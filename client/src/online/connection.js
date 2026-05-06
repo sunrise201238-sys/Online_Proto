@@ -20,13 +20,30 @@ export function createConnection() {
   let playerId = null;
   let connected = false;
   let lastError = null;
+  let snapshotCount = 0;
+  const snapshotTimes = [];
 
-  const log = (kind, payload) => {
-    events.push({ kind, payload, t: Date.now() });
-    if (events.length > MAX_LOG_ENTRIES) events.shift();
+  const notify = () => {
     listeners.forEach((cb) => {
       try { cb(); } catch (err) { console.error('[online] listener error', err); }
     });
+  };
+
+  const log = (kind, payload) => {
+    // Snapshots arrive at the server tick rate (~40 Hz) and would evict every
+    // other event from the buffer within ~1 second. Track them separately as
+    // a counter + recent-times list for Hz computation.
+    if (kind === 'match:snapshot') {
+      snapshotCount += 1;
+      const now = Date.now();
+      snapshotTimes.push(now);
+      while (snapshotTimes.length && now - snapshotTimes[0] > 1000) snapshotTimes.shift();
+      notify();
+      return;
+    }
+    events.push({ kind, payload, t: Date.now() });
+    if (events.length > MAX_LOG_ENTRIES) events.shift();
+    notify();
   };
 
   socket.on('connect', () => {
@@ -68,6 +85,8 @@ export function createConnection() {
     isConnected: () => connected,
     getPlayerId: () => playerId,
     getEvents: () => events.slice(),
+    getSnapshotCount: () => snapshotCount,
+    getSnapshotHz: () => snapshotTimes.length,
     getLastError: () => lastError,
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
   };

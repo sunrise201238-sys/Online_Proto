@@ -46,30 +46,16 @@ export function showOnlineDebugPanel(parent) {
     return `[${ts}] ${e.kind}  ${payload}`;
   };
 
-  // Track snapshot rate over a 1s sliding window so we can show Hz instead
-  // of letting 40 events/sec push real signals out of the log.
-  const snapshotTimes = [];
   const render = () => {
     bindings.status.textContent = conn.isConnected() ? 'connected' : 'disconnected';
     bindings.status.dataset.state = conn.isConnected() ? 'ok' : 'off';
     bindings.playerId.textContent = conn.getPlayerId() ?? '—';
     bindings.error.textContent = conn.getLastError() ?? '—';
+    bindings.snapshots.textContent = `${conn.getSnapshotCount()} (${conn.getSnapshotHz()} Hz)`;
 
-    const allEvents = conn.getEvents();
-    const now = Date.now();
-    snapshotTimes.length = 0;
-    let totalSnapshots = 0;
-    for (const e of allEvents) {
-      if (e.kind === 'match:snapshot') {
-        totalSnapshots += 1;
-        if (now - e.t < 1000) snapshotTimes.push(e.t);
-      }
-    }
-    bindings.snapshots.textContent = `${totalSnapshots} (${snapshotTimes.length} Hz)`;
-
-    const interesting = allEvents.filter((e) => e.kind !== 'match:snapshot');
-    bindings.events.textContent = interesting.length
-      ? interesting.map(formatEvent).join('\n')
+    const events = conn.getEvents();
+    bindings.events.textContent = events.length
+      ? events.map(formatEvent).join('\n')
       : '(none yet)';
     bindings.events.scrollTop = bindings.events.scrollHeight;
   };
