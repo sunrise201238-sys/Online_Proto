@@ -1,0 +1,20 @@
+{
+  "name": "gvg-online",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev --workspace client",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build --workspace client",
+    "start": "npm start --workspace server",
+    "test": "npm run test --workspace shared"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5"
+  }
+}
