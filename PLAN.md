@@ -4,11 +4,11 @@ Tracks the five-phase rollout of online versus. Update this file as phases land 
 
 ---
 
-## Phase 0 — Boot & connect (in progress)
+## Phase 0 — Boot & connect ✅ DONE
 
 **Goal:** server starts, client opens a socket, hello round-trips. No gameplay over the wire yet.
 
-**Status:** scaffolded. Awaiting first local test + first Render deploy.
+**Status:** complete. Both services deployed on Render free tier, p1/p2/spectator slot assignment verified across multiple browsers, 40 Hz snapshot stream alive.
 
 - [x] New monorepo at `gvg-online/`
 - [x] `package.json` workspaces include `client`, `server`, `shared`
@@ -17,9 +17,10 @@ Tracks the five-phase rollout of online versus. Update this file as phases land 
 - [x] `client/src/online/connection.js` wraps the socket + event log
 - [x] Debug **Online (Debug Connect)** button on unit-select menu opens a status panel
 - [x] Server emits `match:hello` on connect alongside `player:assigned`
-- [ ] **User action:** `npm install` from repo root
-- [ ] **User action:** local smoke test — both `npm run dev:server` and `npm run dev:client`, click the debug button, confirm `match:hello` appears
-- [ ] **User action:** push to GitHub, wire to Render, set `VITE_SERVER_URL` on the client service after first deploy
+- [x] Server slot assignment finds the first free slot (p1/p2/spectator), not by count
+- [x] Snapshot events stored as counter + Hz, not in main event log (avoids eviction)
+- [x] Deployed to Render: `gvg-server` (Node, Oregon) + `gvg-client` (Static, Global)
+- [x] Two-browser test confirms p1/p2 assignment
 
 ---
 
