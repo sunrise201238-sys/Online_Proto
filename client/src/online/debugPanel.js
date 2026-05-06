@@ -19,10 +19,11 @@ export function showOnlineDebugPanel(parent) {
       <div><span class="lbl">Server:</span> <span class="val" data-bind="server">${conn.serverUrl}</span></div>
       <div><span class="lbl">Status:</span> <span class="val" data-bind="status">connecting…</span></div>
       <div><span class="lbl">Player ID:</span> <span class="val" data-bind="playerId">—</span></div>
+      <div><span class="lbl">Snapshots:</span> <span class="val" data-bind="snapshots">0 (0 Hz)</span></div>
       <div><span class="lbl">Last error:</span> <span class="val" data-bind="error">—</span></div>
     </div>
     <div class="online-events">
-      <div class="lbl">Events:</div>
+      <div class="lbl">Events (snapshots filtered out):</div>
       <pre data-bind="events">(none yet)</pre>
     </div>
     <button data-action="reconnect">Reconnect</button>
@@ -34,6 +35,7 @@ export function showOnlineDebugPanel(parent) {
   const bindings = {
     status: panel.querySelector('[data-bind="status"]'),
     playerId: panel.querySelector('[data-bind="playerId"]'),
+    snapshots: panel.querySelector('[data-bind="snapshots"]'),
     error: panel.querySelector('[data-bind="error"]'),
     events: panel.querySelector('[data-bind="events"]')
   };
@@ -44,13 +46,31 @@ export function showOnlineDebugPanel(parent) {
     return `[${ts}] ${e.kind}  ${payload}`;
   };
 
+  // Track snapshot rate over a 1s sliding window so we can show Hz instead
+  // of letting 40 events/sec push real signals out of the log.
+  const snapshotTimes = [];
   const render = () => {
     bindings.status.textContent = conn.isConnected() ? 'connected' : 'disconnected';
     bindings.status.dataset.state = conn.isConnected() ? 'ok' : 'off';
     bindings.playerId.textContent = conn.getPlayerId() ?? '—';
     bindings.error.textContent = conn.getLastError() ?? '—';
-    const events = conn.getEvents();
-    bindings.events.textContent = events.length ? events.map(formatEvent).join('\n') : '(none yet)';
+
+    const allEvents = conn.getEvents();
+    const now = Date.now();
+    snapshotTimes.length = 0;
+    let totalSnapshots = 0;
+    for (const e of allEvents) {
+      if (e.kind === 'match:snapshot') {
+        totalSnapshots += 1;
+        if (now - e.t < 1000) snapshotTimes.push(e.t);
+      }
+    }
+    bindings.snapshots.textContent = `${totalSnapshots} (${snapshotTimes.length} Hz)`;
+
+    const interesting = allEvents.filter((e) => e.kind !== 'match:snapshot');
+    bindings.events.textContent = interesting.length
+      ? interesting.map(formatEvent).join('\n')
+      : '(none yet)';
     bindings.events.scrollTop = bindings.events.scrollHeight;
   };
 
@@ -60,7 +80,9 @@ export function showOnlineDebugPanel(parent) {
   panel.querySelector('[data-action="reconnect"]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     conn.close();
-    setTimeout(() => conn.open(), 80);
+    // Give the server time to process the disconnect before reconnecting,
+    // otherwise the new socket sees the old slot still held and gets bumped.
+    setTimeout(() => conn.open(), 350);
   });
 
   panel.querySelector('[data-action="close"]').addEventListener('pointerdown', (e) => {
