@@ -107,9 +107,14 @@ function broadcastSnapshot() {
 setInterval(broadcastSnapshot, TICK_RATE_MS);
 
 io.on('connection', (socket) => {
-  const assignedSlot = lobby.players.size < 2
-    ? (lobby.players.size === 0 ? 'p1' : 'p2')
-    : 'spectator';
+  // Assign by finding a free slot, not by player count. Counting breaks if a
+  // ghost socket lingers (refresh, network blip, fast reconnect) — both new
+  // connections then race for slot 2 because slot 1's holder hasn't been
+  // cleaned up yet but the count is already 1.
+  const taken = new Set(lobby.players.values());
+  let assignedSlot = 'spectator';
+  if (!taken.has('p1')) assignedSlot = 'p1';
+  else if (!taken.has('p2')) assignedSlot = 'p2';
   lobby.players.set(socket.id, assignedSlot);
 
   socket.emit('player:assigned', {
