@@ -1,0 +1,73 @@
+import { createConnection } from './connection.js';
+
+let activePanel = null;
+
+export function showOnlineDebugPanel(parent) {
+  if (activePanel) {
+    activePanel.remove();
+    activePanel = null;
+  }
+
+  const conn = createConnection();
+  conn.open();
+
+  const panel = document.createElement('div');
+  panel.className = 'menu online-debug-panel';
+  panel.innerHTML = `
+    <h2>Online — Debug Connect</h2>
+    <div class="online-status">
+      <div><span class="lbl">Server:</span> <span class="val" data-bind="server">${conn.serverUrl}</span></div>
+      <div><span class="lbl">Status:</span> <span class="val" data-bind="status">connecting…</span></div>
+      <div><span class="lbl">Player ID:</span> <span class="val" data-bind="playerId">—</span></div>
+      <div><span class="lbl">Last error:</span> <span class="val" data-bind="error">—</span></div>
+    </div>
+    <div class="online-events">
+      <div class="lbl">Events:</div>
+      <pre data-bind="events">(none yet)</pre>
+    </div>
+    <button data-action="reconnect">Reconnect</button>
+    <button data-action="close">Close</button>
+  `;
+  parent.appendChild(panel);
+  activePanel = panel;
+
+  const bindings = {
+    status: panel.querySelector('[data-bind="status"]'),
+    playerId: panel.querySelector('[data-bind="playerId"]'),
+    error: panel.querySelector('[data-bind="error"]'),
+    events: panel.querySelector('[data-bind="events"]')
+  };
+
+  const formatEvent = (e) => {
+    const ts = new Date(e.t).toLocaleTimeString();
+    const payload = e.payload ? JSON.stringify(e.payload) : '';
+    return `[${ts}] ${e.kind}  ${payload}`;
+  };
+
+  const render = () => {
+    bindings.status.textContent = conn.isConnected() ? 'connected' : 'disconnected';
+    bindings.status.dataset.state = conn.isConnected() ? 'ok' : 'off';
+    bindings.playerId.textContent = conn.getPlayerId() ?? '—';
+    bindings.error.textContent = conn.getLastError() ?? '—';
+    const events = conn.getEvents();
+    bindings.events.textContent = events.length ? events.map(formatEvent).join('\n') : '(none yet)';
+    bindings.events.scrollTop = bindings.events.scrollHeight;
+  };
+
+  const unsubscribe = conn.onUpdate(render);
+  render();
+
+  panel.querySelector('[data-action="reconnect"]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    conn.close();
+    setTimeout(() => conn.open(), 80);
+  });
+
+  panel.querySelector('[data-action="close"]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    unsubscribe();
+    conn.close();
+    panel.remove();
+    activePanel = null;
+  });
+}
