@@ -6,7 +6,7 @@ export const UNIT_DATA = {
     id: 'unit1',
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
-    projectileSpeed: 55,
+    projectileSpeed: 67,
     fireCooldownMs: 140,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -19,7 +19,7 @@ export const UNIT_DATA = {
     id: 'unit2',
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
-    projectileSpeed: 55,
+    projectileSpeed: 67,
     fireCooldownMs: 700,
     spreadCount: 8,
     // 16 degrees in radians, computed once.
