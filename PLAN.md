@@ -66,7 +66,7 @@ import {
   emptyInput,
   TICK_RATE_MS,
   TICK_DT
-} from '@gvg/shared/sim';
+} from '@gvg/shared/src/sim/index.js';
 
 const match = createMatchState({ p1UnitKey: 'unit1', p2UnitKey: 'unit2', startTime: Date.now() });
 
