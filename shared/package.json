@@ -3,10 +3,6 @@
   "version": "0.1.0",
   "type": "module",
   "main": "src/gameLogic.js",
-  "exports": {
-    ".": "./src/gameLogic.js",
-    "./sim": "./src/sim/index.js"
-  },
   "scripts": {
     "test": "node --test"
   }
