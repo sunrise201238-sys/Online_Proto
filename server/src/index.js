@@ -3,16 +3,13 @@ import http from 'node:http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import {
-  BOOST,
   createMatchState,
-  resolveAction,
-  applyBoostDash,
-  applyBoostStep,
-  applyVerticalThrust,
+  buildSnapshot,
   tickMatch,
+  emptyInput,
   TICK_RATE_MS,
-  interpolateSnapshot
-} from '@gvg/shared/src/gameLogic.js';
+  TICK_DT
+} from '@gvg/shared/src/sim/index.js';
 
 const app = express();
 app.use(cors());
@@ -23,126 +20,170 @@ app.get('/health', (_req, res) => {
 });
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*'
-  }
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
+// One global lobby = one match running at a time. Phase 5 will sharded this
+// out for multi-match hosting.
 const lobby = {
+  // socketId -> 'p1' | 'p2' | 'spectator'
   players: new Map(),
-  match: createMatchState(),
-  previousSnapshot: null,
-  pendingInputs: new Map()
+  // null when no active match. Otherwise the live MatchState.
+  match: null,
+  // 'waiting' | 'active' | 'ended'
+  state: 'waiting',
+  // Last-received input frame per player. Tap flags (jump/stepTap/shootTap)
+  // are accumulated across input:frame messages and reset after each tick.
+  inputs: { p1: emptyInput(), p2: emptyInput() },
+  startedAt: 0,
+  endedAt: 0,
+  winnerId: null
 };
 
-function enqueueInput(actorId, payload) {
-  if (!lobby.pendingInputs.has(actorId)) lobby.pendingInputs.set(actorId, []);
-  const queue = lobby.pendingInputs.get(actorId);
-  queue.push(payload);
-  if (queue.length > 30) queue.splice(0, queue.length - 30);
-}
-
-function applyQueuedInputs(now) {
-  for (const [actorId, queue] of lobby.pendingInputs.entries()) {
-    const actor = lobby.match.fighters[actorId];
-    const defender = lobby.match.fighters[actorId === 'p1' ? 'p2' : 'p1'];
-    if (!actor || !defender || queue.length === 0) continue;
-
-    let latestMove = null;
-
-    for (const { type, move, vertical } of queue) {
-      if (type === 'MOVE_VECTOR') {
-        latestMove = move;
-        continue;
-      }
-      if (type === 'BOOST_DASH') {
-        applyBoostDash(actor, move ?? { x: actor.facing, z: 0 }, now);
-        continue;
-      }
-      if (type === 'BOOST_STEP') {
-        applyBoostStep(actor, move ?? { x: actor.facing, z: 0 }, now);
-        continue;
-      }
-      if (type === 'VERTICAL_THRUST') {
-        applyVerticalThrust(actor, Math.max(0, vertical ?? 0), now);
-        continue;
-      }
-      resolveAction(actor, defender, type, now, lobby.match.projectiles);
-    }
-
-    if (latestMove) {
-      const mx = latestMove.x ?? 0;
-      const mz = latestMove.z ?? 0;
-      actor.vx = mx * BOOST.cruiseSpeed;
-      actor.vz = mz * BOOST.cruiseSpeed;
-      actor.facing = mx >= 0 ? 1 : -1;
-    }
-
-    queue.length = 0;
+function occupiedSlots() {
+  const slots = new Set();
+  for (const v of lobby.players.values()) {
+    if (v === 'p1' || v === 'p2') slots.add(v);
   }
+  return slots;
 }
 
-function getSnapshot(now) {
-  return {
-    tick: lobby.match.tick,
-    serverTime: now,
-    fighters: lobby.match.fighters,
-    projectiles: lobby.match.projectiles
-  };
+function startMatch() {
+  const startTime = Date.now();
+  lobby.match = createMatchState({
+    mapKey: 'arena1',
+    p1UnitKey: 'unit1',
+    p2UnitKey: 'unit1',
+    startTime
+  });
+  lobby.state = 'active';
+  lobby.inputs = { p1: emptyInput(), p2: emptyInput() };
+  lobby.startedAt = startTime;
+  lobby.endedAt = 0;
+  lobby.winnerId = null;
+  io.emit('match:start', { startTime, mapKey: 'arena1' });
+  console.log('[lobby] match started');
 }
 
-function broadcastSnapshot() {
+function endMatch(winnerId, reason) {
+  if (lobby.state !== 'active') return;
+  lobby.state = 'ended';
+  lobby.endedAt = Date.now();
+  lobby.winnerId = winnerId;
+  io.emit('match:end', { winnerId, reason, endedAt: lobby.endedAt });
+  console.log(`[lobby] match ended — winner: ${winnerId ?? 'none'} (${reason})`);
+}
+
+function maybeStartMatch() {
+  if (lobby.state === 'active') return;
+  const slots = occupiedSlots();
+  if (slots.has('p1') && slots.has('p2')) startMatch();
+}
+
+function tick() {
+  if (lobby.state !== 'active' || !lobby.match) return;
   const now = Date.now();
-  applyQueuedInputs(now);
-  tickMatch(lobby.match, now);
+  tickMatch(lobby.match, lobby.inputs, now, TICK_DT);
 
-  const snapshot = getSnapshot(now);
-  const smoothed = interpolateSnapshot(lobby.previousSnapshot, snapshot, 0.55) ?? snapshot;
-  lobby.previousSnapshot = snapshot;
+  // After tickMatch consumes the inputs, clear the tap flags so they don't
+  // re-fire next tick. Continuous flags (move, boost, shootHold) persist
+  // until the client overwrites them.
+  for (const slot of ['p1', 'p2']) {
+    const cur = lobby.inputs[slot];
+    cur.jump = false;
+    cur.stepTap = false;
+    cur.shootTap = false;
+  }
 
-  io.emit('match:snapshot', smoothed);
+  // End-of-match check.
+  const p1 = lobby.match.fighters.p1;
+  const p2 = lobby.match.fighters.p2;
+  if (p1.hp <= 0 || p2.hp <= 0) {
+    const winner = p1.hp <= 0 ? 'p2' : 'p1';
+    io.emit('match:snapshot', buildSnapshot(lobby.match));
+    endMatch(winner, 'ko');
+    return;
+  }
+
+  io.emit('match:snapshot', buildSnapshot(lobby.match));
 }
 
-setInterval(broadcastSnapshot, TICK_RATE_MS);
+setInterval(tick, TICK_RATE_MS);
 
 io.on('connection', (socket) => {
-  // Assign by finding a free slot, not by player count. Counting breaks if a
-  // ghost socket lingers (refresh, network blip, fast reconnect) — both new
-  // connections then race for slot 2 because slot 1's holder hasn't been
-  // cleaned up yet but the count is already 1.
-  const taken = new Set(lobby.players.values());
-  let assignedSlot = 'spectator';
-  if (!taken.has('p1')) assignedSlot = 'p1';
-  else if (!taken.has('p2')) assignedSlot = 'p2';
-  lobby.players.set(socket.id, assignedSlot);
+  // Find a free slot. Counts get out of sync after disconnects, so we walk
+  // the actual map of taken slots.
+  const taken = occupiedSlots();
+  let assigned = 'spectator';
+  if (!taken.has('p1')) assigned = 'p1';
+  else if (!taken.has('p2')) assigned = 'p2';
+  lobby.players.set(socket.id, assigned);
 
   socket.emit('player:assigned', {
-    playerId: assignedSlot,
-    mode: assignedSlot === 'spectator' ? 'spectator' : 'online-ready'
+    playerId: assigned,
+    mode: assigned === 'spectator' ? 'spectator' : 'online-ready',
+    matchState: lobby.state
   });
 
-  // Phase 0 round-trip beacon — proves the socket is open and the server's
-  // game loop is alive. Safe to keep around long-term as a connection probe.
   socket.emit('match:hello', {
     msg: 'hello from gvg-server',
-    playerId: assignedSlot,
+    playerId: assigned,
     serverTime: Date.now(),
-    tick: lobby.match.tick
+    tick: lobby.match?.tick ?? 0,
+    matchState: lobby.state
   });
 
-  socket.on('input:action', ({ type, move, vertical }) => {
-    const actorId = lobby.players.get(socket.id);
-    if (!actorId) return;
-    enqueueInput(actorId, { type, move, vertical });
+  // If both player slots just filled and we're not already running, kick
+  // off a match. Spectators get the same snapshot stream — no special-case.
+  maybeStartMatch();
+
+  socket.on('input:frame', (frame) => {
+    const slot = lobby.players.get(socket.id);
+    if (slot !== 'p1' && slot !== 'p2') return;
+    if (lobby.state !== 'active') return;
+    const cur = lobby.inputs[slot];
+    // Continuous fields overwrite. Tap fields are sticky-OR so a tap that
+    // arrives between two server ticks isn't dropped.
+    lobby.inputs[slot] = {
+      moveX: numericOrZero(frame.moveX),
+      moveZ: numericOrZero(frame.moveZ),
+      boost: !!frame.boost,
+      sprintLocked: !!frame.sprintLocked,
+      shootHold: !!frame.shootHold,
+      jump: cur.jump || !!frame.jump,
+      stepTap: cur.stepTap || !!frame.stepTap,
+      shootTap: cur.shootTap || !!frame.shootTap
+    };
+  });
+
+  socket.on('match:rematch-request', () => {
+    // Either player can request rematch once a match has ended; both ready
+    // semantics are deferred to Phase 4. For now, any request restarts.
+    if (lobby.state === 'ended') {
+      const slots = occupiedSlots();
+      if (slots.has('p1') && slots.has('p2')) startMatch();
+    }
   });
 
   socket.on('disconnect', () => {
-    const actorId = lobby.players.get(socket.id);
+    const slot = lobby.players.get(socket.id);
     lobby.players.delete(socket.id);
-    if (actorId) lobby.pendingInputs.delete(actorId);
+    if ((slot === 'p1' || slot === 'p2') && lobby.state === 'active') {
+      const winner = slot === 'p1' ? 'p2' : 'p1';
+      endMatch(winner, 'forfeit');
+    }
+    // If both player slots are empty, reset the lobby fully.
+    const slots = occupiedSlots();
+    if (slots.size === 0) {
+      lobby.match = null;
+      lobby.state = 'waiting';
+      lobby.inputs = { p1: emptyInput(), p2: emptyInput() };
+    }
   });
 });
+
+function numericOrZero(v) {
+  return Number.isFinite(v) ? v : 0;
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
