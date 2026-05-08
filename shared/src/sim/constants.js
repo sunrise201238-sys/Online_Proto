@@ -118,6 +118,13 @@ export const PROJECTILE_HIT_STUN_MS = 200;
 
 // Sniper-specific.
 export const SNIPER_GLINT_VISIBLE = true;
+// Sprint-cancel: holding sprint during the forced-standing charge ends the
+// charge immediately and fires the projectile, costing half a step's worth
+// of boost.
+export const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
+// Minimum on-screen glint duration so an instant sprint-cancel still flashes
+// a hint at the target instead of vanishing within a single frame.
+export const SNIPER_GLINT_MIN_FLASH_MS = 100;
 
 // Anti-melee window granted on dash start (ms).
 export const ANTI_MELEE_WINDOW_MS = 260;
