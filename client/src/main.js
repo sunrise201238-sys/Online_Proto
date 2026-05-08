@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import './style.css';
 import { createConnection } from './online/connection.js';
+import {
+  tickMatch as simTickMatch,
+  emptyInput as simEmptyInput,
+  TICK_RATE_MS as SIM_TICK_RATE_MS,
+  TICK_DT as SIM_TICK_DT,
+  UNIT_DATA as SIM_UNIT_DATA
+} from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
 
@@ -75,8 +82,10 @@ state.dummyMode = false;
 state.playerStuckSince = 0;
 
 // Online-mode runtime state. Populated by startOnlineMatch and torn down by
-// cleanupMatch / leaveOnlineMatch.
-state.online = null; // { conn, myPlayerId, projectileMeshes (Map), waitingOverlayEl, lastEventTick }
+// cleanupMatch / leaveOnlineMatch. Includes Phase 3 prediction state:
+// predictedState mirrors the server's MatchState locally, advanced ahead by
+// pendingInputs the server hasn't ack'd yet.
+state.online = null;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1314,7 +1323,16 @@ function startOnlineMatch() {
     myPlayerId: null,
     projectileMeshes: new Map(),
     snapshotsApplied: 0,
-    matchEndShown: false
+    matchEndShown: false,
+
+    // Phase 3 — prediction.
+    predictedState: null,        // a MatchState clone we advance with local input
+    pendingInputs: [],           // [{ seq, input, simNow }] not yet ack'd by server
+    nextSeq: 0,                  // next seq number to assign to outgoing input
+    predAccumulator: 0,          // ms accumulated toward the next prediction tick
+    lastPredRealTime: performance.now(),
+    lastPredSimTime: 0,          // server-time the prediction has reached
+    lastAppliedSnapshotTick: -1  // detects new snapshots vs. unchanged
   };
   state.online.conn.open();
 
@@ -1446,7 +1464,115 @@ function showOnlineEndMenu(winnerId, myPlayerId) {
   });
 }
 
-function tickOnline(dt, _now) {
+// ---- Phase 3: prediction & interpolation ----
+
+// Deep-clone a fighter for prediction. Snapshots arrive as plain JSON, so the
+// `unit` reference (set in createFighter) is no longer === UNIT_DATA[unitKey].
+// We re-attach the canonical reference so any code that does identity checks
+// or relies on the same object stays consistent.
+function cloneFighterForPrediction(f) {
+  const cloned = JSON.parse(JSON.stringify(f));
+  cloned.unit = SIM_UNIT_DATA[cloned.unitKey];
+  return cloned;
+}
+
+// Build a workable MatchState from the latest snapshot. Projectiles are
+// always reset to []  — we don't predict them (server-authoritative; client
+// just renders snapshot projectiles).
+function cloneSnapshotForPrediction(snap) {
+  return {
+    tick: snap.tick,
+    now: snap.serverTime,
+    startTime: snap.serverTime,
+    mapKey: snap.mapKey,
+    fighters: {
+      p1: cloneFighterForPrediction(snap.fighters.p1),
+      p2: cloneFighterForPrediction(snap.fighters.p2)
+    },
+    projectiles: [],
+    events: []
+  };
+}
+
+// On every new snapshot: snap to server state, then re-apply every input
+// the server hasn't ack'd yet so we end up "ahead" of the server by RTT.
+function applySnapshotToPrediction(snap) {
+  const onl = state.online;
+  if (!onl) return;
+  const myId = onl.myPlayerId;
+  if (myId !== 'p1' && myId !== 'p2') return;
+
+  const fresh = cloneSnapshotForPrediction(snap);
+  // Drop inputs the server has consumed.
+  const ack = snap.acks?.[myId] ?? -1;
+  onl.pendingInputs = onl.pendingInputs.filter((p) => p.seq > ack);
+
+  // Replay the unack'd ones to advance prediction back to ~present.
+  let simNow = snap.serverTime;
+  for (let i = 0; i < onl.pendingInputs.length; i += 1) {
+    const p = onl.pendingInputs[i];
+    simNow += SIM_TICK_RATE_MS;
+    const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
+    inputs[myId] = p.input;
+    simTickMatch(fresh, inputs, simNow, SIM_TICK_DT);
+  }
+
+  onl.predictedState = fresh;
+  onl.lastPredSimTime = simNow;
+}
+
+// Prediction tick — fixed 25 ms cadence regardless of render rate. Builds an
+// input frame from the current input state, sends it to the server with a
+// seq number, and applies it to the local predictedState so the local
+// fighter visibly advances before the server round-trip.
+function runPredictionTick() {
+  const onl = state.online;
+  if (!onl || !onl.predictedState) return;
+  const myId = onl.myPlayerId;
+  if (myId !== 'p1' && myId !== 'p2') return;
+
+  const inputFrame = buildOnlineInputFrame();
+  const seq = onl.nextSeq++;
+
+  onl.conn.sendInput({ ...inputFrame, seq });
+  onl.pendingInputs.push({ seq, input: inputFrame });
+  // Cap the buffer; >1s of pending inputs at 40 Hz = 40 entries. Worst-case
+  // RTT scenarios shouldn't blow past ~120.
+  if (onl.pendingInputs.length > 240) onl.pendingInputs.shift();
+
+  onl.lastPredSimTime += SIM_TICK_RATE_MS;
+  const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
+  inputs[myId] = inputFrame;
+  simTickMatch(onl.predictedState, inputs, onl.lastPredSimTime, SIM_TICK_DT);
+
+  // Reset taps so they fire exactly once per press.
+  input.stepTap = false;
+  input.shootTap = false;
+  input.jump = false;
+}
+
+// Interpolate the remote fighter between the previous and latest snapshots
+// for smoother rendering. Returns a fighter-shaped object with lerped
+// position; non-position fields come from the latest snapshot.
+function interpolateRemoteFighter(remoteId, prevSnap, latestSnap, lastSnapAt, now) {
+  const latestF = latestSnap?.fighters?.[remoteId];
+  if (!latestF) return null;
+  const prevF = prevSnap?.fighters?.[remoteId];
+  if (!prevF) return latestF;
+
+  const elapsed = now - lastSnapAt;
+  const alpha = Math.max(0, Math.min(1, elapsed / SIM_TICK_RATE_MS));
+  return {
+    ...latestF,
+    pos: {
+      x: prevF.pos.x + (latestF.pos.x - prevF.pos.x) * alpha,
+      y: prevF.pos.y + (latestF.pos.y - prevF.pos.y) * alpha,
+      z: prevF.pos.z + (latestF.pos.z - prevF.pos.z) * alpha
+    }
+  };
+}
+
+function tickOnline(dt, now) {
   const onl = state.online;
   if (!onl) return;
   const conn = onl.conn;
@@ -1461,15 +1587,12 @@ function tickOnline(dt, _now) {
     }
   }
 
-  // Show connect_error if we have one and aren't connected.
   if (!conn.isConnected() && conn.getLastError()) {
     showOnlineOverlay(`Connection error: ${conn.getLastError()}`);
   }
 
   const matchState = conn.getMatchState();
   if (matchState === 'active' && !state.running) {
-    // Don't drop the overlay until the FIRST snapshot lands — otherwise we
-    // briefly see the spawn-position default while the snapshot is in flight.
     if (conn.getLatestSnapshot()) {
       hideOnlineOverlay();
       state.running = true;
@@ -1481,43 +1604,65 @@ function tickOnline(dt, _now) {
 
   if (state.running && matchState === 'active') {
     const snap = conn.getLatestSnapshot();
-    if (snap) {
-      // Mirror fighters onto the local mech objects.
-      const myId = onl.myPlayerId;
-      // Decide which mech is "player" (camera target) vs "enemy" based on assignment.
-      // For spectators or before assignment, treat p1 as player.
-      const playerSlot = (myId === 'p2') ? 'p2' : 'p1';
-      const enemySlot = (playerSlot === 'p1') ? 'p2' : 'p1';
-      mirrorFighterToMech(snap.fighters[playerSlot], state.player);
-      mirrorFighterToMech(snap.fighters[enemySlot], state.enemy);
-      // Face fighters at each other (offline updateTransforms does the same).
-      const dx = state.enemy.root.position.x - state.player.root.position.x;
-      const dz = state.enemy.root.position.z - state.player.root.position.z;
-      if (dx * dx + dz * dz > 1e-6) {
-        const yaw = Math.atan2(dx, dz);
-        state.player.root.rotation.y = yaw;
-        state.enemy.root.rotation.y = yaw + Math.PI;
-      }
-      syncOnlineProjectiles(snap);
-      processOnlineEvents(snap, myId);
+    const prevSnap = conn.getPreviousSnapshot();
+    const lastSnapAt = conn.getLastSnapshotAt();
+
+    // 1. New snapshot? Reset prediction from it and replay unack'd inputs.
+    if (snap && snap.tick !== onl.lastAppliedSnapshotTick) {
+      onl.lastAppliedSnapshotTick = snap.tick;
       onl.snapshotsApplied += 1;
+      // Phase 3: prediction-driven for player slots; bare snapshot for spectator.
+      if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
+        applySnapshotToPrediction(snap);
+      }
+      // Projectiles + events come straight from the snapshot regardless.
+      syncOnlineProjectiles(snap);
+      processOnlineEvents(snap, onl.myPlayerId);
     }
 
-    // Send our input frame.
-    if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
-      conn.sendInput(buildOnlineInputFrame());
-      // Reset taps so they're sent for at most one frame.
-      input.stepTap = false;
-      input.shootTap = false;
-      input.jump = false;
+    // 2. Drive prediction at fixed 25 ms cadence using a real-time accumulator.
+    const realNow = performance.now();
+    onl.predAccumulator += realNow - onl.lastPredRealTime;
+    onl.lastPredRealTime = realNow;
+    // Cap accumulator so a long pause (tab inactive, alt-tab) doesn't trigger
+    // hundreds of catch-up ticks all at once.
+    if (onl.predAccumulator > 250) onl.predAccumulator = 250;
+    while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
+      onl.predAccumulator -= SIM_TICK_RATE_MS;
+      runPredictionTick();
     }
 
-    // Existing render-side updates work because mech.state is mirrored.
+    // 3. Render. Local fighter from prediction; remote from interpolation.
+    const myId = onl.myPlayerId;
+    const cameraSlot = (myId === 'p2') ? 'p2' : 'p1';
+    const otherSlot = (cameraSlot === 'p1') ? 'p2' : 'p1';
+
+    let cameraFighter;
+    if ((myId === 'p1' || myId === 'p2') && onl.predictedState) {
+      cameraFighter = onl.predictedState.fighters[cameraSlot];
+    } else if (snap) {
+      cameraFighter = snap.fighters[cameraSlot];
+    }
+    const otherFighter = snap
+      ? interpolateRemoteFighter(otherSlot, prevSnap, snap, lastSnapAt, realNow)
+      : null;
+
+    if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
+    if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
+
+    // Face fighters at each other (offline updateTransforms does the same).
+    const ddx = state.enemy.root.position.x - state.player.root.position.x;
+    const ddz = state.enemy.root.position.z - state.player.root.position.z;
+    if (ddx * ddx + ddz * ddz > 1e-6) {
+      const yaw = Math.atan2(ddx, ddz);
+      state.player.root.rotation.y = yaw;
+      state.enemy.root.rotation.y = yaw + Math.PI;
+    }
+
+    // Render-side updates use the mirrored mech state.
     updateLocksAndReticle();
     updateGlintScale(state.player);
     updateGlintScale(state.enemy);
-    // No projectile system tick — server owns projectiles.
-    // VFX (hit rings, melee slashes) live in state.vfx and decay per frame.
     updateVfx(dt);
     updateCamera();
     updateHud();
