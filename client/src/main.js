@@ -1798,6 +1798,10 @@ function ensureOnlineMatchSetup(snap) {
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
   hudRefs = setupHUD();
+  // Pause button is meaningless online (server runs the sim authoritatively
+  // — we can't pause it from a single client). Drop it from the HUD.
+  const pauseBtn = state.hud?.querySelector('#pause-btn');
+  if (pauseBtn) pauseBtn.remove();
   onl.mechsCreatedFor = sig;
 }
 
