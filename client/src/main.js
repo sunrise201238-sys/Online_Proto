@@ -1419,25 +1419,28 @@ function processOnlineEvents(snap, myPlayerId) {
   }
 }
 
-function showOnlineEndMenu(winnerId, myPlayerId) {
-  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended'. The
-  // menu's Rematch button just fires the request; renderOnlineUi will tear
-  // it down on the next phase change (active or otherwise).
+function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
+  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended', and
+  // re-drawn by refreshEndMenuIfStale when the opponent's rematch status
+  // changes. The new match doesn't start until BOTH players click Rematch.
   const win = winnerId === myPlayerId;
   const tie = winnerId == null;
+  const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
+  const oppReady = rematchRequested?.[oppId] === true;
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `
     <h2>${tie ? 'MATCH ENDED' : (win ? 'YOU WIN' : 'YOU LOSE')}</h2>
+    ${oppReady ? '<div class="menu-divider">Opponent wants a rematch</div>' : ''}
     <button id="online-rematch">Rematch</button>
     <button id="online-leave" class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
   menu.querySelector('#online-rematch').addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    clearMenus();
     state.online.conn.requestRematch();
-    showOnlineOverlay('Waiting for rematch…');
+    // Server's lobby:config will echo back our request; refreshEndMenuIfStale
+    // sees rematchRequested[me]=true and switches to the overlay.
   });
   menu.querySelector('#online-leave').addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -1614,11 +1617,49 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
       break;
     case 'ended': {
       const end = conn.getLastMatchEnd();
-      showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId);
+      const cfg = conn.getLobbyConfig();
+      const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
+      // Initialize the staleness signature so refreshEndMenuIfStale doesn't
+      // immediately re-render this same state.
+      onl.lastEndMenuSig = rematchSig(onl.myPlayerId, rs);
+      if (rs[onl.myPlayerId]) {
+        // We've already requested (e.g. mid-flight reconnect) — show overlay.
+        showOnlineOverlay(rs[opponentId(onl.myPlayerId)] ? 'Opponent ready — starting…' : 'Waiting for opponent…');
+      } else {
+        showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
+      }
       break;
     }
     default:
       break;
+  }
+}
+
+function opponentId(myId) {
+  return myId === 'p1' ? 'p2' : 'p1';
+}
+
+function rematchSig(myId, rs) {
+  const oppId = opponentId(myId);
+  return `${rs[myId] ? 1 : 0}|${rs[oppId] ? 1 : 0}`;
+}
+
+function refreshEndMenuIfStale(onl, conn) {
+  const cfg = conn.getLobbyConfig();
+  const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
+  const sig = rematchSig(onl.myPlayerId, rs);
+  if (onl.lastEndMenuSig === sig) return;
+  onl.lastEndMenuSig = sig;
+  clearMenus();
+  hideOnlineOverlay();
+  if (rs[onl.myPlayerId]) {
+    // Self has requested — show waiting overlay; opp may or may not be ready.
+    const oppReady = rs[opponentId(onl.myPlayerId)];
+    showOnlineOverlay(oppReady ? 'Opponent ready — starting…' : 'Waiting for opponent…');
+  } else {
+    // Self hasn't requested yet — show end menu, possibly with "opponent wants rematch".
+    const end = conn.getLastMatchEnd();
+    showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
   }
 }
 
@@ -1841,8 +1882,10 @@ function tickOnline(dt, _now) {
     renderOnlineUi(targetPhase, prevPhase, onl, conn);
   } else if (targetPhase === 'waiting-opp') {
     // Re-render waiting-opp on opponent config changes (their unit pick etc).
-    // Cheap: rebuild the menu when lobby:config changes versus what we showed.
     refreshWaitingOppIfStale(onl, conn);
+  } else if (targetPhase === 'ended') {
+    // Re-render end menu / overlay when rematch readiness changes.
+    refreshEndMenuIfStale(onl, conn);
   }
 
   if (targetPhase === 'playing') {
