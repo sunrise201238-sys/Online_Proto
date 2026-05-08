@@ -82,9 +82,10 @@ state.dummyMode = false;
 state.playerStuckSince = 0;
 
 // Online-mode runtime state. Populated by startOnlineMatch and torn down by
-// cleanupMatch / leaveOnlineMatch. Includes Phase 3 prediction state:
-// predictedState mirrors the server's MatchState locally, advanced ahead by
-// pendingInputs the server hasn't ack'd yet.
+// cleanupMatch (called from showSelectMenu). Includes Phase 3 prediction
+// state: predictedState mirrors the server's MatchState locally, advanced
+// ahead by pendingInputs the server hasn't ack'd yet. Phase 4 adds
+// uiSubPhase + lazy mech setup keyed off the first snapshot.
 state.online = null;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1144,18 +1145,20 @@ function updateCamera() {
   camera.updateProjectionMatrix();
 }
 
-function updateHud() {
+function updateHud(now = performance.now()) {
+  // `now` defaults to performance.now() for offline (where mech.state
+  // timestamps are stored in performance.now() reference). Online passes
+  // Date.now() because the server-mirrored timestamps are Date.now()-style.
   hudRefs.hp.style.width = `${(state.player.state.hp / MAX_HP) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / MAX_HP) * 100}%`;
   hudRefs.boost.style.width = `${(state.player.state.boost / BOOST_CAP) * 100}%`;
-  hudRefs.boost.style.background = state.player.state.overheatedUntil > performance.now() ? '#ff8c45' : '#90ff63';
+  hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
   const u = state.player.unit;
   const s = state.player.state;
   if (u.magCapacity != null && hudRefs.ammoCount) {
     hudRefs.ammoCount.textContent = String(s.ammo);
-    const now = performance.now();
     const isMg = !u.autoReload;
     const empty = isMg && s.ammo === 0;
     let progress = 0;
@@ -1284,20 +1287,6 @@ function hideOnlineOverlay() {
   if (el) el.remove();
 }
 
-function leaveOnlineMatch() {
-  if (state.online?.conn) state.online.conn.close();
-  if (state.online?.projectileMeshes) {
-    for (const op of state.online.projectileMeshes.values()) {
-      scene.remove(op.mesh);
-      op.mesh.geometry.dispose();
-      op.mesh.material.dispose();
-    }
-    state.online.projectileMeshes.clear();
-  }
-  state.online = null;
-  hideOnlineOverlay();
-  state.running = false;
-}
 
 function startOnlineMatch() {
   cleanupMatch();
@@ -1305,39 +1294,33 @@ function startOnlineMatch() {
   state.hud?.remove();
   renderer.domElement.style.pointerEvents = 'auto';
 
-  // Both fighters use unit1 in online v1 — server hard-codes this match.
-  const unitData = UNIT_DATA.unit1;
-  state.player = createMech(0x62d7ff, unitData);
-  state.enemy = createMech(0xff7ad5, unitData);
-  // Default spawn positions for arena1; server will overwrite via snapshot.
-  state.player.body.position.set(-24, 2.45, 0);
-  state.enemy.body.position.set(24, 2.45, 0);
-  buildArenaForMap('arena1');
-
-  state.reticle = makeReticleSprite();
-  state.enemy.root.add(state.reticle);
-  hudRefs = setupHUD();
+  // No mechs / arena created yet — we defer that until the player has picked
+  // their unit and the server has chosen a map (sent in the first snapshot).
+  // ensureOnlineMatchSetup() handles it lazily once we hit the 'playing' phase.
 
   state.online = {
     conn: createConnection(),
     myPlayerId: null,
     projectileMeshes: new Map(),
     snapshotsApplied: 0,
-    matchEndShown: false,
 
     // Phase 3 — prediction.
-    predictedState: null,        // a MatchState clone we advance with local input
-    pendingInputs: [],           // [{ seq, input, simNow }] not yet ack'd by server
-    nextSeq: 0,                  // next seq number to assign to outgoing input
-    predAccumulator: 0,          // ms accumulated toward the next prediction tick
+    predictedState: null,
+    pendingInputs: [],
+    nextSeq: 0,
+    predAccumulator: 0,
     lastPredRealTime: performance.now(),
-    lastPredSimTime: 0,          // server-time the prediction has reached
-    lastAppliedSnapshotTick: -1  // detects new snapshots vs. unchanged
+    lastPredSimTime: 0,
+    lastAppliedSnapshotTick: -1,
+
+    // Phase 4 — UI lifecycle.
+    uiSubPhase: 'connecting',    // see computeOnlineUiPhase()
+    mechsCreatedFor: null         // signature key; set when ensureOnlineMatchSetup builds rig
   };
   state.online.conn.open();
 
   state.phase = 'online';
-  state.running = false; // flips true once the first snapshot lands
+  state.running = false;
   showOnlineOverlay('Connecting…');
 }
 
@@ -1437,9 +1420,9 @@ function processOnlineEvents(snap, myPlayerId) {
 }
 
 function showOnlineEndMenu(winnerId, myPlayerId) {
-  state.online.matchEndShown = true;
-  state.running = false;
-  clearMenus();
+  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended'. The
+  // menu's Rematch button just fires the request; renderOnlineUi will tear
+  // it down on the next phase change (active or otherwise).
   const win = winnerId === myPlayerId;
   const tie = winnerId == null;
   const menu = document.createElement('div');
@@ -1447,19 +1430,17 @@ function showOnlineEndMenu(winnerId, myPlayerId) {
   menu.innerHTML = `
     <h2>${tie ? 'MATCH ENDED' : (win ? 'YOU WIN' : 'YOU LOSE')}</h2>
     <button id="online-rematch">Rematch</button>
-    <button id="online-leave">Leave</button>
+    <button id="online-leave" class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
   menu.querySelector('#online-rematch').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     clearMenus();
-    state.online.matchEndShown = false;
     state.online.conn.requestRematch();
     showOnlineOverlay('Waiting for rematch…');
   });
   menu.querySelector('#online-leave').addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    leaveOnlineMatch();
     showSelectMenu();
   });
 }
@@ -1572,104 +1553,311 @@ function interpolateRemoteFighter(remoteId, prevSnap, latestSnap, lastSnapAt, no
   };
 }
 
-function tickOnline(dt, now) {
+// Compute which UI sub-phase we should be in based on connection + lobby state.
+function computeOnlineUiPhase(onl, conn) {
+  const myId = onl.myPlayerId;
+  const matchSt = conn.getMatchState();
+  if (!myId) return 'connecting';
+  if (myId === 'spectator') {
+    if (matchSt === 'active' && conn.getLatestSnapshot()) return 'playing';
+    if (matchSt === 'ended') return 'ended';
+    return 'spectator-waiting';
+  }
+  // Player slot.
+  if (matchSt === 'active') {
+    return conn.getLatestSnapshot() ? 'playing' : 'starting';
+  }
+  if (matchSt === 'ended') return 'ended';
+  // 'waiting' — drive UI off picks.
+  const cfg = conn.getLobbyConfig();
+  const myCfg = cfg?.config?.[myId] ?? {};
+  if (!myCfg.unitKey) return 'pick-unit';
+  if (myId === 'p1' && !myCfg.mapKey) return 'pick-map';
+  return 'waiting-opp';
+}
+
+function renderOnlineUi(phase, prevPhase, onl, conn) {
+  // Always reset the UI surface before rendering the new phase.
+  clearMenus();
+  hideOnlineOverlay();
+
+  // Entering 'playing' is a "new match started" signal — wipe prediction
+  // bookkeeping so any stale inputs from the previous match don't replay.
+  if (phase === 'playing' && prevPhase !== 'playing') {
+    onl.pendingInputs = [];
+    onl.nextSeq = 0;
+    onl.lastAppliedSnapshotTick = -1;
+    onl.predictedState = null;
+  }
+
+  switch (phase) {
+    case 'connecting':
+      showOnlineOverlay('Connecting…');
+      break;
+    case 'pick-unit':
+      showOnlineUnitPicker(onl);
+      break;
+    case 'pick-map':
+      showOnlineMapPicker(onl);
+      break;
+    case 'waiting-opp':
+      showOnlineWaitingOpp(onl, conn);
+      break;
+    case 'spectator-waiting':
+      showOnlineOverlay('Spectator mode — match in progress or full');
+      break;
+    case 'starting':
+      showOnlineOverlay('Match starting…');
+      break;
+    case 'playing':
+      // Mechs / arena are built lazily inside runOnlineMatchFrame.
+      break;
+    case 'ended': {
+      const end = conn.getLastMatchEnd();
+      showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1']);
+
+function showOnlineUnitPicker(onl) {
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  const unitEntries = Object.entries(UNIT_DATA);
+  menu.innerHTML = `
+    <h2>Pick Your Unit</h2>
+    <div class="menu-divider">Online — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
+    ${unitEntries.map(([id, u]) => `<button data-unit="${id}">${u.name}</button>`).join('')}
+    <button data-leave class="online-leave-btn">Leave</button>
+  `;
+  app.appendChild(menu);
+  menu.querySelectorAll('button[data-unit]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      onl.conn.sendConfigure({ unitKey: btn.dataset.unit });
+    });
+  });
+  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    showSelectMenu();
+  });
+}
+
+function showOnlineMapPicker(onl) {
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  const mapEntries = Object.entries(MAP_DATA);
+  menu.innerHTML = `
+    <h2>Pick a Map</h2>
+    <div class="menu-divider">Online — you are p1 (host)</div>
+    ${mapEntries.map(([id, m]) => {
+      const enabled = ONLINE_AVAILABLE_MAPS.has(id);
+      const label = enabled ? m.name : `${m.name} (offline only)`;
+      return `<button data-map="${id}"${enabled ? '' : ' disabled'}>${label}</button>`;
+    }).join('')}
+    <button data-leave class="online-leave-btn">Leave</button>
+  `;
+  app.appendChild(menu);
+  menu.querySelectorAll('button[data-map]:not([disabled])').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      onl.conn.sendConfigure({ mapKey: btn.dataset.map });
+    });
+  });
+  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    showSelectMenu();
+  });
+}
+
+function showOnlineWaitingOpp(onl, conn) {
+  const cfg = conn.getLobbyConfig();
+  const myId = onl.myPlayerId;
+  const oppId = (myId === 'p1') ? 'p2' : 'p1';
+  const myCfg = cfg?.config?.[myId] ?? {};
+  const oppCfg = cfg?.config?.[oppId] ?? {};
+  const oppUnit = oppCfg.unitKey ? UNIT_DATA[oppCfg.unitKey]?.name : null;
+  const mapKey = myCfg.mapKey || oppCfg.mapKey;
+  const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
+
+  let waitingText;
+  if (!oppCfg.unitKey) {
+    waitingText = myId === 'p1' ? 'Waiting for opponent to pick unit…' : 'Waiting for host to pick unit…';
+  } else if (myId === 'p2' && !oppCfg.mapKey) {
+    waitingText = 'Waiting for host to pick map…';
+  } else {
+    waitingText = 'Starting…';
+  }
+
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = `
+    <h2>${waitingText}</h2>
+    <div class="online-status">
+      <div><span class="lbl">Your unit:</span> <span class="val">${UNIT_DATA[myCfg.unitKey]?.name ?? '—'}</span></div>
+      <div><span class="lbl">Opp unit:</span> <span class="val">${oppUnit ?? '—'}</span></div>
+      <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
+    </div>
+    <button data-leave class="online-leave-btn">Leave</button>
+  `;
+  app.appendChild(menu);
+  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    showSelectMenu();
+  });
+}
+
+// Lazy mech + arena setup. Called every frame from runOnlineMatchFrame; only
+// rebuilds when the (mapKey, unit assignments, my slot) signature changes.
+function ensureOnlineMatchSetup(snap) {
+  if (!snap) return;
+  const onl = state.online;
+  const myId = onl.myPlayerId;
+  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
+  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
+  const myUnitKey = snap.fighters[cameraId].unitKey;
+  const oppUnitKey = snap.fighters[otherId].unitKey;
+  const mapKey = snap.mapKey;
+  const sig = `${mapKey}|${myUnitKey}|${oppUnitKey}|${cameraId}`;
+  if (onl.mechsCreatedFor === sig) return;
+
+  // Tear down old mechs/arena/HUD/projectile meshes.
+  [state.player, state.enemy].forEach((m) => {
+    if (!m) return;
+    removeGlintFromMech(m);
+    scene.remove(m.root);
+    world.removeBody(m.body);
+    m.trail.forEach((t) => scene.remove(t.mesh));
+  });
+  state.player = null;
+  state.enemy = null;
+  if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+  state.reticle = null;
+  if (state.hud) { state.hud.remove(); state.hud = null; }
+  hudRefs = null;
+  for (const op of onl.projectileMeshes.values()) {
+    scene.remove(op.mesh);
+    op.mesh.geometry.dispose();
+    op.mesh.material.dispose();
+  }
+  onl.projectileMeshes.clear();
+
+  // Build new. state.player = local mech (camera target), state.enemy = opp.
+  state.player = createMech(0x62d7ff, UNIT_DATA[myUnitKey]);
+  state.enemy = createMech(0xff7ad5, UNIT_DATA[oppUnitKey]);
+  const myPos = snap.fighters[cameraId].pos;
+  const oppPos = snap.fighters[otherId].pos;
+  state.player.body.position.set(myPos.x, myPos.y, myPos.z);
+  state.enemy.body.position.set(oppPos.x, oppPos.y, oppPos.z);
+  buildArenaForMap(mapKey);
+  state.reticle = makeReticleSprite();
+  state.enemy.root.add(state.reticle);
+  hudRefs = setupHUD();
+  onl.mechsCreatedFor = sig;
+}
+
+function runOnlineMatchFrame(dt, onl, conn) {
+  const snap = conn.getLatestSnapshot();
+  if (!snap) return;
+  ensureOnlineMatchSetup(snap);
+  if (!state.player || !state.enemy) return;
+
+  const prevSnap = conn.getPreviousSnapshot();
+  const lastSnapAt = conn.getLastSnapshotAt();
+
+  // 1. New snapshot? Reset prediction from it and replay unack'd inputs.
+  if (snap.tick !== onl.lastAppliedSnapshotTick) {
+    onl.lastAppliedSnapshotTick = snap.tick;
+    onl.snapshotsApplied += 1;
+    if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
+      applySnapshotToPrediction(snap);
+    }
+    syncOnlineProjectiles(snap);
+    processOnlineEvents(snap, onl.myPlayerId);
+  }
+
+  // 2. Drive prediction at fixed 25 ms cadence.
+  const realNow = performance.now();
+  onl.predAccumulator += realNow - onl.lastPredRealTime;
+  onl.lastPredRealTime = realNow;
+  if (onl.predAccumulator > 250) onl.predAccumulator = 250;
+  while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
+    onl.predAccumulator -= SIM_TICK_RATE_MS;
+    runPredictionTick();
+  }
+
+  // 3. Render. state.player = local (camera target); state.enemy = opp.
+  const myId = onl.myPlayerId;
+  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
+  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
+  let cameraFighter;
+  if ((myId === 'p1' || myId === 'p2') && onl.predictedState) {
+    cameraFighter = onl.predictedState.fighters[cameraId];
+  } else {
+    cameraFighter = snap.fighters[cameraId];
+  }
+  const otherFighter = interpolateRemoteFighter(otherId, prevSnap, snap, lastSnapAt, realNow);
+
+  if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
+  if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
+
+  const ddx = state.enemy.root.position.x - state.player.root.position.x;
+  const ddz = state.enemy.root.position.z - state.player.root.position.z;
+  if (ddx * ddx + ddz * ddz > 1e-6) {
+    const yaw = Math.atan2(ddx, ddz);
+    state.player.root.rotation.y = yaw;
+    state.enemy.root.rotation.y = yaw + Math.PI;
+  }
+
+  updateLocksAndReticle();
+  updateGlintScale(state.player);
+  updateGlintScale(state.enemy);
+  updateVfx(dt);
+  updateCamera();
+  updateHud(Date.now());
+}
+
+function tickOnline(dt, _now) {
   const onl = state.online;
   if (!onl) return;
   const conn = onl.conn;
 
-  // Track player ID once it arrives.
   if (!onl.myPlayerId && conn.getPlayerId()) {
     onl.myPlayerId = conn.getPlayerId();
-    if (onl.myPlayerId === 'spectator') {
-      showOnlineOverlay('Spectator mode — match in progress or full');
-    } else {
-      showOnlineOverlay(`Connected as ${onl.myPlayerId}. Waiting for opponent…`);
-    }
   }
-
   if (!conn.isConnected() && conn.getLastError()) {
     showOnlineOverlay(`Connection error: ${conn.getLastError()}`);
   }
 
-  const matchState = conn.getMatchState();
-  if (matchState === 'active' && !state.running) {
-    if (conn.getLatestSnapshot()) {
-      hideOnlineOverlay();
-      state.running = true;
-      onl.matchEndShown = false;
-    } else {
-      showOnlineOverlay('Match starting…');
-    }
+  // Phase machine — re-render UI on transition.
+  const targetPhase = computeOnlineUiPhase(onl, conn);
+  if (targetPhase !== onl.uiSubPhase) {
+    const prevPhase = onl.uiSubPhase;
+    onl.uiSubPhase = targetPhase;
+    renderOnlineUi(targetPhase, prevPhase, onl, conn);
+  } else if (targetPhase === 'waiting-opp') {
+    // Re-render waiting-opp on opponent config changes (their unit pick etc).
+    // Cheap: rebuild the menu when lobby:config changes versus what we showed.
+    refreshWaitingOppIfStale(onl, conn);
   }
 
-  if (state.running && matchState === 'active') {
-    const snap = conn.getLatestSnapshot();
-    const prevSnap = conn.getPreviousSnapshot();
-    const lastSnapAt = conn.getLastSnapshotAt();
-
-    // 1. New snapshot? Reset prediction from it and replay unack'd inputs.
-    if (snap && snap.tick !== onl.lastAppliedSnapshotTick) {
-      onl.lastAppliedSnapshotTick = snap.tick;
-      onl.snapshotsApplied += 1;
-      // Phase 3: prediction-driven for player slots; bare snapshot for spectator.
-      if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
-        applySnapshotToPrediction(snap);
-      }
-      // Projectiles + events come straight from the snapshot regardless.
-      syncOnlineProjectiles(snap);
-      processOnlineEvents(snap, onl.myPlayerId);
-    }
-
-    // 2. Drive prediction at fixed 25 ms cadence using a real-time accumulator.
-    const realNow = performance.now();
-    onl.predAccumulator += realNow - onl.lastPredRealTime;
-    onl.lastPredRealTime = realNow;
-    // Cap accumulator so a long pause (tab inactive, alt-tab) doesn't trigger
-    // hundreds of catch-up ticks all at once.
-    if (onl.predAccumulator > 250) onl.predAccumulator = 250;
-    while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
-      onl.predAccumulator -= SIM_TICK_RATE_MS;
-      runPredictionTick();
-    }
-
-    // 3. Render. Local fighter from prediction; remote from interpolation.
-    const myId = onl.myPlayerId;
-    const cameraSlot = (myId === 'p2') ? 'p2' : 'p1';
-    const otherSlot = (cameraSlot === 'p1') ? 'p2' : 'p1';
-
-    let cameraFighter;
-    if ((myId === 'p1' || myId === 'p2') && onl.predictedState) {
-      cameraFighter = onl.predictedState.fighters[cameraSlot];
-    } else if (snap) {
-      cameraFighter = snap.fighters[cameraSlot];
-    }
-    const otherFighter = snap
-      ? interpolateRemoteFighter(otherSlot, prevSnap, snap, lastSnapAt, realNow)
-      : null;
-
-    if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
-    if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
-
-    // Face fighters at each other (offline updateTransforms does the same).
-    const ddx = state.enemy.root.position.x - state.player.root.position.x;
-    const ddz = state.enemy.root.position.z - state.player.root.position.z;
-    if (ddx * ddx + ddz * ddz > 1e-6) {
-      const yaw = Math.atan2(ddx, ddz);
-      state.player.root.rotation.y = yaw;
-      state.enemy.root.rotation.y = yaw + Math.PI;
-    }
-
-    // Render-side updates use the mirrored mech state.
-    updateLocksAndReticle();
-    updateGlintScale(state.player);
-    updateGlintScale(state.enemy);
-    updateVfx(dt);
-    updateCamera();
-    updateHud();
-  } else if (matchState === 'ended' && !onl.matchEndShown) {
-    const end = conn.getLastMatchEnd();
-    showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId);
+  if (targetPhase === 'playing') {
+    runOnlineMatchFrame(dt, onl, conn);
   }
+}
+
+function refreshWaitingOppIfStale(onl, conn) {
+  const cfg = conn.getLobbyConfig();
+  const sig = JSON.stringify(cfg?.config ?? {});
+  if (onl.lastWaitingSig === sig) return;
+  onl.lastWaitingSig = sig;
+  // Rebuild the menu in place.
+  clearMenus();
+  showOnlineWaitingOpp(onl, conn);
 }
 
 function showSelectMenu() {
