@@ -47,6 +47,9 @@ const lobby = {
     p1: { unitKey: null, mapKey: null },
     p2: { unitKey: null, mapKey: null }
   },
+  // Rematch-ready flags. Both must be true (state === 'ended') for a new
+  // match to begin. Reset on match start.
+  rematchRequested: { p1: false, p2: false },
   startedAt: 0,
   endedAt: 0,
   winnerId: null
@@ -77,6 +80,7 @@ function startMatch() {
   lobby.state = 'active';
   lobby.inputs = { p1: emptyInput(), p2: emptyInput() };
   lobby.lastAcked = { p1: -1, p2: -1 };
+  lobby.rematchRequested = { p1: false, p2: false };
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
@@ -106,7 +110,8 @@ function maybeStartMatch() {
 function emitLobbyConfig() {
   io.emit('lobby:config', {
     state: lobby.state,
-    config: lobby.config
+    config: lobby.config,
+    rematchRequested: lobby.rematchRequested
   });
 }
 
@@ -175,7 +180,11 @@ io.on('connection', (socket) => {
 
   // Bring the new socket up to date on what's been picked so far. The client
   // uses this to decide what config UI to show.
-  socket.emit('lobby:config', { state: lobby.state, config: lobby.config });
+  socket.emit('lobby:config', {
+    state: lobby.state,
+    config: lobby.config,
+    rematchRequested: lobby.rematchRequested
+  });
 
   // If both player slots just filled and we're not already running, kick
   // off a match. Spectators get the same snapshot stream — no special-case.
@@ -230,11 +239,19 @@ io.on('connection', (socket) => {
   });
 
   socket.on('match:rematch-request', () => {
-    // Either player can request rematch once a match has ended; both ready
-    // semantics are deferred to Phase 4. For now, any request restarts.
-    if (lobby.state === 'ended') {
-      const slots = occupiedSlots();
-      if (slots.has('p1') && slots.has('p2')) startMatch();
+    const slot = lobby.players.get(socket.id);
+    if (slot !== 'p1' && slot !== 'p2') return;
+    if (lobby.state !== 'ended') return;
+
+    if (lobby.rematchRequested[slot]) return; // already requested
+    lobby.rematchRequested[slot] = true;
+    emitLobbyConfig();
+
+    // Start a new match only when BOTH players have requested.
+    const slots = occupiedSlots();
+    if (slots.has('p1') && slots.has('p2')
+      && lobby.rematchRequested.p1 && lobby.rematchRequested.p2) {
+      startMatch();
     }
   });
 
@@ -245,9 +262,11 @@ io.on('connection', (socket) => {
       const winner = slot === 'p1' ? 'p2' : 'p1';
       endMatch(winner, 'forfeit');
     }
-    // Clear that slot's config so the next player to take it picks fresh.
+    // Clear that slot's config + rematch flag so the next player taking the
+    // slot starts fresh and can't inherit a stale "ready for rematch".
     if (slot === 'p1' || slot === 'p2') {
       lobby.config[slot] = { unitKey: null, mapKey: null };
+      lobby.rematchRequested[slot] = false;
     }
     // If both player slots are empty, reset the lobby fully.
     const slots = occupiedSlots();
@@ -259,8 +278,9 @@ io.on('connection', (socket) => {
         p1: { unitKey: null, mapKey: null },
         p2: { unitKey: null, mapKey: null }
       };
+      lobby.rematchRequested = { p1: false, p2: false };
     } else {
-      // Tell remaining clients about the slot config change.
+      // Tell remaining clients about the slot config / rematch change.
       emitLobbyConfig();
     }
   });
