@@ -47,11 +47,11 @@ export const UNIT_DATA = {
 };
 
 export const MAP_DATA = {
-  arena1: { id: 'arena1', name: 'Plain Field' }
-  // Other maps from the offline build (Streets, Factory, Square, Lobby) are
-  // intentionally omitted from the online v1. Their obstacle/surface data
-  // can be ported into shared/src/sim/arena.js when we want to enable them
-  // online; the offline client still has them for reference.
+  arena1: { id: 'arena1', name: 'Plain Field' },
+  arena2: { id: 'arena2', name: 'Streets' },
+  factory: { id: 'factory', name: 'Factory' },
+  square: { id: 'square', name: 'Square' },
+  lobby: { id: 'lobby', name: 'Lobby' }
 };
 
 // Match-wide tunables.

@@ -7,7 +7,9 @@ import {
   tickBot,
   emptyInput,
   TICK_RATE_MS,
-  TICK_DT
+  TICK_DT,
+  MAP_DATA,
+  getArena
 } from '../src/sim/index.js';
 
 // Helper — assert no number in `obj` is NaN/±Infinity.
@@ -29,6 +31,23 @@ function assertFinite(obj, path = '') {
     }
   }
 }
+
+
+test('all online maps have arena collision data and spawns', () => {
+  for (const mapKey of Object.keys(MAP_DATA)) {
+    const arena = getArena(mapKey);
+    assert.equal(arena.mapKey, mapKey);
+    assert.ok(arena.obstacles.length > 0, `${mapKey} should have collision obstacles`);
+    assert.ok(arena.spawns.p1 && arena.spawns.p2, `${mapKey} should have both player spawns`);
+    assertFinite(arena.spawns, `${mapKey}.spawns`);
+    const match = createMatchState({ mapKey, startTime: 1000 });
+    assert.equal(match.mapKey, mapKey);
+    assertFinite(match.fighters, `${mapKey}.fighters`);
+    for (const surface of arena.surfaces) {
+      assert.equal(typeof surface.heightAt, 'function', `${mapKey} surface should materialize heightAt`);
+    }
+  }
+});
 
 test('createMatchState produces valid initial state', () => {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit2', startTime: 1000 });
