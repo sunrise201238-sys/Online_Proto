@@ -57,15 +57,22 @@ export function tickBot(matchState, botId, now) {
   let mx = dirX * retreat + sideX * me.strafeSign * 1.05;
   let mz = dirZ * retreat + sideZ * me.strafeSign * 1.05;
 
-  const moveScalar = now < me.hitStunUntil ? 0 : 10.6;
+  // Bot respects its boost gauge — see updateEnemy in client/src/main.js for
+  // the matching offline logic and rationale (without this gate the bot
+  // effectively had infinite sprint).
+  const sprintAvailable = me.boost > 0 && now >= me.emptyRecoverUntil;
+  const baseMoveScalar = sprintAvailable ? 10.6 : 5.6;
+  const moveScalar = now < me.hitStunUntil ? 0 : baseMoveScalar;
   me.vel.x = mx * moveScalar;
   me.vel.z = mz * moveScalar;
   if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
-    me.vel.x = sideX * 4.5;
-    me.vel.z = sideZ * 4.5;
+    const driftScalar = sprintAvailable ? 4.5 : 2.4;
+    me.vel.x = sideX * driftScalar;
+    me.vel.z = sideZ * driftScalar;
   }
 
-  if (dist < 10 && me.boost > 18 && now > me.evadeCooldownUntil && Math.random() > 0.66) {
+  const idleAction = sprintAvailable ? 'dash' : 'idle';
+  if (sprintAvailable && dist < 10 && me.boost > 18 && now > me.evadeCooldownUntil && Math.random() > 0.66) {
     const sign = Math.random() > 0.5 ? 1 : -1;
     me.vel.x += sideX * sign * 22;
     me.vel.z += sideZ * sign * 22;
@@ -73,8 +80,8 @@ export function tickBot(matchState, botId, now) {
     me.evadeCooldownUntil = now + 520;
     me.action = 'dash';
   } else {
-    me.action = 'dash';
-    if (dist >= 10 && dist <= 20 && me.boost > 12 && Math.random() > 0.88) {
+    me.action = idleAction;
+    if (sprintAvailable && dist >= 10 && dist <= 20 && me.boost > 12 && Math.random() > 0.88) {
       const sign = Math.random() > 0.5 ? 1 : -1;
       me.vel.x += sideX * sign * 26;
       me.vel.z += sideZ * sign * 26;
