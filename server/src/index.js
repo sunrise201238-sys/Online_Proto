@@ -34,6 +34,10 @@ const lobby = {
   // Last-received input frame per player. Tap flags (jump/stepTap/shootTap)
   // are accumulated across input:frame messages and reset after each tick.
   inputs: { p1: emptyInput(), p2: emptyInput() },
+  // Highest seq number we've received per player. Echoed back in each
+  // snapshot under `acks` so clients know which predicted inputs the server
+  // has consumed (everything <= this seq) vs. still in-flight.
+  lastAcked: { p1: -1, p2: -1 },
   startedAt: 0,
   endedAt: 0,
   winnerId: null
@@ -57,6 +61,7 @@ function startMatch() {
   });
   lobby.state = 'active';
   lobby.inputs = { p1: emptyInput(), p2: emptyInput() };
+  lobby.lastAcked = { p1: -1, p2: -1 };
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
@@ -99,12 +104,22 @@ function tick() {
   const p2 = lobby.match.fighters.p2;
   if (p1.hp <= 0 || p2.hp <= 0) {
     const winner = p1.hp <= 0 ? 'p2' : 'p1';
-    io.emit('match:snapshot', buildSnapshot(lobby.match));
+    io.emit('match:snapshot', snapshotWithAcks());
     endMatch(winner, 'ko');
     return;
   }
 
-  io.emit('match:snapshot', buildSnapshot(lobby.match));
+  io.emit('match:snapshot', snapshotWithAcks());
+}
+
+function snapshotWithAcks() {
+  // Phase 3: clients use these to know which of their predicted inputs the
+  // server has consumed. Inputs with seq > acks[me] are still pending and
+  // need to be replayed on top of the snapshot during reconciliation.
+  return {
+    ...buildSnapshot(lobby.match),
+    acks: { p1: lobby.lastAcked.p1, p2: lobby.lastAcked.p2 }
+  };
 }
 
 setInterval(tick, TICK_RATE_MS);
@@ -140,6 +155,13 @@ io.on('connection', (socket) => {
     const slot = lobby.players.get(socket.id);
     if (slot !== 'p1' && slot !== 'p2') return;
     if (lobby.state !== 'active') return;
+
+    // Track the highest seq we've seen so the client knows what's been
+    // consumed (echoed back as `acks` in each snapshot).
+    if (typeof frame.seq === 'number' && frame.seq > lobby.lastAcked[slot]) {
+      lobby.lastAcked[slot] = frame.seq;
+    }
+
     const cur = lobby.inputs[slot];
     // Continuous fields overwrite. Tap fields are sticky-OR so a tap that
     // arrives between two server ticks isn't dropped.
