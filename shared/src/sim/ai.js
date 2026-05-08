@@ -7,6 +7,42 @@
 
 import { between } from './math.js';
 import { attemptFire } from './actions.js';
+import { MAX_HP, STEP_BOOST_COST } from './constants.js';
+
+// --- Bot tactical-sprint tunables ---
+// Hysteresis: bot only initiates a new sprint burst once boost has refilled
+// to BOT_SPRINT_READY_BOOST. This prevents the stutter-step that happens when
+// boost barely crosses 0 and is immediately spent again.
+const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;            // 48
+const BOT_SPRINT_MIN_BOOST = 8;
+// Burst window — duration that vel is held in burst direction with action='dash'
+// (so updateBoost / tickBoost drains the gauge during this window).
+const BOT_SPRINT_BURST_MS = 280;
+// Velocity magnitude during a burst — noticeably faster than the kiting walk
+// (10.6) so the player can read it as a deliberate evade. Hit detection is
+// unaffected since we don't change collision shapes.
+const BOT_SPRINT_BURST_VEL = 17;
+// How far ahead to look for projectiles that are heading toward us. Bot only
+// burst-evades projectiles within this radius and approaching.
+const BOT_THREAT_LOOKAHEAD = 14;
+
+// Find the nearest projectile that targets `me`, is within range, and is
+// heading toward `me`. Used to decide when to spend boost on an evade.
+function findIncomingThreat(matchState, me, range) {
+  const r2 = range * range;
+  for (const p of matchState.projectiles) {
+    if (p.targetId !== me.id) continue;
+    const dxp = p.pos.x - me.pos.x;
+    const dzp = p.pos.z - me.pos.z;
+    if (dxp * dxp + dzp * dzp > r2) continue;
+    // Heading toward us when the dot product of (toward-me vector) and
+    // velocity is positive.
+    const dot = (-dxp) * p.vel.x + (-dzp) * p.vel.z;
+    if (dot <= 0) continue;
+    return p;
+  }
+  return null;
+}
 
 // Match the InputFrame shape produced by the client: an idealized "what the
 // player would press" set the orchestrator already knows how to consume.
@@ -57,37 +93,103 @@ export function tickBot(matchState, botId, now) {
   let mx = dirX * retreat + sideX * me.strafeSign * 1.05;
   let mz = dirZ * retreat + sideZ * me.strafeSign * 1.05;
 
-  // Bot respects its boost gauge — see updateEnemy in client/src/main.js for
-  // the matching offline logic and rationale (without this gate the bot
-  // effectively had infinite sprint).
-  const sprintAvailable = me.boost > 0 && now >= me.emptyRecoverUntil;
-  const baseMoveScalar = sprintAvailable ? 10.6 : 5.6;
-  const moveScalar = now < me.hitStunUntil ? 0 : baseMoveScalar;
-  me.vel.x = mx * moveScalar;
-  me.vel.z = mz * moveScalar;
-  if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
-    const driftScalar = sprintAvailable ? 4.5 : 2.4;
-    me.vel.x = sideX * driftScalar;
-    me.vel.z = sideZ * driftScalar;
-  }
+  // --- Tactical sprint state machine ---
+  // Default behaviour is to WALK along the kiting direction (no boost drain,
+  // action='idle'), saving the gauge for actual tactical bursts.
+  //
+  // Hysteresis flag botSprintReady flips ON once boost has refilled to
+  // BOT_SPRINT_READY_BOOST and OFF only when the gauge is fully drained — so
+  // the bot won't engage a sprint until it has a meaningful chunk of boost,
+  // and then commits to spending it rather than stutter-stepping every time
+  // the gauge crosses 0.
+  if (me.boost >= BOT_SPRINT_READY_BOOST) me.botSprintReady = true;
+  if (me.boost <= 0) me.botSprintReady = false;
 
-  const idleAction = sprintAvailable ? 'dash' : 'idle';
-  if (sprintAvailable && dist < 10 && me.boost > 18 && now > me.evadeCooldownUntil && Math.random() > 0.66) {
-    const sign = Math.random() > 0.5 ? 1 : -1;
-    me.vel.x += sideX * sign * 22;
-    me.vel.z += sideZ * sign * 22;
-    me.evadeHomingUntil = now + 240;
-    me.evadeCooldownUntil = now + 520;
-    me.action = 'dash';
-  } else {
-    me.action = idleAction;
-    if (sprintAvailable && dist >= 10 && dist <= 20 && me.boost > 12 && Math.random() > 0.88) {
-      const sign = Math.random() > 0.5 ? 1 : -1;
-      me.vel.x += sideX * sign * 26;
-      me.vel.z += sideZ * sign * 26;
-      me.evadeHomingUntil = now + 280;
+  let inBurst = (me.botSprintUntil ?? 0) > now;
+  // End a burst early if boost ran dry mid-flight, so we drop back to walking
+  // and start the regen cycle instead of sliding at full burst velocity with
+  // an empty gauge.
+  if (inBurst && me.boost <= 0) {
+    me.botSprintUntil = 0;
+    inBurst = false;
+  }
+  const canStartBurst = !inBurst
+    && me.botSprintReady === true
+    && me.boost >= BOT_SPRINT_MIN_BOOST
+    && now > me.evadeCooldownUntil
+    && now >= me.emptyRecoverUntil
+    && now >= me.hitStunUntil;
+
+  if (canStartBurst) {
+    // Trigger 1: incoming projectile — evade perpendicular.
+    const threat = findIncomingThreat(matchState, me, BOT_THREAT_LOOKAHEAD);
+    if (threat) {
+      // Pick the side that moves AWAY from the projectile's heading.
+      const cross = threat.vel.x * sideZ - threat.vel.z * sideX;
+      const evadeSign = cross >= 0 ? 1 : -1;
+      me.botSprintDirX = sideX * evadeSign;
+      me.botSprintDirZ = sideZ * evadeSign;
+      me.botSprintUntil = now + BOT_SPRINT_BURST_MS;
+      me.evadeCooldownUntil = now + 700;
+      me.evadeHomingUntil = now + 240;
+      me.momentumVX = 0;
+      me.momentumVZ = 0;
+      inBurst = true;
+    } else if (dist < 8) {
+      // Trigger 2: opponent too close — burst back to re-open kiting space.
+      me.botSprintDirX = -dirX;
+      me.botSprintDirZ = -dirZ;
+      me.botSprintUntil = now + 240;
+      me.evadeCooldownUntil = now + 600;
+      me.momentumVX = 0;
+      me.momentumVZ = 0;
+      inBurst = true;
+    } else if (me.hp < MAX_HP * 0.4 && dist < 18 && Math.random() > 0.85) {
+      // Trigger 3: low HP — kite further away ("go for cover" approximated as
+      // increasing range; we don't have obstacle awareness for true cover).
+      let bx = -dirX + sideX * me.strafeSign * 0.5;
+      let bz = -dirZ + sideZ * me.strafeSign * 0.5;
+      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
+      me.botSprintDirX = bx / blen;
+      me.botSprintDirZ = bz / blen;
+      me.botSprintUntil = now + 320;
+      me.evadeCooldownUntil = now + 900;
+      me.momentumVX = 0;
+      me.momentumVZ = 0;
+      inBurst = true;
+    } else if (Math.random() > 0.985) {
+      // Trigger 4: occasional unpredictable strafe burst (rare, adds variance
+      // so the bot doesn't sit still between threats).
+      const strafeSign = Math.random() > 0.5 ? 1 : -1;
+      let bx = sideX * strafeSign + dirX * 0.25;
+      let bz = sideZ * strafeSign + dirZ * 0.25;
+      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
+      me.botSprintDirX = bx / blen;
+      me.botSprintDirZ = bz / blen;
+      me.botSprintUntil = now + 220;
+      me.evadeCooldownUntil = now + 700;
+      me.momentumVX = 0;
+      me.momentumVZ = 0;
+      inBurst = true;
     }
   }
+
+  if (inBurst) {
+    me.vel.x = (me.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
+    me.vel.z = (me.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
+    me.action = 'dash';
+  } else {
+    // Walk pace — kiting direction, no boost drain.
+    const moveScalar = now < me.hitStunUntil ? 0 : 10.6;
+    me.vel.x = mx * moveScalar;
+    me.vel.z = mz * moveScalar;
+    if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
+      me.vel.x = sideX * 4.5;
+      me.vel.z = sideZ * 4.5;
+    }
+    me.action = 'idle';
+  }
+
   if (dist > 14 && Math.random() > 0.9) me.evadeHomingUntil = now + 90;
 
   if (now >= me.nextFireAt) {
