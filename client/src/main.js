@@ -1573,6 +1573,31 @@ function buildOnlineInputFrame() {
   forward.normalize();
   const right = new THREE.Vector3(-forward.z, 0, forward.x);
   const move = forward.clone().multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
+
+  // Mirror updatePlayer's per-frame sprint normalization for online mode.
+  // Without this, the PC sprint-lock workflow can leak input.boost=true:
+  //   1. double-tap K → sprintLocked=true, boost=true
+  //   2. tap shoot, release K (keyup-K leaves boost=true because
+  //      sprintLocked is still true at that moment)
+  //   3. release WASD (keyup-WASD clears sprintLocked but never touches boost)
+  // → input.boost stays asserted forever even with no keys held, and the
+  // server keeps draining the boost gauge to zero. Offline doesn't see
+  // this because updatePlayer re-derives input.boost every frame; mobile
+  // doesn't see it because the joystick's pointerup explicitly clears all
+  // three flags. Doing the same derivation here makes the online PC path
+  // behave identically.
+  const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  const playerBoost = state.player?.state?.boost;
+  if (
+    !hasDirInput
+    || input.jump
+    || input.stepTap
+    || (playerBoost != null && playerBoost <= 0)
+  ) {
+    input.sprintLocked = false;
+  }
+  input.boost = input.boostHeld || input.sprintLocked;
+
   return {
     moveX: move.x,
     moveZ: move.z,
