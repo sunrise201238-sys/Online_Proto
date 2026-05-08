@@ -84,7 +84,12 @@ function startMatch() {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.emit('match:start', { startTime, mapKey: 'arena1' });
+  io.emit('match:start', { startTime, mapKey });
+  // Broadcast the reset rematch flags so clients clear their cached
+  // {true,true} from the previous round. Without this, when match N+1 ends,
+  // refreshEndMenuIfStale reads stale flags and gets stuck on the
+  // "Opponent ready — starting…" overlay.
+  emitLobbyConfig();
   console.log('[lobby] match started');
 }
 
