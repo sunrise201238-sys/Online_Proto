@@ -483,14 +483,14 @@ function setupHUD() {
 
 let hudRefs = null;
 
-// Build a projectile mesh. Sniper rounds get a slim, elongated tracer that's
-// re-oriented along velocity each frame (see orientTracer). The hit box is
-// unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
-// the projectile's logical position vs the target's hit radius and never the
-// mesh geometry, so the visual length/orientation has no gameplay effect.
-const SNIPER_TRACER_LENGTH = 1.45;
-const SNIPER_TRACER_HEAD_RADIUS = 0.04;
-const SNIPER_TRACER_TAIL_RADIUS = 0.07;
+// Build a projectile mesh. Sniper rounds get a slim spindle (sharp at both
+// ends) that's re-oriented along velocity each frame (see orientTracer). The
+// hit box is unchanged — hit detection in updateProjectileSystem /
+// tickProjectiles uses the projectile's logical position vs the target's
+// hit radius and never the mesh geometry, so the visual length/orientation
+// has no gameplay effect.
+const SNIPER_TRACER_LENGTH = 1.7;
+const SNIPER_TRACER_MID_RADIUS = 0.09;
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   if (!isSniper) {
@@ -499,20 +499,20 @@ function buildProjectileMesh(unit, isRedLock) {
       new THREE.MeshBasicMaterial({ color: isRedLock ? 0xff4f66 : 0x6df9ff })
     );
   }
-  // Tapered cylinder: radiusTop is the leading tip, radiusBottom is the tail.
-  // Geometry is shifted so the cylinder's +Y face (top) sits at the mesh
-  // origin — i.e. the tracer "head" coincides with the projectile's logical
-  // position and the body trails behind once we rotate +Y onto the velocity
-  // direction. Without this shift the bullet would appear to extend past
-  // its actual impact point.
-  const geom = new THREE.CylinderGeometry(
-    SNIPER_TRACER_HEAD_RADIUS,
-    SNIPER_TRACER_TAIL_RADIUS,
-    SNIPER_TRACER_LENGTH,
-    8,
-    1
-  );
-  geom.translate(0, -SNIPER_TRACER_LENGTH / 2, 0);
+  // Spindle profile: revolve a 3-point silhouette around the Y axis to get a
+  // shape with sharp tips at both ends and a fattest middle. The geometry is
+  // built spanning y ∈ [-L/2, +L/2], then shifted so the head (y=+L/2) sits
+  // at the mesh origin — i.e. the leading tip coincides with the projectile's
+  // logical position and the body trails behind once orientTracer rotates the
+  // local +Y axis onto the velocity direction.
+  const half = SNIPER_TRACER_LENGTH / 2;
+  const profile = [
+    new THREE.Vector2(0, -half),                    // tail tip (sharp)
+    new THREE.Vector2(SNIPER_TRACER_MID_RADIUS, 0), // mid (widest)
+    new THREE.Vector2(0, half)                      // head tip (sharp)
+  ];
+  const geom = new THREE.LatheGeometry(profile, 10);
+  geom.translate(0, -half, 0);
   const color = isRedLock ? 0xffd28a : 0xfff4d0;
   const mesh = new THREE.Mesh(
     geom,
@@ -620,9 +620,9 @@ function createGlintForMech(mech) {
   c.width = c.height = 64;
   const x = c.getContext('2d');
   const grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255, 255, 235, 1)');
-  grad.addColorStop(0.45, 'rgba(255, 220, 110, 0.85)');
-  grad.addColorStop(1, 'rgba(255, 200, 60, 0)');
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  grad.addColorStop(0.45, 'rgba(248, 248, 248, 0.85)');
+  grad.addColorStop(1, 'rgba(238, 238, 238, 0)');
   x.fillStyle = grad;
   x.beginPath();
   x.arc(32, 32, 32, 0, Math.PI * 2);
