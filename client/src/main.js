@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import './style.css';
+import { createConnection } from './online/connection.js';
 
 const app = document.getElementById('app');
 
@@ -72,6 +73,10 @@ const state = {
 };
 state.dummyMode = false;
 state.playerStuckSince = 0;
+
+// Online-mode runtime state. Populated by startOnlineMatch and torn down by
+// cleanupMatch / leaveOnlineMatch.
+state.online = null; // { conn, myPlayerId, projectileMeshes (Map), waitingOverlayEl, lastEventTick }
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1173,6 +1178,20 @@ function updateHud() {
 }
 
 function cleanupMatch() {
+  // If we were in an online match, close the socket + drop online-only meshes.
+  if (state.online) {
+    if (state.online.conn) state.online.conn.close();
+    if (state.online.projectileMeshes) {
+      for (const op of state.online.projectileMeshes.values()) {
+        scene.remove(op.mesh);
+        op.mesh.geometry.dispose();
+        op.mesh.material.dispose();
+      }
+      state.online.projectileMeshes.clear();
+    }
+    state.online = null;
+    hideOnlineOverlay();
+  }
   [state.player, state.enemy].forEach((m) => {
     if (!m) return;
     removeGlintFromMech(m);
@@ -1227,6 +1246,287 @@ function startMatch() {
   state.matchStartAt = performance.now();
 }
 
+// ---- Online match runtime ----
+//
+// Online mode shares the offline scene/camera/HUD setup but skips the
+// offline simulation entirely. Each frame, tickOnline() pulls the latest
+// snapshot from the server, mirrors it onto the local mech objects (so
+// existing render code — camera, reticle, HUD — keeps working), syncs
+// projectile meshes, fires VFX events, and sends the local input frame
+// back to the server.
+
+function showOnlineOverlay(text) {
+  const existing = document.getElementById('online-overlay');
+  if (existing) {
+    existing.querySelector('.msg').textContent = text;
+    return existing;
+  }
+  const el = document.createElement('div');
+  el.id = 'online-overlay';
+  el.className = 'online-overlay';
+  el.innerHTML = `<div class="msg"></div>`;
+  el.querySelector('.msg').textContent = text;
+  app.appendChild(el);
+  return el;
+}
+
+function hideOnlineOverlay() {
+  const el = document.getElementById('online-overlay');
+  if (el) el.remove();
+}
+
+function leaveOnlineMatch() {
+  if (state.online?.conn) state.online.conn.close();
+  if (state.online?.projectileMeshes) {
+    for (const op of state.online.projectileMeshes.values()) {
+      scene.remove(op.mesh);
+      op.mesh.geometry.dispose();
+      op.mesh.material.dispose();
+    }
+    state.online.projectileMeshes.clear();
+  }
+  state.online = null;
+  hideOnlineOverlay();
+  state.running = false;
+}
+
+function startOnlineMatch() {
+  cleanupMatch();
+  clearMenus();
+  state.hud?.remove();
+  renderer.domElement.style.pointerEvents = 'auto';
+
+  // Both fighters use unit1 in online v1 — server hard-codes this match.
+  const unitData = UNIT_DATA.unit1;
+  state.player = createMech(0x62d7ff, unitData);
+  state.enemy = createMech(0xff7ad5, unitData);
+  // Default spawn positions for arena1; server will overwrite via snapshot.
+  state.player.body.position.set(-24, 2.45, 0);
+  state.enemy.body.position.set(24, 2.45, 0);
+  buildArenaForMap('arena1');
+
+  state.reticle = makeReticleSprite();
+  state.enemy.root.add(state.reticle);
+  hudRefs = setupHUD();
+
+  state.online = {
+    conn: createConnection(),
+    myPlayerId: null,
+    projectileMeshes: new Map(),
+    snapshotsApplied: 0,
+    matchEndShown: false
+  };
+  state.online.conn.open();
+
+  state.phase = 'online';
+  state.running = false; // flips true once the first snapshot lands
+  showOnlineOverlay('Connecting…');
+}
+
+function buildOnlineInputFrame() {
+  // Convert joystick (screen-space) into world-space move using the camera's
+  // forward — same conversion the offline updatePlayer uses.
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+  const right = new THREE.Vector3(-forward.z, 0, forward.x);
+  const move = forward.clone().multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
+  return {
+    moveX: move.x,
+    moveZ: move.z,
+    boost: !!input.boost,
+    sprintLocked: !!input.sprintLocked,
+    jump: !!input.jump,
+    stepTap: !!input.stepTap,
+    shootTap: !!input.shootTap,
+    shootHold: !!input.shootHold
+  };
+}
+
+// Per-fighter snapshot → mech mirror. Copies the fields the existing render
+// code (updateCamera, updateLocksAndReticle, updateHud, glint) reads from
+// mech.state and mech.body.
+function mirrorFighterToMech(fighter, mech) {
+  mech.body.position.set(fighter.pos.x, fighter.pos.y, fighter.pos.z);
+  mech.root.position.set(fighter.pos.x, fighter.pos.y + mech.modelYOffset, fighter.pos.z);
+  mech.grounded = !fighter.airborne;
+
+  const s = mech.state;
+  s.action = fighter.action;
+  s.hp = fighter.hp;
+  s.boost = fighter.boost;
+  s.ammo = fighter.ammo;
+  s.lastFireAt = fighter.lastFireAt;
+  s.reloadingUntil = fighter.reloadingUntil;
+  s.reloadTickStartAt = fighter.reloadTickStartAt;
+  s.redLock = fighter.redLock;
+  s.airborne = fighter.airborne;
+  s.hitStunUntil = fighter.hitStunUntil;
+  s.overheatedUntil = fighter.overheatedUntil;
+  // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
+  // anything works since the offline code only checks truthiness.
+  s.sniperChargeTarget = fighter.sniperChargeTargetId ? { id: fighter.sniperChargeTargetId } : null;
+  s.sniperChargeUntil = fighter.sniperChargeUntil;
+}
+
+function syncOnlineProjectiles(snap) {
+  const meshes = state.online.projectileMeshes;
+  const liveIds = new Set();
+  for (const sp of snap.projectiles) {
+    liveIds.add(sp.id);
+    let entry = meshes.get(sp.id);
+    if (!entry) {
+      const owner = snap.fighters[sp.ownerId];
+      const isOwnerRedLock = owner?.redLock ?? false;
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 8, 8),
+        new THREE.MeshBasicMaterial({ color: isOwnerRedLock ? 0xff4f66 : 0x6df9ff })
+      );
+      scene.add(mesh);
+      entry = { mesh };
+      meshes.set(sp.id, entry);
+    }
+    entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
+  }
+  // Despawn anything no longer in the snapshot.
+  for (const [id, entry] of meshes.entries()) {
+    if (liveIds.has(id)) continue;
+    scene.remove(entry.mesh);
+    entry.mesh.geometry.dispose();
+    entry.mesh.material.dispose();
+    meshes.delete(id);
+  }
+}
+
+function processOnlineEvents(snap, myPlayerId) {
+  if (!snap.events) return;
+  for (const ev of snap.events) {
+    if (ev.type === 'hit' && ev.pos) {
+      // Color the hit ring by who got hit, matching offline conventions.
+      const color = ev.targetId === myPlayerId ? 0x67f2ff : 0xff73d2;
+      spawnHitEffect(new THREE.Vector3(ev.pos.x, ev.pos.y, ev.pos.z), color);
+    } else if (ev.type === 'sniper-charge-start' && state.online) {
+      const owner = snap.fighters[ev.ownerId];
+      if (!owner) continue;
+      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
+      createGlintForMech(mech);
+    } else if (ev.type === 'sniper-charge-fire') {
+      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
+      removeGlintFromMech(mech);
+    }
+  }
+}
+
+function showOnlineEndMenu(winnerId, myPlayerId) {
+  state.online.matchEndShown = true;
+  state.running = false;
+  clearMenus();
+  const win = winnerId === myPlayerId;
+  const tie = winnerId == null;
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = `
+    <h2>${tie ? 'MATCH ENDED' : (win ? 'YOU WIN' : 'YOU LOSE')}</h2>
+    <button id="online-rematch">Rematch</button>
+    <button id="online-leave">Leave</button>
+  `;
+  app.appendChild(menu);
+  menu.querySelector('#online-rematch').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    clearMenus();
+    state.online.matchEndShown = false;
+    state.online.conn.requestRematch();
+    showOnlineOverlay('Waiting for rematch…');
+  });
+  menu.querySelector('#online-leave').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    leaveOnlineMatch();
+    showSelectMenu();
+  });
+}
+
+function tickOnline(dt, _now) {
+  const onl = state.online;
+  if (!onl) return;
+  const conn = onl.conn;
+
+  // Track player ID once it arrives.
+  if (!onl.myPlayerId && conn.getPlayerId()) {
+    onl.myPlayerId = conn.getPlayerId();
+    if (onl.myPlayerId === 'spectator') {
+      showOnlineOverlay('Spectator mode — match in progress or full');
+    } else {
+      showOnlineOverlay(`Connected as ${onl.myPlayerId}. Waiting for opponent…`);
+    }
+  }
+
+  // Show connect_error if we have one and aren't connected.
+  if (!conn.isConnected() && conn.getLastError()) {
+    showOnlineOverlay(`Connection error: ${conn.getLastError()}`);
+  }
+
+  const matchState = conn.getMatchState();
+  if (matchState === 'active' && !state.running) {
+    // Don't drop the overlay until the FIRST snapshot lands — otherwise we
+    // briefly see the spawn-position default while the snapshot is in flight.
+    if (conn.getLatestSnapshot()) {
+      hideOnlineOverlay();
+      state.running = true;
+      onl.matchEndShown = false;
+    } else {
+      showOnlineOverlay('Match starting…');
+    }
+  }
+
+  if (state.running && matchState === 'active') {
+    const snap = conn.getLatestSnapshot();
+    if (snap) {
+      // Mirror fighters onto the local mech objects.
+      const myId = onl.myPlayerId;
+      // Decide which mech is "player" (camera target) vs "enemy" based on assignment.
+      // For spectators or before assignment, treat p1 as player.
+      const playerSlot = (myId === 'p2') ? 'p2' : 'p1';
+      const enemySlot = (playerSlot === 'p1') ? 'p2' : 'p1';
+      mirrorFighterToMech(snap.fighters[playerSlot], state.player);
+      mirrorFighterToMech(snap.fighters[enemySlot], state.enemy);
+      // Face fighters at each other (offline updateTransforms does the same).
+      const dx = state.enemy.root.position.x - state.player.root.position.x;
+      const dz = state.enemy.root.position.z - state.player.root.position.z;
+      if (dx * dx + dz * dz > 1e-6) {
+        const yaw = Math.atan2(dx, dz);
+        state.player.root.rotation.y = yaw;
+        state.enemy.root.rotation.y = yaw + Math.PI;
+      }
+      syncOnlineProjectiles(snap);
+      processOnlineEvents(snap, myId);
+      onl.snapshotsApplied += 1;
+    }
+
+    // Send our input frame.
+    if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
+      conn.sendInput(buildOnlineInputFrame());
+      // Reset taps so they're sent for at most one frame.
+      input.stepTap = false;
+      input.shootTap = false;
+      input.jump = false;
+    }
+
+    // Existing render-side updates work because mech.state is mirrored.
+    updateLocksAndReticle();
+    updateGlintScale(state.player);
+    updateGlintScale(state.enemy);
+    // No projectile system tick — server owns projectiles.
+    // VFX (hit rings, melee slashes) live in state.vfx and decay per frame.
+    updateVfx(dt);
+    updateCamera();
+    updateHud();
+  } else if (matchState === 'ended' && !onl.matchEndShown) {
+    const end = conn.getLastMatchEnd();
+    showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId);
+  }
+}
+
 function showSelectMenu() {
   cleanupMatch();
   clearMenus();
@@ -1241,9 +1541,16 @@ function showSelectMenu() {
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h2>Select Your Unit</h2>
+    <button data-online-play class="online-play-btn">Online (vs Player)</button>
     <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
+    <div class="menu-divider">— Offline —</div>
     ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}`;
   app.appendChild(menu);
+
+  menu.querySelector('button[data-online-play]').addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    startOnlineMatch();
+  });
 
   menu.querySelector('button[data-online-debug]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -2929,7 +3236,10 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 1 / 30);
     const now = performance.now();
 
-    if (state.running) {
+    if (state.online) {
+      syncKeyboardMovement();
+      tickOnline(dt, now);
+    } else if (state.running) {
       syncKeyboardMovement();
       tickAmmo(state.player, now);
       tickAmmo(state.enemy, now);
