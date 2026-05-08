@@ -179,6 +179,9 @@ const JUMP_BOOST_COST = STEP_BOOST_COST;
 const STEP_HOMING_CUT_MS = 260;
 const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
+// Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
+// see that file for the 18-small-grid derivation.
+const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
 
 // --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
@@ -594,7 +597,12 @@ function spawnProjectiles(owner, target) {
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
       damage: owner.unit.damage,
-      hitStunMs: 200
+      hitStunMs: 200,
+      // Set on the shotgun's center pellet only — accumulates path length so
+      // non-center pellets can interpolate cluster spread (0 → full) over
+      // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
+      // non-center projectiles (the update step skips them).
+      distTraveled: (isShotgun && isCenterPellet) ? 0 : undefined
     };
     if (isCenterPellet) centerPellet = projectile;
     state.projectiles.push(projectile);
@@ -801,8 +809,20 @@ function updateProjectileSystem(dt) {
       if (p.centerPellet.ttl <= 0 || !state.projectiles.includes(p.centerPellet)) {
         p.centerPellet = null;
       } else {
+        // Cluster offset scales 0 → 1 over SHOTGUN_CLUSTER_SPREAD_DISTANCE
+        // world units of center-pellet travel, so pellets emerge bunched and
+        // grow to the full clusterOffset by the time they reach mid-range.
+        // distTraveled is monotonically non-decreasing, so spread can't
+        // shrink even when homing curves the center pellet.
+        const spreadFactor = THREE.MathUtils.clamp(
+          (p.centerPellet.distTraveled ?? 0) / SHOTGUN_CLUSTER_SPREAD_DISTANCE,
+          0,
+          1
+        );
         p.vel.copy(p.centerPellet.vel);
-        p.mesh.position.copy(p.centerPellet.mesh.position).add(p.clusterOffset);
+        p.mesh.position
+          .copy(p.centerPellet.mesh.position)
+          .addScaledVector(p.clusterOffset, spreadFactor);
       }
     }
     const toTarget = new THREE.Vector3().subVectors(p.target.root.position, p.mesh.position);
@@ -834,6 +854,11 @@ function updateProjectileSystem(dt) {
     // Re-orient tracer projectiles (sniper) so the streak follows any homing
     // turns. No-op for sphere projectiles.
     orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
+    // Track total path length on shotgun center pellets so the cluster
+    // spread factor uses actual distance flown (homing-aware).
+    if (p.distTraveled !== undefined) {
+      p.distTraveled += p.mesh.position.distanceTo(prevPos);
+    }
     // Swept test: catches fast/homing projectiles that would otherwise tunnel through
     // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
     // unit-only fences) are skipped so bullets fly through them.
