@@ -177,6 +177,8 @@ const STEP_COOLDOWN_MS = 1000;
 const STEP_BOOST_COST = 48;
 const JUMP_BOOST_COST = STEP_BOOST_COST;
 const STEP_HOMING_CUT_MS = 260;
+const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
+const SNIPER_GLINT_MIN_FLASH_MS = 100;
 
 const input = {
   x: 0,
@@ -536,7 +538,13 @@ function spawnProjectiles(owner, target) {
 
 
 function createGlintForMech(mech) {
-  if (mech.glintMesh) return;
+  if (mech.glintMesh) {
+    // Refresh the min-flash window so a re-charge after a fast cancel still
+    // shows for at least one flash duration.
+    mech.glintMinHideAt = performance.now() + SNIPER_GLINT_MIN_FLASH_MS;
+    mech.glintPendingRemove = false;
+    return;
+  }
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const x = c.getContext('2d');
@@ -561,9 +569,13 @@ function createGlintForMech(mech) {
   sprite.renderOrder = 9999;
   mech.root.add(sprite);
   mech.glintMesh = sprite;
+  mech.glintMinHideAt = performance.now() + SNIPER_GLINT_MIN_FLASH_MS;
+  mech.glintPendingRemove = false;
 }
 
-function removeGlintFromMech(mech) {
+// Force-remove the glint sprite, ignoring the min-flash window. Used at match
+// teardown so we don't leak resources.
+function disposeGlintImmediate(mech) {
   if (!mech.glintMesh) return;
   mech.root.remove(mech.glintMesh);
   if (mech.glintMesh.material) {
@@ -571,6 +583,28 @@ function removeGlintFromMech(mech) {
     mech.glintMesh.material.dispose();
   }
   mech.glintMesh = null;
+  mech.glintPendingRemove = false;
+  mech.glintMinHideAt = 0;
+}
+
+function removeGlintFromMech(mech) {
+  if (!mech.glintMesh) return;
+  // Honor the minimum flash window. If the charge resolves (or sprint-cancels)
+  // before SNIPER_GLINT_MIN_FLASH_MS has elapsed, defer removal so the glint
+  // is still visible as a brief hint. The render loop polls glintPendingRemove.
+  if (performance.now() < (mech.glintMinHideAt ?? 0)) {
+    mech.glintPendingRemove = true;
+    return;
+  }
+  disposeGlintImmediate(mech);
+}
+
+// Called per-frame. Finalizes a pending glint removal once the min-flash
+// window has elapsed.
+function tickGlintRemoval(mech) {
+  if (!mech?.glintMesh || !mech.glintPendingRemove) return;
+  if (performance.now() < (mech.glintMinHideAt ?? 0)) return;
+  disposeGlintImmediate(mech);
 }
 
 function updateGlintScale(mech) {
@@ -603,9 +637,21 @@ function attemptFire(owner, target, now) {
   return owner.state.lastFireAt !== before;
 }
 
-function tickSniperCharge(mech, now) {
+function tickSniperCharge(mech, now, sprintHeld = false) {
   const target = mech.state.sniperChargeTarget;
   if (!target) return;
+  // Sprint-cancel: holding sprint while the forced-standing charge is active
+  // ends it immediately and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST
+  // (half a step's boost). The glint still flashes via the min-hold window.
+  if (
+    sprintHeld
+    && now < mech.state.sniperChargeUntil
+    && mech.state.boost >= SNIPER_CANCEL_BOOST_COST
+  ) {
+    mech.state.boost = Math.max(0, mech.state.boost - SNIPER_CANCEL_BOOST_COST);
+    mech.state.refillPausedUntil = now + 500;
+    mech.state.sniperChargeUntil = now;
+  }
   if (now < mech.state.sniperChargeUntil) {
     mech.body.velocity.x = 0;
     mech.body.velocity.z = 0;
@@ -1206,7 +1252,7 @@ function cleanupMatch() {
   }
   [state.player, state.enemy].forEach((m) => {
     if (!m) return;
-    removeGlintFromMech(m);
+    disposeGlintImmediate(m);
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
@@ -1769,7 +1815,7 @@ function ensureOnlineMatchSetup(snap) {
   // Tear down old mechs/arena/HUD/projectile meshes.
   [state.player, state.enemy].forEach((m) => {
     if (!m) return;
-    removeGlintFromMech(m);
+    disposeGlintImmediate(m);
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
@@ -1859,6 +1905,8 @@ function runOnlineMatchFrame(dt, onl, conn) {
   }
 
   updateLocksAndReticle();
+  tickGlintRemoval(state.player);
+  tickGlintRemoval(state.enemy);
   updateGlintScale(state.player);
   updateGlintScale(state.enemy);
   updateVfx(dt);
@@ -3623,8 +3671,9 @@ function animate() {
       syncKeyboardMovement();
       tickAmmo(state.player, now);
       tickAmmo(state.enemy, now);
-      tickSniperCharge(state.player, now);
-      tickSniperCharge(state.enemy, now);
+      const playerSprintHeld = !!(input.boostHeld || input.sprintLocked);
+      tickSniperCharge(state.player, now, playerSprintHeld);
+      tickSniperCharge(state.enemy, now, false);
       updatePlayer(now);
       updateEnemy(now);
       applyRepulsion(now);
@@ -3636,6 +3685,8 @@ function animate() {
 
       updateTransforms(dt);
       updateLocksAndReticle();
+      tickGlintRemoval(state.player);
+      tickGlintRemoval(state.enemy);
       updateGlintScale(state.player);
       updateGlintScale(state.enemy);
       updateProjectileSystem(dt);
