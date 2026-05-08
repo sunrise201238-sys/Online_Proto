@@ -16,7 +16,7 @@ const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
-    projectileSpeed: 45,
+    projectileSpeed: 67,
     fireCooldownMs: 140,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -28,7 +28,7 @@ const UNIT_DATA = {
   unit2: {
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
-    projectileSpeed: 45,
+    projectileSpeed: 67,
     fireCooldownMs: 700,
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -40,7 +40,7 @@ const UNIT_DATA = {
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
     lockRange: 120,
-    projectileSpeed: 85,
+    projectileSpeed: 95,
     fireCooldownMs: 1000,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -166,7 +166,7 @@ const MOMENTUM_STANDARD = 100;
 const BOOST_MOVE_SPEED = 11.76;
 const MAX_HP = 150;
 const GROUND_BASE_Y = 2.45;
-const HOMING_MAX_DEG_PER_FRAME = 10;
+const HOMING_MAX_DEG_PER_FRAME = 4;
 const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 const HOMING_SOFTEN_RANGE = 20;
 const HOMING_SOFTEN_DEG_PER_FRAME = 1.5;
