@@ -8,7 +8,9 @@ import {
   tickMatch,
   emptyInput,
   TICK_RATE_MS,
-  TICK_DT
+  TICK_DT,
+  UNIT_DATA,
+  MAP_DATA
 } from '@gvg/shared/src/sim/index.js';
 
 const app = express();
@@ -38,6 +40,13 @@ const lobby = {
   // snapshot under `acks` so clients know which predicted inputs the server
   // has consumed (everything <= this seq) vs. still in-flight.
   lastAcked: { p1: -1, p2: -1 },
+  // Per-player configuration (chosen unit, map). Map is taken from p1 (host).
+  // Persists across matches in the same session so rematches reuse picks.
+  // Cleared per-slot on that player's disconnect.
+  config: {
+    p1: { unitKey: null, mapKey: null },
+    p2: { unitKey: null, mapKey: null }
+  },
   startedAt: 0,
   endedAt: 0,
   winnerId: null
@@ -53,10 +62,16 @@ function occupiedSlots() {
 
 function startMatch() {
   const startTime = Date.now();
+  // p1 is the "host" — their map pick is used. Both pick their own unit.
+  // Fall back to defaults if anything's missing (shouldn't happen because
+  // maybeStartMatch gates on these being set).
+  const mapKey = lobby.config.p1.mapKey ?? 'arena1';
+  const p1UnitKey = lobby.config.p1.unitKey ?? 'unit1';
+  const p2UnitKey = lobby.config.p2.unitKey ?? 'unit1';
   lobby.match = createMatchState({
-    mapKey: 'arena1',
-    p1UnitKey: 'unit1',
-    p2UnitKey: 'unit1',
+    mapKey,
+    p1UnitKey,
+    p2UnitKey,
     startTime
   });
   lobby.state = 'active';
@@ -81,7 +96,18 @@ function endMatch(winnerId, reason) {
 function maybeStartMatch() {
   if (lobby.state === 'active') return;
   const slots = occupiedSlots();
-  if (slots.has('p1') && slots.has('p2')) startMatch();
+  if (!slots.has('p1') || !slots.has('p2')) return;
+  // Both players must have picked a unit; p1 (host) must have picked a map.
+  if (!lobby.config.p1.unitKey || !lobby.config.p2.unitKey) return;
+  if (!lobby.config.p1.mapKey) return;
+  startMatch();
+}
+
+function emitLobbyConfig() {
+  io.emit('lobby:config', {
+    state: lobby.state,
+    config: lobby.config
+  });
 }
 
 function tick() {
@@ -147,6 +173,10 @@ io.on('connection', (socket) => {
     matchState: lobby.state
   });
 
+  // Bring the new socket up to date on what's been picked so far. The client
+  // uses this to decide what config UI to show.
+  socket.emit('lobby:config', { state: lobby.state, config: lobby.config });
+
   // If both player slots just filled and we're not already running, kick
   // off a match. Spectators get the same snapshot stream — no special-case.
   maybeStartMatch();
@@ -177,6 +207,28 @@ io.on('connection', (socket) => {
     };
   });
 
+  socket.on('match:configure', (cfg) => {
+    const slot = lobby.players.get(socket.id);
+    if (slot !== 'p1' && slot !== 'p2') return;
+    if (lobby.state === 'active') return; // can't change picks mid-match
+
+    let dirty = false;
+    if (cfg && typeof cfg.unitKey === 'string' && UNIT_DATA[cfg.unitKey]) {
+      lobby.config[slot].unitKey = cfg.unitKey;
+      dirty = true;
+    }
+    // Map is host-only (p1). Silently ignore p2 trying to set map.
+    if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
+      lobby.config[slot].mapKey = cfg.mapKey;
+      dirty = true;
+    }
+
+    if (dirty) {
+      emitLobbyConfig();
+      maybeStartMatch();
+    }
+  });
+
   socket.on('match:rematch-request', () => {
     // Either player can request rematch once a match has ended; both ready
     // semantics are deferred to Phase 4. For now, any request restarts.
@@ -193,12 +245,23 @@ io.on('connection', (socket) => {
       const winner = slot === 'p1' ? 'p2' : 'p1';
       endMatch(winner, 'forfeit');
     }
+    // Clear that slot's config so the next player to take it picks fresh.
+    if (slot === 'p1' || slot === 'p2') {
+      lobby.config[slot] = { unitKey: null, mapKey: null };
+    }
     // If both player slots are empty, reset the lobby fully.
     const slots = occupiedSlots();
     if (slots.size === 0) {
       lobby.match = null;
       lobby.state = 'waiting';
       lobby.inputs = { p1: emptyInput(), p2: emptyInput() };
+      lobby.config = {
+        p1: { unitKey: null, mapKey: null },
+        p2: { unitKey: null, mapKey: null }
+      };
+    } else {
+      // Tell remaining clients about the slot config change.
+      emitLobbyConfig();
     }
   });
 });
