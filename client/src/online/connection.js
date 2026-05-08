@@ -1,8 +1,7 @@
 import { io } from 'socket.io-client';
 
 // Vite injects import.meta.env.VITE_SERVER_URL at build time. Falls back to
-// localhost for local dev. The trailing slash matters; Socket.IO is forgiving
-// either way but keep it absent for consistency.
+// localhost for local dev.
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 const MAX_LOG_ENTRIES = 40;
@@ -16,12 +15,21 @@ export function createConnection() {
   });
 
   const events = [];
-  let listeners = new Set();
+  const listeners = new Set();
   let playerId = null;
   let connected = false;
   let lastError = null;
   let snapshotCount = 0;
   const snapshotTimes = [];
+
+  // Snapshot-stream state used by the online match runtime.
+  let latestSnapshot = null;
+  let prevSnapshot = null;
+  let lastSnapshotAt = 0;
+
+  // Match lifecycle bits.
+  let matchState = 'waiting'; // 'waiting' | 'active' | 'ended'
+  let lastMatchEnd = null;    // { winnerId, reason, endedAt } or null
 
   const notify = () => {
     listeners.forEach((cb) => {
@@ -30,9 +38,6 @@ export function createConnection() {
   };
 
   const log = (kind, payload) => {
-    // Snapshots arrive at the server tick rate (~40 Hz) and would evict every
-    // other event from the buffer within ~1 second. Track them separately as
-    // a counter + recent-times list for Hz computation.
     if (kind === 'match:snapshot') {
       snapshotCount += 1;
       const now = Date.now();
@@ -64,30 +69,72 @@ export function createConnection() {
 
   socket.on('player:assigned', (payload) => {
     playerId = payload?.playerId ?? null;
+    matchState = payload?.matchState ?? matchState;
     log('player:assigned', payload);
   });
 
   socket.on('match:hello', (payload) => {
+    matchState = payload?.matchState ?? matchState;
     log('match:hello', payload);
   });
 
-  // Catch-all for snapshots so Phase 0 already shows them arriving once we
-  // hook them up later. Harmless if the server doesn't send any yet.
+  socket.on('match:start', (payload) => {
+    matchState = 'active';
+    latestSnapshot = null;
+    prevSnapshot = null;
+    lastMatchEnd = null;
+    log('match:start', payload);
+  });
+
+  socket.on('match:end', (payload) => {
+    matchState = 'ended';
+    lastMatchEnd = payload ?? null;
+    log('match:end', payload);
+  });
+
   socket.on('match:snapshot', (payload) => {
-    log('match:snapshot', { tick: payload?.tick, t: payload?.serverTime });
+    if (!payload) return;
+    prevSnapshot = latestSnapshot;
+    latestSnapshot = payload;
+    lastSnapshotAt = Date.now();
+    log('match:snapshot', { tick: payload.tick, t: payload.serverTime });
   });
 
   return {
     serverUrl: SERVER_URL,
     socket,
+
     open: () => { if (!socket.connected) socket.connect(); },
     close: () => { if (socket.connected) socket.disconnect(); },
+
     isConnected: () => connected,
     getPlayerId: () => playerId,
+    getMatchState: () => matchState,
+    getLastMatchEnd: () => lastMatchEnd,
+    getLastError: () => lastError,
+
+    // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),
     getSnapshotCount: () => snapshotCount,
     getSnapshotHz: () => snapshotTimes.length,
-    getLastError: () => lastError,
+
+    // Snapshot stream — used by the render loop.
+    getLatestSnapshot: () => latestSnapshot,
+    getPreviousSnapshot: () => prevSnapshot,
+    getLastSnapshotAt: () => lastSnapshotAt,
+
+    // Send the player's current input frame to the server. Cheap; called
+    // every render frame from the online match loop.
+    sendInput: (frame) => {
+      if (!connected) return;
+      socket.emit('input:frame', frame);
+    },
+
+    requestRematch: () => {
+      if (!connected) return;
+      socket.emit('match:rematch-request');
+    },
+
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
   };
 }
