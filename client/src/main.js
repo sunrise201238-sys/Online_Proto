@@ -180,6 +180,13 @@ const STEP_HOMING_CUT_MS = 260;
 const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 
+// --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
+const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
+const BOT_SPRINT_MIN_BOOST = 8;
+const BOT_SPRINT_BURST_MS = 280;
+const BOT_SPRINT_BURST_VEL = 17;
+const BOT_THREAT_LOOKAHEAD = 14;
+
 const input = {
   x: 0,
   y: 0,
@@ -476,71 +483,66 @@ function setupHUD() {
 
 let hudRefs = null;
 
-let _projectileHaloTex = null;
-// Lazily build a soft radial-gradient texture used by the sniper-round halo
-// sprite. Cached and shared across every sniper projectile so we don't
-// rebuild the canvas per shot.
-function getProjectileHaloTexture() {
-  if (_projectileHaloTex) return _projectileHaloTex;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const x = c.getContext('2d');
-  const grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  grad.addColorStop(0.35, 'rgba(255, 240, 180, 0.75)');
-  grad.addColorStop(1, 'rgba(255, 200, 80, 0)');
-  x.fillStyle = grad;
-  x.beginPath();
-  x.arc(32, 32, 32, 0, Math.PI * 2);
-  x.fill();
-  _projectileHaloTex = new THREE.CanvasTexture(c);
-  return _projectileHaloTex;
-}
-
-// Build a projectile mesh. Sniper rounds get a noticeably larger sphere plus
-// a billboard halo sprite so the high-impact, single-shot round is readable
-// at long range and through visual noise. The hit box is unchanged: hit
-// detection in updateProjectileSystem / tickProjectiles uses the projectile's
-// position vs the target's hit radius — never the mesh geometry — so the
-// inflated visual has no gameplay effect.
+// Build a projectile mesh. Sniper rounds get a slim, elongated tracer that's
+// re-oriented along velocity each frame (see orientTracer). The hit box is
+// unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
+// the projectile's logical position vs the target's hit radius and never the
+// mesh geometry, so the visual length/orientation has no gameplay effect.
+const SNIPER_TRACER_LENGTH = 1.45;
+const SNIPER_TRACER_HEAD_RADIUS = 0.04;
+const SNIPER_TRACER_TAIL_RADIUS = 0.07;
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
-  const radius = isSniper ? 0.42 : 0.15;
-  const segs = isSniper ? 14 : 8;
-  const baseColor = isSniper
-    ? (isRedLock ? 0xfff0a0 : 0xfff8d8)
-    : (isRedLock ? 0xff4f66 : 0x6df9ff);
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, segs, segs),
-    new THREE.MeshBasicMaterial({ color: baseColor })
-  );
-  if (isSniper) {
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getProjectileHaloTexture(),
-      color: isRedLock ? 0xffaa55 : 0xffd870,
-      transparent: true,
-      depthWrite: false,
-      fog: false,
-      blending: THREE.AdditiveBlending
-    }));
-    halo.scale.set(2.6, 2.6, 1);
-    halo.renderOrder = 9998;
-    mesh.add(halo);
-    mesh.userData.halo = halo;
+  if (!isSniper) {
+    return new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 8, 8),
+      new THREE.MeshBasicMaterial({ color: isRedLock ? 0xff4f66 : 0x6df9ff })
+    );
   }
+  // Tapered cylinder: radiusTop is the leading tip, radiusBottom is the tail.
+  // Geometry is shifted so the cylinder's +Y face (top) sits at the mesh
+  // origin — i.e. the tracer "head" coincides with the projectile's logical
+  // position and the body trails behind once we rotate +Y onto the velocity
+  // direction. Without this shift the bullet would appear to extend past
+  // its actual impact point.
+  const geom = new THREE.CylinderGeometry(
+    SNIPER_TRACER_HEAD_RADIUS,
+    SNIPER_TRACER_TAIL_RADIUS,
+    SNIPER_TRACER_LENGTH,
+    8,
+    1
+  );
+  geom.translate(0, -SNIPER_TRACER_LENGTH / 2, 0);
+  const color = isRedLock ? 0xffd28a : 0xfff4d0;
+  const mesh = new THREE.Mesh(
+    geom,
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false })
+  );
+  mesh.userData.isTracer = true;
   return mesh;
 }
 
-// Detach + dispose a projectile mesh and any attached halo sprite material.
-// The halo texture is shared (cached in _projectileHaloTex) so we never
-// dispose it.
+const _tracerUpAxis = new THREE.Vector3(0, 1, 0);
+const _tracerDirTmp = new THREE.Vector3();
+const _tracerQuatTmp = new THREE.Quaternion();
+// Re-orient a tracer mesh's local +Y axis to point along the given velocity
+// vector each frame. No-op for non-tracer meshes.
+function orientTracer(mesh, velX, velY, velZ) {
+  if (!mesh?.userData?.isTracer) return;
+  const lenSq = velX * velX + velY * velY + velZ * velZ;
+  if (lenSq < 1e-6) return;
+  const inv = 1 / Math.sqrt(lenSq);
+  _tracerDirTmp.set(velX * inv, velY * inv, velZ * inv);
+  _tracerQuatTmp.setFromUnitVectors(_tracerUpAxis, _tracerDirTmp);
+  mesh.quaternion.copy(_tracerQuatTmp);
+}
+
+// Detach + dispose a projectile mesh.
 function disposeProjectileMesh(mesh) {
   if (!mesh) return;
   if (mesh.parent) mesh.parent.remove(mesh);
   if (mesh.geometry) mesh.geometry.dispose();
   if (mesh.material) mesh.material.dispose();
-  const halo = mesh.userData?.halo;
-  if (halo?.material) halo.material.dispose();
 }
 
 function spawnProjectiles(owner, target) {
@@ -577,12 +579,14 @@ function spawnProjectiles(owner, target) {
     mesh.position.copy(owner.root.position).add(new THREE.Vector3(0, 0.8, 0));
     scene.add(mesh);
 
+    const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
+    orientTracer(mesh, projVel.x, projVel.y, projVel.z);
     const homing = owner.state.redLock && (!isShotgun || isCenterPellet);
     const projectile = {
       owner,
       target,
       mesh,
-      vel: dir.multiplyScalar(owner.unit.projectileSpeed),
+      vel: projVel,
       homing,
       homingLost: false,
       isCenterPellet,
@@ -827,6 +831,9 @@ function updateProjectileSystem(dt) {
 
     const prevPos = p.mesh.position.clone();
     p.mesh.position.addScaledVector(p.vel, dt);
+    // Re-orient tracer projectiles (sniper) so the streak follows any homing
+    // turns. No-op for sphere projectiles.
+    orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
     // Swept test: catches fast/homing projectiles that would otherwise tunnel through
     // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
     // unit-only fences) are skipped so bullets fly through them.
@@ -1065,6 +1072,24 @@ function updatePlayer(now) {
   updateBoost(state.player, now, action);
 }
 
+// Offline mirror of findIncomingThreat in shared/src/sim/ai.js. Returns the
+// nearest projectile that targets `mech`, is within `range`, and is heading
+// toward it (so the bot can spend boost on a real threat instead of dashing
+// at random).
+function findIncomingThreatOffline(mech, range) {
+  const r2 = range * range;
+  for (const p of state.projectiles) {
+    if (p.target !== mech) continue;
+    const dxp = p.mesh.position.x - mech.body.position.x;
+    const dzp = p.mesh.position.z - mech.body.position.z;
+    if (dxp * dxp + dzp * dzp > r2) continue;
+    const dot = (-dxp) * p.vel.x + (-dzp) * p.vel.z;
+    if (dot <= 0) continue;
+    return p;
+  }
+  return null;
+}
+
 function updateEnemy(now) {
   if (state.enemy.state.sniperChargeTarget) {
     state.enemy.body.velocity.x = 0;
@@ -1086,42 +1111,105 @@ function updateEnemy(now) {
   if (Math.random() > 0.985) state.enemy.state.strafeSign *= -1;
   const retreat = dist < 11 ? -0.9 : dist > 19 ? 0.62 : 0.15;
   const move = dir.clone().multiplyScalar(retreat).add(side.multiplyScalar(state.enemy.state.strafeSign * 1.05));
+  const eState = state.enemy.state;
 
-  // Bot respects its own boost gauge: sprint while there's juice, otherwise
-  // walk at a reduced pace and let the gauge regen (mirrors the player's
-  // empty-boost penalty). Without this, action='dash' was being stamped every
-  // tick regardless of boost, so updateBoost kept clamping boost to 0 and
-  // refillPausedUntil was bumped forever — effectively infinite sprint.
-  const sprintAvailable = state.enemy.state.boost > 0
-    && now >= state.enemy.state.emptyRecoverUntil;
-  const baseMoveScalar = sprintAvailable ? 10.6 : 5.6;
-  const moveScalar = now < state.enemy.state.hitStunUntil ? 0 : baseMoveScalar;
-  state.enemy.body.velocity.x = move.x * moveScalar;
-  state.enemy.body.velocity.z = move.z * moveScalar;
-  if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
-    const driftScalar = sprintAvailable ? 4.5 : 2.4;
-    state.enemy.body.velocity.x = side.x * driftScalar;
-    state.enemy.body.velocity.z = side.z * driftScalar;
+  // --- Tactical sprint state machine ---
+  // Default behaviour is to WALK along the kiting direction (no boost drain),
+  // saving the gauge for actual tactical bursts.
+  //
+  // Hysteresis flag botSprintReady flips ON when boost has refilled to
+  // BOT_SPRINT_READY_BOOST and OFF only when fully drained, so the bot
+  // commits to spending a chunk of boost rather than stutter-stepping every
+  // time the gauge crosses 0. Mirrors shared/src/sim/ai.js tickBot.
+  if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botSprintReady = true;
+  if (eState.boost <= 0) eState.botSprintReady = false;
+
+  let inBurst = (eState.botSprintUntil ?? 0) > now;
+  // End a burst early if boost ran dry mid-flight, so the bot drops back to
+  // walking and starts the regen cycle instead of sliding at full burst
+  // velocity with an empty gauge.
+  if (inBurst && eState.boost <= 0) {
+    eState.botSprintUntil = 0;
+    inBurst = false;
   }
+  const canStartBurst = !inBurst
+    && eState.botSprintReady === true
+    && eState.boost >= BOT_SPRINT_MIN_BOOST
+    && now > eState.evadeCooldownUntil
+    && now >= eState.emptyRecoverUntil
+    && now >= eState.hitStunUntil;
 
-  const idleAction = sprintAvailable ? 'dash' : 'idle';
-  if (sprintAvailable && dist < 10 && state.enemy.state.boost > 18 && now > state.enemy.state.evadeCooldownUntil && Math.random() > 0.66) {
-    const dodge = Math.random() > 0.5 ? side : side.clone().multiplyScalar(-1);
-    state.enemy.body.velocity.x += dodge.x * 22;
-    state.enemy.body.velocity.z += dodge.z * 22;
-    state.enemy.state.evadeHomingUntil = now + 240;
-    state.enemy.state.evadeCooldownUntil = now + 520;
-    state.enemy.state.action = 'dash';
-  } else {
-    state.enemy.state.action = idleAction;
-    if (sprintAvailable && dist >= 10 && dist <= 20 && state.enemy.state.boost > 12 && Math.random() > 0.88) {
-      const dodge = Math.random() > 0.5 ? side : side.clone().multiplyScalar(-1);
-      state.enemy.body.velocity.x += dodge.x * 26;
-      state.enemy.body.velocity.z += dodge.z * 26;
-      state.enemy.state.evadeHomingUntil = now + 280;
+  if (canStartBurst) {
+    // Trigger 1: incoming projectile — evade perpendicular.
+    const threat = findIncomingThreatOffline(state.enemy, BOT_THREAT_LOOKAHEAD);
+    if (threat) {
+      const cross = threat.vel.x * side.z - threat.vel.z * side.x;
+      const evadeSign = cross >= 0 ? 1 : -1;
+      eState.botSprintDirX = side.x * evadeSign;
+      eState.botSprintDirZ = side.z * evadeSign;
+      eState.botSprintUntil = now + BOT_SPRINT_BURST_MS;
+      eState.evadeCooldownUntil = now + 700;
+      eState.evadeHomingUntil = now + 240;
+      eState.momentumVX = 0;
+      eState.momentumVZ = 0;
+      inBurst = true;
+    } else if (dist < 8) {
+      // Trigger 2: opponent too close — burst back to re-open kiting space.
+      eState.botSprintDirX = -dir.x;
+      eState.botSprintDirZ = -dir.z;
+      eState.botSprintUntil = now + 240;
+      eState.evadeCooldownUntil = now + 600;
+      eState.momentumVX = 0;
+      eState.momentumVZ = 0;
+      inBurst = true;
+    } else if (eState.hp < MAX_HP * 0.4 && dist < 18 && Math.random() > 0.85) {
+      // Trigger 3: low HP — kite further away ("go for cover" approximated as
+      // increasing range; offline build has no obstacle awareness for true
+      // cover-seeking).
+      let bx = -dir.x + side.x * eState.strafeSign * 0.5;
+      let bz = -dir.z + side.z * eState.strafeSign * 0.5;
+      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
+      eState.botSprintDirX = bx / blen;
+      eState.botSprintDirZ = bz / blen;
+      eState.botSprintUntil = now + 320;
+      eState.evadeCooldownUntil = now + 900;
+      eState.momentumVX = 0;
+      eState.momentumVZ = 0;
+      inBurst = true;
+    } else if (Math.random() > 0.985) {
+      // Trigger 4: occasional unpredictable strafe burst (rare, adds variance
+      // so the bot doesn't sit static between threats).
+      const strafeSign = Math.random() > 0.5 ? 1 : -1;
+      let bx = side.x * strafeSign + dir.x * 0.25;
+      let bz = side.z * strafeSign + dir.z * 0.25;
+      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
+      eState.botSprintDirX = bx / blen;
+      eState.botSprintDirZ = bz / blen;
+      eState.botSprintUntil = now + 220;
+      eState.evadeCooldownUntil = now + 700;
+      eState.momentumVX = 0;
+      eState.momentumVZ = 0;
+      inBurst = true;
     }
   }
-  if (dist > 14 && Math.random() > 0.9) state.enemy.state.evadeHomingUntil = now + 90;
+
+  if (inBurst) {
+    state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
+    state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
+    eState.action = 'dash';
+  } else {
+    // Walk pace — kiting direction, no boost drain.
+    const moveScalar = now < eState.hitStunUntil ? 0 : 10.6;
+    state.enemy.body.velocity.x = move.x * moveScalar;
+    state.enemy.body.velocity.z = move.z * moveScalar;
+    if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
+      state.enemy.body.velocity.x = side.x * 4.5;
+      state.enemy.body.velocity.z = side.z * 4.5;
+    }
+    eState.action = 'idle';
+  }
+
+  if (dist > 14 && Math.random() > 0.9) eState.evadeHomingUntil = now + 90;
 
   if (now >= state.enemy.state.nextFireAt) {
     const u = state.enemy.unit;
@@ -1156,10 +1244,20 @@ function updateEnemy(now) {
       }
     }
   }
-  if (sprintAvailable && dist < 7.2 && now > state.player.state.antiMeleeUntil && Math.random() > 0.82) {
+  // Aggressive close-in poke when very close and the player has no anti-melee
+  // window — gated on the burst-readiness flag so it stays in the same
+  // boost-budgeted regime as the rest of the bot's tactical sprint usage.
+  if (
+    eState.botSprintReady === true
+    && eState.boost >= BOT_SPRINT_MIN_BOOST
+    && !inBurst
+    && dist < 7.2
+    && now > state.player.state.antiMeleeUntil
+    && Math.random() > 0.82
+  ) {
     state.enemy.body.velocity.x += dir.x * 16;
     state.enemy.body.velocity.z += dir.z * 16;
-    state.enemy.state.action = 'dash';
+    eState.action = 'dash';
   }
   if (state.enemy.grounded && now > state.enemy.state.hoverUntil && state.enemy.state.action !== 'jump') {
     state.enemy.body.velocity.y = 0;
@@ -1504,6 +1602,9 @@ function syncOnlineProjectiles(snap) {
       meshes.set(sp.id, entry);
     }
     entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
+    // Re-orient sniper tracers along their snapshot velocity so the streak
+    // visibly follows the projectile's path. No-op for sphere projectiles.
+    orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);
   }
   // Despawn anything no longer in the snapshot.
   for (const [id, entry] of meshes.entries()) {
