@@ -30,6 +30,7 @@ export function createConnection() {
   // Match lifecycle bits.
   let matchState = 'waiting'; // 'waiting' | 'active' | 'ended'
   let lastMatchEnd = null;    // { winnerId, reason, endedAt } or null
+  let lobbyConfig = null;     // { state, config: { p1: {unitKey, mapKey}, p2: {...} } }
 
   const notify = () => {
     listeners.forEach((cb) => {
@@ -100,6 +101,12 @@ export function createConnection() {
     log('match:snapshot', { tick: payload.tick, t: payload.serverTime });
   });
 
+  socket.on('lobby:config', (payload) => {
+    lobbyConfig = payload;
+    if (payload?.state) matchState = payload.state;
+    log('lobby:config', payload);
+  });
+
   return {
     serverUrl: SERVER_URL,
     socket,
@@ -134,6 +141,15 @@ export function createConnection() {
       if (!connected) return;
       socket.emit('match:rematch-request');
     },
+
+    // Send a config choice (unitKey and/or mapKey). Server validates and
+    // echoes the new state back via lobby:config.
+    sendConfigure: (cfg) => {
+      if (!connected) return;
+      socket.emit('match:configure', cfg);
+    },
+
+    getLobbyConfig: () => lobbyConfig,
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
   };
