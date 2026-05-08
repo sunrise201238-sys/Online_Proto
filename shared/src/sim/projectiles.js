@@ -10,7 +10,8 @@ import {
   HIT_RADIUS_VULNERABLE,
   HIT_VULNERABILITY_DAMAGE_BONUS,
   PROJECTILE_TTL_S,
-  PROJECTILE_HIT_STUN_MS
+  PROJECTILE_HIT_STUN_MS,
+  SHOTGUN_CLUSTER_SPREAD_DISTANCE
 } from './constants.js';
 import {
   clamp,
@@ -80,6 +81,12 @@ export function spawnProjectiles(matchState, owner, target) {
       ttl: PROJECTILE_TTL_S,
       hitStunMs: PROJECTILE_HIT_STUN_MS
     });
+    if (isShotgun && isCenterPellet) {
+      // Track total path length on the shotgun's center pellet so non-center
+      // pellets can interpolate cluster spread (0 → full) over
+      // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel.
+      projectile.distTraveled = 0;
+    }
     if (isCenterPellet) centerPellet = projectile;
     spawned.push(projectile);
     matchState.projectiles.push(projectile);
@@ -120,17 +127,26 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       continue;
     }
 
-    // Follow center pellet (shotgun cluster).
+    // Follow center pellet (shotgun cluster). The cluster offset is scaled
+    // by spreadFactor — pellets emerge bunched together at the muzzle and
+    // grow to full clusterOffset over SHOTGUN_CLUSTER_SPREAD_DISTANCE world
+    // units of travel. spreadFactor reads from the center pellet's
+    // distTraveled, which is monotonically non-decreasing, so spread can
+    // never shrink even if homing curves the center pellet.
     if (p.centerPelletId != null) {
       const center = byId.get(p.centerPelletId);
       if (!center || center.ttl <= 0) {
         p.centerPelletId = null;
       } else {
+        const spreadFactor = Math.min(
+          1,
+          (center.distTraveled ?? 0) / SHOTGUN_CLUSTER_SPREAD_DISTANCE
+        );
         p.vel = { x: center.vel.x, y: center.vel.y, z: center.vel.z };
         p.pos = {
-          x: center.pos.x + (p.clusterOffset?.x ?? 0),
-          y: center.pos.y + (p.clusterOffset?.y ?? 0),
-          z: center.pos.z + (p.clusterOffset?.z ?? 0)
+          x: center.pos.x + (p.clusterOffset?.x ?? 0) * spreadFactor,
+          y: center.pos.y + (p.clusterOffset?.y ?? 0) * spreadFactor,
+          z: center.pos.z + (p.clusterOffset?.z ?? 0) * spreadFactor
         };
       }
     }
@@ -171,6 +187,14 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     p.pos.x += p.vel.x * dt;
     p.pos.y += p.vel.y * dt;
     p.pos.z += p.vel.z * dt;
+    // Track total path length on shotgun center pellets so cluster spread
+    // can interpolate based on actual distance flown (homing-aware).
+    if (p.distTraveled !== undefined) {
+      const ddx = p.pos.x - prevPos.x;
+      const ddy = p.pos.y - prevPos.y;
+      const ddz = p.pos.z - prevPos.z;
+      p.distTraveled += Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+    }
 
     // Swept obstacle hit (skip noProjectile-tagged obstacles).
     let killed = false;

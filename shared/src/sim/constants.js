@@ -116,6 +116,13 @@ export const FIGHTER_RADIUS = 1.15;
 export const PROJECTILE_TTL_S = 2.2;
 export const PROJECTILE_HIT_STUN_MS = 200;
 
+// Shotgun cluster spread. Pellets spawn clustered at the muzzle and grow to
+// the full clusterOffset over this many world units of travel distance —
+// gives the shotgun a meaningful close-range bonus without changing its
+// medium-/long-range pattern. ~18 small grid cells on Plain Field
+// ((280/8)/(512/16) ≈ 1.09 units per cell, ×18 ≈ 19.7).
+export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
+
 // Sniper-specific.
 export const SNIPER_GLINT_VISIBLE = true;
 // Sprint-cancel: holding sprint during the forced-standing charge ends the
