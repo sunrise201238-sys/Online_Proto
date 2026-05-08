@@ -17,7 +17,9 @@ import {
   ANTI_MELEE_WINDOW_MS,
   DASH_RECOVER_MS,
   MOMENTUM_STANDARD,
-  GROUND_BASE_Y
+  GROUND_BASE_Y,
+  SNIPER_CANCEL_BOOST_COST,
+  BOOST_REFILL_PAUSE_MS
 } from './constants.js';
 import { spawnProjectiles } from './projectiles.js';
 import { unitOverlapsObstacle } from './physics.js';
@@ -81,8 +83,23 @@ function _spawnNonCharge(matchState, owner, target, now) {
 
 // Mirrors tickSniperCharge. Resolves the snap shot once the charge timer
 // elapses; emits a 'sniper-fired' event if the target became invalid mid-charge.
-export function tickSniperCharge(matchState, fighter, now) {
+// `input` is the sniper's input frame this tick — when its boost is held with
+// enough boost gauge, the forced-standing charge cancels and the projectile
+// fires immediately at the cost of SNIPER_CANCEL_BOOST_COST.
+export function tickSniperCharge(matchState, fighter, now, input = null) {
   if (!fighter.sniperChargeTargetId) return;
+
+  const sprintHeld = !!(input && (input.boost || input.sprintLocked));
+  const cancelled = sprintHeld
+    && now < fighter.sniperChargeUntil
+    && fighter.boost >= SNIPER_CANCEL_BOOST_COST;
+  if (cancelled) {
+    fighter.boost = Math.max(0, fighter.boost - SNIPER_CANCEL_BOOST_COST);
+    fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
+    fighter.sniperChargeUntil = now;
+    matchState.events.push({ type: 'sniper-charge-cancel', ownerId: fighter.id });
+  }
+
   if (now < fighter.sniperChargeUntil) {
     fighter.vel.x = 0;
     fighter.vel.z = 0;

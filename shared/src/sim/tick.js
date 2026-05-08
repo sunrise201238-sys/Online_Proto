@@ -160,8 +160,8 @@ export function tickMatch(matchState, inputs, now, dt) {
   // 1. Per-fighter pre-tick (ammo, sniper charge timer).
   tickAmmo(p1, now);
   tickAmmo(p2, now);
-  tickSniperCharge(matchState, p1, now);
-  tickSniperCharge(matchState, p2, now);
+  tickSniperCharge(matchState, p1, now, inputs.p1 ?? null);
+  tickSniperCharge(matchState, p2, now, inputs.p2 ?? null);
 
   // 2. Apply player inputs / drive bots. Inputs are authoritative; if a
   //    slot is absent (e.g. only p1 connected, p2 is a bot), the caller
