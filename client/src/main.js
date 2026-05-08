@@ -16,7 +16,7 @@ const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
-    projectileSpeed: 67,
+    projectileSpeed: 70,
     fireCooldownMs: 140,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -28,7 +28,7 @@ const UNIT_DATA = {
   unit2: {
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
-    projectileSpeed: 67,
+    projectileSpeed: 70,
     fireCooldownMs: 700,
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
