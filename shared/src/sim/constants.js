@@ -6,7 +6,7 @@ export const UNIT_DATA = {
     id: 'unit1',
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
-    projectileSpeed: 45,
+    projectileSpeed: 67,
     fireCooldownMs: 140,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -19,7 +19,7 @@ export const UNIT_DATA = {
     id: 'unit2',
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
-    projectileSpeed: 45,
+    projectileSpeed: 67,
     fireCooldownMs: 700,
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -33,7 +33,7 @@ export const UNIT_DATA = {
     id: 'unit3',
     name: 'Unit 3 / Sniper Rifle',
     lockRange: 120,
-    projectileSpeed: 85,
+    projectileSpeed: 95,
     fireCooldownMs: 1000,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -77,7 +77,7 @@ export const JUMP_HOVER_MS = 300;
 export const JUMP_COOLDOWN_MS = 1500;
 
 // Homing tunables.
-export const HOMING_MAX_DEG_PER_FRAME = 10;
+export const HOMING_MAX_DEG_PER_FRAME = 4;
 export const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 export const HOMING_SOFTEN_RANGE = 20;
 export const HOMING_SOFTEN_DEG_PER_FRAME = 1.5;
