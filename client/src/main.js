@@ -492,8 +492,8 @@ let hudRefs = null;
 // tickProjectiles uses the projectile's logical position vs the target's
 // hit radius and never the mesh geometry, so the visual length/orientation
 // has no gameplay effect.
-const SNIPER_TRACER_LENGTH = 1.7;
-const SNIPER_TRACER_MID_RADIUS = 0.09;
+const SNIPER_TRACER_LENGTH = 2.7;
+const SNIPER_TRACER_MID_RADIUS = 0.18;
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   if (!isSniper) {
