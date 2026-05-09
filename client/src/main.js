@@ -493,7 +493,7 @@ let hudRefs = null;
 // hit radius and never the mesh geometry, so the visual length/orientation
 // has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 3.4;
-const SNIPER_TRACER_MID_RADIUS = 0.15;
+const SNIPER_TRACER_MID_RADIUS = 0.18;
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   if (!isSniper) {
