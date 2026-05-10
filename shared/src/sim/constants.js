@@ -1,13 +1,18 @@
 // Pure-data tunables and unit/map definitions. No imports.
 // Mirrors the constants currently inlined at the top of client/src/main.js.
 
+// Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
+// engine consumes `fireCooldownMs` (per-shot minimum delay in ms) which is
+// auto-derived from RPM by the normalization loop right after this block.
+// Setting fireCooldownMs directly still works as an escape hatch — the
+// normalizer only fills it in when it's absent.
 export const UNIT_DATA = {
   unit1: {
     id: 'unit1',
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
     projectileSpeed: 70,
-    fireCooldownMs: 71,
+    firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 4,
@@ -20,7 +25,7 @@ export const UNIT_DATA = {
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
     projectileSpeed: 70,
-    fireCooldownMs: 700,
+    firePerMinute: 86,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
@@ -34,7 +39,7 @@ export const UNIT_DATA = {
     name: 'Unit 3 / Sniper Rifle',
     lockRange: 120,
     projectileSpeed: 95,
-    fireCooldownMs: 1000,
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 35,
@@ -45,6 +50,15 @@ export const UNIT_DATA = {
     chargeMs: 500
   }
 };
+
+// Derive fireCooldownMs from firePerMinute. Engine code reads
+// u.fireCooldownMs everywhere; designers only ever write u.firePerMinute.
+// If both are present, fireCooldownMs wins (explicit override).
+for (const unit of Object.values(UNIT_DATA)) {
+  if (unit.firePerMinute != null && unit.fireCooldownMs == null) {
+    unit.fireCooldownMs = 60000 / unit.firePerMinute;
+  }
+}
 
 export const MAP_DATA = {
   arena1: { id: 'arena1', name: 'Plain Field' },

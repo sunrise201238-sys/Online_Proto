@@ -212,7 +212,13 @@ export function tickBot(matchState, botId, now) {
       const fired = me.lastFireAt !== firedAt;
       if (u.spreadCount === 1) {
         if (fired) me.machineBurstRemaining -= 1;
-        me.nextFireAt = me.machineBurstRemaining > 0 ? now + 150 : now + between(1300, 2400);
+        // Intra-burst cadence ties to the unit's actual fireCooldownMs so
+        // bumping firePerMinute on a character makes the bot fire faster
+        // too, instead of being stuck at the old hardcoded 150 ms beat.
+        // Inter-burst pause stays a tactical AI choice (1.3-2.4 s).
+        me.nextFireAt = me.machineBurstRemaining > 0
+          ? now + u.fireCooldownMs
+          : now + between(1300, 2400);
         if (me.machineBurstRemaining <= 0) me.machineBurstRemaining = 0;
       } else {
         if (fired) me.nextFireAt = now + between(1500, 3000);
