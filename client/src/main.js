@@ -1572,6 +1572,16 @@ function startOnlineMatch() {
     lastPredSimTime: 0,
     lastAppliedSnapshotTick: -1,
 
+    // Reconciliation smoothing — when a snapshot arrives and the server's
+    // view of the local fighter differs from our prediction, instead of
+    // visibly snapping the mech to the corrected position, we capture the
+    // pre-snapshot rendered position relative to the post-snapshot
+    // predicted position as a "visual offset" that decays over a few
+    // frames. The mech keeps moving smoothly while prediction quietly
+    // corrects underneath. Without this, even small drift produces
+    // visible warps that look like "lag" even on a clean connection.
+    visualPosOffset: { x: 0, y: 0, z: 0 },
+
     // Phase 4 — UI lifecycle.
     uiSubPhase: 'connecting',    // see computeOnlineUiPhase()
     mechsCreatedFor: null         // signature key; set when ensureOnlineMatchSetup builds rig
@@ -1763,11 +1773,23 @@ function cloneSnapshotForPrediction(snap) {
 
 // On every new snapshot: snap to server state, then re-apply every input
 // the server hasn't ack'd yet so we end up "ahead" of the server by RTT.
+//
+// Reconciliation smoothing: capture the pre-snap rendered position
+// (predicted + current visual offset) and the post-snap predicted
+// position. The difference is pushed into `visualPosOffset` so the next
+// few render frames can decay it back to zero — the mech keeps moving
+// smoothly across the discontinuity instead of warping.
 function applySnapshotToPrediction(snap) {
   const onl = state.online;
   if (!onl) return;
   const myId = onl.myPlayerId;
   if (myId !== 'p1' && myId !== 'p2') return;
+
+  // Pre-snap rendered position = pre-snap predicted + current visual offset.
+  const prePredFighter = onl.predictedState?.fighters?.[myId];
+  const renderedX = prePredFighter ? prePredFighter.pos.x + (onl.visualPosOffset?.x ?? 0) : null;
+  const renderedY = prePredFighter ? prePredFighter.pos.y + (onl.visualPosOffset?.y ?? 0) : null;
+  const renderedZ = prePredFighter ? prePredFighter.pos.z + (onl.visualPosOffset?.z ?? 0) : null;
 
   const fresh = cloneSnapshotForPrediction(snap);
   // Drop inputs the server has consumed.
@@ -1786,12 +1808,42 @@ function applySnapshotToPrediction(snap) {
 
   onl.predictedState = fresh;
   onl.lastPredSimTime = simNow;
+
+  // Set new visual offset = (where we WERE rendered) − (where we ARE
+  // NOW predicted), so rendering the local mech at predicted+offset
+  // continues displaying the same position as before this snapshot.
+  // The offset then decays toward zero in runOnlineMatchFrame, smoothly
+  // bringing the rendered mech onto the corrected predicted path.
+  if (renderedX != null) {
+    const newPos = fresh.fighters[myId]?.pos;
+    if (newPos) {
+      const offX = renderedX - newPos.x;
+      const offY = renderedY - newPos.y;
+      const offZ = renderedZ - newPos.z;
+      // Cap the offset — for very large discontinuities (e.g. step/dodge
+      // landing very differently on the server) just snap rather than
+      // ride a long visible rubberband. SNAP_THRESHOLD ≈ a single
+      // sprint tick of distance.
+      const SNAP_THRESHOLD_SQ = 4 * 4;
+      const len2 = offX * offX + offY * offY + offZ * offZ;
+      if (len2 > SNAP_THRESHOLD_SQ) {
+        onl.visualPosOffset.x = 0;
+        onl.visualPosOffset.y = 0;
+        onl.visualPosOffset.z = 0;
+      } else {
+        onl.visualPosOffset.x = offX;
+        onl.visualPosOffset.y = offY;
+        onl.visualPosOffset.z = offZ;
+      }
+    }
+  }
 }
 
-// Prediction tick — fixed 25 ms cadence regardless of render rate. Builds an
-// input frame from the current input state, sends it to the server with a
-// seq number, and applies it to the local predictedState so the local
-// fighter visibly advances before the server round-trip.
+// Prediction tick — fixed cadence (TICK_RATE_MS) regardless of render
+// rate. Builds an input frame from the current input state, sends it to
+// the server with a seq number, and applies it to the local
+// predictedState so the local fighter visibly advances before the
+// server round-trip.
 function runPredictionTick() {
   const onl = state.online;
   if (!onl || !onl.predictedState) return;
@@ -2127,6 +2179,35 @@ function runOnlineMatchFrame(dt, onl, conn) {
     cameraFighter = snap.fighters[cameraId];
   }
   const otherFighter = interpolateRemoteFighter(otherId, prevSnap, snap, lastSnapAt, realNow);
+
+  // Reconciliation smoothing — decay the visual offset toward zero each
+  // frame so any discontinuity captured at snapshot time fades smoothly
+  // over ~6-10 frames (~100-150 ms at 60 fps render). DECAY of 0.85 per
+  // frame ≈ half-life of ~4 frames; small enough offsets snap to zero
+  // to avoid sub-pixel jitter.
+  const off = onl.visualPosOffset;
+  if (off) {
+    const DECAY = 0.85;
+    off.x *= DECAY;
+    off.y *= DECAY;
+    off.z *= DECAY;
+    if (Math.abs(off.x) < 0.01) off.x = 0;
+    if (Math.abs(off.y) < 0.01) off.y = 0;
+    if (Math.abs(off.z) < 0.01) off.z = 0;
+  }
+
+  // Apply the smoothing offset to the local fighter only — remote is
+  // already softened by interpolateRemoteFighter().
+  if (cameraFighter && off && (off.x !== 0 || off.y !== 0 || off.z !== 0)) {
+    cameraFighter = {
+      ...cameraFighter,
+      pos: {
+        x: cameraFighter.pos.x + off.x,
+        y: cameraFighter.pos.y + off.y,
+        z: cameraFighter.pos.z + off.z
+      }
+    };
+  }
 
   if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
   if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
