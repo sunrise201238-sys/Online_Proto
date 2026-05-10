@@ -7,12 +7,12 @@ export const UNIT_DATA = {
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
     projectileSpeed: 70,
-    fireCooldownMs: 140,
+    fireCooldownMs: 71,
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 4,
     magCapacity: 30,
-    reloadMs: 2000,
+    reloadMs: 1500,
     autoReload: false
   },
   unit2: {
