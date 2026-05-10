@@ -12,12 +12,16 @@ import {
 
 const app = document.getElementById('app');
 
+// Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
+// engine consumes `fireCooldownMs` which is auto-derived from RPM by the
+// normalization loop right after this block. Mirrors the same scheme used
+// in shared/src/sim/constants.js.
 const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
     lockRange: 56,
     projectileSpeed: 70,
-    fireCooldownMs: 71,
+    firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 4,
@@ -29,7 +33,7 @@ const UNIT_DATA = {
     name: 'Unit 2 / Shotgun',
     lockRange: 43,
     projectileSpeed: 70,
-    fireCooldownMs: 700,
+    firePerMinute: 86,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,
@@ -41,7 +45,7 @@ const UNIT_DATA = {
     name: 'Unit 3 / Sniper Rifle',
     lockRange: 120,
     projectileSpeed: 95,
-    fireCooldownMs: 1000,
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 35,
@@ -52,6 +56,15 @@ const UNIT_DATA = {
     chargeMs: 500
   }
 };
+
+// Derive fireCooldownMs from firePerMinute. See shared/src/sim/constants.js
+// for the matching block — both must stay in sync since the offline build
+// keeps its own UNIT_DATA copy.
+for (const unit of Object.values(UNIT_DATA)) {
+  if (unit.firePerMinute != null && unit.fireCooldownMs == null) {
+    unit.fireCooldownMs = 60000 / unit.firePerMinute;
+  }
+}
 
 const MAP_DATA = {
   arena1: { name: 'Plain Field' },
@@ -1261,7 +1274,13 @@ function updateEnemy(now) {
       const fired = s.lastFireAt !== firedAt;
       if (u.spreadCount === 1) {
         if (fired) s.machineBurstRemaining -= 1;
-        s.nextFireAt = s.machineBurstRemaining > 0 ? now + 150 : now + PhaserLikeBetween(1300, 2400);
+        // Intra-burst cadence ties to the unit's actual fireCooldownMs so
+        // bumping firePerMinute on a character makes the bot fire faster
+        // too, instead of being stuck at the old hardcoded 150 ms beat.
+        // Inter-burst pause stays a tactical AI choice (1.3-2.4 s).
+        s.nextFireAt = s.machineBurstRemaining > 0
+          ? now + u.fireCooldownMs
+          : now + PhaserLikeBetween(1300, 2400);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
         if (fired) s.nextFireAt = now + PhaserLikeBetween(1500, 3000);
