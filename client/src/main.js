@@ -12,13 +12,46 @@ import {
 
 const app = document.getElementById('app');
 
+// ----------------------------------------------------------------------------
+// UNIT_DATA — per-unit (eventually per-character) stat & weapon definitions.
+//
+// Pilot stats — body-of-the-character knobs that differentiate one unit
+// from another. Read with `??` against the global default constants below,
+// so any field can be omitted on a unit and the default is used. Recognized
+// fields:
+//   hp             max health                                  (default MAX_HP)
+//   boostCap       boost gauge volume                          (default BOOST_CAP)
+//   walkSpeed      non-sprint movement speed                   (default WALK_SPEED)
+//   sprintSpeed    sprint movement speed                       (default BOOST_MOVE_SPEED)
+//   boostDrain     boost drained per tick while action='dash'  (default BOOST_DASH_DRAIN_PER_TICK)
+//   boostRegen     boost gained per tick while idle, grounded  (default BOOST_REGEN_PER_TICK)
+//   jumpVelocity   initial upward velocity on jump start       (default JUMP_INITIAL_VELOCITY)
+//   jumpHoverMs    apex hang-time before fall                  (default JUMP_HOVER_MS)
+//   jumpCooldownMs time between consecutive jumps              (default JUMP_COOLDOWN_MS)
+//   jumpBoostCost  boost cost to start a jump                  (default JUMP_BOOST_COST)
+//
 // Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
 // engine consumes `fireCooldownMs` which is auto-derived from RPM by the
 // normalization loop right after this block. Mirrors the same scheme used
-// in shared/src/sim/constants.js.
+// in shared/src/sim/constants.js — both files must stay in sync.
+// ----------------------------------------------------------------------------
 const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 56,
     projectileSpeed: 70,
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
@@ -31,6 +64,20 @@ const UNIT_DATA = {
   },
   unit2: {
     name: 'Unit 2 / Shotgun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 43,
     projectileSpeed: 70,
     firePerMinute: 86,         // ≈ 697.67 ms cooldown
@@ -43,6 +90,20 @@ const UNIT_DATA = {
   },
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 120,
     projectileSpeed: 95,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
@@ -176,20 +237,28 @@ const arenaObstacles = [];
 createArenaWalls();
 
 const MOMENTUM_STANDARD = 100;
-const BOOST_MOVE_SPEED = 11.76;
-const MAX_HP = 150;
+// --- Pilot-stat defaults (used when a unit's UNIT_DATA entry omits a field) ---
+const MAX_HP = 150;                     // unit.hp default
+const BOOST_MOVE_SPEED = 11.76;         // unit.sprintSpeed default
+const WALK_SPEED = 16;                  // unit.walkSpeed default
+const BOOST_DASH_DRAIN_PER_TICK = 1.1;  // unit.boostDrain default
+const BOOST_REGEN_PER_TICK = 4.59;      // unit.boostRegen default
 const GROUND_BASE_Y = 2.45;
 const HOMING_MAX_DEG_PER_FRAME = 1;
 const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 const HOMING_SOFTEN_RANGE = 20;
 const HOMING_SOFTEN_DEG_PER_FRAME = 1;
-const BOOST_CAP = 250;
+const BOOST_CAP = 250;                  // unit.boostCap default
 const STEP_DISTANCE = 9.2;
 const STEP_DURATION_MS = 125;
 const STEP_COOLDOWN_MS = 1000;
 const STEP_BOOST_COST = 48;
-const JUMP_BOOST_COST = STEP_BOOST_COST;
 const STEP_HOMING_CUT_MS = 260;
+// --- Jump defaults (used when a unit's UNIT_DATA entry omits the field) ---
+const JUMP_BOOST_COST = STEP_BOOST_COST;     // unit.jumpBoostCost default (= 48)
+const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default
+const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default
+const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default
 const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
@@ -271,8 +340,8 @@ function createMech(color, unitData) {
     glintMesh: null,
     state: {
       action: 'idle',
-      boost: BOOST_CAP,
-      hp: MAX_HP,
+      boost: unitData.boostCap ?? BOOST_CAP,
+      hp: unitData.hp ?? MAX_HP,
       redLock: false,
       overheatedUntil: 0,
       hitStunUntil: 0,
@@ -942,10 +1011,14 @@ function updateBoost(mech, now, action) {
 
   s.action = action;
   const consume = ['dash'].includes(action);
+  // Per-unit drain / regen / cap, with global-default fallbacks.
+  const drain = mech.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
+  const regen = mech.unit.boostRegen ?? BOOST_REGEN_PER_TICK;
+  const cap = mech.unit.boostCap ?? BOOST_CAP;
   if (consume) {
-    s.boost = Math.max(0, s.boost - 1.1);
+    s.boost = Math.max(0, s.boost - drain);
     s.refillPausedUntil = now + 500;
-  } else if (grounded && now >= s.refillPausedUntil) s.boost = Math.min(BOOST_CAP, s.boost + 4.59);
+  } else if (grounded && now >= s.refillPausedUntil) s.boost = Math.min(cap, s.boost + regen);
 
   if (s.boost <= 0) {
     if (s.emptyRecoverUntil <= now) s.emptyRecoverUntil = now + 100;
@@ -991,7 +1064,11 @@ function updatePlayer(now) {
   const emptyPenaltyActive = now < state.player.state.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
   const useSprint = input.boost && canDash;
-  const baseSpeed = useSprint ? BOOST_MOVE_SPEED : (recoveringFromDash ? 4.55 : 16);
+  // Per-unit movement speeds — fall back to the global defaults if a unit
+  // omits the override.
+  const playerSprintSpeed = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
+  const playerWalkSpeed = state.player.unit.walkSpeed ?? WALK_SPEED;
+  const baseSpeed = useSprint ? playerSprintSpeed : (recoveringFromDash ? 4.55 : playerWalkSpeed);
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < state.player.state.hitStunUntil;
   const hitStunScale = hitStunned ? 0.25 : 1;
@@ -1026,14 +1103,27 @@ function updatePlayer(now) {
       stepState.queuedMomentumVX = 0;
       stepState.queuedMomentumVZ = 0;
     }
-  } else if (input.jump && canInputMove && stepState.boost >= JUMP_BOOST_COST && (state.player.grounded || state.player.body.position.y <= getGroundLevelY(state.player) + 0.15) && now >= state.player.state.jumpCooldownUntil) {
+  } else if (
+    input.jump
+    && canInputMove
+    && stepState.boost >= (state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST)
+    && (state.player.grounded || state.player.body.position.y <= getGroundLevelY(state.player) + 0.15)
+    && now >= state.player.state.jumpCooldownUntil
+  ) {
+    // Per-unit jump tunables — fall back to globals if a unit doesn't
+    // override. v0 sets peak height (≈ v² / (2·|gravity|)); hover holds
+    // the apex; cooldown gates the next jump; boostCost gates entry.
+    const jumpBoostCost = state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
+    const jumpVelocity = state.player.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+    const jumpHoverMs = state.player.unit.jumpHoverMs ?? JUMP_HOVER_MS;
+    const jumpCooldownMs = state.player.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS;
     input.boost = false;
-    state.player.state.boost = Math.max(0, state.player.state.boost - JUMP_BOOST_COST);
+    state.player.state.boost = Math.max(0, state.player.state.boost - jumpBoostCost);
     state.player.state.refillPausedUntil = now + 500;
-    state.player.state.jumpVelocity = 30;
+    state.player.state.jumpVelocity = jumpVelocity;
     state.player.state.airborne = true;
-    state.player.state.hoverUntil = now + 300;
-    state.player.state.jumpCooldownUntil = now + 1500;
+    state.player.state.hoverUntil = now + jumpHoverMs;
+    state.player.state.jumpCooldownUntil = now + jumpCooldownMs;
     inheritMomentum(state.player, 70);
     action = 'jump';
   } else if (input.boost && canInputMove) {
@@ -1200,7 +1290,7 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (eState.hp < MAX_HP * 0.4 && dist < 18 && Math.random() > 0.85) {
+    } else if (eState.hp < (state.enemy.unit.hp ?? MAX_HP) * 0.4 && dist < 18 && Math.random() > 0.85) {
       // Trigger 3: low HP — kite further away ("go for cover" approximated as
       // increasing range; offline build has no obstacle awareness for true
       // cover-seeking).
@@ -1410,9 +1500,14 @@ function updateHud(now = performance.now()) {
   // `now` defaults to performance.now() for offline (where mech.state
   // timestamps are stored in performance.now() reference). Online passes
   // Date.now() because the server-mirrored timestamps are Date.now()-style.
-  hudRefs.hp.style.width = `${(state.player.state.hp / MAX_HP) * 100}%`;
-  hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / MAX_HP) * 100}%`;
-  hudRefs.boost.style.width = `${(state.player.state.boost / BOOST_CAP) * 100}%`;
+  // HUD bars normalize against each fighter's own per-unit caps so a
+  // higher-HP / higher-boost character's bar still reads full at full state.
+  const playerHpMax = state.player.unit.hp ?? MAX_HP;
+  const enemyHpMax = state.enemy.unit.hp ?? MAX_HP;
+  const playerBoostMax = state.player.unit.boostCap ?? BOOST_CAP;
+  hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
+  hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
+  hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
