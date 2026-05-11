@@ -70,7 +70,7 @@ export const MAP_DATA = {
 
 // Match-wide tunables.
 export const MAX_HP = 150;
-export const BOOST_CAP = 125;
+export const BOOST_CAP = 250;
 export const GROUND_BASE_Y = 2.45;
 
 // Movement / boost.
