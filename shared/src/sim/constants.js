@@ -19,7 +19,7 @@ export const UNIT_DATA = {
 
     // Pilot stats
     hp: 150,
-    boostCap: 125,
+    boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
