@@ -144,7 +144,7 @@ export function tickBot(matchState, botId, now) {
       me.momentumVX = 0;
       me.momentumVZ = 0;
       inBurst = true;
-    } else if (me.hp < MAX_HP * 0.4 && dist < 18 && Math.random() > 0.85) {
+    } else if (me.hp < (me.unit?.hp ?? MAX_HP) * 0.4 && dist < 18 && Math.random() > 0.85) {
       // Trigger 3: low HP — kite further away ("go for cover" approximated as
       // increasing range; we don't have obstacle awareness for true cover).
       let bx = -dirX + sideX * me.strafeSign * 0.5;

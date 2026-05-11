@@ -26,11 +26,11 @@ export function createFighter(id, unitKey, spawn) {
     grounded: true,
 
     // Lifecycle.
-    hp: MAX_HP,
+    hp: unit.hp ?? MAX_HP,
     action: 'idle',
 
     // Boost.
-    boost: BOOST_CAP,
+    boost: unit.boostCap ?? BOOST_CAP,
     overheatedUntil: 0,
     refillPausedUntil: 0,
     emptyRecoverUntil: 0,

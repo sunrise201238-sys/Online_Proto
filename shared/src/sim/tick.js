@@ -6,6 +6,7 @@
 
 import {
   BOOST_MOVE_SPEED,
+  WALK_SPEED,
   STEP_DISTANCE,
   STEP_DURATION_MS,
   STEP_BOOST_COST,
@@ -69,7 +70,12 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const emptyPenaltyActive = now < fighter.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
   const useSprint = boostActive && canDash;
-  const baseSpeed = useSprint ? BOOST_MOVE_SPEED : (recoveringFromDash ? 4.55 : 16);
+  // Per-unit movement speeds — fall back to the global defaults if a unit
+  // omits the override. Keeps the simulation deterministic per fighter
+  // and matches the client's offline computation in updatePlayer.
+  const sprintSpeed = fighter.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
+  const walkSpeed = fighter.unit?.walkSpeed ?? WALK_SPEED;
+  const baseSpeed = useSprint ? sprintSpeed : (recoveringFromDash ? 4.55 : walkSpeed);
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < fighter.hitStunUntil;
   const hitStunScale = hitStunned ? 0.25 : 1;

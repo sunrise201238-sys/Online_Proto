@@ -33,11 +33,16 @@ export function tickBoost(fighter, now, action, surfaces = []) {
 
   fighter.action = action;
   const consume = action === 'dash';
+  // Per-unit drain / regen / cap with global-default fallbacks. Lets a
+  // character spec independently tune its boost economy.
+  const drain = fighter.unit?.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
+  const regen = fighter.unit?.boostRegen ?? BOOST_REGEN_PER_TICK;
+  const cap = fighter.unit?.boostCap ?? BOOST_CAP;
   if (consume) {
-    fighter.boost = Math.max(0, fighter.boost - BOOST_DASH_DRAIN_PER_TICK);
+    fighter.boost = Math.max(0, fighter.boost - drain);
     fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   } else if (grounded && now >= fighter.refillPausedUntil) {
-    fighter.boost = Math.min(BOOST_CAP, fighter.boost + BOOST_REGEN_PER_TICK);
+    fighter.boost = Math.min(cap, fighter.boost + regen);
   }
 
   if (fighter.boost <= 0) {

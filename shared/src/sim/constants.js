@@ -1,6 +1,12 @@
 // Pure-data tunables and unit/map definitions. No imports.
 // Mirrors the constants currently inlined at the top of client/src/main.js.
 
+// Pilot stats per unit fall back to the global defaults further down
+// (MAX_HP, BOOST_CAP, WALK_SPEED, BOOST_MOVE_SPEED, BOOST_DASH_DRAIN_PER_TICK,
+// BOOST_REGEN_PER_TICK, JUMP_INITIAL_VELOCITY, JUMP_HOVER_MS,
+// JUMP_COOLDOWN_MS, JUMP_BOOST_COST). All three current units declare every
+// field explicitly so the schema is visible — mirrors client/src/main.js.
+//
 // Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
 // engine consumes `fireCooldownMs` (per-shot minimum delay in ms) which is
 // auto-derived from RPM by the normalization loop right after this block.
@@ -10,6 +16,20 @@ export const UNIT_DATA = {
   unit1: {
     id: 'unit1',
     name: 'Unit 1 / Machine Gun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 56,
     projectileSpeed: 70,
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
@@ -23,6 +43,20 @@ export const UNIT_DATA = {
   unit2: {
     id: 'unit2',
     name: 'Unit 2 / Shotgun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 43,
     projectileSpeed: 70,
     firePerMinute: 86,         // ≈ 697.67 ms cooldown
@@ -37,6 +71,20 @@ export const UNIT_DATA = {
   unit3: {
     id: 'unit3',
     name: 'Unit 3 / Sniper Rifle',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
     lockRange: 120,
     projectileSpeed: 95,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
@@ -73,8 +121,11 @@ export const MAX_HP = 150;
 export const BOOST_CAP = 250;
 export const GROUND_BASE_Y = 2.45;
 
-// Movement / boost.
-export const BOOST_MOVE_SPEED = 11.76;
+// Movement / boost. BOOST_MOVE_SPEED is the sprint default; WALK_SPEED is
+// the non-sprint default. Both are fall-throughs for units that omit
+// `sprintSpeed` / `walkSpeed` in their UNIT_DATA entry.
+export const BOOST_MOVE_SPEED = 11.76;   // unit.sprintSpeed default
+export const WALK_SPEED = 16;            // unit.walkSpeed default
 export const MOMENTUM_STANDARD = 100;
 
 // Step (dodge) tunables.

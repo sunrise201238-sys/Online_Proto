@@ -203,16 +203,24 @@ export function tickStep(fighter, now, obstacles) {
 }
 
 // Try to start a jump. Returns true if jump started.
+//
+// Per-unit jump tunables — fall back to globals if a unit doesn't override.
+// v0 sets peak height (≈ v² / (2·|gravity|)); hover holds the apex;
+// cooldown gates the next jump; boostCost gates entry.
 export function tryStartJump(fighter, now) {
+  const jumpBoostCost = fighter.unit?.jumpBoostCost ?? JUMP_BOOST_COST;
+  const jumpVelocity = fighter.unit?.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+  const jumpHoverMs = fighter.unit?.jumpHoverMs ?? JUMP_HOVER_MS;
+  const jumpCooldownMs = fighter.unit?.jumpCooldownMs ?? JUMP_COOLDOWN_MS;
   if (now < fighter.jumpCooldownUntil) return false;
-  if (fighter.boost < JUMP_BOOST_COST) return false;
+  if (fighter.boost < jumpBoostCost) return false;
   if (!fighter.grounded && fighter.pos.y > GROUND_BASE_Y + 0.15) return false;
-  fighter.boost = Math.max(0, fighter.boost - JUMP_BOOST_COST);
+  fighter.boost = Math.max(0, fighter.boost - jumpBoostCost);
   fighter.refillPausedUntil = now + 500;
-  fighter.jumpVelocity = JUMP_INITIAL_VELOCITY;
+  fighter.jumpVelocity = jumpVelocity;
   fighter.airborne = true;
-  fighter.hoverUntil = now + JUMP_HOVER_MS;
-  fighter.jumpCooldownUntil = now + JUMP_COOLDOWN_MS;
+  fighter.hoverUntil = now + jumpHoverMs;
+  fighter.jumpCooldownUntil = now + jumpCooldownMs;
   inheritMomentum(fighter, 70);
   return true;
 }
