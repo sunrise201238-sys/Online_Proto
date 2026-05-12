@@ -3341,7 +3341,7 @@ function buildStationArena() {
   const HALF_X = 132;
   const HALF_Z = 132;
   const CEIL_Y = 22;
-  const PLATFORM_Y = 1.4;
+  const PLATFORM_Y = 3.2;
   const floorMat = new THREE.MeshStandardMaterial({ color: 0x20242c, roughness: 0.88 });
   const platformMat = new THREE.MeshStandardMaterial({ color: 0x686f79, roughness: 0.78 });
   const platformEdge = new THREE.MeshStandardMaterial({ color: 0xd7a92f, roughness: 0.66, metalness: 0.1 });
@@ -3397,19 +3397,21 @@ function buildStationArena() {
   addBlockingBox({ x: -102, y: 5, z: 65, sx: 4, sy: 10, sz: 42, material: wallMat });
   addBlockingBox({ x: 102, y: 5, z: -65, sx: 4, sy: 10, sz: 42, material: wallMat });
 
-  // Two raised platforms with ramps at both ends and broad track-to-platform aprons.
+  // Two raised platforms. Track-facing ledges block walking straight up; players must jump
+  // from the track bed or rotate to the end ramps for a walking route.
   addPlatform({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: PLATFORM_Y, material: platformMat, thickness: 0.7 });
   addPlatform({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: PLATFORM_Y, material: platformMat, thickness: 0.7 });
   addRamp({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: PLATFORM_Y, material: platformMat, thickness: 0.08 });
   addRamp({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: PLATFORM_Y, highY: 0, material: platformMat, thickness: 0.08 });
   addRamp({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: PLATFORM_Y, material: platformMat, thickness: 0.08 });
   addRamp({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: PLATFORM_Y, highY: 0, material: platformMat, thickness: 0.08 });
-  addRamp({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: PLATFORM_Y, material: platformMat, thickness: 0.08 });
-  addRamp({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: PLATFORM_Y, highY: 0, material: platformMat, thickness: 0.08 });
   for (const z of [22, 74, -22, -74]) {
     const edge = new THREE.Mesh(new THREE.BoxGeometry(244, 0.08, 0.7), platformEdge);
     edge.position.set(0, PLATFORM_Y + 0.06, z);
     scene.add(edge); arenaDecor.push(edge);
+  }
+  for (const z of [22, -22]) {
+    addBlockingBox({ x: 0, y: PLATFORM_Y / 2, z, sx: 244, sy: PLATFORM_Y, sz: 1.2, material: platformMat, topBuffer: 0.2 });
   }
 
   // Parked freight cars: massive central cover pieces that break long sightlines down the rails.
@@ -3452,6 +3454,15 @@ function buildStationArena() {
   coverSpots.forEach(([x, z], i) => {
     addBlockingBox({ x, y: 1.6, z, sx: 8, sy: 3.2, sz: 5, material: i % 2 ? crateAlt : crateMat });
     addBlockingBox({ x: x - 1.6, y: 4.8, z: z + 0.6, sx: 4.4, sy: 3.2, sz: 4.2, material: i % 2 ? crateMat : crateAlt });
+  });
+
+  const platformHeavyCover = [
+    [-98, 48, 12, 7, 6], [-18, 48, 14, 7, 5], [82, 48, 12, 7, 6],
+    [-82, -48, 12, 7, 6], [18, -48, 14, 7, 5], [98, -48, 12, 7, 6]
+  ];
+  platformHeavyCover.forEach(([x, z, sx, sy, sz], i) => {
+    addBlockingBox({ x, y: PLATFORM_Y + sy / 2, z, sx, sy, sz, material: i % 2 ? kioskMat : crateAlt });
+    addBlockingBox({ x, y: PLATFORM_Y + sy + 0.25, z, sx: sx * 0.8, sy: 0.5, sz: sz * 0.8, material: platformEdge, decorOnly: true });
   });
 
   const kioskSpots = [[-42, 116], [0, 112], [42, 116], [-42, -116], [0, -112], [42, -116], [-118, 18], [118, -18]];

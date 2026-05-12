@@ -6651,7 +6651,7 @@ function rampSurface({ minX, maxX, minZ, maxZ, axis, lowY, highY }) {
 }
 
 function buildStationArena() {
-  const PLATFORM_Y = 1.4;
+  const PLATFORM_Y = 3.2;
   const obstacles = [
     // Station shell: full-height collision; client renders these as low curbs for camera sightlines.
     boxObstacle({ x: 0, y: 10, z: -132, sx: 264, sy: 20, sz: 4, topBuffer: 20 }),
@@ -6678,6 +6678,10 @@ function buildStationArena() {
       boxObstacle({ x, y: 7, z: 44, sx: 3, sy: 14, sz: 3 })
     ]),
 
+    // Track-facing platform ledges block walking straight onto the raised decks; jumping clears them.
+    boxObstacle({ x: 0, y: PLATFORM_Y / 2, z: 22, sx: 244, sy: PLATFORM_Y, sz: 1.2, topBuffer: 0.2 }),
+    boxObstacle({ x: 0, y: PLATFORM_Y / 2, z: -22, sx: 244, sy: PLATFORM_Y, sz: 1.2, topBuffer: 0.2 }),
+
     // Cargo crates, maintenance lockers, and heavy vending/sign cabinets around the platforms.
     ...[
       [-112, 58], [-82, 24], [-50, 62], [-26, 28], [28, 58], [58, 24], [96, 62],
@@ -6686,6 +6690,12 @@ function buildStationArena() {
       boxObstacle({ x, y: 1.6, z, sx: 8, sy: 3.2, sz: 5 }),
       boxObstacle({ x: x - 1.6, y: 4.8, z: z + 0.6, sx: 4.4, sy: 3.2, sz: 4.2 })
     ]),
+
+    // Extra heavy platform cover: large containers and station equipment rooms.
+    ...[
+      [-98, 48, 12, 7, 6], [-18, 48, 14, 7, 5], [82, 48, 12, 7, 6],
+      [-82, -48, 12, 7, 6], [18, -48, 14, 7, 5], [98, -48, 12, 7, 6]
+    ].map(([x, z, sx, sy, sz]) => boxObstacle({ x, y: PLATFORM_Y + sy / 2, z, sx, sy, sz })),
 
     // Kiosks and signal cabinets in the terminal halls, tall enough to hide a full unit.
     ...[
@@ -6718,9 +6728,7 @@ function buildStationArena() {
     rampSurface({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: PLATFORM_Y }),
     rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: PLATFORM_Y, highY: 0 }),
     rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: PLATFORM_Y }),
-    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: PLATFORM_Y, highY: 0 }),
-    rampSurface({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: PLATFORM_Y }),
-    rampSurface({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: PLATFORM_Y, highY: 0 })
+    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: PLATFORM_Y, highY: 0 })
   ];
 
   return {
