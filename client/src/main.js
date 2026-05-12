@@ -2796,6 +2796,9 @@ function applyMapAmbience(mapKey) {
 
 function buildArenaForMap(mapKey) {
   clearArenaDecor();
+  const showDefaultGrid = mapKey === 'arena1';
+  ground.visible = showDefaultGrid;
+  gridHelper.visible = showDefaultGrid;
   applyMapAmbience(mapKey);
   if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
@@ -3357,7 +3360,7 @@ function buildStationArena() {
   const benchMat = new THREE.MeshStandardMaterial({ color: 0x4b3428, roughness: 0.82 });
 
   // Split floor slabs around the track so the track-level surface does not z-fight with the hall floor.
-  for (const [z, depth] of [[-73, 118], [73, 118]]) {
+  for (const [z, depth] of [[-77, 110], [77, 110]]) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, depth), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, 0, z);
@@ -3365,7 +3368,7 @@ function buildStationArena() {
   }
 
   // Track bed, rails, sleepers, and yellow warning lines (visual-only except the parked trains).
-  const trackBed = new THREE.Mesh(new THREE.PlaneGeometry(250, 28), darkSteel);
+  const trackBed = new THREE.Mesh(new THREE.PlaneGeometry(250, 20), darkSteel);
   trackBed.rotation.x = -Math.PI / 2;
   trackBed.position.set(0, 0.012, 0);
   scene.add(trackBed); arenaDecor.push(trackBed);
@@ -3396,12 +3399,12 @@ function buildStationArena() {
   // Two raised platforms with ramps at both ends and broad track-to-platform aprons.
   addPlatform({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: 3.2, material: platformMat, thickness: 0.7 });
   addPlatform({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: 3.2, material: platformMat, thickness: 0.7 });
-  addRamp({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2, material: platformMat });
-  addRamp({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0, material: platformMat });
-  addRamp({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2, material: platformMat });
-  addRamp({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0, material: platformMat });
-  addRamp({ minX: -104, maxX: 104, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2, material: platformMat });
-  addRamp({ minX: -104, maxX: 104, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0, material: platformMat });
+  addRamp({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2, material: platformMat, thickness: 0.08 });
+  addRamp({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0, material: platformMat, thickness: 0.08 });
+  addRamp({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2, material: platformMat, thickness: 0.08 });
+  addRamp({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0, material: platformMat, thickness: 0.08 });
+  addRamp({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2, material: platformMat, thickness: 0.08 });
+  addRamp({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0, material: platformMat, thickness: 0.08 });
   for (const z of [22, 74, -22, -74]) {
     const edge = new THREE.Mesh(new THREE.BoxGeometry(244, 0.08, 0.7), platformEdge);
     edge.position.set(0, 3.26, z);

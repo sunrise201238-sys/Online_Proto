@@ -6718,8 +6718,8 @@ function buildStationArena() {
     rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0 }),
     rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2 }),
     rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0 }),
-    rampSurface({ minX: -104, maxX: 104, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2 }),
-    rampSurface({ minX: -104, maxX: 104, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0 })
+    rampSurface({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2 }),
+    rampSurface({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0 })
   ];
 
   return {
