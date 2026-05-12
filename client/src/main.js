@@ -2671,14 +2671,14 @@ function clearArenaDecor() {
   arenaSurfaces.length = 0;
 }
 
-function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly }) {
+function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, collisionY = y, collisionSy = sy }) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.position.set(x, y, z);
   mesh.userData.blocking = !decorOnly;
   scene.add(mesh);
   arenaDecor.push(mesh);
   if (decorOnly) return mesh;
-  const obstacle = { minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, minY: y - sy / 2, maxY: y + sy / 2 };
+  const obstacle = { minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, minY: collisionY - collisionSy / 2, maxY: collisionY + collisionSy / 2 };
   if (topBuffer !== undefined) obstacle.topBuffer = topBuffer;
   arenaObstacles.push(obstacle);
   return mesh;
@@ -3353,15 +3353,21 @@ function buildStationArena() {
   const railMat = new THREE.MeshStandardMaterial({ color: 0x92979f, roughness: 0.35, metalness: 0.65 });
   const sleeperMat = new THREE.MeshStandardMaterial({ color: 0x3b2b22, roughness: 0.9 });
   const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff0b0, emissive: 0xffc35a, emissiveIntensity: 0.7, roughness: 0.35 });
+  const billboardMat = new THREE.MeshStandardMaterial({ color: 0x12385a, emissive: 0x0a6d92, emissiveIntensity: 0.35, roughness: 0.42 });
+  const benchMat = new THREE.MeshStandardMaterial({ color: 0x4b3428, roughness: 0.82 });
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, 2 * HALF_Z), floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0;
-  scene.add(floor); arenaDecor.push(floor);
+  // Split floor slabs around the track so the track-level surface does not z-fight with the hall floor.
+  for (const [z, depth] of [[-73, 118], [73, 118]]) {
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, depth), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, z);
+    scene.add(floor); arenaDecor.push(floor);
+  }
 
   // Track bed, rails, sleepers, and yellow warning lines (visual-only except the parked trains).
-  const trackBed = new THREE.Mesh(new THREE.BoxGeometry(250, 0.14, 24), darkSteel);
-  trackBed.position.set(0, 0.02, 0);
+  const trackBed = new THREE.Mesh(new THREE.PlaneGeometry(250, 28), darkSteel);
+  trackBed.rotation.x = -Math.PI / 2;
+  trackBed.position.set(0, 0.012, 0);
   scene.add(trackBed); arenaDecor.push(trackBed);
   for (const z of [-5.5, 5.5]) {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(250, 0.24, 0.5), railMat);
@@ -3374,11 +3380,12 @@ function buildStationArena() {
     scene.add(sleeper); arenaDecor.push(sleeper);
   }
 
-  // Station shell and terminal halls.
-  addBlockingBox({ x: 0, y: 10, z: -HALF_Z, sx: 264, sy: 20, sz: 4, material: wallMat });
-  addBlockingBox({ x: 0, y: 10, z: HALF_Z, sx: 264, sy: 20, sz: 4, material: wallMat });
-  addBlockingBox({ x: -HALF_X, y: 10, z: 0, sx: 4, sy: 20, sz: 264, material: wallMat });
-  addBlockingBox({ x: HALF_X, y: 10, z: 0, sx: 4, sy: 20, sz: 264, material: wallMat });
+  // Station shell and terminal halls. Outer curbs render low so the camera can see units near edges,
+  // but their collision boxes remain full height for projectiles and arena containment.
+  addBlockingBox({ x: 0, y: 1.2, z: -HALF_Z, sx: 264, sy: 2.4, sz: 4, material: wallMat, collisionY: 10, collisionSy: 20, topBuffer: 20 });
+  addBlockingBox({ x: 0, y: 1.2, z: HALF_Z, sx: 264, sy: 2.4, sz: 4, material: wallMat, collisionY: 10, collisionSy: 20, topBuffer: 20 });
+  addBlockingBox({ x: -HALF_X, y: 1.2, z: 0, sx: 4, sy: 2.4, sz: 264, material: wallMat, collisionY: 10, collisionSy: 20, topBuffer: 20 });
+  addBlockingBox({ x: HALF_X, y: 1.2, z: 0, sx: 4, sy: 2.4, sz: 264, material: wallMat, collisionY: 10, collisionSy: 20, topBuffer: 20 });
   addBlockingBox({ x: -70, y: 5, z: 96, sx: 40, sy: 10, sz: 4, material: wallMat });
   addBlockingBox({ x: 70, y: 5, z: 96, sx: 40, sy: 10, sz: 4, material: wallMat });
   addBlockingBox({ x: -70, y: 5, z: -96, sx: 40, sy: 10, sz: 4, material: wallMat });
@@ -3386,13 +3393,15 @@ function buildStationArena() {
   addBlockingBox({ x: -102, y: 5, z: 65, sx: 4, sy: 10, sz: 42, material: wallMat });
   addBlockingBox({ x: 102, y: 5, z: -65, sx: 4, sy: 10, sz: 42, material: wallMat });
 
-  // Two raised platforms with ramps at both ends.
+  // Two raised platforms with ramps at both ends and broad track-to-platform aprons.
   addPlatform({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: 3.2, material: platformMat, thickness: 0.7 });
   addPlatform({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: 3.2, material: platformMat, thickness: 0.7 });
   addRamp({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2, material: platformMat });
   addRamp({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0, material: platformMat });
   addRamp({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2, material: platformMat });
   addRamp({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0, material: platformMat });
+  addRamp({ minX: -104, maxX: 104, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2, material: platformMat });
+  addRamp({ minX: -104, maxX: 104, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0, material: platformMat });
   for (const z of [22, 74, -22, -74]) {
     const edge = new THREE.Mesh(new THREE.BoxGeometry(244, 0.08, 0.7), platformEdge);
     edge.position.set(0, 3.26, z);
@@ -3451,6 +3460,22 @@ function buildStationArena() {
   barricades.forEach(([x, z]) => {
     addBlockingBox({ x, y: 3, z, sx: 12, sy: 6, sz: 4, material: platformEdge });
   });
+
+  const drawBillboard = (x, z, faceSouth = true) => {
+    addBlockingBox({ x, y: 6.7, z, sx: 16, sy: 7, sz: 0.8, material: billboardMat });
+    addBlockingBox({ x, y: 10.5, z, sx: 17, sy: 0.35, sz: 1.1, material: platformEdge, decorOnly: true });
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(13, 2.6, 0.18), lightMat);
+    glow.position.set(x, 7.1, z + (faceSouth ? -0.5 : 0.5));
+    scene.add(glow); arenaDecor.push(glow);
+  };
+  [[-72, 70, true], [72, 70, true], [-72, -70, false], [72, -70, false]].forEach(([x, z, faceSouth]) => drawBillboard(x, z, faceSouth));
+
+  const drawBench = (x, z, width, faceSouth = true) => {
+    addBlockingBox({ x, y: 4.0, z, sx: width, sy: 1.6, sz: 3.2, material: benchMat });
+    addBlockingBox({ x, y: 5.8, z: z + (faceSouth ? 1.45 : -1.45), sx: width, sy: 3.8, sz: 0.6, material: benchMat });
+    addBlockingBox({ x, y: 6.8, z: z + (faceSouth ? 1.8 : -1.8), sx: width * 0.9, sy: 0.2, sz: 0.3, material: platformEdge, decorOnly: true });
+  };
+  [[-36, 50, 18, true], [36, 50, 18, true], [-36, -50, 18, false], [36, -50, 18, false]].forEach(([x, z, width, faceSouth]) => drawBench(x, z, width, faceSouth));
 
   // Overhead industrial trusses and station signage (visual-only atmosphere).
   for (let x = -110; x <= 110; x += 44) {

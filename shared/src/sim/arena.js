@@ -6652,11 +6652,11 @@ function rampSurface({ minX, maxX, minZ, maxZ, axis, lowY, highY }) {
 
 function buildStationArena() {
   const obstacles = [
-    // Station shell: a large industrial train hall with playable openings in the middle.
-    boxObstacle({ x: 0, y: 10, z: -132, sx: 264, sy: 20, sz: 4 }),
-    boxObstacle({ x: 0, y: 10, z: 132, sx: 264, sy: 20, sz: 4 }),
-    boxObstacle({ x: -132, y: 10, z: 0, sx: 4, sy: 20, sz: 264 }),
-    boxObstacle({ x: 132, y: 10, z: 0, sx: 4, sy: 20, sz: 264 }),
+    // Station shell: full-height collision; client renders these as low curbs for camera sightlines.
+    boxObstacle({ x: 0, y: 10, z: -132, sx: 264, sy: 20, sz: 4, topBuffer: 20 }),
+    boxObstacle({ x: 0, y: 10, z: 132, sx: 264, sy: 20, sz: 4, topBuffer: 20 }),
+    boxObstacle({ x: -132, y: 10, z: 0, sx: 4, sy: 20, sz: 264, topBuffer: 20 }),
+    boxObstacle({ x: 132, y: 10, z: 0, sx: 4, sy: 20, sz: 264, topBuffer: 20 }),
 
     // Ticket-hall partitions and concourse walls: long cover with multiple angle breaks.
     boxObstacle({ x: -70, y: 5, z: 96, sx: 40, sy: 10, sz: 4 }),
@@ -6695,7 +6695,20 @@ function buildStationArena() {
     // Shorter barricade islands in the approach lanes. They still cover the mech body.
     ...[
       [-18, 80], [18, 80], [-18, -80], [18, -80], [-118, -36], [118, 36]
-    ].map(([x, z]) => boxObstacle({ x, y: 3, z, sx: 12, sy: 6, sz: 4 }))
+    ].map(([x, z]) => boxObstacle({ x, y: 3, z, sx: 12, sy: 6, sz: 4 })),
+
+    // Large platform billboards for full-unit cover and stronger train-station identity.
+    ...[
+      [-72, 70], [72, 70], [-72, -70], [72, -70]
+    ].map(([x, z]) => boxObstacle({ x, y: 6.7, z, sx: 16, sy: 7, sz: 0.8 })),
+
+    // Long benches with tall backs; each bench can be played as cover on the raised platforms.
+    ...[
+      [-36, 50, 18, 1], [36, 50, 18, 1], [-36, -50, 18, -1], [36, -50, 18, -1]
+    ].flatMap(([x, z, width, dir]) => [
+      boxObstacle({ x, y: 4.0, z, sx: width, sy: 1.6, sz: 3.2 }),
+      boxObstacle({ x, y: 5.8, z: z + dir * 1.45, sx: width, sy: 3.8, sz: 0.6 })
+    ])
   ];
 
   const surfaces = [
@@ -6704,7 +6717,9 @@ function buildStationArena() {
     rampSurface({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2 }),
     rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0 }),
     rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2 }),
-    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0 })
+    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0 }),
+    rampSurface({ minX: -104, maxX: 104, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2 }),
+    rampSurface({ minX: -104, maxX: 104, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0 })
   ];
 
   return {
