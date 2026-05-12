@@ -6678,9 +6678,9 @@ function buildStationArena() {
       boxObstacle({ x, y: 7, z: 44, sx: 3, sy: 14, sz: 3 })
     ]),
 
-    // Track-facing platform ledges block walking straight onto the raised decks; jumping clears them.
-    boxObstacle({ x: 0, y: PLATFORM_Y / 2, z: 22, sx: 244, sy: PLATFORM_Y, sz: 1.2, topBuffer: 0.2 }),
-    boxObstacle({ x: 0, y: PLATFORM_Y / 2, z: -22, sx: 244, sy: PLATFORM_Y, sz: 1.2, topBuffer: 0.2 }),
+    // Track-facing retaining walls block walking into the platform edge; jumping can clear them.
+    boxObstacle({ x: 0, y: 3.25, z: 20.8, sx: 244, sy: 6.5, sz: 2.4, topBuffer: 0.2 }),
+    boxObstacle({ x: 0, y: 3.25, z: -20.8, sx: 244, sy: 6.5, sz: 2.4, topBuffer: 0.2 }),
 
     // Cargo crates, maintenance lockers, and heavy vending/sign cabinets around the platforms.
     ...[

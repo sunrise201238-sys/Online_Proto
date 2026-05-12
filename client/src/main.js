@@ -3410,8 +3410,11 @@ function buildStationArena() {
     edge.position.set(0, PLATFORM_Y + 0.06, z);
     scene.add(edge); arenaDecor.push(edge);
   }
-  for (const z of [22, -22]) {
-    addBlockingBox({ x: 0, y: PLATFORM_Y / 2, z, sx: 244, sy: PLATFORM_Y, sz: 1.2, material: platformMat, topBuffer: 0.2 });
+  for (const z of [20.8, -20.8]) {
+    // Tall retaining walls along the track-facing platform lips make it impossible
+    // to walk into the platform edge and become visually submerged; jumping can still clear them.
+    addBlockingBox({ x: 0, y: 3.25, z, sx: 244, sy: 6.5, sz: 2.4, material: wallMat, topBuffer: 0.2 });
+    addBlockingBox({ x: 0, y: 6.65, z, sx: 244, sy: 0.35, sz: 2.8, material: platformEdge, decorOnly: true });
   }
 
   // Parked freight cars: massive central cover pieces that break long sightlines down the rails.
