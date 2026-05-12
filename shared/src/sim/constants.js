@@ -112,6 +112,7 @@ export const MAP_DATA = {
   arena1: { id: 'arena1', name: 'Plain Field' },
   arena2: { id: 'arena2', name: 'Streets' },
   factory: { id: 'factory', name: 'Factory' },
+  station: { id: 'station', name: 'Station' },
   square: { id: 'square', name: 'Square' },
   lobby: { id: 'lobby', name: 'Lobby' }
 };

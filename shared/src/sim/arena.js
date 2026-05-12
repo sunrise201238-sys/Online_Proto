@@ -6589,6 +6589,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
 const ARENA_SPAWNS = {
   arena2: { p1: { x: -108, y: GROUND_BASE_Y, z: 0 }, p2: { x: 108, y: GROUND_BASE_Y, z: 0 } },
   factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
+  station: { p1: { x: -112, y: GROUND_BASE_Y, z: 42 }, p2: { x: 112, y: GROUND_BASE_Y, z: -42 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } }
 };
@@ -6611,6 +6612,109 @@ function materializeSurface(surface) {
   return { minX, maxX, minZ, maxZ, maxTop, heightAt: () => top };
 }
 
+
+function boxObstacle({ x, y, z, sx, sy, sz, topBuffer }) {
+  const obstacle = {
+    minX: x - sx / 2,
+    maxX: x + sx / 2,
+    minZ: z - sz / 2,
+    maxZ: z + sz / 2,
+    minY: y - sy / 2,
+    maxY: y + sy / 2
+  };
+  if (topBuffer !== undefined) obstacle.topBuffer = topBuffer;
+  return obstacle;
+}
+
+function flatSurface({ minX, maxX, minZ, maxZ, top }) {
+  return { minX, maxX, minZ, maxZ, maxTop: top, heightAt: () => top };
+}
+
+function rampSurface({ minX, maxX, minZ, maxZ, axis, lowY, highY }) {
+  const lowEnd = axis === 'x' ? minX : minZ;
+  const highEnd = axis === 'x' ? maxX : maxZ;
+  const span = (highEnd - lowEnd) || 1;
+  const dy = highY - lowY;
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    maxTop: Math.max(lowY, highY),
+    heightAt(x, z) {
+      const v = axis === 'x' ? x : z;
+      const t = (v - lowEnd) / span;
+      const c = Math.max(0, Math.min(1, t));
+      return lowY + dy * c;
+    }
+  };
+}
+
+function buildStationArena() {
+  const obstacles = [
+    // Station shell: a large industrial train hall with playable openings in the middle.
+    boxObstacle({ x: 0, y: 10, z: -132, sx: 264, sy: 20, sz: 4 }),
+    boxObstacle({ x: 0, y: 10, z: 132, sx: 264, sy: 20, sz: 4 }),
+    boxObstacle({ x: -132, y: 10, z: 0, sx: 4, sy: 20, sz: 264 }),
+    boxObstacle({ x: 132, y: 10, z: 0, sx: 4, sy: 20, sz: 264 }),
+
+    // Ticket-hall partitions and concourse walls: long cover with multiple angle breaks.
+    boxObstacle({ x: -70, y: 5, z: 96, sx: 40, sy: 10, sz: 4 }),
+    boxObstacle({ x: 70, y: 5, z: 96, sx: 40, sy: 10, sz: 4 }),
+    boxObstacle({ x: -70, y: 5, z: -96, sx: 40, sy: 10, sz: 4 }),
+    boxObstacle({ x: 70, y: 5, z: -96, sx: 40, sy: 10, sz: 4 }),
+    boxObstacle({ x: -102, y: 5, z: 65, sx: 4, sy: 10, sz: 42 }),
+    boxObstacle({ x: 102, y: 5, z: -65, sx: 4, sy: 10, sz: 42 }),
+
+    // Parked freight cars on the track bed. These are full-height, jump-resistant blockers.
+    boxObstacle({ x: -78, y: 5, z: 0, sx: 38, sy: 10, sz: 12, topBuffer: 10 }),
+    boxObstacle({ x: 0, y: 5, z: 0, sx: 34, sy: 10, sz: 12, topBuffer: 10 }),
+    boxObstacle({ x: 78, y: 5, z: 0, sx: 38, sy: 10, sz: 12, topBuffer: 10 }),
+
+    // Platform pillars: symmetric cover that supports crossfire without making a straight lane.
+    ...[-108, -72, -36, 36, 72, 108].flatMap((x) => [
+      boxObstacle({ x, y: 7, z: -44, sx: 3, sy: 14, sz: 3 }),
+      boxObstacle({ x, y: 7, z: 44, sx: 3, sy: 14, sz: 3 })
+    ]),
+
+    // Cargo crates, maintenance lockers, and heavy vending/sign cabinets around the platforms.
+    ...[
+      [-112, 58], [-82, 24], [-50, 62], [-26, 28], [28, 58], [58, 24], [96, 62],
+      [-96, -62], [-58, -24], [-28, -58], [26, -28], [50, -62], [82, -24], [112, -58]
+    ].flatMap(([x, z]) => [
+      boxObstacle({ x, y: 1.6, z, sx: 8, sy: 3.2, sz: 5 }),
+      boxObstacle({ x: x - 1.6, y: 4.8, z: z + 0.6, sx: 4.4, sy: 3.2, sz: 4.2 })
+    ]),
+
+    // Kiosks and signal cabinets in the terminal halls, tall enough to hide a full unit.
+    ...[
+      [-42, 116], [0, 112], [42, 116], [-42, -116], [0, -112], [42, -116],
+      [-118, 18], [118, -18]
+    ].map(([x, z]) => boxObstacle({ x, y: 3.5, z, sx: 10, sy: 7, sz: 5 })),
+
+    // Shorter barricade islands in the approach lanes. They still cover the mech body.
+    ...[
+      [-18, 80], [18, 80], [-18, -80], [18, -80], [-118, -36], [118, 36]
+    ].map(([x, z]) => boxObstacle({ x, y: 3, z, sx: 12, sy: 6, sz: 4 }))
+  ];
+
+  const surfaces = [
+    flatSurface({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: 3.2 }),
+    flatSurface({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: 3.2 }),
+    rampSurface({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2 }),
+    rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0 }),
+    rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2 }),
+    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0 })
+  ];
+
+  return {
+    mapKey: 'station',
+    obstacles: [...makeBoundaryObstacles(), ...obstacles],
+    surfaces,
+    spawns: ARENA_SPAWNS.station
+  };
+}
+
 function buildGeneratedArena(mapKey) {
   const data = GENERATED_ARENA_COLLISION_DATA[mapKey];
   return {
@@ -6625,6 +6729,7 @@ const ARENAS = {
   arena1: buildPlainField(),
   arena2: buildGeneratedArena('arena2'),
   factory: buildGeneratedArena('factory'),
+  station: buildStationArena(),
   square: buildGeneratedArena('square'),
   lobby: buildGeneratedArena('lobby')
 };
