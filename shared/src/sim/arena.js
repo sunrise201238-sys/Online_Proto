@@ -6651,6 +6651,7 @@ function rampSurface({ minX, maxX, minZ, maxZ, axis, lowY, highY }) {
 }
 
 function buildStationArena() {
+  const PLATFORM_Y = 1.4;
   const obstacles = [
     // Station shell: full-height collision; client renders these as low curbs for camera sightlines.
     boxObstacle({ x: 0, y: 10, z: -132, sx: 264, sy: 20, sz: 4, topBuffer: 20 }),
@@ -6700,26 +6701,26 @@ function buildStationArena() {
     // Large platform billboards for full-unit cover and stronger train-station identity.
     ...[
       [-72, 70], [72, 70], [-72, -70], [72, -70]
-    ].map(([x, z]) => boxObstacle({ x, y: 6.7, z, sx: 16, sy: 7, sz: 0.8 })),
+    ].map(([x, z]) => boxObstacle({ x, y: PLATFORM_Y + 3.5, z, sx: 16, sy: 7, sz: 0.8 })),
 
     // Long benches with tall backs; each bench can be played as cover on the raised platforms.
     ...[
       [-36, 50, 18, 1], [36, 50, 18, 1], [-36, -50, 18, -1], [36, -50, 18, -1]
     ].flatMap(([x, z, width, dir]) => [
-      boxObstacle({ x, y: 4.0, z, sx: width, sy: 1.6, sz: 3.2 }),
-      boxObstacle({ x, y: 5.8, z: z + dir * 1.45, sx: width, sy: 3.8, sz: 0.6 })
+      boxObstacle({ x, y: PLATFORM_Y + 0.8, z, sx: width, sy: 1.6, sz: 3.2 }),
+      boxObstacle({ x, y: PLATFORM_Y + 2.6, z: z + dir * 1.45, sx: width, sy: 3.8, sz: 0.6 })
     ])
   ];
 
   const surfaces = [
-    flatSurface({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: 3.2 }),
-    flatSurface({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: 3.2 }),
-    rampSurface({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: 3.2 }),
-    rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: 3.2, highY: 0 }),
-    rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: 3.2 }),
-    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: 3.2, highY: 0 }),
-    rampSurface({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: 3.2 }),
-    rampSurface({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: 3.2, highY: 0 })
+    flatSurface({ minX: -122, maxX: 122, minZ: 22, maxZ: 74, top: PLATFORM_Y }),
+    flatSurface({ minX: -122, maxX: 122, minZ: -74, maxZ: -22, top: PLATFORM_Y }),
+    rampSurface({ minX: -128, maxX: -110, minZ: 22, maxZ: 74, axis: 'x', lowY: 0, highY: PLATFORM_Y }),
+    rampSurface({ minX: 110, maxX: 128, minZ: 22, maxZ: 74, axis: 'x', lowY: PLATFORM_Y, highY: 0 }),
+    rampSurface({ minX: -128, maxX: -110, minZ: -74, maxZ: -22, axis: 'x', lowY: 0, highY: PLATFORM_Y }),
+    rampSurface({ minX: 110, maxX: 128, minZ: -74, maxZ: -22, axis: 'x', lowY: PLATFORM_Y, highY: 0 }),
+    rampSurface({ minX: -122, maxX: 122, minZ: 10, maxZ: 22, axis: 'z', lowY: 0, highY: PLATFORM_Y }),
+    rampSurface({ minX: -122, maxX: 122, minZ: -22, maxZ: -10, axis: 'z', lowY: PLATFORM_Y, highY: 0 })
   ];
 
   return {
