@@ -113,7 +113,8 @@ export const MAP_DATA = {
   arena2: { id: 'arena2', name: 'Streets' },
   factory: { id: 'factory', name: 'Factory' },
   square: { id: 'square', name: 'Square' },
-  lobby: { id: 'lobby', name: 'Lobby' }
+  lobby: { id: 'lobby', name: 'Lobby' },
+  station: { id: 'station', name: 'Station' }
 };
 
 // Match-wide tunables.
