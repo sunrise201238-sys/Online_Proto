@@ -6583,6 +6583,99 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "highY": 0
       }
     ]
+  },
+  "station": {
+    "obstacles": [
+      { "minX": -132, "maxX": 132, "minZ": -107, "maxZ": -105, "minY": 0, "maxY": 22 },
+      { "minX": -132, "maxX": 132, "minZ": 105, "maxZ": 107, "minY": 0, "maxY": 22 },
+      { "minX": -132, "maxX": -130, "minZ": -107, "maxZ": 107, "minY": 0, "maxY": 22 },
+      { "minX": 130, "maxX": 132, "minZ": -107, "maxZ": 107, "minY": 0, "maxY": 22 },
+      { "minX": -130, "maxX": 130, "minZ": -105.3, "maxZ": -104.7, "minY": 0, "maxY": 0.8 },
+      { "minX": -130, "maxX": 130, "minZ": 104.7, "maxZ": 105.3, "minY": 0, "maxY": 0.8 },
+
+      { "minX": -106, "maxX": -84, "minZ": 5, "maxZ": 8, "minY": 0, "maxY": 5.5 },
+      { "minX": -41, "maxX": -19, "minZ": 5, "maxZ": 8, "minY": 0, "maxY": 5.5 },
+      { "minX": 29, "maxX": 51, "minZ": 5, "maxZ": 8, "minY": 0, "maxY": 5.5 },
+      { "minX": 84, "maxX": 106, "minZ": -8, "maxZ": -5, "minY": 0, "maxY": 5.5 },
+      { "minX": 19, "maxX": 41, "minZ": -8, "maxZ": -5, "minY": 0, "maxY": 5.5 },
+      { "minX": -51, "maxX": -29, "minZ": -8, "maxZ": -5, "minY": 0, "maxY": 5.5 },
+
+      { "minX": -111.25, "maxX": -108.75, "minZ": 23.75, "maxZ": 26.25, "minY": 0, "maxY": 22 },
+      { "minX": -112, "maxX": -108, "minZ": 23, "maxZ": 27, "minY": 0, "maxY": 0.8 },
+      { "minX": -66.25, "maxX": -63.75, "minZ": 23.75, "maxZ": 26.25, "minY": 0, "maxY": 22 },
+      { "minX": -67, "maxX": -63, "minZ": 23, "maxZ": 27, "minY": 0, "maxY": 0.8 },
+      { "minX": 63.75, "maxX": 66.25, "minZ": 23.75, "maxZ": 26.25, "minY": 0, "maxY": 22 },
+      { "minX": 63, "maxX": 67, "minZ": 23, "maxZ": 27, "minY": 0, "maxY": 0.8 },
+      { "minX": 108.75, "maxX": 111.25, "minZ": 23.75, "maxZ": 26.25, "minY": 0, "maxY": 22 },
+      { "minX": 108, "maxX": 112, "minZ": 23, "maxZ": 27, "minY": 0, "maxY": 0.8 },
+      { "minX": -111.25, "maxX": -108.75, "minZ": -26.25, "maxZ": -23.75, "minY": 0, "maxY": 22 },
+      { "minX": -112, "maxX": -108, "minZ": -27, "maxZ": -23, "minY": 0, "maxY": 0.8 },
+      { "minX": -66.25, "maxX": -63.75, "minZ": -26.25, "maxZ": -23.75, "minY": 0, "maxY": 22 },
+      { "minX": -67, "maxX": -63, "minZ": -27, "maxZ": -23, "minY": 0, "maxY": 0.8 },
+      { "minX": 63.75, "maxX": 66.25, "minZ": -26.25, "maxZ": -23.75, "minY": 0, "maxY": 22 },
+      { "minX": 63, "maxX": 67, "minZ": -27, "maxZ": -23, "minY": 0, "maxY": 0.8 },
+      { "minX": 108.75, "maxX": 111.25, "minZ": -26.25, "maxZ": -23.75, "minY": 0, "maxY": 22 },
+      { "minX": 108, "maxX": 112, "minZ": -27, "maxZ": -23, "minY": 0, "maxY": 0.8 },
+      { "minX": -101.25, "maxX": -98.75, "minZ": 68.75, "maxZ": 71.25, "minY": 0, "maxY": 22 },
+      { "minX": -102, "maxX": -98, "minZ": 68, "maxZ": 72, "minY": 0, "maxY": 0.8 },
+      { "minX": 98.75, "maxX": 101.25, "minZ": 68.75, "maxZ": 71.25, "minY": 0, "maxY": 22 },
+      { "minX": 98, "maxX": 102, "minZ": 68, "maxZ": 72, "minY": 0, "maxY": 0.8 },
+      { "minX": -101.25, "maxX": -98.75, "minZ": -71.25, "maxZ": -68.75, "minY": 0, "maxY": 22 },
+      { "minX": -102, "maxX": -98, "minZ": -72, "maxZ": -68, "minY": 0, "maxY": 0.8 },
+      { "minX": 98.75, "maxX": 101.25, "minZ": -71.25, "maxZ": -68.75, "minY": 0, "maxY": 22 },
+      { "minX": 98, "maxX": 102, "minZ": -72, "maxZ": -68, "minY": 0, "maxY": 0.8 },
+
+      { "minX": -75, "maxX": -55, "minZ": 83, "maxZ": 97, "minY": 0, "maxY": 7 },
+      { "minX": 55, "maxX": 75, "minZ": 83, "maxZ": 97, "minY": 0, "maxY": 7 },
+      { "minX": -75, "maxX": -55, "minZ": -97, "maxZ": -83, "minY": 0, "maxY": 7 },
+      { "minX": 55, "maxX": 75, "minZ": -97, "maxZ": -83, "minY": 0, "maxY": 7 },
+
+      { "minX": -32, "maxX": -18, "minZ": 47.25, "maxZ": 48.75, "minY": 0, "maxY": 8 },
+      { "minX": 18, "maxX": 32, "minZ": 47.25, "maxZ": 48.75, "minY": 0, "maxY": 8 },
+      { "minX": -32, "maxX": -18, "minZ": -48.75, "maxZ": -47.25, "minY": 0, "maxY": 8 },
+      { "minX": 18, "maxX": 32, "minZ": -48.75, "maxZ": -47.25, "minY": 0, "maxY": 8 },
+
+      { "minX": -93, "maxX": -87, "minZ": 19.5, "maxZ": 24.5, "minY": 0, "maxY": 5 },
+      { "minX": 87, "maxX": 93, "minZ": 19.5, "maxZ": 24.5, "minY": 0, "maxY": 5 },
+      { "minX": -93, "maxX": -87, "minZ": -24.5, "maxZ": -19.5, "minY": 0, "maxY": 5 },
+      { "minX": 87, "maxX": 93, "minZ": -24.5, "maxZ": -19.5, "minY": 0, "maxY": 5 },
+
+      { "minX": -87.5, "maxX": -82.5, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 4 },
+      { "minX": -52.5, "maxX": -47.5, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 4 },
+      { "minX": 47.5, "maxX": 52.5, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 4 },
+      { "minX": 82.5, "maxX": 87.5, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 4 },
+      { "minX": -87.5, "maxX": -82.5, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 4 },
+      { "minX": -52.5, "maxX": -47.5, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 4 },
+      { "minX": 47.5, "maxX": 52.5, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 4 },
+      { "minX": 82.5, "maxX": 87.5, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 4 },
+
+      { "minX": -61, "maxX": -39, "minZ": 59.5, "maxZ": 60.5, "minY": 0, "maxY": 8 },
+      { "minX": 39, "maxX": 61, "minZ": 59.5, "maxZ": 60.5, "minY": 0, "maxY": 8 },
+      { "minX": -61, "maxX": -39, "minZ": -60.5, "maxZ": -59.5, "minY": 0, "maxY": 8 },
+      { "minX": 39, "maxX": 61, "minZ": -60.5, "maxZ": -59.5, "minY": 0, "maxY": 8 },
+
+      { "minX": -102, "maxX": -98, "minZ": 59, "maxZ": 61, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": -17, "maxX": -13, "minZ": 59, "maxZ": 61, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": 13, "maxX": 17, "minZ": 59, "maxZ": 61, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": 98, "maxX": 102, "minZ": 59, "maxZ": 61, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": -102, "maxX": -98, "minZ": -61, "maxZ": -59, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": -17, "maxX": -13, "minZ": -61, "maxZ": -59, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": 13, "maxX": 17, "minZ": -61, "maxZ": -59, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+      { "minX": 98, "maxX": 102, "minZ": -61, "maxZ": -59, "minY": 0, "maxY": 1.2, "topBuffer": 2 },
+
+      { "minX": -92.5, "maxX": -87.5, "minZ": 13.4, "maxZ": 14.6, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": -52.5, "maxX": -47.5, "minZ": 13.4, "maxZ": 14.6, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": 47.5, "maxX": 52.5, "minZ": 13.4, "maxZ": 14.6, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": 87.5, "maxX": 92.5, "minZ": 13.4, "maxZ": 14.6, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": -92.5, "maxX": -87.5, "minZ": -14.6, "maxZ": -13.4, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": -52.5, "maxX": -47.5, "minZ": -14.6, "maxZ": -13.4, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": 47.5, "maxX": 52.5, "minZ": -14.6, "maxZ": -13.4, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+      { "minX": 87.5, "maxX": 92.5, "minZ": -14.6, "maxZ": -13.4, "minY": 0, "maxY": 1.0, "topBuffer": 2 },
+
+      { "minX": -1, "maxX": 1, "minZ": 24, "maxZ": 26, "minY": 0, "maxY": 6 },
+      { "minX": -1, "maxX": 1, "minZ": -26, "maxZ": -24, "minY": 0, "maxY": 6 }
+    ],
+    "surfaces": []
   }
 };
 
@@ -6590,7 +6683,8 @@ const ARENA_SPAWNS = {
   arena2: { p1: { x: -108, y: GROUND_BASE_Y, z: 0 }, p2: { x: 108, y: GROUND_BASE_Y, z: 0 } },
   factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
-  lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } }
+  lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
+  station: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } }
 };
 
 function materializeSurface(surface) {
@@ -6626,7 +6720,8 @@ const ARENAS = {
   arena2: buildGeneratedArena('arena2'),
   factory: buildGeneratedArena('factory'),
   square: buildGeneratedArena('square'),
-  lobby: buildGeneratedArena('lobby')
+  lobby: buildGeneratedArena('lobby'),
+  station: buildGeneratedArena('station')
 };
 
 export function getArena(mapKey) {
