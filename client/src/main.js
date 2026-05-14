@@ -680,7 +680,7 @@ function spawnProjectiles(owner, target) {
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
       damage: owner.unit.damage,
-      hitStunMs: 200,
+      hitStunMs: 100,
       // Set on the shotgun's center pellet only — accumulates path length so
       // non-center pellets can interpolate cluster spread (0 → full) over
       // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
