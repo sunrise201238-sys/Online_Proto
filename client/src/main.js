@@ -4100,6 +4100,17 @@ function buildStationArena() {
     { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
   );
 
+  // ===== Invisible platform-edge walls (COLLISION ONLY) =====
+  // 4 m tall AABBs running along each platform front so a player walking on
+  // the tracks can't stroll into the platform's xz region — they must JUMP.
+  // topBuffer: 0 means once the player's center clears y=4 (mid-jump) the
+  // collision is skipped, so a forward jump can carry them onto the platform.
+  // noProjectile: true keeps bullets from being stopped by the invisible wall.
+  arenaObstacles.push(
+    { minX: -130, maxX: 130, minZ: 10.75, maxZ: 11.25, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true },
+    { minX: -130, maxX: 130, minZ: -11.25, maxZ: -10.75, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true }
+  );
+
   // ===== Red glowing boundary stripes (the play-area edge indicator) =====
   // Each stripe sits just inside its wall, on whichever floor is present
   // (platform top y=4 or track floor y=0).
