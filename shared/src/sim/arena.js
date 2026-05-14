@@ -6591,8 +6591,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -137, "maxX": -135, "minZ": -134, "maxZ": 134, "minY": 0, "maxY": 28 },
       { "minX": 135, "maxX": 137, "minZ": -134, "maxZ": 134, "minY": 0, "maxY": 28 },
 
-      { "minX": -130, "maxX": 130, "minZ": 10.75, "maxZ": 11.25, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true },
-      { "minX": -130, "maxX": 130, "minZ": -11.25, "maxZ": -10.75, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true },
+      { "minX": -134, "maxX": 134, "minZ": 10.75, "maxZ": 11.25, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true },
+      { "minX": -134, "maxX": 134, "minZ": -11.25, "maxZ": -10.75, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true },
 
       { "minX": -117.5, "maxX": -82.5, "minZ": 5.5, "maxZ": 10.5, "minY": 0, "maxY": 8 },
       { "minX": -42.5, "maxX": -7.5, "minZ": 5.5, "maxZ": 10.5, "minY": 0, "maxY": 8 },
