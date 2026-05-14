@@ -152,7 +152,7 @@ export const HOMING_SOFTEN_DEG_PER_FRAME = 1;
 export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_RADIUS_VULNERABLE = 2.25;
 export const HIT_VULNERABILITY_DAMAGE_BONUS = 1.35; // ×damage when target is vulnerable
-export const HIT_STUN_MS = 200;
+export const HIT_STUN_MS = 100;
 
 // Repulsion (soft-collide) between fighters.
 export const REPULSION_RANGE = 3;
@@ -194,7 +194,7 @@ export const FIGHTER_RADIUS = 1.15;
 
 // Projectile lifetime (seconds).
 export const PROJECTILE_TTL_S = 2.2;
-export const PROJECTILE_HIT_STUN_MS = 200;
+export const PROJECTILE_HIT_STUN_MS = 100;
 
 // Shotgun cluster spread. Pellets spawn clustered at the muzzle and grow to
 // the full clusterOffset over this many world units of travel distance —
