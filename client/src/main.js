@@ -4018,7 +4018,6 @@ function buildStationArena() {
   const boardFrame = new THREE.MeshStandardMaterial({ color: 0x202830, roughness: 0.5, metalness: 0.5 });
   const boardScreen = new THREE.MeshStandardMaterial({ color: 0x121820, emissive: 0xe6a630, emissiveIntensity: 0.6, roughness: 0.4 });
   const kiosk = new THREE.MeshStandardMaterial({ color: 0xd4d8df, roughness: 0.5, metalness: 0.2 });
-  const kioskRoof = new THREE.MeshStandardMaterial({ color: 0x9b3a3a, roughness: 0.7 });
   const vending = new THREE.MeshStandardMaterial({ color: 0x9b2c2c, roughness: 0.6 });
   const vendingFront = new THREE.MeshStandardMaterial({ color: 0x141820, emissive: 0xff8a3a, emissiveIntensity: 0.4, roughness: 0.5 });
   const hallWall = new THREE.MeshStandardMaterial({ color: 0x3d4a5c, roughness: 0.7 });
@@ -4074,17 +4073,19 @@ function buildStationArena() {
   addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: TRACK_Z_HALF, maxZ: HALF_Z - 1, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
   addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: -(HALF_Z - 1), maxZ: -TRACK_Z_HALF, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
   // Visible 4 m platform face skirts (decor only — the surface above catches a
-  // jumping player, the face is just for the player to *see* the step).
+  // jumping player, the face is just for the player to *see* the step). The
+  // face matches the platform's full x extent (HALF_X - 1) so the visible
+  // face aligns with the invisible collision wall below.
   for (const zEdge of [TRACK_Z_HALF, -TRACK_Z_HALF]) {
-    const face = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X - 4, PLATFORM_Y, 0.5), platformFace);
+    const face = new THREE.Mesh(new THREE.BoxGeometry(2 * (HALF_X - 1), PLATFORM_Y, 0.5), platformFace);
     face.position.set(0, PLATFORM_Y / 2, zEdge);
     scene.add(face); arenaDecor.push(face);
     // Steel edge cap running along the top of the platform face
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X - 4, 0.35, 1.0), platformEdge);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2 * (HALF_X - 1), 0.35, 1.0), platformEdge);
     cap.position.set(0, PLATFORM_Y + 0.18, zEdge + (zEdge > 0 ? 0.5 : -0.5));
     scene.add(cap); arenaDecor.push(cap);
     // Yellow safety stripe on top of the platform edge
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 6, 0.9), cautionStripe);
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(2 * (HALF_X - 1) - 2, 0.9), cautionStripe);
     stripe.rotation.x = -Math.PI / 2;
     stripe.position.set(0, PLATFORM_Y + 0.05, zEdge + (zEdge > 0 ? 1.3 : -1.3));
     scene.add(stripe); arenaDecor.push(stripe);
@@ -4107,8 +4108,8 @@ function buildStationArena() {
   // collision is skipped, so a forward jump can carry them onto the platform.
   // noProjectile: true keeps bullets from being stopped by the invisible wall.
   arenaObstacles.push(
-    { minX: -130, maxX: 130, minZ: 10.75, maxZ: 11.25, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true },
-    { minX: -130, maxX: 130, minZ: -11.25, maxZ: -10.75, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true }
+    { minX: -(HALF_X - 1), maxX: HALF_X - 1, minZ: 10.75, maxZ: 11.25, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true },
+    { minX: -(HALF_X - 1), maxX: HALF_X - 1, minZ: -11.25, maxZ: -10.75, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true }
   );
 
   // ===== Red glowing boundary stripes (the play-area edge indicator) =====
@@ -4248,10 +4249,6 @@ function buildStationArena() {
   // ===== Info kiosks on the platforms (8 — full-cover boxes) =====
   const drawKiosk = (cx, cz) => {
     addBlockingBox({ x: cx, y: 6, z: cz, sx: 12, sy: 12, sz: 10, material: kiosk });
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(8, 3.6, 4), kioskRoof);
-    cap.rotation.y = Math.PI / 4;
-    cap.position.set(cx, 13.6, cz);
-    scene.add(cap); arenaDecor.push(cap);
     const sign = new THREE.Mesh(new THREE.BoxGeometry(8, 1.4, 0.25), boardScreen);
     sign.position.set(cx, PLATFORM_Y + 5, cz - 5.15);
     scene.add(sign); arenaDecor.push(sign);
