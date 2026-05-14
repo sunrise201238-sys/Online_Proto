@@ -1219,6 +1219,82 @@ function findIncomingThreatOffline(mech, range) {
   return null;
 }
 
+// ===== Universal bot AI helpers =====
+// Tunables shared across the bot's situational checks. Sized so the avoidance
+// vector is felt without overwhelming the player-tracking direction.
+const BOT_OBSTACLE_AVOID_RADIUS = 7;
+const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
+const BOT_STUCK_MOVED_EPSILON = 0.4;
+const BOT_STUCK_TICKS_THRESHOLD = 8;
+const BOT_STUCK_PIVOT_MS = 600;
+const BOT_LOS_EYE_HEIGHT = 1.6;
+const BOT_JUMP_HEIGHT_DIFF = 2.5;
+
+// Repulsion vector from blocking obstacles within `radius` of (px, py, pz).
+// Returns un-normalized {rx, rz} that the caller can blend into the kiting
+// direction. Uses the same y-skip math as resolveUnitObstacleCollisions so
+// obstacles the bot is over (e.g. low platform decks) or below (high
+// overheads) don't push them. Obstacles flagged `noProjectile` (the station
+// platform-edge walls) are skipped here because they have a dedicated jump
+// handler below — repelling from them would prevent the bot from approaching
+// the platform at all.
+function computeBotAvoidance(px, py, pz, obstacles, radius) {
+  let rx = 0, rz = 0;
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.noProjectile) continue;
+    const topBuffer = o.topBuffer ?? 4;
+    if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
+    const nx = Math.max(o.minX, Math.min(px, o.maxX));
+    const nz = Math.max(o.minZ, Math.min(pz, o.maxZ));
+    const dx = px - nx;
+    const dz = pz - nz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > radius * radius) continue;
+    const d = Math.sqrt(d2);
+    if (d > 0.001) {
+      const t = 1 - d / radius;
+      const strength = t * t;
+      rx += (dx / d) * strength;
+      rz += (dz / d) * strength;
+    } else {
+      // Bot center is on the AABB face — push along the axis of shallowest
+      // penetration so resolveUnitObstacleCollisions doesn't have to.
+      const dMinX = Math.abs(px - o.minX);
+      const dMaxX = Math.abs(o.maxX - px);
+      const dMinZ = Math.abs(pz - o.minZ);
+      const dMaxZ = Math.abs(o.maxZ - pz);
+      const minD = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
+      if (minD === dMinX) rx -= 1;
+      else if (minD === dMaxX) rx += 1;
+      else if (minD === dMinZ) rz -= 1;
+      else rz += 1;
+    }
+  }
+  return { rx, rz };
+}
+
+// Line-of-sight check between two world points using the same swept-AABB
+// math projectiles use, so the bot only "sees" through gaps a bullet would
+// actually pass through. Skips obstacles flagged noProjectile because bullets
+// pass through those too.
+function botHasLineOfSight(p0, p1) {
+  for (const o of arenaObstacles) {
+    if (o.noProjectile) continue;
+    if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  return true;
+}
+
+// Universal burst size for continuous-fire weapons (spreadCount === 1): about
+// half the magazine per trigger pull, clamped so a 5-round mag still feels
+// like a burst and a 100-round mag doesn't fire forever. Derives from
+// magCapacity so re-tuning a weapon's mag automatically re-tunes the bot.
+function botBurstSize(unit) {
+  if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
+  return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
+}
+
 function updateEnemy(now) {
   if (state.enemy.state.sniperChargeTarget) {
     state.enemy.body.velocity.x = 0;
@@ -1235,28 +1311,64 @@ function updateEnemy(now) {
   const dist = toPlayer.length();
   const dir = toPlayer.normalize();
   const side = new THREE.Vector3(-dir.z, 0, dir.x);
-
-  // dynamic evasion + aggressive kiting
-  if (Math.random() > 0.985) state.enemy.state.strafeSign *= -1;
-  const retreat = dist < 11 ? -0.9 : dist > 19 ? 0.62 : 0.15;
-  const move = dir.clone().multiplyScalar(retreat).add(side.multiplyScalar(state.enemy.state.strafeSign * 1.05));
   const eState = state.enemy.state;
+
+  // Range bands are derived from the weapon's lockRange so this AI works for
+  // any weapon stat tuning — short-range MGs and long-range snipers each get
+  // a kiting band centred on their optimal engagement distance.
+  const lockRange = state.enemy.unit.lockRange ?? 50;
+  const optimalRange = Math.max(8, lockRange * 0.7);
+  const lowerRange = Math.max(6, optimalRange - 7);
+  const upperRange = optimalRange + 7;
+
+  if (Math.random() > 0.985) eState.strafeSign *= -1;
+  const retreat = dist < lowerRange ? -0.9 : dist > upperRange ? 0.62 : 0.15;
+  let mx = dir.x * retreat + side.x * eState.strafeSign * 1.05;
+  let mz = dir.z * retreat + side.z * eState.strafeSign * 1.05;
+
+  // --- Obstacle avoidance: blend a repulsion vector into the kiting
+  // direction so the bot steers around walls/pillars/trains instead of
+  // pressing into them and getting pinned by resolveUnitObstacleCollisions.
+  const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
+  mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
+  mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
+  const mlen = Math.sqrt(mx * mx + mz * mz);
+  if (mlen > 1e-3) { mx /= mlen; mz /= mlen; }
+
+  // --- Stuck detection: if we tried to move but our actual position barely
+  // changed for several ticks, force a perpendicular pivot for a beat so we
+  // unstick ourselves from whatever corner we're wedged into.
+  const dxMoved = e.x - (eState.botLastX ?? e.x);
+  const dzMoved = e.z - (eState.botLastZ ?? e.z);
+  const actualMoved = Math.sqrt(dxMoved * dxMoved + dzMoved * dzMoved);
+  const triedToMove = Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) > 1;
+  if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
+    eState.botStuckTicks = (eState.botStuckTicks ?? 0) + 1;
+  } else {
+    eState.botStuckTicks = 0;
+  }
+  eState.botLastX = e.x;
+  eState.botLastZ = e.z;
+  if ((eState.botStuckTicks ?? 0) >= BOT_STUCK_TICKS_THRESHOLD && !((eState.botStuckPivotUntil ?? 0) > now)) {
+    eState.botStuckPivotUntil = now + BOT_STUCK_PIVOT_MS;
+    eState.strafeSign *= -1;
+    eState.botStuckTicks = 0;
+  }
+  if ((eState.botStuckPivotUntil ?? 0) > now) {
+    mx = side.x * eState.strafeSign;
+    mz = side.z * eState.strafeSign;
+  }
 
   // --- Tactical sprint state machine ---
   // Default behaviour is to WALK along the kiting direction (no boost drain),
-  // saving the gauge for actual tactical bursts.
-  //
-  // Hysteresis flag botSprintReady flips ON when boost has refilled to
-  // BOT_SPRINT_READY_BOOST and OFF only when fully drained, so the bot
-  // commits to spending a chunk of boost rather than stutter-stepping every
-  // time the gauge crosses 0. Mirrors shared/src/sim/ai.js tickBot.
+  // saving the gauge for actual tactical bursts. Hysteresis flag
+  // botSprintReady flips ON when boost has refilled to BOT_SPRINT_READY_BOOST
+  // and OFF only when fully drained, so the bot commits to spending a chunk
+  // of boost rather than stutter-stepping every time the gauge crosses 0.
   if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botSprintReady = true;
   if (eState.boost <= 0) eState.botSprintReady = false;
 
   let inBurst = (eState.botSprintUntil ?? 0) > now;
-  // End a burst early if boost ran dry mid-flight, so the bot drops back to
-  // walking and starts the regen cycle instead of sliding at full burst
-  // velocity with an empty gauge.
   if (inBurst && eState.boost <= 0) {
     eState.botSprintUntil = 0;
     inBurst = false;
@@ -1269,9 +1381,9 @@ function updateEnemy(now) {
     && now >= eState.hitStunUntil;
 
   if (canStartBurst) {
-    // Trigger 1: incoming projectile — evade perpendicular.
     const threat = findIncomingThreatOffline(state.enemy, BOT_THREAT_LOOKAHEAD);
     if (threat) {
+      // Trigger 1: incoming projectile — evade perpendicular.
       const cross = threat.vel.x * side.z - threat.vel.z * side.x;
       const evadeSign = cross >= 0 ? 1 : -1;
       eState.botSprintDirX = side.x * evadeSign;
@@ -1282,7 +1394,7 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (dist < 8) {
+    } else if (dist < lowerRange) {
       // Trigger 2: opponent too close — burst back to re-open kiting space.
       eState.botSprintDirX = -dir.x;
       eState.botSprintDirZ = -dir.z;
@@ -1291,10 +1403,8 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (eState.hp < (state.enemy.unit.hp ?? MAX_HP) * 0.4 && dist < 18 && Math.random() > 0.85) {
-      // Trigger 3: low HP — kite further away ("go for cover" approximated as
-      // increasing range; offline build has no obstacle awareness for true
-      // cover-seeking).
+    } else if (eState.hp < (state.enemy.unit.hp ?? MAX_HP) * 0.4 && dist < upperRange && Math.random() > 0.85) {
+      // Trigger 3: low HP — kite further away.
       let bx = -dir.x + side.x * eState.strafeSign * 0.5;
       let bz = -dir.z + side.z * eState.strafeSign * 0.5;
       const blen = Math.sqrt(bx * bx + bz * bz) || 1;
@@ -1305,9 +1415,18 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
+    } else if (dist > upperRange + 6 && Math.random() > 0.94) {
+      // Trigger 4: way out of range — sprint TOWARD opponent to close the
+      // gap. This makes the bot spend boost offensively, not only defensively.
+      eState.botSprintDirX = dir.x;
+      eState.botSprintDirZ = dir.z;
+      eState.botSprintUntil = now + 280;
+      eState.evadeCooldownUntil = now + 800;
+      eState.momentumVX = 0;
+      eState.momentumVZ = 0;
+      inBurst = true;
     } else if (Math.random() > 0.985) {
-      // Trigger 4: occasional unpredictable strafe burst (rare, adds variance
-      // so the bot doesn't sit static between threats).
+      // Trigger 5: occasional unpredictable strafe burst for variance.
       const strafeSign = Math.random() > 0.5 ? 1 : -1;
       let bx = side.x * strafeSign + dir.x * 0.25;
       let bz = side.z * strafeSign + dir.z * 0.25;
@@ -1322,15 +1441,53 @@ function updateEnemy(now) {
     }
   }
 
-  if (inBurst) {
+  // --- Jump for elevation: if the opponent is on a meaningfully higher
+  // surface than the bot (e.g. Station's raised platforms), spend boost to
+  // launch over the step. The arc carries the bot forward; landing on the
+  // higher surface is handled by the same groundHeightAt logic the player
+  // uses, so this works on any map with surfaces.
+  const myFloorY = groundHeightAt(e.x, e.z, e.y - GROUND_BASE_Y);
+  const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
+  const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
+  let jumpThisTick = false;
+  if (
+    state.enemy.grounded
+    && !eState.airborne
+    && eState.boost >= jumpBoostCost + BOT_SPRINT_MIN_BOOST
+    && now >= eState.jumpCooldownUntil
+    && oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
+    && dist < 32
+    && !inBurst
+    && Math.random() > 0.5
+  ) {
+    const jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+    const jumpHoverMs = state.enemy.unit.jumpHoverMs ?? JUMP_HOVER_MS;
+    const jumpCooldownMs = state.enemy.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS;
+    eState.boost = Math.max(0, eState.boost - jumpBoostCost);
+    eState.refillPausedUntil = now + 500;
+    eState.jumpVelocity = jumpVelocity;
+    eState.airborne = true;
+    eState.hoverUntil = now + jumpHoverMs;
+    eState.jumpCooldownUntil = now + jumpCooldownMs;
+    inheritMomentum(state.enemy, 70);
+    jumpThisTick = true;
+  }
+
+  if (jumpThisTick) {
+    // Aim the jump arc straight at the opponent so we actually land on
+    // their elevation.
+    state.enemy.body.velocity.x = dir.x * BOT_SPRINT_BURST_VEL;
+    state.enemy.body.velocity.z = dir.z * BOT_SPRINT_BURST_VEL;
+    eState.action = 'jump';
+  } else if (inBurst) {
     state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
     state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
     eState.action = 'dash';
   } else {
     // Walk pace — kiting direction, no boost drain.
     const moveScalar = now < eState.hitStunUntil ? 0 : 10.6;
-    state.enemy.body.velocity.x = move.x * moveScalar;
-    state.enemy.body.velocity.z = move.z * moveScalar;
+    state.enemy.body.velocity.x = mx * moveScalar;
+    state.enemy.body.velocity.z = mz * moveScalar;
     if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
       state.enemy.body.velocity.x = side.x * 4.5;
       state.enemy.body.velocity.z = side.z * 4.5;
@@ -1340,41 +1497,52 @@ function updateEnemy(now) {
 
   if (dist > 14 && Math.random() > 0.9) eState.evadeHomingUntil = now + 90;
 
-  if (now >= state.enemy.state.nextFireAt) {
+  // --- Firing: LoS-aware + universal burst sizing ---
+  // Skip firing entirely if line of sight is blocked — there's no point
+  // dumping rounds into a wall. The bot keeps repositioning (via the
+  // avoidance + kiting movement above) until the shot is clear.
+  if (now >= eState.nextFireAt) {
     const u = state.enemy.unit;
-    const s = state.enemy.state;
+    const s = eState;
     if (u.magCapacity != null && s.ammo <= 0) {
-      // Out of ammo — defer next attempt until reload completes (mirrors player gating).
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
       s.machineBurstRemaining = 0;
+    } else if (!botHasLineOfSight(
+      { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
+      { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+    )) {
+      // No clear shot — hold fire and check again shortly.
+      s.nextFireAt = now + 220;
+      s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
-      if (fired) {
-        s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
-      } else {
-        s.nextFireAt = now + 220;
-      }
+      if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
+      else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
     } else {
-      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) s.machineBurstRemaining = 5;
+      // Universal burst: derive length from magCapacity so different weapons
+      // (5-round mag, 30-round MG, future 100-round LMG) all feel right.
+      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) {
+        s.machineBurstRemaining = botBurstSize(u);
+      }
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
       if (u.spreadCount === 1) {
         if (fired) s.machineBurstRemaining -= 1;
-        // Intra-burst cadence ties to the unit's actual fireCooldownMs so
-        // bumping firePerMinute on a character makes the bot fire faster
-        // too, instead of being stuck at the old hardcoded 150 ms beat.
-        // Inter-burst pause stays a tactical AI choice (1.3-2.4 s).
+        // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
+        // firePerMinute and the bot's DPS scales with it. Inter-burst pause
+        // is short (0.8-1.5 s) so the bot keeps sustained pressure on like a
+        // real MG user would.
         s.nextFireAt = s.machineBurstRemaining > 0
           ? now + u.fireCooldownMs
-          : now + PhaserLikeBetween(1300, 2400);
+          : now + PhaserLikeBetween(800, 1500);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
-        if (fired) s.nextFireAt = now + PhaserLikeBetween(1500, 3000);
+        if (fired) s.nextFireAt = now + PhaserLikeBetween(1300, 2400);
         else s.nextFireAt = now + 120;
       }
     }
@@ -1386,6 +1554,7 @@ function updateEnemy(now) {
     eState.botSprintReady === true
     && eState.boost >= BOT_SPRINT_MIN_BOOST
     && !inBurst
+    && !jumpThisTick
     && dist < 7.2
     && now > state.player.state.antiMeleeUntil
     && Math.random() > 0.82
