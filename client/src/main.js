@@ -80,12 +80,12 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 43,
     projectileSpeed: 70,
-    firePerMinute: 86,         // ≈ 697.67 ms cooldown
+    firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,
     magCapacity: 7,
-    reloadMs: 2000,
+    reloadMs: 1000,
     autoReload: true
   },
   unit3: {
