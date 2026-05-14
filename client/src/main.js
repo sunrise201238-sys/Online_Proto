@@ -1591,10 +1591,10 @@ function startMatch() {
     state.player.body.position.set(-50, 2.45, 0);
     state.enemy.body.position.set(50, 2.45, 0);
   } else if (state.mapKey === 'station') {
-    // Station: spawn at the far west/east ends of the track corridor, with
-    // staggered train cars and platform pillars giving immediate side cover.
-    state.player.body.position.set(-118, 2.45, 0);
-    state.enemy.body.position.set(118, 2.45, 0);
+    // Station: spawn at the far west/east ends of the track corridor (tracks at y=0).
+    // Platforms on either side are raised 4m — players must jump up to reach them.
+    state.player.body.position.set(-128, 2.45, 0);
+    state.enemy.body.position.set(128, 2.45, 0);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);
@@ -3985,288 +3985,394 @@ function buildLobbyArena() {
 }
 
 function buildStationArena() {
-  // Big terminal hall (260 x 210) with two parallel east-west train tracks down
-  // the centre and stopped freight cars staggered across them — each car fully
-  // hides a ~5m mech. Side platforms host kiosks, vending machines, and benches
-  // for mid-and-low cover; the back halls have ticket booths, departure boards,
-  // and partition walls to break sight-lines. Steel I-beam pillars carry the
-  // roof and double as structural pop-cover.
-  const concrete = new THREE.MeshStandardMaterial({ color: 0x2a313b, roughness: 0.94 });
-  const platformPaint = new THREE.MeshStandardMaterial({ color: 0x3a4350, roughness: 0.85 });
+  // Large industrial terminal (~270 x 264) with two parallel east-west train
+  // tracks down the centre and six staggered freight cars on them (each 35 m
+  // long × 8 m tall — full hard cover even for a jumping mech). On either side
+  // of the tracks the floor is RAISED 4 m: a player on the tracks must JUMP
+  // to reach the platforms. Platforms hold steel pillars (floor-to-ceiling),
+  // ticket booths, departure boards, info kiosks, vending rows, shipping
+  // containers, storage tanks, crate stacks, and info totems — every primary
+  // cover is sized to fully hide a ~5 m mech.
+  //
+  // The outer perimeter walls are collision-only (no mesh) so the camera
+  // never clips when the player backs into a corner. The play area boundary
+  // is marked with glowing red floor stripes inside the invisible wall.
+  // ===== Materials =====
+  const tracksFloor = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.95 });
+  const platformFloor = new THREE.MeshStandardMaterial({ color: 0x3a4350, roughness: 0.85 });
+  const platformEdge = new THREE.MeshStandardMaterial({ color: 0xa6acba, roughness: 0.5, metalness: 0.45 });
+  const platformFace = new THREE.MeshStandardMaterial({ color: 0x252b35, roughness: 0.85 });
+  const cautionStripe = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.65 });
+  const boundaryGlow = new THREE.MeshStandardMaterial({ color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4 });
   const railTie = new THREE.MeshStandardMaterial({ color: 0x4a3d2a, roughness: 0.92 });
   const railSteel = new THREE.MeshStandardMaterial({ color: 0xb0b6c2, roughness: 0.4, metalness: 0.7 });
-  const cautionStripe = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.65 });
-  const wall = new THREE.MeshStandardMaterial({ color: 0x636b78, roughness: 0.7 });
-  const wallTrim = new THREE.MeshStandardMaterial({ color: 0xa6acba, roughness: 0.5, metalness: 0.45 });
-  const pillarSteel = new THREE.MeshStandardMaterial({ color: 0x3b4250, roughness: 0.5, metalness: 0.55 });
-  const pillarBase = new THREE.MeshStandardMaterial({ color: 0x9aa0ad, roughness: 0.55, metalness: 0.4 });
+  const ballast = new THREE.MeshStandardMaterial({ color: 0x3a3a40, roughness: 0.95 });
+  const pillarSteel = new THREE.MeshStandardMaterial({ color: 0x4a5260, roughness: 0.5, metalness: 0.55 });
+  const pillarRim = new THREE.MeshStandardMaterial({ color: 0xb0b6c2, roughness: 0.45, metalness: 0.5 });
   const trainBodyA = new THREE.MeshStandardMaterial({ color: 0x83302a, roughness: 0.6 });
   const trainBodyB = new THREE.MeshStandardMaterial({ color: 0x2f4a76, roughness: 0.6 });
-  const trainAccent = new THREE.MeshStandardMaterial({ color: 0x1b1f26, roughness: 0.7 });
+  const trainAccent = new THREE.MeshStandardMaterial({ color: 0x12161c, roughness: 0.7 });
   const trainRoof = new THREE.MeshStandardMaterial({ color: 0x6b6f78, roughness: 0.55, metalness: 0.3 });
   const booth = new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.7 });
   const boothTrim = new THREE.MeshStandardMaterial({ color: 0x4a3a20, roughness: 0.8 });
   const boardFrame = new THREE.MeshStandardMaterial({ color: 0x202830, roughness: 0.5, metalness: 0.5 });
-  const boardScreen = new THREE.MeshStandardMaterial({ color: 0x121820, emissive: 0xe6a630, emissiveIntensity: 0.55, roughness: 0.4 });
+  const boardScreen = new THREE.MeshStandardMaterial({ color: 0x121820, emissive: 0xe6a630, emissiveIntensity: 0.6, roughness: 0.4 });
   const kiosk = new THREE.MeshStandardMaterial({ color: 0xd4d8df, roughness: 0.5, metalness: 0.2 });
   const kioskRoof = new THREE.MeshStandardMaterial({ color: 0x9b3a3a, roughness: 0.7 });
   const vending = new THREE.MeshStandardMaterial({ color: 0x9b2c2c, roughness: 0.6 });
-  const vendingFront = new THREE.MeshStandardMaterial({ color: 0x141820, emissive: 0xff8a3a, emissiveIntensity: 0.35, roughness: 0.5 });
+  const vendingFront = new THREE.MeshStandardMaterial({ color: 0x141820, emissive: 0xff8a3a, emissiveIntensity: 0.4, roughness: 0.5 });
   const hallWall = new THREE.MeshStandardMaterial({ color: 0x3d4a5c, roughness: 0.7 });
   const billboard = new THREE.MeshStandardMaterial({ color: 0xe6dab0, emissive: 0x4a3a20, emissiveIntensity: 0.3, roughness: 0.6 });
-  const cart = new THREE.MeshStandardMaterial({ color: 0x35414f, roughness: 0.65, metalness: 0.3 });
-  const cartTop = new THREE.MeshStandardMaterial({ color: 0x6e553a, roughness: 0.85 });
-  const bench = new THREE.MeshStandardMaterial({ color: 0x4a341e, roughness: 0.88 });
-  const benchFrame = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.55, metalness: 0.4 });
-  const totem = new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.5, metalness: 0.4 });
-  const totemGlow = new THREE.MeshStandardMaterial({ color: 0xffe9b8, emissive: 0xffe9b8, emissiveIntensity: 0.85, roughness: 0.4 });
+  const containerA = new THREE.MeshStandardMaterial({ color: 0x356b8a, roughness: 0.75 });
+  const containerB = new THREE.MeshStandardMaterial({ color: 0x9b6a2a, roughness: 0.75 });
+  const containerRib = new THREE.MeshStandardMaterial({ color: 0x1a1f28, roughness: 0.7 });
+  const crateA = new THREE.MeshStandardMaterial({ color: 0x7e5635, roughness: 0.85 });
+  const crateB = new THREE.MeshStandardMaterial({ color: 0x614126, roughness: 0.9 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x707783, roughness: 0.5, metalness: 0.6 });
+  const tankBand = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.7 });
+  const totem = new THREE.MeshStandardMaterial({ color: 0x1f242c, roughness: 0.5, metalness: 0.4 });
+  const totemGlow = new THREE.MeshStandardMaterial({ color: 0xffe9b8, emissive: 0xffe9b8, emissiveIntensity: 0.9, roughness: 0.4 });
   const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffe2a8, emissiveIntensity: 0.9, roughness: 0.3 });
   const beam = new THREE.MeshStandardMaterial({ color: 0x2d343f, roughness: 0.6, metalness: 0.45 });
   const pipe = new THREE.MeshStandardMaterial({ color: 0x8b6f3a, roughness: 0.6, metalness: 0.4 });
 
-  const HALF_X = 130;
-  const HALF_Z = 105;
-  const CEIL_Y = 22;
+  const HALF_X = 135;
+  const HALF_Z = 132;
+  const CEIL_Y = 28;
+  const PLATFORM_Y = 4;
+  const TRACK_Z_HALF = 11;
 
-  // Concrete terminal floor
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), concrete);
-  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
-  scene.add(floor); arenaDecor.push(floor);
-
-  // Painted platform tiles (lighter shade flanking the tracks)
-  for (const z of [-25, 25]) {
-    const slab = new THREE.Mesh(new THREE.PlaneGeometry(240, 25), platformPaint);
-    slab.rotation.x = -Math.PI / 2; slab.position.set(0, 0.02, z);
-    scene.add(slab); arenaDecor.push(slab);
+  // ===== Base concrete floor (covers the whole arena at y=0) =====
+  // Platforms below raise sections of the walkable surface to y=4; this floor
+  // shows through wherever the platforms don't, and forms the under-platform
+  // ceiling when seen from the tracks corridor.
+  const baseFloor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, 2 * HALF_Z), tracksFloor);
+  baseFloor.rotation.x = -Math.PI / 2; baseFloor.position.set(0, 0.005, 0);
+  scene.add(baseFloor); arenaDecor.push(baseFloor);
+  // Gravel ballast bands flanking each rail
+  for (const z of [8, -8]) {
+    const bal = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, 4.6), ballast);
+    bal.rotation.x = -Math.PI / 2; bal.position.set(0, 0.012, z);
+    scene.add(bal); arenaDecor.push(bal);
   }
-  // Yellow caution stripes at the platform edges (decor only)
-  for (const z of [-10, 10]) {
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(240, 0.8), cautionStripe);
-    stripe.rotation.x = -Math.PI / 2; stripe.position.set(0, 0.03, z);
-    scene.add(stripe); arenaDecor.push(stripe);
-  }
-
-  // Train tracks (decor: wooden ties + steel rails on each track)
-  for (const z of [6.5, -6.5]) {
-    for (let x = -120; x <= 120; x += 4) {
-      const tie = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 3.6), railTie);
-      tie.position.set(x, 0.06, z);
+  // Wooden ties + steel rails (decor)
+  for (const z of [8, -8]) {
+    for (let x = -130; x <= 130; x += 4.5) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 4.6), railTie);
+      tie.position.set(x, 0.14, z);
       scene.add(tie); arenaDecor.push(tie);
     }
-    for (const dz of [-1.2, 1.2]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(240, 0.18, 0.18), railSteel);
-      rail.position.set(0, 0.18, z + dz);
+    for (const dz of [-1.5, 1.5]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X, 0.28, 0.28), railSteel);
+      rail.position.set(0, 0.32, z + dz);
       scene.add(rail); arenaDecor.push(rail);
     }
   }
 
-  // ===== Outer terminal walls (interior 260 x 210, ceiling 22) =====
-  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: -(HALF_Z + 1), sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
-  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: HALF_Z + 1, sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
-  addBlockingBox({ x: -(HALF_X + 1), y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
-  addBlockingBox({ x: HALF_X + 1, y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
-  addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
-  addBlockingBox({ x: 0, y: 0.4, z: HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
+  // ===== Raised platforms (PLATFORM_Y = 4 m, no ramps — must JUMP up) =====
+  // SURFACE_STEP_HEIGHT is 1.6, so a 4 m step cannot be walked up automatically.
+  addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: TRACK_Z_HALF, maxZ: HALF_Z - 1, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
+  addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: -(HALF_Z - 1), maxZ: -TRACK_Z_HALF, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
+  // Visible 4 m platform face skirts (decor only — the surface above catches a
+  // jumping player, the face is just for the player to *see* the step).
+  for (const zEdge of [TRACK_Z_HALF, -TRACK_Z_HALF]) {
+    const face = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X - 4, PLATFORM_Y, 0.5), platformFace);
+    face.position.set(0, PLATFORM_Y / 2, zEdge);
+    scene.add(face); arenaDecor.push(face);
+    // Steel edge cap running along the top of the platform face
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X - 4, 0.35, 1.0), platformEdge);
+    cap.position.set(0, PLATFORM_Y + 0.18, zEdge + (zEdge > 0 ? 0.5 : -0.5));
+    scene.add(cap); arenaDecor.push(cap);
+    // Yellow safety stripe on top of the platform edge
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 6, 0.9), cautionStripe);
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(0, PLATFORM_Y + 0.05, zEdge + (zEdge > 0 ? 1.3 : -1.3));
+    scene.add(stripe); arenaDecor.push(stripe);
+  }
 
-  // ===== Stopped freight cars on two staggered tracks (full-height hard cover) =====
-  // sy = 5.5 with default topBuffer keeps a jumping mech from sailing over the top.
+  // ===== Outer perimeter walls — COLLISION ONLY, NO MESH =====
+  // Pushed directly so the camera never clips against them when the player
+  // backs into a corner. The boundary is marked by red floor stripes below.
+  arenaObstacles.push(
+    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
+    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
+    { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
+    { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
+  );
+
+  // ===== Red glowing boundary stripes (the play-area edge indicator) =====
+  // Each stripe sits just inside its wall, on whichever floor is present
+  // (platform top y=4 or track floor y=0).
+  const stripeInset = 1.6;
+  // North/south stripes — these always sit on a platform.
+  for (const zEdge of [HALF_Z - stripeInset, -(HALF_Z - stripeInset)]) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 4, 1.4), boundaryGlow);
+    s.rotation.x = -Math.PI / 2;
+    s.position.set(0, PLATFORM_Y + 0.05, zEdge);
+    scene.add(s); arenaDecor.push(s);
+  }
+  // East/west stripes — split into three sections so each rides the correct
+  // floor (platform north, track corridor, platform south).
+  for (const xEdge of [HALF_X - stripeInset, -(HALF_X - stripeInset)]) {
+    const nLen = (HALF_Z - 1) - TRACK_Z_HALF;
+    const n = new THREE.Mesh(new THREE.PlaneGeometry(1.4, nLen), boundaryGlow);
+    n.rotation.x = -Math.PI / 2;
+    n.position.set(xEdge, PLATFORM_Y + 0.05, (TRACK_Z_HALF + HALF_Z - 1) / 2);
+    scene.add(n); arenaDecor.push(n);
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, nLen), boundaryGlow);
+    s.rotation.x = -Math.PI / 2;
+    s.position.set(xEdge, PLATFORM_Y + 0.05, -(TRACK_Z_HALF + HALF_Z - 1) / 2);
+    scene.add(s); arenaDecor.push(s);
+    const t = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * TRACK_Z_HALF), boundaryGlow);
+    t.rotation.x = -Math.PI / 2;
+    t.position.set(xEdge, 0.05, 0);
+    scene.add(t); arenaDecor.push(t);
+  }
+
+  // ===== Stopped freight cars on two staggered tracks (6 — big hard cover) =====
   const drawTrainCar = (cx, beltZ, bodyMat) => {
-    addBlockingBox({ x: cx, y: 2.75, z: beltZ, sx: 22, sy: 5.5, sz: 3, material: bodyMat });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(22.4, 0.4, 3.4), trainRoof);
-    roof.position.set(cx, 5.7, beltZ);
+    addBlockingBox({ x: cx, y: 4, z: beltZ, sx: 35, sy: 8, sz: 5, material: bodyMat });
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(35.6, 0.7, 5.4), trainRoof);
+    roof.position.set(cx, 8.35, beltZ);
     scene.add(roof); arenaDecor.push(roof);
-    const skirt = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 3.2), trainAccent);
-    skirt.position.set(cx, 0.45, beltZ);
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(35, 1.0, 5.2), trainAccent);
+    skirt.position.set(cx, 0.55, beltZ);
     scene.add(skirt); arenaDecor.push(skirt);
-    const stripeMid = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 3.05), trainAccent);
-    stripeMid.position.set(cx, 3.6, beltZ);
+    const stripeMid = new THREE.Mesh(new THREE.BoxGeometry(35, 0.8, 5.05), trainAccent);
+    stripeMid.position.set(cx, 5.2, beltZ);
     scene.add(stripeMid); arenaDecor.push(stripeMid);
-    for (const dx of [-11.4, 11.4]) {
-      const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 10), railSteel);
+    for (const dx of [-17.8, 17.8]) {
+      const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.8, 12), railSteel);
       buf.rotation.z = Math.PI / 2;
-      buf.position.set(cx + dx, 1.8, beltZ);
+      buf.position.set(cx + dx, 2.8, beltZ);
       scene.add(buf); arenaDecor.push(buf);
+    }
+    // Wheel sets (decor)
+    for (const dx of [-12, 12]) {
+      const axle = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 5.2, 16), trainAccent);
+      axle.rotation.x = Math.PI / 2;
+      axle.position.set(cx + dx, 1.0, beltZ);
+      scene.add(axle); arenaDecor.push(axle);
     }
   };
   // North track — rust-red wagons
-  drawTrainCar(-95, 6.5, trainBodyA);
-  drawTrainCar(-30, 6.5, trainBodyA);
-  drawTrainCar(40, 6.5, trainBodyA);
+  drawTrainCar(-100, 8, trainBodyA);
+  drawTrainCar(-25, 8, trainBodyA);
+  drawTrainCar(60, 8, trainBodyA);
   // South track — weathered-blue wagons, offset for staggered cross-fire
-  drawTrainCar(95, -6.5, trainBodyB);
-  drawTrainCar(30, -6.5, trainBodyB);
-  drawTrainCar(-40, -6.5, trainBodyB);
+  drawTrainCar(100, -8, trainBodyB);
+  drawTrainCar(25, -8, trainBodyB);
+  drawTrainCar(-60, -8, trainBodyB);
 
-  // ===== Steel I-beam pillars carrying the roof (12 — structural cover) =====
+  // ===== Steel I-beam pillars carrying the roof (16 — structural cover) =====
   const drawPillar = (cx, cz) => {
-    addBlockingBox({ x: cx, y: CEIL_Y / 2, z: cz, sx: 2.5, sy: CEIL_Y, sz: 2.5, material: pillarSteel });
-    addBlockingBox({ x: cx, y: 0.4, z: cz, sx: 4, sy: 0.8, sz: 4, material: pillarBase });
+    addBlockingBox({ x: cx, y: CEIL_Y / 2, z: cz, sx: 4, sy: CEIL_Y, sz: 4, material: pillarSteel });
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.5, 5.4), pillarRim);
+    cap.position.set(cx, CEIL_Y - 0.4, cz);
+    scene.add(cap); arenaDecor.push(cap);
+    const flange = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.0, 5.8), pillarRim);
+    flange.position.set(cx, PLATFORM_Y + 0.5, cz);
+    scene.add(flange); arenaDecor.push(flange);
   };
-  const pillarSpots = [
-    [-110, 25], [-65, 25], [65, 25], [110, 25],
-    [-110, -25], [-65, -25], [65, -25], [110, -25],
-    [-100, 70], [100, 70], [-100, -70], [100, -70]
-  ];
-  pillarSpots.forEach(([x, z]) => drawPillar(x, z));
+  [
+    [-105, 55], [-35, 55], [35, 55], [105, 55],
+    [-105, -55], [-35, -55], [35, -55], [105, -55],
+    [-105, 115], [-35, 115], [35, 115], [105, 115],
+    [-105, -115], [-35, -115], [35, -115], [105, -115]
+  ].forEach(([x, z]) => drawPillar(x, z));
 
-  // ===== Ticket booths — full-cover buildings along the hall back walls =====
+  // ===== Ticket booths — biggest cover, along the deep back walls =====
   const drawBooth = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 3.5, z: cz, sx: 20, sy: 7, sz: 14, material: booth });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(20.6, 0.6, 14.6), boothTrim);
-    roof.position.set(cx, 7.3, cz);
+    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 28, sy: 15, sz: 18, material: booth });
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(29, 0.8, 19), boothTrim);
+    roof.position.set(cx, 15.4, cz);
     scene.add(roof); arenaDecor.push(roof);
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(16, 3, 0.2), boardScreen);
-    glass.position.set(cx, 4, cz - 7.05);
+    // Glass front facing the platform (decor only)
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(22, 5, 0.25), boardScreen);
+    glass.position.set(cx, PLATFORM_Y + 4, cz - 9.15);
     scene.add(glass); arenaDecor.push(glass);
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 0.4), boardScreen);
-    sign.position.set(cx, 6.4, cz - 7.1);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(16, 1.4, 0.4), boardScreen);
+    sign.position.set(cx, 13, cz - 9.2);
     scene.add(sign); arenaDecor.push(sign);
   };
-  drawBooth(-65, 90);
-  drawBooth(65, 90);
-  drawBooth(-65, -90);
-  drawBooth(65, -90);
+  drawBooth(-65, 122);
+  drawBooth(65, 122);
+  drawBooth(-65, -122);
+  drawBooth(65, -122);
 
-  // ===== Departure information boards — perpendicular sight-line blockers =====
+  // ===== Departure information boards (perpendicular sight-line blockers) =====
   const drawDepartureBoard = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 4, z: cz, sx: 14, sy: 8, sz: 1.5, material: boardFrame });
-    for (const dz of [-0.85, 0.85]) {
-      const screen = new THREE.Mesh(new THREE.BoxGeometry(13, 7, 0.1), boardScreen);
-      screen.position.set(cx, 4.2, cz + dz);
+    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 24, sy: 15, sz: 3, material: boardFrame });
+    for (const dz of [-1.6, 1.6]) {
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(22, 13, 0.15), boardScreen);
+      screen.position.set(cx, 7.8, cz + dz);
       scene.add(screen); arenaDecor.push(screen);
     }
-    const crown = new THREE.Mesh(new THREE.BoxGeometry(14.4, 0.5, 1.8), boardFrame);
-    crown.position.set(cx, 8.25, cz);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(25, 0.6, 3.4), boardFrame);
+    crown.position.set(cx, 15.3, cz);
     scene.add(crown); arenaDecor.push(crown);
   };
-  drawDepartureBoard(-25, 48);
-  drawDepartureBoard(25, 48);
-  drawDepartureBoard(-25, -48);
-  drawDepartureBoard(25, -48);
+  drawDepartureBoard(-65, 80);
+  drawDepartureBoard(65, 80);
+  drawDepartureBoard(-65, -80);
+  drawDepartureBoard(65, -80);
 
-  // ===== Info kiosks on the platforms (4 — full-height square cover) =====
+  // ===== Hall partition walls — break the back hall into bays =====
+  const drawHallWall = (cx, cz) => {
+    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 32, sy: 15, sz: 2.5, material: hallWall });
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(33, 0.5, 3), beam);
+    trim.position.set(cx, 15.25, cz);
+    scene.add(trim); arenaDecor.push(trim);
+    for (const dz of [-1.4, 1.4]) {
+      const ad = new THREE.Mesh(new THREE.BoxGeometry(22, 8, 0.12), billboard);
+      ad.position.set(cx, 8, cz + dz);
+      scene.add(ad); arenaDecor.push(ad);
+    }
+  };
+  drawHallWall(-70, 95);
+  drawHallWall(70, 95);
+  drawHallWall(-70, -95);
+  drawHallWall(70, -95);
+
+  // ===== Info kiosks on the platforms (8 — full-cover boxes) =====
   const drawKiosk = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 2.5, z: cz, sx: 6, sy: 5, sz: 5, material: kiosk });
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(4.2, 1.6, 4), kioskRoof);
+    addBlockingBox({ x: cx, y: 6, z: cz, sx: 12, sy: 12, sz: 10, material: kiosk });
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(8, 3.6, 4), kioskRoof);
     cap.rotation.y = Math.PI / 4;
-    cap.position.set(cx, 5.8, cz);
+    cap.position.set(cx, 13.6, cz);
     scene.add(cap); arenaDecor.push(cap);
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(4, 0.8, 0.15), boardScreen);
-    sign.position.set(cx, 4.2, cz - 2.6);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(8, 1.4, 0.25), boardScreen);
+    sign.position.set(cx, PLATFORM_Y + 5, cz - 5.15);
     scene.add(sign); arenaDecor.push(sign);
   };
-  drawKiosk(-90, 22);
-  drawKiosk(90, 22);
-  drawKiosk(-90, -22);
-  drawKiosk(90, -22);
+  [
+    [-105, 30], [-35, 30], [35, 30], [105, 30],
+    [-105, -30], [-35, -30], [35, -30], [105, -30]
+  ].forEach(([x, z]) => drawKiosk(x, z));
 
-  // ===== Vending machine rows along the back of each platform =====
+  // ===== Vending machine rows along the back of each platform (10) =====
   const drawVending = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 2, z: cz, sx: 5, sy: 4, sz: 2, material: vending });
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.4, 0.1), vendingFront);
-    panel.position.set(cx, 2.8, cz - 1.06);
+    addBlockingBox({ x: cx, y: 5.5, z: cz, sx: 8, sy: 11, sz: 3, material: vending });
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(7, 6, 0.12), vendingFront);
+    panel.position.set(cx, 7, cz - 1.56);
     scene.add(panel); arenaDecor.push(panel);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.4, 2.2), boardFrame);
-    top.position.set(cx, 4.15, cz);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.6, 3.4), boardFrame);
+    top.position.set(cx, 11.3, cz);
     scene.add(top); arenaDecor.push(top);
   };
   [
-    [-85, 40], [-50, 40], [50, 40], [85, 40],
-    [-85, -40], [-50, -40], [50, -40], [85, -40]
+    [-95, 65], [-45, 65], [0, 65], [45, 65], [95, 65],
+    [-95, -65], [-45, -65], [0, -65], [45, -65], [95, -65]
   ].forEach(([x, z]) => drawVending(x, z));
 
-  // ===== Hall mid-walls — partition the back halls from the platforms =====
-  const drawHallWall = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 4, z: cz, sx: 22, sy: 8, sz: 1, material: hallWall });
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(22.4, 0.4, 1.2), beam);
-    trim.position.set(cx, 8.15, cz);
-    scene.add(trim); arenaDecor.push(trim);
-    const ad1 = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.1), billboard);
-    ad1.position.set(cx, 4.5, cz + 0.55);
-    scene.add(ad1); arenaDecor.push(ad1);
-    const ad2 = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.1), billboard);
-    ad2.position.set(cx, 4.5, cz - 0.55);
-    scene.add(ad2); arenaDecor.push(ad2);
-  };
-  drawHallWall(-50, 60);
-  drawHallWall(50, 60);
-  drawHallWall(-50, -60);
-  drawHallWall(50, -60);
-
-  // ===== Baggage carts (low cover scattered through the halls) =====
-  const drawCart = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 0.6, z: cz, sx: 4, sy: 1.2, sz: 2, material: cart, topBuffer: 2 });
-    const case1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 1.2), cartTop);
-    case1.position.set(cx - 0.7, 1.6, cz);
-    scene.add(case1); arenaDecor.push(case1);
-    const case2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.0), boothTrim);
-    case2.position.set(cx + 0.9, 1.55, cz);
-    scene.add(case2); arenaDecor.push(case2);
-  };
-  [
-    [-100, 60], [-15, 60], [15, 60], [100, 60],
-    [-100, -60], [-15, -60], [15, -60], [100, -60]
-  ].forEach(([x, z]) => drawCart(x, z));
-
-  // ===== Benches along the platform-track edge (low cover) =====
-  const drawBench = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 0.5, z: cz, sx: 5, sy: 1.0, sz: 1.2, material: bench, topBuffer: 2 });
-    for (const dx of [-2.2, 2.2]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1, 1.4), benchFrame);
-      leg.position.set(cx + dx, 0.5, cz);
-      scene.add(leg); arenaDecor.push(leg);
+  // ===== Shipping containers — long horizontal cover (4) =====
+  const drawContainer = (cx, cz, mat) => {
+    addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat });
+    const top = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.5, 8.4), containerRib);
+    top.position.set(cx, 10.25, cz);
+    scene.add(top); arenaDecor.push(top);
+    // Corrugated rib strips
+    for (let dx = -8; dx <= 8; dx += 1.6) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.6, 8.2), containerRib);
+      rib.position.set(cx + dx, 5, cz);
+      scene.add(rib); arenaDecor.push(rib);
     }
   };
-  [
-    [-90, 14], [-50, 14], [50, 14], [90, 14],
-    [-90, -14], [-50, -14], [50, -14], [90, -14]
-  ].forEach(([x, z]) => drawBench(x, z));
+  drawContainer(-50, 105, containerA);
+  drawContainer(50, 105, containerB);
+  drawContainer(-50, -105, containerB);
+  drawContainer(50, -105, containerA);
 
-  // ===== Central info totems between the trains in the platform gap =====
+  // ===== Storage tanks — round full-cover cylinders (8) =====
+  const drawTank = (cx, cz) => {
+    // Square AABB matching the tank's footprint, pushed directly so we can use
+    // a cylinder mesh as the visual (addBlockingBox would also create a box).
+    arenaObstacles.push({
+      minX: cx - 2.5, maxX: cx + 2.5,
+      minZ: cz - 2.5, maxZ: cz + 2.5,
+      minY: 0, maxY: 14
+    });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 14, 20), tankMat);
+    body.position.set(cx, 7, cz);
+    scene.add(body); arenaDecor.push(body);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), tankMat);
+    dome.position.set(cx, 14, cz);
+    scene.add(dome); arenaDecor.push(dome);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.7, 20), tankBand);
+    band.position.set(cx, PLATFORM_Y + 1.6, cz);
+    scene.add(band); arenaDecor.push(band);
+  };
+  [
+    [-125, 45], [125, 45], [-125, -45], [125, -45],
+    [-125, 105], [125, 105], [-125, -105], [125, -105]
+  ].forEach(([x, z]) => drawTank(x, z));
+
+  // ===== Crate stacks along the platform front edge (4) =====
+  const drawCrateStack = (cx, cz) => {
+    // Push the AABB directly; visual is four individual stacked crates below.
+    arenaObstacles.push({
+      minX: cx - 4, maxX: cx + 4,
+      minZ: cz - 4, maxZ: cz + 4,
+      minY: 0, maxY: 11
+    });
+    for (let i = 0; i < 4; i++) {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(7.8, 2.7, 7.8), i % 2 === 0 ? crateA : crateB);
+      c.position.set(cx, 1.4 + i * 2.75, cz);
+      scene.add(c); arenaDecor.push(c);
+    }
+  };
+  drawCrateStack(-75, 18);
+  drawCrateStack(75, 18);
+  drawCrateStack(-75, -18);
+  drawCrateStack(75, -18);
+
+  // ===== Info totems mid-platform (4 — slim full-height columns) =====
   const drawTotem = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 3, z: cz, sx: 2, sy: 6, sz: 2, material: totem });
-    const globe = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 10), totemGlow);
-    globe.position.set(cx, 6.7, cz);
+    addBlockingBox({ x: cx, y: 7, z: cz, sx: 3, sy: 14, sz: 3, material: totem });
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 10), totemGlow);
+    globe.position.set(cx, 15.2, cz);
     scene.add(globe); arenaDecor.push(globe);
   };
-  drawTotem(0, 25);
-  drawTotem(0, -25);
+  drawTotem(-25, 70);
+  drawTotem(25, 70);
+  drawTotem(-25, -70);
+  drawTotem(25, -70);
 
-  // ===== Overhead pipework (visual only) =====
-  for (const z of [-80, -45, 0, 45, 80]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 260, 12), pipe);
+  // ===== Overhead pipework (decor only) =====
+  for (const z of [-100, -55, -15, 15, 55, 100]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2 * HALF_X, 12), pipe);
     p.rotation.z = Math.PI / 2;
-    p.position.set(0, 16, z);
+    p.position.set(0, 20, z);
     scene.add(p); arenaDecor.push(p);
   }
 
   // ===== Ceiling truss beams =====
-  for (const x of [-100, -60, -20, 20, 60, 100]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 210), beam);
-    b.position.set(x, CEIL_Y - 3, 0);
+  for (const x of [-115, -75, -35, 0, 35, 75, 115]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 2 * HALF_Z), beam);
+    b.position.set(x, CEIL_Y - 3.5, 0);
     scene.add(b); arenaDecor.push(b);
   }
 
-  // ===== Hanging sodium-lamp banks (warm yellow platform lighting) =====
-  for (const x of [-100, -60, -20, 20, 60, 100]) {
-    for (const z of [-65, -25, 25, 65]) {
-      const l = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.4, 1.4), lampMat);
-      l.position.set(x, CEIL_Y - 4.5, z);
+  // ===== Hanging sodium-lamp banks (warm yellow station lighting) =====
+  for (const x of [-115, -75, -35, 35, 75, 115]) {
+    for (const z of [-110, -70, -35, 0, 35, 70, 110]) {
+      const l = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.5, 2.2), lampMat);
+      l.position.set(x, CEIL_Y - 5.5, z);
       scene.add(l); arenaDecor.push(l);
     }
   }
 
   // ===== Hanging central station clock (decor only) =====
-  const clockBack = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 0.4, 24), beam);
+  const clockBack = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 24), beam);
   clockBack.rotation.x = Math.PI / 2;
-  clockBack.position.set(0, 17.5, 0);
+  clockBack.position.set(0, 22, 0);
   scene.add(clockBack); arenaDecor.push(clockBack);
-  const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.25, 24), lampMat);
+  const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.3, 24), lampMat);
   clockFace.rotation.x = Math.PI / 2;
-  clockFace.position.set(0, 17.5, 0.25);
+  clockFace.position.set(0, 22, 0.3);
   scene.add(clockFace); arenaDecor.push(clockFace);
-  const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 0.3), beam);
-  clockHanger.position.set(0, 20.0, 0);
+  const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
+  clockHanger.position.set(0, 25.5, 0);
   scene.add(clockHanger); arenaDecor.push(clockHanger);
 }
 
