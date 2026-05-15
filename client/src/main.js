@@ -133,8 +133,11 @@ const MAP_DATA = {
   factory: { name: 'Factory' },
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
-  station: { name: 'Station' },
-  carnival: { name: 'Carnival' }
+  station: { name: 'Station' }
+  // 'carnival' is intentionally hidden from the picker for now while it's
+  // being iterated on. The build function, ambience case, and shared collision
+  // data are all still in place — re-add the entry here (and the matching
+  // line in shared/src/sim/constants.js) to surface it again.
 };
 
 const state = {
