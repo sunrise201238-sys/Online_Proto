@@ -3337,9 +3337,10 @@ function buildStreetsArena() {
     addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
   });
 
-  // Outer back walls to close the block
-  addBlockingBox({ x: 0, y: 10, z: -100, sx: 260, sy: 20, sz: 6, material: storefrontD });
-  addBlockingBox({ x: 0, y: 10, z: 100, sx: 260, sy: 20, sz: 6, material: storefrontD });
+  // (Outer back walls removed — the play area is bounded by the invisible
+  // boundary walls at HALF_Z=92, well inside z=±100; tall back-of-block
+  // walls past the boundary just blocked the horizon view from near the
+  // map edge.)
 
   // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
   addPlatform({
