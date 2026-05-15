@@ -6760,70 +6760,77 @@ const GENERATED_ARENA_COLLISION_DATA = {
   },
   "flashpoint": {
     "obstacles": [
-      // ----- Play-area boundary (matches addBoundaryIndicator(130, 90, 14)) -----
-      { "minX": -132, "maxX": 132, "minZ": 90, "maxZ": 92, "minY": 0, "maxY": 14 },
-      { "minX": -132, "maxX": 132, "minZ": -92, "maxZ": -90, "minY": 0, "maxY": 14 },
-      { "minX": -132, "maxX": -130, "minZ": -92, "maxZ": 92, "minY": 0, "maxY": 14 },
-      { "minX": 130, "maxX": 132, "minZ": -92, "maxZ": 92, "minY": 0, "maxY": 14 },
+      // ----- Play-area boundary (matches addBoundaryIndicator(110, 75, 12)) -----
+      { "minX": -112, "maxX": 112, "minZ": 75, "maxZ": 77, "minY": 0, "maxY": 12 },
+      { "minX": -112, "maxX": 112, "minZ": -77, "maxZ": -75, "minY": 0, "maxY": 12 },
+      { "minX": -112, "maxX": -110, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
+      { "minX": 110, "maxX": 112, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
 
-      // ----- B-2 spawn enclosure (SW corner) -----
-      { "minX": -130, "maxX": -100, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 10 },
-      { "minX": -85, "maxX": -65, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 10 },
-      { "minX": -67, "maxX": -65, "minZ": -88, "maxZ": -41, "minY": 0, "maxY": 10 },
+      // ----- B-2 spawn enclosure (SW corner) — 3 m thick partition walls -----
+      { "minX": -110, "maxX": -78, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      { "minX": -58, "maxX": -40, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      { "minX": -43, "maxX": -40, "minZ": -73, "maxZ": -32, "minY": 0, "maxY": 12 },
 
       // ----- B-1 spawn enclosure (NE corner) -----
-      { "minX": 100, "maxX": 130, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 10 },
-      { "minX": 65, "maxX": 85, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 10 },
-      { "minX": 65, "maxX": 67, "minZ": 41, "maxZ": 88, "minY": 0, "maxY": 10 },
+      { "minX": 78, "maxX": 110, "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
+      { "minX": 40, "maxX": 58, "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
+      { "minX": 40, "maxX": 43, "minZ": 32, "maxZ": 73, "minY": 0, "maxY": 12 },
 
-      // ----- Mid divider (3 segments with 2 doorway gaps) -----
-      { "minX": -65, "maxX": -45, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
-      { "minX": -25, "maxX": 5, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
-      { "minX": 25, "maxX": 65, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
+      // ----- Mid divider (3 segments with 2 doorway gaps near x = ±15) -----
+      { "minX": -58, "maxX": -40, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 12 },
+      { "minX": -20, "maxX": 10, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 12 },
+      { "minX": 30, "maxX": 58, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 12 },
 
       // ----- Container cluster (3 parallel shipping containers — red/blue/rust) -----
-      { "minX": -50, "maxX": -36, "minZ": 8, "maxZ": 14, "minY": 0, "maxY": 8 },
-      { "minX": -50, "maxX": -36, "minZ": 18, "maxZ": 24, "minY": 0, "maxY": 8 },
-      { "minX": -50, "maxX": -36, "minZ": 28, "maxZ": 34, "minY": 0, "maxY": 8 },
+      { "minX": -38, "maxX": -22, "minZ": 10, "maxZ": 16, "minY": 0, "maxY": 8 },
+      { "minX": -38, "maxX": -22, "minZ": 20, "maxZ": 26, "minY": 0, "maxY": 8 },
+      { "minX": -38, "maxX": -22, "minZ": 30, "maxZ": 36, "minY": 0, "maxY": 8 },
 
-      // ----- Central rooms (4 walls forming an enclosed lab with a south doorway) -----
-      { "minX": 5, "maxX": 35, "minZ": 24, "maxZ": 26, "minY": 0, "maxY": 10 },
-      { "minX": 33, "maxX": 35, "minZ": 5, "maxZ": 24, "minY": 0, "maxY": 10 },
-      { "minX": 5, "maxX": 15, "minZ": 5, "maxZ": 7, "minY": 0, "maxY": 10 },
-      { "minX": 25, "maxX": 35, "minZ": 5, "maxZ": 7, "minY": 0, "maxY": 10 },
-      { "minX": 5, "maxX": 7, "minZ": 7, "maxZ": 24, "minY": 0, "maxY": 10 },
+      // ----- Reception / blueprint room (mid-east, north half) — 5 walls + south doorway -----
+      { "minX": 10, "maxX": 35, "minZ": 22, "maxZ": 25, "minY": 0, "maxY": 12 },
+      { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
+      { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 22, "minY": 0, "maxY": 12 },
 
-      // ----- Substation block (large equipment unit, mid-south) -----
-      { "minX": -10, "maxX": 8, "minZ": -28, "maxZ": -16, "minY": 0, "maxY": 6 },
+      // ----- Research / lab room (mid-east, south half) — 5 walls + south doorway -----
+      { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 12 },
+      { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
+      { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 13, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 12 },
 
-      // ----- Concrete support columns (full ceiling height, scattered) -----
-      { "minX": -60, "maxX": -58, "minZ": -32, "maxZ": -30, "minY": 0, "maxY": 14 },
-      { "minX": -25, "maxX": -23, "minZ": -55, "maxZ": -53, "minY": 0, "maxY": 14 },
-      { "minX": 25, "maxX": 27, "minZ": -55, "maxZ": -53, "minY": 0, "maxY": 14 },
-      { "minX": 60, "maxX": 62, "minZ": -32, "maxZ": -30, "minY": 0, "maxY": 14 },
-      { "minX": -45, "maxX": -43, "minZ": 60, "maxZ": 62, "minY": 0, "maxY": 14 },
-      { "minX": 45, "maxX": 47, "minZ": 60, "maxZ": 62, "minY": 0, "maxY": 14 },
+      // ----- Substation block (mid-west, south half) — 8 m tall industrial unit -----
+      { "minX": -25, "maxX": -5, "minZ": -30, "maxZ": -15, "minY": 0, "maxY": 8 },
 
-      // ----- Wooden crate stacks (5 m tall, scattered as side cover) -----
-      { "minX": -97, "maxX": -93, "minZ": -10, "maxZ": -6, "minY": 0, "maxY": 5 },
-      { "minX": -45, "maxX": -41, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
-      { "minX": -10, "maxX": -6, "minZ": 50, "maxZ": 54, "minY": 0, "maxY": 5 },
-      { "minX": 50, "maxX": 54, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
-      { "minX": 95, "maxX": 99, "minZ": -10, "maxZ": -6, "minY": 0, "maxY": 5 },
-      { "minX": 6, "maxX": 10, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
+      // ----- Concrete support columns (full ceiling height, 2.5 m square) -----
+      { "minX": -51.25, "maxX": -48.75, "minZ": -21.25, "maxZ": -18.75, "minY": 0, "maxY": 12 },
+      { "minX": -51.25, "maxX": -48.75, "minZ": 18.75, "maxZ": 21.25, "minY": 0, "maxY": 12 },
+      { "minX": 48.75, "maxX": 51.25, "minZ": -51.25, "maxZ": -48.75, "minY": 0, "maxY": 12 },
+      { "minX": 48.75, "maxX": 51.25, "minZ": 48.75, "maxZ": 51.25, "minY": 0, "maxY": 12 },
+      { "minX": -1.25, "maxX": 1.25, "minZ": -56.25, "maxZ": -53.75, "minY": 0, "maxY": 12 },
+      { "minX": -1.25, "maxX": 1.25, "minZ": 53.75, "maxZ": 56.25, "minY": 0, "maxY": 12 },
+      { "minX": -66.25, "maxX": -63.75, "minZ": -51.25, "maxZ": -48.75, "minY": 0, "maxY": 12 },
+      { "minX": 63.75, "maxX": 66.25, "minZ": -26.25, "maxZ": -23.75, "minY": 0, "maxY": 12 },
 
-      // ----- Stacked oil drums (5 m tall, square AABB; visual is a cylinder cluster) -----
-      { "minX": -83, "maxX": -80, "minZ": -3, "maxZ": 0, "minY": 0, "maxY": 5 },
-      { "minX": 80, "maxX": 83, "minZ": 0, "maxZ": 3, "minY": 0, "maxY": 5 },
-      { "minX": -3, "maxX": 0, "minZ": 65, "maxZ": 68, "minY": 0, "maxY": 5 },
-      { "minX": 0, "maxX": 3, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 5 },
+      // ----- Wooden crate stacks (7 m tall — properly bullet-blocking) -----
+      { "minX": -82, "maxX": -78, "minZ": -17, "maxZ": -13, "minY": 0, "maxY": 7 },
+      { "minX": -67, "maxX": -63, "minZ": 18, "maxZ": 22, "minY": 0, "maxY": 7 },
+      { "minX": 78, "maxX": 82, "minZ": 13, "maxZ": 17, "minY": 0, "maxY": 7 },
+      { "minX": 63, "maxX": 67, "minZ": -22, "maxZ": -18, "minY": 0, "maxY": 7 },
+
+      // ----- Stacked oil drums (6 m tall — visual is 3 stacked drums) -----
+      { "minX": -73.5, "maxX": -70.5, "minZ": -6.5, "maxZ": -3.5, "minY": 0, "maxY": 6 },
+      { "minX": 70.5, "maxX": 73.5, "minZ": 3.5, "maxZ": 6.5, "minY": 0, "maxY": 6 },
+      { "minX": -16.5, "maxX": -13.5, "minZ": 58.5, "maxZ": 61.5, "minY": 0, "maxY": 6 },
+      { "minX": 13.5, "maxX": 16.5, "minZ": -61.5, "maxZ": -58.5, "minY": 0, "maxY": 6 },
 
       // ----- Viewing platform front-edge wall (jump-only, like Station's pattern) -----
-      { "minX": 100, "maxX": 128, "minZ": 69.7, "maxZ": 70.3, "minY": 0, "maxY": 3, "topBuffer": 0, "noProjectile": true }
+      { "minX": 80, "maxX": 108, "minZ": 56.7, "maxZ": 57.3, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true }
     ],
     "surfaces": [
-      // Viewing platform — short raised catwalk inside the B-1 enclosure
-      { "minX": 100, "maxX": 128, "minZ": 70, "maxZ": 88, "maxTop": 3, "type": "flat", "top": 3 }
+      // Viewing platform — short raised catwalk inside the B-1 enclosure (4 m tall now)
+      { "minX": 80, "maxX": 108, "minZ": 57, "maxZ": 73, "maxTop": 4, "type": "flat", "top": 4 }
     ]
   }
 };
@@ -6835,7 +6842,7 @@ const ARENA_SPAWNS = {
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
   station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
   carnival: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } },
-  flashpoint: { p1: { x: -115, y: GROUND_BASE_Y, z: -65 }, p2: { x: 115, y: GROUND_BASE_Y, z: 65 } }
+  flashpoint: { p1: { x: -95, y: GROUND_BASE_Y, z: -55 }, p2: { x: 95, y: GROUND_BASE_Y, z: 55 } }
 };
 
 function materializeSurface(surface) {
