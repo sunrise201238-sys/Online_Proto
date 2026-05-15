@@ -114,8 +114,11 @@ export const MAP_DATA = {
   factory: { id: 'factory', name: 'Factory' },
   square: { id: 'square', name: 'Square' },
   lobby: { id: 'lobby', name: 'Lobby' },
-  station: { id: 'station', name: 'Station' },
-  carnival: { id: 'carnival', name: 'Carnival' }
+  station: { id: 'station', name: 'Station' }
+  // 'carnival' is intentionally hidden from the picker for now while it's
+  // being iterated on. The collision data, spawn, ARENAS entry, and client
+  // build function are all still in place — re-add the entry here (and the
+  // matching line in client/src/main.js's local MAP_DATA) to surface it again.
 };
 
 // Match-wide tunables.
