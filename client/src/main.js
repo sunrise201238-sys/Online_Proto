@@ -3255,6 +3255,17 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
+  } else if (mapKey === 'carnival') {
+    // Open-air evening festival ground: deep dusk-blue sky with warm
+    // sodium-tinted ambient bleeding from stage rigs and food-truck signs.
+    scene.background.setHex(0x1c2236);
+    scene.fog.color.setHex(0x1f273b);
+    scene.fog.near = 50;
+    scene.fog.far = 230;
+    ambient.color.setHex(0xc0c8e0);
+    ambient.intensity = 0.7;
+    key.color.setHex(0xffd9a0);
+    key.intensity = 1.1;
   }
 }
 
@@ -3266,6 +3277,7 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'square') buildSquareArena();
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
+  else if (mapKey === 'carnival') buildCarnivalArena();
 }
 
 function buildStreetsArena() {
@@ -4844,6 +4856,212 @@ function buildStationArena() {
   const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
   clockHanger.position.set(0, 25.5, 0);
   scene.add(clockHanger); arenaDecor.push(clockHanger);
+}
+
+function buildCarnivalArena() {
+  // Open-air evening festival ground (~Station-sized: 260 x 260). North end
+  // is a headlining outdoor rock stage with a tall backdrop and stage lights;
+  // south end is a motocross course with two earth-and-dirt jumping ramps
+  // separated by a kicker gap and flanked by berms. The mid-zone is a food
+  // court with food trucks, kiosks, picnic-pavilion tents, and neon info
+  // totems — every primary cover is sized to fully hide a ~5 m mech.
+  // Tone matches Factory/Station: gritty industrial steel + dusty earth.
+
+  // ===== Materials =====
+  const dirt = new THREE.MeshStandardMaterial({ color: 0x6b563d, roughness: 0.95 });
+  const gravel = new THREE.MeshStandardMaterial({ color: 0x4a4036, roughness: 0.92 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
+  const stagePlankMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7 });
+  const stageBackdropMat = new THREE.MeshStandardMaterial({ color: 0x141014, roughness: 0.85 });
+  const stageNeon = new THREE.MeshStandardMaterial({ color: 0xff5577, emissive: 0xff3870, emissiveIntensity: 1.2, roughness: 0.4 });
+  const speakerMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6 });
+  const speakerCone = new THREE.MeshStandardMaterial({ color: 0x4a3838, roughness: 0.7 });
+  const scaffoldMat = new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.5, metalness: 0.55 });
+  const trussMat = new THREE.MeshStandardMaterial({ color: 0x55606e, roughness: 0.5, metalness: 0.55 });
+  const stageLightMat = new THREE.MeshStandardMaterial({ color: 0xffe39c, emissive: 0xffe39c, emissiveIntensity: 1.3, roughness: 0.4 });
+  const bermMat = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.95 });
+  const bermLip = new THREE.MeshStandardMaterial({ color: 0x6b502f, roughness: 0.92 });
+  const hayMat = new THREE.MeshStandardMaterial({ color: 0xc9a95a, roughness: 0.9 });
+  const rampMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.85 });
+  const truckRedMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
+  const truckBlueMat = new THREE.MeshStandardMaterial({ color: 0x2a6a9a, roughness: 0.6 });
+  const truckYellowMat = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.6 });
+  const truckGreenMat = new THREE.MeshStandardMaterial({ color: 0x4a8b3a, roughness: 0.6 });
+  const truckCreamMat = new THREE.MeshStandardMaterial({ color: 0xe6dab0, roughness: 0.6 });
+  const truckPurpleMat = new THREE.MeshStandardMaterial({ color: 0x7a3a8a, roughness: 0.6 });
+  const kioskMat = new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.7 });
+  const kioskTrim = new THREE.MeshStandardMaterial({ color: 0x4a3a20, roughness: 0.8 });
+  const pavilionMat = new THREE.MeshStandardMaterial({ color: 0xead7a8, roughness: 0.85 });
+  const pavilionStripe = new THREE.MeshStandardMaterial({ color: 0xc24a4a, roughness: 0.85 });
+  const totemMat = new THREE.MeshStandardMaterial({ color: 0x1a1f28, roughness: 0.55, metalness: 0.4 });
+  const totemNeon = new THREE.MeshStandardMaterial({ color: 0xfff7d0, emissive: 0xfff7d0, emissiveIntensity: 1.0, roughness: 0.4 });
+  const totemNeonAlt = new THREE.MeshStandardMaterial({ color: 0x6fb6e0, emissive: 0x6fb6e0, emissiveIntensity: 1.0, roughness: 0.4 });
+  const generatorMat = new THREE.MeshStandardMaterial({ color: 0x4a525e, roughness: 0.65, metalness: 0.4 });
+  const generatorTop = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.7 });
+  const lampMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.55, metalness: 0.45 });
+  const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffe2a8, emissiveIntensity: 0.95, roughness: 0.4 });
+
+  // ===== Base floor =====
+  const base = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), dirt);
+  base.rotation.x = -Math.PI / 2; base.position.y = 0.005;
+  scene.add(base); arenaDecor.push(base);
+  // Gravel "audience pit" in front of stage
+  const audience = new THREE.Mesh(new THREE.PlaneGeometry(120, 35), gravel);
+  audience.rotation.x = -Math.PI / 2; audience.position.set(0, 0.012, 75);
+  scene.add(audience); arenaDecor.push(audience);
+  // Wooden plank pathways crossing the food court (decor)
+  for (const z of [-40, 0, 40]) {
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(200, 4), wood);
+    path.rotation.x = -Math.PI / 2; path.position.set(0, 0.01, z);
+    scene.add(path); arenaDecor.push(path);
+  }
+
+  // ===== Rock stage (north) =====
+  // Backdrop wall — full-height curtain wall behind the stage; hides anyone behind.
+  addBlockingBox({ x: 0, y: 7, z: 122.5, sx: 104, sy: 14, sz: 3, material: stageBackdropMat });
+  // Glowing band/title strip on the backdrop (decor only, faces south).
+  const facadeNeon = new THREE.Mesh(new THREE.PlaneGeometry(70, 2.4), stageNeon);
+  facadeNeon.position.set(0, 11.5, 120.95);
+  scene.add(facadeNeon); arenaDecor.push(facadeNeon);
+  // Stage platform — raised 4 m, walkable; jump up onto via the front edge wall.
+  addPlatform({ minX: -50, maxX: 50, minZ: 96, maxZ: 119, top: 4, material: stagePlankMat, thickness: 0.6 });
+  // Visible black skirt on the front of the platform (decor — sits on the
+  // invisible edge wall so the player sees a step they have to jump up).
+  const stageFace = new THREE.Mesh(new THREE.BoxGeometry(100, 4, 0.5), stageBackdropMat);
+  stageFace.position.set(0, 2, 95.75);
+  scene.add(stageFace); arenaDecor.push(stageFace);
+  // Stage front-edge wall — collision-only, jump-only (matches Station's
+  // platform-edge pattern). topBuffer: 0 so a jumping player clears it once
+  // their center crosses y=4; noProjectile: true so bullets pass through.
+  arenaObstacles.push({
+    minX: -50, maxX: 50, minZ: 95.7, maxZ: 96.3, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true
+  });
+  // Front speaker stacks at the stage corners.
+  addBlockingBox({ x: -52, y: 4.5, z: 92, sx: 4, sy: 9, sz: 4, material: speakerMat });
+  addBlockingBox({ x:  52, y: 4.5, z: 92, sx: 4, sy: 9, sz: 4, material: speakerMat });
+  for (const xs of [-52, 52]) {
+    const cone = new THREE.Mesh(new THREE.CircleGeometry(1.4, 16), speakerCone);
+    cone.position.set(xs, 5, 89.95); cone.rotation.y = Math.PI;
+    scene.add(cone); arenaDecor.push(cone);
+  }
+  // Side scaffold towers at the stage flanks (taller than mech — full cover).
+  addBlockingBox({ x: -54, y: 8, z: 97, sx: 4, sy: 16, sz: 4, material: scaffoldMat });
+  addBlockingBox({ x:  54, y: 8, z: 97, sx: 4, sy: 16, sz: 4, material: scaffoldMat });
+  // Truss bridge between scaffold tops carrying the stage lights (decor only —
+  // overhead at y≈17, well above any mech/jump apex).
+  const truss = new THREE.Mesh(new THREE.BoxGeometry(112, 0.7, 1.4), trussMat);
+  truss.position.set(0, 17, 97);
+  scene.add(truss); arenaDecor.push(truss);
+  for (let lx = -50; lx <= 50; lx += 12.5) {
+    const light = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), stageLightMat);
+    light.position.set(lx, 16.4, 97);
+    scene.add(light); arenaDecor.push(light);
+  }
+
+  // ===== Motocross slope stage (south) =====
+  // Take-off ramp — dirt slope rising from south end up to the kicker at z=-101.
+  addRamp({
+    minX: -10, maxX: 10, minZ: -125, maxZ: -101,
+    axis: 'z', lowY: 0, highY: 5, material: rampMat, thickness: 0.7
+  });
+  // Landing ramp — apex at z=-93 then descending back to flat by z=-69.
+  addRamp({
+    minX: -10, maxX: 10, minZ: -93, maxZ: -69,
+    axis: 'z', lowY: 5, highY: 0, material: rampMat, thickness: 0.7
+  });
+  // Side berms — earthworks flanking the course, full mech-height cover.
+  for (const [bx, bz] of [[-22, -112.5], [22, -112.5], [-22, -81.5], [22, -81.5]]) {
+    addBlockingBox({ x: bx, y: 4, z: bz, sx: 12, sy: 8, sz: 25, material: bermMat });
+    // Rough dirt-rim cap along the top of each berm (decor)
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.4, 25.4), bermLip);
+    lip.position.set(bx, 8.2, bz);
+    scene.add(lip); arenaDecor.push(lip);
+  }
+  // Hay-bale stacks at the corners of the course (chunky cover).
+  for (const [hx, hz] of [[-47, -97], [47, -97], [-47, -122], [47, -122]]) {
+    addBlockingBox({ x: hx, y: 3, z: hz, sx: 6, sy: 6, sz: 6, material: hayMat });
+  }
+
+  // ===== Mid-zone food court — trucks, kiosks, pavilions, totems =====
+  // Food trucks (8 m long × 4 m deep × 5 m tall — vibrant colours per truck).
+  const truckMats = [truckRedMat, truckBlueMat, truckYellowMat, truckGreenMat, truckCreamMat, truckPurpleMat];
+  const truckSpots = [
+    [-106, -48], [-71, -23], [-41, 32],
+    [ 41, -28], [ 71,  27], [106,  52]
+  ];
+  truckSpots.forEach(([x, z], i) => {
+    addBlockingBox({ x, y: 2.5, z, sx: 8, sy: 5, sz: 4, material: truckMats[i % truckMats.length] });
+    // Awning slab on top (decor — slightly oversized for visual depth).
+    const awn = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 5.6), truckMats[(i + 2) % truckMats.length]);
+    awn.position.set(x, 5.2, z);
+    scene.add(awn); arenaDecor.push(awn);
+  });
+  // Food kiosks — squarer 6×6×5 stalls (cream walls, brown trim).
+  for (const [x, z] of [[-82, 23], [82, -23], [-7, 63], [7, -63]]) {
+    addBlockingBox({ x, y: 2.5, z, sx: 6, sy: 5, sz: 6, material: kioskMat });
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.3, 6.6), kioskTrim);
+    roof.position.set(x, 5.2, z);
+    scene.add(roof); arenaDecor.push(roof);
+  }
+  // Picnic pavilion tents — 8×8×5 covered canopies that shade tables/benches.
+  for (const [x, z] of [[-26, -6], [26, 6], [-96, 64], [96, -64]]) {
+    addBlockingBox({ x, y: 2.5, z, sx: 8, sy: 5, sz: 8, material: pavilionMat });
+    // Striped awning ridge along the canopy top (decor).
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.4, 1.2), pavilionStripe);
+    stripe.position.set(x, 5.3, z);
+    scene.add(stripe); arenaDecor.push(stripe);
+    // Decorative picnic-table + bench ring around each pavilion (decor only —
+    // too short individually to be cover, but clarify the festival-seating use).
+    for (const [tx, tz] of [[x - 5.8, z], [x + 5.8, z], [x, z - 5.8], [x, z + 5.8]]) {
+      const tableTop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 1.2), wood);
+      tableTop.position.set(tx, 1.0, tz);
+      scene.add(tableTop); arenaDecor.push(tableTop);
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 0.4), wood);
+      bench.position.set(tx, 0.5, tz + 0.85);
+      scene.add(bench); arenaDecor.push(bench);
+    }
+  }
+  // Neon info totems — tall thin pillars marking the centerline aisles.
+  const totemSpots = [
+    [0, 20, totemNeon], [0, -20, totemNeonAlt],
+    [-40, 0, totemNeonAlt], [40, 0, totemNeon]
+  ];
+  totemSpots.forEach(([x, z, glowMat]) => {
+    addBlockingBox({ x, y: 3.5, z, sx: 2, sy: 7, sz: 2, material: totemMat });
+    const ring = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.4, 2.4), glowMat);
+    ring.position.set(x, 6.6, z);
+    scene.add(ring); arenaDecor.push(ring);
+  });
+  // Generator / sound trucks parked behind the audience pit, flanking the
+  // approach to the stage (8×8×6 — large hard cover near the stage edge).
+  for (const gx of [-94, 94]) {
+    addBlockingBox({ x: gx, y: 3, z: 92, sx: 8, sy: 6, sz: 8, material: generatorMat });
+    const band = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.3, 8.4), generatorTop);
+    band.position.set(gx, 6.2, 92);
+    scene.add(band); arenaDecor.push(band);
+  }
+
+  // ===== Lamp posts + bunting (decor only — atmospheric only) =====
+  const lampPositions = [
+    [-100, -90], [-50, -90], [50, -90], [100, -90],
+    [-100,  50], [-50,  50], [50,  50], [100,  50],
+    [-100,   0], [100,   0]
+  ];
+  lampPositions.forEach(([lx, lz]) => {
+    addBlockingBox({ x: lx, y: 6, z: lz, sx: 0.4, sy: 12, sz: 0.4, material: lampMat, decorOnly: true });
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.9), lampGlow);
+    head.position.set(lx, 12.1, lz);
+    scene.add(head); arenaDecor.push(head);
+  });
+  // Carnival flag bunting strung above the food court (decor only, overhead).
+  for (const lz of [-90, 50]) {
+    const bunting = new THREE.Mesh(new THREE.BoxGeometry(200, 0.18, 0.18), pavilionStripe);
+    bunting.position.set(0, 11, lz);
+    scene.add(bunting); arenaDecor.push(bunting);
+  }
+
+  // ===== Play-area edge: invisible perimeter wall + red floor stripe =====
+  addBoundaryIndicator(130, 130, 28);
 }
 
 function createArenaWalls() {
