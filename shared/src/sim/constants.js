@@ -114,7 +114,8 @@ export const MAP_DATA = {
   factory: { id: 'factory', name: 'Factory' },
   square: { id: 'square', name: 'Square' },
   lobby: { id: 'lobby', name: 'Lobby' },
-  station: { id: 'station', name: 'Station' }
+  station: { id: 'station', name: 'Station' },
+  carnival: { id: 'carnival', name: 'Carnival' }
 };
 
 // Match-wide tunables.
