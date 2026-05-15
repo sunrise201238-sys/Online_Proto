@@ -6766,8 +6766,11 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -112, "maxX": -110, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
       { "minX": 110, "maxX": 112, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
 
-      // ----- B-2 spawn enclosure (SW) — 28 m doorway centred at x=-68 -----
-      { "minX": -110, "maxX": -82, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      // ----- B-2 spawn enclosure (SW) — 28 m central doorway PLUS a 10 m
+      //       secondary opening on the west side (N wall west pulled back
+      //       from x=-110 to x=-100 so the alley to the boundary reads as
+      //       a real side exit rather than an unintended crack) -----
+      { "minX": -100, "maxX": -82, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -54, "maxX": -40, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -43, "maxX": -40, "minZ": -73, "maxZ": -32, "minY": 0, "maxY": 12 },
 
@@ -6776,66 +6779,59 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": 40, "maxX": 54, "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
       { "minX": 40, "maxX": 43, "minZ": 32, "maxZ": 73, "minY": 0, "maxY": 12 },
 
-      // ----- Mid divider (LOWERED to 6 m — blocks bullets/LoS but lets the
-      //       overhead camera see across the hall for ambient readability) -----
-      { "minX": -58, "maxX": -40, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 6 },
-      { "minX": -20, "maxX": 10, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 6 },
-      { "minX": 30, "maxX": 58, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 6 },
+      // ----- Mid divider (8 m — matches Factory-style partition height) -----
+      { "minX": -58, "maxX": -40, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 8 },
+      { "minX": -20, "maxX": 10, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 8 },
+      { "minX": 30, "maxX": 58, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 8 },
 
       // ----- Container cluster (3 parallel shipping containers — red/blue/rust) -----
       { "minX": -38, "maxX": -22, "minZ": 10, "maxZ": 16, "minY": 0, "maxY": 8 },
       { "minX": -38, "maxX": -22, "minZ": 20, "maxZ": 26, "minY": 0, "maxY": 8 },
       { "minX": -38, "maxX": -22, "minZ": 30, "maxZ": 36, "minY": 0, "maxY": 8 },
 
-      // ----- Reception / blueprint room (mid-east, north half) — walls
-      //       LOWERED to 6 m (matches the mid-divider) for ambient visibility -----
-      { "minX": 10, "maxX": 35, "minZ": 22, "maxZ": 25, "minY": 0, "maxY": 6 },
-      { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 6 },
-      { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 6 },
-      { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 6 },
-      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 18, "minY": 0, "maxY": 6 },
+      // ----- Reception / blueprint room (mid-east, north half) — walls 8 m
+      //       (match Factory-style partition height) -----
+      { "minX": 10, "maxX": 35, "minZ": 22, "maxZ": 25, "minY": 0, "maxY": 8 },
+      { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 8 },
+      { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 8 },
+      { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 8 },
+      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 18, "minY": 0, "maxY": 8 },
 
       // ----- Research / lab room (mid-east, south half) — L-shape, mirror,
-      //       walls LOWERED to 6 m -----
-      { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 6 },
-      { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 6 },
-      { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 6 },
-      { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 6 },
-      { "minX": 10, "maxX": 13, "minZ": -18, "maxZ": -13, "minY": 0, "maxY": 6 },
+      //       walls 8 m -----
+      { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 8 },
+      { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 8 },
+      { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 8 },
+      { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 8 },
+      { "minX": 10, "maxX": 13, "minZ": -18, "maxZ": -13, "minY": 0, "maxY": 8 },
 
       // ----- Substation block (mid-west, south half) — 8 m tall industrial unit -----
       { "minX": -25, "maxX": -5, "minZ": -30, "maxZ": -15, "minY": 0, "maxY": 8 },
 
-      // ----- NW corner partition (FLIPPED 180° — L now opens toward the
-      //       central play area (SW), so the side opening faces the player's
-      //       natural approach line instead of the map boundary) -----
-      { "minX": -95, "maxX": -65, "minZ": 65, "maxZ": 68, "minY": 0, "maxY": 12 },
-      { "minX": -68, "maxX": -65, "minZ": 55, "maxZ": 65, "minY": 0, "maxY": 12 },
+      // ----- NW corner partition (FLIPPED 180°, walls LOWERED to 8 m to
+      //       match Factory-style partition height, Wall A pulled 5 m south
+      //       and Wall B shortened so the alley between the L and the north
+      //       boundary widens to ~12 m — clearly a passable side opening) -----
+      { "minX": -95, "maxX": -65, "minZ": 60, "maxZ": 63, "minY": 0, "maxY": 8 },
+      { "minX": -68, "maxX": -65, "minZ": 55, "maxZ": 60, "minY": 0, "maxY": 8 },
 
       // ----- SE corner partition (FLIPPED 180° — mirror, opens toward NE) -----
       { "minX": 65, "maxX": 95, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 12 },
       { "minX": 65, "maxX": 68, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 12 },
 
-      // ----- Slim ceiling-support columns (2 m thin) — pure visual support
-      //       for the overhead pipes; cover comes from the partition below. -----
-      { "minX": -51, "maxX": -49, "minZ": -21, "maxZ": -19, "minY": 0, "maxY": 12 },
-      { "minX": -51, "maxX": -49, "minZ": 19, "maxZ": 21, "minY": 0, "maxY": 12 },
-      { "minX": 49, "maxX": 51, "minZ": -51, "maxZ": -49, "minY": 0, "maxY": 12 },
-      { "minX": 49, "maxX": 51, "minZ": 49, "maxZ": 51, "minY": 0, "maxY": 12 },
-      { "minX": -1, "maxX": 1, "minZ": -56, "maxZ": -54, "minY": 0, "maxY": 12 },
-      { "minX": -1, "maxX": 1, "minZ": 54, "maxZ": 56, "minY": 0, "maxY": 12 },
-      { "minX": -66, "maxX": -64, "minZ": -51, "maxZ": -49, "minY": 0, "maxY": 12 },
-      { "minX": 64, "maxX": 66, "minZ": -26, "maxZ": -24, "minY": 0, "maxY": 12 },
-
-      // ----- Factory-style sheet-metal partitions at each pillar base
-      //       (8 m long × 8 m tall × 0.6 m thick — actual full-body cover). -----
-      { "minX": -54, "maxX": -46, "minZ": -20.3, "maxZ": -19.7, "minY": 0, "maxY": 8 },
+      // ----- Factory-style sheet-metal partitions (8 m long × 8 m tall ×
+      //       0.6 m thick). The previously-overlapping support pillars have
+      //       been removed — the partition itself provides full-body cover.
+      //       Two SW-area partitions are rotated 90° from the others; the
+      //       NE partition has been moved north (z=50→z=60) to blockade the
+      //       door↔viewing-deck path inside the B-1 enclosure. -----
+      { "minX": -50.3, "maxX": -49.7, "minZ": -24, "maxZ": -16, "minY": 0, "maxY": 8 },
       { "minX": -54, "maxX": -46, "minZ": 19.7, "maxZ": 20.3, "minY": 0, "maxY": 8 },
       { "minX": 46, "maxX": 54, "minZ": -50.3, "maxZ": -49.7, "minY": 0, "maxY": 8 },
-      { "minX": 46, "maxX": 54, "minZ": 49.7, "maxZ": 50.3, "minY": 0, "maxY": 8 },
+      { "minX": 46, "maxX": 54, "minZ": 59.7, "maxZ": 60.3, "minY": 0, "maxY": 8 },
       { "minX": -0.3, "maxX": 0.3, "minZ": -59, "maxZ": -51, "minY": 0, "maxY": 8 },
       { "minX": -0.3, "maxX": 0.3, "minZ": 51, "maxZ": 59, "minY": 0, "maxY": 8 },
-      { "minX": -65.3, "maxX": -64.7, "minZ": -54, "maxZ": -46, "minY": 0, "maxY": 8 },
+      { "minX": -69, "maxX": -61, "minZ": -50.3, "maxZ": -49.7, "minY": 0, "maxY": 8 },
       { "minX": 64.7, "maxX": 65.3, "minZ": -29, "maxZ": -21, "minY": 0, "maxY": 8 },
 
       // ----- Wooden crate stacks (WIDER 6 m, still 7 m tall) -----
