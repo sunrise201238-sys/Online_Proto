@@ -114,7 +114,8 @@ export const MAP_DATA = {
   factory: { id: 'factory', name: 'Factory' },
   square: { id: 'square', name: 'Square' },
   lobby: { id: 'lobby', name: 'Lobby' },
-  station: { id: 'station', name: 'Station' }
+  station: { id: 'station', name: 'Station' },
+  flashpoint: { id: 'flashpoint', name: 'Flashpoint' }
   // 'carnival' is intentionally hidden from the picker for now while it's
   // being iterated on. The collision data, spawn, ARENAS entry, and client
   // build function are all still in place — re-add the entry here (and the

@@ -6757,6 +6757,74 @@ const GENERATED_ARENA_COLLISION_DATA = {
       // Motocross landing ramp (peaks south, descends north back to flat)
       { "minX": -10, "maxX": 10, "minZ": -93, "maxZ": -69, "maxTop": 5, "type": "ramp", "axis": "z", "lowY": 5, "highY": 0 }
     ]
+  },
+  "flashpoint": {
+    "obstacles": [
+      // ----- Play-area boundary (matches addBoundaryIndicator(130, 90, 14)) -----
+      { "minX": -132, "maxX": 132, "minZ": 90, "maxZ": 92, "minY": 0, "maxY": 14 },
+      { "minX": -132, "maxX": 132, "minZ": -92, "maxZ": -90, "minY": 0, "maxY": 14 },
+      { "minX": -132, "maxX": -130, "minZ": -92, "maxZ": 92, "minY": 0, "maxY": 14 },
+      { "minX": 130, "maxX": 132, "minZ": -92, "maxZ": 92, "minY": 0, "maxY": 14 },
+
+      // ----- B-2 spawn enclosure (SW corner) -----
+      { "minX": -130, "maxX": -100, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 10 },
+      { "minX": -85, "maxX": -65, "minZ": -41, "maxZ": -39, "minY": 0, "maxY": 10 },
+      { "minX": -67, "maxX": -65, "minZ": -88, "maxZ": -41, "minY": 0, "maxY": 10 },
+
+      // ----- B-1 spawn enclosure (NE corner) -----
+      { "minX": 100, "maxX": 130, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 10 },
+      { "minX": 65, "maxX": 85, "minZ": 39, "maxZ": 41, "minY": 0, "maxY": 10 },
+      { "minX": 65, "maxX": 67, "minZ": 41, "maxZ": 88, "minY": 0, "maxY": 10 },
+
+      // ----- Mid divider (3 segments with 2 doorway gaps) -----
+      { "minX": -65, "maxX": -45, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
+      { "minX": -25, "maxX": 5, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
+      { "minX": 25, "maxX": 65, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 10 },
+
+      // ----- Container cluster (3 parallel shipping containers — red/blue/rust) -----
+      { "minX": -50, "maxX": -36, "minZ": 8, "maxZ": 14, "minY": 0, "maxY": 8 },
+      { "minX": -50, "maxX": -36, "minZ": 18, "maxZ": 24, "minY": 0, "maxY": 8 },
+      { "minX": -50, "maxX": -36, "minZ": 28, "maxZ": 34, "minY": 0, "maxY": 8 },
+
+      // ----- Central rooms (4 walls forming an enclosed lab with a south doorway) -----
+      { "minX": 5, "maxX": 35, "minZ": 24, "maxZ": 26, "minY": 0, "maxY": 10 },
+      { "minX": 33, "maxX": 35, "minZ": 5, "maxZ": 24, "minY": 0, "maxY": 10 },
+      { "minX": 5, "maxX": 15, "minZ": 5, "maxZ": 7, "minY": 0, "maxY": 10 },
+      { "minX": 25, "maxX": 35, "minZ": 5, "maxZ": 7, "minY": 0, "maxY": 10 },
+      { "minX": 5, "maxX": 7, "minZ": 7, "maxZ": 24, "minY": 0, "maxY": 10 },
+
+      // ----- Substation block (large equipment unit, mid-south) -----
+      { "minX": -10, "maxX": 8, "minZ": -28, "maxZ": -16, "minY": 0, "maxY": 6 },
+
+      // ----- Concrete support columns (full ceiling height, scattered) -----
+      { "minX": -60, "maxX": -58, "minZ": -32, "maxZ": -30, "minY": 0, "maxY": 14 },
+      { "minX": -25, "maxX": -23, "minZ": -55, "maxZ": -53, "minY": 0, "maxY": 14 },
+      { "minX": 25, "maxX": 27, "minZ": -55, "maxZ": -53, "minY": 0, "maxY": 14 },
+      { "minX": 60, "maxX": 62, "minZ": -32, "maxZ": -30, "minY": 0, "maxY": 14 },
+      { "minX": -45, "maxX": -43, "minZ": 60, "maxZ": 62, "minY": 0, "maxY": 14 },
+      { "minX": 45, "maxX": 47, "minZ": 60, "maxZ": 62, "minY": 0, "maxY": 14 },
+
+      // ----- Wooden crate stacks (5 m tall, scattered as side cover) -----
+      { "minX": -97, "maxX": -93, "minZ": -10, "maxZ": -6, "minY": 0, "maxY": 5 },
+      { "minX": -45, "maxX": -41, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
+      { "minX": -10, "maxX": -6, "minZ": 50, "maxZ": 54, "minY": 0, "maxY": 5 },
+      { "minX": 50, "maxX": 54, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
+      { "minX": 95, "maxX": 99, "minZ": -10, "maxZ": -6, "minY": 0, "maxY": 5 },
+      { "minX": 6, "maxX": 10, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
+
+      // ----- Stacked oil drums (5 m tall, square AABB; visual is a cylinder cluster) -----
+      { "minX": -83, "maxX": -80, "minZ": -3, "maxZ": 0, "minY": 0, "maxY": 5 },
+      { "minX": 80, "maxX": 83, "minZ": 0, "maxZ": 3, "minY": 0, "maxY": 5 },
+      { "minX": -3, "maxX": 0, "minZ": 65, "maxZ": 68, "minY": 0, "maxY": 5 },
+      { "minX": 0, "maxX": 3, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 5 },
+
+      // ----- Viewing platform front-edge wall (jump-only, like Station's pattern) -----
+      { "minX": 100, "maxX": 128, "minZ": 69.7, "maxZ": 70.3, "minY": 0, "maxY": 3, "topBuffer": 0, "noProjectile": true }
+    ],
+    "surfaces": [
+      // Viewing platform — short raised catwalk inside the B-1 enclosure
+      { "minX": 100, "maxX": 128, "minZ": 70, "maxZ": 88, "maxTop": 3, "type": "flat", "top": 3 }
+    ]
   }
 };
 
@@ -6766,7 +6834,8 @@ const ARENA_SPAWNS = {
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
   station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
-  carnival: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } }
+  carnival: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } },
+  flashpoint: { p1: { x: -115, y: GROUND_BASE_Y, z: -65 }, p2: { x: 115, y: GROUND_BASE_Y, z: 65 } }
 };
 
 function materializeSurface(surface) {
@@ -6804,7 +6873,8 @@ const ARENAS = {
   square: buildGeneratedArena('square'),
   lobby: buildGeneratedArena('lobby'),
   station: buildGeneratedArena('station'),
-  carnival: buildGeneratedArena('carnival')
+  carnival: buildGeneratedArena('carnival'),
+  flashpoint: buildGeneratedArena('flashpoint')
 };
 
 export function getArena(mapKey) {
