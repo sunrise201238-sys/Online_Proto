@@ -271,7 +271,15 @@ const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
 const BOT_SPRINT_MIN_BOOST = 8;
 const BOT_SPRINT_BURST_MS = 280;
 const BOT_SPRINT_BURST_VEL = 17;
-const BOT_THREAT_LOOKAHEAD = 14;
+// How far ahead the bot scans for incoming projectiles. Bigger = more alert
+// (reacts to threats earlier, before they're at point-blank), at the cost of
+// burning more boost on dodges. Tuned so even the fast sniper round (95 u/s)
+// gives the bot ~230 ms of warning to commit a dodge.
+const BOT_THREAT_LOOKAHEAD = 22;
+// Cooldown after a threat-evade. Shorter than the tactical-burst cooldowns
+// below so the bot can chain dodges against rapid-fire weapons (MG bursts,
+// shotgun follow-ups) instead of eating the second shot.
+const BOT_THREAT_EVADE_COOLDOWN_MS = 400;
 
 const input = {
   x: 0,
@@ -1227,6 +1235,13 @@ const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
 const BOT_STUCK_TICKS_THRESHOLD = 8;
 const BOT_STUCK_PIVOT_MS = 600;
+// After a stuck event, remember the pinned spot for this long and bias
+// movement away from it so the bot picks a different route around the wall
+// instead of grinding into the same corner once the perpendicular pivot
+// ends. Radius caps the influence so distant memories don't warp kiting.
+const BOT_STUCK_MEMORY_MS = 3500;
+const BOT_STUCK_MEMORY_RADIUS = 12;
+const BOT_STUCK_MEMORY_WEIGHT = 1.4;
 const BOT_LOS_EYE_HEIGHT = 1.6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 
@@ -1295,6 +1310,22 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
     }
   }
   return { rx, rz };
+}
+
+// Soft repulsion away from a spot the bot got recently pinned at. Same
+// quadratic falloff as the obstacle avoidance so it blends naturally with
+// the existing kiting vector, and zero outside `radius` so old memories
+// don't pull the bot toward weird headings on the far side of the map.
+function computeStuckRepulsion(px, pz, memX, memZ, radius) {
+  const dx = px - memX;
+  const dz = pz - memZ;
+  const d2 = dx * dx + dz * dz;
+  if (d2 >= radius * radius) return { rx: 0, rz: 0 };
+  const d = Math.sqrt(d2);
+  if (d < 0.001) return { rx: 0, rz: 0 };
+  const t = 1 - d / radius;
+  const strength = t * t;
+  return { rx: (dx / d) * strength, rz: (dz / d) * strength };
 }
 
 // Line-of-sight check between two world points using the same swept-AABB
@@ -1419,13 +1450,15 @@ function updateEnemy(now) {
   const side = new THREE.Vector3(-dir.z, 0, dir.x);
   const eState = state.enemy.state;
 
-  // Range bands are derived from the weapon's lockRange so this AI works for
-  // any weapon stat tuning — short-range MGs and long-range snipers each get
-  // a kiting band centred on their optimal engagement distance.
+  // Kite near the outer edge of the weapon's red-lock range — far enough to
+  // minimize incoming fire effectiveness while still landing our own shots.
+  // Universal across weapons since lockRange already encodes each weapon's
+  // effective engagement distance (so e.g. the shotgun naturally engages
+  // closer than the sniper without the AI special-casing the unit).
   const lockRange = state.enemy.unit.lockRange ?? 50;
-  const optimalRange = Math.max(8, lockRange * 0.7);
+  const upperRange = Math.max(12, lockRange - 2);
+  const optimalRange = Math.max(10, upperRange - 7);
   const lowerRange = Math.max(6, optimalRange - 7);
-  const upperRange = optimalRange + 7;
 
   if (Math.random() > 0.985) eState.strafeSign *= -1;
   const retreat = dist < lowerRange ? -0.9 : dist > upperRange ? 0.62 : 0.15;
@@ -1438,6 +1471,18 @@ function updateEnemy(now) {
   const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
   mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
   mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
+  // Bias away from the spot we last got pinned at so the next path attempt
+  // picks a different angle around the obstacle instead of grinding into the
+  // same wall/corner once the perpendicular pivot ends.
+  if ((eState.botStuckMemoryUntil ?? 0) > now) {
+    const sm = computeStuckRepulsion(
+      e.x, e.z,
+      eState.botStuckMemoryX ?? e.x, eState.botStuckMemoryZ ?? e.z,
+      BOT_STUCK_MEMORY_RADIUS
+    );
+    mx += sm.rx * BOT_STUCK_MEMORY_WEIGHT;
+    mz += sm.rz * BOT_STUCK_MEMORY_WEIGHT;
+  }
   const mlen = Math.sqrt(mx * mx + mz * mz);
   if (mlen > 1e-3) { mx /= mlen; mz /= mlen; }
 
@@ -1459,6 +1504,12 @@ function updateEnemy(now) {
     eState.botStuckPivotUntil = now + BOT_STUCK_PIVOT_MS;
     eState.strafeSign *= -1;
     eState.botStuckTicks = 0;
+    // Drop a "don't come back here" marker for the next few seconds so
+    // the post-pivot kiting steers around this obstacle instead of
+    // re-attacking the same gap and stalling all over again.
+    eState.botStuckMemoryX = e.x;
+    eState.botStuckMemoryZ = e.z;
+    eState.botStuckMemoryUntil = now + BOT_STUCK_MEMORY_MS;
   }
   if ((eState.botStuckPivotUntil ?? 0) > now) {
     mx = side.x * eState.strafeSign;
@@ -1489,13 +1540,15 @@ function updateEnemy(now) {
   if (canStartBurst) {
     const threat = findIncomingThreatOffline(state.enemy, BOT_THREAT_LOOKAHEAD);
     if (threat) {
-      // Trigger 1: incoming projectile — evade perpendicular.
+      // Trigger 1: incoming projectile — evade perpendicular. Uses a shorter
+      // cooldown than the other triggers so the bot can chain-dodge rapid
+      // weapons instead of being locked out after the first dodge.
       const cross = threat.vel.x * side.z - threat.vel.z * side.x;
       const evadeSign = cross >= 0 ? 1 : -1;
       eState.botSprintDirX = side.x * evadeSign;
       eState.botSprintDirZ = side.z * evadeSign;
       eState.botSprintUntil = now + BOT_SPRINT_BURST_MS;
-      eState.evadeCooldownUntil = now + 700;
+      eState.evadeCooldownUntil = now + BOT_THREAT_EVADE_COOLDOWN_MS;
       eState.evadeHomingUntil = now + 240;
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
