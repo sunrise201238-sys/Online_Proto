@@ -6,13 +6,14 @@
 // Designed to be agnostic to weapon stats and map layout:
 //   - Range bands derive from the unit's lockRange (works for any weapon).
 //   - Burst length derives from magCapacity (works for any future mag size).
-//   - Obstacle avoidance + LoS firing + jump-for-elevation work from the
-//     map's obstacle/surface lists, so re-tuning a map's geometry is enough
-//     to re-tune the bot.
+//   - Obstacle avoidance, LoS firing, and elevation tactics (jumping onto
+//     ledges for a high-ground advantage, dropping off them to reset kiting
+//     distance) all work from the map's obstacle/surface lists, so re-tuning
+//     a map's geometry is enough to re-tune the bot.
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
 import { getArena } from './arena.js';
 import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y } from './constants.js';
 
@@ -32,6 +33,29 @@ const BOT_STUCK_TICKS_THRESHOLD = 8;
 const BOT_STUCK_PIVOT_MS = 600;
 const BOT_LOS_EYE_HEIGHT = 1.6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
+
+// --- Elevation-kiting tunables ---
+// A ledge whose lip rises more than the auto-step height (1.6) above the
+// bot's floor can't be walked onto — it needs a jump. The upper bound is
+// what a jump arc can actually clear (apex ≈ jumpVelocity² / 2·|gravity|,
+// ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
+const BOT_CLIMB_MIN_RISE = 1.7;
+const BOT_CLIMB_MAX_RISE = 4.8;
+// How far out the bot scans for a ledge to perch on, and how close it has to
+// get to that ledge (or to a drop edge) before it commits the jump.
+const BOT_PERCH_SEEK_RADIUS = 24;
+const BOT_LEDGE_JUMP_REACH = 4.5;
+// A floor more than this above base ground means "the bot is on high ground".
+const BOT_HIGH_GROUND_MIN_Y = 1.7;
+// How far past a surface edge to sample when testing whether stepping off it
+// actually drops to lower ground (vs. running straight into a wall).
+const BOT_DESCENT_PROBE = 3;
+// Weight of the ledge-seek steering when blended into the kiting vector.
+const BOT_ELEV_STEER_WEIGHT = 2.4;
+// How long after an elevation jump the bot keeps driving toward the ledge so
+// the arc lands where it was aimed instead of drifting off on the kiting
+// vector. Covers the longest arc (a drop off high ground, ~0.85 s airborne).
+const BOT_AIR_STEER_MS = 900;
 
 // Repulsion vector from blocking obstacles within `radius`. Skips obstacles
 // the bot is over or under (same skip math as resolveUnitObstacleCollisions),
@@ -104,6 +128,72 @@ function findIncomingThreat(matchState, me, range) {
     return p;
   }
   return null;
+}
+
+// Scan for the nearest walkable surface whose lip sits a jump-height above
+// the bot's floor — a ledge it can hop onto for a high-ground kiting
+// advantage. Skips ledges too tall to clear with a jump (those need a ramp)
+// and ones level enough to just walk onto. Returns a unit vector toward the
+// nearest reachable point on that ledge plus the horizontal distance to it,
+// or null if nothing suitable is in range.
+function findHighGroundPerch(px, pz, myFloorY, surfaces, searchRadius) {
+  let best = null;
+  let bestDist = searchRadius;
+  for (let i = 0; i < surfaces.length; i++) {
+    const s = surfaces[i];
+    if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
+    const nx = Math.max(s.minX, Math.min(px, s.maxX));
+    const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
+    const rise = s.heightAt(nx, nz) - myFloorY;
+    if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
+    const ddx = nx - px;
+    const ddz = nz - pz;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d >= bestDist) continue;
+    bestDist = d;
+    const inv = d > 1e-3 ? 1 / d : 0;
+    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
+  }
+  return best;
+}
+
+// The bot is standing on a raised surface — find the edge it should run or
+// jump off to drop back to lower ground. Prefers the edge most aligned with
+// `away` (a direction, usually away from the opponent) and rejects edges
+// that just lead into a wall or don't actually descend. Returns a unit
+// vector toward that edge plus the distance to it, or null if the bot isn't
+// on a droppable surface.
+function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, awayZ) {
+  let host = null;
+  for (let i = 0; i < surfaces.length; i++) {
+    const s = surfaces[i];
+    if (px < s.minX || px > s.maxX || pz < s.minZ || pz > s.maxZ) continue;
+    if (Math.abs(s.heightAt(px, pz) - myFloorY) > 1) continue;
+    host = s;
+    break;
+  }
+  if (!host) return null;
+  const lowerY = myFloorY - BOT_CLIMB_MIN_RISE;
+  const probeY = myFloorY + GROUND_BASE_Y;
+  const edges = [
+    { x: -1, z: 0, edgeDist: px - host.minX, probeX: host.minX - BOT_DESCENT_PROBE, probeZ: pz },
+    { x: 1, z: 0, edgeDist: host.maxX - px, probeX: host.maxX + BOT_DESCENT_PROBE, probeZ: pz },
+    { x: 0, z: -1, edgeDist: pz - host.minZ, probeX: px, probeZ: host.minZ - BOT_DESCENT_PROBE },
+    { x: 0, z: 1, edgeDist: host.maxZ - pz, probeX: px, probeZ: host.maxZ + BOT_DESCENT_PROBE }
+  ];
+  let best = null;
+  let bestScore = -Infinity;
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    if (groundHeightAt(e.probeX, e.probeZ, surfaces, myFloorY + 50) > lowerY) continue;
+    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstacles)) continue;
+    const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { toX: e.x, toZ: e.z, edgeDist: Math.max(0, e.edgeDist) };
+    }
+  }
+  return best;
 }
 
 // Drives the bot's velocity directly (legacy-style — sets vel and fires
@@ -254,25 +344,73 @@ export function tickBot(matchState, botId, now) {
     }
   }
 
-  // --- Jump for elevation: if the opponent is on a meaningfully higher
-  // surface, spend boost on a jump aimed straight at them.
+  // --- Elevation tactics: use jumps and ledges to hold kiting distance.
+  // Priority order, highest first:
+  //   1. Opponent is on higher ground and in engage range — jump straight at
+  //      them so the bot isn't stuck shooting a target it can't reach.
+  //   2. Bot is perched but the opponent has closed inside the kiting band
+  //      (or climbed up to the same level) — run/jump off the nearest ledge
+  //      that opens distance, dropping back down to reset the gap.
+  //   3. Bot is on low ground and engaged — climb a nearby ledge for the
+  //      high-ground sightline and the vertical separation it buys.
+  // Steering toward a ledge is blended into mx/mz; jumps are aimed via
+  // jumpDirX/jumpDirZ (default: straight at the opponent, as before).
   const myFloorY = groundHeightAt(me.pos.x, me.pos.z, surfaces, me.pos.y - GROUND_BASE_Y);
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
+  const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
+  const stuckPivoting = (me.botStuckPivotUntil ?? 0) > now;
   let jumpThisTick = false;
-  if (
-    me.grounded
-    && !me.airborne
-    && oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
-    && dist < 32
-    && !inBurst
-    && Math.random() > 0.5
-  ) {
-    if (tryStartJump(me, now)) jumpThisTick = true;
+  let jumpDirX = dirX;
+  let jumpDirZ = dirZ;
+
+  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting) {
+    if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+      // 1. Opponent above us — jump at them.
+      if (tryStartJump(me, now)) jumpThisTick = true;
+    } else if (
+      onHighGround
+      && dist < upperRange
+      && (dist < lowerRange || oppFloorY > myFloorY - BOT_JUMP_HEIGHT_DIFF)
+    ) {
+      // 2. Pressured on high ground — bail off a ledge to re-open distance.
+      const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, -dirX, -dirZ);
+      if (exit) {
+        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
+        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
+        const l = Math.sqrt(mx * mx + mz * mz);
+        if (l > 1e-3) { mx /= l; mz /= l; }
+        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
+          jumpDirX = exit.toX;
+          jumpDirZ = exit.toZ;
+          if (tryStartJump(me, now)) jumpThisTick = true;
+        }
+      }
+    } else if (!onHighGround && dist < upperRange && dist > lowerRange * 0.55) {
+      // 3. On low ground — climb a ledge, unless the only one is back toward
+      // the opponent (chasing it would just close the gap we want to keep).
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+      if (perch && perch.toX * dirX + perch.toZ * dirZ < 0.45) {
+        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
+        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
+        const l = Math.sqrt(mx * mx + mz * mz);
+        if (l > 1e-3) { mx /= l; mz /= l; }
+        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
+          jumpDirX = perch.toX;
+          jumpDirZ = perch.toZ;
+          if (tryStartJump(me, now)) jumpThisTick = true;
+        }
+      }
+    }
   }
 
   if (jumpThisTick) {
-    me.vel.x = dirX * BOT_SPRINT_BURST_VEL;
-    me.vel.z = dirZ * BOT_SPRINT_BURST_VEL;
+    // Remember the launch aim so the airborne ticks below keep driving the
+    // bot toward the ledge instead of drifting off on the kiting vector.
+    me.botAirSteerX = jumpDirX;
+    me.botAirSteerZ = jumpDirZ;
+    me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
+    me.vel.x = jumpDirX * BOT_SPRINT_BURST_VEL;
+    me.vel.z = jumpDirZ * BOT_SPRINT_BURST_VEL;
     me.action = 'jump';
   } else if (inBurst) {
     me.vel.x = (me.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
@@ -280,6 +418,12 @@ export function tickBot(matchState, botId, now) {
     me.action = 'dash';
   } else {
     const moveScalar = now < me.hitStunUntil ? 0 : 10.6;
+    // Mid elevation-jump: hold the launch heading so the arc lands on (or
+    // clears) the ledge it was aimed at instead of drifting on the kiting vec.
+    if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
+      mx = me.botAirSteerX ?? mx;
+      mz = me.botAirSteerZ ?? mz;
+    }
     me.vel.x = mx * moveScalar;
     me.vel.z = mz * moveScalar;
     if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
