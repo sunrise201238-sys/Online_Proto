@@ -133,7 +133,8 @@ const MAP_DATA = {
   factory: { name: 'Factory' },
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
-  station: { name: 'Station' }
+  station: { name: 'Station' },
+  flashpoint: { name: 'Flashpoint' }
   // 'carnival' is intentionally hidden from the picker for now while it's
   // being iterated on. The build function, ambience case, and shared collision
   // data are all still in place — re-add the entry here (and the matching
@@ -3270,6 +3271,18 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.7;
     key.color.setHex(0xffd9a0);
     key.intensity = 1.1;
+  } else if (mapKey === 'flashpoint') {
+    // Underground industrial CQB arena: deep concrete black with cool blue
+    // accent and dim amber spotlights. Tight, claustrophobic feel — close
+    // fog so distant rooms read as silhouette + light.
+    scene.background.setHex(0x0a0d12);
+    scene.fog.color.setHex(0x0c1018);
+    scene.fog.near = 30;
+    scene.fog.far = 140;
+    ambient.color.setHex(0xa8b6c8);
+    ambient.intensity = 0.45;
+    key.color.setHex(0xffd9a0);
+    key.intensity = 0.85;
   }
 }
 
@@ -3282,6 +3295,7 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'carnival') buildCarnivalArena();
+  else if (mapKey === 'flashpoint') buildFlashpointArena();
 }
 
 function buildStreetsArena() {
@@ -5066,6 +5080,199 @@ function buildCarnivalArena() {
 
   // ===== Play-area edge: invisible perimeter wall + red floor stripe =====
   addBoundaryIndicator(130, 130, 28);
+}
+
+function buildFlashpointArena() {
+  // Underground industrial CQB arena (~260 × 180): a rectangular concrete
+  // hall divided into rooms by partition walls and corrugated-metal panels,
+  // littered with shipping containers, oil drums, wooden crates, and a
+  // central substation block. Two diagonal spawns (B-1 NE / B-2 SW) each in
+  // a partial enclosure with one doorway. A short raised viewing catwalk
+  // sits inside the B-1 room. Tone matches Factory/Station: gritty, dim,
+  // close-fog industrial — every primary cover hides a full ~5 m mech.
+
+  // ===== Materials =====
+  const concreteFloor = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.95 });
+  const concreteFloorAlt = new THREE.MeshStandardMaterial({ color: 0x36393f, roughness: 0.92 });
+  const floorMarking = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.7 });
+  const concreteWall = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.85 });
+  const corrugated = new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.7, metalness: 0.4 });
+  const corrugatedRust = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.78, metalness: 0.3 });
+  const woodPanel = new THREE.MeshStandardMaterial({ color: 0x9b6a3a, roughness: 0.85 });
+  const containerRedMat = new THREE.MeshStandardMaterial({ color: 0xb83a32, roughness: 0.75 });
+  const containerBlueMat = new THREE.MeshStandardMaterial({ color: 0x2a5d8f, roughness: 0.75 });
+  const containerRustMat = new THREE.MeshStandardMaterial({ color: 0x6b4a3a, roughness: 0.8 });
+  const containerRib = new THREE.MeshStandardMaterial({ color: 0x1a1f28, roughness: 0.7 });
+  const drumMat = new THREE.MeshStandardMaterial({ color: 0x7d4a2a, roughness: 0.78 });
+  const drumLid = new THREE.MeshStandardMaterial({ color: 0x4a2e1a, roughness: 0.7 });
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x9b6a3a, roughness: 0.85 });
+  const crateRib = new THREE.MeshStandardMaterial({ color: 0x4a341e, roughness: 0.9 });
+  const columnMat = new THREE.MeshStandardMaterial({ color: 0x4a525e, roughness: 0.55, metalness: 0.5 });
+  const columnTrim = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.45, metalness: 0.6 });
+  const subStationMat = new THREE.MeshStandardMaterial({ color: 0x55606b, roughness: 0.65, metalness: 0.45 });
+  const subStationVent = new THREE.MeshStandardMaterial({ color: 0x141820, roughness: 0.6, metalness: 0.4 });
+  const platformDeck = new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.55, metalness: 0.55 });
+  const platformEdge = new THREE.MeshStandardMaterial({ color: 0xa6acba, roughness: 0.5, metalness: 0.45 });
+  const cautionStripe = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.65 });
+  const exitSign = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x4dd6ff, emissiveIntensity: 1.1, roughness: 0.4 });
+  const ductMat = new THREE.MeshStandardMaterial({ color: 0x32363d, roughness: 0.7, metalness: 0.3 });
+  const pipeMat = new THREE.MeshStandardMaterial({ color: 0xa66a3a, roughness: 0.6, metalness: 0.45 });
+  const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffe39c, emissive: 0xffe39c, emissiveIntensity: 1.0, roughness: 0.4 });
+
+  // ===== Concrete floor + painted walkway markings =====
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(280, 200), concreteFloor);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
+  scene.add(floor); arenaDecor.push(floor);
+  // Diagonal walkway band running corner-to-corner (decor — visual flow line).
+  const lane = new THREE.Mesh(new THREE.PlaneGeometry(260, 6), concreteFloorAlt);
+  lane.rotation.x = -Math.PI / 2; lane.rotation.z = Math.atan2(130, 220);
+  lane.position.set(0, 0.012, 0);
+  scene.add(lane); arenaDecor.push(lane);
+  // Yellow tape boundary stripes around the central arena (decor).
+  for (const z of [-30, 30]) {
+    const tape = new THREE.Mesh(new THREE.PlaneGeometry(170, 0.6), floorMarking);
+    tape.rotation.x = -Math.PI / 2; tape.position.set(0, 0.018, z);
+    scene.add(tape); arenaDecor.push(tape);
+  }
+
+  // ===== B-2 spawn enclosure (SW corner) =====
+  // North wall west segment + east segment leave a 15 m doorway centred at x=-92.5.
+  addBlockingBox({ x: -115, y: 5, z: -40, sx: 30, sy: 10, sz: 2, material: corrugated });
+  addBlockingBox({ x: -75,  y: 5, z: -40, sx: 20, sy: 10, sz: 2, material: corrugated });
+  addBlockingBox({ x: -66,  y: 5, z: -64.5, sx: 2, sy: 10, sz: 47, material: corrugatedRust });
+  // "B-2" exit-sign placard near the doorway (decor only).
+  const b2Sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.0), exitSign);
+  b2Sign.position.set(-92.5, 8, -40.95); b2Sign.rotation.y = Math.PI;
+  scene.add(b2Sign); arenaDecor.push(b2Sign);
+
+  // ===== B-1 spawn enclosure (NE corner) =====
+  // South wall east + west segments leave a 15 m doorway centred at x=92.5.
+  addBlockingBox({ x: 115, y: 5, z: 40, sx: 30, sy: 10, sz: 2, material: corrugated });
+  addBlockingBox({ x: 75,  y: 5, z: 40, sx: 20, sy: 10, sz: 2, material: corrugated });
+  addBlockingBox({ x: 66,  y: 5, z: 64.5, sx: 2, sy: 10, sz: 47, material: corrugatedRust });
+  const b1Sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.0), exitSign);
+  b1Sign.position.set(92.5, 8, 40.95);
+  scene.add(b1Sign); arenaDecor.push(b1Sign);
+
+  // ===== Mid divider (3 segments with 2 doorway gaps centred near x=±15) =====
+  addBlockingBox({ x: -55, y: 5, z: 0, sx: 20, sy: 10, sz: 2, material: concreteWall });
+  addBlockingBox({ x: -10, y: 5, z: 0, sx: 30, sy: 10, sz: 2, material: concreteWall });
+  addBlockingBox({ x:  45, y: 5, z: 0, sx: 40, sy: 10, sz: 2, material: concreteWall });
+
+  // ===== Container cluster (3 parallel shipping containers, mid-west) =====
+  const containerColors = [containerRedMat, containerBlueMat, containerRustMat];
+  containerColors.forEach((mat, i) => {
+    const cz = 11 + i * 10;
+    addBlockingBox({ x: -43, y: 4, z: cz, sx: 14, sy: 8, sz: 6, material: mat });
+    // Top corner ribs (decor — short stubs on each end of the container).
+    for (const xs of [-50, -36]) {
+      const corner = new THREE.Mesh(new THREE.BoxGeometry(0.8, 8.4, 0.8), containerRib);
+      corner.position.set(xs, 4, cz - 3);
+      scene.add(corner); arenaDecor.push(corner);
+      const corner2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 8.4, 0.8), containerRib);
+      corner2.position.set(xs, 4, cz + 3);
+      scene.add(corner2); arenaDecor.push(corner2);
+    }
+  });
+
+  // ===== Central rooms (4 walls forming a small enclosed lab — door at z=6 south) =====
+  addBlockingBox({ x: 20, y: 5, z: 25,    sx: 30, sy: 10, sz: 2, material: concreteWall });
+  addBlockingBox({ x: 34, y: 5, z: 14.5,  sx: 2,  sy: 10, sz: 19, material: concreteWall });
+  addBlockingBox({ x: 10, y: 5, z: 6,     sx: 10, sy: 10, sz: 2, material: concreteWall });
+  addBlockingBox({ x: 30, y: 5, z: 6,     sx: 10, sy: 10, sz: 2, material: concreteWall });
+  addBlockingBox({ x: 6,  y: 5, z: 15.5,  sx: 2,  sy: 10, sz: 17, material: concreteWall });
+
+  // ===== Substation block (large industrial equipment, mid-south) =====
+  addBlockingBox({ x: -1, y: 3, z: -22, sx: 18, sy: 6, sz: 12, material: subStationMat });
+  // Vent louvres on top (decor)
+  const vent = new THREE.Mesh(new THREE.BoxGeometry(16, 0.4, 10), subStationVent);
+  vent.position.set(-1, 6.2, -22);
+  scene.add(vent); arenaDecor.push(vent);
+  // Caution-yellow band wrapping the substation base (decor)
+  const subBand = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.6, 12.4), cautionStripe);
+  subBand.position.set(-1, 0.45, -22);
+  scene.add(subBand); arenaDecor.push(subBand);
+
+  // ===== Concrete support columns (full ceiling height — true full cover) =====
+  const columnSpots = [[-59, -31], [-24, -54], [26, -54], [61, -31], [-44, 61], [46, 61]];
+  columnSpots.forEach(([cx, cz]) => {
+    addBlockingBox({ x: cx, y: 7, z: cz, sx: 2, sy: 14, sz: 2, material: columnMat });
+    // Steel rim cap at column base (decor)
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 2.6), columnTrim);
+    cap.position.set(cx, 0.15, cz);
+    scene.add(cap); arenaDecor.push(cap);
+  });
+
+  // ===== Wooden crate stacks (5 m tall side cover) =====
+  const crateSpots = [[-95, -8], [-43, -48], [-8, 52], [52, -48], [97, -8], [8, -48]];
+  crateSpots.forEach(([cx, cz]) => {
+    addBlockingBox({ x: cx, y: 2.5, z: cz, sx: 4, sy: 5, sz: 4, material: crateMat });
+    // Cross-brace plank trim on the visible faces (decor).
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.3, 4.2), crateRib);
+    trim.position.set(cx, 5.05, cz);
+    scene.add(trim); arenaDecor.push(trim);
+  });
+
+  // ===== Stacked oil drums (5 m total — visual cylinder pair, square AABB collision) =====
+  const drumSpots = [
+    [-81.5, -1.5], [81.5, 1.5], [-1.5, 66.5], [1.5, -66.5]
+  ];
+  drumSpots.forEach(([dx, dz]) => {
+    // Collision AABB (covered by visual below)
+    arenaObstacles.push({ minX: dx - 1.5, maxX: dx + 1.5, minZ: dz - 1.5, maxZ: dz + 1.5, minY: 0, maxY: 5 });
+    // Two stacked drum cylinders for the visual
+    for (let stackI = 0; stackI < 2; stackI++) {
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2.4, 14), drumMat);
+      drum.position.set(dx, 1.2 + stackI * 2.4, dz);
+      scene.add(drum); arenaDecor.push(drum);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.21, 1.21, 0.12, 14), drumLid);
+      lid.position.set(dx, 2.4 + stackI * 2.4, dz);
+      scene.add(lid); arenaDecor.push(lid);
+    }
+  });
+
+  // ===== Viewing platform inside B-1 (short raised catwalk) =====
+  addPlatform({ minX: 100, maxX: 128, minZ: 70, maxZ: 88, top: 3, material: platformDeck, thickness: 0.5 });
+  // Visible platform-face skirt + caution-stripe top, mirrors Station's pattern.
+  const vpFace = new THREE.Mesh(new THREE.BoxGeometry(28, 3, 0.5), platformEdge);
+  vpFace.position.set(114, 1.5, 69.75);
+  scene.add(vpFace); arenaDecor.push(vpFace);
+  const vpStripe = new THREE.Mesh(new THREE.PlaneGeometry(26, 0.7), cautionStripe);
+  vpStripe.rotation.x = -Math.PI / 2;
+  vpStripe.position.set(114, 3.05, 71);
+  scene.add(vpStripe); arenaDecor.push(vpStripe);
+  // Platform-edge wall — collision-only, jump-only (matches Station).
+  arenaObstacles.push({
+    minX: 100, maxX: 128, minZ: 69.7, maxZ: 70.3, minY: 0, maxY: 3, topBuffer: 0, noProjectile: true
+  });
+
+  // ===== Overhead industrial decor (no collision — purely atmospheric) =====
+  // Long ceiling duct running the length of the hall
+  for (const dz of [-50, 0, 50]) {
+    const duct = new THREE.Mesh(new THREE.BoxGeometry(220, 0.9, 1.4), ductMat);
+    duct.position.set(0, 12.5, dz);
+    scene.add(duct); arenaDecor.push(duct);
+  }
+  // Copper exposed pipes along one ceiling axis
+  for (const px of [-60, 60]) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 180, 10), pipeMat);
+    pipe.rotation.x = Math.PI / 2;
+    pipe.position.set(px, 12, 0);
+    scene.add(pipe); arenaDecor.push(pipe);
+  }
+  // Ceiling-mounted fluorescent strip lights (warm-amber emissive squares)
+  const lightSpots = [
+    [-90, -50], [-90, 50], [-30, -30], [-30, 30],
+    [30, -30], [30, 30], [90, -50], [90, 50], [0, 0]
+  ];
+  lightSpots.forEach(([lx, lz]) => {
+    const light = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 0.7), lampGlow);
+    light.position.set(lx, 12.4, lz);
+    scene.add(light); arenaDecor.push(light);
+  });
+
+  // ===== Play-area edge: invisible perimeter wall + red floor stripe =====
+  addBoundaryIndicator(130, 90, 14);
 }
 
 function createArenaWalls() {
