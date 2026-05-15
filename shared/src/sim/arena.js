@@ -6792,35 +6792,48 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 12 },
       { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
       { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 22, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 18, "minY": 0, "maxY": 12 },
 
-      // ----- Research / lab room (mid-east, south half) -----
+      // ----- Research / lab room (mid-east, south half) — L-shape, mirror -----
       { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 12 },
       { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 12 },
       { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
       { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 13, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 12 },
+      { "minX": 10, "maxX": 13, "minZ": -18, "maxZ": -13, "minY": 0, "maxY": 12 },
 
       // ----- Substation block (mid-west, south half) — 8 m tall industrial unit -----
       { "minX": -25, "maxX": -5, "minZ": -30, "maxZ": -15, "minY": 0, "maxY": 8 },
 
-      // ----- NW corner partition (L-shape — fills the open NW quadrant) -----
+      // ----- NW corner partition (L-shape — N-S leg shortened to z=65 so
+      //       the side opening to the boundary reads as a wide ~10 m gap) -----
       { "minX": -95, "maxX": -65, "minZ": 52, "maxZ": 55, "minY": 0, "maxY": 12 },
-      { "minX": -95, "maxX": -92, "minZ": 55, "maxZ": 70, "minY": 0, "maxY": 12 },
+      { "minX": -95, "maxX": -92, "minZ": 55, "maxZ": 65, "minY": 0, "maxY": 12 },
 
       // ----- SE corner partition (L-shape — mirror of NW) -----
       { "minX": 65, "maxX": 95, "minZ": -55, "maxZ": -52, "minY": 0, "maxY": 12 },
-      { "minX": 92, "maxX": 95, "minZ": -70, "maxZ": -55, "minY": 0, "maxY": 12 },
+      { "minX": 92, "maxX": 95, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 12 },
 
-      // ----- Concrete support columns (full ceiling, WIDER 4 m square) -----
-      { "minX": -52, "maxX": -48, "minZ": -22, "maxZ": -18, "minY": 0, "maxY": 12 },
-      { "minX": -52, "maxX": -48, "minZ": 18, "maxZ": 22, "minY": 0, "maxY": 12 },
-      { "minX": 48, "maxX": 52, "minZ": -52, "maxZ": -48, "minY": 0, "maxY": 12 },
-      { "minX": 48, "maxX": 52, "minZ": 48, "maxZ": 52, "minY": 0, "maxY": 12 },
-      { "minX": -2, "maxX": 2, "minZ": -57, "maxZ": -53, "minY": 0, "maxY": 12 },
-      { "minX": -2, "maxX": 2, "minZ": 53, "maxZ": 57, "minY": 0, "maxY": 12 },
-      { "minX": -67, "maxX": -63, "minZ": -52, "maxZ": -48, "minY": 0, "maxY": 12 },
-      { "minX": 63, "maxX": 67, "minZ": -27, "maxZ": -23, "minY": 0, "maxY": 12 },
+      // ----- Slim ceiling-support columns (2 m thin) — pure visual support
+      //       for the overhead pipes; cover comes from the partition below. -----
+      { "minX": -51, "maxX": -49, "minZ": -21, "maxZ": -19, "minY": 0, "maxY": 12 },
+      { "minX": -51, "maxX": -49, "minZ": 19, "maxZ": 21, "minY": 0, "maxY": 12 },
+      { "minX": 49, "maxX": 51, "minZ": -51, "maxZ": -49, "minY": 0, "maxY": 12 },
+      { "minX": 49, "maxX": 51, "minZ": 49, "maxZ": 51, "minY": 0, "maxY": 12 },
+      { "minX": -1, "maxX": 1, "minZ": -56, "maxZ": -54, "minY": 0, "maxY": 12 },
+      { "minX": -1, "maxX": 1, "minZ": 54, "maxZ": 56, "minY": 0, "maxY": 12 },
+      { "minX": -66, "maxX": -64, "minZ": -51, "maxZ": -49, "minY": 0, "maxY": 12 },
+      { "minX": 64, "maxX": 66, "minZ": -26, "maxZ": -24, "minY": 0, "maxY": 12 },
+
+      // ----- Factory-style sheet-metal partitions at each pillar base
+      //       (8 m long × 8 m tall × 0.6 m thick — actual full-body cover). -----
+      { "minX": -54, "maxX": -46, "minZ": -20.3, "maxZ": -19.7, "minY": 0, "maxY": 8 },
+      { "minX": -54, "maxX": -46, "minZ": 19.7, "maxZ": 20.3, "minY": 0, "maxY": 8 },
+      { "minX": 46, "maxX": 54, "minZ": -50.3, "maxZ": -49.7, "minY": 0, "maxY": 8 },
+      { "minX": 46, "maxX": 54, "minZ": 49.7, "maxZ": 50.3, "minY": 0, "maxY": 8 },
+      { "minX": -0.3, "maxX": 0.3, "minZ": -59, "maxZ": -51, "minY": 0, "maxY": 8 },
+      { "minX": -0.3, "maxX": 0.3, "minZ": 51, "maxZ": 59, "minY": 0, "maxY": 8 },
+      { "minX": -65.3, "maxX": -64.7, "minZ": -54, "maxZ": -46, "minY": 0, "maxY": 8 },
+      { "minX": 64.7, "maxX": 65.3, "minZ": -29, "maxZ": -21, "minY": 0, "maxY": 8 },
 
       // ----- Wooden crate stacks (WIDER 6 m, still 7 m tall) -----
       { "minX": -83, "maxX": -77, "minZ": -18, "maxZ": -12, "minY": 0, "maxY": 7 },
