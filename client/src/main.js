@@ -5139,33 +5139,58 @@ function buildFlashpointArena() {
     scene.add(tape); arenaDecor.push(tape);
   }
 
-  // ===== B-2 spawn enclosure (SW corner) — 3 m thick, 12 m tall partition walls =====
-  // North wall west + east leave a ~20 m doorway centred at x=-68.
-  addBlockingBox({ x: -94, y: 6, z: -30.5, sx: 32, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: -49, y: 6, z: -30.5, sx: 18, sy: 12, sz: 3, material: corrugated });
+  // ===== B-2 spawn enclosure (SW) — 28 m doorway centred at x=-68 with a
+  // visible lintel header above so the gap reads as a real architectural
+  // doorway from across the hall (rather than just two random wall ends). =====
+  addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
+  addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: -41.5, y: 6, z: -52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
-  // "B-2" exit-sign placard above the doorway (decor only).
-  const b2Sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.2), exitSign);
-  b2Sign.position.set(-68, 9, -32.5); b2Sign.rotation.y = Math.PI;
-  scene.add(b2Sign); arenaDecor.push(b2Sign);
+  // Doorway lintel header (decor only — frames the opening, no collision so
+  // it doesn't catch jumping mechs).
+  const b2Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
+  b2Lintel.position.set(-68, 11, -30.5);
+  scene.add(b2Lintel); arenaDecor.push(b2Lintel);
+  // "B-2" exit-sign placards on both faces of the lintel so the doorway is
+  // readable from inside the spawn AND from the central hall.
+  const b2SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
+  b2SignS.position.set(-68, 8.5, -32.05); b2SignS.rotation.y = Math.PI;
+  scene.add(b2SignS); arenaDecor.push(b2SignS);
+  const b2SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
+  b2SignN.position.set(-68, 8.5, -28.95);
+  scene.add(b2SignN); arenaDecor.push(b2SignN);
 
-  // ===== B-1 spawn enclosure (NE corner) =====
-  addBlockingBox({ x: 94, y: 6, z: 30.5, sx: 32, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: 49, y: 6, z: 30.5, sx: 18, sy: 12, sz: 3, material: corrugated });
+  // ===== B-1 spawn enclosure (NE) — mirror of B-2 with its own lintel =====
+  addBlockingBox({ x: 96, y: 6, z: 30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
+  addBlockingBox({ x: 47, y: 6, z: 30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: 41.5, y: 6, z: 52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
-  const b1Sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.2), exitSign);
-  b1Sign.position.set(68, 9, 32.5);
-  scene.add(b1Sign); arenaDecor.push(b1Sign);
+  const b1Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
+  b1Lintel.position.set(68, 11, 30.5);
+  scene.add(b1Lintel); arenaDecor.push(b1Lintel);
+  const b1SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
+  b1SignN.position.set(68, 8.5, 32.05);
+  scene.add(b1SignN); arenaDecor.push(b1SignN);
+  const b1SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
+  b1SignS.position.set(68, 8.5, 28.95); b1SignS.rotation.y = Math.PI;
+  scene.add(b1SignS); arenaDecor.push(b1SignS);
 
-  // ===== Mid divider at z=0 (3 segments with 2 doorway gaps near x = ±15) =====
-  addBlockingBox({ x: -49, y: 6, z: 0, sx: 18, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: -5,  y: 6, z: 0, sx: 30, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x:  44, y: 6, z: 0, sx: 28, sy: 12, sz: 3, material: concreteWall });
+  // ===== Mid divider at z=0 — LOWERED to 6 m so the player camera can see
+  // across the hall (ambient readability), but still high enough to block
+  // body-height projectiles and bot LoS (mech eye sits at ~4 m). =====
+  addBlockingBox({ x: -49, y: 3, z: 0, sx: 18, sy: 6, sz: 3, material: concreteWall });
+  addBlockingBox({ x: -5,  y: 3, z: 0, sx: 30, sy: 6, sz: 3, material: concreteWall });
+  addBlockingBox({ x:  44, y: 3, z: 0, sx: 28, sy: 6, sz: 3, material: concreteWall });
   // Concrete-wall base trim (decor — adds weight to the divider visually).
   for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
     const trim = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.6, 3.4), concreteWallTrim);
     trim.position.set(tx, 0.3, 0);
     scene.add(trim); arenaDecor.push(trim);
+  }
+  // Steel cap rail along the top of each lowered segment — visually marks
+  // the divider as "low wall" rather than "wall got cut off".
+  for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.3, 3.6), columnTrim);
+    cap.position.set(tx, 6.15, 0);
+    scene.add(cap); arenaDecor.push(cap);
   }
 
   // ===== Container cluster (3 parallel shipping containers, mid-west NORTH half) =====
@@ -5217,41 +5242,50 @@ function buildFlashpointArena() {
   subBand.position.set(-15, 0.6, -22.5);
   scene.add(subBand); arenaDecor.push(subBand);
 
-  // ===== Concrete support columns (full ceiling height, 2.5 m square) =====
+  // ===== Corner partitions (L-shape walls — fill the previously-open
+  // NW and SE quadrants so the corners aren't dead empty space). =====
+  // NW corner partition.
+  addBlockingBox({ x: -80,   y: 6, z: 53.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
+  addBlockingBox({ x: -93.5, y: 6, z: 62.5, sx: 3,  sy: 12, sz: 15, material: concreteWall });
+  // SE corner partition (mirror).
+  addBlockingBox({ x:  80,   y: 6, z: -53.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
+  addBlockingBox({ x:  93.5, y: 6, z: -62.5, sx: 3,  sy: 12, sz: 15, material: concreteWall });
+
+  // ===== Concrete support columns (full ceiling, WIDER 4 m square) =====
   const columnSpots = [
     [-50, -20], [-50,  20], [50, -50], [50,  50],
     [  0, -55], [  0,  55], [-65, -50], [65, -25]
   ];
   columnSpots.forEach(([cx, cz]) => {
-    addBlockingBox({ x: cx, y: 6, z: cz, sx: 2.5, sy: 12, sz: 2.5, material: columnMat });
+    addBlockingBox({ x: cx, y: 6, z: cz, sx: 4, sy: 12, sz: 4, material: columnMat });
     // Steel rim cap at column base (decor)
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.4, 3.2), columnTrim);
-    cap.position.set(cx, 0.2, cz);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.45, 4.6), columnTrim);
+    cap.position.set(cx, 0.225, cz);
     scene.add(cap); arenaDecor.push(cap);
   });
 
-  // ===== Wooden crate stacks (7 m tall — properly bullet-blocking) =====
+  // ===== Wooden crate stacks (WIDER — 6 m square × 7 m tall) =====
   const crateSpots = [[-80, -15], [-65, 20], [80, 15], [65, -20]];
   crateSpots.forEach(([cx, cz]) => {
-    addBlockingBox({ x: cx, y: 3.5, z: cz, sx: 4, sy: 7, sz: 4, material: crateMat });
+    addBlockingBox({ x: cx, y: 3.5, z: cz, sx: 6, sy: 7, sz: 6, material: crateMat });
     // Cross-brace plank trim along the top + middle of the visible faces (decor).
-    const trimTop = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.35, 4.2), crateRib);
+    const trimTop = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 6.2), crateRib);
     trimTop.position.set(cx, 7.05, cz);
     scene.add(trimTop); arenaDecor.push(trimTop);
-    const trimMid = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.25, 4.2), crateRib);
+    const trimMid = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.3, 6.2), crateRib);
     trimMid.position.set(cx, 3.5, cz);
     scene.add(trimMid); arenaDecor.push(trimMid);
   });
 
-  // ===== Stacked oil drums (6 m total — visual is 3 stacked drums) =====
+  // ===== Stacked oil drums (WIDER — 4 m square AABB, visual is 3 stacked) =====
   const drumSpots = [[-72, -5], [72, 5], [-15, 60], [15, -60]];
   drumSpots.forEach(([dx, dz]) => {
-    arenaObstacles.push({ minX: dx - 1.5, maxX: dx + 1.5, minZ: dz - 1.5, maxZ: dz + 1.5, minY: 0, maxY: 6 });
+    arenaObstacles.push({ minX: dx - 2, maxX: dx + 2, minZ: dz - 2, maxZ: dz + 2, minY: 0, maxY: 6 });
     for (let stackI = 0; stackI < 3; stackI++) {
-      const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.0, 14), drumMat);
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.85, 2.0, 16), drumMat);
       drum.position.set(dx, 1.0 + stackI * 2.0, dz);
       scene.add(drum); arenaDecor.push(drum);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.31, 1.31, 0.12, 14), drumLid);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.86, 1.86, 0.14, 16), drumLid);
       lid.position.set(dx, 2.0 + stackI * 2.0, dz);
       scene.add(lid); arenaDecor.push(lid);
     }
@@ -5267,10 +5301,20 @@ function buildFlashpointArena() {
   vpStripe.rotation.x = -Math.PI / 2;
   vpStripe.position.set(94, 4.05, 58);
   scene.add(vpStripe); arenaDecor.push(vpStripe);
-  // Platform-edge wall — collision-only, jump-only (matches Station).
-  arenaObstacles.push({
-    minX: 80, maxX: 108, minZ: 56.7, maxZ: 57.3, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true
-  });
+  // Platform-edge walls — all 4 sides collision-only, jump-only. Without
+  // these, ground-level units could walk straight into the platform's xz
+  // footprint and clip into the deck mesh; with them, the only way onto
+  // the platform is to jump (the topBuffer:0 lets a mech mid-jump pass
+  // through once its center clears y=4). noProjectile:true so bullets
+  // still pass through the perimeter.
+  for (const w of [
+    { minX: 80,    maxX: 108,   minZ: 56.7, maxZ: 57.3 },  // south face
+    { minX: 80,    maxX: 108,   minZ: 72.7, maxZ: 73.3 },  // north face
+    { minX: 79.7,  maxX: 80.3,  minZ: 57,   maxZ: 73   },  // west face
+    { minX: 107.7, maxX: 108.3, minZ: 57,   maxZ: 73   }   // east face
+  ]) {
+    arenaObstacles.push({ ...w, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true });
+  }
 
   // ===== Overhead industrial decor (no collision — purely atmospheric) =====
   // Long ceiling ducts spanning the hall.
