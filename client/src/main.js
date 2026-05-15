@@ -3149,6 +3149,37 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
   return mesh;
 }
 
+// Adds the standard play-area edge: a 4-sided invisible (collision-only)
+// perimeter wall plus a red glowing floor stripe inset 1.6 units inside it
+// on each side. The wall is 2 units thick and `ceilY` tall, sitting just
+// outside (HALF_X..HALF_X+2 etc.) the play extent so the camera never clips
+// against a solid mesh when the player backs into a corner. Mirrors the
+// pattern Station uses inline.
+function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
+  arenaObstacles.push(
+    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
+    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
+    { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
+    { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
+  );
+  const boundaryGlow = new THREE.MeshStandardMaterial({
+    color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4
+  });
+  const stripeInset = 1.6;
+  for (const zEdge of [HALF_Z - stripeInset, -(HALF_Z - stripeInset)]) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 4, 1.4), boundaryGlow);
+    s.rotation.x = -Math.PI / 2;
+    s.position.set(0, 0.05, zEdge);
+    scene.add(s); arenaDecor.push(s);
+  }
+  for (const xEdge of [HALF_X - stripeInset, -(HALF_X - stripeInset)]) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * HALF_Z - 4), boundaryGlow);
+    s.rotation.x = -Math.PI / 2;
+    s.position.set(xEdge, 0.05, 0);
+    scene.add(s); arenaDecor.push(s);
+  }
+}
+
 function groundHeightAt(x, z, currentSurfaceY = 0) {
   let best = 0;
   for (const s of arenaSurfaces) {
@@ -3475,6 +3506,12 @@ function buildStreetsArena() {
   // Power-line / overhead banner strung between corner towers
   addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
   addBlockingBox({ x: 0, y: 16, z: 94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
+
+  // ===== Play-area edge: invisible perimeter wall + red floor stripe.
+  // The HALF_Z is set just inside the storefront back walls (z=±97-103) so
+  // those remain visible decor past the boundary. HALF_X bounds the avenue
+  // a few units past the corner sign towers (x=±110).
+  addBoundaryIndicator(128, 92, 28);
 }
 
 function buildFactoryArena() {
@@ -3526,11 +3563,11 @@ function buildFactoryArena() {
   crossLane.rotation.x = -Math.PI / 2; crossLane.position.set(0, 0.02, 0);
   scene.add(crossLane); arenaDecor.push(crossLane);
 
-  // Outer factory hall walls (interior 260 x 210)
-  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: -(HALF_Z + 1), sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
-  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: HALF_Z + 1, sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
-  addBlockingBox({ x: -(HALF_X + 1), y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
-  addBlockingBox({ x: HALF_X + 1, y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
+  // ===== Outer factory hall edge: invisible perimeter wall + red glowing
+  // floor stripe indicator (same pattern as Station). Replaces the previous
+  // visible grey hall walls so the camera doesn't clip when the player backs
+  // into a corner; the wall trim below still marks the boundary visually.
+  addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y);
   // Wall base trim
   addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
   addBlockingBox({ x: 0, y: 0.4, z: HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
@@ -4050,6 +4087,12 @@ function buildSquareArena() {
   addBlockingBox({ x: 0, y: 4, z: 110, sx: 240, sy: 8, sz: 4, material: creamStone });
   addBlockingBox({ x: -120, y: 4, z: 0, sx: 4, sy: 8, sz: 240, material: creamStone });
   addBlockingBox({ x: 120, y: 4, z: 0, sx: 4, sy: 8, sz: 240, material: creamStone });
+
+  // ===== Play-area edge: invisible perimeter wall + red floor stripe.
+  // The boundary sits flush against the inner faces of the cream-stone
+  // garden walls (x=±118, z=±108), so the visible walls remain the outer
+  // shell while the invisible wall is what units actually collide with.
+  addBoundaryIndicator(116, 106, 28);
 }
 
 function buildLobbyArena() {
