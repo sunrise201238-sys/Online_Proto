@@ -6787,31 +6787,34 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -38, "maxX": -22, "minZ": 20, "maxZ": 26, "minY": 0, "maxY": 8 },
       { "minX": -38, "maxX": -22, "minZ": 30, "maxZ": 36, "minY": 0, "maxY": 8 },
 
-      // ----- Reception / blueprint room (mid-east, north half) -----
-      { "minX": 10, "maxX": 35, "minZ": 22, "maxZ": 25, "minY": 0, "maxY": 12 },
-      { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
-      { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 18, "minY": 0, "maxY": 12 },
+      // ----- Reception / blueprint room (mid-east, north half) — walls
+      //       LOWERED to 6 m (matches the mid-divider) for ambient visibility -----
+      { "minX": 10, "maxX": 35, "minZ": 22, "maxZ": 25, "minY": 0, "maxY": 6 },
+      { "minX": 32, "maxX": 35, "minZ": 10, "maxZ": 22, "minY": 0, "maxY": 6 },
+      { "minX": 10, "maxX": 22, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 6 },
+      { "minX": 30, "maxX": 35, "minZ": 10, "maxZ": 13, "minY": 0, "maxY": 6 },
+      { "minX": 10, "maxX": 13, "minZ": 13, "maxZ": 18, "minY": 0, "maxY": 6 },
 
-      // ----- Research / lab room (mid-east, south half) — L-shape, mirror -----
-      { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 12 },
-      { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
-      { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 12 },
-      { "minX": 10, "maxX": 13, "minZ": -18, "maxZ": -13, "minY": 0, "maxY": 12 },
+      // ----- Research / lab room (mid-east, south half) — L-shape, mirror,
+      //       walls LOWERED to 6 m -----
+      { "minX": 10, "maxX": 35, "minZ": -13, "maxZ": -10, "minY": 0, "maxY": 6 },
+      { "minX": 32, "maxX": 35, "minZ": -22, "maxZ": -13, "minY": 0, "maxY": 6 },
+      { "minX": 10, "maxX": 22, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 6 },
+      { "minX": 30, "maxX": 35, "minZ": -25, "maxZ": -22, "minY": 0, "maxY": 6 },
+      { "minX": 10, "maxX": 13, "minZ": -18, "maxZ": -13, "minY": 0, "maxY": 6 },
 
       // ----- Substation block (mid-west, south half) — 8 m tall industrial unit -----
       { "minX": -25, "maxX": -5, "minZ": -30, "maxZ": -15, "minY": 0, "maxY": 8 },
 
-      // ----- NW corner partition (L-shape — N-S leg shortened to z=65 so
-      //       the side opening to the boundary reads as a wide ~10 m gap) -----
-      { "minX": -95, "maxX": -65, "minZ": 52, "maxZ": 55, "minY": 0, "maxY": 12 },
-      { "minX": -95, "maxX": -92, "minZ": 55, "maxZ": 65, "minY": 0, "maxY": 12 },
+      // ----- NW corner partition (FLIPPED 180° — L now opens toward the
+      //       central play area (SW), so the side opening faces the player's
+      //       natural approach line instead of the map boundary) -----
+      { "minX": -95, "maxX": -65, "minZ": 65, "maxZ": 68, "minY": 0, "maxY": 12 },
+      { "minX": -68, "maxX": -65, "minZ": 55, "maxZ": 65, "minY": 0, "maxY": 12 },
 
-      // ----- SE corner partition (L-shape — mirror of NW) -----
-      { "minX": 65, "maxX": 95, "minZ": -55, "maxZ": -52, "minY": 0, "maxY": 12 },
-      { "minX": 92, "maxX": 95, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 12 },
+      // ----- SE corner partition (FLIPPED 180° — mirror, opens toward NE) -----
+      { "minX": 65, "maxX": 95, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 12 },
+      { "minX": 65, "maxX": 68, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 12 },
 
       // ----- Slim ceiling-support columns (2 m thin) — pure visual support
       //       for the overhead pipes; cover comes from the partition below. -----
