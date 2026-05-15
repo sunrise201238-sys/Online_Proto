@@ -1670,6 +1670,38 @@ function updateEnemy(now) {
           if (botStartJump(now)) jumpThisTick = true;
         }
       }
+    } else if (onHighGround && dist > upperRange) {
+      // 2b. (positioning) Perched but opponent is out of engage range —
+      // drop off TOWARD them so we shortcut the long walk down to the lower
+      // level instead of trekking to the nearest exit and back around.
+      const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
+      if (exit) {
+        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
+        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
+        const l = Math.sqrt(mx * mx + mz * mz);
+        if (l > 1e-3) { mx /= l; mz /= l; }
+        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
+          jumpDirX = exit.toX;
+          jumpDirZ = exit.toZ;
+          if (botStartJump(now)) jumpThisTick = true;
+        }
+      }
+    } else if (!onHighGround && dist > upperRange) {
+      // 3b. (positioning) Out of engage range on low ground — climb a ledge
+      // if it's roughly TOWARD the opponent, using the elevation as a
+      // shortcut over an obstacle instead of walking the long way around.
+      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+      if (perch && perch.toX * dir.x + perch.toZ * dir.z > 0.3) {
+        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
+        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
+        const l = Math.sqrt(mx * mx + mz * mz);
+        if (l > 1e-3) { mx /= l; mz /= l; }
+        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
+          jumpDirX = perch.toX;
+          jumpDirZ = perch.toZ;
+          if (botStartJump(now)) jumpThisTick = true;
+        }
+      }
     }
   }
 
@@ -1755,7 +1787,12 @@ function updateEnemy(now) {
           : now + PhaserLikeBetween(800, 1500);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
-        if (fired) s.nextFireAt = now + PhaserLikeBetween(1300, 2400);
+        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
+        // mechanical fire cooldown so the bot uses its full per-shot DPS
+        // instead of dawdling 1+ s between shots. Small jitter avoids a
+        // perfectly robotic cadence; the magazine + autoReload still impose
+        // a natural burst rhythm without the AI gating on top.
+        if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(40, 220);
         else s.nextFireAt = now + 120;
       }
     }
