@@ -5139,19 +5139,24 @@ function buildFlashpointArena() {
     scene.add(tape); arenaDecor.push(tape);
   }
 
-  // ===== B-2 spawn enclosure (SW) — 28 m doorway centred at x=-68 with a
-  // visible lintel header above so the gap reads as a real architectural
-  // doorway from across the hall (rather than just two random wall ends). =====
-  addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
+  // ===== B-2 spawn enclosure (SW) — 28 m central doorway PLUS a 10 m
+  // secondary opening on the west side (the N wall west segment now ends
+  // at x=-100 instead of x=-110, so the gap between the wall end and the
+  // west boundary is a clear "alley" the player can use as a side exit
+  // instead of an unintended-looking crack). Both openings get a lintel. =====
+  addBlockingBox({ x: -91, y: 6, z: -30.5, sx: 18, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: -41.5, y: 6, z: -52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
-  // Doorway lintel header (decor only — frames the opening, no collision so
-  // it doesn't catch jumping mechs).
+  // Central doorway lintel.
   const b2Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
   b2Lintel.position.set(-68, 11, -30.5);
   scene.add(b2Lintel); arenaDecor.push(b2Lintel);
-  // "B-2" exit-sign placards on both faces of the lintel so the doorway is
-  // readable from inside the spawn AND from the central hall.
+  // West-side alley lintel (over the new 10 m opening between the boundary
+  // and the shortened N wall west segment).
+  const b2WestLintel = new THREE.Mesh(new THREE.BoxGeometry(10, 2, 3), corrugatedRust);
+  b2WestLintel.position.set(-105, 11, -30.5);
+  scene.add(b2WestLintel); arenaDecor.push(b2WestLintel);
+  // "B-2" exit-sign placards on both faces of the central doorway lintel.
   const b2SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b2SignS.position.set(-68, 8.5, -32.05); b2SignS.rotation.y = Math.PI;
   scene.add(b2SignS); arenaDecor.push(b2SignS);
@@ -5173,23 +5178,22 @@ function buildFlashpointArena() {
   b1SignS.position.set(68, 8.5, 28.95); b1SignS.rotation.y = Math.PI;
   scene.add(b1SignS); arenaDecor.push(b1SignS);
 
-  // ===== Mid divider at z=0 — LOWERED to 6 m so the player camera can see
-  // across the hall (ambient readability), but still high enough to block
-  // body-height projectiles and bot LoS (mech eye sits at ~4 m). =====
-  addBlockingBox({ x: -49, y: 3, z: 0, sx: 18, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: -5,  y: 3, z: 0, sx: 30, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x:  44, y: 3, z: 0, sx: 28, sy: 6, sz: 3, material: concreteWall });
+  // ===== Mid divider at z=0 — raised to 8 m to match the Factory-style
+  // partition height. Still well below the ceiling so the player camera
+  // reads across the hall, but tall enough to function as proper cover. =====
+  addBlockingBox({ x: -49, y: 4, z: 0, sx: 18, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: -5,  y: 4, z: 0, sx: 30, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x:  44, y: 4, z: 0, sx: 28, sy: 8, sz: 3, material: concreteWall });
   // Concrete-wall base trim (decor — adds weight to the divider visually).
   for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
     const trim = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.6, 3.4), concreteWallTrim);
     trim.position.set(tx, 0.3, 0);
     scene.add(trim); arenaDecor.push(trim);
   }
-  // Steel cap rail along the top of each lowered segment — visually marks
-  // the divider as "low wall" rather than "wall got cut off".
+  // Steel cap rail along the top of each segment.
   for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.3, 3.6), columnTrim);
-    cap.position.set(tx, 6.15, 0);
+    cap.position.set(tx, 8.15, 0);
     scene.add(cap); arenaDecor.push(cap);
   }
 
@@ -5211,48 +5215,46 @@ function buildFlashpointArena() {
 
   // ===== Reception / Blueprint room (mid-east, NORTH of divider) =====
   // L-shape passage: south doorway at x=22-30 (entry from divider side) AND
-  // west doorway at z=18-22 (exit toward the food-court area). Walls now
-  // 6 m tall — matches the lowered mid-divider so the player camera reads
-  // straight across the room from above without the room boxing in the view.
-  addBlockingBox({ x: 22.5, y: 3, z: 23.5, sx: 25, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 33.5, y: 3, z: 16,   sx: 3,  sy: 6, sz: 12, material: concreteWall });
-  addBlockingBox({ x: 16,   y: 3, z: 11.5, sx: 12, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 32.5, y: 3, z: 11.5, sx: 5,  sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 11.5, y: 3, z: 15.5, sx: 3,  sy: 6, sz: 5, material: concreteWall });
-  // Steel cap rail along the top of each room wall — visually marks them as
-  // "low wall" (matching the mid-divider treatment), not "wall got cut off".
+  // west doorway at z=18-22 (exit toward the food-court area). Walls raised
+  // to 8 m to match the Factory-style partition height.
+  addBlockingBox({ x: 22.5, y: 4, z: 23.5, sx: 25, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 33.5, y: 4, z: 16,   sx: 3,  sy: 8, sz: 12, material: concreteWall });
+  addBlockingBox({ x: 16,   y: 4, z: 11.5, sx: 12, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 32.5, y: 4, z: 11.5, sx: 5,  sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 11.5, y: 4, z: 15.5, sx: 3,  sy: 8, sz: 5, material: concreteWall });
+  // Steel cap rail along the top of each room wall.
   for (const [tx, ty, tz, lx, lz] of [
-    [22.5, 6.15, 23.5, 25.4, 3.4], [33.5, 6.15, 16, 3.4, 12.4],
-    [16, 6.15, 11.5, 12.4, 3.4],   [32.5, 6.15, 11.5, 5.4, 3.4],
-    [11.5, 6.15, 15.5, 3.4, 5.4]
+    [22.5, 8.15, 23.5, 25.4, 3.4], [33.5, 8.15, 16, 3.4, 12.4],
+    [16, 8.15, 11.5, 12.4, 3.4],   [32.5, 8.15, 11.5, 5.4, 3.4],
+    [11.5, 8.15, 15.5, 3.4, 5.4]
   ]) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(lx, 0.3, lz), columnTrim);
     cap.position.set(tx, ty, tz);
     scene.add(cap); arenaDecor.push(cap);
   }
-  // Wood-panel accent strip — pulled down to fit on the now-shorter wall.
+  // Wood-panel accent strip on the north wall.
   const recAccent = new THREE.Mesh(new THREE.BoxGeometry(25, 1.6, 0.2), woodPanel);
-  recAccent.position.set(22.5, 4, 22);
+  recAccent.position.set(22.5, 5, 22);
   scene.add(recAccent); arenaDecor.push(recAccent);
 
   // ===== Research / Lab room (mid-east, SOUTH of divider) — L-shape passage,
-  // mirror of Reception across z=0; lowered to 6 m to match. =====
-  addBlockingBox({ x: 22.5, y: 3, z: -11.5, sx: 25, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 33.5, y: 3, z: -17.5, sx: 3,  sy: 6, sz: 9,  material: concreteWall });
-  addBlockingBox({ x: 16,   y: 3, z: -23.5, sx: 12, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 32.5, y: 3, z: -23.5, sx: 5,  sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 11.5, y: 3, z: -15.5, sx: 3,  sy: 6, sz: 5, material: concreteWall });
+  // mirror of Reception across z=0; raised to 8 m to match. =====
+  addBlockingBox({ x: 22.5, y: 4, z: -11.5, sx: 25, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 33.5, y: 4, z: -17.5, sx: 3,  sy: 8, sz: 9,  material: concreteWall });
+  addBlockingBox({ x: 16,   y: 4, z: -23.5, sx: 12, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 32.5, y: 4, z: -23.5, sx: 5,  sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: 11.5, y: 4, z: -15.5, sx: 3,  sy: 8, sz: 5, material: concreteWall });
   for (const [tx, ty, tz, lx, lz] of [
-    [22.5, 6.15, -11.5, 25.4, 3.4], [33.5, 6.15, -17.5, 3.4, 9.4],
-    [16, 6.15, -23.5, 12.4, 3.4],   [32.5, 6.15, -23.5, 5.4, 3.4],
-    [11.5, 6.15, -15.5, 3.4, 5.4]
+    [22.5, 8.15, -11.5, 25.4, 3.4], [33.5, 8.15, -17.5, 3.4, 9.4],
+    [16, 8.15, -23.5, 12.4, 3.4],   [32.5, 8.15, -23.5, 5.4, 3.4],
+    [11.5, 8.15, -15.5, 3.4, 5.4]
   ]) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(lx, 0.3, lz), columnTrim);
     cap.position.set(tx, ty, tz);
     scene.add(cap); arenaDecor.push(cap);
   }
   const labAccent = new THREE.Mesh(new THREE.BoxGeometry(25, 1.6, 0.2), woodPanel);
-  labAccent.position.set(22.5, 4, -13);
+  labAccent.position.set(22.5, 5, -13);
   scene.add(labAccent); arenaDecor.push(labAccent);
 
   // ===== Substation block (mid-west, SOUTH half) — 8 m tall industrial unit =====
@@ -5266,55 +5268,49 @@ function buildFlashpointArena() {
   subBand.position.set(-15, 0.6, -22.5);
   scene.add(subBand); arenaDecor.push(subBand);
 
-  // ===== Corner partitions (L-shape walls). FLIPPED 180°: each L now opens
-  // toward the central play area (NW partition opens SW, SE partition opens
-  // NE) instead of toward the map boundary, so the side openings face the
-  // player's natural approach line and read as obvious entries. A visible
-  // lintel above the south/north opening reinforces that it's a doorway. =====
-  // NW corner partition (flipped — N leg + E leg, opens to SW).
-  addBlockingBox({ x: -80,   y: 6, z: 66.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: -66.5, y: 6, z: 60,   sx: 3,  sy: 12, sz: 10, material: concreteWall });
-  // Lintel above the south opening (between Wall B's south end and the
-  // hall) — decor only, marks the entrance.
+  // ===== Corner partitions (L-shape walls). FLIPPED 180°: each L opens
+  // toward the central play area. NW partition's walls have been LOWERED
+  // to 8 m (matching the Factory-style partition height) and Wall A pulled
+  // 5 m south (Wall B shortened to match) so the alley between Wall A and
+  // the north boundary widens from ~7 m to ~12 m — clearly a passable side
+  // opening rather than an unintended crack. SE partition mirrors. =====
+  // NW corner partition (flipped, lowered, alley widened).
+  addBlockingBox({ x: -80,   y: 4, z: 61.5, sx: 30, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x: -66.5, y: 4, z: 57.5, sx: 3,  sy: 8, sz: 5, material: concreteWall });
   const nwLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 6), corrugatedRust);
-  nwLintel.position.set(-66.5, 12.4, 52);
+  nwLintel.position.set(-66.5, 8.4, 52);
   scene.add(nwLintel); arenaDecor.push(nwLintel);
-  // SE corner partition (mirror — S leg + W leg, opens to NE).
+  // SE corner partition (mirror — kept at 12 m for variety; flipped, opens NE).
   addBlockingBox({ x:  80,   y: 6, z: -66.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
   addBlockingBox({ x:  66.5, y: 6, z: -60,   sx: 3,  sy: 12, sz: 10, material: concreteWall });
   const seLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 6), corrugatedRust);
   seLintel.position.set(66.5, 12.4, -52);
   scene.add(seLintel); arenaDecor.push(seLintel);
 
-  // ===== Slim ceiling-support columns + Factory-style sheet-metal partition
-  // at each pillar base. Pillars carry the overhead pipes/ducts visually
-  // but are now thin (2 m) so they don't block player sight; the partition
-  // (mirrors Factory's drawPartition pattern: panel + top trim + caution
-  // stripe) provides the actual full-body cover at the base. =====
+  // ===== Factory-style sheet-metal partitions scattered through the hall.
+  // The previously-overlapping support pillars have been removed (the
+  // partition itself provides all the cover; the thin pillars just
+  // duplicated collision and clutter inside the panel). Two of the
+  // partitions near the SW spawn (col indexes [0] and [6]) are rotated
+  // 90° per the user's request — see axis values below. =====
   const columnSpots = [
-    // [x, z, partition axis] — axis chosen per pillar so partitions fan
-    // out across the hall instead of all stacking on the same orientation.
-    [-50, -20, 'x'], [-50,  20, 'x'], [50, -50, 'x'], [50,  50, 'x'],
-    [  0, -55, 'z'], [  0,  55, 'z'], [-65, -50, 'z'], [65, -25, 'z']
+    // [x, z, partition axis]
+    [-50, -20, 'z'],  // outside SW door — rotated x→z
+    [-50,  20, 'x'],
+    [ 50, -50, 'x'],
+    [ 50,  60, 'x'],  // moved north (was z=50) so it blockades door↔deck
+    [  0, -55, 'z'],
+    [  0,  55, 'z'],
+    [-65, -50, 'x'],  // inside SW room — rotated z→x
+    [ 65, -25, 'z']
   ];
   columnSpots.forEach(([cx, cz, axis]) => {
-    // Thin pillar — 2 × 12 × 2, full ceiling, narrow profile.
-    addBlockingBox({ x: cx, y: 6, z: cz, sx: 2, sy: 12, sz: 2, material: columnMat });
-    // Steel rim cap at column base (decor — slightly wider than the pillar).
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.45, 2.6), columnTrim);
-    cap.position.set(cx, 0.225, cz);
-    scene.add(cap); arenaDecor.push(cap);
-    // Factory-style sheet-metal partition wrapped around the pillar base —
-    // 8 m long × 8 m tall × 0.6 m thick. The thin pillar visually rises
-    // out of the partition top to the ceiling.
     const PART_LEN = 8;
     if (axis === 'x') {
       addBlockingBox({ x: cx, y: 4, z: cz, sx: PART_LEN, sy: 8, sz: 0.6, material: subStationMat });
-      // Top steel trim
       const trim = new THREE.Mesh(new THREE.BoxGeometry(PART_LEN + 0.2, 0.3, 0.8), columnTrim);
       trim.position.set(cx, 8.15, cz);
       scene.add(trim); arenaDecor.push(trim);
-      // Yellow caution stripe at the base
       const stripe = new THREE.Mesh(new THREE.BoxGeometry(PART_LEN, 0.06, 1.0), cautionStripe);
       stripe.position.set(cx, 0.05, cz);
       scene.add(stripe); arenaDecor.push(stripe);
