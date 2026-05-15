@@ -1,47 +1,51 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import './style.css';
-import { createConnection } from './online/connection.js';
-import {
-  tickMatch as simTickMatch,
-  emptyInput as simEmptyInput,
-  TICK_RATE_MS as SIM_TICK_RATE_MS,
-  TICK_DT as SIM_TICK_DT,
-  UNIT_DATA as SIM_UNIT_DATA
-} from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
 
 // ----------------------------------------------------------------------------
 // UNIT_DATA — per-unit (eventually per-character) stat & weapon definitions.
 //
-// Pilot stats — body-of-the-character knobs that differentiate one unit
-// from another. Read with `??` against the global default constants below,
-// so any field can be omitted on a unit and the default is used. Recognized
-// fields:
-//   hp             max health                                  (default MAX_HP)
-//   boostCap       boost gauge volume                          (default BOOST_CAP)
-//   walkSpeed      non-sprint movement speed                   (default WALK_SPEED)
-//   sprintSpeed    sprint movement speed                       (default BOOST_MOVE_SPEED)
-//   boostDrain     boost drained per tick while action='dash'  (default BOOST_DASH_DRAIN_PER_TICK)
-//   boostRegen     boost gained per tick while idle, grounded  (default BOOST_REGEN_PER_TICK)
-//   jumpVelocity   initial upward velocity on jump start       (default JUMP_INITIAL_VELOCITY)
-//   jumpHoverMs    apex hang-time before fall                  (default JUMP_HOVER_MS)
-//   jumpCooldownMs time between consecutive jumps              (default JUMP_COOLDOWN_MS)
-//   jumpBoostCost  boost cost to start a jump                  (default JUMP_BOOST_COST)
+// Pilot stats — body-of-the-character knobs that differentiate one character
+// from another. Read with `??` against the global default constants, so any
+// field can be omitted on a unit and the default is used. Recognized fields:
+//   hp              max health                                  (default MAX_HP)
+//   boostCap        boost gauge volume                          (default BOOST_CAP)
+//   walkSpeed       non-sprint movement speed                   (default WALK_SPEED)
+//   sprintSpeed     sprint movement speed                       (default BOOST_MOVE_SPEED)
+//   boostDrain      boost drained per tick while action='dash'  (default BOOST_DASH_DRAIN_PER_TICK)
+//   boostRegen      boost gained per tick while idle, grounded  (default BOOST_REGEN_PER_TICK)
+//   jumpVelocity    initial upward velocity on jump start —
+//                   peak height ≈ v² / (2 · |gravity|)          (default JUMP_INITIAL_VELOCITY)
+//   jumpHoverMs     apex hang-time before fall                  (default JUMP_HOVER_MS)
+//   jumpCooldownMs  time between consecutive jumps              (default JUMP_COOLDOWN_MS)
+//   jumpBoostCost   boost cost to start a jump                  (default JUMP_BOOST_COST)
 //
-// Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
-// engine consumes `fireCooldownMs` which is auto-derived from RPM by the
-// normalization loop right after this block. Mirrors the same scheme used
-// in shared/src/sim/constants.js — both files must stay in sync.
+// Weapon spec — projectile/firing knobs read directly off the unit (no
+// fallback): lockRange, projectileSpeed, firePerMinute, spreadCount,
+// spreadAngle, damage, magCapacity, reloadMs, autoReload, plus the
+// sniper-only sniperCharge/chargeMs.
+//
+// Fire rate is authored as `firePerMinute` (RPM), matching how real-gun
+// specs are published. The engine consumes `fireCooldownMs` (the per-shot
+// minimum delay in ms), which is auto-derived from RPM by the
+// normalization step right after UNIT_DATA — `fireCooldownMs = 60000 / rpm`.
+// You can still set fireCooldownMs directly to override (the normalizer
+// only writes it when it's absent).
+//
+// Tunables left global for now: STEP_DISTANCE, STEP_DURATION_MS,
+// STEP_COOLDOWN_MS, STEP_BOOST_COST, STEP_HOMING_CUT_MS. Promote any of
+// these to per-unit fields the same way (add a field, fall back to the
+// global default const).
 // ----------------------------------------------------------------------------
 const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
 
     // Pilot stats
-    hp: 150,
-    boostCap: 250,
+    hp: 1500,
+    boostCap: 125,
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
@@ -54,20 +58,20 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 56,
     projectileSpeed: 70,
-    firePerMinute: 850,        // ≈ 70.59 ms cooldown
+    firePerMinute: 429,        // ≈ 140 ms cooldown — drift this number to match the real-gun spec
     spreadCount: 1,
     spreadAngle: 0.02,
-    damage: 4,
+    damage: 40,
     magCapacity: 30,
-    reloadMs: 1500,
+    reloadMs: 2000,
     autoReload: false
   },
   unit2: {
     name: 'Unit 2 / Shotgun',
 
     // Pilot stats
-    hp: 150,
-    boostCap: 250,
+    hp: 1500,
+    boostCap: 125,
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
@@ -80,20 +84,20 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 43,
     projectileSpeed: 70,
-    firePerMinute: 250,         // ≈ 697.67 ms cooldown
+    firePerMinute: 86,         // ≈ 698 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    damage: 4,
+    damage: 40,
     magCapacity: 7,
-    reloadMs: 1000,
+    reloadMs: 2000,
     autoReload: true
   },
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
 
     // Pilot stats
-    hp: 150,
-    boostCap: 250,
+    hp: 1500,
+    boostCap: 125,
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
@@ -109,36 +113,212 @@ const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    damage: 50,
+    damage: 350,
     magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
     chargeMs: 500
+  },
+  yuuka: {
+    name: 'Yuuka',
+
+    // Pilot stats
+    hp: 1500,
+    boostCap: 125,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 56,
+    projectileSpeed: 70,
+    firePerMinute: 850,
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 40,
+    magCapacity: 30,
+    reloadMs: 1500,
+    autoReload: false,
+
+    // Special move — see SPECIAL_HANDLERS for the dispatch table.
+    // dualWieldBuff: 10s self-buff that doubles the mag (one extra
+    // mag from a second gun), fires two parallel projectiles per
+    // trigger pull from the character's left/right shoulder, gives
+    // -10% damage taken and +10% movement speed. On expiry the
+    // second mag's contribution is removed (-30 ammo, sometimes
+    // forces a reload).
+    special: {
+      type: 'dualWieldBuff',
+      cooldownMs: 15000,        // 15s, measured from BUFF END (not activation)
+      durationMs: 10000,        // 10s active buff window
+      params: {
+        damageReduction: 0.10,   // -10% incoming damage during buff
+        speedMultiplier: 1.10,   // +10% movement speed during buff
+        ammoMultiplier: 2,       // 30 → 60 mag during buff
+        shotsPerFire: 2,         // each trigger fires both shoulders
+        ammoPerFire: 2,          // each trigger consumes 2 ammo (one per gun)
+        ammoCostOnExpire: 30,    // second mag's worth removed on buff end
+        shoulderOffsetX: 0.85    // world-space distance from chest center to each shoulder
+      }
+    }
   }
 };
 
-// Derive fireCooldownMs from firePerMinute. See shared/src/sim/constants.js
-// for the matching block — both must stay in sync since the offline build
-// keeps its own UNIT_DATA copy.
+// Derive fireCooldownMs from firePerMinute (the authored, real-gun-style
+// rate-of-fire). Engine code reads u.fireCooldownMs everywhere; designers
+// only ever write u.firePerMinute. If both are present, fireCooldownMs
+// wins (escape hatch for special tuning that doesn't map cleanly to RPM).
 for (const unit of Object.values(UNIT_DATA)) {
   if (unit.firePerMinute != null && unit.fireCooldownMs == null) {
     unit.fireCooldownMs = 60000 / unit.firePerMinute;
   }
 }
 
+// ----------------------------------------------------------------------------
+// HOW TO ADD A NEW CHARACTER
+//
+// 1. Pick an unused key (`unit4`, `unit5`, …, or any string — `'hina'` works).
+// 2. Copy one of the templates below, paste it as a new entry in UNIT_DATA
+//    above (before the closing `};`).
+// 3. Set `name` and tweak the stats and weapon to taste.
+// 4. Save. The new character appears in the unit-select menu automatically;
+//    the bot can pilot it; the HUD bars normalize against its caps.
+//
+// Pilot-stat fields are optional — omit any field and the global default
+// (defined further down: MAX_HP, BOOST_CAP, WALK_SPEED, BOOST_MOVE_SPEED,
+// BOOST_DASH_DRAIN_PER_TICK, BOOST_REGEN_PER_TICK, JUMP_INITIAL_VELOCITY,
+// JUMP_HOVER_MS, JUMP_COOLDOWN_MS, JUMP_BOOST_COST) is used. Weapon-spec
+// fields are required for the unit to fire.
+//
+// — Template A: blank skeleton with every field labeled —
+//
+// unitN: {
+//   name: 'Unit N / Display Name',
+//
+//   // --- Pilot stats (all optional; omit to inherit the global default) ---
+//   hp:             150,    // max health
+//   boostCap:       125,    // boost gauge volume
+//   walkSpeed:      16,     // non-sprint movement speed
+//   sprintSpeed:    11.76,  // sprint movement speed (note: usually < walk in this genre)
+//   boostDrain:     1.1,    // boost lost per tick while dashing
+//   boostRegen:     4.59,   // boost gained per tick while idle on the ground
+//   jumpVelocity:   30,     // initial upward velocity — peak height ≈ v² / (2 · 80.19)
+//   jumpHoverMs:    300,    // apex hang-time before falling
+//   jumpCooldownMs: 1500,   // time between jumps
+//   jumpBoostCost:  48,     // boost cost to jump
+//
+//   // --- Weapon spec (all required for the unit to fire) ---
+//   lockRange:       56,    // homing-target range (also the red-reticle threshold)
+//   projectileSpeed: 70,    // world units per second
+//   firePerMinute:   429,   // rate of fire in RPM (real-gun spec style); engine derives fireCooldownMs
+//   spreadCount:     1,     // >1 = shotgun cluster (one center pellet homes; rest follow)
+//   spreadAngle:     0.02,  // radians; aim-jitter cone (see explanation in PLAN.md / weapon notes)
+//   damage:          4,     // per projectile (shotgun: per pellet)
+//   magCapacity:     30,    // null/omitted = infinite ammo
+//   reloadMs:        2000,  // reload duration
+//   autoReload:      false  // true = trickles one round at a time;
+//                           // false = manual reload after the mag drains to 0
+//
+//   // --- Optional weapon flags ---
+//   // sniperCharge: true,  // enables forced-stand charge before each shot
+//   // chargeMs:     500    // charge duration when sniperCharge is true
+// },
+//
+// — Template B: worked example, "Brawler" archetype (high HP, slow, heavy hits) —
+//
+// unitBrawler: {
+//   name: 'Unit / Brawler',
+//
+//   // Pilot stats: tankier, less mobile, lower-cap-but-fast-recovering boost
+//   hp:             200,
+//   boostCap:        90,
+//   walkSpeed:       14,
+//   sprintSpeed:     10.0,
+//   boostDrain:       0.8,
+//   boostRegen:       5.5,
+//   jumpVelocity:    22,    // shorter hops
+//   jumpHoverMs:    200,
+//   jumpCooldownMs: 2200,   // long cooldown
+//   jumpBoostCost:   60,    // expensive to jump
+//
+//   // Weapon: short range, slow rate, heavy single-shot damage
+//   lockRange:       32,
+//   projectileSpeed: 60,
+//   firePerMinute:  273,    // ≈ 220 ms cooldown — like a heavy hand-cannon
+//   spreadCount:      1,
+//   spreadAngle:      0.04,
+//   damage:           9,
+//   magCapacity:     12,
+//   reloadMs:      1800,
+//   autoReload:    false
+// },
+// ----------------------------------------------------------------------------
+
+// Per-map data. `spawns` holds 4 spawn slots (p1..p4) so the same map data
+// works for the future 2v2 mode (Phase 8 in PLAN.md). In the current 1v1
+// game only p1 (player) and p2 (enemy) are consumed; p3/p4 sit dormant
+// until 2v2 lands. p3 is positioned next to p1 (red team), p4 next to p2
+// (blue team), with a small in-game offset so a 2v2 spawn pair on each
+// side doesn't put two teammates on top of each other.
 const MAP_DATA = {
-  arena1: { name: 'Plain Field' },
-  arena2: { name: 'Streets' },
-  factory: { name: 'Factory' },
-  square: { name: 'Square' },
-  lobby: { name: 'Lobby' },
-  station: { name: 'Station' },
-  flashpoint: { name: 'Flashpoint' }
-  // 'carnival' is intentionally hidden from the picker for now while it's
-  // being iterated on. The build function, ambience case, and shared collision
-  // data are all still in place — re-add the entry here (and the matching
-  // line in shared/src/sim/constants.js) to surface it again.
+  arena1: {
+    name: 'Plain Field',
+    spawns: {
+      p1: { x: -24, y: 2.45, z: 0 },
+      p2: { x:  24, y: 2.45, z: 0 },
+      p3: { x: -24, y: 2.45, z: 8 },
+      p4: { x:  24, y: 2.45, z: 8 }
+    }
+  },
+  arena2: {
+    name: 'Streets',
+    spawns: {
+      // Streets: opposite ends of the cross road on the X axis, not the
+      // bridge lane. p3/p4 nudged Z+8 to share the same end with their
+      // teammate.
+      p1: { x: -108, y: 2.45, z: 0 },
+      p2: { x:  108, y: 2.45, z: 0 },
+      p3: { x: -108, y: 2.45, z: 8 },
+      p4: { x:  108, y: 2.45, z: 8 }
+    }
+  },
+  factory: {
+    name: 'Factory',
+    spawns: {
+      p1: { x: -50, y: 2.45, z: 0 },
+      p2: { x:  50, y: 2.45, z: 0 },
+      p3: { x: -50, y: 2.45, z: 8 },
+      p4: { x:  50, y: 2.45, z: 8 }
+    }
+  },
+  square: {
+    name: 'Square',
+    spawns: {
+      // Square: diagonal spawn across the plaza — past the cathedral and
+      // clock tower zones.
+      p1: { x: -95, y: 2.45, z: -45 },
+      p2: { x:  95, y: 2.45, z:  45 },
+      p3: { x: -85, y: 2.45, z: -45 },
+      p4: { x:  85, y: 2.45, z:  45 }
+    }
+  },
+  lobby: {
+    name: 'Lobby',
+    spawns: {
+      // Lobby: lower floor on opposite ends, mezzanine reachable via the
+      // central stairs.
+      p1: { x: -30, y: 2.45, z: 50 },
+      p2: { x:  30, y: 2.45, z: 50 },
+      p3: { x: -30, y: 2.45, z: 58 },
+      p4: { x:  30, y: 2.45, z: 58 }
+    }
+  }
 };
 
 const state = {
@@ -146,6 +326,14 @@ const state = {
   playerUnitKey: 'unit1',
   enemyUnitKey: 'unit2',
   mapKey: 'arena1',
+  // `fighters` is the canonical id-keyed map of every fighter in the match.
+  // `player` and `enemy` remain as 1v1-flavored aliases for backward
+  // compatibility — they point to the same mech objects as fighters.p1 /
+  // fighters.p2. When 2v2 lands (Phase 8 in PLAN.md), expand `fighters`
+  // with p3/p4, drop the aliases (or repurpose `player` as "the local
+  // human" in PvP), and replace direct `state.enemy` reads with
+  // getCurrentTarget(state.player) at lock/aim sites.
+  fighters: {},
   player: null,
   enemy: null,
   projectiles: [],
@@ -160,13 +348,6 @@ const state = {
 };
 state.dummyMode = false;
 state.playerStuckSince = 0;
-
-// Online-mode runtime state. Populated by startOnlineMatch and torn down by
-// cleanupMatch (called from showSelectMenu). Includes Phase 3 prediction
-// state: predictedState mirrors the server's MatchState locally, advanced
-// ahead by pendingInputs the server hasn't ack'd yet. Phase 4 adds
-// uiSubPhase + lazy mech setup keyed off the first snapshot.
-state.online = null;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -244,7 +425,8 @@ createArenaWalls();
 
 const MOMENTUM_STANDARD = 100;
 // --- Pilot-stat defaults (used when a unit's UNIT_DATA entry omits a field) ---
-const MAX_HP = 150;                     // unit.hp default
+const MAX_HP = 1500;                    // unit.hp default — inflated 10× from 150 for tuning headroom
+const BOOST_CAP = 125;                  // unit.boostCap default
 const BOOST_MOVE_SPEED = 11.76;         // unit.sprintSpeed default
 const WALK_SPEED = 16;                  // unit.walkSpeed default
 const BOOST_DASH_DRAIN_PER_TICK = 1.1;  // unit.boostDrain default
@@ -254,7 +436,6 @@ const HOMING_MAX_DEG_PER_FRAME = 1;
 const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 const HOMING_SOFTEN_RANGE = 20;
 const HOMING_SOFTEN_DEG_PER_FRAME = 1;
-const BOOST_CAP = 250;                  // unit.boostCap default
 const STEP_DISTANCE = 9.2;
 const STEP_DURATION_MS = 125;
 const STEP_COOLDOWN_MS = 1000;
@@ -262,9 +443,9 @@ const STEP_BOOST_COST = 48;
 const STEP_HOMING_CUT_MS = 260;
 // --- Jump defaults (used when a unit's UNIT_DATA entry omits the field) ---
 const JUMP_BOOST_COST = STEP_BOOST_COST;     // unit.jumpBoostCost default (= 48)
-const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default
-const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default
-const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default
+const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default — controls peak jump height
+const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default — apex hang time
+const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default — time between jumps
 const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
@@ -276,15 +457,7 @@ const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
 const BOT_SPRINT_MIN_BOOST = 8;
 const BOT_SPRINT_BURST_MS = 280;
 const BOT_SPRINT_BURST_VEL = 17;
-// How far ahead the bot scans for incoming projectiles. Bigger = more alert
-// (reacts to threats earlier, before they're at point-blank), at the cost of
-// burning more boost on dodges. Tuned so even the fast sniper round (95 u/s)
-// gives the bot ~230 ms of warning to commit a dodge.
-const BOT_THREAT_LOOKAHEAD = 22;
-// Cooldown after a threat-evade. Shorter than the tactical-burst cooldowns
-// below so the bot can chain dodges against rapid-fire weapons (MG bursts,
-// shotgun follow-ups) instead of eating the second shot.
-const BOT_THREAT_EVADE_COOLDOWN_MS = 400;
+const BOT_THREAT_LOOKAHEAD = 14;
 
 const input = {
   x: 0,
@@ -295,7 +468,11 @@ const input = {
   jump: false,
   stepTap: false,
   shootTap: false,
-  shootHold: false
+  shootHold: false,
+  // One-shot pulse for the character's special move. Set true on key press
+  // / button tap, consumed (back to false) by updatePlayer once the SP
+  // attempt has been routed.
+  specialTap: false
 };
 
 let touchSteeringActive = false;
@@ -307,7 +484,15 @@ const keyState = {
   right: false
 };
 
-function createMech(color, unitData) {
+// `id` and `team` are match-time assignments populated by startMatch (or any
+// future match-setup function). They default to 1v1-flavored values so any
+// caller that didn't think to pass them — including the existing
+// state.player / state.enemy creation — still ends up with a coherent mech.
+//
+// When 2v2 lands, the fighters loop in startMatch will set id ∈
+// {p1,p2,p3,p4} and team ∈ {red,blue}, and isHostile() / getCurrentTarget()
+// (defined below) will do the right thing automatically.
+function createMech(color, unitData, { id = null, team = 'red' } = {}) {
   const root = new THREE.Group();
   const armor = new THREE.MeshToonMaterial({ color });
   const steel = new THREE.MeshToonMaterial({ color: 0x3b4658 });
@@ -343,6 +528,12 @@ function createMech(color, unitData) {
     root,
     body,
     unit: unitData,
+    // Match-time identity. `id` is the slot key in state.fighters
+    // (`'p1'`, `'p2'`, …). `team` partitions the fighters into hostile
+    // groups for friend-or-foe checks and lock acquisition. See the
+    // createMech header comment for the 1v1 defaults.
+    id,
+    team,
     thrusters: [],
     plumeLight,
     trail: [],
@@ -356,6 +547,11 @@ function createMech(color, unitData) {
       action: 'idle',
       boost: unitData.boostCap ?? BOOST_CAP,
       hp: unitData.hp ?? MAX_HP,
+      // Currently-locked target as a fighter id (key into state.fighters).
+      // null = "auto-pick" (today's behavior in 1v1: there's only one
+      // valid target). When 2v2 lands this is what a target-switch button
+      // would write into.
+      targetId: null,
       redLock: false,
       overheatedUntil: 0,
       hitStunUntil: 0,
@@ -399,33 +595,234 @@ function createMech(color, unitData) {
       reloadingUntil: 0,
       reloadTickStartAt: 0,
       sniperChargeUntil: 0,
-      sniperChargeTarget: null
+      sniperChargeTarget: null,
+
+      // Special-move state. specialCooldownUntil gates the next activation;
+      // specialActiveUntil is when the current buff window ends (0 if none
+      // running). specialState carries per-buff parameters that are read
+      // by the various effect sites (movement speed, damage taken,
+      // projectile spawn shape, ammo cap). Cleared when the buff expires.
+      specialCooldownUntil: 0,
+      specialActiveUntil: 0,
+      specialState: null
     }
   };
+}
+
+// ----------------------------------------------------------------------------
+// Team-aware fighter helpers — scaffolded now for the future 2v2 mode but
+// fully usable in the current 1v1 game (where each helper resolves to "the
+// other fighter" since there's only one valid opponent). When 2v2 lands,
+// every site that currently does `state.enemy.X` should be switched to
+// `getCurrentTarget(state.player).X` (or its caller-mech equivalent), and
+// the helpers below will do the right thing without further code changes.
+// ----------------------------------------------------------------------------
+
+// True if a and b are valid fighters on different teams.
+function isHostile(a, b) {
+  if (!a || !b || a === b) return false;
+  return a.team !== b.team;
+}
+
+// All living fighters hostile to `mech`. Returns [] if mech is null. In 1v1
+// returns a length-1 array containing the other fighter; in 2v2 it'll
+// return the two opposing-team fighters that haven't died yet.
+function getOpposingFighters(mech) {
+  if (!mech) return [];
+  const out = [];
+  for (const f of Object.values(state.fighters)) {
+    if (!isHostile(mech, f)) continue;
+    if (f.state.hp <= 0) continue;
+    out.push(f);
+  }
+  return out;
+}
+
+// Resolve the fighter `mech` is currently aiming at:
+//   1. Manually selected target (mech.state.targetId), if it's still a
+//      living hostile.
+//   2. Otherwise the closest living hostile.
+//   3. null if no valid target exists.
+// Today's 1v1 behavior is preserved: with only one possible opponent the
+// closest-fallback always returns it, regardless of whether targetId was
+// set.
+function getCurrentTarget(mech) {
+  if (!mech) return null;
+  const opponents = getOpposingFighters(mech);
+  if (opponents.length === 0) return null;
+  if (mech.state.targetId) {
+    const explicit = state.fighters[mech.state.targetId];
+    if (explicit && isHostile(mech, explicit) && explicit.state.hp > 0) {
+      return explicit;
+    }
+  }
+  // Closest-hostile fallback.
+  const myPos = mech.body?.position ?? mech.root?.position;
+  if (!myPos) return opponents[0];
+  let best = opponents[0];
+  let bestDistSq = Infinity;
+  for (const f of opponents) {
+    const fp = f.body?.position ?? f.root?.position;
+    if (!fp) continue;
+    const dx = fp.x - myPos.x;
+    const dz = fp.z - myPos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestDistSq) { bestDistSq = d2; best = f; }
+  }
+  return best;
+}
+
+// Effective magazine capacity, accounting for any active special-move buff
+// that temporarily expands the mag (e.g. Yuuka's dualWieldBuff which doubles
+// it). All ammo / reload code reads this instead of `u.magCapacity` so the
+// buff's larger cap is honored automatically by reload, ammo cap clamps,
+// HUD progress bars, and bot fire-deferral logic.
+function getEffectiveMagCap(mech) {
+  const base = mech.unit?.magCapacity;
+  if (base == null) return null;
+  const sp = mech.state?.specialState;
+  if (sp && sp.ammoMultiplier && sp.ammoMultiplier > 1) {
+    return base * sp.ammoMultiplier;
+  }
+  return base;
 }
 
 function tickAmmo(mech, now) {
   const u = mech.unit;
   if (u.magCapacity == null) return;
   const s = mech.state;
-  if (s.ammo >= u.magCapacity) {
+  const cap = getEffectiveMagCap(mech);
+  if (s.ammo >= cap) {
     s.reloadingUntil = 0;
     s.reloadTickStartAt = 0;
     return;
   }
   if (u.autoReload) {
     if (!s.reloadTickStartAt) s.reloadTickStartAt = now;
-    while (now - s.reloadTickStartAt >= u.reloadMs && s.ammo < u.magCapacity) {
+    while (now - s.reloadTickStartAt >= u.reloadMs && s.ammo < cap) {
       s.ammo += 1;
       s.reloadTickStartAt += u.reloadMs;
     }
-    if (s.ammo >= u.magCapacity) s.reloadTickStartAt = 0;
+    if (s.ammo >= cap) s.reloadTickStartAt = 0;
   } else if (s.ammo === 0) {
     if (!s.reloadingUntil) s.reloadingUntil = now + u.reloadMs;
     if (now >= s.reloadingUntil) {
-      s.ammo = u.magCapacity;
+      s.ammo = cap;
       s.reloadingUntil = 0;
     }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Special-move (SP) framework
+//
+// Each character can declare a `special` block on its UNIT_DATA entry:
+//   special: {
+//     type: 'dualWieldBuff',           // key into SPECIAL_HANDLERS below
+//     cooldownMs: 15000,               // measured from BUFF END (not activation)
+//     durationMs: 10000,               // 0/undefined = instantaneous SP
+//     params: { ... }                  // handler-specific
+//   }
+// Total wait between activations = durationMs + cooldownMs.
+//
+// SPECIAL_HANDLERS dispatches by `type`. A handler can implement:
+//   start(mech, params, now)    -- called once when SP activates. Sets up
+//                                  whatever state the buff needs.
+//   expire(mech, params, now)   -- called once when the duration ends. For
+//                                  buffs, this rolls back / applies on-end
+//                                  effects.
+//
+// During an active buff, mech.state.specialState carries a SNAPSHOT of the
+// active buff's params (a separate object from UNIT_DATA so per-buff state
+// can mutate freely). Read sites elsewhere check this object:
+//   - movement-speed multiplier in updatePlayer
+//   - damage-taken multiplier in updateProjectileSystem
+//   - ammo cap in getEffectiveMagCap
+//   - shotsPerFire / ammoPerFire / shoulderOffsetX in spawnProjectiles
+// ----------------------------------------------------------------------------
+
+const SPECIAL_HANDLERS = {
+  // Yuuka's dualWieldBuff — temporarily double-wield, +10% speed, -10%
+  // damage taken, fire 2 parallel shots from each shoulder per trigger.
+  dualWieldBuff: {
+    start(mech, params, now) {
+      const baseMag = mech.unit.magCapacity ?? 0;
+      const newCap = baseMag * (params.ammoMultiplier ?? 2);
+      mech.state.specialState = {
+        type: 'dualWieldBuff',
+        damageReduction: params.damageReduction ?? 0,
+        speedMultiplier: params.speedMultiplier ?? 1,
+        ammoMultiplier: params.ammoMultiplier ?? 1,
+        shotsPerFire: params.shotsPerFire ?? 2,
+        ammoPerFire: params.ammoPerFire ?? 2,
+        ammoCostOnExpire: params.ammoCostOnExpire ?? 0,
+        shoulderOffsetX: params.shoulderOffsetX ?? 0.85
+      };
+      // Refill ammo to the new (expanded) cap on activation. This is the
+      // "second gun arrives loaded" semantic. Cancel any in-progress
+      // reload — the buff supplies fresh ammo immediately.
+      mech.state.ammo = newCap;
+      mech.state.reloadingUntil = 0;
+      mech.state.reloadTickStartAt = 0;
+      // Visual cue — soft gold aura around the mech for the duration of
+      // the buff. Visible to anyone whose camera frames this mech
+      // (player viewing self + any future onlooker viewing this unit).
+      createBuffAuraForMech(mech);
+    },
+    expire(mech, params, now) {
+      // The "second gun" disappears, taking ammoCostOnExpire (= 30, the
+      // base mag's worth) with it. If that leaves us at 0, the next
+      // tickAmmo call will start a manual reload automatically (mag = 0
+      // → not autoReload → reload to base cap).
+      const cost = params.ammoCostOnExpire ?? 0;
+      mech.state.ammo = Math.max(0, mech.state.ammo - cost);
+      mech.state.specialState = null;
+      removeBuffAuraFromMech(mech);
+      // tickAmmo will see the mag back at base capacity (because
+      // specialState is now null) and re-evaluate reload state next call.
+    }
+  }
+};
+
+// Try to fire a unit's special move. Gates on cooldown, on already-active
+// state, and on the unit actually having a `special` spec.
+//
+// Cooldown semantics: cooldownMs measures time from BUFF END to
+// next-usable, *not* from activation. So the full "wait" between
+// activations is durationMs + cooldownMs. This matches the design — the
+// SP button stays unavailable for the entire buff window and then for
+// the cooldown phase that follows it.
+function attemptSpecial(mech, now) {
+  const spec = mech.unit?.special;
+  if (!spec) return false;
+  if (now < (mech.state.specialCooldownUntil ?? 0)) return false;
+  if (now < (mech.state.specialActiveUntil ?? 0)) return false;
+  const handler = SPECIAL_HANDLERS[spec.type];
+  if (!handler) return false;
+  if (typeof handler.start === 'function') handler.start(mech, spec.params ?? {}, now);
+  const dur = spec.durationMs ?? 0;
+  const cd  = spec.cooldownMs ?? 0;
+  mech.state.specialActiveUntil = now + dur;
+  // Cooldown clock starts when the buff ends, hence the +dur term.
+  mech.state.specialCooldownUntil = now + dur + cd;
+  return true;
+}
+
+// Drive expiry on each tick. If the buff window has elapsed, run the
+// handler's expire hook and clear specialActiveUntil. Cooldown keeps
+// counting down on its own (read directly from state).
+function tickSpecial(mech, now) {
+  const active = mech.state.specialActiveUntil ?? 0;
+  if (active > 0 && now >= active) {
+    const sp = mech.state.specialState;
+    if (sp) {
+      const handler = SPECIAL_HANDLERS[sp.type];
+      if (handler && typeof handler.expire === 'function') {
+        handler.expire(mech, mech.unit.special?.params ?? {}, now);
+      }
+    }
+    mech.state.specialActiveUntil = 0;
+    // Note: handler.expire is responsible for clearing specialState.
   }
 }
 
@@ -476,16 +873,22 @@ function setupHUD() {
     <div class="joy" id="joy"><div class="stick"></div></div>
     <div class="buttons" id="buttons"></div>
     <div class="speed-lines" id="speed-lines"></div>
+    <div id="buff-vignette" class="buff-vignette"></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
   `;
   app.appendChild(hud);
 
-  ['boost', 'shoot', 'step', 'jump'].forEach((action) => {
+  // 'special' is positioned above 'shoot' via CSS (.btn-special). It has the
+  // same reload-ring SVG used for the shoot-button cooldown — repurposed
+  // here to fill as the SP cooldown counts down.
+  ['boost', 'shoot', 'step', 'jump', 'special'].forEach((action) => {
     const b = document.createElement('button');
     b.dataset.k = action;
     b.className = `btn-${action}`;
     if (action === 'shoot') {
       b.innerHTML = '<svg class="reload-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg><span class="ammo-count"></span>';
+    } else if (action === 'special') {
+      b.innerHTML = '<svg class="cd-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg><span class="sp-label">SP</span>';
     } else {
       b.textContent = action === 'boost' ? 'SPRINT' : (action === 'step' ? 'DODGE' : action.toUpperCase());
     }
@@ -545,6 +948,7 @@ function setupHUD() {
         input.shootHold = true;
       }
       else if (k === 'step') input.stepTap = true;
+      else if (k === 'special') input.specialTap = true;
       else if (k === 'boost') {
         const now = performance.now();
         const hasDir = Math.hypot(input.x, input.y) > 0.15;
@@ -559,6 +963,9 @@ function setupHUD() {
       else if (k === 'boost') {
         input.boostHeld = false;
         if (!input.sprintLocked) input.boost = false;
+      } else if (k === 'special') {
+        // specialTap is consumed by updatePlayer as a one-shot pulse;
+        // pointerup is a no-op for SP.
       } else input[k] = false;
     });
   });
@@ -576,7 +983,10 @@ function setupHUD() {
     boost: hud.querySelector('#boost-fill'),
     shootBtn: hud.querySelector('.btn-shoot'),
     ammoCount: hud.querySelector('.btn-shoot .ammo-count'),
-    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle')
+    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle'),
+    specialBtn: hud.querySelector('.btn-special'),
+    specialRing: hud.querySelector('.btn-special .cd-ring circle'),
+    buffVignette: hud.querySelector('#buff-vignette')
   };
 }
 
@@ -648,11 +1058,72 @@ function spawnProjectiles(owner, target) {
   const now = performance.now();
   if (owner.unit.magCapacity != null && owner.state.ammo <= 0) return;
   if (now - owner.state.lastFireAt < owner.unit.fireCooldownMs) return;
+
+  const isShotgun = owner.unit.spreadCount > 1;
+  const sp = owner.state.specialState;
+  // Dual-wield only applies to single-shot weapons (spreadCount === 1) —
+  // a shotgun under dualWieldBuff would be doctrinally weird, and
+  // mixing the cluster system with the shoulder-offset system isn't
+  // worth the complexity for a hypothetical character.
+  const dualWield = !!(sp && sp.shotsPerFire > 1 && !isShotgun);
+
   owner.state.lastFireAt = now;
-  if (owner.unit.magCapacity != null) owner.state.ammo -= 1;
+  if (owner.unit.magCapacity != null) {
+    const cost = dualWield ? (sp.ammoPerFire ?? 2) : 1;
+    owner.state.ammo = Math.max(0, owner.state.ammo - cost);
+  }
 
   const baseDir = new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
-  const isShotgun = owner.unit.spreadCount > 1;
+
+  // Dual-wield branch: two projectiles fired in parallel (no spread cone
+  // and no cluster drift), each spawned at one shoulder. Each carries
+  // full damage independently. Done as a separate code path because the
+  // shape is fundamentally different from the shotgun cluster system.
+  if (dualWield) {
+    // Side vector in world XZ, perpendicular to baseDir, pointing to
+    // the unit's "right" relative to its facing.
+    const sideVec = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), baseDir).normalize();
+    const offsetX = sp.shoulderOffsetX ?? 0.85;
+    const muzzleY = new THREE.Vector3(0, 0.8, 0);
+    for (let i = 0; i < sp.shotsPerFire; i += 1) {
+      const sign = (i === 0) ? -1 : 1;
+      // Tiny per-shot jitter so the two streams don't look perfectly
+      // synthetic. Half of the unit's normal spread so they still feel
+      // accurate.
+      const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.5;
+      const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.35 * 0.5;
+      const dir = baseDir.clone()
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
+        .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
+      const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
+      const spawnPos = owner.root.position.clone().add(muzzleY).add(sideVec.clone().multiplyScalar(sign * offsetX));
+      mesh.position.copy(spawnPos);
+      scene.add(mesh);
+      const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
+      orientTracer(mesh, projVel.x, projVel.y, projVel.z);
+      // Each shoulder shot homes independently if the owner has redLock.
+      // No cluster, no centerPellet bookkeeping.
+      const projectile = {
+        owner,
+        target,
+        mesh,
+        vel: projVel,
+        homing: owner.state.redLock,
+        homingLost: false,
+        isCenterPellet: false,
+        centerPellet: null,
+        clusterOffset: null,
+        ttl: 2.2,
+        damage: owner.unit.damage,
+        hitStunMs: 200,
+        distTraveled: undefined
+      };
+      state.projectiles.push(projectile);
+    }
+    return;
+  }
+
+  // Standard branch — single shot or shotgun cluster (untouched logic).
   const centerIndex = isShotgun ? Math.floor(Math.random() * owner.unit.spreadCount) : 0;
   const shotgunOffsets = [];
   if (isShotgun) {
@@ -693,7 +1164,7 @@ function spawnProjectiles(owner, target) {
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
       damage: owner.unit.damage,
-      hitStunMs: 100,
+      hitStunMs: 200,
       // Set on the shotgun's center pellet only — accumulates path length so
       // non-center pellets can interpolate cluster spread (0 → full) over
       // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
@@ -788,6 +1259,60 @@ function updateGlintScale(mech) {
   // Grow with distance so the glint stays readable on long-range maps (Streets/Square).
   const s = THREE.MathUtils.clamp(0.55 + dist * 0.05, 0.55, 6.5);
   mech.glintMesh.scale.set(s, s, 1);
+}
+
+// Buff aura — soft warm halo sprite that envelops a mech while a self-buff
+// (e.g. Yuuka's dualWieldBuff) is active. Attached to mech.root so it shows
+// up regardless of which side of the camera the unit is on (player sees
+// their own glow from behind; player sees enemy's glow from the front when
+// the enemy is the buffed one).
+function createBuffAuraForMech(mech) {
+  if (mech.buffAuraMesh) return;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  // Warm gold core fading to transparent — same hue as the buff vignette
+  // so they read as the same effect from the inside and the outside.
+  grad.addColorStop(0, 'rgba(255, 232, 156, 0.55)');
+  grad.addColorStop(0.45, 'rgba(255, 198, 96, 0.30)');
+  grad.addColorStop(1, 'rgba(255, 198, 96, 0)');
+  x.fillStyle = grad;
+  x.beginPath();
+  x.arc(64, 64, 64, 0, Math.PI * 2);
+  x.fill();
+  const tex = new THREE.CanvasTexture(c);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    fog: false,
+    blending: THREE.AdditiveBlending
+  }));
+  // Sized to slightly exceed the mech silhouette (mech is ~5 units tall).
+  sprite.scale.set(7.5, 7.5, 1);
+  sprite.position.set(0, 0, 0);
+  // Below the reticle/glint render order so they sit on top of the aura.
+  sprite.renderOrder = 9000;
+  mech.root.add(sprite);
+  mech.buffAuraMesh = sprite;
+}
+
+// Force-detach + dispose the aura sprite. Used by removeBuffAuraFromMech
+// and cleanupMatch.
+function disposeBuffAuraImmediate(mech) {
+  if (!mech?.buffAuraMesh) return;
+  mech.root.remove(mech.buffAuraMesh);
+  if (mech.buffAuraMesh.material) {
+    if (mech.buffAuraMesh.material.map) mech.buffAuraMesh.material.map.dispose();
+    mech.buffAuraMesh.material.dispose();
+  }
+  mech.buffAuraMesh = null;
+}
+
+function removeBuffAuraFromMech(mech) {
+  disposeBuffAuraImmediate(mech);
 }
 
 function attemptFire(owner, target, now) {
@@ -979,7 +1504,15 @@ function updateProjectileSystem(dt) {
     path.closestPointToPoint(p.target.root.position, true, nearest);
     if (nearest.distanceTo(p.target.root.position) < hitRadius) {
       const mitigation = p.target.state.vulnerabilityMove ? 1.35 : 1;
-      const finalDamage = getProjectileDamage(p) * mitigation;
+      // Special-move damage reduction (e.g. Yuuka's dualWieldBuff -10%):
+      // multiplies damage by (1 - reduction). Stacks multiplicatively
+      // *after* the vulnerability bonus, so a vulnerable target with a
+      // buff up still loses a chunk of HP.
+      const targetSP = p.target.state.specialState;
+      const dmgScale = (targetSP && targetSP.damageReduction)
+        ? (1 - targetSP.damageReduction)
+        : 1;
+      const finalDamage = getProjectileDamage(p) * mitigation * dmgScale;
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
       p.target.state.momentumVX = 0;
@@ -1082,8 +1615,14 @@ function updatePlayer(now) {
   // omits the override.
   const playerSprintSpeed = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const playerWalkSpeed = state.player.unit.walkSpeed ?? WALK_SPEED;
-  const baseSpeed = useSprint ? playerSprintSpeed : (recoveringFromDash ? 4.55 : playerWalkSpeed);
-  const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
+  // Special-move speed multiplier (e.g. Yuuka's dualWieldBuff +10%).
+  // Applied to the base movement speed AFTER sprint/walk selection but
+  // BEFORE the empty-boost penalty floor (so SP buff still helps when
+  // boost is empty).
+  const playerSP = state.player.state.specialState;
+  const spSpeedMult = (playerSP && playerSP.speedMultiplier) ? playerSP.speedMultiplier : 1;
+  const baseSpeed = (useSprint ? playerSprintSpeed : (recoveringFromDash ? 4.55 : playerWalkSpeed)) * spSpeedMult;
+  const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5 * spSpeedMult) : baseSpeed;
   const hitStunned = now < state.player.state.hitStunUntil;
   const hitStunScale = hitStunned ? 0.25 : 1;
   const canInputMove = !emptyPenaltyActive;
@@ -1125,8 +1664,8 @@ function updatePlayer(now) {
     && now >= state.player.state.jumpCooldownUntil
   ) {
     // Per-unit jump tunables — fall back to globals if a unit doesn't
-    // override. v0 sets peak height (≈ v² / (2·|gravity|)); hover holds
-    // the apex; cooldown gates the next jump; boostCost gates entry.
+    // override. v0 sets peak height (≈ v² / (2·|gravity|)); hover holds the
+    // apex; cooldown gates the next jump; boostCost gates entry.
     const jumpBoostCost = state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
     const jumpVelocity = state.player.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
     const jumpHoverMs = state.player.unit.jumpHoverMs ?? JUMP_HOVER_MS;
@@ -1175,6 +1714,15 @@ function updatePlayer(now) {
     input.stepTap = false;
   }
 
+  // Special-move attempt — one-shot pulse from keyboard 'U' or the
+  // touch-HUD SP button. attemptSpecial() handles all gating (cooldown,
+  // already-active, missing spec). The flag is always consumed so a held
+  // input never re-fires the SP.
+  if (input.specialTap) {
+    if (state.player.unit.special) attemptSpecial(state.player, now);
+    input.specialTap = false;
+  }
+
   if (input.shootTap) {
     input.boost = false;
     attemptFire(state.player, state.enemy, now);
@@ -1187,6 +1735,7 @@ function updatePlayer(now) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, state.enemy, now);
     if (state.player.state.lastFireAt !== firedAt) {
+      inheritMomentum(state.player, 70);
       triggerEnemyEvasion(now);
       if (action === 'idle') action = 'shoot';
     }
@@ -1231,211 +1780,6 @@ function findIncomingThreatOffline(mech, range) {
   return null;
 }
 
-// ===== Universal bot AI helpers =====
-// Tunables shared across the bot's situational checks. Sized so the avoidance
-// vector is felt without overwhelming the player-tracking direction.
-const BOT_OBSTACLE_AVOID_RADIUS = 7;
-const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
-const BOT_STUCK_MOVED_EPSILON = 0.4;
-const BOT_STUCK_TICKS_THRESHOLD = 8;
-const BOT_STUCK_PIVOT_MS = 600;
-// After a stuck event, remember the pinned spot for this long and bias
-// movement away from it so the bot picks a different route around the wall
-// instead of grinding into the same corner once the perpendicular pivot
-// ends. Radius caps the influence so distant memories don't warp kiting.
-const BOT_STUCK_MEMORY_MS = 3500;
-const BOT_STUCK_MEMORY_RADIUS = 12;
-const BOT_STUCK_MEMORY_WEIGHT = 1.4;
-const BOT_LOS_EYE_HEIGHT = 1.6;
-const BOT_JUMP_HEIGHT_DIFF = 2.5;
-
-// --- Elevation-kiting tunables ---
-// A ledge whose lip rises more than the auto-step height (1.6) above the
-// bot's floor can't be walked onto — it needs a jump. The upper bound is
-// what a jump arc can actually clear (apex ≈ jumpVelocity² / 2·|gravity|,
-// ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
-const BOT_CLIMB_MIN_RISE = 1.7;
-const BOT_CLIMB_MAX_RISE = 4.8;
-// How far out the bot scans for a ledge to perch on, and how close it has to
-// get to that ledge (or to a drop edge) before it commits the jump.
-const BOT_PERCH_SEEK_RADIUS = 24;
-const BOT_LEDGE_JUMP_REACH = 4.5;
-// A floor more than this above base ground means "the bot is on high ground".
-const BOT_HIGH_GROUND_MIN_Y = 1.7;
-// How far past a surface edge to sample when testing whether stepping off it
-// actually drops to lower ground (vs. running straight into a wall).
-const BOT_DESCENT_PROBE = 3;
-// Weight of the ledge-seek steering when blended into the kiting vector.
-const BOT_ELEV_STEER_WEIGHT = 2.4;
-// How long after an elevation jump the bot keeps driving toward the ledge so
-// the arc lands where it was aimed instead of drifting off on the kiting
-// vector. Covers the longest arc (a drop off high ground, ~0.85 s airborne).
-const BOT_AIR_STEER_MS = 900;
-
-// Repulsion vector from blocking obstacles within `radius` of (px, py, pz).
-// Returns un-normalized {rx, rz} that the caller can blend into the kiting
-// direction. Uses the same y-skip math as resolveUnitObstacleCollisions so
-// obstacles the bot is over (e.g. low platform decks) or below (high
-// overheads) don't push them. Obstacles flagged `noProjectile` (the station
-// platform-edge walls) are skipped here because they have a dedicated jump
-// handler below — repelling from them would prevent the bot from approaching
-// the platform at all.
-function computeBotAvoidance(px, py, pz, obstacles, radius) {
-  let rx = 0, rz = 0;
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (o.noProjectile) continue;
-    const topBuffer = o.topBuffer ?? 4;
-    if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
-    const nx = Math.max(o.minX, Math.min(px, o.maxX));
-    const nz = Math.max(o.minZ, Math.min(pz, o.maxZ));
-    const dx = px - nx;
-    const dz = pz - nz;
-    const d2 = dx * dx + dz * dz;
-    if (d2 > radius * radius) continue;
-    const d = Math.sqrt(d2);
-    if (d > 0.001) {
-      const t = 1 - d / radius;
-      const strength = t * t;
-      rx += (dx / d) * strength;
-      rz += (dz / d) * strength;
-    } else {
-      // Bot center is on the AABB face — push along the axis of shallowest
-      // penetration so resolveUnitObstacleCollisions doesn't have to.
-      const dMinX = Math.abs(px - o.minX);
-      const dMaxX = Math.abs(o.maxX - px);
-      const dMinZ = Math.abs(pz - o.minZ);
-      const dMaxZ = Math.abs(o.maxZ - pz);
-      const minD = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-      if (minD === dMinX) rx -= 1;
-      else if (minD === dMaxX) rx += 1;
-      else if (minD === dMinZ) rz -= 1;
-      else rz += 1;
-    }
-  }
-  return { rx, rz };
-}
-
-// Soft repulsion away from a spot the bot got recently pinned at. Same
-// quadratic falloff as the obstacle avoidance so it blends naturally with
-// the existing kiting vector, and zero outside `radius` so old memories
-// don't pull the bot toward weird headings on the far side of the map.
-function computeStuckRepulsion(px, pz, memX, memZ, radius) {
-  const dx = px - memX;
-  const dz = pz - memZ;
-  const d2 = dx * dx + dz * dz;
-  if (d2 >= radius * radius) return { rx: 0, rz: 0 };
-  const d = Math.sqrt(d2);
-  if (d < 0.001) return { rx: 0, rz: 0 };
-  const t = 1 - d / radius;
-  const strength = t * t;
-  return { rx: (dx / d) * strength, rz: (dz / d) * strength };
-}
-
-// Line-of-sight check between two world points using the same swept-AABB
-// math projectiles use, so the bot only "sees" through gaps a bullet would
-// actually pass through. Skips obstacles flagged noProjectile because bullets
-// pass through those too.
-function botHasLineOfSight(p0, p1) {
-  for (const o of arenaObstacles) {
-    if (o.noProjectile) continue;
-    if (segmentHitsObstacle(p0, p1, o)) return false;
-  }
-  return true;
-}
-
-// Universal burst size for continuous-fire weapons (spreadCount === 1): about
-// half the magazine per trigger pull, clamped so a 5-round mag still feels
-// like a burst and a 100-round mag doesn't fire forever. Derives from
-// magCapacity so re-tuning a weapon's mag automatically re-tunes the bot.
-function botBurstSize(unit) {
-  if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
-  return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
-}
-
-// Inline jump bookkeeping for the bot — mirrors the gating the player jump
-// uses (boost cost + cooldown) plus the bot's extra BOT_SPRINT_MIN_BOOST
-// margin so it never jumps itself completely dry. Returns true if a jump
-// started this tick.
-function botStartJump(now) {
-  const eState = state.enemy.state;
-  const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
-  if (!state.enemy.grounded || eState.airborne) return false;
-  if (now < eState.jumpCooldownUntil) return false;
-  if (eState.boost < jumpBoostCost + BOT_SPRINT_MIN_BOOST) return false;
-  eState.boost = Math.max(0, eState.boost - jumpBoostCost);
-  eState.refillPausedUntil = now + 500;
-  eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
-  eState.airborne = true;
-  eState.hoverUntil = now + (state.enemy.unit.jumpHoverMs ?? JUMP_HOVER_MS);
-  eState.jumpCooldownUntil = now + (state.enemy.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS);
-  inheritMomentum(state.enemy, 70);
-  return true;
-}
-
-// Scan for the nearest walkable surface whose lip sits a jump-height above
-// the bot's floor — a ledge it can hop onto for a high-ground kiting
-// advantage. Skips ledges too tall to clear with a jump (those need a ramp)
-// and ones level enough to just walk onto. Returns a unit vector toward the
-// nearest reachable point on that ledge plus the horizontal distance to it,
-// or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
-  let best = null;
-  let bestDist = searchRadius;
-  for (const s of arenaSurfaces) {
-    if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
-    const nx = Math.max(s.minX, Math.min(px, s.maxX));
-    const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
-    const rise = s.heightAt(nx, nz) - myFloorY;
-    if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
-    const ddx = nx - px;
-    const ddz = nz - pz;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d >= bestDist) continue;
-    bestDist = d;
-    const inv = d > 1e-3 ? 1 / d : 0;
-    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
-  }
-  return best;
-}
-
-// The bot is standing on a raised surface — find the edge it should run or
-// jump off to drop back to lower ground. Prefers the edge most aligned with
-// `away` (a direction, usually away from the opponent) and rejects edges
-// that just lead into a wall or don't actually descend. Returns a unit
-// vector toward that edge plus the distance to it, or null if the bot isn't
-// on a droppable surface.
-function findDescentDirection(px, pz, myFloorY, awayX, awayZ) {
-  let host = null;
-  for (const s of arenaSurfaces) {
-    if (px < s.minX || px > s.maxX || pz < s.minZ || pz > s.maxZ) continue;
-    if (Math.abs(s.heightAt(px, pz) - myFloorY) > 1) continue;
-    host = s;
-    break;
-  }
-  if (!host) return null;
-  const lowerY = myFloorY - BOT_CLIMB_MIN_RISE;
-  const probeY = myFloorY + GROUND_BASE_Y;
-  const edges = [
-    { x: -1, z: 0, edgeDist: px - host.minX, probeX: host.minX - BOT_DESCENT_PROBE, probeZ: pz },
-    { x: 1, z: 0, edgeDist: host.maxX - px, probeX: host.maxX + BOT_DESCENT_PROBE, probeZ: pz },
-    { x: 0, z: -1, edgeDist: pz - host.minZ, probeX: px, probeZ: host.minZ - BOT_DESCENT_PROBE },
-    { x: 0, z: 1, edgeDist: host.maxZ - pz, probeX: px, probeZ: host.maxZ + BOT_DESCENT_PROBE }
-  ];
-  let best = null;
-  let bestScore = -Infinity;
-  for (const e of edges) {
-    if (groundHeightAt(e.probeX, e.probeZ, myFloorY + 50) > lowerY) continue;
-    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ)) continue;
-    const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
-    if (score > bestScore) {
-      bestScore = score;
-      best = { toX: e.x, toZ: e.z, edgeDist: Math.max(0, e.edgeDist) };
-    }
-  }
-  return best;
-}
-
 function updateEnemy(now) {
   if (state.enemy.state.sniperChargeTarget) {
     state.enemy.body.velocity.x = 0;
@@ -1452,95 +1796,28 @@ function updateEnemy(now) {
   const dist = toPlayer.length();
   const dir = toPlayer.normalize();
   const side = new THREE.Vector3(-dir.z, 0, dir.x);
+
+  // dynamic evasion + aggressive kiting
+  if (Math.random() > 0.985) state.enemy.state.strafeSign *= -1;
+  const retreat = dist < 11 ? -0.9 : dist > 19 ? 0.62 : 0.15;
+  const move = dir.clone().multiplyScalar(retreat).add(side.multiplyScalar(state.enemy.state.strafeSign * 1.05));
   const eState = state.enemy.state;
-
-  // Kite near the outer edge of the weapon's red-lock range — far enough to
-  // minimize incoming fire effectiveness while still landing our own shots.
-  // Most weapons derive the band from lockRange directly; multi-pellet
-  // shotguns use a dedicated tighter band so they fight inside the cluster
-  // spread distance (SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20) where pellets
-  // haven't fully fanned out yet and more land per shot.
-  const lockRange = state.enemy.unit.lockRange ?? 50;
-  const isShotgun = (state.enemy.unit.spreadCount ?? 1) > 1;
-  let upperRange, optimalRange, lowerRange;
-  if (isShotgun) {
-    upperRange = 34;
-    optimalRange = 27;
-    lowerRange = 20;
-  } else {
-    upperRange = Math.max(12, lockRange - 2);
-    optimalRange = Math.max(10, upperRange - 7);
-    lowerRange = Math.max(6, optimalRange - 7);
-  }
-
-  if (Math.random() > 0.985) eState.strafeSign *= -1;
-  // Drive toward the kiting band aggressively when outside it; once inside,
-  // only a small drift so the bot holds position instead of wandering off.
-  const retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
-  let mx = dir.x * retreat + side.x * eState.strafeSign * 1.05;
-  let mz = dir.z * retreat + side.z * eState.strafeSign * 1.05;
-
-  // --- Obstacle avoidance: blend a repulsion vector into the kiting
-  // direction so the bot steers around walls/pillars/trains instead of
-  // pressing into them and getting pinned by resolveUnitObstacleCollisions.
-  const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
-  mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
-  mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
-  // Bias away from the spot we last got pinned at so the next path attempt
-  // picks a different angle around the obstacle instead of grinding into the
-  // same wall/corner once the perpendicular pivot ends.
-  if ((eState.botStuckMemoryUntil ?? 0) > now) {
-    const sm = computeStuckRepulsion(
-      e.x, e.z,
-      eState.botStuckMemoryX ?? e.x, eState.botStuckMemoryZ ?? e.z,
-      BOT_STUCK_MEMORY_RADIUS
-    );
-    mx += sm.rx * BOT_STUCK_MEMORY_WEIGHT;
-    mz += sm.rz * BOT_STUCK_MEMORY_WEIGHT;
-  }
-  const mlen = Math.sqrt(mx * mx + mz * mz);
-  if (mlen > 1e-3) { mx /= mlen; mz /= mlen; }
-
-  // --- Stuck detection: if we tried to move but our actual position barely
-  // changed for several ticks, force a perpendicular pivot for a beat so we
-  // unstick ourselves from whatever corner we're wedged into.
-  const dxMoved = e.x - (eState.botLastX ?? e.x);
-  const dzMoved = e.z - (eState.botLastZ ?? e.z);
-  const actualMoved = Math.sqrt(dxMoved * dxMoved + dzMoved * dzMoved);
-  const triedToMove = Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) > 1;
-  if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
-    eState.botStuckTicks = (eState.botStuckTicks ?? 0) + 1;
-  } else {
-    eState.botStuckTicks = 0;
-  }
-  eState.botLastX = e.x;
-  eState.botLastZ = e.z;
-  if ((eState.botStuckTicks ?? 0) >= BOT_STUCK_TICKS_THRESHOLD && !((eState.botStuckPivotUntil ?? 0) > now)) {
-    eState.botStuckPivotUntil = now + BOT_STUCK_PIVOT_MS;
-    eState.strafeSign *= -1;
-    eState.botStuckTicks = 0;
-    // Drop a "don't come back here" marker for the next few seconds so
-    // the post-pivot kiting steers around this obstacle instead of
-    // re-attacking the same gap and stalling all over again.
-    eState.botStuckMemoryX = e.x;
-    eState.botStuckMemoryZ = e.z;
-    eState.botStuckMemoryUntil = now + BOT_STUCK_MEMORY_MS;
-  }
-  if ((eState.botStuckPivotUntil ?? 0) > now) {
-    mx = side.x * eState.strafeSign;
-    mz = side.z * eState.strafeSign;
-  }
 
   // --- Tactical sprint state machine ---
   // Default behaviour is to WALK along the kiting direction (no boost drain),
-  // saving the gauge for actual tactical bursts. Hysteresis flag
-  // botSprintReady flips ON when boost has refilled to BOT_SPRINT_READY_BOOST
-  // and OFF only when fully drained, so the bot commits to spending a chunk
-  // of boost rather than stutter-stepping every time the gauge crosses 0.
+  // saving the gauge for actual tactical bursts.
+  //
+  // Hysteresis flag botSprintReady flips ON when boost has refilled to
+  // BOT_SPRINT_READY_BOOST and OFF only when fully drained, so the bot
+  // commits to spending a chunk of boost rather than stutter-stepping every
+  // time the gauge crosses 0. Mirrors shared/src/sim/ai.js tickBot.
   if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botSprintReady = true;
   if (eState.boost <= 0) eState.botSprintReady = false;
 
   let inBurst = (eState.botSprintUntil ?? 0) > now;
+  // End a burst early if boost ran dry mid-flight, so the bot drops back to
+  // walking and starts the regen cycle instead of sliding at full burst
+  // velocity with an empty gauge.
   if (inBurst && eState.boost <= 0) {
     eState.botSprintUntil = 0;
     inBurst = false;
@@ -1553,22 +1830,20 @@ function updateEnemy(now) {
     && now >= eState.hitStunUntil;
 
   if (canStartBurst) {
+    // Trigger 1: incoming projectile — evade perpendicular.
     const threat = findIncomingThreatOffline(state.enemy, BOT_THREAT_LOOKAHEAD);
     if (threat) {
-      // Trigger 1: incoming projectile — evade perpendicular. Uses a shorter
-      // cooldown than the other triggers so the bot can chain-dodge rapid
-      // weapons instead of being locked out after the first dodge.
       const cross = threat.vel.x * side.z - threat.vel.z * side.x;
       const evadeSign = cross >= 0 ? 1 : -1;
       eState.botSprintDirX = side.x * evadeSign;
       eState.botSprintDirZ = side.z * evadeSign;
       eState.botSprintUntil = now + BOT_SPRINT_BURST_MS;
-      eState.evadeCooldownUntil = now + BOT_THREAT_EVADE_COOLDOWN_MS;
+      eState.evadeCooldownUntil = now + 700;
       eState.evadeHomingUntil = now + 240;
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (dist < lowerRange) {
+    } else if (dist < 8) {
       // Trigger 2: opponent too close — burst back to re-open kiting space.
       eState.botSprintDirX = -dir.x;
       eState.botSprintDirZ = -dir.z;
@@ -1577,8 +1852,10 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (eState.hp < (state.enemy.unit.hp ?? MAX_HP) * 0.4 && dist < upperRange && Math.random() > 0.85) {
-      // Trigger 3: low HP — kite further away.
+    } else if (eState.hp < (state.enemy.unit.hp ?? MAX_HP) * 0.4 && dist < 18 && Math.random() > 0.85) {
+      // Trigger 3: low HP — kite further away ("go for cover" approximated as
+      // increasing range; offline build has no obstacle awareness for true
+      // cover-seeking). Threshold is 40% of this character's max HP.
       let bx = -dir.x + side.x * eState.strafeSign * 0.5;
       let bz = -dir.z + side.z * eState.strafeSign * 0.5;
       const blen = Math.sqrt(bx * bx + bz * bz) || 1;
@@ -1589,19 +1866,9 @@ function updateEnemy(now) {
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
       inBurst = true;
-    } else if (dist > upperRange + 3 && Math.random() > 0.6) {
-      // Trigger 4: out of range — sprint TOWARD opponent to close the gap.
-      // Fires reliably (not just occasionally) so the bot positions into its
-      // kiting band quickly instead of dawdling at walk speed all the way in.
-      eState.botSprintDirX = dir.x;
-      eState.botSprintDirZ = dir.z;
-      eState.botSprintUntil = now + 280;
-      eState.evadeCooldownUntil = now + 800;
-      eState.momentumVX = 0;
-      eState.momentumVZ = 0;
-      inBurst = true;
     } else if (Math.random() > 0.985) {
-      // Trigger 5: occasional unpredictable strafe burst for variance.
+      // Trigger 4: occasional unpredictable strafe burst (rare, adds variance
+      // so the bot doesn't sit static between threats).
       const strafeSign = Math.random() > 0.5 ? 1 : -1;
       let bx = side.x * strafeSign + dir.x * 0.25;
       let bz = side.z * strafeSign + dir.z * 0.25;
@@ -1616,127 +1883,15 @@ function updateEnemy(now) {
     }
   }
 
-  // --- Elevation tactics: use jumps and ledges to hold kiting distance
-  // (e.g. Station's raised platforms). Priority order, highest first:
-  //   1. Opponent is on higher ground and in engage range — jump straight at
-  //      them so the bot isn't stuck shooting a target it can't reach.
-  //   2. Bot is perched but the opponent has closed inside the kiting band
-  //      (or climbed up to the same level) — run/jump off the nearest ledge
-  //      that opens distance, dropping back down to reset the gap.
-  //   3. Bot is on low ground and engaged — climb a nearby ledge for the
-  //      high-ground sightline and the vertical separation it buys.
-  // Steering toward a ledge is blended into mx/mz; jumps are aimed via
-  // jumpDirX/jumpDirZ (default: straight at the opponent, as before). Landing
-  // on/off a surface is handled by the same groundHeightAt logic the player
-  // uses, so this works on any map with surfaces.
-  const myFloorY = groundHeightAt(e.x, e.z, e.y - GROUND_BASE_Y);
-  const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
-  const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
-  const stuckPivoting = (eState.botStuckPivotUntil ?? 0) > now;
-  let jumpThisTick = false;
-  let jumpDirX = dir.x;
-  let jumpDirZ = dir.z;
-
-  if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting) {
-    if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
-      // 1. Opponent above us — jump at them.
-      if (botStartJump(now)) jumpThisTick = true;
-    } else if (
-      onHighGround
-      && dist < upperRange
-      && (dist < lowerRange || oppFloorY > myFloorY - BOT_JUMP_HEIGHT_DIFF)
-    ) {
-      // 2. Pressured on high ground — bail off a ledge to re-open distance.
-      const exit = findDescentDirection(e.x, e.z, myFloorY, -dir.x, -dir.z);
-      if (exit) {
-        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = exit.toX;
-          jumpDirZ = exit.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      }
-    } else if (!onHighGround && dist < upperRange && dist > lowerRange * 0.55) {
-      // 3. On low ground — climb a ledge, unless the only one is back toward
-      // the opponent (chasing it would just close the gap we want to keep).
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.toX * dir.x + perch.toZ * dir.z < 0.45) {
-        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = perch.toX;
-          jumpDirZ = perch.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      }
-    } else if (onHighGround && dist > upperRange) {
-      // 2b. (positioning) Perched but opponent is out of engage range —
-      // drop off TOWARD them so we shortcut the long walk down to the lower
-      // level instead of trekking to the nearest exit and back around.
-      const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
-      if (exit) {
-        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = exit.toX;
-          jumpDirZ = exit.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      }
-    } else if (!onHighGround && dist > upperRange) {
-      // 3b. (positioning) Out of engage range on low ground — climb a ledge
-      // if it's roughly TOWARD the opponent, using the elevation as a
-      // shortcut over an obstacle instead of walking the long way around.
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.toX * dir.x + perch.toZ * dir.z > 0.3) {
-        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = perch.toX;
-          jumpDirZ = perch.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      }
-    }
-  }
-
-  if (jumpThisTick) {
-    // Remember the launch aim so the airborne ticks below keep driving the
-    // bot toward the ledge instead of drifting off on the kiting vector.
-    eState.botAirSteerX = jumpDirX;
-    eState.botAirSteerZ = jumpDirZ;
-    eState.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    state.enemy.body.velocity.x = jumpDirX * BOT_SPRINT_BURST_VEL;
-    state.enemy.body.velocity.z = jumpDirZ * BOT_SPRINT_BURST_VEL;
-    eState.action = 'jump';
-  } else if (inBurst) {
+  if (inBurst) {
     state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
     state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
     eState.action = 'dash';
   } else {
-    // Walk faster when outside the kiting band so the bot enters its
-    // advantage distance quickly; relax to the slower in-band pace once
-    // there so it doesn't drift past the optimal range. Still no boost
-    // drain — bursts are reserved for tactical sprints above.
-    const inBand = dist >= lowerRange && dist <= upperRange;
-    const moveScalar = now < eState.hitStunUntil ? 0 : (inBand ? 10.6 : 14);
-    // Mid elevation-jump: hold the launch heading so the arc lands on (or
-    // clears) the ledge it was aimed at instead of drifting on the kiting vec.
-    if (eState.airborne && (eState.botAirSteerUntil ?? 0) > now) {
-      mx = eState.botAirSteerX ?? mx;
-      mz = eState.botAirSteerZ ?? mz;
-    }
-    state.enemy.body.velocity.x = mx * moveScalar;
-    state.enemy.body.velocity.z = mz * moveScalar;
+    // Walk pace — kiting direction, no boost drain.
+    const moveScalar = now < eState.hitStunUntil ? 0 : 10.6;
+    state.enemy.body.velocity.x = move.x * moveScalar;
+    state.enemy.body.velocity.z = move.z * moveScalar;
     if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
       state.enemy.body.velocity.x = side.x * 4.5;
       state.enemy.body.velocity.z = side.z * 4.5;
@@ -1746,57 +1901,41 @@ function updateEnemy(now) {
 
   if (dist > 14 && Math.random() > 0.9) eState.evadeHomingUntil = now + 90;
 
-  // --- Firing: LoS-aware + universal burst sizing ---
-  // Skip firing entirely if line of sight is blocked — there's no point
-  // dumping rounds into a wall. The bot keeps repositioning (via the
-  // avoidance + kiting movement above) until the shot is clear.
-  if (now >= eState.nextFireAt) {
+  if (now >= state.enemy.state.nextFireAt) {
     const u = state.enemy.unit;
-    const s = eState;
+    const s = state.enemy.state;
     if (u.magCapacity != null && s.ammo <= 0) {
+      // Out of ammo — defer next attempt until reload completes (mirrors player gating).
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
       s.machineBurstRemaining = 0;
-    } else if (!botHasLineOfSight(
-      { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
-      { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
-    )) {
-      // No clear shot — hold fire and check again shortly.
-      s.nextFireAt = now + 220;
-      s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
-      if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
-      else s.nextFireAt = now + 220;
+      if (fired) {
+        s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
+      } else {
+        s.nextFireAt = now + 220;
+      }
       s.machineBurstRemaining = 0;
     } else {
-      // Universal burst: derive length from magCapacity so different weapons
-      // (5-round mag, 30-round MG, future 100-round LMG) all feel right.
-      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) {
-        s.machineBurstRemaining = botBurstSize(u);
-      }
+      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) s.machineBurstRemaining = 5;
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
       if (u.spreadCount === 1) {
         if (fired) s.machineBurstRemaining -= 1;
-        // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
-        // firePerMinute and the bot's DPS scales with it. Inter-burst pause
-        // is short (0.8-1.5 s) so the bot keeps sustained pressure on like a
-        // real MG user would.
+        // Intra-burst cadence ties to the unit's actual fireCooldownMs so
+        // bumping firePerMinute on a character makes the bot fire faster
+        // too, instead of being stuck at the old hardcoded 150 ms beat.
+        // Inter-burst pause stays a tactical AI choice (1.3-2.4 s).
         s.nextFireAt = s.machineBurstRemaining > 0
           ? now + u.fireCooldownMs
-          : now + PhaserLikeBetween(800, 1500);
+          : now + PhaserLikeBetween(1300, 2400);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
-        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
-        // mechanical fire cooldown so the bot uses its full per-shot DPS
-        // instead of dawdling 1+ s between shots. Small jitter avoids a
-        // perfectly robotic cadence; the magazine + autoReload still impose
-        // a natural burst rhythm without the AI gating on top.
-        if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(40, 220);
+        if (fired) s.nextFireAt = now + PhaserLikeBetween(1500, 3000);
         else s.nextFireAt = now + 120;
       }
     }
@@ -1808,7 +1947,6 @@ function updateEnemy(now) {
     eState.botSprintReady === true
     && eState.boost >= BOT_SPRINT_MIN_BOOST
     && !inBurst
-    && !jumpThisTick
     && dist < 7.2
     && now > state.player.state.antiMeleeUntil
     && Math.random() > 0.82
@@ -1921,9 +2059,8 @@ function updateCamera() {
 }
 
 function updateHud(now = performance.now()) {
-  // `now` defaults to performance.now() for offline (where mech.state
-  // timestamps are stored in performance.now() reference). Online passes
-  // Date.now() because the server-mirrored timestamps are Date.now()-style.
+  // mech.state timestamps are all in performance.now() reference, so the
+  // default argument is the right one for the offline loop.
   // HUD bars normalize against each fighter's own per-unit caps so a
   // higher-HP / higher-boost character's bar still reads full at full state.
   const playerHpMax = state.player.unit.hp ?? MAX_HP;
@@ -1937,6 +2074,10 @@ function updateHud(now = performance.now()) {
 
   const u = state.player.unit;
   const s = state.player.state;
+  // Effective mag cap mirrors getEffectiveMagCap — auto-doubled while a
+  // dual-wield-style buff is active so the auto-reload ring + ammo count
+  // stay visually correct.
+  const effectiveCap = getEffectiveMagCap(state.player) ?? u.magCapacity;
   if (u.magCapacity != null && hudRefs.ammoCount) {
     hudRefs.ammoCount.textContent = String(s.ammo);
     const isMg = !u.autoReload;
@@ -1955,11 +2096,11 @@ function updateHud(now = performance.now()) {
           showRing = true;
         }
       }
-    } else if (s.ammo < u.magCapacity) {
+    } else if (s.ammo < effectiveCap) {
       const partial = s.reloadTickStartAt
         ? THREE.MathUtils.clamp((now - s.reloadTickStartAt) / u.reloadMs, 0, 1)
         : 0;
-      progress = (s.ammo + partial) / u.magCapacity;
+      progress = (s.ammo + partial) / effectiveCap;
       showRing = true;
     }
     hudRefs.shootBtn.classList.toggle('empty', empty);
@@ -1967,28 +2108,72 @@ function updateHud(now = performance.now()) {
     const circumference = 2 * Math.PI * 46;
     hudRefs.reloadRing.style.strokeDashoffset = String(circumference * (1 - progress));
   }
+
+  // Special-move HUD: same SVG ring around the SP button does double duty —
+  //   - .active   : ring starts FULL and depletes over the buff window
+  //                 (visualizes "buff time left", reversed reload feel).
+  //   - .cooling  : ring starts EMPTY and fills over the cooldown window
+  //                 (visualizes "cooldown elapsed", standard reload feel).
+  // Both states share the same circle element, but the dash-offset math
+  // runs in opposite directions. Hidden when SP is ready (neither class).
+  // The button is hidden entirely if this character has no `special`.
+  if (hudRefs.specialBtn) {
+    const hasSpecial = !!u.special;
+    hudRefs.specialBtn.style.display = hasSpecial ? '' : 'none';
+    if (hasSpecial) {
+      const cdUntil = s.specialCooldownUntil ?? 0;
+      const activeUntil = s.specialActiveUntil ?? 0;
+      const isActive = activeUntil > now;
+      const isCooling = !isActive && cdUntil > now;
+      const cdCircumference = 2 * Math.PI * 46;
+      let dashoffset = cdCircumference; // ring fully empty by default
+      if (isActive && u.special.durationMs > 0) {
+        // Depleting ring — full at buff start, empty at buff end.
+        const buffProgress = THREE.MathUtils.clamp(
+          1 - (activeUntil - now) / u.special.durationMs,
+          0,
+          1
+        );
+        dashoffset = cdCircumference * buffProgress;
+      } else if (isCooling && u.special.cooldownMs > 0) {
+        // Filling ring — empty at cooldown start, full at ready.
+        const cdProgress = THREE.MathUtils.clamp(
+          1 - (cdUntil - now) / u.special.cooldownMs,
+          0,
+          1
+        );
+        dashoffset = cdCircumference * (1 - cdProgress);
+      }
+      hudRefs.specialBtn.classList.toggle('cooling', isCooling);
+      hudRefs.specialBtn.classList.toggle('active', isActive);
+      if (hudRefs.specialRing) {
+        hudRefs.specialRing.style.strokeDashoffset = String(dashoffset);
+      }
+    }
+  }
+
+  // Buff vignette — visible while any self-buff with an effect tag is
+  // running on the local player. Today only Yuuka's dualWieldBuff sets
+  // specialState, so this lights up only during her SP window.
+  if (hudRefs.buffVignette) {
+    const buffOn = !!state.player.state.specialState;
+    hudRefs.buffVignette.classList.toggle('active', buffOn);
+  }
 }
 
 function cleanupMatch() {
-  // If we were in an online match, close the socket + drop online-only meshes.
-  if (state.online) {
-    if (state.online.conn) state.online.conn.close();
-    if (state.online.projectileMeshes) {
-      for (const op of state.online.projectileMeshes.values()) {
-        disposeProjectileMesh(op.mesh);
-      }
-      state.online.projectileMeshes.clear();
-    }
-    state.online = null;
-    hideOnlineOverlay();
-  }
-  [state.player, state.enemy].forEach((m) => {
-    if (!m) return;
+  // Iterate state.fighters (which is the source of truth in the new
+  // structure). state.player/state.enemy are aliases into the same map,
+  // so they get torn down here too.
+  for (const m of Object.values(state.fighters)) {
+    if (!m) continue;
     disposeGlintImmediate(m);
+    disposeBuffAuraImmediate(m);
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
-  });
+  }
+  state.fighters = {};
   state.projectiles.forEach((p) => disposeProjectileMesh(p.mesh));
   state.projectiles.length = 0;
   state.vfx.forEach((vfx) => scene.remove(vfx.mesh));
@@ -2000,36 +2185,38 @@ function startMatch() {
   cleanupMatch();
   clearMenus();
   renderer.domElement.style.pointerEvents = 'auto';
-  state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey]);
-  state.enemy = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey]);
-  if (state.mapKey === 'arena2') {
-    // Streets: spawn on opposite ends of the cross road (X axis), not the bridge lane.
-    state.player.body.position.set(-108, 2.45, 0);
-    state.enemy.body.position.set(108, 2.45, 0);
-  } else if (state.mapKey === 'lobby') {
-    // Lobby: spawn on lower floor on opposite ends, mezzanine reachable via the central stairs.
-    state.player.body.position.set(-30, 2.45, 50);
-    state.enemy.body.position.set(30, 2.45, 50);
-  } else if (state.mapKey === 'factory') {
-    state.player.body.position.set(-50, 2.45, 0);
-    state.enemy.body.position.set(50, 2.45, 0);
-  } else if (state.mapKey === 'station') {
-    // Station: spawn at the far west/east ends of the track corridor (tracks at y=0).
-    // Platforms on either side are raised 4m — players must jump up to reach them.
-    state.player.body.position.set(-128, 2.45, 0);
-    state.enemy.body.position.set(128, 2.45, 0);
-  } else if (state.mapKey === 'square') {
-    // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
-    state.player.body.position.set(-95, 2.45, -45);
-    state.enemy.body.position.set(95, 2.45, 45);
-  } else {
-    state.player.body.position.set(-24, 2.45, 0);
-    state.enemy.body.position.set(24, 2.45, 0);
+
+  // Build the fighters with team-aware identity from the start. In 1v1
+  // there are exactly two slots — p1 on red (the human player), p2 on
+  // blue (the bot). Both get an explicit `targetId` pointing at the
+  // other so getCurrentTarget() can resolve in either direction.
+  //
+  // When 2v2 lands, this block expands to four createMech calls
+  // (p1/p2 red, p3/p4 blue) and the rest of the function — spawn
+  // assignment from MAP_DATA.spawns, lastFireAt initialization, etc. —
+  // already iterates over `state.fighters` so it handles N fighters
+  // without further surgery.
+  state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey], { id: 'p1', team: 'red' });
+  state.enemy  = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey],  { id: 'p2', team: 'blue' });
+  state.player.state.targetId = 'p2';
+  state.enemy.state.targetId  = 'p1';
+  state.fighters = { p1: state.player, p2: state.enemy };
+
+  // Spawn positions come from MAP_DATA[mapKey].spawns now — one source
+  // of truth instead of the per-map if-ladder. Each map declares 4
+  // slots (p1..p4); the 1v1 game only consumes p1/p2.
+  const mapSpawns = (MAP_DATA[state.mapKey] && MAP_DATA[state.mapKey].spawns) || {};
+  for (const [id, mech] of Object.entries(state.fighters)) {
+    const spawn = mapSpawns[id];
+    if (spawn) mech.body.position.set(spawn.x, spawn.y, spawn.z);
   }
+
   buildArenaForMap(state.mapKey);
   const now = performance.now();
-  state.player.state.lastFireAt = now;
-  state.enemy.state.lastFireAt = now;
+  for (const mech of Object.values(state.fighters)) {
+    mech.state.lastFireAt = now;
+  }
+  // Bot's first-shot delay (kept identical to 1v1 baseline).
   state.enemy.state.nextFireAt = now + 650;
   input.shootHold = false;
   input.shootTap = false;
@@ -2039,760 +2226,6 @@ function startMatch() {
   state.phase = 'match';
   state.running = true;
   state.matchStartAt = performance.now();
-}
-
-// ---- Online match runtime ----
-//
-// Online mode shares the offline scene/camera/HUD setup but skips the
-// offline simulation entirely. Each frame, tickOnline() pulls the latest
-// snapshot from the server, mirrors it onto the local mech objects (so
-// existing render code — camera, reticle, HUD — keeps working), syncs
-// projectile meshes, fires VFX events, and sends the local input frame
-// back to the server.
-
-function showOnlineOverlay(text) {
-  const existing = document.getElementById('online-overlay');
-  if (existing) {
-    existing.querySelector('.msg').textContent = text;
-    return existing;
-  }
-  const el = document.createElement('div');
-  el.id = 'online-overlay';
-  el.className = 'online-overlay';
-  el.innerHTML = `<div class="msg"></div>`;
-  el.querySelector('.msg').textContent = text;
-  app.appendChild(el);
-  return el;
-}
-
-function hideOnlineOverlay() {
-  const el = document.getElementById('online-overlay');
-  if (el) el.remove();
-}
-
-
-function startOnlineMatch() {
-  cleanupMatch();
-  clearMenus();
-  state.hud?.remove();
-  renderer.domElement.style.pointerEvents = 'auto';
-
-  // No mechs / arena created yet — we defer that until the player has picked
-  // their unit and the server has chosen a map (sent in the first snapshot).
-  // ensureOnlineMatchSetup() handles it lazily once we hit the 'playing' phase.
-
-  state.online = {
-    conn: createConnection(),
-    myPlayerId: null,
-    projectileMeshes: new Map(),
-    snapshotsApplied: 0,
-
-    // Phase 3 — prediction.
-    predictedState: null,
-    pendingInputs: [],
-    nextSeq: 0,
-    predAccumulator: 0,
-    lastPredRealTime: performance.now(),
-    lastPredSimTime: 0,
-    lastAppliedSnapshotTick: -1,
-
-    // Reconciliation smoothing — when a snapshot arrives and the server's
-    // view of the local fighter differs from our prediction, instead of
-    // visibly snapping the mech to the corrected position, we capture the
-    // pre-snapshot rendered position relative to the post-snapshot
-    // predicted position as a "visual offset" that decays over a few
-    // frames. The mech keeps moving smoothly while prediction quietly
-    // corrects underneath. Without this, even small drift produces
-    // visible warps that look like "lag" even on a clean connection.
-    visualPosOffset: { x: 0, y: 0, z: 0 },
-
-    // Phase 4 — UI lifecycle.
-    uiSubPhase: 'connecting',    // see computeOnlineUiPhase()
-    mechsCreatedFor: null         // signature key; set when ensureOnlineMatchSetup builds rig
-  };
-  state.online.conn.open();
-
-  state.phase = 'online';
-  state.running = false;
-  showOnlineOverlay('Connecting…');
-}
-
-function buildOnlineInputFrame() {
-  // Convert joystick (screen-space) into world-space move using the camera's
-  // forward — same conversion the offline updatePlayer uses.
-  const forward = new THREE.Vector3();
-  camera.getWorldDirection(forward);
-  forward.y = 0;
-  forward.normalize();
-  const right = new THREE.Vector3(-forward.z, 0, forward.x);
-  const move = forward.clone().multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
-
-  // Mirror updatePlayer's per-frame sprint normalization for online mode.
-  // Without this, the PC sprint-lock workflow can leak input.boost=true:
-  //   1. double-tap K → sprintLocked=true, boost=true
-  //   2. tap shoot, release K (keyup-K leaves boost=true because
-  //      sprintLocked is still true at that moment)
-  //   3. release WASD (keyup-WASD clears sprintLocked but never touches boost)
-  // → input.boost stays asserted forever even with no keys held, and the
-  // server keeps draining the boost gauge to zero. Offline doesn't see
-  // this because updatePlayer re-derives input.boost every frame; mobile
-  // doesn't see it because the joystick's pointerup explicitly clears all
-  // three flags. Doing the same derivation here makes the online PC path
-  // behave identically.
-  const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
-  const playerBoost = state.player?.state?.boost;
-  if (
-    !hasDirInput
-    || input.jump
-    || input.stepTap
-    || (playerBoost != null && playerBoost <= 0)
-  ) {
-    input.sprintLocked = false;
-  }
-  input.boost = input.boostHeld || input.sprintLocked;
-
-  return {
-    moveX: move.x,
-    moveZ: move.z,
-    boost: !!input.boost,
-    sprintLocked: !!input.sprintLocked,
-    jump: !!input.jump,
-    stepTap: !!input.stepTap,
-    shootTap: !!input.shootTap,
-    shootHold: !!input.shootHold
-  };
-}
-
-// Per-fighter snapshot → mech mirror. Copies the fields the existing render
-// code (updateCamera, updateLocksAndReticle, updateHud, glint) reads from
-// mech.state and mech.body.
-function mirrorFighterToMech(fighter, mech) {
-  mech.body.position.set(fighter.pos.x, fighter.pos.y, fighter.pos.z);
-  mech.root.position.set(fighter.pos.x, fighter.pos.y + mech.modelYOffset, fighter.pos.z);
-  mech.grounded = !fighter.airborne;
-
-  const s = mech.state;
-  s.action = fighter.action;
-  s.hp = fighter.hp;
-  s.boost = fighter.boost;
-  s.ammo = fighter.ammo;
-  s.lastFireAt = fighter.lastFireAt;
-  s.reloadingUntil = fighter.reloadingUntil;
-  s.reloadTickStartAt = fighter.reloadTickStartAt;
-  s.redLock = fighter.redLock;
-  s.airborne = fighter.airborne;
-  s.hitStunUntil = fighter.hitStunUntil;
-  s.overheatedUntil = fighter.overheatedUntil;
-  // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
-  // anything works since the offline code only checks truthiness.
-  s.sniperChargeTarget = fighter.sniperChargeTargetId ? { id: fighter.sniperChargeTargetId } : null;
-  s.sniperChargeUntil = fighter.sniperChargeUntil;
-}
-
-function syncOnlineProjectiles(snap) {
-  const meshes = state.online.projectileMeshes;
-  const liveIds = new Set();
-  for (const sp of snap.projectiles) {
-    liveIds.add(sp.id);
-    let entry = meshes.get(sp.id);
-    if (!entry) {
-      const owner = snap.fighters[sp.ownerId];
-      const isOwnerRedLock = owner?.redLock ?? false;
-      const ownerUnit = owner?.unit ?? SIM_UNIT_DATA[owner?.unitKey] ?? {};
-      const mesh = buildProjectileMesh(ownerUnit, isOwnerRedLock);
-      scene.add(mesh);
-      entry = { mesh };
-      meshes.set(sp.id, entry);
-    }
-    entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
-    // Re-orient sniper tracers along their snapshot velocity so the streak
-    // visibly follows the projectile's path. No-op for sphere projectiles.
-    orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);
-  }
-  // Despawn anything no longer in the snapshot.
-  for (const [id, entry] of meshes.entries()) {
-    if (liveIds.has(id)) continue;
-    disposeProjectileMesh(entry.mesh);
-    meshes.delete(id);
-  }
-}
-
-function processOnlineEvents(snap, myPlayerId) {
-  if (!snap.events) return;
-  for (const ev of snap.events) {
-    if (ev.type === 'hit' && ev.pos) {
-      // Color the hit ring by who got hit, matching offline conventions.
-      const color = ev.targetId === myPlayerId ? 0x67f2ff : 0xff73d2;
-      spawnHitEffect(new THREE.Vector3(ev.pos.x, ev.pos.y, ev.pos.z), color);
-    } else if (ev.type === 'sniper-charge-start' && state.online) {
-      const owner = snap.fighters[ev.ownerId];
-      if (!owner) continue;
-      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
-      createGlintForMech(mech);
-    } else if (ev.type === 'sniper-charge-fire') {
-      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
-      removeGlintFromMech(mech);
-    }
-  }
-}
-
-function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
-  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended', and
-  // re-drawn by refreshEndMenuIfStale when the opponent's rematch status
-  // changes. The new match doesn't start until BOTH players click Rematch.
-  const win = winnerId === myPlayerId;
-  const tie = winnerId == null;
-  const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
-  const oppReady = rematchRequested?.[oppId] === true;
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `
-    <h2>${tie ? 'MATCH ENDED' : (win ? 'YOU WIN' : 'YOU LOSE')}</h2>
-    ${oppReady ? '<div class="menu-divider">Opponent wants a rematch</div>' : ''}
-    <button id="online-rematch">Rematch</button>
-    <button id="online-leave" class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelector('#online-rematch').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    state.online.conn.requestRematch();
-    // Server's lobby:config will echo back our request; refreshEndMenuIfStale
-    // sees rematchRequested[me]=true and switches to the overlay.
-  });
-  menu.querySelector('#online-leave').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    showSelectMenu();
-  });
-}
-
-// ---- Phase 3: prediction & interpolation ----
-
-// Deep-clone a fighter for prediction. Snapshots arrive as plain JSON, so the
-// `unit` reference (set in createFighter) is no longer === UNIT_DATA[unitKey].
-// We re-attach the canonical reference so any code that does identity checks
-// or relies on the same object stays consistent.
-function cloneFighterForPrediction(f) {
-  const cloned = JSON.parse(JSON.stringify(f));
-  cloned.unit = SIM_UNIT_DATA[cloned.unitKey];
-  return cloned;
-}
-
-// Build a workable MatchState from the latest snapshot. Projectiles are
-// always reset to []  — we don't predict them (server-authoritative; client
-// just renders snapshot projectiles).
-function cloneSnapshotForPrediction(snap) {
-  return {
-    tick: snap.tick,
-    now: snap.serverTime,
-    startTime: snap.serverTime,
-    mapKey: snap.mapKey,
-    fighters: {
-      p1: cloneFighterForPrediction(snap.fighters.p1),
-      p2: cloneFighterForPrediction(snap.fighters.p2)
-    },
-    projectiles: [],
-    events: []
-  };
-}
-
-// On every new snapshot: snap to server state, then re-apply every input
-// the server hasn't ack'd yet so we end up "ahead" of the server by RTT.
-//
-// Reconciliation smoothing: capture the pre-snap rendered position
-// (predicted + current visual offset) and the post-snap predicted
-// position. The difference is pushed into `visualPosOffset` so the next
-// few render frames can decay it back to zero — the mech keeps moving
-// smoothly across the discontinuity instead of warping.
-function applySnapshotToPrediction(snap) {
-  const onl = state.online;
-  if (!onl) return;
-  const myId = onl.myPlayerId;
-  if (myId !== 'p1' && myId !== 'p2') return;
-
-  // Pre-snap rendered position = pre-snap predicted + current visual offset.
-  const prePredFighter = onl.predictedState?.fighters?.[myId];
-  const renderedX = prePredFighter ? prePredFighter.pos.x + (onl.visualPosOffset?.x ?? 0) : null;
-  const renderedY = prePredFighter ? prePredFighter.pos.y + (onl.visualPosOffset?.y ?? 0) : null;
-  const renderedZ = prePredFighter ? prePredFighter.pos.z + (onl.visualPosOffset?.z ?? 0) : null;
-
-  const fresh = cloneSnapshotForPrediction(snap);
-  // Drop inputs the server has consumed.
-  const ack = snap.acks?.[myId] ?? -1;
-  onl.pendingInputs = onl.pendingInputs.filter((p) => p.seq > ack);
-
-  // Replay the unack'd ones to advance prediction back to ~present.
-  let simNow = snap.serverTime;
-  for (let i = 0; i < onl.pendingInputs.length; i += 1) {
-    const p = onl.pendingInputs[i];
-    simNow += SIM_TICK_RATE_MS;
-    const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
-    inputs[myId] = p.input;
-    simTickMatch(fresh, inputs, simNow, SIM_TICK_DT);
-  }
-
-  onl.predictedState = fresh;
-  onl.lastPredSimTime = simNow;
-
-  // Set new visual offset = (where we WERE rendered) − (where we ARE
-  // NOW predicted), so rendering the local mech at predicted+offset
-  // continues displaying the same position as before this snapshot.
-  // The offset then decays toward zero in runOnlineMatchFrame, smoothly
-  // bringing the rendered mech onto the corrected predicted path.
-  if (renderedX != null) {
-    const newPos = fresh.fighters[myId]?.pos;
-    if (newPos) {
-      const offX = renderedX - newPos.x;
-      const offY = renderedY - newPos.y;
-      const offZ = renderedZ - newPos.z;
-      // Cap the offset — for very large discontinuities (e.g. step/dodge
-      // landing very differently on the server) just snap rather than
-      // ride a long visible rubberband. SNAP_THRESHOLD ≈ a single
-      // sprint tick of distance.
-      const SNAP_THRESHOLD_SQ = 4 * 4;
-      const len2 = offX * offX + offY * offY + offZ * offZ;
-      if (len2 > SNAP_THRESHOLD_SQ) {
-        onl.visualPosOffset.x = 0;
-        onl.visualPosOffset.y = 0;
-        onl.visualPosOffset.z = 0;
-      } else {
-        onl.visualPosOffset.x = offX;
-        onl.visualPosOffset.y = offY;
-        onl.visualPosOffset.z = offZ;
-      }
-    }
-  }
-}
-
-// Prediction tick — fixed cadence (TICK_RATE_MS) regardless of render
-// rate. Builds an input frame from the current input state, sends it to
-// the server with a seq number, and applies it to the local
-// predictedState so the local fighter visibly advances before the
-// server round-trip.
-function runPredictionTick() {
-  const onl = state.online;
-  if (!onl || !onl.predictedState) return;
-  const myId = onl.myPlayerId;
-  if (myId !== 'p1' && myId !== 'p2') return;
-
-  const inputFrame = buildOnlineInputFrame();
-  const seq = onl.nextSeq++;
-
-  onl.conn.sendInput({ ...inputFrame, seq });
-  onl.pendingInputs.push({ seq, input: inputFrame });
-  // Cap the buffer; >1s of pending inputs at 40 Hz = 40 entries. Worst-case
-  // RTT scenarios shouldn't blow past ~120.
-  if (onl.pendingInputs.length > 240) onl.pendingInputs.shift();
-
-  onl.lastPredSimTime += SIM_TICK_RATE_MS;
-  const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
-  inputs[myId] = inputFrame;
-  simTickMatch(onl.predictedState, inputs, onl.lastPredSimTime, SIM_TICK_DT);
-
-  // Reset taps so they fire exactly once per press.
-  input.stepTap = false;
-  input.shootTap = false;
-  input.jump = false;
-}
-
-// Interpolate the remote fighter between the previous and latest snapshots
-// for smoother rendering. Returns a fighter-shaped object with lerped
-// position; non-position fields come from the latest snapshot.
-function interpolateRemoteFighter(remoteId, prevSnap, latestSnap, lastSnapAt, now) {
-  const latestF = latestSnap?.fighters?.[remoteId];
-  if (!latestF) return null;
-  const prevF = prevSnap?.fighters?.[remoteId];
-  if (!prevF) return latestF;
-
-  const elapsed = now - lastSnapAt;
-  const alpha = Math.max(0, Math.min(1, elapsed / SIM_TICK_RATE_MS));
-  return {
-    ...latestF,
-    pos: {
-      x: prevF.pos.x + (latestF.pos.x - prevF.pos.x) * alpha,
-      y: prevF.pos.y + (latestF.pos.y - prevF.pos.y) * alpha,
-      z: prevF.pos.z + (latestF.pos.z - prevF.pos.z) * alpha
-    }
-  };
-}
-
-// Compute which UI sub-phase we should be in based on connection + lobby state.
-function computeOnlineUiPhase(onl, conn) {
-  const myId = onl.myPlayerId;
-  const matchSt = conn.getMatchState();
-  if (!myId) return 'connecting';
-  if (myId === 'spectator') {
-    if (matchSt === 'active' && conn.getLatestSnapshot()) return 'playing';
-    if (matchSt === 'ended') return 'ended';
-    return 'spectator-waiting';
-  }
-  // Player slot.
-  if (matchSt === 'active') {
-    return conn.getLatestSnapshot() ? 'playing' : 'starting';
-  }
-  if (matchSt === 'ended') return 'ended';
-  // 'waiting' — drive UI off picks.
-  const cfg = conn.getLobbyConfig();
-  const myCfg = cfg?.config?.[myId] ?? {};
-  if (!myCfg.unitKey) return 'pick-unit';
-  if (myId === 'p1' && !myCfg.mapKey) return 'pick-map';
-  return 'waiting-opp';
-}
-
-function renderOnlineUi(phase, prevPhase, onl, conn) {
-  // Always reset the UI surface before rendering the new phase.
-  clearMenus();
-  hideOnlineOverlay();
-
-  // Entering 'playing' is a "new match started" signal — wipe prediction
-  // bookkeeping so any stale inputs from the previous match don't replay.
-  if (phase === 'playing' && prevPhase !== 'playing') {
-    onl.pendingInputs = [];
-    onl.nextSeq = 0;
-    onl.lastAppliedSnapshotTick = -1;
-    onl.predictedState = null;
-  }
-
-  switch (phase) {
-    case 'connecting':
-      showOnlineOverlay('Connecting…');
-      break;
-    case 'pick-unit':
-      showOnlineUnitPicker(onl);
-      break;
-    case 'pick-map':
-      showOnlineMapPicker(onl);
-      break;
-    case 'waiting-opp':
-      showOnlineWaitingOpp(onl, conn);
-      break;
-    case 'spectator-waiting':
-      showOnlineOverlay('Spectator mode — match in progress or full');
-      break;
-    case 'starting':
-      showOnlineOverlay('Match starting…');
-      break;
-    case 'playing':
-      // Mechs / arena are built lazily inside runOnlineMatchFrame.
-      break;
-    case 'ended': {
-      const end = conn.getLastMatchEnd();
-      const cfg = conn.getLobbyConfig();
-      const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
-      // Initialize the staleness signature so refreshEndMenuIfStale doesn't
-      // immediately re-render this same state.
-      onl.lastEndMenuSig = rematchSig(onl.myPlayerId, rs);
-      if (rs[onl.myPlayerId]) {
-        // We've already requested (e.g. mid-flight reconnect) — show overlay.
-        showOnlineOverlay(rs[opponentId(onl.myPlayerId)] ? 'Opponent ready — starting…' : 'Waiting for opponent…');
-      } else {
-        showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-}
-
-function opponentId(myId) {
-  return myId === 'p1' ? 'p2' : 'p1';
-}
-
-function rematchSig(myId, rs) {
-  const oppId = opponentId(myId);
-  return `${rs[myId] ? 1 : 0}|${rs[oppId] ? 1 : 0}`;
-}
-
-function refreshEndMenuIfStale(onl, conn) {
-  const cfg = conn.getLobbyConfig();
-  const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
-  const sig = rematchSig(onl.myPlayerId, rs);
-  if (onl.lastEndMenuSig === sig) return;
-  onl.lastEndMenuSig = sig;
-  clearMenus();
-  hideOnlineOverlay();
-  if (rs[onl.myPlayerId]) {
-    // Self has requested — show waiting overlay; opp may or may not be ready.
-    const oppReady = rs[opponentId(onl.myPlayerId)];
-    showOnlineOverlay(oppReady ? 'Opponent ready — starting…' : 'Waiting for opponent…');
-  } else {
-    // Self hasn't requested yet — show end menu, possibly with "opponent wants rematch".
-    const end = conn.getLastMatchEnd();
-    showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
-  }
-}
-
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station']);
-
-function showOnlineUnitPicker(onl) {
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  const unitEntries = Object.entries(UNIT_DATA);
-  menu.innerHTML = `
-    <h2>Pick Your Unit</h2>
-    <div class="menu-divider">Online — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
-    ${unitEntries.map(([id, u]) => `<button data-unit="${id}">${u.name}</button>`).join('')}
-    <button data-leave class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelectorAll('button[data-unit]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      onl.conn.sendConfigure({ unitKey: btn.dataset.unit });
-    });
-  });
-  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    showSelectMenu();
-  });
-}
-
-function showOnlineMapPicker(onl) {
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  const mapEntries = Object.entries(MAP_DATA);
-  menu.innerHTML = `
-    <h2>Pick a Map</h2>
-    <div class="menu-divider">Online — you are p1 (host)</div>
-    ${mapEntries.map(([id, m]) => {
-      const enabled = ONLINE_AVAILABLE_MAPS.has(id);
-      const label = enabled ? m.name : `${m.name} (offline only)`;
-      return `<button data-map="${id}"${enabled ? '' : ' disabled'}>${label}</button>`;
-    }).join('')}
-    <button data-leave class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelectorAll('button[data-map]:not([disabled])').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      onl.conn.sendConfigure({ mapKey: btn.dataset.map });
-    });
-  });
-  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    showSelectMenu();
-  });
-}
-
-function showOnlineWaitingOpp(onl, conn) {
-  const cfg = conn.getLobbyConfig();
-  const myId = onl.myPlayerId;
-  const oppId = (myId === 'p1') ? 'p2' : 'p1';
-  const myCfg = cfg?.config?.[myId] ?? {};
-  const oppCfg = cfg?.config?.[oppId] ?? {};
-  const oppUnit = oppCfg.unitKey ? UNIT_DATA[oppCfg.unitKey]?.name : null;
-  const mapKey = myCfg.mapKey || oppCfg.mapKey;
-  const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
-
-  let waitingText;
-  if (!oppCfg.unitKey) {
-    waitingText = myId === 'p1' ? 'Waiting for opponent to pick unit…' : 'Waiting for host to pick unit…';
-  } else if (myId === 'p2' && !oppCfg.mapKey) {
-    waitingText = 'Waiting for host to pick map…';
-  } else {
-    waitingText = 'Starting…';
-  }
-
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `
-    <h2>${waitingText}</h2>
-    <div class="online-status">
-      <div><span class="lbl">Your unit:</span> <span class="val">${UNIT_DATA[myCfg.unitKey]?.name ?? '—'}</span></div>
-      <div><span class="lbl">Opp unit:</span> <span class="val">${oppUnit ?? '—'}</span></div>
-      <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
-    </div>
-    <button data-leave class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    showSelectMenu();
-  });
-}
-
-// Lazy mech + arena setup. Called every frame from runOnlineMatchFrame; only
-// rebuilds when the (mapKey, unit assignments, my slot) signature changes.
-function ensureOnlineMatchSetup(snap) {
-  if (!snap) return;
-  const onl = state.online;
-  const myId = onl.myPlayerId;
-  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
-  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
-  const myUnitKey = snap.fighters[cameraId].unitKey;
-  const oppUnitKey = snap.fighters[otherId].unitKey;
-  const mapKey = snap.mapKey;
-  const sig = `${mapKey}|${myUnitKey}|${oppUnitKey}|${cameraId}`;
-  if (onl.mechsCreatedFor === sig) return;
-
-  // Tear down old mechs/arena/HUD/projectile meshes.
-  [state.player, state.enemy].forEach((m) => {
-    if (!m) return;
-    disposeGlintImmediate(m);
-    scene.remove(m.root);
-    world.removeBody(m.body);
-    m.trail.forEach((t) => scene.remove(t.mesh));
-  });
-  state.player = null;
-  state.enemy = null;
-  if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
-  state.reticle = null;
-  if (state.hud) { state.hud.remove(); state.hud = null; }
-  hudRefs = null;
-  for (const op of onl.projectileMeshes.values()) {
-    disposeProjectileMesh(op.mesh);
-  }
-  onl.projectileMeshes.clear();
-
-  // Build new. state.player = local mech (camera target), state.enemy = opp.
-  state.player = createMech(0x62d7ff, UNIT_DATA[myUnitKey]);
-  state.enemy = createMech(0xff7ad5, UNIT_DATA[oppUnitKey]);
-  const myPos = snap.fighters[cameraId].pos;
-  const oppPos = snap.fighters[otherId].pos;
-  state.player.body.position.set(myPos.x, myPos.y, myPos.z);
-  state.enemy.body.position.set(oppPos.x, oppPos.y, oppPos.z);
-  buildArenaForMap(mapKey);
-  state.reticle = makeReticleSprite();
-  state.enemy.root.add(state.reticle);
-  hudRefs = setupHUD();
-  // Pause button is meaningless online (server runs the sim authoritatively
-  // — we can't pause it from a single client). Drop it from the HUD.
-  const pauseBtn = state.hud?.querySelector('#pause-btn');
-  if (pauseBtn) pauseBtn.remove();
-  onl.mechsCreatedFor = sig;
-}
-
-function runOnlineMatchFrame(dt, onl, conn) {
-  const snap = conn.getLatestSnapshot();
-  if (!snap) return;
-  ensureOnlineMatchSetup(snap);
-  if (!state.player || !state.enemy) return;
-
-  const prevSnap = conn.getPreviousSnapshot();
-  const lastSnapAt = conn.getLastSnapshotAt();
-
-  // 1. New snapshot? Reset prediction from it and replay unack'd inputs.
-  if (snap.tick !== onl.lastAppliedSnapshotTick) {
-    onl.lastAppliedSnapshotTick = snap.tick;
-    onl.snapshotsApplied += 1;
-    if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
-      applySnapshotToPrediction(snap);
-    }
-    syncOnlineProjectiles(snap);
-    processOnlineEvents(snap, onl.myPlayerId);
-  }
-
-  // 2. Drive prediction at fixed 25 ms cadence.
-  const realNow = performance.now();
-  onl.predAccumulator += realNow - onl.lastPredRealTime;
-  onl.lastPredRealTime = realNow;
-  if (onl.predAccumulator > 250) onl.predAccumulator = 250;
-  while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
-    onl.predAccumulator -= SIM_TICK_RATE_MS;
-    runPredictionTick();
-  }
-
-  // 3. Render. state.player = local (camera target); state.enemy = opp.
-  const myId = onl.myPlayerId;
-  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
-  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
-  let cameraFighter;
-  if ((myId === 'p1' || myId === 'p2') && onl.predictedState) {
-    cameraFighter = onl.predictedState.fighters[cameraId];
-  } else {
-    cameraFighter = snap.fighters[cameraId];
-  }
-  const otherFighter = interpolateRemoteFighter(otherId, prevSnap, snap, lastSnapAt, realNow);
-
-  // Reconciliation smoothing — decay the visual offset toward zero each
-  // frame so any discontinuity captured at snapshot time fades smoothly
-  // over ~6-10 frames (~100-150 ms at 60 fps render). DECAY of 0.85 per
-  // frame ≈ half-life of ~4 frames; small enough offsets snap to zero
-  // to avoid sub-pixel jitter.
-  const off = onl.visualPosOffset;
-  if (off) {
-    const DECAY = 0.85;
-    off.x *= DECAY;
-    off.y *= DECAY;
-    off.z *= DECAY;
-    if (Math.abs(off.x) < 0.01) off.x = 0;
-    if (Math.abs(off.y) < 0.01) off.y = 0;
-    if (Math.abs(off.z) < 0.01) off.z = 0;
-  }
-
-  // Apply the smoothing offset to the local fighter only — remote is
-  // already softened by interpolateRemoteFighter().
-  if (cameraFighter && off && (off.x !== 0 || off.y !== 0 || off.z !== 0)) {
-    cameraFighter = {
-      ...cameraFighter,
-      pos: {
-        x: cameraFighter.pos.x + off.x,
-        y: cameraFighter.pos.y + off.y,
-        z: cameraFighter.pos.z + off.z
-      }
-    };
-  }
-
-  if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
-  if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
-
-  const ddx = state.enemy.root.position.x - state.player.root.position.x;
-  const ddz = state.enemy.root.position.z - state.player.root.position.z;
-  if (ddx * ddx + ddz * ddz > 1e-6) {
-    const yaw = Math.atan2(ddx, ddz);
-    state.player.root.rotation.y = yaw;
-    state.enemy.root.rotation.y = yaw + Math.PI;
-  }
-
-  updateLocksAndReticle();
-  tickGlintRemoval(state.player);
-  tickGlintRemoval(state.enemy);
-  updateGlintScale(state.player);
-  updateGlintScale(state.enemy);
-  updateVfx(dt);
-  updateCamera();
-  updateHud(Date.now());
-}
-
-function tickOnline(dt, _now) {
-  const onl = state.online;
-  if (!onl) return;
-  const conn = onl.conn;
-
-  if (!onl.myPlayerId && conn.getPlayerId()) {
-    onl.myPlayerId = conn.getPlayerId();
-  }
-  if (!conn.isConnected() && conn.getLastError()) {
-    showOnlineOverlay(`Connection error: ${conn.getLastError()}`);
-  }
-
-  // Phase machine — re-render UI on transition.
-  const targetPhase = computeOnlineUiPhase(onl, conn);
-  if (targetPhase !== onl.uiSubPhase) {
-    const prevPhase = onl.uiSubPhase;
-    onl.uiSubPhase = targetPhase;
-    renderOnlineUi(targetPhase, prevPhase, onl, conn);
-  } else if (targetPhase === 'waiting-opp') {
-    // Re-render waiting-opp on opponent config changes (their unit pick etc).
-    refreshWaitingOppIfStale(onl, conn);
-  } else if (targetPhase === 'ended') {
-    // Re-render end menu / overlay when rematch readiness changes.
-    refreshEndMenuIfStale(onl, conn);
-  }
-
-  if (targetPhase === 'playing') {
-    runOnlineMatchFrame(dt, onl, conn);
-  }
-}
-
-function refreshWaitingOppIfStale(onl, conn) {
-  const cfg = conn.getLobbyConfig();
-  const sig = JSON.stringify(cfg?.config ?? {});
-  if (onl.lastWaitingSig === sig) return;
-  onl.lastWaitingSig = sig;
-  // Rebuild the menu in place.
-  clearMenus();
-  showOnlineWaitingOpp(onl, conn);
 }
 
 function showSelectMenu() {
@@ -2809,23 +2242,8 @@ function showSelectMenu() {
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h2>Select Your Unit</h2>
-    <button data-online-play class="online-play-btn">Online (vs Player)</button>
-    <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
-    <div class="menu-divider">— Offline —</div>
     ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}`;
   app.appendChild(menu);
-
-  menu.querySelector('button[data-online-play]').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    startOnlineMatch();
-  });
-
-  menu.querySelector('button[data-online-debug]').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    import('./online/debugPanel.js').then(({ showOnlineDebugPanel }) => {
-      showOnlineDebugPanel(app);
-    });
-  });
 
   menu.querySelectorAll('button[data-player-unit]').forEach((button) => {
     button.addEventListener('pointerdown', (event) => {
@@ -2914,6 +2332,9 @@ window.addEventListener('keydown', (e) => {
   }
   else if (k === 'l') input.stepTap = true;
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
+  // Special-move key. `U` sits directly above `J` on the keyboard, mirroring
+  // the touch-HUD layout where the SP button stacks above the shoot button.
+  else if (k === 'u') input.specialTap = true;
 });
 
 window.addEventListener('keyup', (e) => {
@@ -3153,37 +2574,6 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
   return mesh;
 }
 
-// Adds the standard play-area edge: a 4-sided invisible (collision-only)
-// perimeter wall plus a red glowing floor stripe inset 1.6 units inside it
-// on each side. The wall is 2 units thick and `ceilY` tall, sitting just
-// outside (HALF_X..HALF_X+2 etc.) the play extent so the camera never clips
-// against a solid mesh when the player backs into a corner. Mirrors the
-// pattern Station uses inline.
-function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
-  arenaObstacles.push(
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
-  );
-  const boundaryGlow = new THREE.MeshStandardMaterial({
-    color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4
-  });
-  const stripeInset = 1.6;
-  for (const zEdge of [HALF_Z - stripeInset, -(HALF_Z - stripeInset)]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 4, 1.4), boundaryGlow);
-    s.rotation.x = -Math.PI / 2;
-    s.position.set(0, 0.05, zEdge);
-    scene.add(s); arenaDecor.push(s);
-  }
-  for (const xEdge of [HALF_X - stripeInset, -(HALF_X - stripeInset)]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * HALF_Z - 4), boundaryGlow);
-    s.rotation.x = -Math.PI / 2;
-    s.position.set(xEdge, 0.05, 0);
-    scene.add(s); arenaDecor.push(s);
-  }
-}
-
 function groundHeightAt(x, z, currentSurfaceY = 0) {
   let best = 0;
   for (const s of arenaSurfaces) {
@@ -3250,40 +2640,6 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xfff6e0);
     key.intensity = 1.05;
-  } else if (mapKey === 'station') {
-    // Industrial terminal hall: cool steel-grey base with sodium-yellow platform lights.
-    scene.background.setHex(0x10141c);
-    scene.fog.color.setHex(0x141a24);
-    scene.fog.near = 45;
-    scene.fog.far = 210;
-    ambient.color.setHex(0xbfd0e2);
-    ambient.intensity = 0.6;
-    key.color.setHex(0xffe9b8);
-    key.intensity = 1.0;
-  } else if (mapKey === 'carnival') {
-    // Open-air evening festival ground: deep dusk-blue sky with warm
-    // sodium-tinted ambient bleeding from stage rigs and food-truck signs.
-    scene.background.setHex(0x1c2236);
-    scene.fog.color.setHex(0x1f273b);
-    scene.fog.near = 50;
-    scene.fog.far = 230;
-    ambient.color.setHex(0xc0c8e0);
-    ambient.intensity = 0.7;
-    key.color.setHex(0xffd9a0);
-    key.intensity = 1.1;
-  } else if (mapKey === 'flashpoint') {
-    // Industrial CQB arena, well-lit for readability. Cool steel-blue base
-    // ambient with a warm sodium key light over the concrete; fog kept
-    // mid-range so the room dividers still read as silhouettes at the back
-    // of the hall without losing target visibility.
-    scene.background.setHex(0x2a3140);
-    scene.fog.color.setHex(0x2c3340);
-    scene.fog.near = 45;
-    scene.fog.far = 200;
-    ambient.color.setHex(0xc4d2e2);
-    ambient.intensity = 0.95;
-    key.color.setHex(0xfff0d0);
-    key.intensity = 1.3;
   }
 }
 
@@ -3294,9 +2650,6 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'factory') buildFactoryArena();
   else if (mapKey === 'square') buildSquareArena();
   else if (mapKey === 'lobby') buildLobbyArena();
-  else if (mapKey === 'station') buildStationArena();
-  else if (mapKey === 'carnival') buildCarnivalArena();
-  else if (mapKey === 'flashpoint') buildFlashpointArena();
 }
 
 function buildStreetsArena() {
@@ -3367,10 +2720,9 @@ function buildStreetsArena() {
     addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
   });
 
-  // (Outer back walls removed — the play area is bounded by the invisible
-  // boundary walls at HALF_Z=92, well inside z=±100; tall back-of-block
-  // walls past the boundary just blocked the horizon view from near the
-  // map edge.)
+  // Outer back walls to close the block
+  addBlockingBox({ x: 0, y: 10, z: -100, sx: 260, sy: 20, sz: 6, material: storefrontD });
+  addBlockingBox({ x: 0, y: 10, z: 100, sx: 260, sy: 20, sz: 6, material: storefrontD });
 
   // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
   addPlatform({
@@ -3537,12 +2889,6 @@ function buildStreetsArena() {
   // Power-line / overhead banner strung between corner towers
   addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
   addBlockingBox({ x: 0, y: 16, z: 94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
-
-  // ===== Play-area edge: invisible perimeter wall + red floor stripe.
-  // The HALF_Z is set just inside the storefront back walls (z=±97-103) so
-  // those remain visible decor past the boundary. HALF_X bounds the avenue
-  // a few units past the corner sign towers (x=±110).
-  addBoundaryIndicator(128, 92, 28);
 }
 
 function buildFactoryArena() {
@@ -3594,11 +2940,11 @@ function buildFactoryArena() {
   crossLane.rotation.x = -Math.PI / 2; crossLane.position.set(0, 0.02, 0);
   scene.add(crossLane); arenaDecor.push(crossLane);
 
-  // ===== Outer factory hall edge: invisible perimeter wall + red glowing
-  // floor stripe indicator (same pattern as Station). Replaces the previous
-  // visible grey hall walls so the camera doesn't clip when the player backs
-  // into a corner; the wall trim below still marks the boundary visually.
-  addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y);
+  // Outer factory hall walls (interior 260 x 210)
+  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: -(HALF_Z + 1), sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
+  addBlockingBox({ x: 0, y: CEIL_Y / 2, z: HALF_Z + 1, sx: 2 * HALF_X + 4, sy: CEIL_Y, sz: 2, material: wall });
+  addBlockingBox({ x: -(HALF_X + 1), y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
+  addBlockingBox({ x: HALF_X + 1, y: CEIL_Y / 2, z: 0, sx: 2, sy: CEIL_Y, sz: 2 * HALF_Z + 4, material: wall });
   // Wall base trim
   addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
   addBlockingBox({ x: 0, y: 0.4, z: HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
@@ -4118,12 +3464,6 @@ function buildSquareArena() {
   addBlockingBox({ x: 0, y: 4, z: 110, sx: 240, sy: 8, sz: 4, material: creamStone });
   addBlockingBox({ x: -120, y: 4, z: 0, sx: 4, sy: 8, sz: 240, material: creamStone });
   addBlockingBox({ x: 120, y: 4, z: 0, sx: 4, sy: 8, sz: 240, material: creamStone });
-
-  // ===== Play-area edge: invisible perimeter wall + red floor stripe.
-  // The boundary sits flush against the inner faces of the cream-stone
-  // garden walls (x=±118, z=±108), so the visible walls remain the outer
-  // shell while the invisible wall is what units actually collide with.
-  addBoundaryIndicator(116, 106, 28);
 }
 
 function buildLobbyArena() {
@@ -4477,874 +3817,6 @@ function buildLobbyArena() {
   }
 }
 
-function buildStationArena() {
-  // Large industrial terminal (~270 x 264) with two parallel east-west train
-  // tracks down the centre and six staggered freight cars on them (each 35 m
-  // long × 8 m tall — full hard cover even for a jumping mech). On either side
-  // of the tracks the floor is RAISED 4 m: a player on the tracks must JUMP
-  // to reach the platforms. Platforms hold steel pillars (floor-to-ceiling),
-  // ticket booths, departure boards, info kiosks, vending rows, shipping
-  // containers, storage tanks, crate stacks, and info totems — every primary
-  // cover is sized to fully hide a ~5 m mech.
-  //
-  // The outer perimeter walls are collision-only (no mesh) so the camera
-  // never clips when the player backs into a corner. The play area boundary
-  // is marked with glowing red floor stripes inside the invisible wall.
-  // ===== Materials =====
-  const tracksFloor = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.95 });
-  const platformFloor = new THREE.MeshStandardMaterial({ color: 0x3a4350, roughness: 0.85 });
-  const platformEdge = new THREE.MeshStandardMaterial({ color: 0xa6acba, roughness: 0.5, metalness: 0.45 });
-  const platformFace = new THREE.MeshStandardMaterial({ color: 0x252b35, roughness: 0.85 });
-  const cautionStripe = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.65 });
-  const boundaryGlow = new THREE.MeshStandardMaterial({ color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4 });
-  const railTie = new THREE.MeshStandardMaterial({ color: 0x4a3d2a, roughness: 0.92 });
-  const railSteel = new THREE.MeshStandardMaterial({ color: 0xb0b6c2, roughness: 0.4, metalness: 0.7 });
-  const ballast = new THREE.MeshStandardMaterial({ color: 0x3a3a40, roughness: 0.95 });
-  const pillarSteel = new THREE.MeshStandardMaterial({ color: 0x4a5260, roughness: 0.5, metalness: 0.55 });
-  const pillarRim = new THREE.MeshStandardMaterial({ color: 0xb0b6c2, roughness: 0.45, metalness: 0.5 });
-  const trainBodyA = new THREE.MeshStandardMaterial({ color: 0x83302a, roughness: 0.6 });
-  const trainBodyB = new THREE.MeshStandardMaterial({ color: 0x2f4a76, roughness: 0.6 });
-  const trainAccent = new THREE.MeshStandardMaterial({ color: 0x12161c, roughness: 0.7 });
-  const trainRoof = new THREE.MeshStandardMaterial({ color: 0x6b6f78, roughness: 0.55, metalness: 0.3 });
-  const booth = new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.7 });
-  const boothTrim = new THREE.MeshStandardMaterial({ color: 0x4a3a20, roughness: 0.8 });
-  const boardFrame = new THREE.MeshStandardMaterial({ color: 0x202830, roughness: 0.5, metalness: 0.5 });
-  const boardScreen = new THREE.MeshStandardMaterial({ color: 0x121820, emissive: 0xe6a630, emissiveIntensity: 0.6, roughness: 0.4 });
-  const kiosk = new THREE.MeshStandardMaterial({ color: 0xd4d8df, roughness: 0.5, metalness: 0.2 });
-  const vending = new THREE.MeshStandardMaterial({ color: 0x9b2c2c, roughness: 0.6 });
-  const vendingFront = new THREE.MeshStandardMaterial({ color: 0x141820, emissive: 0xff8a3a, emissiveIntensity: 0.4, roughness: 0.5 });
-  const hallWall = new THREE.MeshStandardMaterial({ color: 0x3d4a5c, roughness: 0.7 });
-  const billboard = new THREE.MeshStandardMaterial({ color: 0xe6dab0, emissive: 0x4a3a20, emissiveIntensity: 0.3, roughness: 0.6 });
-  const containerA = new THREE.MeshStandardMaterial({ color: 0x356b8a, roughness: 0.75 });
-  const containerB = new THREE.MeshStandardMaterial({ color: 0x9b6a2a, roughness: 0.75 });
-  const containerRib = new THREE.MeshStandardMaterial({ color: 0x1a1f28, roughness: 0.7 });
-  const crateA = new THREE.MeshStandardMaterial({ color: 0x7e5635, roughness: 0.85 });
-  const crateB = new THREE.MeshStandardMaterial({ color: 0x614126, roughness: 0.9 });
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x707783, roughness: 0.5, metalness: 0.6 });
-  const tankBand = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.7 });
-  const totem = new THREE.MeshStandardMaterial({ color: 0x1f242c, roughness: 0.5, metalness: 0.4 });
-  const totemGlow = new THREE.MeshStandardMaterial({ color: 0xffe9b8, emissive: 0xffe9b8, emissiveIntensity: 0.9, roughness: 0.4 });
-  const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffe2a8, emissiveIntensity: 0.9, roughness: 0.3 });
-  const beam = new THREE.MeshStandardMaterial({ color: 0x2d343f, roughness: 0.6, metalness: 0.45 });
-  const pipe = new THREE.MeshStandardMaterial({ color: 0x8b6f3a, roughness: 0.6, metalness: 0.4 });
-
-  const HALF_X = 135;
-  const HALF_Z = 132;
-  const CEIL_Y = 28;
-  const PLATFORM_Y = 4;
-  const TRACK_Z_HALF = 11;
-
-  // ===== Base concrete floor (covers the whole arena at y=0) =====
-  // Platforms below raise sections of the walkable surface to y=4; this floor
-  // shows through wherever the platforms don't, and forms the under-platform
-  // ceiling when seen from the tracks corridor.
-  const baseFloor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, 2 * HALF_Z), tracksFloor);
-  baseFloor.rotation.x = -Math.PI / 2; baseFloor.position.set(0, 0.005, 0);
-  scene.add(baseFloor); arenaDecor.push(baseFloor);
-  // Gravel ballast bands flanking each rail
-  for (const z of [8, -8]) {
-    const bal = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X, 4.6), ballast);
-    bal.rotation.x = -Math.PI / 2; bal.position.set(0, 0.012, z);
-    scene.add(bal); arenaDecor.push(bal);
-  }
-  // Wooden ties + steel rails (decor)
-  for (const z of [8, -8]) {
-    for (let x = -130; x <= 130; x += 4.5) {
-      const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 4.6), railTie);
-      tie.position.set(x, 0.14, z);
-      scene.add(tie); arenaDecor.push(tie);
-    }
-    for (const dz of [-1.5, 1.5]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF_X, 0.28, 0.28), railSteel);
-      rail.position.set(0, 0.32, z + dz);
-      scene.add(rail); arenaDecor.push(rail);
-    }
-  }
-
-  // ===== Raised platforms (PLATFORM_Y = 4 m, no ramps — must JUMP up) =====
-  // SURFACE_STEP_HEIGHT is 1.6, so a 4 m step cannot be walked up automatically.
-  addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: TRACK_Z_HALF, maxZ: HALF_Z - 1, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
-  addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: -(HALF_Z - 1), maxZ: -TRACK_Z_HALF, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
-  // Visible 4 m platform face skirts (decor only — the surface above catches a
-  // jumping player, the face is just for the player to *see* the step). The
-  // face matches the platform's full x extent (HALF_X - 1) so the visible
-  // face aligns with the invisible collision wall below.
-  for (const zEdge of [TRACK_Z_HALF, -TRACK_Z_HALF]) {
-    const face = new THREE.Mesh(new THREE.BoxGeometry(2 * (HALF_X - 1), PLATFORM_Y, 0.5), platformFace);
-    face.position.set(0, PLATFORM_Y / 2, zEdge);
-    scene.add(face); arenaDecor.push(face);
-    // Steel edge cap running along the top of the platform face
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(2 * (HALF_X - 1), 0.35, 1.0), platformEdge);
-    cap.position.set(0, PLATFORM_Y + 0.18, zEdge + (zEdge > 0 ? 0.5 : -0.5));
-    scene.add(cap); arenaDecor.push(cap);
-    // Yellow safety stripe on top of the platform edge
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(2 * (HALF_X - 1) - 2, 0.9), cautionStripe);
-    stripe.rotation.x = -Math.PI / 2;
-    stripe.position.set(0, PLATFORM_Y + 0.05, zEdge + (zEdge > 0 ? 1.3 : -1.3));
-    scene.add(stripe); arenaDecor.push(stripe);
-  }
-
-  // ===== Outer perimeter walls — COLLISION ONLY, NO MESH =====
-  // Pushed directly so the camera never clips against them when the player
-  // backs into a corner. The boundary is marked by red floor stripes below.
-  arenaObstacles.push(
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
-  );
-
-  // ===== Invisible platform-edge walls (COLLISION ONLY) =====
-  // 4 m tall AABBs running along each platform front so a player walking on
-  // the tracks can't stroll into the platform's xz region — they must JUMP.
-  // topBuffer: 0 means once the player's center clears y=4 (mid-jump) the
-  // collision is skipped, so a forward jump can carry them onto the platform.
-  // noProjectile: true keeps bullets from being stopped by the invisible wall.
-  arenaObstacles.push(
-    { minX: -(HALF_X - 1), maxX: HALF_X - 1, minZ: 10.75, maxZ: 11.25, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true },
-    { minX: -(HALF_X - 1), maxX: HALF_X - 1, minZ: -11.25, maxZ: -10.75, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true }
-  );
-
-  // ===== Red glowing boundary stripes (the play-area edge indicator) =====
-  // Each stripe sits just inside its wall, on whichever floor is present
-  // (platform top y=4 or track floor y=0).
-  const stripeInset = 1.6;
-  // North/south stripes — these always sit on a platform.
-  for (const zEdge of [HALF_Z - stripeInset, -(HALF_Z - stripeInset)]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 4, 1.4), boundaryGlow);
-    s.rotation.x = -Math.PI / 2;
-    s.position.set(0, PLATFORM_Y + 0.05, zEdge);
-    scene.add(s); arenaDecor.push(s);
-  }
-  // East/west stripes — split into three sections so each rides the correct
-  // floor (platform north, track corridor, platform south).
-  for (const xEdge of [HALF_X - stripeInset, -(HALF_X - stripeInset)]) {
-    const nLen = (HALF_Z - 1) - TRACK_Z_HALF;
-    const n = new THREE.Mesh(new THREE.PlaneGeometry(1.4, nLen), boundaryGlow);
-    n.rotation.x = -Math.PI / 2;
-    n.position.set(xEdge, PLATFORM_Y + 0.05, (TRACK_Z_HALF + HALF_Z - 1) / 2);
-    scene.add(n); arenaDecor.push(n);
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, nLen), boundaryGlow);
-    s.rotation.x = -Math.PI / 2;
-    s.position.set(xEdge, PLATFORM_Y + 0.05, -(TRACK_Z_HALF + HALF_Z - 1) / 2);
-    scene.add(s); arenaDecor.push(s);
-    const t = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * TRACK_Z_HALF), boundaryGlow);
-    t.rotation.x = -Math.PI / 2;
-    t.position.set(xEdge, 0.05, 0);
-    scene.add(t); arenaDecor.push(t);
-  }
-
-  // ===== Stopped freight cars on two staggered tracks (6 — big hard cover) =====
-  const drawTrainCar = (cx, beltZ, bodyMat) => {
-    addBlockingBox({ x: cx, y: 4, z: beltZ, sx: 35, sy: 8, sz: 5, material: bodyMat });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(35.6, 0.7, 5.4), trainRoof);
-    roof.position.set(cx, 8.35, beltZ);
-    scene.add(roof); arenaDecor.push(roof);
-    const skirt = new THREE.Mesh(new THREE.BoxGeometry(35, 1.0, 5.2), trainAccent);
-    skirt.position.set(cx, 0.55, beltZ);
-    scene.add(skirt); arenaDecor.push(skirt);
-    const stripeMid = new THREE.Mesh(new THREE.BoxGeometry(35, 0.8, 5.05), trainAccent);
-    stripeMid.position.set(cx, 5.2, beltZ);
-    scene.add(stripeMid); arenaDecor.push(stripeMid);
-    for (const dx of [-17.8, 17.8]) {
-      const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.8, 12), railSteel);
-      buf.rotation.z = Math.PI / 2;
-      buf.position.set(cx + dx, 2.8, beltZ);
-      scene.add(buf); arenaDecor.push(buf);
-    }
-    // Wheel sets (decor)
-    for (const dx of [-12, 12]) {
-      const axle = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 5.2, 16), trainAccent);
-      axle.rotation.x = Math.PI / 2;
-      axle.position.set(cx + dx, 1.0, beltZ);
-      scene.add(axle); arenaDecor.push(axle);
-    }
-  };
-  // North track — rust-red wagons
-  drawTrainCar(-100, 8, trainBodyA);
-  drawTrainCar(-25, 8, trainBodyA);
-  drawTrainCar(60, 8, trainBodyA);
-  // South track — weathered-blue wagons, offset for staggered cross-fire
-  drawTrainCar(100, -8, trainBodyB);
-  drawTrainCar(25, -8, trainBodyB);
-  drawTrainCar(-60, -8, trainBodyB);
-
-  // ===== Steel I-beam pillars carrying the roof (16 — structural cover) =====
-  const drawPillar = (cx, cz) => {
-    addBlockingBox({ x: cx, y: CEIL_Y / 2, z: cz, sx: 4, sy: CEIL_Y, sz: 4, material: pillarSteel });
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.5, 5.4), pillarRim);
-    cap.position.set(cx, CEIL_Y - 0.4, cz);
-    scene.add(cap); arenaDecor.push(cap);
-    const flange = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.0, 5.8), pillarRim);
-    flange.position.set(cx, PLATFORM_Y + 0.5, cz);
-    scene.add(flange); arenaDecor.push(flange);
-  };
-  [
-    [-105, 55], [-35, 55], [35, 55], [105, 55],
-    [-105, -55], [-35, -55], [35, -55], [105, -55],
-    [-105, 115], [-35, 115], [35, 115], [105, 115],
-    [-105, -115], [-35, -115], [35, -115], [105, -115]
-  ].forEach(([x, z]) => drawPillar(x, z));
-
-  // ===== Ticket booths — biggest cover, along the deep back walls =====
-  const drawBooth = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 28, sy: 15, sz: 18, material: booth });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(29, 0.8, 19), boothTrim);
-    roof.position.set(cx, 15.4, cz);
-    scene.add(roof); arenaDecor.push(roof);
-    // Glass front facing the platform (decor only)
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(22, 5, 0.25), boardScreen);
-    glass.position.set(cx, PLATFORM_Y + 4, cz - 9.15);
-    scene.add(glass); arenaDecor.push(glass);
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(16, 1.4, 0.4), boardScreen);
-    sign.position.set(cx, 13, cz - 9.2);
-    scene.add(sign); arenaDecor.push(sign);
-  };
-  drawBooth(-65, 122);
-  drawBooth(65, 122);
-  drawBooth(-65, -122);
-  drawBooth(65, -122);
-
-  // ===== Departure information boards (perpendicular sight-line blockers) =====
-  const drawDepartureBoard = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 24, sy: 15, sz: 3, material: boardFrame });
-    for (const dz of [-1.6, 1.6]) {
-      const screen = new THREE.Mesh(new THREE.BoxGeometry(22, 13, 0.15), boardScreen);
-      screen.position.set(cx, 7.8, cz + dz);
-      scene.add(screen); arenaDecor.push(screen);
-    }
-    const crown = new THREE.Mesh(new THREE.BoxGeometry(25, 0.6, 3.4), boardFrame);
-    crown.position.set(cx, 15.3, cz);
-    scene.add(crown); arenaDecor.push(crown);
-  };
-  drawDepartureBoard(-65, 80);
-  drawDepartureBoard(65, 80);
-  drawDepartureBoard(-65, -80);
-  drawDepartureBoard(65, -80);
-
-  // ===== Hall partition walls — break the back hall into bays =====
-  const drawHallWall = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 32, sy: 15, sz: 2.5, material: hallWall });
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(33, 0.5, 3), beam);
-    trim.position.set(cx, 15.25, cz);
-    scene.add(trim); arenaDecor.push(trim);
-    for (const dz of [-1.4, 1.4]) {
-      const ad = new THREE.Mesh(new THREE.BoxGeometry(22, 8, 0.12), billboard);
-      ad.position.set(cx, 8, cz + dz);
-      scene.add(ad); arenaDecor.push(ad);
-    }
-  };
-  drawHallWall(-70, 95);
-  drawHallWall(70, 95);
-  drawHallWall(-70, -95);
-  drawHallWall(70, -95);
-
-  // ===== Info kiosks on the platforms (8 — full-cover boxes) =====
-  const drawKiosk = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 6, z: cz, sx: 12, sy: 12, sz: 10, material: kiosk });
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(8, 1.4, 0.25), boardScreen);
-    sign.position.set(cx, PLATFORM_Y + 5, cz - 5.15);
-    scene.add(sign); arenaDecor.push(sign);
-  };
-  [
-    [-105, 30], [-35, 30], [35, 30], [105, 30],
-    [-105, -30], [-35, -30], [35, -30], [105, -30]
-  ].forEach(([x, z]) => drawKiosk(x, z));
-
-  // ===== Vending machine rows along the back of each platform (10) =====
-  const drawVending = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 5.5, z: cz, sx: 8, sy: 11, sz: 3, material: vending });
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(7, 6, 0.12), vendingFront);
-    panel.position.set(cx, 7, cz - 1.56);
-    scene.add(panel); arenaDecor.push(panel);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.6, 3.4), boardFrame);
-    top.position.set(cx, 11.3, cz);
-    scene.add(top); arenaDecor.push(top);
-  };
-  [
-    [-95, 65], [-45, 65], [0, 65], [45, 65], [95, 65],
-    [-95, -65], [-45, -65], [0, -65], [45, -65], [95, -65]
-  ].forEach(([x, z]) => drawVending(x, z));
-
-  // ===== Shipping containers — long horizontal cover (4) =====
-  const drawContainer = (cx, cz, mat) => {
-    addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat });
-    const top = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.5, 8.4), containerRib);
-    top.position.set(cx, 10.25, cz);
-    scene.add(top); arenaDecor.push(top);
-    // Corrugated rib strips
-    for (let dx = -8; dx <= 8; dx += 1.6) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.6, 8.2), containerRib);
-      rib.position.set(cx + dx, 5, cz);
-      scene.add(rib); arenaDecor.push(rib);
-    }
-  };
-  drawContainer(-50, 105, containerA);
-  drawContainer(50, 105, containerB);
-  drawContainer(-50, -105, containerB);
-  drawContainer(50, -105, containerA);
-
-  // ===== Storage tanks — round full-cover cylinders (8) =====
-  const drawTank = (cx, cz) => {
-    // Square AABB matching the tank's footprint, pushed directly so we can use
-    // a cylinder mesh as the visual (addBlockingBox would also create a box).
-    arenaObstacles.push({
-      minX: cx - 2.5, maxX: cx + 2.5,
-      minZ: cz - 2.5, maxZ: cz + 2.5,
-      minY: 0, maxY: 14
-    });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 14, 20), tankMat);
-    body.position.set(cx, 7, cz);
-    scene.add(body); arenaDecor.push(body);
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), tankMat);
-    dome.position.set(cx, 14, cz);
-    scene.add(dome); arenaDecor.push(dome);
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.7, 20), tankBand);
-    band.position.set(cx, PLATFORM_Y + 1.6, cz);
-    scene.add(band); arenaDecor.push(band);
-  };
-  [
-    [-125, 45], [125, 45], [-125, -45], [125, -45],
-    [-125, 105], [125, 105], [-125, -105], [125, -105]
-  ].forEach(([x, z]) => drawTank(x, z));
-
-  // ===== Crate stacks along the platform front edge (4) =====
-  const drawCrateStack = (cx, cz) => {
-    // Push the AABB directly; visual is four individual stacked crates below.
-    arenaObstacles.push({
-      minX: cx - 4, maxX: cx + 4,
-      minZ: cz - 4, maxZ: cz + 4,
-      minY: 0, maxY: 11
-    });
-    for (let i = 0; i < 4; i++) {
-      const c = new THREE.Mesh(new THREE.BoxGeometry(7.8, 2.7, 7.8), i % 2 === 0 ? crateA : crateB);
-      c.position.set(cx, 1.4 + i * 2.75, cz);
-      scene.add(c); arenaDecor.push(c);
-    }
-  };
-  drawCrateStack(-75, 18);
-  drawCrateStack(75, 18);
-  drawCrateStack(-75, -18);
-  drawCrateStack(75, -18);
-
-  // ===== Info totems mid-platform (4 — slim full-height columns) =====
-  const drawTotem = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7, z: cz, sx: 3, sy: 14, sz: 3, material: totem });
-    const globe = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 10), totemGlow);
-    globe.position.set(cx, 15.2, cz);
-    scene.add(globe); arenaDecor.push(globe);
-  };
-  drawTotem(-25, 70);
-  drawTotem(25, 70);
-  drawTotem(-25, -70);
-  drawTotem(25, -70);
-
-  // ===== Overhead pipework (decor only) =====
-  for (const z of [-100, -55, -15, 15, 55, 100]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2 * HALF_X, 12), pipe);
-    p.rotation.z = Math.PI / 2;
-    p.position.set(0, 20, z);
-    scene.add(p); arenaDecor.push(p);
-  }
-
-  // ===== Ceiling truss beams =====
-  for (const x of [-115, -75, -35, 0, 35, 75, 115]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 2 * HALF_Z), beam);
-    b.position.set(x, CEIL_Y - 3.5, 0);
-    scene.add(b); arenaDecor.push(b);
-  }
-
-  // ===== Hanging sodium-lamp banks (warm yellow station lighting) =====
-  for (const x of [-115, -75, -35, 35, 75, 115]) {
-    for (const z of [-110, -70, -35, 0, 35, 70, 110]) {
-      const l = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.5, 2.2), lampMat);
-      l.position.set(x, CEIL_Y - 5.5, z);
-      scene.add(l); arenaDecor.push(l);
-    }
-  }
-
-  // ===== Hanging central station clock (decor only) =====
-  const clockBack = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 24), beam);
-  clockBack.rotation.x = Math.PI / 2;
-  clockBack.position.set(0, 22, 0);
-  scene.add(clockBack); arenaDecor.push(clockBack);
-  const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.3, 24), lampMat);
-  clockFace.rotation.x = Math.PI / 2;
-  clockFace.position.set(0, 22, 0.3);
-  scene.add(clockFace); arenaDecor.push(clockFace);
-  const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
-  clockHanger.position.set(0, 25.5, 0);
-  scene.add(clockHanger); arenaDecor.push(clockHanger);
-}
-
-function buildCarnivalArena() {
-  // Open-air evening festival ground (~Station-sized: 260 x 260). North end
-  // is a headlining outdoor rock stage with a tall backdrop and stage lights;
-  // south end is a motocross course with two earth-and-dirt jumping ramps
-  // separated by a kicker gap and flanked by berms. The mid-zone is a food
-  // court with food trucks, kiosks, picnic-pavilion tents, and neon info
-  // totems — every primary cover is sized to fully hide a ~5 m mech.
-  // Tone matches Factory/Station: gritty industrial steel + dusty earth.
-
-  // ===== Materials =====
-  const dirt = new THREE.MeshStandardMaterial({ color: 0x6b563d, roughness: 0.95 });
-  const gravel = new THREE.MeshStandardMaterial({ color: 0x4a4036, roughness: 0.92 });
-  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
-  const stagePlankMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7 });
-  const stageBackdropMat = new THREE.MeshStandardMaterial({ color: 0x141014, roughness: 0.85 });
-  const stageNeon = new THREE.MeshStandardMaterial({ color: 0xff5577, emissive: 0xff3870, emissiveIntensity: 1.2, roughness: 0.4 });
-  const speakerMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6 });
-  const speakerCone = new THREE.MeshStandardMaterial({ color: 0x4a3838, roughness: 0.7 });
-  const scaffoldMat = new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.5, metalness: 0.55 });
-  const trussMat = new THREE.MeshStandardMaterial({ color: 0x55606e, roughness: 0.5, metalness: 0.55 });
-  const stageLightMat = new THREE.MeshStandardMaterial({ color: 0xffe39c, emissive: 0xffe39c, emissiveIntensity: 1.3, roughness: 0.4 });
-  const bermMat = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.95 });
-  const bermLip = new THREE.MeshStandardMaterial({ color: 0x6b502f, roughness: 0.92 });
-  const hayMat = new THREE.MeshStandardMaterial({ color: 0xc9a95a, roughness: 0.9 });
-  const rampMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.85 });
-  const truckRedMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
-  const truckBlueMat = new THREE.MeshStandardMaterial({ color: 0x2a6a9a, roughness: 0.6 });
-  const truckYellowMat = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.6 });
-  const truckGreenMat = new THREE.MeshStandardMaterial({ color: 0x4a8b3a, roughness: 0.6 });
-  const truckCreamMat = new THREE.MeshStandardMaterial({ color: 0xe6dab0, roughness: 0.6 });
-  const truckPurpleMat = new THREE.MeshStandardMaterial({ color: 0x7a3a8a, roughness: 0.6 });
-  const kioskMat = new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.7 });
-  const kioskTrim = new THREE.MeshStandardMaterial({ color: 0x4a3a20, roughness: 0.8 });
-  const pavilionMat = new THREE.MeshStandardMaterial({ color: 0xead7a8, roughness: 0.85 });
-  const pavilionStripe = new THREE.MeshStandardMaterial({ color: 0xc24a4a, roughness: 0.85 });
-  const totemMat = new THREE.MeshStandardMaterial({ color: 0x1a1f28, roughness: 0.55, metalness: 0.4 });
-  const totemNeon = new THREE.MeshStandardMaterial({ color: 0xfff7d0, emissive: 0xfff7d0, emissiveIntensity: 1.0, roughness: 0.4 });
-  const totemNeonAlt = new THREE.MeshStandardMaterial({ color: 0x6fb6e0, emissive: 0x6fb6e0, emissiveIntensity: 1.0, roughness: 0.4 });
-  const generatorMat = new THREE.MeshStandardMaterial({ color: 0x4a525e, roughness: 0.65, metalness: 0.4 });
-  const generatorTop = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.7 });
-  const lampMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.55, metalness: 0.45 });
-  const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffe2a8, emissiveIntensity: 0.95, roughness: 0.4 });
-
-  // ===== Base floor =====
-  const base = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), dirt);
-  base.rotation.x = -Math.PI / 2; base.position.y = 0.005;
-  scene.add(base); arenaDecor.push(base);
-  // Gravel "audience pit" in front of stage
-  const audience = new THREE.Mesh(new THREE.PlaneGeometry(120, 35), gravel);
-  audience.rotation.x = -Math.PI / 2; audience.position.set(0, 0.012, 75);
-  scene.add(audience); arenaDecor.push(audience);
-  // Wooden plank pathways crossing the food court (decor)
-  for (const z of [-40, 0, 40]) {
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(200, 4), wood);
-    path.rotation.x = -Math.PI / 2; path.position.set(0, 0.01, z);
-    scene.add(path); arenaDecor.push(path);
-  }
-
-  // ===== Rock stage (north) =====
-  // Backdrop wall — full-height curtain wall behind the stage; hides anyone behind.
-  addBlockingBox({ x: 0, y: 7, z: 122.5, sx: 104, sy: 14, sz: 3, material: stageBackdropMat });
-  // Glowing band/title strip on the backdrop (decor only, faces south).
-  const facadeNeon = new THREE.Mesh(new THREE.PlaneGeometry(70, 2.4), stageNeon);
-  facadeNeon.position.set(0, 11.5, 120.95);
-  scene.add(facadeNeon); arenaDecor.push(facadeNeon);
-  // Stage platform — raised 4 m, walkable; jump up onto via the front edge wall.
-  addPlatform({ minX: -50, maxX: 50, minZ: 96, maxZ: 119, top: 4, material: stagePlankMat, thickness: 0.6 });
-  // Visible black skirt on the front of the platform (decor — sits on the
-  // invisible edge wall so the player sees a step they have to jump up).
-  const stageFace = new THREE.Mesh(new THREE.BoxGeometry(100, 4, 0.5), stageBackdropMat);
-  stageFace.position.set(0, 2, 95.75);
-  scene.add(stageFace); arenaDecor.push(stageFace);
-  // Stage front-edge wall — collision-only, jump-only (matches Station's
-  // platform-edge pattern). topBuffer: 0 so a jumping player clears it once
-  // their center crosses y=4; noProjectile: true so bullets pass through.
-  arenaObstacles.push({
-    minX: -50, maxX: 50, minZ: 95.7, maxZ: 96.3, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true
-  });
-  // Front speaker stacks at the stage corners.
-  addBlockingBox({ x: -52, y: 4.5, z: 92, sx: 4, sy: 9, sz: 4, material: speakerMat });
-  addBlockingBox({ x:  52, y: 4.5, z: 92, sx: 4, sy: 9, sz: 4, material: speakerMat });
-  for (const xs of [-52, 52]) {
-    const cone = new THREE.Mesh(new THREE.CircleGeometry(1.4, 16), speakerCone);
-    cone.position.set(xs, 5, 89.95); cone.rotation.y = Math.PI;
-    scene.add(cone); arenaDecor.push(cone);
-  }
-  // Side scaffold towers at the stage flanks (taller than mech — full cover).
-  addBlockingBox({ x: -54, y: 8, z: 97, sx: 4, sy: 16, sz: 4, material: scaffoldMat });
-  addBlockingBox({ x:  54, y: 8, z: 97, sx: 4, sy: 16, sz: 4, material: scaffoldMat });
-  // Truss bridge between scaffold tops carrying the stage lights (decor only —
-  // overhead at y≈17, well above any mech/jump apex).
-  const truss = new THREE.Mesh(new THREE.BoxGeometry(112, 0.7, 1.4), trussMat);
-  truss.position.set(0, 17, 97);
-  scene.add(truss); arenaDecor.push(truss);
-  for (let lx = -50; lx <= 50; lx += 12.5) {
-    const light = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), stageLightMat);
-    light.position.set(lx, 16.4, 97);
-    scene.add(light); arenaDecor.push(light);
-  }
-
-  // ===== Motocross slope stage (south) =====
-  // Take-off ramp — dirt slope rising from south end up to the kicker at z=-101.
-  addRamp({
-    minX: -10, maxX: 10, minZ: -125, maxZ: -101,
-    axis: 'z', lowY: 0, highY: 5, material: rampMat, thickness: 0.7
-  });
-  // Landing ramp — apex at z=-93 then descending back to flat by z=-69.
-  addRamp({
-    minX: -10, maxX: 10, minZ: -93, maxZ: -69,
-    axis: 'z', lowY: 5, highY: 0, material: rampMat, thickness: 0.7
-  });
-  // Side berms — earthworks flanking the course, full mech-height cover.
-  for (const [bx, bz] of [[-22, -112.5], [22, -112.5], [-22, -81.5], [22, -81.5]]) {
-    addBlockingBox({ x: bx, y: 4, z: bz, sx: 12, sy: 8, sz: 25, material: bermMat });
-    // Rough dirt-rim cap along the top of each berm (decor)
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.4, 25.4), bermLip);
-    lip.position.set(bx, 8.2, bz);
-    scene.add(lip); arenaDecor.push(lip);
-  }
-  // Hay-bale stacks at the corners of the course (chunky cover).
-  for (const [hx, hz] of [[-47, -97], [47, -97], [-47, -122], [47, -122]]) {
-    addBlockingBox({ x: hx, y: 3, z: hz, sx: 6, sy: 6, sz: 6, material: hayMat });
-  }
-
-  // ===== Mid-zone food court — trucks, kiosks, pavilions, totems =====
-  // Food trucks (8 m long × 4 m deep × 5 m tall — vibrant colours per truck).
-  const truckMats = [truckRedMat, truckBlueMat, truckYellowMat, truckGreenMat, truckCreamMat, truckPurpleMat];
-  const truckSpots = [
-    [-106, -48], [-71, -23], [-41, 32],
-    [ 41, -28], [ 71,  27], [106,  52]
-  ];
-  truckSpots.forEach(([x, z], i) => {
-    addBlockingBox({ x, y: 2.5, z, sx: 8, sy: 5, sz: 4, material: truckMats[i % truckMats.length] });
-    // Awning slab on top (decor — slightly oversized for visual depth).
-    const awn = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 5.6), truckMats[(i + 2) % truckMats.length]);
-    awn.position.set(x, 5.2, z);
-    scene.add(awn); arenaDecor.push(awn);
-  });
-  // Food kiosks — squarer 6×6×5 stalls (cream walls, brown trim).
-  for (const [x, z] of [[-82, 23], [82, -23], [-7, 63], [7, -63]]) {
-    addBlockingBox({ x, y: 2.5, z, sx: 6, sy: 5, sz: 6, material: kioskMat });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.3, 6.6), kioskTrim);
-    roof.position.set(x, 5.2, z);
-    scene.add(roof); arenaDecor.push(roof);
-  }
-  // Picnic pavilion tents — 8×8×5 covered canopies that shade tables/benches.
-  for (const [x, z] of [[-26, -6], [26, 6], [-96, 64], [96, -64]]) {
-    addBlockingBox({ x, y: 2.5, z, sx: 8, sy: 5, sz: 8, material: pavilionMat });
-    // Striped awning ridge along the canopy top (decor).
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.4, 1.2), pavilionStripe);
-    stripe.position.set(x, 5.3, z);
-    scene.add(stripe); arenaDecor.push(stripe);
-    // Decorative picnic-table + bench ring around each pavilion (decor only —
-    // too short individually to be cover, but clarify the festival-seating use).
-    for (const [tx, tz] of [[x - 5.8, z], [x + 5.8, z], [x, z - 5.8], [x, z + 5.8]]) {
-      const tableTop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 1.2), wood);
-      tableTop.position.set(tx, 1.0, tz);
-      scene.add(tableTop); arenaDecor.push(tableTop);
-      const bench = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 0.4), wood);
-      bench.position.set(tx, 0.5, tz + 0.85);
-      scene.add(bench); arenaDecor.push(bench);
-    }
-  }
-  // Neon info totems — tall thin pillars marking the centerline aisles.
-  const totemSpots = [
-    [0, 20, totemNeon], [0, -20, totemNeonAlt],
-    [-40, 0, totemNeonAlt], [40, 0, totemNeon]
-  ];
-  totemSpots.forEach(([x, z, glowMat]) => {
-    addBlockingBox({ x, y: 3.5, z, sx: 2, sy: 7, sz: 2, material: totemMat });
-    const ring = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.4, 2.4), glowMat);
-    ring.position.set(x, 6.6, z);
-    scene.add(ring); arenaDecor.push(ring);
-  });
-  // Generator / sound trucks parked behind the audience pit, flanking the
-  // approach to the stage (8×8×6 — large hard cover near the stage edge).
-  for (const gx of [-94, 94]) {
-    addBlockingBox({ x: gx, y: 3, z: 92, sx: 8, sy: 6, sz: 8, material: generatorMat });
-    const band = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.3, 8.4), generatorTop);
-    band.position.set(gx, 6.2, 92);
-    scene.add(band); arenaDecor.push(band);
-  }
-
-  // ===== Lamp posts + bunting (decor only — atmospheric only) =====
-  const lampPositions = [
-    [-100, -90], [-50, -90], [50, -90], [100, -90],
-    [-100,  50], [-50,  50], [50,  50], [100,  50],
-    [-100,   0], [100,   0]
-  ];
-  lampPositions.forEach(([lx, lz]) => {
-    addBlockingBox({ x: lx, y: 6, z: lz, sx: 0.4, sy: 12, sz: 0.4, material: lampMat, decorOnly: true });
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.9), lampGlow);
-    head.position.set(lx, 12.1, lz);
-    scene.add(head); arenaDecor.push(head);
-  });
-  // Carnival flag bunting strung above the food court (decor only, overhead).
-  for (const lz of [-90, 50]) {
-    const bunting = new THREE.Mesh(new THREE.BoxGeometry(200, 0.18, 0.18), pavilionStripe);
-    bunting.position.set(0, 11, lz);
-    scene.add(bunting); arenaDecor.push(bunting);
-  }
-
-  // ===== Play-area edge: invisible perimeter wall + red floor stripe =====
-  addBoundaryIndicator(130, 130, 28);
-}
-
-function buildFlashpointArena() {
-  // Industrial CQB arena (~220 × 150) — a tighter, well-lit concrete hall
-  // divided into rooms by partition walls, corrugated-metal panels, and
-  // wood paneling. Two diagonal spawns (B-1 NE / B-2 SW) each in a partial
-  // enclosure with one doorway. The mid-east half hosts a Reception/
-  // Blueprint room and a Research/Lab room behind their own walls. A
-  // container cluster sits mid-west with a substation behind it. Concrete
-  // pillars rise full-height for true cover, with chunky 7 m crate stacks
-  // and 6 m drum stacks scattered as side cover. Brighter than the first
-  // pass — readable at distance — but still gritty Factory/Station tone.
-
-  // ===== Materials (lifted brightness for visibility under bigger ambient) =====
-  const concreteFloor = new THREE.MeshStandardMaterial({ color: 0x4a525e, roughness: 0.95 });
-  const concreteFloorAlt = new THREE.MeshStandardMaterial({ color: 0x5a626e, roughness: 0.92 });
-  const floorMarking = new THREE.MeshStandardMaterial({ color: 0xe8b430, roughness: 0.7 });
-  const concreteWall = new THREE.MeshStandardMaterial({ color: 0x9aa3b0, roughness: 0.85 });
-  const concreteWallTrim = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.7 });
-  const corrugated = new THREE.MeshStandardMaterial({ color: 0xa68a55, roughness: 0.7, metalness: 0.4 });
-  const corrugatedRust = new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.78, metalness: 0.3 });
-  const woodPanel = new THREE.MeshStandardMaterial({ color: 0xb38545, roughness: 0.85 });
-  const containerRedMat = new THREE.MeshStandardMaterial({ color: 0xc8463c, roughness: 0.7 });
-  const containerBlueMat = new THREE.MeshStandardMaterial({ color: 0x356da6, roughness: 0.7 });
-  const containerRustMat = new THREE.MeshStandardMaterial({ color: 0x7e564a, roughness: 0.78 });
-  const containerRib = new THREE.MeshStandardMaterial({ color: 0x252b35, roughness: 0.65 });
-  const drumMat = new THREE.MeshStandardMaterial({ color: 0x945c34, roughness: 0.74 });
-  const drumLid = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.68 });
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0xb38545, roughness: 0.82 });
-  const crateRib = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.88 });
-  const columnMat = new THREE.MeshStandardMaterial({ color: 0x5a626e, roughness: 0.55, metalness: 0.5 });
-  const columnTrim = new THREE.MeshStandardMaterial({ color: 0xc4cad6, roughness: 0.45, metalness: 0.6 });
-  const subStationMat = new THREE.MeshStandardMaterial({ color: 0x6a737e, roughness: 0.65, metalness: 0.45 });
-  const subStationVent = new THREE.MeshStandardMaterial({ color: 0x252b35, roughness: 0.6, metalness: 0.4 });
-  const platformDeck = new THREE.MeshStandardMaterial({ color: 0x4a525e, roughness: 0.55, metalness: 0.55 });
-  const platformEdge = new THREE.MeshStandardMaterial({ color: 0xb8becb, roughness: 0.5, metalness: 0.45 });
-  const cautionStripe = new THREE.MeshStandardMaterial({ color: 0xe8b430, roughness: 0.65 });
-  const exitSign = new THREE.MeshStandardMaterial({ color: 0x6fdfff, emissive: 0x6fdfff, emissiveIntensity: 1.2, roughness: 0.4 });
-  const ductMat = new THREE.MeshStandardMaterial({ color: 0x4a5260, roughness: 0.7, metalness: 0.3 });
-  const pipeMat = new THREE.MeshStandardMaterial({ color: 0xb8784a, roughness: 0.6, metalness: 0.45 });
-  const lampGlow = new THREE.MeshStandardMaterial({ color: 0xfff0c0, emissive: 0xfff0c0, emissiveIntensity: 1.2, roughness: 0.4 });
-
-  // ===== Concrete floor + painted walkway markings =====
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 170), concreteFloor);
-  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
-  scene.add(floor); arenaDecor.push(floor);
-  // Diagonal walkway band running corner-to-corner (decor — visual flow line).
-  const lane = new THREE.Mesh(new THREE.PlaneGeometry(220, 6), concreteFloorAlt);
-  lane.rotation.x = -Math.PI / 2; lane.rotation.z = Math.atan2(110, 190);
-  lane.position.set(0, 0.012, 0);
-  scene.add(lane); arenaDecor.push(lane);
-  // Yellow tape boundary stripes around the central arena (decor).
-  for (const z of [-22, 22]) {
-    const tape = new THREE.Mesh(new THREE.PlaneGeometry(140, 0.6), floorMarking);
-    tape.rotation.x = -Math.PI / 2; tape.position.set(0, 0.018, z);
-    scene.add(tape); arenaDecor.push(tape);
-  }
-
-  // ===== B-2 spawn enclosure (SW) — 28 m doorway centred at x=-68 with a
-  // visible lintel header above so the gap reads as a real architectural
-  // doorway from across the hall (rather than just two random wall ends). =====
-  addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: -41.5, y: 6, z: -52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
-  // Doorway lintel header (decor only — frames the opening, no collision so
-  // it doesn't catch jumping mechs).
-  const b2Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
-  b2Lintel.position.set(-68, 11, -30.5);
-  scene.add(b2Lintel); arenaDecor.push(b2Lintel);
-  // "B-2" exit-sign placards on both faces of the lintel so the doorway is
-  // readable from inside the spawn AND from the central hall.
-  const b2SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
-  b2SignS.position.set(-68, 8.5, -32.05); b2SignS.rotation.y = Math.PI;
-  scene.add(b2SignS); arenaDecor.push(b2SignS);
-  const b2SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
-  b2SignN.position.set(-68, 8.5, -28.95);
-  scene.add(b2SignN); arenaDecor.push(b2SignN);
-
-  // ===== B-1 spawn enclosure (NE) — mirror of B-2 with its own lintel =====
-  addBlockingBox({ x: 96, y: 6, z: 30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: 47, y: 6, z: 30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: 41.5, y: 6, z: 52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
-  const b1Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
-  b1Lintel.position.set(68, 11, 30.5);
-  scene.add(b1Lintel); arenaDecor.push(b1Lintel);
-  const b1SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
-  b1SignN.position.set(68, 8.5, 32.05);
-  scene.add(b1SignN); arenaDecor.push(b1SignN);
-  const b1SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
-  b1SignS.position.set(68, 8.5, 28.95); b1SignS.rotation.y = Math.PI;
-  scene.add(b1SignS); arenaDecor.push(b1SignS);
-
-  // ===== Mid divider at z=0 — LOWERED to 6 m so the player camera can see
-  // across the hall (ambient readability), but still high enough to block
-  // body-height projectiles and bot LoS (mech eye sits at ~4 m). =====
-  addBlockingBox({ x: -49, y: 3, z: 0, sx: 18, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x: -5,  y: 3, z: 0, sx: 30, sy: 6, sz: 3, material: concreteWall });
-  addBlockingBox({ x:  44, y: 3, z: 0, sx: 28, sy: 6, sz: 3, material: concreteWall });
-  // Concrete-wall base trim (decor — adds weight to the divider visually).
-  for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.6, 3.4), concreteWallTrim);
-    trim.position.set(tx, 0.3, 0);
-    scene.add(trim); arenaDecor.push(trim);
-  }
-  // Steel cap rail along the top of each lowered segment — visually marks
-  // the divider as "low wall" rather than "wall got cut off".
-  for (const [tx, tw] of [[-49, 18], [-5, 30], [44, 28]]) {
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.3, 3.6), columnTrim);
-    cap.position.set(tx, 6.15, 0);
-    scene.add(cap); arenaDecor.push(cap);
-  }
-
-  // ===== Container cluster (3 parallel shipping containers, mid-west NORTH half) =====
-  const containerColors = [containerRedMat, containerBlueMat, containerRustMat];
-  containerColors.forEach((mat, i) => {
-    const cz = 13 + i * 10;
-    addBlockingBox({ x: -30, y: 4, z: cz, sx: 16, sy: 8, sz: 6, material: mat });
-    // Top corner ribs (decor — short stubs on each end of the container).
-    for (const xs of [-38, -22]) {
-      const corner = new THREE.Mesh(new THREE.BoxGeometry(0.9, 8.4, 0.9), containerRib);
-      corner.position.set(xs, 4, cz - 3);
-      scene.add(corner); arenaDecor.push(corner);
-      const corner2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 8.4, 0.9), containerRib);
-      corner2.position.set(xs, 4, cz + 3);
-      scene.add(corner2); arenaDecor.push(corner2);
-    }
-  });
-
-  // ===== Reception / Blueprint room (mid-east, NORTH of divider) =====
-  // 5 walls forming an enclosed room with a south doorway around x=22-30.
-  addBlockingBox({ x: 22.5, y: 6, z: 23.5, sx: 25, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 33.5, y: 6, z: 16,   sx: 3,  sy: 12, sz: 12, material: concreteWall });
-  addBlockingBox({ x: 16,   y: 6, z: 11.5, sx: 12, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 32.5, y: 6, z: 11.5, sx: 5,  sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 11.5, y: 6, z: 17.5, sx: 3,  sy: 12, sz: 9, material: concreteWall });
-  // Wood-panel accent strip on the north wall (decor — like the reference photos).
-  const recAccent = new THREE.Mesh(new THREE.BoxGeometry(25, 1.6, 0.2), woodPanel);
-  recAccent.position.set(22.5, 8, 22);
-  scene.add(recAccent); arenaDecor.push(recAccent);
-
-  // ===== Research / Lab room (mid-east, SOUTH of divider) =====
-  addBlockingBox({ x: 22.5, y: 6, z: -11.5, sx: 25, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 33.5, y: 6, z: -17.5, sx: 3,  sy: 12, sz: 9,  material: concreteWall });
-  addBlockingBox({ x: 16,   y: 6, z: -23.5, sx: 12, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 32.5, y: 6, z: -23.5, sx: 5,  sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: 11.5, y: 6, z: -17.5, sx: 3,  sy: 12, sz: 9,  material: concreteWall });
-  const labAccent = new THREE.Mesh(new THREE.BoxGeometry(25, 1.6, 0.2), woodPanel);
-  labAccent.position.set(22.5, 8, -13);
-  scene.add(labAccent); arenaDecor.push(labAccent);
-
-  // ===== Substation block (mid-west, SOUTH half) — 8 m tall industrial unit =====
-  addBlockingBox({ x: -15, y: 4, z: -22.5, sx: 20, sy: 8, sz: 15, material: subStationMat });
-  // Vent louvres on top (decor)
-  const vent = new THREE.Mesh(new THREE.BoxGeometry(18, 0.5, 13), subStationVent);
-  vent.position.set(-15, 8.25, -22.5);
-  scene.add(vent); arenaDecor.push(vent);
-  // Caution-yellow band wrapping the substation base (decor)
-  const subBand = new THREE.Mesh(new THREE.BoxGeometry(20.4, 0.8, 15.4), cautionStripe);
-  subBand.position.set(-15, 0.6, -22.5);
-  scene.add(subBand); arenaDecor.push(subBand);
-
-  // ===== Corner partitions (L-shape walls — fill the previously-open
-  // NW and SE quadrants so the corners aren't dead empty space). =====
-  // NW corner partition.
-  addBlockingBox({ x: -80,   y: 6, z: 53.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x: -93.5, y: 6, z: 62.5, sx: 3,  sy: 12, sz: 15, material: concreteWall });
-  // SE corner partition (mirror).
-  addBlockingBox({ x:  80,   y: 6, z: -53.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x:  93.5, y: 6, z: -62.5, sx: 3,  sy: 12, sz: 15, material: concreteWall });
-
-  // ===== Concrete support columns (full ceiling, WIDER 4 m square) =====
-  const columnSpots = [
-    [-50, -20], [-50,  20], [50, -50], [50,  50],
-    [  0, -55], [  0,  55], [-65, -50], [65, -25]
-  ];
-  columnSpots.forEach(([cx, cz]) => {
-    addBlockingBox({ x: cx, y: 6, z: cz, sx: 4, sy: 12, sz: 4, material: columnMat });
-    // Steel rim cap at column base (decor)
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.45, 4.6), columnTrim);
-    cap.position.set(cx, 0.225, cz);
-    scene.add(cap); arenaDecor.push(cap);
-  });
-
-  // ===== Wooden crate stacks (WIDER — 6 m square × 7 m tall) =====
-  const crateSpots = [[-80, -15], [-65, 20], [80, 15], [65, -20]];
-  crateSpots.forEach(([cx, cz]) => {
-    addBlockingBox({ x: cx, y: 3.5, z: cz, sx: 6, sy: 7, sz: 6, material: crateMat });
-    // Cross-brace plank trim along the top + middle of the visible faces (decor).
-    const trimTop = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 6.2), crateRib);
-    trimTop.position.set(cx, 7.05, cz);
-    scene.add(trimTop); arenaDecor.push(trimTop);
-    const trimMid = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.3, 6.2), crateRib);
-    trimMid.position.set(cx, 3.5, cz);
-    scene.add(trimMid); arenaDecor.push(trimMid);
-  });
-
-  // ===== Stacked oil drums (WIDER — 4 m square AABB, visual is 3 stacked) =====
-  const drumSpots = [[-72, -5], [72, 5], [-15, 60], [15, -60]];
-  drumSpots.forEach(([dx, dz]) => {
-    arenaObstacles.push({ minX: dx - 2, maxX: dx + 2, minZ: dz - 2, maxZ: dz + 2, minY: 0, maxY: 6 });
-    for (let stackI = 0; stackI < 3; stackI++) {
-      const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.85, 2.0, 16), drumMat);
-      drum.position.set(dx, 1.0 + stackI * 2.0, dz);
-      scene.add(drum); arenaDecor.push(drum);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.86, 1.86, 0.14, 16), drumLid);
-      lid.position.set(dx, 2.0 + stackI * 2.0, dz);
-      scene.add(lid); arenaDecor.push(lid);
-    }
-  });
-
-  // ===== Viewing platform inside B-1 (4 m raised catwalk) =====
-  addPlatform({ minX: 80, maxX: 108, minZ: 57, maxZ: 73, top: 4, material: platformDeck, thickness: 0.5 });
-  // Visible platform-face skirt + caution-stripe top, mirrors Station's pattern.
-  const vpFace = new THREE.Mesh(new THREE.BoxGeometry(28, 4, 0.5), platformEdge);
-  vpFace.position.set(94, 2, 56.75);
-  scene.add(vpFace); arenaDecor.push(vpFace);
-  const vpStripe = new THREE.Mesh(new THREE.PlaneGeometry(26, 0.7), cautionStripe);
-  vpStripe.rotation.x = -Math.PI / 2;
-  vpStripe.position.set(94, 4.05, 58);
-  scene.add(vpStripe); arenaDecor.push(vpStripe);
-  // Platform-edge walls — all 4 sides collision-only, jump-only. Without
-  // these, ground-level units could walk straight into the platform's xz
-  // footprint and clip into the deck mesh; with them, the only way onto
-  // the platform is to jump (the topBuffer:0 lets a mech mid-jump pass
-  // through once its center clears y=4). noProjectile:true so bullets
-  // still pass through the perimeter.
-  for (const w of [
-    { minX: 80,    maxX: 108,   minZ: 56.7, maxZ: 57.3 },  // south face
-    { minX: 80,    maxX: 108,   minZ: 72.7, maxZ: 73.3 },  // north face
-    { minX: 79.7,  maxX: 80.3,  minZ: 57,   maxZ: 73   },  // west face
-    { minX: 107.7, maxX: 108.3, minZ: 57,   maxZ: 73   }   // east face
-  ]) {
-    arenaObstacles.push({ ...w, minY: 0, maxY: 4, topBuffer: 0, noProjectile: true });
-  }
-
-  // ===== Overhead industrial decor (no collision — purely atmospheric) =====
-  // Long ceiling ducts spanning the hall.
-  for (const dz of [-40, 0, 40]) {
-    const duct = new THREE.Mesh(new THREE.BoxGeometry(200, 1.0, 1.6), ductMat);
-    duct.position.set(0, 10.6, dz);
-    scene.add(duct); arenaDecor.push(duct);
-  }
-  // Copper exposed pipes along one ceiling axis.
-  for (const px of [-50, 50]) {
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 150, 10), pipeMat);
-    pipe.rotation.x = Math.PI / 2;
-    pipe.position.set(px, 10.2, 0);
-    scene.add(pipe); arenaDecor.push(pipe);
-  }
-  // Ceiling-mounted fluorescent strip lights (warm-amber emissive bars).
-  const lightSpots = [
-    [-75, -45], [-75, 45], [-25, -25], [-25, 25],
-    [ 25, -25], [ 25, 25], [ 75, -45], [ 75, 45], [0, 0]
-  ];
-  lightSpots.forEach(([lx, lz]) => {
-    const light = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.22, 0.9), lampGlow);
-    light.position.set(lx, 11.0, lz);
-    scene.add(light); arenaDecor.push(light);
-  });
-
-  // ===== Play-area edge: invisible perimeter wall + red floor stripe =====
-  addBoundaryIndicator(110, 75, 12);
-}
-
 function createArenaWalls() {
   const WALL_HEIGHT = 16;
   const HALF = 138;
@@ -5453,11 +3925,13 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 1 / 30);
     const now = performance.now();
 
-    if (state.online) {
+    if (state.running) {
       syncKeyboardMovement();
-      tickOnline(dt, now);
-    } else if (state.running) {
-      syncKeyboardMovement();
+      // Tick special-move expiry BEFORE tickAmmo so any expire-time ammo
+      // adjustment (e.g. dualWieldBuff subtracting 30 on end) is in place
+      // when reload checks run this frame.
+      tickSpecial(state.player, now);
+      tickSpecial(state.enemy, now);
       tickAmmo(state.player, now);
       tickAmmo(state.enemy, now);
       const playerSprintHeld = !!(input.boostHeld || input.sprintLocked);
