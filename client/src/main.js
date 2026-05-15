@@ -1182,7 +1182,6 @@ function updatePlayer(now) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, state.enemy, now);
     if (state.player.state.lastFireAt !== firedAt) {
-      inheritMomentum(state.player, 70);
       triggerEnemyEvasion(now);
       if (action === 'idle') action = 'shoot';
     }
