@@ -260,16 +260,27 @@ export function tickBot(matchState, botId, now) {
 
   // Kite near the outer edge of the weapon's red-lock range — far enough to
   // minimize incoming fire effectiveness while still landing our own shots.
-  // Universal across weapons since lockRange already encodes each weapon's
-  // effective engagement distance (so e.g. the shotgun naturally engages
-  // closer than the sniper without the AI special-casing the unit).
+  // Most weapons derive the band from lockRange directly; multi-pellet
+  // shotguns use a dedicated tighter band so they fight inside the cluster
+  // spread distance (SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20) where pellets
+  // haven't fully fanned out yet and more land per shot.
   const lockRange = me.unit?.lockRange ?? 50;
-  const upperRange = Math.max(12, lockRange - 2);
-  const optimalRange = Math.max(10, upperRange - 7);
-  const lowerRange = Math.max(6, optimalRange - 7);
+  const isShotgun = (me.unit?.spreadCount ?? 1) > 1;
+  let upperRange, optimalRange, lowerRange;
+  if (isShotgun) {
+    upperRange = 34;
+    optimalRange = 27;
+    lowerRange = 20;
+  } else {
+    upperRange = Math.max(12, lockRange - 2);
+    optimalRange = Math.max(10, upperRange - 7);
+    lowerRange = Math.max(6, optimalRange - 7);
+  }
 
   if (Math.random() > 0.985) me.strafeSign *= -1;
-  const retreat = dist < lowerRange ? -0.9 : dist > upperRange ? 0.62 : 0.15;
+  // Drive toward the kiting band aggressively when outside it; once inside,
+  // only a small drift so the bot holds position instead of wandering off.
+  const retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
   let mx = dirX * retreat + sideX * me.strafeSign * 1.05;
   let mz = dirZ * retreat + sideZ * me.strafeSign * 1.05;
 
@@ -373,9 +384,10 @@ export function tickBot(matchState, botId, now) {
       me.momentumVX = 0;
       me.momentumVZ = 0;
       inBurst = true;
-    } else if (dist > upperRange + 6 && Math.random() > 0.94) {
-      // Trigger 4: way out of range — sprint TOWARD opponent to close the
-      // gap. Makes the bot spend boost offensively, not only defensively.
+    } else if (dist > upperRange + 3 && Math.random() > 0.6) {
+      // Trigger 4: out of range — sprint TOWARD opponent to close the gap.
+      // Fires reliably (not just occasionally) so the bot positions into its
+      // kiting band quickly instead of dawdling at walk speed all the way in.
       me.botSprintDirX = dirX;
       me.botSprintDirZ = dirZ;
       me.botSprintUntil = now + 280;
@@ -472,7 +484,11 @@ export function tickBot(matchState, botId, now) {
     me.vel.z = (me.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
     me.action = 'dash';
   } else {
-    const moveScalar = now < me.hitStunUntil ? 0 : 10.6;
+    // Walk faster when outside the kiting band so the bot enters its
+    // advantage distance quickly; relax to the slower in-band pace once
+    // there so it doesn't drift past the optimal range.
+    const inBand = dist >= lowerRange && dist <= upperRange;
+    const moveScalar = now < me.hitStunUntil ? 0 : (inBand ? 10.6 : 14);
     // Mid elevation-jump: hold the launch heading so the arc lands on (or
     // clears) the ledge it was aimed at instead of drifting on the kiting vec.
     if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
