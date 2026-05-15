@@ -133,7 +133,8 @@ const MAP_DATA = {
   factory: { name: 'Factory' },
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
-  station: { name: 'Station' }
+  station: { name: 'Station' },
+  carnival: { name: 'Carnival' }
 };
 
 const state = {
