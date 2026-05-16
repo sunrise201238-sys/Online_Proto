@@ -55,7 +55,7 @@ export function spawnProjectiles(matchState, owner, target) {
     }
   }
 
-  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
+  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 0.8, z: owner.pos.z };
   const spawned = [];
   let centerPellet = null;
 
@@ -157,7 +157,14 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       continue;
     }
 
-    const toTarget = vec3Sub(target.pos, p.pos);
+    // Chest-height anchor (matches projectile spawn at owner.pos.y + 3.15).
+    // All target-distance logic — homing close-range cutoff, homing turn
+    // direction, and final hit-sphere — measures from here, not from the
+    // feet-level target.pos, so HOMING_CLOSE_RANGE_CUTOFF (2.6 m) and
+    // HIT_RADIUS both keep their intended meaning after the spawn lift.
+    const hitCenter = { x: target.pos.x, y: target.pos.y + 2.35, z: target.pos.z };
+
+    const toTarget = vec3Sub(hitCenter, p.pos);
     if (vec3Length(toTarget) <= HOMING_CLOSE_RANGE_CUTOFF) {
       p.homing = false;
       p.homingLost = true;
@@ -214,12 +221,13 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     }
 
     // Hit detection — closest-point distance from target's body to the
-    // projectile's traveled segment this frame.
+    // projectile's traveled segment this frame. Uses the chest-anchored
+    // hitCenter defined above (same anchor as the homing logic).
     const hitRadius = target.vulnerabilityMove ? HIT_RADIUS_VULNERABLE : HIT_RADIUS_NORMAL;
-    const nearest = closestPointOnSegment(prevPos, p.pos, target.pos);
-    const dx = nearest.x - target.pos.x;
-    const dy = nearest.y - target.pos.y;
-    const dz = nearest.z - target.pos.z;
+    const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
+    const dx = nearest.x - hitCenter.x;
+    const dy = nearest.y - hitCenter.y;
+    const dz = nearest.z - hitCenter.z;
     if (dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
       let damage = damageScaler ? damageScaler(p) : p.damage;
       if (target.vulnerabilityMove) damage *= HIT_VULNERABILITY_DAMAGE_BONUS;
