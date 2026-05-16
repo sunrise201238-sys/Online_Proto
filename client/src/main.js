@@ -5291,11 +5291,12 @@ function buildFlashpointArena() {
   const nwLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 6), corrugatedRust);
   nwLintel.position.set(-66.5, 8.4, 52);
   scene.add(nwLintel); arenaDecor.push(nwLintel);
-  // SE corner partition (mirror — kept at 12 m for variety; flipped, opens NE).
-  addBlockingBox({ x:  80,   y: 6, z: -66.5, sx: 30, sy: 12, sz: 3, material: concreteWall });
-  addBlockingBox({ x:  66.5, y: 6, z: -60,   sx: 3,  sy: 12, sz: 10, material: concreteWall });
+  // SE corner partition (mirror — flipped, opens NE; lowered to 8 m to
+  // match the NW partition's height for visual consistency).
+  addBlockingBox({ x:  80,   y: 4, z: -66.5, sx: 30, sy: 8, sz: 3, material: concreteWall });
+  addBlockingBox({ x:  66.5, y: 4, z: -60,   sx: 3,  sy: 8, sz: 10, material: concreteWall });
   const seLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 6), corrugatedRust);
-  seLintel.position.set(66.5, 12.4, -52);
+  seLintel.position.set(66.5, 8.4, -52);
   scene.add(seLintel); arenaDecor.push(seLintel);
 
   // ===== Factory-style sheet-metal partitions scattered through the hall.
