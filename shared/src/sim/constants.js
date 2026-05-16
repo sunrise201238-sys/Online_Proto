@@ -151,8 +151,6 @@ export const HOMING_SOFTEN_DEG_PER_FRAME = 1;
 
 // Hit reactions.
 export const HIT_RADIUS_NORMAL = 1.6;
-export const HIT_RADIUS_VULNERABLE = 2.25;
-export const HIT_VULNERABILITY_DAMAGE_BONUS = 1.35; // ×damage when target is vulnerable
 export const HIT_STUN_MS = 100;
 
 // Repulsion (soft-collide) between fighters.

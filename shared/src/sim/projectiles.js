@@ -7,8 +7,6 @@ import {
   HOMING_SOFTEN_RANGE,
   HOMING_SOFTEN_DEG_PER_FRAME,
   HIT_RADIUS_NORMAL,
-  HIT_RADIUS_VULNERABLE,
-  HIT_VULNERABILITY_DAMAGE_BONUS,
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
   SHOTGUN_CLUSTER_SPREAD_DISTANCE
@@ -225,14 +223,13 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // Hit detection — closest-point distance from target's body to the
     // projectile's traveled segment this frame. Uses the chest-anchored
     // hitCenter defined above (same anchor as the homing logic).
-    const hitRadius = target.vulnerabilityMove ? HIT_RADIUS_VULNERABLE : HIT_RADIUS_NORMAL;
+    const hitRadius = HIT_RADIUS_NORMAL;
     const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
     const dx = nearest.x - hitCenter.x;
     const dy = nearest.y - hitCenter.y;
     const dz = nearest.z - hitCenter.z;
     if (dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
-      let damage = damageScaler ? damageScaler(p) : p.damage;
-      if (target.vulnerabilityMove) damage *= HIT_VULNERABILITY_DAMAGE_BONUS;
+      const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
       target.momentumVX = 0;

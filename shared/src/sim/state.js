@@ -70,9 +70,6 @@ export function createFighter(id, unitKey, spawn) {
     evadeHomingUntil: 0,
     evadeCooldownUntil: 0,
 
-    // Movement modifier.
-    vulnerabilityMove: false,
-
     // Repulsion / stack timer.
     stackUntil: 0,
 

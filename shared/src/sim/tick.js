@@ -86,7 +86,6 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     fighter.vel.x = canInputMove ? input.moveX * speed * hitStunScale : 0;
     fighter.vel.z = canInputMove ? input.moveZ * speed * hitStunScale : 0;
   }
-  fighter.vulnerabilityMove = !boostActive && moveMag > 0.2;
 
   let action = 'idle';
 
