@@ -5166,13 +5166,22 @@ function buildFlashpointArena() {
   b2SignN.position.set(-68, 8.5, -28.95);
   scene.add(b2SignN); arenaDecor.push(b2SignN);
 
-  // ===== B-1 spawn enclosure (NE) — mirror of B-2 with its own lintel =====
+  // ===== B-1 spawn enclosure (NE) — mirror of B-2: 28 m central S-wall
+  // doorway PLUS a 6 m side opening at the north end of the W wall, right
+  // against the north boundary. =====
   addBlockingBox({ x: 96, y: 6, z: 30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: 47, y: 6, z: 30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: 41.5, y: 6, z: 52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
+  // W wall — shortened from sz=41 to sz=39 so the north end sits at z=71
+  // (was z=73), leaving a 6 m gap to the north boundary at z=77.
+  addBlockingBox({ x: 41.5, y: 6, z: 51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust });
   const b1Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
   b1Lintel.position.set(68, 11, 30.5);
   scene.add(b1Lintel); arenaDecor.push(b1Lintel);
+  // Side opening lintel — frames the 6 m gap at the north end of the W wall,
+  // right against the north boundary at the map edge.
+  const b1NorthLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 6), corrugatedRust);
+  b1NorthLintel.position.set(41.5, 11, 74);
+  scene.add(b1NorthLintel); arenaDecor.push(b1NorthLintel);
   const b1SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b1SignN.position.set(68, 8.5, 32.05);
   scene.add(b1SignN); arenaDecor.push(b1SignN);
