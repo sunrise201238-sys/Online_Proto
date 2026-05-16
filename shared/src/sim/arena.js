@@ -6766,10 +6766,11 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -112, "maxX": -110, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
       { "minX": 110, "maxX": 112, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
 
-      // ----- B-2 spawn enclosure (SW) — 28 m central doorway in the N wall.
-      //       N wall west is one continuous segment from the west boundary
-      //       to the central doorway (no side opening). -----
-      { "minX": -110, "maxX": -82, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      // ----- B-2 spawn enclosure (SW) — 28 m central doorway in the N wall
+      //       PLUS a 6 m side opening right at the map edge (N wall west
+      //       stops at x=-104 instead of x=-110, so the gap from boundary
+      //       to wall is the side door). -----
+      { "minX": -104, "maxX": -82, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -54,  "maxX": -40, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -43,  "maxX": -40, "minZ": -73, "maxZ": -32, "minY": 0, "maxY": 12 },
 
