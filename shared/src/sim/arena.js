@@ -6864,7 +6864,7 @@ const ARENA_SPAWNS = {
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
   station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
   carnival: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } },
-  flashpoint: { p1: { x: -95, y: GROUND_BASE_Y, z: -55 }, p2: { x: 95, y: GROUND_BASE_Y, z: 55 } }
+  flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } }
 };
 
 function materializeSurface(surface) {
