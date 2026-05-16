@@ -2178,8 +2178,23 @@ function mirrorFighterToMech(fighter, mech) {
   s.overheatedUntil = fighter.overheatedUntil;
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
-  s.sniperChargeTarget = fighter.sniperChargeTargetId ? { id: fighter.sniperChargeTargetId } : null;
+  //
+  // State-driven glint: drive createGlintForMech / removeGlintFromMech off the
+  // snapshot-mirrored field rather than off the sim's `sniper-charge-start` /
+  // `sniper-charge-fire` events. Events are only processed on the LATEST
+  // snapshot per render frame (see runOnlineMatchFrame + processOnlineEvents);
+  // when two snapshots land in one frame — typical for sprint-cancel where
+  // charge-start and charge-fire happen 1 tick apart — the older snapshot's
+  // start event is silently dropped and the glint never appears. Detecting
+  // the null↔non-null transition on the mirrored state catches the charge as
+  // long as ANY render frame fires between the two snapshots arriving, which
+  // is far more common than the event handler winning the race.
+  const wasCharging = !!s.sniperChargeTarget;
+  const isCharging = !!fighter.sniperChargeTargetId;
+  s.sniperChargeTarget = isCharging ? { id: fighter.sniperChargeTargetId } : null;
   s.sniperChargeUntil = fighter.sniperChargeUntil;
+  if (isCharging && !wasCharging) createGlintForMech(mech);
+  else if (!isCharging && wasCharging) removeGlintFromMech(mech);
 }
 
 function syncOnlineProjectiles(snap) {
@@ -2217,15 +2232,12 @@ function processOnlineEvents(snap, myPlayerId) {
       // Color the hit ring by who got hit, matching offline conventions.
       const color = ev.targetId === myPlayerId ? 0x67f2ff : 0xff73d2;
       spawnHitEffect(new THREE.Vector3(ev.pos.x, ev.pos.y, ev.pos.z), color);
-    } else if (ev.type === 'sniper-charge-start' && state.online) {
-      const owner = snap.fighters[ev.ownerId];
-      if (!owner) continue;
-      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
-      createGlintForMech(mech);
-    } else if (ev.type === 'sniper-charge-fire') {
-      const mech = ev.ownerId === myPlayerId ? state.player : state.enemy;
-      removeGlintFromMech(mech);
     }
+    // Sniper-charge glint is driven by snapshot state inside
+    // mirrorFighterToMech, not by 'sniper-charge-start' / -fire / -cancel
+    // events here — events get dropped when two snapshots land between
+    // render frames (common on sprint-cancel). The sim still emits those
+    // events for telemetry/test consumers; we just don't act on them.
   }
 }
 
