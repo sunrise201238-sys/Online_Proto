@@ -6818,9 +6818,10 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -95, "maxX": -65, "minZ": 60, "maxZ": 63, "minY": 0, "maxY": 8 },
       { "minX": -68, "maxX": -65, "minZ": 55, "maxZ": 60, "minY": 0, "maxY": 8 },
 
-      // ----- SE corner partition (FLIPPED 180° — mirror, opens toward NE) -----
-      { "minX": 65, "maxX": 95, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 12 },
-      { "minX": 65, "maxX": 68, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 12 },
+      // ----- SE corner partition (FLIPPED 180° — mirror, opens toward NE;
+      //       lowered to 8 m to match the NW partition's height) -----
+      { "minX": 65, "maxX": 95, "minZ": -68, "maxZ": -65, "minY": 0, "maxY": 8 },
+      { "minX": 65, "maxX": 68, "minZ": -65, "maxZ": -55, "minY": 0, "maxY": 8 },
 
       // ----- Factory-style sheet-metal partitions (8 m long × 8 m tall ×
       //       0.6 m thick). The previously-overlapping support pillars have
