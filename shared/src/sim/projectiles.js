@@ -55,7 +55,9 @@ export function spawnProjectiles(matchState, owner, target) {
     }
   }
 
-  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 0.8, z: owner.pos.z };
+  // Spawn at chest height: 2.35 modelYOffset (lifts feet→torso) + 0.8 (offset
+  // to muzzle, matches offline main.js:674 which adds 0.8 to root.position).
+  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
   const spawned = [];
   let centerPellet = null;
 
