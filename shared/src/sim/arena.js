@@ -6674,74 +6674,6 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -134, "maxX": 134, "minZ": -131, "maxZ": -11, "maxTop": 4, "type": "flat", "top": 4 }
     ]
   },
-  "carnival": {
-    "obstacles": [
-      // ----- Play-area boundary (matches addBoundaryIndicator(130, 130, 28)) -----
-      { "minX": -132, "maxX": 132, "minZ": 130, "maxZ": 132, "minY": 0, "maxY": 28 },
-      { "minX": -132, "maxX": 132, "minZ": -132, "maxZ": -130, "minY": 0, "maxY": 28 },
-      { "minX": -132, "maxX": -130, "minZ": -132, "maxZ": 132, "minY": 0, "maxY": 28 },
-      { "minX": 130, "maxX": 132, "minZ": -132, "maxZ": 132, "minY": 0, "maxY": 28 },
-
-      // ----- Rock stage (north) -----
-      // Stage backdrop wall (tall, hides anyone behind it)
-      { "minX": -52, "maxX": 52, "minZ": 121, "maxZ": 124, "minY": 0, "maxY": 14 },
-      // Stage front-edge wall (jump-only, like Station's platform edges)
-      { "minX": -50, "maxX": 50, "minZ": 95.7, "maxZ": 96.3, "minY": 0, "maxY": 4, "topBuffer": 0, "noProjectile": true },
-      // Front speaker stacks
-      { "minX": -54, "maxX": -50, "minZ": 90, "maxZ": 94, "minY": 0, "maxY": 9 },
-      { "minX": 50, "maxX": 54, "minZ": 90, "maxZ": 94, "minY": 0, "maxY": 9 },
-      // Side scaffold towers (tall, with stage lights)
-      { "minX": -56, "maxX": -52, "minZ": 95, "maxZ": 99, "minY": 0, "maxY": 16 },
-      { "minX": 52, "maxX": 56, "minZ": 95, "maxZ": 99, "minY": 0, "maxY": 16 },
-
-      // ----- Motocross slope stage (south) -----
-      // Side berms (dirt mounds flanking the course, full mech-height cover)
-      { "minX": -28, "maxX": -16, "minZ": -125, "maxZ": -100, "minY": 0, "maxY": 8 },
-      { "minX": 16, "maxX": 28, "minZ": -125, "maxZ": -100, "minY": 0, "maxY": 8 },
-      { "minX": -28, "maxX": -16, "minZ": -94, "maxZ": -69, "minY": 0, "maxY": 8 },
-      { "minX": 16, "maxX": 28, "minZ": -94, "maxZ": -69, "minY": 0, "maxY": 8 },
-      // Hay bale stacks at ramp ends
-      { "minX": -50, "maxX": -44, "minZ": -100, "maxZ": -94, "minY": 0, "maxY": 6 },
-      { "minX": 44, "maxX": 50, "minZ": -100, "maxZ": -94, "minY": 0, "maxY": 6 },
-      { "minX": -50, "maxX": -44, "minZ": -125, "maxZ": -119, "minY": 0, "maxY": 6 },
-      { "minX": 44, "maxX": 50, "minZ": -125, "maxZ": -119, "minY": 0, "maxY": 6 },
-
-      // ----- Mid-zone food / amenity area -----
-      // Food trucks (8x4x5 — long boxes)
-      { "minX": -110, "maxX": -102, "minZ": -50, "maxZ": -46, "minY": 0, "maxY": 5 },
-      { "minX": -75, "maxX": -67, "minZ": -25, "maxZ": -21, "minY": 0, "maxY": 5 },
-      { "minX": -45, "maxX": -37, "minZ": 30, "maxZ": 34, "minY": 0, "maxY": 5 },
-      { "minX": 37, "maxX": 45, "minZ": -30, "maxZ": -26, "minY": 0, "maxY": 5 },
-      { "minX": 67, "maxX": 75, "minZ": 25, "maxZ": 29, "minY": 0, "maxY": 5 },
-      { "minX": 102, "maxX": 110, "minZ": 50, "maxZ": 54, "minY": 0, "maxY": 5 },
-      // Food kiosks (6x6x5 — chunkier square stalls)
-      { "minX": -85, "maxX": -79, "minZ": 20, "maxZ": 26, "minY": 0, "maxY": 5 },
-      { "minX": 79, "maxX": 85, "minZ": -26, "maxZ": -20, "minY": 0, "maxY": 5 },
-      { "minX": -10, "maxX": -4, "minZ": 60, "maxZ": 66, "minY": 0, "maxY": 5 },
-      { "minX": 4, "maxX": 10, "minZ": -66, "maxZ": -60, "minY": 0, "maxY": 5 },
-      // Picnic pavilions (8x8x5 — covered tent canopies for tables/benches)
-      { "minX": -30, "maxX": -22, "minZ": -10, "maxZ": -2, "minY": 0, "maxY": 5 },
-      { "minX": 22, "maxX": 30, "minZ": 2, "maxZ": 10, "minY": 0, "maxY": 5 },
-      { "minX": -100, "maxX": -92, "minZ": 60, "maxZ": 68, "minY": 0, "maxY": 5 },
-      { "minX": 92, "maxX": 100, "minZ": -68, "maxZ": -60, "minY": 0, "maxY": 5 },
-      // Carnival info totems (2x2x7 — tall thin pillars)
-      { "minX": -1, "maxX": 1, "minZ": 19, "maxZ": 21, "minY": 0, "maxY": 7 },
-      { "minX": -1, "maxX": 1, "minZ": -21, "maxZ": -19, "minY": 0, "maxY": 7 },
-      { "minX": -41, "maxX": -39, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 7 },
-      { "minX": 39, "maxX": 41, "minZ": -1, "maxZ": 1, "minY": 0, "maxY": 7 },
-      // Generator / sound trucks flanking the stage approach (8x8x6)
-      { "minX": -98, "maxX": -90, "minZ": 88, "maxZ": 96, "minY": 0, "maxY": 6 },
-      { "minX": 90, "maxX": 98, "minZ": 88, "maxZ": 96, "minY": 0, "maxY": 6 }
-    ],
-    "surfaces": [
-      // Stage platform — raised 4 m, jump up onto it via the edge wall above
-      { "minX": -50, "maxX": 50, "minZ": 96, "maxZ": 119, "maxTop": 4, "type": "flat", "top": 4 },
-      // Motocross take-off ramp (low at south end → rises north to the kicker)
-      { "minX": -10, "maxX": 10, "minZ": -125, "maxZ": -101, "maxTop": 5, "type": "ramp", "axis": "z", "lowY": 0, "highY": 5 },
-      // Motocross landing ramp (peaks south, descends north back to flat)
-      { "minX": -10, "maxX": 10, "minZ": -93, "maxZ": -69, "maxTop": 5, "type": "ramp", "axis": "z", "lowY": 5, "highY": 0 }
-    ]
-  },
   "flashpoint": {
     "obstacles": [
       // ----- Play-area boundary (matches addBoundaryIndicator(110, 75, 12)) -----
@@ -6855,7 +6787,6 @@ const ARENA_SPAWNS = {
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
   station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
-  carnival: { p1: { x: -118, y: GROUND_BASE_Y, z: 0 }, p2: { x: 118, y: GROUND_BASE_Y, z: 0 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } }
 };
 
@@ -6894,7 +6825,6 @@ const ARENAS = {
   square: buildGeneratedArena('square'),
   lobby: buildGeneratedArena('lobby'),
   station: buildGeneratedArena('station'),
-  carnival: buildGeneratedArena('carnival'),
   flashpoint: buildGeneratedArena('flashpoint')
 };
 
