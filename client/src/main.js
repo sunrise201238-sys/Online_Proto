@@ -2522,7 +2522,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station', 'flashpoint']);
 
 function showOnlineUnitPicker(onl) {
   const menu = document.createElement('div');
