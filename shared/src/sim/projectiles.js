@@ -55,7 +55,7 @@ export function spawnProjectiles(matchState, owner, target) {
     }
   }
 
-  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 0.8, z: owner.pos.z };
+  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
   const spawned = [];
   let centerPellet = null;
 
