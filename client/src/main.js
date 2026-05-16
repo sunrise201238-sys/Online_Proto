@@ -4007,16 +4007,6 @@ function buildSquareArena() {
     tip.position.set(cathX + bx, 30 + towerH + 9 + 1.2, cathZ + 4);
     scene.add(tip); arenaDecor.push(tip);
   });
-  // Central larger spire over the apse
-  const mainSpireH = 24;
-  addBlockingBox({ x: cathX, y: 30 + mainSpireH / 2, z: cathZ - 4, sx: 5, sy: mainSpireH, sz: 5, material: whiteStone });
-  const mainCone = new THREE.Mesh(new THREE.ConeGeometry(3.6, 14, 8), greenRoof);
-  mainCone.position.set(cathX, 30 + mainSpireH + 7, cathZ - 4);
-  scene.add(mainCone); arenaDecor.push(mainCone);
-  const mainTip = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2.2, 8), goldTrim);
-  mainTip.position.set(cathX, 30 + mainSpireH + 15, cathZ - 4);
-  scene.add(mainTip); arenaDecor.push(mainTip);
-
   // ===== Big Ben-style clock tower on east side =====
   const towerX = 92;
   const towerZ = 28;
