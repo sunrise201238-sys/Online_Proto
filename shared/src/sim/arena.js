@@ -6766,11 +6766,12 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -112, "maxX": -110, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
       { "minX": 110, "maxX": 112, "minZ": -77, "maxZ": 77, "minY": 0, "maxY": 12 },
 
-      // ----- B-2 spawn enclosure (SW) — 28 m central doorway PLUS a 10 m
-      //       secondary opening on the west side (N wall west pulled back
-      //       from x=-110 to x=-100 so the alley to the boundary reads as
-      //       a real side exit rather than an unintended crack) -----
-      { "minX": -100, "maxX": -82, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      // ----- B-2 spawn enclosure (SW) — 28 m central doorway PLUS a 6 m
+      //       side doorway cut THROUGH the N wall near its west end. The
+      //       wall now reaches the boundary at x=-110 again (no side alley);
+      //       the gap between x=-103 and x=-97 is the new map-edge doorway. -----
+      { "minX": -110, "maxX": -103, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
+      { "minX": -97,  "maxX": -82,  "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -54, "maxX": -40, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -43, "maxX": -40, "minZ": -73, "maxZ": -32, "minY": 0, "maxY": 12 },
 
