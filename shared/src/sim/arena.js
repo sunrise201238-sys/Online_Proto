@@ -6774,10 +6774,13 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -54,  "maxX": -40, "minZ": -32, "maxZ": -29, "minY": 0, "maxY": 12 },
       { "minX": -43,  "maxX": -40, "minZ": -71, "maxZ": -32, "minY": 0, "maxY": 12 },
 
-      // ----- B-1 spawn enclosure (NE) — 28 m doorway centred at x=68 -----
+      // ----- B-1 spawn enclosure (NE) — mirror of B-2: 28 m central
+      //       S-wall doorway PLUS a 6 m side opening at the north end of
+      //       the W wall (W wall stops at z=71 instead of z=73, leaving
+      //       the 6 m gap as the side door against the north boundary). -----
       { "minX": 82, "maxX": 110, "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
-      { "minX": 40, "maxX": 54, "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
-      { "minX": 40, "maxX": 43, "minZ": 32, "maxZ": 73, "minY": 0, "maxY": 12 },
+      { "minX": 40, "maxX": 54,  "minZ": 29, "maxZ": 32, "minY": 0, "maxY": 12 },
+      { "minX": 40, "maxX": 43,  "minZ": 32, "maxZ": 71, "minY": 0, "maxY": 12 },
 
       // ----- Mid divider (8 m — matches Factory-style partition height) -----
       { "minX": -58, "maxX": -40, "minZ": -1.5, "maxZ": 1.5, "minY": 0, "maxY": 8 },
