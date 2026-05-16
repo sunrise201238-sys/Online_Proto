@@ -5310,7 +5310,7 @@ function buildFlashpointArena() {
     [-50, -20, 'z'],  // outside SW door — rotated x→z
     [-50,  20, 'x'],
     [ 50, -50, 'x'],
-    [ 50,  60, 'x'],  // moved north (was z=50) so it blockades door↔deck
+    [ 75,  48, 'x'],  // inside NE room — sits in the door↔viewing-deck path
     [  0, -55, 'z'],
     [  0,  55, 'z'],
     [-65, -50, 'x'],  // inside SW room — rotated z→x
