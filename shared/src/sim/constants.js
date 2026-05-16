@@ -31,7 +31,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
-    projectileSpeed: 75,
+    projectileSpeed: 76,
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
