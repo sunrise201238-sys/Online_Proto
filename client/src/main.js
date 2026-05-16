@@ -3991,16 +3991,20 @@ function buildSquareArena() {
     arch.position.set(cathX + bx, 21, cathZ + 11.05);
     scene.add(arch); arenaDecor.push(arch);
   }
-  // Side gothic spires (4 small + 1 tall central)
-  const sideSpires = [-22, -8, 8, 22];
-  sideSpires.forEach((bx, i) => {
-    const spireH = i % 2 === 0 ? 14 : 18;
-    addBlockingBox({ x: cathX + bx, y: 30 + spireH / 2, z: cathZ + 4, sx: 3.2, sy: spireH, sz: 3.2, material: whiteStone });
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.2, spireH * 0.55, 8), greenRoof);
-    cone.position.set(cathX + bx, 30 + spireH + spireH * 0.275, cathZ + 4);
+  // Three wide contiguous towers (no gaps) on the cathedral upper section.
+  // Each tower is 16 wide so centers at -16/0/16 leave neighbors touching at x=±8.
+  // Depth/position kept clear of the apse spire behind (which sits at z=-82).
+  const sideTowers = [-16, 0, 16];
+  const towerW = 16;
+  const towerD = 10;
+  const towerH = 22;
+  sideTowers.forEach((bx) => {
+    addBlockingBox({ x: cathX + bx, y: 30 + towerH / 2, z: cathZ + 4, sx: towerW, sy: towerH, sz: towerD, material: whiteStone });
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(7, 9, 8), greenRoof);
+    cone.position.set(cathX + bx, 30 + towerH + 4.5, cathZ + 4);
     scene.add(cone); arenaDecor.push(cone);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.3, 8), goldTrim);
-    tip.position.set(cathX + bx, 30 + spireH + spireH * 0.55 + 0.65, cathZ + 4);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2.4, 8), goldTrim);
+    tip.position.set(cathX + bx, 30 + towerH + 9 + 1.2, cathZ + 4);
     scene.add(tip); arenaDecor.push(tip);
   });
   // Central larger spire over the apse
