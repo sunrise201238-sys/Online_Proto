@@ -385,7 +385,6 @@ function createMech(color, unitData) {
       machineBurstRemaining: 0,
       nextFireAt: 0,
       strafeSign: 1,
-      vulnerabilityMove: false,
       stackUntil: 0,
       jumpCooldownUntil: 0,
       airborne: false,
@@ -969,13 +968,12 @@ function updateProjectileSystem(dt) {
       p.ttl = 0;
     }
     if (p.ttl <= 0) continue;
-    const hitRadius = p.target.state.vulnerabilityMove ? 2.25 : 1.6;
+    const hitRadius = 1.6;
     const path = new THREE.Line3(prevPos, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
     path.closestPointToPoint(p.target.root.position, true, nearest);
     if (nearest.distanceTo(p.target.root.position) < hitRadius) {
-      const mitigation = p.target.state.vulnerabilityMove ? 1.35 : 1;
-      const finalDamage = getProjectileDamage(p) * mitigation;
+      const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
       p.target.state.momentumVX = 0;
@@ -1087,7 +1085,6 @@ function updatePlayer(now) {
     state.player.body.velocity.x = canInputMove ? move.x * speed * hitStunScale : 0;
     state.player.body.velocity.z = canInputMove ? move.z * speed * hitStunScale : 0;
   }
-  state.player.state.vulnerabilityMove = !input.boost && Math.hypot(input.x, input.y) > 0.2;
 
   let action = 'idle';
   if (inStep) {
