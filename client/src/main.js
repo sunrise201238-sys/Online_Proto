@@ -5140,22 +5140,24 @@ function buildFlashpointArena() {
   }
 
   // ===== B-2 spawn enclosure (SW) — 28 m central doorway in the N wall
-  // PLUS a 6 m side opening at the map-edge end (the wall stops short of
-  // the west boundary, leaving the gap between the wall's west end and the
-  // boundary as a passable side door right against the map edge). =====
-  // N wall west — pulled back from the boundary so x=-110→-104 is the
-  // side opening; wall extends from x=-104 east to x=-82 (length 22).
-  addBlockingBox({ x: -93, y: 6, z: -30.5, sx: 22, sy: 12, sz: 3, material: corrugated });
+  // PLUS a 6 m side opening at the south end of the E wall, right against
+  // the south boundary (the E wall stops at z=-71 instead of z=-73, so the
+  // gap from boundary to wall is the side door at the map edge). =====
+  // N wall — full length, no side opening.
+  addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
   addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: -41.5, y: 6, z: -52.5, sx: 3, sy: 12, sz: 41, material: corrugatedRust });
+  // E wall — shortened from sz=41 to sz=39 so the south end sits at z=-71
+  // (was z=-73), leaving a 6 m gap to the south boundary at z=-77.
+  addBlockingBox({ x: -41.5, y: 6, z: -51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust });
   // Central doorway lintel.
   const b2Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
   b2Lintel.position.set(-68, 11, -30.5);
   scene.add(b2Lintel); arenaDecor.push(b2Lintel);
-  // Side opening lintel — frames the 6 m gap right against the west boundary.
-  const b2WestLintel = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 3), corrugatedRust);
-  b2WestLintel.position.set(-107, 11, -30.5);
-  scene.add(b2WestLintel); arenaDecor.push(b2WestLintel);
+  // Side opening lintel — frames the 6 m gap at the south end of the E wall,
+  // right against the south boundary at the map edge.
+  const b2SouthLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 6), corrugatedRust);
+  b2SouthLintel.position.set(-41.5, 11, -74);
+  scene.add(b2SouthLintel); arenaDecor.push(b2SouthLintel);
   // "B-2" exit-sign placards on both faces of the central doorway lintel.
   const b2SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b2SignS.position.set(-68, 8.5, -32.05); b2SignS.rotation.y = Math.PI;
