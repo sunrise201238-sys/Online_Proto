@@ -4856,14 +4856,6 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 52
       },
       {
-        "minX": -2.5,
-        "maxX": 2.5,
-        "minZ": -84.5,
-        "maxZ": -79.5,
-        "minY": 30,
-        "maxY": 54
-      },
-      {
         "minX": 85.5,
         "maxX": 98.5,
         "minZ": 21.5,
