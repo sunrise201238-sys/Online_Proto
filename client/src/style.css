@@ -100,8 +100,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   top: max(36px, calc(env(safe-area-inset-top) + 28px));
   left: max(16px, env(safe-area-inset-left));
   z-index: 200;
-  width: 38px;
-  height: 38px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1.5px solid rgba(180, 220, 255, 0.55);
   background: rgba(10, 20, 34, 0.55);
