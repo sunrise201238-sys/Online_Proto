@@ -88,6 +88,43 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   font-weight: 700;
 }
 
+/* Persistent fullscreen-toggle button. Top-right, sits below the enemy
+   health bar (top:14px + 10px tall) with a small gap. z-index 200 so it's
+   above the .menu overlay (100) and .online-overlay (90). */
+.fullscreen-btn {
+  position: absolute;
+  top: max(36px, calc(env(safe-area-inset-top) + 28px));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 200;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(180, 220, 255, 0.55);
+  background: rgba(10, 20, 34, 0.55);
+  color: #d7f5ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.fullscreen-btn:active {
+  background: rgba(40, 60, 90, 0.7);
+  border-color: rgba(180, 220, 255, 0.85);
+}
+
+/* Pseudo-fullscreen mode. Toggle adds .pseudo-fullscreen to <body>;
+   #app switches from 100vh (which includes browser chrome area, so
+   the canvas extends behind the URL bar invisibly) to 100dvh (dynamic
+   viewport height = the actually-visible area only). On iOS this means
+   the canvas + HUD fit the visible region cleanly instead of being
+   partly obscured by chrome; on desktop dvh == vh so no visible change. */
+body.pseudo-fullscreen #app {
+  height: 100dvh;
+}
+
 .menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); box-sizing: border-box; background: rgba(5, 8, 14, 0.78); z-index: 100; pointer-events: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y !important; }
 .menu::before, .menu::after { content: ''; flex: 1 1 0; min-height: 0; }
 .menu > * { flex: 0 0 auto; }

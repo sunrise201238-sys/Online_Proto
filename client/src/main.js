@@ -2883,6 +2883,110 @@ function setupRootTouchAction() {
   app.style.touchAction = 'none';
 }
 
+// ---- Pseudo-fullscreen toggle ----
+// Single button (top-right corner) that maximizes available canvas area.
+// Behavior per platform:
+//   Desktop + Android + iPad:  Triggers the real Fullscreen API → true
+//                              fullscreen with no browser chrome.
+//   iPhone Safari/Chrome:      Real API silently no-ops (Apple blocks it),
+//                              but we still switch #app from 100vh → 100dvh
+//                              (so the canvas sizes to the actually-visible
+//                              area instead of extending behind the URL bar)
+//                              and trigger the scroll-trick to retract the
+//                              URL bar into compact mode. Net: ~10–15% more
+//                              usable canvas without any popups or hints.
+// Toggle off reverses everything; Escape on desktop also fully exits.
+let pseudoFullscreenActive = false;
+
+function isRealFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function tryEnterRealFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const r = req.call(el);
+    if (r && typeof r.catch === 'function') r.catch(() => {});
+  } catch (_) { /* no-op — missing user gesture or unsupported */ }
+}
+function tryExitRealFullscreen() {
+  if (!isRealFullscreen()) return;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (!exit) return;
+  try {
+    const r = exit.call(document);
+    if (r && typeof r.catch === 'function') r.catch(() => {});
+  } catch (_) { /* no-op */ }
+}
+function hideMobileChrome() {
+  // iOS Safari scroll-trick: scrolling the page even 1 px retracts the URL
+  // bar into its compact form. No effect on desktop or Android, where the
+  // chrome is either absent or doesn't scroll-retract.
+  window.scrollTo(0, 1);
+}
+
+function togglePseudoFullscreen() {
+  if (pseudoFullscreenActive) {
+    pseudoFullscreenActive = false;
+    document.body.classList.remove('pseudo-fullscreen');
+    tryExitRealFullscreen();
+  } else {
+    pseudoFullscreenActive = true;
+    document.body.classList.add('pseudo-fullscreen');
+    tryEnterRealFullscreen();
+    hideMobileChrome();
+    // iOS sometimes restores the URL bar a beat after layout settles;
+    // re-apply the scroll-trick once after a short delay to catch that.
+    setTimeout(hideMobileChrome, 250);
+  }
+  // Manually dispatch resize so renderer + camera pick up the new canvas
+  // dimensions immediately, ahead of the browser's own resize event.
+  window.dispatchEvent(new Event('resize'));
+}
+
+// SVG icons: 4 corner brackets pointing outward (enter) / inward (exit).
+// Inline so they inherit currentColor and need no extra assets.
+const FS_ICON_ENTER = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 9 3 3 9 3"/><polyline points="21 9 21 3 15 3"/><polyline points="3 15 3 21 9 21"/><polyline points="21 15 21 21 15 21"/></svg>';
+const FS_ICON_EXIT  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 3 9 9 3 9"/><polyline points="15 3 15 9 21 9"/><polyline points="9 21 9 15 3 15"/><polyline points="15 21 15 15 21 15"/></svg>';
+
+function setupFullscreenToggle() {
+  const btn = document.createElement('button');
+  btn.id = 'fullscreen-btn';
+  btn.className = 'fullscreen-btn';
+  btn.type = 'button';
+  btn.title = 'Toggle fullscreen';
+  const syncIcon = () => {
+    const on = pseudoFullscreenActive || isRealFullscreen();
+    btn.innerHTML = on ? FS_ICON_EXIT : FS_ICON_ENTER;
+  };
+  syncIcon();
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePseudoFullscreen();
+    syncIcon();
+  });
+  // If the user presses Escape (desktop) to leave real fullscreen, also
+  // drop pseudo-fullscreen state so the body class doesn't get stranded.
+  const onChange = () => {
+    if (!isRealFullscreen() && pseudoFullscreenActive) {
+      pseudoFullscreenActive = false;
+      document.body.classList.remove('pseudo-fullscreen');
+      window.dispatchEvent(new Event('resize'));
+    }
+    syncIcon();
+  };
+  document.addEventListener('fullscreenchange', onChange);
+  document.addEventListener('webkitfullscreenchange', onChange);
+  // Re-apply the scroll-trick on orientation change while in pseudo mode —
+  // iOS Safari resets the URL bar state when you rotate the device.
+  window.addEventListener('orientationchange', () => {
+    if (pseudoFullscreenActive) setTimeout(hideMobileChrome, 120);
+  });
+  app.appendChild(btn);
+}
+
 window.addEventListener('gesturestart', (e) => e.preventDefault());
 window.addEventListener('gesturechange', (e) => e.preventDefault());
 window.addEventListener('gestureend', (e) => e.preventDefault());
@@ -2952,6 +3056,7 @@ function syncKeyboardMovement() {
 }
 
 setupRootTouchAction();
+setupFullscreenToggle();
 showSelectMenu();
 animate();
 
