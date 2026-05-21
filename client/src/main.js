@@ -79,7 +79,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 43,
-    projectileSpeed: 300,
+    projectileSpeed: 200,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
