@@ -149,8 +149,6 @@ const state = {
   reticle: null,
   speedLines: null,
   vfx: [],
-  reticlePulseUntil: 0,
-  reticleWasRed: false,
   reticleEnemyFiringUntil: 0,
   reticleLastEnemyFireAt: null,
   running: false,
@@ -1850,18 +1848,13 @@ function updateLocksAndReticle() {
 
   state.reticle.position.set(0, 0.2, 0);
   state.reticle.material.color.set(enemyFiring ? 0xff5f72 : 0x7effbd);
-  if (enemyFiring !== state.reticleWasRed) {
-    state.reticlePulseUntil = nowMs + 180;
-    state.reticleWasRed = enemyFiring;
-  }
   // Scale the lock ring up with distance so it stays readable on long-range maps
   // (Streets/Square). Sprites are world-sized, so screen size = world-size / distance —
   // multiplying by distance keeps screen size roughly constant, with a floor for very
   // close range and a generous ceiling so far-away locks remain easy to read.
   const camDist = camera.position.distanceTo(state.enemy.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-  const pulse = state.reticlePulseUntil > nowMs ? 1.2 : 1;
-  state.reticle.scale.setScalar(6.1 * distScale * pulse);
+  state.reticle.scale.setScalar(6.1 * distScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
