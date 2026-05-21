@@ -23,17 +23,18 @@ import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y } from './constants.js';
 // boost barely crosses 0 and is immediately spent again.
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;            // 48
 const BOT_SPRINT_MIN_BOOST = 8;
-const BOT_SPRINT_BURST_MS = 280;
 const BOT_SPRINT_BURST_VEL = 17;
-// How far ahead the bot scans for incoming projectiles. Bigger = more alert
-// (reacts to threats earlier, before they're at point-blank), at the cost of
-// burning more boost on dodges. Tuned so even the fast sniper round (95 u/s)
-// gives the bot ~230 ms of warning to commit a dodge.
-const BOT_THREAT_LOOKAHEAD = 22;
-// Cooldown after a threat-evade. Shorter than the tactical-burst cooldowns
-// below so the bot can chain dodges against rapid-fire weapons (MG bursts,
-// shotgun follow-ups) instead of eating the second shot.
-const BOT_THREAT_EVADE_COOLDOWN_MS = 400;
+// Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
+// reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
+// as "shooting at me" for this long after their last shot, which covers the
+// MG's fast cadence and bridges the gaps between rounds in a burst.
+const BOT_FIRE_REACT_MS = 220;
+// Cover-seek: how far to look for an obstacle to hide behind, how hard to
+// steer toward it, and the largest obstacle footprint still treated as cover
+// (anything bigger is an arena boundary wall, which can't be flanked — skip).
+const BOT_COVER_SEEK_RADIUS = 60;
+const BOT_COVER_STEER_WEIGHT = 2.6;
+const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
@@ -145,20 +146,37 @@ function botBurstSize(unit) {
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
 }
 
-// Find the nearest projectile that targets `me`, is within range, and is
-// heading toward `me`. Used to decide when to spend boost on an evade.
-function findIncomingThreat(matchState, me, range) {
-  const r2 = range * range;
-  for (const p of matchState.projectiles) {
-    if (p.targetId !== me.id) continue;
-    const dxp = p.pos.x - me.pos.x;
-    const dzp = p.pos.z - me.pos.z;
-    if (dxp * dxp + dzp * dzp > r2) continue;
-    const dot = (-dxp) * p.vel.x + (-dzp) * p.vel.z;
-    if (dot <= 0) continue;
-    return p;
+// Steer toward cover: the nearest interior obstacle the bot can put between
+// itself and the opponent. Returns a unit vector toward a hiding spot just
+// behind that obstacle (far side from the opponent) plus its distance, or
+// null if nothing usable is in range. Skips noProjectile obstacles (bullets
+// pass through) and boundary walls (too large to flank).
+function findCoverDirection(px, pz, oppX, oppZ, obstacles, searchRadius) {
+  let best = null;
+  let bestDist = searchRadius;
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.noProjectile) continue;
+    if (o.maxX - o.minX > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
+    if (o.maxZ - o.minZ > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
+    const cx = (o.minX + o.maxX) * 0.5;
+    const cz = (o.minZ + o.maxZ) * 0.5;
+    const sx = cx - oppX;
+    const sz = cz - oppZ;
+    const slen = Math.sqrt(sx * sx + sz * sz);
+    if (slen < 1e-3) continue;
+    const behind = Math.max(o.maxX - o.minX, o.maxZ - o.minZ) * 0.5 + 2.5;
+    const hideX = cx + (sx / slen) * behind;
+    const hideZ = cz + (sz / slen) * behind;
+    const ddx = hideX - px;
+    const ddz = hideZ - pz;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d >= bestDist) continue;
+    bestDist = d;
+    const inv = d > 1e-3 ? 1 / d : 0;
+    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
   }
-  return null;
+  return best;
 }
 
 // Scan for the nearest walkable surface whose lip sits a jump-height above
@@ -331,6 +349,30 @@ export function tickBot(matchState, botId, now) {
     mz = sideZ * me.strafeSign;
   }
 
+  // --- Threat reaction: react to the enemy FIRING, not to the round in
+  // flight (it's near-hitscan now). On detection, steer toward cover to break
+  // line of sight; if there's no flankable cover, juke perpendicular so we're
+  // a moving target instead of a sitting duck. Sniper charge counts as firing
+  // so we start relocating during the 0.5 s tell, before the shot lands.
+  const enemyFiring = (now - opp.lastFireAt < BOT_FIRE_REACT_MS)
+    || opp.sniperChargeTargetId === me.id;
+  let coverSeeking = false;
+  if (enemyFiring && now >= me.hitStunUntil && !((me.botStuckPivotUntil ?? 0) > now)) {
+    const cover = findCoverDirection(me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, obstacles, BOT_COVER_SEEK_RADIUS);
+    if (cover) {
+      mx += cover.toX * BOT_COVER_STEER_WEIGHT;
+      mz += cover.toZ * BOT_COVER_STEER_WEIGHT;
+    } else {
+      mx += sideX * me.strafeSign * 1.2 - dirX * 0.35;
+      mz += sideZ * me.strafeSign * 1.2 - dirZ * 0.35;
+    }
+    const cl = Math.sqrt(mx * mx + mz * mz);
+    if (cl > 1e-3) { mx /= cl; mz /= cl; }
+    // Sprint there when we have the boost; otherwise still hustle at walk
+    // speed (better than holding position under fire).
+    coverSeeking = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
+  }
+
   // --- Tactical sprint state machine ---
   if (me.boost >= BOT_SPRINT_READY_BOOST) me.botSprintReady = true;
   if (me.boost <= 0) me.botSprintReady = false;
@@ -347,24 +389,11 @@ export function tickBot(matchState, botId, now) {
     && now >= me.emptyRecoverUntil
     && now >= me.hitStunUntil;
 
-  if (canStartBurst) {
-    const threat = findIncomingThreat(matchState, me, BOT_THREAT_LOOKAHEAD);
-    if (threat) {
-      // Trigger 1: incoming projectile — evade perpendicular. Uses a shorter
-      // cooldown than the other triggers so the bot can chain-dodge rapid
-      // weapons instead of being locked out after the first dodge.
-      const cross = threat.vel.x * sideZ - threat.vel.z * sideX;
-      const evadeSign = cross >= 0 ? 1 : -1;
-      me.botSprintDirX = sideX * evadeSign;
-      me.botSprintDirZ = sideZ * evadeSign;
-      me.botSprintUntil = now + BOT_SPRINT_BURST_MS;
-      me.evadeCooldownUntil = now + BOT_THREAT_EVADE_COOLDOWN_MS;
-      me.evadeHomingUntil = now + 240;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      inBurst = true;
-    } else if (dist < lowerRange) {
-      // Trigger 2: opponent too close — burst back to re-open kiting space.
+  // Skip these tactical bursts while actively seeking cover (that drives the
+  // velocity directly below); they'd fight the cover-seek heading.
+  if (canStartBurst && !coverSeeking) {
+    if (dist < lowerRange) {
+      // Trigger: opponent too close — burst back to re-open kiting space.
       me.botSprintDirX = -dirX;
       me.botSprintDirZ = -dirZ;
       me.botSprintUntil = now + 240;
@@ -430,7 +459,7 @@ export function tickBot(matchState, botId, now) {
   let jumpDirX = dirX;
   let jumpDirZ = dirZ;
 
-  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting) {
+  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
       if (tryStartJump(me, now)) jumpThisTick = true;
@@ -511,6 +540,12 @@ export function tickBot(matchState, botId, now) {
     me.vel.x = jumpDirX * BOT_SPRINT_BURST_VEL;
     me.vel.z = jumpDirZ * BOT_SPRINT_BURST_VEL;
     me.action = 'jump';
+  } else if (coverSeeking) {
+    // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
+    // around walls toward cover instead of dashing blindly into them.
+    me.vel.x = mx * BOT_SPRINT_BURST_VEL;
+    me.vel.z = mz * BOT_SPRINT_BURST_VEL;
+    me.action = 'dash';
   } else if (inBurst) {
     me.vel.x = (me.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
     me.vel.z = (me.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
