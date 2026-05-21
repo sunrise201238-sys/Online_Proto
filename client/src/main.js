@@ -79,7 +79,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 43,
-    projectileSpeed: 160,
+    projectileSpeed: 500,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -105,7 +105,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,
-    projectileSpeed: 300,
+    projectileSpeed: 800,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -270,17 +270,18 @@ const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
 // --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
 const BOT_SPRINT_MIN_BOOST = 8;
-const BOT_SPRINT_BURST_MS = 280;
 const BOT_SPRINT_BURST_VEL = 17;
-// How far ahead the bot scans for incoming projectiles. Bigger = more alert
-// (reacts to threats earlier, before they're at point-blank), at the cost of
-// burning more boost on dodges. Tuned so even the fast sniper round (95 u/s)
-// gives the bot ~230 ms of warning to commit a dodge.
-const BOT_THREAT_LOOKAHEAD = 22;
-// Cooldown after a threat-evade. Shorter than the tactical-burst cooldowns
-// below so the bot can chain dodges against rapid-fire weapons (MG bursts,
-// shotgun follow-ups) instead of eating the second shot.
-const BOT_THREAT_EVADE_COOLDOWN_MS = 400;
+// Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
+// reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
+// as "shooting at me" for this long after their last shot, which covers the
+// MG's fast cadence and bridges the gaps between rounds in a burst.
+const BOT_FIRE_REACT_MS = 220;
+// Cover-seek: how far to look for an obstacle to hide behind, how hard to
+// steer toward it, and the largest obstacle footprint still treated as cover
+// (anything bigger is an arena boundary wall, which can't be flanked — skip).
+const BOT_COVER_SEEK_RADIUS = 60;
+const BOT_COVER_STEER_WEIGHT = 2.6;
+const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 
 const input = {
   x: 0,
@@ -591,11 +592,12 @@ function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   const isMG = !isSniper && (unit?.spreadCount ?? 0) === 1;
   // Shotgun pellets (and anything unrecognized) stay as small spheres; sniper
-  // and MG share the spindle tracer below.
+  // and MG share the spindle tracer below. Pellets are always cyan — with
+  // homing disabled there's no red-lock behavior left for the color to signal.
   if (!isSniper && !isMG) {
     return new THREE.Mesh(
       new THREE.SphereGeometry(0.15, 8, 8),
-      new THREE.MeshBasicMaterial({ color: isRedLock ? 0xff4f66 : 0x6df9ff })
+      new THREE.MeshBasicMaterial({ color: 0x6df9ff })
     );
   }
   // Spindle profile: revolve a 3-point silhouette around the Y axis to get a
@@ -1213,22 +1215,36 @@ function updatePlayer(now) {
   updateBoost(state.player, now, action);
 }
 
-// Offline mirror of findIncomingThreat in shared/src/sim/ai.js. Returns the
-// nearest projectile that targets `mech`, is within `range`, and is heading
-// toward it (so the bot can spend boost on a real threat instead of dashing
-// at random).
-function findIncomingThreatOffline(mech, range) {
-  const r2 = range * range;
-  for (const p of state.projectiles) {
-    if (p.target !== mech) continue;
-    const dxp = p.mesh.position.x - mech.body.position.x;
-    const dzp = p.mesh.position.z - mech.body.position.z;
-    if (dxp * dxp + dzp * dzp > r2) continue;
-    const dot = (-dxp) * p.vel.x + (-dzp) * p.vel.z;
-    if (dot <= 0) continue;
-    return p;
+// Offline mirror of findCoverDirection in shared/src/sim/ai.js. Returns a unit
+// vector toward a hiding spot just behind the nearest flankable obstacle (far
+// side from the opponent) plus its distance, or null if nothing usable is in
+// range. Skips noProjectile obstacles and boundary walls (too large to flank).
+function findCoverDirection(px, pz, oppX, oppZ, obstacles, searchRadius) {
+  let best = null;
+  let bestDist = searchRadius;
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (o.noProjectile) continue;
+    if (o.maxX - o.minX > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
+    if (o.maxZ - o.minZ > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
+    const cx = (o.minX + o.maxX) * 0.5;
+    const cz = (o.minZ + o.maxZ) * 0.5;
+    const sx = cx - oppX;
+    const sz = cz - oppZ;
+    const slen = Math.sqrt(sx * sx + sz * sz);
+    if (slen < 1e-3) continue;
+    const behind = Math.max(o.maxX - o.minX, o.maxZ - o.minZ) * 0.5 + 2.5;
+    const hideX = cx + (sx / slen) * behind;
+    const hideZ = cz + (sz / slen) * behind;
+    const ddx = hideX - px;
+    const ddz = hideZ - pz;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d >= bestDist) continue;
+    bestDist = d;
+    const inv = d > 1e-3 ? 1 / d : 0;
+    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
   }
-  return null;
+  return best;
 }
 
 // ===== Universal bot AI helpers =====
@@ -1531,6 +1547,30 @@ function updateEnemy(now) {
     mz = side.z * eState.strafeSign;
   }
 
+  // --- Threat reaction: react to the enemy FIRING, not to the round in
+  // flight (it's near-hitscan now). On detection, steer toward cover to break
+  // line of sight; if there's no flankable cover, juke perpendicular so we're
+  // a moving target instead of a sitting duck. Sniper charge counts as firing
+  // so we start relocating during the 0.5 s tell, before the shot lands.
+  const enemyFiring = (now - state.player.state.lastFireAt < BOT_FIRE_REACT_MS)
+    || state.player.state.sniperChargeTarget === state.enemy;
+  let coverSeeking = false;
+  if (enemyFiring && now >= eState.hitStunUntil && !((eState.botStuckPivotUntil ?? 0) > now)) {
+    const cover = findCoverDirection(e.x, e.z, p.x, p.z, arenaObstacles, BOT_COVER_SEEK_RADIUS);
+    if (cover) {
+      mx += cover.toX * BOT_COVER_STEER_WEIGHT;
+      mz += cover.toZ * BOT_COVER_STEER_WEIGHT;
+    } else {
+      mx += side.x * eState.strafeSign * 1.2 - dir.x * 0.35;
+      mz += side.z * eState.strafeSign * 1.2 - dir.z * 0.35;
+    }
+    const cl = Math.sqrt(mx * mx + mz * mz);
+    if (cl > 1e-3) { mx /= cl; mz /= cl; }
+    // Sprint there when we have the boost; otherwise still hustle at walk
+    // speed (better than holding position under fire).
+    coverSeeking = eState.boost >= BOT_SPRINT_MIN_BOOST && now >= eState.emptyRecoverUntil;
+  }
+
   // --- Tactical sprint state machine ---
   // Default behaviour is to WALK along the kiting direction (no boost drain),
   // saving the gauge for actual tactical bursts. Hysteresis flag
@@ -1552,24 +1592,11 @@ function updateEnemy(now) {
     && now >= eState.emptyRecoverUntil
     && now >= eState.hitStunUntil;
 
-  if (canStartBurst) {
-    const threat = findIncomingThreatOffline(state.enemy, BOT_THREAT_LOOKAHEAD);
-    if (threat) {
-      // Trigger 1: incoming projectile — evade perpendicular. Uses a shorter
-      // cooldown than the other triggers so the bot can chain-dodge rapid
-      // weapons instead of being locked out after the first dodge.
-      const cross = threat.vel.x * side.z - threat.vel.z * side.x;
-      const evadeSign = cross >= 0 ? 1 : -1;
-      eState.botSprintDirX = side.x * evadeSign;
-      eState.botSprintDirZ = side.z * evadeSign;
-      eState.botSprintUntil = now + BOT_SPRINT_BURST_MS;
-      eState.evadeCooldownUntil = now + BOT_THREAT_EVADE_COOLDOWN_MS;
-      eState.evadeHomingUntil = now + 240;
-      eState.momentumVX = 0;
-      eState.momentumVZ = 0;
-      inBurst = true;
-    } else if (dist < lowerRange) {
-      // Trigger 2: opponent too close — burst back to re-open kiting space.
+  // Skip these tactical bursts while actively seeking cover (that drives the
+  // velocity directly below); they'd fight the cover-seek heading.
+  if (canStartBurst && !coverSeeking) {
+    if (dist < lowerRange) {
+      // Trigger: opponent too close — burst back to re-open kiting space.
       eState.botSprintDirX = -dir.x;
       eState.botSprintDirZ = -dir.z;
       eState.botSprintUntil = now + 240;
@@ -1637,7 +1664,7 @@ function updateEnemy(now) {
   let jumpDirX = dir.x;
   let jumpDirZ = dir.z;
 
-  if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting) {
+  if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
       if (botStartJump(now)) jumpThisTick = true;
@@ -1718,6 +1745,12 @@ function updateEnemy(now) {
     state.enemy.body.velocity.x = jumpDirX * BOT_SPRINT_BURST_VEL;
     state.enemy.body.velocity.z = jumpDirZ * BOT_SPRINT_BURST_VEL;
     eState.action = 'jump';
+  } else if (coverSeeking) {
+    // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
+    // around walls toward cover instead of dashing blindly into them.
+    state.enemy.body.velocity.x = mx * BOT_SPRINT_BURST_VEL;
+    state.enemy.body.velocity.z = mz * BOT_SPRINT_BURST_VEL;
+    eState.action = 'dash';
   } else if (inBurst) {
     state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
     state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
