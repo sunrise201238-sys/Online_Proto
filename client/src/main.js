@@ -151,6 +151,8 @@ const state = {
   vfx: [],
   reticlePulseUntil: 0,
   reticleWasRed: false,
+  reticleEnemyFiringUntil: 0,
+  reticleLastEnemyFireAt: null,
   running: false,
   matchStartAt: 0
 };
@@ -246,10 +248,10 @@ const WALK_SPEED = 16;                  // unit.walkSpeed default
 const BOOST_DASH_DRAIN_PER_TICK = 1.1;  // unit.boostDrain default
 const BOOST_REGEN_PER_TICK = 4.59;      // unit.boostRegen default
 const GROUND_BASE_Y = 2.45;
-const HOMING_MAX_DEG_PER_FRAME = 1;
+const HOMING_MAX_DEG_PER_FRAME = 0;     // homing disabled — projectiles fly straight
 const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 const HOMING_SOFTEN_RANGE = 20;
-const HOMING_SOFTEN_DEG_PER_FRAME = 1;
+const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectiles fly straight
 const BOOST_CAP = 250;                  // unit.boostCap default
 const STEP_DISTANCE = 9.2;
 const STEP_DURATION_MS = 125;
@@ -577,17 +579,22 @@ function setupHUD() {
 
 let hudRefs = null;
 
-// Build a projectile mesh. Sniper rounds get a slim spindle (sharp at both
-// ends) that's re-oriented along velocity each frame (see orientTracer). The
-// hit box is unchanged — hit detection in updateProjectileSystem /
-// tickProjectiles uses the projectile's logical position vs the target's
-// hit radius and never the mesh geometry, so the visual length/orientation
-// has no gameplay effect.
+// Build a projectile mesh. Sniper and MG rounds get a slim spindle (sharp at
+// both ends) that's re-oriented along velocity each frame (see orientTracer);
+// the MG spindle is half the sniper's length and width. The hit box is
+// unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
+// the projectile's logical position vs the target's hit radius and never the
+// mesh geometry, so the visual length/orientation has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 3.4;
 const SNIPER_TRACER_MID_RADIUS = 0.18;
+// MG reuses the sniper spindle at half length and half width.
+const MG_TRACER_SCALE = 0.5;
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
-  if (!isSniper) {
+  const isMG = !isSniper && (unit?.spreadCount ?? 0) === 1;
+  // Shotgun pellets (and anything unrecognized) stay as small spheres; sniper
+  // and MG share the spindle tracer below.
+  if (!isSniper && !isMG) {
     return new THREE.Mesh(
       new THREE.SphereGeometry(0.15, 8, 8),
       new THREE.MeshBasicMaterial({ color: isRedLock ? 0xff4f66 : 0x6df9ff })
@@ -599,11 +606,13 @@ function buildProjectileMesh(unit, isRedLock) {
   // at the mesh origin — i.e. the leading tip coincides with the projectile's
   // logical position and the body trails behind once orientTracer rotates the
   // local +Y axis onto the velocity direction.
-  const half = SNIPER_TRACER_LENGTH / 2;
+  const scale = isMG ? MG_TRACER_SCALE : 1;
+  const half = (SNIPER_TRACER_LENGTH * scale) / 2;
+  const midRadius = SNIPER_TRACER_MID_RADIUS * scale;
   const profile = [
-    new THREE.Vector2(0, -half),                    // tail tip (sharp)
-    new THREE.Vector2(SNIPER_TRACER_MID_RADIUS, 0), // mid (widest)
-    new THREE.Vector2(0, half)                      // head tip (sharp)
+    new THREE.Vector2(0, -half),        // tail tip (sharp)
+    new THREE.Vector2(midRadius, 0),    // mid (widest)
+    new THREE.Vector2(0, half)          // head tip (sharp)
   ];
   const geom = new THREE.LatheGeometry(profile, 10);
   geom.translate(0, -half, 0);
@@ -942,8 +951,8 @@ function updateProjectileSystem(dt) {
 
     const prevPos = p.mesh.position.clone();
     p.mesh.position.addScaledVector(p.vel, dt);
-    // Re-orient tracer projectiles (sniper) so the streak follows any homing
-    // turns. No-op for sphere projectiles.
+    // Re-orient tracer projectiles (sniper / MG) so the streak follows
+    // velocity. No-op for sphere projectiles (shotgun).
     orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
     // Track total path length on shotgun center pellets so the cluster
     // spread factor uses actual distance flown (homing-aware).
@@ -1817,16 +1826,33 @@ function updateEnemy(now) {
   updateBoost(state.enemy, now, state.enemy.state.action);
 }
 
+// How long the reticle stays red after each enemy shot. Re-armed on every
+// shot, so sustained fire holds it red and a lone shot flashes briefly.
+const RETICLE_FIRING_FLASH_MS = 200;
+
 function updateLocksAndReticle() {
+  const nowMs = performance.now();
   const dist = state.player.root.position.distanceTo(state.enemy.root.position);
   state.player.state.redLock = dist <= state.player.unit.lockRange;
   state.enemy.state.redLock = dist <= state.enemy.unit.lockRange;
 
+  // Reticle is GREEN by default and turns RED only while the enemy is firing.
+  // A shot is detected as a forward jump in the enemy's lastFireAt rather than
+  // a wall-clock window: lastFireAt runs on performance.now() offline but
+  // mirrors the server's Date.now() online, so comparing it against the render
+  // clock directly would be meaningless in online matches.
+  const enemyFireAt = state.enemy.state.lastFireAt;
+  if (state.reticleLastEnemyFireAt != null && enemyFireAt > state.reticleLastEnemyFireAt) {
+    state.reticleEnemyFiringUntil = nowMs + RETICLE_FIRING_FLASH_MS;
+  }
+  state.reticleLastEnemyFireAt = enemyFireAt;
+  const enemyFiring = nowMs < state.reticleEnemyFiringUntil;
+
   state.reticle.position.set(0, 0.2, 0);
-  state.reticle.material.color.set(state.player.state.redLock ? 0xff5f72 : 0x7effbd);
-  if (state.player.state.redLock !== state.reticleWasRed) {
-    state.reticlePulseUntil = performance.now() + 180;
-    state.reticleWasRed = state.player.state.redLock;
+  state.reticle.material.color.set(enemyFiring ? 0xff5f72 : 0x7effbd);
+  if (enemyFiring !== state.reticleWasRed) {
+    state.reticlePulseUntil = nowMs + 180;
+    state.reticleWasRed = enemyFiring;
   }
   // Scale the lock ring up with distance so it stays readable on long-range maps
   // (Streets/Square). Sprites are world-sized, so screen size = world-size / distance —
@@ -1834,7 +1860,7 @@ function updateLocksAndReticle() {
   // close range and a generous ceiling so far-away locks remain easy to read.
   const camDist = camera.position.distanceTo(state.enemy.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-  const pulse = state.reticlePulseUntil > performance.now() ? 1.2 : 1;
+  const pulse = state.reticlePulseUntil > nowMs ? 1.2 : 1;
   state.reticle.scale.setScalar(6.1 * distScale * pulse);
   state.reticle.quaternion.copy(camera.quaternion);
 }
@@ -2028,6 +2054,9 @@ function startMatch() {
   input.shootTap = false;
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
+  // Fresh match — seed the firing tracker so the reticle starts green.
+  state.reticleLastEnemyFireAt = null;
+  state.reticleEnemyFiringUntil = 0;
   hudRefs = setupHUD();
   state.phase = 'match';
   state.running = true;
@@ -2659,6 +2688,9 @@ function ensureOnlineMatchSetup(snap) {
   buildArenaForMap(mapKey);
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
+  // Fresh match — seed the firing tracker so the reticle starts green.
+  state.reticleLastEnemyFireAt = null;
+  state.reticleEnemyFiringUntil = 0;
   hudRefs = setupHUD();
   // Pause button is meaningless online (server runs the sim authoritatively
   // — we can't pause it from a single client). Drop it from the HUD.
