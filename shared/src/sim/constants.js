@@ -144,10 +144,10 @@ export const JUMP_HOVER_MS = 300;
 export const JUMP_COOLDOWN_MS = 1500;
 
 // Homing tunables.
-export const HOMING_MAX_DEG_PER_FRAME = 1;
+export const HOMING_MAX_DEG_PER_FRAME = 0;     // homing disabled — projectiles fly straight
 export const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 export const HOMING_SOFTEN_RANGE = 20;
-export const HOMING_SOFTEN_DEG_PER_FRAME = 1;
+export const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectiles fly straight
 
 // Hit reactions.
 export const HIT_RADIUS_NORMAL = 1.6;
