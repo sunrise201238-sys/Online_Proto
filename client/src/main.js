@@ -1549,6 +1549,19 @@ function updateEnemy(now) {
   const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
   mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
   mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
+  // Reacquire / anti-camp: the stuck-pivot + stuck-memory machinery below
+  // exists to pry us off a wall we're grinding while pathing to a HIDDEN
+  // opponent. But its 3.5 s "avoid this spot" marker (repulsion weight 1.4 >
+  // the chase pull) can keep shoving us away from the opponent long after they
+  // step back into the open near that spot — pinning us in a loop that never
+  // re-acquires preferred distance. So the moment the line is clear, drop all
+  // three latches; per-tick obstacle avoidance still keeps us off any wall we
+  // actually touch.
+  if (playerHasLoS) {
+    eState.botStuckPivotUntil = 0;
+    eState.botStuckMemoryUntil = 0;
+    eState.botStuckTicks = 0;
+  }
   // Bias away from the spot we last got pinned at so the next path attempt
   // picks a different angle around the obstacle instead of grinding into the
   // same wall/corner once the perpendicular pivot ends.
