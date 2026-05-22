@@ -15,7 +15,8 @@ import { between } from './math.js';
 import { attemptFire, tryStartJump } from './actions.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
 import { getArena } from './arena.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED } from './constants.js';
+import { inheritMomentum } from './movement.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD } from './constants.js';
 
 // --- Bot tactical-sprint tunables ---
 // Hysteresis: bot only initiates a new sprint burst once boost has refilled
@@ -584,15 +585,31 @@ export function tickBot(matchState, botId, now) {
   // Movement speeds come from this unit's stats, identical to the player: walk
   // at walkSpeed, and a sustained sprint at sprintSpeed plus the dash momentum
   // the player builds (≈ ×2.5). Keeps the bot's mobility the same as a pilot.
+  // Movement uses this unit's stats AND the player's exact mechanic: a sprint
+  // sets the base sprintSpeed and adds dash momentum via inheritMomentum, which
+  // applyMomentum then applies — same buildup/decay/coasting as a player holding
+  // boost. Walk is plain walkSpeed. (A flat ×2.5 plus applyMomentum would
+  // double-count the momentum, which was the bug.)
   const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
-  const botSprintSpeed = botSprintBase * 2.5;
   const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
+  // Can we afford to sprint? Same gate cover-seek uses. When the gauge is
+  // spent, escape/peek fall back to a walk instead of sprinting for free
+  // (action 'idle' so boost regens), mirroring how the player slows when empty.
+  const botCanSprint = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
 
   if (escaping) {
-    // Sprint to open space to clear the wall, ignoring the kiting band.
-    me.vel.x = mx * botSprintSpeed;
-    me.vel.z = mz * botSprintSpeed;
-    me.action = 'dash';
+    // Sprint to open space to clear the wall, ignoring the kiting band (walk it
+    // out if we're out of boost).
+    if (botCanSprint) {
+      me.vel.x = mx * botSprintBase;
+      me.vel.z = mz * botSprintBase;
+      inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
+      me.action = 'dash';
+    } else {
+      me.vel.x = mx * botWalkSpeed;
+      me.vel.z = mz * botWalkSpeed;
+      me.action = 'idle';
+    }
   } else if (jumpThisTick) {
     // Remember the launch aim so the airborne ticks below keep driving the
     // bot toward the ledge instead of drifting off on the kiting vector.
@@ -607,18 +624,27 @@ export function tickBot(matchState, botId, now) {
   } else if (coverSeeking) {
     // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
     // around walls toward cover instead of dashing blindly into them.
-    me.vel.x = mx * botSprintSpeed;
-    me.vel.z = mz * botSprintSpeed;
+    me.vel.x = mx * botSprintBase;
+    me.vel.z = mz * botSprintBase;
+    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
   } else if (peeking) {
-    // Pop out at sprint speed to re-acquire a line of sight, then the firing
-    // block takes the shot and the threat reaction tucks us back if fired on.
-    me.vel.x = mx * botSprintSpeed;
-    me.vel.z = mz * botSprintSpeed;
-    me.action = 'dash';
+    // Pop out to re-acquire a line of sight (sprint if we can afford it, else
+    // walk), then the firing block shoots and the threat reaction tucks us back.
+    if (botCanSprint) {
+      me.vel.x = mx * botSprintBase;
+      me.vel.z = mz * botSprintBase;
+      inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
+      me.action = 'dash';
+    } else {
+      me.vel.x = mx * botWalkSpeed;
+      me.vel.z = mz * botWalkSpeed;
+      me.action = 'idle';
+    }
   } else if (inBurst) {
-    me.vel.x = (me.botSprintDirX ?? 0) * botSprintSpeed;
-    me.vel.z = (me.botSprintDirZ ?? 0) * botSprintSpeed;
+    me.vel.x = (me.botSprintDirX ?? 0) * botSprintBase;
+    me.vel.z = (me.botSprintDirZ ?? 0) * botSprintBase;
+    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
   } else {
     // Walk at the unit's walkSpeed (same as the player).
