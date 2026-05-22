@@ -266,6 +266,9 @@ const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the 18-small-grid derivation.
 const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
+// Spawn protection — fighters take no damage for this long at round start
+// (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
+const SPAWN_IMMUNITY_MS = 2000;
 
 // --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
@@ -356,6 +359,7 @@ function createMech(color, unitData) {
       redLock: false,
       overheatedUntil: 0,
       hitStunUntil: 0,
+      invulnerableUntil: 0,
       hoverUntil: 0,
       meleeAnimUntil: 0,
       meleeLungeUntil: 0,
@@ -592,13 +596,14 @@ function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   const isMG = !isSniper && (unit?.spreadCount ?? 0) === 1;
   // Shotgun pellets (and anything unrecognized) stay as small spheres; sniper
-  // and MG share the spindle tracer below. Pellets are always cyan — with
-  // homing disabled there's no red-lock behavior left for the color to signal.
+  // and MG share the spindle tracer below. Pellets use the sniper tracer's
+  // normal (non-lock) color 0xfff4d0 — a single warm tone, no red-lock variant,
+  // since with homing disabled there's no red-lock behavior for it to signal.
   // Radius is purely visual; the hit box (see header) is unchanged.
   if (!isSniper && !isMG) {
     return new THREE.Mesh(
       new THREE.SphereGeometry(0.075, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0x6df9ff })
+      new THREE.MeshBasicMaterial({ color: 0xfff4d0 })
     );
   }
   // Spindle profile: revolve a 3-point silhouette around the Y axis to get a
@@ -982,7 +987,8 @@ function updateProjectileSystem(dt) {
     const path = new THREE.Line3(prevPos, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
     path.closestPointToPoint(p.target.root.position, true, nearest);
-    if (nearest.distanceTo(p.target.root.position) < hitRadius) {
+    // Spawn protection: the round passes through an invulnerable target.
+    if (now >= p.target.state.invulnerableUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
@@ -1862,6 +1868,21 @@ function updateEnemy(now) {
 // shot, so sustained fire holds it red and a lone shot flashes briefly.
 const RETICLE_FIRING_FLASH_MS = 200;
 
+// Slight white glow on a mech while it's spawn-protected. Only the toon body
+// materials carry emissive; the reticle/glint (MeshBasicMaterial) have none,
+// so traverse skips them. Toggled only on transition to avoid redundant writes.
+const IMMUNITY_GLOW_INTENSITY = 0.45;
+function applyImmunityGlow(mech, immune) {
+  if (!mech || !mech.root || mech._immuneGlowOn === immune) return;
+  mech._immuneGlowOn = immune;
+  mech.root.traverse((o) => {
+    const m = o.material;
+    if (!m || !m.emissive) return;
+    m.emissive.setHex(immune ? 0xffffff : 0x000000);
+    m.emissiveIntensity = immune ? IMMUNITY_GLOW_INTENSITY : 1;
+  });
+}
+
 function updateLocksAndReticle() {
   const nowMs = performance.now();
   const dist = state.player.root.position.distanceTo(state.enemy.root.position);
@@ -2077,6 +2098,9 @@ function startMatch() {
   state.player.state.lastFireAt = now;
   state.enemy.state.lastFireAt = now;
   state.enemy.state.nextFireAt = now + 650;
+  // Spawn protection — both units are immune for the first SPAWN_IMMUNITY_MS.
+  state.player.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
+  state.enemy.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   input.shootHold = false;
   input.shootTap = false;
   state.reticle = makeReticleSprite();
@@ -2231,6 +2255,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.redLock = fighter.redLock;
   s.airborne = fighter.airborne;
   s.hitStunUntil = fighter.hitStunUntil;
+  s.invulnerableUntil = fighter.invulnerableUntil;
   s.overheatedUntil = fighter.overheatedUntil;
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
@@ -2799,6 +2824,12 @@ function runOnlineMatchFrame(dt, onl, conn) {
 
   if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
   if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
+
+  // Spawn-protection glow. invulnerableUntil is server-clock (Date.now) here,
+  // mirrored from the snapshot, so compare against Date.now().
+  const immuneNow = Date.now();
+  applyImmunityGlow(state.player, immuneNow < state.player.state.invulnerableUntil);
+  applyImmunityGlow(state.enemy, immuneNow < state.enemy.state.invulnerableUntil);
 
   const ddx = state.enemy.root.position.x - state.player.root.position.x;
   const ddz = state.enemy.root.position.z - state.player.root.position.z;
@@ -5495,6 +5526,8 @@ function animate() {
 
       updateTransforms(dt);
       updateLocksAndReticle();
+      applyImmunityGlow(state.player, now < state.player.state.invulnerableUntil);
+      applyImmunityGlow(state.enemy, now < state.enemy.state.invulnerableUntil);
       tickGlintRemoval(state.player);
       tickGlintRemoval(state.enemy);
       updateGlintScale(state.player);
