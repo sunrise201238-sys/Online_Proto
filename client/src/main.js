@@ -268,7 +268,7 @@ const SNIPER_GLINT_MIN_FLASH_MS = 100;
 const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
 // Spawn protection — fighters take no damage for this long at round start
 // (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
-const SPAWN_IMMUNITY_MS = 2000;
+const SPAWN_IMMUNITY_MS = 3000;
 
 // --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
@@ -1878,13 +1878,14 @@ function createImmunityAuraForMech(mech) {
   c.width = c.height = 128;
   const x = c.getContext('2d');
   const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  // Transparent core so the model's own colors are never tinted; a modest
-  // white ring sits just outside the silhouette and fades out — an external
-  // aura rather than a wash over the body.
+  // Transparent core so the model's own colors are never tinted; a soft white
+  // band hugs just outside the silhouette and fades out — a thick external
+  // glow rather than a thin ring or a wash over the body.
   grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-  grad.addColorStop(0.64, 'rgba(255, 255, 255, 0)');
-  grad.addColorStop(0.78, 'rgba(255, 255, 255, 0.26)');
-  grad.addColorStop(0.9, 'rgba(255, 255, 255, 0.1)');
+  grad.addColorStop(0.66, 'rgba(255, 255, 255, 0)');
+  grad.addColorStop(0.77, 'rgba(255, 255, 255, 0.22)');
+  grad.addColorStop(0.87, 'rgba(255, 255, 255, 0.2)');
+  grad.addColorStop(0.95, 'rgba(255, 255, 255, 0.08)');
   grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
   x.fillStyle = grad;
   x.beginPath();
@@ -1898,9 +1899,10 @@ function createImmunityAuraForMech(mech) {
     fog: false,
     blending: THREE.AdditiveBlending
   }));
-  // Larger than the mech (~5 units tall) and centered on its mid-height so the
-  // transparent core covers the body and the ring sits just outside it.
-  sprite.scale.set(9.5, 9.5, 1);
+  // Tighter than the old big circle (which read as a detached ring on the
+  // narrow sides): an upright ellipse that hugs the silhouette, centered on the
+  // mech's mid-height so the transparent core still covers the whole body.
+  sprite.scale.set(5.5, 9, 1);
   sprite.position.set(0, -0.4, 0);
   // Below the reticle/glint render order (9999) so they sit on top of the aura.
   sprite.renderOrder = 9000;
