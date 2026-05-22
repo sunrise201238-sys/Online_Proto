@@ -1621,13 +1621,18 @@ function updateEnemy(now) {
   // line of sight; with no flankable cover, commit a perpendicular juke away
   // from the line (strafeSign is held steady above, so no zig-zag back into
   // it). Skipped while escaping a wall — that takes priority.
-  // Only break to cover while already at preferred engage distance. Out of the
-  // band, repositioning takes priority — otherwise the cover loop hijacks the
-  // velocity and oscillates (hide -> lose sight -> drift back -> get shot at ->
-  // hide again) for seconds before the bot can close/reopen the gap.
+  // Break to cover while at preferred engage distance (out of the band,
+  // repositioning takes priority — otherwise the cover loop hijacks the
+  // velocity and oscillates: hide -> lose sight -> drift back -> get shot at ->
+  // hide again, for seconds before the bot can close/reopen the gap). EXCEPTION:
+  // a fresh hit always earns a defensive sprint to safety wherever we are.
+  // hitEvading is the post-hit window (BOT_HIT_EVADE_MS) baked into evadeActive;
+  // it self-expires and only re-arms on another hit, so it can't camp a loop the
+  // way the fire-reaction (player firing + LoS) could.
   const inEngageBand = dist >= lowerRange && dist <= upperRange;
+  const hitEvading = now < (eState.botHitEvadeUntil ?? 0);
   let coverSeeking = false;
-  if (evadeActive && inEngageBand && now >= eState.hitStunUntil && !escaping) {
+  if (evadeActive && (inEngageBand || hitEvading) && now >= eState.hitStunUntil && !escaping) {
     const cover = findCoverDirection(e.x, e.z, p.x, p.z, arenaObstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
