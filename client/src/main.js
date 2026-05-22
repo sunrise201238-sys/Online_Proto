@@ -1868,24 +1868,20 @@ function updateEnemy(now) {
 // shot, so sustained fire holds it red and a lone shot flashes briefly.
 const RETICLE_FIRING_FLASH_MS = 200;
 
-// White spawn-protection glow — a soft radial-gradient halo sprite (additive)
-// that surrounds the mech (transparent core, glowing ring), adapted from the
-// reference project's buff aura. Attached to mech.root so it follows the unit
-// and reads from any camera angle.
+// White spawn-protection glow — a soft radial-gradient sprite (additive) that
+// covers the mech modestly, adapted from the reference project's buff aura.
+// Attached to mech.root so it follows the unit and reads from any camera angle.
 function createImmunityAuraForMech(mech) {
   if (!mech || mech.immunityAura) return;
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
   const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  // Transparent core so the model's own colors are never tinted; a soft white
-  // band hugs just outside the silhouette and fades out — a thick external
-  // glow rather than a thin ring or a wash over the body.
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-  grad.addColorStop(0.66, 'rgba(255, 255, 255, 0)');
-  grad.addColorStop(0.77, 'rgba(255, 255, 255, 0.22)');
-  grad.addColorStop(0.87, 'rgba(255, 255, 255, 0.2)');
-  grad.addColorStop(0.95, 'rgba(255, 255, 255, 0.08)');
+  // Soft white fill that covers the unit modestly — brightest over the body,
+  // fading to transparent at the edge. Kept low so it reads as a gentle glow
+  // rather than a wash that hides the model's colors.
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+  grad.addColorStop(0.55, 'rgba(255, 255, 255, 0.13)');
   grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
   x.fillStyle = grad;
   x.beginPath();
@@ -1899,9 +1895,8 @@ function createImmunityAuraForMech(mech) {
     fog: false,
     blending: THREE.AdditiveBlending
   }));
-  // Tighter than the old big circle (which read as a detached ring on the
-  // narrow sides): an upright ellipse that hugs the silhouette, centered on the
-  // mech's mid-height so the transparent core still covers the whole body.
+  // Upright ellipse roughly matching the mech's silhouette, centered on its
+  // mid-height so the glow covers the whole body and fades out around it.
   sprite.scale.set(5.5, 9, 1);
   sprite.position.set(0, -0.4, 0);
   // Below the reticle/glint render order (9999) so they sit on top of the aura.
@@ -1920,7 +1915,7 @@ function removeImmunityAuraFromMech(mech) {
   mech.immunityAura = null;
 }
 
-// Show the halo while spawn-protected, drop it when immunity ends. The
+// Show the glow while spawn-protected, drop it when immunity ends. The
 // create/remove guards make this safe to call every frame.
 function applyImmunityGlow(mech, immune) {
   if (!mech || !mech.root) return;
