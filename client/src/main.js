@@ -53,7 +53,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
-    projectileSpeed: 500,
+    projectileSpeed: 600,
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -601,7 +601,7 @@ function buildProjectileMesh(unit, isRedLock) {
   // Radius is purely visual; the hit box (see header) is unchanged.
   if (!isSniper && !isMG) {
     return new THREE.Mesh(
-      new THREE.SphereGeometry(0.075, 8, 8),
+      new THREE.SphereGeometry(0.15, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0xfff4d0 })
     );
   }
