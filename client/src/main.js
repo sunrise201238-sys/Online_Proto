@@ -1801,18 +1801,31 @@ function updateEnemy(now) {
     }
   }
 
-  // Movement speeds come from this unit's stats, identical to the player: walk
-  // at walkSpeed, and a sustained sprint at sprintSpeed plus the dash momentum
-  // the player builds (≈ ×2.5). Keeps the bot's mobility the same as a pilot.
+  // Movement uses this unit's stats AND the player's exact mechanic: a sprint
+  // sets the base sprintSpeed and adds dash momentum via inheritMomentum, which
+  // applyMomentum (below) then applies — same buildup/decay/coasting as a player
+  // holding boost. Walk is plain walkSpeed. (Setting a flat ×2.5 here and also
+  // running applyMomentum would double-count the momentum, which is the bug.)
   const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
-  const botSprintSpeed = botSprintBase * 2.5;
   const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
+  // Can we afford to sprint? Same gate cover-seek uses. When the gauge is
+  // spent, escape/peek fall back to a walk instead of sprinting for free
+  // (action 'idle' so boost regens), mirroring how the player slows when empty.
+  const botCanSprint = eState.boost >= BOT_SPRINT_MIN_BOOST && now >= eState.emptyRecoverUntil;
 
   if (escaping) {
-    // Sprint to open space to clear the wall, ignoring the kiting band.
-    state.enemy.body.velocity.x = mx * botSprintSpeed;
-    state.enemy.body.velocity.z = mz * botSprintSpeed;
-    eState.action = 'dash';
+    // Sprint to open space to clear the wall, ignoring the kiting band (walk it
+    // out if we're out of boost).
+    if (botCanSprint) {
+      state.enemy.body.velocity.x = mx * botSprintBase;
+      state.enemy.body.velocity.z = mz * botSprintBase;
+      inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
+      eState.action = 'dash';
+    } else {
+      state.enemy.body.velocity.x = mx * botWalkSpeed;
+      state.enemy.body.velocity.z = mz * botWalkSpeed;
+      eState.action = 'idle';
+    }
   } else if (jumpThisTick) {
     // Remember the launch aim so the airborne ticks below keep driving the
     // bot toward the ledge instead of drifting off on the kiting vector.
@@ -1827,18 +1840,27 @@ function updateEnemy(now) {
   } else if (coverSeeking) {
     // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
     // around walls toward cover instead of dashing blindly into them.
-    state.enemy.body.velocity.x = mx * botSprintSpeed;
-    state.enemy.body.velocity.z = mz * botSprintSpeed;
+    state.enemy.body.velocity.x = mx * botSprintBase;
+    state.enemy.body.velocity.z = mz * botSprintBase;
+    inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
     eState.action = 'dash';
   } else if (peeking) {
-    // Pop out at sprint speed to re-acquire a line of sight, then the firing
-    // block takes the shot and the threat reaction tucks us back if fired on.
-    state.enemy.body.velocity.x = mx * botSprintSpeed;
-    state.enemy.body.velocity.z = mz * botSprintSpeed;
-    eState.action = 'dash';
+    // Pop out to re-acquire a line of sight (sprint if we can afford it, else
+    // walk), then the firing block shoots and the threat reaction tucks us back.
+    if (botCanSprint) {
+      state.enemy.body.velocity.x = mx * botSprintBase;
+      state.enemy.body.velocity.z = mz * botSprintBase;
+      inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
+      eState.action = 'dash';
+    } else {
+      state.enemy.body.velocity.x = mx * botWalkSpeed;
+      state.enemy.body.velocity.z = mz * botWalkSpeed;
+      eState.action = 'idle';
+    }
   } else if (inBurst) {
-    state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * botSprintSpeed;
-    state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * botSprintSpeed;
+    state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * botSprintBase;
+    state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * botSprintBase;
+    inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
     eState.action = 'dash';
   } else {
     // Walk at the unit's walkSpeed (same as the player).
@@ -1914,22 +1936,6 @@ function updateEnemy(now) {
         else s.nextFireAt = now + 120;
       }
     }
-  }
-  // Aggressive close-in poke when very close and the player has no anti-melee
-  // window — gated on the burst-readiness flag so it stays in the same
-  // boost-budgeted regime as the rest of the bot's tactical sprint usage.
-  if (
-    eState.botSprintReady === true
-    && eState.boost >= BOT_SPRINT_MIN_BOOST
-    && !inBurst
-    && !jumpThisTick
-    && dist < 7.2
-    && now > state.player.state.antiMeleeUntil
-    && Math.random() > 0.82
-  ) {
-    state.enemy.body.velocity.x += dir.x * 16;
-    state.enemy.body.velocity.z += dir.z * 16;
-    eState.action = 'dash';
   }
   if (state.enemy.grounded && now > state.enemy.state.hoverUntil && state.enemy.state.action !== 'jump') {
     state.enemy.body.velocity.y = 0;
