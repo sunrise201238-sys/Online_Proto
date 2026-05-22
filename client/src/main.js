@@ -1536,8 +1536,12 @@ function updateEnemy(now) {
   // In-band but no clear line (blocked by cover): push toward the player so
   // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
   if (!playerHasLoS && !evadeActive && dist >= lowerRange && dist <= upperRange) retreat = 0.6;
-  let mx = dir.x * retreat + side.x * eState.strafeSign * 1.05;
-  let mz = dir.z * retreat + side.z * eState.strafeSign * 1.05;
+  // Strafe hard only inside the band (to circle); out of band, cut the strafe so
+  // we head straight in/out to restore engage distance and keep up with the
+  // player instead of arcing slowly.
+  const strafeWeight = (dist >= lowerRange && dist <= upperRange) ? 1.05 : 0.3;
+  let mx = dir.x * retreat + side.x * eState.strafeSign * strafeWeight;
+  let mz = dir.z * retreat + side.z * eState.strafeSign * strafeWeight;
 
   // --- Obstacle avoidance: blend a repulsion vector into the kiting
   // direction so the bot steers around walls/pillars/trains instead of
@@ -1831,6 +1835,14 @@ function updateEnemy(now) {
   } else if (inBurst) {
     state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * botSprintBase;
     state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * botSprintBase;
+    inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
+    eState.action = 'dash';
+  } else if ((dist < lowerRange || dist > upperRange) && botCanSprint && now >= eState.hitStunUntil) {
+    // Out of the engage band: sprint straight in/out to restore the advantage
+    // distance and keep up with a moving player, instead of ambling at walk
+    // speed and getting left behind.
+    state.enemy.body.velocity.x = mx * botSprintBase;
+    state.enemy.body.velocity.z = mz * botSprintBase;
     inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
     eState.action = 'dash';
   } else {
