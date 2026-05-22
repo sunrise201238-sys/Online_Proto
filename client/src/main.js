@@ -287,10 +287,6 @@ const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Peek-from-cover cadence (cover maps only): how long a peek-out lasts and the
-// minimum gap between peeks.
-const BOT_PEEK_DURATION_MS = 480;
-const BOT_PEEK_COOLDOWN_MS = 1900;
 
 const input = {
   x: 0,
@@ -1611,29 +1607,6 @@ function updateEnemy(now) {
     if (cl > 1e-3) { mx /= cl; mz /= cl; }
     // Sprint there when we have the boost; otherwise still hustle at walk speed.
     coverSeeking = eState.boost >= BOT_SPRINT_MIN_BOOST && now >= eState.emptyRecoverUntil;
-    eState.botPeekUntil = 0; // being shot at cancels any peek-out
-  }
-
-  // --- Peek from cover: when hidden (no clear line) but in engage range and
-  // the player isn't actively shooting, edge out briefly to take a shot. The
-  // threat reaction above tucks us back the instant we're fired on. Cover maps
-  // only — on open maps the player always has a line, so this never triggers.
-  let peeking = false;
-  if (!coverSeeking && !escaping && now >= eState.hitStunUntil
-      && !playerHasLoS && !playerShotRecently && dist <= upperRange) {
-    if (now >= (eState.botPeekUntil ?? 0) && now >= (eState.botPeekCooldownUntil ?? 0)) {
-      eState.botPeekUntil = now + BOT_PEEK_DURATION_MS;
-      eState.botPeekCooldownUntil = now + BOT_PEEK_COOLDOWN_MS;
-    }
-    if (now < (eState.botPeekUntil ?? 0)) {
-      peeking = true;
-      // Edge out around the cover (mostly sideways) to re-acquire a line.
-      mx = dir.x * 0.4 + side.x * eState.strafeSign * 0.9;
-      mz = dir.z * 0.4 + side.z * eState.strafeSign * 0.9;
-      const pl = Math.hypot(mx, mz) || 1;
-      mx /= pl;
-      mz /= pl;
-    }
   }
 
   // --- Tactical sprint state machine ---
@@ -1659,7 +1632,7 @@ function updateEnemy(now) {
 
   // Skip these tactical bursts while actively seeking cover (that drives the
   // velocity directly below); they'd fight the cover-seek heading.
-  if (canStartBurst && !coverSeeking && !escaping && !peeking) {
+  if (canStartBurst && !coverSeeking && !escaping) {
     if (dist < lowerRange) {
       // Trigger: opponent too close — burst back to re-open kiting space.
       eState.botSprintDirX = -dir.x;
@@ -1729,7 +1702,7 @@ function updateEnemy(now) {
   let jumpDirX = dir.x;
   let jumpDirZ = dir.z;
 
-  if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting && !coverSeeking && !peeking) {
+  if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
       if (botStartJump(now)) jumpThisTick = true;
@@ -1844,19 +1817,6 @@ function updateEnemy(now) {
     state.enemy.body.velocity.z = mz * botSprintBase;
     inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
     eState.action = 'dash';
-  } else if (peeking) {
-    // Pop out to re-acquire a line of sight (sprint if we can afford it, else
-    // walk), then the firing block shoots and the threat reaction tucks us back.
-    if (botCanSprint) {
-      state.enemy.body.velocity.x = mx * botSprintBase;
-      state.enemy.body.velocity.z = mz * botSprintBase;
-      inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
-      eState.action = 'dash';
-    } else {
-      state.enemy.body.velocity.x = mx * botWalkSpeed;
-      state.enemy.body.velocity.z = mz * botWalkSpeed;
-      eState.action = 'idle';
-    }
   } else if (inBurst) {
     state.enemy.body.velocity.x = (eState.botSprintDirX ?? 0) * botSprintBase;
     state.enemy.body.velocity.z = (eState.botSprintDirZ ?? 0) * botSprintBase;
