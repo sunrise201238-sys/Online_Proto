@@ -400,8 +400,13 @@ export function tickBot(matchState, botId, now) {
   // line of sight; with no flankable cover, commit a perpendicular juke away
   // from the line (strafeSign held steady above — no zig-zag back in). Skipped
   // while escaping a wall (that takes priority).
+  // Only break to cover while already at preferred engage distance. Out of the
+  // band, repositioning takes priority — otherwise the cover loop hijacks the
+  // velocity and oscillates (hide -> lose sight -> drift back -> get shot at ->
+  // hide again) for seconds before the bot can close/reopen the gap.
+  const inEngageBand = dist >= lowerRange && dist <= upperRange;
   let coverSeeking = false;
-  if (evadeActive && now >= me.hitStunUntil && !escaping) {
+  if (evadeActive && inEngageBand && now >= me.hitStunUntil && !escaping) {
     const cover = findCoverDirection(me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, obstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
