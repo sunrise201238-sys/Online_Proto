@@ -1869,17 +1869,22 @@ function updateEnemy(now) {
 const RETICLE_FIRING_FLASH_MS = 200;
 
 // White spawn-protection glow — a soft radial-gradient halo sprite (additive)
-// that envelops the mech, adapted from the reference project's buff aura.
-// Attached to mech.root so it follows the unit and reads from any camera angle.
+// that surrounds the mech (transparent core, glowing ring), adapted from the
+// reference project's buff aura. Attached to mech.root so it follows the unit
+// and reads from any camera angle.
 function createImmunityAuraForMech(mech) {
   if (!mech || mech.immunityAura) return;
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
   const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  // White core fading to transparent.
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
-  grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.28)');
+  // Transparent core so the model's own colors are never tinted; a modest
+  // white ring sits just outside the silhouette and fades out — an external
+  // aura rather than a wash over the body.
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  grad.addColorStop(0.64, 'rgba(255, 255, 255, 0)');
+  grad.addColorStop(0.78, 'rgba(255, 255, 255, 0.26)');
+  grad.addColorStop(0.9, 'rgba(255, 255, 255, 0.1)');
   grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
   x.fillStyle = grad;
   x.beginPath();
@@ -1893,8 +1898,10 @@ function createImmunityAuraForMech(mech) {
     fog: false,
     blending: THREE.AdditiveBlending
   }));
-  // Sized to slightly exceed the mech silhouette (mech is ~5 units tall).
-  sprite.scale.set(7.5, 7.5, 1);
+  // Larger than the mech (~5 units tall) and centered on its mid-height so the
+  // transparent core covers the body and the ring sits just outside it.
+  sprite.scale.set(9.5, 9.5, 1);
+  sprite.position.set(0, -0.4, 0);
   // Below the reticle/glint render order (9999) so they sit on top of the aura.
   sprite.renderOrder = 9000;
   mech.root.add(sprite);
