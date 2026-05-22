@@ -27,13 +27,19 @@ const BOT_SPRINT_MIN_BOOST = 8;
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
 // MG's fast cadence and bridges the gaps between rounds in a burst.
-const BOT_FIRE_REACT_MS = 220;
+const BOT_FIRE_REACT_MS = 280;
 // Cover-seek: how far to look for an obstacle to hide behind, how hard to
 // steer toward it, and the largest obstacle footprint still treated as cover
 // (anything bigger is an arena boundary wall, which can't be flanked — skip).
 const BOT_COVER_SEEK_RADIUS = 60;
 const BOT_COVER_STEER_WEIGHT = 2.6;
 const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
+// A fresh hit forces an evade for this long (so taking damage always provokes a
+// relocate, even if the shot landed at the edge of the fire window).
+const BOT_HIT_EVADE_MS = 350;
+// Peek-from-cover cadence (cover maps only): peek-out length and min gap.
+const BOT_PEEK_DURATION_MS = 480;
+const BOT_PEEK_COOLDOWN_MS = 1900;
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
@@ -294,7 +300,25 @@ export function tickBot(matchState, botId, now) {
     lowerRange = Math.max(6, optimalRange - 7);
   }
 
-  if (Math.random() > 0.985) me.strafeSign *= -1;
+  // --- Threat detection (early, so it can gate the strafe flip and the
+  // cover-seek below). React to the PLAYER firing — a shot within
+  // BOT_FIRE_REACT_MS, or a sniper charge aimed at us — but only when the
+  // player has a clear line. A fresh hit forces an evade regardless of line.
+  const playerHasLoS = botHasLineOfSight(
+    { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
+    { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+    obstacles
+  );
+  const playerShotRecently = now - opp.lastFireAt < BOT_FIRE_REACT_MS;
+  const sniperCharging = opp.sniperChargeTargetId === me.id;
+  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
+  me.botPrevHitStun = me.hitStunUntil;
+  const evadeActive = ((playerShotRecently || sniperCharging) && playerHasLoS)
+    || now < (me.botHitEvadeUntil ?? 0);
+
+  // Hold strafe direction steady while evading — a zig-zag would carry us back
+  // across the line we're trying to clear, into the incoming round.
+  if (!evadeActive && Math.random() > 0.985) me.strafeSign *= -1;
   // Drive toward the kiting band aggressively when outside it; once inside,
   // only a small drift so the bot holds position instead of wandering off.
   const retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
@@ -343,20 +367,24 @@ export function tickBot(matchState, botId, now) {
     me.botStuckMemoryZ = me.pos.z;
     me.botStuckMemoryUntil = now + BOT_STUCK_MEMORY_MS;
   }
-  if ((me.botStuckPivotUntil ?? 0) > now) {
-    mx = sideX * me.strafeSign;
-    mz = sideZ * me.strafeSign;
+  // While unsticking, sprint toward open space — away from the wall (the
+  // avoidance vector points outward) — ignoring the kiting band until free.
+  const escaping = (me.botStuckPivotUntil ?? 0) > now;
+  if (escaping) {
+    let ex = avoid.rx;
+    let ez = avoid.rz;
+    if (Math.hypot(ex, ez) < 0.1) { ex = sideX * me.strafeSign; ez = sideZ * me.strafeSign; }
+    const el = Math.hypot(ex, ez) || 1;
+    mx = ex / el;
+    mz = ez / el;
   }
 
-  // --- Threat reaction: react to the enemy FIRING, not to the round in
-  // flight (it's near-hitscan now). On detection, steer toward cover to break
-  // line of sight; if there's no flankable cover, juke perpendicular so we're
-  // a moving target instead of a sitting duck. Sniper charge counts as firing
-  // so we start relocating during the 0.5 s tell, before the shot lands.
-  const enemyFiring = (now - opp.lastFireAt < BOT_FIRE_REACT_MS)
-    || opp.sniperChargeTargetId === me.id;
+  // --- Threat reaction (evadeActive computed above): head to cover to break
+  // line of sight; with no flankable cover, commit a perpendicular juke away
+  // from the line (strafeSign held steady above — no zig-zag back in). Skipped
+  // while escaping a wall (that takes priority).
   let coverSeeking = false;
-  if (enemyFiring && now >= me.hitStunUntil && !((me.botStuckPivotUntil ?? 0) > now)) {
+  if (evadeActive && now >= me.hitStunUntil && !escaping) {
     const cover = findCoverDirection(me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, obstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
@@ -367,9 +395,28 @@ export function tickBot(matchState, botId, now) {
     }
     const cl = Math.sqrt(mx * mx + mz * mz);
     if (cl > 1e-3) { mx /= cl; mz /= cl; }
-    // Sprint there when we have the boost; otherwise still hustle at walk
-    // speed (better than holding position under fire).
     coverSeeking = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
+    me.botPeekUntil = 0; // being shot at cancels any peek-out
+  }
+
+  // --- Peek from cover: hidden (no line) but in engage range and the player
+  // isn't shooting — edge out briefly to take a shot; the threat reaction tucks
+  // us back when fired on. Cover maps only.
+  let peeking = false;
+  if (!coverSeeking && !escaping && now >= me.hitStunUntil
+      && !playerHasLoS && !playerShotRecently && dist <= upperRange) {
+    if (now >= (me.botPeekUntil ?? 0) && now >= (me.botPeekCooldownUntil ?? 0)) {
+      me.botPeekUntil = now + BOT_PEEK_DURATION_MS;
+      me.botPeekCooldownUntil = now + BOT_PEEK_COOLDOWN_MS;
+    }
+    if (now < (me.botPeekUntil ?? 0)) {
+      peeking = true;
+      mx = dirX * 0.4 + sideX * me.strafeSign * 0.9;
+      mz = dirZ * 0.4 + sideZ * me.strafeSign * 0.9;
+      const pl = Math.hypot(mx, mz) || 1;
+      mx /= pl;
+      mz /= pl;
+    }
   }
 
   // --- Tactical sprint state machine ---
@@ -390,7 +437,7 @@ export function tickBot(matchState, botId, now) {
 
   // Skip these tactical bursts while actively seeking cover (that drives the
   // velocity directly below); they'd fight the cover-seek heading.
-  if (canStartBurst && !coverSeeking) {
+  if (canStartBurst && !coverSeeking && !escaping && !peeking) {
     if (dist < lowerRange) {
       // Trigger: opponent too close — burst back to re-open kiting space.
       me.botSprintDirX = -dirX;
@@ -458,7 +505,7 @@ export function tickBot(matchState, botId, now) {
   let jumpDirX = dirX;
   let jumpDirZ = dirZ;
 
-  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
+  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking && !peeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
       if (tryStartJump(me, now)) jumpThisTick = true;
@@ -537,7 +584,12 @@ export function tickBot(matchState, botId, now) {
   const botSprintSpeed = botSprintBase * 2.5;
   const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
 
-  if (jumpThisTick) {
+  if (escaping) {
+    // Sprint to open space to clear the wall, ignoring the kiting band.
+    me.vel.x = mx * botSprintSpeed;
+    me.vel.z = mz * botSprintSpeed;
+    me.action = 'dash';
+  } else if (jumpThisTick) {
     // Remember the launch aim so the airborne ticks below keep driving the
     // bot toward the ledge instead of drifting off on the kiting vector.
     me.botAirSteerX = jumpDirX;
@@ -551,6 +603,12 @@ export function tickBot(matchState, botId, now) {
   } else if (coverSeeking) {
     // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
     // around walls toward cover instead of dashing blindly into them.
+    me.vel.x = mx * botSprintSpeed;
+    me.vel.z = mz * botSprintSpeed;
+    me.action = 'dash';
+  } else if (peeking) {
+    // Pop out at sprint speed to re-acquire a line of sight, then the firing
+    // block takes the shot and the threat reaction tucks us back if fired on.
     me.vel.x = mx * botSprintSpeed;
     me.vel.z = mz * botSprintSpeed;
     me.action = 'dash';
