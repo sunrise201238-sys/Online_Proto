@@ -1632,7 +1632,7 @@ function updateEnemy(now) {
   const inEngageBand = dist >= lowerRange && dist <= upperRange;
   const hitEvading = now < (eState.botHitEvadeUntil ?? 0);
   let coverSeeking = false;
-  if (evadeActive && (inEngageBand || hitEvading) && now >= eState.hitStunUntil && !escaping) {
+  if (evadeActive && (inEngageBand || hitEvading) && !escaping) {
     const cover = findCoverDirection(e.x, e.z, p.x, p.z, arenaObstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
@@ -1870,7 +1870,9 @@ function updateEnemy(now) {
     eState.action = 'dash';
   } else {
     // Walk at the unit's walkSpeed (same as the player).
-    const moveScalar = now < eState.hitStunUntil ? 0 : botWalkSpeed;
+    // Stun no longer freezes the bot: it keeps its walk heading here and the
+    // hit-stun scale at the end of updateEnemy drops it to 0.25x, like the player.
+    const moveScalar = botWalkSpeed;
     // Mid elevation-jump: hold the launch heading so the arc lands on (or
     // clears) the ledge it was aimed at instead of drifting on the kiting vec.
     if (eState.airborne && (eState.botAirSteerUntil ?? 0) > now) {
@@ -1947,6 +1949,15 @@ function updateEnemy(now) {
     state.enemy.body.velocity.y = 0;
   }
   applyMomentum(state.enemy);
+  // Hit-stun parity: the player keeps moving at 0.25x speed while stunned
+  // (hitStunScale at line ~1100) rather than freezing. Apply the same scale to
+  // the bot AFTER momentum so sprint + momentum scale together, matching the
+  // player's velocity exactly. Previously the bot used moveScalar 0 and stood
+  // frozen, eating entire bursts instead of crawling to safety.
+  if (now < eState.hitStunUntil) {
+    state.enemy.body.velocity.x *= 0.25;
+    state.enemy.body.velocity.z *= 0.25;
+  }
   updateBoost(state.enemy, now, state.enemy.state.action);
 }
 
