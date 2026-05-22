@@ -6,7 +6,8 @@ import {
   MAP_DATA,
   MAX_HP,
   BOOST_CAP,
-  GROUND_BASE_Y
+  GROUND_BASE_Y,
+  SPAWN_IMMUNITY_MS
 } from './constants.js';
 import { getArena } from './arena.js';
 
@@ -39,6 +40,9 @@ export function createFighter(id, unitKey, spawn) {
     redLock: false,
     hitStunUntil: 0,
     staggerUntil: 0,
+    // Spawn protection — set per round in createMatchState; no damage while
+    // now < invulnerableUntil.
+    invulnerableUntil: 0,
 
     // Step (dodge).
     stepStartAt: 0,
@@ -147,6 +151,10 @@ export function createMatchState({
   // Set initial lock targeting (each fighter targets the other).
   fighters.p1.targetId = 'p2';
   fighters.p2.targetId = 'p1';
+  // Spawn protection — both fighters are immune for the first SPAWN_IMMUNITY_MS
+  // of the round.
+  fighters.p1.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
+  fighters.p2.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
   return {
     tick: 0,
     startTime,

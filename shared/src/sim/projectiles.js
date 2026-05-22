@@ -228,7 +228,8 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     const dx = nearest.x - hitCenter.x;
     const dy = nearest.y - hitCenter.y;
     const dz = nearest.z - hitCenter.z;
-    if (dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
+    // Spawn protection: the round passes through an invulnerable target.
+    if (now >= target.invulnerableUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
