@@ -1497,6 +1497,12 @@ function updateEnemy(now) {
     optimalRange = Math.max(10, upperRange - 7);
     lowerRange = Math.max(6, optimalRange - 7);
   }
+  // The bot's two modes. OUT of this band the only goal is to restore the
+  // preferred distance: head straight in/out with nothing but obstacle
+  // avoidance — NO strafe, NO cover-seek, NO memory bias, NO tactical bursts —
+  // so it never peeks, arcs, or loops before it's in position. INSIDE the band
+  // all the tactical behaviour (orbit, roam, cover-seek, evade, bursts) is on.
+  const inBand = dist >= lowerRange && dist <= upperRange;
 
   // --- Threat detection (early, so it can gate the strafe flip and the
   // cover-seek below). React to the PLAYER firing — a shot within
@@ -1531,15 +1537,15 @@ function updateEnemy(now) {
   const roamTarget = eState.botRoamTarget ?? optimalRange;
   let retreat;
   if (dist < lowerRange) retreat = -1.0;
-  else if (dist > upperRange) retreat = 0.85;
+  else if (dist > upperRange) retreat = 1.0;
   else retreat = dist > roamTarget + 2 ? 0.5 : (dist < roamTarget - 2 ? -0.5 : 0.1);
   // In-band but no clear line (blocked by cover): push toward the player so
   // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
-  if (!playerHasLoS && !evadeActive && dist >= lowerRange && dist <= upperRange) retreat = 0.6;
-  // Strafe hard only inside the band (to circle); out of band, cut the strafe so
-  // we head straight in/out to restore engage distance and keep up with the
-  // player instead of arcing slowly.
-  const strafeWeight = (dist >= lowerRange && dist <= upperRange) ? 1.05 : 0.3;
+  if (!playerHasLoS && !evadeActive && inBand) retreat = 0.6;
+  // Strafe ONLY inside the band (to circle). Out of band the strafe is zero so
+  // the bot heads dead-straight in/out to restore distance — no arcing, no
+  // back-and-forth before it's in position.
+  const strafeWeight = inBand ? 1.05 : 0;
   let mx = dir.x * retreat + side.x * eState.strafeSign * strafeWeight;
   let mz = dir.z * retreat + side.z * eState.strafeSign * strafeWeight;
 
@@ -1565,7 +1571,7 @@ function updateEnemy(now) {
   // Bias away from the spot we last got pinned at so the next path attempt
   // picks a different angle around the obstacle instead of grinding into the
   // same wall/corner once the perpendicular pivot ends.
-  if ((eState.botStuckMemoryUntil ?? 0) > now) {
+  if (inBand && (eState.botStuckMemoryUntil ?? 0) > now) {
     const sm = computeStuckRepulsion(
       e.x, e.z,
       eState.botStuckMemoryX ?? e.x, eState.botStuckMemoryZ ?? e.z,
@@ -1641,18 +1647,14 @@ function updateEnemy(now) {
   // line of sight; with no flankable cover, commit a perpendicular juke away
   // from the line (strafeSign is held steady above, so no zig-zag back into
   // it). Skipped while escaping a wall — that takes priority.
-  // Break to cover while at preferred engage distance (out of the band,
-  // repositioning takes priority — otherwise the cover loop hijacks the
-  // velocity and oscillates: hide -> lose sight -> drift back -> get shot at ->
-  // hide again, for seconds before the bot can close/reopen the gap). EXCEPTION:
-  // a fresh hit always earns a defensive sprint to safety wherever we are.
-  // hitEvading is the post-hit window (BOT_HIT_EVADE_MS) baked into evadeActive;
-  // it self-expires and only re-arms on another hit, so it can't camp a loop the
-  // way the fire-reaction (player firing + LoS) could.
-  const inEngageBand = dist >= lowerRange && dist <= upperRange;
-  const hitEvading = now < (eState.botHitEvadeUntil ?? 0);
+  // Cover-seek / evade ONLY inside the band. Out of the band the bot must keep
+  // repositioning in a straight line — diverting to cover (even right after a
+  // hit) is exactly the "peek/search before getting in distance" loop we're
+  // killing. A hit while out of position no longer pulls the bot to cover; it
+  // just keeps sprinting to the band (which is itself moving, so not a sitting
+  // duck). Once in the band, evade/cover work as before.
   let coverSeeking = false;
-  if (evadeActive && (inEngageBand || hitEvading) && !escaping) {
+  if (evadeActive && inBand && !escaping) {
     const cover = findCoverDirection(e.x, e.z, p.x, p.z, arenaObstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
@@ -1682,6 +1684,7 @@ function updateEnemy(now) {
     inBurst = false;
   }
   const canStartBurst = !inBurst
+    && inBand
     && eState.botSprintReady === true
     && eState.boost >= BOT_SPRINT_MIN_BOOST
     && now > eState.evadeCooldownUntil
