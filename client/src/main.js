@@ -1549,18 +1549,18 @@ function updateEnemy(now) {
   const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
   mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
   mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
-  // Reacquire / anti-camp: the stuck-pivot + stuck-memory machinery below
-  // exists to pry us off a wall we're grinding while pathing to a HIDDEN
-  // opponent. But its 3.5 s "avoid this spot" marker (repulsion weight 1.4 >
-  // the chase pull) can keep shoving us away from the opponent long after they
-  // step back into the open near that spot — pinning us in a loop that never
-  // re-acquires preferred distance. So the moment the line is clear, drop all
-  // three latches; per-tick obstacle avoidance still keeps us off any wall we
-  // actually touch.
+  // Anti-camp: the stuck-MEMORY marker (a 3.5 s "avoid this spot" repulsion,
+  // weight 1.4 > the chase pull) could keep shoving us away from the opponent
+  // long after they stepped back into the open near that spot — pinning us in a
+  // loop that never re-acquired distance. So clear that marker the moment the
+  // line is clear. We deliberately do NOT clear the stuck-tick counter or an
+  // active escape pivot here: a bot pinned on the FRONT face of cover can still
+  // see the opponent, and zeroing those would stop the wall-escape from ever
+  // firing while it's being shot — it would just grind the wall taking hits.
+  // Only the lingering repulsion is the camp hazard; the escape itself must
+  // keep working even with a clear line.
   if (playerHasLoS) {
-    eState.botStuckPivotUntil = 0;
     eState.botStuckMemoryUntil = 0;
-    eState.botStuckTicks = 0;
   }
   // Bias away from the spot we last got pinned at so the next path attempt
   // picks a different angle around the obstacle instead of grinding into the
@@ -1611,7 +1611,22 @@ function updateEnemy(now) {
   if (escaping) {
     let ex = avoid.rx;
     let ez = avoid.rz;
-    if (Math.hypot(ex, ez) < 0.1) { ex = side.x * eState.strafeSign; ez = side.z * eState.strafeSign; }
+    const rlen = Math.hypot(ex, ez);
+    if (rlen < 0.1) {
+      // Not overlapping any AABB (no push-off vector) — juke straight sideways.
+      ex = side.x * eState.strafeSign;
+      ez = side.z * eState.strafeSign;
+    } else {
+      // Slide ALONG the wall (tangent) as well as off it (radial) so we round
+      // the obstacle's edge instead of backing straight off and immediately
+      // re-pressing into the same face. strafeSign (flipped on every stuck
+      // event) picks which way around; if it dead-ends, the next stuck event
+      // tries the other way.
+      const ux = ex / rlen, uz = ez / rlen;
+      const tx = -uz * eState.strafeSign, tz = ux * eState.strafeSign;
+      ex = ux + tx * 1.3;
+      ez = uz + tz * 1.3;
+    }
     const el = Math.hypot(ex, ez) || 1;
     mx = ex / el;
     mz = ez / el;
