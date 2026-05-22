@@ -424,7 +424,7 @@ export function tickBot(matchState, botId, now) {
   const inEngageBand = dist >= lowerRange && dist <= upperRange;
   const hitEvading = now < (me.botHitEvadeUntil ?? 0);
   let coverSeeking = false;
-  if (evadeActive && (inEngageBand || hitEvading) && now >= me.hitStunUntil && !escaping) {
+  if (evadeActive && (inEngageBand || hitEvading) && !escaping) {
     const cover = findCoverDirection(me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, obstacles, BOT_COVER_SEEK_RADIUS);
     if (cover) {
       mx += cover.toX * BOT_COVER_STEER_WEIGHT;
@@ -657,7 +657,9 @@ export function tickBot(matchState, botId, now) {
     me.action = 'dash';
   } else {
     // Walk at the unit's walkSpeed (same as the player).
-    const moveScalar = now < me.hitStunUntil ? 0 : botWalkSpeed;
+    // Stun no longer freezes the bot: it keeps its walk heading here and the
+    // hit-stun scale below drops it to 0.25x, like the player.
+    const moveScalar = botWalkSpeed;
     // Mid elevation-jump: hold the launch heading so the arc lands on (or
     // clears) the ledge it was aimed at instead of drifting on the kiting vec.
     if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
@@ -671,6 +673,14 @@ export function tickBot(matchState, botId, now) {
       me.vel.z = sideZ * 4.5;
     }
     me.action = 'idle';
+  }
+
+  // Hit-stun parity: the player keeps moving at 0.25x speed while stunned
+  // (hitStunScale) rather than freezing. Previously the bot used moveScalar 0
+  // and stood frozen, eating entire bursts instead of crawling to safety.
+  if (now < me.hitStunUntil) {
+    me.vel.x *= 0.25;
+    me.vel.z *= 0.25;
   }
 
   if (dist > 14 && Math.random() > 0.9) me.evadeHomingUntil = now + 90;
