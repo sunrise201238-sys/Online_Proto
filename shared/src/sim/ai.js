@@ -321,7 +321,11 @@ export function tickBot(matchState, botId, now) {
   if (!evadeActive && Math.random() > 0.985) me.strafeSign *= -1;
   // Drive toward the kiting band aggressively when outside it; once inside,
   // only a small drift so the bot holds position instead of wandering off.
-  const retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
+  let retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
+  // In-band but no clear line (blocked by cover): don't sit and poke — push
+  // toward the player so obstacle-avoidance walks us around the cover and we
+  // re-acquire a clean sightline (active search instead of camping).
+  if (!playerHasLoS && !evadeActive && dist >= lowerRange && dist <= upperRange) retreat = 0.6;
   let mx = dirX * retreat + sideX * me.strafeSign * 1.05;
   let mz = dirZ * retreat + sideZ * me.strafeSign * 1.05;
 
