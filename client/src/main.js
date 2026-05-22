@@ -1515,15 +1515,26 @@ function updateEnemy(now) {
   const evadeActive = ((playerShotRecently || sniperCharging) && playerHasLoS)
     || now < (eState.botHitEvadeUntil ?? 0);
 
-  // Hold strafe direction steady while evading — a zig-zag would carry us back
-  // across the line we're trying to clear, into the incoming round.
-  if (!evadeActive && Math.random() > 0.985) eState.strafeSign *= -1;
-  // Drive toward the kiting band aggressively when outside it; once inside,
-  // only a small drift so the bot holds position instead of wandering off.
-  let retreat = dist < lowerRange ? -1.0 : dist > upperRange ? 0.85 : 0.1;
-  // In-band but no clear line (blocked by cover): don't sit and poke — push
-  // toward the player so obstacle-avoidance walks us around the cover and we
-  // re-acquire a clean sightline (active search instead of camping).
+  // Hold strafe direction steady while evading (a zig-zag would carry us back
+  // across the line into the incoming round). Otherwise commit a direction for
+  // a few seconds so we actually circle the player instead of jittering in a
+  // tiny arc and looking parked.
+  if (!evadeActive && Math.random() > 0.995) eState.strafeSign *= -1;
+  // Roam within the kiting band rather than camping the optimal distance: pick a
+  // fresh target distance every couple of seconds and drift in/out toward it.
+  // With the strafe, that makes the bot circle and reposition instead of holding
+  // one spot.
+  if (now >= (eState.botRoamUntil ?? 0)) {
+    eState.botRoamTarget = lowerRange + Math.random() * (upperRange - lowerRange);
+    eState.botRoamUntil = now + 2000 + Math.random() * 2000;
+  }
+  const roamTarget = eState.botRoamTarget ?? optimalRange;
+  let retreat;
+  if (dist < lowerRange) retreat = -1.0;
+  else if (dist > upperRange) retreat = 0.85;
+  else retreat = dist > roamTarget + 2 ? 0.5 : (dist < roamTarget - 2 ? -0.5 : 0.1);
+  // In-band but no clear line (blocked by cover): push toward the player so
+  // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
   if (!playerHasLoS && !evadeActive && dist >= lowerRange && dist <= upperRange) retreat = 0.6;
   let mx = dir.x * retreat + side.x * eState.strafeSign * 1.05;
   let mz = dir.z * retreat + side.z * eState.strafeSign * 1.05;
