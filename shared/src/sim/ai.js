@@ -38,9 +38,6 @@ const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Peek-from-cover cadence (cover maps only): peek-out length and min gap.
-const BOT_PEEK_DURATION_MS = 480;
-const BOT_PEEK_COOLDOWN_MS = 1900;
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
@@ -401,27 +398,6 @@ export function tickBot(matchState, botId, now) {
     const cl = Math.sqrt(mx * mx + mz * mz);
     if (cl > 1e-3) { mx /= cl; mz /= cl; }
     coverSeeking = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
-    me.botPeekUntil = 0; // being shot at cancels any peek-out
-  }
-
-  // --- Peek from cover: hidden (no line) but in engage range and the player
-  // isn't shooting — edge out briefly to take a shot; the threat reaction tucks
-  // us back when fired on. Cover maps only.
-  let peeking = false;
-  if (!coverSeeking && !escaping && now >= me.hitStunUntil
-      && !playerHasLoS && !playerShotRecently && dist <= upperRange) {
-    if (now >= (me.botPeekUntil ?? 0) && now >= (me.botPeekCooldownUntil ?? 0)) {
-      me.botPeekUntil = now + BOT_PEEK_DURATION_MS;
-      me.botPeekCooldownUntil = now + BOT_PEEK_COOLDOWN_MS;
-    }
-    if (now < (me.botPeekUntil ?? 0)) {
-      peeking = true;
-      mx = dirX * 0.4 + sideX * me.strafeSign * 0.9;
-      mz = dirZ * 0.4 + sideZ * me.strafeSign * 0.9;
-      const pl = Math.hypot(mx, mz) || 1;
-      mx /= pl;
-      mz /= pl;
-    }
   }
 
   // --- Tactical sprint state machine ---
@@ -442,7 +418,7 @@ export function tickBot(matchState, botId, now) {
 
   // Skip these tactical bursts while actively seeking cover (that drives the
   // velocity directly below); they'd fight the cover-seek heading.
-  if (canStartBurst && !coverSeeking && !escaping && !peeking) {
+  if (canStartBurst && !coverSeeking && !escaping) {
     if (dist < lowerRange) {
       // Trigger: opponent too close — burst back to re-open kiting space.
       me.botSprintDirX = -dirX;
@@ -510,7 +486,7 @@ export function tickBot(matchState, botId, now) {
   let jumpDirX = dirX;
   let jumpDirZ = dirZ;
 
-  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking && !peeking) {
+  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
       if (tryStartJump(me, now)) jumpThisTick = true;
@@ -628,19 +604,6 @@ export function tickBot(matchState, botId, now) {
     me.vel.z = mz * botSprintBase;
     inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
-  } else if (peeking) {
-    // Pop out to re-acquire a line of sight (sprint if we can afford it, else
-    // walk), then the firing block shoots and the threat reaction tucks us back.
-    if (botCanSprint) {
-      me.vel.x = mx * botSprintBase;
-      me.vel.z = mz * botSprintBase;
-      inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
-      me.action = 'dash';
-    } else {
-      me.vel.x = mx * botWalkSpeed;
-      me.vel.z = mz * botWalkSpeed;
-      me.action = 'idle';
-    }
   } else if (inBurst) {
     me.vel.x = (me.botSprintDirX ?? 0) * botSprintBase;
     me.vel.z = (me.botSprintDirZ ?? 0) * botSprintBase;
