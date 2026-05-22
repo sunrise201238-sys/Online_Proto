@@ -38,6 +38,9 @@ const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
+// No clear line to the player for this long => enter "dire search": drop all
+// range discipline and beeline to the player until a clear line is regained.
+const BOT_DIRE_SEARCH_MS = 4000;
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
@@ -297,13 +300,6 @@ export function tickBot(matchState, botId, now) {
     optimalRange = Math.max(10, upperRange - 7);
     lowerRange = Math.max(6, optimalRange - 7);
   }
-  // The bot's two modes. OUT of this band the only goal is to restore the
-  // preferred distance: head straight in/out with nothing but obstacle
-  // avoidance — NO strafe, NO cover-seek, NO memory bias, NO tactical bursts —
-  // so it never peeks, arcs, or loops before it's in position. INSIDE the band
-  // all the tactical behaviour (orbit, roam, cover-seek, evade, bursts) is on.
-  const inBand = dist >= lowerRange && dist <= upperRange;
-
   // --- Threat detection (early, so it can gate the strafe flip and the
   // cover-seek below). React to the PLAYER firing — a shot within
   // BOT_FIRE_REACT_MS, or a sniper charge aimed at us — but only when the
@@ -319,6 +315,20 @@ export function tickBot(matchState, botId, now) {
   me.botPrevHitStun = me.hitStunUntil;
   const evadeActive = ((playerShotRecently || sniperCharging) && playerHasLoS)
     || now < (me.botHitEvadeUntil ?? 0);
+
+  // Track time since we last had a clear line to the player. Go too long without
+  // one and we're trapped/lost behind geometry — flip to DIRE SEARCH: drop all
+  // range discipline and beeline to the player until a clear line is regained,
+  // then snap straight back to normal range-seeking.
+  if (playerHasLoS || me.botLastLoSAt == null) me.botLastLoSAt = now;
+  const direSearch = (now - me.botLastLoSAt) > BOT_DIRE_SEARCH_MS;
+
+  // The bot's two modes. OUT of the band — or in dire search — the only goal is
+  // to close on the player: head straight in/out with nothing but obstacle
+  // avoidance (NO strafe, cover-seek, memory bias or bursts), so it never peeks,
+  // arcs, or loops before it's in position. INSIDE the band (and not in dire
+  // search) the tactical behaviour (orbit, roam, cover-seek, evade) is on.
+  const inBand = !direSearch && dist >= lowerRange && dist <= upperRange;
 
   // Hold strafe direction steady while evading (a zig-zag would carry us back
   // across the line into the incoming round). Otherwise commit a direction for
@@ -341,6 +351,9 @@ export function tickBot(matchState, botId, now) {
   // In-band but no clear line (blocked by cover): push toward the player so
   // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
   if (!playerHasLoS && !evadeActive && inBand) retreat = 0.6;
+  // Dire search: ignore range entirely and drive straight at the player to punch
+  // through to a clear line, wherever we sit relative to the band.
+  if (direSearch) retreat = 1.0;
   // Strafe ONLY inside the band (to circle). Out of band the strafe is zero so
   // the bot heads dead-straight in/out to restore distance — no arcing, no
   // back-and-forth before it's in position.
@@ -701,10 +714,11 @@ export function tickBot(matchState, botId, now) {
     me.vel.z = (me.botSprintDirZ ?? 0) * botSprintBase;
     inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
-  } else if ((dist < lowerRange || dist > upperRange) && botCanSprint && now >= me.hitStunUntil) {
-    // Out of the engage band: sprint straight in/out to restore the advantage
-    // distance and keep up with a moving player, instead of ambling at walk
-    // speed and getting left behind.
+  } else if (!inBand && botCanSprint) {
+    // Out of the band (or in dire search): sprint straight in/out to restore the
+    // advantage distance / close on the player. No hit-stun gate here — like the
+    // player, the bot keeps sprinting (just scaled to 0.25x by the stun block at
+    // the end) instead of dropping to a frozen-looking walk while taking hits.
     me.vel.x = mx * botSprintBase;
     me.vel.z = mz * botSprintBase;
     inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
