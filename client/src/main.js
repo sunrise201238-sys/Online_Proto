@@ -1559,14 +1559,19 @@ function updateEnemy(now) {
   // weight 1.4 > the chase pull) could keep shoving us away from the opponent
   // long after they stepped back into the open near that spot — pinning us in a
   // loop that never re-acquired distance. So clear that marker the moment the
-  // line is clear. We deliberately do NOT clear the stuck-tick counter or an
-  // active escape pivot here: a bot pinned on the FRONT face of cover can still
-  // see the opponent, and zeroing those would stop the wall-escape from ever
-  // firing while it's being shot — it would just grind the wall taking hits.
-  // Only the lingering repulsion is the camp hazard; the escape itself must
-  // keep working even with a clear line.
+  // line is clear. Additionally, when we can see the player while OUT of the
+  // band, the sightline between us is unobstructed — so any stuck-escape here is
+  // a FALSE trigger (e.g. from being briefly slowed) that would only hijack the
+  // straight chase into a sideways slide and pin us. Clear it so the bot sprints
+  // straight after a retreating player. IN-band we keep the escape: the wall
+  // there is the cover beside us, not a blocker on the sightline, so the bot
+  // legitimately needs to pry off it.
   if (playerHasLoS) {
     eState.botStuckMemoryUntil = 0;
+    if (!inBand) {
+      eState.botStuckPivotUntil = 0;
+      eState.botStuckTicks = 0;
+    }
   }
   // Bias away from the spot we last got pinned at so the next path attempt
   // picks a different angle around the obstacle instead of grinding into the
@@ -1590,7 +1595,13 @@ function updateEnemy(now) {
   const dzMoved = e.z - (eState.botLastZ ?? e.z);
   const actualMoved = Math.sqrt(dxMoved * dxMoved + dzMoved * dzMoved);
   const triedToMove = Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) > 1;
-  if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
+  if (now < eState.hitStunUntil) {
+    // Hit-stun scales our speed to 0.25x; that slow crawl is NOT being wedged,
+    // so don't accumulate false "stuck" ticks (which would fire the escape
+    // mid-fight and pin us). Pre-stun-fix this was implicit — stun zeroed the
+    // velocity, so triedToMove was false here.
+    eState.botStuckTicks = 0;
+  } else if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
     eState.botStuckTicks = (eState.botStuckTicks ?? 0) + 1;
   } else {
     eState.botStuckTicks = 0;
