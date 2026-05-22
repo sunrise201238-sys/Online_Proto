@@ -594,9 +594,10 @@ function buildProjectileMesh(unit, isRedLock) {
   // Shotgun pellets (and anything unrecognized) stay as small spheres; sniper
   // and MG share the spindle tracer below. Pellets are always cyan — with
   // homing disabled there's no red-lock behavior left for the color to signal.
+  // Radius is purely visual; the hit box (see header) is unchanged.
   if (!isSniper && !isMG) {
     return new THREE.Mesh(
-      new THREE.SphereGeometry(0.15, 8, 8),
+      new THREE.SphereGeometry(0.075, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0x6df9ff })
     );
   }
