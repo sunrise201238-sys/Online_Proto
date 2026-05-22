@@ -335,8 +335,12 @@ export function tickBot(matchState, botId, now) {
   // In-band but no clear line (blocked by cover): push toward the player so
   // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
   if (!playerHasLoS && !evadeActive && dist >= lowerRange && dist <= upperRange) retreat = 0.6;
-  let mx = dirX * retreat + sideX * me.strafeSign * 1.05;
-  let mz = dirZ * retreat + sideZ * me.strafeSign * 1.05;
+  // Strafe hard only inside the band (to circle); out of band, cut the strafe so
+  // we head straight in/out to restore engage distance and keep up with the
+  // player instead of arcing slowly.
+  const strafeWeight = (dist >= lowerRange && dist <= upperRange) ? 1.05 : 0.3;
+  let mx = dirX * retreat + sideX * me.strafeSign * strafeWeight;
+  let mz = dirZ * retreat + sideZ * me.strafeSign * strafeWeight;
 
   // --- Obstacle avoidance ---
   const avoid = computeBotAvoidance(me.pos.x, me.pos.y, me.pos.z, obstacles, BOT_OBSTACLE_AVOID_RADIUS);
@@ -618,6 +622,14 @@ export function tickBot(matchState, botId, now) {
   } else if (inBurst) {
     me.vel.x = (me.botSprintDirX ?? 0) * botSprintBase;
     me.vel.z = (me.botSprintDirZ ?? 0) * botSprintBase;
+    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
+    me.action = 'dash';
+  } else if ((dist < lowerRange || dist > upperRange) && botCanSprint && now >= me.hitStunUntil) {
+    // Out of the engage band: sprint straight in/out to restore the advantage
+    // distance and keep up with a moving player, instead of ambling at walk
+    // speed and getting left behind.
+    me.vel.x = mx * botSprintBase;
+    me.vel.z = mz * botSprintBase;
     inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
   } else {
