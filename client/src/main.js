@@ -1270,7 +1270,7 @@ const BOT_STUCK_PIVOT_MS = 600;
 // ends. Radius caps the influence so distant memories don't warp kiting.
 const BOT_STUCK_MEMORY_MS = 3500;
 const BOT_STUCK_MEMORY_RADIUS = 12;
-const BOT_STUCK_MEMORY_WEIGHT = 1.4;
+const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 
@@ -1618,12 +1618,17 @@ function updateEnemy(now) {
       ez = side.z * eState.strafeSign;
     } else {
       // Slide ALONG the wall (tangent) as well as off it (radial) so we round
-      // the obstacle's edge instead of backing straight off and immediately
-      // re-pressing into the same face. strafeSign (flipped on every stuck
-      // event) picks which way around; if it dead-ends, the next stuck event
-      // tries the other way.
+      // the obstacle's edge instead of backing straight off and re-pressing the
+      // same face. Choose which way to round by INTENT, not an arbitrary sign:
+      // when we can't see the player, slide TOWARD them (round the wall to find
+      // them); when we're pinned in their view, slide AWAY (round toward cover
+      // to break the line). Picking by strafeSign sent the bot the wrong way
+      // ~half the time, which is what broke searching.
       const ux = ex / rlen, uz = ez / rlen;
-      const tx = -uz * eState.strafeSign, tz = ux * eState.strafeSign;
+      let tx = -uz, tz = ux;
+      const tangentTowardPlayer = (tx * dir.x + tz * dir.z) >= 0;
+      const wantTowardPlayer = !playerHasLoS;
+      if (tangentTowardPlayer !== wantTowardPlayer) { tx = -tx; tz = -tz; }
       ex = ux + tx * 1.3;
       ez = uz + tz * 1.3;
     }
