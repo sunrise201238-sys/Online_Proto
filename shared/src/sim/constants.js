@@ -154,7 +154,7 @@ export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
-export const SPAWN_IMMUNITY_MS = 2000;
+export const SPAWN_IMMUNITY_MS = 3000;
 
 // Repulsion (soft-collide) between fighters.
 export const REPULSION_RANGE = 3;
