@@ -1868,19 +1868,55 @@ function updateEnemy(now) {
 // shot, so sustained fire holds it red and a lone shot flashes briefly.
 const RETICLE_FIRING_FLASH_MS = 200;
 
-// Slight white glow on a mech while it's spawn-protected. Only the toon body
-// materials carry emissive; the reticle/glint (MeshBasicMaterial) have none,
-// so traverse skips them. Toggled only on transition to avoid redundant writes.
-const IMMUNITY_GLOW_INTENSITY = 0.45;
+// White spawn-protection glow — a soft radial-gradient halo sprite (additive)
+// that envelops the mech, adapted from the reference project's buff aura.
+// Attached to mech.root so it follows the unit and reads from any camera angle.
+function createImmunityAuraForMech(mech) {
+  if (!mech || mech.immunityAura) return;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  // White core fading to transparent.
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+  grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.28)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  x.fillStyle = grad;
+  x.beginPath();
+  x.arc(64, 64, 64, 0, Math.PI * 2);
+  x.fill();
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(c),
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    fog: false,
+    blending: THREE.AdditiveBlending
+  }));
+  // Sized to slightly exceed the mech silhouette (mech is ~5 units tall).
+  sprite.scale.set(7.5, 7.5, 1);
+  // Below the reticle/glint render order (9999) so they sit on top of the aura.
+  sprite.renderOrder = 9000;
+  mech.root.add(sprite);
+  mech.immunityAura = sprite;
+}
+
+function removeImmunityAuraFromMech(mech) {
+  if (!mech?.immunityAura) return;
+  mech.root.remove(mech.immunityAura);
+  if (mech.immunityAura.material) {
+    if (mech.immunityAura.material.map) mech.immunityAura.material.map.dispose();
+    mech.immunityAura.material.dispose();
+  }
+  mech.immunityAura = null;
+}
+
+// Show the halo while spawn-protected, drop it when immunity ends. The
+// create/remove guards make this safe to call every frame.
 function applyImmunityGlow(mech, immune) {
-  if (!mech || !mech.root || mech._immuneGlowOn === immune) return;
-  mech._immuneGlowOn = immune;
-  mech.root.traverse((o) => {
-    const m = o.material;
-    if (!m || !m.emissive) return;
-    m.emissive.setHex(immune ? 0xffffff : 0x000000);
-    m.emissiveIntensity = immune ? IMMUNITY_GLOW_INTENSITY : 1;
-  });
+  if (!mech || !mech.root) return;
+  if (immune) createImmunityAuraForMech(mech);
+  else removeImmunityAuraFromMech(mech);
 }
 
 function updateLocksAndReticle() {
@@ -2052,6 +2088,7 @@ function cleanupMatch() {
   [state.player, state.enemy].forEach((m) => {
     if (!m) return;
     disposeGlintImmediate(m);
+    removeImmunityAuraFromMech(m);
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
@@ -2715,6 +2752,7 @@ function ensureOnlineMatchSetup(snap) {
   [state.player, state.enemy].forEach((m) => {
     if (!m) return;
     disposeGlintImmediate(m);
+    removeImmunityAuraFromMech(m);
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
