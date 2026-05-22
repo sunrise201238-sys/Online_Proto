@@ -361,10 +361,17 @@ export function tickBot(matchState, botId, now) {
   // deliberately do NOT clear the stuck-tick counter or an active escape pivot
   // here: a bot pinned on the FRONT face of cover can still see the opponent,
   // and zeroing those would stop the wall-escape from ever firing while it's
-  // being shot — it would just grind the wall. Only the lingering repulsion is
-  // the camp hazard; the escape itself must keep working even with a clear line.
+  // being shot. When we can see the player while OUT of the band the sightline
+  // is unobstructed, so any stuck-escape here is a FALSE trigger that would
+  // hijack the straight chase and pin us — clear it so the bot sprints straight
+  // after a retreating player. IN-band we keep the escape (the wall there is the
+  // cover beside us, not a blocker on the sightline).
   if (playerHasLoS) {
     me.botStuckMemoryUntil = 0;
+    if (!inBand) {
+      me.botStuckPivotUntil = 0;
+      me.botStuckTicks = 0;
+    }
   }
   // Bias away from the spot we last got pinned at so the next path attempt
   // picks a different angle around the obstacle instead of grinding into the
@@ -386,7 +393,12 @@ export function tickBot(matchState, botId, now) {
   const dzMoved = me.pos.z - (me.botLastZ ?? me.pos.z);
   const actualMoved = Math.sqrt(dxMoved * dxMoved + dzMoved * dzMoved);
   const triedToMove = Math.abs(me.vel.x) + Math.abs(me.vel.z) > 1;
-  if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
+  if (now < me.hitStunUntil) {
+    // Hit-stun scales our speed to 0.25x; that slow crawl is NOT being wedged,
+    // so don't accumulate false "stuck" ticks (which would fire the escape
+    // mid-fight and pin us).
+    me.botStuckTicks = 0;
+  } else if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
     me.botStuckTicks = (me.botStuckTicks ?? 0) + 1;
   } else {
     me.botStuckTicks = 0;
