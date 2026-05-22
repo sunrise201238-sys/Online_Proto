@@ -15,7 +15,7 @@ import { between } from './math.js';
 import { attemptFire, tryStartJump } from './actions.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
 import { getArena } from './arena.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED } from './constants.js';
 
 // --- Bot tactical-sprint tunables ---
 // Hysteresis: bot only initiates a new sprint burst once boost has refilled
@@ -23,7 +23,6 @@ import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y } from './constants.js';
 // boost barely crosses 0 and is immediately spent again.
 const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;            // 48
 const BOT_SPRINT_MIN_BOOST = 8;
-const BOT_SPRINT_BURST_VEL = 17;
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -531,31 +530,37 @@ export function tickBot(matchState, botId, now) {
     }
   }
 
+  // Movement speeds come from this unit's stats, identical to the player: walk
+  // at walkSpeed, and a sustained sprint at sprintSpeed plus the dash momentum
+  // the player builds (≈ ×2.5). Keeps the bot's mobility the same as a pilot.
+  const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
+  const botSprintSpeed = botSprintBase * 2.5;
+  const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
+
   if (jumpThisTick) {
     // Remember the launch aim so the airborne ticks below keep driving the
     // bot toward the ledge instead of drifting off on the kiting vector.
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    me.vel.x = jumpDirX * BOT_SPRINT_BURST_VEL;
-    me.vel.z = jumpDirZ * BOT_SPRINT_BURST_VEL;
+    // Launch at base sprint speed; the jump's own momentum carries the glide,
+    // mirroring the player's jump.
+    me.vel.x = jumpDirX * botSprintBase;
+    me.vel.z = jumpDirZ * botSprintBase;
     me.action = 'jump';
   } else if (coverSeeking) {
     // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
     // around walls toward cover instead of dashing blindly into them.
-    me.vel.x = mx * BOT_SPRINT_BURST_VEL;
-    me.vel.z = mz * BOT_SPRINT_BURST_VEL;
+    me.vel.x = mx * botSprintSpeed;
+    me.vel.z = mz * botSprintSpeed;
     me.action = 'dash';
   } else if (inBurst) {
-    me.vel.x = (me.botSprintDirX ?? 0) * BOT_SPRINT_BURST_VEL;
-    me.vel.z = (me.botSprintDirZ ?? 0) * BOT_SPRINT_BURST_VEL;
+    me.vel.x = (me.botSprintDirX ?? 0) * botSprintSpeed;
+    me.vel.z = (me.botSprintDirZ ?? 0) * botSprintSpeed;
     me.action = 'dash';
   } else {
-    // Walk faster when outside the kiting band so the bot enters its
-    // advantage distance quickly; relax to the slower in-band pace once
-    // there so it doesn't drift past the optimal range.
-    const inBand = dist >= lowerRange && dist <= upperRange;
-    const moveScalar = now < me.hitStunUntil ? 0 : (inBand ? 10.6 : 14);
+    // Walk at the unit's walkSpeed (same as the player).
+    const moveScalar = now < me.hitStunUntil ? 0 : botWalkSpeed;
     // Mid elevation-jump: hold the launch heading so the arc lands on (or
     // clears) the ledge it was aimed at instead of drifting on the kiting vec.
     if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
