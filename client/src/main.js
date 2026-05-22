@@ -1263,7 +1263,7 @@ const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 const BOT_STUCK_MOVED_EPSILON = 0.4;
 const BOT_STUCK_TICKS_THRESHOLD = 8;
-const BOT_STUCK_PIVOT_MS = 600;
+const BOT_STUCK_PIVOT_MS = 1000;  // committed wall-follow window — long enough to run the length of a wall to its opening (was 600, too short to clear long walls)
 // After a stuck event, remember the pinned spot for this long and bias
 // movement away from it so the bot picks a different route around the wall
 // instead of grinding into the same corner once the perpendicular pivot
@@ -1612,9 +1612,29 @@ function updateEnemy(now) {
     eState.botStuckPivotUntil = now + BOT_STUCK_PIVOT_MS;
     eState.strafeSign *= -1;
     eState.botStuckTicks = 0;
-    // Drop a "don't come back here" marker for the next few seconds so
-    // the post-pivot kiting steers around this obstacle instead of
-    // re-attacking the same gap and stalling all over again.
+    // COMMIT a wall-follow heading once, here. Recomputing it every tick let it
+    // flip mid-slide and oscillate, so the bot could never run the length of a
+    // long wall to the opening at its end. Slide along the wall (tangent to the
+    // avoidance push-off), toward the player when we can't see them / away when
+    // pinned in their view. Held for the whole (now longer) pivot, so the bot is
+    // willing to travel — temporarily closer to / farther from its preferred
+    // range — to get all the way around the obstacle.
+    let cx = avoid.rx, cz = avoid.rz;
+    const crl = Math.hypot(cx, cz);
+    if (crl < 0.1) {
+      cx = side.x * eState.strafeSign; cz = side.z * eState.strafeSign;
+    } else {
+      const ux = cx / crl, uz = cz / crl;
+      let tx = -uz, tz = ux;
+      if (((tx * dir.x + tz * dir.z) >= 0) !== !playerHasLoS) { tx = -tx; tz = -tz; }
+      cx = ux + tx * 1.3; cz = uz + tz * 1.3;
+    }
+    const cl = Math.hypot(cx, cz) || 1;
+    eState.botEscapeDirX = cx / cl;
+    eState.botEscapeDirZ = cz / cl;
+    // Drop a "don't come back here" marker for the next few seconds so the
+    // post-pivot kiting steers around this obstacle instead of re-attacking the
+    // same gap and stalling all over again.
     eState.botStuckMemoryX = e.x;
     eState.botStuckMemoryZ = e.z;
     eState.botStuckMemoryUntil = now + BOT_STUCK_MEMORY_MS;
@@ -1626,29 +1646,12 @@ function updateEnemy(now) {
   // the wall.
   const escaping = (eState.botStuckPivotUntil ?? 0) > now;
   if (escaping) {
-    let ex = avoid.rx;
-    let ez = avoid.rz;
-    const rlen = Math.hypot(ex, ez);
-    if (rlen < 0.1) {
-      // Not overlapping any AABB (no push-off vector) — juke straight sideways.
-      ex = side.x * eState.strafeSign;
-      ez = side.z * eState.strafeSign;
-    } else {
-      // Slide ALONG the wall (tangent) as well as off it (radial) so we round
-      // the obstacle's edge instead of backing straight off and re-pressing the
-      // same face. Choose which way to round by INTENT, not an arbitrary sign:
-      // when we can't see the player, slide TOWARD them (round the wall to find
-      // them); when we're pinned in their view, slide AWAY (round toward cover
-      // to break the line). Picking by strafeSign sent the bot the wrong way
-      // ~half the time, which is what broke searching.
-      const ux = ex / rlen, uz = ez / rlen;
-      let tx = -uz, tz = ux;
-      const tangentTowardPlayer = (tx * dir.x + tz * dir.z) >= 0;
-      const wantTowardPlayer = !playerHasLoS;
-      if (tangentTowardPlayer !== wantTowardPlayer) { tx = -tx; tz = -tz; }
-      ex = ux + tx * 1.3;
-      ez = uz + tz * 1.3;
-    }
+    // Follow the COMMITTED heading picked when we got stuck (above), plus a
+    // little live avoidance so we keep rounding corners and stay off the wall.
+    // Held steady — no per-tick recompute — so we run the whole length of the
+    // wall to its opening instead of flip-flopping in place and getting pinned.
+    let ex = (eState.botEscapeDirX ?? -dir.x) + avoid.rx * 0.5;
+    let ez = (eState.botEscapeDirZ ?? -dir.z) + avoid.rz * 0.5;
     const el = Math.hypot(ex, ez) || 1;
     mx = ex / el;
     mz = ez / el;
@@ -1774,6 +1777,20 @@ function updateEnemy(now) {
   let jumpDirX = dir.x;
   let jumpDirZ = dir.z;
 
+  // Pinned against a wall/corner with a platform within hop reach? Jump onto it
+  // — a vertical escape (e.g. Station's raised decks) that beats grinding the
+  // wall. Allowed precisely WHEN stuck, since the normal elevation block below
+  // is disabled while pivoting; the velocity chain lets this jump win over the
+  // wall-follow.
+  if (stuckPivoting && state.enemy.grounded && !eState.airborne) {
+    const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+    if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
+      jumpDirX = perch.toX;
+      jumpDirZ = perch.toZ;
+      if (botStartJump(now)) jumpThisTick = true;
+    }
+  }
+
   if (state.enemy.grounded && !eState.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
     if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
       // 1. Opponent above us — jump at them.
@@ -1858,9 +1875,10 @@ function updateEnemy(now) {
   // (action 'idle' so boost regens), mirroring how the player slows when empty.
   const botCanSprint = eState.boost >= BOT_SPRINT_MIN_BOOST && now >= eState.emptyRecoverUntil;
 
-  if (escaping) {
+  if (escaping && !jumpThisTick) {
     // Sprint to open space to clear the wall, ignoring the kiting band (walk it
-    // out if we're out of boost).
+    // out if we're out of boost). (A pinned-jump to a platform, if one fired,
+    // takes priority via the !jumpThisTick guard so it isn't overridden here.)
     if (botCanSprint) {
       state.enemy.body.velocity.x = mx * botSprintBase;
       state.enemy.body.velocity.z = mz * botSprintBase;
