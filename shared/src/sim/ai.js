@@ -300,10 +300,12 @@ export function tickBot(matchState, botId, now) {
     optimalRange = Math.max(10, upperRange - 7);
     lowerRange = Math.max(6, optimalRange - 7);
   }
-  // --- Threat detection (early, so it can gate the strafe flip and the
-  // cover-seek below). React to the PLAYER firing — a shot within
-  // BOT_FIRE_REACT_MS, or a sniper charge aimed at us — but only when the
-  // player has a clear line. A fresh hit forces an evade regardless of line.
+  // === Behavior state machine: Defense > Maze > Reposition > Engage > Pursue.
+  // Each state has explicit time-bound exits — no latching. Replaces the
+  // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
+  // flags with one botState whose transitions are recomputed every tick.
+
+  // LoS + threats
   const playerHasLoS = botHasLineOfSight(
     { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
@@ -313,429 +315,248 @@ export function tickBot(matchState, botId, now) {
   const sniperCharging = opp.sniperChargeTargetId === me.id;
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
-  const evadeActive = ((playerShotRecently || sniperCharging) && playerHasLoS)
-    || now < (me.botHitEvadeUntil ?? 0);
+  const firedAtWithLoS = (playerShotRecently || sniperCharging) && playerHasLoS;
+  const hitEvading = now < (me.botHitEvadeUntil ?? 0);
+  const underFire = firedAtWithLoS || hitEvading;
+  const inBandDist = dist >= lowerRange && dist <= upperRange;
 
-  // Track time since we last had a clear line to the player. Go too long without
-  // one and we're trapped/lost behind geometry — flip to DIRE SEARCH: drop all
-  // range discipline and beeline to the player until a clear line is regained,
-  // then snap straight back to normal range-seeking.
+  // LoS clock (Reposition's 3 s timeout) + position-progress clock (Maze's 2 s
+  // trigger). Progress is measured as real net displacement over a rolling
+  // 500 ms window, not per-tick velocity, so the stun crawl can't false-trigger
+  // Maze the way the old velocity-based stuck-detector did.
   if (playerHasLoS || me.botLastLoSAt == null) me.botLastLoSAt = now;
-  const direSearch = (now - me.botLastLoSAt) > BOT_DIRE_SEARCH_MS;
-
-  // The bot's two modes. OUT of the band — or in dire search — the only goal is
-  // to close on the player: head straight in/out with nothing but obstacle
-  // avoidance (NO strafe, cover-seek, memory bias or bursts), so it never peeks,
-  // arcs, or loops before it's in position. INSIDE the band (and not in dire
-  // search) the tactical behaviour (orbit, roam, cover-seek, evade) is on.
-  const inBand = !direSearch && dist >= lowerRange && dist <= upperRange;
-
-  // Hold strafe direction steady while evading (a zig-zag would carry us back
-  // across the line into the incoming round). Otherwise commit a direction for
-  // a few seconds so we actually circle the player instead of jittering in a
-  // tiny arc and looking parked.
-  if (!evadeActive && Math.random() > 0.995) me.strafeSign *= -1;
-  // Roam within the kiting band rather than camping the optimal distance: pick a
-  // fresh target distance every couple of seconds and drift in/out toward it.
-  // With the strafe, that makes the bot circle and reposition instead of holding
-  // one spot.
-  if (now >= (me.botRoamUntil ?? 0)) {
-    me.botRoamTarget = lowerRange + Math.random() * (upperRange - lowerRange);
-    me.botRoamUntil = now + 2000 + Math.random() * 2000;
+  const noLoSTime = now - me.botLastLoSAt;
+  if (me.botProgressAnchorAt == null) {
+    me.botProgressAnchorX = me.pos.x;
+    me.botProgressAnchorZ = me.pos.z;
+    me.botProgressAnchorAt = now;
+    me.botLastProgressAt = now;
   }
-  const roamTarget = me.botRoamTarget ?? optimalRange;
-  let retreat;
-  if (dist < lowerRange) retreat = -1.0;
-  else if (dist > upperRange) retreat = 1.0;
-  else retreat = dist > roamTarget + 2 ? 0.5 : (dist < roamTarget - 2 ? -0.5 : 0.1);
-  // In-band but no clear line (blocked by cover): push toward the player so
-  // obstacle-avoidance walks us around the cover and we re-acquire a sightline.
-  if (!playerHasLoS && !evadeActive && inBand) retreat = 0.6;
-  // Dire search: ignore range entirely and drive straight at the player to punch
-  // through to a clear line, wherever we sit relative to the band.
-  if (direSearch) retreat = 1.0;
-  // Strafe ONLY inside the band (to circle). Out of band the strafe is zero so
-  // the bot heads dead-straight in/out to restore distance — no arcing, no
-  // back-and-forth before it's in position.
-  const strafeWeight = inBand ? 1.05 : 0;
-  let mx = dirX * retreat + sideX * me.strafeSign * strafeWeight;
-  let mz = dirZ * retreat + sideZ * me.strafeSign * strafeWeight;
+  if (now - me.botProgressAnchorAt > 500) {
+    const ddx = me.pos.x - me.botProgressAnchorX;
+    const ddz = me.pos.z - me.botProgressAnchorZ;
+    if (Math.hypot(ddx, ddz) > 3) me.botLastProgressAt = now;
+    me.botProgressAnchorX = me.pos.x;
+    me.botProgressAnchorZ = me.pos.z;
+    me.botProgressAnchorAt = now;
+  }
+  const noProgressTime = now - (me.botLastProgressAt ?? now);
 
-  // --- Obstacle avoidance ---
   const avoid = computeBotAvoidance(me.pos.x, me.pos.y, me.pos.z, obstacles, BOT_OBSTACLE_AVOID_RADIUS);
-  mx += avoid.rx * BOT_OBSTACLE_AVOID_WEIGHT;
-  mz += avoid.rz * BOT_OBSTACLE_AVOID_WEIGHT;
-  // Reacquire / anti-camp: the stuck-pivot + stuck-memory machinery below
-  // exists to pry us off a wall we're grinding while pathing to a HIDDEN
-  // opponent. But its 3.5 s "avoid this spot" marker (repulsion weight 1.4 >
-  // the chase pull) can keep shoving us away from the opponent long after they
-  // step back into the open near that spot — pinning us in a loop that never
-  // re-acquired distance. So clear that marker the moment the line is clear. We
-  // deliberately do NOT clear the stuck-tick counter or an active escape pivot
-  // here: a bot pinned on the FRONT face of cover can still see the opponent,
-  // and zeroing those would stop the wall-escape from ever firing while it's
-  // being shot. When we can see the player while OUT of the band the sightline
-  // is unobstructed, so any stuck-escape here is a FALSE trigger that would
-  // hijack the straight chase and pin us — clear it so the bot sprints straight
-  // after a retreating player. IN-band we keep the escape (the wall there is the
-  // cover beside us, not a blocker on the sightline).
-  if (playerHasLoS) {
-    me.botStuckMemoryUntil = 0;
-    if (!inBand) {
-      me.botStuckPivotUntil = 0;
-      me.botStuckTicks = 0;
-    }
-  }
-  // Bias away from the spot we last got pinned at so the next path attempt
-  // picks a different angle around the obstacle instead of grinding into the
-  // same wall/corner once the perpendicular pivot ends.
-  if (inBand && (me.botStuckMemoryUntil ?? 0) > now) {
-    const sm = computeStuckRepulsion(
-      me.pos.x, me.pos.z,
-      me.botStuckMemoryX ?? me.pos.x, me.botStuckMemoryZ ?? me.pos.z,
-      BOT_STUCK_MEMORY_RADIUS
-    );
-    mx += sm.rx * BOT_STUCK_MEMORY_WEIGHT;
-    mz += sm.rz * BOT_STUCK_MEMORY_WEIGHT;
-  }
-  const mlen = Math.sqrt(mx * mx + mz * mz);
-  if (mlen > 1e-3) { mx /= mlen; mz /= mlen; }
+  const avoidMag = Math.hypot(avoid.rx, avoid.rz);
+  const obstacleNear = avoidMag > 0.3;
 
-  // --- Stuck detection ---
-  const dxMoved = me.pos.x - (me.botLastX ?? me.pos.x);
-  const dzMoved = me.pos.z - (me.botLastZ ?? me.pos.z);
-  const actualMoved = Math.sqrt(dxMoved * dxMoved + dzMoved * dzMoved);
-  const triedToMove = Math.abs(me.vel.x) + Math.abs(me.vel.z) > 1;
-  if (now < me.hitStunUntil) {
-    // Hit-stun scales our speed to 0.25x; that slow crawl is NOT being wedged,
-    // so don't accumulate false "stuck" ticks (which would fire the escape
-    // mid-fight and pin us).
-    me.botStuckTicks = 0;
-  } else if (triedToMove && actualMoved < BOT_STUCK_MOVED_EPSILON) {
-    me.botStuckTicks = (me.botStuckTicks ?? 0) + 1;
-  } else {
-    me.botStuckTicks = 0;
-  }
-  me.botLastX = me.pos.x;
-  me.botLastZ = me.pos.z;
-  if ((me.botStuckTicks ?? 0) >= BOT_STUCK_TICKS_THRESHOLD && !((me.botStuckPivotUntil ?? 0) > now)) {
-    me.botStuckPivotUntil = now + BOT_STUCK_PIVOT_MS;
-    me.strafeSign *= -1;
-    me.botStuckTicks = 0;
-    // COMMIT a wall-follow heading once, here. Recomputing it every tick let it
-    // flip mid-slide and oscillate, so the bot could never run the length of a
-    // long wall to the opening at its end. Slide along the wall (tangent to the
-    // avoidance push-off), toward the player when we can't see them / away when
-    // pinned in their view. Held for the whole (now longer) pivot, so the bot is
-    // willing to travel — temporarily closer to / farther from its preferred
-    // range — to get all the way around the obstacle.
-    let cx = avoid.rx, cz = avoid.rz;
-    const crl = Math.hypot(cx, cz);
-    if (crl < 0.1) {
-      cx = sideX * me.strafeSign; cz = sideZ * me.strafeSign;
-    } else {
-      const ux = cx / crl, uz = cz / crl;
-      let tx = -uz, tz = ux;
-      if (((tx * dirX + tz * dirZ) >= 0) !== !playerHasLoS) { tx = -tx; tz = -tz; }
-      cx = ux + tx * 1.3; cz = uz + tz * 1.3;
-    }
-    const cl = Math.hypot(cx, cz) || 1;
-    me.botEscapeDirX = cx / cl;
-    me.botEscapeDirZ = cz / cl;
-    // Drop a "don't come back here" marker for the next few seconds so the
-    // post-pivot kiting steers around this obstacle instead of re-attacking the
-    // same gap and stalling all over again.
-    me.botStuckMemoryX = me.pos.x;
-    me.botStuckMemoryZ = me.pos.z;
-    me.botStuckMemoryUntil = now + BOT_STUCK_MEMORY_MS;
-  }
-  // While unsticking, sprint toward open space — away from the wall (the
-  // avoidance vector points outward) — ignoring the kiting band until free.
-  const escaping = (me.botStuckPivotUntil ?? 0) > now;
-  if (escaping) {
-    // Follow the COMMITTED heading picked when we got stuck (above), plus a
-    // little live avoidance so we keep rounding corners and stay off the wall.
-    // Held steady — no per-tick recompute — so we run the whole length of the
-    // wall to its opening instead of flip-flopping in place and getting pinned.
-    let ex = (me.botEscapeDirX ?? -dirX) + avoid.rx * 0.5;
-    let ez = (me.botEscapeDirZ ?? -dirZ) + avoid.rz * 0.5;
-    const el = Math.hypot(ex, ez) || 1;
-    mx = ex / el;
-    mz = ez / el;
-  }
-
-  // --- Threat reaction (evadeActive computed above): head to cover to break
-  // line of sight; with no flankable cover, commit a perpendicular juke away
-  // from the line (strafeSign held steady above — no zig-zag back in). Skipped
-  // while escaping a wall (that takes priority).
-  // Cover-seek / evade ONLY inside the band. Out of the band the bot must keep
-  // repositioning in a straight line — diverting to cover (even right after a
-  // hit) is exactly the "peek/search before getting in distance" loop we're
-  // killing. A hit while out of position no longer pulls the bot to cover; it
-  // just keeps sprinting to the band (which is itself moving, so not a sitting
-  // duck). Once in the band, evade/cover work as before.
-  let coverSeeking = false;
-  if (evadeActive && inBand && !escaping) {
-    const cover = findCoverDirection(me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, obstacles, BOT_COVER_SEEK_RADIUS);
-    if (cover) {
-      mx += cover.toX * BOT_COVER_STEER_WEIGHT;
-      mz += cover.toZ * BOT_COVER_STEER_WEIGHT;
-    } else {
-      mx += sideX * me.strafeSign * 1.2 - dirX * 0.35;
-      mz += sideZ * me.strafeSign * 1.2 - dirZ * 0.35;
-    }
-    const cl = Math.sqrt(mx * mx + mz * mz);
-    if (cl > 1e-3) { mx /= cl; mz /= cl; }
-    coverSeeking = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
-  }
-
-  // --- Tactical sprint state machine ---
-  if (me.boost >= BOT_SPRINT_READY_BOOST) me.botSprintReady = true;
-  if (me.boost <= 0) me.botSprintReady = false;
-
-  let inBurst = (me.botSprintUntil ?? 0) > now;
-  if (inBurst && me.boost <= 0) {
-    me.botSprintUntil = 0;
-    inBurst = false;
-  }
-  const canStartBurst = !inBurst
-    && inBand
-    && me.botSprintReady === true
-    && me.boost >= BOT_SPRINT_MIN_BOOST
-    && now > me.evadeCooldownUntil
-    && now >= me.emptyRecoverUntil
-    && now >= me.hitStunUntil;
-
-  // Skip these tactical bursts while actively seeking cover (that drives the
-  // velocity directly below); they'd fight the cover-seek heading.
-  if (canStartBurst && !coverSeeking && !escaping) {
-    if (dist < lowerRange) {
-      // Trigger: opponent too close — burst back to re-open kiting space.
-      me.botSprintDirX = -dirX;
-      me.botSprintDirZ = -dirZ;
-      me.botSprintUntil = now + 240;
-      me.evadeCooldownUntil = now + 600;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      inBurst = true;
-    } else if (me.hp < (me.unit?.hp ?? MAX_HP) * 0.4 && dist < upperRange && Math.random() > 0.85) {
-      // Trigger 3: low HP — kite further away.
-      let bx = -dirX + sideX * me.strafeSign * 0.5;
-      let bz = -dirZ + sideZ * me.strafeSign * 0.5;
-      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
-      me.botSprintDirX = bx / blen;
-      me.botSprintDirZ = bz / blen;
-      me.botSprintUntil = now + 320;
-      me.evadeCooldownUntil = now + 900;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      inBurst = true;
-    } else if (dist > upperRange + 3 && Math.random() > 0.6) {
-      // Trigger 4: out of range — sprint TOWARD opponent to close the gap.
-      // Fires reliably (not just occasionally) so the bot positions into its
-      // kiting band quickly instead of dawdling at walk speed all the way in.
-      me.botSprintDirX = dirX;
-      me.botSprintDirZ = dirZ;
-      me.botSprintUntil = now + 280;
-      me.evadeCooldownUntil = now + 800;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      inBurst = true;
-    } else if (Math.random() > 0.985) {
-      // Trigger 5: occasional unpredictable strafe burst for variance.
-      const strafeSign = Math.random() > 0.5 ? 1 : -1;
-      let bx = sideX * strafeSign + dirX * 0.25;
-      let bz = sideZ * strafeSign + dirZ * 0.25;
-      const blen = Math.sqrt(bx * bx + bz * bz) || 1;
-      me.botSprintDirX = bx / blen;
-      me.botSprintDirZ = bz / blen;
-      me.botSprintUntil = now + 220;
-      me.evadeCooldownUntil = now + 700;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      inBurst = true;
-    }
-  }
-
-  // --- Elevation tactics: use jumps and ledges to hold kiting distance.
-  // Priority order, highest first:
-  //   1. Opponent is on higher ground and in engage range — jump straight at
-  //      them so the bot isn't stuck shooting a target it can't reach.
-  //   2. Bot is perched but the opponent has closed inside the kiting band
-  //      (or climbed up to the same level) — run/jump off the nearest ledge
-  //      that opens distance, dropping back down to reset the gap.
-  //   3. Bot is on low ground and engaged — climb a nearby ledge for the
-  //      high-ground sightline and the vertical separation it buys.
-  // Steering toward a ledge is blended into mx/mz; jumps are aimed via
-  // jumpDirX/jumpDirZ (default: straight at the opponent, as before).
   const myFloorY = groundHeightAt(me.pos.x, me.pos.z, surfaces, me.pos.y - GROUND_BASE_Y);
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
-  const stuckPivoting = (me.botStuckPivotUntil ?? 0) > now;
+
+  // --- State transition by precedence ---
+  const prevState = me.botState ?? 'pursue';
+  let nextState = prevState;
+  const inDefenseGrace = prevState === 'defense' && now < (me.botDefenseUntil ?? 0);
+
+  if (underFire || inDefenseGrace) {
+    nextState = 'defense';
+  } else if (noProgressTime > 2000) {
+    nextState = 'maze';
+  } else if (prevState === 'maze') {
+    if (noProgressTime < 300 || (now - (me.botStateEnteredAt ?? now)) > 5000) {
+      nextState = inBandDist ? 'engage' : 'pursue';
+    }
+  } else if (inBandDist) {
+    if (noLoSTime > 3000 || prevState === 'reposition') {
+      nextState = playerHasLoS ? 'engage' : 'reposition';
+    } else {
+      nextState = 'engage';
+    }
+  } else {
+    nextState = 'pursue';
+  }
+
+  // --- State entry: commit per-state directions and timers ---
+  if (nextState !== prevState) {
+    me.botState = nextState;
+    me.botStateEnteredAt = now;
+
+    if (nextState === 'maze') {
+      let mxe = avoid.rx, mze = avoid.rz;
+      const ml = Math.hypot(mxe, mze);
+      if (ml < 0.1) {
+        const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+        mxe = sideX * sg;
+        mze = sideZ * sg;
+      } else {
+        const ux = mxe / ml, uz = mze / ml;
+        let tx = -uz, tz = ux;
+        if (tx * dirX + tz * dirZ < 0) { tx = -tx; tz = -tz; }
+        mxe = ux + tx * 1.3;
+        mze = uz + tz * 1.3;
+      }
+      const ml2 = Math.hypot(mxe, mze) || 1;
+      me.botMazeDirX = mxe / ml2;
+      me.botMazeDirZ = mze / ml2;
+    }
+
+    if (nextState === 'engage'
+        && (prevState === 'pursue' || prevState === 'maze' || prevState === 'defense' || me.botOrbitSign == null)) {
+      me.botOrbitSign = Math.random() > 0.5 ? 1 : -1;
+    }
+
+    if (nextState === 'defense') {
+      const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+      let dxd = sideX * sg;
+      let dzd = sideZ * sg;
+      if (obstacleNear && (dxd * (-avoid.rx) + dzd * (-avoid.rz) > 0.3)) {
+        dxd = -dxd; dzd = -dzd;
+      }
+      me.botDefenseDirX = dxd;
+      me.botDefenseDirZ = dzd;
+      me.botDefenseUntil = now + (sniperCharging ? 600 : 350);
+      me.botDefenseInCover = false;
+      me.botDefenseCoverAt = 0;
+      me.botDefensePeekDone = false;
+      me.botDefenseStuckTicks = 0;
+    }
+  }
+
+  if (me.botState === 'defense' && underFire) {
+    const minDur = sniperCharging ? 600 : 350;
+    if ((me.botDefenseUntil ?? 0) < now + minDur) {
+      me.botDefenseUntil = now + minDur;
+    }
+  }
+
+  // --- State behavior: heading + sprint intent + optional jump ---
+  let mx = 0, mz = 0;
+  let wantSprint = false;
   let jumpThisTick = false;
-  let jumpDirX = dirX;
-  let jumpDirZ = dirZ;
+  let jumpDirX = dirX, jumpDirZ = dirZ;
+  const botS = me.botState;
 
-  // Pinned against a wall/corner with a platform within hop reach? Jump onto it
-  // — a vertical escape (e.g. Station's raised decks) that beats grinding the
-  // wall. Allowed precisely WHEN stuck, since the normal elevation block below
-  // is disabled while pivoting; the velocity chain lets this jump win over the
-  // wall-follow.
-  if (stuckPivoting && me.grounded && !me.airborne) {
-    const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
-    if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
-      jumpDirX = perch.toX;
-      jumpDirZ = perch.toZ;
-      if (tryStartJump(me, now)) jumpThisTick = true;
-    }
-  }
-
-  if (me.grounded && !me.airborne && !inBurst && !stuckPivoting && !coverSeeking) {
-    if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
-      // 1. Opponent above us — jump at them.
-      if (tryStartJump(me, now)) jumpThisTick = true;
-    } else if (
-      onHighGround
-      && dist < upperRange
-      && (dist < lowerRange || oppFloorY > myFloorY - BOT_JUMP_HEIGHT_DIFF)
-    ) {
-      // 2. Pressured on high ground — bail off a ledge to re-open distance.
-      const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, -dirX, -dirZ);
-      if (exit) {
-        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = exit.toX;
-          jumpDirZ = exit.toZ;
+  if (botS === 'pursue') {
+    let tx = dirX + avoid.rx * 0.8;
+    let tz = dirZ + avoid.rz * 0.8;
+    const l = Math.hypot(tx, tz) || 1;
+    mx = tx / l; mz = tz / l;
+    const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
+    if (me.boost >= BOT_SPRINT_READY_BOOST) me.botPursueSprinting = true;
+    if (me.boost <= reserveBoost) me.botPursueSprinting = false;
+    wantSprint = !!me.botPursueSprinting;
+    if (me.grounded && !me.airborne) {
+      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+        if (tryStartJump(me, now)) jumpThisTick = true;
+      } else if (onHighGround) {
+        const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
+        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
           if (tryStartJump(me, now)) jumpThisTick = true;
         }
-      }
-    } else if (!onHighGround && dist < upperRange && dist > lowerRange * 0.55) {
-      // 3. On low ground — climb a ledge, unless the only one is back toward
-      // the opponent (chasing it would just close the gap we want to keep).
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.toX * dirX + perch.toZ * dirZ < 0.45) {
-        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = perch.toX;
-          jumpDirZ = perch.toZ;
-          if (tryStartJump(me, now)) jumpThisTick = true;
-        }
-      }
-    } else if (onHighGround && dist > upperRange) {
-      // 2b. (positioning) Perched but opponent is out of engage range —
-      // drop off TOWARD them so we shortcut the long walk down to the lower
-      // level instead of trekking to the nearest exit and back around.
-      const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
-      if (exit) {
-        mx += exit.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += exit.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = exit.toX;
-          jumpDirZ = exit.toZ;
-          if (tryStartJump(me, now)) jumpThisTick = true;
-        }
-      }
-    } else if (!onHighGround && dist > upperRange) {
-      // 3b. (positioning) Out of engage range on low ground — climb a ledge
-      // if it's roughly TOWARD the opponent, using the elevation as a
-      // shortcut over an obstacle instead of walking the long way around.
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.toX * dirX + perch.toZ * dirZ > 0.3) {
-        mx += perch.toX * BOT_ELEV_STEER_WEIGHT;
-        mz += perch.toZ * BOT_ELEV_STEER_WEIGHT;
-        const l = Math.sqrt(mx * mx + mz * mz);
-        if (l > 1e-3) { mx /= l; mz /= l; }
-        if (perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.4) {
-          jumpDirX = perch.toX;
-          jumpDirZ = perch.toZ;
+      } else {
+        const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+        if (perch && perch.toX * dirX + perch.toZ * dirZ > 0.3
+            && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+          jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (tryStartJump(me, now)) jumpThisTick = true;
         }
       }
     }
+  } else if (botS === 'maze') {
+    let tx = (me.botMazeDirX ?? sideX) + avoid.rx * 0.3;
+    let tz = (me.botMazeDirZ ?? sideZ) + avoid.rz * 0.3;
+    const l = Math.hypot(tx, tz) || 1;
+    mx = tx / l; mz = tz / l;
+    wantSprint = true;
+    if (me.grounded && !me.airborne) {
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
+        jumpDirX = perch.toX; jumpDirZ = perch.toZ;
+        if (tryStartJump(me, now)) jumpThisTick = true;
+      }
+    }
+  } else if (botS === 'engage' || botS === 'reposition') {
+    const sign = me.botOrbitSign ?? 1;
+    const pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
+    let tx = sideX * sign + dirX * pull + avoid.rx * 0.6;
+    let tz = sideZ * sign + dirZ * pull + avoid.rz * 0.6;
+    const l = Math.hypot(tx, tz) || 1;
+    mx = tx / l; mz = tz / l;
+
+    if (botS === 'engage') {
+      if (obstacleNear && !playerHasLoS && now < me.nextFireAt) {
+        mx *= 0.15; mz *= 0.15;
+      }
+      wantSprint = false;
+    } else {
+      wantSprint = true;
+    }
+  } else if (botS === 'defense') {
+    mx = me.botDefenseDirX ?? sideX;
+    mz = me.botDefenseDirZ ?? sideZ;
+    wantSprint = true;
+
+    if (!me.botDefenseInCover && obstacleNear && !playerHasLoS) {
+      me.botDefenseInCover = true;
+      me.botDefenseCoverAt = now;
+      me.botDefensePeekDone = false;
+    }
+
+    if (me.botDefenseInCover) {
+      const sinceCover = now - (me.botDefenseCoverAt ?? now);
+      if (sinceCover < 300) {
+        mx *= 0.1; mz *= 0.1;
+        wantSprint = false;
+      } else if (!me.botDefensePeekDone) {
+        mx = dirX; mz = dirZ;
+        wantSprint = false;
+        if ((now >= me.nextFireAt && playerHasLoS) || sinceCover > 1000) {
+          me.botDefensePeekDone = true;
+        }
+      } else {
+        me.botDefenseUntil = now;
+        me.botDefenseInCover = false;
+      }
+    } else {
+      const intoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4;
+      if (intoWall && avoidMag > 0.4) {
+        me.botDefenseStuckTicks = (me.botDefenseStuckTicks ?? 0) + 1;
+      } else {
+        me.botDefenseStuckTicks = 0;
+      }
+      if (me.botDefenseStuckTicks >= 2) {
+        me.botLastProgressAt = now - 2001;
+        me.botDefenseUntil = now;
+      }
+    }
   }
 
-  // Movement speeds come from this unit's stats, identical to the player: walk
-  // at walkSpeed, and a sustained sprint at sprintSpeed plus the dash momentum
-  // the player builds (≈ ×2.5). Keeps the bot's mobility the same as a pilot.
-  // Movement uses this unit's stats AND the player's exact mechanic: a sprint
-  // sets the base sprintSpeed and adds dash momentum via inheritMomentum, which
-  // applyMomentum then applies — same buildup/decay/coasting as a player holding
-  // boost. Walk is plain walkSpeed. (A flat ×2.5 plus applyMomentum would
-  // double-count the momentum, which was the bug.)
+  // === Velocity dispatch — drives the heading and sprint intent produced by
+  // the active state into the body's velocity. Mid-jump airborne ticks hold
+  // the launch aim so the arc lands where it was committed.
   const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
-  // Can we afford to sprint? Same gate cover-seek uses. When the gauge is
-  // spent, escape/peek fall back to a walk instead of sprinting for free
-  // (action 'idle' so boost regens), mirroring how the player slows when empty.
   const botCanSprint = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
 
-  if (escaping && !jumpThisTick) {
-    // Sprint to open space to clear the wall, ignoring the kiting band (walk it
-    // out if we're out of boost). (A pinned-jump to a platform, if one fired,
-    // takes priority via the !jumpThisTick guard so it isn't overridden here.)
-    if (botCanSprint) {
-      me.vel.x = mx * botSprintBase;
-      me.vel.z = mz * botSprintBase;
-      inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
-      me.action = 'dash';
-    } else {
-      me.vel.x = mx * botWalkSpeed;
-      me.vel.z = mz * botWalkSpeed;
-      me.action = 'idle';
-    }
-  } else if (jumpThisTick) {
-    // Remember the launch aim so the airborne ticks below keep driving the
-    // bot toward the ledge instead of drifting off on the kiting vector.
+  if (jumpThisTick) {
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    // Launch at base sprint speed; the jump's own momentum carries the glide,
-    // mirroring the player's jump.
     me.vel.x = jumpDirX * botSprintBase;
     me.vel.z = jumpDirZ * botSprintBase;
     me.action = 'jump';
-  } else if (coverSeeking) {
-    // Sprint along the live (cover-biased, obstacle-aware) heading so we curve
-    // around walls toward cover instead of dashing blindly into them.
-    me.vel.x = mx * botSprintBase;
-    me.vel.z = mz * botSprintBase;
-    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
+  } else if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
+    const ax = me.botAirSteerX ?? mx;
+    const az = me.botAirSteerZ ?? mz;
+    me.vel.x = ax * botSprintBase;
+    me.vel.z = az * botSprintBase;
     me.action = 'dash';
-  } else if (inBurst) {
-    me.vel.x = (me.botSprintDirX ?? 0) * botSprintBase;
-    me.vel.z = (me.botSprintDirZ ?? 0) * botSprintBase;
-    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
-    me.action = 'dash';
-  } else if (!inBand && botCanSprint) {
-    // Out of the band (or in dire search): sprint straight in/out to restore the
-    // advantage distance / close on the player. No hit-stun gate here — like the
-    // player, the bot keeps sprinting (just scaled to 0.25x by the stun block at
-    // the end) instead of dropping to a frozen-looking walk while taking hits.
+  } else if (wantSprint && botCanSprint) {
     me.vel.x = mx * botSprintBase;
     me.vel.z = mz * botSprintBase;
     inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
   } else {
-    // Walk at the unit's walkSpeed (same as the player).
-    // Stun no longer freezes the bot: it keeps its walk heading here and the
-    // hit-stun scale below drops it to 0.25x, like the player.
-    const moveScalar = botWalkSpeed;
-    // Mid elevation-jump: hold the launch heading so the arc lands on (or
-    // clears) the ledge it was aimed at instead of drifting on the kiting vec.
-    if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
-      mx = me.botAirSteerX ?? mx;
-      mz = me.botAirSteerZ ?? mz;
-    }
-    me.vel.x = mx * moveScalar;
-    me.vel.z = mz * moveScalar;
+    me.vel.x = mx * botWalkSpeed;
+    me.vel.z = mz * botWalkSpeed;
     if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
       me.vel.x = sideX * 4.5;
       me.vel.z = sideZ * 4.5;
