@@ -458,9 +458,12 @@ export function tickBot(matchState, botId, now) {
           if (tryStartJump(me, now)) jumpThisTick = true;
         }
       } else {
+        // Low ground: take any reachable platform — no "toward player" gate,
+        // since on maps like Station the raised decks are the strong positions
+        // and we'd rather be up there than on the tracks. The jump cooldown
+        // rate-limits this; no strict random gate needed.
         const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
-        if (perch && perch.toX * dirX + perch.toZ * dirZ > 0.3
-            && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+        if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (tryStartJump(me, now)) jumpThisTick = true;
         }
@@ -486,6 +489,18 @@ export function tickBot(matchState, botId, now) {
     let tz = sideZ * sign + dirZ * pull + avoid.rz * 0.6;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
+
+    // On low ground? Hop onto any reachable platform — high ground is the
+    // better engagement / vantage spot on Station-like maps. Doesn't override
+    // the orbit (just adds a jump when the chance is there); the jump cooldown
+    // limits how often this fires.
+    if (me.grounded && !me.airborne && !onHighGround) {
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
+        jumpDirX = perch.toX; jumpDirZ = perch.toZ;
+        if (tryStartJump(me, now)) jumpThisTick = true;
+      }
+    }
 
     if (botS === 'engage') {
       if (obstacleNear && !playerHasLoS && now < me.nextFireAt) {
