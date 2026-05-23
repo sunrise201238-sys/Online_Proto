@@ -65,7 +65,7 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,
     magCapacity: 7,
-    reloadMs: 1500,
+    reloadMs: 1000,
     autoReload: true
   },
   unit3: {
