@@ -1559,9 +1559,12 @@ function updateEnemy(now) {
   } else if (noProgressTime > 2000) {
     nextState = 'maze';
   } else if (prevState === 'maze') {
-    // Exit Maze when progress resumes; 5 s safety prevents a wrong-direction
-    // commitment from latching the bot in circumnavigation forever.
-    if (noProgressTime < 300 || (now - (eState.botStateEnteredAt ?? now)) > 5000) {
+    // Exit Maze when the obstacle is GENUINELY behind us — i.e. the line to the
+    // player clears. Only counts if LoS was blocked when Maze fired (otherwise
+    // it'd exit on tick 1 every time the bot is stuck-but-visible, e.g. against
+    // a side pillar). 5 s safety still applies as the ultimate latch break.
+    const losReacquired = playerHasLoS && eState.botMazeLosBlockedAtEntry;
+    if (losReacquired || (now - (eState.botStateEnteredAt ?? now)) > 5000) {
       nextState = inBandDist ? 'engage' : 'pursue';
     }
   } else if (inBandDist) {
@@ -1598,6 +1601,10 @@ function updateEnemy(now) {
       const ml2 = Math.hypot(mxe, mze) || 1;
       eState.botMazeDirX = mxe / ml2;
       eState.botMazeDirZ = mze / ml2;
+      // Record whether LoS was blocked at entry. The LoS-restored exit only
+      // counts when it was — otherwise (stuck against a side pillar with LoS
+      // already clear) Maze would exit on the first tick and never get to act.
+      eState.botMazeLosBlockedAtEntry = !playerHasLoS;
     }
 
     if (nextState === 'engage'
