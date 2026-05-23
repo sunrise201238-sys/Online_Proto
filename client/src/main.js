@@ -1628,11 +1628,15 @@ function updateEnemy(now) {
     { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
-  const playerShotRecently = now - state.player.state.lastFireAt < BOT_FIRE_REACT_MS;
   const sniperCharging = state.player.state.sniperChargeTarget === state.enemy;
   if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   eState.botPrevHitStun = eState.hitStunUntil;
-  const firedAtWithLoS = (playerShotRecently || sniperCharging) && playerHasLoS;
+  // Defense triggers on the SNIPER GLINT (with clear line) or a FRESH HIT.
+  // We deliberately do NOT trigger on "player squeezed the trigger" (the
+  // BOT_FIRE_REACT_MS window) — that made the bot too evasive, dodging every
+  // MG round before it could even land. "Sprint when getting hit" is provided
+  // by hitEvading below.
+  const firedAtWithLoS = sniperCharging && playerHasLoS;
   const hitEvading = now < (eState.botHitEvadeUntil ?? 0);
   const underFire = firedAtWithLoS || hitEvading;
   const inBandDist = dist >= lowerRange && dist <= upperRange;
