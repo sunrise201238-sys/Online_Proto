@@ -156,6 +156,8 @@ const state = {
 };
 state.dummyMode = false;
 state.playerStuckSince = 0;
+// Bullet trails that outlived their projectile and are fading in place.
+state.dyingBulletTrails = [];
 
 // Online-mode runtime state. Populated by startOnlineMatch and torn down by
 // cleanupMatch (called from showSelectMenu). Includes Phase 3 prediction
@@ -597,6 +599,84 @@ const SNIPER_TRACER_LENGTH = 3.4;
 const SNIPER_TRACER_MID_RADIUS = 0.18;
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
+// === Bullet trails (visual-only): a thin light-grey streak that follows each
+// MG / Sniper round and fades out after the bullet expires. Shotgun pellets
+// opt out so 8 pellets per shot don't make a noisy mess. The trail is a
+// 2-vertex THREE.Line whose tail is computed analytically from the projectile's
+// velocity (projectiles fly straight — homing is 0 — so no sample buffer
+// needed). Despawned bullets hand their trail to state.dyingBulletTrails so it
+// fades in place instead of vanishing the instant the bullet stops.
+const BULLET_TRAIL_FADE_MS_MG = 500;
+const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
+const BULLET_TRAIL_COLOR = 0xbbbbbb;
+const BULLET_TRAIL_OPACITY = 0.55;
+
+function bulletTrailFadeMsFor(unit) {
+  if (!unit) return 0;
+  if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
+  if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out
+  return BULLET_TRAIL_FADE_MS_MG;
+}
+
+function buildBulletTrail() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const material = new THREE.LineBasicMaterial({
+    color: BULLET_TRAIL_COLOR,
+    transparent: true,
+    opacity: BULLET_TRAIL_OPACITY,
+    fog: false
+  });
+  const line = new THREE.Line(geometry, material);
+  line.frustumCulled = false;  // streaks can be longer than the bounding box
+  return line;
+}
+
+function disposeBulletTrail(trail) {
+  if (!trail) return;
+  if (trail.parent) trail.parent.remove(trail);
+  if (trail.geometry) trail.geometry.dispose();
+  if (trail.material) trail.material.dispose();
+}
+
+function updateBulletTrailEnds(trail, tx, ty, tz, hx, hy, hz) {
+  const pos = trail.geometry.attributes.position.array;
+  pos[0] = tx; pos[1] = ty; pos[2] = tz;
+  pos[3] = hx; pos[4] = hy; pos[5] = hz;
+  trail.geometry.attributes.position.needsUpdate = true;
+}
+
+// Hand the projectile's trail off to the dying-trails list so it fades in
+// place rather than disappearing the instant the bullet expires/hits.
+function despawnProjectileTrail(p, now) {
+  if (!p.trail) return;
+  state.dyingBulletTrails.push({
+    trail: p.trail,
+    diesAt: now + p.trailFadeMs,
+    fadeMs: p.trailFadeMs,
+    initialOpacity: BULLET_TRAIL_OPACITY
+  });
+  p.trail = null;
+}
+
+function updateDyingBulletTrails(now) {
+  const arr = state.dyingBulletTrails;
+  if (!arr || arr.length === 0) return;
+  for (let i = arr.length - 1; i >= 0; i -= 1) {
+    const dt = arr[i];
+    const remaining = dt.diesAt - now;
+    if (remaining <= 0) {
+      disposeBulletTrail(dt.trail);
+      arr.splice(i, 1);
+      continue;
+    }
+    // Freeze the trail's geometry at its last position; just fade opacity.
+    // (More faithful to how a real tracer reads — the streak dims in place,
+    // it doesn't retract.)
+    dt.trail.material.opacity = dt.initialOpacity * (remaining / dt.fadeMs);
+  }
+}
+
 function buildProjectileMesh(unit, isRedLock) {
   const isSniper = !!unit?.sniperCharge;
   const isMG = !isSniper && (unit?.spreadCount ?? 0) === 1;
@@ -692,6 +772,15 @@ function spawnProjectiles(owner, target) {
     const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
     mesh.position.copy(owner.root.position).add(new THREE.Vector3(0, 0.8, 0));
     scene.add(mesh);
+    // Bullet trail (MG / Sniper only — shotgun pellets opt out). Tail trails
+    // by (fadeMs / 1000) * speed, clamped to spawn for the first fadeMs so the
+    // line doesn't extend behind the muzzle.
+    const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
+    let trail = null;
+    if (trailFadeMs > 0) {
+      trail = buildBulletTrail();
+      scene.add(trail);
+    }
 
     const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
     orientTracer(mesh, projVel.x, projVel.y, projVel.z);
@@ -700,6 +789,10 @@ function spawnProjectiles(owner, target) {
       owner,
       target,
       mesh,
+      trail,
+      trailFadeMs,
+      trailSpawnPos: mesh.position.clone(),
+      trailSpawnAt: now,
       vel: projVel,
       homing,
       homingLost: false,
@@ -911,6 +1004,7 @@ function updateProjectileSystem(dt) {
     const p = state.projectiles[i];
     p.ttl -= dt;
     if (p.ttl <= 0) {
+      despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
       continue;
@@ -965,6 +1059,25 @@ function updateProjectileSystem(dt) {
     // Re-orient tracer projectiles (sniper / MG) so the streak follows
     // velocity. No-op for sphere projectiles (shotgun).
     orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
+    // Bullet trail: tail trails by (fadeMs / 1000) * speed, clamped to the
+    // spawn position for the first fadeMs so the line doesn't extend behind
+    // the muzzle. Skipped for shotgun (no trail).
+    if (p.trail) {
+      const elapsedMs = now - p.trailSpawnAt;
+      const fadeSec = p.trailFadeMs / 1000;
+      let tailX, tailY, tailZ;
+      if (elapsedMs < p.trailFadeMs) {
+        tailX = p.trailSpawnPos.x;
+        tailY = p.trailSpawnPos.y;
+        tailZ = p.trailSpawnPos.z;
+      } else {
+        tailX = p.mesh.position.x - p.vel.x * fadeSec;
+        tailY = p.mesh.position.y - p.vel.y * fadeSec;
+        tailZ = p.mesh.position.z - p.vel.z * fadeSec;
+      }
+      updateBulletTrailEnds(p.trail, tailX, tailY, tailZ,
+        p.mesh.position.x, p.mesh.position.y, p.mesh.position.z);
+    }
     // Track total path length on shotgun center pellets so the cluster
     // spread factor uses actual distance flown (homing-aware).
     if (p.distTraveled !== undefined) {
@@ -976,6 +1089,7 @@ function updateProjectileSystem(dt) {
     for (const obstacle of arenaObstacles) {
       if (obstacle.noProjectile) continue;
       if (!segmentHitsObstacle(prevPos, p.mesh.position, obstacle)) continue;
+      despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
       p.ttl = 0;
@@ -983,6 +1097,7 @@ function updateProjectileSystem(dt) {
     }
     if (p.ttl <= 0) continue;
     if (projectileHitsSurface(prevPos, p.mesh.position)) {
+      despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
       p.ttl = 0;
@@ -1001,6 +1116,7 @@ function updateProjectileSystem(dt) {
       p.target.state.momentumVZ = 0;
       spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
       p.target.body.velocity.set(0, 0, 0);
+      despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
     }
@@ -2113,6 +2229,7 @@ function cleanupMatch() {
     if (state.online.projectileMeshes) {
       for (const op of state.online.projectileMeshes.values()) {
         disposeProjectileMesh(op.mesh);
+        if (op.trail) disposeBulletTrail(op.trail);
       }
       state.online.projectileMeshes.clear();
     }
@@ -2127,8 +2244,15 @@ function cleanupMatch() {
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
   });
-  state.projectiles.forEach((p) => disposeProjectileMesh(p.mesh));
+  state.projectiles.forEach((p) => {
+    disposeProjectileMesh(p.mesh);
+    if (p.trail) disposeBulletTrail(p.trail);
+  });
   state.projectiles.length = 0;
+  if (state.dyingBulletTrails && state.dyingBulletTrails.length) {
+    state.dyingBulletTrails.forEach((dt) => disposeBulletTrail(dt.trail));
+    state.dyingBulletTrails.length = 0;
+  }
   state.vfx.forEach((vfx) => scene.remove(vfx.mesh));
   state.vfx.length = 0;
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
@@ -2352,6 +2476,7 @@ function mirrorFighterToMech(fighter, mech) {
 function syncOnlineProjectiles(snap) {
   const meshes = state.online.projectileMeshes;
   const liveIds = new Set();
+  const now = performance.now();
   for (const sp of snap.projectiles) {
     liveIds.add(sp.id);
     let entry = meshes.get(sp.id);
@@ -2361,18 +2486,56 @@ function syncOnlineProjectiles(snap) {
       const ownerUnit = owner?.unit ?? SIM_UNIT_DATA[owner?.unitKey] ?? {};
       const mesh = buildProjectileMesh(ownerUnit, isOwnerRedLock);
       scene.add(mesh);
-      entry = { mesh };
+      // Bullet trail (MG / Sniper only — shotgun pellets opt out).
+      const trailFadeMs = bulletTrailFadeMsFor(ownerUnit);
+      let trail = null;
+      if (trailFadeMs > 0) {
+        trail = buildBulletTrail();
+        scene.add(trail);
+      }
+      entry = {
+        mesh,
+        trail,
+        trailFadeMs,
+        trailSpawnX: sp.pos.x, trailSpawnY: sp.pos.y, trailSpawnZ: sp.pos.z,
+        trailSpawnAt: now
+      };
       meshes.set(sp.id, entry);
     }
     entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
     // Re-orient sniper tracers along their snapshot velocity so the streak
     // visibly follows the projectile's path. No-op for sphere projectiles.
     orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);
+    // Update the bullet trail (same analytic tail as offline).
+    if (entry.trail) {
+      const elapsedMs = now - entry.trailSpawnAt;
+      const fadeSec = entry.trailFadeMs / 1000;
+      let tailX, tailY, tailZ;
+      if (elapsedMs < entry.trailFadeMs) {
+        tailX = entry.trailSpawnX;
+        tailY = entry.trailSpawnY;
+        tailZ = entry.trailSpawnZ;
+      } else {
+        tailX = sp.pos.x - sp.vel.x * fadeSec;
+        tailY = sp.pos.y - sp.vel.y * fadeSec;
+        tailZ = sp.pos.z - sp.vel.z * fadeSec;
+      }
+      updateBulletTrailEnds(entry.trail, tailX, tailY, tailZ, sp.pos.x, sp.pos.y, sp.pos.z);
+    }
   }
-  // Despawn anything no longer in the snapshot.
+  // Despawn anything no longer in the snapshot — hand any trail off to the
+  // dying list so it fades in place instead of vanishing instantly.
   for (const [id, entry] of meshes.entries()) {
     if (liveIds.has(id)) continue;
     disposeProjectileMesh(entry.mesh);
+    if (entry.trail) {
+      state.dyingBulletTrails.push({
+        trail: entry.trail,
+        diesAt: now + entry.trailFadeMs,
+        fadeMs: entry.trailFadeMs,
+        initialOpacity: BULLET_TRAIL_OPACITY
+      });
+    }
     meshes.delete(id);
   }
 }
@@ -2799,6 +2962,7 @@ function ensureOnlineMatchSetup(snap) {
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
     disposeProjectileMesh(op.mesh);
+    if (op.trail) disposeBulletTrail(op.trail);
   }
   onl.projectileMeshes.clear();
 
@@ -5605,6 +5769,7 @@ function animate() {
       updateGlintScale(state.player);
       updateGlintScale(state.enemy);
       updateProjectileSystem(dt);
+      updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
       updateHud();
