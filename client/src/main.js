@@ -1644,9 +1644,13 @@ function updateEnemy(now) {
   const botS = eState.botState;
 
   if (botS === 'pursue') {
-    // Straight toward the player + avoidance to deflect around obstacles.
-    let tx = dir.x + avoid.rx * 0.8;
-    let tz = dir.z + avoid.rz * 0.8;
+    // Pursue handles BOTH sides of the band: toward the player when too far,
+    // AWAY from them when too close. Without the negative branch the bot just
+    // keeps closing through lowerRange and collides at zero distance.
+    const tooClose = dist < lowerRange;
+    const dirSign = tooClose ? -1 : 1;
+    let tx = dir.x * dirSign + avoid.rx * 0.8;
+    let tz = dir.z * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
     // Occasional sprint with hysteresis. A boost reserve keeps at least one
@@ -1655,8 +1659,8 @@ function updateEnemy(now) {
     if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botPursueSprinting = true;
     if (eState.boost <= reserveBoost) eState.botPursueSprinting = false;
     wantSprint = !!eState.botPursueSprinting;
-    // Elevation aid: hop onto / off of a ledge as a shortcut.
-    if (state.enemy.grounded && !eState.airborne) {
+    // Elevation aids close the gap; skip them when we're trying to back off.
+    if (!tooClose && state.enemy.grounded && !eState.airborne) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
         if (botStartJump(now)) jumpThisTick = true;
       } else if (onHighGround) {
