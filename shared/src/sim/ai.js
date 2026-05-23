@@ -434,15 +434,21 @@ export function tickBot(matchState, botId, now) {
   const botS = me.botState;
 
   if (botS === 'pursue') {
-    let tx = dirX + avoid.rx * 0.8;
-    let tz = dirZ + avoid.rz * 0.8;
+    // Pursue handles BOTH sides of the band: toward the player when too far,
+    // AWAY from them when too close. Without the negative branch the bot just
+    // keeps closing through lowerRange and collides at zero distance.
+    const tooClose = dist < lowerRange;
+    const dirSign = tooClose ? -1 : 1;
+    let tx = dirX * dirSign + avoid.rx * 0.8;
+    let tz = dirZ * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
     const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
     if (me.boost >= BOT_SPRINT_READY_BOOST) me.botPursueSprinting = true;
     if (me.boost <= reserveBoost) me.botPursueSprinting = false;
     wantSprint = !!me.botPursueSprinting;
-    if (me.grounded && !me.airborne) {
+    // Elevation aids close the gap; skip them when we're trying to back off.
+    if (!tooClose && me.grounded && !me.airborne) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
         if (tryStartJump(me, now)) jumpThisTick = true;
       } else if (onHighGround) {
