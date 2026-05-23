@@ -311,11 +311,15 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
-  const playerShotRecently = now - opp.lastFireAt < BOT_FIRE_REACT_MS;
   const sniperCharging = opp.sniperChargeTargetId === me.id;
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
-  const firedAtWithLoS = (playerShotRecently || sniperCharging) && playerHasLoS;
+  // Defense triggers on the SNIPER GLINT (with clear line) or a FRESH HIT.
+  // We deliberately do NOT trigger on "player squeezed the trigger" (the
+  // BOT_FIRE_REACT_MS window) — that made the bot too evasive, dodging every
+  // MG round before it could even land. "Sprint when getting hit" is provided
+  // by hitEvading below.
+  const firedAtWithLoS = sniperCharging && playerHasLoS;
   const hitEvading = now < (me.botHitEvadeUntil ?? 0);
   const underFire = firedAtWithLoS || hitEvading;
   const inBandDist = dist >= lowerRange && dist <= upperRange;
