@@ -85,7 +85,7 @@ const UNIT_DATA = {
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,
     magCapacity: 7,
-    reloadMs: 1500,
+    reloadMs: 1000,
     autoReload: true
   },
   unit3: {
@@ -614,8 +614,10 @@ const BULLET_TRAIL_OPACITY = 0.55;
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
-  if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out
-  return BULLET_TRAIL_FADE_MS_MG;
+  // MG and shotgun trails disabled. MG's ~14 shots/sec spawn rate combined
+  // with the per-tick BufferAttribute updates caused observable framerate
+  // drops; SR (1/s spawn) keeps its trail with no measurable impact.
+  return 0;
 }
 
 function buildBulletTrail() {
@@ -3715,12 +3717,23 @@ function applyMapAmbience(mapKey) {
 function buildArenaForMap(mapKey) {
   clearArenaDecor();
   applyMapAmbience(mapKey);
-  if (mapKey === 'arena2') buildStreetsArena();
+  if (mapKey === 'arena1') buildPlainFieldArena();
+  else if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
   else if (mapKey === 'square') buildSquareArena();
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
+}
+
+function buildPlainFieldArena() {
+  // Plain Field is intentionally featureless — just the boundary so players
+  // know the edge of the play area. The 280x280 global ground plane gives a
+  // wide visible field; the red stripes + invisible wall sit at +/-120 (so a
+  // 240x240 play area with a 20-unit visual buffer to the ground edge). The
+  // outer cannon wall at HALF=138 stays as a backstop. CEIL_Y=16 matches the
+  // physics wall height so the camera never clips when backing into a corner.
+  addBoundaryIndicator(120, 120, 16);
 }
 
 function buildStreetsArena() {
