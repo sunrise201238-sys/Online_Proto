@@ -333,7 +333,10 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
   fog: false
 });
 
-function createMech(color, unitData) {
+// `addXRayGhost` is opt-in per call: only the LOCAL player gets the ghost
+// silhouette. Applying it to the enemy mech would let the player see them
+// through cover, which is a gameplay-breaking exploit (cover wouldn't work).
+function createMech(color, unitData, addXRayGhost = false) {
   const root = new THREE.Group();
   const armor = new THREE.MeshToonMaterial({ color });
   const steel = new THREE.MeshToonMaterial({ color: 0x3b4658 });
@@ -355,19 +358,21 @@ function createMech(color, unitData) {
   plumeLight.position.set(0, -2.2, -0.7);
   root.add(plumeLight);
 
-  // X-ray silhouette: parent a ghost duplicate to each mesh part using a
-  // shared `depthFunc: GreaterDepth` material. The ghost only draws where its
-  // depth is GREATER than what's already in the depth buffer — i.e. where
-  // something is in FRONT of it (the mech is occluded). When the mech is
-  // unoccluded, the real mesh writes its own depth first and the ghost fails
-  // (depth == buffer, not greater) so it's invisible. Result: the mech reads
-  // as a faint coloured outline through walls, with zero visible artifact in
-  // the clear. Ghosts share geometry with their parent and inherit transforms
-  // for free (so any future arm/torso animation works without sync code).
-  for (const child of root.children) {
-    if (!child.isMesh) continue;
-    const ghost = new THREE.Mesh(child.geometry, MECH_OCCLUSION_GHOST);
-    child.add(ghost);
+  // X-ray silhouette (LOCAL PLAYER ONLY): parent a ghost duplicate to each
+  // mesh part using a shared `depthFunc: GreaterDepth` material. The ghost
+  // only draws where its depth is GREATER than what's already in the depth
+  // buffer — i.e. where something is in FRONT of it (the mech is occluded).
+  // When the mech is unoccluded, the real mesh writes its own depth first and
+  // the ghost fails (depth == buffer, not greater) so it's invisible.
+  // Skipped for the enemy mech — silhouetting them through cover would defeat
+  // the point of cover. Ghosts share geometry with their parent and inherit
+  // transforms for free.
+  if (addXRayGhost) {
+    for (const child of root.children) {
+      if (!child.isMesh) continue;
+      const ghost = new THREE.Mesh(child.geometry, MECH_OCCLUSION_GHOST);
+      child.add(ghost);
+    }
   }
 
   scene.add(root);
@@ -2300,7 +2305,7 @@ function startMatch() {
   cleanupMatch();
   clearMenus();
   renderer.domElement.style.pointerEvents = 'auto';
-  state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey]);
+  state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey], true);
   state.enemy = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey]);
   if (state.mapKey === 'arena2') {
     // Streets: spawn on opposite ends of the cross road (X axis), not the bridge lane.
@@ -3005,7 +3010,7 @@ function ensureOnlineMatchSetup(snap) {
   onl.projectileMeshes.clear();
 
   // Build new. state.player = local mech (camera target), state.enemy = opp.
-  state.player = createMech(0x62d7ff, UNIT_DATA[myUnitKey]);
+  state.player = createMech(0x62d7ff, UNIT_DATA[myUnitKey], true);
   state.enemy = createMech(0xff7ad5, UNIT_DATA[oppUnitKey]);
   const myPos = snap.fighters[cameraId].pos;
   const oppPos = snap.fighters[otherId].pos;
