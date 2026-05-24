@@ -1150,7 +1150,9 @@ function updateProjectileSystem(dt) {
     const nearest = new THREE.Vector3();
     path.closestPointToPoint(p.target.root.position, true, nearest);
     // Spawn protection: the round passes through an invulnerable target.
-    if (now >= p.target.state.invulnerableUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
+    // Step (dodge) immunity: the round also passes through while the target is
+    // mid-step, so a well-timed dodge avoids the hit entirely.
+    if (now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
