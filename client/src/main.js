@@ -1711,12 +1711,35 @@ function updateEnemy(now) {
   const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
+  // --- Stuck cut-in detection: if net displacement over the last 3 s drops
+  // below 5 units (any state), fire a fresh 1.5 s Defense to bounce loose.
+  // Tracker reinitialises on first tick and resets on every Defense entry.
+  // Skips airborne and stun frames so landing pauses / hit-freezes don't count.
+  let stuckTriggered = false;
+  if (eState.botStuckCheckAt == null) {
+    eState.botStuckCheckX = e.x;
+    eState.botStuckCheckZ = e.z;
+    eState.botStuckCheckAt = now;
+  } else if (now - eState.botStuckCheckAt >= 3000) {
+    const sddx = e.x - eState.botStuckCheckX;
+    const sddz = e.z - eState.botStuckCheckZ;
+    if (Math.hypot(sddx, sddz) < 5
+        && !eState.airborne
+        && now >= eState.hitStunUntil
+        && (eState.botState ?? 'pursue') !== 'defense') {
+      stuckTriggered = true;
+    }
+    eState.botStuckCheckX = e.x;
+    eState.botStuckCheckZ = e.z;
+    eState.botStuckCheckAt = now;
+  }
+
   // --- State transition by precedence ---
   const prevState = eState.botState ?? 'pursue';
   let nextState = prevState;
   const inDefenseGrace = prevState === 'defense' && now < (eState.botDefenseUntil ?? 0);
 
-  if (underFire || inDefenseGrace) {
+  if (underFire || inDefenseGrace || stuckTriggered) {
     nextState = 'defense';
   } else if (noProgressTime > 2000) {
     nextState = 'maze';
@@ -1757,17 +1780,8 @@ function updateEnemy(now) {
         const ux = mxe / ml, uz = mze / ml;
         let tx = -uz, tz = ux;
         if (tx * dir.x + tz * dir.z < 0) { tx = -tx; tz = -tz; }
-        // Small ±15° random angle jitter on the committed tangent. On a cold
-        // Maze entry it's a few degrees off the player-biased pick — visually
-        // unchanged. On re-fires at the same trap spot the fresh random angle
-        // is different each time, so symmetric corners that previously latched
-        // get broken out of within 2–3 retries instead of staying stuck.
-        const jit = (Math.random() - 0.5) * (Math.PI / 6);
-        const jcos = Math.cos(jit), jsin = Math.sin(jit);
-        const jx = tx * jcos - tz * jsin;
-        const jz = tx * jsin + tz * jcos;
-        mxe = ux + jx * 1.3;
-        mze = uz + jz * 1.3;
+        mxe = ux + tx * 1.3;
+        mze = uz + tz * 1.3;
       }
       const ml2 = Math.hypot(mxe, mze) || 1;
       eState.botMazeDirX = mxe / ml2;
@@ -1796,18 +1810,43 @@ function updateEnemy(now) {
       eState.botDefenseDirX = dxd;
       eState.botDefenseDirZ = dzd;
       // 350 ms for a normal hit; ≥600 ms while a sniper is mid-charge so the
-      // sprint outlasts the glint window.
-      eState.botDefenseUntil = now + (sniperCharging ? 600 : 350);
+      // sprint outlasts the glint window. Stuck-triggered runs 1.5 s to give
+      // the strafe room to break the wedge.
+      eState.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
       eState.botDefenseStuckTicks = 0;
+      eState.botDefenseStuckMode = !!stuckTriggered;
+      // Reset the stuck window — next check starts 3 s after this entry.
+      eState.botStuckCheckX = e.x;
+      eState.botStuckCheckZ = e.z;
+      eState.botStuckCheckAt = now;
     }
   }
 
   // Extend Defense duration while fire continues (keeps the bot evading until
   // the threat actually lets up, rather than committing exactly 350 ms).
   if (eState.botState === 'defense' && underFire) {
+    // Hit during stuck-Defense → snap back to regular Defense: refresh the
+    // strafe direction and clear cover/peek so it behaves as if this hit
+    // had triggered Defense fresh.
+    if (eState.botDefenseStuckMode) {
+      const sg2 = eState.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+      let dxd2 = side.x * sg2;
+      let dzd2 = side.z * sg2;
+      if (obstacleNear && (dxd2 * (-avoid.rx) + dzd2 * (-avoid.rz) > 0.3)) {
+        dxd2 = -dxd2; dzd2 = -dzd2;
+      }
+      eState.botDefenseDirX = dxd2;
+      eState.botDefenseDirZ = dzd2;
+      eState.botDefenseUntil = now + (sniperCharging ? 600 : 350);
+      eState.botDefenseInCover = false;
+      eState.botDefenseCoverAt = 0;
+      eState.botDefensePeekDone = false;
+      eState.botDefenseStuckTicks = 0;
+      eState.botDefenseStuckMode = false;
+    }
     const minDur = sniperCharging ? 600 : 350;
     if ((eState.botDefenseUntil ?? 0) < now + minDur) {
       eState.botDefenseUntil = now + minDur;
