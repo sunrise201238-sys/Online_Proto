@@ -229,7 +229,9 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     const dy = nearest.y - hitCenter.y;
     const dz = nearest.z - hitCenter.z;
     // Spawn protection: the round passes through an invulnerable target.
-    if (now >= target.invulnerableUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
+    // Step (dodge) immunity: the round also passes through while the target is
+    // mid-step, so a well-timed dodge avoids the hit entirely.
+    if (now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
