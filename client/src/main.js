@@ -1757,8 +1757,17 @@ function updateEnemy(now) {
         const ux = mxe / ml, uz = mze / ml;
         let tx = -uz, tz = ux;
         if (tx * dir.x + tz * dir.z < 0) { tx = -tx; tz = -tz; }
-        mxe = ux + tx * 1.3;
-        mze = uz + tz * 1.3;
+        // Small ±15° random angle jitter on the committed tangent. On a cold
+        // Maze entry it's a few degrees off the player-biased pick — visually
+        // unchanged. On re-fires at the same trap spot the fresh random angle
+        // is different each time, so symmetric corners that previously latched
+        // get broken out of within 2–3 retries instead of staying stuck.
+        const jit = (Math.random() - 0.5) * (Math.PI / 6);
+        const jcos = Math.cos(jit), jsin = Math.sin(jit);
+        const jx = tx * jcos - tz * jsin;
+        const jz = tx * jsin + tz * jcos;
+        mxe = ux + jx * 1.3;
+        mze = uz + jz * 1.3;
       }
       const ml2 = Math.hypot(mxe, mze) || 1;
       eState.botMazeDirX = mxe / ml2;
