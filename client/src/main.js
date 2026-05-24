@@ -606,7 +606,7 @@ const MG_TRACER_SCALE = 0.5;
 // velocity (projectiles fly straight — homing is 0 — so no sample buffer
 // needed). Despawned bullets hand their trail to state.dyingBulletTrails so it
 // fades in place instead of vanishing the instant the bullet stops.
-const BULLET_TRAIL_FADE_MS_MG = 500;
+const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
 const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
 const BULLET_TRAIL_COLOR = 0xbbbbbb;
 const BULLET_TRAIL_OPACITY = 0.55;
@@ -614,10 +614,8 @@ const BULLET_TRAIL_OPACITY = 0.55;
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
-  // MG and shotgun trails disabled. MG's ~14 shots/sec spawn rate combined
-  // with the per-tick BufferAttribute updates caused observable framerate
-  // drops; SR (1/s spawn) keeps its trail with no measurable impact.
-  return 0;
+  if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out (8 pellets/shot = visual noise)
+  return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
 }
 
 function buildBulletTrail() {
@@ -5761,6 +5759,10 @@ function animate() {
     if (state.online) {
       syncKeyboardMovement();
       tickOnline(dt, now);
+      // Online has its own update path (no updateProjectileSystem), so the
+      // dying-trails fade has to be ticked here too — otherwise online trails
+      // sit at full opacity forever, never disposed.
+      updateDyingBulletTrails(now);
     } else if (state.running) {
       syncKeyboardMovement();
       tickAmmo(state.player, now);
