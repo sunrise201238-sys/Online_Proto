@@ -367,11 +367,13 @@ function createMech(color, unitData, addXRayGhost = false) {
   // Skipped for the enemy mech — silhouetting them through cover would defeat
   // the point of cover. Ghosts share geometry with their parent and inherit
   // transforms for free.
+  const xRayGhosts = [];
   if (addXRayGhost) {
     for (const child of root.children) {
       if (!child.isMesh) continue;
       const ghost = new THREE.Mesh(child.geometry, MECH_OCCLUSION_GHOST);
       child.add(ghost);
+      xRayGhosts.push(ghost);
     }
   }
 
@@ -397,6 +399,7 @@ function createMech(color, unitData, addXRayGhost = false) {
     legLength: 2.35,
     grounded: false,
     arms: { left: armL, right: armR },
+    xRayGhosts,
     glintMesh: null,
     state: {
       action: 'idle',
@@ -2200,6 +2203,23 @@ function updateTransforms(dt) {
   });
 }
 
+// Show the local player's X-ray silhouette ONLY when the camera-to-mech line
+// is actually blocked by an arena obstacle. When the mech is in clear view,
+// the ghost would just create self-occlusion artifacts (one body part's
+// silhouette showing through another), so we hide them entirely. Cheap —
+// one AABB scan per frame against arenaObstacles.
+function updateMechXRayVisibility() {
+  const mech = state.player;
+  if (!mech || !mech.xRayGhosts || mech.xRayGhosts.length === 0) return;
+  const bp = mech.body.position;
+  const cp = camera.position;
+  const blocked = !botHasLineOfSight(
+    { x: cp.x, y: cp.y, z: cp.z },
+    { x: bp.x, y: bp.y, z: bp.z }
+  );
+  for (const ghost of mech.xRayGhosts) ghost.visible = blocked;
+}
+
 function updateCamera() {
   const p = state.player.root.position;
   const e = state.enemy.root.position;
@@ -3125,6 +3145,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateGlintScale(state.enemy);
   updateVfx(dt);
   updateCamera();
+  updateMechXRayVisibility();
   updateHud(Date.now());
 }
 
@@ -5830,6 +5851,7 @@ function animate() {
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
+      updateMechXRayVisibility();
       updateHud();
 
       if (state.player.state.hp <= 0 || state.enemy.state.hp <= 0) {
