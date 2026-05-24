@@ -314,6 +314,25 @@ const keyState = {
   right: false
 };
 
+// Shared "see-the-mech-through-walls" silhouette material. `depthFunc:
+// GreaterDepth` flips the depth test — fragments only draw where the existing
+// depth buffer is CLOSER than the ghost, i.e. where something is occluding the
+// mech. When the mech is unobstructed, its real opaque meshes write to the
+// depth buffer first and the ghost (same world position, equal depth) fails
+// the inverted test → invisible. When a wall is between camera and mech, the
+// wall writes its closer depth, the real mech fails normal depth (so it
+// doesn't draw), but the ghost's depth is GREATER than the wall's so it
+// passes → silhouette shows through. depthWrite off keeps it from poisoning
+// the depth buffer for subsequent draws.
+const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
+  color: 0x9ec8ff,
+  transparent: true,
+  opacity: 0.45,
+  depthFunc: THREE.GreaterDepth,
+  depthWrite: false,
+  fog: false
+});
+
 function createMech(color, unitData) {
   const root = new THREE.Group();
   const armor = new THREE.MeshToonMaterial({ color });
@@ -335,6 +354,21 @@ function createMech(color, unitData) {
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
   root.add(plumeLight);
+
+  // X-ray silhouette: parent a ghost duplicate to each mesh part using a
+  // shared `depthFunc: GreaterDepth` material. The ghost only draws where its
+  // depth is GREATER than what's already in the depth buffer — i.e. where
+  // something is in FRONT of it (the mech is occluded). When the mech is
+  // unoccluded, the real mesh writes its own depth first and the ghost fails
+  // (depth == buffer, not greater) so it's invisible. Result: the mech reads
+  // as a faint coloured outline through walls, with zero visible artifact in
+  // the clear. Ghosts share geometry with their parent and inherit transforms
+  // for free (so any future arm/torso animation works without sync code).
+  for (const child of root.children) {
+    if (!child.isMesh) continue;
+    const ghost = new THREE.Mesh(child.geometry, MECH_OCCLUSION_GHOST);
+    child.add(ghost);
+  }
 
   scene.add(root);
 
