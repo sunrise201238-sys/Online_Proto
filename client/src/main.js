@@ -3257,7 +3257,8 @@ function showSelectMenu() {
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
     <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
     <div class="menu-divider">— Offline —</div>
-    ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}`;
+    ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}
+    <button data-guide class="guide-btn">Guide</button>`;
   app.appendChild(menu);
 
   menu.querySelector('button[data-online-play]').addEventListener('pointerdown', (event) => {
@@ -3270,6 +3271,11 @@ function showSelectMenu() {
     import('./online/debugPanel.js').then(({ showOnlineDebugPanel }) => {
       showOnlineDebugPanel(app);
     });
+  });
+
+  menu.querySelector('button[data-guide]').addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    showGuidePopup();
   });
 
   menu.querySelectorAll('button[data-player-unit]').forEach((button) => {
@@ -3314,6 +3320,52 @@ function showSelectMenu() {
         });
       });
     });
+  });
+}
+
+function showGuidePopup() {
+  const overlay = document.createElement('div');
+  overlay.className = 'guide-overlay';
+  overlay.innerHTML = `
+    <div class="guide-card">
+      <div class="guide-card-header">
+        <h3>Guide</h3>
+        <button class="guide-close-btn" aria-label="Close">×</button>
+      </div>
+      <div class="guide-card-body">
+        <p>Gun VS Gun — A fast-paced duel gunfight.</p>
+        <p class="guide-tagline">No aiming problem — resource management is the key.</p>
+
+        <h4>Controls</h4>
+        <ul>
+          <li>Mobile — On-screen buttons.</li>
+          <li>PC — WASD move · J fire · K sprint · L dodge · Space jump.</li>
+        </ul>
+
+        <h4>Game Mechanics</h4>
+        <ul>
+          <li>Your character auto-locks on the enemy.</li>
+          <li>Sprint and dodge help you avoid hits, but both cost stamina.</li>
+          <li>Stamina has a cap and needs time to refill.</li>
+          <li>Use cover for safe recovery and pick the best angle for your weapon.</li>
+        </ul>
+        <div class="guide-list-gap"></div>
+        <ul>
+          <li>Double-tap sprint to lock it on — handy on mobile. Mind the drain.</li>
+          <li>Character can't be hit during a dodge.</li>
+          <li>Sniper has a forced aim time. Sprint can cancel the aim and fire instantly (costs stamina).</li>
+        </ul>
+      </div>
+    </div>`;
+  app.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('.guide-close-btn').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    close();
+  });
+  overlay.addEventListener('pointerdown', (e) => {
+    if (e.target === overlay) close();
   });
 }
 
