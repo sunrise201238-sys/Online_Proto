@@ -197,6 +197,7 @@ body.pseudo-fullscreen #app {
   overscroll-behavior: contain;
   line-height: 1.55;
   font-size: 14px;
+  touch-action: pan-y !important;
 }
 .guide-card-body p { margin: 0 0 10px; }
 .guide-card-body .guide-tagline { color: #a0c0d0; margin-bottom: 18px; }
