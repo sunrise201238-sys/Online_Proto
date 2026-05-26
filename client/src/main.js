@@ -3493,7 +3493,7 @@ window.addEventListener('dblclick', (e) => {
 });
 
 window.addEventListener('touchstart', (e) => {
-  if (!e.target.closest('.menu') && !e.target.closest('.pause-btn')) e.preventDefault();
+  if (!e.target.closest('.menu') && !e.target.closest('.pause-btn') && !e.target.closest('.guide-overlay')) e.preventDefault();
 }, { passive: false });
 
 window.addEventListener('resize', () => {
