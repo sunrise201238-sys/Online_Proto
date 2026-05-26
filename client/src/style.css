@@ -150,12 +150,15 @@ body.pseudo-fullscreen #app {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y !important;
+  pointer-events: auto;
+}
+.guide-overlay-inner {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px 16px;
   box-sizing: border-box;
-  pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
 }
 .guide-card {
   background: #0e1722;
@@ -163,7 +166,6 @@ body.pseudo-fullscreen #app {
   border-radius: 12px;
   max-width: 520px;
   width: 100%;
-  margin: auto 0;
   color: #e5fbff;
   box-shadow: 0 6px 32px rgba(0, 0, 0, 0.55);
 }
