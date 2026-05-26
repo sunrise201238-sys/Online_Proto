@@ -3364,7 +3364,9 @@ function showGuidePopup() {
     e.preventDefault();
     close();
   });
-  overlay.addEventListener('pointerdown', (e) => {
+  // Use 'click' for backdrop close so a drag-to-scroll on the overlay padding
+  // doesn't accidentally dismiss the popup mid-gesture.
+  overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
   });
 }
