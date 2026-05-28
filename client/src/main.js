@@ -185,6 +185,38 @@ function getAlliesOf(mech) {
   const myTeam = getTeamOf(mech);
   return getAllFighters().filter((f) => f !== mech && getTeamOf(f) === myTeam);
 }
+function pickClosestEnemyOf(mech) {
+  if (!mech) return null;
+  const enemies = getEnemiesOf(mech).filter((f) => f.state.hp > 0);
+  if (enemies.length === 0) return null;
+  let best = enemies[0];
+  let bestDist = Infinity;
+  for (const e of enemies) {
+    const dx = e.body.position.x - mech.body.position.x;
+    const dz = e.body.position.z - mech.body.position.z;
+    const d = dx * dx + dz * dz;
+    if (d < bestDist) { bestDist = d; best = e; }
+  }
+  return best;
+}
+// Wrap-and-redirect: temporarily aliases state.player/state.enemy to (opp, me)
+// so the existing updateEnemy() body — written for the 1v1 enemy bot — can
+// drive any bot mech against any target without a 480-line refactor.
+// All references inside updateEnemy resolve dynamically against the swapped
+// values, then we restore in a finally block.
+function runBotAIForMech(me, opp, now) {
+  if (!me || !opp || me.state.hp <= 0) return;
+  const savedEnemy = state.enemy;
+  const savedPlayer = state.player;
+  state.enemy = me;
+  state.player = opp;
+  try {
+    updateEnemy(now);
+  } finally {
+    state.enemy = savedEnemy;
+    state.player = savedPlayer;
+  }
+}
 state.playerStuckSince = 0;
 // Bullet trails that outlived their projectile and are fading in place.
 state.dyingBulletTrails = [];
@@ -1182,7 +1214,10 @@ function updateProjectileSystem(dt) {
     // Spawn protection: the round passes through an invulnerable target.
     // Step (dodge) immunity: the round also passes through while the target is
     // mid-step, so a well-timed dodge avoids the hit entirely.
-    if (now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
+    // Friendly fire (2v2): if owner and target are on the same team, the
+    // round passes through. In 1v1 the team fields are unset so this is a no-op.
+    const sameTeam = p.owner?.state?.team && p.target.state.team && p.owner.state.team === p.target.state.team;
+    if (!sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
@@ -1198,20 +1233,27 @@ function updateProjectileSystem(dt) {
 }
 
 function applyRepulsion(now) {
-  const p = state.player.root.position;
-  const e = state.enemy.root.position;
-  const diff = new THREE.Vector3().subVectors(p, e);
-  const dist = diff.length();
-  if (dist >= 3) return;
-
-  diff.normalize();
-  const force = (3 - dist) * 16;
-  state.player.body.velocity.x += diff.x * force * 0.04;
-  state.player.body.velocity.z += diff.z * force * 0.04;
-  state.enemy.body.velocity.x -= diff.x * force * 0.04;
-  state.enemy.body.velocity.z -= diff.z * force * 0.04;
-  state.player.state.stackUntil = now + 220;
-  state.enemy.state.stackUntil = now + 220;
+  // Soft-collision push between any two fighters that have closed inside 3
+  // units. In 1v1 this is just player ↔ enemy. In 2v2 all six pairings are
+  // checked so allies don't clip into each other or stack on a target.
+  const fighters = getAllFighters();
+  for (let i = 0; i < fighters.length; i += 1) {
+    for (let j = i + 1; j < fighters.length; j += 1) {
+      const a = fighters[i];
+      const b = fighters[j];
+      const diff = new THREE.Vector3().subVectors(a.root.position, b.root.position);
+      const dist = diff.length();
+      if (dist >= 3) continue;
+      diff.normalize();
+      const force = (3 - dist) * 16;
+      a.body.velocity.x += diff.x * force * 0.04;
+      a.body.velocity.z += diff.z * force * 0.04;
+      b.body.velocity.x -= diff.x * force * 0.04;
+      b.body.velocity.z -= diff.z * force * 0.04;
+      a.state.stackUntil = now + 220;
+      b.state.stackUntil = now + 220;
+    }
+  }
 }
 
 function updateBoost(mech, now, action) {
@@ -6028,28 +6070,33 @@ function animate() {
       updateDyingBulletTrails(now);
     } else if (state.running) {
       syncKeyboardMovement();
-      tickAmmo(state.player, now);
-      tickAmmo(state.enemy, now);
       const playerSprintHeld = !!(input.boostHeld || input.sprintLocked);
-      tickSniperCharge(state.player, now, playerSprintHeld);
-      tickSniperCharge(state.enemy, now, false);
+      getAllFighters().forEach((m) => {
+        tickAmmo(m, now);
+        tickSniperCharge(m, now, m === state.player ? playerSprintHeld : false);
+      });
       updatePlayer(now);
-      updateEnemy(now);
+      if (state.mode === '2v2') {
+        runBotAIForMech(state.enemy, pickClosestEnemyOf(state.enemy), now);
+        runBotAIForMech(state.ally, pickClosestEnemyOf(state.ally), now);
+        runBotAIForMech(state.enemy2, pickClosestEnemyOf(state.enemy2), now);
+      } else {
+        updateEnemy(now);
+      }
       applyRepulsion(now);
-      const playerPrev = { x: state.player.body.position.x, z: state.player.body.position.z };
-      const enemyPrev = { x: state.enemy.body.position.x, z: state.enemy.body.position.z };
+      const prevPositions = getAllFighters().map((m) => ({
+        m, x: m.body.position.x, z: m.body.position.z
+      }));
       world.step(1 / 60, dt, 3);
-      resolveUnitObstacleCollisions(state.player, playerPrev);
-      resolveUnitObstacleCollisions(state.enemy, enemyPrev);
+      prevPositions.forEach(({ m, x, z }) => resolveUnitObstacleCollisions(m, { x, z }));
 
       updateTransforms(dt);
       updateLocksAndReticle();
-      applyImmunityGlow(state.player, now < state.player.state.invulnerableUntil);
-      applyImmunityGlow(state.enemy, now < state.enemy.state.invulnerableUntil);
-      tickGlintRemoval(state.player);
-      tickGlintRemoval(state.enemy);
-      updateGlintScale(state.player);
-      updateGlintScale(state.enemy);
+      getAllFighters().forEach((m) => {
+        applyImmunityGlow(m, now < m.state.invulnerableUntil);
+        tickGlintRemoval(m);
+        updateGlintScale(m);
+      });
       updateProjectileSystem(dt);
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
@@ -6057,7 +6104,13 @@ function animate() {
       updateMechXRayVisibility();
       updateHud();
 
-      if (state.player.state.hp <= 0 || state.enemy.state.hp <= 0) {
+      // Win condition. 1v1: existing player-vs-enemy check. 2v2: team A
+      // (player + ally) wins when team B has both at 0 HP, and vice versa.
+      if (state.mode === '2v2') {
+        const teamADead = state.player.state.hp <= 0 && (state.ally?.state.hp ?? 0) <= 0;
+        const teamBDead = state.enemy.state.hp <= 0 && (state.enemy2?.state.hp ?? 0) <= 0;
+        if (teamADead || teamBDead) showEndMenu(teamBDead);
+      } else if (state.player.state.hp <= 0 || state.enemy.state.hp <= 0) {
         showEndMenu(state.enemy.state.hp <= 0);
       }
     }
