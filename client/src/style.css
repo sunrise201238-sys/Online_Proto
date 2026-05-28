@@ -73,6 +73,14 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   stroke-dashoffset: 289.03;
 }
 .buttons .btn-melee { right: calc(var(--btn-size) + var(--btn-gap)); bottom: calc(var(--btn-size) + var(--btn-gap)); }
+.buttons .btn-target {
+  right: calc(var(--btn-size) + var(--btn-gap));
+  bottom: calc(var(--btn-size) + var(--btn-gap));
+  font-size: clamp(11px, 1.4vw, 14px);
+  letter-spacing: 1px;
+  background: rgba(45, 72, 110, 0.45);
+  border-color: rgba(170, 200, 255, 0.75);
+}
 .pause-btn {
   position: absolute;
   top: 18px;

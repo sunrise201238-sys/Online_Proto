@@ -149,6 +149,7 @@ const state = {
   enemy: null,
   ally: null,                   // 2v2: your bot ally mech (null in 1v1)
   enemy2: null,                 // 2v2: second enemy bot mech (null in 1v1)
+  playerCurrentTarget: null,    // mech the player is currently aiming at (cycle via target switch)
   projectiles: [],
   hud: null,
   reticle: null,
@@ -216,6 +217,25 @@ function runBotAIForMech(me, opp, now) {
     state.enemy = savedEnemy;
     state.player = savedPlayer;
   }
+}
+// Cycle the player's lock target between the live enemies. In 1v1 there's
+// only one — no-op. In 2v2 it flips between enemy and enemy2 (skipping any
+// that have hit 0 HP). Reparents the reticle sprite to the new target.
+function cyclePlayerTarget() {
+  if (!state.player) return;
+  const enemies = getEnemiesOf(state.player).filter((f) => f.state.hp > 0);
+  if (enemies.length === 0) return;
+  const current = state.playerCurrentTarget;
+  const idx = enemies.indexOf(current);
+  const next = enemies[((idx >= 0 ? idx : -1) + 1) % enemies.length];
+  if (next === current) return;
+  state.playerCurrentTarget = next;
+  if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+  if (state.reticle && next) next.root.add(state.reticle);
+  // Reset the firing-flash tracker so the reticle starts green on the new
+  // target rather than red-flashing from stale lastFireAt comparison.
+  state.reticleLastEnemyFireAt = next.state.lastFireAt;
+  state.reticleEnemyFiringUntil = 0;
 }
 state.playerStuckSince = 0;
 // Bullet trails that outlived their projectile and are fading in place.
@@ -602,6 +622,19 @@ function setupHUD() {
     }
     hud.querySelector('#buttons').appendChild(b);
   });
+  // 2v2 only: target switch button above SHOOT. Cycles state.playerCurrentTarget
+  // between the live enemies. Single-tap action — no held state.
+  if (state.mode === '2v2') {
+    const tb = document.createElement('button');
+    tb.dataset.k = 'target';
+    tb.className = 'btn-target';
+    tb.textContent = 'TARGET';
+    hud.querySelector('#buttons').appendChild(tb);
+    tb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      cyclePlayerTarget();
+    });
+  }
 
   const joy = hud.querySelector('#joy');
   const stick = joy.querySelector('.stick');
@@ -1421,9 +1454,22 @@ function updatePlayer(now) {
     input.stepTap = false;
   }
 
+  // Resolve the current lock target. Defaults to state.enemy (1v1) but can
+  // be the second enemy in 2v2 if the player switched targets. If the current
+  // target died, fall back to the first live enemy.
+  let pTarget = state.playerCurrentTarget ?? state.enemy;
+  if (pTarget && pTarget.state.hp <= 0) {
+    const live = getEnemiesOf(state.player).find((f) => f.state.hp > 0);
+    if (live) {
+      state.playerCurrentTarget = live;
+      pTarget = live;
+      if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+      state.reticle && live.root.add(state.reticle);
+    }
+  }
   if (input.shootTap) {
     input.boost = false;
-    attemptFire(state.player, state.enemy, now);
+    attemptFire(state.player, pTarget, now);
     triggerEnemyEvasion(now);
     if (action === 'idle') action = 'shoot';
     input.shootTap = false;
@@ -1431,7 +1477,7 @@ function updatePlayer(now) {
   // Player MG: continuous fire while shoot is held — no burst cap (cooldown still gates rate).
   if (input.shootHold && state.player.unit.spreadCount === 1 && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
-    attemptFire(state.player, state.enemy, now);
+    attemptFire(state.player, pTarget, now);
     if (state.player.state.lastFireAt !== firedAt) {
       triggerEnemyEvasion(now);
       if (action === 'idle') action = 'shoot';
@@ -2239,16 +2285,20 @@ function applyImmunityGlow(mech, immune) {
 
 function updateLocksAndReticle() {
   const nowMs = performance.now();
-  const dist = state.player.root.position.distanceTo(state.enemy.root.position);
+  // Reticle / lock evaluation is always against the player's CURRENT target,
+  // not necessarily state.enemy. In 2v2 the player can flip between enemies
+  // with the target switch button.
+  const tgt = state.playerCurrentTarget ?? state.enemy;
+  const dist = state.player.root.position.distanceTo(tgt.root.position);
   state.player.state.redLock = dist <= state.player.unit.lockRange;
-  state.enemy.state.redLock = dist <= state.enemy.unit.lockRange;
+  // Enemy bots compute their own redLock against their own targets via the AI
+  // loop's runBotAIForMech swap; here we only refresh the primary enemy's
+  // redLock against the player (1v1 parity, harmless in 2v2).
+  state.enemy.state.redLock = state.player.root.position.distanceTo(state.enemy.root.position) <= state.enemy.unit.lockRange;
 
-  // Reticle is GREEN by default and turns RED only while the enemy is firing.
-  // A shot is detected as a forward jump in the enemy's lastFireAt rather than
-  // a wall-clock window: lastFireAt runs on performance.now() offline but
-  // mirrors the server's Date.now() online, so comparing it against the render
-  // clock directly would be meaningless in online matches.
-  const enemyFireAt = state.enemy.state.lastFireAt;
+  // Reticle is GREEN by default and turns RED only while the current target is
+  // firing. lastFireAt is monotonic so we detect any forward jump.
+  const enemyFireAt = tgt.state.lastFireAt;
   if (state.reticleLastEnemyFireAt != null && enemyFireAt > state.reticleLastEnemyFireAt) {
     state.reticleEnemyFiringUntil = nowMs + RETICLE_FIRING_FLASH_MS;
   }
@@ -2257,11 +2307,7 @@ function updateLocksAndReticle() {
 
   state.reticle.position.set(0, 0.2, 0);
   state.reticle.material.color.set(enemyFiring ? 0xff5f72 : 0x7effbd);
-  // Scale the lock ring up with distance so it stays readable on long-range maps
-  // (Streets/Square). Sprites are world-sized, so screen size = world-size / distance —
-  // multiplying by distance keeps screen size roughly constant, with a floor for very
-  // close range and a generous ceiling so far-away locks remain easy to read.
-  const camDist = camera.position.distanceTo(state.enemy.root.position);
+  const camDist = camera.position.distanceTo(tgt.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
   state.reticle.scale.setScalar(6.1 * distScale);
   state.reticle.quaternion.copy(camera.quaternion);
@@ -2433,6 +2479,7 @@ function cleanupMatch() {
   state.enemy = null;
   state.ally = null;
   state.enemy2 = null;
+  state.playerCurrentTarget = null;
   state.projectiles.forEach((p) => {
     disposeProjectileMesh(p.mesh);
     if (p.trail) disposeBulletTrail(p.trail);
@@ -2506,6 +2553,9 @@ function startMatch() {
   if (state.enemy2) state.enemy2.state.nextFireAt = now + 650;
   input.shootHold = false;
   input.shootTap = false;
+  // Default the player's lock target to the first enemy. In 2v2 this can be
+  // cycled to enemy2 via the target switch (U on PC, target button on mobile).
+  state.playerCurrentTarget = state.enemy;
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
   // Fresh match — seed the firing tracker so the reticle starts green.
@@ -3658,6 +3708,7 @@ window.addEventListener('keydown', (e) => {
   }
   else if (k === 'l') input.stepTap = true;
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
+  else if (k === 'u') cyclePlayerTarget();
 });
 
 window.addEventListener('keyup', (e) => {
