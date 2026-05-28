@@ -140,6 +140,9 @@ body.pseudo-fullscreen #app {
 .menu .menu-divider { color: #6b7d92; font-size: 13px; letter-spacing: 1px; margin: 8px 0 4px; }
 .menu button:disabled { opacity: 0.4; cursor: not-allowed; }
 .menu .guide-btn { background: #1a3445; border-color: #4a809a; color: #c0e8ff; margin-top: 22px; }
+.menu .mode-chip { display: flex; gap: 6px; margin: 0 0 6px; }
+.menu .mode-chip button { width: 90px; padding: 8px 0; border-radius: 18px; border: 1px solid #3a5566; background: #0e1822; color: #9bb8c8; font-weight: 600; font-size: 13px; letter-spacing: 1px; }
+.menu .mode-chip button.mode-active { background: #1a3a52; border-color: #6ab0d4; color: #d7f6ff; }
 
 .guide-overlay {
   position: fixed;

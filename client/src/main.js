@@ -139,11 +139,16 @@ const MAP_DATA = {
 
 const state = {
   phase: 'select',
+  mode: '1v1',                  // '1v1' | '2v2'
   playerUnitKey: 'unit1',
   enemyUnitKey: 'unit2',
+  allyUnitKey: 'unit1',         // 2v2: your bot ally's unit
+  enemy2UnitKey: 'unit2',       // 2v2: second enemy bot's unit
   mapKey: 'arena1',
   player: null,
   enemy: null,
+  ally: null,                   // 2v2: your bot ally mech (null in 1v1)
+  enemy2: null,                 // 2v2: second enemy bot mech (null in 1v1)
   projectiles: [],
   hud: null,
   reticle: null,
@@ -155,6 +160,31 @@ const state = {
   matchStartAt: 0
 };
 state.dummyMode = false;
+
+// ---- 2v2 team helpers ----
+// All four fighters carry a `team` field on their .state object: 'A' for the
+// player's side (player + ally), 'B' for the opposing side (enemy + enemy2).
+// In 1v1, ally and enemy2 are null and the helpers degrade gracefully.
+
+function getAllFighters() {
+  const out = [];
+  if (state.player) out.push(state.player);
+  if (state.enemy) out.push(state.enemy);
+  if (state.ally) out.push(state.ally);
+  if (state.enemy2) out.push(state.enemy2);
+  return out;
+}
+function getTeamOf(mech) {
+  return mech?.state?.team ?? (mech === state.player || mech === state.ally ? 'A' : 'B');
+}
+function getEnemiesOf(mech) {
+  const myTeam = getTeamOf(mech);
+  return getAllFighters().filter((f) => f !== mech && getTeamOf(f) !== myTeam);
+}
+function getAlliesOf(mech) {
+  const myTeam = getTeamOf(mech);
+  return getAllFighters().filter((f) => f !== mech && getTeamOf(f) === myTeam);
+}
 state.playerStuckSince = 0;
 // Bullet trails that outlived their projectile and are fading in place.
 state.dyingBulletTrails = [];
@@ -2196,7 +2226,7 @@ function updateLocksAndReticle() {
 }
 
 function updateTransforms(dt) {
-  [state.player, state.enemy].forEach((m) => {
+  getAllFighters().forEach((m) => {
     const groundY = getGroundLevelY(m);
 
     if (m.state.airborne) {
@@ -2224,7 +2254,7 @@ function updateTransforms(dt) {
   state.player.root.rotation.y = Math.atan2(pToE.x, pToE.z);
   state.enemy.root.rotation.y = Math.atan2(-pToE.x, -pToE.z);
 
-  [state.player, state.enemy].forEach((m) => {
+  getAllFighters().forEach((m) => {
     m.arms.left.rotation.x = 0;
     m.arms.right.rotation.x = 0;
     m.arms.left.rotation.z = 0;
@@ -2239,7 +2269,7 @@ function updateTransforms(dt) {
     m.trail.push({ mesh: puff, life: 0.2 });
   });
 
-  [state.player, state.enemy].forEach((m) => {
+  getAllFighters().forEach((m) => {
     m.trail = m.trail.filter((t) => {
       t.life -= 1 / 60;
       t.mesh.material.opacity = Math.max(0, t.life * 1.6);
@@ -2349,7 +2379,7 @@ function cleanupMatch() {
     state.online = null;
     hideOnlineOverlay();
   }
-  [state.player, state.enemy].forEach((m) => {
+  getAllFighters().forEach((m) => {
     if (!m) return;
     disposeGlintImmediate(m);
     removeImmunityAuraFromMech(m);
@@ -2357,6 +2387,10 @@ function cleanupMatch() {
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
   });
+  state.player = null;
+  state.enemy = null;
+  state.ally = null;
+  state.enemy2 = null;
   state.projectiles.forEach((p) => {
     disposeProjectileMesh(p.mesh);
     if (p.trail) disposeBulletTrail(p.trail);
@@ -2377,6 +2411,16 @@ function startMatch() {
   renderer.domElement.style.pointerEvents = 'auto';
   state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey], true);
   state.enemy = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey]);
+  state.player.state.team = 'A';
+  state.enemy.state.team = 'B';
+  if (state.mode === '2v2') {
+    // Ally: cyan-tinted so the player can tell it apart from themselves.
+    // Enemy 2: paler pink so two enemies are visually distinguishable.
+    state.ally = createMech(0x86f7c2, UNIT_DATA[state.allyUnitKey]);
+    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[state.enemy2UnitKey]);
+    state.ally.state.team = 'A';
+    state.enemy2.state.team = 'B';
+  }
   if (state.mapKey === 'arena2') {
     // Streets: spawn on opposite ends of the cross road (X axis), not the bridge lane.
     state.player.body.position.set(-108, 2.45, 0);
@@ -2401,14 +2445,23 @@ function startMatch() {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
   }
+  // 2v2 placement: drop ally next to the player, enemy2 next to the enemy,
+  // each offset 12 units along Z. Keeps each team grouped at their map corner
+  // without overlapping or requiring per-map spawn data.
+  if (state.mode === '2v2') {
+    const pp = state.player.body.position;
+    state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
+    const ep = state.enemy.body.position;
+    state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
+  }
   buildArenaForMap(state.mapKey);
   const now = performance.now();
-  state.player.state.lastFireAt = now;
-  state.enemy.state.lastFireAt = now;
+  getAllFighters().forEach((m) => {
+    m.state.lastFireAt = now;
+    m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
+  });
   state.enemy.state.nextFireAt = now + 650;
-  // Spawn protection — both units are immune for the first SPAWN_IMMUNITY_MS.
-  state.player.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
-  state.enemy.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
+  if (state.enemy2) state.enemy2.state.nextFireAt = now + 650;
   input.shootHold = false;
   input.shootTap = false;
   state.reticle = makeReticleSprite();
@@ -3249,17 +3302,29 @@ function showSelectMenu() {
   renderer.domElement.style.pointerEvents = 'none';
 
   const unitEntries = Object.entries(UNIT_DATA);
-  const mapEntries = Object.entries(MAP_DATA);
 
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h2>Select Your Unit</h2>
+    <div class="mode-chip">
+      <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
+      <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
+    </div>
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
     <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
     <div class="menu-divider">— Offline —</div>
     ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}
     <button data-guide class="guide-btn">Guide</button>`;
   app.appendChild(menu);
+
+  menu.querySelectorAll('.mode-chip button').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      state.mode = btn.dataset.mode;
+      menu.querySelectorAll('.mode-chip button').forEach((b) => b.classList.remove('mode-active'));
+      btn.classList.add('mode-active');
+    });
+  });
 
   menu.querySelector('button[data-online-play]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -3283,42 +3348,73 @@ function showSelectMenu() {
       event.preventDefault();
       state.playerUnitKey = button.dataset.playerUnit;
       clearMenus();
+      proceedAfterPlayerPick();
+    });
+  });
+}
 
-      const enemyMenu = document.createElement('div');
-      enemyMenu.className = 'menu';
-      enemyMenu.innerHTML = `<h2>Select Enemy Unit</h2>${unitEntries.map(([id, unit]) => `<button data-enemy-unit="${id}">${unit.name}</button>`).join('')}`;
-      app.appendChild(enemyMenu);
-
-      enemyMenu.querySelectorAll('button[data-enemy-unit]').forEach((enemyButton) => {
-        enemyButton.addEventListener('pointerdown', (enemyEvent) => {
-          enemyEvent.preventDefault();
-          state.enemyUnitKey = enemyButton.dataset.enemyUnit;
-          clearMenus();
-
-          const mapMenu = document.createElement('div');
-          mapMenu.className = 'menu';
-          mapMenu.innerHTML = `<h2>Select Map</h2>
-            <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 14px;color:#d8fcff;">
-              <input type="checkbox" id="dummy-mode-toggle" />
-              Dummy (BOT projectile damage = 0)
-            </label>
-            ${mapEntries.map(([id, map]) => `<button data-map="${id}">${map.name}</button>`).join('')}`;
-          app.appendChild(mapMenu);
-          const dummyModeToggle = mapMenu.querySelector('#dummy-mode-toggle');
-          dummyModeToggle.checked = !!state.dummyMode;
-          dummyModeToggle.addEventListener('change', () => {
-            state.dummyMode = dummyModeToggle.checked;
-          });
-
-          mapMenu.querySelectorAll('button[data-map]').forEach((mapButton) => {
-            mapButton.addEventListener('pointerdown', (mapEvent) => {
-              mapEvent.preventDefault();
-              state.mapKey = mapButton.dataset.map;
-              startMatch();
-            });
-          });
-        });
+// 2v2 flow: player pick → (ally pick) → enemy pick → (enemy2 pick) → map.
+// In 1v1 the bracketed steps are skipped and the chain is identical to before.
+function proceedAfterPlayerPick() {
+  if (state.mode === '2v2') {
+    showUnitPicker('Select Ally Unit', (key) => {
+      state.allyUnitKey = key;
+      proceedToEnemyPick();
+    });
+  } else {
+    proceedToEnemyPick();
+  }
+}
+function proceedToEnemyPick() {
+  showUnitPicker('Select Enemy Unit', (key) => {
+    state.enemyUnitKey = key;
+    if (state.mode === '2v2') {
+      showUnitPicker('Select Enemy 2 Unit', (key2) => {
+        state.enemy2UnitKey = key2;
+        showMapPicker();
       });
+    } else {
+      showMapPicker();
+    }
+  });
+}
+function showUnitPicker(title, onPick) {
+  const unitEntries = Object.entries(UNIT_DATA);
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = `<h2>${title}</h2>${unitEntries.map(([id, unit]) => `<button data-unit-pick="${id}">${unit.name}</button>`).join('')}`;
+  app.appendChild(menu);
+  menu.querySelectorAll('button[data-unit-pick]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const key = btn.dataset.unitPick;
+      clearMenus();
+      onPick(key);
+    });
+  });
+}
+function showMapPicker() {
+  const mapEntries = Object.entries(MAP_DATA);
+  const mapMenu = document.createElement('div');
+  mapMenu.className = 'menu';
+  mapMenu.innerHTML = `<h2>Select Map</h2>
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 14px;color:#d8fcff;">
+      <input type="checkbox" id="dummy-mode-toggle" />
+      Dummy (BOT projectile damage = 0)
+    </label>
+    ${mapEntries.map(([id, map]) => `<button data-map="${id}">${map.name}</button>`).join('')}`;
+  app.appendChild(mapMenu);
+  const dummyModeToggle = mapMenu.querySelector('#dummy-mode-toggle');
+  dummyModeToggle.checked = !!state.dummyMode;
+  dummyModeToggle.addEventListener('change', () => {
+    state.dummyMode = dummyModeToggle.checked;
+  });
+
+  mapMenu.querySelectorAll('button[data-map]').forEach((mapButton) => {
+    mapButton.addEventListener('pointerdown', (mapEvent) => {
+      mapEvent.preventDefault();
+      state.mapKey = mapButton.dataset.map;
+      startMatch();
     });
   });
 }
