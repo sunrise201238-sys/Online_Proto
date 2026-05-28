@@ -600,9 +600,13 @@ function setupHUD() {
   if (state.hud) state.hud.remove();
   const hud = document.createElement('div');
   hud.className = 'touch-hud';
+  const teamBarsHtml = state.mode === '2v2' ? `
+    <div class="ally-health"><div id="ally-health-fill"></div></div>
+    <div class="enemy2-health"><div id="enemy2-health-fill"></div></div>` : '';
   hud.innerHTML = `
     <div class="health"><div id="health-fill"></div></div>
     <div class="enemy-health"><div id="enemy-health-fill"></div></div>
+    ${teamBarsHtml}
     <div class="boost"><div id="boost-fill"></div></div>
     <div class="joy" id="joy"><div class="stick"></div></div>
     <div class="buttons" id="buttons"></div>
@@ -717,6 +721,8 @@ function setupHUD() {
   return {
     hp: hud.querySelector('#health-fill'),
     enemyHp: hud.querySelector('#enemy-health-fill'),
+    allyHp: hud.querySelector('#ally-health-fill'),       // 2v2 only, null in 1v1
+    enemy2Hp: hud.querySelector('#enemy2-health-fill'),   // 2v2 only, null in 1v1
     boost: hud.querySelector('#boost-fill'),
     shootBtn: hud.querySelector('.btn-shoot'),
     ammoCount: hud.querySelector('.btn-shoot .ammo-count'),
@@ -2415,6 +2421,14 @@ function updateHud(now = performance.now()) {
   const playerBoostMax = state.player.unit.boostCap ?? BOOST_CAP;
   hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
+  if (hudRefs.allyHp && state.ally) {
+    const allyHpMax = state.ally.unit.hp ?? MAX_HP;
+    hudRefs.allyHp.style.width = `${(state.ally.state.hp / allyHpMax) * 100}%`;
+  }
+  if (hudRefs.enemy2Hp && state.enemy2) {
+    const enemy2HpMax = state.enemy2.unit.hp ?? MAX_HP;
+    hudRefs.enemy2Hp.style.width = `${(state.enemy2.state.hp / enemy2HpMax) * 100}%`;
+  }
   hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
   if (state.speedLines) state.speedLines.style.opacity = '0';
