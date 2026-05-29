@@ -1275,7 +1275,9 @@ function applyRepulsion(now) {
   // Soft-collision push between any two fighters that have closed inside 3
   // units. In 1v1 this is just player ↔ enemy. In 2v2 all six pairings are
   // checked so allies don't clip into each other or stack on a target.
-  const fighters = getAllFighters();
+  // Dead fighters are excluded — they're invisible and shouldn't shove
+  // live mechs around.
+  const fighters = getAllFighters().filter((m) => m.state.hp > 0);
   for (let i = 0; i < fighters.length; i += 1) {
     for (let j = i + 1; j < fighters.length; j += 1) {
       const a = fighters[i];
@@ -1334,6 +1336,24 @@ function updateBoost(mech, now, action) {
 }
 
 function updatePlayer(now) {
+  // Dead player → no input, no movement, no firing. The mech is already
+  // hidden by updateTransforms; this gate stops all gameplay-side effects so
+  // the player can't control / fire while spectating their ally.
+  if (state.player.state.hp <= 0) {
+    state.player.body.velocity.x = 0;
+    state.player.body.velocity.z = 0;
+    state.player.state.momentumVX = 0;
+    state.player.state.momentumVZ = 0;
+    state.player.state.action = 'idle';
+    // Drop any pending input flags so they don't fire when (if ever) we
+    // come back. Match ends when the whole team dies, so this is mostly
+    // belt-and-suspenders.
+    input.shootTap = false;
+    input.shootHold = false;
+    input.stepTap = false;
+    input.jump = false;
+    return;
+  }
   if (state.player.state.sniperChargeTarget) {
     state.player.body.velocity.x = 0;
     state.player.body.velocity.z = 0;
@@ -2291,6 +2311,14 @@ function applyImmunityGlow(mech, immune) {
 
 function updateLocksAndReticle() {
   const nowMs = performance.now();
+  // When the player is dead, hide the reticle entirely (spectating ally) —
+  // it'd otherwise hover on whatever lock target the player had at death,
+  // which doesn't reflect the ally's combat.
+  if (state.player.state.hp <= 0) {
+    if (state.reticle) state.reticle.visible = false;
+    return;
+  }
+  if (state.reticle) state.reticle.visible = true;
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button.
@@ -2398,11 +2426,22 @@ function updateMechXRayVisibility() {
 }
 
 function updateCamera() {
-  // Camera frames the player and their CURRENT target (not necessarily
-  // state.enemy). In 2v2 the target switch swings the camera to the other
-  // enemy along with the reticle / fire / lock.
-  const tgt = state.playerCurrentTarget ?? state.enemy;
-  const p = state.player.root.position;
+  // Camera frames a LIVE fighter on the player's team and that fighter's
+  // current target. Normally that's the player + state.playerCurrentTarget.
+  // When the player has died but their ally is still up, the camera switches
+  // to the ally (spectator mode) and follows whatever enemy the ally is
+  // currently fighting (its closest live opponent).
+  const playerAlive = (state.player?.state.hp ?? 0) > 0;
+  const allyAlive = (state.ally?.state.hp ?? 0) > 0;
+  const cam = playerAlive ? state.player : (allyAlive ? state.ally : state.player);
+  let tgt;
+  if (cam === state.player) {
+    tgt = state.playerCurrentTarget ?? state.enemy;
+  } else {
+    tgt = pickClosestEnemyOf(cam) ?? state.enemy;
+  }
+  if (!cam || !tgt) return;
+  const p = cam.root.position;
   const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
   const side = new THREE.Vector3(-line.z, 0, line.x);
