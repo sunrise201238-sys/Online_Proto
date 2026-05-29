@@ -2321,6 +2321,9 @@ function updateLocksAndReticle() {
 
 function updateTransforms(dt) {
   getAllFighters().forEach((m) => {
+    // Hide dead fighters' models. Keeps the body / state intact so cleanup
+    // and AI checks (hp<=0 guards in pickClosestEnemyOf etc.) keep working.
+    m.root.visible = m.state.hp > 0;
     const groundY = getGroundLevelY(m);
 
     if (m.state.airborne) {
@@ -2714,6 +2717,9 @@ function mirrorFighterToMech(fighter, mech) {
   mech.body.position.set(fighter.pos.x, fighter.pos.y, fighter.pos.z);
   mech.root.position.set(fighter.pos.x, fighter.pos.y + mech.modelYOffset, fighter.pos.z);
   mech.grounded = !fighter.airborne;
+  // Dead fighters disappear visually. The body / root / sim state stay in
+  // memory so refs / IDs remain stable, only the rendered model hides.
+  mech.root.visible = fighter.hp > 0;
 
   const s = mech.state;
   s.action = fighter.action;
