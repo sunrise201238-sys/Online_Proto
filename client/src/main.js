@@ -2899,7 +2899,12 @@ function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
   // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended', and
   // re-drawn by refreshEndMenuIfStale when the opponent's rematch status
   // changes. The new match doesn't start until BOTH players click Rematch.
-  const win = winnerId === myPlayerId;
+  //
+  // winnerId is either a slot id ('p1'/'p2' for 1v1) OR a team letter
+  // ('A'/'B' for 2v2). Detect by string content.
+  const isTeamWinner = winnerId === 'A' || winnerId === 'B';
+  const myTeam = ONLINE_SLOT_IDS.includes(myPlayerId) ? teamOfSlot(myPlayerId) : null;
+  const win = isTeamWinner ? (winnerId === myTeam) : (winnerId === myPlayerId);
   const tie = winnerId == null;
   const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
   const oppReady = rematchRequested?.[oppId] === true;
@@ -3237,34 +3242,98 @@ function showOnlineMapPicker(onl) {
 function showOnlineWaitingOpp(onl, conn) {
   const cfg = conn.getLobbyConfig();
   const myId = onl.myPlayerId;
-  const oppId = (myId === 'p1') ? 'p2' : 'p1';
+  const mode = cfg?.mode ?? '1v1';
+  const isHost = myId === 'p1';
+  const slots = mode === '2v2' ? ONLINE_SLOT_IDS : ONLINE_SLOT_IDS.slice(0, 2);
+  const occupied = new Set(cfg?.occupied ?? []);
   const myCfg = cfg?.config?.[myId] ?? {};
-  const oppCfg = cfg?.config?.[oppId] ?? {};
-  const oppUnit = oppCfg.unitKey ? UNIT_DATA[oppCfg.unitKey]?.name : null;
-  const mapKey = myCfg.mapKey || oppCfg.mapKey;
+  const mapKey = myCfg.mapKey || cfg?.config?.p1?.mapKey;
   const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
 
+  // Headline text. 2v2 host: prompt to start. 2v2 non-host: waiting for host
+  // to start. 1v1: existing text driven off opp picks.
   let waitingText;
-  if (!oppCfg.unitKey) {
-    waitingText = myId === 'p1' ? 'Waiting for opponent to pick unit…' : 'Waiting for host to pick unit…';
-  } else if (myId === 'p2' && !oppCfg.mapKey) {
-    waitingText = 'Waiting for host to pick map…';
+  if (mode === '2v2') {
+    if (isHost) {
+      if (!myCfg.unitKey) waitingText = 'Pick your unit…';
+      else if (!myCfg.mapKey) waitingText = 'Pick a map…';
+      else waitingText = 'Lobby — start when ready';
+    } else {
+      waitingText = 'Waiting for host to start…';
+    }
   } else {
-    waitingText = 'Starting…';
+    const oppId = isHost ? 'p2' : 'p1';
+    const oppCfg = cfg?.config?.[oppId] ?? {};
+    if (!oppCfg.unitKey) waitingText = isHost ? 'Waiting for opponent to pick unit…' : 'Waiting for host to pick unit…';
+    else if (!isHost && !oppCfg.mapKey) waitingText = 'Waiting for host to pick map…';
+    else waitingText = 'Starting…';
   }
+
+  // Roster row HTML — one per active slot. Marks YOU, shows unit pick or
+  // "(empty — bot fill)" for empty slots.
+  const rosterRows = slots.map((s) => {
+    const team = teamOfSlot(s);
+    const isMe = s === myId;
+    const isOccupied = occupied.has(s);
+    const slotCfg = cfg?.config?.[s] ?? {};
+    const unitName = slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null;
+    let status;
+    if (isMe) status = unitName ? `You — ${unitName}` : 'You';
+    else if (isOccupied) status = unitName ? `Player — ${unitName}` : 'Player (picking…)';
+    else status = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
+    return `<div class="roster-row roster-team-${team}">
+      <span class="roster-slot">${s}</span>
+      <span class="roster-team">Team ${team}</span>
+      <span class="roster-status">${status}</span>
+    </div>`;
+  }).join('');
+
+  // Host-only mode toggle (only enabled when no match is active — we're in
+  // 'waiting-opp' phase, so that's already true).
+  const modeChip = isHost ? `
+    <div class="mode-chip">
+      <button data-set-mode="1v1" class="${mode === '1v1' ? 'mode-active' : ''}">1v1</button>
+      <button data-set-mode="2v2" class="${mode === '2v2' ? 'mode-active' : ''}">2v2</button>
+    </div>` : `
+    <div class="menu-divider">Mode: ${mode}</div>`;
+
+  // 2v2 host's explicit Start Now button. Only enabled once they've picked
+  // unit + map (otherwise the server rejects).
+  const canStart = mode === '2v2' && isHost && !!myCfg.unitKey && !!myCfg.mapKey;
+  const startBtnHtml = mode === '2v2' && isHost
+    ? `<button id="online-start-now" class="online-play-btn"${canStart ? '' : ' disabled'}>Start Match</button>`
+    : '';
 
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `
     <h2>${waitingText}</h2>
+    ${modeChip}
+    <div class="online-roster">${rosterRows}</div>
     <div class="online-status">
-      <div><span class="lbl">Your unit:</span> <span class="val">${UNIT_DATA[myCfg.unitKey]?.name ?? '—'}</span></div>
-      <div><span class="lbl">Opp unit:</span> <span class="val">${oppUnit ?? '—'}</span></div>
       <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
     </div>
+    ${startBtnHtml}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
+
+  menu.querySelectorAll('button[data-set-mode]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const newMode = btn.dataset.setMode;
+      if (newMode === mode) return;
+      onl.conn.sendSetMode(newMode);
+    });
+  });
+  const startBtn = menu.querySelector('#online-start-now');
+  if (startBtn) {
+    startBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (startBtn.disabled) return;
+      onl.conn.sendStartNow();
+    });
+  }
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     showSelectMenu();
@@ -3525,7 +3594,13 @@ function tickOnline(dt, _now) {
 
 function refreshWaitingOppIfStale(onl, conn) {
   const cfg = conn.getLobbyConfig();
-  const sig = JSON.stringify(cfg?.config ?? {});
+  // Include mode + occupied so a mode toggle or another player joining
+  // triggers a re-render (otherwise just the config object stays the same).
+  const sig = JSON.stringify({
+    config: cfg?.config ?? {},
+    mode: cfg?.mode ?? '1v1',
+    occupied: cfg?.occupied ?? []
+  });
   if (onl.lastWaitingSig === sig) return;
   onl.lastWaitingSig = sig;
   // Rebuild the menu in place.

@@ -248,6 +248,18 @@ body.pseudo-fullscreen #app {
   border-radius: 10px;
 }
 
+/* 2v2 online roster on the lobby (waiting-opp) screen. One row per slot. */
+.menu .online-roster { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 8px 10px; background: rgba(20, 30, 44, 0.5); border-radius: 8px; color: #d7f6ff; font-size: 13px; box-sizing: border-box; }
+.menu .online-roster .roster-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; }
+.menu .online-roster .roster-team-A { border-left: 3px solid #62d7ff; padding-left: 8px; }
+.menu .online-roster .roster-team-B { border-left: 3px solid #ff7ad5; padding-left: 8px; }
+.menu .online-roster .roster-slot { width: 22px; color: #8eb6c8; font-weight: 700; }
+.menu .online-roster .roster-team { color: #8eb6c8; font-size: 11px; }
+.menu .online-roster .roster-status { flex: 1; text-align: right; color: #e5fbff; }
+.menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 6px 10px; background: rgba(20, 30, 44, 0.4); border-radius: 8px; color: #d7f6ff; font-size: 12px; box-sizing: border-box; }
+.menu .online-status .lbl { color: #8eb6c8; margin-right: 4px; }
+.menu .online-status .val { color: #e5fbff; }
+
 .online-debug-panel { gap: 10px; }
 .online-debug-panel .online-status { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 520px; padding: 12px; background: rgba(20, 30, 44, 0.6); border-radius: 8px; color: #d7f6ff; font-size: 14px; box-sizing: border-box; }
 .online-debug-panel .online-status .lbl { display: inline-block; width: 90px; color: #8eb6c8; }
