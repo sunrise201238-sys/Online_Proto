@@ -52,6 +52,18 @@ export function tickAmmo(fighter, now) {
 
 // Mirrors attemptFire. Returns true if a shot was fired or charge initiated.
 export function attemptFire(matchState, owner, target, now) {
+  // Defensive re-target — if our caller handed us a dead target, swap it
+  // for any live enemy on the opposite team. applyInput's auto-fallback
+  // already does this for the human path, but a bot path or a continuous-
+  // fire tick that gets in before the next applyInput would otherwise spawn
+  // a bullet aimed at the corpse. Also update owner.targetId so subsequent
+  // ticks (and the client's snapshot mirror) pick up the swap.
+  if (target && target.hp <= 0) {
+    const live = Object.values(matchState.fighters).find((f) => f.team !== owner.team && f.hp > 0);
+    if (!live) return false;
+    target = live;
+    owner.targetId = live.id;
+  }
   const u = owner.unit;
   if (u.sniperCharge) {
     if (owner.airborne) return false;
