@@ -3579,6 +3579,22 @@ function runOnlineMatchFrame(dt, onl, conn) {
       state.reticleEnemyFiringUntil = 0;
     }
   }
+  // Defensive: in 2v2 if our locally-tracked target is dead but another
+  // enemy is still alive, repoint state.playerCurrentTarget locally. The
+  // server's applyInput auto-fallback already does this server-side, but in
+  // the snapshot-lag window (RTT + 25 ms tick) the reticle would otherwise
+  // hover on the corpse. Bullets themselves are server-driven, so they'll
+  // land correctly once the next snapshot delivers the updated targetId.
+  if (state.mode === '2v2' && state.playerCurrentTarget && state.playerCurrentTarget.state.hp <= 0) {
+    const live = [state.enemy, state.enemy2].find((m) => m && m.state.hp > 0);
+    if (live && live !== state.playerCurrentTarget) {
+      state.playerCurrentTarget = live;
+      if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+      live.root.add(state.reticle);
+      state.reticleLastEnemyFireAt = live.state.lastFireAt;
+      state.reticleEnemyFiringUntil = 0;
+    }
+  }
 
   // Spawn-protection glow. invulnerableUntil is server-clock (Date.now) here,
   // mirrored from the snapshot, so compare against Date.now().
