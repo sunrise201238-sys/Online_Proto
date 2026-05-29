@@ -1059,6 +1059,19 @@ function updateGlintScale(mech) {
 }
 
 function attemptFire(owner, target, now) {
+  // Defensive re-target — never fire at a corpse. Mirrors the shared sim's
+  // attemptFire so offline 2v2 also auto-swaps to a live enemy when the
+  // current target is dead, including bots that might pass stale refs.
+  if (target && target.state.hp <= 0) {
+    const enemies = getEnemiesOf(owner).filter((f) => f.state.hp > 0);
+    if (enemies.length === 0) return false;
+    target = enemies[0];
+    if (owner === state.player) {
+      state.playerCurrentTarget = target;
+      if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+      target.root.add(state.reticle);
+    }
+  }
   const u = owner.unit;
   if (u.sniperCharge) {
     if (owner.state.airborne) return false;
