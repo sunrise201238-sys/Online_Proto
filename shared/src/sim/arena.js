@@ -6688,8 +6688,13 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": 23.5, "maxX": 26.5, "minZ": -71.5, "maxZ": -68.5, "minY": 0, "maxY": 14 }
     ],
     "surfaces": [
-      { "minX": -134, "maxX": 134, "minZ": 11, "maxZ": 131, "maxTop": 4, "type": "flat", "top": 4 },
-      { "minX": -134, "maxX": 134, "minZ": -131, "maxZ": -11, "maxTop": 4, "type": "flat", "top": 4 }
+      // Station's raised platforms — bounds extended past the ±138 boundary
+      // wall on the outer edges (X both sides, outer Z) so the wall stops the
+      // unit BEFORE its single-point center would walk off the surface.
+      // Inner Z edges (±11) kept tight against the track corridor so the
+      // jump-up onto the platform from y=0 still works as before.
+      { "minX": -145, "maxX": 145, "minZ": 11, "maxZ": 145, "maxTop": 4, "type": "flat", "top": 4 },
+      { "minX": -145, "maxX": 145, "minZ": -145, "maxZ": -11, "maxTop": 4, "type": "flat", "top": 4 }
     ]
   },
   "flashpoint": {
