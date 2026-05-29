@@ -365,28 +365,30 @@ io.on('connection', (socket) => {
     maybeStartMatchFor(lb);
   });
 
-  // Slot swap: any player can move to any empty active slot, INCLUDING p1
-  // (host position is no longer locked — last to claim p1 is host).
+  // Slot swap: any player can move between p2/p3/p4 freely. The p1 host
+  // slot is locked — the original host can't give it up and no one else can
+  // claim it. Keeps the state machine simple (host = whoever's at p1 is
+  // also the original p1).
   socket.on('match:join-slot', (data) => {
     const lb = lobbyForSocket(socket);
     if (!lb) return;
     const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
     if (lb.state !== 'waiting') return;
+    if (slot === 'p1') return;          // host can't leave p1
     const newSlot = data?.slot;
     if (!SLOT_IDS.includes(newSlot)) return;
     if (newSlot === slot) return;
+    if (newSlot === 'p1') return;       // p1 can't be claimed by anyone else
     if (!activeSlots(lb.mode).includes(newSlot)) return;
     if (occupiedSlotsOf(lb).has(newSlot)) return;
 
     lb.players.set(socket.id, newSlot);
     lb.config[newSlot] = {
       unitKey: lb.config[slot].unitKey,
-      // Moving INTO p1 inherits any existing map pick on p1; otherwise drop.
-      // Moving OUT of p1 keeps map on p1 so a returning host doesn't lose it.
-      mapKey: newSlot === 'p1' ? lb.config.p1.mapKey : null
+      mapKey: null
     };
-    lb.config[slot] = { unitKey: null, mapKey: slot === 'p1' ? lb.config.p1.mapKey : null };
+    lb.config[slot] = { unitKey: null, mapKey: null };
     lb.lastAcked[newSlot] = -1;
     lb.lastAcked[slot] = -1;
     lb.rematchRequested[newSlot] = false;
