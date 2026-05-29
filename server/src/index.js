@@ -31,54 +31,78 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, uptime: process.uptime() });
+  res.json({ ok: true, uptime: process.uptime(), lobbies: lobbies.size });
 });
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-// One global lobby = one match running at a time. Phase 5 will shard this
-// out for multi-match hosting.
-const lobby = {
-  // socketId -> 'p1' | 'p2' | 'p3' | 'p4' | 'spectator'
-  players: new Map(),
-  // null when no active match. Otherwise the live MatchState.
-  match: null,
-  // 'waiting' | 'active' | 'ended'
-  state: 'waiting',
-  // '1v1' (default) or '2v2'. Host (p1) toggles via `match:set-mode`.
-  mode: '1v1',
-  // Slots that are bot-controlled in the active match. Set at match start
-  // (any active slot not occupied by a human gets botified). Empty in 1v1.
-  botSlots: new Set(),
-  // Last-received input frame per player. Tap flags (jump/stepTap/shootTap/
-  // targetSwitch) are accumulated across input:frame messages and reset after
-  // each tick. Sized for the maximum (4) so 2v2 needs no rewiring.
-  inputs: {
-    p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
-  },
-  // Highest seq number we've received per player. Echoed back in each
-  // snapshot under `acks` so clients know which predicted inputs the server
-  // has consumed (everything <= this seq) vs. still in-flight.
-  lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
-  // Per-player configuration (chosen unit, map). Map is taken from p1 (host).
-  // Persists across matches in the same session so rematches reuse picks.
-  // Cleared per-slot on that player's disconnect.
-  config: {
-    p1: { unitKey: null, mapKey: null },
-    p2: { unitKey: null, mapKey: null },
-    p3: { unitKey: null, mapKey: null },
-    p4: { unitKey: null, mapKey: null }
-  },
-  // Rematch-ready flags. All occupied slots must request (state === 'ended')
-  // for a new match to begin. Reset on match start.
-  rematchRequested: { p1: false, p2: false, p3: false, p4: false },
-  startedAt: 0,
-  endedAt: 0,
-  winnerId: null
-};
+// Multi-lobby. Each lobby is one independent match (or waiting room). A new
+// player joins the first available 'waiting' lobby with an empty active
+// slot; if none exists, a fresh lobby is created and they become p1 (host).
+// socket.io rooms (socket.join(lobby.id)) isolate broadcasts per-lobby so
+// events from one match never leak into another.
+const lobbies = new Map();           // id -> Lobby
+const socketToLobby = new Map();     // socket.id -> lobby.id
+let _nextLobbyId = 1;
 
-function occupiedSlots() {
+function createLobby() {
+  const id = `L${_nextLobbyId++}`;
+  const lobby = {
+    id,
+    players: new Map(),               // socket.id -> 'p1'..'p4' | 'spectator'
+    match: null,
+    state: 'waiting',                 // 'waiting' | 'active' | 'ended'
+    mode: '1v1',                      // '1v1' | '2v2' — host pushes via match:set-mode
+    botSlots: new Set(),              // slots filled with bots while state==='active'
+    inputs: {
+      p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
+    },
+    lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
+    config: {
+      p1: { unitKey: null, mapKey: null },
+      p2: { unitKey: null, mapKey: null },
+      p3: { unitKey: null, mapKey: null },
+      p4: { unitKey: null, mapKey: null }
+    },
+    rematchRequested: { p1: false, p2: false, p3: false, p4: false },
+    startedAt: 0,
+    endedAt: 0,
+    winnerId: null
+  };
+  lobbies.set(id, lobby);
+  console.log(`[lobbies] created ${id} (total ${lobbies.size})`);
+  return lobby;
+}
+
+function destroyLobby(lobby) {
+  lobbies.delete(lobby.id);
+  console.log(`[lobbies] destroyed ${lobby.id} (total ${lobbies.size})`);
+}
+
+// Pick the lobby a new connection should land in. Strategy:
+//   1. Reuse any 'waiting' lobby that has an empty active slot (humans
+//      who arrive while a match is queueing get pooled together).
+//   2. Otherwise spawn a fresh lobby — the new player becomes p1 (host).
+// We deliberately do NOT match on lobby.mode at connect-time because the
+// client can't communicate its preferred mode until after assignment. The
+// "preferred mode" comes through as the host's match:set-mode message.
+function pickLobbyForJoin() {
+  for (const lobby of lobbies.values()) {
+    if (lobby.state !== 'waiting') continue;
+    const active = activeSlots(lobby.mode);
+    const occ = occupiedSlotsOf(lobby);
+    if (occ.size < active.length) return lobby;
+  }
+  return createLobby();
+}
+
+function lobbyForSocket(socket) {
+  const id = socketToLobby.get(socket.id);
+  return id ? lobbies.get(id) : null;
+}
+
+function occupiedSlotsOf(lobby) {
   const slots = new Set();
   for (const v of lobby.players.values()) {
     if (SLOT_IDS.includes(v)) slots.add(v);
@@ -86,13 +110,11 @@ function occupiedSlots() {
   return slots;
 }
 
-function startMatch() {
+function startMatchFor(lobby) {
   const startTime = Date.now();
-  // p1 is the "host" — their map pick is used. Each occupied slot picks its
-  // own unit. Unoccupied active slots become bots and use a default unit.
   const mapKey = lobby.config.p1.mapKey ?? 'arena1';
   const slots = activeSlots(lobby.mode);
-  const occupied = occupiedSlots();
+  const occupied = occupiedSlotsOf(lobby);
 
   lobby.botSlots.clear();
   for (const s of slots) {
@@ -127,102 +149,45 @@ function startMatch() {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.emit('match:start', { startTime, mapKey, mode: lobby.mode });
-  emitLobbyConfig();
-  console.log(`[lobby] ${lobby.mode} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode });
+  emitLobbyConfig(lobby);
+  console.log(`[${lobby.id}] ${lobby.mode} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
 }
 
-function endMatch(winnerId, reason) {
+function endMatchFor(lobby, winnerId, reason) {
   if (lobby.state !== 'active') return;
   lobby.state = 'ended';
   lobby.endedAt = Date.now();
   lobby.winnerId = winnerId;
-  io.emit('match:end', { winnerId, reason, endedAt: lobby.endedAt });
-  console.log(`[lobby] match ended — winner: ${winnerId ?? 'none'} (${reason})`);
+  io.to(lobby.id).emit('match:end', { winnerId, reason, endedAt: lobby.endedAt });
+  console.log(`[${lobby.id}] match ended — winner: ${winnerId ?? 'none'} (${reason})`);
 }
 
-function maybeStartMatch() {
+function maybeStartMatchFor(lobby) {
   if (lobby.state === 'active') return;
   if (lobby.mode === '1v1') {
-    // 1v1: auto-start when both slots are occupied and configured.
-    const slots = occupiedSlots();
+    const slots = occupiedSlotsOf(lobby);
     if (!slots.has('p1') || !slots.has('p2')) return;
     if (!lobby.config.p1.unitKey || !lobby.config.p2.unitKey) return;
     if (!lobby.config.p1.mapKey) return;
-    startMatch();
+    startMatchFor(lobby);
     return;
   }
-  // 2v2: no auto-start. Host (p1) explicitly triggers via `match:start-now`
-  // after picking their unit + map. Empty slots will be filled with bots.
+  // 2v2: host (p1) explicitly triggers via match:start-now.
 }
 
-function emitLobbyConfig() {
-  io.emit('lobby:config', {
+function emitLobbyConfig(lobby) {
+  io.to(lobby.id).emit('lobby:config', {
     state: lobby.state,
     mode: lobby.mode,
     config: lobby.config,
-    occupied: Array.from(occupiedSlots()),
+    occupied: Array.from(occupiedSlotsOf(lobby)),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
   });
 }
 
-function tick() {
-  if (lobby.state !== 'active' || !lobby.match) return;
-  const now = Date.now();
-
-  // 1. Drive bots — each bot picks its closest live enemy as targetId, then
-  //    tickBot computes its intent for this tick (writing into me.vel /
-  //    me.action / etc, just like applyInput does for humans).
-  for (const botId of lobby.botSlots) {
-    const me = lobby.match.fighters[botId];
-    if (!me || me.hp <= 0) continue;
-    me.targetId = pickClosestEnemyId(lobby.match, me) ?? me.targetId;
-    tickBot(lobby.match, botId, now);
-  }
-
-  // 2. Run the shared sim tick. Humans drive via lobby.inputs; bot fighters
-  //    are listed in botSlots so tickMatch knows to skip applyInput for them
-  //    (otherwise the empty input would clobber tickBot's velocity write).
-  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, lobby.botSlots);
-
-  // 3. After tickMatch consumes the inputs, clear human tap flags so they
-  //    don't re-fire next tick. Continuous flags (move, boost, shootHold)
-  //    persist until the client overwrites them.
-  for (const slot of activeSlots(lobby.mode)) {
-    if (lobby.botSlots.has(slot)) continue;
-    const cur = lobby.inputs[slot];
-    cur.jump = false;
-    cur.stepTap = false;
-    cur.shootTap = false;
-    cur.targetSwitch = false;
-  }
-
-  // 4. End-of-match check. 1v1: either fighter at 0 HP. 2v2: one team fully
-  //    down (both members at 0 HP).
-  const f = lobby.match.fighters;
-  if (lobby.mode === '2v2') {
-    const teamADead = (f.p1?.hp ?? 0) <= 0 && (f.p3?.hp ?? 0) <= 0;
-    const teamBDead = (f.p2?.hp ?? 0) <= 0 && (f.p4?.hp ?? 0) <= 0;
-    if (teamADead || teamBDead) {
-      io.emit('match:snapshot', snapshotWithAcks());
-      endMatch(teamADead ? 'B' : 'A', 'ko');
-      return;
-    }
-  } else if ((f.p1?.hp ?? 0) <= 0 || (f.p2?.hp ?? 0) <= 0) {
-    const winner = f.p1.hp <= 0 ? 'p2' : 'p1';
-    io.emit('match:snapshot', snapshotWithAcks());
-    endMatch(winner, 'ko');
-    return;
-  }
-
-  io.emit('match:snapshot', snapshotWithAcks());
-}
-
-function snapshotWithAcks() {
-  // Phase 3: clients use these to know which of their predicted inputs the
-  // server has consumed. Inputs with seq > acks[me] are still pending and
-  // need to be replayed on top of the snapshot during reconciliation.
+function snapshotWithAcks(lobby) {
   return {
     ...buildSnapshot(lobby.match),
     mode: lobby.mode,
@@ -234,12 +199,69 @@ function snapshotWithAcks() {
   };
 }
 
-setInterval(tick, TICK_RATE_MS);
+function tickLobby(lobby) {
+  if (lobby.state !== 'active' || !lobby.match) return;
+  const now = Date.now();
+
+  // 1. Drive bots — closest live enemy as targetId, then tickBot writes
+  //    velocity/action just like applyInput would for humans.
+  for (const botId of lobby.botSlots) {
+    const me = lobby.match.fighters[botId];
+    if (!me || me.hp <= 0) continue;
+    me.targetId = pickClosestEnemyId(lobby.match, me) ?? me.targetId;
+    tickBot(lobby.match, botId, now);
+  }
+
+  // 2. Shared sim tick. Humans drive via lobby.inputs; bot fighters are
+  //    listed in botSlots so tickMatch skips applyInput for them.
+  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, lobby.botSlots);
+
+  // 3. Clear human tap flags so they fire once per press.
+  for (const slot of activeSlots(lobby.mode)) {
+    if (lobby.botSlots.has(slot)) continue;
+    const cur = lobby.inputs[slot];
+    cur.jump = false;
+    cur.stepTap = false;
+    cur.shootTap = false;
+    cur.targetSwitch = false;
+  }
+
+  // 4. End-of-match check.
+  const f = lobby.match.fighters;
+  if (lobby.mode === '2v2') {
+    const teamADead = (f.p1?.hp ?? 0) <= 0 && (f.p3?.hp ?? 0) <= 0;
+    const teamBDead = (f.p2?.hp ?? 0) <= 0 && (f.p4?.hp ?? 0) <= 0;
+    if (teamADead || teamBDead) {
+      io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+      endMatchFor(lobby, teamADead ? 'B' : 'A', 'ko');
+      return;
+    }
+  } else if ((f.p1?.hp ?? 0) <= 0 || (f.p2?.hp ?? 0) <= 0) {
+    const winner = f.p1.hp <= 0 ? 'p2' : 'p1';
+    io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+    endMatchFor(lobby, winner, 'ko');
+    return;
+  }
+
+  io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+}
+
+function tickAllLobbies() {
+  for (const lobby of lobbies.values()) {
+    tickLobby(lobby);
+  }
+}
+
+setInterval(tickAllLobbies, TICK_RATE_MS);
 
 io.on('connection', (socket) => {
-  // Find a free slot in the currently-active set (2 in 1v1, 4 in 2v2).
-  // Slot priority is p1 → p2 → p3 → p4 so the first joiner is always host.
-  const taken = occupiedSlots();
+  const lobby = pickLobbyForJoin();
+  socketToLobby.set(socket.id, lobby.id);
+  socket.join(lobby.id);
+
+  // First free slot in the active set (p1 → p2 → p3 → p4). First joiner of
+  // a fresh lobby becomes p1 (host).
+  const taken = occupiedSlotsOf(lobby);
   const slots = activeSlots(lobby.mode);
   let assigned = 'spectator';
   for (const s of slots) {
@@ -251,6 +273,7 @@ io.on('connection', (socket) => {
     playerId: assigned,
     team: SLOT_IDS.includes(assigned) ? teamOf(assigned) : null,
     mode: assigned === 'spectator' ? 'spectator' : 'online-ready',
+    lobbyId: lobby.id,
     lobbyMode: lobby.mode,
     matchState: lobby.state
   });
@@ -263,33 +286,31 @@ io.on('connection', (socket) => {
     matchState: lobby.state
   });
 
-  // Bring the new socket up to date on lobby state. Includes mode + botSlots
-  // so the client can render the right UI.
   socket.emit('lobby:config', {
     state: lobby.state,
     mode: lobby.mode,
     config: lobby.config,
-    occupied: Array.from(occupiedSlots()),
+    occupied: Array.from(occupiedSlotsOf(lobby)),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
   });
 
-  // 1v1: if both player slots just filled, kick off a match (existing
-  // auto-start behaviour). 2v2: host has to press "start" explicitly.
-  maybeStartMatch();
+  maybeStartMatchFor(lobby);
 
   socket.on('input:frame', (frame) => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
-    if (lobby.state !== 'active') return;
-    if (lobby.botSlots.has(slot)) return; // bot slot — humans can't drive
+    if (lb.state !== 'active') return;
+    if (lb.botSlots.has(slot)) return;
 
-    if (typeof frame.seq === 'number' && frame.seq > lobby.lastAcked[slot]) {
-      lobby.lastAcked[slot] = frame.seq;
+    if (typeof frame.seq === 'number' && frame.seq > lb.lastAcked[slot]) {
+      lb.lastAcked[slot] = frame.seq;
     }
 
-    const cur = lobby.inputs[slot];
-    lobby.inputs[slot] = {
+    const cur = lb.inputs[slot];
+    lb.inputs[slot] = {
       moveX: numericOrZero(frame.moveX),
       moveZ: numericOrZero(frame.moveZ),
       boost: !!frame.boost,
@@ -303,147 +324,140 @@ io.on('connection', (socket) => {
   });
 
   socket.on('match:configure', (cfg) => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
-    if (lobby.state === 'active') return; // can't change picks mid-match
+    if (lb.state === 'active') return;
 
     let dirty = false;
     if (cfg && typeof cfg.unitKey === 'string' && UNIT_DATA[cfg.unitKey]) {
-      lobby.config[slot].unitKey = cfg.unitKey;
+      lb.config[slot].unitKey = cfg.unitKey;
       dirty = true;
     }
-    // Map is host-only (p1). Silently ignore non-hosts trying to set map.
     if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
-      lobby.config[slot].mapKey = cfg.mapKey;
+      lb.config[slot].mapKey = cfg.mapKey;
       dirty = true;
     }
 
     if (dirty) {
-      emitLobbyConfig();
-      maybeStartMatch();
+      emitLobbyConfig(lb);
+      maybeStartMatchFor(lb);
     }
   });
 
-  // Host-only mode toggle. Only valid while waiting / between matches.
   socket.on('match:set-mode', (data) => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (slot !== 'p1') return;
-    if (lobby.state === 'active') return;
+    if (lb.state === 'active') return;
     if (data?.mode !== '1v1' && data?.mode !== '2v2') return;
-    lobby.mode = data.mode;
-    // 2v2 → 1v1 narrows the active set. Any p3/p4 humans become spectators.
-    if (lobby.mode === '1v1') {
+    lb.mode = data.mode;
+    if (lb.mode === '1v1') {
       const reassigned = [];
-      for (const [sid, s] of lobby.players) {
+      for (const [sid, s] of lb.players) {
         if (s === 'p3' || s === 'p4') reassigned.push(sid);
       }
-      for (const sid of reassigned) lobby.players.set(sid, 'spectator');
+      for (const sid of reassigned) lb.players.set(sid, 'spectator');
     }
-    emitLobbyConfig();
-    maybeStartMatch();
+    emitLobbyConfig(lb);
+    maybeStartMatchFor(lb);
   });
 
-  // Slot swap (any player, lobby only). Lets a player move to an empty
-  // active slot — for example, swap to a slot on the same team as another
-  // human so the two can co-op against bots. Host slot (p1) is locked to
-  // avoid messy host-transfer logic; if you want to be host, you have to be
-  // the first to connect.
+  // Slot swap: any player can move to any empty active slot, INCLUDING p1
+  // (host position is no longer locked — last to claim p1 is host).
   socket.on('match:join-slot', (data) => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
-    if (lobby.state !== 'waiting') return;
+    if (lb.state !== 'waiting') return;
     const newSlot = data?.slot;
     if (!SLOT_IDS.includes(newSlot)) return;
     if (newSlot === slot) return;
-    if (newSlot === 'p1') return; // host slot is locked
-    if (!activeSlots(lobby.mode).includes(newSlot)) return;
-    // Target slot must currently be empty (not occupied by another human).
-    if (occupiedSlots().has(newSlot)) return;
+    if (!activeSlots(lb.mode).includes(newSlot)) return;
+    if (occupiedSlotsOf(lb).has(newSlot)) return;
 
-    // Move. Carry their unitKey along; drop mapKey (only host's map counts
-    // and the old slot's mapKey would've been ignored anyway).
-    lobby.players.set(socket.id, newSlot);
-    lobby.config[newSlot] = {
-      unitKey: lobby.config[slot].unitKey,
-      mapKey: null
+    lb.players.set(socket.id, newSlot);
+    lb.config[newSlot] = {
+      unitKey: lb.config[slot].unitKey,
+      // Moving INTO p1 inherits any existing map pick on p1; otherwise drop.
+      // Moving OUT of p1 keeps map on p1 so a returning host doesn't lose it.
+      mapKey: newSlot === 'p1' ? lb.config.p1.mapKey : null
     };
-    lobby.config[slot] = { unitKey: null, mapKey: null };
-    lobby.lastAcked[newSlot] = -1;
-    lobby.lastAcked[slot] = -1;
-    lobby.rematchRequested[newSlot] = false;
-    lobby.rematchRequested[slot] = false;
+    lb.config[slot] = { unitKey: null, mapKey: slot === 'p1' ? lb.config.p1.mapKey : null };
+    lb.lastAcked[newSlot] = -1;
+    lb.lastAcked[slot] = -1;
+    lb.rematchRequested[newSlot] = false;
+    lb.rematchRequested[slot] = false;
 
     socket.emit('player:assigned', {
       playerId: newSlot,
       team: teamOf(newSlot),
       mode: 'online-ready',
-      lobbyMode: lobby.mode,
-      matchState: lobby.state
+      lobbyId: lb.id,
+      lobbyMode: lb.mode,
+      matchState: lb.state
     });
-    emitLobbyConfig();
+    emitLobbyConfig(lb);
   });
 
-  // Host-only explicit start (2v2). Empty active slots get bot-filled.
   socket.on('match:start-now', () => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (slot !== 'p1') return;
-    if (lobby.state === 'active') return;
-    if (lobby.mode !== '2v2') return;
-    if (!lobby.config.p1.unitKey || !lobby.config.p1.mapKey) return;
-    startMatch();
+    if (lb.state === 'active') return;
+    if (lb.mode !== '2v2') return;
+    if (!lb.config.p1.unitKey || !lb.config.p1.mapKey) return;
+    startMatchFor(lb);
   });
 
   socket.on('match:rematch-request', () => {
-    const slot = lobby.players.get(socket.id);
+    const lb = lobbyForSocket(socket);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
-    if (lobby.state !== 'ended') return;
+    if (lb.state !== 'ended') return;
 
-    if (lobby.rematchRequested[slot]) return;
-    lobby.rematchRequested[slot] = true;
-    emitLobbyConfig();
+    if (lb.rematchRequested[slot]) return;
+    lb.rematchRequested[slot] = true;
+    emitLobbyConfig(lb);
 
-    // Start the next match when every occupied human slot has requested.
-    const occ = occupiedSlots();
-    const allReady = Array.from(occ).every((s) => lobby.rematchRequested[s]);
-    if (lobby.mode === '1v1') {
-      if (occ.has('p1') && occ.has('p2') && allReady) startMatch();
+    const occ = occupiedSlotsOf(lb);
+    const allReady = Array.from(occ).every((s) => lb.rematchRequested[s]);
+    if (lb.mode === '1v1') {
+      if (occ.has('p1') && occ.has('p2') && allReady) startMatchFor(lb);
     } else if (allReady && occ.size > 0) {
-      // 2v2: host must still be present; bot slots will be re-derived.
-      if (occ.has('p1')) startMatch();
+      if (occ.has('p1')) startMatchFor(lb);
     }
   });
 
   socket.on('disconnect', () => {
-    const slot = lobby.players.get(socket.id);
-    lobby.players.delete(socket.id);
-    if (SLOT_IDS.includes(slot) && lobby.state === 'active') {
-      if (lobby.mode === '2v2') {
-        // 2v2: convert the human's slot to a bot so the match can continue.
-        lobby.botSlots.add(slot);
+    const lb = lobbyForSocket(socket);
+    socketToLobby.delete(socket.id);
+    if (!lb) return;
+    const slot = lb.players.get(socket.id);
+    lb.players.delete(socket.id);
+    if (SLOT_IDS.includes(slot) && lb.state === 'active') {
+      if (lb.mode === '2v2') {
+        lb.botSlots.add(slot);
       } else {
-        // 1v1: opponent wins by forfeit.
         const winner = slot === 'p1' ? 'p2' : 'p1';
-        endMatch(winner, 'forfeit');
+        endMatchFor(lb, winner, 'forfeit');
       }
     }
     if (SLOT_IDS.includes(slot)) {
-      lobby.config[slot] = { unitKey: null, mapKey: null };
-      lobby.rematchRequested[slot] = false;
+      lb.config[slot] = { unitKey: null, mapKey: null };
+      lb.rematchRequested[slot] = false;
     }
-    // If every active slot is empty, reset the lobby fully.
-    const occ = occupiedSlots();
-    if (occ.size === 0) {
-      lobby.match = null;
-      lobby.state = 'waiting';
-      lobby.mode = '1v1';
-      lobby.botSlots.clear();
-      for (const s of SLOT_IDS) {
-        lobby.inputs[s] = emptyInput();
-        lobby.config[s] = { unitKey: null, mapKey: null };
-        lobby.rematchRequested[s] = false;
-      }
+    if (lb.players.size === 0) {
+      // Last player left — drop the whole lobby. Otherwise it'd loiter and
+      // pickLobbyForJoin would funnel future joiners into a stale 'ended'.
+      destroyLobby(lb);
     } else {
-      emitLobbyConfig();
+      emitLobbyConfig(lb);
     }
   });
 });
