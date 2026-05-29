@@ -2959,15 +2959,26 @@ function cloneFighterForPrediction(f) {
 // always reset to []  — we don't predict them (server-authoritative; client
 // just renders snapshot projectiles).
 function cloneSnapshotForPrediction(snap) {
+  // Include every fighter the server actually has — p1+p2 in 1v1, p1..p4 in
+  // 2v2. Missing p3/p4 in the cloned state was the cause of the "submerged
+  // mech" bug for players who moved to a p3/p4 slot: simTickMatch would
+  // iterate only [p1,p2], the local fighter (e.g. p4) never existed in
+  // predictedState, cameraFighter was undefined, mirrorFighterToMech was
+  // skipped, and the mech root stayed at its scene-add default (y=0 with
+  // negative-Y leg meshes).
+  const fighters = {};
+  for (const id of ['p1', 'p2', 'p3', 'p4']) {
+    if (snap.fighters?.[id]) {
+      fighters[id] = cloneFighterForPrediction(snap.fighters[id]);
+    }
+  }
   return {
     tick: snap.tick,
     now: snap.serverTime,
     startTime: snap.serverTime,
     mapKey: snap.mapKey,
-    fighters: {
-      p1: cloneFighterForPrediction(snap.fighters.p1),
-      p2: cloneFighterForPrediction(snap.fighters.p2)
-    },
+    mode: snap.mode || '1v1',
+    fighters,
     projectiles: [],
     events: []
   };
@@ -3304,10 +3315,13 @@ function showOnlineWaitingOpp(onl, conn) {
       statusHtml = `<span class="roster-status">${unitName ? `You — ${unitName}` : 'You'}</span>`;
     } else if (isOccupied) {
       statusHtml = `<span class="roster-status">${unitName ? `Player — ${unitName}` : 'Player (picking…)'}</span>`;
+    } else if (s === 'p1') {
+      // Host slot is locked — no Join button. Reaches here only briefly,
+      // during connect-time before p1 is assigned.
+      statusHtml = `<span class="roster-status">(host slot)</span>`;
     } else {
       const labelText = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
-      const hostHint = s === 'p1' ? ' (host)' : '';
-      statusHtml = `<span class="roster-status">${labelText}${hostHint}</span>
+      statusHtml = `<span class="roster-status">${labelText}</span>
         <button class="roster-join" data-join-slot="${s}">Join</button>`;
     }
     return `<div class="roster-row roster-team-${team}">
