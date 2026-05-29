@@ -161,6 +161,7 @@ function emitLobbyConfig() {
     state: lobby.state,
     mode: lobby.mode,
     config: lobby.config,
+    occupied: Array.from(occupiedSlots()),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
   });
@@ -268,6 +269,7 @@ io.on('connection', (socket) => {
     state: lobby.state,
     mode: lobby.mode,
     config: lobby.config,
+    occupied: Array.from(occupiedSlots()),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
   });
