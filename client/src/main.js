@@ -2395,8 +2395,12 @@ function updateMechXRayVisibility() {
 }
 
 function updateCamera() {
+  // Camera frames the player and their CURRENT target (not necessarily
+  // state.enemy). In 2v2 the target switch swings the camera to the other
+  // enemy along with the reticle / fire / lock.
+  const tgt = state.playerCurrentTarget ?? state.enemy;
   const p = state.player.root.position;
-  const e = state.enemy.root.position;
+  const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
   const side = new THREE.Vector3(-line.z, 0, line.x);
   const desired = new THREE.Vector3(p.x - line.x * 13 + side.x * 2, p.y + 6.8, p.z - line.z * 13 + side.z * 2);
