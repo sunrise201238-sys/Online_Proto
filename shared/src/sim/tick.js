@@ -189,11 +189,24 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null);
   }
 
-  // 2. Apply human inputs. Bot fighters skip applyInput because tickBot has
-  //    already written their velocity/action for this tick — calling
-  //    applyInput with emptyInput would zero those out.
+  // 2. Apply human inputs. Bot fighters skip applyInput (tickBot has already
+  //    written their velocity/action for this tick), but they STILL need
+  //    applyMomentum + tickBoost — the two end-of-applyInput calls that
+  //    integrate momentum into velocity and run the boost gauge. Without
+  //    these for bots:
+  //      - sprint speed (11.76) is slower than walk (16) because the
+  //        `inheritMomentum` write inside tickBot is never paid out — bots
+  //        look like they're walking even when their state machine wants
+  //        them sprinting.
+  //      - boost never drains or regenerates, so bots have effectively
+  //        infinite stamina, different from the offline updateEnemy path
+  //        which runs updateBoost every tick.
   for (const f of fighters) {
-    if (botSet.has(f.id)) continue;
+    if (botSet.has(f.id)) {
+      applyMomentum(f, { suspend: f.action === 'step' });
+      tickBoost(f, now, f.action, arena.surfaces);
+      continue;
+    }
     applyInput(matchState, f, inputs[f.id] ?? emptyInput(), now, arena.obstacles, arena.surfaces);
   }
 
