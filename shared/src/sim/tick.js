@@ -166,15 +166,17 @@ export function updateLocks(matchState) {
 //
 //   matchState — mutable state object created by createMatchState
 //   inputs     — { p1: InputFrame, p2: InputFrame, ... } keyed by fighter id.
-//                Use emptyInput() (or omit) for absent players. Bots ought to
-//                have their tickBot driven BEFORE this call and their inputs
-//                left as emptyInput so the bot's already-set velocity / state
-//                carries through applyInput-like behaviour.
+//                Use emptyInput() (or omit) for absent players.
 //   now        — server-authoritative time in ms (Date.now())
 //   dt         — delta time in seconds (typically TICK_RATE_MS / 1000)
+//   botIds     — optional Set or Array of fighter ids that are bot-controlled.
+//                The caller MUST have run tickBot(matchState, id, now) for
+//                each before this call. applyInput is then skipped for bots
+//                (it would clobber the velocity tickBot just wrote).
 //
 // Returns the same matchState (mutated) for chaining.
-export function tickMatch(matchState, inputs, now, dt) {
+export function tickMatch(matchState, inputs, now, dt, botIds = null) {
+  const botSet = botIds instanceof Set ? botIds : new Set(botIds || []);
   matchState.now = now;
   matchState.events = []; // events are per-tick
 
@@ -187,9 +189,11 @@ export function tickMatch(matchState, inputs, now, dt) {
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null);
   }
 
-  // 2. Apply player inputs / drive bots. Inputs are authoritative; bot
-  //    fighters should have tickBot run by the caller before tickMatch.
+  // 2. Apply human inputs. Bot fighters skip applyInput because tickBot has
+  //    already written their velocity/action for this tick — calling
+  //    applyInput with emptyInput would zero those out.
   for (const f of fighters) {
+    if (botSet.has(f.id)) continue;
     applyInput(matchState, f, inputs[f.id] ?? emptyInput(), now, arena.obstacles, arena.surfaces);
   }
 
