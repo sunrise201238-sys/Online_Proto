@@ -13,23 +13,41 @@ import { GROUND_BASE_Y } from './constants.js';
 // Surfaces describe walkable ground at non-zero heights (platforms, ramps).
 // heightAt(x, z) returns the surface Y for a point inside the surface bbox.
 
-const PLAIN_FIELD_HALF = 138;
-const PLAIN_FIELD_WALL_THICKNESS = 2;
-const PLAIN_FIELD_WALL_HEIGHT = 16;
+// Per-map play-area half-extents. Wall obstacles are placed at ±halfX
+// (along X) and ±halfZ (along Z) — same positions where the offline
+// `addBoundaryIndicator` helper draws its red ground stripes inside
+// client/src/main.js. Lobby and Station never had an indicator in offline
+// either, so they fall back to the original ±138 outer cannon-wall extent.
+// Any map id not listed here defaults to ±138 (matching the previous
+// global behaviour).
+const MAP_BOUNDARY = {
+  arena1:     { halfX: 120, halfZ: 120 },  // Plain Field
+  arena2:     { halfX: 128, halfZ:  92 },  // Streets
+  factory:    { halfX: 130, halfZ: 105 },
+  square:     { halfX: 116, halfZ: 106 },
+  lobby:      { halfX: 138, halfZ: 138 },
+  station:    { halfX: 138, halfZ: 138 },
+  flashpoint: { halfX: 110, halfZ:  75 }
+};
+const BOUNDARY_WALL_THICKNESS = 2;
+const BOUNDARY_WALL_HEIGHT = 16;
 
-function makeBoundaryObstacles() {
+function makeBoundaryObstacles(mapKey) {
+  const { halfX, halfZ } = MAP_BOUNDARY[mapKey] ?? { halfX: 138, halfZ: 138 };
+  const T = BOUNDARY_WALL_THICKNESS;
+  const H2 = BOUNDARY_WALL_HEIGHT * 2;
   return [
-    { minX: PLAIN_FIELD_HALF - PLAIN_FIELD_WALL_THICKNESS, maxX: PLAIN_FIELD_HALF + PLAIN_FIELD_WALL_THICKNESS, minZ: -PLAIN_FIELD_HALF, maxZ: PLAIN_FIELD_HALF, minY: 0, maxY: PLAIN_FIELD_WALL_HEIGHT * 2, topBuffer: PLAIN_FIELD_WALL_HEIGHT * 2 },
-    { minX: -PLAIN_FIELD_HALF - PLAIN_FIELD_WALL_THICKNESS, maxX: -PLAIN_FIELD_HALF + PLAIN_FIELD_WALL_THICKNESS, minZ: -PLAIN_FIELD_HALF, maxZ: PLAIN_FIELD_HALF, minY: 0, maxY: PLAIN_FIELD_WALL_HEIGHT * 2, topBuffer: PLAIN_FIELD_WALL_HEIGHT * 2 },
-    { minX: -PLAIN_FIELD_HALF, maxX: PLAIN_FIELD_HALF, minZ: PLAIN_FIELD_HALF - PLAIN_FIELD_WALL_THICKNESS, maxZ: PLAIN_FIELD_HALF + PLAIN_FIELD_WALL_THICKNESS, minY: 0, maxY: PLAIN_FIELD_WALL_HEIGHT * 2, topBuffer: PLAIN_FIELD_WALL_HEIGHT * 2 },
-    { minX: -PLAIN_FIELD_HALF, maxX: PLAIN_FIELD_HALF, minZ: -PLAIN_FIELD_HALF - PLAIN_FIELD_WALL_THICKNESS, maxZ: -PLAIN_FIELD_HALF + PLAIN_FIELD_WALL_THICKNESS, minY: 0, maxY: PLAIN_FIELD_WALL_HEIGHT * 2, topBuffer: PLAIN_FIELD_WALL_HEIGHT * 2 }
+    { minX: halfX - T,    maxX: halfX + T,    minZ: -halfZ,        maxZ:  halfZ,        minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX - T,   maxX: -halfX + T,   minZ: -halfZ,        maxZ:  halfZ,        minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX,       maxX:  halfX,       minZ:  halfZ - T,    maxZ:  halfZ + T,    minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX,       maxX:  halfX,       minZ: -halfZ - T,    maxZ: -halfZ + T,    minY: 0, maxY: H2, topBuffer: H2 }
   ];
 }
 
 function buildPlainField() {
   return {
     mapKey: 'arena1',
-    obstacles: makeBoundaryObstacles(),
+    obstacles: makeBoundaryObstacles('arena1'),
     surfaces: [],
     spawns: {
       p1: { x: -24, y: GROUND_BASE_Y, z: 0 },
@@ -6812,7 +6830,7 @@ function buildGeneratedArena(mapKey) {
   const data = GENERATED_ARENA_COLLISION_DATA[mapKey];
   return {
     mapKey,
-    obstacles: [...makeBoundaryObstacles(), ...data.obstacles],
+    obstacles: [...makeBoundaryObstacles(mapKey), ...data.obstacles],
     surfaces: data.surfaces.map(materializeSurface),
     spawns: ARENA_SPAWNS[mapKey]
   };
