@@ -2985,7 +2985,7 @@ function applySnapshotToPrediction(snap) {
   const onl = state.online;
   if (!onl) return;
   const myId = onl.myPlayerId;
-  if (myId !== 'p1' && myId !== 'p2') return;
+  if (!ONLINE_SLOT_IDS.includes(myId)) return;
 
   // Pre-snap rendered position = pre-snap predicted + current visual offset.
   const prePredFighter = onl.predictedState?.fighters?.[myId];
@@ -2998,12 +2998,16 @@ function applySnapshotToPrediction(snap) {
   const ack = snap.acks?.[myId] ?? -1;
   onl.pendingInputs = onl.pendingInputs.filter((p) => p.seq > ack);
 
-  // Replay the unack'd ones to advance prediction back to ~present.
+  // Replay the unack'd ones to advance prediction back to ~present. Empty
+  // inputs for the other slots — only the local player's predictions matter.
   let simNow = snap.serverTime;
   for (let i = 0; i < onl.pendingInputs.length; i += 1) {
     const p = onl.pendingInputs[i];
     simNow += SIM_TICK_RATE_MS;
-    const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
+    const inputs = {
+      p1: simEmptyInput(), p2: simEmptyInput(),
+      p3: simEmptyInput(), p4: simEmptyInput()
+    };
     inputs[myId] = p.input;
     simTickMatch(fresh, inputs, simNow, SIM_TICK_DT);
   }
@@ -3050,7 +3054,7 @@ function runPredictionTick() {
   const onl = state.online;
   if (!onl || !onl.predictedState) return;
   const myId = onl.myPlayerId;
-  if (myId !== 'p1' && myId !== 'p2') return;
+  if (!ONLINE_SLOT_IDS.includes(myId)) return;
 
   const inputFrame = buildOnlineInputFrame();
   const seq = onl.nextSeq++;
@@ -3062,7 +3066,10 @@ function runPredictionTick() {
   if (onl.pendingInputs.length > 240) onl.pendingInputs.shift();
 
   onl.lastPredSimTime += SIM_TICK_RATE_MS;
-  const inputs = { p1: simEmptyInput(), p2: simEmptyInput() };
+  const inputs = {
+    p1: simEmptyInput(), p2: simEmptyInput(),
+    p3: simEmptyInput(), p4: simEmptyInput()
+  };
   inputs[myId] = inputFrame;
   simTickMatch(onl.predictedState, inputs, onl.lastPredSimTime, SIM_TICK_DT);
 
@@ -3467,7 +3474,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   if (snap.tick !== onl.lastAppliedSnapshotTick) {
     onl.lastAppliedSnapshotTick = snap.tick;
     onl.snapshotsApplied += 1;
-    if (onl.myPlayerId === 'p1' || onl.myPlayerId === 'p2') {
+    if (ONLINE_SLOT_IDS.includes(onl.myPlayerId)) {
       applySnapshotToPrediction(snap);
     }
     syncOnlineProjectiles(snap);
