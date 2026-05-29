@@ -1123,11 +1123,14 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
 }
 
 function getProjectileDamage(projectile) {
-  // Dummy mode zeroes damage from EVERY enemy bot. In 1v1 that's just
-  // state.enemy; in 2v2 it's state.enemy + state.enemy2 (both team B).
-  // Ally's projectiles (team A, like the player) are unaffected so the
-  // player can still see their teammate land hits.
-  if (state.dummyMode && (projectile.owner === state.enemy || projectile.owner === state.enemy2)) return 0;
+  // Dummy mode zeroes damage from EVERY bot — both enemies AND the player's
+  // ally bot. Only the player's own bullets do damage. Lets the player
+  // freely test/observe without anyone else being able to land hits.
+  if (state.dummyMode
+      && projectile.owner !== state.player
+      && (projectile.owner === state.enemy
+          || projectile.owner === state.enemy2
+          || projectile.owner === state.ally)) return 0;
   return projectile.damage;
 }
 
@@ -3878,7 +3881,7 @@ function showGuidePopup() {
           <h4>Controls</h4>
           <ul>
             <li>Mobile — On-screen buttons.</li>
-            <li>PC — WASD move · J fire · K sprint · L dodge · Space jump.</li>
+            <li>PC — WASD move · J fire · K sprint · L dodge · Space jump · U target switch.</li>
           </ul>
 
           <h4>Game Mechanics</h4>
