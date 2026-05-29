@@ -40,8 +40,20 @@ export function emptyInput() {
     jump: false,        // jump button pressed this frame
     stepTap: false,     // dodge tap this frame
     shootTap: false,    // shoot tap this frame
-    shootHold: false    // shoot held continuously
+    shootHold: false,   // shoot held continuously
+    targetSwitch: false // 2v2: cycle to next live enemy target this frame
   };
+}
+
+// Cycle a human-controlled fighter's targetId to the next live enemy.
+// In 1v1 there's only one enemy — no-op. In 2v2 it flips between the two
+// enemies. Called from applyInput when input.targetSwitch is set.
+function cycleTargetId(matchState, fighter) {
+  const enemies = Object.values(matchState.fighters).filter((f) => f.team !== fighter.team && f.hp > 0);
+  if (enemies.length <= 1) return;
+  const ids = enemies.map((f) => f.id);
+  const idx = ids.indexOf(fighter.targetId);
+  fighter.targetId = ids[((idx >= 0 ? idx : -1) + 1) % ids.length];
 }
 
 // Drive a fighter from a player input frame. Mirrors updatePlayer's body of
@@ -58,7 +70,10 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     return;
   }
 
-  const opp = matchState.fighters[fighter.id === 'p1' ? 'p2' : 'p1'];
+  // Honour a one-tick target switch before resolving opp so the very next
+  // shot already lands on the new target.
+  if (input.targetSwitch) cycleTargetId(matchState, fighter);
+  const opp = matchState.fighters[fighter.targetId];
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
   let sprintLocked = input.sprintLocked;
@@ -134,21 +149,27 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
 }
 
 // Update lock state on each fighter. Called once per tick after movement.
+// Each fighter's redLock is evaluated against its own current targetId, so
+// 2v2 fighters with different targets get independent lock states.
 export function updateLocks(matchState) {
-  const p1 = matchState.fighters.p1;
-  const p2 = matchState.fighters.p2;
-  if (!p1 || !p2) return;
-  const dx = p1.pos.x - p2.pos.x;
-  const dz = p1.pos.z - p2.pos.z;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  p1.redLock = dist <= p1.unit.lockRange;
-  p2.redLock = dist <= p2.unit.lockRange;
+  for (const f of Object.values(matchState.fighters)) {
+    const tgt = f.targetId ? matchState.fighters[f.targetId] : null;
+    if (!tgt) { f.redLock = false; continue; }
+    const dx = f.pos.x - tgt.pos.x;
+    const dz = f.pos.z - tgt.pos.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    f.redLock = dist <= f.unit.lockRange;
+  }
 }
 
 // THE function. One server tick.
 //
 //   matchState — mutable state object created by createMatchState
-//   inputs     — { p1: InputFrame, p2: InputFrame } (use emptyInput() for absent players)
+//   inputs     — { p1: InputFrame, p2: InputFrame, ... } keyed by fighter id.
+//                Use emptyInput() (or omit) for absent players. Bots ought to
+//                have their tickBot driven BEFORE this call and their inputs
+//                left as emptyInput so the bot's already-set velocity / state
+//                carries through applyInput-like behaviour.
 //   now        — server-authoritative time in ms (Date.now())
 //   dt         — delta time in seconds (typically TICK_RATE_MS / 1000)
 //
@@ -158,41 +179,43 @@ export function tickMatch(matchState, inputs, now, dt) {
   matchState.events = []; // events are per-tick
 
   const arena = getArena(matchState.mapKey);
-
-  const p1 = matchState.fighters.p1;
-  const p2 = matchState.fighters.p2;
+  const fighters = Object.values(matchState.fighters);
 
   // 1. Per-fighter pre-tick (ammo, sniper charge timer).
-  tickAmmo(p1, now);
-  tickAmmo(p2, now);
-  tickSniperCharge(matchState, p1, now, inputs.p1 ?? null);
-  tickSniperCharge(matchState, p2, now, inputs.p2 ?? null);
+  for (const f of fighters) {
+    tickAmmo(f, now);
+    tickSniperCharge(matchState, f, now, inputs[f.id] ?? null);
+  }
 
-  // 2. Apply player inputs / drive bots. Inputs are authoritative; if a
-  //    slot is absent (e.g. only p1 connected, p2 is a bot), the caller
-  //    should run tickBot for that fighter BEFORE calling tickMatch and
-  //    pass emptyInput() here.
-  applyInput(matchState, p1, inputs.p1 ?? emptyInput(), now, arena.obstacles, arena.surfaces);
-  applyInput(matchState, p2, inputs.p2 ?? emptyInput(), now, arena.obstacles, arena.surfaces);
+  // 2. Apply player inputs / drive bots. Inputs are authoritative; bot
+  //    fighters should have tickBot run by the caller before tickMatch.
+  for (const f of fighters) {
+    applyInput(matchState, f, inputs[f.id] ?? emptyInput(), now, arena.obstacles, arena.surfaces);
+  }
 
-  // 3. Soft-collide repulsion between fighters.
-  applyRepulsion(p1, p2, now);
+  // 3. Soft-collide repulsion across every fighter pair.
+  for (let i = 0; i < fighters.length; i += 1) {
+    for (let j = i + 1; j < fighters.length; j += 1) {
+      applyRepulsion(fighters[i], fighters[j], now);
+    }
+  }
 
   // 4. Integrate horizontal velocity + jump physics. Track prevPos for the
   //    collision-resolve step.
-  const p1Prev = { x: p1.pos.x, y: p1.pos.y, z: p1.pos.z };
-  const p2Prev = { x: p2.pos.x, y: p2.pos.y, z: p2.pos.z };
-  integrateFighter(p1, arena.surfaces, dt);
-  integrateFighter(p2, arena.surfaces, dt);
+  const prevPositions = fighters.map((f) => ({
+    f,
+    pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
+  }));
+  for (const f of fighters) integrateFighter(f, arena.surfaces, dt);
 
   // 5. Resolve obstacle penetrations.
-  resolveUnitObstacleCollisions(p1, p1Prev, arena.obstacles);
-  resolveUnitObstacleCollisions(p2, p2Prev, arena.obstacles);
+  for (const { f, pos } of prevPositions) {
+    resolveUnitObstacleCollisions(f, pos, arena.obstacles);
+  }
 
   // 6. Tiny-velocity damping (replicates the offline build's "stops below
   //    0.14 vel" behavior).
-  dampHorizontal(p1, dt);
-  dampHorizontal(p2, dt);
+  for (const f of fighters) dampHorizontal(f, dt);
 
   // 7. Lock state.
   updateLocks(matchState);

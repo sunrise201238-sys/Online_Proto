@@ -136,10 +136,21 @@ export function createProjectile({
 }
 
 // Match state — the thing that travels in snapshots.
+//
+// Mode is '1v1' (p1 vs p2, team A vs team B) or '2v2' (p1+p3 team A,
+// p2+p4 team B). p3UnitKey / p4UnitKey are ignored in 1v1 and the fighters
+// object only contains p1 and p2 in that case. Every fighter carries
+// `team` ('A' | 'B') and `targetId` (id of the enemy it's currently locked
+// onto). For human-controlled fighters the targetId is mutated via the
+// targetSwitch input flag; for bot-controlled fighters the server driver
+// picks it before each tick.
 export function createMatchState({
   mapKey = 'arena1',
+  mode = '1v1',
   p1UnitKey = 'unit1',
   p2UnitKey = 'unit2',
+  p3UnitKey = 'unit1',
+  p4UnitKey = 'unit2',
   startTime = 0
 } = {}) {
   if (!MAP_DATA[mapKey]) throw new Error(`Unknown map: ${mapKey}`);
@@ -148,17 +159,44 @@ export function createMatchState({
     p1: createFighter('p1', p1UnitKey, arena.spawns.p1),
     p2: createFighter('p2', p2UnitKey, arena.spawns.p2)
   };
-  // Set initial lock targeting (each fighter targets the other).
+  fighters.p1.team = 'A';
+  fighters.p2.team = 'B';
   fighters.p1.targetId = 'p2';
   fighters.p2.targetId = 'p1';
-  // Spawn protection — both fighters are immune for the first SPAWN_IMMUNITY_MS
-  // of the round.
-  fighters.p1.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
-  fighters.p2.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
+
+  if (mode === '2v2') {
+    // 2v2 teammates spawn next to their counterpart, offset Z+12 (mirrors the
+    // offline client's 4-corner placement so we don't need per-map spawn data).
+    const p3Spawn = {
+      x: arena.spawns.p1.x,
+      y: arena.spawns.p1.y ?? GROUND_BASE_Y,
+      z: arena.spawns.p1.z + 12
+    };
+    const p4Spawn = {
+      x: arena.spawns.p2.x,
+      y: arena.spawns.p2.y ?? GROUND_BASE_Y,
+      z: arena.spawns.p2.z + 12
+    };
+    fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
+    fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
+    fighters.p3.team = 'A';
+    fighters.p4.team = 'B';
+    // Default targets: each pairs off with the opposite-team counterpart.
+    // Bot drivers / human target-switch can override later.
+    fighters.p3.targetId = 'p4';
+    fighters.p4.targetId = 'p3';
+  }
+
+  // Spawn protection — all fighters immune for the first SPAWN_IMMUNITY_MS.
+  for (const f of Object.values(fighters)) {
+    f.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
+  }
+
   return {
     tick: 0,
     startTime,
     now: startTime,
+    mode,
     mapKey,
     fighters,
     projectiles: [],
@@ -166,6 +204,28 @@ export function createMatchState({
     // expirations). Cleared at the top of every tick.
     events: []
   };
+}
+
+// Helpers for team-aware iteration. Used by tickMatch and any caller that
+// needs to enumerate teams without hardcoding p1/p2/p3/p4 ids.
+export function getFightersOnTeam(matchState, team) {
+  return Object.values(matchState.fighters).filter((f) => f.team === team);
+}
+export function getEnemiesOf(matchState, fighter) {
+  return Object.values(matchState.fighters).filter((f) => f.team !== fighter.team);
+}
+export function pickClosestEnemyId(matchState, fighter) {
+  const enemies = getEnemiesOf(matchState, fighter).filter((f) => f.hp > 0);
+  if (enemies.length === 0) return null;
+  let bestId = enemies[0].id;
+  let bestDist = Infinity;
+  for (const e of enemies) {
+    const dx = e.pos.x - fighter.pos.x;
+    const dz = e.pos.z - fighter.pos.z;
+    const d = dx * dx + dz * dz;
+    if (d < bestDist) { bestDist = d; bestId = e.id; }
+  }
+  return bestId;
 }
 
 // Snapshot extraction — what the server sends to clients each tick. By

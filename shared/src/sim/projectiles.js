@@ -231,7 +231,11 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // Spawn protection: the round passes through an invulnerable target.
     // Step (dodge) immunity: the round also passes through while the target is
     // mid-step, so a well-timed dodge avoids the hit entirely.
-    if (now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
+    // Friendly fire (2v2): if owner and target are on the same team the round
+    // passes through. 1v1 fighters have opposite teams so this is a no-op.
+    const owner = matchState.fighters[p.ownerId];
+    const sameTeam = owner?.team && target.team && owner.team === target.team;
+    if (!sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;

@@ -256,9 +256,12 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
-  const opponentId = botId === 'p1' ? 'p2' : 'p1';
-  const opp = matchState.fighters[opponentId];
-  if (!opp) return;
+  // Bot's opp is its current targetId. In 1v1 there's only ever one enemy so
+  // this is equivalent to the old hardcoded pair lookup. In 2v2 the server
+  // (or the caller) picks the closest live enemy via pickClosestEnemyId and
+  // writes it onto me.targetId before this call.
+  const opp = me.targetId ? matchState.fighters[me.targetId] : null;
+  if (!opp || opp.hp <= 0) return;
 
   // Sniper-charge lock: stand still until the charge resolves.
   if (me.sniperChargeTargetId) {
