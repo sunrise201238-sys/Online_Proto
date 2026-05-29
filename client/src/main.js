@@ -186,6 +186,14 @@ function getAlliesOf(mech) {
   const myTeam = getTeamOf(mech);
   return getAllFighters().filter((f) => f !== mech && getTeamOf(f) === myTeam);
 }
+// Slot conventions shared with the server — p1+p3 = team A, p2+p4 = team B.
+// Used by the online code to map snapshot fighter ids onto the local
+// state.player / state.ally / state.enemy / state.enemy2 mechs.
+const ONLINE_SLOT_IDS = ['p1', 'p2', 'p3', 'p4'];
+function teamOfSlot(slot) {
+  return (slot === 'p1' || slot === 'p3') ? 'A' : 'B';
+}
+
 function pickClosestEnemyOf(mech) {
   if (!mech) return null;
   const enemies = getEnemiesOf(mech).filter((f) => f.state.hp > 0);
@@ -222,6 +230,14 @@ function runBotAIForMech(me, opp, now) {
 // only one — no-op. In 2v2 it flips between enemy and enemy2 (skipping any
 // that have hit 0 HP). Reparents the reticle sprite to the new target.
 function cyclePlayerTarget() {
+  // Online: server is authoritative on fighter.targetId. Set the input flag
+  // and the next sent input frame will carry targetSwitch=true; the server
+  // cycles, the snapshot mirror updates state.playerCurrentTarget.
+  if (state.online) {
+    input.targetSwitchTap = true;
+    return;
+  }
+  // Offline: mutate local state directly.
   if (!state.player) return;
   const enemies = getEnemiesOf(state.player).filter((f) => f.state.hp > 0);
   if (enemies.length === 0) return;
@@ -384,7 +400,8 @@ const input = {
   jump: false,
   stepTap: false,
   shootTap: false,
-  shootHold: false
+  shootHold: false,
+  targetSwitchTap: false  // 2v2: cycle to next enemy this frame
 };
 
 let touchSteeringActive = false;
@@ -2745,7 +2762,8 @@ function buildOnlineInputFrame() {
     jump: !!input.jump,
     stepTap: !!input.stepTap,
     shootTap: !!input.shootTap,
-    shootHold: !!input.shootHold
+    shootHold: !!input.shootHold,
+    targetSwitch: !!input.targetSwitchTap
   };
 }
 
@@ -3032,6 +3050,7 @@ function runPredictionTick() {
   // Reset taps so they fire exactly once per press.
   input.stepTap = false;
   input.shootTap = false;
+  input.targetSwitchTap = false;
   input.jump = false;
 }
 
@@ -3253,22 +3272,30 @@ function showOnlineWaitingOpp(onl, conn) {
 }
 
 // Lazy mech + arena setup. Called every frame from runOnlineMatchFrame; only
-// rebuilds when the (mapKey, unit assignments, my slot) signature changes.
+// rebuilds when the (mapKey, mode, unit assignments, my slot) signature
+// changes. In 2v2 it builds 4 mechs and remembers which snapshot slot maps
+// to state.player / state.ally / state.enemy / state.enemy2 (onl.slotMap).
 function ensureOnlineMatchSetup(snap) {
   if (!snap) return;
   const onl = state.online;
   const myId = onl.myPlayerId;
-  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
-  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
-  const myUnitKey = snap.fighters[cameraId].unitKey;
-  const oppUnitKey = snap.fighters[otherId].unitKey;
+  const mode = snap.mode || '1v1';
+  const cameraId = ONLINE_SLOT_IDS.includes(myId) ? myId : 'p1';
+  const activeSlots = mode === '2v2' ? ONLINE_SLOT_IDS : ONLINE_SLOT_IDS.slice(0, 2);
+  const myTeam = teamOfSlot(cameraId);
+  const allyId = activeSlots.find((id) => id !== cameraId && teamOfSlot(id) === myTeam) || null;
+  const enemyIds = activeSlots.filter((id) => teamOfSlot(id) !== myTeam);
+  const enemyId = enemyIds[0];
+  const enemy2Id = enemyIds[1] || null;
+
+  const unitSig = activeSlots.map((id) => `${id}:${snap.fighters[id]?.unitKey ?? ''}`).join('|');
   const mapKey = snap.mapKey;
-  const sig = `${mapKey}|${myUnitKey}|${oppUnitKey}|${cameraId}`;
+  const sig = `${mapKey}|${unitSig}|${cameraId}|${mode}`;
   if (onl.mechsCreatedFor === sig) return;
 
-  // Tear down old mechs/arena/HUD/projectile meshes.
-  [state.player, state.enemy].forEach((m) => {
-    if (!m) return;
+  // Tear down old mechs/arena/HUD/projectile meshes. getAllFighters covers
+  // any subset (1v1 had 2; 2v2 has 4) so we don't have to special-case.
+  getAllFighters().forEach((m) => {
     disposeGlintImmediate(m);
     removeImmunityAuraFromMech(m);
     scene.remove(m.root);
@@ -3277,6 +3304,9 @@ function ensureOnlineMatchSetup(snap) {
   });
   state.player = null;
   state.enemy = null;
+  state.ally = null;
+  state.enemy2 = null;
+  state.playerCurrentTarget = null;
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
   state.reticle = null;
   if (state.hud) { state.hud.remove(); state.hud = null; }
@@ -3287,22 +3317,45 @@ function ensureOnlineMatchSetup(snap) {
   }
   onl.projectileMeshes.clear();
 
-  // Build new. state.player = local mech (camera target), state.enemy = opp.
-  state.player = createMech(0x62d7ff, UNIT_DATA[myUnitKey], true);
-  state.enemy = createMech(0xff7ad5, UNIT_DATA[oppUnitKey]);
+  // Tell the HUD layout which mode it is BEFORE setupHUD reads state.mode.
+  state.mode = mode;
+
+  // Build new mechs. Same colour palette as offline so it reads consistently.
+  state.player = createMech(0x62d7ff, UNIT_DATA[snap.fighters[cameraId].unitKey], true);
+  state.player.state.team = myTeam;
   const myPos = snap.fighters[cameraId].pos;
-  const oppPos = snap.fighters[otherId].pos;
   state.player.body.position.set(myPos.x, myPos.y, myPos.z);
-  state.enemy.body.position.set(oppPos.x, oppPos.y, oppPos.z);
+
+  state.enemy = createMech(0xff7ad5, UNIT_DATA[snap.fighters[enemyId].unitKey]);
+  state.enemy.state.team = teamOfSlot(enemyId);
+  const ePos = snap.fighters[enemyId].pos;
+  state.enemy.body.position.set(ePos.x, ePos.y, ePos.z);
+
+  if (mode === '2v2' && allyId) {
+    state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey]);
+    state.ally.state.team = myTeam;
+    const aPos = snap.fighters[allyId].pos;
+    state.ally.body.position.set(aPos.x, aPos.y, aPos.z);
+  }
+  if (mode === '2v2' && enemy2Id) {
+    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey]);
+    state.enemy2.state.team = teamOfSlot(enemy2Id);
+    const e2Pos = snap.fighters[enemy2Id].pos;
+    state.enemy2.body.position.set(e2Pos.x, e2Pos.y, e2Pos.z);
+  }
+
+  // Save the snapshot-id → mech mapping for per-frame mirroring.
+  onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
+
   buildArenaForMap(mapKey);
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
+  state.playerCurrentTarget = state.enemy;
   // Fresh match — seed the firing tracker so the reticle starts green.
   state.reticleLastEnemyFireAt = null;
   state.reticleEnemyFiringUntil = 0;
   hudRefs = setupHUD();
-  // Pause button is meaningless online (server runs the sim authoritatively
-  // — we can't pause it from a single client). Drop it from the HUD.
+  // Pause button is meaningless online (server runs the sim authoritatively).
   const pauseBtn = state.hud?.querySelector('#pause-btn');
   if (pauseBtn) pauseBtn.remove();
   onl.mechsCreatedFor = sig;
@@ -3338,12 +3391,14 @@ function runOnlineMatchFrame(dt, onl, conn) {
     runPredictionTick();
   }
 
-  // 3. Render. state.player = local (camera target); state.enemy = opp.
+  // 3. Render. state.player = local (camera target); state.enemy = primary
+  //    enemy (slotMap.enemyId in 2v2, opposite slot in 1v1).
   const myId = onl.myPlayerId;
-  const cameraId = (myId === 'p1' || myId === 'p2') ? myId : 'p1';
-  const otherId = cameraId === 'p1' ? 'p2' : 'p1';
+  const cameraId = ONLINE_SLOT_IDS.includes(myId) ? myId : 'p1';
+  // 1v1 fallback when slotMap hasn't been built yet: derive otherId directly.
+  const otherId = onl.slotMap?.enemyId ?? (cameraId === 'p1' ? 'p2' : 'p1');
   let cameraFighter;
-  if ((myId === 'p1' || myId === 'p2') && onl.predictedState) {
+  if (ONLINE_SLOT_IDS.includes(myId) && onl.predictedState) {
     cameraFighter = onl.predictedState.fighters[cameraId];
   } else {
     cameraFighter = snap.fighters[cameraId];
@@ -3382,11 +3437,41 @@ function runOnlineMatchFrame(dt, onl, conn) {
   if (cameraFighter) mirrorFighterToMech(cameraFighter, state.player);
   if (otherFighter) mirrorFighterToMech(otherFighter, state.enemy);
 
+  // 2v2: mirror ally + enemy2 from interpolated snapshots (same path as the
+  // primary opponent — both are remote fighters from this client's view).
+  if (state.mode === '2v2' && onl.slotMap) {
+    if (state.ally && onl.slotMap.allyId) {
+      const af = interpolateRemoteFighter(onl.slotMap.allyId, prevSnap, snap, lastSnapAt, realNow);
+      if (af) mirrorFighterToMech(af, state.ally);
+    }
+    if (state.enemy2 && onl.slotMap.enemy2Id) {
+      const ef = interpolateRemoteFighter(onl.slotMap.enemy2Id, prevSnap, snap, lastSnapAt, realNow);
+      if (ef) mirrorFighterToMech(ef, state.enemy2);
+    }
+  }
+
+  // Sync the player's local current-target reference to whatever the server
+  // says (cameraFighter.targetId). The server is authoritative for cycle
+  // behaviour — client just reparents the reticle to match.
+  if (cameraFighter?.targetId && state.mode === '2v2' && onl.slotMap) {
+    const tgt = cameraFighter.targetId === onl.slotMap.enemyId ? state.enemy
+      : cameraFighter.targetId === onl.slotMap.enemy2Id ? state.enemy2
+      : null;
+    if (tgt && tgt !== state.playerCurrentTarget) {
+      state.playerCurrentTarget = tgt;
+      if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+      tgt.root.add(state.reticle);
+      state.reticleLastEnemyFireAt = tgt.state.lastFireAt;
+      state.reticleEnemyFiringUntil = 0;
+    }
+  }
+
   // Spawn-protection glow. invulnerableUntil is server-clock (Date.now) here,
   // mirrored from the snapshot, so compare against Date.now().
   const immuneNow = Date.now();
-  applyImmunityGlow(state.player, immuneNow < state.player.state.invulnerableUntil);
-  applyImmunityGlow(state.enemy, immuneNow < state.enemy.state.invulnerableUntil);
+  getAllFighters().forEach((m) => {
+    applyImmunityGlow(m, immuneNow < m.state.invulnerableUntil);
+  });
 
   const ddx = state.enemy.root.position.x - state.player.root.position.x;
   const ddz = state.enemy.root.position.z - state.player.root.position.z;
@@ -3397,10 +3482,10 @@ function runOnlineMatchFrame(dt, onl, conn) {
   }
 
   updateLocksAndReticle();
-  tickGlintRemoval(state.player);
-  tickGlintRemoval(state.enemy);
-  updateGlintScale(state.player);
-  updateGlintScale(state.enemy);
+  getAllFighters().forEach((m) => {
+    tickGlintRemoval(m);
+    updateGlintScale(m);
+  });
   updateVfx(dt);
   updateCamera();
   updateMechXRayVisibility();
