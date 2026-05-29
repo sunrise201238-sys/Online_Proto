@@ -162,6 +162,14 @@ export function createConnection() {
       socket.emit('match:start-now');
     },
 
+    // Move to a different (empty) slot during the lobby. Used by the team
+    // swap UI so two players can co-op on the same team. Server rejects if
+    // the slot is taken, not active in the current mode, or is p1.
+    sendJoinSlot: (slot) => {
+      if (!connected) return;
+      socket.emit('match:join-slot', { slot });
+    },
+
     getLobbyConfig: () => lobbyConfig,
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
