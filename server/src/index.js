@@ -343,6 +343,46 @@ io.on('connection', (socket) => {
     maybeStartMatch();
   });
 
+  // Slot swap (any player, lobby only). Lets a player move to an empty
+  // active slot — for example, swap to a slot on the same team as another
+  // human so the two can co-op against bots. Host slot (p1) is locked to
+  // avoid messy host-transfer logic; if you want to be host, you have to be
+  // the first to connect.
+  socket.on('match:join-slot', (data) => {
+    const slot = lobby.players.get(socket.id);
+    if (!SLOT_IDS.includes(slot)) return;
+    if (lobby.state !== 'waiting') return;
+    const newSlot = data?.slot;
+    if (!SLOT_IDS.includes(newSlot)) return;
+    if (newSlot === slot) return;
+    if (newSlot === 'p1') return; // host slot is locked
+    if (!activeSlots(lobby.mode).includes(newSlot)) return;
+    // Target slot must currently be empty (not occupied by another human).
+    if (occupiedSlots().has(newSlot)) return;
+
+    // Move. Carry their unitKey along; drop mapKey (only host's map counts
+    // and the old slot's mapKey would've been ignored anyway).
+    lobby.players.set(socket.id, newSlot);
+    lobby.config[newSlot] = {
+      unitKey: lobby.config[slot].unitKey,
+      mapKey: null
+    };
+    lobby.config[slot] = { unitKey: null, mapKey: null };
+    lobby.lastAcked[newSlot] = -1;
+    lobby.lastAcked[slot] = -1;
+    lobby.rematchRequested[newSlot] = false;
+    lobby.rematchRequested[slot] = false;
+
+    socket.emit('player:assigned', {
+      playerId: newSlot,
+      team: teamOf(newSlot),
+      mode: 'online-ready',
+      lobbyMode: lobby.mode,
+      matchState: lobby.state
+    });
+    emitLobbyConfig();
+  });
+
   // Host-only explicit start (2v2). Empty active slots get bot-filled.
   socket.on('match:start-now', () => {
     const slot = lobby.players.get(socket.id);
