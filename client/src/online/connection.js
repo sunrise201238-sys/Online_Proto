@@ -149,6 +149,19 @@ export function createConnection() {
       socket.emit('match:configure', cfg);
     },
 
+    // Host-only: toggle lobby mode between '1v1' and '2v2'. Server rejects
+    // if not p1 or if a match is active.
+    sendSetMode: (mode) => {
+      if (!connected) return;
+      socket.emit('match:set-mode', { mode });
+    },
+
+    // Host-only (2v2): start the match now with bot-fill for empty slots.
+    sendStartNow: () => {
+      if (!connected) return;
+      socket.emit('match:start-now');
+    },
+
     getLobbyConfig: () => lobbyConfig,
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
