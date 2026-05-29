@@ -2724,7 +2724,8 @@ function startOnlineMatch() {
 
     // Phase 4 — UI lifecycle.
     uiSubPhase: 'connecting',    // see computeOnlineUiPhase()
-    mechsCreatedFor: null         // signature key; set when ensureOnlineMatchSetup builds rig
+    mechsCreatedFor: null,        // signature key; set when ensureOnlineMatchSetup builds rig
+    modePushedToServer: false     // set true once host has pushed state.mode → server
   };
   state.online.conn.open();
 
@@ -3282,11 +3283,10 @@ function showOnlineWaitingOpp(onl, conn) {
     else waitingText = 'Starting…';
   }
 
-  // Roster row HTML — one per active slot. Marks YOU, shows unit pick, or
-  // a clickable "Join" button on empty slots so a non-host player can swap
-  // to a teammate's side (or move to any open slot). Host slot p1 is never
-  // joinable — it's the "you must be the first to claim it" anchor.
-  const rosterRows = slots.map((s) => {
+  // Roster grouped by team. Each team gets its own <section> with a header
+  // and one row per slot on that side. Empty non-host slots show a Join
+  // button so a player can hop to the other team.
+  const renderSlot = (s) => {
     const team = teamOfSlot(s);
     const isMe = s === myId;
     const isOccupied = occupied.has(s);
@@ -3298,29 +3298,32 @@ function showOnlineWaitingOpp(onl, conn) {
     } else if (isOccupied) {
       statusHtml = `<span class="roster-status">${unitName ? `Player — ${unitName}` : 'Player (picking…)'}</span>`;
     } else if (s === 'p1') {
-      statusHtml = `<span class="roster-status">(empty — host slot)</span>`;
+      statusHtml = `<span class="roster-status">(host slot)</span>`;
     } else {
-      // Empty + non-host slot — show the bot-fill label plus a Join button
-      // (only if the current player isn't already there).
       const labelText = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
       statusHtml = `<span class="roster-status">${labelText}</span>
         <button class="roster-join" data-join-slot="${s}">Join</button>`;
     }
     return `<div class="roster-row roster-team-${team}">
       <span class="roster-slot">${s}</span>
-      <span class="roster-team">Team ${team}</span>
       ${statusHtml}
     </div>`;
-  }).join('');
+  };
+  const teamASlots = slots.filter((s) => teamOfSlot(s) === 'A');
+  const teamBSlots = slots.filter((s) => teamOfSlot(s) === 'B');
+  const rosterHtml = `
+    <div class="roster-team-group roster-team-A">
+      <div class="roster-team-header">Team A</div>
+      ${teamASlots.map(renderSlot).join('')}
+    </div>
+    <div class="roster-team-group roster-team-B">
+      <div class="roster-team-header">Team B</div>
+      ${teamBSlots.map(renderSlot).join('')}
+    </div>`;
 
-  // Host-only mode toggle (only enabled when no match is active — we're in
-  // 'waiting-opp' phase, so that's already true).
-  const modeChip = isHost ? `
-    <div class="mode-chip">
-      <button data-set-mode="1v1" class="${mode === '1v1' ? 'mode-active' : ''}">1v1</button>
-      <button data-set-mode="2v2" class="${mode === '2v2' ? 'mode-active' : ''}">2v2</button>
-    </div>` : `
-    <div class="menu-divider">Mode: ${mode}</div>`;
+  // Mode is chosen on the main menu before entering the online flow.
+  // Display it here as read-only — no toggle.
+  const modeChip = `<div class="menu-divider">Mode: ${mode}</div>`;
 
   // 2v2 host's explicit Start Now button. Only enabled once they've picked
   // unit + map (otherwise the server rejects).
@@ -3334,7 +3337,7 @@ function showOnlineWaitingOpp(onl, conn) {
   menu.innerHTML = `
     <h2>${waitingText}</h2>
     ${modeChip}
-    <div class="online-roster">${rosterRows}</div>
+    <div class="online-roster">${rosterHtml}</div>
     <div class="online-status">
       <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
     </div>
@@ -3342,15 +3345,6 @@ function showOnlineWaitingOpp(onl, conn) {
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
-
-  menu.querySelectorAll('button[data-set-mode]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      const newMode = btn.dataset.setMode;
-      if (newMode === mode) return;
-      onl.conn.sendSetMode(newMode);
-    });
-  });
   menu.querySelectorAll('button[data-join-slot]').forEach((btn) => {
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -3604,6 +3598,14 @@ function tickOnline(dt, _now) {
     onl.myPlayerId = connPid;
     // Force the lobby UI to re-render with the new slot info.
     onl.lastWaitingSig = null;
+  }
+  // Mode is committed BEFORE entering the online flow (chip on the main
+  // unit-select menu). When the host gets assigned p1, push their chosen
+  // mode to the server once. Non-hosts inherit whatever the lobby's mode
+  // already is. We only fire this once per session.
+  if (onl.myPlayerId === 'p1' && !onl.modePushedToServer && conn.isConnected()) {
+    conn.sendSetMode(state.mode || '1v1');
+    onl.modePushedToServer = true;
   }
   if (!conn.isConnected() && conn.getLastError()) {
     showOnlineOverlay(`Connection error: ${conn.getLastError()}`);

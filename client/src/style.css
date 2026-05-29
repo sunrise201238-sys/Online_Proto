@@ -248,13 +248,16 @@ body.pseudo-fullscreen #app {
   border-radius: 10px;
 }
 
-/* 2v2 online roster on the lobby (waiting-opp) screen. One row per slot. */
-.menu .online-roster { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 8px 10px; background: rgba(20, 30, 44, 0.5); border-radius: 8px; color: #d7f6ff; font-size: 13px; box-sizing: border-box; }
-.menu .online-roster .roster-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; }
-.menu .online-roster .roster-team-A { border-left: 3px solid #62d7ff; padding-left: 8px; }
-.menu .online-roster .roster-team-B { border-left: 3px solid #ff7ad5; padding-left: 8px; }
-.menu .online-roster .roster-slot { width: 22px; color: #8eb6c8; font-weight: 700; }
-.menu .online-roster .roster-team { color: #8eb6c8; font-size: 11px; }
+/* 2v2 online roster on the lobby screen — grouped by team. Team A on top,
+   Team B below, each with its own header. */
+.menu .online-roster { display: flex; flex-direction: column; gap: 10px; width: 280px; padding: 10px; background: rgba(20, 30, 44, 0.5); border-radius: 8px; color: #d7f6ff; font-size: 13px; box-sizing: border-box; }
+.menu .online-roster .roster-team-group { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 6px; }
+.menu .online-roster .roster-team-group.roster-team-A { background: rgba(98, 215, 255, 0.06); border-left: 3px solid #62d7ff; }
+.menu .online-roster .roster-team-group.roster-team-B { background: rgba(255, 122, 213, 0.06); border-left: 3px solid #ff7ad5; }
+.menu .online-roster .roster-team-header { color: #c0e8ff; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; }
+.menu .online-roster .roster-team-group.roster-team-B .roster-team-header { color: #ffb8e5; }
+.menu .online-roster .roster-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; }
+.menu .online-roster .roster-slot { width: 22px; color: #8eb6c8; font-weight: 700; font-size: 11px; }
 .menu .online-roster .roster-status { flex: 1; text-align: right; color: #e5fbff; }
 .menu .online-roster .roster-join { width: auto; padding: 4px 12px; font-size: 11px; border-radius: 12px; border: 1px solid #4a809a; background: #1a3445; color: #c0e8ff; letter-spacing: 1px; margin-left: 6px; }
 .menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 6px 10px; background: rgba(20, 30, 44, 0.4); border-radius: 8px; color: #d7f6ff; font-size: 12px; box-sizing: border-box; }
