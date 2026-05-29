@@ -37,10 +37,7 @@ const BOT_COVER_STEER_WEIGHT = 2.6;
 const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
-// 350 in offline. Slightly extended online to give the Defense-sprint window
-// time to actually render through ~100 ms of snapshot interpolation. Same
-// trigger (any hit), same direction logic; just visually held longer.
-const BOT_HIT_EVADE_MS = 550;
+const BOT_HIT_EVADE_MS = 350;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -455,7 +452,7 @@ export function tickBot(matchState, botId, now) {
       me.botDefenseDirZ = dzd;
       // Stuck-triggered Defense runs 1.5 s to give the strafe room to break
       // the wedge; hit/glint-triggered keeps the original 350/600 ms.
-      me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 800 : 550));
+      me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
@@ -481,14 +478,14 @@ export function tickBot(matchState, botId, now) {
       }
       me.botDefenseDirX = dxd2;
       me.botDefenseDirZ = dzd2;
-      me.botDefenseUntil = now + (sniperCharging ? 800 : 550);
+      me.botDefenseUntil = now + (sniperCharging ? 600 : 350);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
       me.botDefenseStuckMode = false;
     }
-    const minDur = sniperCharging ? 800 : 550;
+    const minDur = sniperCharging ? 600 : 350;
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
     }
