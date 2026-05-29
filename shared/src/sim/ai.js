@@ -491,6 +491,23 @@ export function tickBot(matchState, botId, now) {
     }
   }
 
+  // --- Stamina-saving hysteresis ---
+  // Maze and Reposition unconditionally sprint, which in sustained 2v2
+  // firefights can drain boost faster than it regenerates — bots end up
+  // exhausted late game with nothing left for emergencies. This shared
+  // hysteresis flag forces those two states to walk once boost dips below
+  // a reserve, and only resumes sprint once boost has recovered to the
+  // READY threshold (mirrors the Pursue state's existing hysteresis).
+  // Defense gets its own lower floor: it can keep sprinting through low
+  // boost (it's the survival state) down to BOT_SPRINT_MIN_BOOST + 10,
+  // so the bot still dodges aggressively when it actually needs to.
+  const sprintReserve = BOT_SPRINT_MIN_BOOST + 25;   // 33
+  const defenseSprintFloor = BOT_SPRINT_MIN_BOOST + 10; // 18
+  if (me.boost >= BOT_SPRINT_READY_BOOST) me.botStaminaSavingMode = false;
+  if (me.boost <= sprintReserve) me.botStaminaSavingMode = true;
+  const conserveStamina = !!me.botStaminaSavingMode;
+  const defenseCanSprint = me.boost >= defenseSprintFloor;
+
   // --- State behavior: heading + sprint intent + optional jump ---
   let mx = 0, mz = 0;
   let wantSprint = false;
@@ -539,7 +556,7 @@ export function tickBot(matchState, botId, now) {
     let tz = (me.botMazeDirZ ?? sideZ) + avoid.rz * 0.3;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    wantSprint = true;
+    wantSprint = !conserveStamina;
     if (me.grounded && !me.airborne) {
       const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
@@ -573,12 +590,12 @@ export function tickBot(matchState, botId, now) {
       }
       wantSprint = false;
     } else {
-      wantSprint = true;
+      wantSprint = !conserveStamina;
     }
   } else if (botS === 'defense') {
     mx = me.botDefenseDirX ?? sideX;
     mz = me.botDefenseDirZ ?? sideZ;
-    wantSprint = true;
+    wantSprint = defenseCanSprint;
 
     if (!me.botDefenseInCover && obstacleNear && !playerHasLoS) {
       me.botDefenseInCover = true;
