@@ -37,7 +37,7 @@ const BOT_COVER_STEER_WEIGHT = 2.6;
 const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
-const BOT_HIT_EVADE_MS = 800;
+const BOT_HIT_EVADE_MS = 350;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -452,7 +452,7 @@ export function tickBot(matchState, botId, now) {
       me.botDefenseDirZ = dzd;
       // Stuck-triggered Defense runs 1.5 s to give the strafe room to break
       // the wedge; hit/glint-triggered keeps the original 350/600 ms.
-      me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 900 : 600));
+      me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
@@ -478,35 +478,18 @@ export function tickBot(matchState, botId, now) {
       }
       me.botDefenseDirX = dxd2;
       me.botDefenseDirZ = dzd2;
-      me.botDefenseUntil = now + (sniperCharging ? 900 : 600);
+      me.botDefenseUntil = now + (sniperCharging ? 600 : 350);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
       me.botDefenseStuckMode = false;
     }
-    const minDur = sniperCharging ? 900 : 600;
+    const minDur = sniperCharging ? 600 : 350;
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
     }
   }
-
-  // --- Stamina-saving hysteresis ---
-  // Maze and Reposition unconditionally sprint, which in sustained 2v2
-  // firefights can drain boost faster than it regenerates — bots end up
-  // exhausted late game with nothing left for emergencies. This shared
-  // hysteresis flag forces those two states to walk once boost dips below
-  // a reserve, and only resumes sprint once boost has recovered to the
-  // READY threshold (mirrors the Pursue state's existing hysteresis).
-  // Defense gets its own lower floor: it can keep sprinting through low
-  // boost (it's the survival state) down to BOT_SPRINT_MIN_BOOST + 10,
-  // so the bot still dodges aggressively when it actually needs to.
-  const sprintReserve = BOT_SPRINT_MIN_BOOST + 25;   // 33
-  const defenseSprintFloor = BOT_SPRINT_MIN_BOOST + 10; // 18
-  if (me.boost >= BOT_SPRINT_READY_BOOST) me.botStaminaSavingMode = false;
-  if (me.boost <= sprintReserve) me.botStaminaSavingMode = true;
-  const conserveStamina = !!me.botStaminaSavingMode;
-  const defenseCanSprint = me.boost >= defenseSprintFloor;
 
   // --- State behavior: heading + sprint intent + optional jump ---
   let mx = 0, mz = 0;
@@ -556,7 +539,7 @@ export function tickBot(matchState, botId, now) {
     let tz = (me.botMazeDirZ ?? sideZ) + avoid.rz * 0.3;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    wantSprint = !conserveStamina;
+    wantSprint = true;
     if (me.grounded && !me.airborne) {
       const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
@@ -590,12 +573,12 @@ export function tickBot(matchState, botId, now) {
       }
       wantSprint = false;
     } else {
-      wantSprint = !conserveStamina;
+      wantSprint = true;
     }
   } else if (botS === 'defense') {
     mx = me.botDefenseDirX ?? sideX;
     mz = me.botDefenseDirZ ?? sideZ;
-    wantSprint = defenseCanSprint;
+    wantSprint = true;
 
     if (!me.botDefenseInCover && obstacleNear && !playerHasLoS) {
       me.botDefenseInCover = true;
