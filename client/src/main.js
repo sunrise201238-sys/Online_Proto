@@ -1110,7 +1110,11 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
 }
 
 function getProjectileDamage(projectile) {
-  if (state.dummyMode && projectile.owner === state.enemy) return 0;
+  // Dummy mode zeroes damage from EVERY enemy bot. In 1v1 that's just
+  // state.enemy; in 2v2 it's state.enemy + state.enemy2 (both team B).
+  // Ally's projectiles (team A, like the player) are unaffected so the
+  // player can still see their teammate land hits.
+  if (state.dummyMode && (projectile.owner === state.enemy || projectile.owner === state.enemy2)) return 0;
   return projectile.damage;
 }
 
@@ -2457,6 +2461,15 @@ function updateCamera() {
   } else {
     tgt = pickClosestEnemyOf(cam) ?? state.enemy;
   }
+  // Auto-fallback: if the chosen target is dead, swing the camera to the
+  // closest live enemy of the camera fighter. Belt-and-suspenders — the
+  // gameplay path (offline updatePlayer / online applyInput) also retargets
+  // on death, but the camera reads its own tgt each frame so we cover the
+  // edge case where the player can't fire (sniper charge, hit-stun, etc).
+  if (tgt && tgt.state.hp <= 0) {
+    const fallback = pickClosestEnemyOf(cam);
+    if (fallback) tgt = fallback;
+  }
   if (!cam || !tgt) return;
   const p = cam.root.position;
   const e = tgt.root.position;
@@ -3269,22 +3282,34 @@ function showOnlineWaitingOpp(onl, conn) {
     else waitingText = 'Starting…';
   }
 
-  // Roster row HTML — one per active slot. Marks YOU, shows unit pick or
-  // "(empty — bot fill)" for empty slots.
+  // Roster row HTML — one per active slot. Marks YOU, shows unit pick, or
+  // a clickable "Join" button on empty slots so a non-host player can swap
+  // to a teammate's side (or move to any open slot). Host slot p1 is never
+  // joinable — it's the "you must be the first to claim it" anchor.
   const rosterRows = slots.map((s) => {
     const team = teamOfSlot(s);
     const isMe = s === myId;
     const isOccupied = occupied.has(s);
     const slotCfg = cfg?.config?.[s] ?? {};
     const unitName = slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null;
-    let status;
-    if (isMe) status = unitName ? `You — ${unitName}` : 'You';
-    else if (isOccupied) status = unitName ? `Player — ${unitName}` : 'Player (picking…)';
-    else status = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
+    let statusHtml;
+    if (isMe) {
+      statusHtml = `<span class="roster-status">${unitName ? `You — ${unitName}` : 'You'}</span>`;
+    } else if (isOccupied) {
+      statusHtml = `<span class="roster-status">${unitName ? `Player — ${unitName}` : 'Player (picking…)'}</span>`;
+    } else if (s === 'p1') {
+      statusHtml = `<span class="roster-status">(empty — host slot)</span>`;
+    } else {
+      // Empty + non-host slot — show the bot-fill label plus a Join button
+      // (only if the current player isn't already there).
+      const labelText = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
+      statusHtml = `<span class="roster-status">${labelText}</span>
+        <button class="roster-join" data-join-slot="${s}">Join</button>`;
+    }
     return `<div class="roster-row roster-team-${team}">
       <span class="roster-slot">${s}</span>
       <span class="roster-team">Team ${team}</span>
-      <span class="roster-status">${status}</span>
+      ${statusHtml}
     </div>`;
   }).join('');
 
@@ -3324,6 +3349,12 @@ function showOnlineWaitingOpp(onl, conn) {
       const newMode = btn.dataset.setMode;
       if (newMode === mode) return;
       onl.conn.sendSetMode(newMode);
+    });
+  });
+  menu.querySelectorAll('button[data-join-slot]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      onl.conn.sendJoinSlot(btn.dataset.joinSlot);
     });
   });
   const startBtn = menu.querySelector('#online-start-now');
@@ -3566,8 +3597,13 @@ function tickOnline(dt, _now) {
   if (!onl) return;
   const conn = onl.conn;
 
-  if (!onl.myPlayerId && conn.getPlayerId()) {
-    onl.myPlayerId = conn.getPlayerId();
+  // Sync to the connection's playerId — it can change when the player swaps
+  // slots in the lobby (server sends a fresh player:assigned event).
+  const connPid = conn.getPlayerId();
+  if (connPid && onl.myPlayerId !== connPid) {
+    onl.myPlayerId = connPid;
+    // Force the lobby UI to re-render with the new slot info.
+    onl.lastWaitingSig = null;
   }
   if (!conn.isConnected() && conn.getLastError()) {
     showOnlineOverlay(`Connection error: ${conn.getLastError()}`);

@@ -256,6 +256,7 @@ body.pseudo-fullscreen #app {
 .menu .online-roster .roster-slot { width: 22px; color: #8eb6c8; font-weight: 700; }
 .menu .online-roster .roster-team { color: #8eb6c8; font-size: 11px; }
 .menu .online-roster .roster-status { flex: 1; text-align: right; color: #e5fbff; }
+.menu .online-roster .roster-join { width: auto; padding: 4px 12px; font-size: 11px; border-radius: 12px; border: 1px solid #4a809a; background: #1a3445; color: #c0e8ff; letter-spacing: 1px; margin-left: 6px; }
 .menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 6px 10px; background: rgba(20, 30, 44, 0.4); border-radius: 8px; color: #d7f6ff; font-size: 12px; box-sizing: border-box; }
 .menu .online-status .lbl { color: #8eb6c8; margin-right: 4px; }
 .menu .online-status .val { color: #e5fbff; }
