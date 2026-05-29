@@ -1276,8 +1276,10 @@ function updateProjectileSystem(dt) {
     // mid-step, so a well-timed dodge avoids the hit entirely.
     // Friendly fire (2v2): if owner and target are on the same team, the
     // round passes through. In 1v1 the team fields are unset so this is a no-op.
+    // Dead-target pass-through: matches the shared sim behaviour — bullets
+    // fly past corpses rather than triggering a hit-VFX on empty space.
     const sameTeam = p.owner?.state?.team && p.target.state.team && p.owner.state.team === p.target.state.team;
-    if (!sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
+    if (p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
