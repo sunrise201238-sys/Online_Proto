@@ -3297,11 +3297,10 @@ function showOnlineWaitingOpp(onl, conn) {
       statusHtml = `<span class="roster-status">${unitName ? `You — ${unitName}` : 'You'}</span>`;
     } else if (isOccupied) {
       statusHtml = `<span class="roster-status">${unitName ? `Player — ${unitName}` : 'Player (picking…)'}</span>`;
-    } else if (s === 'p1') {
-      statusHtml = `<span class="roster-status">(host slot)</span>`;
     } else {
       const labelText = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
-      statusHtml = `<span class="roster-status">${labelText}</span>
+      const hostHint = s === 'p1' ? ' (host)' : '';
+      statusHtml = `<span class="roster-status">${labelText}${hostHint}</span>
         <button class="roster-join" data-join-slot="${s}">Join</button>`;
     }
     return `<div class="roster-row roster-team-${team}">
