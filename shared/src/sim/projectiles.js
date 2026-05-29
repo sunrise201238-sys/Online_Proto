@@ -152,9 +152,19 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     }
 
     const target = matchState.fighters[p.targetId];
-    if (!target || target.hp <= 0) {
+    if (!target) {
+      // Target id no longer resolves (snap rebuild, swap, etc.) — give up.
       _despawn(matchState, projectiles, i, p, 'expire');
       continue;
+    }
+    // Target died mid-flight (or this is a bullet fired the same tick the
+    // target died on a different bullet's hit). Don't despawn — keep the
+    // bullet flying so the player sees it. Just disable homing; the dead
+    // body's hit volume is also gated below so the bullet won't "hit" a
+    // corpse.
+    if (target.hp <= 0) {
+      p.homing = false;
+      p.homingLost = true;
     }
 
     // Chest-height anchor (matches projectile spawn at owner.pos.y + 3.15).
@@ -233,9 +243,11 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // mid-step, so a well-timed dodge avoids the hit entirely.
     // Friendly fire (2v2): if owner and target are on the same team the round
     // passes through. 1v1 fighters have opposite teams so this is a no-op.
+    // Dead-target pass-through: a bullet whose target already died flies past
+    // the corpse rather than triggering a hit-VFX on empty space.
     const owner = matchState.fighters[p.ownerId];
     const sameTeam = owner?.team && target.team && owner.team === target.team;
-    if (!sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
+    if (target.hp > 0 && !sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
