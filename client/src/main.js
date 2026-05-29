@@ -3145,6 +3145,9 @@ function computeOnlineUiPhase(onl, conn) {
   // 'waiting' — drive UI off picks.
   const cfg = conn.getLobbyConfig();
   const myCfg = cfg?.config?.[myId] ?? {};
+  // Host has to choose 1v1 vs 2v2 before anything else — and only once.
+  // Joiners (p2/p3/p4) skip this — they inherit the lobby's existing mode.
+  if (myId === 'p1' && !onl.modePushedToServer) return 'pick-mode';
   if (!myCfg.unitKey) return 'pick-unit';
   if (myId === 'p1' && !myCfg.mapKey) return 'pick-map';
   return 'waiting-opp';
@@ -3168,11 +3171,14 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
     case 'connecting':
       showOnlineOverlay('Connecting…');
       break;
+    case 'pick-mode':
+      showOnlineModePicker(onl);
+      break;
     case 'pick-unit':
-      showOnlineUnitPicker(onl);
+      showOnlineUnitPicker(onl, conn);
       break;
     case 'pick-map':
-      showOnlineMapPicker(onl);
+      showOnlineMapPicker(onl, conn);
       break;
     case 'waiting-opp':
       showOnlineWaitingOpp(onl, conn);
@@ -3236,13 +3242,42 @@ function refreshEndMenuIfStale(onl, conn) {
 
 const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station', 'flashpoint']);
 
-function showOnlineUnitPicker(onl) {
+// Host-only step: select 1v1 or 2v2. Only shown once per session (gated by
+// onl.modePushedToServer). Joiners skip this and inherit the lobby's mode.
+function showOnlineModePicker(onl) {
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = `
+    <h2>Choose Mode</h2>
+    <div class="menu-divider">Online — you are p1 (host)</div>
+    <button data-mode-pick="1v1" class="online-play-btn">1v1</button>
+    <button data-mode-pick="2v2" class="online-play-btn">2v2</button>
+    <button data-leave class="online-leave-btn">Leave</button>
+  `;
+  app.appendChild(menu);
+  menu.querySelectorAll('button[data-mode-pick]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const mode = btn.dataset.modePick;
+      onl.conn.sendSetMode(mode);
+      onl.modePushedToServer = true;
+    });
+  });
+  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    showSelectMenu();
+  });
+}
+
+function showOnlineUnitPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   const unitEntries = Object.entries(UNIT_DATA);
+  // Mention which mode the lobby is in so non-hosts know what they joined.
+  const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
   menu.innerHTML = `
     <h2>Pick Your Unit</h2>
-    <div class="menu-divider">Online — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
+    <div class="menu-divider">Online ${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
     ${unitEntries.map(([id, u]) => `<button data-unit="${id}">${u.name}</button>`).join('')}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
@@ -3259,13 +3294,14 @@ function showOnlineUnitPicker(onl) {
   });
 }
 
-function showOnlineMapPicker(onl) {
+function showOnlineMapPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   const mapEntries = Object.entries(MAP_DATA);
+  const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
   menu.innerHTML = `
     <h2>Pick a Map</h2>
-    <div class="menu-divider">Online — you are p1 (host)</div>
+    <div class="menu-divider">Online ${mode} — you are p1 (host)</div>
     ${mapEntries.map(([id, m]) => {
       const enabled = ONLINE_AVAILABLE_MAPS.has(id);
       const label = enabled ? m.name : `${m.name} (offline only)`;
@@ -3650,12 +3686,13 @@ function tickOnline(dt, _now) {
     // Force the lobby UI to re-render with the new slot info.
     onl.lastWaitingSig = null;
   }
-  // Mode is committed BEFORE entering the online flow (chip on the main
-  // unit-select menu). When the host gets assigned p1, push their chosen
-  // mode to the server once. Non-hosts inherit whatever the lobby's mode
-  // already is. We only fire this once per session.
-  if (onl.myPlayerId === 'p1' && !onl.modePushedToServer && conn.isConnected()) {
-    conn.sendSetMode(state.mode || '1v1');
+  // Mode is committed by the host via the in-flow `pick-mode` UI phase
+  // (showOnlineModePicker). The auto-push from state.mode that used to be
+  // here was removed — the offline chip no longer drives the online mode.
+  // For joiners (non-p1), they don't push mode at all; the server's
+  // existing lobby.mode is what they inherit. We force-set modePushedToServer
+  // on the client to true for joiners so they skip the pick-mode phase.
+  if (onl.myPlayerId && onl.myPlayerId !== 'p1' && !onl.modePushedToServer) {
     onl.modePushedToServer = true;
   }
   if (!conn.isConnected() && conn.getLastError()) {
@@ -3710,14 +3747,15 @@ function showSelectMenu() {
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h2>Select Your Unit</h2>
+    <div class="menu-divider">— Offline —</div>
     <div class="mode-chip">
       <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
       <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
     </div>
+    ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}
+    <div class="menu-divider">— Online —</div>
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
     <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
-    <div class="menu-divider">— Offline —</div>
-    ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}
     <button data-guide class="guide-btn">Guide</button>`;
   app.appendChild(menu);
 
