@@ -1,6 +1,6 @@
 # Gun VS Gun
 
-A fast-paced 1v1 / 2v2 mecha duel prototype. Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
+A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
 
 ## Modes
 
@@ -17,7 +17,7 @@ A fast-paced 1v1 / 2v2 mecha duel prototype. Auto-aim — no manual targeting. T
 
 ## Units
 
-Three pickable units, identical chassis stats (150 HP, 250 boost, 16 walk, 11.76 sprint base):
+Three pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base):
 
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
