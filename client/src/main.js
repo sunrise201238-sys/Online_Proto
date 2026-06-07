@@ -643,7 +643,7 @@ function makeAllyArrowSprite() {
   x.fill();
   const t = new THREE.CanvasTexture(c);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
-  s.scale.set(3.4, 3.4, 1);
+  s.scale.set(2.55, 2.55, 1);
   s.renderOrder = 9998;
   scene.add(s);
   return s;
@@ -2471,7 +2471,7 @@ function updateAllyArrow() {
       arrow.position.set(0, 4.6 + bob, 0);
       const camDist = camera.position.distanceTo(ally.root.position);
       const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
-      arrow.scale.setScalar(3.4 * distScale);
+      arrow.scale.setScalar(2.55 * distScale);
     }
   }
 
