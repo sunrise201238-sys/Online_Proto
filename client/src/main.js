@@ -2422,27 +2422,106 @@ function updateLocksAndReticle() {
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
-// Position the friendly-unit marker above the teammate each frame. Parented to
-// state.ally.root, so we work in the ally's local space. Hidden outside 2v2 or
-// when the teammate is down. Called once per frame from both the offline and
-// online render paths (right after updateLocksAndReticle).
+// Lazily build the screen-edge direction arrow (a DOM overlay). Kept on
+// document.body rather than the HUD so it survives HUD rebuilds; pointer-events
+// off so it never eats touches. Mint chevron + dark outline to match the
+// in-world marker.
+function ensureAllyEdgeArrow() {
+  if (state.allyEdgeArrow && state.allyEdgeArrow.isConnected) return state.allyEdgeArrow;
+  const el = document.createElement('div');
+  el.id = 'ally-edge-arrow';
+  el.style.cssText = [
+    'position:fixed', 'left:0', 'top:0', 'width:34px', 'height:34px',
+    'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
+    'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
+  ].join(';');
+  el.innerHTML = '<svg viewBox="0 0 32 32" width="100%" height="100%">'
+    + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#86f7c2" stroke="#0b1622" '
+    + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  document.body.appendChild(el);
+  state.allyEdgeArrow = el;
+  return el;
+}
+
+function hideAllyEdgeArrow() {
+  if (state.allyEdgeArrow) state.allyEdgeArrow.style.display = 'none';
+}
+
+// Friendly-unit indicator, refreshed once per frame from both the offline and
+// online render paths. Two complementary pieces:
+//   1. state.allyArrow     — a 3D chevron floating above the teammate; only
+//      visible while they're actually inside the camera frustum.
+//   2. state.allyEdgeArrow — a DOM arrow pinned to the screen edge that points
+//      toward the teammate whenever they're OUT OF FRAME (off to the side or
+//      behind the camera), so the player always knows which way to look.
+const _allyArrowNdc = new THREE.Vector3();
+const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
-  const arrow = state.allyArrow;
-  if (!arrow) return;
   const ally = state.ally;
-  if (state.mode !== '2v2' || !ally || ally.state.hp <= 0) {
-    arrow.visible = false;
-    return;
+  const active = state.mode === '2v2' && !!ally && ally.state.hp > 0;
+
+  // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  const arrow = state.allyArrow;
+  if (arrow) {
+    if (!active) {
+      arrow.visible = false;
+    } else {
+      arrow.visible = true;
+      const bob = Math.sin(performance.now() * 0.004) * 0.18;
+      arrow.position.set(0, 4.6 + bob, 0);
+      const camDist = camera.position.distanceTo(ally.root.position);
+      const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
+      arrow.scale.setScalar(3.4 * distScale);
+    }
   }
-  arrow.visible = true;
-  // Float above the head with a gentle bob so it draws the eye.
-  const bob = Math.sin(performance.now() * 0.004) * 0.18;
-  arrow.position.set(0, 4.6 + bob, 0);
-  // Grow with camera distance so it stays readable when the teammate is far
-  // away (same distance-compensation idea as the reticle).
-  const camDist = camera.position.distanceTo(ally.root.position);
-  const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
-  arrow.scale.setScalar(3.4 * distScale);
+
+  // --- 2. Screen-edge direction arrow (off-frame case). ---
+  if (!active) { hideAllyEdgeArrow(); return; }
+  const edge = ensureAllyEdgeArrow();
+
+  // updateCamera() set camera.position/quaternion fresh this frame, but the
+  // world matrices aren't recomposed until render — refresh them here so the
+  // projection below reflects the current camera.
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+  // Anchor on the teammate's torso (not the higher chevron) so the on/off
+  // screen decision matches where the player perceives the unit.
+  _allyArrowNdc.set(ally.root.position.x, ally.root.position.y + 2.0, ally.root.position.z);
+  const camZ = _allyArrowCam.copy(_allyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
+  const inFront = camZ < 0;        // camera looks down -z in its own space
+  _allyArrowNdc.project(camera);   // -> NDC; x,y in [-1,1] means on screen
+  const onScreen = inFront
+    && Math.abs(_allyArrowNdc.x) <= 1
+    && Math.abs(_allyArrowNdc.y) <= 1;
+
+  if (onScreen) { edge.style.display = 'none'; return; }
+
+  // Direction toward the teammate in NDC (y up). project() mirrors points that
+  // sit behind the camera, so flip those back to the true bearing.
+  let dx = _allyArrowNdc.x;
+  let dy = _allyArrowNdc.y;
+  if (!inFront) { dx = -dx; dy = -dy; }
+  if (dx === 0 && dy === 0) dy = -1;
+
+  // Slide that direction onto an inset screen rectangle (touch the nearest edge).
+  const inset = 0.82;
+  const k = inset / Math.max(Math.abs(dx), Math.abs(dy));
+  const ex = dx * k;
+  const ey = dy * k;
+  const w = renderer.domElement.clientWidth;
+  const h = renderer.domElement.clientHeight;
+  const sx = (ex * 0.5 + 0.5) * w;
+  const sy = (-ey * 0.5 + 0.5) * h;   // NDC y up -> screen y down
+
+  // Glyph points up by default; rotate to face the teammate. Screen y is down,
+  // so the screen-space bearing is (dx, -dy) and +90° aligns "up" onto it.
+  const rot = Math.atan2(-dy, dx) + Math.PI / 2;
+
+  edge.style.display = 'block';
+  edge.style.left = `${sx}px`;
+  edge.style.top = `${sy}px`;
+  edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
 }
 
 function updateTransforms(dt) {
@@ -2661,6 +2740,7 @@ function cleanupMatch() {
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
   if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
   state.allyArrow = null;
+  if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
 }
 
 function startMatch() {
@@ -3546,6 +3626,7 @@ function ensureOnlineMatchSetup(snap) {
   state.reticle = null;
   if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
   state.allyArrow = null;
+  if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
   if (state.hud) { state.hud.remove(); state.hud = null; }
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
@@ -4178,6 +4259,7 @@ animate();
 function showEndMenu(win) {
   state.phase = 'end';
   state.running = false;
+  hideAllyEdgeArrow();
   clearMenus();
 
   const menu = document.createElement('div');
@@ -4269,6 +4351,7 @@ function showPauseMenu() {
   if (!state.running || state.phase !== 'match') return;
   state.running = false;
   state.phase = 'pause';
+  hideAllyEdgeArrow();
   clearMenus();
   const menu = document.createElement('div');
   menu.className = 'menu';
