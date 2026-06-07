@@ -613,6 +613,42 @@ function makeReticleSprite() {
   return s;
 }
 
+// Friendly-unit marker (2v2 only): a downward-pointing chevron that floats
+// above the teammate's head so the player can locate their ally at a glance.
+// Colours are baked into the texture (mint fill + dark outline) and the
+// material is left untinted, so it reads clearly against any backdrop. Drawn
+// with depthTest off (like the reticle) so it stays visible through cover —
+// the whole point is to know where your teammate is even when they're behind
+// a wall.
+function makeAllyArrowSprite() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.lineJoin = 'round';
+  x.lineCap = 'round';
+  const cx = 64;
+  const topY = 30;
+  const botY = 102;
+  const halfW = 38;
+  x.beginPath();
+  x.moveTo(cx - halfW, topY);
+  x.lineTo(cx + halfW, topY);
+  x.lineTo(cx, botY);
+  x.closePath();
+  // Dark outline first (stroke straddles the path), mint fill on top.
+  x.lineWidth = 14;
+  x.strokeStyle = '#0b1622';
+  x.stroke();
+  x.fillStyle = '#86f7c2';
+  x.fill();
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  s.scale.set(3.4, 3.4, 1);
+  s.renderOrder = 9998;
+  scene.add(s);
+  return s;
+}
+
 function setupHUD() {
   if (state.hud) state.hud.remove();
   const hud = document.createElement('div');
@@ -2386,6 +2422,29 @@ function updateLocksAndReticle() {
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
+// Position the friendly-unit marker above the teammate each frame. Parented to
+// state.ally.root, so we work in the ally's local space. Hidden outside 2v2 or
+// when the teammate is down. Called once per frame from both the offline and
+// online render paths (right after updateLocksAndReticle).
+function updateAllyArrow() {
+  const arrow = state.allyArrow;
+  if (!arrow) return;
+  const ally = state.ally;
+  if (state.mode !== '2v2' || !ally || ally.state.hp <= 0) {
+    arrow.visible = false;
+    return;
+  }
+  arrow.visible = true;
+  // Float above the head with a gentle bob so it draws the eye.
+  const bob = Math.sin(performance.now() * 0.004) * 0.18;
+  arrow.position.set(0, 4.6 + bob, 0);
+  // Grow with camera distance so it stays readable when the teammate is far
+  // away (same distance-compensation idea as the reticle).
+  const camDist = camera.position.distanceTo(ally.root.position);
+  const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
+  arrow.scale.setScalar(3.4 * distScale);
+}
+
 function updateTransforms(dt) {
   getAllFighters().forEach((m) => {
     // Hide dead fighters' models. Keeps the body / state intact so cleanup
@@ -2600,6 +2659,8 @@ function cleanupMatch() {
   state.vfx.forEach((vfx) => scene.remove(vfx.mesh));
   state.vfx.length = 0;
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+  if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
+  state.allyArrow = null;
 }
 
 function startMatch() {
@@ -2669,6 +2730,12 @@ function startMatch() {
   // Fresh match — seed the firing tracker so the reticle starts green.
   state.reticleLastEnemyFireAt = null;
   state.reticleEnemyFiringUntil = 0;
+  // 2v2: a floating marker above the teammate so the player can find them.
+  state.allyArrow = null;
+  if (state.mode === '2v2' && state.ally) {
+    state.allyArrow = makeAllyArrowSprite();
+    state.ally.root.add(state.allyArrow);
+  }
   hudRefs = setupHUD();
   state.phase = 'match';
   state.running = true;
@@ -3477,6 +3544,8 @@ function ensureOnlineMatchSetup(snap) {
   state.playerCurrentTarget = null;
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
   state.reticle = null;
+  if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
+  state.allyArrow = null;
   if (state.hud) { state.hud.remove(); state.hud = null; }
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
@@ -3522,6 +3591,12 @@ function ensureOnlineMatchSetup(snap) {
   // Fresh match — seed the firing tracker so the reticle starts green.
   state.reticleLastEnemyFireAt = null;
   state.reticleEnemyFiringUntil = 0;
+  // 2v2: a floating marker above the teammate so the player can find them.
+  state.allyArrow = null;
+  if (mode === '2v2' && state.ally) {
+    state.allyArrow = makeAllyArrowSprite();
+    state.ally.root.add(state.allyArrow);
+  }
   hudRefs = setupHUD();
   // Pause button is meaningless online (server runs the sim authoritatively).
   const pauseBtn = state.hud?.querySelector('#pause-btn');
@@ -3666,6 +3741,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   }
 
   updateLocksAndReticle();
+  updateAllyArrow();
   getAllFighters().forEach((m) => {
     tickGlintRemoval(m);
     updateGlintScale(m);
@@ -6496,6 +6572,7 @@ function animate() {
 
       updateTransforms(dt);
       updateLocksAndReticle();
+      updateAllyArrow();
       getAllFighters().forEach((m) => {
         applyImmunityGlow(m, now < m.state.invulnerableUntil);
         tickGlintRemoval(m);
