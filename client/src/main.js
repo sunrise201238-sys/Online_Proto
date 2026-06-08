@@ -613,14 +613,13 @@ function makeReticleSprite() {
   return s;
 }
 
-// Friendly-unit marker (2v2 only): a downward-pointing chevron that floats
-// above the teammate's head so the player can locate their ally at a glance.
-// Colours are baked into the texture (mint fill + dark outline) and the
-// material is left untinted, so it reads clearly against any backdrop. Drawn
-// with depthTest off (like the reticle) so it stays visible through cover —
-// the whole point is to know where your teammate is even when they're behind
-// a wall.
-function makeAllyArrowSprite() {
+// Team marker (2v2 only): a downward-pointing chevron that floats above a
+// unit's head so the player can locate it at a glance. Used for both the ally
+// (mint, the default) and the not-locked enemy (red-orange, passed via
+// fillHex). The fill is baked into the texture and the material left untinted,
+// so it reads clearly against any backdrop. Drawn with depthTest off (like the
+// reticle) so it stays visible through cover.
+function makeAllyArrowSprite(fillHex = '#86f7c2') {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
@@ -639,7 +638,7 @@ function makeAllyArrowSprite() {
   x.lineWidth = 14;
   x.strokeStyle = '#0b1622';
   x.stroke();
-  x.fillStyle = '#86f7c2';
+  x.fillStyle = fillHex;
   x.fill();
   const t = new THREE.CanvasTexture(c);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
@@ -2447,6 +2446,29 @@ function hideAllyEdgeArrow() {
   if (state.allyEdgeArrow) state.allyEdgeArrow.style.display = 'none';
 }
 
+// Enemy counterpart to the ally edge arrow — same overlay, red-orange fill so
+// it reads as a threat. Points toward the not-locked enemy when it's off-frame.
+function ensureEnemyEdgeArrow() {
+  if (state.enemyEdgeArrow && state.enemyEdgeArrow.isConnected) return state.enemyEdgeArrow;
+  const el = document.createElement('div');
+  el.id = 'enemy-edge-arrow';
+  el.style.cssText = [
+    'position:fixed', 'left:0', 'top:0', 'width:34px', 'height:34px',
+    'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
+    'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
+  ].join(';');
+  el.innerHTML = '<svg viewBox="0 0 32 32" width="100%" height="100%">'
+    + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#ff6a2c" stroke="#0b1622" '
+    + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  document.body.appendChild(el);
+  state.enemyEdgeArrow = el;
+  return el;
+}
+
+function hideEnemyEdgeArrow() {
+  if (state.enemyEdgeArrow) state.enemyEdgeArrow.style.display = 'none';
+}
+
 // Friendly-unit indicator, refreshed once per frame from both the offline and
 // online render paths. Two complementary pieces:
 //   1. state.allyArrow     — a 3D chevron floating above the teammate; only
@@ -2516,6 +2538,92 @@ function updateAllyArrow() {
 
   // Glyph points up by default; rotate to face the teammate. Screen y is down,
   // so the screen-space bearing is (dx, -dy) and +90° aligns "up" onto it.
+  const rot = Math.atan2(-dy, dx) + Math.PI / 2;
+
+  edge.style.display = 'block';
+  edge.style.left = `${sx}px`;
+  edge.style.top = `${sy}px`;
+  edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+}
+
+// The enemy that ISN'T currently locked, in 2v2 — the live one of the two that
+// the player's reticle is not on. Used to mark the "other" threat (the locked
+// one already wears the green reticle). Returns null in 1v1 or if none qualify.
+function getUnlockedEnemy() {
+  if (state.mode !== '2v2') return null;
+  const locked = state.playerCurrentTarget;
+  for (const e of [state.enemy, state.enemy2]) {
+    if (e && e.state.hp > 0 && e !== locked) return e;
+  }
+  return null;
+}
+
+// Enemy counterpart to the friendly indicator (2v2 only), refreshed each frame.
+// Mirrors updateAllyArrow but rides the NOT-locked enemy and reads red-orange:
+//   1. state.enemyArrow     — a 3D chevron above that enemy, in-frustum only.
+//   2. state.enemyEdgeArrow — a screen-edge arrow pointing at it when off-frame.
+const _enemyArrowNdc = new THREE.Vector3();
+const _enemyArrowCam = new THREE.Vector3();
+function updateEnemyArrow() {
+  const foe = getUnlockedEnemy();
+  const active = !!foe;
+
+  // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  const arrow = state.enemyArrow;
+  if (arrow) {
+    if (!active) {
+      arrow.visible = false;
+    } else {
+      // The lock can be switched mid-match, so ride whichever enemy is unlocked.
+      if (arrow.parent !== foe.root) foe.root.add(arrow);
+      arrow.visible = true;
+      const bob = Math.sin(performance.now() * 0.004) * 0.18;
+      arrow.position.set(0, 4.6 + bob, 0);
+      const camDist = camera.position.distanceTo(foe.root.position);
+      const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
+      arrow.scale.setScalar(2.55 * distScale);
+    }
+  }
+
+  // --- 2. Screen-edge direction arrow (off-frame case). ---
+  if (!active) { hideEnemyEdgeArrow(); return; }
+  const edge = ensureEnemyEdgeArrow();
+
+  // Refresh the composed camera matrices before projecting (updateCamera() only
+  // set position/quaternion this frame).
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+  // Anchor on the enemy's torso so the on/off-screen decision matches where the
+  // player perceives the unit.
+  _enemyArrowNdc.set(foe.root.position.x, foe.root.position.y + 2.0, foe.root.position.z);
+  const camZ = _enemyArrowCam.copy(_enemyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
+  const inFront = camZ < 0;        // camera looks down -z in its own space
+  _enemyArrowNdc.project(camera);  // -> NDC; x,y in [-1,1] means on screen
+  const onScreen = inFront
+    && Math.abs(_enemyArrowNdc.x) <= 1
+    && Math.abs(_enemyArrowNdc.y) <= 1;
+
+  if (onScreen) { edge.style.display = 'none'; return; }
+
+  // Direction toward the enemy in NDC (y up). project() mirrors points behind
+  // the camera, so flip those back to the true bearing.
+  let dx = _enemyArrowNdc.x;
+  let dy = _enemyArrowNdc.y;
+  if (!inFront) { dx = -dx; dy = -dy; }
+  if (dx === 0 && dy === 0) dy = -1;
+
+  // Slide that direction onto an inset screen rectangle (touch the nearest edge).
+  const inset = 0.82;
+  const k = inset / Math.max(Math.abs(dx), Math.abs(dy));
+  const ex = dx * k;
+  const ey = dy * k;
+  const w = renderer.domElement.clientWidth;
+  const h = renderer.domElement.clientHeight;
+  const sx = (ex * 0.5 + 0.5) * w;
+  const sy = (-ey * 0.5 + 0.5) * h;   // NDC y up -> screen y down
+
+  // Glyph points up by default; rotate to face the enemy.
   const rot = Math.atan2(-dy, dx) + Math.PI / 2;
 
   edge.style.display = 'block';
@@ -2740,7 +2848,10 @@ function cleanupMatch() {
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
   if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
   state.allyArrow = null;
+  if (state.enemyArrow?.parent) state.enemyArrow.parent.remove(state.enemyArrow);
+  state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
+  if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
 }
 
 function startMatch() {
@@ -2815,6 +2926,13 @@ function startMatch() {
   if (state.mode === '2v2' && state.ally) {
     state.allyArrow = makeAllyArrowSprite();
     state.ally.root.add(state.allyArrow);
+  }
+  // 2v2: a red-orange marker above whichever enemy isn't currently locked.
+  // updateEnemyArrow() parents it onto the live not-locked enemy each frame.
+  state.enemyArrow = null;
+  if (state.mode === '2v2') {
+    state.enemyArrow = makeAllyArrowSprite('#ff6a2c');
+    state.enemyArrow.visible = false;
   }
   hudRefs = setupHUD();
   state.phase = 'match';
@@ -3626,7 +3744,10 @@ function ensureOnlineMatchSetup(snap) {
   state.reticle = null;
   if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
   state.allyArrow = null;
+  if (state.enemyArrow?.parent) state.enemyArrow.parent.remove(state.enemyArrow);
+  state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
+  if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
   if (state.hud) { state.hud.remove(); state.hud = null; }
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
@@ -3677,6 +3798,13 @@ function ensureOnlineMatchSetup(snap) {
   if (mode === '2v2' && state.ally) {
     state.allyArrow = makeAllyArrowSprite();
     state.ally.root.add(state.allyArrow);
+  }
+  // 2v2: a red-orange marker above whichever enemy isn't currently locked.
+  // updateEnemyArrow() parents it onto the live not-locked enemy each frame.
+  state.enemyArrow = null;
+  if (mode === '2v2') {
+    state.enemyArrow = makeAllyArrowSprite('#ff6a2c');
+    state.enemyArrow.visible = false;
   }
   hudRefs = setupHUD();
   // Pause button is meaningless online (server runs the sim authoritatively).
@@ -3823,6 +3951,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
 
   updateLocksAndReticle();
   updateAllyArrow();
+  updateEnemyArrow();
   getAllFighters().forEach((m) => {
     tickGlintRemoval(m);
     updateGlintScale(m);
@@ -4260,6 +4389,7 @@ function showEndMenu(win) {
   state.phase = 'end';
   state.running = false;
   hideAllyEdgeArrow();
+  hideEnemyEdgeArrow();
   clearMenus();
 
   const menu = document.createElement('div');
@@ -4352,6 +4482,7 @@ function showPauseMenu() {
   state.running = false;
   state.phase = 'pause';
   hideAllyEdgeArrow();
+  hideEnemyEdgeArrow();
   clearMenus();
   const menu = document.createElement('div');
   menu.className = 'menu';
@@ -6656,6 +6787,7 @@ function animate() {
       updateTransforms(dt);
       updateLocksAndReticle();
       updateAllyArrow();
+      updateEnemyArrow();
       getAllFighters().forEach((m) => {
         applyImmunityGlow(m, now < m.state.invulnerableUntil);
         tickGlintRemoval(m);
