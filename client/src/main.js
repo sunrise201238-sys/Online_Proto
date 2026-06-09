@@ -554,7 +554,7 @@ function makeUnitSprite(unitData) {
 // placeholder. Each stage degrades gracefully, so the game runs with no assets.
 // ----------------------------------------------------------------------------
 const UNIT_MODEL_HEIGHT = UNIT_SPRITE_HEIGHT;  // fit models to the billboard/hitbox height
-const UNIT_MODEL_YAW_OFFSET = Math.PI;         // flip to 0 if a model faces AWAY from its target
+const UNIT_MODEL_YAW_OFFSET = 0;               // flip to Math.PI if a model faces AWAY from its target
 const MODEL_WALK_SPEED = 0.8;                  // horiz speed (u/s) above which -> walking
 const MODEL_SPRINT_SPEED = 10.0;               // horiz speed (u/s) above which -> sprinting
 const MODEL_FIRE_HOLD_MS = 180;                // how long the fire pose holds after a shot
@@ -680,6 +680,10 @@ function attachModelToMech(mech, entry) {
   if (!key) return;
   const cfg = UNIT_MODEL_CONFIG[key] || {};
   const handBone = findHandBone(model, cfg.handBone);
+  // TEMP diagnostic — shows what the model actually contains (animation clip
+  // names + which hand bone the gun attached to). Read it in the browser
+  // console (F12). Remove once the models are dialed in.
+  console.log(`[unit-model] ${key}: ${clips.length} clip(s): [${clips.map((c) => c.name).join(', ')}] | handBone: ${handBone ? handBone.name : 'NOT FOUND'}`);
   if (!handBone) return;   // no rigged hand -> character renders without a held gun
   loadGLB(
     `${import.meta.env.BASE_URL}units/${key}_gun.glb`,
@@ -691,6 +695,11 @@ function attachModelToMech(mech, entry) {
       seat.scale.setScalar(g.scale ?? 1);
       const gun = cloneSkeleton(gltf.scene);
       gun.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+      // A gun exported on its own usually keeps a big positional offset from how
+      // it sat in the source scene (e.g. floating beside the character). Recenter
+      // it on its own bounds so it starts AT the hand; cfg.gun.pos fine-tunes from there.
+      const gbox = new THREE.Box3().setFromObject(gun);
+      gun.position.sub(gbox.getCenter(new THREE.Vector3()));
       seat.add(gun);
       handBone.add(seat);
       mech.modelRig.gun = seat;
