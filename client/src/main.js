@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as CANNON from 'cannon-es';
 import './style.css';
 import { createConnection } from './online/connection.js';
@@ -525,7 +523,13 @@ function makeUnitSprite(unitData) {
   const applyScale = (tex) => {
     const img = tex.image;
     const aspect = (img && img.width && img.height) ? img.width / img.height : 256 / 384;
-    sprite.scale.set(UNIT_SPRITE_HEIGHT * aspect, UNIT_SPRITE_HEIGHT, 1);
+    const sx = UNIT_SPRITE_HEIGHT * aspect;
+    sprite.scale.set(sx, UNIT_SPRITE_HEIGHT, 1);
+    // Base values the billboard animation modulates around (survives the async
+    // swap from placeholder → real PNG, which can change the aspect/scale).
+    sprite.userData.baseX = sx;
+    sprite.userData.baseY = UNIT_SPRITE_HEIGHT;
+    sprite.userData.baseFootY = UNIT_SPRITE_FOOT_Y;
   };
   applyScale(placeholder);
 
@@ -540,170 +544,65 @@ function makeUnitSprite(unitData) {
 }
 
 // ----------------------------------------------------------------------------
-// Unit 3D models (glTF / .glb) — the "real 3D" upgrade over the billboard.
-// If client/public/units/<spriteKey>.glb exists it is loaded, cloned per mech,
-// and its animation clips are driven by gameplay state (idle / walk / sprint /
-// dodge / fire). If it is absent or fails to load, the character billboard
-// sprite stays as the fallback so nothing breaks. Models are auto-fitted
-// (scaled to UNIT_MODEL_HEIGHT, feet planted, centered) so any reasonably
-// rigged humanoid drops in without hand-tuning.
-//
-// Asset layering: .glb (3D, animated) → .png (flat billboard) → procedural
-// placeholder. Each stage degrades gracefully to the next.
+// Billboard animation — procedural "juice" on the character sprites so they
+// feel alive without needing any extra art. The sprites are camera-facing, so
+// motion is conveyed with a vertical bob, squash/stretch, a dodge tilt+crouch,
+// and a firing recoil pulse. Drives every fighter's m.sprite each render frame,
+// offline and online (getAllFighters() covers both).
 // ----------------------------------------------------------------------------
-const UNIT_MODEL_HEIGHT = 6.0;          // target model height in world units
-const UNIT_MODEL_YAW_OFFSET = Math.PI;  // flip to 0 if a model faces AWAY from the enemy
-const MODEL_WALK_SPEED = 0.8;           // horiz speed (u/s) above which → walking
-const MODEL_SPRINT_SPEED = 10.0;        // horiz speed (u/s) above which → sprinting
-const MODEL_FIRE_HOLD_MS = 180;         // how long the fire pose holds after a shot
-const MODEL_FADE = 0.18;                // crossfade seconds between animation states
+const ANIM_WALK_SPEED = 0.8;    // horiz speed (u/s) above which → walking
+const ANIM_SPRINT_SPEED = 10.0; // horiz speed (u/s) above which → sprinting
+const ANIM_FIRE_HOLD_MS = 180;  // recoil pulse duration after a shot
+const _camRight = new THREE.Vector3();
 
-const _unitModelLoader = new GLTFLoader();
-const _unitModelCache = {};    // spriteKey → { scene, animations }
-const _unitModelPending = {};  // spriteKey → [{ onReady, onErr }] awaiting in-flight load
+// Per-frame sprite update: read movement + dodge + fire and modulate the
+// sprite's position/scale/rotation around its stored base values. dt = seconds,
+// now = performance.now() (offline) or shared render clock.
+function updateMechBillboard(m, dt, now) {
+  const sp = m.sprite;
+  if (!sp || !sp.visible || !sp.material) return;
+  const ud = sp.userData;
+  if (ud.baseX == null) return;   // base scale not initialized yet
 
-// Map gameplay states → animation-clip-name keywords. First case-insensitive
-// substring match wins, so clips named e.g. "Armature|Run01" resolve to sprint.
-const MODEL_CLIP_KEYWORDS = {
-  idle:   ['idle', 'stand', 'wait'],
-  walk:   ['walk', 'move'],
-  sprint: ['run', 'sprint'],
-  dodge:  ['dodge', 'roll', 'evade', 'avoid', 'step', 'dash'],
-  fire:   ['fire', 'shoot', 'attack', 'atk', 'shot', 'skill']
-};
-
-// Load (and cache) a unit's glb. onReady({scene, animations}); onErr() keeps the
-// billboard. The cached entry is a TEMPLATE — each mech clones it (skinned-mesh
-// safe via SkeletonUtils) so instances animate independently.
-function loadUnitModel(spriteKey, onReady, onErr) {
-  if (_unitModelCache[spriteKey]) { onReady(_unitModelCache[spriteKey]); return; }
-  if (_unitModelPending[spriteKey]) { _unitModelPending[spriteKey].push({ onReady, onErr }); return; }
-  _unitModelPending[spriteKey] = [{ onReady, onErr }];
-  const url = `${import.meta.env.BASE_URL}units/${spriteKey}.glb`;
-  _unitModelLoader.load(
-    url,
-    (gltf) => {
-      const entry = { scene: gltf.scene, animations: gltf.animations || [] };
-      _unitModelCache[spriteKey] = entry;
-      const cbs = _unitModelPending[spriteKey] || [];
-      delete _unitModelPending[spriteKey];
-      for (const c of cbs) c.onReady(entry);
-    },
-    undefined,
-    () => {
-      const cbs = _unitModelPending[spriteKey] || [];
-      delete _unitModelPending[spriteKey];
-      for (const c of cbs) if (c.onErr) c.onErr();   // no .glb → keep billboard
-    }
-  );
-}
-
-// Clone the template for one mech, auto-fit it, wire an AnimationMixer, resolve
-// the state→action map, and hide the billboard. Stored on mech.modelRig.
-function attachModelToMech(mech, entry) {
-  const holder = new THREE.Group();
-  const model = cloneSkeleton(entry.scene);
-  // Skinned meshes can be wrongly frustum-culled when their bounds animate.
-  model.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
-
-  // Auto-fit: scale to a consistent height, plant the feet at the foot line,
-  // and center horizontally — robust to whatever native scale/origin the
-  // exported model used.
-  const box = new THREE.Box3().setFromObject(model);
-  const size = box.getSize(new THREE.Vector3());
-  model.scale.setScalar(UNIT_MODEL_HEIGHT / (size.y || 1));
-  const fit = new THREE.Box3().setFromObject(model);
-  model.position.y += UNIT_SPRITE_FOOT_Y - fit.min.y;
-  model.position.x -= (fit.min.x + fit.max.x) / 2;
-  model.position.z -= (fit.min.z + fit.max.z) / 2;
-
-  holder.add(model);
-  mech.root.add(holder);
-
-  const mixer = new THREE.AnimationMixer(model);
-  const clips = entry.animations;
-  const findClip = (keys) => clips.find((c) => keys.some((k) => c.name.toLowerCase().includes(k)));
-  const actions = {};
-  for (const key of Object.keys(MODEL_CLIP_KEYWORDS)) {
-    const clip = findClip(MODEL_CLIP_KEYWORDS[key]);
-    if (clip) actions[key] = mixer.clipAction(clip);
-  }
-  // Graceful degradation when clips are missing.
-  const anyAction = clips.length ? mixer.clipAction(clips[0]) : null;
-  actions.idle = actions.idle || anyAction;
-  actions.walk = actions.walk || actions.idle;
-  actions.sprint = actions.sprint || actions.walk;
-  actions.dodge = actions.dodge || actions.sprint;
-  // actions.fire stays optional — if absent, locomotion just keeps playing.
-
-  mech.modelRig = { mixer, actions, current: null, holder, model, lastFireSeen: 0, fireUntil: 0 };
-  if (mech.sprite) mech.sprite.visible = false;   // 3D model is in → drop billboard
-  if (actions.idle) { actions.idle.play(); mech.modelRig.current = actions.idle; }
-}
-
-// Crossfade the rig to a base looping action (idle/walk/sprint/dodge/fire).
-function setMechBaseAction(rig, key) {
-  const next = rig.actions[key] || rig.actions.idle;
-  if (!next || next === rig.current) return;
-  if (rig.current) rig.current.fadeOut(MODEL_FADE);
-  next.reset().fadeIn(MODEL_FADE).play();
-  rig.current = next;
-}
-
-// Per-frame model update: pick a state from movement + dodge + fire, face the
-// nearest live opponent, advance the mixer. dt = seconds, now = performance.now().
-function updateMechModel(m, dt, now) {
-  const rig = m.modelRig;
-  if (!rig || !rig.mixer) return;
-
-  // Measured horizontal speed — path-agnostic, so it works identically for the
-  // offline sim and the online snapshot mirror.
+  // Measured horizontal speed + screen-x velocity — path-agnostic, so it works
+  // identically for the offline sim and the online snapshot mirror.
   const pos = m.root.position;
   if (!m._animPrev) m._animPrev = pos.clone();
-  const speed = dt > 0 ? Math.hypot(pos.x - m._animPrev.x, pos.z - m._animPrev.z) / dt : 0;
+  const dx = pos.x - m._animPrev.x, dz = pos.z - m._animPrev.z;
+  const speed = dt > 0 ? Math.hypot(dx, dz) / dt : 0;
+  _camRight.setFromMatrixColumn(camera.matrixWorld, 0);     // camera right (world)
+  const sideVel = dx * _camRight.x + dz * _camRight.z;      // screen-x velocity sign
   m._animPrev.copy(pos);
-
-  // Face the nearest live opponent (visual only). The model sits under `holder`,
-  // itself under `root`; subtracting root yaw makes facing correct whether or
-  // not the existing code already yawed root (player/enemy offline) or not
-  // (ally/enemy2, all online).
-  let foe = null, best = Infinity;
-  for (const e of getEnemiesOf(m)) {
-    if (e.state.hp <= 0) continue;
-    const d = (e.root.position.x - pos.x) ** 2 + (e.root.position.z - pos.z) ** 2;
-    if (d < best) { best = d; foe = e; }
-  }
-  if (foe && best > 1e-4) {
-    const worldYaw = Math.atan2(foe.root.position.x - pos.x, foe.root.position.z - pos.z) + UNIT_MODEL_YAW_OFFSET;
-    rig.holder.rotation.y = worldYaw - m.root.rotation.y;
-  }
 
   // Fire is detected by a CHANGE in lastFireAt (not `now - lastFireAt`) so it is
   // immune to online's server-clock vs local-clock mismatch.
   const st = m.state;
   const lf = st.lastFireAt || 0;
-  if (lf !== rig.lastFireSeen) {
-    rig.lastFireSeen = lf;
-    if (lf > 0) rig.fireUntil = now + MODEL_FIRE_HOLD_MS;
-  }
+  if (lf !== m._lastFireSeen) { m._lastFireSeen = lf; if (lf > 0) m._fireUntil = now + ANIM_FIRE_HOLD_MS; }
+  const recoil = Math.max(0, ((m._fireUntil || 0) - now) / ANIM_FIRE_HOLD_MS);  // 1 → 0
+  const dodging = st.action === 'dash' || now < (st.stepUntil || 0);
 
-  // Priority: dodge > fire > sprint > walk > idle.
-  let key;
-  if (st.action === 'dash' || now < (st.stepUntil || 0)) key = 'dodge';
-  else if (rig.actions.fire && now < rig.fireUntil) key = 'fire';
-  else if (speed > MODEL_SPRINT_SPEED) key = 'sprint';
-  else if (speed > MODEL_WALK_SPEED) key = 'walk';
-  else key = 'idle';
-  setMechBaseAction(rig, key);
+  // Bob amplitude/frequency scale with locomotion state.
+  let amp = 0.05, freq = 2.4;
+  if (speed > ANIM_SPRINT_SPEED)    { amp = 0.17; freq = 9.0; }
+  else if (speed > ANIM_WALK_SPEED) { amp = 0.11; freq = 6.0; }
+  const bob = Math.abs(Math.sin(now * 0.001 * freq)) * amp;
+  const tilt = dodging ? 0.34 * Math.sign(sideVel || 1) : 0;
+  const crouch = dodging ? 0.18 : 0;
 
-  rig.mixer.update(dt);
+  // Feet-anchored sprite (center 0.5,0): stretch Y / squash X around the base.
+  const stretch = 1 + bob * 0.45 - recoil * 0.10 - crouch * 0.55;
+  const squash  = 1 - bob * 0.22 + recoil * 0.08 + crouch * 0.45;
+  sp.position.y = ud.baseFootY + bob - recoil * 0.10 - crouch;
+  sp.scale.set(ud.baseX * squash, ud.baseY * stretch, 1);
+  sp.material.rotation = tilt + recoil * 0.05;   // each sprite owns its material
 }
 
-// Drive every live fighter's 3D model once per render frame (both modes —
+// Drive every live fighter's billboard once per render frame (both modes —
 // getAllFighters() mirrors online snapshots onto the same state.* mechs).
 function updateMechAnimations(dt, now) {
   for (const m of getAllFighters()) {
-    if (m.modelRig && m.root.visible) updateMechModel(m, dt, now);
+    if (m.root.visible) updateMechBillboard(m, dt, now);
   }
 }
 
@@ -804,16 +703,6 @@ function createMech(color, unitData, addXRayGhost = false) {
       sniperChargeTarget: null
     }
   };
-
-  // Kick off the 3D model load (async). On success it replaces the billboard
-  // (attachModelToMech); on absence/failure the billboard sprite remains.
-  if (unitData.spriteKey) {
-    loadUnitModel(
-      unitData.spriteKey,
-      (entry) => attachModelToMech(mech, entry),
-      () => { /* no .glb yet — keep the billboard fallback */ }
-    );
-  }
 
   return mech;
 }
