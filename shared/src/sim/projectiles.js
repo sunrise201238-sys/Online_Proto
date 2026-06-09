@@ -7,6 +7,7 @@ import {
   HOMING_SOFTEN_RANGE,
   HOMING_SOFTEN_DEG_PER_FRAME,
   HIT_RADIUS_NORMAL,
+  HIT_HALF_HEIGHT,
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
   SHOTGUN_CLUSTER_SPREAD_DISTANCE
@@ -233,10 +234,13 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // Hit detection — closest-point distance from target's body to the
     // projectile's traveled segment this frame. Uses the chest-anchored
     // hitCenter defined above (same anchor as the homing logic).
+    // Capsule hit volume matching the tall character billboard: free vertical
+    // travel within ±HIT_HALF_HEIGHT of the body center, then sphere falloff at
+    // hitRadius (instead of a single mid-body sphere). Mirrors offline main.js.
     const hitRadius = HIT_RADIUS_NORMAL;
     const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
     const dx = nearest.x - hitCenter.x;
-    const dy = nearest.y - hitCenter.y;
+    const dy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
     const dz = nearest.z - hitCenter.z;
     // Spawn protection: the round passes through an invulnerable target.
     // Step (dodge) immunity: the round also passes through while the target is

@@ -149,8 +149,12 @@ export const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 export const HOMING_SOFTEN_RANGE = 20;
 export const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectiles fly straight
 
-// Hit reactions.
+// Hit reactions. The hit volume is a vertical capsule matching the character
+// billboard: HIT_RADIUS_NORMAL is its horizontal radius, HIT_HALF_HEIGHT the
+// vertical half-extent of the straight section. Together they span the full
+// 6.4-tall sprite (body center ± (1.6 + 1.6) = ±3.2).
 export const HIT_RADIUS_NORMAL = 1.6;
+export const HIT_HALF_HEIGHT = 1.6;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
