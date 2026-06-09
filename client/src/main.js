@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as CANNON from 'cannon-es';
 import './style.css';
 import { createConnection } from './online/connection.js';
@@ -537,6 +539,230 @@ function makeUnitSprite(unitData) {
   return sprite;
 }
 
+// ----------------------------------------------------------------------------
+// Unit 3D models (glTF / .glb) — "real 3D" characters, each holding a gun that
+// is loaded SEPARATELY and parented to the character's hand bone, so the weapon
+// follows every animation automatically.
+//
+// Per unit, keyed by spriteKey (saori / hoshino / aru):
+//   units/<key>.glb      -> rigged character; clips drive idle/walk/sprint/
+//                           dodge/fire (matched by name, see MODEL_CLIP_KEYWORDS)
+//   units/<key>_gun.glb  -> weapon mesh, seated in the hand (OPTIONAL — skip it
+//                           if the character already holds its gun)
+//
+// Fallback chain: .glb (3D, animated) -> .png (static billboard) -> procedural
+// placeholder. Each stage degrades gracefully, so the game runs with no assets.
+// ----------------------------------------------------------------------------
+const UNIT_MODEL_HEIGHT = UNIT_SPRITE_HEIGHT;  // fit models to the billboard/hitbox height
+const UNIT_MODEL_YAW_OFFSET = Math.PI;         // flip to 0 if a model faces AWAY from its target
+const MODEL_WALK_SPEED = 0.8;                  // horiz speed (u/s) above which -> walking
+const MODEL_SPRINT_SPEED = 10.0;               // horiz speed (u/s) above which -> sprinting
+const MODEL_FIRE_HOLD_MS = 180;                // how long the fire pose holds after a shot
+const MODEL_FADE = 0.18;                       // crossfade seconds between animation states
+
+// Match a gameplay state to an animation clip by NAME (first case-insensitive
+// substring match wins, so "Armature|Run01" resolves to sprint).
+const MODEL_CLIP_KEYWORDS = {
+  idle:   ['idle', 'stand', 'wait'],
+  walk:   ['walk', 'move'],
+  sprint: ['run', 'sprint'],
+  dodge:  ['dodge', 'roll', 'evade', 'avoid', 'step', 'dash'],
+  fire:   ['fire', 'shoot', 'attack', 'atk', 'shot', 'skill']
+};
+
+// Common right-hand bone names across rigs (Mixamo / VRoid / Rigify / ...),
+// auto-detected unless a unit overrides handBone in UNIT_MODEL_CONFIG.
+const COMMON_HAND_BONES = [
+  'mixamorig:righthand', 'righthand', 'right_hand', 'hand_r', 'hand.r',
+  'r_hand', 'rhand', 'j_bip_r_hand', 'rightwrist', 'wrist_r', 'hand_right'
+];
+
+// Per-unit model + gun tuning. handBone: substring of the bone to hang the gun
+// on (null = auto-detect from COMMON_HAND_BONES). gun.pos / gun.rot (RADIANS) /
+// gun.scale seat the weapon in the grip — given in the hand bone's local space,
+// they almost always need hand-tuning per model, so nudge them until the gun
+// sits right. gun.scale is RELATIVE to the auto-fitted character.
+const UNIT_MODEL_CONFIG = {
+  saori:   { handBone: null, gun: { pos: [0, 0, 0], rot: [0, 0, 0], scale: 1 } },
+  hoshino: { handBone: null, gun: { pos: [0, 0, 0], rot: [0, 0, 0], scale: 1 } },
+  aru:     { handBone: null, gun: { pos: [0, 0, 0], rot: [0, 0, 0], scale: 1 } }
+};
+
+const _gltfLoader = new GLTFLoader();
+const _glbCache = {};     // url -> loaded gltf (template; cloned per mech)
+const _glbPending = {};   // url -> [{ onReady, onErr }] awaiting an in-flight load
+
+// Generic cached GLB load. onReady(gltf); onErr() on 404 / parse failure.
+function loadGLB(url, onReady, onErr) {
+  if (_glbCache[url]) { onReady(_glbCache[url]); return; }
+  if (_glbPending[url]) { _glbPending[url].push({ onReady, onErr }); return; }
+  _glbPending[url] = [{ onReady, onErr }];
+  _gltfLoader.load(
+    url,
+    (gltf) => {
+      _glbCache[url] = gltf;
+      const cbs = _glbPending[url] || []; delete _glbPending[url];
+      for (const c of cbs) c.onReady(gltf);
+    },
+    undefined,
+    () => { const cbs = _glbPending[url] || []; delete _glbPending[url]; for (const c of cbs) if (c.onErr) c.onErr(); }
+  );
+}
+
+// Load a unit's character glb. onReady({scene, animations}); onErr() keeps the billboard.
+function loadUnitModel(spriteKey, onReady, onErr) {
+  loadGLB(
+    `${import.meta.env.BASE_URL}units/${spriteKey}.glb`,
+    (gltf) => onReady({ scene: gltf.scene, animations: gltf.animations || [] }),
+    onErr
+  );
+}
+
+// Find the hand bone to hang the gun on. Tries a unit-specified name first, then
+// the common cross-rig names. Depth-first pre-order means a palm bone is matched
+// before its finger children.
+function findHandBone(model, preferred) {
+  const tryKeys = (keys) => {
+    let found = null;
+    model.traverse((o) => {
+      if (found || !o.isBone) return;
+      const n = o.name.toLowerCase();
+      if (keys.some((k) => n.includes(k))) found = o;
+    });
+    return found;
+  };
+  return (preferred && tryKeys([preferred.toLowerCase()])) || tryKeys(COMMON_HAND_BONES);
+}
+
+// Clone the character template for one mech, auto-fit it, wire an AnimationMixer,
+// resolve the state->clip map, hide the billboard, and attach the gun.
+function attachModelToMech(mech, entry) {
+  const holder = new THREE.Group();
+  const model = cloneSkeleton(entry.scene);
+  // Skinned meshes can be wrongly frustum-culled when their bounds animate.
+  model.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+
+  // Auto-fit: scale to a consistent height, plant the feet at the foot line, and
+  // center horizontally — robust to whatever native scale/origin the export used.
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  model.scale.setScalar(UNIT_MODEL_HEIGHT / (size.y || 1));
+  const fit = new THREE.Box3().setFromObject(model);
+  model.position.y += UNIT_SPRITE_FOOT_Y - fit.min.y;
+  model.position.x -= (fit.min.x + fit.max.x) / 2;
+  model.position.z -= (fit.min.z + fit.max.z) / 2;
+
+  holder.add(model);
+  mech.root.add(holder);
+
+  const mixer = new THREE.AnimationMixer(model);
+  const clips = entry.animations;
+  const findClip = (keys) => clips.find((c) => keys.some((k) => c.name.toLowerCase().includes(k)));
+  const actions = {};
+  for (const key of Object.keys(MODEL_CLIP_KEYWORDS)) {
+    const clip = findClip(MODEL_CLIP_KEYWORDS[key]);
+    if (clip) actions[key] = mixer.clipAction(clip);
+  }
+  // Graceful degradation when clips are missing.
+  const anyAction = clips.length ? mixer.clipAction(clips[0]) : null;
+  actions.idle = actions.idle || anyAction;
+  actions.walk = actions.walk || actions.idle;
+  actions.sprint = actions.sprint || actions.walk;
+  actions.dodge = actions.dodge || actions.sprint;
+  // actions.fire stays optional — if absent, locomotion just keeps playing.
+
+  mech.modelRig = { mixer, actions, current: null, holder, model, gun: null, lastFireSeen: 0, fireUntil: 0 };
+  if (mech.sprite) mech.sprite.visible = false;   // 3D model is in -> drop billboard
+  if (actions.idle) { actions.idle.play(); mech.modelRig.current = actions.idle; }
+
+  // Attach the gun (optional) to the hand bone so it rides every animation.
+  const key = mech.unit?.spriteKey;
+  if (!key) return;
+  const cfg = UNIT_MODEL_CONFIG[key] || {};
+  const handBone = findHandBone(model, cfg.handBone);
+  if (!handBone) return;   // no rigged hand -> character renders without a held gun
+  loadGLB(
+    `${import.meta.env.BASE_URL}units/${key}_gun.glb`,
+    (gltf) => {
+      const g = cfg.gun || {};
+      const seat = new THREE.Group();
+      seat.position.fromArray(g.pos || [0, 0, 0]);
+      seat.rotation.set(...(g.rot || [0, 0, 0]));
+      seat.scale.setScalar(g.scale ?? 1);
+      const gun = cloneSkeleton(gltf.scene);
+      gun.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+      seat.add(gun);
+      handBone.add(seat);
+      mech.modelRig.gun = seat;
+    },
+    () => { /* no _gun.glb — character holds nothing extra */ }
+  );
+}
+
+// Crossfade the rig to a base looping action (idle/walk/sprint/dodge/fire).
+function setMechBaseAction(rig, key) {
+  const next = rig.actions[key] || rig.actions.idle;
+  if (!next || next === rig.current) return;
+  if (rig.current) rig.current.fadeOut(MODEL_FADE);
+  next.reset().fadeIn(MODEL_FADE).play();
+  rig.current = next;
+}
+
+// Per-frame model update: pick a state from movement + dodge + fire, face the
+// nearest live opponent, advance the mixer. dt = seconds, now = render clock.
+function updateMechModel(m, dt, now) {
+  const rig = m.modelRig;
+  if (!rig || !rig.mixer) return;
+
+  // Measured horizontal speed — path-agnostic, so it works identically for the
+  // offline sim and the online snapshot mirror.
+  const pos = m.root.position;
+  if (!m._animPrev) m._animPrev = pos.clone();
+  const speed = dt > 0 ? Math.hypot(pos.x - m._animPrev.x, pos.z - m._animPrev.z) / dt : 0;
+  m._animPrev.copy(pos);
+
+  // Face the nearest live opponent (visual only). Subtracting root yaw keeps the
+  // facing correct whether or not other code already yawed root.
+  let foe = null, best = Infinity;
+  for (const e of getEnemiesOf(m)) {
+    if (e.state.hp <= 0) continue;
+    const d = (e.root.position.x - pos.x) ** 2 + (e.root.position.z - pos.z) ** 2;
+    if (d < best) { best = d; foe = e; }
+  }
+  if (foe && best > 1e-4) {
+    const worldYaw = Math.atan2(foe.root.position.x - pos.x, foe.root.position.z - pos.z) + UNIT_MODEL_YAW_OFFSET;
+    rig.holder.rotation.y = worldYaw - m.root.rotation.y;
+  }
+
+  // Fire is detected by a CHANGE in lastFireAt (not `now - lastFireAt`) so it is
+  // immune to online's server-clock vs local-clock mismatch.
+  const st = m.state;
+  const lf = st.lastFireAt || 0;
+  if (lf !== rig.lastFireSeen) {
+    rig.lastFireSeen = lf;
+    if (lf > 0) rig.fireUntil = now + MODEL_FIRE_HOLD_MS;
+  }
+
+  // Priority: dodge > fire > sprint > walk > idle.
+  let key;
+  if (st.action === 'dash' || now < (st.stepUntil || 0)) key = 'dodge';
+  else if (rig.actions.fire && now < rig.fireUntil) key = 'fire';
+  else if (speed > MODEL_SPRINT_SPEED) key = 'sprint';
+  else if (speed > MODEL_WALK_SPEED) key = 'walk';
+  else key = 'idle';
+  setMechBaseAction(rig, key);
+
+  rig.mixer.update(dt);
+}
+
+// Drive every live fighter's 3D model once per render frame (both modes —
+// getAllFighters() mirrors online snapshots onto the same state.* mechs).
+function updateMechAnimations(dt, now) {
+  for (const m of getAllFighters()) {
+    if (m.modelRig && m.root.visible) updateMechModel(m, dt, now);
+  }
+}
+
 // `addXRayGhost` is kept in the signature for call-site compatibility; the
 // box-mech (and its x-ray ghost) was replaced by a character billboard, so the
 // flag and `color` team tint are no longer used for the body itself.
@@ -634,6 +860,17 @@ function createMech(color, unitData, addXRayGhost = false) {
       sniperChargeTarget: null
     }
   };
+
+  // Kick off the 3D character load (async). On success it replaces the
+  // billboard (attachModelToMech) and attaches the gun; on absence/failure the
+  // static billboard sprite remains as the fallback.
+  if (unitData.spriteKey) {
+    loadUnitModel(
+      unitData.spriteKey,
+      (entry) => attachModelToMech(mech, entry),
+      () => { /* no .glb yet — keep the billboard fallback */ }
+    );
+  }
 
   return mech;
 }
@@ -6906,6 +7143,9 @@ function animate() {
         showEndMenu(state.enemy.state.hp <= 0);
       }
     }
+    // Drive 3D character models (idle/walk/sprint/dodge/fire) + gun attach —
+    // both online and offline. No-op for mechs still on the billboard fallback.
+    updateMechAnimations(dt, now);
     renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);
