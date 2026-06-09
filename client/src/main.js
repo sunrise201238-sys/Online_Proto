@@ -38,6 +38,8 @@ const app = document.getElementById('app');
 const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Machine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'saori', char: 'Saori', accent: 0x3a4a78,
 
     // Pilot stats
     hp: 150,
@@ -64,6 +66,8 @@ const UNIT_DATA = {
   },
   unit2: {
     name: 'Unit 2 / Shotgun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'hoshino', char: 'Hoshino', accent: 0xff9ec7,
 
     // Pilot stats
     hp: 150,
@@ -90,6 +94,8 @@ const UNIT_DATA = {
   },
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'aru', char: 'Aru', accent: 0xff7a8a,
 
     // Pilot stats
     hp: 150,
@@ -432,49 +438,126 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
   fog: false
 });
 
-// `addXRayGhost` is opt-in per call: only the LOCAL player gets the ghost
-// silhouette. Applying it to the enemy mech would let the player see them
-// through cover, which is a gameplay-breaking exploit (cover wouldn't work).
+// ----------------------------------------------------------------------------
+// Unit character billboards (Blue Archive SD models).
+// Each mech renders as a camera-facing sprite instead of the old box-mech.
+// Real art lives in client/public/units/<spriteKey>.png (transparent portrait,
+// feet near the bottom edge). Until those PNGs exist a labelled placeholder
+// stands in, so the game still runs without the assets.
+// ----------------------------------------------------------------------------
+const UNIT_SPRITE_HEIGHT = 6.4;   // world-units tall (feet → top of head/halo)
+const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
+const _unitTexLoader = new THREE.TextureLoader();
+const _unitArtCache = {};         // spriteKey → loaded THREE.Texture (real art)
+const _unitArtPending = {};       // spriteKey → [callbacks] awaiting in-flight load
+
+// Procedural stand-in so the game renders before real PNGs are dropped in.
+function makeUnitPlaceholderTexture(label, accentHex = 0x88aadd) {
+  const W = 256, H = 384;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const accent = '#' + (accentHex >>> 0).toString(16).padStart(6, '0').slice(-6);
+
+  // halo
+  x.strokeStyle = '#ffe27a'; x.lineWidth = 8;
+  x.beginPath(); x.ellipse(W / 2, 74, 52, 16, 0, 0, Math.PI * 2); x.stroke();
+  // body
+  x.fillStyle = accent;
+  x.beginPath();
+  x.moveTo(W / 2 - 64, H - 24); x.lineTo(W / 2 - 40, 150);
+  x.lineTo(W / 2 + 40, 150); x.lineTo(W / 2 + 64, H - 24);
+  x.closePath(); x.fill();
+  // head
+  x.fillStyle = '#ffe0d0';
+  x.beginPath(); x.arc(W / 2, 118, 40, 0, Math.PI * 2); x.fill();
+  // name plate
+  x.fillStyle = 'rgba(8,16,30,0.82)';
+  x.fillRect(W / 2 - 80, H - 66, 160, 42);
+  x.fillStyle = '#eaf6ff';
+  x.font = 'bold 30px sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(label, W / 2, H - 44);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Load real art (cached). onReady(texture) fires once the PNG decodes; on error
+// the placeholder is kept (onReady never fires) so the game still works.
+function loadUnitArt(spriteKey, onReady) {
+  if (_unitArtCache[spriteKey]) { onReady(_unitArtCache[spriteKey]); return; }
+  if (_unitArtPending[spriteKey]) { _unitArtPending[spriteKey].push(onReady); return; }
+  _unitArtPending[spriteKey] = [onReady];
+  const url = `${import.meta.env.BASE_URL}units/${spriteKey}.png`;
+  _unitTexLoader.load(
+    url,
+    (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      _unitArtCache[spriteKey] = tex;
+      const cbs = _unitArtPending[spriteKey] || [];
+      delete _unitArtPending[spriteKey];
+      for (const cb of cbs) cb(tex);
+    },
+    undefined,
+    () => { delete _unitArtPending[spriteKey]; }   // keep placeholder on 404/error
+  );
+}
+
+// Build the camera-facing character sprite for a unit. Starts on the placeholder
+// and swaps in real art when/if it loads. Anchored at the feet (bottom-center).
+function makeUnitSprite(unitData) {
+  const placeholder = makeUnitPlaceholderTexture(unitData.char || '?', unitData.accent);
+  const mat = new THREE.SpriteMaterial({
+    map: placeholder,
+    transparent: true,
+    alphaTest: 0.4,        // cutout → real depth occlusion behind cover
+    depthWrite: true,
+    fog: false
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.center.set(0.5, 0);                 // anchor at feet (bottom-center)
+  sprite.position.y = UNIT_SPRITE_FOOT_Y;
+
+  const applyScale = (tex) => {
+    const img = tex.image;
+    const aspect = (img && img.width && img.height) ? img.width / img.height : 256 / 384;
+    sprite.scale.set(UNIT_SPRITE_HEIGHT * aspect, UNIT_SPRITE_HEIGHT, 1);
+  };
+  applyScale(placeholder);
+
+  if (unitData.spriteKey) {
+    loadUnitArt(unitData.spriteKey, (tex) => {
+      mat.map = tex;
+      mat.needsUpdate = true;
+      applyScale(tex);
+    });
+  }
+  return sprite;
+}
+
+// `addXRayGhost` is kept in the signature for call-site compatibility; the
+// box-mech (and its x-ray ghost) was replaced by a character billboard, so the
+// flag and `color` team tint are no longer used for the body itself.
 function createMech(color, unitData, addXRayGhost = false) {
   const root = new THREE.Group();
-  const armor = new THREE.MeshToonMaterial({ color });
-  const steel = new THREE.MeshToonMaterial({ color: 0x3b4658 });
-  const make = (g, m, x, y, z) => {
-    const mesh = new THREE.Mesh(g, m);
-    mesh.position.set(x, y, z);
-    root.add(mesh);
-    return mesh;
-  };
 
-  const torso = make(new THREE.BoxGeometry(1.85, 2.55, 1.05), armor, 0, 0, 0);
-  make(new THREE.BoxGeometry(0.95, 0.82, 0.9), steel, 0, 1.85, 0);
-  const armL = make(new THREE.BoxGeometry(0.52, 2.55, 0.5), steel, -1.15, 0, 0);
-  const armR = make(new THREE.BoxGeometry(0.52, 2.55, 0.5), steel, 1.15, 0, 0);
-  make(new THREE.BoxGeometry(0.58, 2.05, 0.62), steel, -0.38, -2.2, 0);
-  make(new THREE.BoxGeometry(0.58, 2.05, 0.62), steel, 0.38, -2.2, 0);
+  // Character billboard replaces the old box-mech body. Team identity reads
+  // from the reticle / floating triangle / HP indicators, not body color.
+  const sprite = makeUnitSprite(unitData);
+  root.add(sprite);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
   root.add(plumeLight);
 
-  // X-ray silhouette (LOCAL PLAYER ONLY): parent a ghost duplicate to each
-  // mesh part using a shared `depthFunc: GreaterDepth` material. The ghost
-  // only draws where its depth is GREATER than what's already in the depth
-  // buffer — i.e. where something is in FRONT of it (the mech is occluded).
-  // When the mech is unoccluded, the real mesh writes its own depth first and
-  // the ghost fails (depth == buffer, not greater) so it's invisible.
-  // Skipped for the enemy mech — silhouetting them through cover would defeat
-  // the point of cover. Ghosts share geometry with their parent and inherit
-  // transforms for free.
-  const xRayGhosts = [];
-  if (addXRayGhost) {
-    for (const child of root.children) {
-      if (!child.isMesh) continue;
-      const ghost = new THREE.Mesh(child.geometry, MECH_OCCLUSION_GHOST);
-      child.add(ghost);
-      xRayGhosts.push(ghost);
-    }
-  }
+  // Animation shims: the frame loop pokes `arms.left/right` (rotation zeroing)
+  // and reads `torso`. Sprites have no such parts, so expose lightweight
+  // stand-ins that make those pokes harmless no-ops.
+  const armL = new THREE.Object3D();
+  const armR = new THREE.Object3D();
+  root.add(armL, armR);
 
   scene.add(root);
 
@@ -493,12 +576,13 @@ function createMech(color, unitData, addXRayGhost = false) {
     thrusters: [],
     plumeLight,
     trail: [],
-    torso,
+    torso: sprite,
+    sprite,
     modelYOffset: 2.35,
     legLength: 2.35,
     grounded: false,
     arms: { left: armL, right: armR },
-    xRayGhosts,
+    xRayGhosts: [],
     glintMesh: null,
     state: {
       action: 'idle',
