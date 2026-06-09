@@ -1,10 +1,11 @@
-# Unit character assets — drop the Blue Archive art/models here.
+# Unit character assets — drop the Blue Archive character art here.
 # Served at /units/<name> (this folder is Vite's public root).
 #
 # The game tries assets in this order and falls back gracefully:
-#   1. <key>.glb  -> animated 3D model   (best — real walk/sprint/dodge/fire)
-#   2. <key>.png  -> flat 2D billboard   (still character art, no animation)
-#   3. built-in procedural placeholder   (labelled stand-in, always works)
+#   1. <key>.png  -> character billboard (camera-facing sprite, procedurally
+#                    animated in-engine: idle bob, walk/sprint bob, dodge
+#                    crouch+tilt, firing recoil — no per-frame art needed)
+#   2. built-in procedural placeholder   (labelled stand-in, always works)
 #
 # Keys / characters / weapons:
 #   saori    -> Unit 1 / Machine Gun  (M4A1)
@@ -12,27 +13,14 @@
 #   aru      -> Unit 3 / Sniper Rifle (PSG1)
 #
 # ----------------------------------------------------------------------------
-# 3D MODELS (preferred) — saori.glb / hoshino.glb / aru.glb
+# 2D BILLBOARDS — saori.png / hoshino.png / aru.png
 # ----------------------------------------------------------------------------
-#   - Format: glTF binary (.glb), Y-up, real-world-ish upright humanoid rig.
-#   - NOT Draco-compressed (no Draco decoder is wired up). Export uncompressed.
-#   - Auto-fitted in-engine: scaled to a set height, feet planted, centered —
-#     so the model's native scale/origin don't matter.
-#   - Animation clips are matched by NAME (case-insensitive substring). Name
-#     your clips so they contain one of these keywords:
-#         idle   : idle / stand / wait
-#         walk   : walk / move
-#         sprint : run / sprint
-#         dodge  : dodge / roll / evade / avoid / step / dash
-#         fire   : fire / shoot / attack / atk / shot / skill
-#     Missing clips degrade gracefully (sprint->walk->idle, etc.). A model with
-#     no clips still renders, just static.
-#   - Facing: the model is turned to face its target automatically. If a model
-#     ends up facing the WRONG way (back to the enemy), flip UNIT_MODEL_YAW_OFFSET
-#     in client/src/main.js between Math.PI and 0.
-#
-# ----------------------------------------------------------------------------
-# 2D BILLBOARDS (fallback) — saori.png / hoshino.png / aru.png
-# ----------------------------------------------------------------------------
-#   - PNG, TRANSPARENT background (alpha cutout). Portrait, full body, feet near
-#     the BOTTOM edge (sprite is anchored at the feet). ~512x768 / 2:3 ratio.
+#   - PNG, TRANSPARENT background (alpha cutout) — cut out the character so
+#     there's NO box/background behind it, or it will render as a flat card.
+#   - Portrait, full body, feet near the BOTTOM edge (the sprite is anchored at
+#     the feet). ~512x768 / 2:3 ratio works well; any portrait aspect is fine
+#     (the engine scales to a fixed height and reads the image's own aspect).
+#   - The weapon (M4A1 / XM1014 / PSG1) should be drawn into the character art
+#     itself — there's no separate weapon model.
+#   - Auto-fitted in-engine: scaled to a set height, feet planted — so the
+#     source image's pixel size/scale doesn't matter, only the aspect ratio.
