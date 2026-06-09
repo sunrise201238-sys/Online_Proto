@@ -652,7 +652,11 @@ function attachModelToMech(mech, entry) {
   model.position.x -= (fit.min.x + fit.max.x) / 2;
   model.position.z -= (fit.min.z + fit.max.z) / 2;
 
-  holder.add(model);
+  // An intermediate group the procedural-motion path animates freely (bob /
+  // lean / recoil), leaving the model's auto-fit transform untouched.
+  const animLayer = new THREE.Group();
+  animLayer.add(model);
+  holder.add(animLayer);
   mech.root.add(holder);
 
   const mixer = new THREE.AnimationMixer(model);
@@ -671,7 +675,7 @@ function attachModelToMech(mech, entry) {
   actions.dodge = actions.dodge || actions.sprint;
   // actions.fire stays optional — if absent, locomotion just keeps playing.
 
-  mech.modelRig = { mixer, actions, current: null, holder, model, gun: null, lastFireSeen: 0, fireUntil: 0 };
+  mech.modelRig = { mixer, actions, current: null, holder, animLayer, model, gun: null, hasClips: clips.length > 0, lastFireSeen: 0, fireUntil: 0 };
   if (mech.sprite) mech.sprite.visible = false;   // 3D model is in -> drop billboard
   if (actions.idle) { actions.idle.play(); mech.modelRig.current = actions.idle; }
 
@@ -680,11 +684,12 @@ function attachModelToMech(mech, entry) {
   if (!key) return;
   const cfg = UNIT_MODEL_CONFIG[key] || {};
   const handBone = findHandBone(model, cfg.handBone);
-  // TEMP diagnostic — shows what the model actually contains (animation clip
-  // names + which hand bone the gun attached to). Read it in the browser
-  // console (F12). Remove once the models are dialed in.
-  console.log(`[unit-model] ${key}: ${clips.length} clip(s): [${clips.map((c) => c.name).join(', ')}] | handBone: ${handBone ? handBone.name : 'NOT FOUND'}`);
-  if (!handBone) return;   // no rigged hand -> character renders without a held gun
+  // TEMP diagnostic — read in the browser console (F12). Shows clip names,
+  // whether the model is rigged (bone count + sample names), and which hand
+  // bone the gun used. Remove once the models are dialed in.
+  const _boneNames = [];
+  model.traverse((o) => { if (o.isBone) _boneNames.push(o.name); });
+  console.log(`[unit-model] ${key}: ${clips.length} clip(s) [${clips.map((c) => c.name).join(', ')}] | ${_boneNames.length} bone(s)${_boneNames.length ? ' [' + _boneNames.slice(0, 16).join(', ') + ']' : ''} | hand: ${handBone ? handBone.name : 'NONE'}`);
   loadGLB(
     `${import.meta.env.BASE_URL}units/${key}_gun.glb`,
     (gltf) => {
@@ -701,7 +706,9 @@ function attachModelToMech(mech, entry) {
       const gbox = new THREE.Box3().setFromObject(gun);
       gun.position.sub(gbox.getCenter(new THREE.Vector3()));
       seat.add(gun);
-      handBone.add(seat);
+      // Prefer the hand bone (gun rides the animation); fall back to the model
+      // body so an un-rigged static mesh still shows the weapon held.
+      (handBone || model).add(seat);
       mech.modelRig.gun = seat;
     },
     () => { /* no _gun.glb — character holds nothing extra */ }
@@ -717,17 +724,55 @@ function setMechBaseAction(rig, key) {
   rig.current = next;
 }
 
-// Per-frame model update: pick a state from movement + dodge + fire, face the
-// nearest live opponent, advance the mixer. dt = seconds, now = render clock.
+// Code-driven motion for static (un-rigged) meshes so they aren't frozen: a
+// breathing/step bob, a lean toward movement, and a recoil kick on fire.
+// Applied to rig.animLayer, leaving the model's auto-fit transform intact.
+// Amplitudes are deliberately small — bump the numbers to taste.
+function applyProceduralMotion(m, rig, dt, now, speed, vx, vz, worldYaw) {
+  const layer = rig.animLayer;
+  if (!layer) return;
+  const moving = speed > MODEL_WALK_SPEED;
+
+  // Bob: slow breathing at idle, a faster bounce while moving. The phase
+  // accumulator keeps it smooth even as speed changes.
+  m._animPhase = (m._animPhase || 0) + dt * (moving ? (4 + speed * 0.7) : 1.8);
+  layer.position.y = (moving ? 0.10 : 0.05) * Math.sin(m._animPhase);
+
+  // Lean toward the movement direction, decomposed into the facing frame
+  // (forward = pitch, sideways = roll).
+  const inv = dt > 0 ? 1 / dt : 0;
+  const vFwd = (vx * Math.sin(worldYaw) + vz * Math.cos(worldYaw)) * inv;
+  const vRgt = (vx * Math.cos(worldYaw) - vz * Math.sin(worldYaw)) * inv;
+  const MAX_LEAN = 0.12;
+  const leanPitch = THREE.MathUtils.clamp(vFwd * 0.012, -MAX_LEAN, MAX_LEAN);
+  const leanRoll = THREE.MathUtils.clamp(-vRgt * 0.012, -MAX_LEAN, MAX_LEAN);
+
+  // Recoil: a brief shove back + backward tilt right after a shot.
+  const kick = Math.max(0, (rig.fireUntil - now) / MODEL_FIRE_HOLD_MS);
+  const recoilZ = kick * 0.18;
+  const recoilPitch = kick * 0.10;
+
+  // Ease rotation + recoil toward target (frame-rate independent).
+  const k = 1 - Math.pow(0.0001, dt);
+  layer.position.z += (-recoilZ - layer.position.z) * k;
+  layer.rotation.x += ((leanPitch - recoilPitch) - layer.rotation.x) * k;
+  layer.rotation.z += (leanRoll - layer.rotation.z) * k;
+}
+
+// Per-frame model update: face the nearest live opponent, detect fire, then
+// either drive animation clips (rigged models) or procedural motion (static
+// meshes). dt = seconds, now = render clock.
 function updateMechModel(m, dt, now) {
   const rig = m.modelRig;
   if (!rig || !rig.mixer) return;
 
-  // Measured horizontal speed — path-agnostic, so it works identically for the
+  // Measured per-frame movement — path-agnostic, so it works identically for the
   // offline sim and the online snapshot mirror.
   const pos = m.root.position;
   if (!m._animPrev) m._animPrev = pos.clone();
-  const speed = dt > 0 ? Math.hypot(pos.x - m._animPrev.x, pos.z - m._animPrev.z) / dt : 0;
+  const vx = pos.x - m._animPrev.x;
+  const vz = pos.z - m._animPrev.z;
+  const speed = dt > 0 ? Math.hypot(vx, vz) / dt : 0;
   m._animPrev.copy(pos);
 
   // Face the nearest live opponent (visual only). Subtracting root yaw keeps the
@@ -738,8 +783,9 @@ function updateMechModel(m, dt, now) {
     const d = (e.root.position.x - pos.x) ** 2 + (e.root.position.z - pos.z) ** 2;
     if (d < best) { best = d; foe = e; }
   }
+  let worldYaw = m.root.rotation.y + rig.holder.rotation.y;
   if (foe && best > 1e-4) {
-    const worldYaw = Math.atan2(foe.root.position.x - pos.x, foe.root.position.z - pos.z) + UNIT_MODEL_YAW_OFFSET;
+    worldYaw = Math.atan2(foe.root.position.x - pos.x, foe.root.position.z - pos.z) + UNIT_MODEL_YAW_OFFSET;
     rig.holder.rotation.y = worldYaw - m.root.rotation.y;
   }
 
@@ -752,14 +798,20 @@ function updateMechModel(m, dt, now) {
     if (lf > 0) rig.fireUntil = now + MODEL_FIRE_HOLD_MS;
   }
 
-  // Priority: dodge > fire > sprint > walk > idle.
-  let key;
-  if (st.action === 'dash' || now < (st.stepUntil || 0)) key = 'dodge';
-  else if (rig.actions.fire && now < rig.fireUntil) key = 'fire';
-  else if (speed > MODEL_SPRINT_SPEED) key = 'sprint';
-  else if (speed > MODEL_WALK_SPEED) key = 'walk';
-  else key = 'idle';
-  setMechBaseAction(rig, key);
+  if (rig.hasClips) {
+    // Clip-driven path (rigged + animated models). Priority: dodge > fire >
+    // sprint > walk > idle.
+    let key;
+    if (st.action === 'dash' || now < (st.stepUntil || 0)) key = 'dodge';
+    else if (rig.actions.fire && now < rig.fireUntil) key = 'fire';
+    else if (speed > MODEL_SPRINT_SPEED) key = 'sprint';
+    else if (speed > MODEL_WALK_SPEED) key = 'walk';
+    else key = 'idle';
+    setMechBaseAction(rig, key);
+  } else {
+    // Procedural path (static, un-rigged meshes).
+    applyProceduralMotion(m, rig, dt, now, speed, vx, vz, worldYaw);
+  }
 
   rig.mixer.update(dt);
 }
