@@ -523,13 +523,7 @@ function makeUnitSprite(unitData) {
   const applyScale = (tex) => {
     const img = tex.image;
     const aspect = (img && img.width && img.height) ? img.width / img.height : 256 / 384;
-    const sx = UNIT_SPRITE_HEIGHT * aspect;
-    sprite.scale.set(sx, UNIT_SPRITE_HEIGHT, 1);
-    // Base values the billboard animation modulates around (survives the async
-    // swap from placeholder → real PNG, which can change the aspect/scale).
-    sprite.userData.baseX = sx;
-    sprite.userData.baseY = UNIT_SPRITE_HEIGHT;
-    sprite.userData.baseFootY = UNIT_SPRITE_FOOT_Y;
+    sprite.scale.set(UNIT_SPRITE_HEIGHT * aspect, UNIT_SPRITE_HEIGHT, 1);
   };
   applyScale(placeholder);
 
@@ -541,69 +535,6 @@ function makeUnitSprite(unitData) {
     });
   }
   return sprite;
-}
-
-// ----------------------------------------------------------------------------
-// Billboard animation — procedural "juice" on the character sprites so they
-// feel alive without needing any extra art. The sprites are camera-facing, so
-// motion is conveyed with a vertical bob, squash/stretch, a dodge tilt+crouch,
-// and a firing recoil pulse. Drives every fighter's m.sprite each render frame,
-// offline and online (getAllFighters() covers both).
-// ----------------------------------------------------------------------------
-const ANIM_WALK_SPEED = 0.8;    // horiz speed (u/s) above which → walking
-const ANIM_SPRINT_SPEED = 10.0; // horiz speed (u/s) above which → sprinting
-const ANIM_FIRE_HOLD_MS = 180;  // recoil pulse duration after a shot
-const _camRight = new THREE.Vector3();
-
-// Per-frame sprite update: read movement + dodge + fire and modulate the
-// sprite's position/scale/rotation around its stored base values. dt = seconds,
-// now = performance.now() (offline) or shared render clock.
-function updateMechBillboard(m, dt, now) {
-  const sp = m.sprite;
-  if (!sp || !sp.visible || !sp.material) return;
-  const ud = sp.userData;
-  if (ud.baseX == null) return;   // base scale not initialized yet
-
-  // Measured horizontal speed + screen-x velocity — path-agnostic, so it works
-  // identically for the offline sim and the online snapshot mirror.
-  const pos = m.root.position;
-  if (!m._animPrev) m._animPrev = pos.clone();
-  const dx = pos.x - m._animPrev.x, dz = pos.z - m._animPrev.z;
-  const speed = dt > 0 ? Math.hypot(dx, dz) / dt : 0;
-  _camRight.setFromMatrixColumn(camera.matrixWorld, 0);     // camera right (world)
-  const sideVel = dx * _camRight.x + dz * _camRight.z;      // screen-x velocity sign
-  m._animPrev.copy(pos);
-
-  // Fire is detected by a CHANGE in lastFireAt (not `now - lastFireAt`) so it is
-  // immune to online's server-clock vs local-clock mismatch.
-  const st = m.state;
-  const lf = st.lastFireAt || 0;
-  if (lf !== m._lastFireSeen) { m._lastFireSeen = lf; if (lf > 0) m._fireUntil = now + ANIM_FIRE_HOLD_MS; }
-  const recoil = Math.max(0, ((m._fireUntil || 0) - now) / ANIM_FIRE_HOLD_MS);  // 1 → 0
-  const dodging = st.action === 'dash' || now < (st.stepUntil || 0);
-
-  // Bob amplitude/frequency scale with locomotion state.
-  let amp = 0.05, freq = 2.4;
-  if (speed > ANIM_SPRINT_SPEED)    { amp = 0.17; freq = 9.0; }
-  else if (speed > ANIM_WALK_SPEED) { amp = 0.11; freq = 6.0; }
-  const bob = Math.abs(Math.sin(now * 0.001 * freq)) * amp;
-  const tilt = dodging ? 0.34 * Math.sign(sideVel || 1) : 0;
-  const crouch = dodging ? 0.18 : 0;
-
-  // Feet-anchored sprite (center 0.5,0): stretch Y / squash X around the base.
-  const stretch = 1 + bob * 0.45 - recoil * 0.10 - crouch * 0.55;
-  const squash  = 1 - bob * 0.22 + recoil * 0.08 + crouch * 0.45;
-  sp.position.y = ud.baseFootY + bob - recoil * 0.10 - crouch;
-  sp.scale.set(ud.baseX * squash, ud.baseY * stretch, 1);
-  sp.material.rotation = tilt + recoil * 0.05;   // each sprite owns its material
-}
-
-// Drive every live fighter's billboard once per render frame (both modes —
-// getAllFighters() mirrors online snapshots onto the same state.* mechs).
-function updateMechAnimations(dt, now) {
-  for (const m of getAllFighters()) {
-    if (m.root.visible) updateMechBillboard(m, dt, now);
-  }
 }
 
 // `addXRayGhost` is kept in the signature for call-site compatibility; the
@@ -1473,10 +1404,20 @@ function updateProjectileSystem(dt) {
       p.ttl = 0;
     }
     if (p.ttl <= 0) continue;
-    const hitRadius = 1.6;
+    // Capsule hit volume that matches the tall character billboard: free
+    // vertical travel within ±hitHalfHeight of the body center, then sphere-style
+    // falloff at hitRadius. Centered on root.position — the sprite's vertical
+    // center (feet −3.2 .. head +3.2 around it). Mirrors shared/sim/projectiles.js.
+    const hitRadius = 1.6;        // horizontal radius (unchanged)
+    const hitHalfHeight = 1.6;    // vertical half-extent → capsule spans ±3.2 = full 6.4 sprite
+    const hitCenter = p.target.root.position;
     const path = new THREE.Line3(prevPos, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
-    path.closestPointToPoint(p.target.root.position, true, nearest);
+    path.closestPointToPoint(hitCenter, true, nearest);
+    const _hdx = nearest.x - hitCenter.x;
+    const _hdz = nearest.z - hitCenter.z;
+    const _hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - hitHalfHeight);
+    const hitDistSq = _hdx * _hdx + _hdy * _hdy + _hdz * _hdz;
     // Spawn protection: the round passes through an invulnerable target.
     // Step (dodge) immunity: the round also passes through while the target is
     // mid-step, so a well-timed dodge avoids the hit entirely.
@@ -1485,7 +1426,7 @@ function updateProjectileSystem(dt) {
     // Dead-target pass-through: matches the shared sim behaviour — bullets
     // fly past corpses rather than triggering a hit-VFX on empty space.
     const sameTeam = p.owner?.state?.team && p.target.state.team && p.owner.state.team === p.target.state.team;
-    if (p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && nearest.distanceTo(p.target.root.position) < hitRadius) {
+    if (p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
@@ -6965,9 +6906,6 @@ function animate() {
         showEndMenu(state.enemy.state.hp <= 0);
       }
     }
-    // Drive 3D character models (idle/walk/sprint/dodge/fire) — both modes.
-    // No-op in menus and for mechs still on the billboard fallback.
-    updateMechAnimations(dt, now);
     renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);
