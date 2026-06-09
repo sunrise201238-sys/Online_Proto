@@ -2,9 +2,8 @@
 # Served at /units/<name> (this folder is Vite's public root).
 #
 # The game tries assets in this order and falls back gracefully:
-#   1. <key>.png  -> character billboard (camera-facing sprite, procedurally
-#                    animated in-engine: idle bob, walk/sprint bob, dodge
-#                    crouch+tilt, firing recoil — no per-frame art needed)
+#   1. <key>.png  -> character billboard (camera-facing sprite, shown as-is —
+#                    the still image IS the character; no animation)
 #   2. built-in procedural placeholder   (labelled stand-in, always works)
 #
 # Keys / characters / weapons:
