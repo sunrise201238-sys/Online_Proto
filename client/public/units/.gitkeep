@@ -1,0 +1,14 @@
+# Unit character billboards — drop the Blue Archive SD art here.
+#
+# Required files (exact lowercase names, served at /units/<name>.png):
+#   saori.png    -> Unit 1 / Machine Gun
+#   hoshino.png  -> Unit 2 / Shotgun
+#   aru.png      -> Unit 3 / Sniper Rifle
+#
+# Format:
+#   - PNG with a TRANSPARENT background (alpha cutout — the game uses alphaTest).
+#   - Portrait orientation, full body, feet near the BOTTOM edge of the image
+#     (the sprite is anchored at the feet). ~512x768 or similar 2:3 ratio works.
+#   - No padding needed at the bottom; trim so the feet sit on the lower edge.
+#
+# Until these exist the game shows a labelled placeholder so it still runs.
