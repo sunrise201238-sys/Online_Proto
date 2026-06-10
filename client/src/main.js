@@ -759,12 +759,311 @@ function applyProceduralMotion(m, rig, dt, now, speed, vx, vz, worldYaw) {
   layer.rotation.z += (leanRoll - layer.rotation.z) * k;
 }
 
+// ----------------------------------------------------------------------------
+// Code-built articulated humanoid — the DEFAULT unit body. A jointed figure
+// assembled from primitives (head, torso, hips, two-segment arms + legs, hair /
+// halo / optional hat / a stylized gun), animated procedurally in code: a real
+// walk cycle (legs swing, knees bend), idle weight-shift + breathing, an aim
+// hold, fire recoil, and a dodge crouch. Needs NO external assets and always
+// animates. A RIGGED .glb (one that actually ships clips) still overrides it
+// (see createMech). Recognizable by silhouette + palette + props, which is what
+// reads at the small on-screen size — not by face.
+// ----------------------------------------------------------------------------
+
+// Per-unit palette + props. These are CLOTHING/HAIR tints only — team identity
+// still reads from the reticle / floating triangle, not the body. gun picks the
+// stylized weapon; hat is an optional cap (null = none); halo is the Blue
+// Archive signature ring. Unknown keys fall back to FIGURE_STYLE_DEFAULT.
+const FIGURE_STYLE = {
+  // Saori (Machine Gun / M4A1): dark navy military coat, near-black long hair.
+  saori:   { skin: 0xecccae, hairColor: 0x2b2533, hairStyle: 'long', coat: 0x39406e, trim: 0xaeb7e6, legs: 0x20243c, boots: 0x14161b, halo: 0x9fb0ff, hat: null,     gun: 'rifle'   },
+  // Hoshino (Shotgun / XM1014): relaxed grey-blue jacket, pink hair + cap.
+  hoshino: { skin: 0xf3d3ba, hairColor: 0xf2a6c8, hairStyle: 'long', coat: 0x586273, trim: 0xff9ec7, legs: 0x2f3440, boots: 0x222631, halo: 0xffc0dd, hat: 0x49515f, gun: 'shotgun' },
+  // Aru (Sniper / PSG1): dark maroon/black coat with red trim, long dark hair.
+  aru:     { skin: 0xecccae, hairColor: 0x241f29, hairStyle: 'long', coat: 0x3b2331, trim: 0xff7a8a, legs: 0x1b1620, boots: 0x110e14, halo: 0xff9aa6, hat: null,     gun: 'sniper'  }
+};
+const FIGURE_STYLE_DEFAULT = { skin: 0xe8c9ad, hairColor: 0x33312e, hairStyle: 'short', coat: 0x5a6070, trim: 0x9aa0b0, legs: 0x2a2d36, boots: 0x17191f, halo: 0x9fb0ff, hat: null, gun: 'rifle' };
+
+// Base arm pose: both arms held forward gripping the gun (shoulders pitched
+// down-forward, slight inward, elbows bent). Animation eases toward these every
+// frame and layers a small bob + fire recoil on top. RADIANS.
+const FIG_AIM = {
+  shoR: { x: -1.28, y: 0.10, z: -0.18 }, elbR: -0.34,
+  shoL: { x: -1.14, y: -0.10, z: 0.28 }, elbL: -0.54
+};
+
+// Lit-but-flat material; a touch of emissive keeps the figure readable against
+// any background even where scene lighting is weak.
+function _figMat(color, opts) {
+  const o = opts || {};
+  const c = new THREE.Color(color);
+  return new THREE.MeshStandardMaterial({
+    color: c,
+    roughness: o.rough ?? 0.8,
+    metalness: o.metal ?? 0.04,
+    emissive: c.clone().multiplyScalar(o.emi ?? 0.16)
+  });
+}
+
+// A box mesh positioned at (x,y,z) in its parent's space.
+function _figBox(w, h, d, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  return m;
+}
+
+// Build a stylized weapon under `mount` (barrel points +Z = the aim/forward
+// direction). Pieces are flagged noFit so the gun never skews the body's
+// auto-fit. Three silhouettes: rifle (M4A1), shotgun (XM1014), sniper (PSG1).
+function buildFigureGun(mount, kind, matGun, matAccent) {
+  const add = (w, h, d, mat, x, y, z) => mount.add(_figBox(w, h, d, mat, x, y, z));
+  if (kind === 'shotgun') {
+    add(0.10, 0.10, 0.46, matGun, 0, 0, 0.18);       // short fat barrel/receiver
+    add(0.085, 0.085, 0.20, matGun, 0, -0.03, 0.34); // pump
+    add(0.06, 0.16, 0.10, matGun, 0, -0.10, -0.04);  // grip
+    add(0.07, 0.10, 0.14, matGun, 0, 0.01, -0.12);   // stock
+  } else if (kind === 'sniper') {
+    add(0.07, 0.07, 0.86, matGun, 0, 0, 0.36);       // long barrel
+    add(0.10, 0.12, 0.26, matGun, 0, -0.01, 0.06);   // receiver
+    add(0.05, 0.05, 0.20, matGun, 0, 0.10, 0.18);    // scope tube
+    add(0.05, 0.06, 0.05, matGun, 0, 0.075, 0.10);   // scope mount
+    add(0.06, 0.18, 0.10, matGun, 0, -0.11, -0.05);  // grip
+    add(0.07, 0.11, 0.18, matGun, 0, -0.02, -0.18);  // stock
+  } else {                                           // rifle (default)
+    add(0.075, 0.085, 0.62, matGun, 0, 0, 0.28);     // barrel / handguard
+    add(0.10, 0.12, 0.22, matGun, 0, -0.01, 0.02);   // receiver
+    add(0.06, 0.20, 0.09, matAccent, 0, -0.14, 0.04);// magazine (accent tint)
+    add(0.06, 0.16, 0.09, matGun, 0, -0.10, -0.07);  // grip
+    add(0.07, 0.10, 0.16, matGun, 0, 0.0, -0.16);    // stock
+  }
+  mount.traverse((o) => { if (o.isMesh) o.userData.noFit = true; });
+}
+
+// Assemble the whole figure. Returns { figure, joints } where joints holds the
+// THREE.Group nodes the animation rotates. Built in "body units" (~1.75 tall);
+// attachFigureToMech auto-fits the whole thing to UNIT_MODEL_HEIGHT.
+function buildUnitFigure(spriteKey) {
+  const S = FIGURE_STYLE[spriteKey] || FIGURE_STYLE_DEFAULT;
+  const matSkin = _figMat(S.skin, { rough: 0.6 });
+  const matHair = _figMat(S.hairColor);
+  const matCoat = _figMat(S.coat);
+  const matTrim = _figMat(S.trim, { emi: 0.28 });
+  const matLegs = _figMat(S.legs);
+  const matBoot = _figMat(S.boots);
+  const matGun  = _figMat(0x1b1d22, { rough: 0.5, metal: 0.45 });
+
+  // Proportions (body units).
+  const LEG_UP = 0.46, LEG_LO = 0.42, FOOT = 0.12;
+  const PELV = 0.20, TORSO = 0.52, SHO = 0.19, HIPW = 0.105;
+  const ARM_UP = 0.34, ARM_LO = 0.30, LIMB = 0.10;
+  const HEAD = 0.16, NECK = 0.07;
+  const HIPY = FOOT + LEG_LO + LEG_UP;    // hip-joint height off the floor
+
+  const figure = new THREE.Group();
+  const joints = {};
+
+  // Hips / pelvis (root of the figure's articulation).
+  const hips = new THREE.Group(); hips.position.y = HIPY; figure.add(hips); joints.hips = hips;
+  hips.add(_figBox(HIPW * 2 + 0.10, PELV, 0.22, matCoat, 0, -PELV * 0.3, 0));
+
+  // Torso (pivots at the pelvis top).
+  const torso = new THREE.Group(); torso.position.y = PELV * 0.2; hips.add(torso); joints.torso = torso;
+  torso.add(_figBox(SHO * 2, TORSO, 0.24, matCoat, 0, TORSO / 2, 0));                       // chest
+  torso.add(_figBox(SHO * 2 + 0.05, TORSO * 0.40, 0.26, matTrim, 0, TORSO * 0.76, 0.006));  // collar/trim band
+  torso.add(_figBox(HIPW * 2 + 0.16, 0.34, 0.27, matCoat, 0, -0.05, 0));                    // coat skirt
+
+  // Head: neck + skull + hair + face plate + halo.
+  const head = new THREE.Group(); head.position.y = TORSO; torso.add(head); joints.head = head;
+  head.add(_figBox(0.12, NECK, 0.12, matSkin, 0, NECK / 2, 0));                             // neck
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(HEAD, 16, 12), matSkin);
+  skull.position.y = NECK + HEAD; skull.scale.set(0.92, 1.0, 0.92); head.add(skull);
+  const hairTop = new THREE.Mesh(new THREE.SphereGeometry(HEAD * 1.06, 16, 12), matHair);
+  hairTop.position.y = NECK + HEAD + 0.02; hairTop.scale.set(1.0, 0.86, 1.02); head.add(hairTop);
+  head.add(_figBox(HEAD * 1.3, HEAD * 1.05, 0.03, matSkin, 0, NECK + HEAD, HEAD * 0.85));   // face plate
+  if (S.hairStyle === 'long') {
+    head.add(_figBox(HEAD * 1.7, 0.52, 0.13, matHair, 0, NECK + HEAD - 0.24, -HEAD * 0.72));// long hair down the back
+  }
+  if (S.hat != null) {
+    const matHat = _figMat(S.hat);
+    head.add(_figBox(HEAD * 2.05, 0.07, HEAD * 2.05, matHat, 0, NECK + HEAD * 2.0, 0));     // crown
+    head.add(_figBox(HEAD * 2.3, 0.05, 0.34, matHat, 0, NECK + HEAD * 1.78, HEAD * 0.9));   // brim
+  }
+  const halo = new THREE.Mesh(
+    new THREE.TorusGeometry(HEAD * 0.95, 0.024, 10, 28),
+    new THREE.MeshStandardMaterial({ color: S.halo, emissive: new THREE.Color(S.halo).multiplyScalar(0.9), roughness: 0.4, metalness: 0.1 })
+  );
+  halo.rotation.x = Math.PI / 2 - 0.30;
+  halo.position.set(0, NECK + HEAD * 2.6 + 0.04, -0.02);
+  halo.userData.noFit = true;
+  head.add(halo); joints.halo = halo;
+
+  // Arms — two segments each, hung straight (animation poses them to aim).
+  const buildArm = (side) => {
+    const shoulder = new THREE.Group(); shoulder.position.set(side * (SHO + 0.03), TORSO - 0.07, 0.02); torso.add(shoulder);
+    shoulder.add(_figBox(LIMB, ARM_UP, LIMB, matCoat, 0, -ARM_UP / 2, 0));                  // upper arm (sleeve)
+    const elbow = new THREE.Group(); elbow.position.y = -ARM_UP; shoulder.add(elbow);
+    elbow.add(_figBox(LIMB * 0.92, ARM_LO, LIMB * 0.92, matSkin, 0, -ARM_LO / 2, 0));       // forearm
+    const hand = new THREE.Group(); hand.position.y = -ARM_LO; elbow.add(hand);
+    hand.add(_figBox(LIMB * 1.05, LIMB * 1.1, LIMB * 1.15, matSkin, 0, -LIMB * 0.5, 0));    // hand
+    return { shoulder, elbow, hand };
+  };
+  const aL = buildArm(-1), aR = buildArm(1);
+  joints.shoulderL = aL.shoulder; joints.elbowL = aL.elbow; joints.handL = aL.hand;
+  joints.shoulderR = aR.shoulder; joints.elbowR = aR.elbow; joints.handR = aR.hand;
+
+  // Legs — two segments + boot. Hip pivots at the pelvis, knee one level down.
+  const buildLeg = (side) => {
+    const hip = new THREE.Group(); hip.position.set(side * HIPW, -PELV * 0.5, 0); hips.add(hip);
+    hip.add(_figBox(LIMB * 1.25, LEG_UP, LIMB * 1.3, matLegs, 0, -LEG_UP / 2, 0));          // thigh
+    const knee = new THREE.Group(); knee.position.y = -LEG_UP; hip.add(knee);
+    knee.add(_figBox(LIMB * 1.12, LEG_LO, LIMB * 1.15, matLegs, 0, -LEG_LO / 2, 0));        // shin
+    const foot = new THREE.Group(); foot.position.y = -LEG_LO; knee.add(foot);
+    foot.add(_figBox(LIMB * 1.3, FOOT, LIMB * 2.0, matBoot, 0, -FOOT / 2, LIMB * 0.45));    // boot
+    return { hip, knee, foot };
+  };
+  const lL = buildLeg(-1), lR = buildLeg(1);
+  joints.hipL = lL.hip; joints.kneeL = lL.knee; joints.footL = lL.foot;
+  joints.hipR = lR.hip; joints.kneeR = lR.knee; joints.footR = lR.foot;
+
+  // Gun mounted on the torso front so it always points forward (the aim axis),
+  // independent of arm jitter; the hands pose to it. Recoils on fire.
+  const gunMount = new THREE.Group(); gunMount.position.set(0.06, TORSO * 0.52, 0.20); torso.add(gunMount); joints.gunMount = gunMount;
+  buildFigureGun(gunMount, S.gun, matGun, matTrim);
+
+  return { figure, joints };
+}
+
+// Body-only bounding box (skips noFit-flagged gun + halo) so the figure auto-
+// fits on its torso/limbs, leaving the gun to jut forward and the halo to float
+// without shrinking the character.
+function _figFitBox(root) {
+  const box = new THREE.Box3();
+  const tmp = new THREE.Box3();
+  root.updateWorldMatrix(true, true);
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.noFit) return;
+    tmp.setFromObject(o);
+    box.union(tmp);
+  });
+  return box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1.75, 0.5)) : box;
+}
+
+// Build the figure for this mech, auto-fit it to the standard height, wrap it in
+// the holder/animLayer rig the animation drives, and hide the billboard.
+function attachFigureToMech(mech) {
+  const key = mech.unit?.spriteKey;
+  const holder = new THREE.Group();
+  const built = buildUnitFigure(key);
+  const fig = built.figure;
+
+  // Auto-fit: scale to a consistent height, plant the feet at the foot line,
+  // center horizontally — all on the body box (gun/halo excluded).
+  const pre = _figFitBox(fig);
+  fig.scale.setScalar(UNIT_MODEL_HEIGHT / (pre.getSize(new THREE.Vector3()).y || 1));
+  const fit = _figFitBox(fig);
+  fig.position.y += UNIT_SPRITE_FOOT_Y - fit.min.y;
+  fig.position.x -= (fit.min.x + fit.max.x) / 2;
+  fig.position.z -= (fit.min.z + fit.max.z) / 2;
+
+  const animLayer = new THREE.Group();
+  animLayer.add(fig);
+  holder.add(animLayer);
+  mech.root.add(holder);
+
+  mech.modelRig = {
+    isFigure: true, mixer: null, holder, animLayer, model: fig,
+    joints: built.joints, hasClips: false, lastFireSeen: 0, fireUntil: 0, phase: 0
+  };
+  if (mech.sprite) mech.sprite.visible = false;    // figure is in -> drop billboard
+}
+
+// Tear down the code figure (used only when a RIGGED .glb arrives to replace it).
+function detachFigureFromMech(mech) {
+  const rig = mech.modelRig;
+  if (!rig || !rig.isFigure) return;
+  const h = rig.holder;
+  if (h) {
+    if (h.parent) h.parent.remove(h);
+    h.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { const mm = Array.isArray(o.material) ? o.material : [o.material]; mm.forEach((x) => x.dispose && x.dispose()); }
+    });
+  }
+  mech.modelRig = null;
+}
+
+// Procedural skeletal animation for the code figure: walk cycle, idle weight-
+// shift + breathing, a constant aim hold, fire recoil, and a dodge crouch. All
+// joints ease toward per-frame targets (frame-rate independent), so state
+// changes blend smoothly. st = mech.state.
+function applyFigureAnimation(m, rig, dt, now, speed, st) {
+  const j = rig.joints;
+  const layer = rig.animLayer;
+  const moving = speed > MODEL_WALK_SPEED;
+  const sprint = speed > MODEL_SPRINT_SPEED;
+  const dashing = st.action === 'dash' || now < (st.stepUntil || 0);
+
+  // Gait phase: advances with speed when moving, ticks slowly when idle.
+  const rate = moving ? (5 + Math.min(speed, 22) * 0.55) : 2.0;
+  rig.phase = (rig.phase || 0) + dt * rate;
+  const ph = rig.phase, s = Math.sin(ph), c = Math.cos(ph);
+
+  const k = 1 - Math.pow(0.0001, dt);
+  const ease = (o, axis, t) => { o.rotation[axis] += (t - o.rotation[axis]) * k; };
+
+  // Legs — alternating swing + one-directional knee bend (straighten at idle,
+  // deep crouch on dodge).
+  const swing = dashing ? 0.12 : (moving ? (sprint ? 0.85 : 0.55) : 0.0);
+  const lift  = dashing ? 0 : (moving ? (sprint ? 0.9 : 0.6) : 0.0);
+  ease(j.hipL, 'x', swing * s);
+  ease(j.hipR, 'x', swing * -s);
+  let kneeLT = -(0.14 + lift * (0.5 - 0.5 * Math.cos(ph)));
+  let kneeRT = -(0.14 + lift * (0.5 - 0.5 * Math.cos(ph + Math.PI)));
+  let torsoXT = 0.05;
+  if (dashing) { kneeLT = -0.62; kneeRT = -0.62; torsoXT = 0.22; }
+  ease(j.kneeL, 'x', kneeLT);
+  ease(j.kneeR, 'x', kneeRT);
+  ease(j.footL, 'x', 0.08 - swing * 0.3 * s);
+  ease(j.footR, 'x', 0.08 + swing * 0.3 * s);
+
+  // Hips / torso — vertical bob, slight twist + roll while moving, breathing idle.
+  const bob = moving ? 0.05 * Math.abs(c) : 0.012 * Math.sin(ph);
+  let targetY = moving ? bob - 0.02 : bob;
+  if (dashing) targetY = -0.12;
+  layer.position.y += (targetY - layer.position.y) * k;
+  ease(j.torso, 'x', torsoXT);
+  ease(j.torso, 'y', moving ? 0.10 * s : 0.0);
+  ease(j.torso, 'z', moving ? 0.04 * c : 0.018 * Math.sin(ph * 0.5));
+  ease(j.head, 'x', moving ? 0.0 : 0.03 * Math.sin(ph * 0.9));
+
+  // Arms — hold the gun (aim pose) with a small bob; jerk back on fire.
+  const kick = Math.max(0, (rig.fireUntil - now) / MODEL_FIRE_HOLD_MS);
+  const armBob = moving ? 0.05 * s : 0.02 * Math.sin(ph * 0.9);
+  ease(j.shoulderR, 'x', FIG_AIM.shoR.x + armBob + kick * 0.5);
+  ease(j.shoulderR, 'y', FIG_AIM.shoR.y);
+  ease(j.shoulderR, 'z', FIG_AIM.shoR.z);
+  ease(j.elbowR, 'x', FIG_AIM.elbR - kick * 0.4);
+  ease(j.shoulderL, 'x', FIG_AIM.shoL.x + armBob * 0.6 + kick * 0.3);
+  ease(j.shoulderL, 'y', FIG_AIM.shoL.y);
+  ease(j.shoulderL, 'z', FIG_AIM.shoL.z);
+  ease(j.elbowL, 'x', FIG_AIM.elbL - kick * 0.2);
+
+  // Gun — recoil straight back + muzzle rise (0.20 = its built mount z).
+  if (j.gunMount) {
+    j.gunMount.position.z += ((0.20 - kick * 0.10) - j.gunMount.position.z) * k;
+    ease(j.gunMount, 'x', -kick * 0.5);
+  }
+
+  // Halo — slow idle spin for a touch of life.
+  if (j.halo) j.halo.rotation.z += dt * 0.6;
+}
+
 // Per-frame model update: face the nearest live opponent, detect fire, then
 // either drive animation clips (rigged models) or procedural motion (static
 // meshes). dt = seconds, now = render clock.
 function updateMechModel(m, dt, now) {
   const rig = m.modelRig;
-  if (!rig || !rig.mixer) return;
+  if (!rig) return;   // figures have no mixer; clip/static rigs do
 
   // Measured per-frame movement — path-agnostic, so it works identically for the
   // offline sim and the online snapshot mirror.
@@ -798,8 +1097,11 @@ function updateMechModel(m, dt, now) {
     if (lf > 0) rig.fireUntil = now + MODEL_FIRE_HOLD_MS;
   }
 
-  if (rig.hasClips) {
-    // Clip-driven path (rigged + animated models). Priority: dodge > fire >
+  if (rig.isFigure) {
+    // Code-built humanoid: procedural skeletal animation on its joints.
+    applyFigureAnimation(m, rig, dt, now, speed, st);
+  } else if (rig.hasClips) {
+    // Clip-driven path (rigged + animated .glb). Priority: dodge > fire >
     // sprint > walk > idle.
     let key;
     if (st.action === 'dash' || now < (st.stepUntil || 0)) key = 'dodge';
@@ -809,11 +1111,11 @@ function updateMechModel(m, dt, now) {
     else key = 'idle';
     setMechBaseAction(rig, key);
   } else {
-    // Procedural path (static, un-rigged meshes).
+    // Procedural path for a static, un-rigged .glb mesh.
     applyProceduralMotion(m, rig, dt, now, speed, vx, vz, worldYaw);
   }
 
-  rig.mixer.update(dt);
+  if (rig.mixer) rig.mixer.update(dt);
 }
 
 // Drive every live fighter's 3D model once per render frame (both modes —
@@ -922,14 +1224,21 @@ function createMech(color, unitData, addXRayGhost = false) {
     }
   };
 
-  // Kick off the 3D character load (async). On success it replaces the
-  // billboard (attachModelToMech) and attaches the gun; on absence/failure the
-  // static billboard sprite remains as the fallback.
+  // Default body: the code-built articulated humanoid (always animated, needs
+  // no assets). Then attempt the .glb — but only a RIGGED one (it actually
+  // ships animation clips) takes over; a static / clip-less .glb is ignored in
+  // favor of the animated figure, and a missing file just leaves the figure.
   if (unitData.spriteKey) {
+    attachFigureToMech(mech);
     loadUnitModel(
       unitData.spriteKey,
-      (entry) => attachModelToMech(mech, entry),
-      () => { /* no .glb yet — keep the billboard fallback */ }
+      (entry) => {
+        if ((entry.animations || []).length > 0) {
+          detachFigureFromMech(mech);
+          attachModelToMech(mech, entry);
+        }
+      },
+      () => { /* no .glb — keep the code figure */ }
     );
   }
 
