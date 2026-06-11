@@ -454,6 +454,9 @@ const UNIT_SPRITE_HEIGHT = 6.4;   // world-units tall (feet → top of head/halo
 const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
 const UNIT_SPRITE_STATES = ['stand', 'sprint', 'dodge', 'shoot'];  // PNG suffixes
 const SPRITE_MOVE_SPEED = 2.5;    // horiz speed (u/s) above which -> sprint pose
+const SPRITE_MOVE_HOLD_MS = 220;  // sprint pose lingers this long after speed dips,
+                                  // debouncing the stand<->sprint flicker when the
+                                  // move stick recenters with the finger still down
 const SPRITE_SHOOT_HOLD_MS = 200; // how long the shoot pose holds after a shot
 const _unitTexLoader = new THREE.TextureLoader();
 const _unitArtCache = {};         // `${spriteKey}_${state}` → loaded THREE.Texture
@@ -546,7 +549,7 @@ function makeUnitSprite(unitData) {
   const rig = {
     mat, applyScale,
     tex: { stand: null, sprint: null, dodge: null, shoot: null },
-    shown: null, lastFireSeen: 0, fireUntil: 0, prev: null
+    shown: null, lastFireSeen: 0, fireUntil: 0, moveUntil: 0, prev: null
   };
   sprite.userData.stateRig = rig;
 
@@ -599,9 +602,19 @@ function updateUnitSpriteState(m, rig, dt, now) {
     if (lf > 0) rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS;
   }
 
+  // Debounce sprint->stand: any frame above the move threshold refreshes a short
+  // hold, so a brief speed dip (the move stick recentering while the finger is
+  // still down) keeps the sprint pose instead of flickering back to stand.
+  if (speed > SPRITE_MOVE_SPEED) rig.moveUntil = now + SPRITE_MOVE_HOLD_MS;
+
   const dashing = st.action === 'dash' || now < (st.stepUntil || 0);
-  const moving = speed > SPRITE_MOVE_SPEED;
-  const firing = now < rig.fireUntil;
+  const moving = now < rig.moveUntil;
+  // Sniper pre-aim (charging) reads as firing so Aru holds the shoot pose while
+  // winding up. sniperChargeTarget truthiness tracks the charge precisely in both
+  // modes (offline clears it when the shot fires; online mirrors the server flag),
+  // so it needs no clock comparison.
+  const charging = !!st.sniperChargeTarget;
+  const firing = now < rig.fireUntil || charging;
 
   // Priority: dodge > sprint > shoot > stand (sprint/dodge outrank shoot, so a
   // unit firing mid-dash/run keeps its motion pose — no shoot-frame cut-in).
