@@ -595,10 +595,14 @@ function updateUnitSpriteState(m, rig, dt, now) {
     if (lf > 0) rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS;
   }
 
-  // Dodge = the discrete step/dodge burst (L / dodge button) -> action 'step'.
+  // Dodge image = the discrete dodge burst (L / dodge button -> action 'step')
+  // OR a jump: the whole airborne arc reuses the dodge pose. The 'jump' action
+  // is only the takeoff frame (the unit reverts to idle/dash mid-air), so we key
+  // off the persistent `airborne` flag, which is held until landing for player +
+  // bot alike and is mirrored online.
   // Sprint = the held sprint run (K / sprint button)         -> action 'dash'.
   // Basic walking is action 'idle' and falls through to 'stand'.
-  const dodging = st.action === 'step' || now < (st.stepUntil || 0);
+  const dodging = st.action === 'step' || st.airborne || now < (st.stepUntil || 0);
   const sprinting = st.action === 'dash';
   // Sniper pre-aim (charging) reads as firing so Aru holds the shoot pose while
   // winding up. sniperChargeTarget truthiness tracks the charge precisely in both
