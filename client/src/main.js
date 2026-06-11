@@ -531,7 +531,31 @@ function makeUnitSprite(unitData) {
   sprite.center.set(0.5, 0);                 // anchor at feet (bottom-center)
   sprite.position.y = UNIT_SPRITE_FOOT_Y;
 
-  // Rescale per texture so every pose keeps its own aspect ratio at a fixed height.
+  // Through-wall X-ray silhouette: a second billboard riding on the body that
+  // draws the matching "_shadow" art ONLY where the unit is hidden behind cover.
+  // The depthFunc flip (GreaterDepth, same trick as MECH_OCCLUSION_GHOST) passes
+  // only where the depth buffer is CLOSER than the sprite — i.e. behind a wall —
+  // so the un-occluded part keeps the normal art and just the blocked part shows
+  // the shadow (partial X-ray, no raycast needed; a flat billboard has no parts
+  // to self-occlude). depthWrite off so it never poisons the depth buffer. Added
+  // as a CHILD of the body sprite, so it inherits the body's world position AND
+  // per-pose scale automatically — always pixel-aligned. Hidden until its real
+  // shadow art loads, so a missing "_shadow" PNG simply means no X-ray.
+  const shadowMat = new THREE.SpriteMaterial({
+    map: placeholder,
+    transparent: true,                 // keep the shadow art's own (soft) alpha
+    depthFunc: THREE.GreaterDepth,     // draw only where occluded by closer geo
+    depthWrite: false,
+    fog: false
+  });
+  const shadowSprite = new THREE.Sprite(shadowMat);
+  shadowSprite.center.set(0.5, 0);
+  shadowSprite.visible = false;
+  sprite.add(shadowSprite);
+
+  // Rescale per texture so every pose keeps its own aspect ratio at a fixed
+  // height. The shadow child inherits this scale (and the body's world position),
+  // so it stays aligned with the body without any transform math of its own.
   const applyScale = (tex) => {
     const img = tex.image;
     const aspect = (img && img.width && img.height) ? img.width / img.height : 256 / 384;
@@ -540,12 +564,13 @@ function makeUnitSprite(unitData) {
   applyScale(placeholder);
 
   // State rig: textures fill in as each PNG decodes; `shown` tracks the current
-  // pose; fire bookkeeping drives the shoot hold. Read/written every frame by
-  // updateUnitSpriteState().
+  // pose; fire bookkeeping drives the shoot hold. `shadow*`/`texShadow` drive the
+  // through-wall silhouette, kept one-for-one with the body pose by the updater.
   const rig = {
-    mat, applyScale,
+    mat, shadowMat, shadowSprite, applyScale,
     tex: { stand: null, sprint: null, dodge: null, shoot: null },
-    shown: null, lastFireSeen: 0, fireUntil: 0
+    texShadow: { stand: null, sprint: null, dodge: null, shoot: null },
+    shown: null, shadowShown: null, lastFireSeen: 0, fireUntil: 0
   };
   sprite.userData.stateRig = rig;
 
@@ -560,6 +585,11 @@ function makeUnitSprite(unitData) {
           applyScale(tex);
           rig.shown = 'stand';
         }
+      });
+      // Matching through-wall silhouette ("<key>_<state>_shadow.png"); the
+      // updater swaps shadowMat.map to follow the visible pose as these arrive.
+      loadUnitArt(unitData.spriteKey, `${state}_shadow`, (tex) => {
+        rig.texShadow[state] = tex;
       });
     }
   }
@@ -625,6 +655,21 @@ function updateUnitSpriteState(m, rig, dt, now) {
       rig.mat.needsUpdate = true;
       rig.applyScale(tex);
       rig.shown = want;
+    }
+  }
+
+  // Keep the through-wall silhouette one-for-one with the visible pose. Tracked
+  // separately from `shown` because a pose's "_shadow" PNG can finish loading a
+  // few frames after the body PNG (or be absent). The shadow child stays hidden
+  // until a real shadow texture is applied, so a missing PNG just means no X-ray
+  // rather than a stray placeholder showing through walls.
+  if (rig.shown && rig.shadowShown !== rig.shown) {
+    const shadowTex = rig.texShadow[rig.shown];
+    if (shadowTex) {
+      rig.shadowMat.map = shadowTex;
+      rig.shadowMat.needsUpdate = true;
+      rig.shadowSprite.visible = true;
+      rig.shadowShown = rig.shown;
     }
   }
 }
