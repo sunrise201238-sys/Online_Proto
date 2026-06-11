@@ -454,6 +454,7 @@ const UNIT_SPRITE_HEIGHT = 6.4;   // world-units tall (feet → top of head/halo
 const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
 const UNIT_SPRITE_STATES = ['stand', 'sprint', 'dodge', 'shoot'];  // PNG suffixes
 const SPRITE_SHOOT_HOLD_MS = 200; // how long the shoot pose holds after a shot
+const SPRITE_MOTION_HOLD_MS = 150; // bridge brief gaps in a bot's sprint/dodge intent (anti-flicker)
 const _unitTexLoader = new THREE.TextureLoader();
 const _unitArtCache = {};         // `${spriteKey}_${state}` → loaded THREE.Texture
 const _unitArtPending = {};       // `${spriteKey}_${state}` → [callbacks] awaiting load
@@ -581,7 +582,8 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
     mat, shadowMat, shadowSprite, applyScale,
     tex: { stand: null, sprint: null, dodge: null, shoot: null },
     texShadow: { stand: null, sprint: null, dodge: null, shoot: null },
-    shown: null, shadowShown: null, lastFireSeen: 0, fireUntil: 0
+    shown: null, shadowShown: null, lastFireSeen: 0, fireUntil: 0,
+    motionPose: null, motionHoldUntil: 0   // anti-flicker: last sprint/dodge pose + its linger deadline
   };
   sprite.userData.stateRig = rig;
 
@@ -662,6 +664,25 @@ function updateUnitSpriteState(m, rig, dt, now) {
   if (dodging) want = 'dodge';
   else if (sprinting) want = 'sprint';
   else if (firing) want = 'shoot';
+
+  // Anti-flicker release-hold on the motion poses. A bot re-derives `action`
+  // every AI tick, so its sprint/dodge intent can blink out for a frame or two
+  // (boost dipping under the sprint threshold, a one-tick state flip) and strobe
+  // the sprite between sprint/dodge and stand. When a motion pose is wanted we
+  // refresh its linger deadline; when it drops we keep showing the last motion
+  // pose until the deadline passes, bridging those brief gaps. UPGRADES are
+  // instant (we only defer the downgrade), so it stays responsive; the player's
+  // poses come from steady held input and never trigger the hold, so they look
+  // unchanged. Render-only — uniform across the offline bots, the player, and the
+  // online snapshot mirror, touching no gameplay/AI state.
+  if (want === 'sprint' || want === 'dodge') {
+    rig.motionPose = want;
+    rig.motionHoldUntil = now + SPRITE_MOTION_HOLD_MS;
+  } else if (rig.motionPose && now < rig.motionHoldUntil) {
+    want = rig.motionPose;          // hold the last motion pose through a brief gap
+  } else {
+    rig.motionPose = null;
+  }
 
   if (want !== rig.shown) {
     const tex = rig.tex[want];
