@@ -518,7 +518,7 @@ function loadUnitArt(spriteKey, state, onReady) {
 // and preloads one texture per state (stand/sprint/dodge/shoot); the per-frame
 // updater swaps `mat.map` to match the fighter's pose. Anchored at the feet
 // (bottom-center). The state rig hangs off sprite.userData for the updater.
-function makeUnitSprite(unitData) {
+function makeUnitSprite(unitData, isOwnUnit = false) {
   const placeholder = makeUnitPlaceholderTexture(unitData.char || '?', unitData.accent);
   const mat = new THREE.SpriteMaterial({
     map: placeholder,
@@ -531,27 +531,38 @@ function makeUnitSprite(unitData) {
   sprite.center.set(0.5, 0);                 // anchor at feet (bottom-center)
   sprite.position.y = UNIT_SPRITE_FOOT_Y;
 
-  // Through-wall X-ray silhouette: a second billboard riding on the body that
-  // draws the matching "_shadow" art ONLY where the unit is hidden behind cover.
-  // The depthFunc flip (GreaterDepth, same trick as MECH_OCCLUSION_GHOST) passes
-  // only where the depth buffer is CLOSER than the sprite — i.e. behind a wall —
-  // so the un-occluded part keeps the normal art and just the blocked part shows
-  // the shadow (partial X-ray, no raycast needed; a flat billboard has no parts
-  // to self-occlude). depthWrite off so it never poisons the depth buffer. Added
-  // as a CHILD of the body sprite, so it inherits the body's world position AND
-  // per-pose scale automatically — always pixel-aligned. Hidden until its real
-  // shadow art loads, so a missing "_shadow" PNG simply means no X-ray.
-  const shadowMat = new THREE.SpriteMaterial({
-    map: placeholder,
-    transparent: true,                 // keep the shadow art's own (soft) alpha
-    depthFunc: THREE.GreaterDepth,     // draw only where occluded by closer geo
-    depthWrite: false,
-    fog: false
-  });
-  const shadowSprite = new THREE.Sprite(shadowMat);
-  shadowSprite.center.set(0.5, 0);
-  shadowSprite.visible = false;
-  sprite.add(shadowSprite);
+  // The local player's own unit is seen from behind (camera sits behind it), so
+  // it renders the rear-facing "_rear" art set; every other unit faces the
+  // camera and keeps the default front art.
+  const bodySuffix = isOwnUnit ? '_rear' : '';
+
+  // Through-wall X-ray silhouette — OWN UNIT ONLY. A second billboard riding on
+  // the body draws the matching "_rear_shadow" art ONLY where the unit is hidden
+  // behind cover. The depthFunc flip (GreaterDepth, same trick as
+  // MECH_OCCLUSION_GHOST) passes only where the depth buffer is CLOSER than the
+  // sprite — i.e. behind a wall — so the un-occluded part keeps the normal art
+  // and just the blocked part shows the shadow (partial X-ray, no raycast needed;
+  // a flat billboard has no parts to self-occlude). depthWrite off so it never
+  // poisons the depth buffer. Added as a CHILD of the body sprite, so it inherits
+  // the body's world position AND per-pose scale automatically — always
+  // pixel-aligned. Hidden until its real shadow art loads, so a missing
+  // "_rear_shadow" PNG simply means no X-ray. Other units never build it, so they
+  // never X-ray through walls.
+  let shadowMat = null;
+  let shadowSprite = null;
+  if (isOwnUnit) {
+    shadowMat = new THREE.SpriteMaterial({
+      map: placeholder,
+      transparent: true,                 // keep the shadow art's own (soft) alpha
+      depthFunc: THREE.GreaterDepth,     // draw only where occluded by closer geo
+      depthWrite: false,
+      fog: false
+    });
+    shadowSprite = new THREE.Sprite(shadowMat);
+    shadowSprite.center.set(0.5, 0);
+    shadowSprite.visible = false;
+    sprite.add(shadowSprite);
+  }
 
   // Rescale per texture so every pose keeps its own aspect ratio at a fixed
   // height. The shadow child inherits this scale (and the body's world position),
@@ -576,7 +587,8 @@ function makeUnitSprite(unitData) {
 
   if (unitData.spriteKey) {
     for (const state of UNIT_SPRITE_STATES) {
-      loadUnitArt(unitData.spriteKey, state, (tex) => {
+      // Own unit pulls the "_rear" art set; other units the default front art.
+      loadUnitArt(unitData.spriteKey, `${state}${bodySuffix}`, (tex) => {
         rig.tex[state] = tex;
         // Show the stand pose as soon as it arrives (first real art on screen).
         if (state === 'stand' && (rig.shown === null || rig.shown === 'stand')) {
@@ -586,11 +598,14 @@ function makeUnitSprite(unitData) {
           rig.shown = 'stand';
         }
       });
-      // Matching through-wall silhouette ("<key>_<state>_shadow.png"); the
-      // updater swaps shadowMat.map to follow the visible pose as these arrive.
-      loadUnitArt(unitData.spriteKey, `${state}_shadow`, (tex) => {
-        rig.texShadow[state] = tex;
-      });
+      // Matching through-wall silhouette ("<key>_<state>_rear_shadow.png") — own
+      // unit only; the updater swaps shadowMat.map to follow the visible pose as
+      // these arrive. Other units skip this load entirely (no X-ray for them).
+      if (isOwnUnit) {
+        loadUnitArt(unitData.spriteKey, `${state}_rear_shadow`, (tex) => {
+          rig.texShadow[state] = tex;
+        });
+      }
     }
   }
   return sprite;
@@ -658,12 +673,13 @@ function updateUnitSpriteState(m, rig, dt, now) {
     }
   }
 
-  // Keep the through-wall silhouette one-for-one with the visible pose. Tracked
-  // separately from `shown` because a pose's "_shadow" PNG can finish loading a
-  // few frames after the body PNG (or be absent). The shadow child stays hidden
-  // until a real shadow texture is applied, so a missing PNG just means no X-ray
-  // rather than a stray placeholder showing through walls.
-  if (rig.shown && rig.shadowShown !== rig.shown) {
+  // Keep the through-wall silhouette one-for-one with the visible pose — OWN UNIT
+  // ONLY (rig.shadowSprite is null for every other unit, which skips this block).
+  // Tracked separately from `shown` because a pose's "_rear_shadow" PNG can finish
+  // loading a few frames after the body PNG (or be absent). The shadow child stays
+  // hidden until a real shadow texture is applied, so a missing PNG just means no
+  // X-ray rather than a stray placeholder showing through walls.
+  if (rig.shadowSprite && rig.shown && rig.shadowShown !== rig.shown) {
     const shadowTex = rig.texShadow[rig.shown];
     if (shadowTex) {
       rig.shadowMat.map = shadowTex;
@@ -684,15 +700,18 @@ function updateMechAnimations(dt, now) {
   }
 }
 
-// `addXRayGhost` is kept in the signature for call-site compatibility; the
-// box-mech (and its x-ray ghost) was replaced by a character billboard, so the
-// flag and `color` team tint are no longer used for the body itself.
-function createMech(color, unitData, addXRayGhost = false) {
+// `isOwnUnit` is true only for the local player's own mech (the createMech calls
+// that pass `true`, offline + online). The camera sits behind that unit, so it
+// renders the rear-facing "_rear" art set AND gets the through-wall X-ray
+// silhouette — it's the one the player needs to see when their own movement tucks
+// it behind cover. Every other unit faces the camera (front art) with no X-ray.
+// `color` (team tint) is no longer used for the body itself.
+function createMech(color, unitData, isOwnUnit = false) {
   const root = new THREE.Group();
 
   // Character billboard replaces the old box-mech body. Team identity reads
   // from the reticle / floating triangle / HP indicators, not body color.
-  const sprite = makeUnitSprite(unitData);
+  const sprite = makeUnitSprite(unitData, isOwnUnit);
   root.add(sprite);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
