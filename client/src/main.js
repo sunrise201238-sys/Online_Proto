@@ -453,10 +453,6 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
 const UNIT_SPRITE_HEIGHT = 6.4;   // world-units tall (feet → top of head/halo)
 const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
 const UNIT_SPRITE_STATES = ['stand', 'sprint', 'dodge', 'shoot'];  // PNG suffixes
-const SPRITE_MOVE_SPEED = 2.5;    // horiz speed (u/s) above which -> sprint pose
-const SPRITE_MOVE_HOLD_MS = 220;  // sprint pose lingers this long after speed dips,
-                                  // debouncing the stand<->sprint flicker when the
-                                  // move stick recenters with the finger still down
 const SPRITE_SHOOT_HOLD_MS = 200; // how long the shoot pose holds after a shot
 const _unitTexLoader = new THREE.TextureLoader();
 const _unitArtCache = {};         // `${spriteKey}_${state}` → loaded THREE.Texture
@@ -549,7 +545,7 @@ function makeUnitSprite(unitData) {
   const rig = {
     mat, applyScale,
     tex: { stand: null, sprint: null, dodge: null, shoot: null },
-    shown: null, lastFireSeen: 0, fireUntil: 0, moveUntil: 0, prev: null
+    shown: null, lastFireSeen: 0, fireUntil: 0
   };
   sprite.userData.stateRig = rig;
 
@@ -573,8 +569,8 @@ function makeUnitSprite(unitData) {
 // ----------------------------------------------------------------------------
 // State-driven sprite poses. Each frame every fighter's billboard swaps to the
 // texture matching its current action, using the per-sprite rig built in
-// makeUnitSprite(). State is derived path-agnostically (measured movement +
-// state flags + a fire-change pulse), so it behaves identically for the offline
+// makeUnitSprite(). State is derived from the sim's `action` field (plus state
+// flags and a fire-change pulse), so it behaves identically for the offline
 // sim and the online snapshot mirror.
 //
 // Priority (highest first): dodge > sprint > shoot > stand. Sprint/dodge outrank
@@ -586,29 +582,24 @@ function makeUnitSprite(unitData) {
 // rig = m.sprite.userData.stateRig. The texture is swapped only when the wanted
 // pose differs AND its art has finished loading (otherwise the current pose holds).
 function updateUnitSpriteState(m, rig, dt, now) {
-  // Measured per-frame movement — path-agnostic, so it works identically for the
-  // offline sim and the online snapshot mirror.
-  const pos = m.root.position;
-  if (!rig.prev) rig.prev = pos.clone();
-  const speed = dt > 0 ? Math.hypot(pos.x - rig.prev.x, pos.z - rig.prev.z) / dt : 0;
-  rig.prev.copy(pos);
+  // Pose is driven by the sim's `action` (mirrored online via s.action), NOT by
+  // measured speed: basic joystick walking stays action 'idle', so it reads as
+  // 'stand'; only the explicit sprint/dodge inputs change the motion pose.
+  const st = m.state;
 
   // Fire is detected by a CHANGE in lastFireAt (not `now - lastFireAt`) so it is
   // immune to online's server-clock vs local-clock mismatch.
-  const st = m.state;
   const lf = st.lastFireAt || 0;
   if (lf !== rig.lastFireSeen) {
     rig.lastFireSeen = lf;
     if (lf > 0) rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS;
   }
 
-  // Debounce sprint->stand: any frame above the move threshold refreshes a short
-  // hold, so a brief speed dip (the move stick recentering while the finger is
-  // still down) keeps the sprint pose instead of flickering back to stand.
-  if (speed > SPRITE_MOVE_SPEED) rig.moveUntil = now + SPRITE_MOVE_HOLD_MS;
-
-  const dashing = st.action === 'dash' || now < (st.stepUntil || 0);
-  const moving = now < rig.moveUntil;
+  // Dodge = the discrete step/dodge burst (L / dodge button) -> action 'step'.
+  // Sprint = the held sprint run (K / sprint button)         -> action 'dash'.
+  // Basic walking is action 'idle' and falls through to 'stand'.
+  const dodging = st.action === 'step' || now < (st.stepUntil || 0);
+  const sprinting = st.action === 'dash';
   // Sniper pre-aim (charging) reads as firing so Aru holds the shoot pose while
   // winding up. sniperChargeTarget truthiness tracks the charge precisely in both
   // modes (offline clears it when the shot fires; online mirrors the server flag),
@@ -619,8 +610,8 @@ function updateUnitSpriteState(m, rig, dt, now) {
   // Priority: dodge > sprint > shoot > stand (sprint/dodge outrank shoot, so a
   // unit firing mid-dash/run keeps its motion pose — no shoot-frame cut-in).
   let want = 'stand';
-  if (dashing) want = 'dodge';
-  else if (moving) want = 'sprint';
+  if (dodging) want = 'dodge';
+  else if (sprinting) want = 'sprint';
   else if (firing) want = 'shoot';
 
   if (want !== rig.shown) {
