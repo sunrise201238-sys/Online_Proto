@@ -19,6 +19,7 @@ import {
   MOMENTUM_STANDARD,
   GROUND_BASE_Y,
   SNIPER_CANCEL_BOOST_COST,
+  SNIPER_CANCEL_MIN_CHARGE_MS,
   BOOST_REFILL_PAUSE_MS
 } from './constants.js';
 import { spawnProjectiles } from './projectiles.js';
@@ -97,12 +98,19 @@ function _spawnNonCharge(matchState, owner, target, now) {
 // elapses; emits a 'sniper-fired' event if the target became invalid mid-charge.
 // `input` is the sniper's input frame this tick — when its boost is held with
 // enough boost gauge, the forced-standing charge cancels and the projectile
-// fires immediately at the cost of SNIPER_CANCEL_BOOST_COST.
+// fires immediately at the cost of SNIPER_CANCEL_BOOST_COST. The cancel only
+// registers once the charge is SNIPER_CANCEL_MIN_CHARGE_MS old, so a pre-held
+// sprint releases the shot at the floor instead of the next tick — the target
+// always gets a fixed glint-to-bullet window. Gating registration (rather than
+// deferring the fire) also means the boost cost is paid exactly once, on the
+// tick the shot actually releases.
 export function tickSniperCharge(matchState, fighter, now, input = null) {
   if (!fighter.sniperChargeTargetId) return;
 
   const sprintHeld = !!(input && (input.boost || input.sprintLocked));
+  const chargeStartAt = fighter.sniperChargeUntil - (fighter.unit.chargeMs ?? 500);
   const cancelled = sprintHeld
+    && now >= chargeStartAt + SNIPER_CANCEL_MIN_CHARGE_MS
     && now < fighter.sniperChargeUntil
     && fighter.boost >= SNIPER_CANCEL_BOOST_COST;
   if (cancelled) {

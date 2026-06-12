@@ -212,9 +212,15 @@ export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
 // Sniper-specific.
 export const SNIPER_GLINT_VISIBLE = true;
 // Sprint-cancel: holding sprint during the forced-standing charge ends the
-// charge immediately and fires the projectile, costing half a step's worth
-// of boost.
+// charge and fires the projectile, costing half a step's worth of boost.
 export const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
+// The cancel can't release the shot before the charge is at least this old.
+// Guarantees the target a fixed glint-to-bullet telegraph even when sprint is
+// pre-held (which previously fired the very next tick — unreactable at close
+// range once netcode delay eats into the window). Holding sprint through the
+// floor releases the shot exactly at the floor; pressing sprint after the
+// floor still fires immediately.
+export const SNIPER_CANCEL_MIN_CHARGE_MS = 250;
 // Minimum on-screen glint duration so an instant sprint-cancel still flashes
 // a hint at the target instead of vanishing within a single frame.
 export const SNIPER_GLINT_MIN_FLASH_MS = 100;
