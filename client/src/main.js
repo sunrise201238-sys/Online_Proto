@@ -368,6 +368,10 @@ const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default
 const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default
 const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default
 const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
+// Mirrors SNIPER_CANCEL_MIN_CHARGE_MS in shared/src/sim/constants.js — the
+// sprint-cancel can't release the shot before the charge is this old, so a
+// pre-held sprint can't produce a zero-telegraph snap shot.
+const SNIPER_CANCEL_MIN_CHARGE_MS = 250;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the 18-small-grid derivation.
@@ -1409,10 +1413,15 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   const target = mech.state.sniperChargeTarget;
   if (!target) return;
   // Sprint-cancel: holding sprint while the forced-standing charge is active
-  // ends it immediately and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST
-  // (half a step's boost). The glint still flashes via the min-hold window.
+  // ends it and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST (half a
+  // step's boost). The cancel only registers once the charge is
+  // SNIPER_CANCEL_MIN_CHARGE_MS old, so a pre-held sprint releases the shot at
+  // the floor instead of instantly — the target always gets a fixed
+  // glint-to-bullet window. Gating registration (not deferring the fire) also
+  // means the boost cost is paid exactly once, on the tick the shot releases.
   if (
     sprintHeld
+    && now >= mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 500) + SNIPER_CANCEL_MIN_CHARGE_MS
     && now < mech.state.sniperChargeUntil
     && mech.state.boost >= SNIPER_CANCEL_BOOST_COST
   ) {
