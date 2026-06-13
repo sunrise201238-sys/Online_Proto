@@ -220,7 +220,7 @@ export const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 // range once netcode delay eats into the window). Holding sprint through the
 // floor releases the shot exactly at the floor; pressing sprint after the
 // floor still fires immediately.
-export const SNIPER_CANCEL_MIN_CHARGE_MS = 250;
+export const SNIPER_CANCEL_MIN_CHARGE_MS = 300;
 // Minimum on-screen glint duration so an instant sprint-cancel still flashes
 // a hint at the target instead of vanishing within a single frame.
 export const SNIPER_GLINT_MIN_FLASH_MS = 100;
