@@ -358,8 +358,8 @@ const HOMING_SOFTEN_RANGE = 20;
 const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectiles fly straight
 const BOOST_CAP = 250;                  // unit.boostCap default
 const STEP_DISTANCE = 9.2;
-const STEP_DURATION_MS = 125;
-const STEP_COOLDOWN_MS = 1000;
+const STEP_DURATION_MS = 300;
+const STEP_COOLDOWN_MS = 1175;
 const STEP_BOOST_COST = 48;
 const STEP_HOMING_CUT_MS = 260;
 // --- Jump defaults (used when a unit's UNIT_DATA entry omits the field) ---
