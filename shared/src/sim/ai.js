@@ -12,11 +12,11 @@
 //     a map's geometry is enough to re-tune the bot.
 
 import { between } from './math.js';
-import { attemptFire, tryStartJump } from './actions.js';
+import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
 import { getArena } from './arena.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, STEP_DURATION_MS } from './constants.js';
 
 // --- Bot tactical-sprint tunables ---
 // Hysteresis: bot only initiates a new sprint burst once boost has refilled
@@ -38,6 +38,11 @@ const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
+// Anti-sniper humanization: the bot only "notices" a sniper glint after this
+// reaction delay — Defense entry AND its guessed dodge both wait on it. A
+// floor-canceled snap shot (SNIPER_CANCEL_MIN_CHARGE_MS) therefore arrives
+// before a bot that hasn't reacted yet, instead of being dodged on frame one.
+const BOT_GLINT_REACT_MS = 300;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -285,6 +290,64 @@ export function tickBot(matchState, botId, now) {
   const sideX = -dirZ;
   const sideZ = dirX;
 
+  // --- Anti-sniper glint response: humanlike reaction + guessed dodge ---
+  // (mirrors updateEnemy in main.js). On the glint's rising edge the bot rolls
+  // ONE guess at when the shot will arrive — a release somewhere between the
+  // sprint-cancel floor and the full charge, plus bullet flight time — and
+  // schedules a single step whose i-frames are centered on that guess. The
+  // guess is consumed whether or not the step actually starts (cooldown/boost
+  // gates inside tryStartStep), so the bot can never step more than once per
+  // enemy charge. The schedule deliberately survives the charge ending: a
+  // full-charge bullet arrives AFTER the glint vanishes, and the dodge must
+  // still be allowed to cover it.
+  const sniperCharging = opp.sniperChargeTargetId === me.id;
+  if (sniperCharging) {
+    if (!me.botGlintAt) {
+      me.botGlintAt = now;
+      const oppChargeMs = opp.unit?.chargeMs ?? 500;
+      const guessedRelease = SNIPER_CANCEL_MIN_CHARGE_MS
+        + Math.random() * Math.max(0, oppChargeMs - SNIPER_CANCEL_MIN_CHARGE_MS);
+      const flightMs = (dist / (opp.unit?.projectileSpeed ?? 1000)) * 1000;
+      me.botGlintStepAt = now + Math.max(
+        BOT_GLINT_REACT_MS,
+        guessedRelease + flightMs - STEP_DURATION_MS / 2
+      );
+    }
+  } else {
+    me.botGlintAt = null;
+  }
+  // A fresh hit means the shot already landed — drop the now-pointless dodge.
+  // (botPrevHitStun is only advanced by the threat block below, so the rising
+  // edge is still visible here.)
+  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
+
+  // The guessed dodge comes due: one attempt, then the guess is spent.
+  if (me.botGlintStepAt != null && now >= me.botGlintStepAt) {
+    me.botGlintStepAt = null;
+    if (now > me.stepUntil) {
+      // Continue the committed Defense escape line if one is active so the
+      // dodge reads as part of the same evade; otherwise pick a random side.
+      let sdx, sdz;
+      if (me.botState === 'defense' && me.botDefenseDirX != null) {
+        sdx = me.botDefenseDirX; sdz = me.botDefenseDirZ;
+      } else {
+        const lat = Math.random() < 0.5 ? 1 : -1;
+        sdx = sideX * lat; sdz = sideZ * lat;
+      }
+      tryStartStep(matchState, me, sdx, sdz, now, obstacles);
+    }
+  }
+
+  // Step lifecycle. Bots skip applyInput (where players' steps are ticked), so
+  // the bot's own step must be advanced here: while mid-step the lerp owns
+  // position/velocity/action and the rest of the AI sits out the tick; the
+  // first tick after it ends pays out the queued momentum.
+  if (now <= me.stepUntil) {
+    tickStep(me, now, obstacles);
+    return;
+  }
+  if (me.stepUntil > 0) tickStep(me, now, obstacles);
+
   // Kite near the outer edge of the weapon's red-lock range — far enough to
   // minimize incoming fire effectiveness while still landing our own shots.
   // Most weapons derive the band from lockRange directly; multi-pellet
@@ -314,15 +377,17 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
-  const sniperCharging = opp.sniperChargeTargetId === me.id;
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
-  // Defense triggers on the SNIPER GLINT (with clear line) or a FRESH HIT.
+  // Defense triggers on the SNIPER GLINT (with clear line, after the humanlike
+  // BOT_GLINT_REACT_MS reaction delay) or a FRESH HIT.
   // We deliberately do NOT trigger on "player squeezed the trigger" (the
   // BOT_FIRE_REACT_MS window) — that made the bot too evasive, dodging every
   // MG round before it could even land. "Sprint when getting hit" is provided
   // by hitEvading below.
-  const firedAtWithLoS = sniperCharging && playerHasLoS;
+  const glintReacted = sniperCharging
+    && me.botGlintAt != null && now >= me.botGlintAt + BOT_GLINT_REACT_MS;
+  const firedAtWithLoS = glintReacted && playerHasLoS;
   const hitEvading = now < (me.botHitEvadeUntil ?? 0);
   const underFire = firedAtWithLoS || hitEvading;
   const inBandDist = dist >= lowerRange && dist <= upperRange;
