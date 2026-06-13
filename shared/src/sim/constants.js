@@ -132,8 +132,8 @@ export const MOMENTUM_STANDARD = 100;
 
 // Step (dodge) tunables.
 export const STEP_DISTANCE = 9.2;
-export const STEP_DURATION_MS = 125;
-export const STEP_COOLDOWN_MS = 1000;
+export const STEP_DURATION_MS = 300;
+export const STEP_COOLDOWN_MS = 1175;
 export const STEP_BOOST_COST = 48;
 export const STEP_HOMING_CUT_MS = 260;
 
