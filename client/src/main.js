@@ -5195,7 +5195,7 @@ function buildStreetsArena() {
   const storefrontD = new THREE.MeshStandardMaterial({ color: 0x3d4759, roughness: 0.82 });
   const sign = new THREE.MeshStandardMaterial({ color: 0xff6db0, emissive: 0x55173a, emissiveIntensity: 0.35, roughness: 0.55 });
   const signCyan = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x163d52, emissiveIntensity: 0.4, roughness: 0.55 });
-  const vendor = new THREE.MeshStandardMaterial({ color: 0xe33c4d, roughness: 0.6 });
+  const vendor = new THREE.MeshStandardMaterial({ color: 0x26407a, roughness: 0.6 });
   const billboard = new THREE.MeshStandardMaterial({ color: 0xffe2a3, emissive: 0x4a3915, emissiveIntensity: 0.3, roughness: 0.6 });
 
   const lampMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.5, metalness: 0.4 });
@@ -5217,6 +5217,13 @@ function buildStreetsArena() {
   const postMat = new THREE.MeshStandardMaterial({ color: 0x4a3526, roughness: 0.7 });
   const stripeRed = new THREE.MeshStandardMaterial({ color: 0xd64a44, roughness: 0.7 });
   const stripeWhite = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.7 });
+  const windowLit = new THREE.MeshStandardMaterial({ color: 0xffe6a8, emissive: 0xffd27a, emissiveIntensity: 0.5, roughness: 0.4 });
+  const windowDark = new THREE.MeshStandardMaterial({ color: 0x2b3344, roughness: 0.35, metalness: 0.4 });
+  const roofTrim = new THREE.MeshStandardMaterial({ color: 0x39414f, roughness: 0.8 });
+  const towerBase = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.5, metalness: 0.5 });
+  const neonA = new THREE.MeshStandardMaterial({ color: 0xff5db0, emissive: 0xff2a8a, emissiveIntensity: 0.9, roughness: 0.4 });
+  const neonB = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x18a8e0, emissiveIntensity: 0.9, roughness: 0.4 });
+  const towerCap = new THREE.MeshStandardMaterial({ color: 0xffe2a3, emissive: 0xffae3f, emissiveIntensity: 0.7, roughness: 0.5 });
 
   const addDecor = (opts) => addBlockingBox({ ...opts, decorOnly: true });
 
@@ -5259,6 +5266,34 @@ function buildStreetsArena() {
     }
   };
 
+  // Storefront building: a grid of lit/dark windows on the avenue-facing side,
+  // a ground-floor storefront band in the building's accent colour, and a roof
+  // parapet — turns the plain coloured box into a city block.
+  const dressBuilding = (x, z, sx, sy, sz, accentMat) => {
+    const faceDir = z < 0 ? 1 : -1;
+    const fz = z + faceDir * (sz / 2 + 0.06);
+    const cols = Math.max(2, Math.floor(sx / 4.5));
+    for (let c = 0; c < cols; c += 1) {
+      const wx = x - sx / 2 + (c + 0.5) * (sx / cols);
+      for (let wy = 3.6; wy < sy - 1.2; wy += 3) {
+        const lit = (c * 2 + Math.round(wy)) % 3 !== 0;
+        addDecor({ x: wx, y: wy, z: fz, sx: (sx / cols) * 0.5, sy: 1.5, sz: 0.16, material: lit ? windowLit : windowDark });
+      }
+    }
+    addDecor({ x, y: 1.4, z: fz, sx: sx * 0.92, sy: 2.6, sz: 0.22, material: accentMat }); // ground-floor band
+    addDecor({ x, y: sy - 0.25, z, sx: sx + 0.5, sy: 0.7, sz: sz + 0.5, material: roofTrim }); // roof parapet
+  };
+
+  // Corner signage tower: a base block, neon rings climbing the shaft, and a lit
+  // sign cap up top.
+  const dressTower = (x, z, w, topY) => {
+    addDecor({ x, y: 1.6, z, sx: w + 2.2, sy: 3.2, sz: w + 2.2, material: towerBase });
+    for (let i = 1; i <= 4; i += 1) {
+      addDecor({ x, y: 4 + (topY - 6) * (i / 5), z, sx: w + 0.5, sy: 0.6, sz: w + 0.5, material: i % 2 ? neonA : neonB });
+    }
+    addDecor({ x, y: topY - 1.5, z, sx: w + 1.4, sy: 3, sz: w + 1.4, material: towerCap });
+  };
+
   const base = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), road);
   base.rotation.x = -Math.PI / 2; base.position.y = 0.005; scene.add(base); arenaDecor.push(base);
 
@@ -5294,6 +5329,7 @@ function buildStreetsArena() {
   ];
   southBuildings.forEach((b) => {
     addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat);
   });
   const northBuildings = [
     { x: -100, sx: 28, h: 13, mat: storefrontD },
@@ -5305,6 +5341,7 @@ function buildStreetsArena() {
   ];
   northBuildings.forEach((b) => {
     addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat);
   });
 
   // (Outer back walls removed — the play area is bounded by the invisible
@@ -5419,11 +5456,15 @@ function buildStreetsArena() {
   }
 
   // ===== Akihabara dressing =====
-  // Corner signage towers (neon-emissive)
+  // Corner signage towers (neon-emissive), dressed with base/rings/sign cap.
   addBlockingBox({ x: -110, y: 12, z: -94, sx: 5, sy: 24, sz: 5, material: sign });
   addBlockingBox({ x: 110, y: 12, z: 94, sx: 5, sy: 24, sz: 5, material: signCyan });
   addBlockingBox({ x: -110, y: 14, z: 94, sx: 5, sy: 28, sz: 5, material: signCyan });
   addBlockingBox({ x: 110, y: 14, z: -94, sx: 5, sy: 28, sz: 5, material: sign });
+  dressTower(-110, -94, 5, 24);
+  dressTower(110, 94, 5, 24);
+  dressTower(-110, 94, 5, 28);
+  dressTower(110, -94, 5, 28);
 
   // Lamp posts along sidewalks
   const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110];
@@ -5457,10 +5498,10 @@ function buildStreetsArena() {
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
   const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
   stallSpots.forEach(([x, z]) => {
-    // Wide + full-height cover to hide the whole unit; awning rides on top.
-    addBlockingBox({ x, y: 4.0, z, sx: 6.0, sy: 8.0, sz: 3.2, material: stallAwning });
-    addBlockingBox({ x, y: 8.2, z, sx: 6.5, sy: 0.25, sz: 3.8, material: storefrontA });
-    dressStall(x, z, 6.0, 8.0, 3.2);
+    // Big cover: longer (x) and wider/deeper (z); awning rides on top.
+    addBlockingBox({ x, y: 4.0, z, sx: 8.0, sy: 8.0, sz: 4.5, material: stallAwning });
+    addBlockingBox({ x, y: 8.2, z, sx: 8.5, sy: 0.25, sz: 5.0, material: storefrontA });
+    dressStall(x, z, 8.0, 8.0, 4.5);
   });
 
   // (Parked scooters removed.)
