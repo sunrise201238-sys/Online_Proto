@@ -738,260 +738,260 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 18.2
       },
       {
-        "minX": -96.5,
-        "maxX": -93.5,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -95,
-        "maxX": -92,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -51.5,
-        "maxX": -48.5,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -50,
-        "maxX": -47,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 23.5,
-        "maxX": 26.5,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 25,
-        "maxX": 28,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 78.5,
-        "maxX": 81.5,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 77,
-        "maxX": 80,
-        "minZ": -16.5,
-        "maxZ": -13.9,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -79.5,
-        "maxX": -76.5,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -78,
-        "maxX": -75,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -26.5,
-        "maxX": -23.5,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -25,
-        "maxX": -22,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 48.5,
-        "maxX": 51.5,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 50,
-        "maxX": 53,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 93.5,
-        "maxX": 96.5,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": 92,
-        "maxX": 95,
-        "minZ": 13.9,
-        "maxZ": 16.5,
-        "minY": 0,
-        "maxY": 7
-      },
-      {
-        "minX": -32.25,
-        "maxX": -27.75,
-        "minZ": -16.4,
-        "maxZ": -13.6,
-        "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": -32.5,
-        "maxX": -27.5,
+        "minX": -97.5,
+        "maxX": -92.5,
         "minZ": -16.7,
-        "maxZ": -13.3,
-        "minY": 6.575,
-        "maxY": 6.825
-      },
-      {
-        "minX": 27.75,
-        "maxX": 32.25,
-        "minZ": 13.6,
-        "maxZ": 16.4,
+        "maxZ": -13.7,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": 27.5,
-        "maxX": 32.5,
-        "minZ": 13.3,
+        "minX": -96,
+        "maxX": -91,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -52.5,
+        "maxX": -47.5,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -51,
+        "maxX": -46,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 22.5,
+        "maxX": 27.5,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 24,
+        "maxX": 29,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 77.5,
+        "maxX": 82.5,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 76,
+        "maxX": 81,
+        "minZ": -16.7,
+        "maxZ": -13.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -80.5,
+        "maxX": -75.5,
+        "minZ": 13.7,
         "maxZ": 16.7,
-        "minY": 6.575,
-        "maxY": 6.825
-      },
-      {
-        "minX": -60.25,
-        "maxX": -55.75,
-        "minZ": 13.4,
-        "maxZ": 16.2,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": -60.5,
-        "maxX": -55.5,
-        "minZ": 13.1,
-        "maxZ": 16.5,
-        "minY": 6.575,
-        "maxY": 6.825
-      },
-      {
-        "minX": 57.75,
-        "maxX": 62.25,
-        "minZ": -16.2,
-        "maxZ": -13.4,
+        "minX": -79,
+        "maxX": -74,
+        "minZ": 13.7,
+        "maxZ": 16.7,
         "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": 57.5,
-        "maxX": 62.5,
-        "minZ": -16.5,
-        "maxZ": -13.1,
-        "minY": 6.575,
-        "maxY": 6.825
-      },
-      {
-        "minX": -32,
-        "maxX": -12,
-        "minZ": -39.2,
-        "maxZ": -36.8,
-        "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": 12,
-        "maxX": 32,
-        "minZ": -39.2,
-        "maxZ": -36.8,
-        "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": -32,
-        "maxX": -12,
-        "minZ": 36.8,
-        "maxZ": 39.2,
-        "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": 12,
-        "maxX": 32,
-        "minZ": 36.8,
-        "maxZ": 39.2,
-        "minY": 0,
-        "maxY": 6.5
-      },
-      {
-        "minX": -29.5,
-        "maxX": -26.5,
-        "minZ": -53.3,
-        "maxZ": -50.7,
-        "minY": 0,
-        "maxY": 7
+        "maxY": 8
       },
       {
         "minX": -27.5,
-        "maxX": -24.5,
-        "minZ": -53.3,
-        "maxZ": -50.7,
+        "maxX": -22.5,
+        "minZ": 13.7,
+        "maxZ": 16.7,
         "minY": 0,
-        "maxY": 7
+        "maxY": 8
       },
       {
-        "minX": 24.5,
-        "maxX": 27.5,
-        "minZ": 50.7,
-        "maxZ": 53.3,
+        "minX": -26,
+        "maxX": -21,
+        "minZ": 13.7,
+        "maxZ": 16.7,
         "minY": 0,
-        "maxY": 7
+        "maxY": 8
       },
       {
-        "minX": 26.5,
-        "maxX": 29.5,
-        "minZ": 50.7,
-        "maxZ": 53.3,
+        "minX": 47.5,
+        "maxX": 52.5,
+        "minZ": 13.7,
+        "maxZ": 16.7,
         "minY": 0,
-        "maxY": 7
+        "maxY": 8
+      },
+      {
+        "minX": 49,
+        "maxX": 54,
+        "minZ": 13.7,
+        "maxZ": 16.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 92.5,
+        "maxX": 97.5,
+        "minZ": 13.7,
+        "maxZ": 16.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 91,
+        "maxX": 96,
+        "minZ": 13.7,
+        "maxZ": 16.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -33,
+        "maxX": -27,
+        "minZ": -16.6,
+        "maxZ": -13.4,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -33.25,
+        "maxX": -26.75,
+        "minZ": -16.9,
+        "maxZ": -13.1,
+        "minY": 8.075,
+        "maxY": 8.325
+      },
+      {
+        "minX": 27,
+        "maxX": 33,
+        "minZ": 13.4,
+        "maxZ": 16.6,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 26.75,
+        "maxX": 33.25,
+        "minZ": 13.1,
+        "maxZ": 16.9,
+        "minY": 8.075,
+        "maxY": 8.325
+      },
+      {
+        "minX": -61,
+        "maxX": -55,
+        "minZ": 13.2,
+        "maxZ": 16.4,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -61.25,
+        "maxX": -54.75,
+        "minZ": 12.9,
+        "maxZ": 16.7,
+        "minY": 8.075,
+        "maxY": 8.325
+      },
+      {
+        "minX": 57,
+        "maxX": 63,
+        "minZ": -16.4,
+        "maxZ": -13.2,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 56.75,
+        "maxX": 63.25,
+        "minZ": -16.7,
+        "maxZ": -12.9,
+        "minY": 8.075,
+        "maxY": 8.325
+      },
+      {
+        "minX": -32,
+        "maxX": -12,
+        "minZ": -39.2,
+        "maxZ": -36.8,
+        "minY": 0,
+        "maxY": 6.5
+      },
+      {
+        "minX": 12,
+        "maxX": 32,
+        "minZ": -39.2,
+        "maxZ": -36.8,
+        "minY": 0,
+        "maxY": 6.5
+      },
+      {
+        "minX": -32,
+        "maxX": -12,
+        "minZ": 36.8,
+        "maxZ": 39.2,
+        "minY": 0,
+        "maxY": 6.5
+      },
+      {
+        "minX": 12,
+        "maxX": 32,
+        "minZ": 36.8,
+        "maxZ": 39.2,
+        "minY": 0,
+        "maxY": 6.5
+      },
+      {
+        "minX": -30.5,
+        "maxX": -25.5,
+        "minZ": -53.5,
+        "maxZ": -50.5,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -28.5,
+        "maxX": -23.5,
+        "minZ": -53.5,
+        "maxZ": -50.5,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 23.5,
+        "maxX": 28.5,
+        "minZ": 50.5,
+        "maxZ": 53.5,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 25.5,
+        "maxX": 30.5,
+        "minZ": 50.5,
+        "maxZ": 53.5,
+        "minY": 0,
+        "maxY": 8
       },
       {
         "minX": -110,
