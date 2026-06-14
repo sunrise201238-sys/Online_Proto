@@ -5226,6 +5226,10 @@ function buildStreetsArena() {
   const industrialDark = new THREE.MeshStandardMaterial({ color: 0x33373d, roughness: 0.6, metalness: 0.6 });
   const hazardStripe = new THREE.MeshStandardMaterial({ color: 0xd9a82a, roughness: 0.6 });
   const industrialPipe = new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 0.7, metalness: 0.3 });
+  const billboardFrame = new THREE.MeshStandardMaterial({ color: 0x1c1f26, roughness: 0.6, metalness: 0.4 });
+  const adScreenA = new THREE.MeshStandardMaterial({ color: 0xff5db0, emissive: 0xff2a8a, emissiveIntensity: 0.9, roughness: 0.4 });
+  const adScreenB = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x18a8e0, emissiveIntensity: 0.9, roughness: 0.4 });
+  const adScreenC = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffae3f, emissiveIntensity: 0.8, roughness: 0.4 });
 
   const addDecor = (opts) => addBlockingBox({ ...opts, decorOnly: true });
 
@@ -5277,12 +5281,21 @@ function buildStreetsArena() {
     const spanCenter = axis === 'z' ? x : z;
     const cols = Math.max(2, Math.round(spanW / spacing));
     const winW = (spanW / cols) * 0.5;
-    for (let c = 0; c < cols; c += 1) {
-      const wc = spanCenter - spanW / 2 + (c + 0.5) * (spanW / cols);
-      for (let wy = 4.5; wy < visualH - 2.5; wy += 6) {
-        const mat = (c * 3 + Math.round(wy)) % 4 !== 0 ? windowLit : windowDark;
-        if (axis === 'z') addDecor({ x: wc, y: wy, z: faceCoord + outDir * 0.06, sx: winW, sy: 3.5, sz: 0.18, material: mat });
-        else addDecor({ x: faceCoord + outDir * 0.06, y: wy, z: wc, sx: 0.18, sy: 3.5, sz: winW, material: mat });
+    const fc = faceCoord + outDir * 0.06;
+    let floor = 0;
+    for (let wy = 4.5; wy < visualH - 2.5; wy += 6, floor += 1) {
+      if (floor % 3 === 1) {
+        // Ribbon floor: one continuous connected window band across the whole face.
+        const mat = floor % 2 === 0 ? windowLit : windowDark;
+        if (axis === 'z') addDecor({ x: spanCenter, y: wy, z: fc, sx: spanW * 0.88, sy: 2.6, sz: 0.18, material: mat });
+        else addDecor({ x: fc, y: wy, z: spanCenter, sx: 0.18, sy: 2.6, sz: spanW * 0.88, material: mat });
+        continue;
+      }
+      for (let c = 0; c < cols; c += 1) {
+        const wc = spanCenter - spanW / 2 + (c + 0.5) * (spanW / cols);
+        const mat = (c * 3 + floor) % 4 !== 0 ? windowLit : windowDark;
+        if (axis === 'z') addDecor({ x: wc, y: wy, z: fc, sx: winW, sy: 3.5, sz: 0.18, material: mat });
+        else addDecor({ x: fc, y: wy, z: wc, sx: 0.18, sy: 3.5, sz: winW, material: mat });
       }
     }
   };
@@ -5303,6 +5316,19 @@ function buildStreetsArena() {
     addDecor({ x, y: 2.2, z: fz, sx: sx * 0.94, sy: 4.0, sz: 0.25, material: accentMat }); // ground-floor storefront band (front)
     addDecor({ x, y: visualH - 0.4, z, sx: sx + 0.6, sy: 1.0, sz: sz + 0.6, material: roofTrim }); // roof parapet
     addDecor({ x: x - sx * 0.22, y: visualH + 1.4, z, sx: sx * 0.32, sy: 2.8, sz: sz * 0.4, material: towerBase }); // rooftop unit
+    // Rooftop billboard on the bigger blocks — emissive ad screen on a framed
+    // stand facing the avenue, for city flavour.
+    if (sx >= 20) {
+      const key = Math.abs(Math.round(x)) % 3;
+      const screen = key === 0 ? adScreenA : key === 1 ? adScreenB : adScreenC;
+      const bbW = Math.min(sx * 0.7, 16);
+      const bbH = 5.5;
+      const bbY = visualH + bbH / 2 + 1.2;
+      const bbZ = z + faceDir * (sz / 2 - 0.5);
+      addDecor({ x, y: bbY, z: bbZ, sx: bbW + 0.6, sy: bbH + 0.6, sz: 0.45, material: billboardFrame });        // frame
+      addDecor({ x, y: bbY, z: bbZ + faceDir * 0.25, sx: bbW, sy: bbH, sz: 0.12, material: screen });           // ad screen
+      for (const dx of [-1, 1]) addDecor({ x: x + dx * bbW * 0.32, y: visualH + 0.9, z: bbZ, sx: 0.35, sy: 2.4, sz: 0.35, material: billboardFrame }); // support legs
+    }
   };
 
   // Corner tower, industrial style: a concrete base, a hazard-stripe band,
