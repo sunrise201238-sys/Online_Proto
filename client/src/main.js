@@ -5221,9 +5221,11 @@ function buildStreetsArena() {
   const windowDark = new THREE.MeshStandardMaterial({ color: 0x2b3344, roughness: 0.35, metalness: 0.4 });
   const roofTrim = new THREE.MeshStandardMaterial({ color: 0x39414f, roughness: 0.8 });
   const towerBase = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.5, metalness: 0.5 });
-  const neonA = new THREE.MeshStandardMaterial({ color: 0xff5db0, emissive: 0xff2a8a, emissiveIntensity: 0.9, roughness: 0.4 });
-  const neonB = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x18a8e0, emissiveIntensity: 0.9, roughness: 0.4 });
-  const towerCap = new THREE.MeshStandardMaterial({ color: 0xffe2a3, emissive: 0xffae3f, emissiveIntensity: 0.7, roughness: 0.5 });
+  const industrialBody = new THREE.MeshStandardMaterial({ color: 0x70757d, roughness: 0.6, metalness: 0.5 });
+  const industrialBase = new THREE.MeshStandardMaterial({ color: 0x4e525a, roughness: 0.85 });
+  const industrialDark = new THREE.MeshStandardMaterial({ color: 0x33373d, roughness: 0.6, metalness: 0.6 });
+  const hazardStripe = new THREE.MeshStandardMaterial({ color: 0xd9a82a, roughness: 0.6 });
+  const industrialPipe = new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 0.7, metalness: 0.3 });
 
   const addDecor = (opts) => addBlockingBox({ ...opts, decorOnly: true });
 
@@ -5266,36 +5268,55 @@ function buildStreetsArena() {
     }
   };
 
+  // One column×floor window grid on a single building face. `axis` 'z' = the
+  // window-bearing width runs along X (front/back faces); 'x' = along Z (sides).
+  // `faceCoord` is the perpendicular coord of the face; `outDir` pushes windows
+  // proud of the wall; larger `spacing` = sparser grid (used for sides/back).
+  const addWindowWall = (x, z, sx, sz, visualH, axis, faceCoord, outDir, spacing) => {
+    const spanW = axis === 'z' ? sx : sz;
+    const spanCenter = axis === 'z' ? x : z;
+    const cols = Math.max(2, Math.round(spanW / spacing));
+    const winW = (spanW / cols) * 0.5;
+    for (let c = 0; c < cols; c += 1) {
+      const wc = spanCenter - spanW / 2 + (c + 0.5) * (spanW / cols);
+      for (let wy = 4.5; wy < visualH - 2.5; wy += 6) {
+        const mat = (c * 3 + Math.round(wy)) % 4 !== 0 ? windowLit : windowDark;
+        if (axis === 'z') addDecor({ x: wc, y: wy, z: faceCoord + outDir * 0.06, sx: winW, sy: 3.5, sz: 0.18, material: mat });
+        else addDecor({ x: faceCoord + outDir * 0.06, y: wy, z: wc, sx: 0.18, sy: 3.5, sz: winW, material: mat });
+      }
+    }
+  };
+
   // Storefront building. The collision box (h) only needs to block the bullet
   // line at y≈5, so this dresses a much TALLER visual on top of it — extra floors
   // as decor (no collision) so the building towers over the ~6.4-tall unit and
   // stops reading like the unit is a giant. Floors are unit-height (~6) with big
-  // windows, so the unit stands ≈1 floor tall against the façade.
+  // windows on ALL four faces (detailed front, sparser sides/back).
   const dressBuilding = (x, z, sx, h, sz, accentMat, visualH) => {
     const faceDir = z < 0 ? 1 : -1;
     const fz = z + faceDir * (sz / 2 + 0.06);
     addDecor({ x, y: (h + visualH) / 2, z, sx, sy: visualH - h, sz, material: accentMat }); // upper floors (visual only)
-    const cols = Math.max(2, Math.round(sx / 5));
-    for (let c = 0; c < cols; c += 1) {
-      const wx = x - sx / 2 + (c + 0.5) * (sx / cols);
-      for (let wy = 4.5; wy < visualH - 2.5; wy += 6) {
-        const lit = (c * 3 + Math.round(wy)) % 4 !== 0;
-        addDecor({ x: wx, y: wy, z: fz, sx: (sx / cols) * 0.55, sy: 3.5, sz: 0.18, material: lit ? windowLit : windowDark });
-      }
-    }
-    addDecor({ x, y: 2.2, z: fz, sx: sx * 0.94, sy: 4.0, sz: 0.25, material: accentMat }); // ground-floor storefront band
+    addWindowWall(x, z, sx, sz, visualH, 'z', z + faceDir * (sz / 2), faceDir, 5);   // front (avenue)
+    addWindowWall(x, z, sx, sz, visualH, 'z', z - faceDir * (sz / 2), -faceDir, 7);  // back
+    addWindowWall(x, z, sx, sz, visualH, 'x', x + sx / 2, 1, 8);                     // right side
+    addWindowWall(x, z, sx, sz, visualH, 'x', x - sx / 2, -1, 8);                    // left side
+    addDecor({ x, y: 2.2, z: fz, sx: sx * 0.94, sy: 4.0, sz: 0.25, material: accentMat }); // ground-floor storefront band (front)
     addDecor({ x, y: visualH - 0.4, z, sx: sx + 0.6, sy: 1.0, sz: sz + 0.6, material: roofTrim }); // roof parapet
     addDecor({ x: x - sx * 0.22, y: visualH + 1.4, z, sx: sx * 0.32, sy: 2.8, sz: sz * 0.4, material: towerBase }); // rooftop unit
   };
 
-  // Corner signage tower: a base block, neon rings climbing the shaft, and a lit
-  // sign cap up top.
+  // Corner tower, industrial style: a concrete base, a hazard-stripe band,
+  // riveted steel rings climbing the shaft, a vertical conduit pipe, and a
+  // vented metal cap — reads like a factory smokestack instead of a neon sign.
   const dressTower = (x, z, w, topY) => {
-    addDecor({ x, y: 1.6, z, sx: w + 2.2, sy: 3.2, sz: w + 2.2, material: towerBase });
+    addDecor({ x, y: 1.8, z, sx: w + 2.6, sy: 3.6, sz: w + 2.6, material: industrialBase });           // concrete base
+    addDecor({ x, y: 4.3, z, sx: w + 0.7, sy: 0.9, sz: w + 0.7, material: hazardStripe });             // hazard band
     for (let i = 1; i <= 4; i += 1) {
-      addDecor({ x, y: 4 + (topY - 6) * (i / 5), z, sx: w + 0.5, sy: 0.6, sz: w + 0.5, material: i % 2 ? neonA : neonB });
+      addDecor({ x, y: 7 + (topY - 11) * (i / 5), z, sx: w + 0.4, sy: 0.5, sz: w + 0.4, material: industrialDark }); // riveted rings
     }
-    addDecor({ x, y: topY - 1.5, z, sx: w + 1.4, sy: 3, sz: w + 1.4, material: towerCap });
+    addDecor({ x: x + (w / 2 + 0.25), y: topY * 0.5 + 2, z, sx: 0.5, sy: topY - 5, sz: 0.5, material: industrialPipe }); // conduit
+    addDecor({ x, y: topY + 0.4, z, sx: w + 1.2, sy: 1.6, sz: w + 1.2, material: industrialDark });    // cap flange
+    addDecor({ x, y: topY + 1.9, z, sx: w * 0.55, sy: 1.6, sz: w * 0.55, material: industrialBody });  // vent stub
   };
 
   const base = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), road);
@@ -5460,11 +5481,11 @@ function buildStreetsArena() {
   }
 
   // ===== Akihabara dressing =====
-  // Corner signage towers (neon-emissive), dressed with base/rings/sign cap.
-  addBlockingBox({ x: -110, y: 12, z: -94, sx: 5, sy: 24, sz: 5, material: sign });
-  addBlockingBox({ x: 110, y: 12, z: 94, sx: 5, sy: 24, sz: 5, material: signCyan });
-  addBlockingBox({ x: -110, y: 14, z: 94, sx: 5, sy: 28, sz: 5, material: signCyan });
-  addBlockingBox({ x: 110, y: 14, z: -94, sx: 5, sy: 28, sz: 5, material: sign });
+  // Corner towers (industrial smokestacks), dressed with base/hazard/rings/cap.
+  addBlockingBox({ x: -110, y: 12, z: -94, sx: 5, sy: 24, sz: 5, material: industrialBody });
+  addBlockingBox({ x: 110, y: 12, z: 94, sx: 5, sy: 24, sz: 5, material: industrialBody });
+  addBlockingBox({ x: -110, y: 14, z: 94, sx: 5, sy: 28, sz: 5, material: industrialBody });
+  addBlockingBox({ x: 110, y: 14, z: -94, sx: 5, sy: 28, sz: 5, material: industrialBody });
   dressTower(-110, -94, 5, 24);
   dressTower(110, 94, 5, 24);
   dressTower(-110, 94, 5, 28);
