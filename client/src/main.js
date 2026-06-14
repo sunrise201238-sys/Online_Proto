@@ -5266,22 +5266,26 @@ function buildStreetsArena() {
     }
   };
 
-  // Storefront building: a grid of lit/dark windows on the avenue-facing side,
-  // a ground-floor storefront band in the building's accent colour, and a roof
-  // parapet — turns the plain coloured box into a city block.
-  const dressBuilding = (x, z, sx, sy, sz, accentMat) => {
+  // Storefront building. The collision box (h) only needs to block the bullet
+  // line at y≈5, so this dresses a much TALLER visual on top of it — extra floors
+  // as decor (no collision) so the building towers over the ~6.4-tall unit and
+  // stops reading like the unit is a giant. Floors are unit-height (~6) with big
+  // windows, so the unit stands ≈1 floor tall against the façade.
+  const dressBuilding = (x, z, sx, h, sz, accentMat, visualH) => {
     const faceDir = z < 0 ? 1 : -1;
     const fz = z + faceDir * (sz / 2 + 0.06);
-    const cols = Math.max(2, Math.floor(sx / 4.5));
+    addDecor({ x, y: (h + visualH) / 2, z, sx, sy: visualH - h, sz, material: accentMat }); // upper floors (visual only)
+    const cols = Math.max(2, Math.round(sx / 5));
     for (let c = 0; c < cols; c += 1) {
       const wx = x - sx / 2 + (c + 0.5) * (sx / cols);
-      for (let wy = 3.6; wy < sy - 1.2; wy += 3) {
-        const lit = (c * 2 + Math.round(wy)) % 3 !== 0;
-        addDecor({ x: wx, y: wy, z: fz, sx: (sx / cols) * 0.5, sy: 1.5, sz: 0.16, material: lit ? windowLit : windowDark });
+      for (let wy = 4.5; wy < visualH - 2.5; wy += 6) {
+        const lit = (c * 3 + Math.round(wy)) % 4 !== 0;
+        addDecor({ x: wx, y: wy, z: fz, sx: (sx / cols) * 0.55, sy: 3.5, sz: 0.18, material: lit ? windowLit : windowDark });
       }
     }
-    addDecor({ x, y: 1.4, z: fz, sx: sx * 0.92, sy: 2.6, sz: 0.22, material: accentMat }); // ground-floor band
-    addDecor({ x, y: sy - 0.25, z, sx: sx + 0.5, sy: 0.7, sz: sz + 0.5, material: roofTrim }); // roof parapet
+    addDecor({ x, y: 2.2, z: fz, sx: sx * 0.94, sy: 4.0, sz: 0.25, material: accentMat }); // ground-floor storefront band
+    addDecor({ x, y: visualH - 0.4, z, sx: sx + 0.6, sy: 1.0, sz: sz + 0.6, material: roofTrim }); // roof parapet
+    addDecor({ x: x - sx * 0.22, y: visualH + 1.4, z, sx: sx * 0.32, sy: 2.8, sz: sz * 0.4, material: towerBase }); // rooftop unit
   };
 
   // Corner signage tower: a base block, neon rings climbing the shaft, and a lit
@@ -5329,7 +5333,7 @@ function buildStreetsArena() {
   ];
   southBuildings.forEach((b) => {
     addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
-    dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat);
+    dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat, b.h + 22);
   });
   const northBuildings = [
     { x: -100, sx: 28, h: 13, mat: storefrontD },
@@ -5341,7 +5345,7 @@ function buildStreetsArena() {
   ];
   northBuildings.forEach((b) => {
     addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
-    dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat);
+    dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat, b.h + 22);
   });
 
   // (Outer back walls removed — the play area is bounded by the invisible
@@ -5498,10 +5502,10 @@ function buildStreetsArena() {
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
   const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
   stallSpots.forEach(([x, z]) => {
-    // Big cover: longer (x) and wider/deeper (z); awning rides on top.
-    addBlockingBox({ x, y: 4.0, z, sx: 8.0, sy: 8.0, sz: 4.5, material: stallAwning });
-    addBlockingBox({ x, y: 8.2, z, sx: 8.5, sy: 0.25, sz: 5.0, material: storefrontA });
-    dressStall(x, z, 8.0, 8.0, 4.5);
+    // Long booth cover: extended along x into a market-stall length; awning on top.
+    addBlockingBox({ x, y: 4.0, z, sx: 12.0, sy: 8.0, sz: 4.5, material: stallAwning });
+    addBlockingBox({ x, y: 8.2, z, sx: 12.5, sy: 0.25, sz: 5.0, material: storefrontA });
+    dressStall(x, z, 12.0, 8.0, 4.5);
   });
 
   // (Parked scooters removed.)
