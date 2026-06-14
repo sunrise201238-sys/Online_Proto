@@ -5392,33 +5392,34 @@ function buildStreetsArena() {
     [95, 15.2], [93.5, 15.2]
   ];
   vendingPos.forEach(([x, z]) => {
-    // Enlarged into real cover: wide + chest-over-head tall so a unit can hide behind one.
-    addBlockingBox({ x, y: 2.0, z, sx: 3.0, sy: 4.0, sz: 2.6, material: vendor });
+    // Full bullet cover: bullets fly the body line (~4.8 aim, up to ~5.6 at the
+    // muzzle), so cover must top ~6 to actually block shots, not just look big.
+    addBlockingBox({ x, y: 3.0, z, sx: 3.0, sy: 6.0, sz: 2.6, material: vendor });
   });
 
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
   const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
   stallSpots.forEach(([x, z]) => {
-    // Enlarged into wide, head-height cover; awning rides on top of the taller stall.
-    addBlockingBox({ x, y: 1.6, z, sx: 4.5, sy: 3.2, sz: 2.8, material: stallAwning });
-    addBlockingBox({ x, y: 3.4, z, sx: 5.0, sy: 0.25, sz: 3.4, material: storefrontA });
+    // Wide bullet cover; awning rides on top of the taller stall.
+    addBlockingBox({ x, y: 2.9, z, sx: 4.5, sy: 5.8, sz: 2.8, material: stallAwning });
+    addBlockingBox({ x, y: 6.0, z, sx: 5.0, sy: 0.25, sz: 3.4, material: storefrontA });
   });
 
-  // Parked vehicles (enlarged from low scooters into eye-height cover)
+  // Parked vehicles (enlarged into bullet-blocking cover)
   const scooterSpots = [[-20, -14.5], [-12, -14.5], [12, 14.5], [20, 14.5], [-100, -14.5], [100, 14.5]];
   scooterSpots.forEach(([x, z]) => {
-    addBlockingBox({ x, y: 1.2, z, sx: 3.4, sy: 2.4, sz: 1.8, material: scooter });
+    addBlockingBox({ x, y: 2.7, z, sx: 3.4, sy: 5.4, sz: 1.8, material: scooter });
   });
 
-  // Plaza dressing — planters (enlarged into long waist-to-head cover walls) and a vending row
-  addBlockingBox({ x: -22, y: 1.5, z: -38, sx: 8, sy: 3.0, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: 22, y: 1.5, z: -38, sx: 8, sy: 3.0, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: -22, y: 1.5, z: 38, sx: 8, sy: 3.0, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: 22, y: 1.5, z: 38, sx: 8, sy: 3.0, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: -28, y: 2.0, z: -52, sx: 3.0, sy: 4.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: -26, y: 2.0, z: -52, sx: 3.0, sy: 4.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: 26, y: 2.0, z: 52, sx: 3.0, sy: 4.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: 28, y: 2.0, z: 52, sx: 3.0, sy: 4.0, sz: 2.6, material: vendor });
+  // Plaza dressing — planters (enlarged into long bullet-cover walls) and a vending row
+  addBlockingBox({ x: -22, y: 2.8, z: -38, sx: 8, sy: 5.6, sz: 2.4, material: sidewalk });
+  addBlockingBox({ x: 22, y: 2.8, z: -38, sx: 8, sy: 5.6, sz: 2.4, material: sidewalk });
+  addBlockingBox({ x: -22, y: 2.8, z: 38, sx: 8, sy: 5.6, sz: 2.4, material: sidewalk });
+  addBlockingBox({ x: 22, y: 2.8, z: 38, sx: 8, sy: 5.6, sz: 2.4, material: sidewalk });
+  addBlockingBox({ x: -28, y: 3.0, z: -52, sx: 3.0, sy: 6.0, sz: 2.6, material: vendor });
+  addBlockingBox({ x: -26, y: 3.0, z: -52, sx: 3.0, sy: 6.0, sz: 2.6, material: vendor });
+  addBlockingBox({ x: 26, y: 3.0, z: 52, sx: 3.0, sy: 6.0, sz: 2.6, material: vendor });
+  addBlockingBox({ x: 28, y: 3.0, z: 52, sx: 3.0, sy: 6.0, sz: 2.6, material: vendor });
 
   // Power-line / overhead banner strung between corner towers
   addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
