@@ -4954,7 +4954,10 @@ function addPlatform({ minX, maxX, minZ, maxZ, top, material, thickness = 0.5 })
   mesh.position.set((minX + maxX) / 2, top - thickness / 2, (minZ + maxZ) / 2);
   scene.add(mesh);
   arenaDecor.push(mesh);
-  arenaSurfaces.push({ minX, maxX, minZ, maxZ, maxTop: top, heightAt: () => top });
+  // `type`/`top` mirror the serialized shape in shared/src/sim/arena.js so the
+  // collision exporter (exportArenaCollision) can round-trip this surface; the
+  // sim reconstructs heightAt from them via materializeSurface().
+  arenaSurfaces.push({ minX, maxX, minZ, maxZ, maxTop: top, type: 'flat', top, heightAt: () => top });
   return mesh;
 }
 
@@ -4978,6 +4981,9 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
   arenaSurfaces.push({
     minX, maxX, minZ, maxZ,
     maxTop: Math.max(lowY, highY),
+    // `type`/`axis`/`lowY`/`highY` mirror the serialized shape the sim consumes
+    // (materializeSurface) so the collision exporter can round-trip this ramp.
+    type: 'ramp', axis, lowY, highY,
     heightAt(x, z) {
       const v = axis === 'x' ? x : z;
       const t = (v - lowEnd) / span;
@@ -5122,6 +5128,50 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
 }
+
+// ---------------------------------------------------------------------------
+// Dev tool: regenerate the online collision snapshot from this offline build,
+// so shared/src/sim/arena.js can't silently drift from the buildXArena()
+// geometry. The offline addBlockingBox/addPlatform/addRamp helpers are the
+// single source of truth; this serialises their output (arenaObstacles +
+// arenaSurfaces) into the exact `{ obstacles, surfaces }` shape that
+// GENERATED_ARENA_COLLISION_DATA expects. buildGeneratedArena() prepends the
+// runtime perimeter walls via makeBoundaryObstacles(), so the addBoundaryIndicator
+// walls baked into arenaObstacles are kept in the dump verbatim — matching how
+// the original snapshot was captured.
+//
+// Console usage:
+//   __exportArenaCollision()          // dump the currently-loaded map
+//   __exportArenaCollision('arena2')  // rebuild+dump a specific map, then restore
+// Then paste the printed block over that map's entry in GENERATED_ARENA_COLLISION_DATA
+// and commit client/src/main.js + shared/src/sim/arena.js together. Safety check:
+// run it on an UNCHANGED map first and diff — the output should match the file.
+function serializeArenaCollision() {
+  return {
+    // Obstacles are already plain AABBs ({minX..maxY [,topBuffer][,noProjectile]}).
+    obstacles: arenaObstacles.map((o) => ({ ...o })),
+    // Surfaces drop their heightAt closure; type + top/(axis,lowY,highY) remain
+    // and are what materializeSurface() rebuilds heightAt from on the sim side.
+    surfaces: arenaSurfaces.map(({ heightAt, ...rest }) => rest)
+  };
+}
+
+function exportArenaCollision(mapKey) {
+  const restoreKey = state.mapKey;
+  const target = mapKey || restoreKey;
+  if (!target) {
+    console.warn('[arena-export] no map loaded — pass one, e.g. __exportArenaCollision("arena2")');
+    return '';
+  }
+  if (target !== restoreKey) buildArenaForMap(target);
+  const json = JSON.stringify({ [target]: serializeArenaCollision() }, null, 2);
+  if (target !== restoreKey && restoreKey) buildArenaForMap(restoreKey); // restore the live scene
+  console.log(`[arena-export] paste over GENERATED_ARENA_COLLISION_DATA["${target}"] in shared/src/sim/arena.js:`);
+  console.log(json);
+  if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(json).catch(() => {});
+  return json;
+}
+if (typeof window !== 'undefined') window.__exportArenaCollision = exportArenaCollision;
 
 function buildPlainFieldArena() {
   // Plain Field is intentionally featureless — just the boundary so players
