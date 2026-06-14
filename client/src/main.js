@@ -5448,19 +5448,19 @@ function buildStreetsArena() {
     [95, 15.2], [93.5, 15.2]
   ];
   vendingPos.forEach(([x, z]) => {
-    // Full bullet cover: bullets fly the body line (~4.8 aim, up to ~5.6 at the
-    // muzzle), so cover tops ~7 (near head height) to block shots at any angle.
-    addBlockingBox({ x, y: 3.5, z, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
-    dressVending(x, z, 3.0, 7.0, 2.6);
+    // Full cover: sized to hide the WHOLE unit (~4.3 wide, head at y≈8), not just
+    // the hittable body — wide + tall enough to fully duck behind one.
+    addBlockingBox({ x, y: 4.0, z, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
+    dressVending(x, z, 5.0, 8.0, 3.0);
   });
 
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
   const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
   stallSpots.forEach(([x, z]) => {
-    // Wide cover, tall enough to clear the bullet line; awning rides on top.
-    addBlockingBox({ x, y: 3.25, z, sx: 4.5, sy: 6.5, sz: 2.8, material: stallAwning });
-    addBlockingBox({ x, y: 6.7, z, sx: 5.0, sy: 0.25, sz: 3.4, material: storefrontA });
-    dressStall(x, z, 4.5, 6.5, 2.8);
+    // Wide + full-height cover to hide the whole unit; awning rides on top.
+    addBlockingBox({ x, y: 4.0, z, sx: 6.0, sy: 8.0, sz: 3.2, material: stallAwning });
+    addBlockingBox({ x, y: 8.2, z, sx: 6.5, sy: 0.25, sz: 3.8, material: storefrontA });
+    dressStall(x, z, 6.0, 8.0, 3.2);
   });
 
   // (Parked scooters removed.)
@@ -5474,8 +5474,8 @@ function buildStreetsArena() {
     dressPlanter(px, pz, 20, 6.5, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
-    addBlockingBox({ x: px, y: 3.5, z: pz, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
-    dressVending(px, pz, 3.0, 7.0, 2.6);
+    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
+    dressVending(px, pz, 5.0, 8.0, 3.0);
   }
 
   // Power-line / overhead banner strung between corner towers
