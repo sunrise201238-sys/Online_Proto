@@ -5203,6 +5203,62 @@ function buildStreetsArena() {
   const scooter = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.6 });
   const stallAwning = new THREE.MeshStandardMaterial({ color: 0xd95a52, roughness: 0.7 });
 
+  // --- Detail materials + dressing helpers. These add purely-decorative meshes
+  // (decorOnly: true → no collision) on top of the gameplay-sized cover boxes so
+  // they read as real objects instead of plain slabs. Collision/cover is
+  // unchanged; this is render-only. ---
+  const vendGlass = new THREE.MeshStandardMaterial({ color: 0xcdefff, emissive: 0x5fc8ff, emissiveIntensity: 0.7, roughness: 0.25 });
+  const vendSign = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffae3f, emissiveIntensity: 0.6, roughness: 0.5 });
+  const vendTray = new THREE.MeshStandardMaterial({ color: 0x16181f, roughness: 0.85 });
+  const vendTrim = new THREE.MeshStandardMaterial({ color: 0xd9dde4, roughness: 0.5, metalness: 0.3 });
+  const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x4f9145, roughness: 0.95 });
+  const hedgeMat2 = new THREE.MeshStandardMaterial({ color: 0x3c7a39, roughness: 0.95 });
+  const planterRim = new THREE.MeshStandardMaterial({ color: 0xaab0ba, roughness: 0.8 });
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x4a3526, roughness: 0.7 });
+  const stripeRed = new THREE.MeshStandardMaterial({ color: 0xd64a44, roughness: 0.7 });
+  const stripeWhite = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.7 });
+
+  const addDecor = (opts) => addBlockingBox({ ...opts, decorOnly: true });
+
+  // Vending machine: lit display window, top sign band, dispenser tray, and side
+  // trim — placed on the face toward the road centreline (z=0).
+  const dressVending = (x, z, sx, sy, sz) => {
+    const faceDir = z < 0 ? 1 : -1;
+    const fz = z + faceDir * (sz / 2 + 0.06);
+    addDecor({ x, y: sy * 0.52, z: fz, sx: sx - 0.5, sy: sy * 0.62, sz: 0.12, material: vendGlass });
+    addDecor({ x, y: sy - 0.45, z: fz, sx, sy: 0.7, sz: 0.22, material: vendSign });
+    addDecor({ x, y: 0.95, z: fz, sx: sx - 0.6, sy: 0.7, sz: 0.16, material: vendTray });
+    for (const dx of [-1, 1]) {
+      addDecor({ x: x + dx * (sx / 2 - 0.12), y: sy * 0.5, z: z + faceDir * (sz / 2), sx: 0.24, sy: sy - 0.25, sz: sz * 0.5, material: vendTrim });
+    }
+  };
+
+  // Planter wall: keep the lower ~1.8 as the concrete container, then grow a tall
+  // hedge of overlapping green clumps to the top so it reads as planted, not a wall.
+  const dressPlanter = (x, z, sx, sy, sz) => {
+    const baseTop = 1.8;
+    const hedgeMidY = (baseTop + sy + 0.5) / 2;
+    const hedgeH = (sy + 0.5) - baseTop;
+    const clumps = Math.max(3, Math.round(sx / 2.2));
+    for (let i = 0; i < clumps; i += 1) {
+      const cx = x - sx / 2 + (i + 0.5) * (sx / clumps);
+      addDecor({ x: cx, y: hedgeMidY + (i % 2) * 0.3, z, sx: (sx / clumps) * 1.1, sy: hedgeH, sz: sz + 0.6, material: i % 2 ? hedgeMat : hedgeMat2 });
+    }
+    addDecor({ x, y: baseTop, z, sx: sx + 0.2, sy: 0.3, sz: sz + 0.3, material: planterRim }); // container rim
+  };
+
+  // Market stall: striped awning band under the canopy + four corner posts.
+  const dressStall = (x, z, sx, sy, sz) => {
+    const stripes = 5;
+    for (let i = 0; i < stripes; i += 1) {
+      const sxpos = x - sx / 2 + (i + 0.5) * (sx / stripes);
+      addDecor({ x: sxpos, y: sy + 0.1, z, sx: (sx / stripes) * 0.92, sy: 0.5, sz: sz + 0.8, material: i % 2 ? stripeRed : stripeWhite });
+    }
+    for (const dx of [-1, 1]) for (const dz of [-1, 1]) {
+      addDecor({ x: x + dx * (sx / 2 - 0.15), y: sy * 0.5, z: z + dz * (sz / 2 - 0.15), sx: 0.22, sy, sz: 0.22, material: postMat });
+    }
+  };
+
   const base = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), road);
   base.rotation.x = -Math.PI / 2; base.position.y = 0.005; scene.add(base); arenaDecor.push(base);
 
@@ -5395,6 +5451,7 @@ function buildStreetsArena() {
     // Full bullet cover: bullets fly the body line (~4.8 aim, up to ~5.6 at the
     // muzzle), so cover tops ~7 (near head height) to block shots at any angle.
     addBlockingBox({ x, y: 3.5, z, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
+    dressVending(x, z, 3.0, 7.0, 2.6);
   });
 
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
@@ -5403,6 +5460,7 @@ function buildStreetsArena() {
     // Wide cover, tall enough to clear the bullet line; awning rides on top.
     addBlockingBox({ x, y: 3.25, z, sx: 4.5, sy: 6.5, sz: 2.8, material: stallAwning });
     addBlockingBox({ x, y: 6.7, z, sx: 5.0, sy: 0.25, sz: 3.4, material: storefrontA });
+    dressStall(x, z, 4.5, 6.5, 2.8);
   });
 
   // (Parked scooters removed.)
@@ -5411,14 +5469,14 @@ function buildStreetsArena() {
   // Each pair runs from the plaza edge (x=±32) inward to x=±12, leaving a central
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
-  addBlockingBox({ x: -22, y: 3.25, z: -38, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: 22, y: 3.25, z: -38, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: -22, y: 3.25, z: 38, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: 22, y: 3.25, z: 38, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
-  addBlockingBox({ x: -28, y: 3.5, z: -52, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: -26, y: 3.5, z: -52, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: 26, y: 3.5, z: 52, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
-  addBlockingBox({ x: 28, y: 3.5, z: 52, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
+  for (const [px, pz] of [[-22, -38], [22, -38], [-22, 38], [22, 38]]) {
+    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 20, 6.5, 2.4);
+  }
+  for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
+    addBlockingBox({ x: px, y: 3.5, z: pz, sx: 3.0, sy: 7.0, sz: 2.6, material: vendor });
+    dressVending(px, pz, 3.0, 7.0, 2.6);
+  }
 
   // Power-line / overhead banner strung between corner towers
   addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
