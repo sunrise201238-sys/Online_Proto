@@ -111,7 +111,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,
-    projectileSpeed: 1600,
+    projectileSpeed: 1000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -400,7 +400,7 @@ const BOT_HIT_EVADE_MS = 350;
 // Mirrors BOT_GLINT_REACT_MS in shared/src/sim/ai.js — humanlike delay before
 // the bot "notices" a sniper glint (Defense entry + its guessed dodge both
 // wait on it), so a floor-canceled snap shot beats a bot that hasn't reacted.
-const BOT_GLINT_REACT_MS = 300;
+const BOT_GLINT_REACT_MS = 350;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
