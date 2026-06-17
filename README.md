@@ -27,6 +27,13 @@ Three pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sp
 
 Red-lock (in-range target) enables homing on single-shot weapons.
 
+### Sniper charge & sprint-cancel
+
+- The Sniper holds its shot on a **0.5 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.3 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.3–0.5 s** window, and the target always gets that much glint-to-bullet warning.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **1000 u/s** — at close range there's almost no flight time, so it's a pure read (dodge-window = cancel-floor = 0.3 s, no margin).
+
+**Bots vs. the sniper.** A bot ignores the glint for a **0.4 s** humanlike reaction delay, then commits to one move per charge: a single guessed **dodge** (0.3 s i-frames centered on a random guess of when the bullet lands) or a **cover-sprint**. Whether it's already dodging or still sprinting at the 0.4 s mark scales with range — ~100% dodge up close, ~65% at max range (sprinting first then dodging slightly later, otherwise). Bots never sprint-cancel their own charges (always the full 0.5 s), so the snap-shot is only seen against human snipers online.
+
 ## Controls
 
 | | |
@@ -34,7 +41,7 @@ Red-lock (in-range target) enables homing on single-shot weapons.
 | **Mobile** | On-screen joystick + buttons |
 | **PC** | `WASD` move · `J` fire · `K` sprint · `L` dodge · `Space` jump · `U` switch target (2v2) |
 
-Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants brief damage immunity.
+Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s of damage immunity (i-frames).
 
 ## Maps
 
