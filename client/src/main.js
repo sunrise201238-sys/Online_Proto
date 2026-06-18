@@ -2160,28 +2160,15 @@ function updateEnemy(now) {
   const side = new THREE.Vector3(-dir.z, 0, dir.x);
   const eState = state.enemy.state;
 
-  // --- Anti-sniper glint response: humanlike reaction + guessed dodge ---
-  // (mirrors tickBot in shared/src/sim/ai.js). On the glint's rising edge the
-  // bot rolls ONE guess at when the shot will arrive — a release somewhere
-  // between the sprint-cancel floor and the full charge, plus bullet flight
-  // time — and schedules a single step whose i-frames are centered on that
-  // guess. The guess is consumed whether or not the step actually starts
-  // (cooldown/boost gates), so the bot can never step more than once per enemy
-  // charge. The schedule deliberately survives the charge ending: a
-  // full-charge bullet arrives AFTER the glint vanishes, and the dodge must
-  // still be allowed to cover it.
+  // --- Anti-sniper glint response: dodge a fixed BOT_GLINT_REACT_MS after the
+  // glint appears (mirrors tickBot in shared/src/sim/ai.js). One step per
+  // charge; the schedule survives the glint vanishing so a late/full-charge
+  // shot is still covered.
   const sniperCharging = state.player.state.sniperChargeTarget === state.enemy;
   if (sniperCharging) {
     if (!eState.botGlintAt) {
       eState.botGlintAt = now;
-      const oppChargeMs = state.player.unit.chargeMs ?? 500;
-      const guessedRelease = SNIPER_CANCEL_MIN_CHARGE_MS
-        + Math.random() * Math.max(0, oppChargeMs - SNIPER_CANCEL_MIN_CHARGE_MS);
-      const flightMs = (dist / (state.player.unit.projectileSpeed ?? 1000)) * 1000;
-      eState.botGlintStepAt = now + Math.max(
-        BOT_GLINT_REACT_MS,
-        guessedRelease + flightMs - STEP_DURATION_MS / 2
-      );
+      eState.botGlintStepAt = now + BOT_GLINT_REACT_MS;
     }
   } else {
     eState.botGlintAt = null;
