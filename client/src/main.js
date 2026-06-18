@@ -6311,8 +6311,9 @@ function buildLobbyArena() {
   // ===== Sleek angular benches with blue cushions (much bigger, proper cover ~5m total) =====
   const drawSciFiBench = (x, baseY, z, sofa = false) => {
     const w = sofa ? 9 : 6;
-    // Angular base (white shell)
-    addBlockingBox({ x, y: baseY + 0.9, z, sx: w, sy: 1.8, sz: 3.0, material: benchBase });
+    // Angular base — raised into a tall solid block so it tops the bullet line
+    // (~5) and works as real cover; the seat/cushion/back ride on its front.
+    addBlockingBox({ x, y: baseY + 3.2, z, sx: w, sy: 6.4, sz: 3.0, material: benchBase });
     // Seat slab on top
     addBlockingBox({ x, y: baseY + 1.95, z, sx: w + 0.5, sy: 0.3, sz: 3.2, material: benchSeat });
     // Blue cushion
@@ -6331,8 +6332,7 @@ function buildLobbyArena() {
   drawSciFiBench(25, 0, 86, false);
   drawSciFiBench(-78, 0, 25, true);
   drawSciFiBench(78, 0, 25, true);
-  drawSciFiBench(-30, 0, 32, false);
-  drawSciFiBench(30, 0, 32, false);
+  // (Benches at (±30, 32) removed — they overlapped the tall pillars at (±30, 30).)
 
   // Coffee tables paired with seating (taller now)
   const coffeeTables = [[-60, 70], [60, 70], [0, 78]];
