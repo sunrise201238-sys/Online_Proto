@@ -16,7 +16,7 @@ import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js'
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
 import { getArena } from './arena.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, STEP_DURATION_MS } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS } from './constants.js';
 
 // --- Bot tactical-sprint tunables ---
 // Hysteresis: bot only initiates a new sprint burst once boost has refilled
@@ -290,28 +290,15 @@ export function tickBot(matchState, botId, now) {
   const sideX = -dirZ;
   const sideZ = dirX;
 
-  // --- Anti-sniper glint response: humanlike reaction + guessed dodge ---
-  // (mirrors updateEnemy in main.js). On the glint's rising edge the bot rolls
-  // ONE guess at when the shot will arrive — a release somewhere between the
-  // sprint-cancel floor and the full charge, plus bullet flight time — and
-  // schedules a single step whose i-frames are centered on that guess. The
-  // guess is consumed whether or not the step actually starts (cooldown/boost
-  // gates inside tryStartStep), so the bot can never step more than once per
-  // enemy charge. The schedule deliberately survives the charge ending: a
-  // full-charge bullet arrives AFTER the glint vanishes, and the dodge must
-  // still be allowed to cover it.
+  // --- Anti-sniper glint response: dodge a fixed BOT_GLINT_REACT_MS after the
+  // glint appears (mirrors updateEnemy in main.js). One step per charge; the
+  // schedule survives the glint vanishing so a late/full-charge shot is still
+  // covered.
   const sniperCharging = opp.sniperChargeTargetId === me.id;
   if (sniperCharging) {
     if (!me.botGlintAt) {
       me.botGlintAt = now;
-      const oppChargeMs = opp.unit?.chargeMs ?? 500;
-      const guessedRelease = SNIPER_CANCEL_MIN_CHARGE_MS
-        + Math.random() * Math.max(0, oppChargeMs - SNIPER_CANCEL_MIN_CHARGE_MS);
-      const flightMs = (dist / (opp.unit?.projectileSpeed ?? 1000)) * 1000;
-      me.botGlintStepAt = now + Math.max(
-        BOT_GLINT_REACT_MS,
-        guessedRelease + flightMs - STEP_DURATION_MS / 2
-      );
+      me.botGlintStepAt = now + BOT_GLINT_REACT_MS;
     }
   } else {
     me.botGlintAt = null;
