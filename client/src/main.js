@@ -2211,6 +2211,17 @@ function updateEnemy(now) {
       eState.boost = Math.max(0, eState.boost - STEP_BOOST_COST);
       eState.refillPausedUntil = now + 500;
       clearIncomingHoming(state.enemy, now);
+      // "Dodge + 150 ms sprint": after the i-frame step ends, keep sprinting the
+      // same way for 150 ms via a brief Defense commit.
+      eState.botState = 'defense';
+      eState.botStateEnteredAt = now;
+      eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
+      eState.botDefenseUntil = eState.stepUntil + 150;
+      eState.botDefenseInCover = false;
+      eState.botDefenseCoverAt = 0;
+      eState.botDefensePeekDone = false;
+      eState.botDefenseStuckTicks = 0;
+      eState.botDefenseStuckMode = false;
     }
   }
 
