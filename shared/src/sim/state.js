@@ -166,16 +166,19 @@ export function createMatchState({
 
   if (mode === '2v2') {
     // 2v2 teammates spawn next to their counterpart, offset Z+12 (mirrors the
-    // offline client's 4-corner placement so we don't need per-map spawn data).
+    // offline client's 4-corner placement). Station's narrow track is flanked by
+    // raised platforms (clear only for |z|<=11), so there +Z lands inside a
+    // platform — offset along the track toward centre (X) instead.
+    const station = mapKey === 'station';
     const p3Spawn = {
-      x: arena.spawns.p1.x,
+      x: station ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
-      z: arena.spawns.p1.z + 12
+      z: station ? arena.spawns.p1.z : arena.spawns.p1.z + 12
     };
     const p4Spawn = {
-      x: arena.spawns.p2.x,
+      x: station ? arena.spawns.p2.x - Math.sign(arena.spawns.p2.x) * 12 : arena.spawns.p2.x,
       y: arena.spawns.p2.y ?? GROUND_BASE_Y,
-      z: arena.spawns.p2.z + 12
+      z: station ? arena.spawns.p2.z : arena.spawns.p2.z + 12
     };
     fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
     fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
