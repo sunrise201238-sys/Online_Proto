@@ -6324,9 +6324,12 @@ function buildLobbyArena() {
   // whole object is one solid bench and blocks the bullet line. =====
   const drawSciFiBench = (x, baseY, z, sofa = false) => {
     const w = sofa ? 9 : 6;
-    // One solid chunky block = the whole bench (and bullet cover). It is collision
-    // AND rendered — fully hard, nothing decorative or hidden.
-    addBlockingBox({ x, y: baseY + 3.0, z, sx: w, sy: 6.0, sz: 4.0, material: benchBase });
+    // High-backed bench, fully hard — every piece is collision AND rendered.
+    // Low seat + blue cushion + a tall full-width backrest that doubles as the
+    // bullet cover (its 2.8..6.4 span crosses the ~5 bullet line).
+    addBlockingBox({ x, y: baseY + 1.4, z, sx: w, sy: 2.8, sz: 4.0, material: benchBase });             // seat
+    addBlockingBox({ x, y: baseY + 3.1, z: z - 0.3, sx: w - 0.4, sy: 0.6, sz: 3.0, material: cushion }); // seat cushion
+    addBlockingBox({ x, y: baseY + 4.6, z: z + 1.5, sx: w, sy: 3.6, sz: 1.0, material: benchSeat });      // tall backrest / cover
   };
   // Lower-floor benches (z=12..98 walkable area)
   drawSciFiBench(-78, 0, 82, true);
