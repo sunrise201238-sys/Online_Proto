@@ -728,7 +728,11 @@ export function tickBot(matchState, botId, now) {
   // --- Firing: LoS-aware + universal burst sizing ---
   if (now >= me.nextFireAt) {
     const u = me.unit;
-    if (u.magCapacity != null && me.ammo <= 0) {
+    if (now < me.invulnerableUntil) {
+      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
+      me.nextFireAt = me.invulnerableUntil;
+      me.machineBurstRemaining = 0;
+    } else if (u.magCapacity != null && me.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);
