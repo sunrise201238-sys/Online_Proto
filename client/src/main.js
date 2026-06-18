@@ -2671,8 +2671,12 @@ function updateEnemy(now) {
       s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
-      if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
-      else s.nextFireAt = now + 220;
+      if (fired) {
+        // Release the snap shot at a random point in the cancel window (like a
+        // human sprint-cancel) instead of always holding the full charge.
+        s.sniperChargeUntil = now + PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 500);
+        s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
+      } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
     } else {
       // Universal burst: derive length from magCapacity so different weapons
