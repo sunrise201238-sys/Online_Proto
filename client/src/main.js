@@ -2656,7 +2656,11 @@ function updateEnemy(now) {
   if (now >= eState.nextFireAt) {
     const u = state.enemy.unit;
     const s = eState;
-    if (u.magCapacity != null && s.ammo <= 0) {
+    if (now < s.invulnerableUntil) {
+      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
+      s.nextFireAt = s.invulnerableUntil;
+      s.machineBurstRemaining = 0;
+    } else if (u.magCapacity != null && s.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
