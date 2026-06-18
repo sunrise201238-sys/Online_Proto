@@ -379,17 +379,13 @@ export function tickBot(matchState, botId, now) {
   );
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
-  // Defense triggers on the SNIPER GLINT (with clear line, after the humanlike
-  // BOT_GLINT_REACT_MS reaction delay) or a FRESH HIT.
-  // We deliberately do NOT trigger on "player squeezed the trigger" (the
-  // BOT_FIRE_REACT_MS window) — that made the bot too evasive, dodging every
-  // MG round before it could even land. "Sprint when getting hit" is provided
-  // by hitEvading below.
-  const glintReacted = sniperCharging
-    && me.botGlintAt != null && now >= me.botGlintAt + BOT_GLINT_REACT_MS;
-  const firedAtWithLoS = glintReacted && playerHasLoS;
+  // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
+  // longer triggers Defense — the bot's sole response to a glint is the
+  // committed dodge scheduled above, so it ALWAYS dodges instead of sometimes
+  // sprinting to cover. We also deliberately do NOT trigger on "player squeezed
+  // the trigger". "Sprint when getting hit" is provided by hitEvading below.
   const hitEvading = now < (me.botHitEvadeUntil ?? 0);
-  const underFire = firedAtWithLoS || hitEvading;
+  const underFire = hitEvading;
   const inBandDist = dist >= lowerRange && dist <= upperRange;
 
   // LoS clock (Reposition's 3 s timeout) + position-progress clock (Maze's 2 s
