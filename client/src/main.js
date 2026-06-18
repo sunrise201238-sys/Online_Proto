@@ -120,7 +120,7 @@ const UNIT_DATA = {
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
-    chargeMs: 500
+    chargeMs: 1000
   }
 };
 
@@ -371,7 +371,7 @@ const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 // Mirrors SNIPER_CANCEL_MIN_CHARGE_MS in shared/src/sim/constants.js — the
 // sprint-cancel can't release the shot before the charge is this old, so a
 // pre-held sprint can't produce a zero-telegraph snap shot.
-const SNIPER_CANCEL_MIN_CHARGE_MS = 300;
+const SNIPER_CANCEL_MIN_CHARGE_MS = 500;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the 18-small-grid derivation.
@@ -400,7 +400,7 @@ const BOT_HIT_EVADE_MS = 350;
 // Mirrors BOT_GLINT_REACT_MS in shared/src/sim/ai.js — humanlike delay before
 // the bot "notices" a sniper glint (Defense entry + its guessed dodge both
 // wait on it), so a floor-canceled snap shot beats a bot that hasn't reacted.
-const BOT_GLINT_REACT_MS = 400;
+const BOT_GLINT_REACT_MS = 600;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -1398,7 +1398,7 @@ function attemptFire(owner, target, now) {
     if (owner.state.sniperChargeTarget) return false;
     if (u.magCapacity != null && owner.state.ammo <= 0) return false;
     if (now - owner.state.lastFireAt < u.fireCooldownMs) return false;
-    const chargeMs = u.chargeMs ?? 500;
+    const chargeMs = u.chargeMs ?? 1000;
     owner.state.sniperChargeUntil = now + chargeMs;
     owner.state.sniperChargeTarget = target;
     owner.body.velocity.x = 0;
@@ -1425,7 +1425,7 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   // means the boost cost is paid exactly once, on the tick the shot releases.
   if (
     sprintHeld
-    && now >= mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 500) + SNIPER_CANCEL_MIN_CHARGE_MS
+    && now >= mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000) + SNIPER_CANCEL_MIN_CHARGE_MS
     && now < mech.state.sniperChargeUntil
     && mech.state.boost >= SNIPER_CANCEL_BOOST_COST
   ) {
@@ -2661,9 +2661,9 @@ function updateEnemy(now) {
       if (fired) {
         // Release at the earliest legal point (the cancel floor) 80% of the
         // time; the other 20% releases anywhere in the cancel window.
-        s.sniperChargeUntil = now + (Math.random() < 0.8
+        s.sniperChargeUntil = now + (Math.random() < 0.9
           ? SNIPER_CANCEL_MIN_CHARGE_MS
-          : PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 500));
+          : PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000));
         s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
       } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
