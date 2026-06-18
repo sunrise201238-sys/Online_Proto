@@ -308,7 +308,8 @@ export function tickBot(matchState, botId, now) {
   // edge is still visible here.)
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
 
-  // The guessed dodge comes due: one attempt, then the guess is spent.
+  // The dodge comes due: one i-frame step, then a 150 ms sprint in the same
+  // direction (the guess/schedule is spent either way).
   if (me.botGlintStepAt != null && now >= me.botGlintStepAt) {
     me.botGlintStepAt = null;
     if (now > me.stepUntil) {
@@ -321,7 +322,19 @@ export function tickBot(matchState, botId, now) {
         const lat = Math.random() < 0.5 ? 1 : -1;
         sdx = sideX * lat; sdz = sideZ * lat;
       }
-      tryStartStep(matchState, me, sdx, sdz, now, obstacles);
+      if (tryStartStep(matchState, me, sdx, sdz, now, obstacles)) {
+        // "Dodge + 150 ms sprint": after the i-frame step ends, keep sprinting
+        // the same way for 150 ms via a brief Defense commit.
+        me.botState = 'defense';
+        me.botStateEnteredAt = now;
+        me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
+        me.botDefenseUntil = me.stepUntil + 150;
+        me.botDefenseInCover = false;
+        me.botDefenseCoverAt = 0;
+        me.botDefensePeekDone = false;
+        me.botDefenseStuckTicks = 0;
+        me.botDefenseStuckMode = false;
+      }
     }
   }
 
