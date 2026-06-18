@@ -749,9 +749,11 @@ export function tickBot(matchState, botId, now) {
     } else if (u.sniperCharge) {
       const fired = attemptFire(matchState, me, opp, now);
       if (fired) {
-        // Release the snap shot at a random point in the cancel window (like a
-        // human sprint-cancel) instead of always holding the full charge.
-        me.sniperChargeUntil = now + between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 500);
+        // Release at the earliest legal point (the cancel floor) 80% of the
+        // time; the other 20% releases anywhere in the cancel window.
+        me.sniperChargeUntil = now + (Math.random() < 0.8
+          ? SNIPER_CANCEL_MIN_CHARGE_MS
+          : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 500));
         me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
