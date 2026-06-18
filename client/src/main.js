@@ -3294,14 +3294,21 @@ function startMatch() {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
   }
-  // 2v2 placement: drop ally next to the player, enemy2 next to the enemy,
-  // each offset 12 units along Z. Keeps each team grouped at their map corner
-  // without overlapping or requiring per-map spawn data.
+  // 2v2 placement: drop ally next to the player, enemy2 next to the enemy.
+  // Most maps offset 12 along +Z. Station's track is clear only for |z|<=11
+  // (raised side platforms beyond), so +Z there lands the 2nd unit inside a
+  // platform — offset along the track toward centre (X) instead, keeping both
+  // teammates on the clear central lane between the rail lines.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
-    state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
     const ep = state.enemy.body.position;
-    state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
+    if (state.mapKey === 'station') {
+      state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
+      state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
+    } else {
+      state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
+      state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
+    }
   }
   buildArenaForMap(state.mapKey);
   const now = performance.now();
