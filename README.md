@@ -23,16 +23,18 @@ Three pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sp
 |---|---|---|---|---|---|
 | Unit 1 — Machine Gun | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
 | Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
-| Unit 3 — Sniper Rifle | 5 | 50 / shot | 60 RPM | 120 | 2.5 s + 0.5 s charge |
+| Unit 3 — Sniper Rifle | 5 | 50 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
 
 Red-lock (in-range target) enables homing on single-shot weapons.
 
 ### Sniper charge & sprint-cancel
 
-- The Sniper holds its shot on a **0.5 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.3 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.3–0.5 s** window, and the target always gets that much glint-to-bullet warning.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **1000 u/s** — at close range there's almost no flight time, so it's a pure read (dodge-window = cancel-floor = 0.3 s, no margin).
+- The Sniper holds its shot on a **1 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.5 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.5–1 s** window, and the target always gets at least that much glint-to-bullet warning.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **1000 u/s** (near-hitscan up close), so close range is a read off the glint, not the bullet.
 
-**Bots vs. the sniper.** A bot ignores the glint for a **0.4 s** humanlike reaction delay, then commits to one move per charge: a single guessed **dodge** (0.3 s i-frames centered on a random guess of when the bullet lands) or a **cover-sprint**. Whether it's already dodging or still sprinting at the 0.4 s mark scales with range — ~100% dodge up close, ~65% at max range (sprinting first then dodging slightly later, otherwise). Bots never sprint-cancel their own charges (always the full 0.5 s), so the snap-shot is only seen against human snipers online.
+**Bots vs. the sniper.**
+- **As the shooter:** the bot releases at the **0.5 s floor 90%** of the time (a fast snap), and at a random **0.5–1 s** the other 10%.
+- **On defense:** when a glint appears, the bot ignores it for a fixed **0.6 s**, then does exactly **one** lateral dodge (0.3 s i-frames) per charge — no prediction, no cover-sprint. So a bullet **arriving ~0.6–0.9 s** after the glint is dodged; a fast close-range snap (bullet before 0.6 s) beats the dodge, and holding the shot past ~0.9 s catches the bot just after its dash.
 
 ## Controls
 
