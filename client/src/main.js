@@ -6319,32 +6319,14 @@ function buildLobbyArena() {
   drawDesk(-60, 55);
   drawDesk(60, 55);
 
-  // ===== Sleek angular benches with blue cushions (much bigger, proper cover ~5m total) =====
-  const dec = (opts) => addBlockingBox({ ...opts, decorOnly: true });
-  // Collision-only box (no mesh) — matches an addBlockingBox AABB exactly so the
-  // online snapshot stays byte-aligned without rendering a duplicate mesh.
-  const coll = ({ x, y, z, sx, sy, sz }) => arenaObstacles.push({
-    minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, minY: y - sy / 2, maxY: y + sy / 2
-  });
+  // ===== Sleek benches — FULLY HARD: every visible piece is a real collision
+  // box (no decor-only meshes, no hidden colliders). Chunky solid body so the
+  // whole object is one solid bench and blocks the bullet line. =====
   const drawSciFiBench = (x, baseY, z, sofa = false) => {
     const w = sofa ? 9 : 6;
-    // Tall solid body = the bullet cover (collision + visible).
-    addBlockingBox({ x, y: baseY + 3.2, z, sx: w, sy: 6.4, sz: 3.0, material: benchBase });
-    // The old seat/cushion/back boxes are kept as collision-ONLY (no mesh) so the
-    // generated online collision still matches; their visuals are replaced by the
-    // booth dressing below.
-    coll({ x, y: baseY + 1.95, z, sx: w + 0.5, sy: 0.3, sz: 3.2 });
-    coll({ x, y: baseY + 2.45, z, sx: w * 0.85, sy: 0.6, sz: 2.4 });
-    coll({ x, y: baseY + 3.6, z: z + 1.4, sx: w, sy: 2.9, sz: 0.5 });
-    coll({ x, y: baseY + 4.95, z: z + 1.6, sx: w * 0.92, sy: 0.2, sz: 0.3 });
-    // Chunky oversized sofa dressing (decor only) so the whole thing reads as one
-    // big bench, not a small seat against a slab. The collision cover is unchanged.
-    const fz = z - 1.5; // front face of the body
-    dec({ x, y: baseY + 1.4, z: fz - 0.8, sx: w, sy: 2.8, sz: 2.4, material: benchBase });             // fat seat base
-    dec({ x, y: baseY + 3.1, z: fz - 0.8, sx: w - 0.6, sy: 0.9, sz: 2.0, material: cushion });         // seat cushion
-    dec({ x, y: baseY + 4.7, z: fz + 0.2, sx: w - 0.6, sy: 2.9, sz: 0.7, material: cushion });         // back cushion
-    for (const dx of [-1, 1]) dec({ x: x + dx * (w / 2 - 0.3), y: baseY + 2.2, z: fz - 0.5, sx: 1.3, sy: 4.0, sz: 3.0, material: benchBase }); // beefy armrests
-    dec({ x, y: baseY + 5.8, z: fz + 0.45, sx: w * 0.55, sy: 0.3, sz: 0.12, material: blueGlow });     // back glow accent
+    // One solid chunky block = the whole bench (and bullet cover). It is collision
+    // AND rendered — fully hard, nothing decorative or hidden.
+    addBlockingBox({ x, y: baseY + 3.0, z, sx: w, sy: 6.0, sz: 4.0, material: benchBase });
   };
   // Lower-floor benches (z=12..98 walkable area)
   drawSciFiBench(-78, 0, 82, true);
