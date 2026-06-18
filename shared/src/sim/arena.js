@@ -5256,7 +5256,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 80,
         "maxZ": 84,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": -82.3,
+        "maxX": -73.7,
+        "minZ": 80.2,
+        "maxZ": 83.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": -82.5,
+        "maxX": -73.5,
+        "minZ": 83,
+        "maxZ": 84,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": -53,
@@ -5264,7 +5280,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 80,
         "maxZ": 84,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": -52.8,
+        "maxX": -47.2,
+        "minZ": 80.2,
+        "maxZ": 83.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": -53,
+        "maxX": -47,
+        "minZ": 83,
+        "maxZ": 84,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": 73.5,
@@ -5272,7 +5304,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 80,
         "maxZ": 84,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": 73.7,
+        "maxX": 82.3,
+        "minZ": 80.2,
+        "maxZ": 83.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": 73.5,
+        "maxX": 82.5,
+        "minZ": 83,
+        "maxZ": 84,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": 47,
@@ -5280,7 +5328,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 80,
         "maxZ": 84,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": 47.2,
+        "maxX": 52.8,
+        "minZ": 80.2,
+        "maxZ": 83.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": 47,
+        "maxX": 53,
+        "minZ": 83,
+        "maxZ": 84,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": -28,
@@ -5288,7 +5352,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 84,
         "maxZ": 88,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": -27.8,
+        "maxX": -22.2,
+        "minZ": 84.2,
+        "maxZ": 87.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": -28,
+        "maxX": -22,
+        "minZ": 87,
+        "maxZ": 88,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": 22,
@@ -5296,7 +5376,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 84,
         "maxZ": 88,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": 22.2,
+        "maxX": 27.8,
+        "minZ": 84.2,
+        "maxZ": 87.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": 22,
+        "maxX": 28,
+        "minZ": 87,
+        "maxZ": 88,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": -82.5,
@@ -5304,7 +5400,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 23,
         "maxZ": 27,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": -82.3,
+        "maxX": -73.7,
+        "minZ": 23.2,
+        "maxZ": 26.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": -82.5,
+        "maxX": -73.5,
+        "minZ": 26,
+        "maxZ": 27,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": 73.5,
@@ -5312,7 +5424,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 23,
         "maxZ": 27,
         "minY": 0,
-        "maxY": 6
+        "maxY": 2.8
+      },
+      {
+        "minX": 73.7,
+        "maxX": 82.3,
+        "minZ": 23.2,
+        "maxZ": 26.2,
+        "minY": 2.8,
+        "maxY": 3.4
+      },
+      {
+        "minX": 73.5,
+        "maxX": 82.5,
+        "minZ": 26,
+        "maxZ": 27,
+        "minY": 2.8,
+        "maxY": 6.4
       },
       {
         "minX": -62,
@@ -5912,7 +6040,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -57,
         "maxZ": -53,
         "minY": 5,
-        "maxY": 11
+        "maxY": 7.8
+      },
+      {
+        "minX": -52.8,
+        "maxX": -47.2,
+        "minZ": -56.8,
+        "maxZ": -53.8,
+        "minY": 7.8,
+        "maxY": 8.4
+      },
+      {
+        "minX": -53,
+        "maxX": -47,
+        "minZ": -54,
+        "maxZ": -53,
+        "minY": 7.8,
+        "maxY": 11.4
       },
       {
         "minX": 47,
@@ -5920,7 +6064,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -57,
         "maxZ": -53,
         "minY": 5,
-        "maxY": 11
+        "maxY": 7.8
+      },
+      {
+        "minX": 47.2,
+        "maxX": 52.8,
+        "minZ": -56.8,
+        "maxZ": -53.8,
+        "minY": 7.8,
+        "maxY": 8.4
+      },
+      {
+        "minX": 47,
+        "maxX": 53,
+        "minZ": -54,
+        "maxZ": -53,
+        "minY": 7.8,
+        "maxY": 11.4
       },
       {
         "minX": -28,
@@ -5928,7 +6088,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -82,
         "maxZ": -78,
         "minY": 5,
-        "maxY": 11
+        "maxY": 7.8
+      },
+      {
+        "minX": -27.8,
+        "maxX": -22.2,
+        "minZ": -81.8,
+        "maxZ": -78.8,
+        "minY": 7.8,
+        "maxY": 8.4
+      },
+      {
+        "minX": -28,
+        "maxX": -22,
+        "minZ": -79,
+        "maxZ": -78,
+        "minY": 7.8,
+        "maxY": 11.4
       },
       {
         "minX": 22,
@@ -5936,7 +6112,23 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -82,
         "maxZ": -78,
         "minY": 5,
-        "maxY": 11
+        "maxY": 7.8
+      },
+      {
+        "minX": 22.2,
+        "maxX": 27.8,
+        "minZ": -81.8,
+        "maxZ": -78.8,
+        "minY": 7.8,
+        "maxY": 8.4
+      },
+      {
+        "minX": 22,
+        "maxX": 28,
+        "minZ": -79,
+        "maxZ": -78,
+        "minY": 7.8,
+        "maxY": 11.4
       },
       {
         "minX": -96.3,
