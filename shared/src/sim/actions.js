@@ -71,7 +71,7 @@ export function attemptFire(matchState, owner, target, now) {
     if (owner.sniperChargeTargetId) return false;
     if (u.magCapacity != null && owner.ammo <= 0) return false;
     if (now - owner.lastFireAt < u.fireCooldownMs) return false;
-    const chargeMs = u.chargeMs ?? 500;
+    const chargeMs = u.chargeMs ?? 1000;
     owner.sniperChargeUntil = now + chargeMs;
     owner.sniperChargeTargetId = target.id;
     owner.vel.x = 0;
@@ -108,7 +108,7 @@ export function tickSniperCharge(matchState, fighter, now, input = null) {
   if (!fighter.sniperChargeTargetId) return;
 
   const sprintHeld = !!(input && (input.boost || input.sprintLocked));
-  const chargeStartAt = fighter.sniperChargeUntil - (fighter.unit.chargeMs ?? 500);
+  const chargeStartAt = fighter.sniperChargeUntil - (fighter.unit.chargeMs ?? 1000);
   const cancelled = sprintHeld
     && now >= chargeStartAt + SNIPER_CANCEL_MIN_CHARGE_MS
     && now < fighter.sniperChargeUntil

@@ -42,7 +42,7 @@ const BOT_HIT_EVADE_MS = 350;
 // reaction delay — Defense entry AND its guessed dodge both wait on it. A
 // floor-canceled snap shot (SNIPER_CANCEL_MIN_CHARGE_MS) therefore arrives
 // before a bot that hasn't reacted yet, instead of being dodged on frame one.
-const BOT_GLINT_REACT_MS = 400;
+const BOT_GLINT_REACT_MS = 600;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -734,9 +734,9 @@ export function tickBot(matchState, botId, now) {
       if (fired) {
         // Release at the earliest legal point (the cancel floor) 80% of the
         // time; the other 20% releases anywhere in the cancel window.
-        me.sniperChargeUntil = now + (Math.random() < 0.8
+        me.sniperChargeUntil = now + (Math.random() < 0.9
           ? SNIPER_CANCEL_MIN_CHARGE_MS
-          : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 500));
+          : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000));
         me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
