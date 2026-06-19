@@ -1590,34 +1590,15 @@ function updateProjectileSystem(dt) {
     if (p.distTraveled !== undefined) {
       p.distTraveled += p.mesh.position.distanceTo(prevPos);
     }
-    // Swept test: catches fast/homing projectiles that would otherwise tunnel through
-    // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
-    // unit-only fences) are skipped so bullets fly through them.
-    for (const obstacle of arenaObstacles) {
-      if (obstacle.noProjectile) continue;
-      if (!segmentHitsObstacle(prevPos, p.mesh.position, obstacle)) continue;
-      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] OBSTACLE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
-      despawnProjectileTrail(p, now);
-      disposeProjectileMesh(p.mesh);
-      state.projectiles.splice(i, 1);
-      p.ttl = 0;
-      break;
-    }
-    if (p.ttl <= 0) continue;
-    if (projectileHitsSurface(prevPos, p.mesh.position)) {
-      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] SURFACE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
-      despawnProjectileTrail(p, now);
-      disposeProjectileMesh(p.mesh);
-      state.projectiles.splice(i, 1);
-      p.ttl = 0;
-    }
-    if (p.ttl <= 0) continue;
-    // Capsule hit volume that matches the tall character billboard: free
-    // vertical travel within ±hitHalfHeight of the body center, then sphere-style
-    // falloff at hitRadius. Centered on root.position — the sprite's vertical
-    // center (feet −3.2 .. head +3.2 around it). Mirrors shared/sim/projectiles.js.
-    const hitRadius = 1.6;        // horizontal radius (unchanged)
-    const hitHalfHeight = 1.6;    // vertical half-extent → capsule spans ±3.2 = full 6.4 sprite
+    // Hit geometry, computed BEFORE the wall/surface sweep so that sweep can be
+    // clipped to the target's hit point. Without the clip, the swept wall test
+    // spans the full per-frame step (~34 u at 2000 u/s) and despawns the round
+    // on a wall *behind* the target — eating a shot that reaches the target
+    // first (the close-range "phantom dodge"). Capsule volume matches the tall
+    // billboard: free vertical travel within ±hitHalfHeight of body center, then
+    // sphere falloff at hitRadius, centered on root.position. Mirrors shared/sim.
+    const hitRadius = 1.6;
+    const hitHalfHeight = 1.6;
     const hitCenter = p.target.root.position;
     const path = new THREE.Line3(prevPos, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
@@ -1626,19 +1607,40 @@ function updateProjectileSystem(dt) {
     const _hdz = nearest.z - hitCenter.z;
     const _hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - hitHalfHeight);
     const hitDistSq = _hdx * _hdx + _hdy * _hdy + _hdz * _hdz;
-    // Spawn protection: the round passes through an invulnerable target.
-    // Step (dodge) immunity: the round also passes through while the target is
-    // mid-step, so a well-timed dodge avoids the hit entirely.
-    // Friendly fire (2v2): if owner and target are on the same team, the
-    // round passes through. In 1v1 the team fields are unset so this is a no-op.
-    // Dead-target pass-through: matches the shared sim behaviour — bullets
-    // fly past corpses rather than triggering a hit-VFX on empty space.
+    // Spawn protection / step (dodge) immunity / friendly-fire (2v2) / dead
+    // target: the round passes through in each of these cases.
     const sameTeam = p.owner?.state?.team && p.target.state.team && p.owner.state.team === p.target.state.team;
-    if (p.owner === state.player && p.target === state.enemy && hitDistSq < 144) { // DEBUG — closest-approach probe, remove after diagnosing
-      const _wouldHit = p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius;
-      console.log('[HIT DBG] closest:', Math.round(Math.sqrt(hitDistSq) * 100) / 100, 'u | mid-step(>0=iframe):', Math.round((p.target.state.stepUntil || 0) - now), '| invuln(>0):', Math.round(p.target.state.invulnerableUntil - now), '| bulletY:', Math.round(nearest.y * 100) / 100, '| botY:', Math.round(hitCenter.y * 100) / 100, '| HIT?', _wouldHit);
+    const botHit = p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius;
+    // Clip the wall/surface sweep to the hit point when the target is hit this
+    // frame, so obstacles beyond the target don't despawn the round first. When
+    // the target isn't hit (or passes through), sweep the full step as before.
+    const sweepEnd = botHit ? nearest : p.mesh.position;
+    // Swept test: catches fast/homing projectiles that would otherwise tunnel through
+    // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
+    // unit-only fences) are skipped so bullets fly through them.
+    for (const obstacle of arenaObstacles) {
+      if (obstacle.noProjectile) continue;
+      if (!segmentHitsObstacle(prevPos, sweepEnd, obstacle)) continue;
+      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] OBSTACLE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
+      despawnProjectileTrail(p, now);
+      disposeProjectileMesh(p.mesh);
+      state.projectiles.splice(i, 1);
+      p.ttl = 0;
+      break;
     }
-    if (p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius) {
+    if (p.ttl <= 0) continue;
+    if (projectileHitsSurface(prevPos, sweepEnd)) {
+      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] SURFACE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
+      despawnProjectileTrail(p, now);
+      disposeProjectileMesh(p.mesh);
+      state.projectiles.splice(i, 1);
+      p.ttl = 0;
+    }
+    if (p.ttl <= 0) continue;
+    if (p.owner === state.player && p.target === state.enemy && hitDistSq < 144) { // DEBUG — closest-approach probe, remove after diagnosing
+      console.log('[HIT DBG] closest:', Math.round(Math.sqrt(hitDistSq) * 100) / 100, 'u | mid-step(>0=iframe):', Math.round((p.target.state.stepUntil || 0) - now), '| invuln(>0):', Math.round(p.target.state.invulnerableUntil - now), '| bulletY:', Math.round(nearest.y * 100) / 100, '| botY:', Math.round(hitCenter.y * 100) / 100, '| HIT?', botHit);
+    }
+    if (botHit) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
       if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
