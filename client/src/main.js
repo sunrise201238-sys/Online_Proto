@@ -4553,13 +4553,20 @@ let _activeProfilePopup = null;
 function removeProfilePopup() {
   if (_activeProfilePopup) { _activeProfilePopup.remove(); _activeProfilePopup = null; }
 }
-function showProfilePopup(card, spriteKey, char) {
+function showProfilePopup(card, spriteKey, char, onConfirm) {
   removeProfilePopup();
   const popup = document.createElement('div');
   popup.className = 'unit-profile-popup';
   popup.innerHTML = `<img src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />`;
   document.body.appendChild(popup);
   _activeProfilePopup = popup;
+  // Tapping the profile art confirms the pending selection — same as a second
+  // tap on the thumbnail.
+  popup.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onConfirm) onConfirm();
+  });
   // Position beside the card; flip to the left edge if it would run off-screen.
   const place = () => {
     const r = card.getBoundingClientRect();
@@ -4608,7 +4615,7 @@ function wireUnitGrid(menu, onPick) {
       pendingKey = key;
       card.classList.add('selecting');
       const u = UNIT_DATA[key];
-      showProfilePopup(card, u.spriteKey, u.char);
+      showProfilePopup(card, u.spriteKey, u.char, () => { clearPending(); onPick(key); });
     });
   });
   // Tap anywhere else in the menu → cancel the preview, back to plain selection.
