@@ -1596,6 +1596,7 @@ function updateProjectileSystem(dt) {
     for (const obstacle of arenaObstacles) {
       if (obstacle.noProjectile) continue;
       if (!segmentHitsObstacle(prevPos, p.mesh.position, obstacle)) continue;
+      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] OBSTACLE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
@@ -1604,6 +1605,7 @@ function updateProjectileSystem(dt) {
     }
     if (p.ttl <= 0) continue;
     if (projectileHitsSurface(prevPos, p.mesh.position)) {
+      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] SURFACE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
