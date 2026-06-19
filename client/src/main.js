@@ -121,6 +121,34 @@ const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000
+  },
+  unit4: {
+    name: 'Unit 4 / Submachine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'atsuko', char: 'Atsuko', accent: 0xe8a13a,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 46,
+    projectileSpeed: 600,
+    firePerMinute: 1100,       // ≈ 54.55 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.06,
+    damage: 3,
+    magCapacity: 30,
+    reloadMs: 1500,
+    autoReload: false
   }
 };
 
