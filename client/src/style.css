@@ -289,9 +289,9 @@ body.pseudo-fullscreen #app {
 .menu .unit-grid { display: grid; grid-template-columns: repeat(2, 132px); gap: 12px; justify-content: center; margin: 4px 0 6px; }
 .menu .unit-card { width: 132px; padding: 8px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 12px; border: 2px solid #3a5566; background: #131e2a; color: #e5fbff; cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease; }
 .menu .unit-card:hover { border-color: #5a7d96; }
-.menu .unit-card .unit-thumb { width: 112px; height: 112px; object-fit: cover; border-radius: 8px; background: #0b1119; pointer-events: none; }
+.menu .unit-card .unit-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #0b1119; pointer-events: none; }
 .menu .unit-card .unit-label { font-size: 13px; line-height: 1.35; font-weight: 600; text-align: center; pointer-events: none; }
 .menu .unit-card.selecting { border-color: #6ab8ff; box-shadow: 0 0 0 2px rgba(106, 184, 255, 0.55), 0 0 18px 3px rgba(106, 184, 255, 0.7); }
 
 .unit-profile-popup { position: fixed; z-index: 300; padding: 6px; border-radius: 12px; border: 2px solid #6ab8ff; background: rgba(10, 16, 26, 0.96); box-shadow: 0 0 22px 5px rgba(106, 184, 255, 0.5); pointer-events: none; }
-.unit-profile-popup img { display: block; width: 220px; max-width: 42vw; height: auto; border-radius: 8px; }
+.unit-profile-popup img { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 8px; }
