@@ -214,44 +214,49 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       p.distTraveled += Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
     }
 
+    // Hit geometry, computed BEFORE the wall/surface sweep so that sweep can be
+    // clipped to the target's hit point. Without the clip, the swept wall test
+    // spans the full per-frame step (~34 u at 2000 u/s) and despawns the round
+    // on a wall *behind* the target — eating a shot that reaches the target
+    // first (the close-range "phantom dodge"). Capsule volume matches the tall
+    // billboard: free vertical travel within ±HIT_HALF_HEIGHT of the chest-
+    // anchored center, then sphere falloff at hitRadius. Mirrors offline main.js.
+    const hitRadius = HIT_RADIUS_NORMAL;
+    const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
+    const dx = nearest.x - hitCenter.x;
+    const dy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
+    const dz = nearest.z - hitCenter.z;
+    // Spawn protection / step (dodge) immunity / friendly-fire (2v2) / dead
+    // target: the round passes through in each of these cases.
+    const owner = matchState.fighters[p.ownerId];
+    const sameTeam = owner?.team && target.team && owner.team === target.team;
+    const botHit = target.hp > 0 && !sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius;
+    // Clip the wall/surface sweep to the hit point when the target is hit this
+    // frame, so obstacles beyond the target don't despawn the round first. When
+    // the target isn't hit (or passes through), sweep the full step as before.
+    const sweepEnd = botHit ? nearest : p.pos;
+
     // Swept obstacle hit (skip noProjectile-tagged obstacles).
     let killed = false;
     for (let j = 0; j < obstacles.length; j += 1) {
       const o = obstacles[j];
       if (o.noProjectile) continue;
-      if (!segmentHitsObstacle(prevPos, p.pos, o)) continue;
+      if (!segmentHitsObstacle(prevPos, sweepEnd, o)) continue;
       _despawn(matchState, projectiles, i, p, 'obstacle');
       killed = true;
       break;
     }
     if (killed) continue;
 
-    if (projectileHitsSurface(prevPos, p.pos, surfaces)) {
+    if (projectileHitsSurface(prevPos, sweepEnd, surfaces)) {
       _despawn(matchState, projectiles, i, p, 'surface');
       continue;
     }
 
-    // Hit detection — closest-point distance from target's body to the
-    // projectile's traveled segment this frame. Uses the chest-anchored
-    // hitCenter defined above (same anchor as the homing logic).
-    // Capsule hit volume matching the tall character billboard: free vertical
-    // travel within ±HIT_HALF_HEIGHT of the body center, then sphere falloff at
-    // hitRadius (instead of a single mid-body sphere). Mirrors offline main.js.
-    const hitRadius = HIT_RADIUS_NORMAL;
-    const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
-    const dx = nearest.x - hitCenter.x;
-    const dy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
-    const dz = nearest.z - hitCenter.z;
-    // Spawn protection: the round passes through an invulnerable target.
-    // Step (dodge) immunity: the round also passes through while the target is
-    // mid-step, so a well-timed dodge avoids the hit entirely.
-    // Friendly fire (2v2): if owner and target are on the same team the round
-    // passes through. 1v1 fighters have opposite teams so this is a no-op.
-    // Dead-target pass-through: a bullet whose target already died flies past
-    // the corpse rather than triggering a hit-VFX on empty space.
-    const owner = matchState.fighters[p.ownerId];
-    const sameTeam = owner?.team && target.team && owner.team === target.team;
-    if (target.hp > 0 && !sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius) {
+    // Apply the hit resolved above (botHit): closest-point distance from the
+    // target's chest-anchored body to the round's traveled segment, gated for
+    // pass-through cases. See the hit-geometry block above. Mirrors offline.
+    if (botHit) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
       if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
