@@ -15,7 +15,7 @@
 export const UNIT_DATA = {
   unit1: {
     id: 'unit1',
-    name: 'Unit 1 / Machine Gun',
+    name: 'Unit 1 / Assault Rifle',
 
     // Pilot stats
     hp: 150,
