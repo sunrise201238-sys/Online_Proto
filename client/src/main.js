@@ -37,7 +37,7 @@ const app = document.getElementById('app');
 // ----------------------------------------------------------------------------
 const UNIT_DATA = {
   unit1: {
-    name: 'Unit 1 / Machine Gun',
+    name: 'Unit 1 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'saori', char: 'Saori', accent: 0x3a4a78,
 
@@ -3984,15 +3984,12 @@ function showOnlineUnitPicker(onl, conn) {
   menu.innerHTML = `
     <h2>Pick Your Unit</h2>
     <div class="menu-divider">Online ${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
-    ${unitEntries.map(([id, u]) => `<button data-unit="${id}">${u.name}</button>`).join('')}
+    ${unitGridHTML(unitEntries)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
-  menu.querySelectorAll('button[data-unit]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      onl.conn.sendConfigure({ unitKey: btn.dataset.unit });
-    });
+  wireUnitGrid(menu, (key) => {
+    onl.conn.sendConfigure({ unitKey: key });
   });
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -4479,7 +4476,7 @@ function showSelectMenu() {
       <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
       <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
     </div>
-    ${unitEntries.map(([id, unit]) => `<button data-player-unit="${id}">${unit.name}</button>`).join('')}
+    ${unitGridHTML(unitEntries)}
     <div class="menu-divider">— Online —</div>
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
     <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
@@ -4512,13 +4509,10 @@ function showSelectMenu() {
     showGuidePopup();
   });
 
-  menu.querySelectorAll('button[data-player-unit]').forEach((button) => {
-    button.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      state.playerUnitKey = button.dataset.playerUnit;
-      clearMenus();
-      proceedAfterPlayerPick();
-    });
+  wireUnitGrid(menu, (key) => {
+    state.playerUnitKey = key;
+    clearMenus();
+    proceedAfterPlayerPick();
   });
 }
 
@@ -4547,19 +4541,89 @@ function proceedToEnemyPick() {
     }
   });
 }
+// ---------------------------------------------------------------------------
+// Unit thumbnail picker — shared by the offline player/ally/enemy pickers and
+// the online lobby. Renders a thumbnail grid (portrait + "Character / Weapon"
+// label). First tap previews: the card frame glows and the character's full
+// profile art pops up beside it. Tapping the SAME card again confirms; tapping
+// another card switches the preview; tapping anywhere else cancels back to the
+// plain grid.
+// ---------------------------------------------------------------------------
+let _activeProfilePopup = null;
+function removeProfilePopup() {
+  if (_activeProfilePopup) { _activeProfilePopup.remove(); _activeProfilePopup = null; }
+}
+function showProfilePopup(card, spriteKey, char) {
+  removeProfilePopup();
+  const popup = document.createElement('div');
+  popup.className = 'unit-profile-popup';
+  popup.innerHTML = `<img src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />`;
+  document.body.appendChild(popup);
+  _activeProfilePopup = popup;
+  // Position beside the card; flip to the left edge if it would run off-screen.
+  const place = () => {
+    const r = card.getBoundingClientRect();
+    const pw = popup.offsetWidth || 150;
+    const ph = popup.offsetHeight || 200;
+    let left = r.right + 12;
+    if (left + pw > window.innerWidth - 8) left = r.left - pw - 12;
+    const top = Math.min(Math.max(8, r.top + r.height / 2 - ph / 2), window.innerHeight - ph - 8);
+    popup.style.left = `${Math.max(8, left)}px`;
+    popup.style.top = `${top}px`;
+  };
+  place();
+  const img = popup.querySelector('img');
+  if (img) img.addEventListener('load', place);
+}
+// Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
+// Weapon is the part of unit.name after the "/".
+function unitGridHTML(unitEntries) {
+  return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
+    const weapon = (u.name.split('/')[1] || u.name).trim();
+    const thumb = `${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png`;
+    return `<button class="unit-card" data-unit-card="${id}">
+      <img class="unit-thumb" src="${thumb}" alt="${u.char || id}" draggable="false" />
+      <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+// Wire preview→confirm onto a menu containing a .unit-grid. onPick(unitKey)
+// fires on the confirming (second) tap of the same card.
+function wireUnitGrid(menu, onPick) {
+  const grid = menu.querySelector('.unit-grid');
+  if (!grid) return;
+  let pendingKey = null;
+  const clearPending = () => {
+    pendingKey = null;
+    grid.querySelectorAll('.unit-card.selecting').forEach((c) => c.classList.remove('selecting'));
+    removeProfilePopup();
+  };
+  grid.querySelectorAll('.unit-card').forEach((card) => {
+    card.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const key = card.dataset.unitCard;
+      if (pendingKey === key) { clearPending(); onPick(key); return; }
+      clearPending();
+      pendingKey = key;
+      card.classList.add('selecting');
+      const u = UNIT_DATA[key];
+      showProfilePopup(card, u.spriteKey, u.char);
+    });
+  });
+  // Tap anywhere else in the menu → cancel the preview, back to plain selection.
+  menu.addEventListener('pointerdown', () => { if (pendingKey) clearPending(); });
+}
+
 function showUnitPicker(title, onPick) {
   const unitEntries = Object.entries(UNIT_DATA);
   const menu = document.createElement('div');
   menu.className = 'menu';
-  menu.innerHTML = `<h2>${title}</h2>${unitEntries.map(([id, unit]) => `<button data-unit-pick="${id}">${unit.name}</button>`).join('')}`;
+  menu.innerHTML = `<h2>${title}</h2>${unitGridHTML(unitEntries)}`;
   app.appendChild(menu);
-  menu.querySelectorAll('button[data-unit-pick]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      const key = btn.dataset.unitPick;
-      clearMenus();
-      onPick(key);
-    });
+  wireUnitGrid(menu, (key) => {
+    clearMenus();
+    onPick(key);
   });
 }
 function showMapPicker() {
@@ -4939,6 +5003,7 @@ function showPauseMenu() {
 }
 
 function clearMenus() {
+  removeProfilePopup();
   document.querySelectorAll('.menu').forEach((menu) => menu.remove());
 }
 
