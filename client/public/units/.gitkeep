@@ -9,9 +9,10 @@
 # a full 3D model. .glb wins over .png when both are present.
 #
 # Keys / characters / weapons:
-#   saori    -> Unit 1 / Machine Gun  (M4A1)
-#   hoshino  -> Unit 2 / Shotgun      (XM1014)
-#   aru      -> Unit 3 / Sniper Rifle (PSG1)
+#   saori    -> Unit 1 / Assault Rifle   (M4A1)
+#   hoshino  -> Unit 2 / Shotgun         (XM1014)
+#   aru      -> Unit 3 / Sniper Rifle    (PSG1)
+#   atsuko   -> Unit 4 / Submachine Gun
 #
 # ============================================================================
 # 3D MODELS — <key>.glb  (+ optional <key>_gun.glb)
