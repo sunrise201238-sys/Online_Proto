@@ -148,7 +148,10 @@ const UNIT_DATA = {
     damage: 3,
     magCapacity: 30,
     reloadMs: 1500,
-    autoReload: false
+    autoReload: false,
+    // Per-weapon hit-stun. Omit `stun` on a unit to use the defaults (100 ms,
+    // 0.25 move-scale). SMG = short + light so the victim barely slows when hit.
+    stun: { ms: 50, moveScale: 0.85 }
   }
 };
 
@@ -814,6 +817,7 @@ function createMech(color, unitData, isOwnUnit = false) {
       redLock: false,
       overheatedUntil: 0,
       hitStunUntil: 0,
+      hitStunScale: 0.25,
       invulnerableUntil: 0,
       hoverUntil: 0,
       meleeAnimUntil: 0,
@@ -1309,7 +1313,8 @@ function spawnProjectiles(owner, target) {
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
       damage: owner.unit.damage,
-      hitStunMs: 100,
+      hitStunMs: owner.unit.stun?.ms ?? 100,
+      hitStunScale: owner.unit.stun?.moveScale ?? 0.25,
       // Set on the shotgun's center pellet only — accumulates path length so
       // non-center pellets can interpolate cluster spread (0 → full) over
       // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
@@ -1664,7 +1669,14 @@ function updateProjectileSystem(dt) {
     if (botHit) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
-      if (performance.now() >= p.target.state.hitStunUntil) p.target.state.hitStunUntil = performance.now() + p.hitStunMs;
+      // Per-weapon stun, lowest-move-scale-wins: a fresh hit applies its stun
+      // when the target is free OR when its stun is strictly heavier (lower
+      // move-scale) than the active one — taking its own duration even if shorter.
+      const _ts = p.target.state;
+      if (now >= _ts.hitStunUntil || p.hitStunScale < _ts.hitStunScale) {
+        _ts.hitStunScale = p.hitStunScale;
+        _ts.hitStunUntil = now + p.hitStunMs;
+      }
       p.target.state.momentumVX = 0;
       p.target.state.momentumVZ = 0;
       spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
@@ -1796,7 +1808,7 @@ function updatePlayer(now) {
   const baseSpeed = useSprint ? playerSprintSpeed : (recoveringFromDash ? 4.55 : playerWalkSpeed);
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < state.player.state.hitStunUntil;
-  const hitStunScale = hitStunned ? 0.25 : 1;
+  const hitStunScale = hitStunned ? state.player.state.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
   if (!inStep) {
     state.player.body.velocity.x = canInputMove ? move.x * speed * hitStunScale : 0;
@@ -2743,14 +2755,13 @@ function updateEnemy(now) {
     state.enemy.body.velocity.y = 0;
   }
   applyMomentum(state.enemy);
-  // Hit-stun parity: the player keeps moving at 0.25x speed while stunned
-  // (hitStunScale at line ~1100) rather than freezing. Apply the same scale to
-  // the bot AFTER momentum so sprint + momentum scale together, matching the
-  // player's velocity exactly. Previously the bot used moveScalar 0 and stood
-  // frozen, eating entire bursts instead of crawling to safety.
+  // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
+  // weapon's move-scale, stored on the victim) while stunned rather than
+  // freezing. Apply the same scale to the bot AFTER momentum so sprint +
+  // momentum scale together, matching the player's velocity exactly.
   if (now < eState.hitStunUntil) {
-    state.enemy.body.velocity.x *= 0.25;
-    state.enemy.body.velocity.z *= 0.25;
+    state.enemy.body.velocity.x *= eState.hitStunScale;
+    state.enemy.body.velocity.z *= eState.hitStunScale;
   }
   updateBoost(state.enemy, now, state.enemy.state.action);
 }
@@ -3524,6 +3535,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.redLock = fighter.redLock;
   s.airborne = fighter.airborne;
   s.hitStunUntil = fighter.hitStunUntil;
+  s.hitStunScale = fighter.hitStunScale ?? 0.25;
   s.invulnerableUntil = fighter.invulnerableUntil;
   s.overheatedUntil = fighter.overheatedUntil;
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
