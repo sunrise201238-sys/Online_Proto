@@ -1632,6 +1632,10 @@ function updateProjectileSystem(dt) {
     // Dead-target pass-through: matches the shared sim behaviour — bullets
     // fly past corpses rather than triggering a hit-VFX on empty space.
     const sameTeam = p.owner?.state?.team && p.target.state.team && p.owner.state.team === p.target.state.team;
+    if (p.owner === state.player && p.target === state.enemy && hitDistSq < 144) { // DEBUG — closest-approach probe, remove after diagnosing
+      const _wouldHit = p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius;
+      console.log('[HIT DBG] closest:', Math.round(Math.sqrt(hitDistSq) * 100) / 100, 'u | mid-step(>0=iframe):', Math.round((p.target.state.stepUntil || 0) - now), '| invuln(>0):', Math.round(p.target.state.invulnerableUntil - now), '| bulletY:', Math.round(nearest.y * 100) / 100, '| botY:', Math.round(hitCenter.y * 100) / 100, '| HIT?', _wouldHit);
+    }
     if (p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil && hitDistSq < hitRadius * hitRadius) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
