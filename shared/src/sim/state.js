@@ -39,6 +39,7 @@ export function createFighter(id, unitKey, spawn) {
     // Lock & stun.
     redLock: false,
     hitStunUntil: 0,
+    hitStunScale: 0.25,
     staggerUntil: 0,
     // Spawn protection — set per round in createMatchState; no damage while
     // now < invulnerableUntil.
@@ -116,7 +117,8 @@ export function createProjectile({
   centerPelletId = null,
   clusterOffset = null,
   ttl,
-  hitStunMs
+  hitStunMs,
+  hitStunScale = 0.25
 }) {
   return {
     id: id ?? nextProjectileId(),
@@ -131,7 +133,8 @@ export function createProjectile({
     centerPelletId,
     clusterOffset: clusterOffset ? { x: clusterOffset.x, y: clusterOffset.y, z: clusterOffset.z } : null,
     ttl,
-    hitStunMs
+    hitStunMs,
+    hitStunScale
   };
 }
 

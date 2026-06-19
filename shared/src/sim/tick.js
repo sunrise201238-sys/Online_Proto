@@ -93,7 +93,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const baseSpeed = useSprint ? sprintSpeed : (recoveringFromDash ? 4.55 : walkSpeed);
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < fighter.hitStunUntil;
-  const hitStunScale = hitStunned ? 0.25 : 1;
+  const hitStunScale = hitStunned ? fighter.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
 
   const inStep = now <= fighter.stepUntil;

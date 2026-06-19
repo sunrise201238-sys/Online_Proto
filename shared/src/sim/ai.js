@@ -711,12 +711,12 @@ export function tickBot(matchState, botId, now) {
     me.action = 'idle';
   }
 
-  // Hit-stun parity: the player keeps moving at 0.25x speed while stunned
-  // (hitStunScale) rather than freezing. Previously the bot used moveScalar 0
-  // and stood frozen, eating entire bursts instead of crawling to safety.
+  // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
+  // weapon's move-scale, stored on the victim) while stunned rather than
+  // freezing. Mirrors offline main.js updateEnemy.
   if (now < me.hitStunUntil) {
-    me.vel.x *= 0.25;
-    me.vel.z *= 0.25;
+    me.vel.x *= me.hitStunScale;
+    me.vel.z *= me.hitStunScale;
   }
 
   if (dist > 14 && Math.random() > 0.9) me.evadeHomingUntil = now + 90;

@@ -80,7 +80,8 @@ export function spawnProjectiles(matchState, owner, target) {
       centerPelletId: null,
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: PROJECTILE_TTL_S,
-      hitStunMs: PROJECTILE_HIT_STUN_MS
+      hitStunMs: u.stun?.ms ?? PROJECTILE_HIT_STUN_MS,
+      hitStunScale: u.stun?.moveScale ?? 0.25
     });
     if (isShotgun && isCenterPellet) {
       // Track total path length on the shotgun's center pellet so non-center
@@ -259,7 +260,13 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     if (botHit) {
       const damage = damageScaler ? damageScaler(p) : p.damage;
       target.hp = Math.max(0, target.hp - damage);
-      if (now >= target.hitStunUntil) target.hitStunUntil = now + p.hitStunMs;
+      // Per-weapon stun, lowest-move-scale-wins: apply when the target is free
+      // OR the new stun is strictly heavier (lower move-scale), taking its own
+      // duration even if shorter. Mirrors offline main.js.
+      if (now >= target.hitStunUntil || p.hitStunScale < target.hitStunScale) {
+        target.hitStunScale = p.hitStunScale;
+        target.hitStunUntil = now + p.hitStunMs;
+      }
       target.momentumVX = 0;
       target.momentumVZ = 0;
       target.vel.x = 0;

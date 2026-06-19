@@ -122,7 +122,10 @@ export const UNIT_DATA = {
     damage: 3,
     magCapacity: 30,
     reloadMs: 1500,
-    autoReload: false
+    autoReload: false,
+    // Per-weapon hit-stun. Omit `stun` on a unit to use the defaults
+    // (PROJECTILE_HIT_STUN_MS, 0.25 move-scale). SMG = short + light.
+    stun: { ms: 50, moveScale: 0.85 }
   }
 };
 
