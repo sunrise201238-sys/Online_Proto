@@ -1416,7 +1416,6 @@ function attemptFire(owner, target, now) {
 function tickSniperCharge(mech, now, sprintHeld = false) {
   const target = mech.state.sniperChargeTarget;
   if (!target) return;
-  const _chargeStartDbg = mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000); // DEBUG: original charge start (before cancel overwrites sniperChargeUntil)
   // Sprint-cancel: holding sprint while the forced-standing charge is active
   // ends it and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST (half a
   // step's boost). The cancel only registers once the charge is
@@ -1445,7 +1444,6 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   mech.state.sniperChargeUntil = 0;
   removeGlintFromMech(mech);
   if (mech.state.hp <= 0) return;
-  if (mech === state.player) console.log('[SNIPER DBG] charge age at fire:', Math.round(now - _chargeStartDbg), 'ms  | sprintHeld:', sprintHeld, '| boost:', Math.round(mech.state.boost)); // DEBUG — remove after diagnosing
   spawnProjectiles(mech, target);
 }
 
@@ -1621,7 +1619,6 @@ function updateProjectileSystem(dt) {
     for (const obstacle of arenaObstacles) {
       if (obstacle.noProjectile) continue;
       if (!segmentHitsObstacle(prevPos, sweepEnd, obstacle)) continue;
-      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] OBSTACLE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
@@ -1630,16 +1627,12 @@ function updateProjectileSystem(dt) {
     }
     if (p.ttl <= 0) continue;
     if (projectileHitsSurface(prevPos, sweepEnd)) {
-      if (p.owner === state.player && state.enemy) console.log('[BLOCK DBG] SURFACE despawn | bot dist from bullet:', Math.round(prevPos.distanceTo(state.enemy.root.position) * 10) / 10, '| segLen:', Math.round(prevPos.distanceTo(p.mesh.position) * 10) / 10); // DEBUG — remove after diagnosing
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
       p.ttl = 0;
     }
     if (p.ttl <= 0) continue;
-    if (p.owner === state.player && p.target === state.enemy && hitDistSq < 144) { // DEBUG — closest-approach probe, remove after diagnosing
-      console.log('[HIT DBG] closest:', Math.round(Math.sqrt(hitDistSq) * 100) / 100, 'u | mid-step(>0=iframe):', Math.round((p.target.state.stepUntil || 0) - now), '| invuln(>0):', Math.round(p.target.state.invulnerableUntil - now), '| bulletY:', Math.round(nearest.y * 100) / 100, '| botY:', Math.round(hitCenter.y * 100) / 100, '| HIT?', botHit);
-    }
     if (botHit) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
