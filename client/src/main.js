@@ -1416,6 +1416,7 @@ function attemptFire(owner, target, now) {
 function tickSniperCharge(mech, now, sprintHeld = false) {
   const target = mech.state.sniperChargeTarget;
   if (!target) return;
+  const _chargeStartDbg = mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000); // DEBUG: original charge start (before cancel overwrites sniperChargeUntil)
   // Sprint-cancel: holding sprint while the forced-standing charge is active
   // ends it and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST (half a
   // step's boost). The cancel only registers once the charge is
@@ -1444,6 +1445,7 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   mech.state.sniperChargeUntil = 0;
   removeGlintFromMech(mech);
   if (mech.state.hp <= 0) return;
+  if (mech === state.player) console.log('[SNIPER DBG] charge age at fire:', Math.round(now - _chargeStartDbg), 'ms  | sprintHeld:', sprintHeld, '| boost:', Math.round(mech.state.boost)); // DEBUG — remove after diagnosing
   spawnProjectiles(mech, target);
 }
 
