@@ -126,6 +126,33 @@ export const UNIT_DATA = {
     // Per-weapon hit-stun. Omit `stun` on a unit to use the defaults
     // (PROJECTILE_HIT_STUN_MS, 0.25 move-scale). SMG = short + light.
     stun: { ms: 50, moveScale: 0.85 }
+  },
+  unit5: {
+    id: 'unit5',
+    name: 'Unit 5 / Machine Gun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 80,
+    projectileSpeed: 800,
+    firePerMinute: 1200,       // = 50 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    damage: 4,
+    magCapacity: 250,
+    reloadMs: 5000,
+    autoReload: false
   }
 };
 
