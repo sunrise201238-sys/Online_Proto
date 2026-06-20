@@ -134,7 +134,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 150,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 8,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -152,7 +152,8 @@ export const UNIT_DATA = {
     damage: 4,
     magCapacity: 250,
     reloadMs: 5000,
-    autoReload: false
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   }
 };
 
