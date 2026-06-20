@@ -145,13 +145,13 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 80,
-    projectileSpeed: 800,
+    projectileSpeed: 600,
     firePerMinute: 1200,       // = 50 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
     damage: 4,
     magCapacity: 250,
-    reloadMs: 5000,
+    reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   }
