@@ -126,9 +126,9 @@ function startMatchFor(lobby) {
     const human = occupied.has(s);
     const cfg = lobby.config[s].unitKey;
     if (human && cfg) return cfg;
-    // Bot default: cycle through unit1/unit2/unit3/unit4 by slot index for variety.
+    // Bot default: cycle through unit1..unit5 by slot index for variety.
     const idx = slots.indexOf(s);
-    return ['unit1', 'unit2', 'unit3', 'unit4'][idx % 4];
+    return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5'][idx % 5];
   };
 
   lobby.match = createMatchState({
