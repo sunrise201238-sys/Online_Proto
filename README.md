@@ -17,24 +17,26 @@ A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fig
 
 ## Units
 
-Three pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base):
+Five pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base):
 
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
-| Unit 1 — Machine Gun | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
+| Unit 1 — Assault Rifle | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
 | Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
 | Unit 3 — Sniper Rifle | 5 | 50 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
+| Unit 4 — Submachine Gun | 30 | 3 / shot | ~1100 RPM | 46 | 1.5 s |
+| Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 5 s |
 
 Red-lock (in-range target) enables homing on single-shot weapons.
 
 ### Sniper charge & sprint-cancel
 
 - The Sniper holds its shot on a **1 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.5 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.5–1 s** window, and the target always gets at least that much glint-to-bullet warning.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **1000 u/s** (near-hitscan up close), so close range is a read off the glint, not the bullet.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **2000 u/s** (near-hitscan — only ~0.06 s flight even at max range), so evasion is a read off the glint, not the bullet.
 
 **Bots vs. the sniper.**
 - **As the shooter:** the bot releases at the **0.5 s floor 90%** of the time (a fast snap), and at a random **0.5–1 s** the other 10%.
-- **On defense:** when a glint appears, the bot ignores it for a fixed **0.6 s**, then does exactly **one** lateral dodge (0.3 s i-frames) per charge — no prediction, no cover-sprint. So a bullet **arriving ~0.6–0.9 s** after the glint is dodged; a fast close-range snap (bullet before 0.6 s) beats the dodge, and holding the shot past ~0.9 s catches the bot just after its dash.
+- **On defense:** when a glint appears, the bot ignores it for a fixed **0.6 s**, then does exactly **one** lateral dodge (0.3 s i-frames) per charge — no prediction, no cover-sprint. A bullet **arriving ~0.6–0.9 s** after the glint is dodged — but at 2000 u/s a floor-snap (release at 0.5 s) lands ~0.5–0.56 s in, *before* the 0.6 s dodge, so the snap now beats the dodge **at any range**. Only a *held* shot can be dodged, and one held past ~0.9 s whiffs the dash entirely.
 
 ## Controls
 
