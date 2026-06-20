@@ -25,7 +25,7 @@ Five pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 spr
 | Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
 | Unit 3 — Sniper Rifle | 5 | 50 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
 | Unit 4 — Submachine Gun | 30 | 3 / shot | ~1100 RPM | 46 | 1.5 s |
-| Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 5 s |
+| Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
 
 Red-lock (in-range target) enables homing on single-shot weapons.
 
