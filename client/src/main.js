@@ -3223,8 +3223,10 @@ function updateCamera() {
 
 function updateHud(now = performance.now()) {
   // `now` defaults to performance.now() for offline (where mech.state
-  // timestamps are stored in performance.now() reference). Online passes
-  // Date.now() because the server-mirrored timestamps are Date.now()-style.
+  // timestamps are stored in performance.now() reference). Online passes the
+  // prediction's server-clock time (onl.lastPredSimTime) because the local
+  // player's predicted timestamps live in that clock — NOT the client's raw
+  // Date.now(), which would be off by the client↔server wall-clock skew.
   // HUD bars normalize against each fighter's own per-unit caps so a
   // higher-HP / higher-boost character's bar still reads full at full state.
   const playerHpMax = state.player.unit.hp ?? MAX_HP;
@@ -4410,9 +4412,14 @@ function runOnlineMatchFrame(dt, onl, conn) {
     }
   }
 
-  // Spawn-protection glow. invulnerableUntil is server-clock (Date.now) here,
-  // mirrored from the snapshot, so compare against Date.now().
-  const immuneNow = Date.now();
+  // HUD + glow timing uses the prediction's server-clock time (anchored to
+  // snap.serverTime, advanced by tick rate), NOT the client wall clock. The
+  // local player's predicted timestamps (lastFireAt, reloadingUntil,
+  // invulnerableUntil) live in that clock, so plain Date.now() reads off by the
+  // client↔server clock skew — most visible as the sniper's 1 s fire-cooldown
+  // ring being wrong. Falls back to the snapshot time for non-slot spectators.
+  const hudNow = onl.lastPredSimTime || snap.serverTime;
+  const immuneNow = hudNow;
   getAllFighters().forEach((m) => {
     applyImmunityGlow(m, immuneNow < m.state.invulnerableUntil);
   });
@@ -4435,7 +4442,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateVfx(dt);
   updateCamera();
   updateMechXRayVisibility();
-  updateHud(Date.now());
+  updateHud(hudNow);
 }
 
 function tickOnline(dt, _now) {
