@@ -214,7 +214,7 @@ const UNIT_DATA = {
     // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
-    beam: { durationMs: 500, radius: 1.6 }
+    beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
   }
 };
 
@@ -2117,7 +2117,8 @@ function updateChargedBeams(now, dt) {
       if (st.team && tst.team && st.team === tst.team) continue;
       if (now < tst.invulnerableUntil || now <= tst.stepUntil) continue;
       if (beamPerpDistXZ(beamLike, t.root.position.x, t.root.position.z) >= radius + 1.6) continue;
-      let dmg = u.damage;
+      // The charged sweep channel hits softer than the quick beam / normal shot.
+      let dmg = u.beam?.chargedDamage ?? u.damage;
       if (state.dummyMode && m !== state.player) dmg = 0;
       tst.hp = Math.max(0, tst.hp - dmg);
       if (now >= tst.hitStunUntil || (u.stun?.moveScale ?? 0.25) < tst.hitStunScale) {
