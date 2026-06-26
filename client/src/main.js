@@ -202,11 +202,12 @@ const UNIT_DATA = {
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
     lockRange: 120,
     projectileSpeed: 2000,
-    firePerMinute: 60,         // = 1000 ms cooldown (exact)
+    firePerMinute: 60,
+    fireCooldownMs: 0,         // TEMP: no between-shot cooldown while tuning Kei
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 50,
-    magCapacity: 5,
+    magCapacity: null,         // TEMP: no ammo / reload while tuning Kei
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
@@ -1853,6 +1854,13 @@ function beamPerpDistXZ(b, px, pz) {
 
 function spawnBeamOffline(owner, target) {
   const u = owner.unit;
+  const now = performance.now();
+  // Same ammo + fire-cooldown bookkeeping as spawnProjectiles (which the beam
+  // path replaces), so Kei's beam consumes ammo and respects the fire cooldown.
+  if (u.magCapacity != null && owner.state.ammo <= 0) return;
+  if (now - owner.state.lastFireAt < u.fireCooldownMs) return;
+  owner.state.lastFireAt = now;
+  if (u.magCapacity != null) owner.state.ammo -= 1;
   const ox = owner.root.position.x;
   const oy = owner.root.position.y + 0.8;   // muzzle height (matches projectile spawn)
   const oz = owner.root.position.z;
@@ -1868,7 +1876,7 @@ function spawnBeamOffline(owner, target) {
     owner, team: owner.state.team,
     ox, oy, oz, dx: dir.x, dy: dir.y, dz: dir.z,
     length, radius,
-    expiresAt: performance.now() + durationMs,
+    expiresAt: now + durationMs,
     damage: u.damage,
     hitStunMs: u.stun?.ms ?? 100,
     hitStunScale: u.stun?.moveScale ?? 0.25,
