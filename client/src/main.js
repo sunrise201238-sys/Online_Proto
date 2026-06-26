@@ -202,12 +202,11 @@ const UNIT_DATA = {
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
     lockRange: 120,
     projectileSpeed: 2000,
-    firePerMinute: 60,
-    fireCooldownMs: 0,         // TEMP: no between-shot cooldown while tuning Kei
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 50,
-    magCapacity: null,         // TEMP: no ammo / reload while tuning Kei
+    magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
