@@ -205,7 +205,7 @@ const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    damage: 50,
+    damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
@@ -1821,7 +1821,7 @@ const BEAM_MAX_LENGTH = 400;
 // Kei full-charge sweep beam (照射ビーム channel).
 const KEI_CHARGED_DURATION_MS = 1000;   // how long the channel lasts at full charge
 const KEI_CHARGED_RADIUS_MULT = 1.5;    // charged beam is 1.5× the quick beam's width
-const KEI_BEAM_SWEEP_RATE = 2.6;        // rad/s the beam rotates toward the aim (kept low so it's not twitchy)
+const KEI_BEAM_SWEEP_RATE = 0.785;      // rad/s the beam rotates toward the aim (≈45°/s — deliberate, low sensitivity)
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
@@ -3172,11 +3172,12 @@ function updateEnemy(now) {
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
-        // Release at the earliest legal point (the cancel floor) 80% of the
-        // time; the other 20% releases anywhere in the cancel window.
-        s.sniperChargeUntil = now + (Math.random() < 0.9
-          ? SNIPER_CANCEL_MIN_CHARGE_MS
-          : PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000));
+        // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
+        // to full charge (the sweep channel). Other snipers: 90% floor / 10%
+        // random point in the cancel window.
+        s.sniperChargeUntil = now + (u.beam
+          ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
+          : (Math.random() < 0.9 ? SNIPER_CANCEL_MIN_CHARGE_MS : PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000)));
         s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
       } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
