@@ -1508,7 +1508,7 @@ function tickGlintRemoval(mech) {
   disposeGlintImmediate(mech);
 }
 
-function updateGlintScale(mech) {
+function updateGlintScale(mech, now = performance.now()) {
   if (!mech.glintMesh) return;
   const dist = camera.position.distanceTo(mech.root.position);
   // Grow with distance so the glint stays readable on long-range maps (Streets/Square).
@@ -1518,7 +1518,7 @@ function updateGlintScale(mech) {
   // Kei: the glint grows toward 2× as the charge fills (full charge = 2×).
   if (mech.unit?.beam && mech.state.sniperChargeUntil > 0) {
     const chargeMs = mech.unit.chargeMs ?? 1000;
-    const prog = THREE.MathUtils.clamp(1 - (mech.state.sniperChargeUntil - performance.now()) / chargeMs, 0, 1);
+    const prog = THREE.MathUtils.clamp(1 - (mech.state.sniperChargeUntil - now) / chargeMs, 0, 1);
     s *= (1 + prog);
   }
   mech.glintMesh.scale.set(s, s, 1);
@@ -2124,6 +2124,37 @@ function updateChargedBeams(now, dt) {
       g.position.set(ox + st.chargedBeamDirX * length / 2, oy, oz + st.chargedBeamDirZ * length / 2);
     }
   }
+}
+
+// Online render of charged sweep channels — drives the same persistent mesh
+// from the snapshot-mirrored state (chargedBeamUntil / chargedBeamDirX|Z);
+// damage + steering are server-authoritative (shared tickChargedBeams). `now`
+// is server-clock (hudNow), since chargedBeamUntil is server-clock.
+function syncOnlineChargedBeams(now) {
+  getAllFighters().forEach((m) => {
+    if (!m) return;
+    if (!(m.state.chargedBeamUntil > now)) {
+      if (m.chargedBeamVisual) {
+        scene.remove(m.chargedBeamVisual);
+        m.chargedBeamVisual.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        m.chargedBeamVisual = null;
+      }
+      return;
+    }
+    const radius = (m.unit.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
+    if (!m.chargedBeamVisual) m.chargedBeamVisual = buildChargedBeamMesh(radius);
+    const dx = m.state.chargedBeamDirX;
+    const dz = m.state.chargedBeamDirZ;
+    if (dx * dx + dz * dz < 1e-6) return;
+    const ox = m.root.position.x;
+    const oy = m.root.position.y + 0.8;
+    const oz = m.root.position.z;
+    const length = beamLengthToWall(ox, oy, oz, dx, 0, dz, BEAM_MAX_LENGTH);
+    const g = m.chargedBeamVisual;
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, 0, dz));
+    g.scale.set(1, length, 1);
+    g.position.set(ox + dx * length / 2, oy, oz + dz * length / 2);
+  });
 }
 
 function applyRepulsion(now) {
@@ -4017,6 +4048,10 @@ function mirrorFighterToMech(fighter, mech) {
   s.hitStunScale = fighter.hitStunScale ?? 0.25;
   s.invulnerableUntil = fighter.invulnerableUntil;
   s.overheatedUntil = fighter.overheatedUntil;
+  // Kei charged sweep channel — server-clock timestamps, used to render the beam.
+  s.chargedBeamUntil = fighter.chargedBeamUntil ?? 0;
+  s.chargedBeamDirX = fighter.chargedBeamDirX ?? 0;
+  s.chargedBeamDirZ = fighter.chargedBeamDirZ ?? 0;
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
   //
@@ -4889,12 +4924,13 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateEnemyArrow();
   getAllFighters().forEach((m) => {
     tickGlintRemoval(m);
-    updateGlintScale(m);
+    updateGlintScale(m, hudNow);
   });
   updateVfx(dt);
   updateCamera();
   updateMechXRayVisibility();
   updateBeamVisuals(performance.now());
+  syncOnlineChargedBeams(hudNow);
   updateHud(hudNow);
 }
 
