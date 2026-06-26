@@ -181,6 +181,36 @@ const UNIT_DATA = {
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+  },
+  unit6: {
+    name: 'Unit 6 / Sniper Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'kei', char: 'Kei', accent: 0x9a7be0,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
+    lockRange: 120,
+    projectileSpeed: 2000,
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 50,
+    magCapacity: 5,
+    reloadMs: 2500,
+    autoReload: false,
+    sniperCharge: true,
+    chargeMs: 1000
   }
 };
 
