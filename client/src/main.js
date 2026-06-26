@@ -1573,6 +1573,7 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   // the floor instead of instantly — the target always gets a fixed
   // glint-to-bullet window. Gating registration (not deferring the fire) also
   // means the boost cost is paid exactly once, on the tick the shot releases.
+  let wasCancelled = false;
   if (
     sprintHeld
     && now >= mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000) + SNIPER_CANCEL_MIN_CHARGE_MS
@@ -1582,6 +1583,7 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
     mech.state.boost = Math.max(0, mech.state.boost - SNIPER_CANCEL_BOOST_COST);
     mech.state.refillPausedUntil = now + 500;
     mech.state.sniperChargeUntil = now;
+    wasCancelled = true;
   }
   if (now < mech.state.sniperChargeUntil) {
     mech.body.velocity.x = 0;
@@ -1596,9 +1598,11 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   if (mech.state.hp <= 0) return;
   if (mech.unit.beam) {
     const chargeMs = mech.unit.chargeMs ?? 1000;
-    // Full charge (held all the way) → the 1 s steerable sweep channel; an
-    // early sprint-cancel (or the bot's short release) → the quick fixed beam.
-    if (now - mech.state.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(mech, target);
+    // Full charge → the 1 s steerable sweep channel; an early sprint-cancel (or
+    // the bot's short release) → the quick fixed beam. A sprint-cancel ALWAYS
+    // makes a quick beam even if it lands late — otherwise the still-held sprint
+    // would cancel the channel on its first frame and the beam would never show.
+    if (!wasCancelled && now - mech.state.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(mech, target);
     else spawnBeamOffline(mech, target);
   } else {
     spawnProjectiles(mech, target);
@@ -2017,14 +2021,16 @@ function endChargedBeam(owner, now) {
   owner.state.chargedBeamUntil = 0;
   owner.state.lastFireAt = now;          // cooldown resumes from here
   owner.chargedBeamHitIds = null;
-  if (owner.chargedBeamVisual) {
-    scene.remove(owner.chargedBeamVisual);
-    owner.chargedBeamVisual.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
-      if (o.material) o.material.dispose();
-    });
-    owner.chargedBeamVisual = null;
-  }
+  fadeOutChargedBeamVisual(owner);
+}
+
+// Hand the charged-beam mesh to the fading-beam list so the channel fades over
+// ~0.5 s (like the quick beam) on end/cancel instead of vanishing instantly.
+function fadeOutChargedBeamVisual(owner) {
+  if (!owner.chargedBeamVisual) return;
+  if (!state.beamVisuals) state.beamVisuals = [];
+  state.beamVisuals.push({ group: owner.chargedBeamVisual, spawnAt: performance.now(), durationMs: 500, baseGlow: 0.55, baseCore: 0.97 });
+  owner.chargedBeamVisual = null;
 }
 
 function buildChargedBeamMesh(radius) {
@@ -2137,11 +2143,7 @@ function syncOnlineChargedBeams(now) {
   getAllFighters().forEach((m) => {
     if (!m) return;
     if (!(m.state.chargedBeamUntil > now)) {
-      if (m.chargedBeamVisual) {
-        scene.remove(m.chargedBeamVisual);
-        m.chargedBeamVisual.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-        m.chargedBeamVisual = null;
-      }
+      fadeOutChargedBeamVisual(m);   // fade over ~0.5 s instead of vanishing
       return;
     }
     const radius = (m.unit.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
