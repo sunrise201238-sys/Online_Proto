@@ -1821,7 +1821,7 @@ const BEAM_MAX_LENGTH = 400;
 // Kei full-charge sweep beam (照射ビーム channel).
 const KEI_CHARGED_DURATION_MS = 1000;   // how long the channel lasts at full charge
 const KEI_CHARGED_RADIUS_MULT = 1.5;    // charged beam is 1.5× the quick beam's width
-const KEI_BEAM_SWEEP_RATE = 0.785;      // rad/s the beam rotates toward the aim (≈45°/s — deliberate, low sensitivity)
+const KEI_BEAM_SWEEP_RATE = 0.175;      // rad/s the beam rotates toward the aim (≈10°/s — very low sensitivity)
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
