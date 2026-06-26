@@ -11,7 +11,11 @@ import {
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
   SHOTGUN_CLUSTER_SPREAD_DISTANCE,
-  BEAM_MAX_LENGTH
+  BEAM_MAX_LENGTH,
+  KEI_CHARGED_DURATION_MS,
+  KEI_CHARGED_RADIUS_MULT,
+  KEI_BEAM_SWEEP_RATE,
+  KEI_BEAM_AIM_DEADZONE
 } from './constants.js';
 import {
   clamp,
@@ -369,5 +373,108 @@ export function tickBeams(matchState, now, damageScaler = null) {
         pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
       });
     }
+    _deleteProjectilesInBeam(matchState, b, b.radius);   // #1: laser deletes projectiles it touches
+  }
+}
+
+// Despawn any projectile whose position lies within the beam volume (XZ).
+function _deleteProjectilesInBeam(matchState, b, radius) {
+  for (let i = matchState.projectiles.length - 1; i >= 0; i -= 1) {
+    const p = matchState.projectiles[i];
+    if (beamPerpDistXZ(b, p.pos.x, p.pos.z) >= radius) continue;
+    matchState.projectiles.splice(i, 1);
+    matchState.events.push({ type: 'despawn', id: p.id, reason: 'beam' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kei full-charge SWEEP CHANNEL (照射ビーム) — server-authoritative. The owner is
+// locked (applyInput/tickBot); the beam steers toward the aim and damages each
+// fighter once over KEI_CHARGED_DURATION_MS, deleting projectiles it touches.
+// State (chargedBeamUntil/DirX/DirZ) rides the fighter snapshot so the client
+// renders it each frame. Mirrors offline updateChargedBeams.
+// ---------------------------------------------------------------------------
+export function startChargedBeam(matchState, owner, target, now) {
+  const u = owner.unit;
+  if (u.magCapacity != null) owner.ammo -= 1;   // one shot; lastFireAt set on END (cooldown paused)
+  // Level aim toward the target (degenerate → due +X).
+  let dx = target.pos.x - owner.pos.x;
+  let dz = target.pos.z - owner.pos.z;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-4) { dx = 1; dz = 0; } else { dx /= len; dz /= len; }
+  owner.chargedBeamUntil = now + KEI_CHARGED_DURATION_MS;
+  owner.chargedBeamDirX = dx;
+  owner.chargedBeamDirZ = dz;
+  owner.chargedBeamHitIds = [];
+}
+
+function endChargedBeamShared(f, now) {
+  f.chargedBeamUntil = 0;
+  f.lastFireAt = now;           // cooldown resumes from here
+  f.chargedBeamHitIds = [];
+}
+
+export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles) {
+  const fighters = Object.values(matchState.fighters);
+  for (const f of fighters) {
+    if (!(f.chargedBeamUntil > now)) continue;
+    const u = f.unit;
+    // --- Steer (point & sweep, capped rate) ---
+    const curAngle = Math.atan2(f.chargedBeamDirZ, f.chargedBeamDirX);
+    let targetAngle = curAngle;
+    if (botSet && botSet.has(f.id)) {
+      const tgt = matchState.fighters[f.targetId];
+      if (tgt && tgt.hp > 0) {
+        const ax = tgt.pos.x - f.pos.x;
+        const az = tgt.pos.z - f.pos.z;
+        if (ax * ax + az * az > 1e-4) targetAngle = Math.atan2(az, ax);
+      }
+    } else {
+      const input = inputs[f.id];
+      if (input && (input.boost || input.sprintLocked)) { endChargedBeamShared(f, now); continue; } // sprint cancels
+      if (input && Math.hypot(input.moveX, input.moveZ) > KEI_BEAM_AIM_DEADZONE) {
+        targetAngle = Math.atan2(input.moveZ, input.moveX);
+      }
+    }
+    let delta = targetAngle - curAngle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
+    const newAngle = curAngle + clamp(delta, -maxStep, maxStep);
+    f.chargedBeamDirX = Math.cos(newAngle);
+    f.chargedBeamDirZ = Math.sin(newAngle);
+    // --- Geometry ---
+    const origin = { x: f.pos.x, y: f.pos.y + 3.15, z: f.pos.z };
+    const dir = { x: f.chargedBeamDirX, y: 0, z: f.chargedBeamDirZ };
+    const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
+    const radius = (u.beam?.radius ?? HIT_RADIUS_NORMAL) * KEI_CHARGED_RADIUS_MULT;
+    const beam = { ox: origin.x, oz: origin.z, dx: f.chargedBeamDirX, dz: f.chargedBeamDirZ, length };
+    // --- One hit per fighter ---
+    if (!f.chargedBeamHitIds) f.chargedBeamHitIds = [];
+    for (const t of fighters) {
+      if (t.id === f.id || t.hp <= 0) continue;
+      if (f.chargedBeamHitIds.includes(t.id)) continue;
+      if (f.team && t.team && f.team === t.team) continue;
+      if (now < t.invulnerableUntil || now <= t.stepUntil) continue;
+      if (beamPerpDistXZ(beam, t.pos.x, t.pos.z) >= radius + HIT_RADIUS_NORMAL) continue;
+      const damage = u.damage;
+      t.hp = Math.max(0, t.hp - damage);
+      if (now >= t.hitStunUntil || (u.stun?.moveScale ?? 0.25) < t.hitStunScale) {
+        t.hitStunScale = u.stun?.moveScale ?? 0.25;
+        t.hitStunUntil = now + (u.stun?.ms ?? PROJECTILE_HIT_STUN_MS);
+      }
+      t.momentumVX = 0; t.momentumVZ = 0;
+      t.vel.x = 0; t.vel.y = 0; t.vel.z = 0;
+      f.chargedBeamHitIds.push(t.id);
+      matchState.events.push({
+        type: 'hit', ownerId: f.id, targetId: t.id, damage, targetHp: t.hp,
+        pos: { x: t.pos.x, y: t.pos.y, z: t.pos.z }
+      });
+    }
+    _deleteProjectilesInBeam(matchState, beam, radius);
+  }
+  // End expired channels (cooldown starts here).
+  for (const f of fighters) {
+    if (f.chargedBeamUntil > 0 && !(f.chargedBeamUntil > now)) endChargedBeamShared(f, now);
   }
 }

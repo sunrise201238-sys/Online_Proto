@@ -28,7 +28,7 @@ import {
   faceTowards
 } from './movement.js';
 import { tickAmmo, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
-import { tickProjectiles, tickBeams } from './projectiles.js';
+import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
 
 // One input frame, sent client→server per tick. Defaults to no-op.
 export function emptyInput() {
@@ -62,6 +62,16 @@ function cycleTargetId(matchState, fighter) {
 export function applyInput(matchState, fighter, input, now, obstacles, surfaces) {
   // Sniper charge lock — same gating as updatePlayer.
   if (fighter.sniperChargeTargetId) {
+    fighter.vel.x = 0;
+    fighter.vel.z = 0;
+    fighter.momentumVX = 0;
+    fighter.momentumVZ = 0;
+    fighter.action = 'shoot';
+    return;
+  }
+  // Locked while channeling a charged sweep (the beam steers from the move
+  // input in tickChargedBeams instead of moving).
+  if (fighter.chargedBeamUntil > now) {
     fighter.vel.x = 0;
     fighter.vel.z = 0;
     fighter.momentumVX = 0;
@@ -242,6 +252,10 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
 
   // 9. Beams (Kei 照射ビーム) — one-hit damage volumes, same post-movement timing.
   tickBeams(matchState, now);
+
+  // 10. Kei full-charge sweep channels — steer + one-hit damage + projectile
+  //     deletion for any fighter mid-channel (lock handled in applyInput/tickBot).
+  tickChargedBeams(matchState, inputs, botSet, now, dt, arena.obstacles);
 
   matchState.tick += 1;
   return matchState;

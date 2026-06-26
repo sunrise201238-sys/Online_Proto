@@ -292,6 +292,11 @@ export const FIGHTER_RADIUS = 1.15;
 // Beam (照射ビーム) max length before it's clipped to the first wall. Spans the
 // largest arena, so on open ground the beam reaches the far edge.
 export const BEAM_MAX_LENGTH = 400;
+// Kei full-charge sweep channel (照射ビーム). Mirrors the offline constants.
+export const KEI_CHARGED_DURATION_MS = 1000;  // channel length at full charge
+export const KEI_CHARGED_RADIUS_MULT = 1.5;   // charged beam is 1.5× the quick beam's width
+export const KEI_BEAM_SWEEP_RATE = 0.175;     // rad/s the beam rotates toward the aim (≈10°/s)
+export const KEI_BEAM_AIM_DEADZONE = 0.3;     // move-input magnitude below this = hold direction
 
 // Projectile lifetime (seconds).
 export const PROJECTILE_TTL_S = 2.2;

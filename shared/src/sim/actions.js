@@ -22,7 +22,7 @@ import {
   SNIPER_CANCEL_MIN_CHARGE_MS,
   BOOST_REFILL_PAUSE_MS
 } from './constants.js';
-import { spawnProjectiles, spawnBeam } from './projectiles.js';
+import { spawnProjectiles, spawnBeam, startChargedBeam } from './projectiles.js';
 import { unitOverlapsObstacle } from './physics.js';
 import { inheritMomentum } from './movement.js';
 
@@ -73,6 +73,7 @@ export function attemptFire(matchState, owner, target, now) {
     if (now - owner.lastFireAt < u.fireCooldownMs) return false;
     const chargeMs = u.chargeMs ?? 1000;
     owner.sniperChargeUntil = now + chargeMs;
+    owner.sniperChargeStartAt = now;
     owner.sniperChargeTargetId = target.id;
     owner.vel.x = 0;
     owner.vel.z = 0;
@@ -136,8 +137,14 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
   // Sniper fires using the same ammo/cooldown gates as a regular shot.
   fighter.lastFireAt = now;
   if (fighter.unit.magCapacity != null) fighter.ammo -= 1;
-  if (fighter.unit.beam) spawnBeam(matchState, fighter, target, now, obstacles);
-  else spawnProjectiles(matchState, fighter, target);
+  if (fighter.unit.beam) {
+    const chargeMs = fighter.unit.chargeMs ?? 1000;
+    // Full charge → the 1 s steerable sweep channel; early release → quick beam.
+    if (now - fighter.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(matchState, fighter, target, now);
+    else spawnBeam(matchState, fighter, target, now, obstacles);
+  } else {
+    spawnProjectiles(matchState, fighter, target);
+  }
   matchState.events.push({ type: 'sniper-charge-fire', ownerId: fighter.id });
 }
 

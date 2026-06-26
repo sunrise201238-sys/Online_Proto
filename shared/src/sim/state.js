@@ -91,7 +91,14 @@ export function createFighter(id, unitKey, spawn) {
 
     // Sniper charge.
     sniperChargeUntil: 0,
+    sniperChargeStartAt: 0,
     sniperChargeTargetId: null,
+    // Kei full-charge sweep channel (chargedBeamUntil>now = active; owner locked,
+    // beam steers toward chargedBeamDir; one hit per fighter via chargedBeamHitIds).
+    chargedBeamUntil: 0,
+    chargedBeamDirX: 0,
+    chargedBeamDirZ: 0,
+    chargedBeamHitIds: [],
 
     // Cached unit reference is convenient at call sites; clients can
     // re-read it from UNIT_DATA[unitKey] if they want.

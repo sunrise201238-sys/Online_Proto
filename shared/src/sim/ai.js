@@ -277,6 +277,15 @@ export function tickBot(matchState, botId, now) {
     me.action = 'shoot';
     return;
   }
+  // Locked while channeling a charged sweep (beam tracks target in tickChargedBeams).
+  if (me.chargedBeamUntil > now) {
+    me.vel.x = 0;
+    me.vel.z = 0;
+    me.momentumVX = 0;
+    me.momentumVZ = 0;
+    me.action = 'shoot';
+    return;
+  }
 
   const arena = getArena(matchState.mapKey);
   const obstacles = arena.obstacles;
