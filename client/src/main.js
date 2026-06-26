@@ -2004,13 +2004,17 @@ function startChargedBeam(owner, target) {
   const now = performance.now();
   if (u.magCapacity != null && owner.state.ammo <= 0) return;
   if (u.magCapacity != null) owner.state.ammo -= 1;
-  // lastFireAt is deliberately NOT set here — the cooldown is paused until the
-  // channel ends (endChargedBeam writes it).
   const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
   dir.y = 0;
   if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
   dir.normalize();
   owner.state.chargedBeamUntil = now + KEI_CHARGED_DURATION_MS;
+  // Cooldown is paused during the channel and starts at its end. Park lastFireAt
+  // at the scheduled end NOW so the charge-init gate blocks a re-charge until
+  // end + fireCooldownMs — even on the frame the channel expires, where
+  // updatePlayer (charge-init) runs before updateChargedBeams (endChargedBeam).
+  // endChargedBeam overwrites it with the real end time on an early sprint-cancel.
+  owner.state.lastFireAt = owner.state.chargedBeamUntil;
   owner.state.chargedBeamDirX = dir.x;
   owner.state.chargedBeamDirZ = dir.z;
   owner.chargedBeamHitIds = [];
