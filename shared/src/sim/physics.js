@@ -38,6 +38,50 @@ export function segmentHitsObstacle(p0, p1, o) {
   return true;
 }
 
+// Distance from `origin` along unit `dir` to the nearest obstacle face, clamped
+// to maxLen. Used to stop a hitscan beam at the first wall. Skips noProjectile
+// obstacles; the 3D slab test naturally lets the beam pass over/under obstacles
+// it clears vertically (e.g. low cover when the beam flies at chest height).
+export function raycastObstacleDistance(origin, dir, maxLen, obstacles) {
+  const ex = origin.x + dir.x * maxLen;
+  const ey = origin.y + dir.y * maxLen;
+  const ez = origin.z + dir.z * maxLen;
+  let best = maxLen;
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const o = obstacles[i];
+    if (o.noProjectile) continue;
+    let tMin = 0;
+    let tMax = 1;
+    let miss = false;
+    const axes = [
+      [origin.x, ex - origin.x, o.minX, o.maxX],
+      [origin.y, ey - origin.y, o.minY, o.maxY],
+      [origin.z, ez - origin.z, o.minZ, o.maxZ]
+    ];
+    for (let a = 0; a < 3; a += 1) {
+      const start = axes[a][0];
+      const delta = axes[a][1];
+      const lo = axes[a][2];
+      const hi = axes[a][3];
+      if (Math.abs(delta) < 1e-9) {
+        if (start < lo || start > hi) { miss = true; break; }
+      } else {
+        const t1 = (lo - start) / delta;
+        const t2 = (hi - start) / delta;
+        const tNear = t1 < t2 ? t1 : t2;
+        const tFar = t1 < t2 ? t2 : t1;
+        if (tNear > tMin) tMin = tNear;
+        if (tFar < tMax) tMax = tFar;
+        if (tMin > tMax) { miss = true; break; }
+      }
+    }
+    if (miss) continue;
+    const d = tMin * maxLen;
+    if (d >= 0 && d < best) best = d;
+  }
+  return best;
+}
+
 // Does a fighter's bounding cylinder at (x, y, z) overlap any AABB obstacle?
 export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS) {
   for (let i = 0; i < obstacles.length; i += 1) {

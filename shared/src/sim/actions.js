@@ -22,7 +22,7 @@ import {
   SNIPER_CANCEL_MIN_CHARGE_MS,
   BOOST_REFILL_PAUSE_MS
 } from './constants.js';
-import { spawnProjectiles } from './projectiles.js';
+import { spawnProjectiles, spawnBeam } from './projectiles.js';
 import { unitOverlapsObstacle } from './physics.js';
 import { inheritMomentum } from './movement.js';
 
@@ -104,7 +104,7 @@ function _spawnNonCharge(matchState, owner, target, now) {
 // always gets a fixed glint-to-bullet window. Gating registration (rather than
 // deferring the fire) also means the boost cost is paid exactly once, on the
 // tick the shot actually releases.
-export function tickSniperCharge(matchState, fighter, now, input = null) {
+export function tickSniperCharge(matchState, fighter, now, input = null, obstacles = null) {
   if (!fighter.sniperChargeTargetId) return;
 
   const sprintHeld = !!(input && (input.boost || input.sprintLocked));
@@ -136,7 +136,8 @@ export function tickSniperCharge(matchState, fighter, now, input = null) {
   // Sniper fires using the same ammo/cooldown gates as a regular shot.
   fighter.lastFireAt = now;
   if (fighter.unit.magCapacity != null) fighter.ammo -= 1;
-  spawnProjectiles(matchState, fighter, target);
+  if (fighter.unit.beam) spawnBeam(matchState, fighter, target, now, obstacles);
+  else spawnProjectiles(matchState, fighter, target);
   matchState.events.push({ type: 'sniper-charge-fire', ownerId: fighter.id });
 }
 

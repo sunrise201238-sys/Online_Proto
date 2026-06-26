@@ -182,7 +182,11 @@ export const UNIT_DATA = {
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
-    chargeMs: 1000
+    chargeMs: 1000,
+    // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
+    // release an instant wide line appears (blocked by walls), damaging each
+    // enemy once during durationMs, then fading. radius = visual half-width.
+    beam: { durationMs: 500, radius: 1.6 }
   }
 };
 
@@ -284,6 +288,10 @@ export const GRAVITY_Y = -80.19;
 // Fighter collision radius (X/Z, used for unit-vs-obstacle checks and the
 // repulsion soft-collide).
 export const FIGHTER_RADIUS = 1.15;
+
+// Beam (照射ビーム) max length before it's clipped to the first wall. Spans the
+// largest arena, so on open ground the beam reaches the far edge.
+export const BEAM_MAX_LENGTH = 400;
 
 // Projectile lifetime (seconds).
 export const PROJECTILE_TTL_S = 2.2;

@@ -206,6 +206,10 @@ export function createMatchState({
     mapKey,
     fighters,
     projectiles: [],
+    // Active 照射ビーム beams (Kei). Server-authoritative one-hit damage volumes
+    // that live for durationMs; the client renders them off the 'beam-fired'
+    // event rather than from this array.
+    beams: [],
     // Per-tick events the client uses to spawn one-shot VFX (hits, fires,
     // expirations). Cleared at the top of every tick.
     events: []

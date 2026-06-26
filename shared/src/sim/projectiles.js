@@ -10,7 +10,8 @@ import {
   HIT_HALF_HEIGHT,
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
-  SHOTGUN_CLUSTER_SPREAD_DISTANCE
+  SHOTGUN_CLUSTER_SPREAD_DISTANCE,
+  BEAM_MAX_LENGTH
 } from './constants.js';
 import {
   clamp,
@@ -25,7 +26,7 @@ import {
   closestPointOnSegment
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
-import { segmentHitsObstacle, projectileHitsSurface } from './physics.js';
+import { segmentHitsObstacle, projectileHitsSurface, raycastObstacleDistance } from './physics.js';
 
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
@@ -288,4 +289,85 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
 function _despawn(matchState, projectiles, idx, p, reason) {
   projectiles.splice(idx, 1);
   matchState.events.push({ type: 'despawn', id: p.id, reason });
+}
+
+// ---------------------------------------------------------------------------
+// 照射ビーム (Kei). An instant hitscan laser: on fire a wide line appears from
+// the muzzle along the aim, clipped to the first wall, and lives for durationMs.
+// Each enemy takes the unit's damage ONCE during that window (re-hittable only
+// by a new beam) — so a dodge avoids it only if the enemy is out of the line
+// (or still i-framed) when the window ends. Emits a 'beam-fired' event the
+// client renders; the array here is purely server-side for hit detection.
+// ---------------------------------------------------------------------------
+export function spawnBeam(matchState, owner, target, now, obstacles) {
+  if (!matchState.beams) matchState.beams = []; // predicted states clone from a beam-less snapshot
+  const u = owner.unit;
+  const origin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
+  // Level aim toward the target (feet→feet ⇒ dy = 0), same as the projectile.
+  const dir = vec3Normalize(vec3Sub(target.pos, owner.pos));
+  const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
+  const radius = u.beam?.radius ?? HIT_RADIUS_NORMAL;
+  const durationMs = u.beam?.durationMs ?? 500;
+  matchState.beams.push({
+    ownerId: owner.id,
+    team: owner.team,
+    ox: origin.x, oy: origin.y, oz: origin.z,
+    dx: dir.x, dy: dir.y, dz: dir.z,
+    length, radius,
+    expiresAt: now + durationMs,
+    damage: u.damage,
+    hitStunMs: u.stun?.ms ?? PROJECTILE_HIT_STUN_MS,
+    hitStunScale: u.stun?.moveScale ?? 0.25,
+    hitIds: []
+  });
+  matchState.events.push({
+    type: 'beam-fired', ownerId: owner.id,
+    ox: origin.x, oy: origin.y, oz: origin.z,
+    dx: dir.x, dy: dir.y, dz: dir.z,
+    length, radius, durationMs
+  });
+}
+
+// Perpendicular distance (XZ) from a point to the beam's clamped segment. The
+// beam is level so Y is ignored (the tall capsule always overlaps it on ground).
+function beamPerpDistXZ(b, px, pz) {
+  let t = (px - b.ox) * b.dx + (pz - b.oz) * b.dz;
+  if (t < 0) t = 0; else if (t > b.length) t = b.length;
+  const cx = b.ox + b.dx * t;
+  const cz = b.oz + b.dz * t;
+  const dx = px - cx;
+  const dz = pz - cz;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+// Per-tick beam update: expire, then one-hit damage to any enemy in the line.
+export function tickBeams(matchState, now, damageScaler = null) {
+  const beams = matchState.beams;
+  if (!beams || beams.length === 0) return;
+  const fighters = Object.values(matchState.fighters);
+  for (let i = beams.length - 1; i >= 0; i -= 1) {
+    const b = beams[i];
+    if (now >= b.expiresAt) { beams.splice(i, 1); continue; }
+    for (const f of fighters) {
+      if (f.hp <= 0 || f.id === b.ownerId) continue;
+      if (b.hitIds.includes(f.id)) continue;
+      if (b.team && f.team && b.team === f.team) continue;   // friendly fire off
+      if (now < f.invulnerableUntil) continue;               // spawn protection
+      if (now <= f.stepUntil) continue;                      // dodge i-frames
+      if (beamPerpDistXZ(b, f.pos.x, f.pos.z) >= b.radius + HIT_RADIUS_NORMAL) continue;
+      const damage = damageScaler ? damageScaler(b) : b.damage;
+      f.hp = Math.max(0, f.hp - damage);
+      if (now >= f.hitStunUntil || b.hitStunScale < f.hitStunScale) {
+        f.hitStunScale = b.hitStunScale;
+        f.hitStunUntil = now + b.hitStunMs;
+      }
+      f.momentumVX = 0; f.momentumVZ = 0;
+      f.vel.x = 0; f.vel.y = 0; f.vel.z = 0;
+      b.hitIds.push(f.id);
+      matchState.events.push({
+        type: 'hit', ownerId: b.ownerId, targetId: f.id, damage, targetHp: f.hp,
+        pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
+      });
+    }
+  }
 }

@@ -28,7 +28,7 @@ import {
   faceTowards
 } from './movement.js';
 import { tickAmmo, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
-import { tickProjectiles } from './projectiles.js';
+import { tickProjectiles, tickBeams } from './projectiles.js';
 
 // One input frame, sent client→server per tick. Defaults to no-op.
 export function emptyInput() {
@@ -186,7 +186,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 1. Per-fighter pre-tick (ammo, sniper charge timer).
   for (const f of fighters) {
     tickAmmo(f, now);
-    tickSniperCharge(matchState, f, now, inputs[f.id] ?? null);
+    tickSniperCharge(matchState, f, now, inputs[f.id] ?? null, arena.obstacles);
   }
 
   // 2. Apply human inputs. Bot fighters skip applyInput (tickBot has already
@@ -239,6 +239,9 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
 
   // 8. Projectiles tick last so they react to the new fighter positions.
   tickProjectiles(matchState, dt, now, arena.obstacles, arena.surfaces);
+
+  // 9. Beams (Kei 照射ビーム) — one-hit damage volumes, same post-movement timing.
+  tickBeams(matchState, now);
 
   matchState.tick += 1;
   return matchState;
