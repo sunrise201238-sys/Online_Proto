@@ -139,8 +139,10 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
   if (fighter.unit.magCapacity != null) fighter.ammo -= 1;
   if (fighter.unit.beam) {
     const chargeMs = fighter.unit.chargeMs ?? 1000;
-    // Full charge → the 1 s steerable sweep channel; early release → quick beam.
-    if (now - fighter.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(matchState, fighter, target, now);
+    // Sprint-cancel always → quick beam (a late cancel would otherwise start a
+    // channel that the still-held sprint kills on frame 1); full natural charge
+    // → the sweep channel.
+    if (!cancelled && now - fighter.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(matchState, fighter, target, now);
     else spawnBeam(matchState, fighter, target, now, obstacles);
   } else {
     spawnProjectiles(matchState, fighter, target);
