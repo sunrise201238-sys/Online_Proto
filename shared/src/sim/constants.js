@@ -186,7 +186,7 @@ export const UNIT_DATA = {
     // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
-    beam: { durationMs: 500, radius: 1.6 }
+    beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
   }
 };
 

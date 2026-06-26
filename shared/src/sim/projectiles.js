@@ -464,7 +464,8 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       if (f.team && t.team && f.team === t.team) continue;
       if (now < t.invulnerableUntil || now <= t.stepUntil) continue;
       if (beamPerpDistXZ(beam, t.pos.x, t.pos.z) >= radius + HIT_RADIUS_NORMAL) continue;
-      const damage = u.damage;
+      // The charged sweep channel hits softer than the quick beam / normal shot.
+      const damage = u.beam?.chargedDamage ?? u.damage;
       t.hp = Math.max(0, t.hp - damage);
       if (now >= t.hitStunUntil || (u.stun?.moveScale ?? 0.25) < t.hitStunScale) {
         t.hitStunScale = u.stun?.moveScale ?? 0.25;
