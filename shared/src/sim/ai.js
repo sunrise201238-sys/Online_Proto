@@ -745,11 +745,12 @@ export function tickBot(matchState, botId, now) {
     } else if (u.sniperCharge) {
       const fired = attemptFire(matchState, me, opp, now);
       if (fired) {
-        // Release at the earliest legal point (the cancel floor) 80% of the
-        // time; the other 20% releases anywhere in the cancel window.
-        me.sniperChargeUntil = now + (Math.random() < 0.9
-          ? SNIPER_CANCEL_MIN_CHARGE_MS
-          : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000));
+        // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
+        // to full charge (the sweep channel). Other snipers: 90% floor / 10%
+        // random point in the cancel window.
+        me.sniperChargeUntil = now + (u.beam
+          ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
+          : (Math.random() < 0.9 ? SNIPER_CANCEL_MIN_CHARGE_MS : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000)));
         me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;

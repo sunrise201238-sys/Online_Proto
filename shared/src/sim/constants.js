@@ -177,7 +177,7 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    damage: 50,
+    damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
