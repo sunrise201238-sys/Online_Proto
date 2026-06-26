@@ -395,8 +395,10 @@ function _deleteProjectilesInBeam(matchState, b, radius) {
 // renders it each frame. Mirrors offline updateChargedBeams.
 // ---------------------------------------------------------------------------
 export function startChargedBeam(matchState, owner, target, now) {
-  const u = owner.unit;
-  if (u.magCapacity != null) owner.ammo -= 1;   // one shot
+  // Ammo (and lastFireAt) are already paid by tickSniperCharge for every sniper
+  // fire before this call, so we must NOT decrement ammo again here — doing so
+  // double-spent ammo on the charged path online (the quick-beam and regular
+  // sniper paths never decrement here either; they rely on tickSniperCharge).
   // Level aim toward the target (degenerate → due +X).
   let dx = target.pos.x - owner.pos.x;
   let dz = target.pos.z - owner.pos.z;
