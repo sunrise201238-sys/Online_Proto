@@ -14,6 +14,7 @@
 #   aru      -> Unit 3 / Sniper Rifle    (PSG1)
 #   atsuko   -> Unit 4 / Submachine Gun
 #   hina     -> Unit 5 / Machine Gun
+#   kei      -> Unit 6 / Sniper Rifle  (clone of Unit 3, to be tuned)
 #
 # ============================================================================
 # 3D MODELS — <key>.glb  (+ optional <key>_gun.glb)
