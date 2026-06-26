@@ -758,7 +758,10 @@ function updateUnitSpriteState(m, rig, dt, now) {
   // modes (offline clears it when the shot fires; online mirrors the server flag),
   // so it needs no clock comparison.
   const charging = !!st.sniperChargeTarget;
-  const firing = now < rig.fireUntil || charging;
+  // Kei's full-charge sweep channel also holds the shoot pose: lastFireAt is
+  // paused during it so rig.fireUntil doesn't cover it. chargedBeamUntil is 0
+  // when idle, so this check reads correctly offline and online alike.
+  const firing = now < rig.fireUntil || charging || st.chargedBeamUntil > now;
 
   // Priority: dodge > sprint > shoot > stand (sprint/dodge outrank shoot, so a
   // unit firing mid-dash/run keeps its motion pose — no shoot-frame cut-in).
