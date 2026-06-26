@@ -396,13 +396,18 @@ function _deleteProjectilesInBeam(matchState, b, radius) {
 // ---------------------------------------------------------------------------
 export function startChargedBeam(matchState, owner, target, now) {
   const u = owner.unit;
-  if (u.magCapacity != null) owner.ammo -= 1;   // one shot; lastFireAt set on END (cooldown paused)
+  if (u.magCapacity != null) owner.ammo -= 1;   // one shot
   // Level aim toward the target (degenerate → due +X).
   let dx = target.pos.x - owner.pos.x;
   let dz = target.pos.z - owner.pos.z;
   const len = Math.hypot(dx, dz);
   if (len < 1e-4) { dx = 1; dz = 0; } else { dx /= len; dz /= len; }
   owner.chargedBeamUntil = now + KEI_CHARGED_DURATION_MS;
+  // Cooldown pauses during the channel and starts at its end: park lastFireAt at
+  // the scheduled end so the charge-init gate blocks a re-charge until end +
+  // cooldown even on the expiry frame (applyInput runs before tickChargedBeams).
+  // endChargedBeamShared overwrites it with the real end on an early cancel.
+  owner.lastFireAt = owner.chargedBeamUntil;
   owner.chargedBeamDirX = dx;
   owner.chargedBeamDirZ = dz;
   owner.chargedBeamHitIds = [];
