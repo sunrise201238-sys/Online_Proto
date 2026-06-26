@@ -921,7 +921,13 @@ function createMech(color, unitData, isOwnUnit = false) {
       reloadingUntil: 0,
       reloadTickStartAt: 0,
       sniperChargeUntil: 0,
-      sniperChargeTarget: null
+      sniperChargeStartAt: 0,
+      sniperChargeTarget: null,
+      // Kei full-charge sweep beam: chargedBeamUntil>now = the 1 s channel is
+      // active (owner locked, joystick steers chargedBeamDir).
+      chargedBeamUntil: 0,
+      chargedBeamDirX: 0,
+      chargedBeamDirZ: 0
     }
   };
 
@@ -1508,7 +1514,13 @@ function updateGlintScale(mech) {
   // Grow with distance so the glint stays readable on long-range maps (Streets/Square).
   const base = mech.glintBaseScale ?? 0.55;
   const max = mech.glintMaxScale ?? 6.5;
-  const s = THREE.MathUtils.clamp(base + dist * 0.05, base, max);
+  let s = THREE.MathUtils.clamp(base + dist * 0.05, base, max);
+  // Kei: the glint grows toward 2× as the charge fills (full charge = 2×).
+  if (mech.unit?.beam && mech.state.sniperChargeUntil > 0) {
+    const chargeMs = mech.unit.chargeMs ?? 1000;
+    const prog = THREE.MathUtils.clamp(1 - (mech.state.sniperChargeUntil - performance.now()) / chargeMs, 0, 1);
+    s *= (1 + prog);
+  }
   mech.glintMesh.scale.set(s, s, 1);
 }
 
@@ -1534,6 +1546,7 @@ function attemptFire(owner, target, now) {
     if (now - owner.state.lastFireAt < u.fireCooldownMs) return false;
     const chargeMs = u.chargeMs ?? 1000;
     owner.state.sniperChargeUntil = now + chargeMs;
+    owner.state.sniperChargeStartAt = now;
     owner.state.sniperChargeTarget = target;
     owner.body.velocity.x = 0;
     owner.body.velocity.z = 0;
@@ -1578,8 +1591,15 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   mech.state.sniperChargeUntil = 0;
   removeGlintFromMech(mech);
   if (mech.state.hp <= 0) return;
-  if (mech.unit.beam) spawnBeamOffline(mech, target);
-  else spawnProjectiles(mech, target);
+  if (mech.unit.beam) {
+    const chargeMs = mech.unit.chargeMs ?? 1000;
+    // Full charge (held all the way) → the 1 s steerable sweep channel; an
+    // early sprint-cancel (or the bot's short release) → the quick fixed beam.
+    if (now - mech.state.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(mech, target);
+    else spawnBeamOffline(mech, target);
+  } else {
+    spawnProjectiles(mech, target);
+  }
 }
 
 function getProjectileDamage(projectile) {
@@ -1798,6 +1818,11 @@ function updateProjectileSystem(dt) {
 // 'beam-fired' event instead of the gameplay array.
 // ---------------------------------------------------------------------------
 const BEAM_MAX_LENGTH = 400;
+// Kei full-charge sweep beam (照射ビーム channel).
+const KEI_CHARGED_DURATION_MS = 1000;   // how long the channel lasts at full charge
+const KEI_CHARGED_RADIUS_MULT = 1.5;    // charged beam is 1.5× the quick beam's width
+const KEI_BEAM_SWEEP_RATE = 2.6;        // rad/s the beam rotates toward the aim (kept low so it's not twitchy)
+const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
 // maxLen. Mirrors shared raycastObstacleDistance (same slab method).
@@ -1912,6 +1937,7 @@ function updateBeamDamage(now) {
       spawnHitEffect(m.root.position, m === state.player ? 0x67f2ff : 0xff73d2);
       b.hitIds.push(m);
     }
+    deleteProjectilesInBeam(b, b.radius);   // #1: the laser deletes projectiles it touches
   }
 }
 
@@ -1956,6 +1982,147 @@ function updateBeamVisuals(now) {
     const fade = 1 - t;
     bv.group.children[0].material.opacity = bv.baseGlow * fade;
     bv.group.children[1].material.opacity = bv.baseCore * fade;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kei full charge → 照射ビーム SWEEP CHANNEL. The owner is locked for
+// KEI_CHARGED_DURATION_MS; the 1.5×-wide beam follows the muzzle, damages each
+// enemy once, deletes projectiles it touches, and steers — the player's
+// joystick rotates it toward the aim at a capped rate (bots track their
+// target). Sprint cancels it; the fire cooldown only starts when it ends.
+// ---------------------------------------------------------------------------
+function startChargedBeam(owner, target) {
+  const u = owner.unit;
+  const now = performance.now();
+  if (u.magCapacity != null && owner.state.ammo <= 0) return;
+  if (u.magCapacity != null) owner.state.ammo -= 1;
+  // lastFireAt is deliberately NOT set here — the cooldown is paused until the
+  // channel ends (endChargedBeam writes it).
+  const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
+  dir.y = 0;
+  if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+  dir.normalize();
+  owner.state.chargedBeamUntil = now + KEI_CHARGED_DURATION_MS;
+  owner.state.chargedBeamDirX = dir.x;
+  owner.state.chargedBeamDirZ = dir.z;
+  owner.chargedBeamHitIds = [];
+  owner.chargedBeamVisual = buildChargedBeamMesh((u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT);
+}
+
+function endChargedBeam(owner, now) {
+  owner.state.chargedBeamUntil = 0;
+  owner.state.lastFireAt = now;          // cooldown resumes from here
+  owner.chargedBeamHitIds = null;
+  if (owner.chargedBeamVisual) {
+    scene.remove(owner.chargedBeamVisual);
+    owner.chargedBeamVisual.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    owner.chargedBeamVisual = null;
+  }
+}
+
+function buildChargedBeamMesh(radius) {
+  const group = new THREE.Group();
+  const glow = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 1, 16, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffc7e2, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.32, radius * 0.32, 1, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff0f7, transparent: true, opacity: 0.97, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  group.add(glow);
+  group.add(core);
+  group.renderOrder = 9998;
+  scene.add(group);
+  return group;
+}
+
+// Despawn any projectile whose position lies within the beam volume (XZ).
+function deleteProjectilesInBeam(beamLike, radius) {
+  for (let i = state.projectiles.length - 1; i >= 0; i -= 1) {
+    const p = state.projectiles[i];
+    if (!p.mesh) continue;
+    if (beamPerpDistXZ(beamLike, p.mesh.position.x, p.mesh.position.z) >= radius) continue;
+    despawnProjectileTrail(p, performance.now());
+    disposeProjectileMesh(p.mesh);
+    state.projectiles.splice(i, 1);
+  }
+}
+
+function updateChargedBeams(now, dt) {
+  for (const m of getAllFighters()) {
+    if (!m) continue;
+    if (!(m.state.chargedBeamUntil > now)) {
+      if (m.chargedBeamVisual) endChargedBeam(m, now);   // expired this frame
+      continue;
+    }
+    const u = m.unit;
+    const st = m.state;
+    // --- Steer (point & sweep, capped rate) ---
+    const curAngle = Math.atan2(st.chargedBeamDirZ, st.chargedBeamDirX);
+    let targetAngle = curAngle;
+    if (m === state.player) {
+      if (input.boostHeld || input.sprintLocked) { endChargedBeam(m, now); continue; } // sprint cancels
+      if (Math.hypot(input.x, input.y) > KEI_BEAM_AIM_DEADZONE) {
+        const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+        const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+        const aim = fwd.multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
+        if (aim.lengthSq() > 1e-4) targetAngle = Math.atan2(aim.z, aim.x);
+      }
+    } else {
+      const tgt = pickClosestEnemyOf(m) ?? state.player;
+      if (tgt && tgt.state.hp > 0) {
+        const ax = tgt.root.position.x - m.root.position.x;
+        const az = tgt.root.position.z - m.root.position.z;
+        if (ax * ax + az * az > 1e-4) targetAngle = Math.atan2(az, ax);
+      }
+    }
+    let delta = targetAngle - curAngle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
+    const newAngle = curAngle + THREE.MathUtils.clamp(delta, -maxStep, maxStep);
+    st.chargedBeamDirX = Math.cos(newAngle);
+    st.chargedBeamDirZ = Math.sin(newAngle);
+    // --- Geometry ---
+    const ox = m.root.position.x;
+    const oy = m.root.position.y + 0.8;
+    const oz = m.root.position.z;
+    const radius = (u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
+    const length = beamLengthToWall(ox, oy, oz, st.chargedBeamDirX, 0, st.chargedBeamDirZ, BEAM_MAX_LENGTH);
+    const beamLike = { ox, oz, dx: st.chargedBeamDirX, dz: st.chargedBeamDirZ, length };
+    // --- One-hit damage ---
+    if (!m.chargedBeamHitIds) m.chargedBeamHitIds = [];
+    for (const t of getAllFighters()) {
+      if (!t || t === m) continue;
+      const tst = t.state;
+      if (tst.hp <= 0 || m.chargedBeamHitIds.includes(t)) continue;
+      if (st.team && tst.team && st.team === tst.team) continue;
+      if (now < tst.invulnerableUntil || now <= tst.stepUntil) continue;
+      if (beamPerpDistXZ(beamLike, t.root.position.x, t.root.position.z) >= radius + 1.6) continue;
+      let dmg = u.damage;
+      if (state.dummyMode && m !== state.player) dmg = 0;
+      tst.hp = Math.max(0, tst.hp - dmg);
+      if (now >= tst.hitStunUntil || (u.stun?.moveScale ?? 0.25) < tst.hitStunScale) {
+        tst.hitStunScale = u.stun?.moveScale ?? 0.25;
+        tst.hitStunUntil = now + (u.stun?.ms ?? 100);
+      }
+      tst.momentumVX = 0; tst.momentumVZ = 0; t.body.velocity.set(0, 0, 0);
+      spawnHitEffect(t.root.position, t === state.player ? 0x67f2ff : 0xff73d2);
+      m.chargedBeamHitIds.push(t);
+    }
+    deleteProjectilesInBeam(beamLike, radius);
+    // --- Visual: stretch + orient the persistent mesh along the beam ---
+    if (m.chargedBeamVisual) {
+      const g = m.chargedBeamVisual;
+      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(st.chargedBeamDirX, 0, st.chargedBeamDirZ));
+      g.scale.set(1, length, 1);
+      g.position.set(ox + st.chargedBeamDirX * length / 2, oy, oz + st.chargedBeamDirZ * length / 2);
+    }
   }
 }
 
@@ -2043,6 +2210,17 @@ function updatePlayer(now) {
     return;
   }
   if (state.player.state.sniperChargeTarget) {
+    state.player.body.velocity.x = 0;
+    state.player.body.velocity.z = 0;
+    state.player.state.momentumVX = 0;
+    state.player.state.momentumVZ = 0;
+    state.player.state.action = 'shoot';
+    updateBoost(state.player, now, 'shoot');
+    return;
+  }
+  // Locked during the charged sweep channel — the joystick becomes the aimer
+  // (handled in updateChargedBeams), not movement.
+  if (state.player.state.chargedBeamUntil > now) {
     state.player.body.velocity.x = 0;
     state.player.body.velocity.z = 0;
     state.player.state.momentumVX = 0;
@@ -2458,6 +2636,16 @@ function findDescentDirection(px, pz, myFloorY, awayX, awayZ) {
 
 function updateEnemy(now) {
   if (state.enemy.state.sniperChargeTarget) {
+    state.enemy.body.velocity.x = 0;
+    state.enemy.body.velocity.z = 0;
+    state.enemy.state.momentumVX = 0;
+    state.enemy.state.momentumVZ = 0;
+    state.enemy.state.action = 'shoot';
+    updateBoost(state.enemy, now, 'shoot');
+    return;
+  }
+  // Locked while channeling a charged sweep (beam steers toward target in updateChargedBeams).
+  if (state.enemy.state.chargedBeamUntil > now) {
     state.enemy.body.velocity.x = 0;
     state.enemy.body.velocity.z = 0;
     state.enemy.state.momentumVX = 0;
@@ -3540,6 +3728,11 @@ function cleanupMatch() {
     if (!m) return;
     disposeGlintImmediate(m);
     removeImmunityAuraFromMech(m);
+    if (m.chargedBeamVisual) {
+      scene.remove(m.chargedBeamVisual);
+      m.chargedBeamVisual.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      m.chargedBeamVisual = null;
+    }
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
@@ -7811,6 +8004,7 @@ function animate() {
       });
       updateProjectileSystem(dt);
       updateBeamDamage(now);
+      updateChargedBeams(now, dt);
       updateBeamVisuals(performance.now());
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
