@@ -210,7 +210,11 @@ const UNIT_DATA = {
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
-    chargeMs: 1000
+    chargeMs: 1000,
+    // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
+    // release an instant wide line appears (blocked by walls), damaging each
+    // enemy once during durationMs, then fading. radius = visual half-width.
+    beam: { durationMs: 500, radius: 1.6 }
   }
 };
 
@@ -1400,17 +1404,47 @@ function createGlintForMech(mech) {
     mech.glintPendingRemove = false;
     return;
   }
+  const isBeam = !!mech.unit?.beam;
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = isBeam ? 128 : 64;
   const x = c.getContext('2d');
-  const grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  grad.addColorStop(0.45, 'rgba(248, 248, 248, 0.85)');
-  grad.addColorStop(1, 'rgba(238, 238, 238, 0)');
-  x.fillStyle = grad;
-  x.beginPath();
-  x.arc(32, 32, 32, 0, Math.PI * 2);
-  x.fill();
+  if (isBeam) {
+    // Kei 照射ビーム charge: a bigger, very-light-pink glint with thin geometric
+    // "crack" shards radiating out to read as a building laser charge.
+    const cc = 64;
+    const grad = x.createRadialGradient(cc, cc, 0, cc, cc, 60);
+    grad.addColorStop(0, 'rgba(255, 244, 250, 1)');
+    grad.addColorStop(0.4, 'rgba(255, 199, 226, 0.78)');
+    grad.addColorStop(1, 'rgba(255, 199, 226, 0)');
+    x.fillStyle = grad;
+    x.beginPath();
+    x.arc(cc, cc, 60, 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = 'rgba(255, 225, 240, 0.85)';
+    x.lineWidth = 1.5;
+    const shards = 7;
+    for (let i = 0; i < shards; i += 1) {
+      const a = (i / shards) * Math.PI * 2 + 0.3;
+      const r0 = 9;
+      const r1 = 50 + (i % 3) * 6;
+      const kx = cc + Math.cos(a) * r1 * 0.55 + Math.cos(a + 1.3) * 4;
+      const ky = cc + Math.sin(a) * r1 * 0.55 + Math.sin(a + 1.3) * 4;
+      x.beginPath();
+      x.moveTo(cc + Math.cos(a) * r0, cc + Math.sin(a) * r0);
+      x.lineTo(kx, ky);
+      x.lineTo(cc + Math.cos(a) * r1, cc + Math.sin(a) * r1);
+      x.stroke();
+    }
+  } else {
+    const grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.45, 'rgba(248, 248, 248, 0.85)');
+    grad.addColorStop(1, 'rgba(238, 238, 238, 0)');
+    x.fillStyle = grad;
+    x.beginPath();
+    x.arc(32, 32, 32, 0, Math.PI * 2);
+    x.fill();
+  }
   const tex = new THREE.CanvasTexture(c);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex,
@@ -1419,8 +1453,14 @@ function createGlintForMech(mech) {
     depthWrite: false,
     fog: false
   }));
-  sprite.scale.set(0.55, 0.55, 1);
-  sprite.position.set(0.55, 0.55, 0.55);
+  const base = isBeam ? 3.0 : 0.55;
+  mech.glintBaseScale = base;
+  mech.glintMaxScale = isBeam ? 9 : 6.5;
+  sprite.scale.set(base, base, 1);
+  // Beam glint is centered on the chest (~half the unit); the normal glint
+  // stays the small offset muzzle spark.
+  if (isBeam) sprite.position.set(0, 0.4, 0.55);
+  else sprite.position.set(0.55, 0.55, 0.55);
   sprite.renderOrder = 9999;
   mech.root.add(sprite);
   mech.glintMesh = sprite;
@@ -1466,7 +1506,9 @@ function updateGlintScale(mech) {
   if (!mech.glintMesh) return;
   const dist = camera.position.distanceTo(mech.root.position);
   // Grow with distance so the glint stays readable on long-range maps (Streets/Square).
-  const s = THREE.MathUtils.clamp(0.55 + dist * 0.05, 0.55, 6.5);
+  const base = mech.glintBaseScale ?? 0.55;
+  const max = mech.glintMaxScale ?? 6.5;
+  const s = THREE.MathUtils.clamp(base + dist * 0.05, base, max);
   mech.glintMesh.scale.set(s, s, 1);
 }
 
@@ -1536,7 +1578,8 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   mech.state.sniperChargeUntil = 0;
   removeGlintFromMech(mech);
   if (mech.state.hp <= 0) return;
-  spawnProjectiles(mech, target);
+  if (mech.unit.beam) spawnBeamOffline(mech, target);
+  else spawnProjectiles(mech, target);
 }
 
 function getProjectileDamage(projectile) {
@@ -1744,6 +1787,168 @@ function updateProjectileSystem(dt) {
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 照射ビーム (Kei) — offline mirror of shared spawnBeam / tickBeams. An instant
+// hitscan laser from the muzzle along the aim, clipped to the first wall, that
+// damages each enemy ONCE during its life. The light-pink visual (spawnBeamMesh
+// / updateBeamVisuals) is reused by the online client, which builds it from the
+// 'beam-fired' event instead of the gameplay array.
+// ---------------------------------------------------------------------------
+const BEAM_MAX_LENGTH = 400;
+
+// Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
+// maxLen. Mirrors shared raycastObstacleDistance (same slab method).
+function beamLengthToWall(ox, oy, oz, dx, dy, dz, maxLen) {
+  const ex = ox + dx * maxLen;
+  const ey = oy + dy * maxLen;
+  const ez = oz + dz * maxLen;
+  let best = maxLen;
+  for (const o of arenaObstacles) {
+    if (o.noProjectile) continue;
+    let tMin = 0;
+    let tMax = 1;
+    let miss = false;
+    const axes = [
+      [ox, ex - ox, o.minX, o.maxX],
+      [oy, ey - oy, o.minY, o.maxY],
+      [oz, ez - oz, o.minZ, o.maxZ]
+    ];
+    for (let a = 0; a < 3; a += 1) {
+      const start = axes[a][0];
+      const delta = axes[a][1];
+      const lo = axes[a][2];
+      const hi = axes[a][3];
+      if (Math.abs(delta) < 1e-9) {
+        if (start < lo || start > hi) { miss = true; break; }
+      } else {
+        const t1 = (lo - start) / delta;
+        const t2 = (hi - start) / delta;
+        const tn = t1 < t2 ? t1 : t2;
+        const tf = t1 < t2 ? t2 : t1;
+        if (tn > tMin) tMin = tn;
+        if (tf < tMax) tMax = tf;
+        if (tMin > tMax) { miss = true; break; }
+      }
+    }
+    if (miss) continue;
+    const d = tMin * maxLen;
+    if (d >= 0 && d < best) best = d;
+  }
+  return best;
+}
+
+// Perpendicular distance (XZ) from a point to the beam's clamped segment.
+function beamPerpDistXZ(b, px, pz) {
+  let t = (px - b.ox) * b.dx + (pz - b.oz) * b.dz;
+  if (t < 0) t = 0; else if (t > b.length) t = b.length;
+  const cx = b.ox + b.dx * t;
+  const cz = b.oz + b.dz * t;
+  const ddx = px - cx;
+  const ddz = pz - cz;
+  return Math.sqrt(ddx * ddx + ddz * ddz);
+}
+
+function spawnBeamOffline(owner, target) {
+  const u = owner.unit;
+  const ox = owner.root.position.x;
+  const oy = owner.root.position.y + 0.8;   // muzzle height (matches projectile spawn)
+  const oz = owner.root.position.z;
+  const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
+  dir.y = 0;                                 // level beam
+  if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+  dir.normalize();
+  const radius = u.beam?.radius ?? 1.6;
+  const durationMs = u.beam?.durationMs ?? 500;
+  const length = beamLengthToWall(ox, oy, oz, dir.x, dir.y, dir.z, BEAM_MAX_LENGTH);
+  if (!state.beams) state.beams = [];
+  state.beams.push({
+    owner, team: owner.state.team,
+    ox, oy, oz, dx: dir.x, dy: dir.y, dz: dir.z,
+    length, radius,
+    expiresAt: performance.now() + durationMs,
+    damage: u.damage,
+    hitStunMs: u.stun?.ms ?? 100,
+    hitStunScale: u.stun?.moveScale ?? 0.25,
+    hitIds: []
+  });
+  spawnBeamMesh(ox, oy, oz, dir.x, dir.y, dir.z, length, radius, durationMs);
+}
+
+function updateBeamDamage(now) {
+  if (!state.beams || state.beams.length === 0) return;
+  const fighters = getAllFighters();
+  for (let i = state.beams.length - 1; i >= 0; i -= 1) {
+    const b = state.beams[i];
+    if (now >= b.expiresAt) { state.beams.splice(i, 1); continue; }
+    for (const m of fighters) {
+      if (!m || m === b.owner) continue;
+      const st = m.state;
+      if (st.hp <= 0) continue;
+      if (b.hitIds.includes(m)) continue;
+      if (b.team && st.team && b.team === st.team) continue;   // friendly fire off
+      if (now < st.invulnerableUntil) continue;                // spawn protection
+      if (now <= st.stepUntil) continue;                       // dodge i-frames
+      if (beamPerpDistXZ(b, m.root.position.x, m.root.position.z) >= b.radius + 1.6) continue;
+      let dmg = b.damage;
+      if (state.dummyMode && b.owner !== state.player) dmg = 0;  // dummy: only player damages
+      st.hp = Math.max(0, st.hp - dmg);
+      if (now >= st.hitStunUntil || b.hitStunScale < st.hitStunScale) {
+        st.hitStunScale = b.hitStunScale;
+        st.hitStunUntil = now + b.hitStunMs;
+      }
+      st.momentumVX = 0;
+      st.momentumVZ = 0;
+      m.body.velocity.set(0, 0, 0);
+      spawnHitEffect(m.root.position, m === state.player ? 0x67f2ff : 0xff73d2);
+      b.hitIds.push(m);
+    }
+  }
+}
+
+// Light-pink beam mesh (bright core + soft glow), reused by offline and the
+// online client. Fades over durationMs via state.beamVisuals / updateBeamVisuals.
+function spawnBeamMesh(ox, oy, oz, dx, dy, dz, length, radius, durationMs = 500) {
+  const group = new THREE.Group();
+  const glow = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, length, 14, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffc7e2, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.32, radius * 0.32, length, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff0f7, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  group.add(glow);
+  group.add(core);
+  // CylinderGeometry is along local +Y; rotate +Y → beam dir, center at mid-line.
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, dy, dz));
+  group.position.set(ox + dx * length / 2, oy + dy * length / 2, oz + dz * length / 2);
+  group.renderOrder = 9998;
+  scene.add(group);
+  if (!state.beamVisuals) state.beamVisuals = [];
+  state.beamVisuals.push({ group, spawnAt: performance.now(), durationMs, baseGlow: 0.5, baseCore: 0.95 });
+}
+
+function updateBeamVisuals(now) {
+  const arr = state.beamVisuals;
+  if (!arr || arr.length === 0) return;
+  for (let i = arr.length - 1; i >= 0; i -= 1) {
+    const bv = arr[i];
+    const t = (now - bv.spawnAt) / bv.durationMs;
+    if (t >= 1) {
+      scene.remove(bv.group);
+      bv.group.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+      arr.splice(i, 1);
+      continue;
+    }
+    const fade = 1 - t;
+    bv.group.children[0].material.opacity = bv.baseGlow * fade;
+    bv.group.children[1].material.opacity = bv.baseCore * fade;
   }
 }
 
@@ -3332,6 +3537,18 @@ function cleanupMatch() {
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
   });
+  // Dispose any lingering 照射ビーム visuals + clear beam state.
+  if (state.beamVisuals) {
+    for (const bv of state.beamVisuals) {
+      scene.remove(bv.group);
+      bv.group.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+    }
+  }
+  state.beams = [];
+  state.beamVisuals = [];
   state.player = null;
   state.enemy = null;
   state.ally = null;
@@ -3694,6 +3911,10 @@ function processOnlineEvents(snap, myPlayerId) {
       // Color the hit ring by who got hit, matching offline conventions.
       const color = ev.targetId === myPlayerId ? 0x67f2ff : 0xff73d2;
       spawnHitEffect(new THREE.Vector3(ev.pos.x, ev.pos.y, ev.pos.z), color);
+    }
+    if (ev.type === 'beam-fired') {
+      // Kei 照射ビーム — server resolves the damage; we just draw the fading beam.
+      spawnBeamMesh(ev.ox, ev.oy, ev.oz, ev.dx, ev.dy, ev.dz, ev.length, ev.radius, ev.durationMs);
     }
     // Sniper-charge glint is driven by snapshot state inside
     // mirrorFighterToMech, not by 'sniper-charge-start' / -fire / -cancel
@@ -4472,6 +4693,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateVfx(dt);
   updateCamera();
   updateMechXRayVisibility();
+  updateBeamVisuals(performance.now());
   updateHud(hudNow);
 }
 
@@ -7581,6 +7803,8 @@ function animate() {
         updateGlintScale(m);
       });
       updateProjectileSystem(dt);
+      updateBeamDamage(now);
+      updateBeamVisuals(performance.now());
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
