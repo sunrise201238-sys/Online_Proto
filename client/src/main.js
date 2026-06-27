@@ -2066,6 +2066,35 @@ function deleteProjectilesInBeam(beamLike, radius) {
   }
 }
 
+// Orient + stretch a charged-beam mesh from the muzzle along its swept XZ
+// heading, tilted vertically so the rendered line points at the nearest enemy's
+// height instead of staying flat at Kei's muzzle height. The beam's hit test is
+// XZ-only (height-agnostic), so this is purely cosmetic — used by both the
+// offline sweep and the online snapshot render. Flat ground ⇒ tan 0 ⇒ unchanged.
+function orientChargedBeamVisual(g, ownerMech, ox, oy, oz, dirX, dirZ, length) {
+  let tanY = 0;
+  let bestD = Infinity;
+  let best = null;
+  for (const e of getEnemiesOf(ownerMech)) {
+    if (!e || e.state.hp <= 0) continue;
+    const ex = e.root.position.x - ox;
+    const ez = e.root.position.z - oz;
+    const d = ex * ex + ez * ez;
+    if (d < bestD) { bestD = d; best = e; }
+  }
+  if (best) {
+    const horiz = Math.sqrt(bestD);
+    // Rise per unit of XZ travel toward that enemy (same reference height for
+    // both, so level opponents give 0). Clamped so a very close/high enemy
+    // can't make the beam near-vertical.
+    if (horiz > 1e-3) tanY = THREE.MathUtils.clamp((best.root.position.y - ownerMech.root.position.y) / horiz, -2, 2);
+  }
+  const dir3 = new THREE.Vector3(dirX, tanY, dirZ).normalize();
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir3);
+  g.scale.set(1, Math.hypot(length, tanY * length), 1);
+  g.position.set(ox + dirX * length / 2, oy + tanY * length / 2, oz + dirZ * length / 2);
+}
+
 function updateChargedBeams(now, dt) {
   for (const m of getAllFighters()) {
     if (!m) continue;
@@ -2132,10 +2161,7 @@ function updateChargedBeams(now, dt) {
     deleteProjectilesInBeam(beamLike, radius);
     // --- Visual: stretch + orient the persistent mesh along the beam ---
     if (m.chargedBeamVisual) {
-      const g = m.chargedBeamVisual;
-      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(st.chargedBeamDirX, 0, st.chargedBeamDirZ));
-      g.scale.set(1, length, 1);
-      g.position.set(ox + st.chargedBeamDirX * length / 2, oy, oz + st.chargedBeamDirZ * length / 2);
+      orientChargedBeamVisual(m.chargedBeamVisual, m, ox, oy, oz, st.chargedBeamDirX, st.chargedBeamDirZ, length);
     }
   }
 }
@@ -2160,10 +2186,7 @@ function syncOnlineChargedBeams(now) {
     const oy = m.root.position.y + 0.8;
     const oz = m.root.position.z;
     const length = beamLengthToWall(ox, oy, oz, dx, 0, dz, BEAM_MAX_LENGTH);
-    const g = m.chargedBeamVisual;
-    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, 0, dz));
-    g.scale.set(1, length, 1);
-    g.position.set(ox + dx * length / 2, oy, oz + dz * length / 2);
+    orientChargedBeamVisual(m.chargedBeamVisual, m, ox, oy, oz, dx, dz, length);
   });
 }
 
