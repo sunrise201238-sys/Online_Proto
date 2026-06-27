@@ -356,13 +356,23 @@ export function tickBeams(matchState, now, damageScaler = null) {
   for (let i = beams.length - 1; i >= 0; i -= 1) {
     const b = beams[i];
     if (now >= b.expiresAt) { beams.splice(i, 1); continue; }
+    // Real cylinder hit volume: the beam's drawn 3D line vs each enemy's capsule
+    // (HIT_HALF_HEIGHT vertical free band + HIT_RADIUS_NORMAL radius — the same
+    // body model projectiles use). Replaces the old height-agnostic XZ "wall".
+    const bA = { x: b.ox, y: b.oy, z: b.oz };
+    const bB = { x: b.ox + b.dx * b.length, y: b.oy + b.dy * b.length, z: b.oz + b.dz * b.length };
+    const rrN = b.radius + HIT_RADIUS_NORMAL;
     for (const f of fighters) {
       if (f.hp <= 0 || f.id === b.ownerId) continue;
       if (b.hitIds.includes(f.id)) continue;
       if (b.team && f.team && b.team === f.team) continue;   // friendly fire off
       if (now < f.invulnerableUntil) continue;               // spawn protection
       if (now <= f.stepUntil) continue;                      // dodge i-frames
-      if (beamPerpDistXZ(b, f.pos.x, f.pos.z) >= b.radius + HIT_RADIUS_NORMAL) continue;
+      const hc = { x: f.pos.x, y: f.pos.y + 2.35, z: f.pos.z };
+      const near = closestPointOnSegment(bA, bB, hc);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
+      const hdx = near.x - hc.x, hdz = near.z - hc.z;
+      if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       const damage = damageScaler ? damageScaler(b) : b.damage;
       f.hp = Math.max(0, f.hp - damage);
       if (now >= f.hitStunUntil || b.hitStunScale < f.hitStunScale) {
@@ -425,6 +435,24 @@ function endChargedBeamShared(f, now) {
   f.chargedBeamHitIds = [];
 }
 
+// Vertical aim (rise per unit of XZ travel) toward the nearest enemy, clamped.
+// Mirrors the client's orientChargedBeamVisual so the charged-beam hit cylinder
+// tilts the same way the beam is drawn.
+function chargedBeamTanY(matchState, owner) {
+  let best = null, bestD = Infinity;
+  for (const e of Object.values(matchState.fighters)) {
+    if (e.id === owner.id || e.hp <= 0) continue;
+    if (owner.team && e.team && owner.team === e.team) continue;
+    const ex = e.pos.x - owner.pos.x, ez = e.pos.z - owner.pos.z;
+    const d = ex * ex + ez * ez;
+    if (d < bestD) { bestD = d; best = e; }
+  }
+  if (!best) return 0;
+  const horiz = Math.sqrt(bestD);
+  if (horiz < 1e-3) return 0;
+  return clamp((best.pos.y - owner.pos.y) / horiz, -2, 2);
+}
+
 export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles) {
   const fighters = Object.values(matchState.fighters);
   for (const f of fighters) {
@@ -460,6 +488,12 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
     const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
     const radius = (u.beam?.radius ?? HIT_RADIUS_NORMAL) * KEI_CHARGED_RADIUS_MULT;
     const beam = { ox: origin.x, oz: origin.z, dx: f.chargedBeamDirX, dz: f.chargedBeamDirZ, length };
+    // Real cylinder: tilt the hit line toward the nearest enemy's height (matching
+    // the drawn tilt) and test each enemy's capsule against it, not an XZ wall.
+    const tanY = chargedBeamTanY(matchState, f);
+    const cA = { x: origin.x, y: origin.y, z: origin.z };
+    const cB = { x: origin.x + f.chargedBeamDirX * length, y: origin.y + tanY * length, z: origin.z + f.chargedBeamDirZ * length };
+    const rrC = radius + HIT_RADIUS_NORMAL;
     // --- One hit per fighter ---
     if (!f.chargedBeamHitIds) f.chargedBeamHitIds = [];
     for (const t of fighters) {
@@ -467,7 +501,11 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       if (f.chargedBeamHitIds.includes(t.id)) continue;
       if (f.team && t.team && f.team === t.team) continue;
       if (now < t.invulnerableUntil || now <= t.stepUntil) continue;
-      if (beamPerpDistXZ(beam, t.pos.x, t.pos.z) >= radius + HIT_RADIUS_NORMAL) continue;
+      const hc = { x: t.pos.x, y: t.pos.y + 2.35, z: t.pos.z };
+      const near = closestPointOnSegment(cA, cB, hc);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
+      const hdx = near.x - hc.x, hdz = near.z - hc.z;
+      if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.
       const damage = u.beam?.chargedDamage ?? u.damage;
       t.hp = Math.max(0, t.hp - damage);
