@@ -214,8 +214,9 @@ export function createMatchState({
     fighters,
     projectiles: [],
     // Active 照射ビーム beams (Kei). Server-authoritative one-hit damage volumes
-    // that live for durationMs; the client renders them off the 'beam-fired'
-    // event rather than from this array.
+    // that live for durationMs. Shipped in the snapshot so the client draws them
+    // state-driven (each beam's mesh spawned once, by id) — robust to the
+    // snapshot drops that used to eat the one-shot 'beam-fired' event.
     beams: [],
     // Per-tick events the client uses to spawn one-shot VFX (hits, fires,
     // expirations). Cleared at the top of every tick.
@@ -255,6 +256,11 @@ export function buildSnapshot(state) {
     mapKey: state.mapKey,
     fighters: state.fighters,
     projectiles: state.projectiles,
+    // Active Kei 照射ビーム beams. Shipped so the client can draw them
+    // state-driven (each beam persists ~0.5 s across many snapshots), instead of
+    // off the one-shot 'beam-fired' event which is lost when two snapshots land
+    // in one render frame.
+    beams: state.beams,
     events: state.events
   };
 }

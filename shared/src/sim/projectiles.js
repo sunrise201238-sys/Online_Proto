@@ -300,9 +300,12 @@ function _despawn(matchState, projectiles, idx, p, reason) {
 // the muzzle along the aim, clipped to the first wall, and lives for durationMs.
 // Each enemy takes the unit's damage ONCE during that window (re-hittable only
 // by a new beam) — so a dodge avoids it only if the enemy is out of the line
-// (or still i-framed) when the window ends. Emits a 'beam-fired' event the
-// client renders; the array here is purely server-side for hit detection.
+// (or still i-framed) when the window ends. The beam lives in matchState.beams,
+// which is shipped in the snapshot; the client draws it from there (state-driven)
+// so a dropped snapshot can't lose the visual. A 'beam-fired' event is still
+// emitted for telemetry/tests but the client no longer renders off it.
 // ---------------------------------------------------------------------------
+let _beamSeq = 0;
 export function spawnBeam(matchState, owner, target, now, obstacles) {
   if (!matchState.beams) matchState.beams = []; // predicted states clone from a beam-less snapshot
   const u = owner.unit;
@@ -313,6 +316,7 @@ export function spawnBeam(matchState, owner, target, now, obstacles) {
   const radius = u.beam?.radius ?? HIT_RADIUS_NORMAL;
   const durationMs = u.beam?.durationMs ?? 500;
   matchState.beams.push({
+    id: (_beamSeq = (_beamSeq + 1) >>> 0),   // monotonic; client draws each beam's mesh once
     ownerId: owner.id,
     team: owner.team,
     ox: origin.x, oy: origin.y, oz: origin.z,
