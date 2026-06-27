@@ -2190,6 +2190,29 @@ function syncOnlineChargedBeams(now) {
   });
 }
 
+// Draw Kei's quick 照射ビーム beams from the snapshot's beam list (state-driven).
+// Each beam persists ~0.5 s across many snapshots, so — unlike the old one-shot
+// 'beam-fired' event — this survives the snapshot drops that happen when two
+// land in one render frame (common on sprint-cancel). Beam ids are monotonic, so
+// we draw each one's fading mesh exactly once and fade it over its remaining life.
+function syncOnlineBeams(snap) {
+  const beams = snap.beams;
+  if (!beams || !beams.length) return;
+  const onl = state.online;
+  if (!onl) return;
+  const last = onl.lastBeamId || 0;
+  let maxId = last;
+  for (const b of beams) {
+    if (b.id == null) continue;
+    if (b.id > last) {
+      const remaining = b.expiresAt - snap.serverTime;   // server clock, same units as expiresAt
+      spawnBeamMesh(b.ox, b.oy, b.oz, b.dx, b.dy, b.dz, b.length, b.radius, Math.max(120, remaining));
+    }
+    if (b.id > maxId) maxId = b.id;
+  }
+  onl.lastBeamId = maxId;
+}
+
 function applyRepulsion(now) {
   // Soft-collision push between any two fighters that have closed inside 3
   // units. In 1v1 this is just player ↔ enemy. In 2v2 all six pairings are
@@ -4181,10 +4204,9 @@ function processOnlineEvents(snap, myPlayerId) {
       const color = ev.targetId === myPlayerId ? 0x67f2ff : 0xff73d2;
       spawnHitEffect(new THREE.Vector3(ev.pos.x, ev.pos.y, ev.pos.z), color);
     }
-    if (ev.type === 'beam-fired') {
-      // Kei 照射ビーム — server resolves the damage; we just draw the fading beam.
-      spawnBeamMesh(ev.ox, ev.oy, ev.oz, ev.dx, ev.dy, ev.dz, ev.length, ev.radius, ev.durationMs);
-    }
+    // 'beam-fired' is intentionally NOT drawn here anymore — the beam visual is
+    // state-driven from snap.beams in syncOnlineBeams, which survives the snapshot
+    // drops that used to lose this one-shot event (common on sprint-cancel).
     // Sniper-charge glint is driven by snapshot state inside
     // mirrorFighterToMech, not by 'sniper-charge-start' / -fire / -cancel
     // events here — events get dropped when two snapshots land between
@@ -4828,6 +4850,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
       applySnapshotToPrediction(snap);
     }
     syncOnlineProjectiles(snap);
+    syncOnlineBeams(snap);
     processOnlineEvents(snap, onl.myPlayerId);
   }
 
