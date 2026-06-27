@@ -1925,6 +1925,13 @@ function updateBeamDamage(now) {
   for (let i = state.beams.length - 1; i >= 0; i -= 1) {
     const b = state.beams[i];
     if (now >= b.expiresAt) { state.beams.splice(i, 1); continue; }
+    // Real cylinder: the beam's drawn 3D line vs each enemy's capsule (1.6
+    // vertical free band + 1.6 radius — same body model the projectiles use).
+    const beamLine = new THREE.Line3(
+      new THREE.Vector3(b.ox, b.oy, b.oz),
+      new THREE.Vector3(b.ox + b.dx * b.length, b.oy + b.dy * b.length, b.oz + b.dz * b.length)
+    );
+    const rrN = b.radius + 1.6;
     for (const m of fighters) {
       if (!m || m === b.owner) continue;
       const st = m.state;
@@ -1933,7 +1940,11 @@ function updateBeamDamage(now) {
       if (b.team && st.team && b.team === st.team) continue;   // friendly fire off
       if (now < st.invulnerableUntil) continue;                // spawn protection
       if (now <= st.stepUntil) continue;                       // dodge i-frames
-      if (beamPerpDistXZ(b, m.root.position.x, m.root.position.z) >= b.radius + 1.6) continue;
+      const hc = m.root.position;
+      const near = beamLine.closestPointToPoint(hc, true, new THREE.Vector3());
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - 1.6);
+      const hdx = near.x - hc.x, hdz = near.z - hc.z;
+      if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       let dmg = b.damage;
       if (state.dummyMode && b.owner !== state.player) dmg = 0;  // dummy: only player damages
       st.hp = Math.max(0, st.hp - dmg);
@@ -2074,24 +2085,27 @@ function deleteProjectilesInBeam(beamLike, radius) {
 // height instead of staying flat at Kei's muzzle height. The beam's hit test is
 // XZ-only (height-agnostic), so this is purely cosmetic — used by both the
 // offline sweep and the online snapshot render. Flat ground ⇒ tan 0 ⇒ unchanged.
-function orientChargedBeamVisual(g, ownerMech, ox, oy, oz, dirX, dirZ, length) {
-  let tanY = 0;
-  let bestD = Infinity;
-  let best = null;
+// Vertical aim (rise per unit of XZ travel) toward the nearest enemy, clamped so
+// a very close/high enemy can't make the beam near-vertical. Shared by the
+// charged-beam VISUAL (orientChargedBeamVisual) and its HIT test
+// (updateChargedBeams) so the drawn line and the hit cylinder tilt identically.
+function chargedBeamTanYOffline(ownerMech) {
+  let best = null, bestD = Infinity;
   for (const e of getEnemiesOf(ownerMech)) {
     if (!e || e.state.hp <= 0) continue;
-    const ex = e.root.position.x - ox;
-    const ez = e.root.position.z - oz;
+    const ex = e.root.position.x - ownerMech.root.position.x;
+    const ez = e.root.position.z - ownerMech.root.position.z;
     const d = ex * ex + ez * ez;
     if (d < bestD) { bestD = d; best = e; }
   }
-  if (best) {
-    const horiz = Math.sqrt(bestD);
-    // Rise per unit of XZ travel toward that enemy (same reference height for
-    // both, so level opponents give 0). Clamped so a very close/high enemy
-    // can't make the beam near-vertical.
-    if (horiz > 1e-3) tanY = THREE.MathUtils.clamp((best.root.position.y - ownerMech.root.position.y) / horiz, -2, 2);
-  }
+  if (!best) return 0;
+  const horiz = Math.sqrt(bestD);
+  if (horiz <= 1e-3) return 0;
+  return THREE.MathUtils.clamp((best.root.position.y - ownerMech.root.position.y) / horiz, -2, 2);
+}
+
+function orientChargedBeamVisual(g, ownerMech, ox, oy, oz, dirX, dirZ, length) {
+  const tanY = chargedBeamTanYOffline(ownerMech);
   const dir3 = new THREE.Vector3(dirX, tanY, dirZ).normalize();
   g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir3);
   g.scale.set(1, Math.hypot(length, tanY * length), 1);
@@ -2140,6 +2154,14 @@ function updateChargedBeams(now, dt) {
     const radius = (u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
     const length = beamLengthToWall(ox, oy, oz, st.chargedBeamDirX, 0, st.chargedBeamDirZ, BEAM_MAX_LENGTH);
     const beamLike = { ox, oz, dx: st.chargedBeamDirX, dz: st.chargedBeamDirZ, length };
+    // Real cylinder: tilt the hit line toward the nearest enemy's height (the
+    // SAME tanY orientChargedBeamVisual draws with) and test each enemy's capsule.
+    const tanY = chargedBeamTanYOffline(m);
+    const cBeamLine = new THREE.Line3(
+      new THREE.Vector3(ox, oy, oz),
+      new THREE.Vector3(ox + st.chargedBeamDirX * length, oy + tanY * length, oz + st.chargedBeamDirZ * length)
+    );
+    const rrC = radius + 1.6;
     // --- One-hit damage ---
     if (!m.chargedBeamHitIds) m.chargedBeamHitIds = [];
     for (const t of getAllFighters()) {
@@ -2148,7 +2170,11 @@ function updateChargedBeams(now, dt) {
       if (tst.hp <= 0 || m.chargedBeamHitIds.includes(t)) continue;
       if (st.team && tst.team && st.team === tst.team) continue;
       if (now < tst.invulnerableUntil || now <= tst.stepUntil) continue;
-      if (beamPerpDistXZ(beamLike, t.root.position.x, t.root.position.z) >= radius + 1.6) continue;
+      const hc = t.root.position;
+      const near = cBeamLine.closestPointToPoint(hc, true, new THREE.Vector3());
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - 1.6);
+      const hdx = near.x - hc.x, hdz = near.z - hc.z;
+      if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.
       let dmg = u.beam?.chargedDamage ?? u.damage;
       if (state.dummyMode && m !== state.player) dmg = 0;
