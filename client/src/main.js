@@ -1895,8 +1895,11 @@ function spawnBeamOffline(owner, target) {
   const ox = owner.root.position.x;
   const oy = owner.root.position.y + 0.8;   // muzzle height (matches projectile spawn)
   const oz = owner.root.position.z;
+  // Aim 3D toward the target so the beam tilts to the enemy's height (matches the
+  // online shared spawnBeam). Keeping dir.y zeroed pinned the visual flat at
+  // Kei's muzzle height even when the target was higher/lower. Hit detection is
+  // XZ-only, so this only changes how the line is drawn.
   const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
-  dir.y = 0;                                 // level beam
   if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
   dir.normalize();
   const radius = u.beam?.radius ?? 1.6;
