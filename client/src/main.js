@@ -2396,12 +2396,16 @@ function updatePlayer(now) {
     const progress = THREE.MathUtils.clamp((now - stepState.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(stepState.stepFromX, stepState.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(stepState.stepFromZ, stepState.stepToZ, progress);
-    // Bonk: when the next lerp point lands inside an obstacle, stop advancing
-    // (halt at the wall) but DON'T end the step early — the dodge animation and
-    // i-frames still run the full STEP_DURATION_MS regardless of the wall.
+    // Bonk: the next lerp point lands inside an obstacle. Halt the dodge here for
+    // the rest of the step — collapse the lerp path to this spot so a later point
+    // on the FAR side of a thin wall can't tunnel the unit through. The step is
+    // NOT ended early, so the animation + i-frames run the full duration.
     if (!unitOverlapsObstacle(targetX, state.player.body.position.y, targetZ)) {
       state.player.body.position.x = targetX;
       state.player.body.position.z = targetZ;
+    } else {
+      stepState.stepFromX = state.player.body.position.x; stepState.stepToX = state.player.body.position.x;
+      stepState.stepFromZ = state.player.body.position.z; stepState.stepToZ = state.player.body.position.z;
     }
     state.player.body.velocity.x = 0;
     state.player.body.velocity.z = 0;
@@ -2862,12 +2866,16 @@ function updateEnemy(now) {
     const progress = THREE.MathUtils.clamp((now - eState.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(eState.stepFromX, eState.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(eState.stepFromZ, eState.stepToZ, progress);
-    // Bonk: when the next lerp point lands inside an obstacle, stop advancing
-    // (halt at the wall) but DON'T end the step early — the dodge animation and
-    // i-frames still run the full STEP_DURATION_MS regardless of the wall.
+    // Bonk: the next lerp point lands inside an obstacle. Halt the dodge here for
+    // the rest of the step — collapse the lerp path to this spot so a later point
+    // on the FAR side of a thin wall can't tunnel the unit through. The step is
+    // NOT ended early, so the animation + i-frames run the full duration.
     if (!unitOverlapsObstacle(targetX, state.enemy.body.position.y, targetZ)) {
       state.enemy.body.position.x = targetX;
       state.enemy.body.position.z = targetZ;
+    } else {
+      eState.stepFromX = state.enemy.body.position.x; eState.stepToX = state.enemy.body.position.x;
+      eState.stepFromZ = state.enemy.body.position.z; eState.stepToZ = state.enemy.body.position.z;
     }
     state.enemy.body.velocity.x = 0;
     state.enemy.body.velocity.z = 0;
