@@ -319,7 +319,9 @@ io.on('connection', (socket) => {
       jump: cur.jump || !!frame.jump,
       stepTap: cur.stepTap || !!frame.stepTap,
       shootTap: cur.shootTap || !!frame.shootTap,
-      targetSwitch: cur.targetSwitch || !!frame.targetSwitch
+      targetSwitch: cur.targetSwitch || !!frame.targetSwitch,
+      aimX: numericOrZero(frame.aimX),   // Kei charged-sweep horizontal aim
+      aimY: numericOrZero(frame.aimY)    // Kei charged-sweep vertical (pitch) aim
     };
   });
 
