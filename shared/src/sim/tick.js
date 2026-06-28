@@ -41,7 +41,9 @@ export function emptyInput() {
     stepTap: false,     // dodge tap this frame
     shootTap: false,    // shoot tap this frame
     shootHold: false,   // shoot held continuously
-    targetSwitch: false // 2v2: cycle to next live enemy target this frame
+    targetSwitch: false, // 2v2: cycle to next live enemy target this frame
+    aimX: 0,            // Kei charged sweep: raw aim-stick X (horizontal sweep)
+    aimY: 0             // Kei charged sweep: raw aim-stick Y (vertical / pitch sweep)
   };
 }
 

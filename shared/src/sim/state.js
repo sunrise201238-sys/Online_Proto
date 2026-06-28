@@ -98,6 +98,7 @@ export function createFighter(id, unitKey, spawn) {
     chargedBeamUntil: 0,
     chargedBeamDirX: 0,
     chargedBeamDirZ: 0,
+    chargedBeamPitch: 0,   // steered vertical aim (radians); player drives it, bot tracks target height
     chargedBeamHitIds: [],
 
     // Cached unit reference is convenient at call sites; clients can

@@ -15,7 +15,8 @@ import {
   KEI_CHARGED_DURATION_MS,
   KEI_CHARGED_RADIUS_MULT,
   KEI_BEAM_SWEEP_RATE,
-  KEI_BEAM_AIM_DEADZONE
+  KEI_BEAM_AIM_DEADZONE,
+  KEI_BEAM_MAX_PITCH
 } from './constants.js';
 import {
   clamp,
@@ -426,6 +427,9 @@ export function startChargedBeam(matchState, owner, target, now) {
   owner.lastFireAt = owner.chargedBeamUntil;
   owner.chargedBeamDirX = dx;
   owner.chargedBeamDirZ = dz;
+  // Start the vertical aim pointed at the target's height (so the channel opens
+  // on-target); the player can then sweep it up/down. Bots re-aim it each tick.
+  owner.chargedBeamPitch = clamp(Math.atan2(target.pos.y - owner.pos.y, len), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
   owner.chargedBeamHitIds = [];
 }
 
@@ -458,39 +462,49 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
   for (const f of fighters) {
     if (!(f.chargedBeamUntil > now)) continue;
     const u = f.unit;
-    // --- Steer (point & sweep, capped rate) ---
+    // --- Steer (capped rate). The bot auto-aims yaw+pitch at its target; the
+    // player drives a twin-axis turret: aimX = horizontal sweep, aimY = pitch. ---
+    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
     const curAngle = Math.atan2(f.chargedBeamDirZ, f.chargedBeamDirX);
-    let targetAngle = curAngle;
     if (botSet && botSet.has(f.id)) {
+      let targetAngle = curAngle;
       const tgt = matchState.fighters[f.targetId];
       if (tgt && tgt.hp > 0) {
         const ax = tgt.pos.x - f.pos.x;
         const az = tgt.pos.z - f.pos.z;
         if (ax * ax + az * az > 1e-4) targetAngle = Math.atan2(az, ax);
       }
+      let delta = targetAngle - curAngle;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const newAngle = curAngle + clamp(delta, -maxStep, maxStep);
+      f.chargedBeamDirX = Math.cos(newAngle);
+      f.chargedBeamDirZ = Math.sin(newAngle);
+      // Vertical: aim at the target's height (the bot's beam tracks elevation).
+      f.chargedBeamPitch = clamp(Math.atan(chargedBeamTanY(matchState, f)), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
     } else {
       const input = inputs[f.id];
       if (input && (input.boost || input.sprintLocked)) { endChargedBeamShared(f, now); continue; } // sprint cancels
-      if (input && Math.hypot(input.moveX, input.moveZ) > KEI_BEAM_AIM_DEADZONE) {
-        targetAngle = Math.atan2(input.moveZ, input.moveX);
+      const aimX = input ? input.aimX : 0;
+      const aimY = input ? input.aimY : 0;
+      if (Math.abs(aimX) > KEI_BEAM_AIM_DEADZONE) {
+        const newAngle = curAngle + aimX * maxStep;   // horizontal sweep
+        f.chargedBeamDirX = Math.cos(newAngle);
+        f.chargedBeamDirZ = Math.sin(newAngle);
+      }
+      if (Math.abs(aimY) > KEI_BEAM_AIM_DEADZONE) {     // vertical (pitch) sweep
+        f.chargedBeamPitch = clamp(f.chargedBeamPitch - aimY * maxStep, -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
       }
     }
-    let delta = targetAngle - curAngle;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
-    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
-    const newAngle = curAngle + clamp(delta, -maxStep, maxStep);
-    f.chargedBeamDirX = Math.cos(newAngle);
-    f.chargedBeamDirZ = Math.sin(newAngle);
     // --- Geometry ---
     const origin = { x: f.pos.x, y: f.pos.y + 3.15, z: f.pos.z };
     const dir = { x: f.chargedBeamDirX, y: 0, z: f.chargedBeamDirZ };
     const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
     const radius = (u.beam?.radius ?? HIT_RADIUS_NORMAL) * KEI_CHARGED_RADIUS_MULT;
     const beam = { ox: origin.x, oz: origin.z, dx: f.chargedBeamDirX, dz: f.chargedBeamDirZ, length };
-    // Real cylinder: tilt the hit line toward the nearest enemy's height (matching
-    // the drawn tilt) and test each enemy's capsule against it, not an XZ wall.
-    const tanY = chargedBeamTanY(matchState, f);
+    // Real cylinder: tilt the hit line to the steered pitch (same as the drawn
+    // beam) and test each enemy's capsule against it, not an XZ wall.
+    const tanY = Math.tan(f.chargedBeamPitch);
     const cA = { x: origin.x, y: origin.y, z: origin.z };
     const cB = { x: origin.x + f.chargedBeamDirX * length, y: origin.y + tanY * length, z: origin.z + f.chargedBeamDirZ * length };
     const rrC = radius + HIT_RADIUS_NORMAL;
