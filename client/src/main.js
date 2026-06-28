@@ -930,7 +930,8 @@ function createMech(color, unitData, isOwnUnit = false) {
       // active (owner locked, joystick steers chargedBeamDir).
       chargedBeamUntil: 0,
       chargedBeamDirX: 0,
-      chargedBeamDirZ: 0
+      chargedBeamDirZ: 0,
+      chargedBeamPitch: 0   // steered vertical aim (radians)
     }
   };
 
@@ -1830,6 +1831,7 @@ const KEI_CHARGED_DURATION_MS = 1000;   // how long the channel lasts at full ch
 const KEI_CHARGED_RADIUS_MULT = 1.5;    // charged beam is 1.5× the quick beam's width
 const KEI_BEAM_SWEEP_RATE = 0.175;      // rad/s the beam rotates toward the aim (≈10°/s — very low sensitivity)
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
+const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
 // maxLen. Mirrors shared raycastObstacleDistance (same slab method).
@@ -2031,6 +2033,10 @@ function startChargedBeam(owner, target) {
   owner.state.lastFireAt = owner.state.chargedBeamUntil;
   owner.state.chargedBeamDirX = dir.x;
   owner.state.chargedBeamDirZ = dir.z;
+  // Start the vertical aim pointed at the target's height (channel opens on-
+  // target); the player can then sweep it up/down, bots re-aim it each tick.
+  const hd = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
+  owner.state.chargedBeamPitch = THREE.MathUtils.clamp(Math.atan2(target.root.position.y - owner.root.position.y, hd), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
   owner.chargedBeamHitIds = [];
   owner.chargedBeamVisual = buildChargedBeamMesh((u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT);
 }
@@ -2086,9 +2092,9 @@ function deleteProjectilesInBeam(beamLike, radius) {
 // XZ-only (height-agnostic), so this is purely cosmetic — used by both the
 // offline sweep and the online snapshot render. Flat ground ⇒ tan 0 ⇒ unchanged.
 // Vertical aim (rise per unit of XZ travel) toward the nearest enemy, clamped so
-// a very close/high enemy can't make the beam near-vertical. Shared by the
-// charged-beam VISUAL (orientChargedBeamVisual) and its HIT test
-// (updateChargedBeams) so the drawn line and the hit cylinder tilt identically.
+// a very close/high enemy can't make the beam near-vertical. Used by the BOT to
+// auto-aim its charged-beam pitch at the target's height (players steer pitch
+// themselves via the aim stick).
 function chargedBeamTanYOffline(ownerMech) {
   let best = null, bestD = Infinity;
   for (const e of getEnemiesOf(ownerMech)) {
@@ -2104,8 +2110,7 @@ function chargedBeamTanYOffline(ownerMech) {
   return THREE.MathUtils.clamp((best.root.position.y - ownerMech.root.position.y) / horiz, -2, 2);
 }
 
-function orientChargedBeamVisual(g, ownerMech, ox, oy, oz, dirX, dirZ, length) {
-  const tanY = chargedBeamTanYOffline(ownerMech);
+function orientChargedBeamVisual(g, tanY, ox, oy, oz, dirX, dirZ, length) {
   const dir3 = new THREE.Vector3(dirX, tanY, dirZ).normalize();
   g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir3);
   g.scale.set(1, Math.hypot(length, tanY * length), 1);
@@ -2121,32 +2126,37 @@ function updateChargedBeams(now, dt) {
     }
     const u = m.unit;
     const st = m.state;
-    // --- Steer (point & sweep, capped rate) ---
+    // --- Steer (capped rate). The bot auto-aims yaw+pitch at its target; the
+    // player drives a twin-axis turret: joystick x = horizontal sweep, y = pitch. ---
+    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
     const curAngle = Math.atan2(st.chargedBeamDirZ, st.chargedBeamDirX);
-    let targetAngle = curAngle;
     if (m === state.player) {
       if (input.boostHeld || input.sprintLocked) { endChargedBeam(m, now); continue; } // sprint cancels
-      if (Math.hypot(input.x, input.y) > KEI_BEAM_AIM_DEADZONE) {
-        const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
-        const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-        const aim = fwd.multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
-        if (aim.lengthSq() > 1e-4) targetAngle = Math.atan2(aim.z, aim.x);
+      if (Math.abs(input.x) > KEI_BEAM_AIM_DEADZONE) {
+        const newAngle = curAngle + input.x * maxStep;   // horizontal sweep
+        st.chargedBeamDirX = Math.cos(newAngle);
+        st.chargedBeamDirZ = Math.sin(newAngle);
+      }
+      if (Math.abs(input.y) > KEI_BEAM_AIM_DEADZONE) {     // vertical (pitch) sweep
+        st.chargedBeamPitch = THREE.MathUtils.clamp(st.chargedBeamPitch - input.y * maxStep, -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
       }
     } else {
+      let targetAngle = curAngle;
       const tgt = pickClosestEnemyOf(m) ?? state.player;
       if (tgt && tgt.state.hp > 0) {
         const ax = tgt.root.position.x - m.root.position.x;
         const az = tgt.root.position.z - m.root.position.z;
         if (ax * ax + az * az > 1e-4) targetAngle = Math.atan2(az, ax);
       }
+      let delta = targetAngle - curAngle;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const newAngle = curAngle + THREE.MathUtils.clamp(delta, -maxStep, maxStep);
+      st.chargedBeamDirX = Math.cos(newAngle);
+      st.chargedBeamDirZ = Math.sin(newAngle);
+      // Vertical: aim at the target's height (the bot's beam tracks elevation).
+      st.chargedBeamPitch = THREE.MathUtils.clamp(Math.atan(chargedBeamTanYOffline(m)), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
     }
-    let delta = targetAngle - curAngle;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
-    const maxStep = KEI_BEAM_SWEEP_RATE * dt;
-    const newAngle = curAngle + THREE.MathUtils.clamp(delta, -maxStep, maxStep);
-    st.chargedBeamDirX = Math.cos(newAngle);
-    st.chargedBeamDirZ = Math.sin(newAngle);
     // --- Geometry ---
     const ox = m.root.position.x;
     const oy = m.root.position.y + 0.8;
@@ -2154,9 +2164,9 @@ function updateChargedBeams(now, dt) {
     const radius = (u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
     const length = beamLengthToWall(ox, oy, oz, st.chargedBeamDirX, 0, st.chargedBeamDirZ, BEAM_MAX_LENGTH);
     const beamLike = { ox, oz, dx: st.chargedBeamDirX, dz: st.chargedBeamDirZ, length };
-    // Real cylinder: tilt the hit line toward the nearest enemy's height (the
-    // SAME tanY orientChargedBeamVisual draws with) and test each enemy's capsule.
-    const tanY = chargedBeamTanYOffline(m);
+    // Real cylinder: tilt the hit line to the steered pitch (same as the drawn
+    // beam) and test each enemy's capsule against it.
+    const tanY = Math.tan(st.chargedBeamPitch);
     const cBeamLine = new THREE.Line3(
       new THREE.Vector3(ox, oy, oz),
       new THREE.Vector3(ox + st.chargedBeamDirX * length, oy + tanY * length, oz + st.chargedBeamDirZ * length)
@@ -2190,7 +2200,7 @@ function updateChargedBeams(now, dt) {
     deleteProjectilesInBeam(beamLike, radius);
     // --- Visual: stretch + orient the persistent mesh along the beam ---
     if (m.chargedBeamVisual) {
-      orientChargedBeamVisual(m.chargedBeamVisual, m, ox, oy, oz, st.chargedBeamDirX, st.chargedBeamDirZ, length);
+      orientChargedBeamVisual(m.chargedBeamVisual, tanY, ox, oy, oz, st.chargedBeamDirX, st.chargedBeamDirZ, length);
     }
   }
 }
@@ -2215,7 +2225,7 @@ function syncOnlineChargedBeams(now) {
     const oy = m.root.position.y + 0.8;
     const oz = m.root.position.z;
     const length = beamLengthToWall(ox, oy, oz, dx, 0, dz, BEAM_MAX_LENGTH);
-    orientChargedBeamVisual(m.chargedBeamVisual, m, ox, oy, oz, dx, dz, length);
+    orientChargedBeamVisual(m.chargedBeamVisual, Math.tan(m.state.chargedBeamPitch), ox, oy, oz, dx, dz, length);
   });
 }
 
@@ -4104,7 +4114,9 @@ function buildOnlineInputFrame() {
     stepTap: !!input.stepTap,
     shootTap: !!input.shootTap,
     shootHold: !!input.shootHold,
-    targetSwitch: !!input.targetSwitchTap
+    targetSwitch: !!input.targetSwitchTap,
+    aimX: input.x,   // raw aim-stick → Kei charged-sweep horizontal aim
+    aimY: input.y    // raw aim-stick → Kei charged-sweep vertical (pitch) aim
   };
 }
 
@@ -4137,6 +4149,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.chargedBeamUntil = fighter.chargedBeamUntil ?? 0;
   s.chargedBeamDirX = fighter.chargedBeamDirX ?? 0;
   s.chargedBeamDirZ = fighter.chargedBeamDirZ ?? 0;
+  s.chargedBeamPitch = fighter.chargedBeamPitch ?? 0;   // steered vertical aim, used by the beam visual
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
   //
