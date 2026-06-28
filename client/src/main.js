@@ -1832,6 +1832,7 @@ const KEI_CHARGED_RADIUS_MULT = 1.5;    // charged beam is 1.5× the quick beam'
 const KEI_BEAM_SWEEP_RATE = 0.175;      // rad/s the beam rotates toward the aim (≈10°/s — very low sensitivity)
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
+const KEI_BEAM_VIS_SMOOTH = 0.35;       // online-only: ease the DRAWN charged beam toward the predicted dir per frame (kills reconciliation snap)
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
 // maxLen. Mirrors shared raycastObstacleDistance (same slab method).
@@ -2210,22 +2211,44 @@ function updateChargedBeams(now, dt) {
 // damage + steering are server-authoritative (shared tickChargedBeams). `now`
 // is server-clock (hudNow), since chargedBeamUntil is server-clock.
 function syncOnlineChargedBeams(now) {
+  const onl = state.online;
   getAllFighters().forEach((m) => {
     if (!m) return;
     if (!(m.state.chargedBeamUntil > now)) {
       fadeOutChargedBeamVisual(m);   // fade over ~0.5 s instead of vanishing
+      if (m === state.player && onl) onl.beamVisActive = false;  // re-init smoothing next channel
       return;
     }
     const radius = (m.unit.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT;
     if (!m.chargedBeamVisual) m.chargedBeamVisual = buildChargedBeamMesh(radius);
-    const dx = m.state.chargedBeamDirX;
-    const dz = m.state.chargedBeamDirZ;
+    let dx = m.state.chargedBeamDirX;
+    let dz = m.state.chargedBeamDirZ;
+    let pitch = m.state.chargedBeamPitch;
     if (dx * dx + dz * dz < 1e-6) return;
+    // Local player only: ease the DRAWN beam direction toward the predicted one so
+    // the prediction→server reconciliation doesn't snap it each snapshot (the
+    // "interference" feel). Render-only — the hit uses the real server direction,
+    // so the drawn line can trail it by a sliver, but it never auto-aims to target.
+    if (m === state.player && onl) {
+      const tgtYaw = Math.atan2(dz, dx);
+      if (!onl.beamVisActive) {
+        onl.beamVisYaw = tgtYaw; onl.beamVisPitch = pitch; onl.beamVisActive = true;
+      } else {
+        let dyaw = tgtYaw - onl.beamVisYaw;
+        while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+        while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+        onl.beamVisYaw += dyaw * KEI_BEAM_VIS_SMOOTH;
+        onl.beamVisPitch += (pitch - onl.beamVisPitch) * KEI_BEAM_VIS_SMOOTH;
+      }
+      dx = Math.cos(onl.beamVisYaw);
+      dz = Math.sin(onl.beamVisYaw);
+      pitch = onl.beamVisPitch;
+    }
     const ox = m.root.position.x;
     const oy = m.root.position.y + 0.8;
     const oz = m.root.position.z;
     const length = beamLengthToWall(ox, oy, oz, dx, 0, dz, BEAM_MAX_LENGTH);
-    orientChargedBeamVisual(m.chargedBeamVisual, Math.tan(m.state.chargedBeamPitch), ox, oy, oz, dx, dz, length);
+    orientChargedBeamVisual(m.chargedBeamVisual, Math.tan(pitch), ox, oy, oz, dx, dz, length);
   });
 }
 
