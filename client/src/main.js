@@ -2396,9 +2396,10 @@ function updatePlayer(now) {
     const progress = THREE.MathUtils.clamp((now - stepState.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(stepState.stepFromX, stepState.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(stepState.stepFromZ, stepState.stepToZ, progress);
-    if (unitOverlapsObstacle(targetX, state.player.body.position.y, targetZ)) {
-      stepState.stepUntil = now;
-    } else {
+    // Bonk: when the next lerp point lands inside an obstacle, stop advancing
+    // (halt at the wall) but DON'T end the step early — the dodge animation and
+    // i-frames still run the full STEP_DURATION_MS regardless of the wall.
+    if (!unitOverlapsObstacle(targetX, state.player.body.position.y, targetZ)) {
       state.player.body.position.x = targetX;
       state.player.body.position.z = targetZ;
     }
@@ -2861,9 +2862,10 @@ function updateEnemy(now) {
     const progress = THREE.MathUtils.clamp((now - eState.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(eState.stepFromX, eState.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(eState.stepFromZ, eState.stepToZ, progress);
-    if (unitOverlapsObstacle(targetX, state.enemy.body.position.y, targetZ)) {
-      eState.stepUntil = now;
-    } else {
+    // Bonk: when the next lerp point lands inside an obstacle, stop advancing
+    // (halt at the wall) but DON'T end the step early — the dodge animation and
+    // i-frames still run the full STEP_DURATION_MS regardless of the wall.
+    if (!unitOverlapsObstacle(targetX, state.enemy.body.position.y, targetZ)) {
       state.enemy.body.position.x = targetX;
       state.enemy.body.position.z = targetZ;
     }
