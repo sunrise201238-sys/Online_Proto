@@ -219,10 +219,10 @@ export function tickStep(fighter, now, obstacles) {
   const t = Math.max(0, Math.min(1, (now - fighter.stepStartAt) / span));
   const targetX = fighter.stepFromX + (fighter.stepToX - fighter.stepFromX) * t;
   const targetZ = fighter.stepFromZ + (fighter.stepToZ - fighter.stepFromZ) * t;
-  if (unitOverlapsObstacle(targetX, fighter.pos.y, targetZ, obstacles)) {
-    // Bonk — abort step here.
-    fighter.stepUntil = now;
-  } else {
+  // Bonk: when the next lerp point lands inside an obstacle, stop advancing (the
+  // unit halts at the wall) but DON'T end the step early — the dodge animation
+  // and i-frames still run the full STEP_DURATION_MS regardless of the wall.
+  if (!unitOverlapsObstacle(targetX, fighter.pos.y, targetZ, obstacles)) {
     fighter.pos.x = targetX;
     fighter.pos.z = targetZ;
   }
