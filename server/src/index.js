@@ -126,8 +126,9 @@ function startMatchFor(lobby) {
     const human = occupied.has(s);
     const cfg = lobby.config[s].unitKey;
     if (human && cfg) return cfg;
-    // Bot default: 1v1's opponent is always Saori (unit1); 2v2 cycles for variety.
-    if (lobby.mode === '1v1') return 'unit1';
+    // Bot default: 1v1's opponent is the host-chosen unit (config.p2.unitKey),
+    // defaulting to Saori (unit1); 2v2 cycles for variety.
+    if (lobby.mode === '1v1') return cfg ?? 'unit1';
     const idx = slots.indexOf(s);
     return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][idx % 6];
   };
@@ -334,6 +335,12 @@ io.on('connection', (socket) => {
     }
     if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
       lb.config[slot].mapKey = cfg.mapKey;
+      dirty = true;
+    }
+    // Host picks the 1v1 bot's unit while the opponent slot is still an empty bot.
+    if (cfg && typeof cfg.botUnitKey === 'string' && UNIT_DATA[cfg.botUnitKey]
+        && slot === 'p1' && lb.mode === '1v1' && !occupiedSlotsOf(lb).has('p2')) {
+      lb.config.p2.unitKey = cfg.botUnitKey;
       dirty = true;
     }
 
