@@ -14,7 +14,7 @@ export function showOnlineDebugPanel(parent) {
   const panel = document.createElement('div');
   panel.className = 'menu online-debug-panel';
   panel.innerHTML = `
-    <h2>Online — Debug Connect</h2>
+    <h2>Refresh page after boot-up</h2>
     <div class="online-status">
       <div><span class="lbl">Server:</span> <span class="val" data-bind="server">${conn.serverUrl}</span></div>
       <div><span class="lbl">Status:</span> <span class="val" data-bind="status">connecting…</span></div>
