@@ -126,7 +126,8 @@ function startMatchFor(lobby) {
     const human = occupied.has(s);
     const cfg = lobby.config[s].unitKey;
     if (human && cfg) return cfg;
-    // Bot default: cycle through unit1..unit6 by slot index for variety.
+    // Bot default: 1v1's opponent is always Saori (unit1); 2v2 cycles for variety.
+    if (lobby.mode === '1v1') return 'unit1';
     const idx = slots.indexOf(s);
     return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][idx % 6];
   };
@@ -164,16 +165,10 @@ function endMatchFor(lobby, winnerId, reason) {
 }
 
 function maybeStartMatchFor(lobby) {
+  // Both 1v1 and 2v2 start MANUALLY now — the host (p1) triggers via
+  // match:start-now, choosing to start now (an empty opponent slot fills with a
+  // bot) or wait for a human to take the slot. No auto-start on readiness.
   if (lobby.state === 'active') return;
-  if (lobby.mode === '1v1') {
-    const slots = occupiedSlotsOf(lobby);
-    if (!slots.has('p1') || !slots.has('p2')) return;
-    if (!lobby.config.p1.unitKey || !lobby.config.p2.unitKey) return;
-    if (!lobby.config.p1.mapKey) return;
-    startMatchFor(lobby);
-    return;
-  }
-  // 2v2: host (p1) explicitly triggers via match:start-now.
 }
 
 function emitLobbyConfig(lobby) {
@@ -413,9 +408,8 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     if (slot !== 'p1') return;
     if (lb.state === 'active') return;
-    if (lb.mode !== '2v2') return;
     if (!lb.config.p1.unitKey || !lb.config.p1.mapKey) return;
-    startMatchFor(lb);
+    startMatchFor(lb);   // 1v1 or 2v2: empty opponent slots fill with bots
   });
 
   socket.on('match:rematch-request', () => {
@@ -431,11 +425,9 @@ io.on('connection', (socket) => {
 
     const occ = occupiedSlotsOf(lb);
     const allReady = Array.from(occ).every((s) => lb.rematchRequested[s]);
-    if (lb.mode === '1v1') {
-      if (occ.has('p1') && occ.has('p2') && allReady) startMatchFor(lb);
-    } else if (allReady && occ.size > 0) {
-      if (occ.has('p1')) startMatchFor(lb);
-    }
+    // Both modes: once every occupied slot has requested a rematch (host present),
+    // restart — an empty opponent slot re-fills with a bot.
+    if (allReady && occ.size > 0 && occ.has('p1')) startMatchFor(lb);
   });
 
   socket.on('disconnect', () => {
