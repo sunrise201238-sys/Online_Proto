@@ -2872,7 +2872,7 @@ function updateEnemy(now) {
       eState.botState = 'defense';
       eState.botStateEnteredAt = now;
       eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
-      eState.botDefenseUntil = eState.stepUntil + 170;
+      eState.botDefenseUntil = eState.stepUntil + 500;
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
