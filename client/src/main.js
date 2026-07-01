@@ -4756,7 +4756,7 @@ function showOnlineWaitingOpp(onl, conn) {
     } else if (mode === '1v1') {
       // 1v1: opponent slot is the bot until a human takes it. Host taps to pick
       // its unit (default Saori); shown with the chosen unit's character.
-      const botUnitKey = cfg?.config?.p2?.unitKey || 'unit1';
+      const botUnitKey = cfg?.botUnitKey || 'unit1';
       const botChar = UNIT_DATA[botUnitKey]?.char || 'Saori';
       statusHtml = isHost
         ? `<span class="roster-status roster-bot-pick" data-pick-bot="1">${botChar} (BOT) — tap to change</span>`
@@ -5153,7 +5153,8 @@ function refreshWaitingOppIfStale(onl, conn) {
   const sig = JSON.stringify({
     config: cfg?.config ?? {},
     mode: cfg?.mode ?? '1v1',
-    occupied: cfg?.occupied ?? []
+    occupied: cfg?.occupied ?? [],
+    botUnitKey: cfg?.botUnitKey ?? 'unit1'
   });
   if (onl.lastWaitingSig === sig) return;
   onl.lastWaitingSig = sig;
