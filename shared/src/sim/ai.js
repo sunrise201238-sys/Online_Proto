@@ -337,7 +337,7 @@ export function tickBot(matchState, botId, now) {
         me.botState = 'defense';
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
-        me.botDefenseUntil = me.stepUntil + 170;
+        me.botDefenseUntil = me.stepUntil + 500;
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
         me.botDefensePeekDone = false;
