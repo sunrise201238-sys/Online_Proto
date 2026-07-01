@@ -55,6 +55,7 @@ function createLobby() {
     state: 'waiting',                 // 'waiting' | 'active' | 'ended'
     mode: '1v1',                      // '1v1' | '2v2' — host pushes via match:set-mode
     botSlots: new Set(),              // slots filled with bots while state==='active'
+    botUnitKey: 'unit1',              // 1v1 opponent bot's unit (host-chosen; default Saori)
     inputs: {
       p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
     },
@@ -126,9 +127,9 @@ function startMatchFor(lobby) {
     const human = occupied.has(s);
     const cfg = lobby.config[s].unitKey;
     if (human && cfg) return cfg;
-    // Bot default: 1v1's opponent is the host-chosen unit (config.p2.unitKey),
-    // defaulting to Saori (unit1); 2v2 cycles for variety.
-    if (lobby.mode === '1v1') return cfg ?? 'unit1';
+    // Bot default: 1v1's opponent is the host-chosen bot unit (lobby.botUnitKey,
+    // default Saori); 2v2 cycles for variety.
+    if (lobby.mode === '1v1') return lobby.botUnitKey ?? 'unit1';
     const idx = slots.indexOf(s);
     return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][idx % 6];
   };
@@ -177,6 +178,7 @@ function emitLobbyConfig(lobby) {
     state: lobby.state,
     mode: lobby.mode,
     config: lobby.config,
+    botUnitKey: lobby.botUnitKey,
     occupied: Array.from(occupiedSlotsOf(lobby)),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
@@ -282,14 +284,9 @@ io.on('connection', (socket) => {
     matchState: lobby.state
   });
 
-  socket.emit('lobby:config', {
-    state: lobby.state,
-    mode: lobby.mode,
-    config: lobby.config,
-    occupied: Array.from(occupiedSlotsOf(lobby)),
-    botSlots: Array.from(lobby.botSlots),
-    rematchRequested: lobby.rematchRequested
-  });
+  // Broadcast to the whole lobby (not just the joiner) so the host sees the new
+  // occupant — e.g. a player taking the bot's 1v1 slot.
+  emitLobbyConfig(lobby);
 
   maybeStartMatchFor(lobby);
 
@@ -337,10 +334,11 @@ io.on('connection', (socket) => {
       lb.config[slot].mapKey = cfg.mapKey;
       dirty = true;
     }
-    // Host picks the 1v1 bot's unit while the opponent slot is still an empty bot.
+    // Host picks the 1v1 bot's unit — its OWN field so it never collides with a
+    // human joiner's p2 pick. Only while p2 is still an empty bot.
     if (cfg && typeof cfg.botUnitKey === 'string' && UNIT_DATA[cfg.botUnitKey]
         && slot === 'p1' && lb.mode === '1v1' && !occupiedSlotsOf(lb).has('p2')) {
-      lb.config.p2.unitKey = cfg.botUnitKey;
+      lb.botUnitKey = cfg.botUnitKey;
       dirty = true;
     }
 
