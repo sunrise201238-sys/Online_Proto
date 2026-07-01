@@ -4696,23 +4696,15 @@ function showOnlineWaitingOpp(onl, conn) {
   const mapKey = myCfg.mapKey || cfg?.config?.p1?.mapKey;
   const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
 
-  // Headline text. 2v2 host: prompt to start. 2v2 non-host: waiting for host
-  // to start. 1v1: existing text driven off opp picks.
+  // Headline text. Both modes use the manual-start flow: the host picks unit +
+  // map then starts; everyone else waits for the host.
   let waitingText;
-  if (mode === '2v2') {
-    if (isHost) {
-      if (!myCfg.unitKey) waitingText = 'Pick your unit…';
-      else if (!myCfg.mapKey) waitingText = 'Pick a map…';
-      else waitingText = 'Lobby — start when ready';
-    } else {
-      waitingText = 'Waiting for host to start…';
-    }
+  if (isHost) {
+    if (!myCfg.unitKey) waitingText = 'Pick your unit…';
+    else if (!myCfg.mapKey) waitingText = 'Pick a map…';
+    else waitingText = 'Lobby — start when ready';
   } else {
-    const oppId = isHost ? 'p2' : 'p1';
-    const oppCfg = cfg?.config?.[oppId] ?? {};
-    if (!oppCfg.unitKey) waitingText = isHost ? 'Waiting for opponent to pick unit…' : 'Waiting for host to pick unit…';
-    else if (!isHost && !oppCfg.mapKey) waitingText = 'Waiting for host to pick map…';
-    else waitingText = 'Starting…';
+    waitingText = 'Waiting for host to start…';
   }
 
   // Roster grouped by team. Each team gets its own <section> with a header
@@ -4733,9 +4725,12 @@ function showOnlineWaitingOpp(onl, conn) {
       // Host slot is locked — no Join button. Reaches here only briefly,
       // during connect-time before p1 is assigned.
       statusHtml = `<span class="roster-status">(host slot)</span>`;
+    } else if (mode === '1v1') {
+      // 1v1: the empty opponent slot is the Saori bot until a human takes it.
+      // No Join/team-switch button (only two slots, auto-assigned).
+      statusHtml = `<span class="roster-status">(empty — Saori bot)</span>`;
     } else {
-      const labelText = mode === '2v2' ? '(empty — bot fill)' : '(waiting…)';
-      statusHtml = `<span class="roster-status">${labelText}</span>
+      statusHtml = `<span class="roster-status">(empty — bot fill)</span>
         <button class="roster-join" data-join-slot="${s}">Join</button>`;
     }
     return `<div class="roster-row roster-team-${team}">
@@ -4759,10 +4754,11 @@ function showOnlineWaitingOpp(onl, conn) {
   // Display it here as read-only — no toggle.
   const modeChip = `<div class="menu-divider">Mode: ${mode}</div>`;
 
-  // 2v2 host's explicit Start Now button. Only enabled once they've picked
-  // unit + map (otherwise the server rejects).
-  const canStart = mode === '2v2' && isHost && !!myCfg.unitKey && !!myCfg.mapKey;
-  const startBtnHtml = mode === '2v2' && isHost
+  // Host's explicit Start button (both modes). Enabled once they've picked
+  // unit + map (server rejects otherwise). Starting with an empty opponent slot
+  // fills it with a bot (1v1 → Saori); a human who joins first takes the slot.
+  const canStart = isHost && !!myCfg.unitKey && !!myCfg.mapKey;
+  const startBtnHtml = isHost
     ? `<button id="online-start-now" class="online-play-btn"${canStart ? '' : ' disabled'}>Start Match</button>`
     : '';
 
