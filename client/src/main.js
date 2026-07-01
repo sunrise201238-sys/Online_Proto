@@ -4726,9 +4726,9 @@ function showOnlineWaitingOpp(onl, conn) {
       // during connect-time before p1 is assigned.
       statusHtml = `<span class="roster-status">(host slot)</span>`;
     } else if (mode === '1v1') {
-      // 1v1: the empty opponent slot is the Saori bot until a human takes it.
-      // No Join/team-switch button (only two slots, auto-assigned).
-      statusHtml = `<span class="roster-status">(empty — Saori bot)</span>`;
+      // 1v1: the opponent slot is held by the Saori bot until a human takes it.
+      // Shown as a filled occupant (no Join/team-switch button — two slots only).
+      statusHtml = `<span class="roster-status">Saori (BOT)</span>`;
     } else {
       statusHtml = `<span class="roster-status">(empty — bot fill)</span>
         <button class="roster-join" data-join-slot="${s}">Join</button>`;
