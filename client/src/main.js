@@ -5183,7 +5183,7 @@ function showSelectMenu() {
     ${unitGridHTML(unitEntries)}
     <div class="menu-divider">— Online —</div>
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
-    <button data-online-debug class="online-debug-btn">Online (Debug Connect)</button>
+    <button data-online-debug class="online-debug-btn">Server Boot-up</button>
     <button data-guide class="guide-btn">Guide</button>`;
   app.appendChild(menu);
 
