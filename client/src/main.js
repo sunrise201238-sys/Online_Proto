@@ -494,7 +494,7 @@ const BOT_HIT_EVADE_MS = 350;
 // Mirrors BOT_GLINT_REACT_MS in shared/src/sim/ai.js — humanlike delay before
 // the bot "notices" a sniper glint (Defense entry + its guessed dodge both
 // wait on it), so a floor-canceled snap shot beats a bot that hasn't reacted.
-const BOT_GLINT_REACT_MS = 600;
+const BOT_GLINT_REACT_MS = 530;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -2872,7 +2872,7 @@ function updateEnemy(now) {
       eState.botState = 'defense';
       eState.botStateEnteredAt = now;
       eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
-      eState.botDefenseUntil = eState.stepUntil + 150;
+      eState.botDefenseUntil = eState.stepUntil + 170;
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
