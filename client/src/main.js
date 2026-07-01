@@ -4516,8 +4516,8 @@ function computeOnlineUiPhase(onl, conn) {
   if (myId === 'p1' && !onl.modePushedToServer) return 'pick-mode';
   if (!myCfg.unitKey) return 'pick-unit';
   if (myId === 'p1' && !myCfg.mapKey) return 'pick-map';
-  // Host tapping the 1v1 opponent (bot) slot opens the bot-unit picker.
-  if (onl.pickingBotUnit && myId === 'p1' && cfg?.mode === '1v1') return 'pick-bot-unit';
+  // Host tapping a bot slot opens the bot-unit picker (1v1 or 2v2).
+  if (onl.pickingBotSlot && myId === 'p1') return 'pick-bot-unit';
   return 'waiting-opp';
 }
 
@@ -4662,26 +4662,27 @@ function showOnlineUnitPicker(onl, conn) {
   });
 }
 
-// Host taps the 1v1 opponent (bot) slot → pick which unit the Saori-default bot
-// uses. Sends botUnitKey; the server stores it on the p2 slot config.
+// Host taps a bot slot → pick which unit that bot uses (1v1 or 2v2). Sends
+// { botSlot, botUnitKey }; the server stores it per-slot in lobby.botUnits.
 function showOnlineBotUnitPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
+  const slot = onl.pickingBotSlot;
   const unitEntries = Object.entries(UNIT_DATA);
   menu.innerHTML = `
     <h2>Pick Bot Unit</h2>
-    <div class="menu-divider">Online 1v1 — opponent bot (default Saori)</div>
+    <div class="menu-divider">Bot in slot ${slot}</div>
     ${unitGridHTML(unitEntries)}
     <button data-back class="online-leave-btn">Back</button>
   `;
   app.appendChild(menu);
   wireUnitGrid(menu, (key) => {
-    onl.conn.sendConfigure({ botUnitKey: key });
-    onl.pickingBotUnit = false;   // back to the queue room next frame
+    onl.conn.sendConfigure({ botSlot: slot, botUnitKey: key });
+    onl.pickingBotSlot = null;   // back to the queue room next frame
   });
   menu.querySelector('button[data-back]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    onl.pickingBotUnit = false;
+    onl.pickingBotSlot = null;
   });
 }
 
@@ -4753,17 +4754,18 @@ function showOnlineWaitingOpp(onl, conn) {
       // Host slot is locked — no Join button. Reaches here only briefly,
       // during connect-time before p1 is assigned.
       statusHtml = `<span class="roster-status">(host slot)</span>`;
-    } else if (mode === '1v1') {
-      // 1v1: opponent slot is the bot until a human takes it. Host taps to pick
-      // its unit (default Saori); shown with the chosen unit's character.
-      const botUnitKey = cfg?.botUnitKey || 'unit1';
-      const botChar = UNIT_DATA[botUnitKey]?.char || 'Saori';
-      statusHtml = isHost
-        ? `<span class="roster-status roster-bot-pick" data-pick-bot="1">${botChar} (BOT) — tap to change</span>`
-        : `<span class="roster-status">${botChar} (BOT)</span>`;
     } else {
-      statusHtml = `<span class="roster-status">(empty — bot fill)</span>
-        <button class="roster-join" data-join-slot="${s}">Join</button>`;
+      // Empty slot = a bot until a human takes it. Show its (host-chosen) unit.
+      // Host taps to change that bot's unit; non-hosts get a Join button in 2v2
+      // (team-switch). 1v1 has no Join (two slots, auto-assigned).
+      const botUnitKey = cfg?.botUnits?.[s] || 'unit1';
+      const botChar = UNIT_DATA[botUnitKey]?.char || 'Saori';
+      if (isHost) {
+        statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botChar} (BOT) — tap to change</span>`;
+      } else {
+        const joinBtn = mode === '2v2' ? `<button class="roster-join" data-join-slot="${s}">Join</button>` : '';
+        statusHtml = `<span class="roster-status">${botChar} (BOT)</span>${joinBtn}`;
+      }
     }
     return `<div class="roster-row roster-team-${team}">
       <span class="roster-slot">${s}</span>
@@ -4813,14 +4815,13 @@ function showOnlineWaitingOpp(onl, conn) {
       onl.conn.sendJoinSlot(btn.dataset.joinSlot);
     });
   });
-  // Host taps the bot slot to open the bot-unit picker (1v1).
-  const botPick = menu.querySelector('[data-pick-bot]');
-  if (botPick) {
-    botPick.addEventListener('pointerdown', (e) => {
+  // Host taps a bot slot to open the bot-unit picker (1v1 or 2v2).
+  menu.querySelectorAll('[data-pick-bot-slot]').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      onl.pickingBotUnit = true;
+      onl.pickingBotSlot = el.dataset.pickBotSlot;
     });
-  }
+  });
   const startBtn = menu.querySelector('#online-start-now');
   if (startBtn) {
     startBtn.addEventListener('pointerdown', (e) => {
@@ -5154,7 +5155,7 @@ function refreshWaitingOppIfStale(onl, conn) {
     config: cfg?.config ?? {},
     mode: cfg?.mode ?? '1v1',
     occupied: cfg?.occupied ?? [],
-    botUnitKey: cfg?.botUnitKey ?? 'unit1'
+    botUnits: cfg?.botUnits ?? {}
   });
   if (onl.lastWaitingSig === sig) return;
   onl.lastWaitingSig = sig;
