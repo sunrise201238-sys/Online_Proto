@@ -971,37 +971,67 @@ function tickAmmo(mech, now) {
   }
 }
 
-function makeReticleSprite() {
+// Reticle textures come in three range tiers (Aru's rangeDamage zones):
+//   0 base  — the four corner brackets (also every non-Aru matchup)
+//   1 mid   — + slightly thicker cross ticks through the four edge midpoints
+//   2 far   — + four inward-pointing triangles set out past the ticks
+// All drawn in white on a 192px canvas (the old 128px art re-centred, with
+// margin for the tier marks) so the SpriteMaterial tint gives clean red/green.
+function buildReticleTexture(tier) {
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  c.width = c.height = 192;
   const x = c.getContext('2d');
-  // Draw with white so the SpriteMaterial color tint produces a clean red/green.
   x.strokeStyle = '#ffffff';
+  x.fillStyle = '#ffffff';
   x.lineWidth = 9;
   x.lineCap = 'round';
   x.lineJoin = 'round';
-  const m = 14;        // margin from canvas edge
+  const m = 46;        // bracket square margin (same 100px square as before)
   const arm = 32;      // length of each L-arm
-  const e = 128 - m;   // far edge
-  // Top-left bracket
-  x.beginPath();
-  x.moveTo(m, m + arm); x.lineTo(m, m); x.lineTo(m + arm, m);
-  x.stroke();
-  // Top-right bracket
-  x.beginPath();
-  x.moveTo(e - arm, m); x.lineTo(e, m); x.lineTo(e, m + arm);
-  x.stroke();
-  // Bottom-left bracket
-  x.beginPath();
-  x.moveTo(m, e - arm); x.lineTo(m, e); x.lineTo(m + arm, e);
-  x.stroke();
-  // Bottom-right bracket
-  x.beginPath();
-  x.moveTo(e - arm, e); x.lineTo(e, e); x.lineTo(e, e - arm);
-  x.stroke();
-  const t = new THREE.CanvasTexture(c);
+  const e = 192 - m;   // far edge of the bracket square
+  x.beginPath(); x.moveTo(m, m + arm); x.lineTo(m, m); x.lineTo(m + arm, m); x.stroke();
+  x.beginPath(); x.moveTo(e - arm, m); x.lineTo(e, m); x.lineTo(e, m + arm); x.stroke();
+  x.beginPath(); x.moveTo(m, e - arm); x.lineTo(m, e); x.lineTo(m + arm, e); x.stroke();
+  x.beginPath(); x.moveTo(e - arm, e); x.lineTo(e, e); x.lineTo(e, e - arm); x.stroke();
+  if (tier >= 1) {
+    // Cross ticks poking through the edge midpoints, a touch thicker than the frame.
+    x.lineWidth = 13;
+    x.beginPath(); x.moveTo(96, m - 12); x.lineTo(96, m + 12); x.stroke();
+    x.beginPath(); x.moveTo(96, e - 12); x.lineTo(96, e + 12); x.stroke();
+    x.beginPath(); x.moveTo(m - 12, 96); x.lineTo(m + 12, 96); x.stroke();
+    x.beginPath(); x.moveTo(e - 12, 96); x.lineTo(e + 12, 96); x.stroke();
+  }
+  if (tier >= 2) {
+    // Inward-pointing triangles with a clear gap beyond the ticks.
+    const tri = (ax, ay, bx, by, cx2, cy2) => {
+      x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.lineTo(cx2, cy2); x.closePath(); x.fill();
+    };
+    tri(96, 24, 80, 4, 112, 4);         // top
+    tri(96, 168, 80, 188, 112, 188);    // bottom
+    tri(24, 96, 4, 80, 4, 112);         // left
+    tri(168, 96, 188, 80, 188, 112);    // right
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+let reticleTierTextures = null;
+function getReticleTierTextures() {
+  if (!reticleTierTextures) {
+    reticleTierTextures = {
+      base: buildReticleTexture(0),
+      mid: buildReticleTexture(1),
+      far: buildReticleTexture(2)
+    };
+  }
+  return reticleTierTextures;
+}
+
+function makeReticleSprite() {
+  const t = getReticleTierTextures().base;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
-  s.scale.set(5.4, 5.4, 1);
+  // 1.5× the old 128px-canvas scale — the bracket square stays the same
+  // on-screen size, the extra canvas room is for the tier marks.
+  s.scale.set(8.1, 8.1, 1);
   s.renderOrder = 9999;
   scene.add(s);
   return s;
@@ -1845,8 +1875,10 @@ const KEI_BEAM_SWEEP_RATE = 0.175;      // rad/s the beam rotates toward the aim
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
 const KEI_BEAM_VIS_SMOOTH = 0.35;       // online-only: ease the DRAWN charged beam toward the predicted dir per frame (kills reconciliation snap)
-// Aru laser sight (units with rangeDamage). Always-on toward the lock target;
-// flip to false to show it only during the sniper charge wind-up.
+// Aru laser sight (units with rangeDamage). RETIRED in favor of the range-tier
+// lock reticle — flip LASER_SIGHT_ENABLED to true to bring the line back.
+const LASER_SIGHT_ENABLED = false;
+// Always-on toward the lock target; false = show only during the charge wind-up.
 const LASER_SIGHT_ALWAYS_ON = true;
 const LASER_SIGHT_DIM = 0x8f2f2f;       // mid tier (nearDist..midDist) — dim red
 const LASER_SIGHT_BRIGHT = 0xff4646;    // far tier (beyond midDist) — brighter red
@@ -2291,6 +2323,14 @@ function laserTargetOf(m) {
 }
 
 function updateLaserSights() {
+  if (!LASER_SIGHT_ENABLED) {
+    // Retired visual — keep any existing lines hidden, but leave the system
+    // intact so one flag flip restores it.
+    for (const m of getAllFighters()) {
+      if (m?.laserSightVisual) m.laserSightVisual.visible = false;
+    }
+    return;
+  }
   for (const m of getAllFighters()) {
     if (!m) continue;
     const rd = m.unit?.rangeDamage;
@@ -3556,11 +3596,36 @@ function updateLocksAndReticle() {
   state.reticleLastEnemyFireAt = enemyFireAt;
   const enemyFiring = nowMs < state.reticleEnemyFiringUntil;
 
+  // Sniper charge warning: RED while the lock target (Aru or Kei) is mid-charge
+  // with ME as the charge target — a continuous danger signal from glint to
+  // shot. Offline stores the target as a mech ref; online mirrors { id }.
+  const chargeTgt = tgt.state.sniperChargeTarget;
+  const chargingAtMe = !!chargeTgt && (state.online
+    ? chargeTgt.id === state.online.myPlayerId
+    : chargeTgt === state.player);
+
+  // Range-tier reticle (Aru's rangeDamage zones). Applies when I am Aru
+  // (my damage tier on the target) or my lock target is an Aru (which of HER
+  // zones I'm standing in) — same distance either way. XZ distance, matching
+  // the fire-time damage tier calc.
+  const rd = state.player.unit?.rangeDamage ?? tgt.unit?.rangeDamage;
+  const tex = getReticleTierTextures();
+  let tierTex = tex.base;
+  if (rd) {
+    const distXZ = Math.hypot(tgt.root.position.x - state.player.root.position.x, tgt.root.position.z - state.player.root.position.z);
+    tierTex = distXZ >= rd.midDist ? tex.far : distXZ >= rd.nearDist ? tex.mid : tex.base;
+  }
+  if (state.reticle.material.map !== tierTex) {
+    state.reticle.material.map = tierTex;
+    state.reticle.material.needsUpdate = true;
+  }
+
   state.reticle.position.set(0, 0.2, 0);
-  state.reticle.material.color.set(enemyFiring ? 0xff5f72 : 0x7effbd);
+  state.reticle.material.color.set((enemyFiring || chargingAtMe) ? 0xff5f72 : 0x7effbd);
   const camDist = camera.position.distanceTo(tgt.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-  state.reticle.scale.setScalar(6.1 * distScale);
+  // 1.5× the old 6.1 — larger canvas, same on-screen bracket size.
+  state.reticle.scale.setScalar(9.15 * distScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
