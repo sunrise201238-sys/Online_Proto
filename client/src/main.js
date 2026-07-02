@@ -994,10 +994,10 @@ function buildReticleTexture(tier) {
   x.beginPath(); x.moveTo(m, e - arm); x.lineTo(m, e); x.lineTo(m + arm, e); x.stroke();
   x.beginPath(); x.moveTo(e - arm, e); x.lineTo(e, e); x.lineTo(e, e - arm); x.stroke();
   if (tier >= 1) {
-    // Cross ticks at the edge midpoints, a touch thicker than the frame and
+    // Cross ticks at the edge midpoints, same thickness as the bracket frame,
     // mostly OUTSIDE it — they stop just inside so they never touch the
-    // far-tier triangles.
-    x.lineWidth = 13;
+    // far-tier inner bars.
+    x.lineWidth = 9;
     x.beginPath(); x.moveTo(96, m - 18); x.lineTo(96, m + 2); x.stroke();
     x.beginPath(); x.moveTo(96, e - 2); x.lineTo(96, e + 18); x.stroke();
     x.beginPath(); x.moveTo(m - 18, 96); x.lineTo(m + 2, 96); x.stroke();
@@ -1007,7 +1007,7 @@ function buildReticleTexture(tier) {
     // Short bars parallel to each edge, INSIDE the bracket square — an inner
     // frame closing around the target. Clear gap from the tick ends; the
     // parallel-vs-perpendicular contrast keeps them distinct from the ticks.
-    x.lineWidth = 13;
+    x.lineWidth = 9;
     x.beginPath(); x.moveTo(82, 62); x.lineTo(110, 62); x.stroke();     // top
     x.beginPath(); x.moveTo(82, 130); x.lineTo(110, 130); x.stroke();   // bottom
     x.beginPath(); x.moveTo(62, 82); x.lineTo(62, 110); x.stroke();     // left
