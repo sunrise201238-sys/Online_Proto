@@ -94,7 +94,7 @@ export const UNIT_DATA = {
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
     // Also drives the laser-sight tiers (client visual).
-    rangeDamage: { nearDist: 30, midDist: 50, near: 20, mid: 35 },
+    rangeDamage: { nearDist: 15, midDist: 50, near: 20, mid: 35 },
     magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
