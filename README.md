@@ -10,34 +10,47 @@ A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fig
 - Optional "Dummy" mode on the map-select screen — zeroes out damage from every bot (enemies and your ally), so you can practice movement and observe bot behaviour without dying.
 
 ### Online
-- **1v1**: matchmaking pools two humans into the same lobby.
+- **1v1**: the host presses **Start Match** when ready. The opponent slot holds a bot (default **Saori / Unit 1**) until a second human queues in and takes it — start early to play the bot, or wait for a player.
 - **2v2**: host picks `2v2` on connect, then presses **Start Match** when ready; empty player slots fill with bots. Up to four humans can play (any split between teams); bots fill any remaining slots.
+- **Bot unit selection**: in the lobby, the host can tap any bot slot to pick which unit that bot plays (1v1 and 2v2). A human joining the slot always overrides the bot.
 - Multi-lobby — when an existing lobby is full or running, new joiners spawn their own lobby and become host.
-- Team swap allowed during the lobby: any non-host player can `Join` an empty slot to switch teams (e.g. two humans want to co-op on one side against two bots).
+- Team swap in 2v2: any non-host player can `Join` an empty slot to switch teams (e.g. two humans want to co-op on one side against two bots).
 
 ## Units
 
-Six pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base):
+Six pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8):
 
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
-| Unit 1 — Assault Rifle | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
+| Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
 | Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
-| Unit 3 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
 | Unit 4 — Submachine Gun | 30 | 3 / shot | ~1100 RPM | 46 | 1.5 s |
 | Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
-| Unit 6 — Sniper Rifle | 5 | 30 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
+| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge |
 
-Red-lock (in-range target) enables homing on single-shot weapons.
+Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon tunable (SMG's is lighter: 50 ms at 0.85 move-scale vs the default 100 ms at 0.25).
 
 ### Sniper charge & sprint-cancel
 
-- The Sniper holds its shot on a **1 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.5 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.5–1 s** window, and the target always gets at least that much glint-to-bullet warning.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Bullet speed is **2000 u/s** (near-hitscan — only ~0.06 s flight even at max range), so evasion is a read off the glint, not the bullet.
+- Both snipers hold their shot on a **1 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.5 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.5–1 s** window, and the target always gets at least that much glint-to-bullet warning.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **2000 u/s** (near-hitscan — only ~0.06 s flight even at max range); Kei's beam is instant.
+
+### Aru (Unit 3) — range zones & the lock reticle
+
+- Damage is tiered by distance, **locked at fire time**: under 30 units → **20**, 30–50 → **35**, beyond 50 → **50**. Rushing a sniper is real counterplay; long range stays lethal.
+- The lock reticle shows the current zone — plain brackets (<30), **+ cross ticks** (30–50), **+ inner bars** (50+). It appears both when *you* play Aru (your tier on the target) and when your lock target *is* an Aru (which of her zones you're standing in).
+- The reticle turns **red** not just when your target fires, but for the whole time a sniper (Aru **or** Kei) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
+
+### Kei (Unit 6) — 照射ビーム laser
+
+- Fires an instant **hitscan beam** (30 damage, one hit per enemy per beam, blocked by walls, ~0.5 s fade) instead of a bullet. The beam also **deletes projectiles** it touches.
+- Holding the charge to the full **1 s** fires a **sweep channel**: a 1 s locked, steerable beam (1.5× width, **20 damage**, one hit per enemy for the whole channel). The stick steers it — horizontal and vertical — at ~10°/s; sprint cancels the channel. The fire cooldown is paused during the channel and starts when it ends.
+- Her glint grows toward **2×** size as the charge fills, telegraphing a full-charge sweep.
 
 **Bots vs. the sniper.**
-- **As the shooter:** the bot releases at the **0.5 s floor 90%** of the time (a fast snap), and at a random **0.5–1 s** the other 10%.
-- **On defense:** when a glint appears, the bot ignores it for a fixed **0.6 s**, then does exactly **one** lateral dodge (0.3 s i-frames) per charge — no prediction, no cover-sprint. A bullet **arriving ~0.6–0.9 s** after the glint is dodged — but at 2000 u/s a floor-snap (release at 0.5 s) lands ~0.5–0.56 s in, *before* the 0.6 s dodge, so the snap now beats the dodge **at any range**. Only a *held* shot can be dodged, and one held past ~0.9 s whiffs the dash entirely.
+- **As the shooter:** Aru bots release at the **0.5 s floor 90%** of the time (a fast snap) and at a random 0.5–1 s the other 10%. Kei bots snap at the floor **70%** and hold to the **full-charge sweep 30%**.
+- **On defense:** when a glint appears, the bot ignores it for a fixed **0.54 s**, then does **one** lateral dodge (0.3 s i-frames) followed by a **0.5 s** committed sprint in the same direction — refreshed while the charge persists. A floor-snap (release at 0.5 s) arrives ~0.5–0.56 s in, so it beats the dodge at all but the longest ranges; a held shot can be dodged, and one held past ~0.9 s whiffs the dash entirely.
 
 ## Controls
 
@@ -46,7 +59,7 @@ Red-lock (in-range target) enables homing on single-shot weapons.
 | **Mobile** | On-screen joystick + buttons |
 | **PC** | `WASD` move · `J` fire · `K` sprint · `L` dodge · `Space` jump · `U` switch target (2v2) |
 
-Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s of damage immunity (i-frames).
+Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
 
 ## Maps
 
