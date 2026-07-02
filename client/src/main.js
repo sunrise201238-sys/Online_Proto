@@ -3606,6 +3606,13 @@ function updateLocksAndReticle() {
     ? chargeTgt.id === state.online.myPlayerId
     : chargeTgt === state.player);
 
+  // Kei's charged sweep channel: stay red for the channel's WHOLE duration —
+  // the beam sweeps and can hit anyone, so no "at me" filter. Returns to green
+  // the moment a sprint-cancel (or expiry) ends it: chargedBeamVisual is
+  // non-null exactly while the channel is live in both modes (offline
+  // start/endChargedBeam, online syncOnlineChargedBeams).
+  const sweepChannelActive = !!tgt.chargedBeamVisual;
+
   // Range-tier reticle (Aru's rangeDamage zones). Applies when I am Aru
   // (my damage tier on the target) or my lock target is an Aru (which of HER
   // zones I'm standing in) — same distance either way. XZ distance, matching
@@ -3623,7 +3630,7 @@ function updateLocksAndReticle() {
   }
 
   state.reticle.position.set(0, 0.2, 0);
-  state.reticle.material.color.set((enemyFiring || chargingAtMe) ? 0xff5f72 : 0x7effbd);
+  state.reticle.material.color.set((enemyFiring || chargingAtMe || sweepChannelActive) ? 0xff5f72 : 0x7effbd);
   const camDist = camera.position.distanceTo(tgt.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
   // 1.5× the old 6.1 — larger canvas, same on-screen bracket size.
