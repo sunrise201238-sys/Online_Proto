@@ -1004,15 +1004,14 @@ function buildReticleTexture(tier) {
     x.beginPath(); x.moveTo(e - 2, 96); x.lineTo(e + 18, 96); x.stroke();
   }
   if (tier >= 2) {
-    // Inward-pointing triangles INSIDE the bracket square, with a clear gap
-    // from the tick ends and the center left clear for the target sprite.
-    const tri = (ax, ay, bx, by, cx2, cy2) => {
-      x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.lineTo(cx2, cy2); x.closePath(); x.fill();
-    };
-    tri(96, 80, 82, 63, 110, 63);       // top (tip points down/in)
-    tri(96, 112, 82, 129, 110, 129);    // bottom (tip points up/in)
-    tri(80, 96, 63, 82, 63, 110);       // left (tip points right/in)
-    tri(112, 96, 129, 82, 129, 110);    // right (tip points left/in)
+    // Short bars parallel to each edge, INSIDE the bracket square — an inner
+    // frame closing around the target. Clear gap from the tick ends; the
+    // parallel-vs-perpendicular contrast keeps them distinct from the ticks.
+    x.lineWidth = 13;
+    x.beginPath(); x.moveTo(82, 62); x.lineTo(110, 62); x.stroke();     // top
+    x.beginPath(); x.moveTo(82, 130); x.lineTo(110, 130); x.stroke();   // bottom
+    x.beginPath(); x.moveTo(62, 82); x.lineTo(62, 110); x.stroke();     // left
+    x.beginPath(); x.moveTo(130, 82); x.lineTo(130, 110); x.stroke();   // right
   }
   return new THREE.CanvasTexture(c);
 }
