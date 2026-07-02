@@ -116,6 +116,10 @@ const UNIT_DATA = {
     spreadCount: 1,
     spreadAngle: 0.02,
     damage: 50,
+    // Distance-tiered damage (locked at fire time): closer than nearDist →
+    // near, between nearDist and midDist → mid, beyond midDist → full damage.
+    // Also drives the laser-sight tiers (client visual).
+    rangeDamage: { nearDist: 30, midDist: 50, near: 20, mid: 35 },
     magCapacity: 5,
     reloadMs: 2500,
     autoReload: false,
@@ -1331,6 +1335,14 @@ function spawnProjectiles(owner, target) {
   owner.state.lastFireAt = now;
   if (owner.unit.magCapacity != null) owner.state.ammo -= 1;
 
+  // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
+  // what the laser sight showed. Units without rangeDamage keep flat damage.
+  let shotDamage = owner.unit.damage;
+  if (owner.unit.rangeDamage) {
+    const rd = owner.unit.rangeDamage;
+    const rdDist = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
+    shotDamage = rdDist < rd.nearDist ? rd.near : rdDist < rd.midDist ? rd.mid : owner.unit.damage;
+  }
   const baseDir = new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
   const isShotgun = owner.unit.spreadCount > 1;
   const centerIndex = isShotgun ? Math.floor(Math.random() * owner.unit.spreadCount) : 0;
@@ -1385,7 +1397,7 @@ function spawnProjectiles(owner, target) {
       centerPellet: null,
       clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
-      damage: owner.unit.damage,
+      damage: shotDamage,
       hitStunMs: owner.unit.stun?.ms ?? 100,
       hitStunScale: owner.unit.stun?.moveScale ?? 0.25,
       // Set on the shotgun's center pellet only — accumulates path length so
@@ -1833,6 +1845,11 @@ const KEI_BEAM_SWEEP_RATE = 0.175;      // rad/s the beam rotates toward the aim
 const KEI_BEAM_AIM_DEADZONE = 0.3;      // joystick magnitude below this = hold direction
 const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
 const KEI_BEAM_VIS_SMOOTH = 0.35;       // online-only: ease the DRAWN charged beam toward the predicted dir per frame (kills reconciliation snap)
+// Aru laser sight (units with rangeDamage). Always-on toward the lock target;
+// flip to false to show it only during the sniper charge wind-up.
+const LASER_SIGHT_ALWAYS_ON = true;
+const LASER_SIGHT_DIM = 0x8f2f2f;       // mid tier (nearDist..midDist) — dim red
+const LASER_SIGHT_BRIGHT = 0xff4646;    // far tier (beyond midDist) — brighter red
 
 // Distance from (ox,oy,oz) along (dx,dy,dz) to the nearest wall, clamped to
 // maxLen. Mirrors shared raycastObstacleDistance (same slab method).
@@ -2250,6 +2267,71 @@ function syncOnlineChargedBeams(now) {
     const length = beamLengthToWall(ox, oy, oz, dx, 0, dz, BEAM_MAX_LENGTH);
     orientChargedBeamVisual(m.chargedBeamVisual, Math.tan(pitch), ox, oy, oz, dx, dz, length);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Aru laser sight — a 1px red line from the muzzle toward the lock target,
+// clipped at the first wall. Pure client visual (no sim/net state), rendered
+// for every mech with unit.rangeDamage in BOTH modes, so everyone sees it.
+// Color encodes the damage tier: hidden inside nearDist (weak zone), dim red
+// in the mid tier, brighter red at full-damage range.
+// ---------------------------------------------------------------------------
+function laserTargetOf(m) {
+  if (state.online) {
+    const sm = state.online.slotMap;
+    if (sm && m.state.targetId) {
+      const byId = { [sm.cameraId]: state.player, [sm.allyId]: state.ally, [sm.enemyId]: state.enemy, [sm.enemy2Id]: state.enemy2 };
+      const t = byId[m.state.targetId];
+      if (t) return t;
+    }
+    return pickClosestEnemyOf(m);
+  }
+  if (m === state.player) return state.playerCurrentTarget ?? state.enemy;
+  return pickClosestEnemyOf(m);
+}
+
+function updateLaserSights() {
+  for (const m of getAllFighters()) {
+    if (!m) continue;
+    const rd = m.unit?.rangeDamage;
+    let show = !!rd && m.state.hp > 0;
+    if (show && !LASER_SIGHT_ALWAYS_ON) show = !!m.state.sniperChargeTarget;
+    const tgt = show ? laserTargetOf(m) : null;
+    if (!tgt || tgt.state.hp <= 0) show = false;
+    let dist = 0;
+    if (show) {
+      dist = Math.hypot(tgt.root.position.x - m.root.position.x, tgt.root.position.z - m.root.position.z);
+      if (dist < rd.nearDist) show = false;   // weak zone: no laser
+    }
+    if (!show) {
+      if (m.laserSightVisual) m.laserSightVisual.visible = false;
+      continue;
+    }
+    if (!m.laserSightVisual) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const mat = new THREE.LineBasicMaterial({ color: LASER_SIGHT_BRIGHT, transparent: true, opacity: 0.9 });
+      m.laserSightVisual = new THREE.Line(geo, mat);
+      m.laserSightVisual.renderOrder = 9997;
+      scene.add(m.laserSightVisual);
+    }
+    const ox = m.root.position.x;
+    const oy = m.root.position.y + 0.8;      // muzzle height (matches projectile spawn)
+    const oz = m.root.position.z;
+    let dx = tgt.root.position.x - ox;
+    let dy = (tgt.root.position.y + 0.8) - oy;
+    let dz = tgt.root.position.z - oz;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    dx /= len; dy /= len; dz /= len;
+    // Clip at the first wall so the sight never shows through cover.
+    const drawLen = Math.min(len, beamLengthToWall(ox, oy, oz, dx, dy, dz, len));
+    const pos = m.laserSightVisual.geometry.attributes.position;
+    pos.setXYZ(0, ox, oy, oz);
+    pos.setXYZ(1, ox + dx * drawLen, oy + dy * drawLen, oz + dz * drawLen);
+    pos.needsUpdate = true;
+    m.laserSightVisual.material.color.set(dist < rd.midDist ? LASER_SIGHT_DIM : LASER_SIGHT_BRIGHT);
+    m.laserSightVisual.visible = true;
+  }
 }
 
 // Draw Kei's quick 照射ビーム beams from the snapshot's beam list (state-driven).
@@ -3893,6 +3975,12 @@ function cleanupMatch() {
       m.chargedBeamVisual.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
       m.chargedBeamVisual = null;
     }
+    if (m.laserSightVisual) {
+      scene.remove(m.laserSightVisual);
+      m.laserSightVisual.geometry.dispose();
+      m.laserSightVisual.material.dispose();
+      m.laserSightVisual = null;
+    }
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
@@ -4183,6 +4271,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.chargedBeamDirX = fighter.chargedBeamDirX ?? 0;
   s.chargedBeamDirZ = fighter.chargedBeamDirZ ?? 0;
   s.chargedBeamPitch = fighter.chargedBeamPitch ?? 0;   // steered vertical aim, used by the beam visual
+  s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
   //
@@ -5099,6 +5188,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateMechXRayVisibility();
   updateBeamVisuals(performance.now());
   syncOnlineChargedBeams(hudNow);
+  updateLaserSights();
   updateHud(hudNow);
 }
 
@@ -8212,6 +8302,7 @@ function animate() {
       updateBeamDamage(now);
       updateChargedBeams(now, dt);
       updateBeamVisuals(performance.now());
+      updateLaserSights();
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
