@@ -23,7 +23,7 @@ Six pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 spri
 |---|---|---|---|---|---|
 | Unit 1 — Assault Rifle | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
 | Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
-| Unit 3 — Sniper Rifle | 5 | 50 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
+| Unit 3 — Sniper Rifle | 5 | 30 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
 | Unit 4 — Submachine Gun | 30 | 3 / shot | ~1100 RPM | 46 | 1.5 s |
 | Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
 | Unit 6 — Sniper Rifle | 5 | 30 / shot | 60 RPM | 120 | 2.5 s + 1 s charge |
