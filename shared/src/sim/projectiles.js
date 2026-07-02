@@ -40,6 +40,16 @@ import { segmentHitsObstacle, projectileHitsSurface, raycastObstacleDistance } f
 // reference the center pellet (sniper / shotgun).
 export function spawnProjectiles(matchState, owner, target) {
   const u = owner.unit;
+  // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
+  // what the shooter's laser sight showed — a target crossing a boundary while
+  // the bullet flies doesn't change the number. Units without rangeDamage keep
+  // their flat damage.
+  let shotDamage = u.damage;
+  if (u.rangeDamage) {
+    const rdDist = Math.hypot(target.pos.x - owner.pos.x, target.pos.z - owner.pos.z);
+    shotDamage = rdDist < u.rangeDamage.nearDist ? u.rangeDamage.near
+      : rdDist < u.rangeDamage.midDist ? u.rangeDamage.mid : u.damage;
+  }
   const baseDirRaw = vec3Sub(target.pos, owner.pos);
   const baseDir = vec3Normalize(baseDirRaw);
   const isShotgun = u.spreadCount > 1;
@@ -80,7 +90,7 @@ export function spawnProjectiles(matchState, owner, target) {
       targetId: target.id,
       pos: spawnOrigin,
       vel: { x: dir.x * u.projectileSpeed, y: dir.y * u.projectileSpeed, z: dir.z * u.projectileSpeed },
-      damage: u.damage,
+      damage: shotDamage,
       homing,
       isCenterPellet: isShotgun ? isCenterPellet : false,
       centerPelletId: null,
