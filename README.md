@@ -38,8 +38,8 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 
 ### Aru (Unit 3) — range zones & the lock reticle
 
-- Damage is tiered by distance, **locked at fire time**: under 30 units → **20**, 30–50 → **35**, beyond 50 → **50**. Rushing a sniper is real counterplay; long range stays lethal.
-- The lock reticle shows the current zone — plain brackets (<30), **+ cross ticks** (30–50), **+ inner bars** (50+). It appears both when *you* play Aru (your tier on the target) and when your lock target *is* an Aru (which of her zones you're standing in).
+- Damage is tiered by distance, **locked at fire time**: under 15 units → **20**, 15–50 → **35**, beyond 50 → **50**. Rushing a sniper is real counterplay; long range stays lethal.
+- The lock reticle shows the current zone — plain brackets (<15), **+ cross ticks** (15–50), **+ inner bars** (50+). It appears both when *you* play Aru (your tier on the target) and when your lock target *is* an Aru (which of her zones you're standing in).
 - The reticle turns **red** not just when your target fires, but for the whole time a sniper (Aru **or** Kei) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
 
 ### Kei (Unit 6) — 照射ビーム laser
