@@ -995,23 +995,24 @@ function buildReticleTexture(tier) {
   x.beginPath(); x.moveTo(e - arm, e); x.lineTo(e, e); x.lineTo(e, e - arm); x.stroke();
   if (tier >= 1) {
     // Cross ticks at the edge midpoints, a touch thicker than the frame and
-    // shifted slightly OUTWARD (they poke out more than in).
+    // mostly OUTSIDE it — they stop just inside so they never touch the
+    // far-tier triangles.
     x.lineWidth = 13;
-    x.beginPath(); x.moveTo(96, m - 18); x.lineTo(96, m + 6); x.stroke();
-    x.beginPath(); x.moveTo(96, e - 6); x.lineTo(96, e + 18); x.stroke();
-    x.beginPath(); x.moveTo(m - 18, 96); x.lineTo(m + 6, 96); x.stroke();
-    x.beginPath(); x.moveTo(e - 6, 96); x.lineTo(e + 18, 96); x.stroke();
+    x.beginPath(); x.moveTo(96, m - 18); x.lineTo(96, m + 2); x.stroke();
+    x.beginPath(); x.moveTo(96, e - 2); x.lineTo(96, e + 18); x.stroke();
+    x.beginPath(); x.moveTo(m - 18, 96); x.lineTo(m + 2, 96); x.stroke();
+    x.beginPath(); x.moveTo(e - 2, 96); x.lineTo(e + 18, 96); x.stroke();
   }
   if (tier >= 2) {
-    // Inward-pointing triangles INSIDE the bracket square, leaving the very
-    // center clear for the target sprite.
+    // Inward-pointing triangles INSIDE the bracket square, with a clear gap
+    // from the tick ends and the center left clear for the target sprite.
     const tri = (ax, ay, bx, by, cx2, cy2) => {
       x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.lineTo(cx2, cy2); x.closePath(); x.fill();
     };
-    tri(96, 74, 82, 56, 110, 56);       // top (tip points down/in)
-    tri(96, 118, 82, 136, 110, 136);    // bottom (tip points up/in)
-    tri(74, 96, 56, 82, 56, 110);       // left (tip points right/in)
-    tri(118, 96, 136, 82, 136, 110);    // right (tip points left/in)
+    tri(96, 80, 82, 63, 110, 63);       // top (tip points down/in)
+    tri(96, 112, 82, 129, 110, 129);    // bottom (tip points up/in)
+    tri(80, 96, 63, 82, 63, 110);       // left (tip points right/in)
+    tri(112, 96, 129, 82, 129, 110);    // right (tip points left/in)
   }
   return new THREE.CanvasTexture(c);
 }
