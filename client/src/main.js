@@ -238,7 +238,8 @@ const MAP_DATA = {
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
-  flashpoint: { name: 'Flashpoint' }
+  flashpoint: { name: 'Flashpoint' },
+  airport: { name: 'Airport' }   // offline-only until finalized (not in ONLINE_AVAILABLE_MAPS)
 };
 
 const state = {
@@ -4132,6 +4133,11 @@ function startMatch() {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);
     state.enemy.body.position.set(95, 2.45, 45);
+  } else if (state.mapKey === 'airport') {
+    // Diagonal spawn at opposite ends of the concourse, clear of the corner
+    // escalators (|z| < 84) and the baggage-belt zones (|x| < 100).
+    state.player.body.position.set(-118, 2.45, -60);
+    state.enemy.body.position.set(118, 2.45, 60);
   } else {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
@@ -6098,6 +6104,17 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xfff0d0);
     key.intensity = 1.3;
+  } else if (mapKey === 'airport') {
+    // Bright daylight departure hall: white terminal light, pale sky seen
+    // through the glass curtain walls, long fog range for the big sightlines.
+    scene.background.setHex(0x9db8cc);
+    scene.fog.color.setHex(0xaebfd0);
+    scene.fog.near = 80;
+    scene.fog.far = 340;
+    ambient.color.setHex(0xe8f0fa);
+    ambient.intensity = 1.0;
+    key.color.setHex(0xffffff);
+    key.intensity = 1.35;
   }
 }
 
@@ -6111,6 +6128,7 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
+  else if (mapKey === 'airport') buildAirportArena();
 }
 
 // ---------------------------------------------------------------------------
@@ -7886,6 +7904,174 @@ function buildStationArena() {
   const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
   clockHanger.position.set(0, 25.5, 0);
   scene.add(clockHanger); arenaDecor.push(clockHanger);
+}
+
+function buildAirportArena() {
+  // Bright daylight departure concourse (offline-only until finalized).
+  // Layout mirrors the approved mock: two h8 mezzanines with corner escalator
+  // ramps, a raised h6 security deck with metal-detector gates as the central
+  // divider, two h6 gate pods, check-in desk cover rows, and low luggage-belt
+  // clutter in the baggage bays. Point-symmetric about the center.
+  //
+  // COVER RULE (see also the reticle/damage work): every piece is either
+  // TRUE COVER (top >= 6 — fully hides the 5.55-tall hittable sprite AND
+  // blocks the 3.15-high fire line), a HARD WALL (>= 10), or CLUTTER
+  // (top <= 2.5 — you see over it and shoot over it). Nothing between 3 and 6
+  // ever stands in a fire lane, so visuals never lie about protection.
+  const HALF_X = 138;
+  const HALF_Z = 100;
+  const WALL_Y = 24;
+  const MEZZ_Y = 8;    // mezzanine floor (ramp access only — jump apex is ~5.6)
+  const DECK_Y = 6;    // security deck + gate pods (ramp access only)
+
+  const tileMat = new THREE.MeshStandardMaterial({ color: 0xe8ebef, roughness: 0.35, metalness: 0.1 });
+  const tileDark = new THREE.MeshStandardMaterial({ color: 0x33404e, roughness: 0.5 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xdde3ea, roughness: 0.5 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x8fc3e8, transparent: true, opacity: 0.35, roughness: 0.1, metalness: 0.4 });
+  const mullionMat = new THREE.MeshStandardMaterial({ color: 0x9aa7b5, roughness: 0.4, metalness: 0.5 });
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0xb8c2cc, roughness: 0.35, metalness: 0.5 });
+  const deckMat = new THREE.MeshStandardMaterial({ color: 0xccd4dd, roughness: 0.4, metalness: 0.2 });
+  const rampMat = new THREE.MeshStandardMaterial({ color: 0xa9b6c4, roughness: 0.45, metalness: 0.3 });
+  const deskMat = new THREE.MeshStandardMaterial({ color: 0xf0f2f5, roughness: 0.4 });
+  const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x2a3644, roughness: 0.4, metalness: 0.2 });
+  const beltMat = new THREE.MeshStandardMaterial({ color: 0x232a33, roughness: 0.85 });
+  const signBlue = new THREE.MeshStandardMaterial({ color: 0x2f7fd6, emissive: 0x155a9e, emissiveIntensity: 0.6, roughness: 0.35 });
+  const signYellow = new THREE.MeshStandardMaterial({ color: 0xffc93c, emissive: 0x8a6a10, emissiveIntensity: 0.5, roughness: 0.4 });
+  const gateMat = new THREE.MeshStandardMaterial({ color: 0xcfd6de, roughness: 0.35, metalness: 0.45 });
+  const cushionMat = new THREE.MeshStandardMaterial({ color: 0x3565b0, roughness: 0.7 });
+  const caseMats = [0xc23b3b, 0x3565b0, 0x3f9e5f, 0xd8a03c, 0x7a4fa0]
+    .map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }));
+
+  // ===== Terminal floor + walkway strips =====
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X + 24, 2 * HALF_Z + 24), tileMat);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
+  scene.add(floor); arenaDecor.push(floor);
+  for (const z of [-42, 42]) {
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 20, 3), tileDark);
+    strip.rotation.x = -Math.PI / 2; strip.position.set(0, 0.012, z);
+    scene.add(strip); arenaDecor.push(strip);
+  }
+
+  // ===== Outer shell: solid walls, glass curtain on the end walls =====
+  addBlockingBox({ x: 0, y: WALL_Y / 2, z: -HALF_Z - 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4, material: wallMat });
+  addBlockingBox({ x: 0, y: WALL_Y / 2, z: HALF_Z + 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4, material: wallMat });
+  addBlockingBox({ x: -HALF_X - 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
+  addBlockingBox({ x: HALF_X + 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
+  for (const gx of [-HALF_X + 0.3, HALF_X - 0.3]) {
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(0.3, 14, 2 * HALF_Z - 10), glassMat);
+    glass.position.set(gx, 15, 0);
+    scene.add(glass); arenaDecor.push(glass);
+    for (let mz = -90; mz <= 90; mz += 15) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, 0.5), mullionMat);
+      m.position.set(gx, 15, mz);
+      scene.add(m); arenaDecor.push(m);
+    }
+  }
+
+  // ===== Mezzanines (h8): solid body + walkable top + corner escalators =====
+  for (const side of [-1, 1]) {
+    const zIn = side * 84;                       // inner (concourse-facing) edge
+    const zMid = side * (84 + HALF_Z) / 2;
+    // Solid body — no walking underneath; its face is an 8-tall wall.
+    addBlockingBox({ x: 0, y: MEZZ_Y / 2, z: zMid, sx: 220, sy: MEZZ_Y, sz: HALF_Z - 84, material: wallMat });
+    addPlatform({ minX: -110, maxX: 110, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), top: MEZZ_Y, material: deckMat, thickness: 0.6 });
+    // Wayfinding band on the mezzanine face + glass balustrade (visuals only —
+    // units can drop off the edge freely).
+    const band = new THREE.Mesh(new THREE.BoxGeometry(200, 0.9, 0.3), signBlue);
+    band.position.set(0, 7.2, zIn - side * 0.2);
+    scene.add(band); arenaDecor.push(band);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(220, 1.2, 0.3), glassMat);
+    rail.position.set(0, MEZZ_Y + 0.6, zIn + side * 0.2);
+    scene.add(rail); arenaDecor.push(rail);
+    // Corner escalators: walk-up ramps 0 -> 8 (bots reach the mezzanine by
+    // walking these; no jump-only access anywhere).
+    addRamp({ minX: -126, maxX: -110, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), axis: 'x', lowY: 0, highY: MEZZ_Y, material: rampMat });
+    addRamp({ minX: 110, maxX: 126, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), axis: 'x', lowY: MEZZ_Y, highY: 0, material: rampMat });
+  }
+
+  // ===== Security deck (h6): the central divider, ramped east + west =====
+  addBlockingBox({ x: 0, y: DECK_Y / 2, z: 0, sx: 44, sy: DECK_Y, sz: 68, material: steelMat });
+  addPlatform({ minX: -22, maxX: 22, minZ: -34, maxZ: 34, top: DECK_Y, material: deckMat, thickness: 0.6 });
+  addRamp({ minX: -46, maxX: -22, minZ: -34, maxZ: 34, axis: 'x', lowY: 0, highY: DECK_Y, material: rampMat });
+  addRamp({ minX: 22, maxX: 46, minZ: -34, maxZ: 34, axis: 'x', lowY: DECK_Y, highY: 0, material: rampMat });
+  // Three metal-detector gates on the deck: paired posts (10 tall from the
+  // deck) with an 8-wide walk gap; the crossbar is visual only.
+  for (const gz of [-20, 0, 20]) {
+    addBlockingBox({ x: -6.5, y: DECK_Y + 5, z: gz, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 6.5, y: DECK_Y + 5, z: gz, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 0, y: DECK_Y + 10.8, z: gz, sx: 18, sy: 1.6, sz: 5, material: signBlue, decorOnly: true });
+  }
+
+  // ===== Departure-board walls (h10 hard walls extending the center line) =====
+  for (const side of [-1, 1]) {
+    addBlockingBox({ x: side * 75, y: 5, z: 0, sx: 30, sy: 10, sz: 4, material: wallMat });
+    for (const face of [-1, 1]) {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(24, 5, 0.3), tileDark);
+      board.position.set(side * 75, 6.2, face * 2.3);
+      scene.add(board); arenaDecor.push(board);
+      const header = new THREE.Mesh(new THREE.BoxGeometry(24, 0.8, 0.3), signYellow);
+      header.position.set(side * 75, 9.2, face * 2.3);
+      scene.add(header); arenaDecor.push(header);
+    }
+  }
+
+  // ===== Gate pods (h6): hop-on high ground, one ramp each =====
+  // NE pod
+  addBlockingBox({ x: 70, y: DECK_Y / 2, z: -45, sx: 24, sy: DECK_Y, sz: 24, material: wallMat });
+  addPlatform({ minX: 58, maxX: 82, minZ: -57, maxZ: -33, top: DECK_Y, material: deckMat, thickness: 0.6 });
+  addRamp({ minX: 46, maxX: 58, minZ: -51, maxZ: -39, axis: 'x', lowY: 0, highY: DECK_Y, material: rampMat });
+  // SW pod (point mirror)
+  addBlockingBox({ x: -70, y: DECK_Y / 2, z: 45, sx: 24, sy: DECK_Y, sz: 24, material: wallMat });
+  addPlatform({ minX: -82, maxX: -58, minZ: 33, maxZ: 57, top: DECK_Y, material: deckMat, thickness: 0.6 });
+  addRamp({ minX: -58, maxX: -46, minZ: 39, maxZ: 51, axis: 'x', lowY: DECK_Y, highY: 0, material: rampMat });
+  // Gate number signs
+  for (const [px, pz] of [[70, -45], [-70, 45]]) {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 0.5), signYellow);
+    sign.position.set(px, DECK_Y + 1.6, pz);
+    scene.add(sign); arenaDecor.push(sign);
+  }
+
+  // ===== Check-in desk rows (h6 true cover) =====
+  for (const [dx, dzs] of [[-75, [-40, -20]], [75, [20, 40]]]) {
+    for (const dz of dzs) {
+      addBlockingBox({ x: dx, y: 3, z: dz, sx: 40, sy: 6, sz: 6, material: deskMat });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(40.6, 0.3, 6.6), deskTopMat);
+      top.position.set(dx, 6.15, dz);
+      scene.add(top); arenaDecor.push(top);
+    }
+  }
+
+  // ===== Kiosks (h6 true cover) =====
+  for (const [kx, kz] of [[-20, -60], [20, 60], [90, -60], [-90, 60]]) {
+    addBlockingBox({ x: kx, y: 3, z: kz, sx: 8, sy: 6, sz: 8, material: deskMat });
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), signYellow);
+    cap.position.set(kx, 6.45, kz);
+    scene.add(cap); arenaDecor.push(cap);
+  }
+
+  // ===== Baggage bays: luggage belts (h2 clutter) with suitcases on top =====
+  for (const side of [-1, 1]) {
+    const bx = side * -70;                       // side 1 -> NW bay (x -70), side -1 -> SE bay (x 70)
+    const bz = side * -1;
+    addBlockingBox({ x: bx, y: 1, z: bz * 68, sx: 60, sy: 2, sz: 4, material: beltMat });
+    addBlockingBox({ x: bx, y: 1, z: bz * 54, sx: 60, sy: 2, sz: 4, material: beltMat });
+    addBlockingBox({ x: side * -42, y: 1, z: bz * 61, sx: 4, sy: 2, sz: 10, material: beltMat });
+    // Suitcase trail (visual only) — alternates between the two belts.
+    const caseXs = [-95, -83, -68, -55, -47];
+    caseXs.forEach((cx, i) => {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 2.2), caseMats[i % caseMats.length]);
+      c.position.set(side === 1 ? cx : -cx, 2.6, bz * (i % 2 === 0 ? 68 : 54));
+      scene.add(c); arenaDecor.push(c);
+    });
+  }
+
+  // ===== Seating rows (h2 clutter) =====
+  for (const sz of [-48, 48]) {
+    addBlockingBox({ x: 0, y: 1, z: sz, sx: 40, sy: 2, sz: 4, material: steelMat });
+    const cush = new THREE.Mesh(new THREE.BoxGeometry(39, 0.4, 3.4), cushionMat);
+    cush.position.set(0, 2.2, sz);
+    scene.add(cush); arenaDecor.push(cush);
+  }
 }
 
 function buildFlashpointArena() {
