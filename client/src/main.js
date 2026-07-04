@@ -5964,7 +5964,10 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
     : new THREE.BoxGeometry(width, thickness, length);
   const mesh = new THREE.Mesh(geo, material);
   mesh.position.set((minX + maxX) / 2, (lowY + highY) / 2, (minZ + maxZ) / 2);
-  if (axis === 'x') mesh.rotation.z = -angle;
+  // Rotation signs differ per axis: about Z, +angle lifts the +X end; about X,
+  // -angle lifts the +Z end. (The old unconditional -angle made axis-x ramp
+  // MESHES slope the wrong way while the walkable surface was correct.)
+  if (axis === 'x') mesh.rotation.z = angle;
   else mesh.rotation.x = -angle;
   scene.add(mesh);
   arenaDecor.push(mesh);
@@ -7913,16 +7916,18 @@ function buildAirportArena() {
   // divider, two h6 gate pods, check-in desk cover rows, and low luggage-belt
   // clutter in the baggage bays. Point-symmetric about the center.
   //
-  // COVER RULE (see also the reticle/damage work): every piece is either
-  // TRUE COVER (top >= 6 — fully hides the 5.55-tall hittable sprite AND
-  // blocks the 3.15-high fire line), a HARD WALL (>= 10), or CLUTTER
-  // (top <= 2.5 — you see over it and shoot over it). Nothing between 3 and 6
-  // ever stands in a fire lane, so visuals never lie about protection.
+  // COVER RULE — measured from the FLOOR (y=0), where units actually stand:
+  //   sprite is 6.4 tall (feet -> head/halo), the hit capsule reaches ~8.0,
+  //   and the fire line (muzzle) sits at ~5.6.
+  // So every piece is either TRUE COVER (top >= 8 — fully hides the sprite AND
+  // the whole hittable capsule AND blocks fire), a HARD WALL (>= 12), or
+  // CLUTTER (top <= 2.5 — you see over it and shoot over it). Nothing between
+  // 3 and 8 ever stands in a fire lane, so visuals never lie about protection.
   const HALF_X = 138;
   const HALF_Z = 100;
-  const WALL_Y = 24;
-  const MEZZ_Y = 8;    // mezzanine floor (ramp access only — jump apex is ~5.6)
-  const DECK_Y = 6;    // security deck + gate pods (ramp access only)
+  const WALL_Y = 26;
+  const MEZZ_Y = 12;   // mezzanine floor (ramp access only — jump apex is ~5.6)
+  const DECK_Y = 8;    // security deck + gate pods (ramp access only)
 
   const tileMat = new THREE.MeshStandardMaterial({ color: 0xe8ebef, roughness: 0.35, metalness: 0.1 });
   const tileDark = new THREE.MeshStandardMaterial({ color: 0x33404e, roughness: 0.5 });
@@ -7957,13 +7962,15 @@ function buildAirportArena() {
   addBlockingBox({ x: 0, y: WALL_Y / 2, z: HALF_Z + 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4, material: wallMat });
   addBlockingBox({ x: -HALF_X - 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
   addBlockingBox({ x: HALF_X + 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
+  // Full-height glass curtain: floor to near-ceiling so it reads as the
+  // terminal's window wall (no floating panel gap underneath).
   for (const gx of [-HALF_X + 0.3, HALF_X - 0.3]) {
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(0.3, 14, 2 * HALF_Z - 10), glassMat);
-    glass.position.set(gx, 15, 0);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(0.3, WALL_Y - 3, 2 * HALF_Z - 8), glassMat);
+    glass.position.set(gx, (WALL_Y - 3) / 2 + 1, 0);
     scene.add(glass); arenaDecor.push(glass);
     for (let mz = -90; mz <= 90; mz += 15) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, 0.5), mullionMat);
-      m.position.set(gx, 15, mz);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.6, WALL_Y - 2, 0.6), mullionMat);
+      m.position.set(gx, (WALL_Y - 2) / 2, mz);
       scene.add(m); arenaDecor.push(m);
     }
   }
@@ -7972,28 +7979,44 @@ function buildAirportArena() {
   for (const side of [-1, 1]) {
     const zIn = side * 84;                       // inner (concourse-facing) edge
     const zMid = side * (84 + HALF_Z) / 2;
-    // Solid body — no walking underneath; its face is an 8-tall wall.
-    addBlockingBox({ x: 0, y: MEZZ_Y / 2, z: zMid, sx: 220, sy: MEZZ_Y, sz: HALF_Z - 84, material: wallMat });
-    addPlatform({ minX: -110, maxX: 110, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), top: MEZZ_Y, material: deckMat, thickness: 0.6 });
+    const ezMin = Math.min(zIn, side * HALF_Z);
+    const ezMax = Math.max(zIn, side * HALF_Z);
+    // Solid body — no walking underneath; its face is a 12-tall wall. Inset
+    // 0.2 on the sides and 0.3 below the platform top so no face is coplanar
+    // with the platform mesh (kills the z-fighting shimmer).
+    addBlockingBox({ x: 0, y: (MEZZ_Y - 0.3) / 2, z: zMid, sx: 219.6, sy: MEZZ_Y - 0.3, sz: HALF_Z - 84 - 0.4, material: wallMat });
+    addPlatform({ minX: -110, maxX: 110, minZ: ezMin, maxZ: ezMax, top: MEZZ_Y, material: deckMat, thickness: 0.6 });
     // Wayfinding band on the mezzanine face + glass balustrade (visuals only —
     // units can drop off the edge freely).
     const band = new THREE.Mesh(new THREE.BoxGeometry(200, 0.9, 0.3), signBlue);
-    band.position.set(0, 7.2, zIn - side * 0.2);
+    band.position.set(0, 9.8, zIn - side * 0.15);
     scene.add(band); arenaDecor.push(band);
     const rail = new THREE.Mesh(new THREE.BoxGeometry(220, 1.2, 0.3), glassMat);
     rail.position.set(0, MEZZ_Y + 0.6, zIn + side * 0.2);
     scene.add(rail); arenaDecor.push(rail);
-    // Corner escalators: walk-up ramps 0 -> 8 (bots reach the mezzanine by
-    // walking these; no jump-only access anywhere).
-    addRamp({ minX: -126, maxX: -110, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), axis: 'x', lowY: 0, highY: MEZZ_Y, material: rampMat });
-    addRamp({ minX: 110, maxX: 126, minZ: Math.min(zIn, side * HALF_Z), maxZ: Math.max(zIn, side * HALF_Z), axis: 'x', lowY: MEZZ_Y, highY: 0, material: rampMat });
+    // Corner escalators: walk-up ramps 0 -> 12 over 24 units (bots reach the
+    // mezzanine by walking these; no jump-only access anywhere). Solid stepped
+    // skirts underneath so the ramp reads as a real escalator structure and
+    // nothing clips through from below (topBuffer 0 = passable at/above its top).
+    addRamp({ minX: -134, maxX: -110, minZ: ezMin, maxZ: ezMax, axis: 'x', lowY: 0, highY: MEZZ_Y, material: rampMat });
+    addRamp({ minX: 110, maxX: 134, minZ: ezMin, maxZ: ezMax, axis: 'x', lowY: MEZZ_Y, highY: 0, material: rampMat });
+    for (const [sa, sb, st] of [[-126, -118, 4], [-118, -110, 8], [110, 118, 8], [118, 126, 4]]) {
+      addBlockingBox({ x: (sa + sb) / 2, y: st / 2, z: zMid, sx: sb - sa, sy: st, sz: HALF_Z - 84 - 0.4, material: steelMat, topBuffer: 0 });
+    }
+    // Plug the 4-wide corner slivers between the escalator feet and the outer
+    // wall so no unit (or bot) gets wedged behind the ramps.
+    addBlockingBox({ x: -136, y: 6, z: zMid, sx: 4, sy: 12, sz: HALF_Z - 84, material: wallMat });
+    addBlockingBox({ x: 136, y: 6, z: zMid, sx: 4, sy: 12, sz: HALF_Z - 84, material: wallMat });
   }
 
   // ===== Security deck (h6): the central divider, ramped east + west =====
-  addBlockingBox({ x: 0, y: DECK_Y / 2, z: 0, sx: 44, sy: DECK_Y, sz: 68, material: steelMat });
+  addBlockingBox({ x: 0, y: (DECK_Y - 0.3) / 2, z: 0, sx: 43.6, sy: DECK_Y - 0.3, sz: 67.6, material: steelMat });
   addPlatform({ minX: -22, maxX: 22, minZ: -34, maxZ: 34, top: DECK_Y, material: deckMat, thickness: 0.6 });
   addRamp({ minX: -46, maxX: -22, minZ: -34, maxZ: 34, axis: 'x', lowY: 0, highY: DECK_Y, material: rampMat });
   addRamp({ minX: 22, maxX: 46, minZ: -34, maxZ: 34, axis: 'x', lowY: DECK_Y, highY: 0, material: rampMat });
+  // Solid skirts under the upper half of each deck ramp.
+  addBlockingBox({ x: -28, y: 2, z: 0, sx: 12, sy: 4, sz: 67.6, material: steelMat, topBuffer: 0 });
+  addBlockingBox({ x: 28, y: 2, z: 0, sx: 12, sy: 4, sz: 67.6, material: steelMat, topBuffer: 0 });
   // Three metal-detector gates on the deck: paired posts (10 tall from the
   // deck) with an 8-wide walk gap; the crossbar is visual only.
   for (const gz of [-20, 0, 20]) {
@@ -8004,26 +8027,28 @@ function buildAirportArena() {
 
   // ===== Departure-board walls (h10 hard walls extending the center line) =====
   for (const side of [-1, 1]) {
-    addBlockingBox({ x: side * 75, y: 5, z: 0, sx: 30, sy: 10, sz: 4, material: wallMat });
+    addBlockingBox({ x: side * 75, y: 6, z: 0, sx: 30, sy: 12, sz: 4, material: wallMat });
     for (const face of [-1, 1]) {
       const board = new THREE.Mesh(new THREE.BoxGeometry(24, 5, 0.3), tileDark);
-      board.position.set(side * 75, 6.2, face * 2.3);
+      board.position.set(side * 75, 7, face * 2.3);
       scene.add(board); arenaDecor.push(board);
       const header = new THREE.Mesh(new THREE.BoxGeometry(24, 0.8, 0.3), signYellow);
-      header.position.set(side * 75, 9.2, face * 2.3);
+      header.position.set(side * 75, 10.3, face * 2.3);
       scene.add(header); arenaDecor.push(header);
     }
   }
 
   // ===== Gate pods (h6): hop-on high ground, one ramp each =====
   // NE pod
-  addBlockingBox({ x: 70, y: DECK_Y / 2, z: -45, sx: 24, sy: DECK_Y, sz: 24, material: wallMat });
+  addBlockingBox({ x: 70, y: (DECK_Y - 0.3) / 2, z: -45, sx: 23.6, sy: DECK_Y - 0.3, sz: 23.6, material: wallMat });
   addPlatform({ minX: 58, maxX: 82, minZ: -57, maxZ: -33, top: DECK_Y, material: deckMat, thickness: 0.6 });
-  addRamp({ minX: 46, maxX: 58, minZ: -51, maxZ: -39, axis: 'x', lowY: 0, highY: DECK_Y, material: rampMat });
+  addRamp({ minX: 42, maxX: 58, minZ: -51, maxZ: -39, axis: 'x', lowY: 0, highY: DECK_Y, material: rampMat });
+  addBlockingBox({ x: 54, y: 2, z: -45, sx: 8, sy: 4, sz: 11.6, material: steelMat, topBuffer: 0 });
   // SW pod (point mirror)
-  addBlockingBox({ x: -70, y: DECK_Y / 2, z: 45, sx: 24, sy: DECK_Y, sz: 24, material: wallMat });
+  addBlockingBox({ x: -70, y: (DECK_Y - 0.3) / 2, z: 45, sx: 23.6, sy: DECK_Y - 0.3, sz: 23.6, material: wallMat });
   addPlatform({ minX: -82, maxX: -58, minZ: 33, maxZ: 57, top: DECK_Y, material: deckMat, thickness: 0.6 });
-  addRamp({ minX: -58, maxX: -46, minZ: 39, maxZ: 51, axis: 'x', lowY: DECK_Y, highY: 0, material: rampMat });
+  addRamp({ minX: -58, maxX: -42, minZ: 39, maxZ: 51, axis: 'x', lowY: DECK_Y, highY: 0, material: rampMat });
+  addBlockingBox({ x: -54, y: 2, z: 45, sx: 8, sy: 4, sz: 11.6, material: steelMat, topBuffer: 0 });
   // Gate number signs
   for (const [px, pz] of [[70, -45], [-70, 45]]) {
     const sign = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 0.5), signYellow);
@@ -8034,33 +8059,37 @@ function buildAirportArena() {
   // ===== Check-in desk rows (h6 true cover) =====
   for (const [dx, dzs] of [[-75, [-40, -20]], [75, [20, 40]]]) {
     for (const dz of dzs) {
-      addBlockingBox({ x: dx, y: 3, z: dz, sx: 40, sy: 6, sz: 6, material: deskMat });
+      addBlockingBox({ x: dx, y: 4, z: dz, sx: 40, sy: 8, sz: 6, material: deskMat });
       const top = new THREE.Mesh(new THREE.BoxGeometry(40.6, 0.3, 6.6), deskTopMat);
-      top.position.set(dx, 6.15, dz);
+      top.position.set(dx, 8.1, dz);
       scene.add(top); arenaDecor.push(top);
     }
   }
 
   // ===== Kiosks (h6 true cover) =====
   for (const [kx, kz] of [[-20, -60], [20, 60], [90, -60], [-90, 60]]) {
-    addBlockingBox({ x: kx, y: 3, z: kz, sx: 8, sy: 6, sz: 8, material: deskMat });
+    addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: deskMat });
     const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), signYellow);
-    cap.position.set(kx, 6.45, kz);
+    cap.position.set(kx, 8.2, kz);
     scene.add(cap); arenaDecor.push(cap);
   }
 
   // ===== Baggage bays: luggage belts (h2 clutter) with suitcases on top =====
-  for (const side of [-1, 1]) {
-    const bx = side * -70;                       // side 1 -> NW bay (x -70), side -1 -> SE bay (x 70)
-    const bz = side * -1;
-    addBlockingBox({ x: bx, y: 1, z: bz * 68, sx: 60, sy: 2, sz: 4, material: beltMat });
-    addBlockingBox({ x: bx, y: 1, z: bz * 54, sx: 60, sy: 2, sz: 4, material: beltMat });
-    addBlockingBox({ x: side * -42, y: 1, z: bz * 61, sx: 4, sy: 2, sz: 10, material: beltMat });
-    // Suitcase trail (visual only) — alternates between the two belts.
-    const caseXs = [-95, -83, -68, -55, -47];
+  // Carousel-scale loops: two wide lanes joined by end caps, reading as one
+  // baggage carousel per bay, with a chunky suitcase trail riding on top.
+  for (const side of [1, -1]) {
+    const bz = side * -1;                        // side 1 -> NW bay (z<0), side -1 -> SE bay (z>0)
+    for (const lane of [68, 54]) {
+      addBlockingBox({ x: side * -70, y: 1.2, z: bz * lane, sx: 64, sy: 2.4, sz: 6, material: beltMat });
+    }
+    for (const ex of [-99, -41]) {
+      addBlockingBox({ x: side === 1 ? ex : -ex, y: 1.2, z: bz * 61, sx: 6, sy: 2.4, sz: 17.2, material: beltMat });
+    }
+    const caseXs = [-96, -86, -75, -64, -53, -44];
     caseXs.forEach((cx, i) => {
-      const c = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 2.2), caseMats[i % caseMats.length]);
-      c.position.set(side === 1 ? cx : -cx, 2.6, bz * (i % 2 === 0 ? 68 : 54));
+      const c = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 3.4), caseMats[i % caseMats.length]);
+      c.position.set(side === 1 ? cx : -cx, 3.1, bz * (i % 2 === 0 ? 68 : 54));
+      c.rotation.y = ((i % 3) - 1) * 0.35;
       scene.add(c); arenaDecor.push(c);
     });
   }
