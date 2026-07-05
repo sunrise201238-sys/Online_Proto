@@ -196,7 +196,7 @@ function findCoverDirection(px, pz, oppX, oppZ, obstacles, searchRadius) {
 // and ones level enough to just walk onto. Returns a unit vector toward the
 // nearest reachable point on that ledge plus the horizontal distance to it,
 // or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, surfaces, searchRadius) {
+function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius) {
   let best = null;
   let bestDist = searchRadius;
   for (let i = 0; i < surfaces.length; i++) {
@@ -206,6 +206,24 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, searchRadius) {
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
     if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
+    // A wall standing ON the ledge lip (e.g. Airport's rim glass fences) means
+    // a unit couldn't stand at this point — treat it like any wall and don't
+    // steer/jump toward it. Same y-window semantics as unit collision; Station's
+    // edge walls (maxY == platform top, topBuffer 0) pass unchanged. Mirrors
+    // offline main.js.
+    const lipY = myFloorY + rise + 2.45;
+    let lipBlocked = false;
+    for (let j = 0; j < obstacles.length; j++) {
+      const o = obstacles[j];
+      const tb = o.topBuffer ?? 4;
+      if (lipY < o.minY - 2 || lipY > o.maxY + tb) continue;
+      const ox = Math.max(o.minX, Math.min(nx, o.maxX));
+      const oz = Math.max(o.minZ, Math.min(nz, o.maxZ));
+      const bdx = nx - ox;
+      const bdz = nz - oz;
+      if (bdx * bdx + bdz * bdz < 1.15 * 1.15) { lipBlocked = true; break; }
+    }
+    if (lipBlocked) continue;
     const ddx = nx - px;
     const ddz = nz - pz;
     const d = Math.sqrt(ddx * ddx + ddz * ddz);
@@ -597,7 +615,7 @@ export function tickBot(matchState, botId, now) {
         // since on maps like Station the raised decks are the strong positions
         // and we'd rather be up there than on the tracks. The jump cooldown
         // rate-limits this; no strict random gate needed.
-        const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+        const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (tryStartJump(me, now)) jumpThisTick = true;
@@ -611,7 +629,7 @@ export function tickBot(matchState, botId, now) {
     mx = tx / l; mz = tz / l;
     wantSprint = true;
     if (me.grounded && !me.airborne) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (tryStartJump(me, now)) jumpThisTick = true;
@@ -630,7 +648,7 @@ export function tickBot(matchState, botId, now) {
     // the orbit (just adds a jump when the chance is there); the jump cooldown
     // limits how often this fires.
     if (me.grounded && !me.airborne && !onHighGround) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (tryStartJump(me, now)) jumpThisTick = true;
