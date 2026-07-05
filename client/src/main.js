@@ -2882,6 +2882,11 @@ function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
     if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
+    // A wall standing ON the ledge lip (e.g. Airport's rim glass fences) means
+    // a unit couldn't stand at this point — treat it like any wall and don't
+    // steer/jump toward it. (Station's edge walls top out AT the platform
+    // surface with topBuffer 0, so they pass this check unchanged.)
+    if (unitOverlapsObstacle(nx, myFloorY + rise + 2.45, nz)) continue;
     const ddx = nx - px;
     const ddz = nz - pz;
     const d = Math.sqrt(ddx * ddx + ddz * ddz);
