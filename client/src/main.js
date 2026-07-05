@@ -8045,19 +8045,32 @@ function buildAirportArena() {
     stripe.position.set(0, PLATEAU_Y + 0.08, ez);
     scene.add(stripe); arenaDecor.push(stripe);
   }
+  // Glass rim fences along BOTH plateau edges: see-through and shoot-through
+  // (noProjectile) but never jumpable (top at 12; a ground jump reaches ~5.6,
+  // a plateau jump ~9.6). They leave only the wide end ramps as ways up — the
+  // plateau is a genuinely secured zone.
+  for (const side of [-1, 1]) {
+    for (const [fx0, fx1] of [[-88, 88], [-137, -130], [130, 137]]) {
+      const fw = fx1 - fx0;
+      addBlockingBox({ x: (fx0 + fx1) / 2, y: PLATEAU_Y + 4, z: side * 40, sx: fw, sy: 8, sz: 1.2, material: glassMat.clone(), noProjectile: true });
+      const railTop = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.5, 1.4), steelMat);
+      railTop.position.set((fx0 + fx1) / 2, PLATEAU_Y + 8.2, side * 40);
+      scene.add(railTop); arenaDecor.push(railTop);
+    }
+  }
   // Four walk-up ramps at the platform's two ENDS (both edges, mirror-
   // symmetric) so the mid-section stays a clean checkpoint zone; bots never
   // need to jump.
-  addRamp({ minX: 100, maxX: 124, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
-  addRamp({ minX: -124, maxX: -100, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
-  addRamp({ minX: 100, maxX: 124, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
-  addRamp({ minX: -124, maxX: -100, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  addRamp({ minX: 88, maxX: 130, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: -130, maxX: -88, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: 88, maxX: 130, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  addRamp({ minX: -130, maxX: -88, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
   // Invisible side rails along both long edges of every ramp: a unit can only
   // enter a ramp at its foot (walking up) or from the plateau (walking down) —
   // never sideways into the sloped slab, which made units overlap the mesh.
   // maxY 5 + topBuffer 0: blocks grounded units (collision point 2.45), frees
   // anyone already high on the ramp or on the plateau.
-  for (const [rx, rz] of [[99.5, -45], [124.5, -45], [-99.5, -45], [-124.5, -45], [99.5, 45], [124.5, 45], [-99.5, 45], [-124.5, 45]]) {
+  for (const [rx, rz] of [[87.5, -45], [130.5, -45], [-87.5, -45], [-130.5, -45], [87.5, 45], [130.5, 45], [-87.5, 45], [-130.5, 45]]) {
     addBlockingBox({ x: rx, y: 2.5, z: rz, sx: 1, sy: 5, sz: 10, material: steelMat, topBuffer: 0, invisible: true });
   }
 
@@ -8106,12 +8119,13 @@ function buildAirportArena() {
     for (const rowZ of [gz - 4.5, gz + 4.5]) {
       let prev = null;
       for (const px of [-22, -16.7, -11.4, -6.1, 6.1, 11.4, 16.7, 22]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), mullionMat);
-        post.position.set(px, PLATEAU_Y + 0.75, rowZ);
+        // Waist-height barrier posts (sprite is 6.4 tall — waist ≈ 3).
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3.2, 0.6), mullionMat);
+        post.position.set(px, PLATEAU_Y + 1.6, rowZ);
         scene.add(post); arenaDecor.push(post);
         if (prev !== null && px - prev < 6) {
-          const belt = new THREE.Mesh(new THREE.BoxGeometry(px - prev - 0.5, 0.25, 0.15), beltMat);
-          belt.position.set((px + prev) / 2, PLATEAU_Y + 1.25, rowZ);
+          const belt = new THREE.Mesh(new THREE.BoxGeometry(px - prev - 0.6, 0.3, 0.15), beltMat);
+          belt.position.set((px + prev) / 2, PLATEAU_Y + 2.9, rowZ);
           scene.add(belt); arenaDecor.push(belt);
         }
         prev = px;
