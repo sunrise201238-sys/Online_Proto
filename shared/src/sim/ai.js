@@ -455,7 +455,14 @@ export function tickBot(matchState, botId, now) {
   if (now - me.botProgressAnchorAt > 500) {
     const ddx = me.pos.x - me.botProgressAnchorX;
     const ddz = me.pos.z - me.botProgressAnchorZ;
-    if (Math.hypot(ddx, ddz) > 3) me.botLastProgressAt = now;
+    // Hit-stun overlapped this window → excused. Being slowed to a crawl by
+    // landing bullets is suppression, not "stuck": sustained fire otherwise
+    // starves this clock and drops the bot into spurious mid-fight Maze
+    // episodes (the angled-backward-sprint sightings on Plain Field).
+    // Under-fire wedges are Defense's job, on its own 2-tick trigger.
+    if (Math.hypot(ddx, ddz) > 3 || me.hitStunUntil > me.botProgressAnchorAt) {
+      me.botLastProgressAt = now;
+    }
     me.botProgressAnchorX = me.pos.x;
     me.botProgressAnchorZ = me.pos.z;
     me.botProgressAnchorAt = now;
