@@ -371,6 +371,7 @@ export function tickBot(matchState, botId, now) {
         me.botState = 'defense';
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
+        me.botDefenseDirAt = now;
         me.botDefenseUntil = me.stepUntil + 500;
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
@@ -870,6 +871,7 @@ export function tickBot(matchState, botId, now) {
       }
       me.botDefenseDirX = dxd;
       me.botDefenseDirZ = dzd;
+      me.botDefenseDirAt = now;
       // Stuck-triggered Defense runs 1.5 s to give the strafe room to break
       // the wedge; hit/glint-triggered keeps the original 350/600 ms.
       me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
@@ -900,6 +902,7 @@ export function tickBot(matchState, botId, now) {
       }
       me.botDefenseDirX = dxd2;
       me.botDefenseDirZ = dzd2;
+      me.botDefenseDirAt = now;
       me.botDefenseUntil = now + (sniperCharging ? 600 : 350);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
@@ -911,6 +914,25 @@ export function tickBot(matchState, botId, now) {
     const minDur = sniperCharging ? 600 : 350;
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
+    }
+    // SUSTAINED-FIRE RE-ALIGN: under a continuous stream (fresh hits keep
+    // Defense alive indefinitely) the once-picked perpendicular slowly
+    // rotates into a stale TANGENT — a straight line that flies away from
+    // the shooter forever. That was the "shorter the lock range, the harder
+    // they flee" report: short-LR bots must close through the densest fire,
+    // so their Defense chains never break and the tangent-flight runs long.
+    // Re-perpendicularize at most every 400 ms so the bot CIRCLES the
+    // shooter instead. Single-burst Defense (< 400 ms) is untouched.
+    if (now - (me.botDefenseDirAt ?? 0) > 400) {
+      const sg3 = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+      let dxd3 = sideX * sg3;
+      let dzd3 = sideZ * sg3;
+      if (obstacleNear && (dxd3 * (-avoid.rx) + dzd3 * (-avoid.rz) > 0.3)) {
+        dxd3 = -dxd3; dzd3 = -dzd3;
+      }
+      me.botDefenseDirX = dxd3;
+      me.botDefenseDirZ = dzd3;
+      me.botDefenseDirAt = now;
     }
   }
 
@@ -1148,6 +1170,7 @@ export function tickBot(matchState, botId, now) {
         if (flips === 0) {
           me.botDefenseDirX = -(me.botDefenseDirX ?? sideX);
           me.botDefenseDirZ = -(me.botDefenseDirZ ?? sideZ);
+          me.botDefenseDirAt = now;
           me.botDefenseFlips = 1;
           me.botDefenseStuckTicks = 0;
         } else if (flips === 1) {
@@ -1158,6 +1181,7 @@ export function tickBot(matchState, botId, now) {
           }
           me.botDefenseDirX = tx2;
           me.botDefenseDirZ = tz2;
+          me.botDefenseDirAt = now;
           me.botDefenseFlips = 2;
           me.botDefenseStuckTicks = 0;
         } else {
