@@ -3202,18 +3202,21 @@ function updateEnemy(now) {
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
-      // Tiebreak the go-around side by PROBING: from ~20 units along each
-      // tangent, would the player be visible? Prefer the side that opens
-      // sight (kills the long-way-around coin flip at symmetric walls);
-      // fall back to the old "lean toward the player" rule when probes agree.
-      const mazeProbe = (px2, pz2) => botHasLineOfSight(
-        { x: px2, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz2 },
-        { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
-      );
-      const losPlus = mazeProbe(e.x + tx * 20, e.z + tz * 20);
-      const losMinus = mazeProbe(e.x - tx * 20, e.z - tz * 20);
-      if (losPlus !== losMinus) {
-        if (losMinus) { tx = -tx; tz = -tz; }
+      // MULTI-DISTANCE probes: from 20/40/60 units along each tangent, how
+      // soon would the player become visible? Picking the side that gains
+      // sight SOONEST approximates the shorter way around a finite wall —
+      // the old single-20 probe went blind past one cover-length, leaving
+      // the tie to a fixed-rotation default (the "always turns right" bias).
+      const probeDist = (px2, pz2) => {
+        for (const pd of [20, 40, 60]) {
+          if (losFromPoint(e.x + px2 * pd, e.z + pz2 * pd)) return pd;
+        }
+        return Infinity;
+      };
+      const dPlus = probeDist(tx, tz);
+      const dMinus = probeDist(-tx, -tz);
+      if (dPlus !== dMinus) {
+        if (dMinus < dPlus) { tx = -tx; tz = -tz; }
       } else if (escaping) {
         // Probes tied while escaping a jam: reverse the committed heading.
         const proj = tx * (eState.botMazeDirX ?? tx) + tz * (eState.botMazeDirZ ?? tz);
@@ -3245,6 +3248,38 @@ function updateEnemy(now) {
     // counts when it was — otherwise (stuck against a side pillar with LoS
     // already clear) Maze would exit on the first tick and never get to act.
     eState.botMazeLosBlockedAtEntry = !playerHasLoS;
+  };
+
+  // OPENING SCAN — Maze's loop breaker. Wall-following a CLOSED loop (a
+  // room's inside perimeter, a free-standing block) laps forever: corners
+  // hand off cleanly, the stuck alarm sees real movement, and a blind-entry
+  // Maze has no time cap. So every 7 s refresh scans rings of probe points
+  // (8 directions × 25/50/75 units) for one that can SEE the player — a
+  // doorway or opening — and commits straight at it. Ties on the same ring
+  // break toward the player (no fixed-rotation bias). False if nothing sees.
+  const mazeScanForOpening = () => {
+    for (const sd of [25, 50, 75]) {
+      let bx = 0, bz = 0, bestDot = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8;
+        const sx2 = Math.cos(a), sz2 = Math.sin(a);
+        if (!losFromPoint(e.x + sx2 * sd, e.z + sz2 * sd)) continue;
+        const dt = sx2 * dir.x + sz2 * dir.z;
+        if (dt > bestDot) { bestDot = dt; bx = sx2; bz = sz2; }
+      }
+      if (bestDot > -Infinity) {
+        eState.botMazeDirX = bx;
+        eState.botMazeDirZ = bz;
+        // hadWall=true suppresses the open-ground context re-commit (the
+        // wall being left behind would instantly re-grab the heading);
+        // real wall contact en route is handled by the corner turn.
+        eState.botMazeHadWall = true;
+        eState.botMazeHand = null;
+        eState.botMazeLosBlockedAtEntry = !playerHasLoS;
+        return true;
+      }
+    }
+    return false;
   };
 
   // --- State transition by precedence ---
@@ -3282,9 +3317,17 @@ function updateEnemy(now) {
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || (now - (eState.botStateEnteredAt ?? now)) > 7000)) {
     eState.botStateEnteredAt = now;
-    // Stuck → escape (reverse). Plain 7 s refresh → keep the same hand, so a
-    // long wall gets walked to its end instead of re-aimed toward the player.
-    commitMazeDirection(stuckTriggered, !stuckTriggered);
+    if (stuckTriggered) {
+      // Stuck mid-Maze → escape re-commit (reverses when probes tie).
+      commitMazeDirection(true);
+    } else if (!mazeScanForOpening()) {
+      // 7 s refresh and the opening scan saw nothing — re-aim toward the
+      // player (hand dropped). Keeping the hand here lapped closed loops
+      // forever (the Flashpoint spawn-room trap); the multi-distance
+      // tangent probes now cover the long-wall case the hand persistence
+      // was added for. The hand still rules corner turns WITHIN a leg.
+      commitMazeDirection(false, false);
+    }
   }
 
   // --- State entry: commit per-state directions and timers ---
