@@ -454,10 +454,16 @@ export function tickBot(matchState, botId, now) {
   const commitMazeDirection = (escaping = false) => {
     let mxe = avoid.rx, mze = avoid.rz;
     const ml = Math.hypot(mxe, mze);
+    me.botMazeHadWall = ml >= 0.1;
     if (ml < 0.1) {
-      const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-      mxe = sideX * sg;
-      mze = sideZ * sg;
+      // OPEN GROUND: nothing to go around yet — head straight at the player.
+      // (The old commit here was side*orbitSign = PERPENDICULAR to the player,
+      // which combined with the toward-pull traced a stable ORBIT around the
+      // target — the endless circling below the Airport plateau.) The moment
+      // a wall interposes, the context check in the maze movement block
+      // re-commits into wall-follow.
+      mxe = dirX;
+      mze = dirZ;
       if (escaping) { mxe = -mxe; mze = -mze; }
     } else {
       const ux = mxe / ml, uz = mze / ml;
@@ -482,8 +488,13 @@ export function tickBot(matchState, botId, now) {
       } else if (tx * dirX + tz * dirZ < 0) {
         tx = -tx; tz = -tz;
       }
-      mxe = ux + tx * 1.3;
-      mze = uz + tz * 1.3;
+      // WALL-FOLLOW: tangent-dominant with a slight standoff. The old blend
+      // (away + 1.3*tangent = 61% away after normalizing) detached the bot
+      // from the wall diagonally within a second, stranding it in open
+      // ground where the old open-ground commit turned the march into an
+      // orbit. Hugging the wall is the whole point of Maze.
+      mxe = tx + ux * 0.25;
+      mze = tz + uz * 0.25;
     }
     const ml2 = Math.hypot(mxe, mze) || 1;
     me.botMazeDirX = mxe / ml2;
@@ -646,6 +657,9 @@ export function tickBot(matchState, botId, now) {
     // strength) so it can't press the bot into concave corners; in the open —
     // i.e. right after the wall ends — it kicks back in and curls the bot
     // around the corner instead of letting it sprint on past the opening.
+    // Context change: committed in the open, and a wall just interposed —
+    // switch to wall-follow NOW instead of grinding into it.
+    if (me.botMazeHadWall === false && obstacleNear) commitMazeDirection();
     const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
     let tx = (me.botMazeDirX ?? sideX) + dirX * mazePull + avoid.rx * 0.3;
     let tz = (me.botMazeDirZ ?? sideZ) + dirZ * mazePull + avoid.rz * 0.3;
