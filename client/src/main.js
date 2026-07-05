@@ -3135,7 +3135,14 @@ function updateEnemy(now) {
   if (now - eState.botProgressAnchorAt > 500) {
     const ddx = e.x - eState.botProgressAnchorX;
     const ddz = e.z - eState.botProgressAnchorZ;
-    if (Math.hypot(ddx, ddz) > 3) eState.botLastProgressAt = now;
+    // Hit-stun overlapped this window → excused. Being slowed to a crawl by
+    // landing bullets is suppression, not "stuck": sustained fire otherwise
+    // starves this clock and drops the bot into spurious mid-fight Maze
+    // episodes (the angled-backward-sprint sightings on Plain Field).
+    // Under-fire wedges are Defense's job, on its own 2-tick trigger.
+    if (Math.hypot(ddx, ddz) > 3 || eState.hitStunUntil > eState.botProgressAnchorAt) {
+      eState.botLastProgressAt = now;
+    }
     eState.botProgressAnchorX = e.x;
     eState.botProgressAnchorZ = e.z;
     eState.botProgressAnchorAt = now;
