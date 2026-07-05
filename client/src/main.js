@@ -7,7 +7,9 @@ import {
   emptyInput as simEmptyInput,
   TICK_RATE_MS as SIM_TICK_RATE_MS,
   TICK_DT as SIM_TICK_DT,
-  UNIT_DATA as SIM_UNIT_DATA
+  UNIT_DATA as SIM_UNIT_DATA,
+  buildNavGrid,
+  findPathOnGrid
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -3365,6 +3367,25 @@ function updateEnemy(now) {
     return true;
   };
 
+  // NAV PLAN — the universal pathfinder (offline mirror of the shared one).
+  // Ask the grid for a real walk route to the target; Maze follows it
+  // waypoint by waypoint. Returns false when no walk route exists (target
+  // on a jump-only platform, degenerate snap) — the heuristic stack
+  // (scan / ramp-seek / wall-follow) remains the fallback.
+  const navPlan = () => {
+    if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+    const path = findPathOnGrid(
+      offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY
+    );
+    if (path && path.length > 1) {
+      eState.botNav = { path, idx: 1, gx: p.x, gz: p.z, at: now };
+      eState.botMazeLosBlockedAtEntry = !playerHasLoS;
+      return true;
+    }
+    eState.botNav = null;
+    return false;
+  };
+
   // --- State transition by precedence ---
   const prevState = eState.botState ?? 'pursue';
   let nextState = prevState;
@@ -3409,7 +3430,12 @@ function updateEnemy(now) {
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || (now - (eState.botStateEnteredAt ?? now)) > 7000)) {
     eState.botStateEnteredAt = now;
-    if (stuckTriggered) {
+    // Pathfinder first: a stuck signal or 7 s refresh re-plans the route
+    // from the CURRENT position. Only when no route exists does the
+    // heuristic stack take over.
+    if (navPlan()) {
+      // fresh path committed
+    } else if (stuckTriggered) {
       // Stuck mid-Maze → escape re-commit (reverses when probes tie).
       commitMazeDirection(true);
     } else {
@@ -3442,7 +3468,8 @@ function updateEnemy(now) {
 
     if (nextState === 'maze') {
       eState.botMazeWallTicks = 0;
-      commitMazeDirection();
+      // Pathfinder first; the heuristic commit is the no-route fallback.
+      if (!navPlan()) commitMazeDirection();
     }
 
     if (nextState === 'engage'
@@ -3586,29 +3613,58 @@ function updateEnemy(now) {
     // around the corner instead of letting it sprint on past the opening.
     // Context change: committed in the open, and a wall just interposed —
     // switch to wall-follow NOW instead of grinding into it.
-    if (eState.botMazeHadWall === false && obstacleNear) commitMazeDirection();
-    // CORNER TURN: the committed wall-follow ran into a NEW wall face
-    // (concave corner). Same 2-tick wall-press read Defense uses — re-commit
-    // HERE (~0.03 s, not the 1.5 s stuck alarm) preserving the going-around
-    // hand, so the bot turns the corner and keeps circling the object
-    // instead of stalling until the alarm reverses it.
-    const mazeIntoWall = avoidMag > 0.4
-      && ((eState.botMazeDirX ?? 0) * avoid.rx + (eState.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
-    if (mazeIntoWall) {
-      eState.botMazeWallTicks = (eState.botMazeWallTicks ?? 0) + 1;
+    const nav = eState.botNav;
+    if (nav && nav.path && nav.idx < nav.path.length) {
+      // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
+      // exists. Head for the current waypoint, advance within 3 units, and
+      // refresh the route (rate-limited) when the target wanders off the
+      // planned goal. Avoidance stays blended in for dynamic wiggle room.
+      let wp = nav.path[nav.idx];
+      while (nav.idx < nav.path.length - 1
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < 3) {
+        nav.idx += 1;
+        wp = nav.path[nav.idx];
+      }
+      if (now - nav.at > 1000
+          && Math.hypot(p.x - nav.gx, p.z - nav.gz) > 12) {
+        navPlan();
+        if (eState.botNav && eState.botNav.path[eState.botNav.idx]) {
+          wp = eState.botNav.path[eState.botNav.idx];
+        }
+      }
+      let tx = wp.x - e.x, tz = wp.z - e.z;
+      const wl = Math.hypot(tx, tz) || 1;
+      tx = tx / wl + avoid.rx * 0.3;
+      tz = tz / wl + avoid.rz * 0.3;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      wantSprint = true;
     } else {
-      eState.botMazeWallTicks = 0;
+      // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
+      // pull toward the player, wall-follow corner turns — the pre-
+      // pathfinder Maze, kept for jump-only targets and degenerate spots.
+      if (eState.botMazeHadWall === false && obstacleNear) commitMazeDirection();
+      // CORNER TURN: the committed wall-follow ran into a NEW wall face
+      // (concave corner). Same 2-tick wall-press read Defense uses —
+      // re-commit HERE (~0.03 s) preserving the going-around hand.
+      const mazeIntoWall = avoidMag > 0.4
+        && ((eState.botMazeDirX ?? 0) * avoid.rx + (eState.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
+      if (mazeIntoWall) {
+        eState.botMazeWallTicks = (eState.botMazeWallTicks ?? 0) + 1;
+      } else {
+        eState.botMazeWallTicks = 0;
+      }
+      if (eState.botMazeWallTicks >= 2) {
+        eState.botMazeWallTicks = 0;
+        commitMazeDirection(false, true);
+      }
+      const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
+      let tx = (eState.botMazeDirX ?? side.x) + dir.x * mazePull + avoid.rx * 0.3;
+      let tz = (eState.botMazeDirZ ?? side.z) + dir.z * mazePull + avoid.rz * 0.3;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      wantSprint = true;
     }
-    if (eState.botMazeWallTicks >= 2) {
-      eState.botMazeWallTicks = 0;
-      commitMazeDirection(false, true);
-    }
-    const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
-    let tx = (eState.botMazeDirX ?? side.x) + dir.x * mazePull + avoid.rx * 0.3;
-    let tz = (eState.botMazeDirZ ?? side.z) + dir.z * mazePull + avoid.rz * 0.3;
-    const l = Math.hypot(tx, tz) || 1;
-    mx = tx / l; mz = tz / l;
-    wantSprint = true;
     // Vertical Maze: hop up onto a reachable platform (Station).
     if (state.enemy.grounded && !eState.airborne) {
       const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
@@ -6304,8 +6360,13 @@ function registerWallFade(mesh, box) {
   state.wallFadeMeshes.push(mesh);
 }
 
+// Offline nav grid — built lazily from arenaObstacles/arenaSurfaces on the
+// bots' first Maze plan, dropped on every map rebuild.
+let offlineNavGrid = null;
+
 function clearArenaDecor() {
   state.wallFadeMeshes = [];
+  offlineNavGrid = null;
   while (arenaDecor.length) {
     const obj = arenaDecor.pop();
     scene.remove(obj);
