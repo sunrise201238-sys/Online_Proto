@@ -27,7 +27,8 @@ const MAP_BOUNDARY = {
   square:     { halfX: 116, halfZ: 106 },
   lobby:      { halfX: 138, halfZ: 138 },
   station:    { halfX: 138, halfZ: 138 },
-  flashpoint: { halfX: 110, halfZ:  75 }
+  flashpoint: { halfX: 110, halfZ:  75 },
+  airport:    { halfX: 138, halfZ: 112 }
 };
 const BOUNDARY_WALL_THICKNESS = 2;
 const BOUNDARY_WALL_HEIGHT = 16;
@@ -6481,6 +6482,104 @@ const GENERATED_ARENA_COLLISION_DATA = {
       // Viewing platform — short raised catwalk inside the B-1 enclosure
       { "minX": 80, "maxX": 108, "minZ": 57, "maxZ": 73, "maxTop": 4, "type": "flat", "top": 4 }
     ]
+  },
+
+  // Hand-derived from buildAirportArena() in client/src/main.js (the offline
+  // builder is the source of truth — keep in sync, or regenerate via the
+  // browser console: __exportArenaCollision('airport')).
+  "airport": {
+    "obstacles": [
+      // ----- Outer terminal shell (solid, 26 tall) -----
+      { "minX": -142, "maxX": 142, "minZ": -116, "maxZ": -112, "minY": 0, "maxY": 26 },
+      { "minX": -142, "maxX": 142, "minZ": 112, "maxZ": 116, "minY": 0, "maxY": 26 },
+      { "minX": -142, "maxX": -138, "minZ": -116, "maxZ": 116, "minY": 0, "maxY": 26 },
+      { "minX": 138, "maxX": 142, "minZ": -116, "maxZ": 116, "minY": 0, "maxY": 26 },
+      // ----- Security plateau body (walkable top is the flat surface below);
+      //       topBuffer 0 so units standing ON the plateau don't collide -----
+      { "minX": -136.8, "maxX": 136.8, "minZ": -39.8, "maxZ": 39.8, "minY": 0, "maxY": 3.7, "topBuffer": 0 },
+      // ----- Glass rim fences (solid, block bullets; ramp openings excepted) -----
+      { "minX": -88, "maxX": 88, "minZ": -40.6, "maxZ": -39.4, "minY": 4, "maxY": 12 },
+      { "minX": -137, "maxX": -130, "minZ": -40.6, "maxZ": -39.4, "minY": 4, "maxY": 12 },
+      { "minX": 130, "maxX": 137, "minZ": -40.6, "maxZ": -39.4, "minY": 4, "maxY": 12 },
+      { "minX": -88, "maxX": 88, "minZ": 39.4, "maxZ": 40.6, "minY": 4, "maxY": 12 },
+      { "minX": -137, "maxX": -130, "minZ": 39.4, "maxZ": 40.6, "minY": 4, "maxY": 12 },
+      { "minX": 130, "maxX": 137, "minZ": 39.4, "maxZ": 40.6, "minY": 4, "maxY": 12 },
+      // ----- Glass ramp balustrades (stop 1.5 short of each ramp foot) -----
+      { "minX": 87, "maxX": 88, "minZ": -48.5, "maxZ": -40, "minY": 0, "maxY": 12 },
+      { "minX": 130, "maxX": 131, "minZ": -48.5, "maxZ": -40, "minY": 0, "maxY": 12 },
+      { "minX": -88, "maxX": -87, "minZ": -48.5, "maxZ": -40, "minY": 0, "maxY": 12 },
+      { "minX": -131, "maxX": -130, "minZ": -48.5, "maxZ": -40, "minY": 0, "maxY": 12 },
+      { "minX": 87, "maxX": 88, "minZ": 40, "maxZ": 48.5, "minY": 0, "maxY": 12 },
+      { "minX": 130, "maxX": 131, "minZ": 40, "maxZ": 48.5, "minY": 0, "maxY": 12 },
+      { "minX": -88, "maxX": -87, "minZ": 40, "maxZ": 48.5, "minY": 0, "maxY": 12 },
+      { "minX": -131, "maxX": -130, "minZ": 40, "maxZ": 48.5, "minY": 0, "maxY": 12 },
+      // ----- Checkpoint: x-ray machines + metal-detector posts + shoulder glass -----
+      { "minX": -4.5, "maxX": 4.5, "minZ": 9, "maxZ": 17, "minY": 4, "maxY": 12 },
+      { "minX": -4.5, "maxX": 4.5, "minZ": -17, "maxZ": -9, "minY": 4, "maxY": 12 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": -35, "maxZ": -30, "minY": 4, "maxY": 14 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": -22, "maxZ": -17, "minY": 4, "maxY": 14 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": -9, "maxZ": -4, "minY": 4, "maxY": 14 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": 4, "maxZ": 9, "minY": 4, "maxY": 14 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": 17, "maxZ": 22, "minY": 4, "maxY": 14 },
+      { "minX": -2.5, "maxX": 2.5, "minZ": 30, "maxZ": 35, "minY": 4, "maxY": 14 },
+      { "minX": -0.6, "maxX": 0.6, "minZ": 35, "maxZ": 40, "minY": 4, "maxY": 12 },
+      { "minX": -0.6, "maxX": 0.6, "minZ": -40, "maxZ": -35, "minY": 4, "maxY": 12 },
+      // ----- Departure-board walls (h12 from the plateau) -----
+      { "minX": 60, "maxX": 90, "minZ": -2, "maxZ": 2, "minY": 4, "maxY": 16 },
+      { "minX": -90, "maxX": -60, "minZ": -2, "maxZ": 2, "minY": 4, "maxY": 16 },
+      // ----- Check-in islands (on the plateau) -----
+      { "minX": -95, "maxX": -55, "minZ": -35, "maxZ": -29, "minY": 4, "maxY": 12 },
+      { "minX": -95, "maxX": -55, "minZ": -17, "maxZ": -11, "minY": 4, "maxY": 12 },
+      { "minX": 55, "maxX": 95, "minZ": 11, "maxZ": 17, "minY": 4, "maxY": 12 },
+      { "minX": 55, "maxX": 95, "minZ": 29, "maxZ": 35, "minY": 4, "maxY": 12 },
+      // ----- Gate desks (end pair on plateau, corner pair on ground) -----
+      { "minX": 117, "maxX": 123, "minZ": -36, "maxZ": -24, "minY": 4, "maxY": 12 },
+      { "minX": -123, "maxX": -117, "minZ": 24, "maxZ": 36, "minY": 4, "maxY": 12 },
+      { "minX": -108, "maxX": -102, "minZ": -96, "maxZ": -84, "minY": 0, "maxY": 8 },
+      { "minX": 102, "maxX": 108, "minZ": 84, "maxZ": 96, "minY": 0, "maxY": 8 },
+      // ----- Info totems -----
+      { "minX": -24, "maxX": -16, "minZ": -76, "maxZ": -68, "minY": 0, "maxY": 8 },
+      { "minX": 16, "maxX": 24, "minZ": 68, "maxZ": 76, "minY": 0, "maxY": 8 },
+      { "minX": 86, "maxX": 94, "minZ": -76, "maxZ": -68, "minY": 0, "maxY": 8 },
+      { "minX": -94, "maxX": -86, "minZ": 68, "maxZ": 76, "minY": 0, "maxY": 8 },
+      // ----- Vending machine banks -----
+      { "minX": 41, "maxX": 49, "minZ": -96, "maxZ": -88, "minY": 0, "maxY": 8 },
+      { "minX": -49, "maxX": -41, "minZ": 88, "maxZ": 96, "minY": 0, "maxY": 8 },
+      { "minX": -49, "maxX": -41, "minZ": -96, "maxZ": -88, "minY": 0, "maxY": 8 },
+      { "minX": 41, "maxX": 49, "minZ": 88, "maxZ": 96, "minY": 0, "maxY": 8 },
+      // ----- Seating lounges: h8 ad-panel spine + two low seat aprons each -----
+      { "minX": -20, "maxX": 20, "minZ": -62.6, "maxZ": -61.4, "minY": 0, "maxY": 8 },
+      { "minX": -20, "maxX": 20, "minZ": -65.2, "maxZ": -62.6, "minY": 0, "maxY": 2 },
+      { "minX": -20, "maxX": 20, "minZ": -61.4, "maxZ": -58.8, "minY": 0, "maxY": 2 },
+      { "minX": -20, "maxX": 20, "minZ": 61.4, "maxZ": 62.6, "minY": 0, "maxY": 8 },
+      { "minX": -20, "maxX": 20, "minZ": 58.8, "maxZ": 61.4, "minY": 0, "maxY": 2 },
+      { "minX": -20, "maxX": 20, "minZ": 62.6, "maxZ": 65.2, "minY": 0, "maxY": 2 },
+      { "minX": 58, "maxX": 82, "minZ": -57.6, "maxZ": -56.4, "minY": 0, "maxY": 8 },
+      { "minX": 58, "maxX": 82, "minZ": -60.2, "maxZ": -57.6, "minY": 0, "maxY": 2 },
+      { "minX": 58, "maxX": 82, "minZ": -56.4, "maxZ": -53.8, "minY": 0, "maxY": 2 },
+      { "minX": -82, "maxX": -58, "minZ": 56.4, "maxZ": 57.6, "minY": 0, "maxY": 8 },
+      { "minX": -82, "maxX": -58, "minZ": 53.8, "maxZ": 56.4, "minY": 0, "maxY": 2 },
+      { "minX": -82, "maxX": -58, "minZ": 57.6, "maxZ": 60.2, "minY": 0, "maxY": 2 },
+      // ----- Baggage carousels: low belt loops + h8 center feed housings -----
+      { "minX": -102, "maxX": -38, "minZ": -83, "maxZ": -77, "minY": 0, "maxY": 2.4 },
+      { "minX": -102, "maxX": -38, "minZ": -69, "maxZ": -63, "minY": 0, "maxY": 2.4 },
+      { "minX": -102, "maxX": -96, "minZ": -81.6, "maxZ": -64.4, "minY": 0, "maxY": 2.4 },
+      { "minX": -44, "maxX": -38, "minZ": -81.6, "maxZ": -64.4, "minY": 0, "maxY": 2.4 },
+      { "minX": -90, "maxX": -50, "minZ": -77, "maxZ": -69, "minY": 0, "maxY": 8 },
+      { "minX": 38, "maxX": 102, "minZ": 77, "maxZ": 83, "minY": 0, "maxY": 2.4 },
+      { "minX": 38, "maxX": 102, "minZ": 63, "maxZ": 69, "minY": 0, "maxY": 2.4 },
+      { "minX": 96, "maxX": 102, "minZ": 64.4, "maxZ": 81.6, "minY": 0, "maxY": 2.4 },
+      { "minX": 38, "maxX": 44, "minZ": 64.4, "maxZ": 81.6, "minY": 0, "maxY": 2.4 },
+      { "minX": 50, "maxX": 90, "minZ": 69, "maxZ": 77, "minY": 0, "maxY": 8 }
+    ],
+    "surfaces": [
+      // Security plateau top + the four end ramps
+      { "minX": -137, "maxX": 137, "minZ": -40, "maxZ": 40, "maxTop": 4, "type": "flat", "top": 4 },
+      { "minX": 88, "maxX": 130, "minZ": -50, "maxZ": -40, "maxTop": 4, "type": "ramp", "axis": "z", "lowY": 0, "highY": 4 },
+      { "minX": -130, "maxX": -88, "minZ": -50, "maxZ": -40, "maxTop": 4, "type": "ramp", "axis": "z", "lowY": 0, "highY": 4 },
+      { "minX": 88, "maxX": 130, "minZ": 40, "maxZ": 50, "maxTop": 4, "type": "ramp", "axis": "z", "lowY": 4, "highY": 0 },
+      { "minX": -130, "maxX": -88, "minZ": 40, "maxZ": 50, "maxTop": 4, "type": "ramp", "axis": "z", "lowY": 4, "highY": 0 }
+    ]
   }
 };
 
@@ -6490,7 +6589,8 @@ const ARENA_SPAWNS = {
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
   station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
-  flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } }
+  flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
+  airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };
 
 function materializeSurface(surface) {
@@ -6528,7 +6628,8 @@ const ARENAS = {
   square: buildGeneratedArena('square'),
   lobby: buildGeneratedArena('lobby'),
   station: buildGeneratedArena('station'),
-  flashpoint: buildGeneratedArena('flashpoint')
+  flashpoint: buildGeneratedArena('flashpoint'),
+  airport: buildGeneratedArena('airport')
 };
 
 export function getArena(mapKey) {

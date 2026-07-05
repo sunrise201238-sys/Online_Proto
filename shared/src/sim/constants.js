@@ -210,7 +210,8 @@ export const MAP_DATA = {
   square: { id: 'square', name: 'Square' },
   lobby: { id: 'lobby', name: 'Lobby' },
   station: { id: 'station', name: 'Station' },
-  flashpoint: { id: 'flashpoint', name: 'Flashpoint' }
+  flashpoint: { id: 'flashpoint', name: 'Flashpoint' },
+  airport: { id: 'airport', name: 'Airport' }
 };
 
 // Match-wide tunables.
