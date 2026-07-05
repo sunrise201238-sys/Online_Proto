@@ -8299,10 +8299,21 @@ function buildAirportArena() {
         minY: PLATEAU_Y + 10.3, maxY: PLATEAU_Y + 12.7,
         minZ: dz - 0.3, maxZ: dz + 0.3
       });
-      for (const qx of [-14, -7, 0, 7, 14]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), mullionMat);
-        post.position.set(dx + qx, PLATEAU_Y + 0.7, dz + (dz > 0 ? -5.5 : 5.5));
+      // Chest-height belt barriers matching the checkpoint set — the old
+      // version was 5 bare shin-high stubs, which read as creepy floor
+      // bumps instead of queue furniture. Fewer posts, connected by belts.
+      const qz = dz + (dz > 0 ? -5.5 : 5.5);
+      let prevQ = null;
+      for (const qx of [-13.5, -4.5, 4.5, 13.5]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 4.8, 0.6), mullionMat);
+        post.position.set(dx + qx, PLATEAU_Y + 2.4, qz);
         scene.add(post); arenaDecor.push(post);
+        if (prevQ !== null) {
+          const belt = new THREE.Mesh(new THREE.BoxGeometry(qx - prevQ - 0.6, 0.3, 0.15), beltMat);
+          belt.position.set(dx + (qx + prevQ) / 2, PLATEAU_Y + 4.35, qz);
+          scene.add(belt); arenaDecor.push(belt);
+        }
+        prevQ = qx;
       }
     }
   }
