@@ -3032,6 +3032,7 @@ function updateEnemy(now) {
       eState.botState = 'defense';
       eState.botStateEnteredAt = now;
       eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
+      eState.botDefenseDirAt = now;
       eState.botDefenseUntil = eState.stepUntil + 500;
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
@@ -3549,6 +3550,7 @@ function updateEnemy(now) {
       }
       eState.botDefenseDirX = dxd;
       eState.botDefenseDirZ = dzd;
+      eState.botDefenseDirAt = now;
       // 350 ms for a normal hit; ≥600 ms while a sniper is mid-charge so the
       // sprint outlasts the glint window. Stuck-triggered runs 1.5 s to give
       // the strafe room to break the wedge.
@@ -3582,6 +3584,7 @@ function updateEnemy(now) {
       }
       eState.botDefenseDirX = dxd2;
       eState.botDefenseDirZ = dzd2;
+      eState.botDefenseDirAt = now;
       eState.botDefenseUntil = now + (sniperCharging ? 600 : 350);
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
@@ -3593,6 +3596,25 @@ function updateEnemy(now) {
     const minDur = sniperCharging ? 600 : 350;
     if ((eState.botDefenseUntil ?? 0) < now + minDur) {
       eState.botDefenseUntil = now + minDur;
+    }
+    // SUSTAINED-FIRE RE-ALIGN: under a continuous stream (fresh hits keep
+    // Defense alive indefinitely) the once-picked perpendicular slowly
+    // rotates into a stale TANGENT — a straight line that flies away from
+    // the shooter forever. That was the "shorter the lock range, the harder
+    // they flee" report: short-LR bots must close through the densest fire,
+    // so their Defense chains never break and the tangent-flight runs long.
+    // Re-perpendicularize at most every 400 ms so the bot CIRCLES the
+    // shooter instead. Single-burst Defense (< 400 ms) is untouched.
+    if (now - (eState.botDefenseDirAt ?? 0) > 400) {
+      const sg3 = eState.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+      let dxd3 = side.x * sg3;
+      let dzd3 = side.z * sg3;
+      if (obstacleNear && (dxd3 * (-avoid.rx) + dzd3 * (-avoid.rz) > 0.3)) {
+        dxd3 = -dxd3; dzd3 = -dzd3;
+      }
+      eState.botDefenseDirX = dxd3;
+      eState.botDefenseDirZ = dzd3;
+      eState.botDefenseDirAt = now;
     }
   }
 
@@ -3852,6 +3874,7 @@ function updateEnemy(now) {
         if (flips === 0) {
           eState.botDefenseDirX = -(eState.botDefenseDirX ?? side.x);
           eState.botDefenseDirZ = -(eState.botDefenseDirZ ?? side.z);
+          eState.botDefenseDirAt = now;
           eState.botDefenseFlips = 1;
           eState.botDefenseStuckTicks = 0;
         } else if (flips === 1) {
@@ -3862,6 +3885,7 @@ function updateEnemy(now) {
           }
           eState.botDefenseDirX = tx2;
           eState.botDefenseDirZ = tz2;
+          eState.botDefenseDirAt = now;
           eState.botDefenseFlips = 2;
           eState.botDefenseStuckTicks = 0;
         } else {
