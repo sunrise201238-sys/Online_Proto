@@ -161,11 +161,29 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
           (center.distTraveled ?? 0) / SHOTGUN_CLUSTER_SPREAD_DISTANCE
         );
         p.vel = { x: center.vel.x, y: center.vel.y, z: center.vel.z };
-        p.pos = {
+        const repositioned = {
           x: center.pos.x + (p.clusterOffset?.x ?? 0) * spreadFactor,
           y: center.pos.y + (p.clusterOffset?.y ?? 0) * spreadFactor,
           z: center.pos.z + (p.clusterOffset?.z ?? 0) * spreadFactor
         };
+        // The cluster reposition is a teleport — give it the same swept wall
+        // check as normal flight, or pellets can be PLACED across a thin
+        // barrier (e.g. Airport's 1.2-thick glass) without ever "flying"
+        // through it. A pellet whose reposition crosses a wall dies on it.
+        // Mirrors offline main.js.
+        let repoBlocked = false;
+        for (let j = 0; j < obstacles.length; j += 1) {
+          const o = obstacles[j];
+          if (o.noProjectile) continue;
+          if (!segmentHitsObstacle(p.pos, repositioned, o)) continue;
+          repoBlocked = true;
+          break;
+        }
+        if (repoBlocked) {
+          _despawn(matchState, projectiles, i, p, 'obstacle');
+          continue;
+        }
+        p.pos = repositioned;
       }
     }
 
