@@ -9035,55 +9035,91 @@ function buildFlashpointArena() {
     scene.add(tape); arenaDecor.push(tape);
   }
 
+  // Corner-room pieces fade ONLY while they actually sit between the camera
+  // and the player unit (occlusion mode — same rule as Streets' buildings),
+  // so spawn-room fights stay readable while the walls still look solid
+  // whenever they aren't hiding your own unit. Materials cloned per mesh —
+  // corrugated/rust/exit-sign are shared across the map.
+  const fadeRoomPiece = (mesh, box) => {
+    mesh.material = mesh.material.clone();
+    registerWallFade(mesh, { ...box, occlude: true });
+  };
+
   // ===== B-2 spawn enclosure (SW) — 28 m central doorway in the N wall
   // PLUS a 6 m side opening at the south end of the E wall, right against
   // the south boundary (the E wall stops at z=-71 instead of z=-73, so the
   // gap from boundary to wall is the side door at the map edge). =====
   // N wall — full length, no side opening.
-  addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
+  fadeRoomPiece(
+    addBlockingBox({ x: -96, y: 6, z: -30.5, sx: 28, sy: 12, sz: 3, material: corrugated }),
+    { minX: -110, maxX: -82, minY: 0, maxY: 12, minZ: -32, maxZ: -29 }
+  );
+  fadeRoomPiece(
+    addBlockingBox({ x: -47, y: 6, z: -30.5, sx: 14, sy: 12, sz: 3, material: corrugated }),
+    { minX: -54, maxX: -40, minY: 0, maxY: 12, minZ: -32, maxZ: -29 }
+  );
   // E wall — shortened from sz=41 to sz=39 so the south end sits at z=-71
   // (was z=-73), leaving a 6 m gap to the south boundary at z=-77.
-  addBlockingBox({ x: -41.5, y: 6, z: -51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust });
+  fadeRoomPiece(
+    addBlockingBox({ x: -41.5, y: 6, z: -51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust }),
+    { minX: -43, maxX: -40, minY: 0, maxY: 12, minZ: -71, maxZ: -32 }
+  );
   // Central doorway lintel.
   const b2Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
   b2Lintel.position.set(-68, 11, -30.5);
   scene.add(b2Lintel); arenaDecor.push(b2Lintel);
+  fadeRoomPiece(b2Lintel, { minX: -82, maxX: -54, minY: 10, maxY: 12, minZ: -32, maxZ: -29 });
   // Side opening lintel — frames the 6 m gap at the south end of the E wall,
   // right against the south boundary at the map edge.
   const b2SouthLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 6), corrugatedRust);
   b2SouthLintel.position.set(-41.5, 11, -74);
   scene.add(b2SouthLintel); arenaDecor.push(b2SouthLintel);
+  fadeRoomPiece(b2SouthLintel, { minX: -43, maxX: -40, minY: 10, maxY: 12, minZ: -77, maxZ: -71 });
   // "B-2" exit-sign placards on both faces of the central doorway lintel.
   const b2SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b2SignS.position.set(-68, 8.5, -32.05); b2SignS.rotation.y = Math.PI;
   scene.add(b2SignS); arenaDecor.push(b2SignS);
+  fadeRoomPiece(b2SignS, { minX: -69.7, maxX: -66.3, minY: 7.8, maxY: 9.2, minZ: -32.3, maxZ: -31.8 });
   const b2SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b2SignN.position.set(-68, 8.5, -28.95);
   scene.add(b2SignN); arenaDecor.push(b2SignN);
+  fadeRoomPiece(b2SignN, { minX: -69.7, maxX: -66.3, minY: 7.8, maxY: 9.2, minZ: -29.2, maxZ: -28.7 });
 
   // ===== B-1 spawn enclosure (NE) — mirror of B-2: 28 m central S-wall
   // doorway PLUS a 6 m side opening at the north end of the W wall, right
   // against the north boundary. =====
-  addBlockingBox({ x: 96, y: 6, z: 30.5, sx: 28, sy: 12, sz: 3, material: corrugated });
-  addBlockingBox({ x: 47, y: 6, z: 30.5, sx: 14, sy: 12, sz: 3, material: corrugated });
+  fadeRoomPiece(
+    addBlockingBox({ x: 96, y: 6, z: 30.5, sx: 28, sy: 12, sz: 3, material: corrugated }),
+    { minX: 82, maxX: 110, minY: 0, maxY: 12, minZ: 29, maxZ: 32 }
+  );
+  fadeRoomPiece(
+    addBlockingBox({ x: 47, y: 6, z: 30.5, sx: 14, sy: 12, sz: 3, material: corrugated }),
+    { minX: 40, maxX: 54, minY: 0, maxY: 12, minZ: 29, maxZ: 32 }
+  );
   // W wall — shortened from sz=41 to sz=39 so the north end sits at z=71
   // (was z=73), leaving a 6 m gap to the north boundary at z=77.
-  addBlockingBox({ x: 41.5, y: 6, z: 51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust });
+  fadeRoomPiece(
+    addBlockingBox({ x: 41.5, y: 6, z: 51.5, sx: 3, sy: 12, sz: 39, material: corrugatedRust }),
+    { minX: 40, maxX: 43, minY: 0, maxY: 12, minZ: 32, maxZ: 71 }
+  );
   const b1Lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 3), corrugatedRust);
   b1Lintel.position.set(68, 11, 30.5);
   scene.add(b1Lintel); arenaDecor.push(b1Lintel);
+  fadeRoomPiece(b1Lintel, { minX: 54, maxX: 82, minY: 10, maxY: 12, minZ: 29, maxZ: 32 });
   // Side opening lintel — frames the 6 m gap at the north end of the W wall,
   // right against the north boundary at the map edge.
   const b1NorthLintel = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 6), corrugatedRust);
   b1NorthLintel.position.set(41.5, 11, 74);
   scene.add(b1NorthLintel); arenaDecor.push(b1NorthLintel);
+  fadeRoomPiece(b1NorthLintel, { minX: 40, maxX: 43, minY: 10, maxY: 12, minZ: 71, maxZ: 77 });
   const b1SignN = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b1SignN.position.set(68, 8.5, 32.05);
   scene.add(b1SignN); arenaDecor.push(b1SignN);
+  fadeRoomPiece(b1SignN, { minX: 66.3, maxX: 69.7, minY: 7.8, maxY: 9.2, minZ: 31.8, maxZ: 32.3 });
   const b1SignS = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.4), exitSign);
   b1SignS.position.set(68, 8.5, 28.95); b1SignS.rotation.y = Math.PI;
   scene.add(b1SignS); arenaDecor.push(b1SignS);
+  fadeRoomPiece(b1SignS, { minX: 66.3, maxX: 69.7, minY: 7.8, maxY: 9.2, minZ: 28.7, maxZ: 29.2 });
 
   // ===== Mid divider at z=0 — raised to 8 m to match the Factory-style
   // partition height. Still well below the ceiling so the player camera
