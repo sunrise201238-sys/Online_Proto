@@ -407,6 +407,13 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
+  // Would the player still be visible from (px, pz)? LoS-gates the range
+  // discipline below: never retreat or drift outward past the edge of sight.
+  const losFromPoint = (px, pz) => botHasLineOfSight(
+    { x: px, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+    obstacles
+  );
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
@@ -674,15 +681,33 @@ export function tickBot(matchState, botId, now) {
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
     const tooClose = dist < lowerRange;
-    const dirSign = tooClose ? -1 : 1;
-    let tx = dirX * dirSign + avoid.rx * 0.8;
-    let tz = dirZ * dirSign + avoid.rz * 0.8;
-    const l = Math.hypot(tx, tz) || 1;
-    mx = tx / l; mz = tz / l;
-    const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
-    if (me.boost >= BOT_SPRINT_READY_BOOST) me.botPursueSprinting = true;
-    if (me.boost <= reserveBoost) me.botPursueSprinting = false;
-    wantSprint = !!me.botPursueSprinting;
+    // LoS-GATED RETREAT: too close, but backing off (probe ~18 units down the
+    // retreat line) would put a wall/glass between us. That peek was earned by
+    // circling the blocker — hold the spot and fight from here instead of
+    // trading sight for spacing (the peek → retreat → lose sight → Maze all
+    // over again loop). On open ground the probe passes and nothing changes.
+    const retreatBlocked = tooClose
+      && !losFromPoint(me.pos.x - dirX * 18, me.pos.z - dirZ * 18);
+    if (retreatBlocked) {
+      // Hold ground: slow sideways drift so the hitbox keeps moving while the
+      // independent fire module does the work.
+      const sg = me.botOrbitSign ?? 1;
+      let tx = sideX * sg + avoid.rx * 0.8;
+      let tz = sideZ * sg + avoid.rz * 0.8;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = (tx / l) * 0.6; mz = (tz / l) * 0.6;
+      wantSprint = false;
+    } else {
+      const dirSign = tooClose ? -1 : 1;
+      let tx = dirX * dirSign + avoid.rx * 0.8;
+      let tz = dirZ * dirSign + avoid.rz * 0.8;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
+      if (me.boost >= BOT_SPRINT_READY_BOOST) me.botPursueSprinting = true;
+      if (me.boost <= reserveBoost) me.botPursueSprinting = false;
+      wantSprint = !!me.botPursueSprinting;
+    }
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && me.grounded && !me.airborne) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
@@ -745,7 +770,10 @@ export function tickBot(matchState, botId, now) {
     }
   } else if (botS === 'engage') {
     const sign = me.botOrbitSign ?? 1;
-    const pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
+    let pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
+    // LoS-gate the outward correction (mirrors Pursue's held retreat):
+    // spacing never buys blindness — orbit at the current radius instead.
+    if (pull < 0 && !losFromPoint(me.pos.x - dirX * 18, me.pos.z - dirZ * 18)) pull = 0;
     let tx = sideX * sign + dirX * pull + avoid.rx * 0.6;
     let tz = sideZ * sign + dirZ * pull + avoid.rz * 0.6;
     const l = Math.hypot(tx, tz) || 1;
