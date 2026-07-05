@@ -8052,7 +8052,13 @@ function buildAirportArena() {
   for (const side of [-1, 1]) {
     for (const [fx0, fx1] of [[-88, 88], [-137, -130], [130, 137]]) {
       const fw = fx1 - fx0;
-      addBlockingBox({ x: (fx0 + fx1) / 2, y: PLATEAU_Y + 4, z: side * 40, sx: fw, sy: 8, sz: 1.2, material: glassMat.clone() });
+      const pane = addBlockingBox({ x: (fx0 + fx1) / 2, y: PLATEAU_Y + 4, z: side * 40, sx: fw, sy: 8, sz: 1.2, material: glassMat.clone() });
+      // Transparent panes must NOT write depth: their centers are far away, so
+      // Three.js draws them before nearby sprites/tracers, and a depth-writing
+      // pane would cull everything behind the glass. renderOrder 1 draws them
+      // after the default transparent pass instead.
+      pane.material.depthWrite = false;
+      pane.renderOrder = 1;
       const railTop = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.5, 1.4), steelMat);
       railTop.position.set((fx0 + fx1) / 2, PLATEAU_Y + 8.2, side * 40);
       scene.add(railTop); arenaDecor.push(railTop);
@@ -8070,8 +8076,17 @@ function buildAirportArena() {
   // never sideways into the sloped slab, which made units overlap the mesh.
   // maxY 5 + topBuffer 0: blocks grounded units (collision point 2.45), frees
   // anyone already high on the ramp or on the plateau.
-  for (const [rx, rz] of [[87.5, -45], [130.5, -45], [-87.5, -45], [-130.5, -45], [87.5, 45], [130.5, 45], [-87.5, 45], [-130.5, 45]]) {
-    addBlockingBox({ x: rx, y: 2.5, z: rz, sx: 1, sy: 5, sz: 10, material: steelMat, topBuffer: 0, invisible: true });
+  // Visible glass side barriers along every ramp edge (replacing the old
+  // INVISIBLE rails, whose unseen ends caught units walking off at an angle).
+  // They stop 1.5 short of the foot so diagonal exits merge smoothly, and
+  // match the rim fences: solid, unjumpable, tops at 12.
+  for (const [rx, rz] of [[87.5, -44.25], [130.5, -44.25], [-87.5, -44.25], [-130.5, -44.25], [87.5, 44.25], [130.5, 44.25], [-87.5, 44.25], [-130.5, 44.25]]) {
+    const pane = addBlockingBox({ x: rx, y: 6, z: rz, sx: 1, sy: 12, sz: 8.5, material: glassMat.clone() });
+    pane.material.depthWrite = false;   // same no-depth-write rule as all fence glass
+    pane.renderOrder = 1;
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 8.7), steelMat);
+    rail.position.set(rx, 12.2, rz);
+    scene.add(rail); arenaDecor.push(rail);
   }
   // Entrance indicators: glowing yellow floor chevrons marching toward each
   // ramp foot, plus marker pylons flanking every rim opening — the four ramps
@@ -8126,7 +8141,9 @@ function buildAirportArena() {
   // apex from the plateau reaches ~9.6) or shoot through. Crossing the
   // mid-plateau means going through an arch, like a real checkpoint.
   for (const fz of [-37.5, 37.5]) {
-    addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: fz, sx: 1.2, sy: 8, sz: 5, material: glassMat.clone() });
+    const pane = addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: fz, sx: 1.2, sy: 8, sz: 5, material: glassMat.clone() });
+    pane.material.depthWrite = false;   // same no-depth-write rule as the rim panes
+    pane.renderOrder = 1;
     const railTop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 5.2), steelMat);
     railTop.position.set(0, PLATEAU_Y + 8.2, fz);
     scene.add(railTop); arenaDecor.push(railTop);
