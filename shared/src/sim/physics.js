@@ -82,6 +82,40 @@ export function raycastObstacleDistance(origin, dir, maxLen, obstacles) {
   return best;
 }
 
+// Does the horizontal segment (x0,z0)→(x1,z1), walked at body-center height
+// `y`, cross any obstacle a unit cannot WALK through? Uses the same y-window
+// as unitOverlapsObstacle (topBuffer semantics) — a 2.4-high belt blocks
+// walking even though a chest-height raw-AABB ray sails over it, and the
+// walkable TOP of a topBuffer:0 body (the Airport plateau) doesn't block a
+// unit standing on it. This is the test for "could the bot walk this line",
+// as opposed to segmentHitsObstacle which answers "would a bullet hit".
+export function walkSegmentBlocked(x0, z0, x1, z1, y, obstacles) {
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const o = obstacles[i];
+    if (y < o.minY - 2 || y > o.maxY + (o.topBuffer ?? 4)) continue;
+    let tMin = 0, tMax = 1, miss = false;
+    const axes = [
+      [x0, x1 - x0, o.minX, o.maxX],
+      [z0, z1 - z0, o.minZ, o.maxZ]
+    ];
+    for (const [start, delta, lo, hi] of axes) {
+      if (Math.abs(delta) < 1e-9) {
+        if (start < lo || start > hi) { miss = true; break; }
+      } else {
+        const t1 = (lo - start) / delta;
+        const t2 = (hi - start) / delta;
+        const tNear = t1 < t2 ? t1 : t2;
+        const tFar = t1 < t2 ? t2 : t1;
+        if (tNear > tMin) tMin = tNear;
+        if (tFar < tMax) tMax = tFar;
+        if (tMin > tMax) { miss = true; break; }
+      }
+    }
+    if (!miss) return true;
+  }
+  return false;
+}
+
 // Does a fighter's bounding cylinder at (x, y, z) overlap any AABB obstacle?
 export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS) {
   for (let i = 0; i < obstacles.length; i += 1) {

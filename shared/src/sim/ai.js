@@ -13,7 +13,7 @@
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked } from './physics.js';
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
@@ -420,20 +420,15 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
-  // Are the next `len` units straight toward the player WALKABLE? Probed at
-  // body height (+1.0): low clutter (≤2.5) passes underfoot logic fine, but
-  // the 3.7 plateau body, fences, balustrades and walls block. ALL obstacles
-  // count, including noProjectile jump-only edges — they still stop walking.
-  // (Sight and walkability differ exactly in the 3.45..4.05 band: the
-  // Airport plateau is sight-transparent but walk-solid.)
-  const walkTowardClear = (len) => {
-    const p0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
-    const p1 = { x: me.pos.x + dirX * len, y: me.pos.y + 1.0, z: me.pos.z + dirZ * len };
-    for (const o of obstacles) {
-      if (segmentHitsObstacle(p0, p1, o)) return false;
-    }
-    return true;
-  };
+  // Are the next `len` units straight toward the player WALKABLE? Uses the
+  // real movement rules (walkSegmentBlocked, topBuffer semantics) — the old
+  // chest-height ray sailed clean over 2.4-high belts that physically stop
+  // a unit, so the triggers/exits kept releasing the bot into low walls.
+  const walkTowardClear = (len) => !walkSegmentBlocked(
+    me.pos.x, me.pos.z,
+    me.pos.x + dirX * len, me.pos.z + dirZ * len,
+    me.pos.y, obstacles
+  );
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
@@ -738,14 +733,16 @@ export function tickBot(matchState, botId, now) {
     );
     if (!path || path.length < 2) {
       path = findPathOnGrid(
-        grid, me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY
+        grid, me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
     if (matchState._navPaths == null) matchState._navPaths = {};
     if (path && path.length > 1) {
+      // idx 0: walk to the pinned start square first — beelining to square
+      // #2 from an off-grid position can clip the corner between them.
       matchState._navPaths[botId] = {
-        path, idx: 1, gx: opp.pos.x, gz: opp.pos.z, at: now
+        path, idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now
       };
       me.botMazeLosBlockedAtEntry = !playerHasLoS;
       return true;

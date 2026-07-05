@@ -8,6 +8,7 @@ export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns } from '.
 export {
   segmentHitsObstacle,
   unitOverlapsObstacle,
+  walkSegmentBlocked,
   resolveUnitObstacleCollisions,
   groundHeightAt,
   surfaceHeightAtXZ,

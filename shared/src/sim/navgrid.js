@@ -25,7 +25,7 @@
 // samples 2 units apart fully tile a 4-unit edge, so thin glass panes
 // between two cell centers cannot slip through.
 
-import { surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle } from './physics.js';
+import { surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked } from './physics.js';
 import { GROUND_BASE_Y } from './constants.js';
 
 const CELL = 4;
@@ -98,10 +98,19 @@ export function buildNavGrid(obstacles, surfaces) {
 // Nearest walkable cell to (x, z). `floorHint` (the actor's floor height)
 // prefers cells on the SAME level — without it, a bot on the plateau could
 // snap to a ground cell through the wall beneath it.
-function nearestWalkable(grid, x, z, floorHint) {
+// `reachObstacles` (start pins only): the pin may additionally only land on
+// a square the actor can WALK to from its true position — measured with
+// real movement rules (walkSegmentBlocked). "Nearest" alone measures
+// straight through walls, so a bot pressed against a ramp balustrade got
+// pinned on the far side of the glass and every route began with "walk
+// through the wall" (the on-a-slope grinding bug). Mid-slope the floorHint
+// tolerance (±2) can't save it — a slope's own height sits within 2 of BOTH
+// adjacent levels.
+function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
   const { cols, rows, cell, minX, minZ, walk, floor } = grid;
   const c0 = Math.max(0, Math.min(cols - 1, Math.floor((x - minX) / cell)));
   const r0 = Math.max(0, Math.min(rows - 1, Math.floor((z - minZ) / cell)));
+  const reachY = (floorHint ?? 0) + GROUND_BASE_Y;
   let anyMatch = -1;
   for (let rad = 0; rad <= SNAP_RADIUS; rad += 1) {
     for (let dr = -rad; dr <= rad; dr += 1) {
@@ -111,6 +120,11 @@ function nearestWalkable(grid, x, z, floorHint) {
         if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
         const i = r * cols + c;
         if (!walk[i]) continue;
+        if (reachObstacles) {
+          const cx = minX + (c + 0.5) * cell;
+          const cz = minZ + (r + 0.5) * cell;
+          if (walkSegmentBlocked(x, z, cx, cz, reachY, reachObstacles)) continue;
+        }
         if (floorHint == null || Math.abs(floor[i] - floorHint) <= 2) return i;
         if (anyMatch < 0) anyMatch = i;
       }
@@ -122,9 +136,9 @@ function nearestWalkable(grid, x, z, floorHint) {
 // A* over the grid. Returns waypoints [{x, z}, ...] from near the start to
 // near the goal (cell centers, collinear runs collapsed), or null when no
 // walk route exists (e.g. target on a jump-only platform).
-export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null) {
+export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null, obstacles = null) {
   const { cols, rows, cell, minX, minZ, edgeE, edgeS } = grid;
-  const start = nearestWalkable(grid, sx, sz, startFloor);
+  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   const goal = nearestWalkable(grid, tx, tz, goalFloor);
   if (start < 0 || goal < 0 || start === goal) return null;
   const n = cols * rows;
@@ -227,7 +241,7 @@ function collapseWaypoints(pts) {
 // findPathOnGrid, or null when no reachable firing cell exists.
 export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles) {
   const { cols, rows, cell, minX, minZ, edgeE, edgeS, floor } = grid;
-  const start = nearestWalkable(grid, sx, sz, startFloor);
+  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   if (start < 0) return null;
   const n = cols * rows;
   const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 BFS root
