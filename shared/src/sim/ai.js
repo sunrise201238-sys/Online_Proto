@@ -357,7 +357,7 @@ export function tickBot(matchState, botId, now) {
     optimalRange = Math.max(10, upperRange - 7);
     lowerRange = Math.max(6, optimalRange - 7);
   }
-  // === Behavior state machine: Defense > Maze > Reposition > Engage > Pursue.
+  // === Behavior state machine: Defense > Maze > Engage > Pursue.
   // Each state has explicit time-bound exits — no latching. Replaces the
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
   // flags with one botState whose transitions are recomputed every tick.
@@ -457,7 +457,22 @@ export function tickBot(matchState, botId, now) {
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
-      if (tx * dirX + tz * dirZ < 0) { tx = -tx; tz = -tz; }
+      // Tiebreak the go-around side by PROBING: from ~20 units along each
+      // tangent, would the player be visible? Prefer the side that opens
+      // sight (kills the long-way-around coin flip at symmetric walls);
+      // fall back to the old "lean toward the player" rule when probes agree.
+      const mazeProbe = (px2, pz2) => botHasLineOfSight(
+        { x: px2, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz2 },
+        { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+        obstacles
+      );
+      const losPlus = mazeProbe(me.pos.x + tx * 20, me.pos.z + tz * 20);
+      const losMinus = mazeProbe(me.pos.x - tx * 20, me.pos.z - tz * 20);
+      if (losPlus !== losMinus) {
+        if (losMinus) { tx = -tx; tz = -tz; }
+      } else if (tx * dirX + tz * dirZ < 0) {
+        tx = -tx; tz = -tz;
+      }
       mxe = ux + tx * 1.3;
       mze = uz + tz * 1.3;
     }
@@ -492,11 +507,9 @@ export function tickBot(matchState, botId, now) {
       nextState = inBandDist ? 'engage' : 'pursue';
     }
   } else if (inBandDist) {
-    if (noLoSTime > 3000 || prevState === 'reposition') {
-      nextState = playerHasLoS ? 'engage' : 'reposition';
-    } else {
-      nextState = 'engage';
-    }
+    // (Reposition removed: its no-sight-in-band case is fully owned by the
+    // 2 s Maze trigger above, which fires before its 3 s timer ever could.)
+    nextState = 'engage';
   } else {
     nextState = 'pursue';
   }
@@ -619,8 +632,12 @@ export function tickBot(matchState, botId, now) {
       }
     }
   } else if (botS === 'maze') {
-    let tx = (me.botMazeDirX ?? sideX) + avoid.rx * 0.3;
-    let tz = (me.botMazeDirZ ?? sideZ) + avoid.rz * 0.3;
+    // Committed tangent + a constant gentle pull toward the player (the
+    // Pursue-flavored heart): the tangent dominates while the wall blocks the
+    // pull, and the moment the wall ends the pull curls the bot around the
+    // corner instead of letting it sprint on past the opening.
+    let tx = (me.botMazeDirX ?? sideX) + dirX * 0.4 + avoid.rx * 0.3;
+    let tz = (me.botMazeDirZ ?? sideZ) + dirZ * 0.4 + avoid.rz * 0.3;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
     wantSprint = true;
@@ -631,7 +648,7 @@ export function tickBot(matchState, botId, now) {
         if (tryStartJump(me, now)) jumpThisTick = true;
       }
     }
-  } else if (botS === 'engage' || botS === 'reposition') {
+  } else if (botS === 'engage') {
     const sign = me.botOrbitSign ?? 1;
     const pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
     let tx = sideX * sign + dirX * pull + avoid.rx * 0.6;
