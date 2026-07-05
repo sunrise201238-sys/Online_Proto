@@ -7991,16 +7991,25 @@ function buildAirportArena() {
   // A north-south line at x=0 alternating x-ray belt machines (h8 true cover)
   // with metal-detector arches (h10 post pairs, 8-wide walk gaps). Weave
   // through the arches or fight around the machines — no elevation anywhere.
-  for (const mz of [-32, -12, 12, 32]) {
-    addBlockingBox({ x: 0, y: 4, z: mz, sx: 9, sy: 8, sz: 9, material: deskMat });
+  for (const mz of [-41, -13, 13, 41]) {
+    addBlockingBox({ x: 0, y: 4, z: mz, sx: 9, sy: 8, sz: 8, material: deskMat });
     const slot = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.5, 3), beltMat);
     slot.position.set(0, 8.1, mz);
     scene.add(slot); arenaDecor.push(slot);
+    // Dark scanner-tunnel mouths on both x faces so it reads as an x-ray
+    // machine you'd feed a bag through, not a gray crate.
+    for (const f of [-1, 1]) {
+      const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 5), tileDark);
+      mouth.position.set(f * 4.7, 5.2, mz);
+      scene.add(mouth); arenaDecor.push(mouth);
+    }
   }
-  for (const gz of [-24, 0, 24]) {
-    addBlockingBox({ x: -6.5, y: 5, z: gz, sx: 5, sy: 10, sz: 5, material: gateMat });
-    addBlockingBox({ x: 6.5, y: 5, z: gz, sx: 5, sy: 10, sz: 5, material: gateMat });
-    addBlockingBox({ x: 0, y: 10.8, z: gz, sx: 18, sy: 1.6, sz: 5, material: signBlue, decorOnly: true });
+  // Metal-detector arches: posts BESIDE the walk path (gap runs along X, the
+  // direction you actually cross the line), crossbar spanning them.
+  for (const gz of [-26, 0, 26]) {
+    addBlockingBox({ x: 0, y: 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 0, y: 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 0, y: 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
   }
 
   // ===== Departure-board walls (h10 hard walls extending the center line) =====
@@ -8022,6 +8031,12 @@ function buildAirportArena() {
     const sign = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.4, 0.5), signYellow);
     sign.position.set(gx, 8.6, gz);
     scene.add(sign); arenaDecor.push(sign);
+    // Boarding-door frame on the glass wall behind the desks near the ends.
+    if (Math.abs(gx) > 110) {
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 10, 8), tileDark);
+      door.position.set(Math.sign(gx) * (HALF_X - 0.7), 5, gz);
+      scene.add(door); arenaDecor.push(door);
+    }
   }
 
   // ===== Check-in desk rows (h6 true cover) =====
@@ -8031,6 +8046,16 @@ function buildAirportArena() {
       const top = new THREE.Mesh(new THREE.BoxGeometry(40.6, 0.3, 6.6), deskTopMat);
       top.position.set(dx, 8.1, dz);
       scene.add(top); arenaDecor.push(top);
+      // Hanging airline sign above + queue-barrier posts on the concourse side
+      // make the islands read as check-in counters.
+      const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue);
+      hang.position.set(dx, 11.5, dz);
+      scene.add(hang); arenaDecor.push(hang);
+      for (const qx of [-14, -7, 0, 7, 14]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), mullionMat);
+        post.position.set(dx + qx, 0.7, dz + (dz > 0 ? -5.5 : 5.5));
+        scene.add(post); arenaDecor.push(post);
+      }
     }
   }
 
@@ -8040,6 +8065,12 @@ function buildAirportArena() {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), signYellow);
     cap.position.set(kx, 8.2, kz);
     scene.add(cap); arenaDecor.push(cap);
+    // Dark info screens on every face — reads as a flight-info kiosk.
+    for (const [ox, oz] of [[4.3, 0], [-4.3, 0], [0, 4.3], [0, -4.3]]) {
+      const scr = new THREE.Mesh(new THREE.BoxGeometry(ox !== 0 ? 0.3 : 5, 3.6, oz !== 0 ? 0.3 : 5), tileDark);
+      scr.position.set(kx + ox, 4.8, kz + oz);
+      scene.add(scr); arenaDecor.push(scr);
+    }
   }
 
   // ===== Baggage bays: luggage belts (h2 clutter) with suitcases on top =====
@@ -8058,6 +8089,10 @@ function buildAirportArena() {
     const num = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.4), signYellow);
     num.position.set(side * -70, 5.5, bz * 56.6);
     scene.add(num); arenaDecor.push(num);
+    // Yellow hazard band at the housing base — baggage-area signature look.
+    const hz = new THREE.Mesh(new THREE.BoxGeometry(40.4, 1, 8.4), signYellow);
+    hz.position.set(side * -70, 0.5, bz * 61);
+    scene.add(hz); arenaDecor.push(hz);
     const caseXs = [-96, -86, -75, -64, -53, -44];
     caseXs.forEach((cx, i) => {
       const c = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 3.4), caseMats[i % caseMats.length]);
@@ -8067,16 +8102,25 @@ function buildAirportArena() {
     });
   }
 
-  // ===== Seating rows (h2 clutter) — central + gate lounges =====
+  // ===== Seating lounges: back-to-back benches around an h8 ad-panel spine =====
+  // NO free-standing low boxes: every lounge is a REAL h8 cover spine with
+  // low seat aprons attached to both sides — reads as airport seating, and the
+  // tall panel means what you see is what protects you.
   const seatRow = (sx0, sz0, len) => {
-    addBlockingBox({ x: sx0, y: 1, z: sz0, sx: len, sy: 2, sz: 4, material: steelMat });
-    const cush = new THREE.Mesh(new THREE.BoxGeometry(len - 1, 0.4, 3.4), cushionMat);
-    cush.position.set(sx0, 2.2, sz0);
-    scene.add(cush); arenaDecor.push(cush);
+    addBlockingBox({ x: sx0, y: 4, z: sz0, sx: len, sy: 8, sz: 1.2, material: steelMat });
+    for (const s of [-1, 1]) {
+      addBlockingBox({ x: sx0, y: 1, z: sz0 + s * 1.9, sx: len, sy: 2, sz: 2.6, material: steelMat });
+      const cush = new THREE.Mesh(new THREE.BoxGeometry(len - 1, 0.5, 2.2), cushionMat);
+      cush.position.set(sx0, 2.15, sz0 + s * 1.9);
+      scene.add(cush); arenaDecor.push(cush);
+      const ad = new THREE.Mesh(new THREE.BoxGeometry(len - 2, 4.2, 0.3), signBlue);
+      ad.position.set(sx0, 5.2, sz0 + s * 0.75);
+      scene.add(ad); arenaDecor.push(ad);
+    }
   };
-  seatRow(0, -48, 40); seatRow(0, 48, 40);
-  seatRow(70, -49, 24); seatRow(70, -41, 24);
-  seatRow(-70, 49, 24); seatRow(-70, 41, 24);
+  seatRow(0, -50, 40); seatRow(0, 50, 40);
+  seatRow(70, -45, 24);
+  seatRow(-70, 45, 24);
 
   // ===== Overhead signage gantries (visual only, high above fire lanes) =====
   for (const gx of [-40, 40]) {
