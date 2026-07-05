@@ -6326,7 +6326,29 @@ function buildStreetsArena() {
   const adScreenB = new THREE.MeshStandardMaterial({ color: 0x4dd6ff, emissive: 0x18a8e0, emissiveIntensity: 0.9, roughness: 0.4 });
   const adScreenC = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffae3f, emissiveIntensity: 0.8, roughness: 0.4 });
 
-  const addDecor = (opts) => addBlockingBox({ ...opts, decorOnly: true });
+  // When fadeGroup is set, dressing meshes are collected so a whole building
+  // (body + windows + roof + billboard) can be registered for camera fade.
+  let fadeGroup = null;
+  const addDecor = (opts) => {
+    const mesh = addBlockingBox({ ...opts, decorOnly: true });
+    if (fadeGroup) fadeGroup.push(mesh);
+    return mesh;
+  };
+  // Camera-proximity fade for a whole building. Materials are cloned once per
+  // building (shared within the group so every piece fades in step — cloning
+  // matters because storefront/window materials are shared across buildings),
+  // and ONE mesh per cloned material drives the opacity in updateWallFade.
+  const applyBuildingFade = (meshes, fadeBox) => {
+    const cache = new Map();
+    for (const m of meshes) {
+      const cm = cache.get(m.material);
+      if (cm) { m.material = cm; continue; }
+      const clone = m.material.clone();
+      cache.set(m.material, clone);
+      m.material = clone;
+      registerWallFade(m, fadeBox);
+    }
+  };
 
   // Vending machine: lit display window, top sign band, dispenser tray, and side
   // trim — placed on the face toward the road centreline (z=0).
@@ -6474,8 +6496,15 @@ function buildStreetsArena() {
     { x: 100, sx: 28, h: 15, mat: storefrontC }
   ];
   southBuildings.forEach((b) => {
-    addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    const body = addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    fadeGroup = [body];
     dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat, b.h + 22);
+    applyBuildingFade(fadeGroup, {
+      minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2,
+      minY: 0, maxY: b.h + 22,
+      minZ: -60, maxZ: -36
+    });
+    fadeGroup = null;
   });
   const northBuildings = [
     { x: -100, sx: 28, h: 13, mat: storefrontD },
@@ -6486,8 +6515,15 @@ function buildStreetsArena() {
     { x: 100, sx: 28, h: 12, mat: storefrontA }
   ];
   northBuildings.forEach((b) => {
-    addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    const body = addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    fadeGroup = [body];
     dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat, b.h + 22);
+    applyBuildingFade(fadeGroup, {
+      minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2,
+      minY: 0, maxY: b.h + 22,
+      minZ: 36, maxZ: 60
+    });
+    fadeGroup = null;
   });
 
   // (Outer back walls removed — the play area is bounded by the invisible
