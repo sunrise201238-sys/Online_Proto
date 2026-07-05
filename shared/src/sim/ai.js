@@ -414,6 +414,20 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
+  // Are the next `len` units straight toward the player WALKABLE? Probed at
+  // body height (+1.0): low clutter (≤2.5) passes underfoot logic fine, but
+  // the 3.7 plateau body, fences, balustrades and walls block. ALL obstacles
+  // count, including noProjectile jump-only edges — they still stop walking.
+  // (Sight and walkability differ exactly in the 3.45..4.05 band: the
+  // Airport plateau is sight-transparent but walk-solid.)
+  const walkTowardClear = (len) => {
+    const p0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
+    const p1 = { x: me.pos.x + dirX * len, y: me.pos.y + 1.0, z: me.pos.z + dirZ * len };
+    for (const o of obstacles) {
+      if (segmentHitsObstacle(p0, p1, o)) return false;
+    }
+    return true;
+  };
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
@@ -577,15 +591,17 @@ export function tickBot(matchState, botId, now) {
         const a = (Math.PI * 2 * i) / 8;
         const sx2 = Math.cos(a), sz2 = Math.sin(a);
         const px3 = me.pos.x + sx2 * sd, pz3 = me.pos.z + sz2 * sd;
-        // REACHABILITY: reject probe points the bot has no clear line to.
-        // On the Airport plateau, points past the rim glass float over the
-        // ground floor and genuinely see the player — but committing toward
-        // them just runs the bot into the fence, forever.
-        if (!botHasLineOfSight(
-          { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
-          { x: px3, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz3 },
-          obstacles
-        )) continue;
+        // REACHABILITY at WALK height (+1.0, ALL obstacles): eye-height
+        // testing had two holes — it skipped jump-only edges, and it passed
+        // clean OVER the 3.7 plateau body, calling points on the far side
+        // "reachable" through a wall the bot can't walk through.
+        const r0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
+        const r1 = { x: px3, y: me.pos.y + 1.0, z: pz3 };
+        let reachable = true;
+        for (const o of obstacles) {
+          if (segmentHitsObstacle(r0, r1, o)) { reachable = false; break; }
+        }
+        if (!reachable) continue;
         if (!losFromPoint(px3, pz3)) continue;
         const dt = sx2 * dirX + sz2 * dirZ;
         if (dt > bestDot) { bestDot = dt; bx = sx2; bz = sz2; }
@@ -613,9 +629,15 @@ export function tickBot(matchState, botId, now) {
   // way INTO the nearest connecting ramp from MY end (foot when climbing,
   // crest when descending); riding it to the other level is what finally
   // opens sight, and the normal flow takes over from there.
-  const mazeSeekElevationRoute = () => {
+  const mazeSeekElevationRoute = (allowClimb = false) => {
     const floorGap = oppFloorY - myFloorY;
-    if (Math.abs(floorGap) < 2.5) return false;
+    // CLIMB MODE: same floor, but the flat route is dead (allowClimb is
+    // passed only then) — e.g. both on Airport ground with the full-width
+    // plateau between. Take any UP-ramp from my level: crossing over the
+    // top is the route, and once up there the normal cross-floor logic
+    // descends the far side.
+    const climbMode = Math.abs(floorGap) < 2.5;
+    if (climbMode && !allowClimb) return false;
     const levelLow = Math.min(myFloorY, oppFloorY);
     const levelHigh = Math.max(myFloorY, oppFloorY);
     let bx = 0, bz = 0, bestD = Infinity;
@@ -623,9 +645,14 @@ export function tickBot(matchState, botId, now) {
       if (s.type !== 'ramp') continue;
       const lo = Math.min(s.lowY, s.highY);
       const hi = Math.max(s.lowY, s.highY);
-      // Must actually connect the two floors (ends within ~a step of each).
-      if (Math.abs(lo - levelLow) > 2 || Math.abs(hi - levelHigh) > 2) continue;
-      const wantY = floorGap > 0 ? lo : hi;   // the ramp end on MY level
+      if (climbMode) {
+        // An up-ramp starting at my level.
+        if (Math.abs(lo - myFloorY) > 2 || hi < myFloorY + 2.5) continue;
+      } else if (Math.abs(lo - levelLow) > 2 || Math.abs(hi - levelHigh) > 2) {
+        // Cross-floor: must actually connect the two floors.
+        continue;
+      }
+      const wantY = (climbMode || floorGap > 0) ? lo : hi;   // the ramp end on MY level
       let ex, ez;
       if (s.axis === 'x') {
         const e0 = s.lowY === wantY ? s.minX : s.maxX;
@@ -666,29 +693,16 @@ export function tickBot(matchState, botId, now) {
     // Maze latches until the job is done: entered sightless, only reacquiring
     // sight releases it. Entered WITH sight (pillar graze), a short cap
     // releases it — else nothing ever would.
-    // VIABILITY GATE: a 1-tick corridor peek used to release Maze into a
-    // Pursue beeline that ran straight into the plateau side — sight ON,
-    // charge the wall, sight OFF, detour, repeat (the far-range back-and-
-    // forth on Airport). Sight alone doesn't hand control back: either the
-    // fight starts here (in band → Engage) or the ~20 units TOWARD the
-    // player must be walkable. Probed at body height (+1.0) so low clutter
-    // passes but the 3.7 plateau body / fences / balustrades block; ALL
-    // obstacles count, including noProjectile jump-only edges (they still
-    // block walking).
-    const approachWalkable = () => {
-      const p0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
-      const p1 = { x: me.pos.x + dirX * 20, y: me.pos.y + 1.0, z: me.pos.z + dirZ * 20 };
-      for (const o of obstacles) {
-        if (segmentHitsObstacle(p0, p1, o)) return false;
-      }
-      return true;
-    };
-    // Cross-floor: a corridor peek mid-climb must not dump the bot back
-    // into Pursue's wall-grind — release on sight only when same-floor (or
-    // already in band, where Engage can legitimately fight through the gap).
+    // VIABILITY GATE: sight alone doesn't hand control back to Pursue —
+    // either the fight starts here (in band → Engage, legitimate even
+    // through a corridor window), or the walk TOWARD the player must be
+    // clear for up to 50 units on the SAME floor. The old 20-unit probe
+    // passed whenever the plateau was more than 20 away, releasing Maze
+    // into a beeline that ground the plateau side 30 units later.
     const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry
       && (inBandDist
-        || (approachWalkable() && Math.abs(oppFloorY - myFloorY) < 2.5));
+        || (walkTowardClear(Math.min(dist, 50))
+          && Math.abs(oppFloorY - myFloorY) < 2.5));
     const visibleEntryDone = !me.botMazeLosBlockedAtEntry
       && (now - (me.botStateEnteredAt ?? now)) > 3000;
     if (losReacquired || visibleEntryDone) {
@@ -712,15 +726,19 @@ export function tickBot(matchState, botId, now) {
       // Stuck mid-Maze → escape re-commit (reverses when probes tie).
       commitMazeDirection(true);
     } else {
-      // CROSS-FLOOR PRIORITY: when the target stands on another floor, the
-      // ramp is the plan and the scan is the fallback. A reachable ground-
-      // level peephole is a consolation prize — scan-first let it preempt
-      // the climb every 7 s, shuttling the bot between the peephole and the
-      // wall forever. Same floor keeps scan-first (Flashpoint rooms).
-      const crossFloor = Math.abs(oppFloorY - myFloorY) > 2.5;
-      const committed = crossFloor
-        ? (mazeSeekElevationRoute() || mazeScanForOpening())
-        : (mazeScanForOpening() || mazeSeekElevationRoute());
+      // ROUTE-CHANGE PRIORITY: the ramp goes first when the fight needs a
+      // different route — the target is on another floor, OR I can SEE the
+      // player but can't WALK at them (the full-width Airport plateau
+      // between two ground-floor fighters: sight passes over its 3.7 body,
+      // feet don't). A reachable peephole is a consolation prize — scan-
+      // first let it preempt the route every 7 s, shuttling the bot between
+      // the peephole and the wall. Plain blind same-floor keeps scan-first
+      // (Flashpoint rooms; Station falls through — no ramps there, the
+      // perch reflex climbs instead).
+      const needRoute = Math.abs(oppFloorY - myFloorY) > 2.5
+        || (playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
+      let committed = needRoute && mazeSeekElevationRoute(true);
+      if (!committed) committed = mazeScanForOpening();
       if (!committed) {
         // Nothing seen, no ramp applies — re-aim toward the player (hand
         // dropped; keeping it lapped closed loops forever — the Flashpoint
