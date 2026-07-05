@@ -447,13 +447,18 @@ export function tickBot(matchState, botId, now) {
 
   // Commit (or re-commit) Maze's go-around heading: tangent to the nearest
   // obstacle, biased toward the player so the detour closes distance.
-  const commitMazeDirection = () => {
+  // `escaping` = re-commit fired by the stuck alarm: when the probes can't
+  // pick a side, REVERSE the current heading instead of leaning toward the
+  // player — the player-lean is what walks the bot straight back into the
+  // corner it just jammed in.
+  const commitMazeDirection = (escaping = false) => {
     let mxe = avoid.rx, mze = avoid.rz;
     const ml = Math.hypot(mxe, mze);
     if (ml < 0.1) {
       const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
       mxe = sideX * sg;
       mze = sideZ * sg;
+      if (escaping) { mxe = -mxe; mze = -mze; }
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
@@ -470,6 +475,10 @@ export function tickBot(matchState, botId, now) {
       const losMinus = mazeProbe(me.pos.x - tx * 20, me.pos.z - tz * 20);
       if (losPlus !== losMinus) {
         if (losMinus) { tx = -tx; tz = -tz; }
+      } else if (escaping) {
+        // Probes tied while escaping a jam: reverse the committed heading.
+        const proj = tx * (me.botMazeDirX ?? tx) + tz * (me.botMazeDirZ ?? tz);
+        if (proj > 0) { tx = -tx; tz = -tz; }
       } else if (tx * dirX + tz * dirZ < 0) {
         tx = -tx; tz = -tz;
       }
@@ -520,7 +529,7 @@ export function tickBot(matchState, botId, now) {
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
     me.botStateEnteredAt = now;
-    commitMazeDirection();
+    commitMazeDirection(stuckTriggered);
   }
 
   // --- State entry: commit per-state directions and timers ---
@@ -632,12 +641,14 @@ export function tickBot(matchState, botId, now) {
       }
     }
   } else if (botS === 'maze') {
-    // Committed tangent + a constant gentle pull toward the player (the
-    // Pursue-flavored heart): the tangent dominates while the wall blocks the
-    // pull, and the moment the wall ends the pull curls the bot around the
-    // corner instead of letting it sprint on past the opening.
-    let tx = (me.botMazeDirX ?? sideX) + dirX * 0.4 + avoid.rx * 0.3;
-    let tz = (me.botMazeDirZ ?? sideZ) + dirZ * 0.4 + avoid.rz * 0.3;
+    // Committed tangent + a gentle pull toward the player (the Pursue-
+    // flavored heart). The pull FADES OUT near walls (scaled by avoidance
+    // strength) so it can't press the bot into concave corners; in the open —
+    // i.e. right after the wall ends — it kicks back in and curls the bot
+    // around the corner instead of letting it sprint on past the opening.
+    const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
+    let tx = (me.botMazeDirX ?? sideX) + dirX * mazePull + avoid.rx * 0.3;
+    let tz = (me.botMazeDirZ ?? sideZ) + dirZ * mazePull + avoid.rz * 0.3;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
     wantSprint = true;
