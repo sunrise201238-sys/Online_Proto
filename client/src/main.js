@@ -3596,7 +3596,11 @@ function updateEnemy(now) {
   let wantSprint = false;
   let jumpThisTick = false;
   let jumpDirX = dir.x, jumpDirZ = dir.z;
-  const botS = eState.botState;
+  // Default to 'pursue' — botState is only ASSIGNED on a state CHANGE, so
+  // it's undefined for the whole first stretch of a match; the raw read
+  // matched no movement branch and the bot stood frozen until the
+  // no-progress timer shoved it into maze (the 2 s statue at match start).
+  const botS = eState.botState ?? 'pursue';
 
   if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
@@ -3666,6 +3670,19 @@ function updateEnemy(now) {
         if (nav) eState.botNav = null;
         nav = null;
         eState.botStateEnteredAt = now - 3001;
+      }
+    }
+    // FINAL-WAYPOINT ARRIVAL: destination reached but the maze hasn't
+    // exited yet (e.g. sighted-entry cap still counting). Drop the path
+    // rather than stand on it — a standing bot re-arms the no-progress
+    // trigger every 2 s, which keeps re-selecting maze and STARVES the
+    // exit branch forever (the Plain Field never-orbits bug). The moving
+    // heuristic fallback covers the remaining ticks until the exit fires.
+    if (nav && nav.path.length > 0) {
+      const lastWp = nav.path[nav.path.length - 1];
+      if (Math.hypot(lastWp.x - e.x, lastWp.z - e.z) < 3) {
+        eState.botNav = null;
+        nav = null;
       }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
