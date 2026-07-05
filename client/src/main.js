@@ -7987,89 +7987,133 @@ function buildAirportArena() {
     scene.add(win); arenaDecor.push(win);
   }
 
+  // ===== Security plateau: the middle band (z -40..40) raised to h4 =====
+  // Station's exact platform height: low enough to jump onto anywhere (apex
+  // ~5.6) and for bots to climb, central so it never blocks the camera. The
+  // checkpoint, check-in islands, board walls and end gate desks sit ON it.
+  const PLATEAU_Y = 4;
+  addBlockingBox({ x: 0, y: (PLATEAU_Y - 0.3) / 2, z: 0, sx: 273.6, sy: PLATEAU_Y - 0.3, sz: 79.6, material: steelMat });
+  addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: tileMat, thickness: 0.6 });
+  // Yellow edge stripes so the height change reads at a glance.
+  for (const ez of [-39.2, 39.2]) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(272, 0.15, 1.2), signYellow);
+    stripe.position.set(0, PLATEAU_Y + 0.08, ez);
+    scene.add(stripe); arenaDecor.push(stripe);
+  }
+  // Four walk-up ramps (two per edge, mirror-symmetric) so bots never need to
+  // jump; solid skirts under the upper halves.
+  addRamp({ minX: 24, maxX: 48, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: -48, maxX: -24, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: 24, maxX: 48, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  addRamp({ minX: -48, maxX: -24, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  for (const [rx, rz] of [[36, -42.5], [-36, -42.5], [36, 42.5], [-36, 42.5]]) {
+    addBlockingBox({ x: rx, y: 1, z: rz, sx: 23.6, sy: 2, sz: 5, material: steelMat, topBuffer: 0 });
+  }
+
   // ===== Security checkpoint (the central divider, at GROUND level) =====
   // A north-south line at x=0 alternating x-ray belt machines (h8 true cover)
   // with metal-detector arches (h10 post pairs, 8-wide walk gaps). Weave
   // through the arches or fight around the machines — no elevation anywhere.
-  for (const mz of [-41, -13, 13, 41]) {
-    addBlockingBox({ x: 0, y: 4, z: mz, sx: 9, sy: 8, sz: 8, material: deskMat });
+  // (Everything here sits ON the plateau — all heights offset by PLATEAU_Y.)
+  for (const mz of [-13, 13]) {
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: mz, sx: 9, sy: 8, sz: 8, material: deskMat });
     const slot = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.5, 3), beltMat);
-    slot.position.set(0, 8.1, mz);
+    slot.position.set(0, PLATEAU_Y + 8.1, mz);
     scene.add(slot); arenaDecor.push(slot);
     // Dark scanner-tunnel mouths on both x faces so it reads as an x-ray
     // machine you'd feed a bag through, not a gray crate.
     for (const f of [-1, 1]) {
       const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 5), tileDark);
-      mouth.position.set(f * 4.7, 5.2, mz);
+      mouth.position.set(f * 4.7, PLATEAU_Y + 5.2, mz);
       scene.add(mouth); arenaDecor.push(mouth);
     }
   }
   // Metal-detector arches: posts BESIDE the walk path (gap runs along X, the
   // direction you actually cross the line), crossbar spanning them.
   for (const gz of [-26, 0, 26]) {
-    addBlockingBox({ x: 0, y: 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
-    addBlockingBox({ x: 0, y: 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
-    addBlockingBox({ x: 0, y: 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
   }
 
   // ===== Departure-board walls (h10 hard walls extending the center line) =====
   for (const side of [-1, 1]) {
-    addBlockingBox({ x: side * 75, y: 6, z: 0, sx: 30, sy: 12, sz: 4, material: wallMat });
+    addBlockingBox({ x: side * 75, y: PLATEAU_Y + 6, z: 0, sx: 30, sy: 12, sz: 4, material: wallMat });
     for (const face of [-1, 1]) {
       const board = new THREE.Mesh(new THREE.BoxGeometry(24, 5, 0.3), tileDark);
-      board.position.set(side * 75, 7, face * 2.3);
+      board.position.set(side * 75, PLATEAU_Y + 7, face * 2.3);
       scene.add(board); arenaDecor.push(board);
       const header = new THREE.Mesh(new THREE.BoxGeometry(24, 0.8, 0.3), signYellow);
-      header.position.set(side * 75, 10.3, face * 2.3);
+      header.position.set(side * 75, PLATEAU_Y + 10.3, face * 2.3);
       scene.add(header); arenaDecor.push(header);
     }
   }
 
   // ===== Gate desks (h8 true cover in the end zones) =====
-  for (const [gx, gz] of [[120, -30], [-120, 30], [-105, -78], [105, 78]]) {
-    addBlockingBox({ x: gx, y: 4, z: gz, sx: 6, sy: 8, sz: 12, material: deskMat });
+  // End pair sits ON the plateau; the corner pair stays at ground level.
+  for (const [gx, gz, gy] of [[120, -30, PLATEAU_Y], [-120, 30, PLATEAU_Y], [-105, -78, 0], [105, 78, 0]]) {
+    addBlockingBox({ x: gx, y: gy + 4, z: gz, sx: 6, sy: 8, sz: 12, material: deskMat });
     const sign = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.4, 0.5), signYellow);
-    sign.position.set(gx, 8.6, gz);
+    sign.position.set(gx, gy + 8.6, gz);
     scene.add(sign); arenaDecor.push(sign);
     // Boarding-door frame on the glass wall behind the desks near the ends.
     if (Math.abs(gx) > 110) {
       const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 10, 8), tileDark);
-      door.position.set(Math.sign(gx) * (HALF_X - 0.7), 5, gz);
+      door.position.set(Math.sign(gx) * (HALF_X - 0.7), gy + 5, gz);
       scene.add(door); arenaDecor.push(door);
     }
   }
 
   // ===== Check-in desk rows (h6 true cover) =====
-  for (const [dx, dzs] of [[-75, [-40, -20]], [75, [20, 40]]]) {
+  // Repositioned fully ONTO the plateau (they used to straddle its edge).
+  for (const [dx, dzs] of [[-75, [-32, -14]], [75, [14, 32]]]) {
     for (const dz of dzs) {
-      addBlockingBox({ x: dx, y: 4, z: dz, sx: 40, sy: 8, sz: 6, material: deskMat });
+      addBlockingBox({ x: dx, y: PLATEAU_Y + 4, z: dz, sx: 40, sy: 8, sz: 6, material: deskMat });
       const top = new THREE.Mesh(new THREE.BoxGeometry(40.6, 0.3, 6.6), deskTopMat);
-      top.position.set(dx, 8.1, dz);
+      top.position.set(dx, PLATEAU_Y + 8.1, dz);
       scene.add(top); arenaDecor.push(top);
       // Hanging airline sign above + queue-barrier posts on the concourse side
       // make the islands read as check-in counters.
       const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue);
-      hang.position.set(dx, 11.5, dz);
+      hang.position.set(dx, PLATEAU_Y + 11.5, dz);
       scene.add(hang); arenaDecor.push(hang);
       for (const qx of [-14, -7, 0, 7, 14]) {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), mullionMat);
-        post.position.set(dx + qx, 0.7, dz + (dz > 0 ? -5.5 : 5.5));
+        post.position.set(dx + qx, PLATEAU_Y + 0.7, dz + (dz > 0 ? -5.5 : 5.5));
         scene.add(post); arenaDecor.push(post);
       }
     }
   }
 
   // ===== Kiosks (h6 true cover) =====
-  for (const [kx, kz] of [[-20, -60], [20, 60], [90, -60], [-90, 60], [45, -80], [-45, 80], [-45, -80], [45, 80]]) {
-    addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: deskMat });
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), signYellow);
+  // Two DISTINCT kiosk types (no more identical yellow-capped cubes):
+  // info totems — gray-blue body, dark screens all faces, white cap.
+  for (const [kx, kz] of [[-20, -60], [20, 60], [90, -60], [-90, 60]]) {
+    addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: mullionMat });
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), planeWhite);
     cap.position.set(kx, 8.2, kz);
     scene.add(cap); arenaDecor.push(cap);
-    // Dark info screens on every face — reads as a flight-info kiosk.
     for (const [ox, oz] of [[4.3, 0], [-4.3, 0], [0, 4.3], [0, -4.3]]) {
       const scr = new THREE.Mesh(new THREE.BoxGeometry(ox !== 0 ? 0.3 : 5, 3.6, oz !== 0 ? 0.3 : 5), tileDark);
       scr.position.set(kx + ox, 4.8, kz + oz);
       scene.add(scr); arenaDecor.push(scr);
+    }
+  }
+  // Vending machine banks — dark body, one red + one blue machine front on
+  // both long faces, lit strip along the top.
+  for (const [kx, kz] of [[45, -80], [-45, 80], [-45, -80], [45, 80]]) {
+    addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: tileDark });
+    for (const f of [-1, 1]) {
+      const fz = kz + f * 4.2;
+      const vRed = new THREE.Mesh(new THREE.BoxGeometry(3.2, 5.4, 0.3), caseMats[0]);
+      vRed.position.set(kx - 1.9, 3.4, fz);
+      scene.add(vRed); arenaDecor.push(vRed);
+      const vBlue = new THREE.Mesh(new THREE.BoxGeometry(3.2, 5.4, 0.3), caseMats[1]);
+      vBlue.position.set(kx + 1.9, 3.4, fz);
+      scene.add(vBlue); arenaDecor.push(vBlue);
+      const lit = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.7, 0.3), planeWhite);
+      lit.position.set(kx, 6.9, fz);
+      scene.add(lit); arenaDecor.push(lit);
     }
   }
 
