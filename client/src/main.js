@@ -313,6 +313,41 @@ function pickClosestEnemyOf(mech) {
   }
   return best;
 }
+
+// LoS-aware bot target pick (2v2) — offline mirror of pickBotTargetId in
+// shared/src/sim/ai.js. Score = real distance + a flat penalty when the
+// enemy is out of line of sight — raw closest-distance locked the enemy
+// sealed behind the Airport rim glass (unreachable without rounding the
+// whole plateau) while the OTHER enemy shot freely. An enemy standing at an
+// opening HAS LoS, so it still reads as genuinely close. Hysteresis: keep
+// the current lock unless a rival beats it by a clear margin.
+function pickBotTargetOf(mech) {
+  if (!mech) return null;
+  const enemies = getEnemiesOf(mech).filter((f) => f.state.hp > 0);
+  if (enemies.length === 0) return null;
+  if (enemies.length === 1) { mech.state.botTargetRef = enemies[0]; return enemies[0]; }
+  let best = enemies[0];
+  let bestScore = Infinity;
+  let currentScore = null;
+  for (const e of enemies) {
+    const d = Math.hypot(
+      e.body.position.x - mech.body.position.x,
+      e.body.position.z - mech.body.position.z
+    );
+    const seen = botHasLineOfSight(
+      { x: mech.body.position.x, y: mech.body.position.y + BOT_LOS_EYE_HEIGHT, z: mech.body.position.z },
+      { x: e.body.position.x, y: e.body.position.y + BOT_LOS_EYE_HEIGHT, z: e.body.position.z }
+    );
+    const score = d + (seen ? 0 : BOT_TARGET_BLOCKED_PENALTY);
+    if (e === mech.state.botTargetRef) currentScore = score;
+    if (score < bestScore) { bestScore = score; best = e; }
+  }
+  if (currentScore != null && currentScore <= bestScore + BOT_TARGET_SWITCH_MARGIN) {
+    return mech.state.botTargetRef;
+  }
+  mech.state.botTargetRef = best;
+  return best;
+}
 // Wrap-and-redirect: temporarily aliases state.player/state.enemy to (opp, me)
 // so the existing updateEnemy() body — written for the 1v1 enemy bot — can
 // drive any bot mech against any target without a 480-line refactor.
@@ -2707,6 +2742,12 @@ const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
+// LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
+// glass/walls) reads this many units FARTHER than it really is, so a visible
+// enemy wins the lock unless the blocked one is drastically closer. The
+// margin keeps the current lock unless a rival clearly beats it (no flicker).
+const BOT_TARGET_BLOCKED_PENALTY = 50;
+const BOT_TARGET_SWITCH_MARGIN = 6;
 
 // --- Elevation-kiting tunables ---
 // A ledge whose lip rises more than the auto-step height (1.6) above the
@@ -2989,6 +3030,7 @@ function updateEnemy(now) {
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
       eState.botDefenseStuckTicks = 0;
+      eState.botDefenseFlips = 0;
       eState.botDefenseStuckMode = false;
     }
   }
@@ -3136,7 +3178,7 @@ function updateEnemy(now) {
   // pick a side, REVERSE the current heading instead of leaning toward the
   // player — the player-lean is what walks the bot straight back into the
   // corner it just jammed in.
-  const commitMazeDirection = (escaping = false) => {
+  const commitMazeDirection = (escaping = false, keepHand = false) => {
     let mxe = avoid.rx, mze = avoid.rz;
     const ml = Math.hypot(mxe, mze);
     eState.botMazeHadWall = ml >= 0.1;
@@ -3150,6 +3192,7 @@ function updateEnemy(now) {
       mxe = dir.x;
       mze = dir.z;
       if (escaping) { mxe = -mxe; mze = -mze; }
+      eState.botMazeHand = null;
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
@@ -3169,9 +3212,18 @@ function updateEnemy(now) {
         // Probes tied while escaping a jam: reverse the committed heading.
         const proj = tx * (eState.botMazeDirX ?? tx) + tz * (eState.botMazeDirZ ?? tz);
         if (proj > 0) { tx = -tx; tz = -tz; }
+      } else if (keepHand && eState.botMazeHand != null) {
+        // KEEP THE SAME WAY AROUND: preserve which hand the wall is on. Corner
+        // re-commits keep circling the object, and 7 s refreshes along a long
+        // wall hold their direction — instead of the toward-player tiebreak
+        // re-aiming every refresh and pendulum-ing the bot under the player
+        // (it never committed the full run to the Airport ramp gaps).
+        if ((tz * ux - tx * uz) * eState.botMazeHand < 0) { tx = -tx; tz = -tz; }
       } else if (tx * dir.x + tz * dir.z < 0) {
         tx = -tx; tz = -tz;
       }
+      // Record the chosen going-around hand (side of the wall vs travel).
+      eState.botMazeHand = (tz * ux - tx * uz) >= 0 ? 1 : -1;
       // WALL-FOLLOW: tangent-dominant with a slight standoff. The old blend
       // (away + 1.3*tangent = 61% away after normalizing) detached the bot
       // from the wall diagonally within a second, stranding it in open
@@ -3224,7 +3276,9 @@ function updateEnemy(now) {
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || (now - (eState.botStateEnteredAt ?? now)) > 7000)) {
     eState.botStateEnteredAt = now;
-    commitMazeDirection(stuckTriggered);
+    // Stuck → escape (reverse). Plain 7 s refresh → keep the same hand, so a
+    // long wall gets walked to its end instead of re-aimed toward the player.
+    commitMazeDirection(stuckTriggered, !stuckTriggered);
   }
 
   // --- State entry: commit per-state directions and timers ---
@@ -3233,6 +3287,7 @@ function updateEnemy(now) {
     eState.botStateEnteredAt = now;
 
     if (nextState === 'maze') {
+      eState.botMazeWallTicks = 0;
       commitMazeDirection();
     }
 
@@ -3261,6 +3316,7 @@ function updateEnemy(now) {
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
       eState.botDefenseStuckTicks = 0;
+      eState.botDefenseFlips = 0;
       eState.botDefenseStuckMode = !!stuckTriggered;
       // Reset the stuck window — next check starts fresh after this entry.
       eState.botStuckCheckX = e.x;
@@ -3290,6 +3346,7 @@ function updateEnemy(now) {
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;
       eState.botDefenseStuckTicks = 0;
+      eState.botDefenseFlips = 0;
       eState.botDefenseStuckMode = false;
     }
     const minDur = sniperCharging ? 600 : 350;
@@ -3352,6 +3409,22 @@ function updateEnemy(now) {
     // Context change: committed in the open, and a wall just interposed —
     // switch to wall-follow NOW instead of grinding into it.
     if (eState.botMazeHadWall === false && obstacleNear) commitMazeDirection();
+    // CORNER TURN: the committed wall-follow ran into a NEW wall face
+    // (concave corner). Same 2-tick wall-press read Defense uses — re-commit
+    // HERE (~0.03 s, not the 1.5 s stuck alarm) preserving the going-around
+    // hand, so the bot turns the corner and keeps circling the object
+    // instead of stalling until the alarm reverses it.
+    const mazeIntoWall = avoidMag > 0.4
+      && ((eState.botMazeDirX ?? 0) * avoid.rx + (eState.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
+    if (mazeIntoWall) {
+      eState.botMazeWallTicks = (eState.botMazeWallTicks ?? 0) + 1;
+    } else {
+      eState.botMazeWallTicks = 0;
+    }
+    if (eState.botMazeWallTicks >= 2) {
+      eState.botMazeWallTicks = 0;
+      commitMazeDirection(false, true);
+    }
     const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
     let tx = (eState.botMazeDirX ?? side.x) + dir.x * mazePull + avoid.rx * 0.3;
     let tz = (eState.botMazeDirZ ?? side.z) + dir.z * mazePull + avoid.rz * 0.3;
@@ -3443,8 +3516,35 @@ function updateEnemy(now) {
         eState.botDefenseStuckTicks = 0;
       }
       if (eState.botDefenseStuckTicks >= 2) {
-        eState.botLastProgressAt = now - 2001;
-        eState.botDefenseUntil = now;
+        // Wedged mid-escape (~2 ticks of zero lateral motion pressing a
+        // wall). The old response — end Defense and hand off to Maze — never
+        // won under sustained fire: "under fire" re-asserted Defense every
+        // tick with the SAME direction still pointed into the wall, so the
+        // bot stood there getting farmed. Recover IN PLACE instead:
+        //   1st wedge → the OTHER perpendicular (equally across the aim
+        //               line, and away from the wall just hit by construction);
+        //   2nd wedge → slide along the wall (concave corner / corridor);
+        //   after that → the old bail-to-Maze as a last resort.
+        const flips = eState.botDefenseFlips ?? 0;
+        if (flips === 0) {
+          eState.botDefenseDirX = -(eState.botDefenseDirX ?? side.x);
+          eState.botDefenseDirZ = -(eState.botDefenseDirZ ?? side.z);
+          eState.botDefenseFlips = 1;
+          eState.botDefenseStuckTicks = 0;
+        } else if (flips === 1) {
+          const am = avoidMag || 1;
+          let tx2 = -avoid.rz / am, tz2 = avoid.rx / am;
+          if (tx2 * (eState.botDefenseDirX ?? side.x) + tz2 * (eState.botDefenseDirZ ?? side.z) < 0) {
+            tx2 = -tx2; tz2 = -tz2;
+          }
+          eState.botDefenseDirX = tx2;
+          eState.botDefenseDirZ = tz2;
+          eState.botDefenseFlips = 2;
+          eState.botDefenseStuckTicks = 0;
+        } else {
+          eState.botLastProgressAt = now - 2001;
+          eState.botDefenseUntil = now;
+        }
       }
     }
   }
@@ -8964,9 +9064,9 @@ function animate() {
       });
       updatePlayer(now);
       if (state.mode === '2v2') {
-        runBotAIForMech(state.enemy, pickClosestEnemyOf(state.enemy), now);
-        runBotAIForMech(state.ally, pickClosestEnemyOf(state.ally), now);
-        runBotAIForMech(state.enemy2, pickClosestEnemyOf(state.enemy2), now);
+        runBotAIForMech(state.enemy, pickBotTargetOf(state.enemy), now);
+        runBotAIForMech(state.ally, pickBotTargetOf(state.ally), now);
+        runBotAIForMech(state.enemy2, pickBotTargetOf(state.enemy2), now);
       } else {
         updateEnemy(now);
       }
