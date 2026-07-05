@@ -666,7 +666,25 @@ export function tickBot(matchState, botId, now) {
     // Maze latches until the job is done: entered sightless, only reacquiring
     // sight releases it. Entered WITH sight (pillar graze), a short cap
     // releases it — else nothing ever would.
-    const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry;
+    // VIABILITY GATE: a 1-tick corridor peek used to release Maze into a
+    // Pursue beeline that ran straight into the plateau side — sight ON,
+    // charge the wall, sight OFF, detour, repeat (the far-range back-and-
+    // forth on Airport). Sight alone doesn't hand control back: either the
+    // fight starts here (in band → Engage) or the ~20 units TOWARD the
+    // player must be walkable. Probed at body height (+1.0) so low clutter
+    // passes but the 3.7 plateau body / fences / balustrades block; ALL
+    // obstacles count, including noProjectile jump-only edges (they still
+    // block walking).
+    const approachWalkable = () => {
+      const p0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
+      const p1 = { x: me.pos.x + dirX * 20, y: me.pos.y + 1.0, z: me.pos.z + dirZ * 20 };
+      for (const o of obstacles) {
+        if (segmentHitsObstacle(p0, p1, o)) return false;
+      }
+      return true;
+    };
+    const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry
+      && (inBandDist || approachWalkable());
     const visibleEntryDone = !me.botMazeLosBlockedAtEntry
       && (now - (me.botStateEnteredAt ?? now)) > 3000;
     if (losReacquired || visibleEntryDone) {
