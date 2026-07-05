@@ -57,6 +57,12 @@ const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
+// LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
+// glass/walls) reads this many units FARTHER than it really is, so a visible
+// enemy wins the lock unless the blocked one is drastically closer. The
+// margin keeps the current lock unless a rival clearly beats it (no flicker).
+const BOT_TARGET_BLOCKED_PENALTY = 50;
+const BOT_TARGET_SWITCH_MARGIN = 6;
 
 // --- Elevation-kiting tunables ---
 // A ledge whose lip rises more than the auto-step height (1.6) above the
@@ -240,6 +246,38 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
 
 // Drives the bot's velocity directly (legacy-style — sets vel and fires
 // through attemptFire). Mirrors updateEnemy.
+// LoS-aware bot target pick (2v2). Score = real distance + a flat penalty
+// when the enemy is out of line of sight — raw closest-distance locked the
+// enemy sealed behind the Airport rim glass (unreachable without rounding
+// the whole plateau) while the OTHER enemy shot freely. An enemy standing at
+// an opening HAS LoS, so it still reads as genuinely close. Hysteresis: keep
+// the current lock unless a rival beats it by a clear margin.
+export function pickBotTargetId(matchState, fighter) {
+  const enemies = Object.values(matchState.fighters)
+    .filter((f) => f.team !== fighter.team && f.hp > 0);
+  if (enemies.length === 0) return null;
+  if (enemies.length === 1) return enemies[0].id;
+  const obstacles = getArena(matchState.mapKey).obstacles;
+  let bestId = enemies[0].id;
+  let bestScore = Infinity;
+  let currentScore = null;
+  for (const e of enemies) {
+    const d = Math.hypot(e.pos.x - fighter.pos.x, e.pos.z - fighter.pos.z);
+    const seen = botHasLineOfSight(
+      { x: fighter.pos.x, y: fighter.pos.y + BOT_LOS_EYE_HEIGHT, z: fighter.pos.z },
+      { x: e.pos.x, y: e.pos.y + BOT_LOS_EYE_HEIGHT, z: e.pos.z },
+      obstacles
+    );
+    const score = d + (seen ? 0 : BOT_TARGET_BLOCKED_PENALTY);
+    if (e.id === fighter.targetId) currentScore = score;
+    if (score < bestScore) { bestScore = score; bestId = e.id; }
+  }
+  if (currentScore != null && currentScore <= bestScore + BOT_TARGET_SWITCH_MARGIN) {
+    return fighter.targetId;
+  }
+  return bestId;
+}
+
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
@@ -324,6 +362,7 @@ export function tickBot(matchState, botId, now) {
         me.botDefenseCoverAt = 0;
         me.botDefensePeekDone = false;
         me.botDefenseStuckTicks = 0;
+        me.botDefenseFlips = 0;
         me.botDefenseStuckMode = false;
       }
     }
@@ -451,7 +490,7 @@ export function tickBot(matchState, botId, now) {
   // pick a side, REVERSE the current heading instead of leaning toward the
   // player — the player-lean is what walks the bot straight back into the
   // corner it just jammed in.
-  const commitMazeDirection = (escaping = false) => {
+  const commitMazeDirection = (escaping = false, keepHand = false) => {
     let mxe = avoid.rx, mze = avoid.rz;
     const ml = Math.hypot(mxe, mze);
     me.botMazeHadWall = ml >= 0.1;
@@ -465,6 +504,7 @@ export function tickBot(matchState, botId, now) {
       mxe = dirX;
       mze = dirZ;
       if (escaping) { mxe = -mxe; mze = -mze; }
+      me.botMazeHand = null;
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
@@ -485,9 +525,18 @@ export function tickBot(matchState, botId, now) {
         // Probes tied while escaping a jam: reverse the committed heading.
         const proj = tx * (me.botMazeDirX ?? tx) + tz * (me.botMazeDirZ ?? tz);
         if (proj > 0) { tx = -tx; tz = -tz; }
+      } else if (keepHand && me.botMazeHand != null) {
+        // KEEP THE SAME WAY AROUND: preserve which hand the wall is on. Corner
+        // re-commits keep circling the object, and 7 s refreshes along a long
+        // wall hold their direction — instead of the toward-player tiebreak
+        // re-aiming every refresh and pendulum-ing the bot under the player
+        // (it never committed the full run to the Airport ramp gaps).
+        if ((tz * ux - tx * uz) * me.botMazeHand < 0) { tx = -tx; tz = -tz; }
       } else if (tx * dirX + tz * dirZ < 0) {
         tx = -tx; tz = -tz;
       }
+      // Record the chosen going-around hand (side of the wall vs travel).
+      me.botMazeHand = (tz * ux - tx * uz) >= 0 ? 1 : -1;
       // WALL-FOLLOW: tangent-dominant with a slight standoff. The old blend
       // (away + 1.3*tangent = 61% away after normalizing) detached the bot
       // from the wall diagonally within a second, stranding it in open
@@ -540,7 +589,9 @@ export function tickBot(matchState, botId, now) {
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
     me.botStateEnteredAt = now;
-    commitMazeDirection(stuckTriggered);
+    // Stuck → escape (reverse). Plain 7 s refresh → keep the same hand, so a
+    // long wall gets walked to its end instead of re-aimed toward the player.
+    commitMazeDirection(stuckTriggered, !stuckTriggered);
   }
 
   // --- State entry: commit per-state directions and timers ---
@@ -549,6 +600,7 @@ export function tickBot(matchState, botId, now) {
     me.botStateEnteredAt = now;
 
     if (nextState === 'maze') {
+      me.botMazeWallTicks = 0;
       commitMazeDirection();
     }
 
@@ -573,6 +625,7 @@ export function tickBot(matchState, botId, now) {
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
+      me.botDefenseFlips = 0;
       me.botDefenseStuckMode = !!stuckTriggered;
       // Reset the stuck window — next check starts fresh after this entry.
       me.botStuckCheckX = me.pos.x;
@@ -600,6 +653,7 @@ export function tickBot(matchState, botId, now) {
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
+      me.botDefenseFlips = 0;
       me.botDefenseStuckMode = false;
     }
     const minDur = sniperCharging ? 600 : 350;
@@ -660,6 +714,22 @@ export function tickBot(matchState, botId, now) {
     // Context change: committed in the open, and a wall just interposed —
     // switch to wall-follow NOW instead of grinding into it.
     if (me.botMazeHadWall === false && obstacleNear) commitMazeDirection();
+    // CORNER TURN: the committed wall-follow ran into a NEW wall face
+    // (concave corner). Same 2-tick wall-press read Defense uses — re-commit
+    // HERE (~0.03 s, not the 1.5 s stuck alarm) preserving the going-around
+    // hand, so the bot turns the corner and keeps circling the object
+    // instead of stalling until the alarm reverses it.
+    const mazeIntoWall = avoidMag > 0.4
+      && ((me.botMazeDirX ?? 0) * avoid.rx + (me.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
+    if (mazeIntoWall) {
+      me.botMazeWallTicks = (me.botMazeWallTicks ?? 0) + 1;
+    } else {
+      me.botMazeWallTicks = 0;
+    }
+    if (me.botMazeWallTicks >= 2) {
+      me.botMazeWallTicks = 0;
+      commitMazeDirection(false, true);
+    }
     const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
     let tx = (me.botMazeDirX ?? sideX) + dirX * mazePull + avoid.rx * 0.3;
     let tz = (me.botMazeDirZ ?? sideZ) + dirZ * mazePull + avoid.rz * 0.3;
@@ -735,8 +805,35 @@ export function tickBot(matchState, botId, now) {
         me.botDefenseStuckTicks = 0;
       }
       if (me.botDefenseStuckTicks >= 2) {
-        me.botLastProgressAt = now - 2001;
-        me.botDefenseUntil = now;
+        // Wedged mid-escape (~2 ticks of zero lateral motion pressing a
+        // wall). The old response — end Defense and hand off to Maze — never
+        // won under sustained fire: "under fire" re-asserted Defense every
+        // tick with the SAME direction still pointed into the wall, so the
+        // bot stood there getting farmed. Recover IN PLACE instead:
+        //   1st wedge → the OTHER perpendicular (equally across the aim
+        //               line, and away from the wall just hit by construction);
+        //   2nd wedge → slide along the wall (concave corner / corridor);
+        //   after that → the old bail-to-Maze as a last resort.
+        const flips = me.botDefenseFlips ?? 0;
+        if (flips === 0) {
+          me.botDefenseDirX = -(me.botDefenseDirX ?? sideX);
+          me.botDefenseDirZ = -(me.botDefenseDirZ ?? sideZ);
+          me.botDefenseFlips = 1;
+          me.botDefenseStuckTicks = 0;
+        } else if (flips === 1) {
+          const am = avoidMag || 1;
+          let tx2 = -avoid.rz / am, tz2 = avoid.rx / am;
+          if (tx2 * (me.botDefenseDirX ?? sideX) + tz2 * (me.botDefenseDirZ ?? sideZ) < 0) {
+            tx2 = -tx2; tz2 = -tz2;
+          }
+          me.botDefenseDirX = tx2;
+          me.botDefenseDirZ = tz2;
+          me.botDefenseFlips = 2;
+          me.botDefenseStuckTicks = 0;
+        } else {
+          me.botLastProgressAt = now - 2001;
+          me.botDefenseUntil = now;
+        }
       }
     }
   }

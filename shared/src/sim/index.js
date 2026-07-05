@@ -35,5 +35,5 @@ export {
   startDash
 } from './actions.js';
 export { spawnProjectiles, tickProjectiles } from './projectiles.js';
-export { tickBot } from './ai.js';
+export { tickBot, pickBotTargetId } from './ai.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
