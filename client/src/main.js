@@ -3095,6 +3095,12 @@ function updateEnemy(now) {
     { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
+  // Would the player still be visible from (px, pz)? LoS-gates the range
+  // discipline below: never retreat or drift outward past the edge of sight.
+  const losFromPoint = (px, pz) => botHasLineOfSight(
+    { x: px, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+  );
   if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   eState.botPrevHitStun = eState.hitStunUntil;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
@@ -3367,17 +3373,35 @@ function updateEnemy(now) {
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
     const tooClose = dist < lowerRange;
-    const dirSign = tooClose ? -1 : 1;
-    let tx = dir.x * dirSign + avoid.rx * 0.8;
-    let tz = dir.z * dirSign + avoid.rz * 0.8;
-    const l = Math.hypot(tx, tz) || 1;
-    mx = tx / l; mz = tz / l;
-    // Occasional sprint with hysteresis. A boost reserve keeps at least one
-    // good evade in the tank — Defense should never find the gauge empty.
-    const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
-    if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botPursueSprinting = true;
-    if (eState.boost <= reserveBoost) eState.botPursueSprinting = false;
-    wantSprint = !!eState.botPursueSprinting;
+    // LoS-GATED RETREAT: too close, but backing off (probe ~18 units down the
+    // retreat line) would put a wall/glass between us. That peek was earned by
+    // circling the blocker — hold the spot and fight from here instead of
+    // trading sight for spacing (the peek → retreat → lose sight → Maze all
+    // over again loop). On open ground the probe passes and nothing changes.
+    const retreatBlocked = tooClose
+      && !losFromPoint(e.x - dir.x * 18, e.z - dir.z * 18);
+    if (retreatBlocked) {
+      // Hold ground: slow sideways drift so the hitbox keeps moving while the
+      // independent fire module does the work.
+      const sg = eState.botOrbitSign ?? 1;
+      let tx = side.x * sg + avoid.rx * 0.8;
+      let tz = side.z * sg + avoid.rz * 0.8;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = (tx / l) * 0.6; mz = (tz / l) * 0.6;
+      wantSprint = false;
+    } else {
+      const dirSign = tooClose ? -1 : 1;
+      let tx = dir.x * dirSign + avoid.rx * 0.8;
+      let tz = dir.z * dirSign + avoid.rz * 0.8;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      // Occasional sprint with hysteresis. A boost reserve keeps at least one
+      // good evade in the tank — Defense should never find the gauge empty.
+      const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
+      if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botPursueSprinting = true;
+      if (eState.boost <= reserveBoost) eState.botPursueSprinting = false;
+      wantSprint = !!eState.botPursueSprinting;
+    }
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && state.enemy.grounded && !eState.airborne) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
@@ -3443,7 +3467,10 @@ function updateEnemy(now) {
     // Committed orbit (same direction across Engage <-> Reposition), with a
     // gentle pull toward the optimal distance.
     const sign = eState.botOrbitSign ?? 1;
-    const pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
+    let pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
+    // LoS-gate the outward correction (mirrors Pursue's held retreat):
+    // spacing never buys blindness — orbit at the current radius instead.
+    if (pull < 0 && !losFromPoint(e.x - dir.x * 18, e.z - dir.z * 18)) pull = 0;
     let tx = side.x * sign + dir.x * pull + avoid.rx * 0.6;
     let tz = side.z * sign + dir.z * pull + avoid.rz * 0.6;
     const l = Math.hypot(tx, tz) || 1;
