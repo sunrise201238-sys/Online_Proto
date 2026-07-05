@@ -4134,10 +4134,10 @@ function startMatch() {
     state.player.body.position.set(-95, 2.45, -45);
     state.enemy.body.position.set(95, 2.45, 45);
   } else if (state.mapKey === 'airport') {
-    // Diagonal spawn at opposite ends of the concourse, clear of the corner
-    // escalators (|z| < 84) and the baggage-belt zones (|x| < 100).
-    state.player.body.position.set(-118, 2.45, -60);
-    state.enemy.body.position.set(118, 2.45, 60);
+    // Diagonal spawn at opposite ends of the concourse, clear of the plateau
+    // end-ramps (z ±40..50) and the baggage carousels (|x| <= 102).
+    state.player.body.position.set(-118, 2.45, -72);
+    state.enemy.body.position.set(118, 2.45, 72);
   } else {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
@@ -5945,7 +5945,7 @@ function clearArenaDecor() {
   arenaSurfaces.length = 0;
 }
 
-function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, invisible }) {
+function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, invisible, noProjectile }) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.position.set(x, y, z);
   mesh.userData.blocking = !decorOnly;
@@ -5955,6 +5955,7 @@ function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, i
   if (decorOnly) return mesh;
   const obstacle = { minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, minY: y - sy / 2, maxY: y + sy / 2 };
   if (topBuffer !== undefined) obstacle.topBuffer = topBuffer;
+  if (noProjectile) obstacle.noProjectile = true;   // unit fence: bullets pass through
   arenaObstacles.push(obstacle);
   return mesh;
 }
@@ -7949,7 +7950,7 @@ function buildAirportArena() {
   // CLUTTER (top <= 2.5 — you see over it and shoot over it). Nothing between
   // 3 and 8 exists on this map, so visuals never lie about protection.
   const HALF_X = 138;
-  const HALF_Z = 100;
+  const HALF_Z = 112;   // widened so the ground bands breathe around the plateau
   const WALL_Y = 26;
 
   const tileMat = new THREE.MeshStandardMaterial({ color: 0xe8ebef, roughness: 0.35, metalness: 0.1 });
@@ -8044,18 +8045,19 @@ function buildAirportArena() {
     stripe.position.set(0, PLATEAU_Y + 0.08, ez);
     scene.add(stripe); arenaDecor.push(stripe);
   }
-  // Four walk-up ramps (two per edge, mirror-symmetric) so bots never need to
-  // jump; solid skirts under the upper halves.
-  addRamp({ minX: 24, maxX: 48, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
-  addRamp({ minX: -48, maxX: -24, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
-  addRamp({ minX: 24, maxX: 48, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
-  addRamp({ minX: -48, maxX: -24, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  // Four walk-up ramps at the platform's two ENDS (both edges, mirror-
+  // symmetric) so the mid-section stays a clean checkpoint zone; bots never
+  // need to jump.
+  addRamp({ minX: 100, maxX: 124, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: -124, maxX: -100, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
+  addRamp({ minX: 100, maxX: 124, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
+  addRamp({ minX: -124, maxX: -100, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
   // Invisible side rails along both long edges of every ramp: a unit can only
   // enter a ramp at its foot (walking up) or from the plateau (walking down) —
   // never sideways into the sloped slab, which made units overlap the mesh.
   // maxY 5 + topBuffer 0: blocks grounded units (collision point 2.45), frees
   // anyone already high on the ramp or on the plateau.
-  for (const [rx, rz] of [[23.5, -45], [48.5, -45], [-23.5, -45], [-48.5, -45], [23.5, 45], [48.5, 45], [-23.5, 45], [-48.5, 45]]) {
+  for (const [rx, rz] of [[99.5, -45], [124.5, -45], [-99.5, -45], [-124.5, -45], [99.5, 45], [124.5, 45], [-99.5, 45], [-124.5, 45]]) {
     addBlockingBox({ x: rx, y: 2.5, z: rz, sx: 1, sy: 5, sz: 10, material: steelMat, topBuffer: 0, invisible: true });
   }
 
@@ -8084,6 +8086,38 @@ function buildAirportArena() {
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
   }
+  // Security fences closing the plateau shoulders beside the checkpoint:
+  // glass panels you can SEE and SHOOT through (noProjectile) but never cross
+  // or jump (top at 12 — jump apex from the plateau reaches ~9.6). Crossing
+  // the mid-plateau means going through an arch, like a real checkpoint.
+  for (const fz of [-37.5, 37.5]) {
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: fz, sx: 1.2, sy: 8, sz: 5, material: glassMat.clone(), noProjectile: true });
+    const railTop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 5.2), steelMat);
+    railTop.position.set(0, PLATEAU_Y + 8.2, fz);
+    scene.add(railTop); arenaDecor.push(railTop);
+  }
+  // Queue-lane furniture: retractable-belt barriers + dark floor lanes feeding
+  // into each arch from both approaches — the checkpoint workflow look.
+  for (const gz of [-26, 0, 26]) {
+    const lane = new THREE.Mesh(new THREE.PlaneGeometry(44, 2.6), tileDark);
+    lane.rotation.x = -Math.PI / 2;
+    lane.position.set(0, PLATEAU_Y + 0.02, gz);
+    scene.add(lane); arenaDecor.push(lane);
+    for (const rowZ of [gz - 4.5, gz + 4.5]) {
+      let prev = null;
+      for (const px of [-22, -16.7, -11.4, -6.1, 6.1, 11.4, 16.7, 22]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), mullionMat);
+        post.position.set(px, PLATEAU_Y + 0.75, rowZ);
+        scene.add(post); arenaDecor.push(post);
+        if (prev !== null && px - prev < 6) {
+          const belt = new THREE.Mesh(new THREE.BoxGeometry(px - prev - 0.5, 0.25, 0.15), beltMat);
+          belt.position.set((px + prev) / 2, PLATEAU_Y + 1.25, rowZ);
+          scene.add(belt); arenaDecor.push(belt);
+        }
+        prev = px;
+      }
+    }
+  }
 
   // ===== Departure-board walls (h10 hard walls extending the center line) =====
   for (const side of [-1, 1]) {
@@ -8100,7 +8134,7 @@ function buildAirportArena() {
 
   // ===== Gate desks (h8 true cover in the end zones) =====
   // End pair sits ON the plateau; the corner pair stays at ground level.
-  for (const [gx, gz, gy] of [[120, -30, PLATEAU_Y], [-120, 30, PLATEAU_Y], [-105, -78, 0], [105, 78, 0]]) {
+  for (const [gx, gz, gy] of [[120, -30, PLATEAU_Y], [-120, 30, PLATEAU_Y], [-105, -90, 0], [105, 90, 0]]) {
     addBlockingBox({ x: gx, y: gy + 4, z: gz, sx: 6, sy: 8, sz: 12, material: deskMat });
     const sign = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.4, 0.5), signYellow);
     sign.position.set(gx, gy + 8.6, gz);
@@ -8137,7 +8171,7 @@ function buildAirportArena() {
   // ===== Kiosks (h6 true cover) =====
   // Two DISTINCT kiosk types (no more identical yellow-capped cubes):
   // info totems — gray-blue body, dark screens all faces, white cap.
-  for (const [kx, kz] of [[-20, -60], [20, 60], [90, -60], [-90, 60]]) {
+  for (const [kx, kz] of [[-20, -72], [20, 72], [90, -72], [-90, 72]]) {
     addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: mullionMat });
     const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), planeWhite);
     cap.position.set(kx, 8.2, kz);
@@ -8150,7 +8184,7 @@ function buildAirportArena() {
   }
   // Vending machine banks — dark body, one red + one blue machine front on
   // both long faces, lit strip along the top.
-  for (const [kx, kz] of [[45, -80], [-45, 80], [-45, -80], [45, 80]]) {
+  for (const [kx, kz] of [[45, -92], [-45, 92], [-45, -92], [45, 92]]) {
     addBlockingBox({ x: kx, y: 4, z: kz, sx: 8, sy: 8, sz: 8, material: tileDark });
     for (const f of [-1, 1]) {
       const fz = kz + f * 4.2;
@@ -8171,25 +8205,25 @@ function buildAirportArena() {
   // baggage carousel per bay, with a chunky suitcase trail riding on top.
   for (const side of [1, -1]) {
     const bz = side * -1;                        // side 1 -> NW bay (z<0), side -1 -> SE bay (z>0)
-    for (const lane of [68, 54]) {
+    for (const lane of [80, 66]) {
       addBlockingBox({ x: side * -70, y: 1.2, z: bz * lane, sx: 64, sy: 2.4, sz: 6, material: beltMat });
     }
     for (const ex of [-99, -41]) {
-      addBlockingBox({ x: side === 1 ? ex : -ex, y: 1.2, z: bz * 61, sx: 6, sy: 2.4, sz: 17.2, material: beltMat });
+      addBlockingBox({ x: side === 1 ? ex : -ex, y: 1.2, z: bz * 73, sx: 6, sy: 2.4, sz: 17.2, material: beltMat });
     }
     // Center feed housing — h8, so the carousel is REAL cover, not just decor.
-    addBlockingBox({ x: side * -70, y: 4, z: bz * 61, sx: 40, sy: 8, sz: 8, material: steelMat });
+    addBlockingBox({ x: side * -70, y: 4, z: bz * 73, sx: 40, sy: 8, sz: 8, material: steelMat });
     const num = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.4), signYellow);
-    num.position.set(side * -70, 5.5, bz * 56.6);
+    num.position.set(side * -70, 5.5, bz * 68.6);
     scene.add(num); arenaDecor.push(num);
     // Yellow hazard band at the housing base — baggage-area signature look.
     const hz = new THREE.Mesh(new THREE.BoxGeometry(40.4, 1, 8.4), signYellow);
-    hz.position.set(side * -70, 0.5, bz * 61);
+    hz.position.set(side * -70, 0.5, bz * 73);
     scene.add(hz); arenaDecor.push(hz);
     const caseXs = [-96, -86, -75, -64, -53, -44];
     caseXs.forEach((cx, i) => {
       const c = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 3.4), caseMats[i % caseMats.length]);
-      c.position.set(side === 1 ? cx : -cx, 3.1, bz * (i % 2 === 0 ? 68 : 54));
+      c.position.set(side === 1 ? cx : -cx, 3.1, bz * (i % 2 === 0 ? 80 : 66));
       c.rotation.y = ((i % 3) - 1) * 0.35;
       scene.add(c); arenaDecor.push(c);
     });
@@ -8211,9 +8245,9 @@ function buildAirportArena() {
       scene.add(ad); arenaDecor.push(ad);
     }
   };
-  seatRow(0, -50, 40); seatRow(0, 50, 40);
-  seatRow(70, -45, 24);
-  seatRow(-70, 45, 24);
+  seatRow(0, -62, 40); seatRow(0, 62, 40);
+  seatRow(70, -57, 24);
+  seatRow(-70, 57, 24);
 
   // ===== Overhead signage gantries (visual only, high above fire lanes) =====
   for (const gx of [-40, 40]) {
