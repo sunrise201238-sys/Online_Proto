@@ -25,7 +25,7 @@
 // samples 2 units apart fully tile a 4-unit edge, so thin glass panes
 // between two cell centers cannot slip through.
 
-import { surfaceHeightAtXZ, unitOverlapsObstacle } from './physics.js';
+import { surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle } from './physics.js';
 import { GROUND_BASE_Y } from './constants.js';
 
 const CELL = 4;
@@ -200,7 +200,12 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     });
   }
   pts.reverse();
-  // Collapse straight runs — fewer waypoints, smoother following.
+  return collapseWaypoints(pts);
+}
+
+// Collapse straight runs — fewer waypoints, smoother following.
+function collapseWaypoints(pts) {
+  if (pts.length < 3) return pts;
   const out = [pts[0]];
   for (let k = 1; k < pts.length - 1; k += 1) {
     const a = out[out.length - 1], b = pts[k], c2 = pts[k + 1];
@@ -210,4 +215,65 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
   }
   out.push(pts[pts.length - 1]);
   return out;
+}
+
+// FIRING-POSITION SEARCH. Find the nearest-by-walking cell that can FIGHT
+// the target: distance to (tx, tz) inside [minD, maxD] (the weapon's band)
+// AND a clear line of sight from that cell's eye height to the target's.
+// BFS from the start guarantees the shortest-walk such cell. This is what
+// lets a sniper route to a sniping SPOT instead of to the enemy's feet —
+// sampling only along the direct path missed band positions that live off
+// to the side (e.g. clear lanes past the clutter). Returns waypoints like
+// findPathOnGrid, or null when no reachable firing cell exists.
+export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles) {
+  const { cols, rows, cell, minX, minZ, edgeE, edgeS, floor } = grid;
+  const start = nearestWalkable(grid, sx, sz, startFloor);
+  if (start < 0) return null;
+  const n = cols * rows;
+  const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 BFS root
+  const queue = new Int32Array(n);
+  let qh = 0, qt = 0;
+  parent[start] = -1;
+  queue[qt++] = start;
+  const pTarget = { x: tx, y: targetEyeY, z: tz };
+  const sees = (i) => {
+    // Eye height at the cell = its floor + body center + eye offset (same
+    // 1.6 the bot LoS tests use).
+    const p0 = {
+      x: minX + ((i % cols) + 0.5) * cell,
+      y: floor[i] + GROUND_BASE_Y + 1.6,
+      z: minZ + (((i / cols) | 0) + 0.5) * cell
+    };
+    for (const o of obstacles) {
+      if (o.noProjectile) continue;
+      if (segmentHitsObstacle(p0, pTarget, o)) return false;
+    }
+    return true;
+  };
+  let goal = -1;
+  while (qh < qt) {
+    const cur = queue[qh++];
+    const cx = minX + ((cur % cols) + 0.5) * cell;
+    const cz = minZ + (((cur / cols) | 0) + 0.5) * cell;
+    const d = Math.hypot(tx - cx, tz - cz);
+    // The start cell itself never qualifies: this is called when the bot
+    // needs to GO somewhere (jammed, blind, out of band) — "stay where you
+    // are" is a degenerate answer that starved the caller into fallbacks.
+    if (cur !== start && d >= minD && d <= maxD && sees(cur)) { goal = cur; break; }
+    const c = cur % cols, r = (cur / cols) | 0;
+    if (c + 1 < cols && edgeE[cur] && parent[cur + 1] === -2) { parent[cur + 1] = cur; queue[qt++] = cur + 1; }
+    if (c > 0 && edgeE[cur - 1] && parent[cur - 1] === -2) { parent[cur - 1] = cur; queue[qt++] = cur - 1; }
+    if (r + 1 < rows && edgeS[cur] && parent[cur + cols] === -2) { parent[cur + cols] = cur; queue[qt++] = cur + cols; }
+    if (r > 0 && edgeS[cur - cols] && parent[cur - cols] === -2) { parent[cur - cols] = cur; queue[qt++] = cur - cols; }
+  }
+  if (goal < 0) return null;
+  const pts = [];
+  for (let i = goal; i !== -1; i = parent[i]) {
+    pts.push({
+      x: minX + ((i % cols) + 0.5) * cell,
+      z: minZ + (((i / cols) | 0) + 0.5) * cell
+    });
+  }
+  pts.reverse();
+  return collapseWaypoints(pts);
 }
