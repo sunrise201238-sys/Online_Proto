@@ -7,7 +7,7 @@ import {
   buildSnapshot,
   tickMatch,
   tickBot,
-  pickClosestEnemyId,
+  pickBotTargetId,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -214,7 +214,7 @@ function tickLobby(lobby) {
   for (const botId of lobby.botSlots) {
     const me = lobby.match.fighters[botId];
     if (!me || me.hp <= 0) continue;
-    me.targetId = pickClosestEnemyId(lobby.match, me) ?? me.targetId;
+    me.targetId = pickBotTargetId(lobby.match, me) ?? me.targetId;
     tickBot(lobby.match, botId, now);
   }
 
