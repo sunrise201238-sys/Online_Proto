@@ -239,7 +239,7 @@ const MAP_DATA = {
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
   flashpoint: { name: 'Flashpoint' },
-  airport: { name: 'Airport' }   // offline-only until finalized (not in ONLINE_AVAILABLE_MAPS)
+  airport: { name: 'Airport' }
 };
 
 const state = {
@@ -4780,7 +4780,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station', 'flashpoint']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station', 'flashpoint', 'airport']);
 
 // Host-only step: select 1v1 or 2v2. Only shown once per session (gated by
 // onl.modePushedToServer). Joiners skip this and inherit the lobby's mode.
