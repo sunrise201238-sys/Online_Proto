@@ -5266,6 +5266,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateVfx(dt);
   updateCamera();
   updateMechXRayVisibility();
+  updateWallFade();
   updateBeamVisuals(performance.now());
   syncOnlineChargedBeams(hudNow);
   updateLaserSights();
@@ -5910,7 +5911,27 @@ function applyMomentum(mech, { suspend = false } = {}) {
 const arenaSurfaces = [];
 const SURFACE_STEP_HEIGHT = 1.6;
 
+// Camera-proximity wall fade: registered walls (state.wallFadeMeshes, set by
+// map builders) ease to translucent when the camera gets close, so backing
+// into a wall or hugging the plateau edge doesn't fill the screen with a
+// solid face. Render-only; collision is untouched.
+function updateWallFade() {
+  const list = state.wallFadeMeshes;
+  if (!list || list.length === 0) return;
+  for (const mesh of list) {
+    const b = mesh.userData.fadeBox;
+    if (!b || !mesh.material) continue;
+    const cx = Math.max(b.minX, Math.min(camera.position.x, b.maxX));
+    const cy = Math.max(b.minY, Math.min(camera.position.y, b.maxY));
+    const cz = Math.max(b.minZ, Math.min(camera.position.z, b.maxZ));
+    const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
+    const target = d < 14 ? 0.25 : 1;
+    mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
+  }
+}
+
 function clearArenaDecor() {
+  state.wallFadeMeshes = [];
   while (arenaDecor.length) {
     const obj = arenaDecor.pop();
     scene.remove(obj);
@@ -5924,10 +5945,11 @@ function clearArenaDecor() {
   arenaSurfaces.length = 0;
 }
 
-function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly }) {
+function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, invisible }) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.position.set(x, y, z);
   mesh.userData.blocking = !decorOnly;
+  if (invisible) mesh.visible = false;   // collision-only helper (e.g. ramp skirts)
   scene.add(mesh);
   arenaDecor.push(mesh);
   if (decorOnly) return mesh;
@@ -7959,10 +7981,28 @@ function buildAirportArena() {
   }
 
   // ===== Outer shell: solid walls, glass curtain on the end walls =====
-  addBlockingBox({ x: 0, y: WALL_Y / 2, z: -HALF_Z - 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4, material: wallMat });
-  addBlockingBox({ x: 0, y: WALL_Y / 2, z: HALF_Z + 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4, material: wallMat });
-  addBlockingBox({ x: -HALF_X - 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
-  addBlockingBox({ x: HALF_X + 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8, material: wallMat });
+  // Walls register for camera-proximity fade (see updateWallFade): when the
+  // camera closes in, they turn translucent instead of filling the screen.
+  state.wallFadeMeshes = [];
+  const registerWallFade = (mesh, box) => {
+    mesh.material.transparent = true;
+    mesh.userData.fadeBox = box;
+    state.wallFadeMeshes.push(mesh);
+  };
+  const wallDefs = [
+    { x: 0, y: WALL_Y / 2, z: -HALF_Z - 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4 },
+    { x: 0, y: WALL_Y / 2, z: HALF_Z + 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4 },
+    { x: -HALF_X - 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8 },
+    { x: HALF_X + 2, y: WALL_Y / 2, z: 0, sx: 4, sy: WALL_Y, sz: 2 * HALF_Z + 8 }
+  ];
+  for (const w of wallDefs) {
+    const mesh = addBlockingBox({ ...w, material: wallMat.clone() });
+    registerWallFade(mesh, {
+      minX: w.x - w.sx / 2, maxX: w.x + w.sx / 2,
+      minY: w.y - w.sy / 2, maxY: w.y + w.sy / 2,
+      minZ: w.z - w.sz / 2, maxZ: w.z + w.sz / 2
+    });
+  }
   // Full-height glass curtain: floor to near-ceiling so it reads as the
   // terminal's window wall (no floating panel gap underneath).
   for (const gx of [-HALF_X + 0.3, HALF_X - 0.3]) {
@@ -7992,7 +8032,11 @@ function buildAirportArena() {
   // ~5.6) and for bots to climb, central so it never blocks the camera. The
   // checkpoint, check-in islands, board walls and end gate desks sit ON it.
   const PLATEAU_Y = 4;
-  addBlockingBox({ x: 0, y: (PLATEAU_Y - 0.3) / 2, z: 0, sx: 273.6, sy: PLATEAU_Y - 0.3, sz: 79.6, material: steelMat });
+  // topBuffer 0 is CRITICAL: the default (4) extends collision 4 above the
+  // body's top, which shoves anyone standing ON the plateau back off — the
+  // "invisible wall". With 0, only units below the top collide with the side.
+  const plateauBody = addBlockingBox({ x: 0, y: (PLATEAU_Y - 0.3) / 2, z: 0, sx: 273.6, sy: PLATEAU_Y - 0.3, sz: 79.6, material: steelMat.clone(), topBuffer: 0 });
+  registerWallFade(plateauBody, { minX: -136.8, maxX: 136.8, minY: 0, maxY: PLATEAU_Y, minZ: -39.8, maxZ: 39.8 });
   addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: tileMat, thickness: 0.6 });
   // Yellow edge stripes so the height change reads at a glance.
   for (const ez of [-39.2, 39.2]) {
@@ -8006,8 +8050,13 @@ function buildAirportArena() {
   addRamp({ minX: -48, maxX: -24, minZ: -50, maxZ: -40, axis: 'z', lowY: 0, highY: PLATEAU_Y, material: steelMat });
   addRamp({ minX: 24, maxX: 48, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
   addRamp({ minX: -48, maxX: -24, minZ: 40, maxZ: 50, axis: 'z', lowY: PLATEAU_Y, highY: 0, material: steelMat });
-  for (const [rx, rz] of [[36, -42.5], [-36, -42.5], [36, 42.5], [-36, 42.5]]) {
-    addBlockingBox({ x: rx, y: 1, z: rz, sx: 23.6, sy: 2, sz: 5, material: steelMat, topBuffer: 0 });
+  // Invisible side rails along both long edges of every ramp: a unit can only
+  // enter a ramp at its foot (walking up) or from the plateau (walking down) —
+  // never sideways into the sloped slab, which made units overlap the mesh.
+  // maxY 5 + topBuffer 0: blocks grounded units (collision point 2.45), frees
+  // anyone already high on the ramp or on the plateau.
+  for (const [rx, rz] of [[23.5, -45], [48.5, -45], [-23.5, -45], [-48.5, -45], [23.5, 45], [48.5, 45], [-23.5, 45], [-48.5, 45]]) {
+    addBlockingBox({ x: rx, y: 2.5, z: rz, sx: 1, sy: 5, sz: 10, material: steelMat, topBuffer: 0, invisible: true });
   }
 
   // ===== Security checkpoint (the central divider, at GROUND level) =====
@@ -8699,6 +8748,7 @@ function animate() {
       updateVfx(dt);
       updateCamera();
       updateMechXRayVisibility();
+      updateWallFade();
       updateHud();
 
       // Win condition. 1v1: existing player-vs-enemy check. 2v2: team A
