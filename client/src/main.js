@@ -84,7 +84,10 @@ const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 43,
+    // 27 = pellet-cluster fighting distance. The bot band rule (sweet spot =
+    // lockRange, edges ±7) then reproduces the shotgun's old dedicated band
+    // (20–34) with no special case.
+    lockRange: 27,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -3069,24 +3072,16 @@ function updateEnemy(now) {
     eState.queuedMomentumVZ = 0;
   }
 
-  // Kite near the outer edge of the weapon's red-lock range — far enough to
-  // minimize incoming fire effectiveness while still landing our own shots.
-  // Most weapons derive the band from lockRange directly; multi-pellet
-  // shotguns use a dedicated tighter band so they fight inside the cluster
-  // spread distance (SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20) where pellets
-  // haven't fully fanned out yet and more land per shot.
+  // Range band centers ON the lock range: sweet spot = lockRange exactly,
+  // edges ±7. The bot hovers right at the red-lock boundary — drifting past
+  // it briefly is fine, the Engage pull immediately corrects back. One
+  // universal rule for every weapon: the shotgun's lockRange is tuned to 27
+  // (pellet-cluster distance), which lands its band at 20–34 — the same
+  // numbers its old dedicated special case hard-coded.
   const lockRange = state.enemy.unit.lockRange ?? 50;
-  const isShotgun = (state.enemy.unit.spreadCount ?? 1) > 1;
-  let upperRange, optimalRange, lowerRange;
-  if (isShotgun) {
-    upperRange = 34;
-    optimalRange = 27;
-    lowerRange = 20;
-  } else {
-    upperRange = Math.max(12, lockRange - 2);
-    optimalRange = Math.max(10, upperRange - 7);
-    lowerRange = Math.max(6, optimalRange - 7);
-  }
+  const upperRange = lockRange + 7;
+  const optimalRange = Math.max(10, lockRange);
+  const lowerRange = Math.max(6, lockRange - 7);
   // === Behavior state machine: Defense > Maze > Engage > Pursue.
   // Each state has explicit time-bound exits — no latching. Replaces the
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
