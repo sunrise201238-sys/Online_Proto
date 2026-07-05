@@ -576,7 +576,17 @@ export function tickBot(matchState, botId, now) {
       for (let i = 0; i < 8; i++) {
         const a = (Math.PI * 2 * i) / 8;
         const sx2 = Math.cos(a), sz2 = Math.sin(a);
-        if (!losFromPoint(me.pos.x + sx2 * sd, me.pos.z + sz2 * sd)) continue;
+        const px3 = me.pos.x + sx2 * sd, pz3 = me.pos.z + sz2 * sd;
+        // REACHABILITY: reject probe points the bot has no clear line to.
+        // On the Airport plateau, points past the rim glass float over the
+        // ground floor and genuinely see the player — but committing toward
+        // them just runs the bot into the fence, forever.
+        if (!botHasLineOfSight(
+          { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
+          { x: px3, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz3 },
+          obstacles
+        )) continue;
+        if (!losFromPoint(px3, pz3)) continue;
         const dt = sx2 * dirX + sz2 * dirZ;
         if (dt > bestDot) { bestDot = dt; bx = sx2; bz = sz2; }
       }
@@ -593,6 +603,52 @@ export function tickBot(matchState, botId, now) {
       }
     }
     return false;
+  };
+
+  // ELEVATION ROUTE — Maze's ramp-seeker. When the opening scan sees nothing
+  // AND the target stands on a meaningfully different floor, same-floor
+  // wall-following can never help (Airport plateau: the 12-high rim glass
+  // blocks every between-floor sight line, and fence lips block the perch
+  // hop — ramps are the only route). Commit toward a point a third of the
+  // way INTO the nearest connecting ramp from MY end (foot when climbing,
+  // crest when descending); riding it to the other level is what finally
+  // opens sight, and the normal flow takes over from there.
+  const mazeSeekElevationRoute = () => {
+    const floorGap = oppFloorY - myFloorY;
+    if (Math.abs(floorGap) < 2.5) return false;
+    const levelLow = Math.min(myFloorY, oppFloorY);
+    const levelHigh = Math.max(myFloorY, oppFloorY);
+    let bx = 0, bz = 0, bestD = Infinity;
+    for (const s of surfaces) {
+      if (s.type !== 'ramp') continue;
+      const lo = Math.min(s.lowY, s.highY);
+      const hi = Math.max(s.lowY, s.highY);
+      // Must actually connect the two floors (ends within ~a step of each).
+      if (Math.abs(lo - levelLow) > 2 || Math.abs(hi - levelHigh) > 2) continue;
+      const wantY = floorGap > 0 ? lo : hi;   // the ramp end on MY level
+      let ex, ez;
+      if (s.axis === 'x') {
+        const e0 = s.lowY === wantY ? s.minX : s.maxX;
+        const e1 = s.lowY === wantY ? s.maxX : s.minX;
+        ex = e0 + (e1 - e0) * 0.35;
+        ez = (s.minZ + s.maxZ) / 2;
+      } else {
+        const e0 = s.lowY === wantY ? s.minZ : s.maxZ;
+        const e1 = s.lowY === wantY ? s.maxZ : s.minZ;
+        ez = e0 + (e1 - e0) * 0.35;
+        ex = (s.minX + s.maxX) / 2;
+      }
+      const d = Math.hypot(ex - me.pos.x, ez - me.pos.z);
+      if (d < bestD) { bestD = d; bx = ex; bz = ez; }
+    }
+    if (bestD === Infinity) return false;
+    const dl = bestD || 1;
+    me.botMazeDirX = (bx - me.pos.x) / dl;
+    me.botMazeDirZ = (bz - me.pos.z) / dl;
+    me.botMazeHadWall = true;   // corner turn handles wall contact en route
+    me.botMazeHand = null;
+    me.botMazeLosBlockedAtEntry = !playerHasLoS;
+    return true;
   };
 
   // --- State transition by precedence ---
@@ -633,12 +689,13 @@ export function tickBot(matchState, botId, now) {
     if (stuckTriggered) {
       // Stuck mid-Maze → escape re-commit (reverses when probes tie).
       commitMazeDirection(true);
-    } else if (!mazeScanForOpening()) {
-      // 7 s refresh and the opening scan saw nothing — re-aim toward the
-      // player (hand dropped). Keeping the hand here lapped closed loops
-      // forever (the Flashpoint spawn-room trap); the multi-distance
-      // tangent probes now cover the long-wall case the hand persistence
-      // was added for. The hand still rules corner turns WITHIN a leg.
+    } else if (!mazeScanForOpening() && !mazeSeekElevationRoute()) {
+      // 7 s refresh; no reachable opening and no cross-floor ramp applies —
+      // re-aim toward the player (hand dropped). Keeping the hand here
+      // lapped closed loops forever (the Flashpoint spawn-room trap); the
+      // multi-distance tangent probes now cover the long-wall case the hand
+      // persistence was added for. The hand still rules corner turns WITHIN
+      // a leg.
       commitMazeDirection(false, false);
     }
   }
