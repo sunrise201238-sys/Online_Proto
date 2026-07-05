@@ -3369,8 +3369,12 @@ function updateEnemy(now) {
       }
       return true;
     };
+    // Cross-floor: a corridor peek mid-climb must not dump the bot back
+    // into Pursue's wall-grind — release on sight only when same-floor (or
+    // already in band, where Engage can legitimately fight through the gap).
     const losReacquired = playerHasLoS && eState.botMazeLosBlockedAtEntry
-      && (inBandDist || approachWalkable());
+      && (inBandDist
+        || (approachWalkable() && Math.abs(oppFloorY - myFloorY) < 2.5));
     const visibleEntryDone = !eState.botMazeLosBlockedAtEntry
       && (now - (eState.botStateEnteredAt ?? now)) > 3000;
     if (losReacquired || visibleEntryDone) {
@@ -3393,14 +3397,22 @@ function updateEnemy(now) {
     if (stuckTriggered) {
       // Stuck mid-Maze → escape re-commit (reverses when probes tie).
       commitMazeDirection(true);
-    } else if (!mazeScanForOpening() && !mazeSeekElevationRoute()) {
-      // 7 s refresh; no reachable opening and no cross-floor ramp applies —
-      // re-aim toward the player (hand dropped). Keeping the hand here
-      // lapped closed loops forever (the Flashpoint spawn-room trap); the
-      // multi-distance tangent probes now cover the long-wall case the hand
-      // persistence was added for. The hand still rules corner turns WITHIN
-      // a leg.
-      commitMazeDirection(false, false);
+    } else {
+      // CROSS-FLOOR PRIORITY: when the target stands on another floor, the
+      // ramp is the plan and the scan is the fallback. A reachable ground-
+      // level peephole is a consolation prize — scan-first let it preempt
+      // the climb every 7 s, shuttling the bot between the peephole and the
+      // wall forever. Same floor keeps scan-first (Flashpoint rooms).
+      const crossFloor = Math.abs(oppFloorY - myFloorY) > 2.5;
+      const committed = crossFloor
+        ? (mazeSeekElevationRoute() || mazeScanForOpening())
+        : (mazeScanForOpening() || mazeSeekElevationRoute());
+      if (!committed) {
+        // Nothing seen, no ramp applies — re-aim toward the player (hand
+        // dropped; keeping it lapped closed loops forever — the Flashpoint
+        // spawn-room trap). The hand still rules corner turns WITHIN a leg.
+        commitMazeDirection(false, false);
+      }
     }
   }
 
@@ -3416,8 +3428,14 @@ function updateEnemy(now) {
 
     if (nextState === 'engage'
         && (prevState === 'pursue' || prevState === 'maze' || prevState === 'defense' || eState.botOrbitSign == null)) {
-      // Commit a fresh orbit direction. Engage <-> Reposition keep the same sign.
-      eState.botOrbitSign = Math.random() > 0.5 ? 1 : -1;
+      // Orbit direction by SIGHT PROBE, not coin flip: from ~12 units along
+      // each orbit tangent, which way keeps the player visible? The blind
+      // coin flip walked the bot out of hard-won sight windows half the
+      // time (the plateau-edge pacing). Ties fall back to random.
+      const losCw = losFromPoint(e.x + side.x * 12, e.z + side.z * 12);
+      const losCcw = losFromPoint(e.x - side.x * 12, e.z - side.z * 12);
+      if (losCw !== losCcw) eState.botOrbitSign = losCw ? 1 : -1;
+      else eState.botOrbitSign = Math.random() > 0.5 ? 1 : -1;
     }
 
     if (nextState === 'defense') {
@@ -3581,8 +3599,18 @@ function updateEnemy(now) {
       }
     }
   } else if (botS === 'engage') {
-    // Committed orbit (same direction across Engage <-> Reposition), with a
-    // gentle pull toward the optimal distance.
+    // Mid-orbit sight keeping: if the next ~12 units along the orbit lose
+    // sight while the other way keeps it, flip once (1 s cooldown so
+    // opposing probes can't jitter it). Engage patrols INSIDE the sight
+    // window it was handed instead of blindly strolling out of it.
+    if (playerHasLoS && now >= (eState.botOrbitFlipAt ?? 0)) {
+      const sgn = eState.botOrbitSign ?? 1;
+      if (!losFromPoint(e.x + side.x * sgn * 12, e.z + side.z * sgn * 12)
+          && losFromPoint(e.x - side.x * sgn * 12, e.z - side.z * sgn * 12)) {
+        eState.botOrbitSign = -sgn;
+        eState.botOrbitFlipAt = now + 1000;
+      }
+    }
     const sign = eState.botOrbitSign ?? 1;
     let pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
     // LoS-gate the outward correction (mirrors Pursue's held retreat):
