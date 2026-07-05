@@ -5987,6 +5987,16 @@ function updateWallFade() {
   }
 }
 
+// Register a mesh for the camera-proximity fade above. The mesh needs its
+// OWN material instance — clone shared materials before registering, or
+// every object using that material fades together.
+function registerWallFade(mesh, box) {
+  mesh.material.transparent = true;
+  mesh.userData.fadeBox = box;
+  if (!state.wallFadeMeshes) state.wallFadeMeshes = [];
+  state.wallFadeMeshes.push(mesh);
+}
+
 function clearArenaDecor() {
   state.wallFadeMeshes = [];
   while (arenaDecor.length) {
@@ -7305,10 +7315,22 @@ function buildLobbyArena() {
   }
 
   // ===== Outer walls (lobby interior 220 x 200) =====
-  addBlockingBox({ x: 0, y: 12, z: -100, sx: 220, sy: 24, sz: 4, material: wall });
-  addBlockingBox({ x: 0, y: 12, z: 100, sx: 220, sy: 24, sz: 4, material: wall });
-  addBlockingBox({ x: -110, y: 12, z: 0, sx: 4, sy: 24, sz: 200, material: wall });
-  addBlockingBox({ x: 110, y: 12, z: 0, sx: 4, sy: 24, sz: 200, material: wall });
+  // Registered for camera-proximity fade (same rule as Airport's edge walls):
+  // backing the camera into a wall turns it translucent instead of blanking
+  // the screen. Materials cloned — `wall` is shared with the ceiling beams.
+  for (const w of [
+    { x: 0, y: 12, z: -100, sx: 220, sy: 24, sz: 4 },
+    { x: 0, y: 12, z: 100, sx: 220, sy: 24, sz: 4 },
+    { x: -110, y: 12, z: 0, sx: 4, sy: 24, sz: 200 },
+    { x: 110, y: 12, z: 0, sx: 4, sy: 24, sz: 200 }
+  ]) {
+    const mesh = addBlockingBox({ ...w, material: wall.clone() });
+    registerWallFade(mesh, {
+      minX: w.x - w.sx / 2, maxX: w.x + w.sx / 2,
+      minY: w.y - w.sy / 2, maxY: w.y + w.sy / 2,
+      minZ: w.z - w.sz / 2, maxZ: w.z + w.sz / 2
+    });
+  }
 
   // ===== Glass back wall facing the night city skyline =====
   // Positioned just in front of the back wall, above the mezzanine deck (mezzanine extends to z=-98).
@@ -8042,11 +8064,6 @@ function buildAirportArena() {
   // Walls register for camera-proximity fade (see updateWallFade): when the
   // camera closes in, they turn translucent instead of filling the screen.
   state.wallFadeMeshes = [];
-  const registerWallFade = (mesh, box) => {
-    mesh.material.transparent = true;
-    mesh.userData.fadeBox = box;
-    state.wallFadeMeshes.push(mesh);
-  };
   const wallDefs = [
     { x: 0, y: WALL_Y / 2, z: -HALF_Z - 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4 },
     { x: 0, y: WALL_Y / 2, z: HALF_Z + 2, sx: 2 * HALF_X + 8, sy: WALL_Y, sz: 4 },
@@ -8191,7 +8208,14 @@ function buildAirportArena() {
   for (const gz of [-26, 0, 26]) {
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
-    addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
+    // Crossbar fades when the camera closes in (same rule as the edge walls)
+    // so overhead furniture never blanks the plateau fight.
+    const bar = addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue.clone(), decorOnly: true });
+    registerWallFade(bar, {
+      minX: -2.5, maxX: 2.5,
+      minY: PLATEAU_Y + 10, maxY: PLATEAU_Y + 11.6,
+      minZ: gz - 9, maxZ: gz + 9
+    });
   }
   // Security fences closing the plateau shoulders beside the checkpoint:
   // glass panels you can SEE through but not cross, jump (top at 12 — jump
@@ -8267,9 +8291,14 @@ function buildAirportArena() {
       scene.add(top); arenaDecor.push(top);
       // Hanging airline sign above + queue-barrier posts on the concourse side
       // make the islands read as check-in counters.
-      const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue);
+      const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue.clone());
       hang.position.set(dx, PLATEAU_Y + 11.5, dz);
       scene.add(hang); arenaDecor.push(hang);
+      registerWallFade(hang, {
+        minX: dx - 6, maxX: dx + 6,
+        minY: PLATEAU_Y + 10.3, maxY: PLATEAU_Y + 12.7,
+        minZ: dz - 0.3, maxZ: dz + 0.3
+      });
       for (const qx of [-14, -7, 0, 7, 14]) {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), mullionMat);
         post.position.set(dx + qx, PLATEAU_Y + 0.7, dz + (dz > 0 ? -5.5 : 5.5));
@@ -8361,13 +8390,23 @@ function buildAirportArena() {
 
   // ===== Overhead signage gantries (visual only, high above fire lanes) =====
   for (const gx of [-40, 40]) {
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 150), mullionMat);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 150), mullionMat.clone());
     beam.position.set(gx, 14.5, 0);
     scene.add(beam); arenaDecor.push(beam);
+    registerWallFade(beam, {
+      minX: gx - 0.75, maxX: gx + 0.75,
+      minY: 13.75, maxY: 15.25,
+      minZ: -75, maxZ: 75
+    });
     for (const sz of [-55, 0, 55]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 11), signBlue);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 11), signBlue.clone());
       panel.position.set(gx, 12, sz);
       scene.add(panel); arenaDecor.push(panel);
+      registerWallFade(panel, {
+        minX: gx - 0.2, maxX: gx + 0.2,
+        minY: 10.3, maxY: 13.7,
+        minZ: sz - 5.5, maxZ: sz + 5.5
+      });
     }
   }
 
