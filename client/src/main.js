@@ -9,7 +9,8 @@ import {
   TICK_DT as SIM_TICK_DT,
   UNIT_DATA as SIM_UNIT_DATA,
   buildNavGrid,
-  findPathOnGrid
+  findPathOnGrid,
+  findFiringPath
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -3367,13 +3368,61 @@ function updateEnemy(now) {
   // waypoint by waypoint. Returns false when no walk route exists (target
   // on a jump-only platform, degenerate snap) — the heuristic stack
   // (scan / ramp-seek / wall-follow) remains the fallback.
+  // FIRING-POSITION TRUNCATION — the raw path ends at the player's FEET.
+  // Walk it (6-unit samples) and cut it at the first spot that already SEES
+  // the player from inside the band's upper edge: the bot travels to a
+  // FIRING POSITION, never to the player. Without this, a blind approach
+  // rode the path until sight happened to open — often point-blank on
+  // cover-heavy maps — before range discipline could act (the "runs at me
+  // at match start" report). Nothing qualifies → keep the full path (some
+  // fights genuinely require getting close before any sight exists).
+  const truncateAtFiringPoint = (path) => {
+    let prev = { x: e.x, z: e.z };
+    for (let i = 0; i < path.length; i += 1) {
+      const seg = path[i];
+      const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
+      const steps = Math.max(1, Math.ceil(segLen / 6));
+      for (let s = 1; s <= steps; s += 1) {
+        const px = prev.x + ((seg.x - prev.x) * s) / steps;
+        const pz = prev.z + ((seg.z - prev.z) * s) / steps;
+        if (Math.hypot(p.x - px, p.z - pz) > upperRange) continue;
+        const fy = groundHeightAt(px, pz, 1000);
+        if (botHasLineOfSight(
+          { x: px, y: fy + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: pz },
+          { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+        )) {
+          const cut = path.slice(0, i);
+          cut.push({ x: px, z: pz });
+          return cut;
+        }
+      }
+      prev = seg;
+    }
+    return path;
+  };
   const navPlan = () => {
     if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
-    const path = findPathOnGrid(
-      offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY
+    // FIRST CHOICE: walk to a FIRING POSITION — the nearest reachable spot
+    // that already sees the target from inside the band. This is what makes
+    // a sniper cross the map to a sniping lane instead of to the enemy.
+    // FALLBACK: path to the target itself, cut at the first sighted sample
+    // (some pockets have no in-band sight anywhere — then getting close is
+    // genuinely the only option, and the exit gates take over from there).
+    let path = findFiringPath(
+      offlineNavGrid, e.x, e.z, myFloorY,
+      p.x, p.z, p.y + BOT_LOS_EYE_HEIGHT,
+      lowerRange, upperRange, arenaObstacles
     );
+    if (!path || path.length < 2) {
+      path = findPathOnGrid(
+        offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY
+      );
+      if (path && path.length > 1) path = truncateAtFiringPoint(path);
+    }
     if (path && path.length > 1) {
-      eState.botNav = { path, idx: 1, gx: p.x, gz: p.z, at: now };
+      eState.botNav = {
+        path, idx: 1, gx: p.x, gz: p.z, at: now
+      };
       eState.botMazeLosBlockedAtEntry = !playerHasLoS;
       return true;
     }
@@ -3601,15 +3650,23 @@ function updateEnemy(now) {
     // Context change: committed in the open, and a wall just interposed —
     // switch to wall-follow NOW instead of grinding into it.
     let nav = eState.botNav;
-    // ARRIVED: sight of the target AND inside the sweet spot — the trip is
-    // done. Drop the path NOW and let the exit gates hand the fight to
-    // Engage/Pursue. Without this, the path (aimed at the player's FEET,
-    // with zero range awareness) rode the bot straight through its lock
-    // range — most visibly during sighted-entry Mazes, which can only exit
-    // via the 3 s cap.
-    if (nav && playerHasLoS && dist <= optimalRange) {
-      eState.botNav = null;
-      nav = null;
+    // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
+    // whose goal is meaningfully CLOSER to the player is an approach — done,
+    // drop it. A pathless (heuristic) maze has nothing sane to do here
+    // either — its stale committed direction charged straight through the
+    // player during sighted-entry windows. Both cases: trip the sighted-
+    // entry cap so the maze ENDS and Engage/Pursue own the fight. A
+    // REPOSITION path (goal not closer — e.g. a sidestep to an unjammed
+    // in-band cell) keeps running.
+    if (playerHasLoS && dist <= optimalRange) {
+      const goalWp = nav && nav.path[nav.path.length - 1];
+      const goalCloser = goalWp
+        && Math.hypot(p.x - goalWp.x, p.z - goalWp.z) < dist - 4;
+      if (!nav || goalCloser) {
+        if (nav) eState.botNav = null;
+        nav = null;
+        eState.botStateEnteredAt = now - 3001;
+      }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
       // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
