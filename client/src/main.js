@@ -7011,10 +7011,12 @@ function buildStreetsArena() {
   // map edge.)
 
   // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
-  // Deck + railings fade when the camera closes in (same proximity rule as
-  // Airport's overhead signage) so the bridge platform never blanks the
-  // view of a fight under/behind it. Slopes are left solid. Materials are
-  // cloned — `railing` is shared with the support pillars, which stay solid.
+  // Deck + railings fade ONLY while they actually sit between the camera
+  // and the player unit (occlusion mode, same as the storefront buildings) —
+  // e.g. fighting under the deck with the camera above it, or standing
+  // behind the railings. Otherwise they stay fully solid. Slopes are left
+  // alone. Materials are cloned — `railing` is shared with the support
+  // pillars, which stay solid.
   const deckMesh = addPlatform({
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
@@ -7023,7 +7025,8 @@ function buildStreetsArena() {
   registerWallFade(deckMesh, {
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minY: BRIDGE_TOP - 0.8, maxY: BRIDGE_TOP,
-    minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z
+    minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
+    occlude: true
   });
   // Railings along bridge sides
   const RAIL_H = 1.6;
@@ -7033,7 +7036,8 @@ function buildStreetsArena() {
     registerWallFade(railMesh, {
       minX: railX - 0.2, maxX: railX + 0.2,
       minY: BRIDGE_TOP, maxY: BRIDGE_TOP + RAIL_H,
-      minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z
+      minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
+      occlude: true
     });
   }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
