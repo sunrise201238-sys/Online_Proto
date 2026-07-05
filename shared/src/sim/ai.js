@@ -32,9 +32,6 @@ const BOT_FIRE_REACT_MS = 280;
 // Cover-seek: how far to look for an obstacle to hide behind, how hard to
 // steer toward it, and the largest obstacle footprint still treated as cover
 // (anything bigger is an arena boundary wall, which can't be flanked — skip).
-const BOT_COVER_SEEK_RADIUS = 60;
-const BOT_COVER_STEER_WEIGHT = 2.6;
-const BOT_COVER_MAX_OBSTACLE_SPAN = 60;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
@@ -155,39 +152,6 @@ function botHasLineOfSight(p0, p1, obstacles) {
 function botBurstSize(unit) {
   if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
-}
-
-// Steer toward cover: the nearest interior obstacle the bot can put between
-// itself and the opponent. Returns a unit vector toward a hiding spot just
-// behind that obstacle (far side from the opponent) plus its distance, or
-// null if nothing usable is in range. Skips noProjectile obstacles (bullets
-// pass through) and boundary walls (too large to flank).
-function findCoverDirection(px, pz, oppX, oppZ, obstacles, searchRadius) {
-  let best = null;
-  let bestDist = searchRadius;
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (o.noProjectile) continue;
-    if (o.maxX - o.minX > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
-    if (o.maxZ - o.minZ > BOT_COVER_MAX_OBSTACLE_SPAN) continue;
-    const cx = (o.minX + o.maxX) * 0.5;
-    const cz = (o.minZ + o.maxZ) * 0.5;
-    const sx = cx - oppX;
-    const sz = cz - oppZ;
-    const slen = Math.sqrt(sx * sx + sz * sz);
-    if (slen < 1e-3) continue;
-    const behind = Math.max(o.maxX - o.minX, o.maxZ - o.minZ) * 0.5 + 2.5;
-    const hideX = cx + (sx / slen) * behind;
-    const hideZ = cz + (sz / slen) * behind;
-    const ddx = hideX - px;
-    const ddz = hideZ - pz;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d >= bestDist) continue;
-    bestDist = d;
-    const inv = d > 1e-3 ? 1 / d : 0;
-    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
-  }
-  return best;
 }
 
 // Scan for the nearest walkable surface whose lip sits a jump-height above
@@ -445,19 +409,31 @@ export function tickBot(matchState, botId, now) {
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
-  // --- Stuck cut-in detection: if net displacement over the last 3 s drops
-  // below 5 units (any state), fire a fresh 1.5 s Defense to bounce loose.
-  // Tracker reinitialises on first tick and resets on every Defense entry.
-  // Skips airborne and stun frames so landing pauses / hit-freezes don't count.
+  // --- Stuck cut-in detection over a rolling 1.5 s window, two flavors:
+  //   WEDGED   — barely any net movement AND barely any path traveled.
+  //   SPINNING — plenty of path traveled but almost no net displacement
+  //              (ping-ponging, orbit jams, wall grinding).
+  // Either funnels into Maze (committed go-around) below — the old remedy
+  // (a blind Defense strafe) is gone. Skips airborne and stun frames; a
+  // window inflated by a charge-lock freeze (the AI early-returns while
+  // charging, so the clock runs without samples) is discarded unevaluated.
   let stuckTriggered = false;
+  me.botPathLen = (me.botPathLen ?? 0)
+    + Math.hypot(me.pos.x - (me.botPrevX ?? me.pos.x), me.pos.z - (me.botPrevZ ?? me.pos.z));
+  me.botPrevX = me.pos.x;
+  me.botPrevZ = me.pos.z;
   if (me.botStuckCheckAt == null) {
     me.botStuckCheckX = me.pos.x;
     me.botStuckCheckZ = me.pos.z;
     me.botStuckCheckAt = now;
-  } else if (now - me.botStuckCheckAt >= 3000) {
-    const sddx = me.pos.x - me.botStuckCheckX;
-    const sddz = me.pos.z - me.botStuckCheckZ;
-    if (Math.hypot(sddx, sddz) < 5
+    me.botPathLen = 0;
+  } else if (now - me.botStuckCheckAt >= 1500) {
+    const windowStale = now - me.botStuckCheckAt > 2200;
+    const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
+    const wedged = net < 2.5 && me.botPathLen < 6;
+    const spinning = me.botPathLen > 18 && net < 6;
+    if (!windowStale
+        && (wedged || spinning)
         && !me.airborne
         && now >= me.hitStunUntil
         && (me.botState ?? 'pursue') !== 'defense') {
@@ -466,24 +442,53 @@ export function tickBot(matchState, botId, now) {
     me.botStuckCheckX = me.pos.x;
     me.botStuckCheckZ = me.pos.z;
     me.botStuckCheckAt = now;
+    me.botPathLen = 0;
   }
+
+  // Commit (or re-commit) Maze's go-around heading: tangent to the nearest
+  // obstacle, biased toward the player so the detour closes distance.
+  const commitMazeDirection = () => {
+    let mxe = avoid.rx, mze = avoid.rz;
+    const ml = Math.hypot(mxe, mze);
+    if (ml < 0.1) {
+      const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
+      mxe = sideX * sg;
+      mze = sideZ * sg;
+    } else {
+      const ux = mxe / ml, uz = mze / ml;
+      let tx = -uz, tz = ux;
+      if (tx * dirX + tz * dirZ < 0) { tx = -tx; tz = -tz; }
+      mxe = ux + tx * 1.3;
+      mze = uz + tz * 1.3;
+    }
+    const ml2 = Math.hypot(mxe, mze) || 1;
+    me.botMazeDirX = mxe / ml2;
+    me.botMazeDirZ = mze / ml2;
+    // Record whether LoS was blocked at (re)commit. The LoS-restored exit only
+    // counts when it was — otherwise (stuck against a side pillar with LoS
+    // already clear) Maze would exit on the first tick and never get to act.
+    me.botMazeLosBlockedAtEntry = !playerHasLoS;
+  };
 
   // --- State transition by precedence ---
   const prevState = me.botState ?? 'pursue';
   let nextState = prevState;
   const inDefenseGrace = prevState === 'defense' && now < (me.botDefenseUntil ?? 0);
 
-  if (underFire || inDefenseGrace || stuckTriggered) {
+  if (underFire || inDefenseGrace) {
     nextState = 'defense';
-  } else if (noProgressTime > 2000) {
+  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000) {
+    // Wedged, spinning, stalled, or sightless for 2 s — commit to going
+    // AROUND whatever is in the way.
     nextState = 'maze';
   } else if (prevState === 'maze') {
-    // Exit Maze when the obstacle is GENUINELY behind us — i.e. the line to the
-    // player clears. Only counts if LoS was blocked when Maze fired (otherwise
-    // it'd exit on tick 1 every time the bot is stuck-but-visible, e.g. against
-    // a side pillar). 5 s safety still applies as the ultimate latch break.
+    // Maze latches until the job is done: entered sightless, only reacquiring
+    // sight releases it. Entered WITH sight (pillar graze), a short cap
+    // releases it — else nothing ever would.
     const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry;
-    if (losReacquired || (now - (me.botStateEnteredAt ?? now)) > 5000) {
+    const visibleEntryDone = !me.botMazeLosBlockedAtEntry
+      && (now - (me.botStateEnteredAt ?? now)) > 3000;
+    if (losReacquired || visibleEntryDone) {
       nextState = inBandDist ? 'engage' : 'pursue';
     }
   } else if (inBandDist) {
@@ -496,32 +501,22 @@ export function tickBot(matchState, botId, now) {
     nextState = 'pursue';
   }
 
+  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, picks a
+  // fresh tangent instead of exiting — Maze doesn't give up, it tries a
+  // different way around.
+  if (nextState === 'maze' && prevState === 'maze'
+      && (stuckTriggered || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
+    me.botStateEnteredAt = now;
+    commitMazeDirection();
+  }
+
   // --- State entry: commit per-state directions and timers ---
   if (nextState !== prevState) {
     me.botState = nextState;
     me.botStateEnteredAt = now;
 
     if (nextState === 'maze') {
-      let mxe = avoid.rx, mze = avoid.rz;
-      const ml = Math.hypot(mxe, mze);
-      if (ml < 0.1) {
-        const sg = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-        mxe = sideX * sg;
-        mze = sideZ * sg;
-      } else {
-        const ux = mxe / ml, uz = mze / ml;
-        let tx = -uz, tz = ux;
-        if (tx * dirX + tz * dirZ < 0) { tx = -tx; tz = -tz; }
-        mxe = ux + tx * 1.3;
-        mze = uz + tz * 1.3;
-      }
-      const ml2 = Math.hypot(mxe, mze) || 1;
-      me.botMazeDirX = mxe / ml2;
-      me.botMazeDirZ = mze / ml2;
-      // Record whether LoS was blocked at entry. The LoS-restored exit only
-      // counts when it was — otherwise (stuck against a side pillar with LoS
-      // already clear) Maze would exit on the first tick and never get to act.
-      me.botMazeLosBlockedAtEntry = !playerHasLoS;
+      commitMazeDirection();
     }
 
     if (nextState === 'engage'
@@ -546,10 +541,11 @@ export function tickBot(matchState, botId, now) {
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
       me.botDefenseStuckMode = !!stuckTriggered;
-      // Reset the stuck window — next check starts 3 s after this entry.
+      // Reset the stuck window — next check starts fresh after this entry.
       me.botStuckCheckX = me.pos.x;
       me.botStuckCheckZ = me.pos.z;
       me.botStuckCheckAt = now;
+      me.botPathLen = 0;
     }
   }
 
