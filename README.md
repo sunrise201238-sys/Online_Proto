@@ -63,7 +63,7 @@ Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s 
 
 ## Maps
 
-Seven arenas: Plain Field, Streets, Factory, Square, Lobby, Station, Flashpoint. Each has its own cover layout and elevation; Station has raised platforms players jump up onto.
+Eight arenas: Plain Field, Streets, Factory, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle.
 
 ## Project layout
 
