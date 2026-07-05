@@ -1738,9 +1738,26 @@ function updateProjectileSystem(dt) {
           1
         );
         p.vel.copy(p.centerPellet.vel);
-        p.mesh.position
-          .copy(p.centerPellet.mesh.position)
+        const repositioned = p.centerPellet.mesh.position.clone()
           .addScaledVector(p.clusterOffset, spreadFactor);
+        // The cluster reposition is a teleport — give it the same swept wall
+        // check as normal flight, or pellets can be PLACED across a thin
+        // barrier (e.g. Airport's 1.2-thick glass) without ever "flying"
+        // through it. A pellet whose reposition crosses a wall dies on it.
+        let repoBlocked = false;
+        for (const obstacle of arenaObstacles) {
+          if (obstacle.noProjectile) continue;
+          if (!segmentHitsObstacle(p.mesh.position, repositioned, obstacle)) continue;
+          repoBlocked = true;
+          break;
+        }
+        if (repoBlocked) {
+          despawnProjectileTrail(p, now);
+          disposeProjectileMesh(p.mesh);
+          state.projectiles.splice(i, 1);
+          continue;
+        }
+        p.mesh.position.copy(repositioned);
       }
     }
     const toTarget = new THREE.Vector3().subVectors(p.target.root.position, p.mesh.position);
