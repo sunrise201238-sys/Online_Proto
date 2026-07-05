@@ -10,7 +10,8 @@ import {
   UNIT_DATA as SIM_UNIT_DATA,
   buildNavGrid,
   findPathOnGrid,
-  findFiringPath
+  findFiringPath,
+  walkSegmentBlocked
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -3099,20 +3100,15 @@ function updateEnemy(now) {
     { x: px, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
-  // Are the next `len` units straight toward the player WALKABLE? Probed at
-  // body height (+1.0): low clutter (≤2.5) passes underfoot logic fine, but
-  // the 3.7 plateau body, fences, balustrades and walls block. ALL obstacles
-  // count, including noProjectile jump-only edges — they still stop walking.
-  // (Sight and walkability differ exactly in the 3.45..4.05 band: the
-  // Airport plateau is sight-transparent but walk-solid.)
-  const walkTowardClear = (len) => {
-    const p0 = { x: e.x, y: e.y + 1.0, z: e.z };
-    const p1 = { x: e.x + dir.x * len, y: e.y + 1.0, z: e.z + dir.z * len };
-    for (const o of arenaObstacles) {
-      if (segmentHitsObstacle(p0, p1, o)) return false;
-    }
-    return true;
-  };
+  // Are the next `len` units straight toward the player WALKABLE? Uses the
+  // real movement rules (walkSegmentBlocked, topBuffer semantics) — the old
+  // chest-height ray sailed clean over 2.4-high belts that physically stop
+  // a unit, so the triggers/exits kept releasing the bot into low walls.
+  const walkTowardClear = (len) => !walkSegmentBlocked(
+    e.x, e.z,
+    e.x + dir.x * len, e.z + dir.z * len,
+    e.y, arenaObstacles
+  );
   if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   eState.botPrevHitStun = eState.hitStunUntil;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
@@ -3415,13 +3411,15 @@ function updateEnemy(now) {
     );
     if (!path || path.length < 2) {
       path = findPathOnGrid(
-        offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY
+        offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY, arenaObstacles
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
     if (path && path.length > 1) {
+      // idx 0: walk to the pinned start square first — beelining to square
+      // #2 from an off-grid position can clip the corner between them.
       eState.botNav = {
-        path, idx: 1, gx: p.x, gz: p.z, at: now
+        path, idx: 0, gx: p.x, gz: p.z, at: now
       };
       eState.botMazeLosBlockedAtEntry = !playerHasLoS;
       return true;
