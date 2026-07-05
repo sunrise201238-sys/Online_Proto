@@ -7011,16 +7011,31 @@ function buildStreetsArena() {
   // map edge.)
 
   // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
-  addPlatform({
+  // Deck + railings fade when the camera closes in (same proximity rule as
+  // Airport's overhead signage) so the bridge platform never blanks the
+  // view of a fight under/behind it. Slopes are left solid. Materials are
+  // cloned — `railing` is shared with the support pillars, which stay solid.
+  const deckMesh = addPlatform({
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-    top: BRIDGE_TOP, thickness: 0.8, material: bridgeDeck
+    top: BRIDGE_TOP, thickness: 0.8, material: bridgeDeck.clone()
+  });
+  registerWallFade(deckMesh, {
+    minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
+    minY: BRIDGE_TOP - 0.8, maxY: BRIDGE_TOP,
+    minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z
   });
   // Railings along bridge sides
   const RAIL_H = 1.6;
   const railLength = BRIDGE_MAX_Z - BRIDGE_MIN_Z;
-  addBlockingBox({ x: -BRIDGE_HALF_X - 0.2, y: BRIDGE_TOP + RAIL_H / 2, z: 0, sx: 0.4, sy: RAIL_H, sz: railLength, material: railing });
-  addBlockingBox({ x: BRIDGE_HALF_X + 0.2, y: BRIDGE_TOP + RAIL_H / 2, z: 0, sx: 0.4, sy: RAIL_H, sz: railLength, material: railing });
+  for (const railX of [-BRIDGE_HALF_X - 0.2, BRIDGE_HALF_X + 0.2]) {
+    const railMesh = addBlockingBox({ x: railX, y: BRIDGE_TOP + RAIL_H / 2, z: 0, sx: 0.4, sy: RAIL_H, sz: railLength, material: railing.clone() });
+    registerWallFade(railMesh, {
+      minX: railX - 0.2, maxX: railX + 0.2,
+      minY: BRIDGE_TOP, maxY: BRIDGE_TOP + RAIL_H,
+      minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z
+    });
+  }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
   // Underside support pillars (set into the sidewalks, not the street)
   addBlockingBox({ x: -BRIDGE_HALF_X + 0.6, y: BRIDGE_TOP / 2, z: -15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
