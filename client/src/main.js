@@ -3043,7 +3043,7 @@ function updateEnemy(now) {
     optimalRange = Math.max(10, upperRange - 7);
     lowerRange = Math.max(6, optimalRange - 7);
   }
-  // === Behavior state machine: Defense > Maze > Reposition > Engage > Pursue.
+  // === Behavior state machine: Defense > Maze > Engage > Pursue.
   // Each state has explicit time-bound exits — no latching. Replaces the
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
   // flags with one botState whose transitions are recomputed every tick.
@@ -3142,7 +3142,21 @@ function updateEnemy(now) {
     } else {
       const ux = mxe / ml, uz = mze / ml;
       let tx = -uz, tz = ux;
-      if (tx * dir.x + tz * dir.z < 0) { tx = -tx; tz = -tz; }
+      // Tiebreak the go-around side by PROBING: from ~20 units along each
+      // tangent, would the player be visible? Prefer the side that opens
+      // sight (kills the long-way-around coin flip at symmetric walls);
+      // fall back to the old "lean toward the player" rule when probes agree.
+      const mazeProbe = (px2, pz2) => botHasLineOfSight(
+        { x: px2, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz2 },
+        { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+      );
+      const losPlus = mazeProbe(e.x + tx * 20, e.z + tz * 20);
+      const losMinus = mazeProbe(e.x - tx * 20, e.z - tz * 20);
+      if (losPlus !== losMinus) {
+        if (losMinus) { tx = -tx; tz = -tz; }
+      } else if (tx * dir.x + tz * dir.z < 0) {
+        tx = -tx; tz = -tz;
+      }
       mxe = ux + tx * 1.3;
       mze = uz + tz * 1.3;
     }
@@ -3177,11 +3191,9 @@ function updateEnemy(now) {
       nextState = inBandDist ? 'engage' : 'pursue';
     }
   } else if (inBandDist) {
-    if (noLoSTime > 3000 || prevState === 'reposition') {
-      nextState = playerHasLoS ? 'engage' : 'reposition';
-    } else {
-      nextState = 'engage';
-    }
+    // (Reposition removed: its no-sight-in-band case is fully owned by the
+    // 2 s Maze trigger above, which fires before its 3 s timer ever could.)
+    nextState = 'engage';
   } else {
     nextState = 'pursue';
   }
@@ -3312,9 +3324,12 @@ function updateEnemy(now) {
       }
     }
   } else if (botS === 'maze') {
-    // Committed circumnavigation + light avoidance to keep rounding corners.
-    let tx = (eState.botMazeDirX ?? side.x) + avoid.rx * 0.3;
-    let tz = (eState.botMazeDirZ ?? side.z) + avoid.rz * 0.3;
+    // Committed tangent + a constant gentle pull toward the player (the
+    // Pursue-flavored heart): the tangent dominates while the wall blocks the
+    // pull, and the moment the wall ends the pull curls the bot around the
+    // corner instead of letting it sprint on past the opening.
+    let tx = (eState.botMazeDirX ?? side.x) + dir.x * 0.4 + avoid.rx * 0.3;
+    let tz = (eState.botMazeDirZ ?? side.z) + dir.z * 0.4 + avoid.rz * 0.3;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
     wantSprint = true;
@@ -3326,7 +3341,7 @@ function updateEnemy(now) {
         if (botStartJump(now)) jumpThisTick = true;
       }
     }
-  } else if (botS === 'engage' || botS === 'reposition') {
+  } else if (botS === 'engage') {
     // Committed orbit (same direction across Engage <-> Reposition), with a
     // gentle pull toward the optimal distance.
     const sign = eState.botOrbitSign ?? 1;
