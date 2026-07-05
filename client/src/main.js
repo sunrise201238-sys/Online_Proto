@@ -3388,9 +3388,14 @@ function updateEnemy(now) {
 
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
-  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000) {
+  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
+      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
     // Wedged, spinning, stalled, or sightless for 2 s — commit to going
-    // AROUND whatever is in the way.
+    // AROUND whatever is in the way. FAST LANE (4th condition): can't see
+    // the target, too far to fight, AND the straight walk is blocked —
+    // nothing to debounce, route NOW instead of beelining into a wall for
+    // 2 s (the awkward approach at every match start). In-band sight
+    // flickers (the cover peek-dance) still get the full 2 s buffer.
     nextState = 'maze';
   } else if (prevState === 'maze') {
     // Maze latches until the job is done: entered sightless, only reacquiring
