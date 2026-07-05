@@ -57,7 +57,10 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 43,
+    // 27 = pellet-cluster fighting distance. The bot band rule (sweet spot =
+    // lockRange, edges ±7) then reproduces the shotgun's old dedicated band
+    // (20–34) with no special case.
+    lockRange: 27,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
