@@ -3595,7 +3595,17 @@ function updateEnemy(now) {
     // around the corner instead of letting it sprint on past the opening.
     // Context change: committed in the open, and a wall just interposed —
     // switch to wall-follow NOW instead of grinding into it.
-    const nav = eState.botNav;
+    let nav = eState.botNav;
+    // ARRIVED: sight of the target AND inside the sweet spot — the trip is
+    // done. Drop the path NOW and let the exit gates hand the fight to
+    // Engage/Pursue. Without this, the path (aimed at the player's FEET,
+    // with zero range awareness) rode the bot straight through its lock
+    // range — most visibly during sighted-entry Mazes, which can only exit
+    // via the 3 s cap.
+    if (nav && playerHasLoS && dist <= optimalRange) {
+      eState.botNav = null;
+      nav = null;
+    }
     if (nav && nav.path && nav.idx < nav.path.length) {
       // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
       // exists. Head for the current waypoint, advance within 3 units, and
