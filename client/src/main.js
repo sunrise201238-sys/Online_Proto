@@ -5978,11 +5978,27 @@ function updateWallFade() {
   for (const mesh of list) {
     const b = mesh.userData.fadeBox;
     if (!b || !mesh.material) continue;
-    const cx = Math.max(b.minX, Math.min(camera.position.x, b.maxX));
-    const cy = Math.max(b.minY, Math.min(camera.position.y, b.maxY));
-    const cz = Math.max(b.minZ, Math.min(camera.position.z, b.maxZ));
-    const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
-    const target = d < 14 ? 0.25 : 1;
+    let blocking;
+    if (b.occlude) {
+      // Occlusion mode (Streets buildings): fade only while the box actually
+      // sits between the camera and the player unit — walking past or
+      // fighting beside it keeps it fully solid (no seeing through cover).
+      const pr = state.player?.root;
+      blocking = !!pr && segmentHitsObstacle(
+        camera.position,
+        { x: pr.position.x, y: pr.position.y + 1.6, z: pr.position.z },
+        b
+      );
+    } else {
+      // Proximity mode (edge walls, plateau, overhead signage): fade when the
+      // camera closes within 14 units of the box.
+      const cx = Math.max(b.minX, Math.min(camera.position.x, b.maxX));
+      const cy = Math.max(b.minY, Math.min(camera.position.y, b.maxY));
+      const cz = Math.max(b.minZ, Math.min(camera.position.z, b.maxZ));
+      const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
+      blocking = d < 14;
+    }
+    const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
   }
 }
@@ -6339,6 +6355,7 @@ function buildStreetsArena() {
   // matters because storefront/window materials are shared across buildings),
   // and ONE mesh per cloned material drives the opacity in updateWallFade.
   const applyBuildingFade = (meshes, fadeBox) => {
+    fadeBox.occlude = true;   // fade on view-block only, not camera proximity
     const cache = new Map();
     for (const m of meshes) {
       const cm = cache.get(m.material);
