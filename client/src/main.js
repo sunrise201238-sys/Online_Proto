@@ -8045,14 +8045,14 @@ function buildAirportArena() {
     stripe.position.set(0, PLATEAU_Y + 0.08, ez);
     scene.add(stripe); arenaDecor.push(stripe);
   }
-  // Glass rim fences along BOTH plateau edges: see-through and shoot-through
-  // (noProjectile) but never jumpable (top at 12; a ground jump reaches ~5.6,
-  // a plateau jump ~9.6). They leave only the wide end ramps as ways up — the
-  // plateau is a genuinely secured zone.
+  // Glass rim fences along BOTH plateau edges: see-through but SOLID — they
+  // block movement, jumps (top at 12; a ground jump reaches ~5.6) and bullets.
+  // They leave only the wide end ramps as ways up — the plateau is a genuinely
+  // secured zone.
   for (const side of [-1, 1]) {
     for (const [fx0, fx1] of [[-88, 88], [-137, -130], [130, 137]]) {
       const fw = fx1 - fx0;
-      addBlockingBox({ x: (fx0 + fx1) / 2, y: PLATEAU_Y + 4, z: side * 40, sx: fw, sy: 8, sz: 1.2, material: glassMat.clone(), noProjectile: true });
+      addBlockingBox({ x: (fx0 + fx1) / 2, y: PLATEAU_Y + 4, z: side * 40, sx: fw, sy: 8, sz: 1.2, material: glassMat.clone() });
       const railTop = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.5, 1.4), steelMat);
       railTop.position.set((fx0 + fx1) / 2, PLATEAU_Y + 8.2, side * 40);
       scene.add(railTop); arenaDecor.push(railTop);
@@ -8072,6 +8072,28 @@ function buildAirportArena() {
   // anyone already high on the ramp or on the plateau.
   for (const [rx, rz] of [[87.5, -45], [130.5, -45], [-87.5, -45], [-130.5, -45], [87.5, 45], [130.5, 45], [-87.5, 45], [-130.5, 45]]) {
     addBlockingBox({ x: rx, y: 2.5, z: rz, sx: 1, sy: 5, sz: 10, material: steelMat, topBuffer: 0, invisible: true });
+  }
+  // Entrance indicators: glowing yellow floor chevrons marching toward each
+  // ramp foot, plus marker pylons flanking every rim opening — the four ramps
+  // read as THE ways on/off the plateau from across the hall.
+  const mkChevron = (cx, cz, dirZ) => {
+    for (const s of [-1, 1]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(4, 0.12, 0.9), signYellow);
+      bar.position.set(cx + s * 1.35, 0.08, cz - dirZ * 1.35);
+      bar.rotation.y = s * dirZ * Math.PI / 4;
+      scene.add(bar); arenaDecor.push(bar);
+    }
+  };
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      mkChevron(sx * 109, sz * 54, -sz);
+      mkChevron(sx * 109, sz * 58, -sz);
+      for (const px of [88, 130]) {
+        const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.9, 6, 0.9), signYellow);
+        pylon.position.set(sx * px, PLATEAU_Y + 3, sz * 40);
+        scene.add(pylon); arenaDecor.push(pylon);
+      }
+    }
   }
 
   // ===== Security checkpoint (the central divider, at GROUND level) =====
@@ -8100,11 +8122,11 @@ function buildAirportArena() {
     addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue, decorOnly: true });
   }
   // Security fences closing the plateau shoulders beside the checkpoint:
-  // glass panels you can SEE and SHOOT through (noProjectile) but never cross
-  // or jump (top at 12 — jump apex from the plateau reaches ~9.6). Crossing
-  // the mid-plateau means going through an arch, like a real checkpoint.
+  // glass panels you can SEE through but not cross, jump (top at 12 — jump
+  // apex from the plateau reaches ~9.6) or shoot through. Crossing the
+  // mid-plateau means going through an arch, like a real checkpoint.
   for (const fz of [-37.5, 37.5]) {
-    addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: fz, sx: 1.2, sy: 8, sz: 5, material: glassMat.clone(), noProjectile: true });
+    addBlockingBox({ x: 0, y: PLATEAU_Y + 4, z: fz, sx: 1.2, sy: 8, sz: 5, material: glassMat.clone() });
     const railTop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 5.2), steelMat);
     railTop.position.set(0, PLATEAU_Y + 8.2, fz);
     scene.add(railTop); arenaDecor.push(railTop);
@@ -8119,13 +8141,13 @@ function buildAirportArena() {
     for (const rowZ of [gz - 4.5, gz + 4.5]) {
       let prev = null;
       for (const px of [-22, -16.7, -11.4, -6.1, 6.1, 11.4, 16.7, 22]) {
-        // Waist-height barrier posts (sprite is 6.4 tall — waist ≈ 3).
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3.2, 0.6), mullionMat);
-        post.position.set(px, PLATEAU_Y + 1.6, rowZ);
+        // Chest-height barrier posts (1.5× the old waist height).
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 4.8, 0.6), mullionMat);
+        post.position.set(px, PLATEAU_Y + 2.4, rowZ);
         scene.add(post); arenaDecor.push(post);
         if (prev !== null && px - prev < 6) {
           const belt = new THREE.Mesh(new THREE.BoxGeometry(px - prev - 0.6, 0.3, 0.15), beltMat);
-          belt.position.set((px + prev) / 2, PLATEAU_Y + 2.9, rowZ);
+          belt.position.set((px + prev) / 2, PLATEAU_Y + 4.35, rowZ);
           scene.add(belt); arenaDecor.push(belt);
         }
         prev = px;
