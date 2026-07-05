@@ -930,8 +930,18 @@ export function tickBot(matchState, botId, now) {
       if (obstacleNear && (dxd3 * (-avoid.rx) + dzd3 * (-avoid.rz) > 0.3)) {
         dxd3 = -dxd3; dzd3 = -dzd3;
       }
-      me.botDefenseDirX = dxd3;
-      me.botDefenseDirZ = dzd3;
+      // RANGE-HOLD: sideways steps have an outward chord drift that
+      // compounds over an endless hit chain (the shotgun bot slowly spiraled
+      // to double its band and read as "backing off"). Bias the fresh
+      // perpendicular with the same range pull Engage uses, so a suppressed
+      // bot circle-strafes AT its band radius — closing while weaving when
+      // it's too far, instead of drifting out forever.
+      const pull3 = Math.max(-0.4, Math.min(0.4, (dist - optimalRange) * 0.12));
+      dxd3 += dirX * pull3;
+      dzd3 += dirZ * pull3;
+      const dl3 = Math.hypot(dxd3, dzd3) || 1;
+      me.botDefenseDirX = dxd3 / dl3;
+      me.botDefenseDirZ = dzd3 / dl3;
       me.botDefenseDirAt = now;
     }
   }
