@@ -8432,31 +8432,53 @@ function buildStationArena() {
     scene.add(t); arenaDecor.push(t);
   }
 
+  // Cover pieces fade ONLY while they actually sit between the camera and
+  // the player unit (occlusion mode — same rule as Streets' buildings), so
+  // cover still reads solid whenever it isn't hiding your own unit. Each
+  // structure's materials are cloned once per group (its parts fade in
+  // step); the base materials stay shared and solid everywhere else.
+  const fadeCoverGroup = (meshes, box) => {
+    const cache = new Map();
+    for (const m of meshes) {
+      const cm = cache.get(m.material);
+      if (cm) { m.material = cm; continue; }
+      const clone = m.material.clone();
+      cache.set(m.material, clone);
+      m.material = clone;
+      registerWallFade(m, { ...box, occlude: true });
+    }
+  };
+
   // ===== Stopped freight cars on two staggered tracks (6 — big hard cover) =====
   const drawTrainCar = (cx, beltZ, bodyMat) => {
-    addBlockingBox({ x: cx, y: 4, z: beltZ, sx: 35, sy: 8, sz: 5, material: bodyMat });
+    const parts = [];
+    parts.push(addBlockingBox({ x: cx, y: 4, z: beltZ, sx: 35, sy: 8, sz: 5, material: bodyMat }));
     const roof = new THREE.Mesh(new THREE.BoxGeometry(35.6, 0.7, 5.4), trainRoof);
     roof.position.set(cx, 8.35, beltZ);
-    scene.add(roof); arenaDecor.push(roof);
+    scene.add(roof); arenaDecor.push(roof); parts.push(roof);
     const skirt = new THREE.Mesh(new THREE.BoxGeometry(35, 1.0, 5.2), trainAccent);
     skirt.position.set(cx, 0.55, beltZ);
-    scene.add(skirt); arenaDecor.push(skirt);
+    scene.add(skirt); arenaDecor.push(skirt); parts.push(skirt);
     const stripeMid = new THREE.Mesh(new THREE.BoxGeometry(35, 0.8, 5.05), trainAccent);
     stripeMid.position.set(cx, 5.2, beltZ);
-    scene.add(stripeMid); arenaDecor.push(stripeMid);
+    scene.add(stripeMid); arenaDecor.push(stripeMid); parts.push(stripeMid);
     for (const dx of [-17.8, 17.8]) {
       const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.8, 12), railSteel);
       buf.rotation.z = Math.PI / 2;
       buf.position.set(cx + dx, 2.8, beltZ);
-      scene.add(buf); arenaDecor.push(buf);
+      scene.add(buf); arenaDecor.push(buf); parts.push(buf);
     }
     // Wheel sets (decor)
     for (const dx of [-12, 12]) {
       const axle = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 5.2, 16), trainAccent);
       axle.rotation.x = Math.PI / 2;
       axle.position.set(cx + dx, 1.0, beltZ);
-      scene.add(axle); arenaDecor.push(axle);
+      scene.add(axle); arenaDecor.push(axle); parts.push(axle);
     }
+    fadeCoverGroup(parts, {
+      minX: cx - 18, maxX: cx + 18, minY: 0, maxY: 8.8,
+      minZ: beltZ - 2.8, maxZ: beltZ + 2.8
+    });
   };
   // North track — rust-red wagons
   drawTrainCar(-100, 8, trainBodyA);
@@ -8469,13 +8491,17 @@ function buildStationArena() {
 
   // ===== Steel I-beam pillars carrying the roof (16 — structural cover) =====
   const drawPillar = (cx, cz) => {
-    addBlockingBox({ x: cx, y: CEIL_Y / 2, z: cz, sx: 4, sy: CEIL_Y, sz: 4, material: pillarSteel });
+    const body = addBlockingBox({ x: cx, y: CEIL_Y / 2, z: cz, sx: 4, sy: CEIL_Y, sz: 4, material: pillarSteel });
     const cap = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.5, 5.4), pillarRim);
     cap.position.set(cx, CEIL_Y - 0.4, cz);
     scene.add(cap); arenaDecor.push(cap);
     const flange = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.0, 5.8), pillarRim);
     flange.position.set(cx, PLATFORM_Y + 0.5, cz);
     scene.add(flange); arenaDecor.push(flange);
+    fadeCoverGroup([body, flange], {
+      minX: cx - 2, maxX: cx + 2, minY: 0, maxY: 18,
+      minZ: cz - 2, maxZ: cz + 2
+    });
   };
   [
     [-105, 55], [-35, 55], [35, 55], [105, 55],
@@ -8486,7 +8512,7 @@ function buildStationArena() {
 
   // ===== Ticket booths — biggest cover, along the deep back walls =====
   const drawBooth = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 28, sy: 15, sz: 18, material: booth });
+    const body = addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 28, sy: 15, sz: 18, material: booth });
     const roof = new THREE.Mesh(new THREE.BoxGeometry(29, 0.8, 19), boothTrim);
     roof.position.set(cx, 15.4, cz);
     scene.add(roof); arenaDecor.push(roof);
@@ -8497,6 +8523,10 @@ function buildStationArena() {
     const sign = new THREE.Mesh(new THREE.BoxGeometry(16, 1.4, 0.4), boardScreen);
     sign.position.set(cx, 13, cz - 9.2);
     scene.add(sign); arenaDecor.push(sign);
+    fadeCoverGroup([body, roof, glass, sign], {
+      minX: cx - 14, maxX: cx + 14, minY: 0, maxY: 15.8,
+      minZ: cz - 9.5, maxZ: cz + 9.5
+    });
   };
   drawBooth(-65, 122);
   drawBooth(65, 122);
@@ -8505,15 +8535,20 @@ function buildStationArena() {
 
   // ===== Departure information boards (perpendicular sight-line blockers) =====
   const drawDepartureBoard = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 24, sy: 15, sz: 3, material: boardFrame });
+    const parts = [];
+    parts.push(addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 24, sy: 15, sz: 3, material: boardFrame }));
     for (const dz of [-1.6, 1.6]) {
       const screen = new THREE.Mesh(new THREE.BoxGeometry(22, 13, 0.15), boardScreen);
       screen.position.set(cx, 7.8, cz + dz);
-      scene.add(screen); arenaDecor.push(screen);
+      scene.add(screen); arenaDecor.push(screen); parts.push(screen);
     }
     const crown = new THREE.Mesh(new THREE.BoxGeometry(25, 0.6, 3.4), boardFrame);
     crown.position.set(cx, 15.3, cz);
-    scene.add(crown); arenaDecor.push(crown);
+    scene.add(crown); arenaDecor.push(crown); parts.push(crown);
+    fadeCoverGroup(parts, {
+      minX: cx - 12.5, maxX: cx + 12.5, minY: 0, maxY: 15.6,
+      minZ: cz - 1.8, maxZ: cz + 1.8
+    });
   };
   drawDepartureBoard(-65, 80);
   drawDepartureBoard(65, 80);
@@ -8522,15 +8557,20 @@ function buildStationArena() {
 
   // ===== Hall partition walls — break the back hall into bays =====
   const drawHallWall = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 32, sy: 15, sz: 2.5, material: hallWall });
+    const parts = [];
+    parts.push(addBlockingBox({ x: cx, y: 7.5, z: cz, sx: 32, sy: 15, sz: 2.5, material: hallWall }));
     const trim = new THREE.Mesh(new THREE.BoxGeometry(33, 0.5, 3), beam);
     trim.position.set(cx, 15.25, cz);
-    scene.add(trim); arenaDecor.push(trim);
+    scene.add(trim); arenaDecor.push(trim); parts.push(trim);
     for (const dz of [-1.4, 1.4]) {
       const ad = new THREE.Mesh(new THREE.BoxGeometry(22, 8, 0.12), billboard);
       ad.position.set(cx, 8, cz + dz);
-      scene.add(ad); arenaDecor.push(ad);
+      scene.add(ad); arenaDecor.push(ad); parts.push(ad);
     }
+    fadeCoverGroup(parts, {
+      minX: cx - 16.5, maxX: cx + 16.5, minY: 0, maxY: 15.5,
+      minZ: cz - 1.7, maxZ: cz + 1.7
+    });
   };
   drawHallWall(-70, 95);
   drawHallWall(70, 95);
@@ -8539,10 +8579,14 @@ function buildStationArena() {
 
   // ===== Info kiosks on the platforms (8 — full-cover boxes) =====
   const drawKiosk = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 6, z: cz, sx: 12, sy: 12, sz: 10, material: kiosk });
+    const body = addBlockingBox({ x: cx, y: 6, z: cz, sx: 12, sy: 12, sz: 10, material: kiosk });
     const sign = new THREE.Mesh(new THREE.BoxGeometry(8, 1.4, 0.25), boardScreen);
     sign.position.set(cx, PLATFORM_Y + 5, cz - 5.15);
     scene.add(sign); arenaDecor.push(sign);
+    fadeCoverGroup([body, sign], {
+      minX: cx - 6, maxX: cx + 6, minY: 0, maxY: 12,
+      minZ: cz - 5.2, maxZ: cz + 5.2
+    });
   };
   [
     [-105, 30], [-35, 30], [35, 30], [105, 30],
@@ -8551,13 +8595,17 @@ function buildStationArena() {
 
   // ===== Vending machine rows along the back of each platform (10) =====
   const drawVending = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 5.5, z: cz, sx: 8, sy: 11, sz: 3, material: vending });
+    const body = addBlockingBox({ x: cx, y: 5.5, z: cz, sx: 8, sy: 11, sz: 3, material: vending });
     const panel = new THREE.Mesh(new THREE.BoxGeometry(7, 6, 0.12), vendingFront);
     panel.position.set(cx, 7, cz - 1.56);
     scene.add(panel); arenaDecor.push(panel);
     const top = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.6, 3.4), boardFrame);
     top.position.set(cx, 11.3, cz);
     scene.add(top); arenaDecor.push(top);
+    fadeCoverGroup([body, panel, top], {
+      minX: cx - 4.2, maxX: cx + 4.2, minY: 0, maxY: 11.6,
+      minZ: cz - 1.8, maxZ: cz + 1.8
+    });
   };
   [
     [-95, 65], [-45, 65], [0, 65], [45, 65], [95, 65],
@@ -8566,16 +8614,21 @@ function buildStationArena() {
 
   // ===== Shipping containers — long horizontal cover (4) =====
   const drawContainer = (cx, cz, mat) => {
-    addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat });
+    const parts = [];
+    parts.push(addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat }));
     const top = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.5, 8.4), containerRib);
     top.position.set(cx, 10.25, cz);
-    scene.add(top); arenaDecor.push(top);
+    scene.add(top); arenaDecor.push(top); parts.push(top);
     // Corrugated rib strips
     for (let dx = -8; dx <= 8; dx += 1.6) {
       const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.6, 8.2), containerRib);
       rib.position.set(cx + dx, 5, cz);
-      scene.add(rib); arenaDecor.push(rib);
+      scene.add(rib); arenaDecor.push(rib); parts.push(rib);
     }
+    fadeCoverGroup(parts, {
+      minX: cx - 9.2, maxX: cx + 9.2, minY: 0, maxY: 10.5,
+      minZ: cz - 4.2, maxZ: cz + 4.2
+    });
   };
   drawContainer(-50, 105, containerA);
   drawContainer(50, 105, containerB);
@@ -8600,6 +8653,10 @@ function buildStationArena() {
     const band = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.7, 20), tankBand);
     band.position.set(cx, PLATFORM_Y + 1.6, cz);
     scene.add(band); arenaDecor.push(band);
+    fadeCoverGroup([body, dome, band], {
+      minX: cx - 2.6, maxX: cx + 2.6, minY: 0, maxY: 16.5,
+      minZ: cz - 2.6, maxZ: cz + 2.6
+    });
   };
   [
     [-125, 45], [125, 45], [-125, -45], [125, -45],
@@ -8614,11 +8671,16 @@ function buildStationArena() {
       minZ: cz - 4, maxZ: cz + 4,
       minY: 0, maxY: 11
     });
+    const crates = [];
     for (let i = 0; i < 4; i++) {
       const c = new THREE.Mesh(new THREE.BoxGeometry(7.8, 2.7, 7.8), i % 2 === 0 ? crateA : crateB);
       c.position.set(cx, 1.4 + i * 2.75, cz);
-      scene.add(c); arenaDecor.push(c);
+      scene.add(c); arenaDecor.push(c); crates.push(c);
     }
+    fadeCoverGroup(crates, {
+      minX: cx - 4, maxX: cx + 4, minY: 0, maxY: 12.4,
+      minZ: cz - 4, maxZ: cz + 4
+    });
   };
   drawCrateStack(-75, 18);
   drawCrateStack(75, 18);
@@ -8627,10 +8689,14 @@ function buildStationArena() {
 
   // ===== Info totems mid-platform (4 — slim full-height columns) =====
   const drawTotem = (cx, cz) => {
-    addBlockingBox({ x: cx, y: 7, z: cz, sx: 3, sy: 14, sz: 3, material: totem });
+    const body = addBlockingBox({ x: cx, y: 7, z: cz, sx: 3, sy: 14, sz: 3, material: totem });
     const globe = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 10), totemGlow);
     globe.position.set(cx, 15.2, cz);
     scene.add(globe); arenaDecor.push(globe);
+    fadeCoverGroup([body, globe], {
+      minX: cx - 1.5, maxX: cx + 1.5, minY: 0, maxY: 16.6,
+      minZ: cz - 1.5, maxZ: cz + 1.5
+    });
   };
   drawTotem(-25, 70);
   drawTotem(25, 70);
