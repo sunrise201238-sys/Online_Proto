@@ -8105,58 +8105,51 @@ function buildLobbyArena() {
     addBlockingBox({ x, y: 1.45, z, sx: 4.2, sy: 0.18, sz: 2.8, material: railGlass });
   });
 
-  // ===== Big indoor topiary plants (full cover ~5m wide × ~9m tall) =====
-  // Replaces the earlier kiosk/pod silhouette. A wide stone planter at the base plus
-  // a bushy foliage column that fully hides the ~5m mech behind it. The foliage AABB
-  // matches the dense visible mass; sphere clusters break up the silhouette so it
-  // reads as an organic plant.
-  const drawHoloKiosk = (x, baseY, z /* axis ignored — plants are radially symmetric */) => {
+  // ===== Holographic ad columns (full cover ~5m wide × ~8.5m tall) =====
+  // Replaces the old topiary look (a visible foliage collision CUBE with
+  // spheres around it — the box corners poked through and read as "square
+  // and circle mashed together"). Same stone base, same collision AABBs
+  // (bullet-blocking identical); the visible body is now a dark cylindrical
+  // kiosk column wrapped in emissive blue ad bands — matches the lobby's
+  // sci-fi glow language, and a clean architectural shape can't look mashed.
+  const drawHoloKiosk = (x, baseY, z /* axis ignored — radially symmetric */) => {
     const potW = 5.2;
     const potH = 2.5;
-    // Wide stone pot — solid cover for the lower body
+    // Wide stone base — solid cover for the lower body (collision unchanged)
     addBlockingBox({ x, y: baseY + potH / 2, z, sx: potW, sy: potH, sz: potW, material: pillarMat });
-    // Pot rim (decor)
+    // Base rim (decor)
     addBlockingBox({ x, y: baseY + potH + 0.18, z, sx: potW + 0.5, sy: 0.36, sz: potW + 0.5, material: marbleDark, decorOnly: true });
     // Blue glow accent ring on the rim (sci-fi lobby touch)
     addBlockingBox({ x, y: baseY + potH + 0.42, z, sx: potW + 0.42, sy: 0.14, sz: potW + 0.42, material: blueGlow, decorOnly: true });
-    // Soil / mulch layer (decor)
-    addBlockingBox({ x, y: baseY + potH + 0.05, z, sx: potW * 0.86, sy: 0.1, sz: potW * 0.86, material: trunkMat, decorOnly: true });
 
-    // Bush body — collision AABB providing upper-body cover, hidden inside the foliage spheres
+    // Upper-body cover AABB — unchanged dims, now collision-only; the
+    // visible column below fills its footprint (diameter == AABB width),
+    // so the cover still reads honestly.
     const bushBaseY = baseY + potH + 0.4;
     const bushW = 4.6;
     const bushH = 5.4;
-    addBlockingBox({ x, y: bushBaseY + bushH / 2, z, sx: bushW, sy: bushH, sz: bushW, material: treeFoliage });
+    addBlockingBox({ x, y: bushBaseY + bushH / 2, z, sx: bushW, sy: bushH, sz: bushW, material: treeFoliage, invisible: true });
 
-    // Stacked column of overlapping spheres along the central axis to hide the box edges
-    const stack = [
-      { dy: bushBaseY + 1.0, r: 3.0 },
-      { dy: bushBaseY + 2.6, r: 2.8 },
-      { dy: bushBaseY + 4.0, r: 2.5 },
-      { dy: bushBaseY + 5.2, r: 2.0 }
+    // Dark column body
+    const colH = bushH + 0.6;
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, colH, 20), marbleDark);
+    body.position.set(x, bushBaseY + colH / 2, z);
+    scene.add(body); arenaDecor.push(body);
+    // Emissive ad bands wrapping the column
+    const bands = [
+      { dy: 1.4, h: 1.1, mat: wallAccent },
+      { dy: 3.1, h: 0.8, mat: blueGlow },
+      { dy: 4.6, h: 1.1, mat: wallAccent }
     ];
-    stack.forEach(({ dy, r }) => {
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), treeFoliage);
-      ball.position.set(x, dy, z);
-      scene.add(ball); arenaDecor.push(ball);
+    bands.forEach(({ dy, h, mat }) => {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(2.42, 2.42, h, 20), mat);
+      band.position.set(x, bushBaseY + dy, z);
+      scene.add(band); arenaDecor.push(band);
     });
-    // Off-axis offshoots for an asymmetric, more natural silhouette
-    const offshoots = [
-      { dx: 1.6, dz: 1.3, dy: bushBaseY + 1.6, r: 2.0 },
-      { dx: -1.7, dz: -1.0, dy: bushBaseY + 2.2, r: 2.1 },
-      { dx: 1.4, dz: -1.5, dy: bushBaseY + 3.4, r: 1.8 },
-      { dx: -1.5, dz: 1.4, dy: bushBaseY + 3.9, r: 1.8 },
-      { dx: 0.6, dz: 1.6, dy: bushBaseY + 4.7, r: 1.4 }
-    ];
-    offshoots.forEach(({ dx, dy, dz, r }) => {
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), treeFoliage);
-      ball.position.set(x + dx, dy, z + dz);
-      scene.add(ball); arenaDecor.push(ball);
-    });
-    // Crowning tuft at the very top
-    const top = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), treeFoliage);
-    top.position.set(x, bushBaseY + bushH + 0.2, z);
-    scene.add(top); arenaDecor.push(top);
+    // Glowing cap edge
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.34, 2.34, 0.22, 20), blueGlow);
+    cap.position.set(x, bushBaseY + colH + 0.11, z);
+    scene.add(cap); arenaDecor.push(cap);
   };
 
   // ===== Cube sculptures (full cover, ~8m tall stacked geometric forms) =====
