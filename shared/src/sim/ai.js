@@ -1008,7 +1008,12 @@ export function tickBot(matchState, botId, now) {
     // entry cap so the maze ENDS and Engage/Pursue own the fight. A
     // REPOSITION path (goal not closer — e.g. a sidestep to an unjammed
     // in-band cell) keeps running.
-    if (playerHasLoS && dist <= optimalRange) {
+    // SAME FLOOR required: raw distance isn't arrival when there's a cliff
+    // between — a player at the Station platform's edge read as "arrived"
+    // from the tracks below, which dropped every climb path and ground the
+    // bot into the edge wall forever.
+    if (playerHasLoS && dist <= optimalRange
+        && Math.abs(oppFloorY - myFloorY) < 2.5) {
       const goalWp = nav && nav.path[nav.path.length - 1];
       const goalCloser = goalWp
         && Math.hypot(opp.pos.x - goalWp.x, opp.pos.z - goalWp.z) < dist - 4;
