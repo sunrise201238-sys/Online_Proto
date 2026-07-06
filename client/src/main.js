@@ -6570,6 +6570,12 @@ function updateWallFade() {
     }
     const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
+    // Depth-toggled groups (Station's trains): write depth while solid
+    // (self-occluding — no seeing the car's inside structure), stop while
+    // faded (no depth = the own-unit X-ray can't patch onto the ghost).
+    if (mesh.userData.fadeDepthToggle) {
+      mesh.material.depthWrite = mesh.material.opacity > 0.95;
+    }
   }
 }
 
@@ -8507,19 +8513,18 @@ function buildStationArena() {
   // cover still reads solid whenever it isn't hiding your own unit. Each
   // structure's materials are cloned once per group (its parts fade in
   // step); the base materials stay shared and solid everywhere else.
-  // `noDepthWrite` (trains): keeps the group out of the depth buffer so the
-  // own-unit X-ray silhouette can NEVER patch onto it — parts of a long car
-  // sorted before the unit sprite otherwise wrote depth and triggered
-  // partial X-ray while other parts showed plain transparency (a mixed
-  // look). No depth = uniformly the fade treatment. Same rule as the
-  // Airport glass panes.
-  const fadeCoverGroup = (meshes, box, noDepthWrite = false) => {
+  // `depthToggle` (trains): while the group is FADED its materials stop
+  // writing depth, so the own-unit X-ray silhouette can't patch onto the
+  // ghost (the mixed x-ray/transparency look) — but while SOLID they write
+  // depth normally, so the car self-occludes and you can't see its inside
+  // structure. The toggle lives in updateWallFade, driven by opacity.
+  const fadeCoverGroup = (meshes, box, depthToggle = false) => {
     const cache = new Map();
     for (const m of meshes) {
+      if (depthToggle) m.userData.fadeDepthToggle = true;
       const cm = cache.get(m.material);
       if (cm) { m.material = cm; continue; }
       const clone = m.material.clone();
-      if (noDepthWrite) clone.depthWrite = false;
       cache.set(m.material, clone);
       m.material = clone;
       registerWallFade(m, { ...box, occlude: true });
@@ -8555,7 +8560,7 @@ function buildStationArena() {
     fadeCoverGroup(parts, {
       minX: cx - 18, maxX: cx + 18, minY: 0, maxY: 8.8,
       minZ: beltZ - 2.8, maxZ: beltZ + 2.8
-    }, true /* noDepthWrite — unify trains on the transparency treatment */);
+    }, true /* depthToggle — solid: self-occluding; faded: pure transparency */);
   };
   // North track — rust-red wagons
   drawTrainCar(-100, 8, trainBodyA);
