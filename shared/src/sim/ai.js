@@ -737,7 +737,7 @@ export function tickBot(matchState, botId, now) {
     let path = findFiringPath(
       grid, me.pos.x, me.pos.z, myFloorY,
       opp.pos.x, opp.pos.z, opp.pos.y + BOT_LOS_EYE_HEIGHT,
-      lowerRange, upperRange, obstacles
+      lowerRange, upperRange, obstacles, oppFloorY
     );
     if (!path || path.length < 2) {
       path = findPathOnGrid(
@@ -1072,7 +1072,17 @@ export function tickBot(matchState, botId, now) {
       tz = tz / wl + avoid.rz * 0.3;
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
-      wantSprint = true;
+      // JUMP RESERVE: an upcoming jump-link costs 48 boost, but maze's
+      // permanent sprint pins the gauge at the ~8 floor — the bot arrived
+      // at the ledge eternally unable to afford the hop (the "never jumps
+      // onto Station's platform" bug). Walk and bank while a jump is ahead
+      // and unaffordable; sprint resumes once the jump is funded.
+      let jumpAhead = false;
+      for (let k = nav.idx; k < nav.path.length; k += 1) {
+        if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
+      }
+      const jumpCost = (me.unit?.jumpBoostCost ?? 48) + 10;
+      wantSprint = !(jumpAhead && me.boost < jumpCost);
     } else {
       // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
       // pull toward the player. The pull FADES OUT near walls so it can't

@@ -320,16 +320,11 @@ function collapseWaypoints(pts) {
 // sampling only along the direct path missed band positions that live off
 // to the side (e.g. clear lanes past the clutter). Returns waypoints like
 // findPathOnGrid, or null when no reachable firing cell exists.
-export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles) {
+export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles, targetFloor = null) {
   const { cols, rows, cell, minX, minZ, edgeE, edgeS, floor } = grid;
   const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   if (start < 0) return null;
   const n = cols * rows;
-  const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 BFS root
-  const queue = new Int32Array(n);
-  let qh = 0, qt = 0;
-  parent[start] = -1;
-  queue[qt++] = start;
   const pTarget = { x: tx, y: targetEyeY, z: tz };
   const sees = (i) => {
     // Eye height at the cell = its floor + body center + eye offset (same
@@ -345,34 +340,50 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     }
     return true;
   };
-  let goal = -1;
-  while (qh < qt) {
-    const cur = queue[qh++];
-    const cx = minX + ((cur % cols) + 0.5) * cell;
-    const cz = minZ + (((cur / cols) | 0) + 0.5) * cell;
-    const d = Math.hypot(tx - cx, tz - cz);
-    // The start cell itself never qualifies: this is called when the bot
-    // needs to GO somewhere (jammed, blind, out of band) — "stay where you
-    // are" is a degenerate answer that starved the caller into fallbacks.
-    if (cur !== start && d >= minD && d <= maxD && sees(cur)) { goal = cur; break; }
-    const c = cur % cols, r = (cur / cols) | 0;
-    if (c + 1 < cols && edgeE[cur] && parent[cur + 1] === -2) { parent[cur + 1] = cur; queue[qt++] = cur + 1; }
-    if (c > 0 && edgeE[cur - 1] && parent[cur - 1] === -2) { parent[cur - 1] = cur; queue[qt++] = cur - 1; }
-    if (r + 1 < rows && edgeS[cur] && parent[cur + cols] === -2) { parent[cur + cols] = cur; queue[qt++] = cur + cols; }
-    if (r > 0 && edgeS[cur - cols] && parent[cur - cols] === -2) { parent[cur - cols] = cur; queue[qt++] = cur - cols; }
-    // Jump-links participate in the firing-position search too.
-    const jl = grid.jumpAdj ? grid.jumpAdj.get(cur) : null;
-    if (jl) for (const nb of jl) { if (parent[nb] === -2) { parent[nb] = cur; queue[qt++] = nb; } }
-  }
-  if (goal < 0) return null;
-  const pts = [];
-  for (let i = goal; i !== -1; i = parent[i]) {
-    pts.push({
-      x: minX + ((i % cols) + 0.5) * cell,
-      z: minZ + (((i / cols) | 0) + 0.5) * cell,
-      y: floor[i]
-    });
-  }
-  pts.reverse();
-  return collapseWaypoints(pts);
+  // Two passes: firing cells ON THE TARGET'S FLOOR first, anywhere second.
+  // A short-range bot facing an edge-camper on a Station platform can "see"
+  // the target from a ground peephole over the 4-high edge wall — accepting
+  // that first meant its paths never contained a climb, and it ground the
+  // wall forever instead of jumping up to fight properly.
+  const run = (sameFloorOnly) => {
+    const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 BFS root
+    const queue = new Int32Array(n);
+    let qh = 0, qt = 0;
+    parent[start] = -1;
+    queue[qt++] = start;
+    let goal = -1;
+    while (qh < qt) {
+      const cur = queue[qh++];
+      const cx = minX + ((cur % cols) + 0.5) * cell;
+      const cz = minZ + (((cur / cols) | 0) + 0.5) * cell;
+      const d = Math.hypot(tx - cx, tz - cz);
+      // The start cell itself never qualifies: this is called when the bot
+      // needs to GO somewhere (jammed, blind, out of band) — "stay where
+      // you are" is a degenerate answer that starved the caller.
+      const floorOk = !sameFloorOnly
+        || targetFloor == null
+        || Math.abs(floor[cur] - targetFloor) <= 2;
+      if (cur !== start && floorOk && d >= minD && d <= maxD && sees(cur)) { goal = cur; break; }
+      const c = cur % cols, r = (cur / cols) | 0;
+      if (c + 1 < cols && edgeE[cur] && parent[cur + 1] === -2) { parent[cur + 1] = cur; queue[qt++] = cur + 1; }
+      if (c > 0 && edgeE[cur - 1] && parent[cur - 1] === -2) { parent[cur - 1] = cur; queue[qt++] = cur - 1; }
+      if (r + 1 < rows && edgeS[cur] && parent[cur + cols] === -2) { parent[cur + cols] = cur; queue[qt++] = cur + cols; }
+      if (r > 0 && edgeS[cur - cols] && parent[cur - cols] === -2) { parent[cur - cols] = cur; queue[qt++] = cur - cols; }
+      // Jump-links participate in the firing-position search too.
+      const jl = grid.jumpAdj ? grid.jumpAdj.get(cur) : null;
+      if (jl) for (const nb of jl) { if (parent[nb] === -2) { parent[nb] = cur; queue[qt++] = nb; } }
+    }
+    if (goal < 0) return null;
+    const pts = [];
+    for (let i = goal; i !== -1; i = parent[i]) {
+      pts.push({
+        x: minX + ((i % cols) + 0.5) * cell,
+        z: minZ + (((i / cols) | 0) + 0.5) * cell,
+        y: floor[i]
+      });
+    }
+    pts.reverse();
+    return collapseWaypoints(pts);
+  };
+  return run(true) ?? run(false);
 }
