@@ -8502,12 +8502,19 @@ function buildStationArena() {
   // cover still reads solid whenever it isn't hiding your own unit. Each
   // structure's materials are cloned once per group (its parts fade in
   // step); the base materials stay shared and solid everywhere else.
-  const fadeCoverGroup = (meshes, box) => {
+  // `noDepthWrite` (trains): keeps the group out of the depth buffer so the
+  // own-unit X-ray silhouette can NEVER patch onto it — parts of a long car
+  // sorted before the unit sprite otherwise wrote depth and triggered
+  // partial X-ray while other parts showed plain transparency (a mixed
+  // look). No depth = uniformly the fade treatment. Same rule as the
+  // Airport glass panes.
+  const fadeCoverGroup = (meshes, box, noDepthWrite = false) => {
     const cache = new Map();
     for (const m of meshes) {
       const cm = cache.get(m.material);
       if (cm) { m.material = cm; continue; }
       const clone = m.material.clone();
+      if (noDepthWrite) clone.depthWrite = false;
       cache.set(m.material, clone);
       m.material = clone;
       registerWallFade(m, { ...box, occlude: true });
@@ -8543,7 +8550,7 @@ function buildStationArena() {
     fadeCoverGroup(parts, {
       minX: cx - 18, maxX: cx + 18, minY: 0, maxY: 8.8,
       minZ: beltZ - 2.8, maxZ: beltZ + 2.8
-    });
+    }, true /* noDepthWrite — unify trains on the transparency treatment */);
   };
   // North track — rust-red wagons
   drawTrainCar(-100, 8, trainBodyA);
