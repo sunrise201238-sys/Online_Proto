@@ -8151,6 +8151,61 @@ function buildLobbyArena() {
     scene.add(halo); arenaDecor.push(halo);
   };
 
+  // ===== Aquarium pillars (same footprint/cover as the globe pedestals) =====
+  // The quieter sibling for clustered spots: a glass tank on the same stone
+  // base — steel corner posts, lid, teal fish, bubbles. Glass box over box
+  // collision = zero visual/hitbox mismatch at any height.
+  const fishMat = new THREE.MeshStandardMaterial({ color: 0x35c2a0, roughness: 0.5, metalness: 0.2 });
+  const drawAquariumPillar = (x, baseY, z) => {
+    const potW = 5.2;
+    const potH = 2.5;
+    // Identical stone base + trims (collision unchanged)
+    addBlockingBox({ x, y: baseY + potH / 2, z, sx: potW, sy: potH, sz: potW, material: pillarMat });
+    addBlockingBox({ x, y: baseY + potH + 0.18, z, sx: potW + 0.5, sy: 0.36, sz: potW + 0.5, material: marbleDark, decorOnly: true });
+    addBlockingBox({ x, y: baseY + potH + 0.42, z, sx: potW + 0.42, sy: 0.14, sz: potW + 0.42, material: blueGlow, decorOnly: true });
+    // Identical invisible cover AABB
+    const tankBaseY = baseY + potH + 0.4;
+    const tankW = 4.6;
+    const tankH = 5.4;
+    addBlockingBox({ x, y: tankBaseY + tankH / 2, z, sx: tankW, sy: tankH, sz: tankW, material: treeFoliage, invisible: true });
+
+    // Fish (drawn before the glass so they show through it)
+    const fishSpots = [
+      { dx: -0.8, dy: 1.6, dz: 0.5, s: 1.0, rot: 0.5 },
+      { dx: 0.9, dy: 3.0, dz: -0.6, s: 0.85, rot: 2.4 },
+      { dx: -0.4, dy: 4.2, dz: -0.2, s: 0.7, rot: 4.0 }
+    ];
+    fishSpots.forEach(({ dx, dy, dz, s, rot }) => {
+      const fish = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), fishMat);
+      fish.scale.set(1.5 * s, 0.55 * s, 0.45 * s);
+      fish.rotation.y = rot;
+      fish.position.set(x + dx, tankBaseY + dy, z + dz);
+      scene.add(fish); arenaDecor.push(fish);
+    });
+    // Bubbles
+    for (const [bdx, bdy, bdz] of [[1.2, 2.2, 0.9], [1.4, 3.6, 0.4], [0.9, 4.6, -0.8]]) {
+      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), blueGlow);
+      bubble.position.set(x + bdx, tankBaseY + bdy, z + bdz);
+      scene.add(bubble); arenaDecor.push(bubble);
+    }
+    // Glass tank body — same no-depth-write rule as the Airport panes so
+    // units/sprites behind it stay visible; drawn after the fish.
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(tankW - 0.2, tankH - 0.2, tankW - 0.2), glassWall.clone());
+    glass.material.depthWrite = false;
+    glass.renderOrder = 2;
+    glass.position.set(x, tankBaseY + tankH / 2, z);
+    scene.add(glass); arenaDecor.push(glass);
+    // Steel corner posts + lid
+    for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, tankH + 0.2, 0.35), sideWall);
+      post.position.set(x + px * (tankW / 2 - 0.18), tankBaseY + tankH / 2, z + pz * (tankW / 2 - 0.18));
+      scene.add(post); arenaDecor.push(post);
+    }
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(tankW + 0.3, 0.4, tankW + 0.3), sideWall);
+    lid.position.set(x, tankBaseY + tankH + 0.2, z);
+    scene.add(lid); arenaDecor.push(lid);
+  };
+
   // ===== Cube sculptures (full cover, ~8m tall stacked geometric forms) =====
   const drawCubeSculpture = (x, baseY, z) => {
     addBlockingBox({ x, y: baseY + 0.4, z, sx: 5.5, sy: 0.8, sz: 5.5, material: marbleDark });
@@ -8172,11 +8227,14 @@ function buildLobbyArena() {
   };
 
   // Lower-floor cover (entrance lounge area)
+  // One globe centerpiece up front; the clustered lounge spots get the
+  // quieter aquarium pillars (five identical glowing orbs read as an orb
+  // farm, not interior design).
   drawHoloKiosk(0, 0, 42, 'x');
-  drawHoloKiosk(-30, 0, 60, 'z');
-  drawHoloKiosk(30, 0, 60, 'z');
-  drawHoloKiosk(-15, 0, 88, 'x');
-  drawHoloKiosk(15, 0, 88, 'x');
+  drawAquariumPillar(-30, 0, 60);
+  drawAquariumPillar(30, 0, 60);
+  drawAquariumPillar(-15, 0, 88);
+  drawAquariumPillar(15, 0, 88);
   drawCubeSculpture(-50, 0, 88);
   drawCubeSculpture(50, 0, 88);
   drawBigPlanter(-90, 0, 65);
