@@ -7946,22 +7946,40 @@ function buildLobbyArena() {
     mullion.position.set(mx, 14, -97.4);
     scene.add(mullion); arenaDecor.push(mullion);
   }
+  // Blue wall decorations ride the SAME camera-proximity fade as the walls
+  // they're mounted on, so wall and trim vanish together instead of the
+  // blue bits floating opaque over a ghosted wall. Materials cloned —
+  // blueGlow/wallAccent are shared with non-wall props that stay solid.
   // Bright blue header bar above the glass wall
-  addBlockingBox({ x: 0, y: 22.4, z: -97.6, sx: 182, sy: 0.8, sz: 0.4, material: blueGlow });
+  const headerBar = addBlockingBox({ x: 0, y: 22.4, z: -97.6, sx: 182, sy: 0.8, sz: 0.4, material: blueGlow.clone() });
+  registerWallFade(headerBar, { minX: -91, maxX: 91, minY: 22, maxY: 22.8, minZ: -97.8, maxZ: -97.4 });
   // Lower glow line at the top of the mezzanine deck
-  addBlockingBox({ x: 0, y: UPPER_Y + 0.6, z: -97.6, sx: 182, sy: 0.4, sz: 0.4, material: blueGlow });
+  const deckGlow = addBlockingBox({ x: 0, y: UPPER_Y + 0.6, z: -97.6, sx: 182, sy: 0.4, sz: 0.4, material: blueGlow.clone() });
+  registerWallFade(deckGlow, { minX: -91, maxX: 91, minY: UPPER_Y + 0.4, maxY: UPPER_Y + 0.8, minZ: -97.8, maxZ: -97.4 });
 
   // Side wall logo accents (vertical glow strips + Millennium-style panels)
   for (const sxn of [-1, 1]) {
-    addBlockingBox({ x: sxn * 107.6, y: 14, z: 0, sx: 0.5, sy: 8, sz: 60, material: wallAccent });
+    const accentStrip = addBlockingBox({ x: sxn * 107.6, y: 14, z: 0, sx: 0.5, sy: 8, sz: 60, material: wallAccent.clone() });
+    registerWallFade(accentStrip, {
+      minX: sxn * 107.6 - 0.25, maxX: sxn * 107.6 + 0.25,
+      minY: 10, maxY: 18, minZ: -30, maxZ: 30
+    });
     // Glow line accent along its length
-    addBlockingBox({ x: sxn * 107.4, y: 14, z: 0, sx: 0.4, sy: 0.4, sz: 64, material: blueGlow });
+    const glowLine = addBlockingBox({ x: sxn * 107.4, y: 14, z: 0, sx: 0.4, sy: 0.4, sz: 64, material: blueGlow.clone() });
+    registerWallFade(glowLine, {
+      minX: sxn * 107.4 - 0.2, maxX: sxn * 107.4 + 0.2,
+      minY: 13.8, maxY: 14.2, minZ: -32, maxZ: 32
+    });
     // Logo panels along the wall (lower floor side only — z>0)
     for (let i = 0; i < 3; i += 1) {
       const z = 30 - i * 28;
-      const lblock = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4, 7), wallAccent);
+      const lblock = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4, 7), wallAccent.clone());
       lblock.position.set(sxn * 107.2, 9, z);
       scene.add(lblock); arenaDecor.push(lblock);
+      registerWallFade(lblock, {
+        minX: sxn * 107.2 - 0.2, maxX: sxn * 107.2 + 0.2,
+        minY: 7, maxY: 11, minZ: z - 3.5, maxZ: z + 3.5
+      });
     }
   }
 
@@ -8144,9 +8162,20 @@ function buildLobbyArena() {
   const tallPillars = [[-65, 65], [65, 65], [-30, 30], [30, 30], [-65, 25], [65, 25]];
   const PILLAR_R = 3.2;
   tallPillars.forEach(([x, z]) => {
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(PILLAR_R, PILLAR_R, 24, 24), pillarMat);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(PILLAR_R, PILLAR_R, 24, 24), pillarMat.clone());
     col.position.set(x, 12, z);
     scene.add(col); arenaDecor.push(col);
+    // Pillars are mid-map cover: fade ONLY while one actually sits between
+    // the camera and the player unit (occlusion mode, same as Streets'
+    // buildings) — cover still reads solid whenever it isn't hiding you.
+    // pillarMat is cloned per column (shared with the indoor tree planters,
+    // which stay solid).
+    registerWallFade(col, {
+      minX: x - PILLAR_R, maxX: x + PILLAR_R,
+      minY: 0, maxY: 24,
+      minZ: z - PILLAR_R, maxZ: z + PILLAR_R,
+      occlude: true
+    });
     arenaObstacles.push({
       minX: x - PILLAR_R, maxX: x + PILLAR_R,
       minZ: z - PILLAR_R, maxZ: z + PILLAR_R,
