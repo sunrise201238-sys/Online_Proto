@@ -8105,13 +8105,14 @@ function buildLobbyArena() {
     addBlockingBox({ x, y: 1.45, z, sx: 4.2, sy: 0.18, sz: 2.8, material: railGlass });
   });
 
-  // ===== Holographic ad columns (full cover ~5m wide × ~8.5m tall) =====
-  // Replaces the old topiary look (a visible foliage collision CUBE with
-  // spheres around it — the box corners poked through and read as "square
-  // and circle mashed together"). Same stone base, same collision AABBs
-  // (bullet-blocking identical); the visible body is now a dark cylindrical
-  // kiosk column wrapped in emissive blue ad bands — matches the lobby's
-  // sci-fi glow language, and a clean architectural shape can't look mashed.
+  // ===== Holo-globe pedestals (full cover ~5m wide × ~8.5m tall) =====
+  // A stone pedestal carrying a large glowing globe wrapped in a flat halo
+  // ring — a lobby centerpiece silhouette that can't read as tomb, crate
+  // pile, or water cooler. Collision unchanged: the same stone base box +
+  // the same invisible cover AABB as always (bullet-blocking identical).
+  // The globe's equator matches the AABB width right at muzzle height, so
+  // the cover reads honestly where bullets actually fly; the halo ring
+  // overhangs the box and blocks nothing (it reads as a hologram).
   const drawHoloKiosk = (x, baseY, z /* axis ignored — radially symmetric */) => {
     const potW = 5.2;
     const potH = 2.5;
@@ -8122,34 +8123,32 @@ function buildLobbyArena() {
     // Blue glow accent ring on the rim (sci-fi lobby touch)
     addBlockingBox({ x, y: baseY + potH + 0.42, z, sx: potW + 0.42, sy: 0.14, sz: potW + 0.42, material: blueGlow, decorOnly: true });
 
-    // Upper-body cover AABB — unchanged dims, now collision-only; the
-    // visible column below fills its footprint (diameter == AABB width),
-    // so the cover still reads honestly.
+    // Upper-body cover AABB — unchanged dims, collision-only.
     const bushBaseY = baseY + potH + 0.4;
     const bushW = 4.6;
     const bushH = 5.4;
     addBlockingBox({ x, y: bushBaseY + bushH / 2, z, sx: bushW, sy: bushH, sz: bushW, material: treeFoliage, invisible: true });
 
-    // Dark column body
-    const colH = bushH + 0.6;
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, colH, 20), marbleDark);
-    body.position.set(x, bushBaseY + colH / 2, z);
-    scene.add(body); arenaDecor.push(body);
-    // Emissive ad bands wrapping the column
-    const bands = [
-      { dy: 1.4, h: 1.1, mat: wallAccent },
-      { dy: 3.1, h: 0.8, mat: blueGlow },
-      { dy: 4.6, h: 1.1, mat: wallAccent }
-    ];
-    bands.forEach(({ dy, h, mat }) => {
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(2.42, 2.42, h, 20), mat);
-      band.position.set(x, bushBaseY + dy, z);
-      scene.add(band); arenaDecor.push(band);
-    });
-    // Glowing cap edge
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.34, 2.34, 0.22, 20), blueGlow);
-    cap.position.set(x, bushBaseY + colH + 0.11, z);
-    scene.add(cap); arenaDecor.push(cap);
+    // Stone pedestal shaft + cap plate (globe bottom rests on the plate)
+    const shaftTop = bushBaseY + 0.6;
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(2.4, shaftTop - (baseY + potH), 2.4), pillarMat);
+    shaft.position.set(x, (baseY + potH + shaftTop) / 2, z);
+    scene.add(shaft); arenaDecor.push(shaft);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.35, 3.2), marbleDark);
+    plate.position.set(x, shaftTop + 0.18, z);
+    scene.add(plate); arenaDecor.push(plate);
+
+    // Glowing globe — equator width == cover AABB width, top == AABB top
+    const globeR = 2.3;
+    const globeY = bushBaseY + bushH - globeR;
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(globeR, 24, 16), wallAccent);
+    globe.position.set(x, globeY, z);
+    scene.add(globe); arenaDecor.push(globe);
+    // Flat halo ring around the equator (visual only — reads as a hologram)
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.12, 10, 40), blueGlow);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.set(x, globeY, z);
+    scene.add(halo); arenaDecor.push(halo);
   };
 
   // ===== Cube sculptures (full cover, ~8m tall stacked geometric forms) =====
