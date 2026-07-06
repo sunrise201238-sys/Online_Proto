@@ -1490,15 +1490,10 @@ function spawnProjectiles(owner, target) {
 }
 
 
-function createGlintForMech(mech) {
-  if (mech.glintMesh) {
-    // Refresh the min-flash window so a re-charge after a fast cancel still
-    // shows for at least one flash duration.
-    mech.glintMinHideAt = performance.now() + SNIPER_GLINT_MIN_FLASH_MS;
-    mech.glintPendingRemove = false;
-    return;
-  }
-  const isBeam = !!mech.unit?.beam;
+// Draws the glint art onto a fresh canvas — Aru's plain white flash or
+// Kei's big pink shard glint. Single source of truth: the in-world glint
+// AND the arrow-indicator glints both render from this exact art.
+function drawGlintCanvas(isBeam) {
   const c = document.createElement('canvas');
   c.width = c.height = isBeam ? 128 : 64;
   const x = c.getContext('2d');
@@ -1539,7 +1534,19 @@ function createGlintForMech(mech) {
     x.arc(32, 32, 32, 0, Math.PI * 2);
     x.fill();
   }
-  const tex = new THREE.CanvasTexture(c);
+  return c;
+}
+
+function createGlintForMech(mech) {
+  if (mech.glintMesh) {
+    // Refresh the min-flash window so a re-charge after a fast cancel still
+    // shows for at least one flash duration.
+    mech.glintMinHideAt = performance.now() + SNIPER_GLINT_MIN_FLASH_MS;
+    mech.glintPendingRemove = false;
+    return;
+  }
+  const isBeam = !!mech.unit?.beam;
+  const tex = new THREE.CanvasTexture(drawGlintCanvas(isBeam));
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex,
     transparent: true,
@@ -4166,7 +4173,12 @@ function ensureAllyEdgeArrow() {
     'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
     'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
   ].join(';');
-  el.innerHTML = '<svg viewBox="0 0 32 32" width="100%" height="100%">'
+  // Glint halo (hidden by default): pulses while the teammate sniper is
+  // mid-charge, using their own glint art (set per-frame in updateAllyArrow).
+  el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+    + 'background-position:center; background-repeat:no-repeat; background-size:contain;'
+    + 'display:none;"></div>'
+    + '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
     + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#86f7c2" stroke="#0b1622" '
     + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   document.body.appendChild(el);
@@ -4189,12 +4201,54 @@ function ensureEnemyEdgeArrow() {
     'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
     'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
   ].join(';');
-  el.innerHTML = '<svg viewBox="0 0 32 32" width="100%" height="100%">'
+  // Glint halo (hidden by default): pulses while the tracked enemy is a
+  // sniper mid-charge — the off-screen telegraph. Uses the unit's own glint
+  // art (set per-frame in updateEnemyArrow). Overlaps the chevron by design.
+  el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+    + 'background-position:center; background-repeat:no-repeat; background-size:contain;'
+    + 'display:none;"></div>'
+    + '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
     + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#ff6a2c" stroke="#0b1622" '
     + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   document.body.appendChild(el);
   state.enemyEdgeArrow = el;
   return el;
+}
+
+// Arrow-indicator glints reuse the EXACT in-world glint art via
+// drawGlintCanvas — Aru's white flash for Aru, Kei's shard glint for Kei.
+// Textures and data-URLs (for the DOM edge arrows) are built once per
+// variant and shared.
+const _arrowGlintTex = { std: null, beam: null };
+const _arrowGlintUrl = { std: null, beam: null };
+function getArrowGlintTexture(isBeam) {
+  const key = isBeam ? 'beam' : 'std';
+  if (!_arrowGlintTex[key]) _arrowGlintTex[key] = new THREE.CanvasTexture(drawGlintCanvas(isBeam));
+  return _arrowGlintTex[key];
+}
+function getArrowGlintUrl(isBeam) {
+  const key = isBeam ? 'beam' : 'std';
+  if (!_arrowGlintUrl[key]) _arrowGlintUrl[key] = drawGlintCanvas(isBeam).toDataURL();
+  return _arrowGlintUrl[key];
+}
+function makeArrowGlintSprite(isBeam) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getArrowGlintTexture(isBeam),
+    transparent: true,
+    depthTest: false,
+    depthWrite: false
+  }));
+  sprite.userData.isBeam = !!isBeam;
+  sprite.renderOrder = 30;
+  return sprite;
+}
+// Keeps an arrow's glint sprite in sync with the unit it currently tracks
+// (2v2 lock switching can swap which sniper the arrow rides).
+function syncArrowGlintVariant(sprite, isBeam) {
+  if (sprite.userData.isBeam === !!isBeam) return;
+  sprite.material.map = getArrowGlintTexture(isBeam);
+  sprite.material.needsUpdate = true;
+  sprite.userData.isBeam = !!isBeam;
 }
 
 function hideEnemyEdgeArrow() {
@@ -4214,6 +4268,12 @@ function updateAllyArrow() {
   const ally = state.ally;
   const active = state.mode === '2v2' && !!ally && ally.state.hp > 0;
 
+  // Teammate sniper wind-up: the ally's arrow carries a glint while they're
+  // mid-charge (or Kei mid-sweep) — using the teammate's OWN glint art.
+  const allyGlint = active
+    && (!!ally.state.sniperChargeTarget || !!ally.chargedBeamVisual);
+  const allyGlintBeam = active && !!ally.unit?.beam;
+
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
   const arrow = state.allyArrow;
   if (arrow) {
@@ -4226,6 +4286,20 @@ function updateAllyArrow() {
       const camDist = camera.position.distanceTo(ally.root.position);
       const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
       arrow.scale.setScalar(2.55 * distScale);
+      // Glint overlay on the chevron (overlap is fine — it's a halo).
+      let glintSprite = state.allyArrowGlint;
+      if (allyGlint && !glintSprite) {
+        glintSprite = state.allyArrowGlint = makeArrowGlintSprite(allyGlintBeam);
+      }
+      if (glintSprite) {
+        if (glintSprite.parent !== arrow) arrow.add(glintSprite);
+        glintSprite.visible = allyGlint;
+        if (allyGlint) {
+          syncArrowGlintVariant(glintSprite, allyGlintBeam);
+          glintSprite.position.set(0, 0.1, 0);
+          glintSprite.scale.setScalar(1.2 + Math.sin(performance.now() * 0.015) * 0.3);
+        }
+      }
     }
   }
 
@@ -4276,6 +4350,19 @@ function updateAllyArrow() {
   edge.style.left = `${sx}px`;
   edge.style.top = `${sy}px`;
   edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+  // Glint halo while the teammate sniper is mid-charge — their own art.
+  const halo = edge.firstElementChild;
+  if (halo && halo.hasAttribute('data-glint')) {
+    halo.style.display = allyGlint ? 'block' : 'none';
+    if (allyGlint) {
+      const variant = allyGlintBeam ? 'beam' : 'std';
+      if (halo.dataset.variant !== variant) {
+        halo.dataset.variant = variant;
+        halo.style.backgroundImage = `url(${getArrowGlintUrl(allyGlintBeam)})`;
+      }
+      halo.style.opacity = (0.65 + Math.sin(performance.now() * 0.015) * 0.25).toFixed(2);
+    }
+  }
 }
 
 // The enemy that ISN'T currently locked, in 2v2 — the live one of the two that
@@ -4300,6 +4387,14 @@ function updateEnemyArrow() {
   const foe = getUnlockedEnemy();
   const active = !!foe;
 
+  // Sniper-charge glint on the arrow: shows whenever the tracked (unlocked)
+  // enemy is a sniper mid-charge or Kei mid-sweep — using that unit's OWN
+  // glint art (Aru's flash for Aru, Kei's shard glint for Kei). Keeps the
+  // blind-side wind-up visible while the camera and lock are busy elsewhere.
+  const arrowGlint = active
+    && (!!foe.state.sniperChargeTarget || !!foe.chargedBeamVisual);
+  const foeGlintBeam = active && !!foe.unit?.beam;
+
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
   const arrow = state.enemyArrow;
   if (arrow) {
@@ -4314,6 +4409,20 @@ function updateEnemyArrow() {
       const camDist = camera.position.distanceTo(foe.root.position);
       const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
       arrow.scale.setScalar(2.55 * distScale);
+      // Glint overlay on the chevron (overlapping is fine — it's a halo).
+      let glintSprite = state.enemyArrowGlint;
+      if (arrowGlint && !glintSprite) {
+        glintSprite = state.enemyArrowGlint = makeArrowGlintSprite(foeGlintBeam);
+      }
+      if (glintSprite) {
+        if (glintSprite.parent !== arrow) arrow.add(glintSprite);
+        glintSprite.visible = arrowGlint;
+        if (arrowGlint) {
+          syncArrowGlintVariant(glintSprite, foeGlintBeam);
+          glintSprite.position.set(0, 0.1, 0);
+          glintSprite.scale.setScalar(1.2 + Math.sin(performance.now() * 0.015) * 0.3);
+        }
+      }
     }
   }
 
@@ -4362,6 +4471,20 @@ function updateEnemyArrow() {
   edge.style.left = `${sx}px`;
   edge.style.top = `${sy}px`;
   edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+  // Glint halo on the edge arrow while the tracked sniper is charging —
+  // the unit's own glint art (Aru's / Kei's).
+  const halo = edge.firstElementChild;
+  if (halo && halo.hasAttribute('data-glint')) {
+    halo.style.display = arrowGlint ? 'block' : 'none';
+    if (arrowGlint) {
+      const variant = foeGlintBeam ? 'beam' : 'std';
+      if (halo.dataset.variant !== variant) {
+        halo.dataset.variant = variant;
+        halo.style.backgroundImage = `url(${getArrowGlintUrl(foeGlintBeam)})`;
+      }
+      halo.style.opacity = (0.65 + Math.sin(performance.now() * 0.015) * 0.25).toFixed(2);
+    }
+  }
 }
 
 function updateTransforms(dt) {
