@@ -8670,22 +8670,23 @@ function buildStationArena() {
   ].forEach(([x, z]) => drawVending(x, z));
 
   // ===== Shipping containers — long horizontal cover (4) =====
+  // NOT fade-registered, deliberately: the containers stand on the
+  // platforms (floor 4, top 10), so their effective height is ~6 — just
+  // under the 6.4 unit sprite. They can never hide a whole unit, the
+  // occlusion fade's torso test never trips, and the permanent transparent
+  // flag only broke the X-ray rear-shadow (it needs the occluder in the
+  // OPAQUE pass to have written depth). Opaque = shadow silhouette works.
   const drawContainer = (cx, cz, mat) => {
-    const parts = [];
-    parts.push(addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat }));
+    addBlockingBox({ x: cx, y: 5, z: cz, sx: 18, sy: 10, sz: 8, material: mat });
     const top = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.5, 8.4), containerRib);
     top.position.set(cx, 10.25, cz);
-    scene.add(top); arenaDecor.push(top); parts.push(top);
+    scene.add(top); arenaDecor.push(top);
     // Corrugated rib strips
     for (let dx = -8; dx <= 8; dx += 1.6) {
       const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.6, 8.2), containerRib);
       rib.position.set(cx + dx, 5, cz);
-      scene.add(rib); arenaDecor.push(rib); parts.push(rib);
+      scene.add(rib); arenaDecor.push(rib);
     }
-    fadeCoverGroup(parts, {
-      minX: cx - 9.2, maxX: cx + 9.2, minY: 0, maxY: 10.5,
-      minZ: cz - 4.2, maxZ: cz + 4.2
-    });
   };
   drawContainer(-50, 105, containerA);
   drawContainer(50, 105, containerB);
