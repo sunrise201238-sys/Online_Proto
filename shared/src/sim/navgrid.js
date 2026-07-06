@@ -92,7 +92,79 @@ export function buildNavGrid(obstacles, surfaces) {
       }
     }
   }
-  return { cols, rows, minX, minZ, cell: CELL, floor, walk, edgeE, edgeS };
+  // ===== Jump-links =====
+  // Bridge WALK-DISCONNECTED islands (Station's 4 m platforms) with jump
+  // edges: two walkable cells within 2 cells of each other, vertical gap in
+  // the bots' climb window [1.7 .. 4.8], and in DIFFERENT walk components.
+  // The component rule is the safety guarantee: anywhere walking already
+  // works (ramped plateaus, flat maps) produces ZERO links, so existing
+  // routes stay byte-identical. Links are bidirectional — traversed upward
+  // the path-follower jumps; downward it simply walks off the ledge.
+  const comp = new Int32Array(n).fill(-1);
+  {
+    const stack = new Int32Array(n);
+    let compCount = 0;
+    for (let seed = 0; seed < n; seed += 1) {
+      if (!walk[seed] || comp[seed] !== -1) continue;
+      let sp = 0;
+      stack[sp++] = seed;
+      comp[seed] = compCount;
+      while (sp > 0) {
+        const cur = stack[--sp];
+        const c = cur % cols, r = (cur / cols) | 0;
+        if (c + 1 < cols && edgeE[cur] && comp[cur + 1] === -1) { comp[cur + 1] = compCount; stack[sp++] = cur + 1; }
+        if (c > 0 && edgeE[cur - 1] && comp[cur - 1] === -1) { comp[cur - 1] = compCount; stack[sp++] = cur - 1; }
+        if (r + 1 < rows && edgeS[cur] && comp[cur + cols] === -1) { comp[cur + cols] = compCount; stack[sp++] = cur + cols; }
+        if (r > 0 && edgeS[cur - cols] && comp[cur - cols] === -1) { comp[cur - cols] = compCount; stack[sp++] = cur - cols; }
+      }
+      compCount += 1;
+    }
+  }
+  const JUMP_MIN = 1.7;
+  const JUMP_MAX = 4.8;
+  const jumpAdj = new Map();
+  let jumpLinkCount = 0;
+  const addLink = (a, b) => {
+    if (!jumpAdj.has(a)) jumpAdj.set(a, []);
+    if (!jumpAdj.has(b)) jumpAdj.set(b, []);
+    jumpAdj.get(a).push(b);
+    jumpAdj.get(b).push(a);
+    jumpLinkCount += 1;
+  };
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const i = r * cols + c;
+      if (!walk[i]) continue;
+      const tryLink = (j) => {
+        if (!walk[j] || comp[i] === comp[j]) return false;
+        const dyF = Math.abs(floor[i] - floor[j]);
+        if (dyF < JUMP_MIN || dyF > JUMP_MAX) return false;
+        // The crossing must be PHYSICALLY jumpable: test the segment between
+        // the two cell centers at the UPPER floor's body height. A thin
+        // edge-seam wall (top == upper floor, topBuffer 0 — Station's
+        // platform fronts) passes over its top; a real wall (boundary,
+        // glass fence) blocks — without this, span-2 links bridged straight
+        // THROUGH the Lobby's outer wall to ghost cells beyond it.
+        const xi = minX + ((i % cols) + 0.5) * CELL;
+        const zi = minZ + (((i / cols) | 0) + 0.5) * CELL;
+        const xj = minX + ((j % cols) + 0.5) * CELL;
+        const zj = minZ + (((j / cols) | 0) + 0.5) * CELL;
+        const yHi = Math.max(floor[i], floor[j]) + GROUND_BASE_Y;
+        if (walkSegmentBlocked(xi, zi, xj, zj, yHi, obstacles)) return false;
+        addLink(i, j);
+        return true;
+      };
+      // Span +1, and +2 across an unwalkable seam cell (the strip hugging an
+      // invisible edge wall is often too tight to stand in).
+      if (c + 1 < cols && !edgeE[i]) {
+        if (!tryLink(i + 1) && c + 2 < cols && !walk[i + 1]) tryLink(i + 2);
+      }
+      if (r + 1 < rows && !edgeS[i]) {
+        if (!tryLink(i + cols) && r + 2 < rows && !walk[i + cols]) tryLink(i + 2 * cols);
+      }
+    }
+  }
+  return { cols, rows, minX, minZ, cell: CELL, floor, walk, edgeE, edgeS, jumpAdj, jumpLinkCount };
 }
 
 // Nearest walkable cell to (x, z). `floorHint` (the actor's floor height)
@@ -190,19 +262,23 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     closed[cur] = 1;
     if (cur === goal) { found = true; break; }
     const c = cur % cols, r = (cur / cols) | 0;
-    const step = (nb) => {
+    const step = (nb, cost) => {
       if (closed[nb]) return;
-      const ng = g[cur] + 1;
+      const ng = g[cur] + cost;
       if (ng < g[nb]) {
         g[nb] = ng;
         parent[nb] = cur;
         push(ng + h(nb), nb);
       }
     };
-    if (c + 1 < cols && edgeE[cur]) step(cur + 1);
-    if (c > 0 && edgeE[cur - 1]) step(cur - 1);
-    if (r + 1 < rows && edgeS[cur]) step(cur + cols);
-    if (r > 0 && edgeS[cur - cols]) step(cur - cols);
+    if (c + 1 < cols && edgeE[cur]) step(cur + 1, 1);
+    if (c > 0 && edgeE[cur - 1]) step(cur - 1, 1);
+    if (r + 1 < rows && edgeS[cur]) step(cur + cols, 1);
+    if (r > 0 && edgeS[cur - cols]) step(cur - cols, 1);
+    // Jump-links (island bridges) cost a bit extra so walking wins when a
+    // walk route of similar length exists.
+    const jl = grid.jumpAdj ? grid.jumpAdj.get(cur) : null;
+    if (jl) for (const nb of jl) step(nb, 2.5);
   }
   if (!found) return null;
 
@@ -210,21 +286,26 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
   for (let i = goal; i !== -1; i = parent[i]) {
     pts.push({
       x: minX + ((i % cols) + 0.5) * cell,
-      z: minZ + (((i / cols) | 0) + 0.5) * cell
+      z: minZ + (((i / cols) | 0) + 0.5) * cell,
+      y: grid.floor[i]
     });
   }
   pts.reverse();
   return collapseWaypoints(pts);
 }
 
-// Collapse straight runs — fewer waypoints, smoother following.
+// Collapse straight runs — fewer waypoints, smoother following. NEVER
+// collapses across a floor jump (a jump-link crossing): the follower needs
+// the waypoint on each side of the ledge to know where to vault.
 function collapseWaypoints(pts) {
   if (pts.length < 3) return pts;
   const out = [pts[0]];
   for (let k = 1; k < pts.length - 1; k += 1) {
     const a = out[out.length - 1], b = pts[k], c2 = pts[k + 1];
+    const floorJump = Math.abs((b.y ?? 0) - (a.y ?? 0)) > 1.7
+      || Math.abs((c2.y ?? 0) - (b.y ?? 0)) > 1.7;
     const cross = (b.x - a.x) * (c2.z - b.z) - (b.z - a.z) * (c2.x - b.x);
-    if (Math.abs(cross) < 1e-6) continue;
+    if (!floorJump && Math.abs(cross) < 1e-6) continue;
     out.push(b);
   }
   out.push(pts[pts.length - 1]);
@@ -279,13 +360,17 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     if (c > 0 && edgeE[cur - 1] && parent[cur - 1] === -2) { parent[cur - 1] = cur; queue[qt++] = cur - 1; }
     if (r + 1 < rows && edgeS[cur] && parent[cur + cols] === -2) { parent[cur + cols] = cur; queue[qt++] = cur + cols; }
     if (r > 0 && edgeS[cur - cols] && parent[cur - cols] === -2) { parent[cur - cols] = cur; queue[qt++] = cur - cols; }
+    // Jump-links participate in the firing-position search too.
+    const jl = grid.jumpAdj ? grid.jumpAdj.get(cur) : null;
+    if (jl) for (const nb of jl) { if (parent[nb] === -2) { parent[nb] = cur; queue[qt++] = nb; } }
   }
   if (goal < 0) return null;
   const pts = [];
   for (let i = goal; i !== -1; i = parent[i]) {
     pts.push({
       x: minX + ((i % cols) + 0.5) * cell,
-      z: minZ + (((i / cols) | 0) + 0.5) * cell
+      z: minZ + (((i / cols) | 0) + 0.5) * cell,
+      y: floor[i]
     });
   }
   pts.reverse();
