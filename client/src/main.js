@@ -3423,7 +3423,7 @@ function updateEnemy(now) {
     let path = findFiringPath(
       offlineNavGrid, e.x, e.z, myFloorY,
       p.x, p.z, p.y + BOT_LOS_EYE_HEIGHT,
-      lowerRange, upperRange, arenaObstacles
+      lowerRange, upperRange, arenaObstacles, oppFloorY
     );
     if (!path || path.length < 2) {
       path = findPathOnGrid(
@@ -3772,7 +3772,17 @@ function updateEnemy(now) {
       tz = tz / wl + avoid.rz * 0.3;
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
-      wantSprint = true;
+      // JUMP RESERVE: an upcoming jump-link costs 48 boost, but maze's
+      // permanent sprint pins the gauge at the ~8 floor — the bot arrived
+      // at the ledge eternally unable to afford the hop (the "never jumps
+      // onto Station's platform" bug). Walk and bank while a jump is ahead
+      // and unaffordable; sprint resumes once the jump is funded.
+      let jumpAhead = false;
+      for (let k = nav.idx; k < nav.path.length; k += 1) {
+        if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
+      }
+      const jumpCost = (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10;
+      wantSprint = !(jumpAhead && eState.boost < jumpCost);
     } else {
       // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
       // pull toward the player, wall-follow corner turns — the pre-
