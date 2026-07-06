@@ -38,7 +38,8 @@ export const UNIT_DATA = {
     damage: 4,
     magCapacity: 30,
     reloadMs: 1500,
-    autoReload: false
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit2: {
     id: 'unit2',
@@ -69,7 +70,8 @@ export const UNIT_DATA = {
     damage: 4,
     magCapacity: 7,
     reloadMs: 1500,
-    autoReload: true
+    autoReload: true,
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit3: {
     id: 'unit3',
@@ -102,7 +104,8 @@ export const UNIT_DATA = {
     reloadMs: 2500,
     autoReload: false,
     sniperCharge: true,
-    chargeMs: 1000
+    chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit4: {
     id: 'unit4',
@@ -131,8 +134,9 @@ export const UNIT_DATA = {
     magCapacity: 30,
     reloadMs: 1500,
     autoReload: false,
-    // Per-weapon hit-stun. Omit `stun` on a unit to use the defaults
-    // (PROJECTILE_HIT_STUN_MS, 0.25 move-scale). SMG = short + light.
+    // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
+    // in projectiles.js (PROJECTILE_HIT_STUN_MS, 0.25) are just a safety net.
+    // SMG = short + light.
     stun: { ms: 50, moveScale: 0.50 }
   },
   unit5: {
@@ -191,6 +195,7 @@ export const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 },
     // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
