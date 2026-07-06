@@ -8155,7 +8155,15 @@ function buildLobbyArena() {
   // The quieter sibling for clustered spots: a glass tank on the same stone
   // base — steel corner posts, lid, teal fish, bubbles. Glass box over box
   // collision = zero visual/hitbox mismatch at any height.
-  const fishMat = new THREE.MeshStandardMaterial({ color: 0x35c2a0, roughness: 0.5, metalness: 0.2 });
+  const fishMat = new THREE.MeshStandardMaterial({
+    color: 0x5fe8c4, emissive: 0x2fbf9a, emissiveIntensity: 0.55, roughness: 0.4, metalness: 0.1
+  });
+  // Bright lit aquarium water — NOT the dark night-window glass; a light
+  // aqua with a soft inner glow so the tanks read as illuminated features.
+  const aquaWater = new THREE.MeshStandardMaterial({
+    color: 0x8fd8ea, emissive: 0x1f7f9c, emissiveIntensity: 0.4,
+    transparent: true, opacity: 0.42, roughness: 0.1, metalness: 0.2
+  });
   const drawAquariumPillar = (x, baseY, z) => {
     const potW = 5.2;
     const potH = 2.5;
@@ -8184,13 +8192,13 @@ function buildLobbyArena() {
     });
     // Bubbles
     for (const [bdx, bdy, bdz] of [[1.2, 2.2, 0.9], [1.4, 3.6, 0.4], [0.9, 4.6, -0.8]]) {
-      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), blueGlow);
+      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), blueGlow);
       bubble.position.set(x + bdx, tankBaseY + bdy, z + bdz);
       scene.add(bubble); arenaDecor.push(bubble);
     }
-    // Glass tank body — same no-depth-write rule as the Airport panes so
+    // Bright water body — same no-depth-write rule as the Airport panes so
     // units/sprites behind it stay visible; drawn after the fish.
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(tankW - 0.2, tankH - 0.2, tankW - 0.2), glassWall.clone());
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(tankW - 0.2, tankH - 0.2, tankW - 0.2), aquaWater.clone());
     glass.material.depthWrite = false;
     glass.renderOrder = 2;
     glass.position.set(x, tankBaseY + tankH / 2, z);
