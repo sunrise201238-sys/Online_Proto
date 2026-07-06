@@ -3748,6 +3748,19 @@ function updateEnemy(now) {
           wp = eState.botNav.path[eState.botNav.idx];
         }
       }
+      // JUMP-LINK crossing: the upcoming waypoint sits on a ledge above the
+      // bot's floor (the path bridged a walk-island, e.g. Station's
+      // platforms) — vault toward it once close enough. Downward crossings
+      // need nothing: the bot just walks off the ledge.
+      if (wp.y != null && wp.y - myFloorY > 1.7
+          && state.enemy.grounded && !eState.airborne
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < 7) {
+        const jdx = wp.x - e.x, jdz = wp.z - e.z;
+        const jln = Math.hypot(jdx, jdz) || 1;
+        jumpDirX = jdx / jln;
+        jumpDirZ = jdz / jln;
+        if (botStartJump(now)) jumpThisTick = true;
+      }
       let tx = wp.x - e.x, tz = wp.z - e.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.3;
@@ -3879,6 +3892,30 @@ function updateEnemy(now) {
         eState.botDefenseStuckTicks = 0;
       }
       if (eState.botDefenseStuckTicks >= 2) {
+        // VAULT FIRST: if the "wall" being pressed is actually a jumpable
+        // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
+        // check used elsewhere, so Airport's rim glass still rejects it)
+        // roughly along the committed escape line, jump ONTO it and keep
+        // sprinting the same direction up top: the dodge continues with an
+        // elevation change instead of a turn. Jump unaffordable (boost /
+        // cooldown) or no ledge → the usual flip → slide → bail chain.
+        let vaulted = false;
+        if (state.enemy.grounded && !eState.airborne) {
+          const ledge = findHighGroundPerch(e.x, e.z, myFloorY, 6);
+          if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
+              && ledge.toX * (eState.botDefenseDirX ?? side.x) + ledge.toZ * (eState.botDefenseDirZ ?? side.z) > 0.3) {
+            jumpDirX = ledge.toX;
+            jumpDirZ = ledge.toZ;
+            if (botStartJump(now)) {
+              jumpThisTick = true;
+              vaulted = true;
+              eState.botDefenseStuckTicks = 0;
+            }
+          }
+        }
+        if (vaulted) {
+          // committed direction kept — the sprint resumes on the ledge
+        } else {
         // Wedged mid-escape (~2 ticks of zero lateral motion pressing a
         // wall). The old response — end Defense and hand off to Maze — never
         // won under sustained fire: "under fire" re-asserted Defense every
@@ -3909,6 +3946,7 @@ function updateEnemy(now) {
         } else {
           eState.botLastProgressAt = now - 2001;
           eState.botDefenseUntil = now;
+        }
         }
       }
     }
