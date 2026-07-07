@@ -805,13 +805,39 @@ export function tickBot(matchState, botId, now) {
   // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, picks a
   // fresh tangent instead of exiting — Maze doesn't give up, it tries a
   // different way around.
+  const escapeDue = me.botMazeEscapeUntil != null && now >= me.botMazeEscapeUntil;
   if (nextState === 'maze' && prevState === 'maze'
-      && (stuckTriggered || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
+      && (stuckTriggered || escapeDue || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
+    if (escapeDue) me.botMazeEscapeUntil = null;
     me.botStateEnteredAt = now;
+    // ESCAPE-FIRST ON REPEAT WEDGES: note the waypoint the wedge alarm
+    // caught us steering at. The pin/reach tests are zero-width lines, so
+    // a corner pocket (Airport's ramp-top notch) passes them while the
+    // unit-radius body stays pinched — the planner then re-issues the
+    // identical line every 1.5 s forever. If the fresh plan below starts
+    // by steering at that same waypoint, treat it as NO ROUTE: back out
+    // along the escape heading for a beat, then replan from the freed spot.
+    const navPrev = matchState._navPaths ? matchState._navPaths[botId] : null;
+    const wedgedWp = stuckTriggered && navPrev ? navPrev.path[navPrev.idx] : null;
     // Pathfinder first: a stuck signal or 7 s refresh re-plans the route
     // from the CURRENT position. Only when no route exists does the
     // heuristic stack take over.
-    if (navPlan()) {
+    let planned = navPlan();
+    if (planned && wedgedWp) {
+      const fresh = matchState._navPaths[botId];
+      // Apply the follower's own advance rule (skip waypoints within 3
+      // units) to find the waypoint it would actually steer to.
+      let fi = fresh.idx;
+      while (fi < fresh.path.length - 1
+          && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < 3) fi += 1;
+      const firstWp = fresh.path[fi];
+      if (Math.abs(firstWp.x - wedgedWp.x) < 0.5 && Math.abs(firstWp.z - wedgedWp.z) < 0.5) {
+        delete matchState._navPaths[botId];
+        planned = false;
+        me.botMazeEscapeUntil = now + 800;
+      }
+    }
+    if (planned) {
       // fresh path committed
     } else if (stuckTriggered) {
       // Stuck mid-Maze → escape re-commit (reverses when probes tie).
@@ -846,6 +872,7 @@ export function tickBot(matchState, botId, now) {
 
     if (nextState === 'maze') {
       me.botMazeWallTicks = 0;
+      me.botMazeEscapeUntil = null;
       // Pathfinder first; the heuristic commit is the no-route fallback.
       if (!navPlan()) commitMazeDirection();
     }
