@@ -5492,20 +5492,20 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 1.54
       },
       {
-        "minX": -2.6,
-        "maxX": 2.6,
-        "minZ": 39.4,
-        "maxZ": 44.6,
+        "minX": -3,
+        "maxX": 3,
+        "minZ": 39,
+        "maxZ": 45,
         "minY": 0,
-        "maxY": 2.5
+        "maxY": 2.9
       },
       {
-        "minX": -2.3,
-        "maxX": 2.3,
-        "minZ": 39.7,
-        "maxZ": 44.3,
-        "minY": 2.8999999999999995,
-        "maxY": 8.3
+        "minX": -2.65,
+        "maxX": 2.65,
+        "minZ": 39.35,
+        "maxZ": 44.65,
+        "minY": 3.3,
+        "maxY": 9.5
       },
       {
         "minX": -32.6,
@@ -5700,20 +5700,20 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 3.0250000000000004
       },
       {
-        "minX": -2.6,
-        "maxX": 2.6,
-        "minZ": -32.6,
-        "maxZ": -27.4,
+        "minX": -3,
+        "maxX": 3,
+        "minZ": -33,
+        "maxZ": -27,
         "minY": 5,
-        "maxY": 7.5
+        "maxY": 7.9
       },
       {
-        "minX": -2.3,
-        "maxX": 2.3,
-        "minZ": -32.3,
-        "maxZ": -27.7,
-        "minY": 7.900000000000001,
-        "maxY": 13.3
+        "minX": -2.65,
+        "maxX": 2.65,
+        "minZ": -32.65,
+        "maxZ": -27.35,
+        "minY": 8.3,
+        "maxY": 14.5
       },
       {
         "minX": -42.75,
