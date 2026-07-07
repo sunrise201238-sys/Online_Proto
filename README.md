@@ -23,13 +23,13 @@ Six pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 spri
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
 | Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
-| Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 43 | 1.5 s (auto, per round) |
+| Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
-| Unit 4 — Submachine Gun | 30 | 3 / shot | ~1100 RPM | 46 | 1.5 s |
+| Unit 4 — Submachine Gun | 30 | 4 / shot | ~1100 RPM | 46 | 1.5 s |
 | Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
 | Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge |
 
-Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon tunable (SMG's is lighter: 50 ms at 0.85 move-scale vs the default 100 ms at 0.25).
+Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon: every unit declares its own (SMG: 50 ms at 0.50 move-scale, MG: 50 ms at 0.85, all others: 100 ms at 0.25).
 
 ### Sniper charge & sprint-cancel
 
@@ -109,8 +109,9 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 ## Implementation notes
 
 - **Server authoritative.** Shared sim runs on the server at ~62.5 Hz; clients predict their own local fighter and reconcile against snapshots.
-- **Bot AI** has one logical state machine (Defense > Maze > Reposition > Engage > Pursue) with identical numbers in both offline (`updateEnemy` in `client/src/main.js`) and online (`tickBot` in `shared/src/sim/ai.js`) implementations.
-- **Stamina economy** is shared by humans and bots — same cap (250), drain (1.1/tick), regen (4.59/tick), and empty-recovery lockout. Bots self-regulate via dispatch floor (`boost ≥ 8`) and the Pursue-state hysteresis (sprint at 48, stop at 33).
+- **Bot AI** has one logical state machine (Defense > Maze > Engage > Pursue) with identical numbers in both offline (`updateEnemy` in `client/src/main.js`) and online (`tickBot` in `shared/src/sim/ai.js`) implementations.
+- **Universal pathfinder.** Maze is route-first: a nav grid is derived from each map's collision data (4-unit cells, A* plus a firing-position search), with jump-links bridging separated walk islands (e.g. Station's raised platforms) so bots climb instead of grinding walls. Heuristic wall-following remains the no-route fallback. Bots hold a per-weapon range band centered on their lock range (sweet spot ±7) — one rule for every weapon.
+- **Stamina economy** is shared by humans and bots — same cap (250), drain (1.1/tick), regen (4.59/tick), and empty-recovery lockout. Bots self-regulate via dispatch floor (`boost ≥ 8`) and a jump reserve — they walk and bank boost whenever their planned route needs a jump they can't yet afford.
 - **Friendly fire** in 2v2 is off — bullets pass through teammates.
 - **Map collision data** for the online server is auto-extracted from offline at build time. Visual mesh is always rendered by the offline arena-build code on the client.
 
