@@ -414,6 +414,19 @@ export function tickBot(matchState, botId, now) {
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles
   );
+  // BLINK-TOLERANT SIGHT (decision layer). At cover slits the raw LoS ray
+  // flickers per tick as either side moves a hair — and every state trigger
+  // (orbit flips, the no-sight clock, maze latch/release, ARRIVED) consumed
+  // that flicker at once, producing the pacing standoffs at arch gaps and
+  // doorways. Decisions use `sightedStable`: raw LoS gated by a ~0.8 s
+  // rolling average — sight must be SUSTAINED (avg > 0.6) to count, so
+  // flicker-grade sight reads as BLIND for state changes and the bot
+  // commits a route instead of dithering. Aiming/firing, Defense cover
+  // reads, and the engage cover-hold keep the raw per-tick `playerHasLoS`.
+  // (EMA assumes the fixed ~16 ms tick both sims run at.)
+  me.botSightAvg = (me.botSightAvg ?? (playerHasLoS ? 1 : 0)) * 0.98
+    + (playerHasLoS ? 0.02 : 0);
+  const sightedStable = playerHasLoS && me.botSightAvg > 0.6;
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
@@ -445,7 +458,7 @@ export function tickBot(matchState, botId, now) {
   // trigger). Progress is measured as real net displacement over a rolling
   // 500 ms window, not per-tick velocity, so the stun crawl can't false-trigger
   // Maze the way the old velocity-based stuck-detector did.
-  if (playerHasLoS || me.botLastLoSAt == null) me.botLastLoSAt = now;
+  if (sightedStable || me.botLastLoSAt == null) me.botLastLoSAt = now;
   const noLoSTime = now - me.botLastLoSAt;
   if (me.botProgressAnchorAt == null) {
     me.botProgressAnchorX = me.pos.x;
@@ -461,7 +474,10 @@ export function tickBot(matchState, botId, now) {
     // starves this clock and drops the bot into spurious mid-fight Maze
     // episodes (the angled-backward-sprint sightings on Plain Field).
     // Under-fire wedges are Defense's job, on its own 2-tick trigger.
-    if (Math.hypot(ddx, ddz) > 3 || me.hitStunUntil > me.botProgressAnchorAt) {
+    // A bounded-window hold is likewise DELIBERATE standing, not a stall.
+    if (Math.hypot(ddx, ddz) > 3
+        || me.hitStunUntil > me.botProgressAnchorAt
+        || now < (me.botOrbitHoldUntil ?? 0)) {
       me.botLastProgressAt = now;
     }
     me.botProgressAnchorX = me.pos.x;
@@ -505,6 +521,7 @@ export function tickBot(matchState, botId, now) {
         && (wedged || spinning)
         && !me.airborne
         && now >= me.hitStunUntil
+        && now >= (me.botOrbitHoldUntil ?? 0)   // hold = deliberate standing
         && (me.botState ?? 'pursue') !== 'defense') {
       stuckTriggered = true;
     }
@@ -583,7 +600,7 @@ export function tickBot(matchState, botId, now) {
     // Record whether LoS was blocked at (re)commit. The LoS-restored exit only
     // counts when it was — otherwise (stuck against a side pillar with LoS
     // already clear) Maze would exit on the first tick and never get to act.
-    me.botMazeLosBlockedAtEntry = !playerHasLoS;
+    me.botMazeLosBlockedAtEntry = !sightedStable;
   };
 
   // OPENING SCAN — Maze's loop breaker. Wall-following a CLOSED loop (a
@@ -623,7 +640,7 @@ export function tickBot(matchState, botId, now) {
         // real wall contact en route is handled by the corner turn.
         me.botMazeHadWall = true;
         me.botMazeHand = null;
-        me.botMazeLosBlockedAtEntry = !playerHasLoS;
+        me.botMazeLosBlockedAtEntry = !sightedStable;
         return true;
       }
     }
@@ -683,7 +700,7 @@ export function tickBot(matchState, botId, now) {
     me.botMazeDirZ = (bz - me.pos.z) / dl;
     me.botMazeHadWall = true;   // corner turn handles wall contact en route
     me.botMazeHand = null;
-    me.botMazeLosBlockedAtEntry = !playerHasLoS;
+    me.botMazeLosBlockedAtEntry = !sightedStable;
     return true;
   };
 
@@ -752,7 +769,7 @@ export function tickBot(matchState, botId, now) {
       matchState._navPaths[botId] = {
         path, idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now
       };
-      me.botMazeLosBlockedAtEntry = !playerHasLoS;
+      me.botMazeLosBlockedAtEntry = !sightedStable;
       return true;
     }
     delete matchState._navPaths[botId];
@@ -767,7 +784,7 @@ export function tickBot(matchState, botId, now) {
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
   } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
-      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
+      || (!sightedStable && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
     // Wedged, spinning, stalled, or sightless for 2 s — commit to going
     // AROUND whatever is in the way. FAST LANE (4th condition): can't see
     // the target, too far to fight, AND the straight walk is blocked —
@@ -785,7 +802,7 @@ export function tickBot(matchState, botId, now) {
     // clear for up to 50 units on the SAME floor. The old 20-unit probe
     // passed whenever the plateau was more than 20 away, releasing Maze
     // into a beeline that ground the plateau side 30 units later.
-    const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry
+    const losReacquired = sightedStable && me.botMazeLosBlockedAtEntry
       && (inBandDist
         || (walkTowardClear(Math.min(dist, 50))
           && Math.abs(oppFloorY - myFloorY) < 2.5));
@@ -853,7 +870,7 @@ export function tickBot(matchState, botId, now) {
       // (Flashpoint rooms; Station falls through — no ramps there, the
       // perch reflex climbs instead).
       const needRoute = Math.abs(oppFloorY - myFloorY) > 2.5
-        || (playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
+        || (sightedStable && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
       let committed = needRoute && mazeSeekElevationRoute(true);
       if (!committed) committed = mazeScanForOpening();
       if (!committed) {
@@ -1039,7 +1056,7 @@ export function tickBot(matchState, botId, now) {
     // between — a player at the Station platform's edge read as "arrived"
     // from the tracks below, which dropped every climb path and ground the
     // bot into the edge wall forever.
-    if (playerHasLoS && dist <= optimalRange
+    if (sightedStable && dist <= optimalRange
         && Math.abs(oppFloorY - myFloorY) < 2.5) {
       const goalWp = nav && nav.path[nav.path.length - 1];
       const goalCloser = goalWp
@@ -1150,12 +1167,30 @@ export function tickBot(matchState, botId, now) {
     // sight while the other way keeps it, flip once (1 s cooldown so
     // opposing probes can't jitter it). Engage patrols INSIDE the sight
     // window it was handed instead of blindly strolling out of it.
-    if (playerHasLoS && now >= (me.botOrbitFlipAt ?? 0)) {
+    if (sightedStable && now >= (me.botOrbitFlipAt ?? 0)
+        && now >= (me.botOrbitHoldUntil ?? 0)) {
       const sgn = me.botOrbitSign ?? 1;
       if (!losFromPoint(me.pos.x + sideX * sgn * 12, me.pos.z + sideZ * sgn * 12)
           && losFromPoint(me.pos.x - sideX * sgn * 12, me.pos.z - sideZ * sgn * 12)) {
-        me.botOrbitSign = -sgn;
-        me.botOrbitFlipAt = now + 1000;
+        // DOUBLE FLIP = BOUNDED WINDOW: flipping BACK within 2.5 s means the
+        // orbit is pacing wall-to-wall inside a bounded sight window (arch
+        // gaps, alley mouths) — a metronome wiper, the back-and-forth
+        // sighting. HOLD instead: stand on the window and fight (damp
+        // below; solid because sightedStable can't flicker). A single flip
+        // within 10 s of a hold re-arms it directly, so between holds the
+        // bot creeps one leg at most instead of lapping. Sight truly lost →
+        // damp lifts and the 2 s no-sight clock commits the Maze approach.
+        const pairFlip = me.botOrbitFlipLastAt != null && now - me.botOrbitFlipLastAt < 2500;
+        const recentHold = me.botOrbitHoldLastAt != null && now - me.botOrbitHoldLastAt < 10000;
+        if (pairFlip || recentHold) {
+          me.botOrbitHoldUntil = now + 4000;
+          me.botOrbitHoldLastAt = now;
+          me.botOrbitFlipLastAt = null;
+        } else {
+          me.botOrbitSign = -sgn;
+          me.botOrbitFlipAt = now + 1000;
+          me.botOrbitFlipLastAt = now;
+        }
       }
     }
     const sign = me.botOrbitSign ?? 1;
@@ -1167,6 +1202,13 @@ export function tickBot(matchState, botId, now) {
     let tz = sideZ * sign + dirZ * pull + avoid.rz * 0.6;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
+    // BOUNDED-WINDOW HOLD (armed by the double-flip detector above): stand
+    // and fight while the window works. sightedStable can't flicker, so the
+    // damp holds solidly; sight lost or band left → it lifts and the normal
+    // state machine takes over.
+    if (now < (me.botOrbitHoldUntil ?? 0) && sightedStable && inBandDist) {
+      mx *= 0.1; mz *= 0.1;
+    }
 
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
