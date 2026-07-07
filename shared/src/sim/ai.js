@@ -487,6 +487,7 @@ export function tickBot(matchState, botId, now) {
   // window inflated by a charge-lock freeze (the AI early-returns while
   // charging, so the clock runs without samples) is discarded unevaluated.
   let stuckTriggered = false;
+  let stuckFrozen = false;
   me.botPathLen = (me.botPathLen ?? 0)
     + Math.hypot(me.pos.x - (me.botPrevX ?? me.pos.x), me.pos.z - (me.botPrevZ ?? me.pos.z));
   me.botPrevX = me.pos.x;
@@ -507,6 +508,11 @@ export function tickBot(matchState, botId, now) {
         && now >= me.hitStunUntil
         && (me.botState ?? 'pursue') !== 'defense') {
       stuckTriggered = true;
+      // TRUE STATUE: not merely slow — collision-pinned to a standstill
+      // (the Airport ramp-top notch cancels velocity to exactly zero).
+      // Only this flavor is allowed the escape back-out in the maze
+      // re-commit; anything that still moves resolves via normal re-plans.
+      stuckFrozen = net < 0.8;
     }
     me.botStuckCheckX = me.pos.x;
     me.botStuckCheckZ = me.pos.z;
@@ -810,28 +816,28 @@ export function tickBot(matchState, botId, now) {
       && (stuckTriggered || escapeDue || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
     if (escapeDue) me.botMazeEscapeUntil = null;
     me.botStateEnteredAt = now;
-    // ESCAPE-FIRST ON REPEAT WEDGES: note the waypoint the wedge alarm
-    // caught us steering at. The pin/reach tests are zero-width lines, so
-    // a corner pocket (Airport's ramp-top notch) passes them while the
-    // unit-radius body stays pinched — the planner then re-issues the
-    // identical line every 1.5 s forever. If the fresh plan below starts
-    // by steering at that same waypoint, treat it as NO ROUTE: back out
-    // along the escape heading for a beat, then replan from the freed spot.
+    // STATUE ESCAPE: a FROZEN bot is body-pinched in a corner pocket the
+    // zero-width pin test can't see (the ramp-top notch against Airport's
+    // rim glass) — the planner then re-issues the identical line every
+    // 1.5 s forever. If the fresh plan below starts at the very waypoint
+    // it froze against, treat it as NO ROUTE: back out along the escape
+    // heading for a beat, then replan from the freed spot. Deliberately
+    // statue-only (zero net movement): bots that still move never take
+    // the back-out, so live routing gains no back-and-forth.
     const navPrev = matchState._navPaths ? matchState._navPaths[botId] : null;
-    const wedgedWp = stuckTriggered && navPrev ? navPrev.path[navPrev.idx] : null;
+    const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
     // Pathfinder first: a stuck signal or 7 s refresh re-plans the route
     // from the CURRENT position. Only when no route exists does the
     // heuristic stack take over.
     let planned = navPlan();
-    if (planned && wedgedWp) {
+    if (planned && frozenWp) {
       const fresh = matchState._navPaths[botId];
-      // Apply the follower's own advance rule (skip waypoints within 3
-      // units) to find the waypoint it would actually steer to.
+      // The follower's own advance rule: the waypoint it would steer to.
       let fi = fresh.idx;
       while (fi < fresh.path.length - 1
           && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < 3) fi += 1;
       const firstWp = fresh.path[fi];
-      if (Math.abs(firstWp.x - wedgedWp.x) < 0.5 && Math.abs(firstWp.z - wedgedWp.z) < 0.5) {
+      if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
         delete matchState._navPaths[botId];
         planned = false;
         me.botMazeEscapeUntil = now + 800;
@@ -1083,15 +1089,10 @@ export function tickBot(matchState, botId, now) {
       // JUMP-LINK crossing: the upcoming waypoint sits on a ledge above the
       // bot's floor (the path bridged a walk-island, e.g. Station's
       // platforms) — vault toward it once close enough. Downward crossings
-      // need nothing: the bot just walks off the ledge. CLEAR-LINE check:
-      // collapsed ramp legs can present a >1.7 rise with a fence between
-      // (Airport's rim glass / balustrades) — same upper-floor body-height
-      // test the jump-link builder uses, so the bot never leaps into a pane.
+      // need nothing: the bot just walks off the ledge.
       if (wp.y != null && wp.y - myFloorY > 1.7
           && me.grounded && !me.airborne
-          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 7
-          && !walkSegmentBlocked(me.pos.x, me.pos.z, wp.x, wp.z,
-            Math.max(myFloorY, wp.y) + GROUND_BASE_Y, obstacles)) {
+          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 7) {
         const jdx = wp.x - me.pos.x, jdz = wp.z - me.pos.z;
         const jln = Math.hypot(jdx, jdz) || 1;
         jumpDirX = jdx / jln;
