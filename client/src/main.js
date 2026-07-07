@@ -8131,17 +8131,18 @@ function buildLobbyArena() {
     addBlockingBox({ x, y: 1.45, z, sx: 4.2, sy: 0.18, sz: 2.8, material: railGlass });
   });
 
-  // ===== Holo-globe pedestals (full cover ~5m wide × ~8.5m tall) =====
+  // ===== Holo-globe pedestals (full cover ~6m wide × ~9.5m tall) =====
   // A stone pedestal carrying a large glowing globe wrapped in a flat halo
   // ring — a lobby centerpiece silhouette that can't read as tomb, crate
-  // pile, or water cooler. Collision unchanged: the same stone base box +
-  // the same invisible cover AABB as always (bullet-blocking identical).
+  // pile, or water cooler. Collision = stone base box + invisible cover
+  // AABB; the SAME boxes are baked in shared arena.js (lobby) — change
+  // dims here and there together or online/offline collision diverges.
   // The globe's equator matches the AABB width right at muzzle height, so
   // the cover reads honestly where bullets actually fly; the halo ring
   // overhangs the box and blocks nothing (it reads as a hologram).
   const drawHoloKiosk = (x, baseY, z /* axis ignored — radially symmetric */) => {
-    const potW = 5.2;
-    const potH = 2.5;
+    const potW = 6.0;
+    const potH = 2.9;
     // Wide stone base — solid cover for the lower body (collision unchanged)
     addBlockingBox({ x, y: baseY + potH / 2, z, sx: potW, sy: potH, sz: potW, material: pillarMat });
     // Base rim (decor)
@@ -8149,41 +8150,38 @@ function buildLobbyArena() {
     // Blue glow accent ring on the rim (sci-fi lobby touch)
     addBlockingBox({ x, y: baseY + potH + 0.42, z, sx: potW + 0.42, sy: 0.14, sz: potW + 0.42, material: blueGlow, decorOnly: true });
 
-    // Upper-body cover AABB — unchanged dims, collision-only.
+    // Upper-body cover AABB — collision-only, mirrored in shared arena.js.
     const bushBaseY = baseY + potH + 0.4;
-    const bushW = 4.6;
-    const bushH = 5.4;
+    const bushW = 5.3;
+    const bushH = 6.2;
     addBlockingBox({ x, y: bushBaseY + bushH / 2, z, sx: bushW, sy: bushH, sz: bushW, material: treeFoliage, invisible: true });
 
     // Stone pedestal shaft + cap plate (globe bottom rests on the plate)
     const shaftTop = bushBaseY + 0.6;
-    const shaft = new THREE.Mesh(new THREE.BoxGeometry(2.4, shaftTop - (baseY + potH), 2.4), pillarMat);
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(2.8, shaftTop - (baseY + potH), 2.8), pillarMat);
     shaft.position.set(x, (baseY + potH + shaftTop) / 2, z);
     scene.add(shaft); arenaDecor.push(shaft);
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.35, 3.2), marbleDark);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.35, 3.7), marbleDark);
     plate.position.set(x, shaftTop + 0.18, z);
     scene.add(plate); arenaDecor.push(plate);
 
     // Glowing globe — equator width == cover AABB width, top == AABB top
-    const globeR = 2.3;
+    const globeR = 2.65;
     const globeY = bushBaseY + bushH - globeR;
     const globe = new THREE.Mesh(new THREE.SphereGeometry(globeR, 24, 16), wallAccent);
     globe.position.set(x, globeY, z);
     scene.add(globe); arenaDecor.push(globe);
     // Flat halo ring around the equator (visual only — reads as a hologram)
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.12, 10, 40), blueGlow);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(3.9, 0.12, 10, 40), blueGlow);
     halo.rotation.x = Math.PI / 2;
     halo.position.set(x, globeY, z);
     scene.add(halo); arenaDecor.push(halo);
   };
 
-  // ===== Aquarium pillars (same footprint/cover as the globe pedestals) =====
+  // ===== Aquarium pillars =====
   // The quieter sibling for clustered spots: a glass tank on the same stone
-  // base — steel corner posts, lid, teal fish, bubbles. Glass box over box
-  // collision = zero visual/hitbox mismatch at any height.
-  const fishMat = new THREE.MeshStandardMaterial({
-    color: 0x5fe8c4, emissive: 0x2fbf9a, emissiveIntensity: 0.55, roughness: 0.4, metalness: 0.1
-  });
+  // base — steel corner posts, lid, glowing water (no floating contents).
+  // Glass box over box collision = zero visual/hitbox mismatch at any height.
   // Bright lit aquarium water — NOT the dark night-window glass; a light
   // aqua with a soft inner glow so the tanks read as illuminated features.
   const aquaWater = new THREE.MeshStandardMaterial({
@@ -8193,37 +8191,18 @@ function buildLobbyArena() {
   const drawAquariumPillar = (x, baseY, z) => {
     const potW = 5.2;
     const potH = 2.5;
-    // Identical stone base + trims (collision unchanged)
+    // Stone base + trims (collision unchanged)
     addBlockingBox({ x, y: baseY + potH / 2, z, sx: potW, sy: potH, sz: potW, material: pillarMat });
     addBlockingBox({ x, y: baseY + potH + 0.18, z, sx: potW + 0.5, sy: 0.36, sz: potW + 0.5, material: marbleDark, decorOnly: true });
     addBlockingBox({ x, y: baseY + potH + 0.42, z, sx: potW + 0.42, sy: 0.14, sz: potW + 0.42, material: blueGlow, decorOnly: true });
-    // Identical invisible cover AABB
+    // Invisible cover AABB (collision unchanged)
     const tankBaseY = baseY + potH + 0.4;
     const tankW = 4.6;
     const tankH = 5.4;
     addBlockingBox({ x, y: tankBaseY + tankH / 2, z, sx: tankW, sy: tankH, sz: tankW, material: treeFoliage, invisible: true });
 
-    // Fish (drawn before the glass so they show through it)
-    const fishSpots = [
-      { dx: -0.8, dy: 1.6, dz: 0.5, s: 1.0, rot: 0.5 },
-      { dx: 0.9, dy: 3.0, dz: -0.6, s: 0.85, rot: 2.4 },
-      { dx: -0.4, dy: 4.2, dz: -0.2, s: 0.7, rot: 4.0 }
-    ];
-    fishSpots.forEach(({ dx, dy, dz, s, rot }) => {
-      const fish = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), fishMat);
-      fish.scale.set(1.5 * s, 0.55 * s, 0.45 * s);
-      fish.rotation.y = rot;
-      fish.position.set(x + dx, tankBaseY + dy, z + dz);
-      scene.add(fish); arenaDecor.push(fish);
-    });
-    // Bubbles
-    for (const [bdx, bdy, bdz] of [[1.2, 2.2, 0.9], [1.4, 3.6, 0.4], [0.9, 4.6, -0.8]]) {
-      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), blueGlow);
-      bubble.position.set(x + bdx, tankBaseY + bdy, z + bdz);
-      scene.add(bubble); arenaDecor.push(bubble);
-    }
     // Bright water body — same no-depth-write rule as the Airport panes so
-    // units/sprites behind it stay visible; drawn after the fish.
+    // units/sprites behind it stay visible.
     const glass = new THREE.Mesh(new THREE.BoxGeometry(tankW - 0.2, tankH - 0.2, tankW - 0.2), aquaWater.clone());
     glass.material.depthWrite = false;
     glass.renderOrder = 2;
