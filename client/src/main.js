@@ -3108,19 +3108,6 @@ function updateEnemy(now) {
     { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
-  // BLINK-TOLERANT SIGHT (decision layer). At cover slits the raw LoS ray
-  // flickers per tick as either side moves a hair — and every state trigger
-  // (orbit flips, the no-sight clock, maze latch/release, ARRIVED) consumed
-  // that flicker at once, producing the pacing standoffs at arch gaps and
-  // doorways. Decisions use `sightedStable`: raw LoS gated by a ~0.8 s
-  // rolling average — sight must be SUSTAINED (avg > 0.6) to count, so
-  // flicker-grade sight reads as BLIND for state changes and the bot
-  // commits a route instead of dithering. Aiming/firing, Defense cover
-  // reads, and the engage cover-hold keep the raw per-tick `playerHasLoS`.
-  // (EMA assumes the fixed ~16 ms tick both sims run at.)
-  eState.botSightAvg = (eState.botSightAvg ?? (playerHasLoS ? 1 : 0)) * 0.98
-    + (playerHasLoS ? 0.02 : 0);
-  const sightedStable = playerHasLoS && eState.botSightAvg > 0.6;
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
@@ -3151,7 +3138,7 @@ function updateEnemy(now) {
   // trigger). Progress is measured as real net displacement over a rolling
   // 500 ms window, not per-tick velocity, so the stun crawl can't false-trigger
   // Maze the way the old velocity-based stuck-detector did.
-  if (sightedStable || eState.botLastLoSAt == null) eState.botLastLoSAt = now;
+  if (playerHasLoS || eState.botLastLoSAt == null) eState.botLastLoSAt = now;
   const noLoSTime = now - eState.botLastLoSAt;
   if (eState.botProgressAnchorAt == null) {
     eState.botProgressAnchorX = e.x;
@@ -3167,10 +3154,7 @@ function updateEnemy(now) {
     // starves this clock and drops the bot into spurious mid-fight Maze
     // episodes (the angled-backward-sprint sightings on Plain Field).
     // Under-fire wedges are Defense's job, on its own 2-tick trigger.
-    // A bounded-window hold is likewise DELIBERATE standing, not a stall.
-    if (Math.hypot(ddx, ddz) > 3
-        || eState.hitStunUntil > eState.botProgressAnchorAt
-        || now < (eState.botOrbitHoldUntil ?? 0)) {
+    if (Math.hypot(ddx, ddz) > 3 || eState.hitStunUntil > eState.botProgressAnchorAt) {
       eState.botLastProgressAt = now;
     }
     eState.botProgressAnchorX = e.x;
@@ -3214,7 +3198,6 @@ function updateEnemy(now) {
         && (wedged || spinning)
         && !eState.airborne
         && now >= eState.hitStunUntil
-        && now >= (eState.botOrbitHoldUntil ?? 0)   // hold = deliberate standing
         && (eState.botState ?? 'pursue') !== 'defense') {
       stuckTriggered = true;
     }
@@ -3293,7 +3276,7 @@ function updateEnemy(now) {
     // Record whether LoS was blocked at (re)commit. The LoS-restored exit only
     // counts when it was — otherwise (stuck against a side pillar with LoS
     // already clear) Maze would exit on the first tick and never get to act.
-    eState.botMazeLosBlockedAtEntry = !sightedStable;
+    eState.botMazeLosBlockedAtEntry = !playerHasLoS;
   };
 
   // OPENING SCAN — Maze's loop breaker. Wall-following a CLOSED loop (a
@@ -3333,7 +3316,7 @@ function updateEnemy(now) {
         // real wall contact en route is handled by the corner turn.
         eState.botMazeHadWall = true;
         eState.botMazeHand = null;
-        eState.botMazeLosBlockedAtEntry = !sightedStable;
+        eState.botMazeLosBlockedAtEntry = !playerHasLoS;
         return true;
       }
     }
@@ -3393,7 +3376,7 @@ function updateEnemy(now) {
     eState.botMazeDirZ = (bz - e.z) / dl;
     eState.botMazeHadWall = true;   // corner turn handles wall contact en route
     eState.botMazeHand = null;
-    eState.botMazeLosBlockedAtEntry = !sightedStable;
+    eState.botMazeLosBlockedAtEntry = !playerHasLoS;
     return true;
   };
 
@@ -3459,7 +3442,7 @@ function updateEnemy(now) {
       eState.botNav = {
         path, idx: 0, gx: p.x, gz: p.z, at: now
       };
-      eState.botMazeLosBlockedAtEntry = !sightedStable;
+      eState.botMazeLosBlockedAtEntry = !playerHasLoS;
       return true;
     }
     eState.botNav = null;
@@ -3474,7 +3457,7 @@ function updateEnemy(now) {
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
   } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
-      || (!sightedStable && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
+      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
     // Wedged, spinning, stalled, or sightless for 2 s — commit to going
     // AROUND whatever is in the way. FAST LANE (4th condition): can't see
     // the target, too far to fight, AND the straight walk is blocked —
@@ -3492,7 +3475,7 @@ function updateEnemy(now) {
     // clear for up to 50 units on the SAME floor. The old 20-unit probe
     // passed whenever the plateau was more than 20 away, releasing Maze
     // into a beeline that ground the plateau side 30 units later.
-    const losReacquired = sightedStable && eState.botMazeLosBlockedAtEntry
+    const losReacquired = playerHasLoS && eState.botMazeLosBlockedAtEntry
       && (inBandDist
         || (walkTowardClear(Math.min(dist, 50))
           && Math.abs(oppFloorY - myFloorY) < 2.5));
@@ -3560,7 +3543,7 @@ function updateEnemy(now) {
       // (Flashpoint rooms; Station falls through — no ramps there, the
       // perch reflex climbs instead).
       const needRoute = Math.abs(oppFloorY - myFloorY) > 2.5
-        || (sightedStable && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
+        || (playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
       let committed = needRoute && mazeSeekElevationRoute(true);
       if (!committed) committed = mazeScanForOpening();
       if (!committed) {
@@ -3760,7 +3743,7 @@ function updateEnemy(now) {
     // between — a player at the Station platform's edge read as "arrived"
     // from the tracks below, which dropped every climb path and ground the
     // bot into the edge wall forever.
-    if (sightedStable && dist <= optimalRange
+    if (playerHasLoS && dist <= optimalRange
         && Math.abs(oppFloorY - myFloorY) < 2.5) {
       const goalWp = nav && nav.path[nav.path.length - 1];
       const goalCloser = goalWp
@@ -3806,9 +3789,15 @@ function updateEnemy(now) {
       // bot's floor (the path bridged a walk-island, e.g. Station's
       // platforms) — vault toward it once close enough. Downward crossings
       // need nothing: the bot just walks off the ledge.
+      // CLEAR-LINE check: collapsed ramp legs can present a >1.7 rise with
+      // a fence between (Airport's rim glass / balustrades) — same
+      // upper-floor body-height test the jump-link builder uses, so the
+      // bot never leaps into a pane.
       if (wp.y != null && wp.y - myFloorY > 1.7
           && state.enemy.grounded && !eState.airborne
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < 7) {
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < 7
+          && !walkSegmentBlocked(e.x, e.z, wp.x, wp.z,
+            Math.max(myFloorY, wp.y) + GROUND_BASE_Y, arenaObstacles)) {
         const jdx = wp.x - e.x, jdz = wp.z - e.z;
         const jln = Math.hypot(jdx, jdz) || 1;
         jumpDirX = jdx / jln;
@@ -3871,30 +3860,12 @@ function updateEnemy(now) {
     // sight while the other way keeps it, flip once (1 s cooldown so
     // opposing probes can't jitter it). Engage patrols INSIDE the sight
     // window it was handed instead of blindly strolling out of it.
-    if (sightedStable && now >= (eState.botOrbitFlipAt ?? 0)
-        && now >= (eState.botOrbitHoldUntil ?? 0)) {
+    if (playerHasLoS && now >= (eState.botOrbitFlipAt ?? 0)) {
       const sgn = eState.botOrbitSign ?? 1;
       if (!losFromPoint(e.x + side.x * sgn * 12, e.z + side.z * sgn * 12)
           && losFromPoint(e.x - side.x * sgn * 12, e.z - side.z * sgn * 12)) {
-        // DOUBLE FLIP = BOUNDED WINDOW: flipping BACK within 2.5 s means the
-        // orbit is pacing wall-to-wall inside a bounded sight window (arch
-        // gaps, alley mouths) — a metronome wiper, the back-and-forth
-        // sighting. HOLD instead: stand on the window and fight (damp
-        // below; solid because sightedStable can't flicker). A single flip
-        // within 10 s of a hold re-arms it directly, so between holds the
-        // bot creeps one leg at most instead of lapping. Sight truly lost →
-        // damp lifts and the 2 s no-sight clock commits the Maze approach.
-        const pairFlip = eState.botOrbitFlipLastAt != null && now - eState.botOrbitFlipLastAt < 2500;
-        const recentHold = eState.botOrbitHoldLastAt != null && now - eState.botOrbitHoldLastAt < 10000;
-        if (pairFlip || recentHold) {
-          eState.botOrbitHoldUntil = now + 4000;
-          eState.botOrbitHoldLastAt = now;
-          eState.botOrbitFlipLastAt = null;
-        } else {
-          eState.botOrbitSign = -sgn;
-          eState.botOrbitFlipAt = now + 1000;
-          eState.botOrbitFlipLastAt = now;
-        }
+        eState.botOrbitSign = -sgn;
+        eState.botOrbitFlipAt = now + 1000;
       }
     }
     const sign = eState.botOrbitSign ?? 1;
@@ -3906,13 +3877,6 @@ function updateEnemy(now) {
     let tz = side.z * sign + dir.z * pull + avoid.rz * 0.6;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    // BOUNDED-WINDOW HOLD (armed by the double-flip detector above): stand
-    // and fight while the window works. sightedStable can't flicker, so the
-    // damp holds solidly; sight lost or band left → it lifts and the normal
-    // state machine takes over.
-    if (now < (eState.botOrbitHoldUntil ?? 0) && sightedStable && inBandDist) {
-      mx *= 0.1; mz *= 0.1;
-    }
 
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
