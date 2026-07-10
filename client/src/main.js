@@ -1951,10 +1951,16 @@ function updateProjectileSystem(dt) {
     const hitCenter = p.target.root.position;
     // Laser bolts hit with their whole trailing body, not just the nose:
     // extend the swept segment backward by the body length along velocity.
+    // The body GROWS OUT of the muzzle — clipped to the distance flown so
+    // neither the hitbox nor the visual ever reaches behind the spawn point
+    // (a full-length tail overlapped Aris herself on the firing frames).
     let segStart = prevPos;
     if (p.boltLen) {
       const bl = p.vel.length() || 1;
-      segStart = prevPos.clone().addScaledVector(p.vel, -p.boltLen / bl);
+      const prevBody = Math.min(p.boltLen, prevPos.distanceTo(p.trailSpawnPos));
+      segStart = prevPos.clone().addScaledVector(p.vel, -prevBody / bl);
+      const nowBody = Math.min(p.boltLen, p.mesh.position.distanceTo(p.trailSpawnPos));
+      p.mesh.scale.y = Math.max(nowBody, 0.6) / p.boltLen;
     }
     const path = new THREE.Line3(segStart, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
