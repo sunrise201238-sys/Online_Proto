@@ -222,11 +222,13 @@ function tickLobby(lobby) {
   //    listed in botSlots so tickMatch skips applyInput for them.
   tickMatch(lobby.match, lobby.inputs, now, TICK_DT, lobby.botSlots);
 
-  // 3. Clear human tap flags so they fire once per press.
+  // 3. Clear human tap flags so they fire once per press. `jump` resets to
+  //    the last frame's raw HELD value (not false) — held-jump must survive
+  //    ticks that received no input frame, or flight climbing flickers.
   for (const slot of activeSlots(lobby.mode)) {
     if (lobby.botSlots.has(slot)) continue;
     const cur = lobby.inputs[slot];
-    cur.jump = false;
+    cur.jump = !!cur.jumpHeld;
     cur.stepTap = false;
     cur.shootTap = false;
     cur.targetSwitch = false;
@@ -318,6 +320,12 @@ io.on('connection', (socket) => {
       sprintLocked: !!frame.sprintLocked,
       shootHold: !!frame.shootHold,
       jump: cur.jump || !!frame.jump,
+      // Raw held value of the LAST frame — after each tick consumes the
+      // latched `jump`, it resets to this instead of false, so a held jump
+      // (Aris flight climb) doesn't flicker on ticks that received no frame
+      // (client sends 40 Hz vs the 62.5 Hz tick). The flicker re-armed the
+      // sim's air-pop edge detector every 250 ms.
+      jumpHeld: !!frame.jump,
       stepTap: cur.stepTap || !!frame.stepTap,
       shootTap: cur.shootTap || !!frame.shootTap,
       targetSwitch: cur.targetSwitch || !!frame.targetSwitch,
