@@ -253,6 +253,9 @@ const UNIT_DATA = {
     // bunny-hop her (bots play her grounded — no flight AI yet).
     jumpCooldownMs: 0,
     jumpBoostCost: 48,
+    // Mid-air re-jump pops cost less than the ground jump (tap-flying is her
+    // identity); only the air-pop path reads this.
+    airJumpBoostCost: 24,
 
     // Weapon spec
     lockRange: 56,
@@ -266,7 +269,7 @@ const UNIT_DATA = {
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
     // FLIGHT (offline-only for now — migrate online after tuning): a JUMP
-    // tap in air re-fires the full jump impulse (48 boost per pop, no
+    // tap in air re-fires the full jump impulse (airJumpBoostCost per pop, no
     // cooldown beyond the 250 ms debounce); holding JUMP sustains the climb
     // at sprint speed/drain after the impulse decays; air-sprint flies LEVEL
     // (uses the 'fly' art); the air-dodge holds altitude too. Releasing
@@ -2823,7 +2826,8 @@ function updatePlayer(now) {
     // detection means holding never re-pops on its own.
     const jumpTapped = input.jump && !st.prevJumpHeld;
     st.prevJumpHeld = input.jump;
-    const airPopCost = state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
+    const airPopCost = state.player.unit.airJumpBoostCost
+      ?? state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
     if (flying && jumpTapped && canInputMove
         && st.boost >= airPopCost
         && now >= st.jumpCooldownUntil) {
