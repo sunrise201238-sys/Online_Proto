@@ -4088,7 +4088,15 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 2.5999999999999996
       }
     ],
-    "surfaces": []
+    "surfaces": [
+      // Conveyor belt tops (west/east lines) — walkable, so the nav grid gets
+      // cells up there and the jump-link builder bridges ground <-> belt:
+      // bots can cross the 90-long belts between the crates instead of
+      // detouring around the ends (the "stuck against the track" report).
+      // Mirrors drawConveyor in client/src/main.js — keep in sync.
+      { "minX": -27, "maxX": -23, "minZ": -45, "maxZ": 45, "maxTop": 2.6, "type": "flat", "top": 2.6 },
+      { "minX": 23, "maxX": 27, "minZ": -45, "maxZ": 45, "maxTop": 2.6, "type": "flat", "top": 2.6 }
+    ]
   },
   "square": {
     "obstacles": [

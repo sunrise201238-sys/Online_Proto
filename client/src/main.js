@@ -7684,6 +7684,14 @@ function buildFactoryArena() {
       });
       alt = !alt;
     }
+    // Belt top is WALKABLE (mirrors the baked factory surfaces in shared
+    // arena.js — keep in sync): units can stand/fight on the belt between
+    // the crates, and the nav grid's jump-link builder bridges ground <->
+    // belt so bots cross the line instead of detouring around the ends.
+    arenaSurfaces.push({
+      minX: cx - 2, maxX: cx + 2, minZ: beltZ - len / 2, maxZ: beltZ + len / 2,
+      maxTop: 2.6, type: 'flat', top: 2.6, heightAt: () => 2.6
+    });
   };
   drawConveyor(-25, 90, 0);
   drawConveyor(25, 90, 0);
