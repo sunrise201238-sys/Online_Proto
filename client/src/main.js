@@ -4970,6 +4970,7 @@ function cleanupMatch() {
     if (state.online.projectileMeshes) {
       for (const op of state.online.projectileMeshes.values()) {
         disposeProjectileMesh(op.mesh);
+        if (op.pelletMeshes) for (const pm of op.pelletMeshes) disposeProjectileMesh(pm);
         if (op.trail) disposeBulletTrail(op.trail);
       }
       state.online.projectileMeshes.clear();
@@ -6046,6 +6047,7 @@ function ensureOnlineMatchSetup(snap) {
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
     disposeProjectileMesh(op.mesh);
+    if (op.pelletMeshes) for (const pm of op.pelletMeshes) disposeProjectileMesh(pm);
     if (op.trail) disposeBulletTrail(op.trail);
   }
   onl.projectileMeshes.clear();
