@@ -243,7 +243,7 @@ export const UNIT_DATA = {
     // Laser bolt: the projectile's hitbox is a thin beamBolt-sized cylinder
     // that grows out of the muzzle; the client draws the transparent cyan
     // visual from this same entry, so hitbox and visual can't drift apart.
-    beamBolt: { length: 32, radius: 0.4 }
+    beamBolt: { length: 64, radius: 0.4 }
   }
 };
 

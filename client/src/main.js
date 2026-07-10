@@ -276,10 +276,12 @@ const UNIT_DATA = {
     // (uses the 'fly' art); the air-dodge holds altitude too. Releasing
     // everything falls normally. Uncapped height during tuning.
     flight: true,
-    // Laser bolt: the projectile's hitbox is a thin 32-long cylinder and the
+    // Laser bolt: the projectile's hitbox is a thin 64-long cylinder and the
     // transparent bright-cyan visual is that exact shape (both derive from
-    // this one entry, so they can never drift apart).
-    beamBolt: { length: 32, radius: 0.4 }
+    // this one entry, so they can never drift apart). NOTE: 64 exceeds her
+    // lock range (56), so in-band hits land with a partially grown body —
+    // the grow-out-of-the-muzzle rule keeps that honest at every distance.
+    beamBolt: { length: 64, radius: 0.4 }
   }
 };
 
