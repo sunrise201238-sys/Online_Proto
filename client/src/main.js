@@ -255,7 +255,7 @@ const UNIT_DATA = {
     jumpBoostCost: 48,
     // Mid-air re-jump pops cost less than the ground jump (tap-flying is her
     // identity); only the air-pop path reads this.
-    airJumpBoostCost: 24,
+    airJumpBoostCost: 12,
 
     // Weapon spec
     lockRange: 56,
