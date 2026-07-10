@@ -265,9 +265,11 @@ const UNIT_DATA = {
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
-    // FLIGHT (offline-only for now — migrate online after tuning): holding
-    // JUMP mid-air keeps climbing at sprint speed/drain; air-sprint flies
-    // LEVEL (uses the 'fly' art); the air-dodge holds altitude too. Releasing
+    // FLIGHT (offline-only for now — migrate online after tuning): a JUMP
+    // tap in air re-fires the full jump impulse (48 boost per pop, no
+    // cooldown beyond the 250 ms debounce); holding JUMP sustains the climb
+    // at sprint speed/drain after the impulse decays; air-sprint flies LEVEL
+    // (uses the 'fly' art); the air-dodge holds altitude too. Releasing
     // everything falls normally. Uncapped height during tuning.
     flight: true,
     // Laser bolt: the projectile's hitbox is a thin 32-long cylinder and the
@@ -2815,6 +2817,21 @@ function updatePlayer(now) {
   {
     const st = state.player.state;
     const flying = !!state.player.unit.flight && st.airborne;
+    // AIR RE-JUMP: a FRESH tap of JUMP while airborne fires another full
+    // jump impulse — same boost cost and 250 ms debounce as the ground pop.
+    // Holding past the pop settles into the sustained climb below; the edge
+    // detection means holding never re-pops on its own.
+    const jumpTapped = input.jump && !st.prevJumpHeld;
+    st.prevJumpHeld = input.jump;
+    const airPopCost = state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
+    if (flying && jumpTapped && canInputMove
+        && st.boost >= airPopCost
+        && now >= st.jumpCooldownUntil) {
+      st.boost = Math.max(0, st.boost - airPopCost);
+      st.refillPausedUntil = now + 500;
+      st.jumpVelocity = state.player.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+      st.jumpCooldownUntil = now + 250;
+    }
     st.flightClimb = flying && input.jump && canInputMove && st.boost > 0;
     // Fresh step check (NOT the `inStep` const from the top of the frame):
     // a dodge that STARTED this frame must hold altitude from its first tick.
@@ -4670,8 +4687,9 @@ function updateTransforms(dt) {
     if (m.state.airborne) {
       if (m.state.flightClimb) {
         // FLIGHT (Aris): pop-then-climb — gravity erodes the jump impulse
-        // down to the sprint-speed climb rate and the thruster holds it
-        // there, never below.
+        // down to the sprint-speed sustained climb and the thruster holds it
+        // there, never below. A fresh mid-air JUMP tap re-fires the full
+        // impulse (see the air re-jump in the player input path).
         m.state.jumpVelocity = Math.max(
           m.unit?.sprintSpeed ?? BOOST_MOVE_SPEED,
           m.state.jumpVelocity + world.gravity.y * dt
