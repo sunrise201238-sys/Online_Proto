@@ -232,6 +232,50 @@ const UNIT_DATA = {
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
     beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
+  },
+  unit7: {
+    name: 'Unit 7 / Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'aris', char: 'Aris', accent: 0x6fd9e8,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    // No jump cooldown — airborne again the moment she lands. The player path
+    // debounces re-trigger by 250 ms (double-fire guard at high frame rates);
+    // bots get a 1.5 s floor in botStartJump so the perch reflex can't
+    // bunny-hop her (bots play her grounded — no flight AI yet).
+    jumpCooldownMs: 0,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 56,
+    projectileSpeed: 600,
+    firePerMinute: 250,        // = 240 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 15,
+    magCapacity: 8,
+    reloadMs: 1200,
+    autoReload: true,
+    stun: { ms: 100, moveScale: 0.25 },
+    // FLIGHT (offline-only for now — migrate online after tuning): holding
+    // JUMP mid-air keeps climbing at sprint speed/drain; air-sprint flies
+    // LEVEL (uses the 'fly' art); the air-dodge holds altitude too. Releasing
+    // everything falls normally. Uncapped height during tuning.
+    flight: true,
+    // Laser bolt: the projectile's hitbox is a thin 8-long cylinder and the
+    // transparent bright-cyan visual is that exact shape.
+    beamBolt: { length: 8, radius: 0.4 },
+    // Hidden from the ONLINE pickers until the unit is migrated to the
+    // shared sim — the server's UNIT_DATA has no unit7 yet.
+    offlineOnly: true
   }
 };
 
@@ -816,7 +860,11 @@ function updateUnitSpriteState(m, rig, dt, now) {
   // Priority: dodge > sprint > shoot > stand (sprint/dodge outrank shoot, so a
   // unit firing mid-dash/run keeps its motion pose — no shoot-frame cut-in).
   let want = 'stand';
-  if (dodging) want = 'dodge';
+  // Flight units (Aris) show the 'fly' art while sprinting in the air —
+  // level flight reads as flight, not as a falling dodge. Everything else
+  // keeps the standard airborne-as-dodge rule.
+  if (st.airborne && sprinting && m.unit?.flight) want = 'fly';
+  else if (dodging) want = 'dodge';
   else if (sprinting) want = 'sprint';
   else if (firing) want = 'shoot';
 
@@ -830,7 +878,7 @@ function updateUnitSpriteState(m, rig, dt, now) {
   // poses come from steady held input and never trigger the hold, so they look
   // unchanged. Render-only — uniform across the offline bots, the player, and the
   // online snapshot mirror, touching no gameplay/AI state.
-  if (want === 'sprint' || want === 'dodge') {
+  if (want === 'sprint' || want === 'dodge' || want === 'fly') {
     rig.motionPose = want;
     rig.motionHoldUntil = now + SPRITE_MOTION_HOLD_MS;
   } else if (rig.motionPose && now < rig.motionHoldUntil) {
@@ -1280,6 +1328,7 @@ const BULLET_TRAIL_OPACITY = 0.55;
 
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
+  if (unit.beamBolt) return 0;  // the laser bolt IS its own trail
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
   if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out (8 pellets/shot = visual noise)
   return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
@@ -1345,6 +1394,22 @@ function updateDyingBulletTrails(now) {
 }
 
 function buildProjectileMesh(unit, isRedLock) {
+  // Aris laser bolt: hitbox == visual — a thin transparent bright-cyan
+  // cylinder, nose at the mesh origin with the body trailing behind (same
+  // convention as the spindle tracers, so orientTracer aligns it with
+  // velocity). The hit test extends its swept segment by this body length.
+  if (unit?.beamBolt) {
+    const geom = new THREE.CylinderGeometry(
+      unit.beamBolt.radius, unit.beamBolt.radius, unit.beamBolt.length, 10, 1, true
+    );
+    geom.translate(0, -unit.beamBolt.length / 2, 0);
+    const mesh = new THREE.Mesh(
+      geom,
+      new THREE.MeshBasicMaterial({ color: 0x7df4ff, transparent: true, opacity: 0.55, fog: false, depthWrite: false })
+    );
+    mesh.userData.isTracer = true;
+    return mesh;
+  }
   const isSniper = !!unit?.sniperCharge;
   const isMG = !isSniper && (unit?.spreadCount ?? 0) === 1;
   // Shotgun pellets (and anything unrecognized) stay as small spheres; sniper
@@ -1478,6 +1543,11 @@ function spawnProjectiles(owner, target) {
       damage: shotDamage,
       hitStunMs: owner.unit.stun?.ms ?? 100,
       hitStunScale: owner.unit.stun?.moveScale ?? 0.25,
+      // Laser bolt (Aris): body length/radius of the cylinder hitbox; 0 for
+      // point projectiles. The hit test below extends the swept segment by
+      // boltLen and widens the capsule test by boltRadius.
+      boltLen: owner.unit.beamBolt?.length ?? 0,
+      boltRadius: owner.unit.beamBolt?.radius ?? 0,
       // Set on the shotgun's center pellet only — accumulates path length so
       // non-center pellets can interpolate cluster spread (0 → full) over
       // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
@@ -1872,10 +1942,17 @@ function updateProjectileSystem(dt) {
     // first (the close-range "phantom dodge"). Capsule volume matches the tall
     // billboard: free vertical travel within ±hitHalfHeight of body center, then
     // sphere falloff at hitRadius, centered on root.position. Mirrors shared/sim.
-    const hitRadius = 1.6;
+    const hitRadius = 1.6 + (p.boltRadius || 0);
     const hitHalfHeight = 1.6;
     const hitCenter = p.target.root.position;
-    const path = new THREE.Line3(prevPos, p.mesh.position.clone());
+    // Laser bolts hit with their whole trailing body, not just the nose:
+    // extend the swept segment backward by the body length along velocity.
+    let segStart = prevPos;
+    if (p.boltLen) {
+      const bl = p.vel.length() || 1;
+      segStart = prevPos.clone().addScaledVector(p.vel, -p.boltLen / bl);
+    }
+    const path = new THREE.Line3(segStart, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
     path.closestPointToPoint(hitCenter, true, nearest);
     const _hdx = nearest.x - hitCenter.x;
@@ -2577,7 +2654,10 @@ function updatePlayer(now) {
   const stepState = state.player.state;
   const inStep = now <= stepState.stepUntil;
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
-  if (!hasDirInput || input.jump || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
+  // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
+  // there, held jump is the climb verb and must coexist with locked sprint.
+  const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
+  if (!hasDirInput || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
   input.boost = input.boostHeld || input.sprintLocked;
 
   const forward = new THREE.Vector3();
@@ -2656,7 +2736,10 @@ function updatePlayer(now) {
     state.player.state.jumpVelocity = jumpVelocity;
     state.player.state.airborne = true;
     state.player.state.hoverUntil = now + jumpHoverMs;
-    state.player.state.jumpCooldownUntil = now + jumpCooldownMs;
+    // 250 ms floor: a zero-cooldown unit (Aris) must not re-trigger on the
+    // next frame while her body is still within 0.15 of the ground at high
+    // frame rates. Irrelevant for units with real cooldowns.
+    state.player.state.jumpCooldownUntil = now + Math.max(jumpCooldownMs, 250);
     inheritMomentum(state.player, 70);
     action = 'jump';
   } else if (input.boost && canInputMove) {
@@ -2692,6 +2775,27 @@ function updatePlayer(now) {
       action = 'step';
     }
     input.stepTap = false;
+  }
+
+  // === FLIGHT (unit.flight — Aris, offline-only for now) ==================
+  // Airborne verbs, evaluated every frame from held input:
+  //   hold JUMP            → keep climbing (pop-then-climb; see updateTransforms)
+  //   air-sprint / air-dodge → hold altitude (level flight / altitude-locked step)
+  //   nothing held         → normal gravity fall
+  // Climbing drains boost at the sprint standard (same per-frame drain, same
+  // refill pause); air-sprint already pays the normal dash drain via
+  // updateBoost. Boost empty → the verbs lapse and she falls. Bots never set
+  // these flags (no flight AI yet — they play her grounded).
+  {
+    const st = state.player.state;
+    const flying = !!state.player.unit.flight && st.airborne;
+    st.flightClimb = flying && input.jump && canInputMove && st.boost > 0;
+    st.flightLevel = flying && !st.flightClimb && st.boost > 0
+      && (useSprint || inStep);
+    if (st.flightClimb) {
+      st.boost = Math.max(0, st.boost - (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
+      st.refillPausedUntil = now + 500;
+    }
   }
 
   // Resolve the current lock target. Defaults to state.enemy (1v1) but can
@@ -2888,7 +2992,10 @@ function botStartJump(now) {
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
   eState.airborne = true;
   eState.hoverUntil = now + (state.enemy.unit.jumpHoverMs ?? JUMP_HOVER_MS);
-  eState.jumpCooldownUntil = now + (state.enemy.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS);
+  // 1.5 s floor: zero-cooldown units (Aris) would let the bot perch reflex
+  // bunny-hop every few ticks. Bots have no flight AI, so the player-only
+  // zero cooldown never applies to them.
+  eState.jumpCooldownUntil = now + Math.max(state.enemy.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS, 1500);
   inheritMomentum(state.enemy, 70);
   return true;
 }
@@ -4533,7 +4640,20 @@ function updateTransforms(dt) {
     const groundY = getGroundLevelY(m);
 
     if (m.state.airborne) {
-      m.state.jumpVelocity += world.gravity.y * dt;
+      if (m.state.flightClimb) {
+        // FLIGHT (Aris): pop-then-climb — gravity erodes the jump impulse
+        // down to the sprint-speed climb rate and the thruster holds it
+        // there, never below.
+        m.state.jumpVelocity = Math.max(
+          m.unit?.sprintSpeed ?? BOOST_MOVE_SPEED,
+          m.state.jumpVelocity + world.gravity.y * dt
+        );
+      } else if (m.state.flightLevel) {
+        // FLIGHT (Aris): level flight — air-sprint / air-dodge hold altitude.
+        m.state.jumpVelocity = 0;
+      } else {
+        m.state.jumpVelocity += world.gravity.y * dt;
+      }
       m.body.position.y += m.state.jumpVelocity * dt;
       if (m.body.position.y <= groundY && m.state.jumpVelocity <= 0) {
         m.body.position.y = groundY;
@@ -5487,7 +5607,9 @@ function showOnlineModePicker(onl) {
 function showOnlineUnitPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
-  const unitEntries = Object.entries(UNIT_DATA);
+  // offlineOnly units (Aris) are hidden online: the server sim doesn't know
+  // them yet. Remove the filters once the unit is migrated to shared.
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
   // Mention which mode the lobby is in so non-hosts know what they joined.
   const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
   menu.innerHTML = `
@@ -5512,7 +5634,8 @@ function showOnlineBotUnitPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   const slot = onl.pickingBotSlot;
-  const unitEntries = Object.entries(UNIT_DATA);
+  // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
   menu.innerHTML = `
     <h2>Pick Bot Unit</h2>
     <div class="menu-divider">Bot in slot ${slot}</div>
