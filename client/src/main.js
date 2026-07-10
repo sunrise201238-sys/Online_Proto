@@ -5503,7 +5503,10 @@ function runPredictionTick() {
   input.stepTap = false;
   input.shootTap = false;
   input.targetSwitchTap = false;
-  input.jump = false;
+  // Jump must stay a HELD state for flight units — the shared sim's climb
+  // verb reads the held signal every tick (clearing it here reduced online
+  // Aris to pop-only). Non-flight units keep the original tap semantics.
+  if (!onl.predictedState?.fighters?.[myId]?.unit?.flight) input.jump = false;
 }
 
 // Interpolate the remote fighter between the previous and latest snapshots
