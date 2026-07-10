@@ -1496,13 +1496,27 @@ function spawnProjectiles(owner, target) {
   const baseDir = new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
   const isShotgun = owner.unit.spreadCount > 1;
   const centerIndex = isShotgun ? Math.floor(Math.random() * owner.unit.spreadCount) : 0;
+  // ROUND PATTERN: the disk is sampled in the plane PERPENDICULAR to the aim,
+  // so the cluster reads as a circle from the shooter's point of view.
+  // (Previously a flat horizontal disk + 0.7-scaled vertical jitter — a
+  // ~3.5:1 wide ellipse.) Mirrors shared projectiles.js.
   const shotgunOffsets = [];
   if (isShotgun) {
     const clusterRadius = 3.8;
+    const pl = Math.hypot(baseDir.x, baseDir.z) || 1;
+    const rightX = -baseDir.z / pl;
+    const rightZ = baseDir.x / pl;
+    let upX = -rightZ * baseDir.y;
+    let upY = rightZ * baseDir.x - rightX * baseDir.z;
+    let upZ = rightX * baseDir.y;
+    const ul = Math.hypot(upX, upY, upZ) || 1;
+    upX /= ul; upY /= ul; upZ /= ul;
     for (let i = 0; i < owner.unit.spreadCount; i += 1) {
       const angle = Math.random() * Math.PI * 2;
       const radius = Math.sqrt(Math.random()) * clusterRadius;
-      shotgunOffsets.push(new THREE.Vector3(Math.cos(angle) * radius, (Math.random() - 0.5) * radius * 0.7, Math.sin(angle) * radius));
+      const c = Math.cos(angle) * radius;
+      const s = Math.sin(angle) * radius;
+      shotgunOffsets.push(new THREE.Vector3(rightX * c + upX * s, upY * s, rightZ * c + upZ * s));
     }
   }
   let centerPellet = null;

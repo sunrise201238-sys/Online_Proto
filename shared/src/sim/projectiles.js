@@ -56,16 +56,32 @@ export function spawnProjectiles(matchState, owner, target) {
   const centerIndex = isShotgun ? Math.floor(Math.random() * u.spreadCount) : 0;
 
   // Build cluster offsets (visual jitter so shotgun pellets don't all overlap).
+  // ROUND PATTERN: the disk is sampled in the plane PERPENDICULAR to the aim,
+  // so the cluster reads as a circle from the shooter's point of view.
+  // (Previously a flat horizontal disk + 0.7-scaled vertical jitter — a
+  // ~3.5:1 wide ellipse.) Mirrors offline main.js.
   const shotgunOffsets = [];
   if (isShotgun) {
     const clusterRadius = 3.8;
+    // Horizontal axis perpendicular to the aim, then the matching "up" axis
+    // (right × dir) — for a level aim this is straight +Y.
+    const pl = Math.hypot(baseDir.x, baseDir.z) || 1;
+    const rightX = -baseDir.z / pl;
+    const rightZ = baseDir.x / pl;
+    let upX = -rightZ * baseDir.y;
+    let upY = rightZ * baseDir.x - rightX * baseDir.z;
+    let upZ = rightX * baseDir.y;
+    const ul = Math.hypot(upX, upY, upZ) || 1;
+    upX /= ul; upY /= ul; upZ /= ul;
     for (let i = 0; i < u.spreadCount; i += 1) {
       const angle = Math.random() * Math.PI * 2;
       const radius = Math.sqrt(Math.random()) * clusterRadius;
+      const c = Math.cos(angle) * radius;
+      const s = Math.sin(angle) * radius;
       shotgunOffsets.push({
-        x: Math.cos(angle) * radius,
-        y: (Math.random() - 0.5) * radius * 0.7,
-        z: Math.sin(angle) * radius
+        x: rightX * c + upX * s,
+        y: upY * s,
+        z: rightZ * c + upZ * s
       });
     }
   }
