@@ -2838,8 +2838,15 @@ function updatePlayer(now) {
     st.flightLevel = flying && !st.flightClimb && st.boost > 0
       && (useSprint || now <= (st.stepUntil || 0));
     if (st.flightClimb) {
-      st.boost = Math.max(0, st.boost - (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
-      st.refillPausedUntil = now + 500;
+      // Charge the climb drain only while the thruster is SUSTAINING the
+      // climb (vertical speed at the sustained rate). While a jump / air-pop
+      // impulse is still decaying above that rate, the impulse's flat 48
+      // already paid for the lift — charging drain too was a double-charge.
+      const climbRate = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
+      if (st.jumpVelocity <= climbRate + 0.01) {
+        st.boost = Math.max(0, st.boost - (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
+        st.refillPausedUntil = now + 500;
+      }
     }
   }
 
