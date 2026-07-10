@@ -99,7 +99,7 @@ const UNIT_DATA = {
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    damage: 4,
+    damage: 6,               // per pellet (volley max 8 x 6 = 48 point-blank)
     magCapacity: 7,
     reloadMs: 1500,
     autoReload: true,

@@ -67,7 +67,7 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    damage: 4,
+    damage: 6,               // per pellet (volley max 8 x 6 = 48 point-blank)
     magCapacity: 7,
     reloadMs: 1500,
     autoReload: true,
