@@ -270,10 +270,10 @@ const UNIT_DATA = {
     // LEVEL (uses the 'fly' art); the air-dodge holds altitude too. Releasing
     // everything falls normally. Uncapped height during tuning.
     flight: true,
-    // Laser bolt: the projectile's hitbox is a thin 16-long cylinder and the
+    // Laser bolt: the projectile's hitbox is a thin 32-long cylinder and the
     // transparent bright-cyan visual is that exact shape (both derive from
     // this one entry, so they can never drift apart).
-    beamBolt: { length: 16, radius: 0.4 },
+    beamBolt: { length: 32, radius: 0.4 },
     // Hidden from the ONLINE pickers until the unit is migrated to the
     // shared sim — the server's UNIT_DATA has no unit7 yet.
     offlineOnly: true
