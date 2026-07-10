@@ -575,8 +575,8 @@ const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 const SNIPER_CANCEL_MIN_CHARGE_MS = 500;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
-// see that file for the 18-small-grid derivation.
-const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
+// full spread at the SG's lockRange (27), see that file for the rationale.
+const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 27;
 // Spawn protection — fighters take no damage for this long at round start
 // (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
 const SPAWN_IMMUNITY_MS = 3000;
