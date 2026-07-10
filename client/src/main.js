@@ -270,9 +270,10 @@ const UNIT_DATA = {
     // LEVEL (uses the 'fly' art); the air-dodge holds altitude too. Releasing
     // everything falls normally. Uncapped height during tuning.
     flight: true,
-    // Laser bolt: the projectile's hitbox is a thin 8-long cylinder and the
-    // transparent bright-cyan visual is that exact shape.
-    beamBolt: { length: 8, radius: 0.4 },
+    // Laser bolt: the projectile's hitbox is a thin 16-long cylinder and the
+    // transparent bright-cyan visual is that exact shape (both derive from
+    // this one entry, so they can never drift apart).
+    beamBolt: { length: 16, radius: 0.4 },
     // Hidden from the ONLINE pickers until the unit is migrated to the
     // shared sim — the server's UNIT_DATA has no unit7 yet.
     offlineOnly: true
@@ -784,7 +785,10 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   sprite.userData.stateRig = rig;
 
   if (unitData.spriteKey) {
-    for (const state of UNIT_SPRITE_STATES) {
+    // Flight units (Aris) also load the 'fly' pose — the air-sprint art.
+    // Non-flight units skip it (no <key>_fly.png exists for them).
+    const spriteStates = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
+    for (const state of spriteStates) {
       // Own unit pulls the "_rear" art set; other units the default front art.
       loadUnitArt(unitData.spriteKey, `${state}${bodySuffix}`, (tex) => {
         rig.tex[state] = tex;
@@ -1405,7 +1409,7 @@ function buildProjectileMesh(unit, isRedLock) {
     geom.translate(0, -unit.beamBolt.length / 2, 0);
     const mesh = new THREE.Mesh(
       geom,
-      new THREE.MeshBasicMaterial({ color: 0x7df4ff, transparent: true, opacity: 0.55, fog: false, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0x66faff, transparent: true, opacity: 0.85, fog: false, depthWrite: false })
     );
     mesh.userData.isTracer = true;
     return mesh;
@@ -2673,6 +2677,14 @@ function updatePlayer(now) {
   const emptyPenaltyActive = now < state.player.state.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
   const useSprint = input.boost && canDash;
+  // FLIGHT sprint-carry bookkeeping (Aris): remember the sprint's REAL
+  // velocity (previous frame's total, momentum included) so a jump shortly
+  // after the sprint ends can inherit it — see the jump branch.
+  if (useSprint && state.player.unit.flight) {
+    state.player.state.lastDashAt = now;
+    state.player.state.lastDashVX = state.player.body.velocity.x;
+    state.player.state.lastDashVZ = state.player.body.velocity.z;
+  }
   // Per-unit movement speeds — fall back to the global defaults if a unit
   // omits the override.
   const playerSprintSpeed = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
@@ -2741,6 +2753,14 @@ function updatePlayer(now) {
     // frame rates. Irrelevant for units with real cooldowns.
     state.player.state.jumpCooldownUntil = now + Math.max(jumpCooldownMs, 250);
     inheritMomentum(state.player, 70);
+    // FLIGHT sprint-carry (Aris): jumping within 400 ms of sprinting seeds
+    // the jump's momentum from the remembered sprint velocity instead of the
+    // now-walking one — a hop right after a sprint glides visibly farther.
+    if (state.player.unit.flight
+        && now - (state.player.state.lastDashAt ?? -1e9) < 400) {
+      state.player.state.momentumVX = (state.player.state.lastDashVX ?? 0) * 0.9;
+      state.player.state.momentumVZ = (state.player.state.lastDashVZ ?? 0) * 0.9;
+    }
     action = 'jump';
   } else if (input.boost && canInputMove) {
     state.player.state.antiMeleeUntil = now + 260;
@@ -2790,8 +2810,10 @@ function updatePlayer(now) {
     const st = state.player.state;
     const flying = !!state.player.unit.flight && st.airborne;
     st.flightClimb = flying && input.jump && canInputMove && st.boost > 0;
+    // Fresh step check (NOT the `inStep` const from the top of the frame):
+    // a dodge that STARTED this frame must hold altitude from its first tick.
     st.flightLevel = flying && !st.flightClimb && st.boost > 0
-      && (useSprint || inStep);
+      && (useSprint || now <= (st.stepUntil || 0));
     if (st.flightClimb) {
       st.boost = Math.max(0, st.boost - (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
       st.refillPausedUntil = now + 500;
@@ -4648,8 +4670,11 @@ function updateTransforms(dt) {
           m.unit?.sprintSpeed ?? BOOST_MOVE_SPEED,
           m.state.jumpVelocity + world.gravity.y * dt
         );
-      } else if (m.state.flightLevel) {
+      } else if (m.state.flightLevel
+          || (m.unit?.flight && performance.now() <= (m.state.stepUntil || 0))) {
         // FLIGHT (Aris): level flight — air-sprint / air-dodge hold altitude.
+        // The direct stepUntil check is a belt-and-braces guard so an airborne
+        // dodge can never fall regardless of flag timing in the input path.
         m.state.jumpVelocity = 0;
       } else {
         m.state.jumpVelocity += world.gravity.y * dt;
