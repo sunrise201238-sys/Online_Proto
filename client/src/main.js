@@ -1852,9 +1852,20 @@ function updateProjectileSystem(dt) {
       continue;
     }
 
+    // COST NOTE (mirrors shared projectiles.js): the teleport-reposition and
+    // its full-map wall check run ONLY while the spread is still growing — a
+    // handful of ticks per volley. Once spreadFactor hits 1 the pellet's slot
+    // is constant: it's flagged clusterLocked and advances via the normal
+    // integration below (single standard wall sweep) while still mirroring
+    // the center's velocity each tick, so the formation translates as one
+    // (homing-compatible) at ordinary-bullet cost. Followers previously paid
+    // the teleport + extra sweep every tick — the shotgun lag spike.
     if (p.centerPellet && p.centerPellet !== p) {
       if (p.centerPellet.ttl <= 0 || !state.projectiles.includes(p.centerPellet)) {
         p.centerPellet = null;
+      } else if (p.clusterLocked) {
+        // Formation locked: just mirror the center's steering.
+        p.vel.copy(p.centerPellet.vel);
       } else {
         // Cluster offset scales 0 → 1 over SHOTGUN_CLUSTER_SPREAD_DISTANCE
         // world units of center-pellet travel, so pellets emerge bunched and
@@ -1887,6 +1898,7 @@ function updateProjectileSystem(dt) {
           continue;
         }
         p.mesh.position.copy(repositioned);
+        if (spreadFactor >= 1) p.clusterLocked = true;
       }
     }
     const toTarget = new THREE.Vector3().subVectors(p.target.root.position, p.mesh.position);

@@ -163,10 +163,25 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // units of travel. spreadFactor reads from the center pellet's
     // distTraveled, which is monotonically non-decreasing, so spread can
     // never shrink even if homing curves the center pellet.
+    //
+    // COST NOTE: the teleport-reposition (and its full-map swept wall check)
+    // runs ONLY while the spread is still growing — a handful of ticks per
+    // volley. Once spreadFactor hits 1 the pellet's slot in the formation is
+    // constant, and "teleport to slot" is bit-identical to "advance by the
+    // center's velocity": the pellet is flagged clusterLocked and moves via
+    // the normal integration below (single standard wall sweep). It keeps
+    // mirroring the center's velocity every tick, so the formation still
+    // translates as one — homing-compatible — at ordinary-bullet cost.
+    // Followers previously paid the teleport + extra wall sweep every tick
+    // of their lives; with 8 pellets/shot that was the shotgun lag spike.
     if (p.centerPelletId != null) {
       const center = byId.get(p.centerPelletId);
       if (!center || center.ttl <= 0) {
         p.centerPelletId = null;
+      } else if (p.clusterLocked) {
+        // Formation locked: just mirror the center's steering; position
+        // advances in lockstep via the shared integration below.
+        p.vel = { x: center.vel.x, y: center.vel.y, z: center.vel.z };
       } else {
         const spreadFactor = Math.min(
           1,
@@ -196,6 +211,7 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
           continue;
         }
         p.pos = repositioned;
+        if (spreadFactor >= 1) p.clusterLocked = true;
       }
     }
 
