@@ -11,7 +11,11 @@ import {
   buildNavGrid,
   findPathOnGrid,
   findFiringPath,
-  walkSegmentBlocked
+  walkSegmentBlocked,
+  volleyAxes,
+  volleyPelletOffset,
+  volleySpreadFactor,
+  SHOTGUN_PATTERN
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -1497,37 +1501,49 @@ function spawnProjectiles(owner, target) {
   }
   const baseDir = new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
   const isShotgun = owner.unit.spreadCount > 1;
-  const centerIndex = isShotgun ? Math.floor(Math.random() * owner.unit.spreadCount) : 0;
-  // ROUND PATTERN: the disk is sampled in the plane PERPENDICULAR to the aim,
-  // so the cluster reads as a circle from the shooter's point of view.
-  // (Previously a flat horizontal disk + 0.7-scaled vertical jitter — a
-  // ~3.5:1 wide ellipse.) Mirrors shared projectiles.js.
-  const shotgunOffsets = [];
-  if (isShotgun) {
-    const clusterRadius = 3.8;
-    const pl = Math.hypot(baseDir.x, baseDir.z) || 1;
-    const rightX = -baseDir.z / pl;
-    const rightZ = baseDir.x / pl;
-    let upX = -rightZ * baseDir.y;
-    let upY = rightZ * baseDir.x - rightX * baseDir.z;
-    let upZ = rightX * baseDir.y;
-    const ul = Math.hypot(upX, upY, upZ) || 1;
-    upX /= ul; upY /= ul; upZ /= ul;
-    for (let i = 0; i < owner.unit.spreadCount; i += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = Math.sqrt(Math.random()) * clusterRadius;
-      const c = Math.cos(angle) * radius;
-      const s = Math.sin(angle) * radius;
-      shotgunOffsets.push(new THREE.Vector3(rightX * c + upX * s, upY * s, rightZ * c + upZ * s));
-    }
-  }
-  let centerPellet = null;
 
-  for (let i = 0; i < owner.unit.spreadCount; i += 1) {
-    const isCenterPellet = isShotgun && i === centerIndex;
-    const spreadScale = isShotgun ? (isCenterPellet ? 0.08 : 0.14) : 1;
-    const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle * spreadScale;
-    const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.35 * spreadScale;
+  // Shotgun VOLLEY STAMP (mirrors shared projectiles.js): ONE flying object
+  // carries the whole SHOTGUN_PATTERN. Pellet positions (hitbox AND visual)
+  // derive from volleyPelletOffset, per-pellet deaths flip pelletMask bits.
+  if (isShotgun) {
+    const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.08;
+    const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.35 * 0.08;
+    const dir = baseDir.clone()
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
+      .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
+    const spawnPos = owner.root.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+    const pelletMeshes = [];
+    for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+      const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
+      mesh.position.copy(spawnPos);
+      scene.add(mesh);
+      pelletMeshes.push(mesh);
+    }
+    state.projectiles.push({
+      owner,
+      target,
+      mesh: null,
+      pelletMeshes,
+      trail: null,
+      trailFadeMs: 0,
+      center: spawnPos.clone(),
+      spawnPos,
+      vel: dir.multiplyScalar(owner.unit.projectileSpeed),
+      homing: owner.state.redLock,
+      homingLost: false,
+      pelletMask: (1 << SHOTGUN_PATTERN.length) - 1,
+      volleyRot: Math.random() * Math.PI * 2,
+      ttl: 2.2,
+      damage: shotDamage,
+      hitStunMs: owner.unit.stun?.ms ?? 100,
+      hitStunScale: owner.unit.stun?.moveScale ?? 0.25
+    });
+    return;
+  }
+
+  {
+    const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle;
+    const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.35;
     const dir = baseDir.clone()
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
       .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
@@ -1535,9 +1551,9 @@ function spawnProjectiles(owner, target) {
     const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
     mesh.position.copy(owner.root.position).add(new THREE.Vector3(0, 0.8, 0));
     scene.add(mesh);
-    // Bullet trail (MG / Sniper only — shotgun pellets opt out). Tail trails
-    // by (fadeMs / 1000) * speed, clamped to spawn for the first fadeMs so the
-    // line doesn't extend behind the muzzle.
+    // Bullet trail (MG / Sniper only). Tail trails by (fadeMs / 1000) * speed,
+    // clamped to spawn for the first fadeMs so the line doesn't extend behind
+    // the muzzle.
     const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
     let trail = null;
     if (trailFadeMs > 0) {
@@ -1547,8 +1563,7 @@ function spawnProjectiles(owner, target) {
 
     const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
     orientTracer(mesh, projVel.x, projVel.y, projVel.z);
-    const homing = owner.state.redLock && (!isShotgun || isCenterPellet);
-    const projectile = {
+    state.projectiles.push({
       owner,
       target,
       mesh,
@@ -1557,11 +1572,8 @@ function spawnProjectiles(owner, target) {
       trailSpawnPos: mesh.position.clone(),
       trailSpawnAt: now,
       vel: projVel,
-      homing,
+      homing: owner.state.redLock,
       homingLost: false,
-      isCenterPellet,
-      centerPellet: null,
-      clusterOffset: isShotgun ? shotgunOffsets[i] : null,
       ttl: 2.2,
       damage: shotDamage,
       hitStunMs: owner.unit.stun?.ms ?? 100,
@@ -1570,21 +1582,8 @@ function spawnProjectiles(owner, target) {
       // point projectiles. The hit test below extends the swept segment by
       // boltLen and widens the capsule test by boltRadius.
       boltLen: owner.unit.beamBolt?.length ?? 0,
-      boltRadius: owner.unit.beamBolt?.radius ?? 0,
-      // Set on the shotgun's center pellet only — accumulates path length so
-      // non-center pellets can interpolate cluster spread (0 → full) over
-      // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel. undefined for non-shotgun /
-      // non-center projectiles (the update step skips them).
-      distTraveled: (isShotgun && isCenterPellet) ? 0 : undefined
-    };
-    if (isCenterPellet) centerPellet = projectile;
-    state.projectiles.push(projectile);
-  }
-  if (isShotgun && centerPellet) {
-    for (let i = state.projectiles.length - owner.unit.spreadCount; i < state.projectiles.length; i += 1) {
-      const pellet = state.projectiles[i];
-      if (!pellet.isCenterPellet) pellet.centerPellet = centerPellet;
-    }
+      boltRadius: owner.unit.beamBolt?.radius ?? 0
+    });
   }
 }
 
@@ -1864,59 +1863,116 @@ function updateProjectileSystem(dt) {
     if (p.ttl <= 0) {
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
+      if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
       state.projectiles.splice(i, 1);
       continue;
     }
 
-    // COST NOTE (mirrors shared projectiles.js): the teleport-reposition and
-    // its full-map wall check run ONLY while the spread is still growing — a
-    // handful of ticks per volley. Once spreadFactor hits 1 the pellet's slot
-    // is constant: it's flagged clusterLocked and advances via the normal
-    // integration below (single standard wall sweep) while still mirroring
-    // the center's velocity each tick, so the formation translates as one
-    // (homing-compatible) at ordinary-bullet cost. Followers previously paid
-    // the teleport + extra sweep every tick — the shotgun lag spike.
-    if (p.centerPellet && p.centerPellet !== p) {
-      if (p.centerPellet.ttl <= 0 || !state.projectiles.includes(p.centerPellet)) {
-        p.centerPellet = null;
-      } else if (p.clusterLocked) {
-        // Formation locked: just mirror the center's steering.
-        p.vel.copy(p.centerPellet.vel);
-      } else {
-        // Cluster offset scales 0 → 1 over SHOTGUN_CLUSTER_SPREAD_DISTANCE
-        // world units of center-pellet travel, so pellets emerge bunched and
-        // grow to the full clusterOffset by the time they reach mid-range.
-        // distTraveled is monotonically non-decreasing, so spread can't
-        // shrink even when homing curves the center pellet.
-        const spreadFactor = THREE.MathUtils.clamp(
-          (p.centerPellet.distTraveled ?? 0) / SHOTGUN_CLUSTER_SPREAD_DISTANCE,
-          0,
-          1
-        );
-        p.vel.copy(p.centerPellet.vel);
-        const repositioned = p.centerPellet.mesh.position.clone()
-          .addScaledVector(p.clusterOffset, spreadFactor);
-        // The cluster reposition is a teleport — give it the same swept wall
-        // check as normal flight, or pellets can be PLACED across a thin
-        // barrier (e.g. Airport's 1.2-thick glass) without ever "flying"
-        // through it. A pellet whose reposition crosses a wall dies on it.
-        let repoBlocked = false;
+    // Shotgun VOLLEY STAMP (mirrors shared _tickVolley — keep in sync): ONE
+    // object carries the whole SHOTGUN_PATTERN. The center flies/homes like a
+    // normal projectile; every alive pellet (pelletMask bit set) sweeps its
+    // own segment at volleyPelletOffset each tick, dying individually on
+    // walls/surfaces/the target. Pellet meshes are placed from the exact same
+    // offsets, so hitboxes and visuals can't drift apart.
+    if (p.pelletMask !== undefined) {
+      const tgtState = p.target.state;
+      if (tgtState.hp <= 0) {
+        p.homing = false;
+        p.homingLost = true;
+      }
+      const toTarget = new THREE.Vector3().subVectors(p.target.root.position, p.center);
+      if (toTarget.length() <= HOMING_CLOSE_RANGE_CUTOFF) {
+        p.homing = false;
+        p.homingLost = true;
+      }
+      if (!p.homingLost && p.vel.dot(toTarget) < 0) {
+        p.homingLost = true;
+        p.homing = false;
+      }
+      if (p.homing && !p.homingLost && now >= tgtState.evadeHomingUntil) {
+        const desiredAngle = Math.atan2(toTarget.z, toTarget.x);
+        const currentAngle = Math.atan2(p.vel.z, p.vel.x);
+        const distToTarget = toTarget.length();
+        const turnDeg = distToTarget <= HOMING_SOFTEN_RANGE ? HOMING_SOFTEN_DEG_PER_FRAME : HOMING_MAX_DEG_PER_FRAME;
+        const maxTurn = THREE.MathUtils.degToRad(turnDeg);
+        const wrapped = wrapAngle(desiredAngle - currentAngle);
+        const turn = THREE.MathUtils.clamp(wrapped, -maxTurn, maxTurn);
+        const speed = p.vel.length();
+        const next = currentAngle + turn;
+        p.vel.x = Math.cos(next) * speed;
+        p.vel.z = Math.sin(next) * speed;
+      }
+
+      const prevCenter = p.center.clone();
+      p.center.addScaledVector(p.vel, dt);
+      const factor = Math.min(1, p.center.distanceTo(p.spawnPos) / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+      const axes = volleyAxes(p.vel);
+      const sameTeam = p.owner?.state?.team && tgtState.team && p.owner.state.team === tgtState.team;
+      const targetable = tgtState.hp > 0 && !sameTeam
+        && now >= tgtState.invulnerableUntil && now > tgtState.stepUntil;
+      const hitCenter = p.target.root.position;
+
+      let pelletsHit = 0;
+      for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+        const bit = 1 << k;
+        if (!(p.pelletMask & bit)) continue;
+        const off = volleyPelletOffset(k, axes, p.volleyRot, factor);
+        const a = new THREE.Vector3(prevCenter.x + off.x, prevCenter.y + off.y, prevCenter.z + off.z);
+        const b = new THREE.Vector3(p.center.x + off.x, p.center.y + off.y, p.center.z + off.z);
+        let hitThis = false;
+        let sweepEnd = b;
+        if (targetable) {
+          const nearest = new THREE.Vector3();
+          new THREE.Line3(a, b).closestPointToPoint(hitCenter, true, nearest);
+          const hdx = nearest.x - hitCenter.x;
+          const hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - 1.6);
+          const hdz = nearest.z - hitCenter.z;
+          if (hdx * hdx + hdy * hdy + hdz * hdz < 1.6 * 1.6) {
+            hitThis = true;
+            sweepEnd = nearest;
+          }
+        }
+        let dead = false;
         for (const obstacle of arenaObstacles) {
           if (obstacle.noProjectile) continue;
-          if (!segmentHitsObstacle(p.mesh.position, repositioned, obstacle)) continue;
-          repoBlocked = true;
+          if (!segmentHitsObstacle(a, sweepEnd, obstacle)) continue;
+          dead = true;
+          hitThis = false;   // the wall was in front of the hit point
           break;
         }
-        if (repoBlocked) {
-          despawnProjectileTrail(p, now);
-          disposeProjectileMesh(p.mesh);
-          state.projectiles.splice(i, 1);
-          continue;
+        if (!dead && projectileHitsSurface(a, sweepEnd)) {
+          dead = true;
+          hitThis = false;
         }
-        p.mesh.position.copy(repositioned);
-        if (spreadFactor >= 1) p.clusterLocked = true;
+        if (hitThis) {
+          pelletsHit += 1;
+          dead = true;       // pellets despawn on hit, as before
+        }
+        if (dead) {
+          p.pelletMask &= ~bit;
+          disposeProjectileMesh(p.pelletMeshes[k]);
+          p.pelletMeshes[k] = null;
+        } else {
+          p.pelletMeshes[k].position.copy(b);
+        }
       }
+
+      if (pelletsHit > 0) {
+        const finalDamage = getProjectileDamage(p) * pelletsHit;
+        tgtState.hp = Math.max(0, tgtState.hp - finalDamage);
+        if (now >= tgtState.hitStunUntil || p.hitStunScale < tgtState.hitStunScale) {
+          tgtState.hitStunScale = p.hitStunScale;
+          tgtState.hitStunUntil = now + p.hitStunMs;
+        }
+        tgtState.momentumVX = 0;
+        tgtState.momentumVZ = 0;
+        spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
+        p.target.body.velocity.set(0, 0, 0);
+      }
+      if (p.pelletMask === 0) state.projectiles.splice(i, 1);
+      continue;
     }
+
     const toTarget = new THREE.Vector3().subVectors(p.target.root.position, p.mesh.position);
     if (toTarget.length() <= HOMING_CLOSE_RANGE_CUTOFF) {
       p.homing = false;
@@ -1964,11 +2020,6 @@ function updateProjectileSystem(dt) {
       }
       updateBulletTrailEnds(p.trail, tailX, tailY, tailZ,
         p.mesh.position.x, p.mesh.position.y, p.mesh.position.z);
-    }
-    // Track total path length on shotgun center pellets so the cluster
-    // spread factor uses actual distance flown (homing-aware).
-    if (p.distTraveled !== undefined) {
-      p.distTraveled += p.mesh.position.distanceTo(prevPos);
     }
     // Hit geometry, computed BEFORE the wall/surface sweep so that sweep can be
     // clipped to the target's hit point. Without the clip, the swept wall test
@@ -2318,10 +2369,14 @@ function buildChargedBeamMesh(radius) {
 function deleteProjectilesInBeam(beamLike, radius) {
   for (let i = state.projectiles.length - 1; i >= 0; i -= 1) {
     const p = state.projectiles[i];
-    if (!p.mesh) continue;
-    if (beamPerpDistXZ(beamLike, p.mesh.position.x, p.mesh.position.z) >= radius) continue;
+    // Shotgun volleys have no single mesh — test their flying center (the
+    // shared sim tests p.pos the same way and deletes the whole volley).
+    const pos = p.mesh ? p.mesh.position : p.center;
+    if (!pos) continue;
+    if (beamPerpDistXZ(beamLike, pos.x, pos.z) >= radius) continue;
     despawnProjectileTrail(p, performance.now());
     disposeProjectileMesh(p.mesh);
+    if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
     state.projectiles.splice(i, 1);
   }
 }
@@ -4960,6 +5015,7 @@ function cleanupMatch() {
   state.playerCurrentTarget = null;
   state.projectiles.forEach((p) => {
     disposeProjectileMesh(p.mesh);
+    if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
     if (p.trail) disposeBulletTrail(p.trail);
   });
   state.projectiles.length = 0;
@@ -5260,6 +5316,43 @@ function syncOnlineProjectiles(snap) {
   const now = performance.now();
   for (const sp of snap.projectiles) {
     liveIds.add(sp.id);
+    // Shotgun VOLLEY: one snapshot entry expands into the whole pattern —
+    // pellet positions come from the SAME shared math the server sim uses
+    // for hitboxes (volleyAxes / volleyPelletOffset / spawn-distance growth),
+    // and pelletMask drives which pellets still render.
+    if (sp.pelletMask !== undefined) {
+      let entry = meshes.get(sp.id);
+      if (!entry) {
+        const owner = snap.fighters[sp.ownerId];
+        const ownerUnit = owner?.unit ?? SIM_UNIT_DATA[owner?.unitKey] ?? {};
+        const pelletMeshes = [];
+        for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+          const pm = buildProjectileMesh(ownerUnit, owner?.redLock ?? false);
+          pm.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
+          scene.add(pm);
+          pelletMeshes.push(pm);
+        }
+        entry = { mesh: null, trail: null, trailFadeMs: 0, boltLen: 0, pelletMeshes };
+        meshes.set(sp.id, entry);
+      }
+      const vdx = sp.pos.x - sp.spawnX;
+      const vdy = sp.pos.y - sp.spawnY;
+      const vdz = sp.pos.z - sp.spawnZ;
+      const factor = Math.min(1, Math.sqrt(vdx * vdx + vdy * vdy + vdz * vdz) / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+      const axes = volleyAxes(sp.vel);
+      for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+        const pm = entry.pelletMeshes[k];
+        if (!pm) continue;
+        if (!(sp.pelletMask & (1 << k))) {
+          disposeProjectileMesh(pm);
+          entry.pelletMeshes[k] = null;
+          continue;
+        }
+        const off = volleyPelletOffset(k, axes, sp.volleyRot, factor);
+        pm.position.set(sp.pos.x + off.x, sp.pos.y + off.y, sp.pos.z + off.z);
+      }
+      continue;
+    }
     let entry = meshes.get(sp.id);
     if (!entry) {
       const owner = snap.fighters[sp.ownerId];
@@ -5321,6 +5414,7 @@ function syncOnlineProjectiles(snap) {
   for (const [id, entry] of meshes.entries()) {
     if (liveIds.has(id)) continue;
     disposeProjectileMesh(entry.mesh);
+    if (entry.pelletMeshes) for (const pm of entry.pelletMeshes) disposeProjectileMesh(pm);
     if (entry.trail) {
       state.dyingBulletTrails.push({
         trail: entry.trail,

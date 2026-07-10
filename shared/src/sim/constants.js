@@ -367,6 +367,16 @@ export const PROJECTILE_HIT_STUN_MS = 100;
 // medium-/long-range pattern. ~18 small grid cells on Plain Field
 // ((280/8)/(512/16) ≈ 1.09 units per cell, ×18 ≈ 19.7).
 export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 20;
+// Hand-designed irregular 8-point shotgun pattern (pattern-plane [x, y]
+// coordinates; max radius ≤ 3.8, no two points closer than ~1.6). One
+// VOLLEY object flies per trigger pull; these points — rotated by the
+// volley's random per-shot rotation and scaled by the 0→1 spread growth —
+// are both the pellet HITBOXES and the pellet VISUALS, so they can never
+// drift apart. Pellets die individually via the volley's pelletMask.
+export const SHOTGUN_PATTERN = [
+  [0.0, 0.35], [2.1, 1.9], [-1.7, 2.6], [-3.1, -0.4],
+  [-1.5, -2.4], [0.9, -3.3], [3.3, -1.2], [1.4, -0.9]
+];
 
 // Sniper-specific.
 export const SNIPER_GLINT_VISIBLE = true;

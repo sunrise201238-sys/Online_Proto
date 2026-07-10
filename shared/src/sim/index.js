@@ -35,7 +35,13 @@ export {
   tryStartJump,
   startDash
 } from './actions.js';
-export { spawnProjectiles, tickProjectiles } from './projectiles.js';
+export {
+  spawnProjectiles, tickProjectiles,
+  // Shotgun volley pattern math — shared by the sim, the offline renderer,
+  // and the online snapshot mirror so pellet hitboxes and visuals can never
+  // drift apart.
+  volleyAxes, volleyPelletOffset, volleySpreadFactor
+} from './projectiles.js';
 export { tickBot, pickBotTargetId } from './ai.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';

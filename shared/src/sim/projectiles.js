@@ -11,6 +11,7 @@ import {
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
   SHOTGUN_CLUSTER_SPREAD_DISTANCE,
+  SHOTGUN_PATTERN,
   BEAM_MAX_LENGTH,
   KEI_CHARGED_DURATION_MS,
   KEI_CHARGED_RADIUS_MULT,
@@ -53,96 +54,75 @@ export function spawnProjectiles(matchState, owner, target) {
   const baseDirRaw = vec3Sub(target.pos, owner.pos);
   const baseDir = vec3Normalize(baseDirRaw);
   const isShotgun = u.spreadCount > 1;
-  const centerIndex = isShotgun ? Math.floor(Math.random() * u.spreadCount) : 0;
-
-  // Build cluster offsets (visual jitter so shotgun pellets don't all overlap).
-  // ROUND PATTERN: the disk is sampled in the plane PERPENDICULAR to the aim,
-  // so the cluster reads as a circle from the shooter's point of view.
-  // (Previously a flat horizontal disk + 0.7-scaled vertical jitter — a
-  // ~3.5:1 wide ellipse.) Mirrors offline main.js.
-  const shotgunOffsets = [];
-  if (isShotgun) {
-    const clusterRadius = 3.8;
-    // Horizontal axis perpendicular to the aim, then the matching "up" axis
-    // (right × dir) — for a level aim this is straight +Y.
-    const pl = Math.hypot(baseDir.x, baseDir.z) || 1;
-    const rightX = -baseDir.z / pl;
-    const rightZ = baseDir.x / pl;
-    let upX = -rightZ * baseDir.y;
-    let upY = rightZ * baseDir.x - rightX * baseDir.z;
-    let upZ = rightX * baseDir.y;
-    const ul = Math.hypot(upX, upY, upZ) || 1;
-    upX /= ul; upY /= ul; upZ /= ul;
-    for (let i = 0; i < u.spreadCount; i += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = Math.sqrt(Math.random()) * clusterRadius;
-      const c = Math.cos(angle) * radius;
-      const s = Math.sin(angle) * radius;
-      shotgunOffsets.push({
-        x: rightX * c + upX * s,
-        y: upY * s,
-        z: rightZ * c + upZ * s
-      });
-    }
-  }
 
   // Spawn at chest height: 2.35 modelYOffset (lifts feet→torso) + 0.8 (offset
   // to muzzle, matches offline main.js:674 which adds 0.8 to root.position).
   const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
   const spawned = [];
-  let centerPellet = null;
 
-  for (let i = 0; i < u.spreadCount; i += 1) {
-    const isCenterPellet = isShotgun && i === centerIndex;
-    const spreadScale = isShotgun ? (isCenterPellet ? 0.08 : 0.14) : 1;
-    const yaw = (Math.random() - 0.5) * u.spreadAngle * spreadScale;
-    const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.35 * spreadScale;
+  if (isShotgun) {
+    // VOLLEY STAMP: the whole shotgun blast is ONE flying object carrying the
+    // fixed SHOTGUN_PATTERN (randomly rotated per shot). Pellet hitboxes and
+    // visuals both derive from center + pattern × rotation × spread growth,
+    // so they can never drift apart; pelletMask tracks which pellets are
+    // still alive (individual wall/target deaths, exactly like before).
+    // Replaces 8 independent projectiles — 8× fewer objects simulated,
+    // serialized, transmitted, parsed, cloned, and rendered (the online
+    // "one shotgun lags the match" report). Mirrors offline main.js.
+    const yaw = (Math.random() - 0.5) * u.spreadAngle * 0.08;
+    const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.35 * 0.08;
     const dir = applyYawPitch(baseDir, yaw, pitch);
-
-    const homing = owner.redLock && (!isShotgun || isCenterPellet);
     const projectile = createProjectile({
       id: nextProjectileId(),
       ownerId: owner.id,
       targetId: target.id,
       pos: spawnOrigin,
       vel: { x: dir.x * u.projectileSpeed, y: dir.y * u.projectileSpeed, z: dir.z * u.projectileSpeed },
-      damage: shotDamage,
-      homing,
-      isCenterPellet: isShotgun ? isCenterPellet : false,
-      centerPelletId: null,
-      clusterOffset: isShotgun ? shotgunOffsets[i] : null,
+      damage: shotDamage,             // per PELLET, as before
+      homing: owner.redLock,          // homing steers the volley as one; the
+                                      // rigid pattern makes clumping impossible
       ttl: PROJECTILE_TTL_S,
       hitStunMs: u.stun?.ms ?? PROJECTILE_HIT_STUN_MS,
       hitStunScale: u.stun?.moveScale ?? 0.25
     });
-    if (isShotgun && isCenterPellet) {
-      // Track total path length on the shotgun's center pellet so non-center
-      // pellets can interpolate cluster spread (0 → full) over
-      // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel.
-      projectile.distTraveled = 0;
-    }
-    if (u.beamBolt) {
-      // Aris laser bolt: the hitbox is a thin beamBolt.length-long cylinder
-      // that GROWS OUT of the muzzle — clipped to the distance flown from
-      // the spawn point, so it never reaches behind the muzzle. The client
-      // renders the matching cyan visual from the same unit entry. Mirrors
-      // offline main.js.
-      projectile.boltLen = u.beamBolt.length;
-      projectile.boltRadius = u.beamBolt.radius;
-      projectile.spawnX = spawnOrigin.x;
-      projectile.spawnY = spawnOrigin.y;
-      projectile.spawnZ = spawnOrigin.z;
-    }
-    if (isCenterPellet) centerPellet = projectile;
+    projectile.pelletMask = (1 << SHOTGUN_PATTERN.length) - 1;
+    projectile.volleyRot = Math.random() * Math.PI * 2;
+    projectile.spawnX = spawnOrigin.x;
+    projectile.spawnY = spawnOrigin.y;
+    projectile.spawnZ = spawnOrigin.z;
     spawned.push(projectile);
     matchState.projectiles.push(projectile);
-  }
-
-  // Wire shotgun pellets to follow the center pellet.
-  if (isShotgun && centerPellet) {
-    for (let i = 0; i < spawned.length; i += 1) {
-      const p = spawned[i];
-      if (!p.isCenterPellet) p.centerPelletId = centerPellet.id;
+  } else {
+    for (let i = 0; i < u.spreadCount; i += 1) {
+      const yaw = (Math.random() - 0.5) * u.spreadAngle;
+      const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.35;
+      const dir = applyYawPitch(baseDir, yaw, pitch);
+      const projectile = createProjectile({
+        id: nextProjectileId(),
+        ownerId: owner.id,
+        targetId: target.id,
+        pos: spawnOrigin,
+        vel: { x: dir.x * u.projectileSpeed, y: dir.y * u.projectileSpeed, z: dir.z * u.projectileSpeed },
+        damage: shotDamage,
+        homing: owner.redLock,
+        ttl: PROJECTILE_TTL_S,
+        hitStunMs: u.stun?.ms ?? PROJECTILE_HIT_STUN_MS,
+        hitStunScale: u.stun?.moveScale ?? 0.25
+      });
+      if (u.beamBolt) {
+        // Aris laser bolt: the hitbox is a thin beamBolt.length-long cylinder
+        // that GROWS OUT of the muzzle — clipped to the distance flown from
+        // the spawn point, so it never reaches behind the muzzle. The client
+        // renders the matching cyan visual from the same unit entry. Mirrors
+        // offline main.js.
+        projectile.boltLen = u.beamBolt.length;
+        projectile.boltRadius = u.beamBolt.radius;
+        projectile.spawnX = spawnOrigin.x;
+        projectile.spawnY = spawnOrigin.y;
+        projectile.spawnZ = spawnOrigin.z;
+      }
+      spawned.push(projectile);
+      matchState.projectiles.push(projectile);
     }
   }
 
@@ -161,9 +141,6 @@ export function spawnProjectiles(matchState, owner, target) {
 // Mutates matchState.projectiles and matchState.fighters[targetId].
 export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damageScaler = null) {
   const projectiles = matchState.projectiles;
-  // Rebuild the per-tick id→projectile map for the centerPelletId follow.
-  const byId = new Map();
-  for (let i = 0; i < projectiles.length; i += 1) byId.set(projectiles[i].id, projectiles[i]);
 
   for (let i = projectiles.length - 1; i >= 0; i -= 1) {
     const p = projectiles[i];
@@ -173,62 +150,10 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       continue;
     }
 
-    // Follow center pellet (shotgun cluster). The cluster offset is scaled
-    // by spreadFactor — pellets emerge bunched together at the muzzle and
-    // grow to full clusterOffset over SHOTGUN_CLUSTER_SPREAD_DISTANCE world
-    // units of travel. spreadFactor reads from the center pellet's
-    // distTraveled, which is monotonically non-decreasing, so spread can
-    // never shrink even if homing curves the center pellet.
-    //
-    // COST NOTE: the teleport-reposition (and its full-map swept wall check)
-    // runs ONLY while the spread is still growing — a handful of ticks per
-    // volley. Once spreadFactor hits 1 the pellet's slot in the formation is
-    // constant, and "teleport to slot" is bit-identical to "advance by the
-    // center's velocity": the pellet is flagged clusterLocked and moves via
-    // the normal integration below (single standard wall sweep). It keeps
-    // mirroring the center's velocity every tick, so the formation still
-    // translates as one — homing-compatible — at ordinary-bullet cost.
-    // Followers previously paid the teleport + extra wall sweep every tick
-    // of their lives; with 8 pellets/shot that was the shotgun lag spike.
-    if (p.centerPelletId != null) {
-      const center = byId.get(p.centerPelletId);
-      if (!center || center.ttl <= 0) {
-        p.centerPelletId = null;
-      } else if (p.clusterLocked) {
-        // Formation locked: just mirror the center's steering; position
-        // advances in lockstep via the shared integration below.
-        p.vel = { x: center.vel.x, y: center.vel.y, z: center.vel.z };
-      } else {
-        const spreadFactor = Math.min(
-          1,
-          (center.distTraveled ?? 0) / SHOTGUN_CLUSTER_SPREAD_DISTANCE
-        );
-        p.vel = { x: center.vel.x, y: center.vel.y, z: center.vel.z };
-        const repositioned = {
-          x: center.pos.x + (p.clusterOffset?.x ?? 0) * spreadFactor,
-          y: center.pos.y + (p.clusterOffset?.y ?? 0) * spreadFactor,
-          z: center.pos.z + (p.clusterOffset?.z ?? 0) * spreadFactor
-        };
-        // The cluster reposition is a teleport — give it the same swept wall
-        // check as normal flight, or pellets can be PLACED across a thin
-        // barrier (e.g. Airport's 1.2-thick glass) without ever "flying"
-        // through it. A pellet whose reposition crosses a wall dies on it.
-        // Mirrors offline main.js.
-        let repoBlocked = false;
-        for (let j = 0; j < obstacles.length; j += 1) {
-          const o = obstacles[j];
-          if (o.noProjectile) continue;
-          if (!segmentHitsObstacle(p.pos, repositioned, o)) continue;
-          repoBlocked = true;
-          break;
-        }
-        if (repoBlocked) {
-          _despawn(matchState, projectiles, i, p, 'obstacle');
-          continue;
-        }
-        p.pos = repositioned;
-        if (spreadFactor >= 1) p.clusterLocked = true;
-      }
+    // Shotgun VOLLEY: one object, whole pattern — dedicated handler.
+    if (p.pelletMask !== undefined) {
+      _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces, damageScaler);
+      continue;
     }
 
     const target = matchState.fighters[p.targetId];
@@ -284,14 +209,6 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     p.pos.x += p.vel.x * dt;
     p.pos.y += p.vel.y * dt;
     p.pos.z += p.vel.z * dt;
-    // Track total path length on shotgun center pellets so cluster spread
-    // can interpolate based on actual distance flown (homing-aware).
-    if (p.distTraveled !== undefined) {
-      const ddx = p.pos.x - prevPos.x;
-      const ddy = p.pos.y - prevPos.y;
-      const ddz = p.pos.z - prevPos.z;
-      p.distTraveled += Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
-    }
 
     // Hit geometry, computed BEFORE the wall/surface sweep so that sweep can be
     // clipped to the target's hit point. Without the clip, the swept wall test
@@ -382,6 +299,172 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
 function _despawn(matchState, projectiles, idx, p, reason) {
   projectiles.splice(idx, 1);
   matchState.events.push({ type: 'despawn', id: p.id, reason });
+}
+
+// ---------------------------------------------------------------------------
+// Shotgun VOLLEY — one flying object per trigger pull carrying the whole
+// SHOTGUN_PATTERN. Pellets exist only as pattern slots: pelletMask says which
+// are alive; hitboxes AND visuals derive from the same formula below, so they
+// can never drift apart. Per-pellet wall/target deaths are preserved exactly.
+// ---------------------------------------------------------------------------
+
+// Pattern-plane axes from the volley's CURRENT velocity: `right` is the
+// horizontal perpendicular, `up` completes the frame (straight +Y for level
+// flight). Under future homing the pattern keeps facing the flight direction,
+// so the rigid formation can curve as one — clumping is geometrically
+// impossible. Shared by the sim, the offline renderer, and the online mirror.
+export function volleyAxes(vel) {
+  const pl = Math.hypot(vel.x, vel.z) || 1;
+  const rX = -vel.z / pl;
+  const rZ = vel.x / pl;
+  let uX = -rZ * vel.y;
+  let uY = rZ * vel.x - rX * vel.z;
+  let uZ = rX * vel.y;
+  const ul = Math.hypot(uX, uY, uZ) || 1;
+  return { rX, rZ, uX: uX / ul, uY: uY / ul, uZ: uZ / ul };
+}
+
+// World-space offset of pattern slot k: pattern point, rotated by the
+// volley's per-shot rotation, laid onto the axes, scaled by spread growth.
+export function volleyPelletOffset(k, axes, rot, factor) {
+  const px = SHOTGUN_PATTERN[k][0];
+  const py = SHOTGUN_PATTERN[k][1];
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  const rx2 = px * c - py * s;
+  const ry2 = px * s + py * c;
+  return {
+    x: (axes.rX * rx2 + axes.uX * ry2) * factor,
+    y: (axes.uY * ry2) * factor,
+    z: (axes.rZ * rx2 + axes.uZ * ry2) * factor
+  };
+}
+
+// Spread growth 0→1 over SHOTGUN_CLUSTER_SPREAD_DISTANCE units from the
+// spawn point (straight-line — identical on sim and clients).
+export function volleySpreadFactor(p) {
+  const dx = p.pos.x - p.spawnX;
+  const dy = p.pos.y - p.spawnY;
+  const dz = p.pos.z - p.spawnZ;
+  return Math.min(1, Math.sqrt(dx * dx + dy * dy + dz * dz) / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+}
+
+function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces, damageScaler) {
+  const target = matchState.fighters[p.targetId];
+  if (!target) {
+    _despawn(matchState, projectiles, i, p, 'expire');
+    return;
+  }
+  if (target.hp <= 0) {
+    p.homing = false;
+    p.homingLost = true;
+  }
+
+  // Homing steers the VOLLEY (same rules/cutoffs as single projectiles);
+  // the pattern rides along rigidly.
+  const hitCenter = { x: target.pos.x, y: target.pos.y + 2.35, z: target.pos.z };
+  const toTarget = vec3Sub(hitCenter, p.pos);
+  if (vec3Length(toTarget) <= HOMING_CLOSE_RANGE_CUTOFF) {
+    p.homing = false;
+    p.homingLost = true;
+  }
+  if (!p.homingLost && vec3Dot(p.vel, toTarget) < 0) {
+    p.homing = false;
+    p.homingLost = true;
+  }
+  if (p.homing && !p.homingLost && now >= target.evadeHomingUntil) {
+    const desiredAngle = Math.atan2(toTarget.z, toTarget.x);
+    const currentAngle = Math.atan2(p.vel.z, p.vel.x);
+    const distToTarget = vec3Length(toTarget);
+    const turnDeg = distToTarget <= HOMING_SOFTEN_RANGE
+      ? HOMING_SOFTEN_DEG_PER_FRAME
+      : HOMING_MAX_DEG_PER_FRAME;
+    const maxTurn = degToRad(turnDeg);
+    const wrapped = wrapAngle(desiredAngle - currentAngle);
+    const turn = clamp(wrapped, -maxTurn, maxTurn);
+    const speed = vec3Length(p.vel);
+    const nextAngle = currentAngle + turn;
+    p.vel.x = Math.cos(nextAngle) * speed;
+    p.vel.z = Math.sin(nextAngle) * speed;
+  }
+
+  const prevPos = { x: p.pos.x, y: p.pos.y, z: p.pos.z };
+  p.pos.x += p.vel.x * dt;
+  p.pos.y += p.vel.y * dt;
+  p.pos.z += p.vel.z * dt;
+
+  const factor = volleySpreadFactor(p);
+  const axes = volleyAxes(p.vel);
+  const owner = matchState.fighters[p.ownerId];
+  const sameTeam = owner?.team && target.team && owner.team === target.team;
+  const targetable = target.hp > 0 && !sameTeam
+    && now >= target.invulnerableUntil && now > target.stepUntil;
+
+  // Each alive pellet flies its own swept segment this tick: target-capsule
+  // test first (clipping the wall sweep to the hit point, like the single-
+  // projectile path), then walls, then surfaces. Deaths clear its mask bit.
+  let pelletsHit = 0;
+  for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+    if (!(p.pelletMask & (1 << k))) continue;
+    const off = volleyPelletOffset(k, axes, p.volleyRot, factor);
+    const a = { x: prevPos.x + off.x, y: prevPos.y + off.y, z: prevPos.z + off.z };
+    const b = { x: p.pos.x + off.x, y: p.pos.y + off.y, z: p.pos.z + off.z };
+    let hitThis = false;
+    let sweepEnd = b;
+    if (targetable) {
+      const nearest = closestPointOnSegment(a, b, hitCenter);
+      const hdx = nearest.x - hitCenter.x;
+      const hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
+      const hdz = nearest.z - hitCenter.z;
+      if (hdx * hdx + hdy * hdy + hdz * hdz < HIT_RADIUS_NORMAL * HIT_RADIUS_NORMAL) {
+        hitThis = true;
+        sweepEnd = nearest;
+      }
+    }
+    let dead = false;
+    for (let j = 0; j < obstacles.length; j += 1) {
+      const o = obstacles[j];
+      if (o.noProjectile) continue;
+      if (!segmentHitsObstacle(a, sweepEnd, o)) continue;
+      dead = true;
+      hitThis = false;   // the wall was in front of the hit point
+      break;
+    }
+    if (!dead && projectileHitsSurface(a, sweepEnd, surfaces)) {
+      dead = true;
+      hitThis = false;
+    }
+    if (hitThis) {
+      pelletsHit += 1;
+      dead = true;       // pellets despawn on hit, as before
+    }
+    if (dead) p.pelletMask &= ~(1 << k);
+  }
+
+  if (pelletsHit > 0) {
+    const per = damageScaler ? damageScaler(p) : p.damage;
+    const damage = per * pelletsHit;
+    target.hp = Math.max(0, target.hp - damage);
+    if (now >= target.hitStunUntil || p.hitStunScale < target.hitStunScale) {
+      target.hitStunScale = p.hitStunScale;
+      target.hitStunUntil = now + p.hitStunMs;
+    }
+    target.momentumVX = 0;
+    target.momentumVZ = 0;
+    target.vel.x = 0;
+    target.vel.y = 0;
+    target.vel.z = 0;
+    matchState.events.push({
+      type: 'hit',
+      ownerId: p.ownerId,
+      targetId: p.targetId,
+      damage,
+      targetHp: target.hp,
+      pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z }
+    });
+  }
+
+  if (p.pelletMask === 0) _despawn(matchState, projectiles, i, p, 'obstacle');
 }
 
 // ---------------------------------------------------------------------------
