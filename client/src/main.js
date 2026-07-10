@@ -268,9 +268,10 @@ const UNIT_DATA = {
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
-    // FLIGHT (offline-only for now — migrate online after tuning): a JUMP
-    // tap in air re-fires the full jump impulse (airJumpBoostCost per pop, no
-    // cooldown beyond the 250 ms debounce); holding JUMP sustains the climb
+    // FLIGHT (mirrored in shared/src/sim tick.js+movement.js — keep in
+    // sync): a JUMP tap in air re-fires the full jump impulse
+    // (airJumpBoostCost per pop, no cooldown beyond the 250 ms debounce);
+    // holding JUMP sustains the climb
     // at sprint speed/drain after the impulse decays; air-sprint flies LEVEL
     // (uses the 'fly' art); the air-dodge holds altitude too. Releasing
     // everything falls normally. Uncapped height during tuning.
@@ -278,10 +279,7 @@ const UNIT_DATA = {
     // Laser bolt: the projectile's hitbox is a thin 32-long cylinder and the
     // transparent bright-cyan visual is that exact shape (both derive from
     // this one entry, so they can never drift apart).
-    beamBolt: { length: 32, radius: 0.4 },
-    // Hidden from the ONLINE pickers until the unit is migrated to the
-    // shared sim — the server's UNIT_DATA has no unit7 yet.
-    offlineOnly: true
+    beamBolt: { length: 32, radius: 0.4 }
   }
 };
 
@@ -5252,12 +5250,24 @@ function syncOnlineProjectiles(snap) {
         mesh,
         trail,
         trailFadeMs,
+        // Aris laser bolt body length (0 for point projectiles) — used to
+        // grow the visual out of the muzzle exactly like the sim's hitbox.
+        boltLen: ownerUnit.beamBolt?.length ?? 0,
         trailSpawnX: sp.pos.x, trailSpawnY: sp.pos.y, trailSpawnZ: sp.pos.z,
         trailSpawnAt: now
       };
       meshes.set(sp.id, entry);
     }
     entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
+    // Laser bolt: scale the body to the distance flown from the spawn point
+    // (the sim clips its hitbox the same way — see shared projectiles.js).
+    if (entry.boltLen) {
+      const bdx = sp.pos.x - (sp.spawnX ?? entry.trailSpawnX);
+      const bdy = sp.pos.y - (sp.spawnY ?? entry.trailSpawnY);
+      const bdz = sp.pos.z - (sp.spawnZ ?? entry.trailSpawnZ);
+      const body = Math.min(entry.boltLen, Math.sqrt(bdx * bdx + bdy * bdy + bdz * bdz));
+      entry.mesh.scale.y = Math.max(body, 0.6) / entry.boltLen;
+    }
     // Re-orient sniper tracers along their snapshot velocity so the streak
     // visibly follows the projectile's path. No-op for sphere projectiles.
     orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);

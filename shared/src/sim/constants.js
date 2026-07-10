@@ -200,6 +200,50 @@ export const UNIT_DATA = {
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
     beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
+  },
+  unit7: {
+    id: 'unit7',
+    name: 'Unit 7 / Rifle',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    // No jump cooldown — airborne again the moment she lands. tryStartJump
+    // floors the effective cooldown (250 ms players / 1.5 s bots) so
+    // same-press re-triggers and bot perch bunny-hopping can't happen.
+    jumpCooldownMs: 0,
+    jumpBoostCost: 48,
+    // Mid-air re-jump pops cost less than the ground jump (tap-flying is her
+    // identity); only the air-pop path in applyInput reads this.
+    airJumpBoostCost: 12,
+
+    // Weapon spec
+    lockRange: 56,
+    projectileSpeed: 600,
+    firePerMinute: 250,        // = 240 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 15,
+    magCapacity: 8,
+    reloadMs: 1200,
+    autoReload: true,
+    stun: { ms: 100, moveScale: 0.25 },
+    // FLIGHT (players only — bots play her grounded, no flight AI): a JUMP
+    // tap in air re-fires the full jump impulse (airJumpBoostCost per pop);
+    // holding JUMP sustains the climb at sprint speed, drained only while
+    // the thruster actually sustains it; air-sprint flies level; the
+    // air-dodge holds altitude. No boost regen while airborne.
+    flight: true,
+    // Laser bolt: the projectile's hitbox is a thin beamBolt-sized cylinder
+    // that grows out of the muzzle; the client draws the transparent cyan
+    // visual from this same entry, so hitbox and visual can't drift apart.
+    beamBolt: { length: 32, radius: 0.4 }
   }
 };
 

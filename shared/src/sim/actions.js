@@ -254,7 +254,12 @@ export function tryStartJump(fighter, now) {
   fighter.jumpVelocity = jumpVelocity;
   fighter.airborne = true;
   fighter.hoverUntil = now + jumpHoverMs;
-  fighter.jumpCooldownUntil = now + jumpCooldownMs;
+  // Zero-cooldown units (Aris): floor the effective cooldown — 250 ms for
+  // players (stops the same press re-triggering next tick) and 1.5 s for
+  // bot-controlled fighters (the perch reflex would bunny-hop otherwise;
+  // bots have no flight AI and play her grounded). Units with real
+  // cooldowns are unaffected (their own value wins the max).
+  fighter.jumpCooldownUntil = now + Math.max(jumpCooldownMs, fighter.botControlled ? 1500 : 250);
   inheritMomentum(fighter, 70);
   return true;
 }

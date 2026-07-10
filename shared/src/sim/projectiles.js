@@ -105,6 +105,18 @@ export function spawnProjectiles(matchState, owner, target) {
       // SHOTGUN_CLUSTER_SPREAD_DISTANCE travel.
       projectile.distTraveled = 0;
     }
+    if (u.beamBolt) {
+      // Aris laser bolt: the hitbox is a thin beamBolt.length-long cylinder
+      // that GROWS OUT of the muzzle — clipped to the distance flown from
+      // the spawn point, so it never reaches behind the muzzle. The client
+      // renders the matching cyan visual from the same unit entry. Mirrors
+      // offline main.js.
+      projectile.boltLen = u.beamBolt.length;
+      projectile.boltRadius = u.beamBolt.radius;
+      projectile.spawnX = spawnOrigin.x;
+      projectile.spawnY = spawnOrigin.y;
+      projectile.spawnZ = spawnOrigin.z;
+    }
     if (isCenterPellet) centerPellet = projectile;
     spawned.push(projectile);
     matchState.projectiles.push(projectile);
@@ -256,8 +268,24 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // first (the close-range "phantom dodge"). Capsule volume matches the tall
     // billboard: free vertical travel within ±HIT_HALF_HEIGHT of the chest-
     // anchored center, then sphere falloff at hitRadius. Mirrors offline main.js.
-    const hitRadius = HIT_RADIUS_NORMAL;
-    const nearest = closestPointOnSegment(prevPos, p.pos, hitCenter);
+    const hitRadius = HIT_RADIUS_NORMAL + (p.boltRadius || 0);
+    // Laser bolts hit with their whole trailing body, not just the nose:
+    // extend the swept segment backward by the body extended so far (grows
+    // out of the muzzle — never reaches behind the spawn point).
+    let segStart = prevPos;
+    if (p.boltLen) {
+      const spd = vec3Length(p.vel) || 1;
+      const sdx = prevPos.x - p.spawnX;
+      const sdy = prevPos.y - p.spawnY;
+      const sdz = prevPos.z - p.spawnZ;
+      const prevBody = Math.min(p.boltLen, Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz));
+      segStart = {
+        x: prevPos.x - (p.vel.x / spd) * prevBody,
+        y: prevPos.y - (p.vel.y / spd) * prevBody,
+        z: prevPos.z - (p.vel.z / spd) * prevBody
+      };
+    }
+    const nearest = closestPointOnSegment(segStart, p.pos, hitCenter);
     const dx = nearest.x - hitCenter.x;
     const dy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
     const dz = nearest.z - hitCenter.z;

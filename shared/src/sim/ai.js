@@ -295,6 +295,10 @@ export function pickBotTargetId(matchState, fighter) {
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
+  // Mark bot control for shared helpers that behave differently for bots
+  // (tryStartJump floors zero-cooldown jumps at 1.5 s for bots so the perch
+  // reflex can't bunny-hop Aris — bots play flight units grounded).
+  me.botControlled = true;
   // Bot's opp is its current targetId. In 1v1 there's only ever one enemy so
   // this is equivalent to the old hardcoded pair lookup. In 2v2 the server
   // (or the caller) picks the closest live enemy via pickClosestEnemyId and

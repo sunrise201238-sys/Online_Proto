@@ -4,6 +4,7 @@
 
 import {
   BOOST_CAP,
+  BOOST_MOVE_SPEED,
   BOOST_DASH_DRAIN_PER_TICK,
   BOOST_REGEN_PER_TICK,
   BOOST_REFILL_PAUSE_MS,
@@ -102,7 +103,20 @@ export function integrateFighter(fighter, surfaces, dt) {
   const groundY = getGroundLevelY(fighter, surfaces);
 
   if (fighter.airborne) {
-    fighter.jumpVelocity += GRAVITY_Y * dt;
+    if (fighter.flightClimb) {
+      // FLIGHT (Aris): pop-then-climb — gravity erodes the jump impulse
+      // down to the sprint-speed sustained climb and the thruster holds it
+      // there, never below. Mirrors offline updateTransforms.
+      fighter.jumpVelocity = Math.max(
+        fighter.unit?.sprintSpeed ?? BOOST_MOVE_SPEED,
+        fighter.jumpVelocity + GRAVITY_Y * dt
+      );
+    } else if (fighter.flightLevel) {
+      // FLIGHT (Aris): level flight — air-sprint / air-dodge hold altitude.
+      fighter.jumpVelocity = 0;
+    } else {
+      fighter.jumpVelocity += GRAVITY_Y * dt;
+    }
     fighter.pos.y += fighter.jumpVelocity * dt;
     if (fighter.pos.y <= groundY && fighter.jumpVelocity <= 0) {
       fighter.pos.y = groundY;

@@ -11,6 +11,8 @@ import {
   STEP_DURATION_MS,
   STEP_BOOST_COST,
   JUMP_BOOST_COST,
+  JUMP_INITIAL_VELOCITY,
+  BOOST_DASH_DRAIN_PER_TICK,
   MOMENTUM_STANDARD,
   MAX_HP
 } from './constants.js';
@@ -89,7 +91,10 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
   let sprintLocked = input.sprintLocked;
-  if (!hasDirInput || input.jump || input.stepTap || fighter.boost <= 0) sprintLocked = false;
+  // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
+  // there, held jump is the climb verb and must coexist with locked sprint.
+  const jumpBreaksLock = input.jump && !(fighter.unit?.flight && fighter.airborne);
+  if (!hasDirInput || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
   const boostActive = input.boost || sprintLocked;
 
   const recoveringFromDash = now < fighter.dashRecoverUntil;
@@ -97,6 +102,14 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const emptyPenaltyActive = now < fighter.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
   const useSprint = boostActive && canDash;
+  // FLIGHT sprint-carry bookkeeping (Aris): remember the sprint's REAL
+  // velocity (last tick's total, momentum included — vel isn't overwritten
+  // until below) so a jump shortly after the sprint ends can inherit it.
+  if (useSprint && fighter.unit?.flight) {
+    fighter.lastDashAt = now;
+    fighter.lastDashVX = fighter.vel.x;
+    fighter.lastDashVZ = fighter.vel.z;
+  }
   // Per-unit movement speeds — fall back to the global defaults if a unit
   // omits the override. Keeps the simulation deterministic per fighter
   // and matches the client's offline computation in updatePlayer.
@@ -123,10 +136,51 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     // Step ended this frame — let tickStep handle the queued momentum.
     tickStep(fighter, now, obstacles);
   } else if (input.jump && canInputMove && tryStartJump(fighter, now)) {
+    // FLIGHT sprint-carry (Aris): jumping within 400 ms of sprinting seeds
+    // the jump's momentum from the remembered sprint velocity instead of
+    // the now-walking one — a hop right after a sprint glides farther.
+    if (fighter.unit?.flight && now - (fighter.lastDashAt ?? -1e9) < 400) {
+      fighter.momentumVX = (fighter.lastDashVX ?? 0) * 0.9;
+      fighter.momentumVZ = (fighter.lastDashVZ ?? 0) * 0.9;
+    }
     action = 'jump';
   } else if (boostActive && canInputMove) {
     startDash(fighter, now);
     action = 'dash';
+  }
+
+  // === FLIGHT (unit.flight — Aris): airborne verbs ==========================
+  // Mirrors the offline flight block in client/src/main.js — keep in sync.
+  //   fresh JUMP tap in air → another full jump impulse (airJumpBoostCost)
+  //   hold JUMP             → sustained climb at sprint speed (drained only
+  //                           while the thruster sustains it — the impulse
+  //                           phase after a pop rides free)
+  //   air-sprint / air-dodge → hold altitude (see integrateFighter)
+  // Bots never run applyInput, so they never set these flags.
+  {
+    const flying = !!fighter.unit?.flight && fighter.airborne;
+    const jumpTapped = input.jump && !fighter.prevJumpHeld;
+    fighter.prevJumpHeld = input.jump;
+    const airPopCost = fighter.unit?.airJumpBoostCost
+      ?? fighter.unit?.jumpBoostCost ?? JUMP_BOOST_COST;
+    if (flying && jumpTapped && canInputMove
+        && fighter.boost >= airPopCost
+        && now >= fighter.jumpCooldownUntil) {
+      fighter.boost = Math.max(0, fighter.boost - airPopCost);
+      fighter.refillPausedUntil = now + 500;
+      fighter.jumpVelocity = fighter.unit?.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+      fighter.jumpCooldownUntil = now + 250;
+    }
+    fighter.flightClimb = flying && input.jump && canInputMove && fighter.boost > 0;
+    fighter.flightLevel = flying && !fighter.flightClimb && fighter.boost > 0
+      && (useSprint || now <= (fighter.stepUntil || 0));
+    if (fighter.flightClimb) {
+      const climbRate = fighter.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
+      if (fighter.jumpVelocity <= climbRate + 0.01) {
+        fighter.boost = Math.max(0, fighter.boost - (fighter.unit?.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
+        fighter.refillPausedUntil = now + 500;
+      }
+    }
   }
 
   if (input.stepTap && !inStep && canInputMove) {
