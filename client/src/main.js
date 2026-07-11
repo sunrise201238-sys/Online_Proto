@@ -7898,18 +7898,48 @@ function buildFactory2Arena() {
   drawPartition(-72, -46, 'z', 10);
   drawPartition(72, 46, 'z', 10);
 
-  // ===== Workbenches (mid cover; backsplash raised to 8.2 = true cover) =====
+  // ===== Workbenches — solid stations (no see-through legs): a full base
+  // cabinet, worktop, and a backsplash to 8.4 (true cover with real depth) =====
   const drawWorkbench = (x, z) => {
-    for (const ox of [-3.5, 3.5]) for (const oz of [-2, 2]) {
-      addBlockingBox({ x: x + ox, y: 1.6, z: z + oz, sx: 0.7, sy: 3.2, sz: 0.7, material: roller });
-    }
-    addBlockingBox({ x, y: 3.4, z, sx: 8, sy: 0.5, sz: 4.5, material: machine });
-    addBlockingBox({ x: x - 2.6, y: 4.4, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
-    addBlockingBox({ x, y: 6.0, z: z + 2.4, sx: 7.5, sy: 4.4, sz: 0.4, material: machineTop });
+    addBlockingBox({ x, y: 1.7, z, sx: 9, sy: 3.4, sz: 5, material: machine });
+    addBlockingBox({ x, y: 3.65, z, sx: 9.4, sy: 0.5, sz: 5.4, material: roller });
+    addBlockingBox({ x: x - 2.8, y: 4.6, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
+    addBlockingBox({ x, y: 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop });
   };
   drawWorkbench(-30, -52); drawWorkbench(30, 52);
   drawWorkbench(-78, 82);  drawWorkbench(78, -82);
   drawWorkbench(-108, -70); drawWorkbench(108, 70);
+
+  // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
+  const drawMachine = (x, z) => {
+    const body = addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine });
+    fadeTall(body, { minX: x - 4.5, maxX: x + 4.5, minY: 0, maxY: 8.5, minZ: z - 3, maxZ: z + 3 });
+    addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam });
+    addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe });
+    addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: cautionMat });
+  };
+  drawMachine(-76, -34); drawMachine(76, 34);
+  drawMachine(-20, -86); drawMachine(20, 86);
+
+  // ===== Shipping containers (10 x 3.2, 8 tall — long cover with depth) =====
+  const drawContainer = (x, z, axis) => {
+    const sx = axis === 'x' ? 10 : 3.2;
+    const sz = axis === 'x' ? 3.2 : 10;
+    const body = addBlockingBox({ x, y: 4, z, sx, sy: 8, sz, material: machineAlt });
+    fadeTall(body, { minX: x - sx / 2, maxX: x + sx / 2, minY: 0, maxY: 8, minZ: z - sz / 2, maxZ: z + sz / 2 });
+    addBlockingBox({ x, y: 8.2, z, sx: sx + 0.3, sy: 0.4, sz: sz + 0.3, material: beltFrame });
+  };
+  drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
+  drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
+
+  // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
+  const drawStack = (x, z) => {
+    const base = addBlockingBox({ x, y: 2, z, sx: 6, sy: 4, sz: 6, material: crate });
+    fadeTall(base, { minX: x - 3, maxX: x + 3, minY: 0, maxY: 8, minZ: z - 3, maxZ: z + 3 });
+    addBlockingBox({ x: x + 0.3, y: 6, z: z - 0.2, sx: 5.4, sy: 4, sz: 5.4, material: crateAlt });
+  };
+  drawStack(-12, 52);  drawStack(12, -52);
+  drawStack(-98, 84);  drawStack(98, -84);
 
   // ===== Corner storage tanks (12 tall, round orbit cover) =====
   const drawTank = (x, z) => {
