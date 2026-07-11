@@ -271,7 +271,7 @@ export const UNIT_DATA = {
     magCapacity: 50,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 75, moveScale: 0.25 }   // rifle-tier slow, between SMG (50) and rifle (100) duration
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
