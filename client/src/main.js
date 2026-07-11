@@ -331,6 +331,7 @@ const MAP_DATA = {
   arena1: { name: 'Plain Field' },
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
+  factory2: { name: 'Factory 2' },   // offline-only until tuned (not in ONLINE_AVAILABLE_MAPS / shared arena.js)
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -5099,6 +5100,11 @@ function startMatch() {
   } else if (state.mapKey === 'factory') {
     state.player.body.position.set(-50, 2.45, 0);
     state.enemy.body.position.set(50, 2.45, 0);
+  } else if (state.mapKey === 'factory2') {
+    // Diagonal spawn in opposite yards, clear of the corner tanks, belts,
+    // workbenches, and the deck ramps.
+    state.player.body.position.set(-100, 2.45, -60);
+    state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
     // Station: spawn at the far west/east ends of the track corridor (tracks at y=0).
     // Platforms on either side are raised 4m — players must jump up to reach them.
@@ -7167,7 +7173,7 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xeaf2ff);
     key.intensity = 1.4;
-  } else if (mapKey === 'factory') {
+  } else if (mapKey === 'factory' || mapKey === 'factory2') {
     scene.background.setHex(0x141821);
     scene.fog.color.setHex(0x14181f);
     scene.fog.near = 40;
@@ -7219,6 +7225,7 @@ function buildArenaForMap(mapKey) {
   if (mapKey === 'arena1') buildPlainFieldArena();
   else if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
+  else if (mapKey === 'factory2') buildFactory2Arena();
   else if (mapKey === 'square') buildSquareArena();
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
@@ -7744,6 +7751,199 @@ function buildStreetsArena() {
   // those remain visible decor past the boundary. HALF_X bounds the avenue
   // a few units past the corner sign towers (x=±110).
   addBoundaryIndicator(128, 92, 28);
+}
+
+// Factory 2 — industrial remake of Factory using Airport's design philosophy:
+// ONE central organizing anchor (a raised assembly deck, ramp-accessible by
+// everyone), real interaction points (4 ramps + 2 jump-in fence gaps), and
+// cover that passes the sizing rules (true cover >= 8 tall, walls >= 12,
+// vault clutter <= 2.5). Tall structures register occlude-fade (turn
+// transparent when they block the view); low objects rely on the unit's
+// X-ray rear-shadow, which needs no registration. OFFLINE-ONLY for now —
+// intentionally NOT in shared arena.js / ONLINE_AVAILABLE_MAPS until tuned.
+function buildFactory2Arena() {
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x2d3540, roughness: 0.92 });
+  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x37424f, roughness: 0.85 });
+  const stripe = new THREE.MeshStandardMaterial({ color: 0xeae66f, roughness: 0.7 });
+  const wallTrim = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.5, metalness: 0.45 });
+  const beltSurface = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.95 });
+  const beltFrame = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.6 });
+  const roller = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.45, metalness: 0.7 });
+  const machine = new THREE.MeshStandardMaterial({ color: 0x2b3f5f, roughness: 0.55, metalness: 0.4 });
+  const machineAlt = new THREE.MeshStandardMaterial({ color: 0x37547a, roughness: 0.55, metalness: 0.4 });
+  const machineTop = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
+  const crate = new THREE.MeshStandardMaterial({ color: 0x7e5635, roughness: 0.85 });
+  const crateAlt = new THREE.MeshStandardMaterial({ color: 0x614126, roughness: 0.9 });
+  const beam = new THREE.MeshStandardMaterial({ color: 0x8b3a36, roughness: 0.5 });
+  const rackFrame = new THREE.MeshStandardMaterial({ color: 0xc09030, roughness: 0.6 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x6a7383, roughness: 0.5, metalness: 0.55 });
+  const cautionMat = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.7 });
+  const deckSteel = new THREE.MeshStandardMaterial({ color: 0x4a5566, roughness: 0.6, metalness: 0.5 });
+  const deckTile = new THREE.MeshStandardMaterial({ color: 0x515e72, roughness: 0.75 });
+
+  const HALF_X = 130;
+  const HALF_Z = 105;
+  const CEIL_Y = 22;
+  // Occlude-fade a tall structure part (clone the material first — these
+  // materials are shared, and fading a shared material fades every copy).
+  const fadeTall = (mesh, box) => {
+    mesh.material = mesh.material.clone();
+    registerWallFade(mesh, { ...box, occlude: true });
+  };
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(280, 280), concrete);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
+  scene.add(floor); arenaDecor.push(floor);
+  for (const z of [-52, 52]) {
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(230, 5), floorPaint);
+    w.rotation.x = -Math.PI / 2; w.position.set(0, 0.02, z);
+    scene.add(w); arenaDecor.push(w);
+  }
+  addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y);
+  addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
+  addBlockingBox({ x: 0, y: 0.4, z: HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
+
+  // ===== THE ASSEMBLY DECK (central anchor, Airport-plateau pattern) =====
+  // Raised 4 (jump apex ~5.6 clears it; bots climb via ramps/jump-links).
+  const DECK_Y = 4;
+  const deckBody = addBlockingBox({ x: 0, y: (DECK_Y - 0.3) / 2, z: 0, sx: 119.6, sy: DECK_Y - 0.3, sz: 63.6, material: deckSteel.clone(), topBuffer: 0 });
+  registerWallFade(deckBody, { minX: -60, maxX: 60, minY: 0, maxY: DECK_Y, minZ: -32, maxZ: 32 });
+  addPlatform({ minX: -60, maxX: 60, minZ: -32, maxZ: 32, top: DECK_Y, material: deckTile, thickness: 0.6 });
+  for (const ez of [-31.2, 31.2]) {
+    const es = new THREE.Mesh(new THREE.BoxGeometry(118, 0.15, 1.2), stripe);
+    es.position.set(0, DECK_Y + 0.08, ez);
+    scene.add(es); arenaDecor.push(es);
+  }
+  // Long-edge safety fences (sheet metal, tops at 12 — unjumpable) with a
+  // 16-wide jump-in gap at the middle of each side: two extra contest points
+  // Airport doesn't have. Ends stay fenced except at the ramp mouths.
+  for (const side of [-1, 1]) {
+    for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
+      const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
+      fadeTall(fence, { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8, minZ: side * 32 - 0.5, maxZ: side * 32 + 0.5 });
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(fx1 - fx0, 0.4, 1.2), beltFrame);
+      rail.position.set((fx0 + fx1) / 2, DECK_Y + 8.2, side * 32);
+      scene.add(rail); arenaDecor.push(rail);
+    }
+  }
+  // End-edge fences (x = ±60), leaving the ramp mouths (z -22..-10, 10..22) open.
+  for (const [fz0, fz1] of [[-32, -24], [-8, 8], [24, 32]]) {
+    for (const ex of [-60, 60]) {
+      const fence = addBlockingBox({ x: ex, y: DECK_Y + 4, z: (fz0 + fz1) / 2, sx: 1.0, sy: 8, sz: fz1 - fz0, material: machineAlt });
+      fadeTall(fence, { minX: ex - 0.5, maxX: ex + 0.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: fz0, maxZ: fz1 });
+    }
+  }
+  // Four walk-up ramps, two per end — bots never need to jump onto the deck.
+  addRamp({ minX: 60, maxX: 82, minZ: -22, maxZ: -10, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
+  addRamp({ minX: 60, maxX: 82, minZ: 10, maxZ: 22, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
+  addRamp({ minX: -82, maxX: -60, minZ: -22, maxZ: -10, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
+  addRamp({ minX: -82, maxX: -60, minZ: 10, maxZ: 22, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
+  // Solid caution rails along every ramp edge (top 6, topBuffer 0): grounded
+  // units can only enter at the foot; anyone already on the ramp/deck passes.
+  for (const sx of [-1, 1]) {
+    for (const rz of [-22.4, -9.6, 9.6, 22.4]) {
+      addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: cautionMat, topBuffer: 0 });
+    }
+  }
+  // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
+  // machine cabinets, 11-wide weave gaps. All tops >= deck+8 (true cover).
+  const deckCab = (z) => {
+    const cab = addBlockingBox({ x: 0, y: DECK_Y + 4, z, sx: 7, sy: 8, sz: 6, material: machine });
+    fadeTall(cab, { minX: -3.5, maxX: 3.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: z - 3, maxZ: z + 3 });
+    addBlockingBox({ x: 0, y: DECK_Y + 8.3, z, sx: 7.4, sy: 0.5, sz: 6.4, material: beam });
+  };
+  deckCab(-20); deckCab(20);
+  const pressU1 = addBlockingBox({ x: -2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
+  const pressU2 = addBlockingBox({ x: 2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
+  const pressBeam = addBlockingBox({ x: 0, y: DECK_Y + 9.4, z: 0, sx: 5.6, sy: 1.5, sz: 4.5, material: machineAlt });
+  addBlockingBox({ x: 0, y: DECK_Y + 1.1, z: 0, sx: 5.4, sy: 2.2, sz: 4.2, material: machineTop });
+  fadeTall(pressU1, { minX: -2.7, maxX: -1.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
+  fadeTall(pressU2, { minX: 1.7, maxX: 2.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
+  fadeTall(pressBeam, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 8.6, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
+
+  // ===== Conveyor belts (walkable tops at 2.6, crates riding) — one per
+  // yard, running north-south past the deck ends. =====
+  const drawBelt = (cx, len, beltZ) => {
+    addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: beltSurface, topBuffer: 2 });
+    addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
+    addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
+    let alt = false;
+    for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
+      addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: alt ? crate : crateAlt, topBuffer: 2 });
+      alt = !alt;
+    }
+    arenaSurfaces.push({ minX: cx - 2, maxX: cx + 2, minZ: beltZ - len / 2, maxZ: beltZ + len / 2, maxTop: 2.6, type: 'flat', top: 2.6, heightAt: () => 2.6 });
+  };
+  drawBelt(-94, 60, 0);
+  drawBelt(94, 60, 0);
+
+  // ===== Partitions (8 tall — real cover) breaking the flank sightlines =====
+  const drawPartition = (x, z, axis, length) => {
+    const main = axis === 'x'
+      ? addBlockingBox({ x, y: 4.0, z, sx: length, sy: 8.0, sz: 0.6, material: machineAlt })
+      : addBlockingBox({ x, y: 4.0, z, sx: 0.6, sy: 8.0, sz: length, material: machineAlt });
+    addBlockingBox(axis === 'x'
+      ? { x, y: 8.15, z, sx: length + 0.2, sy: 0.3, sz: 0.8, material: beam }
+      : { x, y: 8.15, z, sx: 0.8, sy: 0.3, sz: length + 0.2, material: beam });
+    fadeTall(main, axis === 'x'
+      ? { minX: x - length / 2, maxX: x + length / 2, minY: 0, maxY: 8.3, minZ: z - 0.4, maxZ: z + 0.4 }
+      : { minX: x - 0.4, maxX: x + 0.4, minY: 0, maxY: 8.3, minZ: z - length / 2, maxZ: z + length / 2 });
+  };
+  drawPartition(0, -66, 'x', 14);
+  drawPartition(0, 66, 'x', 14);
+  drawPartition(-42, -80, 'z', 12);
+  drawPartition(42, 80, 'z', 12);
+  drawPartition(-84, 62, 'x', 12);
+  drawPartition(84, -62, 'x', 12);
+  drawPartition(-72, -46, 'z', 10);
+  drawPartition(72, 46, 'z', 10);
+
+  // ===== Workbenches (mid cover; backsplash raised to 8.2 = true cover) =====
+  const drawWorkbench = (x, z) => {
+    for (const ox of [-3.5, 3.5]) for (const oz of [-2, 2]) {
+      addBlockingBox({ x: x + ox, y: 1.6, z: z + oz, sx: 0.7, sy: 3.2, sz: 0.7, material: roller });
+    }
+    addBlockingBox({ x, y: 3.4, z, sx: 8, sy: 0.5, sz: 4.5, material: machine });
+    addBlockingBox({ x: x - 2.6, y: 4.4, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
+    addBlockingBox({ x, y: 6.0, z: z + 2.4, sx: 7.5, sy: 4.4, sz: 0.4, material: machineTop });
+  };
+  drawWorkbench(-30, -52); drawWorkbench(30, 52);
+  drawWorkbench(-78, 82);  drawWorkbench(78, -82);
+  drawWorkbench(-108, -70); drawWorkbench(108, 70);
+
+  // ===== Corner storage tanks (12 tall, round orbit cover) =====
+  const drawTank = (x, z) => {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 12, 18), tankMat.clone());
+    tank.position.set(x, 6, z);
+    scene.add(tank); arenaDecor.push(tank);
+    registerWallFade(tank, { minX: x - 2.2, maxX: x + 2.2, minY: 0, maxY: 12, minZ: z - 2.2, maxZ: z + 2.2, occlude: true });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 2.25, 0.6, 18), cautionMat);
+    band.position.set(x, 2, z);
+    scene.add(band); arenaDecor.push(band);
+    arenaObstacles.push({ minX: x - 2.2, maxX: x + 2.2, minZ: z - 2.2, maxZ: z + 2.2, minY: 0, maxY: 12 });
+  };
+  drawTank(-118, -88); drawTank(-112, -80);
+  drawTank(118, 88);   drawTank(112, 80);
+  drawTank(118, -84);  drawTank(-118, 84);
+
+  // ===== Storage racks near the side walls =====
+  const drawRack = (x, z) => {
+    addBlockingBox({ x: x - 2.5, y: 4.5, z, sx: 0.5, sy: 9.0, sz: 0.5, material: rackFrame });
+    addBlockingBox({ x: x + 2.5, y: 4.5, z, sx: 0.5, sy: 9.0, sz: 0.5, material: rackFrame });
+    addBlockingBox({ x, y: 9.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
+    addBlockingBox({ x, y: 3.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
+    addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
+    addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
+  };
+  drawRack(-118, 28); drawRack(118, -28);
+  drawRack(-64, -94); drawRack(64, 94);
+
+  // ===== Vaultable crate scatter (tops 2.4 — dodge/hop clutter) =====
+  const lowCrate = (x, z) => addBlockingBox({ x, y: 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2 });
+  lowCrate(-12, -88); lowCrate(12, 88);
+  lowCrate(-58, 46);  lowCrate(58, -46);
+  lowCrate(-96, -44); lowCrate(96, 44);
+  lowCrate(30, -74);  lowCrate(-30, 74);
 }
 
 function buildFactoryArena() {
