@@ -1365,7 +1365,7 @@ const MG_TRACER_SCALE = 0.5;
 // fades in place instead of vanishing the instant the bullet stops.
 const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
 const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
-const BULLET_TRAIL_COLOR = 0xbbbbbb;
+const BULLET_TRAIL_COLOR = 0x3a3f4a;  // dark slate — light grey washed out on bright ground (Airport)
 const BULLET_TRAIL_OPACITY = 0.55;
 
 function bulletTrailFadeMsFor(unit) {
