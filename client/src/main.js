@@ -7819,11 +7819,13 @@ function buildFactory2Arena() {
   // Airport doesn't have. Ends stay fenced except at the ramp mouths.
   for (const side of [-1, 1]) {
     for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
+      const fbox = { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8.5, minZ: side * 32 - 0.6, maxZ: side * 32 + 0.6 };
       const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
-      fadeTall(fence, { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8, minZ: side * 32 - 0.5, maxZ: side * 32 + 0.5 });
+      fadeTall(fence, fbox);
       const rail = new THREE.Mesh(new THREE.BoxGeometry(fx1 - fx0, 0.4, 1.2), beltFrame);
       rail.position.set((fx0 + fx1) / 2, DECK_Y + 8.2, side * 32);
       scene.add(rail); arenaDecor.push(rail);
+      fadeTall(rail, fbox);   // top rail fades with its fence
     }
   }
   // End-edge fences (x = ±60), leaving the ramp mouths (z -22..-10, 10..22) open.
@@ -7848,9 +7850,11 @@ function buildFactory2Arena() {
   // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
   // machine cabinets, 11-wide weave gaps. All tops >= deck+8 (true cover).
   const deckCab = (z) => {
+    const box = { minX: -3.7, maxX: 3.7, minY: DECK_Y, maxY: DECK_Y + 8.6, minZ: z - 3.2, maxZ: z + 3.2 };
     const cab = addBlockingBox({ x: 0, y: DECK_Y + 4, z, sx: 7, sy: 8, sz: 6, material: machine });
-    fadeTall(cab, { minX: -3.5, maxX: 3.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: z - 3, maxZ: z + 3 });
-    addBlockingBox({ x: 0, y: DECK_Y + 8.3, z, sx: 7.4, sy: 0.5, sz: 6.4, material: beam });
+    fadeTall(cab, box);
+    // Cap fades WITH the body (a solid cap floating over a faded body reads broken).
+    fadeTall(addBlockingBox({ x: 0, y: DECK_Y + 8.3, z, sx: 7.4, sy: 0.5, sz: 6.4, material: beam }), box);
   };
   deckCab(-20); deckCab(20);
   const pressU1 = addBlockingBox({ x: -2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
@@ -7879,15 +7883,17 @@ function buildFactory2Arena() {
 
   // ===== Partitions (8 tall — real cover) breaking the flank sightlines =====
   const drawPartition = (x, z, axis, length) => {
+    const box = axis === 'x'
+      ? { minX: x - length / 2, maxX: x + length / 2, minY: 0, maxY: 8.3, minZ: z - 0.4, maxZ: z + 0.4 }
+      : { minX: x - 0.4, maxX: x + 0.4, minY: 0, maxY: 8.3, minZ: z - length / 2, maxZ: z + length / 2 };
     const main = axis === 'x'
       ? addBlockingBox({ x, y: 4.0, z, sx: length, sy: 8.0, sz: 0.6, material: machineAlt })
       : addBlockingBox({ x, y: 4.0, z, sx: 0.6, sy: 8.0, sz: length, material: machineAlt });
-    addBlockingBox(axis === 'x'
+    const trim = addBlockingBox(axis === 'x'
       ? { x, y: 8.15, z, sx: length + 0.2, sy: 0.3, sz: 0.8, material: beam }
       : { x, y: 8.15, z, sx: 0.8, sy: 0.3, sz: length + 0.2, material: beam });
-    fadeTall(main, axis === 'x'
-      ? { minX: x - length / 2, maxX: x + length / 2, minY: 0, maxY: 8.3, minZ: z - 0.4, maxZ: z + 0.4 }
-      : { minX: x - 0.4, maxX: x + 0.4, minY: 0, maxY: 8.3, minZ: z - length / 2, maxZ: z + length / 2 });
+    fadeTall(main, box);
+    fadeTall(trim, box);   // top trim fades with the panel
   };
   drawPartition(0, -66, 'x', 14);
   drawPartition(0, 66, 'x', 14);
@@ -7898,48 +7904,58 @@ function buildFactory2Arena() {
   drawPartition(-72, -46, 'z', 10);
   drawPartition(72, 46, 'z', 10);
 
-  // ===== Workbenches — solid stations (no see-through legs): a full base
-  // cabinet, worktop, and a backsplash to 8.4 (true cover with real depth) =====
-  const drawWorkbench = (x, z) => {
-    addBlockingBox({ x, y: 1.7, z, sx: 9, sy: 3.4, sz: 5, material: machine });
-    addBlockingBox({ x, y: 3.65, z, sx: 9.4, sy: 0.5, sz: 5.4, material: roller });
-    addBlockingBox({ x: x - 2.8, y: 4.6, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
-    addBlockingBox({ x, y: 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop });
+  // ===== Workbenches — solid stations: full base cabinet, worktop, and a
+  // backsplash rising 8.4 above the floor they stand on (true cover with
+  // depth). `b` = base height (0 = ground, DECK_Y = on the deck). =====
+  const drawWorkbench = (x, z, b = 0) => {
+    addBlockingBox({ x, y: b + 1.7, z, sx: 9, sy: 3.4, sz: 5, material: machine });
+    addBlockingBox({ x, y: b + 3.65, z, sx: 9.4, sy: 0.5, sz: 5.4, material: roller });
+    addBlockingBox({ x: x - 2.8, y: b + 4.6, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
+    const splash = addBlockingBox({ x, y: b + 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop });
+    // The backsplash tops out above unit height — it fades like the tall stuff.
+    fadeTall(splash, { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 });
   };
   drawWorkbench(-30, -52); drawWorkbench(30, 52);
   drawWorkbench(-78, 82);  drawWorkbench(78, -82);
   drawWorkbench(-108, -70); drawWorkbench(108, 70);
+  drawWorkbench(-32, 14, DECK_Y); drawWorkbench(32, -14, DECK_Y);   // deck stations
 
   // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
   const drawMachine = (x, z) => {
-    const body = addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine });
-    fadeTall(body, { minX: x - 4.5, maxX: x + 4.5, minY: 0, maxY: 8.5, minZ: z - 3, maxZ: z + 3 });
-    addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam });
-    addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe });
+    const box = { minX: x - 4.7, maxX: x + 4.7, minY: 0, maxY: 9.1, minZ: z - 3.4, maxZ: z + 3.4 };
+    fadeTall(addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine }), box);
+    fadeTall(addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam }), box);
+    fadeTall(addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe }), box);
     addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: cautionMat });
   };
   drawMachine(-76, -34); drawMachine(76, 34);
   drawMachine(-20, -86); drawMachine(20, 86);
+  drawMachine(-114, 0);  drawMachine(114, 0);   // side halls
 
   // ===== Shipping containers (10 x 3.2, 8 tall — long cover with depth) =====
   const drawContainer = (x, z, axis) => {
     const sx = axis === 'x' ? 10 : 3.2;
     const sz = axis === 'x' ? 3.2 : 10;
-    const body = addBlockingBox({ x, y: 4, z, sx, sy: 8, sz, material: machineAlt });
-    fadeTall(body, { minX: x - sx / 2, maxX: x + sx / 2, minY: 0, maxY: 8, minZ: z - sz / 2, maxZ: z + sz / 2 });
-    addBlockingBox({ x, y: 8.2, z, sx: sx + 0.3, sy: 0.4, sz: sz + 0.3, material: beltFrame });
+    const box = { minX: x - sx / 2 - 0.2, maxX: x + sx / 2 + 0.2, minY: 0, maxY: 8.4, minZ: z - sz / 2 - 0.2, maxZ: z + sz / 2 + 0.2 };
+    fadeTall(addBlockingBox({ x, y: 4, z, sx, sy: 8, sz, material: machineAlt }), box);
+    fadeTall(addBlockingBox({ x, y: 8.2, z, sx: sx + 0.3, sy: 0.4, sz: sz + 0.3, material: beltFrame }), box);
   };
   drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
   drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
+  drawContainer(-86, -56, 'z'); drawContainer(86, 56, 'z');     // spawn-yard cover
+  drawContainer(-102, -26, 'z'); drawContainer(102, 26, 'z');   // side halls
 
   // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
-  const drawStack = (x, z) => {
-    const base = addBlockingBox({ x, y: 2, z, sx: 6, sy: 4, sz: 6, material: crate });
-    fadeTall(base, { minX: x - 3, maxX: x + 3, minY: 0, maxY: 8, minZ: z - 3, maxZ: z + 3 });
-    addBlockingBox({ x: x + 0.3, y: 6, z: z - 0.2, sx: 5.4, sy: 4, sz: 5.4, material: crateAlt });
+  const drawStack = (x, z, b = 0) => {
+    const box = { minX: x - 3.2, maxX: x + 3.2, minY: b, maxY: b + 8, minZ: z - 3.2, maxZ: z + 3.2 };
+    fadeTall(addBlockingBox({ x, y: b + 2, z, sx: 6, sy: 4, sz: 6, material: crate }), box);
+    fadeTall(addBlockingBox({ x: x + 0.3, y: b + 6, z: z - 0.2, sx: 5.4, sy: 4, sz: 5.4, material: crateAlt }), box);
   };
   drawStack(-12, 52);  drawStack(12, -52);
   drawStack(-98, 84);  drawStack(98, -84);
+  drawStack(-96, -90); drawStack(96, 90);                        // spawn-yard cover
+  drawStack(-122, 58); drawStack(122, -58);                      // side halls
+  drawStack(-20, -24, DECK_Y); drawStack(20, 24, DECK_Y);        // deck stacks
 
   // ===== Corner storage tanks (12 tall, round orbit cover) =====
   const drawTank = (x, z) => {
@@ -7969,11 +7985,13 @@ function buildFactory2Arena() {
   drawRack(-64, -94); drawRack(64, 94);
 
   // ===== Vaultable crate scatter (tops 2.4 — dodge/hop clutter) =====
-  const lowCrate = (x, z) => addBlockingBox({ x, y: 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2 });
+  const lowCrate = (x, z, b = 0) => addBlockingBox({ x, y: b + 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2 });
   lowCrate(-12, -88); lowCrate(12, 88);
   lowCrate(-58, 46);  lowCrate(58, -46);
   lowCrate(-96, -44); lowCrate(96, 44);
   lowCrate(30, -74);  lowCrate(-30, 74);
+  lowCrate(-44, -6, DECK_Y); lowCrate(44, 6, DECK_Y);   // deck vault clutter
+  lowCrate(-112, -44); lowCrate(112, 44);               // side halls
 }
 
 function buildFactoryArena() {
