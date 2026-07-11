@@ -7463,11 +7463,19 @@ function buildStreetsArena() {
   ];
   southBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    // Upper floors are SOLID (blocks units, bullets, and bot sight — real high
+    // cover for flyers) and the rooftop is standable. Invisible box: the visual
+    // floors are drawn by dressBuilding. topBuffer 2 < GROUND_BASE_Y lets a
+    // unit standing at roof height skip the box's horizontal push-out (same
+    // pattern as Factory's belt tops). Mirrors shared arena.js arena2 data.
+    const roof = b.h + 22;
+    addBlockingBox({ x: b.x, y: (b.h + roof) / 2, z: -48, sx: b.sx, sy: roof - b.h, sz: 24, material: b.mat, invisible: true, topBuffer: 2 });
+    arenaSurfaces.push({ minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2, minZ: -60, maxZ: -36, maxTop: roof, type: 'flat', top: roof, heightAt: () => roof });
     fadeGroup = [body];
-    dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat, b.h + 22);
+    dressBuilding(b.x, -48, b.sx, b.h, 24, b.mat, roof);
     applyBuildingFade(fadeGroup, {
       minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2,
-      minY: 0, maxY: b.h + 22,
+      minY: 0, maxY: roof,
       minZ: -60, maxZ: -36
     });
     fadeGroup = null;
@@ -7482,11 +7490,15 @@ function buildStreetsArena() {
   ];
   northBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
+    // Solid upper floors + standable rooftop — see the south row note.
+    const roof = b.h + 22;
+    addBlockingBox({ x: b.x, y: (b.h + roof) / 2, z: 48, sx: b.sx, sy: roof - b.h, sz: 24, material: b.mat, invisible: true, topBuffer: 2 });
+    arenaSurfaces.push({ minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2, minZ: 36, maxZ: 60, maxTop: roof, type: 'flat', top: roof, heightAt: () => roof });
     fadeGroup = [body];
-    dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat, b.h + 22);
+    dressBuilding(b.x, 48, b.sx, b.h, 24, b.mat, roof);
     applyBuildingFade(fadeGroup, {
       minX: b.x - b.sx / 2, maxX: b.x + b.sx / 2,
-      minY: 0, maxY: b.h + 22,
+      minY: 0, maxY: roof,
       minZ: 36, maxZ: 60
     });
     fadeGroup = null;

@@ -157,6 +157,114 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 12
       },
       {
+        "minX": -114,
+        "maxX": -86,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 14,
+        "maxY": 36,
+        "topBuffer": 2
+      },
+      {
+        "minX": -79,
+        "maxX": -57,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 11,
+        "maxY": 33,
+        "topBuffer": 2
+      },
+      {
+        "minX": -49,
+        "maxX": -35,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 16,
+        "maxY": 38,
+        "topBuffer": 2
+      },
+      {
+        "minX": 35,
+        "maxX": 49,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 16,
+        "maxY": 38,
+        "topBuffer": 2
+      },
+      {
+        "minX": 57,
+        "maxX": 79,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 12,
+        "maxY": 34,
+        "topBuffer": 2
+      },
+      {
+        "minX": 86,
+        "maxX": 114,
+        "minZ": -60,
+        "maxZ": -36,
+        "minY": 15,
+        "maxY": 37,
+        "topBuffer": 2
+      },
+      {
+        "minX": -114,
+        "maxX": -86,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 13,
+        "maxY": 35,
+        "topBuffer": 2
+      },
+      {
+        "minX": -79,
+        "maxX": -57,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 16,
+        "maxY": 38,
+        "topBuffer": 2
+      },
+      {
+        "minX": -49,
+        "maxX": -35,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 12,
+        "maxY": 34,
+        "topBuffer": 2
+      },
+      {
+        "minX": 35,
+        "maxX": 49,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 14,
+        "maxY": 36,
+        "topBuffer": 2
+      },
+      {
+        "minX": 57,
+        "maxX": 79,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 17,
+        "maxY": 39,
+        "topBuffer": 2
+      },
+      {
+        "minX": 86,
+        "maxX": 114,
+        "minZ": 36,
+        "maxZ": 60,
+        "minY": 12,
+        "maxY": 34,
+        "topBuffer": 2
+      },
+      {
         "minX": -130,
         "maxX": 130,
         "minZ": -103,
@@ -1082,6 +1190,114 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "axis": "z",
         "lowY": 8,
         "highY": 0.45
+      },
+      {
+        "minX": -114,
+        "maxX": -86,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 36,
+        "type": "flat",
+        "top": 36
+      },
+      {
+        "minX": -79,
+        "maxX": -57,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 33,
+        "type": "flat",
+        "top": 33
+      },
+      {
+        "minX": -49,
+        "maxX": -35,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 38,
+        "type": "flat",
+        "top": 38
+      },
+      {
+        "minX": 35,
+        "maxX": 49,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 38,
+        "type": "flat",
+        "top": 38
+      },
+      {
+        "minX": 57,
+        "maxX": 79,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 34,
+        "type": "flat",
+        "top": 34
+      },
+      {
+        "minX": 86,
+        "maxX": 114,
+        "minZ": -60,
+        "maxZ": -36,
+        "maxTop": 37,
+        "type": "flat",
+        "top": 37
+      },
+      {
+        "minX": -114,
+        "maxX": -86,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 35,
+        "type": "flat",
+        "top": 35
+      },
+      {
+        "minX": -79,
+        "maxX": -57,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 38,
+        "type": "flat",
+        "top": 38
+      },
+      {
+        "minX": -49,
+        "maxX": -35,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 34,
+        "type": "flat",
+        "top": 34
+      },
+      {
+        "minX": 35,
+        "maxX": 49,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 36,
+        "type": "flat",
+        "top": 36
+      },
+      {
+        "minX": 57,
+        "maxX": 79,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 39,
+        "type": "flat",
+        "top": 39
+      },
+      {
+        "minX": 86,
+        "maxX": 114,
+        "minZ": 36,
+        "maxZ": 60,
+        "maxTop": 34,
+        "type": "flat",
+        "top": 34
       }
     ]
   },
