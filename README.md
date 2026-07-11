@@ -18,18 +18,34 @@ A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fig
 
 ## Units
 
-Six pickable units, identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8):
+Eight pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8; Unit 7 flies):
 
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
 | Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
-| Unit 2 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
-| Unit 4 — Submachine Gun | 30 | 4 / shot | ~1100 RPM | 46 | 1.5 s |
-| Unit 5 — Machine Gun | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 46 | 1.5 s |
+| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
 | Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge |
+| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) |
+| Unit 8 — Submachine Gun (Mika) | 50 | 4.5 / shot | ~600 RPM | 50 | 1.5 s |
+
+Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 225 damage per magazine and ~5.5 s of uninterrupted fire where the others reload every ~2 s.
 
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon: every unit declares its own (SMG: 50 ms at 0.50 move-scale, MG: 50 ms at 0.85, all others: 100 ms at 0.25).
+
+### Unit 2 — the shotgun volley
+
+- A trigger pull fires **one flying volley** carrying a fixed 8-point pellet pattern (randomly rotated each shot, so no two volleys look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40).
+- The pattern leaves the muzzle bunched and grows to full width (~6.5 across) over the first **27 units** — exactly her lock range — so in-band shots are always tighter than the final spread.
+- One volley = one simulated/networked object instead of 8, which is what fixed the online "shotgun lag".
+
+### Aris (Unit 7) — flight & laser bolts
+
+- **Flight kit**: a jump tap in the air re-fires the jump impulse (12 boost per pop, no cooldown); *holding* jump sustains a climb at sprint speed; air-sprint flies **level** (dedicated fly art); the air-dodge holds altitude. Boost does not regen while airborne — altitude is a spent resource.
+- Sprinting into a jump **carries the sprint momentum** through the air.
+- Her shot is a **64-unit-long laser bolt**: the thin cyan cylinder you see *is* the hitbox (both derive from one spec entry). It grows out of the muzzle — the body never reaches behind the spawn point — and hits with its whole length, so a dodge must clear the entire passing beam, not just its nose.
 
 ### Sniper charge & sprint-cancel
 
@@ -63,7 +79,7 @@ Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s 
 
 ## Maps
 
-Eight arenas: Plain Field, Streets, Factory, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle.
+Eight arenas: Plain Field, Streets, Factory, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** — only flight gets up there, making them Aris's high ground.
 
 ## Project layout
 
