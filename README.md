@@ -20,26 +20,28 @@ A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fig
 
 Eight pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8; Unit 7 flies):
 
-| | Mag | Damage | Fire rate | Lock range | Reload |
-|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 56 | 1.5 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 50 | 1.5 s |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
-| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge |
-| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) |
-| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 50 | 1.5 s |
+| | Mag | Damage | Fire rate | Lock range | Reload | Stun |
+|---|---|---|---|---|---|---|
+| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 56 | 1.5 s | 100 ms @ 0.25 |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) | 100 ms @ 0.25 |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 50 | 1.5 s | 50 ms @ 0.50 |
+| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s | 50 ms @ 0.85 |
+| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 |
+| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) | 100 ms @ 0.25 |
+| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 50 | 1.5 s | 100 ms @ 0.25 |
 
 Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 200 damage per magazine and ~5.5 s of uninterrupted fire where the others reload every ~2 s.
 
-Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon: every unit declares its own (SMG: 50 ms at 0.50 move-scale, MG: 50 ms at 0.85, all others: 100 ms at 0.25).
+**Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 20–34, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
-### Unit 2 — the shotgun volley
+Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun (see table) slows the target to the move-scale for the duration — lower scale = heavier slow, and the heaviest active stun wins.
 
-- A trigger pull fires **one flying volley** carrying a fixed 8-point pellet pattern (randomly rotated each shot, so no two volleys look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40).
+### Unit 2 — the shotgun blast
+
+- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40).
 - The pattern leaves the muzzle bunched and grows to full width (~6.5 across) over the first **27 units** — exactly her lock range — so in-band shots are always tighter than the final spread.
-- One volley = one simulated/networked object instead of 8, which is what fixed the online "shotgun lag".
+- One blast = one simulated/networked object instead of 8, which is what fixed the online "shotgun lag".
 
 ### Aris (Unit 7) — flight & laser bolts
 
