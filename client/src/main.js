@@ -1234,7 +1234,15 @@ function setupHUD() {
     b.dataset.k = action;
     b.className = `btn-${action}`;
     if (action === 'shoot') {
-      b.innerHTML = '<svg class="reload-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg><span class="ammo-count"></span>';
+      // Layer order: reload ring (outer), faint crosshair logo (watermark),
+      // ammo count on top — the number intentionally overlaps the logo.
+      b.innerHTML = '<svg class="reload-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>'
+        + '<svg class="fire-logo" viewBox="0 0 100 100" aria-hidden="true">'
+        + '<circle cx="50" cy="50" r="28"/>'
+        + '<line x1="50" y1="5" x2="50" y2="31"/><line x1="50" y1="69" x2="50" y2="95"/>'
+        + '<line x1="5" y1="50" x2="31" y2="50"/><line x1="69" y1="50" x2="95" y2="50"/>'
+        + '</svg>'
+        + '<span class="ammo-count"></span>';
     } else {
       b.textContent = action === 'boost' ? 'SPRINT' : (action === 'step' ? 'DODGE' : action.toUpperCase());
     }
