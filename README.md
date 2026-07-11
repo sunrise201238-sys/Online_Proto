@@ -22,16 +22,16 @@ Eight pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.
 
 | | Mag | Damage | Fire rate | Lock range | Reload |
 |---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~850 RPM | 56 | 1.5 s |
+| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 56 | 1.5 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 46 | 1.5 s |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 50 | 1.5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s |
 | Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge |
 | Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) |
-| Unit 8 — Submachine Gun (Mika) | 50 | 4.5 / shot | ~600 RPM | 50 | 1.5 s |
+| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 50 | 1.5 s |
 
-Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 225 damage per magazine and ~5.5 s of uninterrupted fire where the others reload every ~2 s.
+Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 200 damage per magazine and ~5.5 s of uninterrupted fire where the others reload every ~2 s.
 
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun is per-weapon: every unit declares its own (SMG: 50 ms at 0.50 move-scale, MG: 50 ms at 0.85, all others: 100 ms at 0.25).
 
