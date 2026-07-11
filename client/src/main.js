@@ -7907,19 +7907,24 @@ function buildFactory2Arena() {
   // ===== Workbenches — solid stations: full base cabinet, worktop, and a
   // backsplash rising 8.4 above the floor they stand on (true cover with
   // depth). `b` = base height (0 = ground, DECK_Y = on the deck). =====
-  const drawWorkbench = (x, z, b = 0) => {
-    addBlockingBox({ x, y: b + 1.7, z, sx: 9, sy: 3.4, sz: 5, material: machine });
-    addBlockingBox({ x, y: b + 3.65, z, sx: 9.4, sy: 0.5, sz: 5.4, material: roller });
-    addBlockingBox({ x: x - 2.8, y: b + 4.6, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
-    const splash = addBlockingBox({ x, y: b + 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop });
-    // The backsplash tops out above unit height — it fades like the tall stuff.
-    fadeTall(splash, { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 });
+  const drawWorkbench = (x, z, b = 0, axis = 'x') => {
+    const h = axis === 'x';
+    addBlockingBox({ x, y: b + 1.7, z, sx: h ? 9 : 5, sy: 3.4, sz: h ? 5 : 9, material: machine });
+    addBlockingBox({ x, y: b + 3.65, z, sx: h ? 9.4 : 5.4, sy: 0.5, sz: h ? 5.4 : 9.4, material: roller });
+    addBlockingBox({ x: h ? x - 2.8 : x, y: b + 4.6, z: h ? z : z - 2.8, sx: h ? 2.4 : 1.6, sy: 1.5, sz: h ? 1.6 : 2.4, material: machineTop });
+    // Backsplash on the long side; it tops out above unit height so it fades.
+    const splash = h
+      ? addBlockingBox({ x, y: b + 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop })
+      : addBlockingBox({ x: x + 2.6, y: b + 6.1, z, sx: 0.5, sy: 4.6, sz: 9, material: machineTop });
+    fadeTall(splash, h
+      ? { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 }
+      : { minX: x + 2.3, maxX: x + 2.9, minY: b + 3.8, maxY: b + 8.4, minZ: z - 4.5, maxZ: z + 4.5 });
   };
   drawWorkbench(-30, -52); drawWorkbench(30, 52);
   drawWorkbench(-78, 82);  drawWorkbench(78, -82);
   drawWorkbench(-108, -70); drawWorkbench(108, 70);
-  drawWorkbench(-32, 14, DECK_Y); drawWorkbench(32, -14, DECK_Y);   // deck stations
-  drawWorkbench(14, -27, DECK_Y); drawWorkbench(-14, 27, DECK_Y);   // deck edge stations (hug the fences, clear of the jump-in gaps)
+  drawWorkbench(-32, 14, DECK_Y, 'z'); drawWorkbench(32, -14, DECK_Y, 'z');   // deck stations (vertical)
+  drawWorkbench(14, -27, DECK_Y, 'z'); drawWorkbench(-14, 27, DECK_Y, 'z');   // deck edge stations (vertical, clear of the jump-in gaps)
 
   // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
   const drawMachine = (x, z) => {
