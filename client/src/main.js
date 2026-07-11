@@ -67,7 +67,7 @@ const UNIT_DATA = {
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
-    damage: 4,
+    damage: 4.5,
     magCapacity: 30,
     reloadMs: 1500,
     autoReload: false,
@@ -158,7 +158,7 @@ const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 46,
+    lockRange: 50,
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
@@ -310,11 +310,11 @@ const UNIT_DATA = {
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
-    damage: 4.5,
+    damage: 4,
     magCapacity: 50,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.50 }   // light stun, same as the SMG
   }
 };
 
