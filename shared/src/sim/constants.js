@@ -244,6 +244,34 @@ export const UNIT_DATA = {
     // that grows out of the muzzle; the client draws the transparent cyan
     // visual from this same entry, so hitbox and visual can't drift apart.
     beamBolt: { length: 64, radius: 0.4 }
+  },
+  unit8: {
+    id: 'unit8',
+    name: 'Unit 8 / Submachine Gun',
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    damage: 4.5,
+    magCapacity: 50,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 

@@ -286,6 +286,35 @@ const UNIT_DATA = {
     // lock range (56), so in-band hits land with a partially grown body —
     // the grow-out-of-the-muzzle rule keeps that honest at every distance.
     beamBolt: { length: 64, radius: 0.4 }
+  },
+  unit8: {
+    name: 'Unit 8 / Submachine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'mika', char: 'Mika', accent: 0xf4b8e4,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    damage: 4.5,
+    magCapacity: 50,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
