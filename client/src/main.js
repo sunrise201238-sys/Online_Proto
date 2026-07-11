@@ -7919,6 +7919,7 @@ function buildFactory2Arena() {
   drawWorkbench(-78, 82);  drawWorkbench(78, -82);
   drawWorkbench(-108, -70); drawWorkbench(108, 70);
   drawWorkbench(-32, 14, DECK_Y); drawWorkbench(32, -14, DECK_Y);   // deck stations
+  drawWorkbench(14, -27, DECK_Y); drawWorkbench(-14, 27, DECK_Y);   // deck edge stations (hug the fences, clear of the jump-in gaps)
 
   // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
   const drawMachine = (x, z) => {
@@ -7931,6 +7932,7 @@ function buildFactory2Arena() {
   drawMachine(-76, -34); drawMachine(76, 34);
   drawMachine(-20, -86); drawMachine(20, 86);
   drawMachine(-114, 0);  drawMachine(114, 0);   // side halls
+  drawMachine(-48, 44);  drawMachine(48, -44);  // mid-band, off the deck corners
 
   // ===== Shipping containers (10 x 3.2, 8 tall — long cover with depth) =====
   const drawContainer = (x, z, axis) => {
@@ -7944,6 +7946,8 @@ function buildFactory2Arena() {
   drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
   drawContainer(-86, -56, 'z'); drawContainer(86, 56, 'z');     // spawn-yard cover
   drawContainer(-102, -26, 'z'); drawContainer(102, 26, 'z');   // side halls
+  drawContainer(-24, 40, 'x'); drawContainer(24, -40, 'x');     // hugging the deck fences (approach cover)
+  drawContainer(0, 90, 'z'); drawContainer(0, -90, 'z');        // central north/south corridors
 
   // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
   const drawStack = (x, z, b = 0) => {
@@ -7956,6 +7960,8 @@ function buildFactory2Arena() {
   drawStack(-96, -90); drawStack(96, 90);                        // spawn-yard cover
   drawStack(-122, 58); drawStack(122, -58);                      // side halls
   drawStack(-20, -24, DECK_Y); drawStack(20, 24, DECK_Y);        // deck stacks
+  drawStack(-44, 20, DECK_Y); drawStack(44, -20, DECK_Y);        // deck, inside the ramp entries
+  drawStack(-52, 58); drawStack(52, -58);                        // mid-band
 
   // ===== Corner storage tanks (12 tall, round orbit cover) =====
   const drawTank = (x, z) => {
@@ -7991,6 +7997,7 @@ function buildFactory2Arena() {
   lowCrate(-96, -44); lowCrate(96, 44);
   lowCrate(30, -74);  lowCrate(-30, 74);
   lowCrate(-44, -6, DECK_Y); lowCrate(44, 6, DECK_Y);   // deck vault clutter
+  lowCrate(8, 12, DECK_Y); lowCrate(-8, -12, DECK_Y);   // deck, beside the press
   lowCrate(-112, -44); lowCrate(112, 44);               // side halls
 }
 
