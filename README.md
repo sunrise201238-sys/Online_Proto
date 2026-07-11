@@ -20,22 +20,26 @@ A fast-paced 1v1 / 2v2 duel prototype. Auto-aim — no manual targeting. The fig
 
 Eight pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8; Unit 7 flies):
 
-| | Mag | Damage | Fire rate | Lock range | Reload | Stun |
-|---|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 56 | 1.5 s | 100 ms @ 0.25 |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) | 100 ms @ 0.25 |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 50 | 1.5 s | 50 ms @ 0.50 |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s | 50 ms @ 0.85 |
-| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 |
-| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) | 100 ms @ 0.25 |
-| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 50 | 1.5 s | 100 ms @ 0.25 |
+| | Mag | Damage | Fire rate | Lock range | Reload | Stun | Spread |
+|---|---|---|---|---|---|---|---|
+| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 56 | 1.5 s | 100 ms @ 0.25 | 0.02 |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 27 | 1.5 s (auto, per round) | 100 ms @ 0.25 | pattern (see below) |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 | 0.02 |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 50 | 1.5 s | 50 ms @ 0.50 | 0.06 |
+| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 80 | 7 s | 50 ms @ 0.85 | 0.04 |
+| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | 120 | 2.5 s + 1 s charge | 100 ms @ 0.25 | — (beam) |
+| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 56 | 1.2 s (auto, per round) | 100 ms @ 0.25 | 0.02 |
+| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 50 | 1.5 s | 100 ms @ 0.25 | 0.04 |
 
 Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 200 damage per magazine and ~5.5 s of uninterrupted fire where the others reload every ~2 s.
 
+**Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
+
+**Reading the spread column:** the number is the weapon's full random cone in radians — each bullet deflects up to ±half of it sideways (vertical jitter is only 0.35× of that, and the target hitbox is tall, so real misses are horizontal). The error grows with distance, so every cone has a **sure-hit range** against a stationary target: ~160 units at 0.02 (i.e. never misses in practice), ~80 at 0.04, ~53 at 0.06 — beyond that, hit chance falls off roughly as sure-hit ÷ distance. The shotgun ignores the cone: its pellets fly a fixed 8-point pattern that opens to ~6.5 wide over the first 27 units (details below).
+
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 20–34, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
-Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator. Hit-stun (see table) slows the target to the move-scale for the duration — lower scale = heavier slow, and the heaviest active stun wins.
+Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
 ### Unit 2 — the shotgun blast
 
