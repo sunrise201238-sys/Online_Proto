@@ -314,7 +314,7 @@ const UNIT_DATA = {
     magCapacity: 50,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.50 }   // light stun, same as the SMG
+    stun: { ms: 50, moveScale: 0.25 }   // short but heavy: SMG duration, rifle slow
   }
 };
 
