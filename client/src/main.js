@@ -8769,8 +8769,15 @@ function buildLobbyArena() {
   const drawDesk = (cx, cz) => {
     addBlockingBox({ x: cx, y: 1.5, z: cz, sx: 14, sy: 3.0, sz: 3.2, material: desk });
     addBlockingBox({ x: cx, y: 3.1, z: cz, sx: 14.4, sy: 0.3, sz: 3.4, material: deskTop });
-    addBlockingBox({ x: cx, y: 4.4, z: cz - 1.4, sx: 14, sy: 2.0, sz: 0.4, material: deskTop });
-    addBlockingBox({ x: cx, y: 5.3, z: cz - 1.4, sx: 12, sy: 0.2, sz: 0.5, material: blueGlow });
+    // Back panel raised to 8.2: the old top (5.4) sat UNDER the 5.6 muzzle —
+    // a desk that looked like cover but blocked nothing. 8.2 clears the
+    // 8-tall target capsule = true cover. Taller than the unit -> occlude-fade
+    // (glow trim rides the new top and fades with the panel).
+    const panel = addBlockingBox({ x: cx, y: 5.65, z: cz - 1.4, sx: 14, sy: 5.1, sz: 0.5, material: deskTop.clone() });
+    const trim = addBlockingBox({ x: cx, y: 8.1, z: cz - 1.4, sx: 12, sy: 0.2, sz: 0.6, material: blueGlow.clone() });
+    const dbox = { minX: cx - 7, maxX: cx + 7, minY: 3.1, maxY: 8.2, minZ: cz - 1.65, maxZ: cz - 1.15, occlude: true };
+    registerWallFade(panel, dbox);
+    registerWallFade(trim, dbox);
   };
   drawDesk(-60, 55);
   drawDesk(60, 55);
@@ -8785,7 +8792,11 @@ function buildLobbyArena() {
     // bullet cover (its 2.8..6.4 span crosses the ~5 bullet line).
     addBlockingBox({ x, y: baseY + 1.4, z, sx: w, sy: 2.8, sz: 4.0, material: benchBase });             // seat
     addBlockingBox({ x, y: baseY + 3.1, z: z - 0.3, sx: w - 0.4, sy: 0.6, sz: 3.0, material: cushion }); // seat cushion
-    addBlockingBox({ x, y: baseY + 4.6, z: z + 1.5, sx: w, sy: 3.6, sz: 1.0, material: benchSeat });      // tall backrest / cover
+    // High backrest to 8.2 above the bench's own floor: the old 6.4 top
+    // blocked the bullet line but left the capsule's head band (up to 8)
+    // exposed — cover that betrayed you. Taller than the unit -> occlude-fade.
+    const back = addBlockingBox({ x, y: baseY + 5.5, z: z + 1.5, sx: w, sy: 5.4, sz: 1.0, material: benchSeat.clone() });
+    registerWallFade(back, { minX: x - w / 2, maxX: x + w / 2, minY: baseY + 2.8, maxY: baseY + 8.2, minZ: z + 1, maxZ: z + 2, occlude: true });
   };
   // Lower-floor benches (z=12..98 walkable area)
   drawSciFiBench(-78, 0, 82, true);
