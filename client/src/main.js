@@ -7818,8 +7818,11 @@ function buildFactory2Arena() {
   // Long-edge safety fences (sheet metal, tops at 12 — unjumpable) with a
   // 16-wide jump-in gap at the middle of each side: two extra contest points
   // Airport doesn't have. Ends stay fenced except at the ramp mouths.
+  // Long-edge fences run corner-to-corner (only the sloped mid openings
+  // break them) — the old [-52..-8]/[8..52] spans left four unfenced 8-wide
+  // corner notches that neither players nor the pathfinder could use well.
   for (const side of [-1, 1]) {
-    for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
+    for (const [fx0, fx1] of [[-60, -8], [8, 60]]) {
       const fbox = { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8.5, minZ: side * 32 - 0.6, maxZ: side * 32 + 0.6 };
       const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
       fadeTall(fence, fbox);
