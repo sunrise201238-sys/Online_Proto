@@ -122,6 +122,70 @@ export function buildNavGrid(obstacles, surfaces) {
   }
   const JUMP_MIN = 1.7;
   const JUMP_MAX = 4.8;
+  // ==== SAME-COMPONENT SHORTCUT LINKS (2026-07-12) ====================
+  // REVERSIBILITY SWITCH: set to false to restore the pre-change builder
+  // exactly (island-only links). Everything below is additive — island
+  // links flow through the unchanged code path regardless of this flag.
+  //
+  // With the flag on, a jump link may ALSO be created between two cells of
+  // the SAME walk component (e.g. Factory 2's fence-gap deck openings,
+  // which are walk-reachable via the ramps but only by a long detour) when
+  // ALL THREE extra guards pass:
+  //   1. detour  — walking between the cells takes >= SAME_COMP_MIN_DETOUR
+  //                units (BFS, capped); short detours keep walking.
+  //   2. arc     — no obstacle crossing the segment sticks up past the jump
+  //                arc (top > lowFloor + JUMP_ARC_CLEARANCE). This is the
+  //                guard the audit demanded: topBuffer-0 rails (top 6) sit
+  //                between the two floors' body heights and pass the yHi
+  //                clearance test below, but a jump from the ground (apex
+  //                ~5.6) physically cannot clear them.
+  //   3. the existing yHi walkSegmentBlocked clearance (shared with island
+  //                links) — walls/glass still veto.
+  const SAME_COMPONENT_LINKS = true;
+  const SAME_COMP_MIN_DETOUR = 40;          // world units
+  const JUMP_ARC_CLEARANCE = 5.2;           // jump apex ~5.6, with margin
+  // Does any obstacle crossing the XZ segment stick up past `topLimit`?
+  const segBlockedAbove = (x0, z0, x1, z1, topLimit) => {
+    for (let k = 0; k < obstacles.length; k += 1) {
+      const o = obstacles[k];
+      if (o.maxY <= topLimit || o.minY > topLimit) continue;
+      let tMin = 0, tMax = 1, miss = false;
+      for (const [s, dl, lo, hi] of [[x0, x1 - x0, o.minX, o.maxX], [z0, z1 - z0, o.minZ, o.maxZ]]) {
+        if (Math.abs(dl) < 1e-9) { if (s < lo || s > hi) { miss = true; break; } }
+        else {
+          const t1 = (lo - s) / dl, t2 = (hi - s) / dl;
+          const tN = Math.min(t1, t2), tF = Math.max(t1, t2);
+          if (tN > tMin) tMin = tN;
+          if (tF < tMax) tMax = tF;
+          if (tMin > tMax) { miss = true; break; }
+        }
+      }
+      if (!miss) return true;
+    }
+    return false;
+  };
+  // Capped BFS walking distance (cells) between two cells of one component.
+  const walkDetourCells = (from, to, capCells) => {
+    if (from === to) return 0;
+    const dist = new Map([[from, 0]]);
+    let frontier = [from];
+    for (let d = 1; d <= capCells; d += 1) {
+      const next = [];
+      for (const cur of frontier) {
+        const c = cur % cols, r = (cur / cols) | 0;
+        const push = (j) => { if (!dist.has(j)) { dist.set(j, d); next.push(j); } };
+        if (c + 1 < cols && edgeE[cur]) push(cur + 1);
+        if (c > 0 && edgeE[cur - 1]) push(cur - 1);
+        if (r + 1 < rows && edgeS[cur]) push(cur + cols);
+        if (r > 0 && edgeS[cur - cols]) push(cur - cols);
+      }
+      if (dist.has(to)) return dist.get(to);
+      frontier = next;
+      if (!frontier.length) return Infinity;
+    }
+    return Infinity;
+  };
+  // ====================================================================
   const jumpAdj = new Map();
   let jumpLinkCount = 0;
   const addLink = (a, b) => {
@@ -136,7 +200,9 @@ export function buildNavGrid(obstacles, surfaces) {
       const i = r * cols + c;
       if (!walk[i]) continue;
       const tryLink = (j) => {
-        if (!walk[j] || comp[i] === comp[j]) return false;
+        if (!walk[j]) return false;
+        const sameComp = comp[i] === comp[j];
+        if (sameComp && !SAME_COMPONENT_LINKS) return false;
         const dyF = Math.abs(floor[i] - floor[j]);
         if (dyF < JUMP_MIN || dyF > JUMP_MAX) return false;
         // The crossing must be PHYSICALLY jumpable: test the segment between
@@ -151,6 +217,12 @@ export function buildNavGrid(obstacles, surfaces) {
         const zj = minZ + (((j / cols) | 0) + 0.5) * CELL;
         const yHi = Math.max(floor[i], floor[j]) + GROUND_BASE_Y;
         if (walkSegmentBlocked(xi, zi, xj, zj, yHi, obstacles)) return false;
+        if (sameComp) {
+          // Extra guards for shortcut links (see block comment above).
+          if (segBlockedAbove(xi, zi, xj, zj, Math.min(floor[i], floor[j]) + JUMP_ARC_CLEARANCE)) return false;
+          const capCells = Math.ceil(SAME_COMP_MIN_DETOUR / CELL) + 2;
+          if (walkDetourCells(i, j, capCells) * CELL < SAME_COMP_MIN_DETOUR) return false;
+        }
         addLink(i, j);
         return true;
       };
