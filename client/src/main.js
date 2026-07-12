@@ -7920,9 +7920,9 @@ function buildFactory2Arena() {
       ? { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 }
       : { minX: x + 2.3, maxX: x + 2.9, minY: b + 3.8, maxY: b + 8.4, minZ: z - 4.5, maxZ: z + 4.5 });
   };
-  drawWorkbench(-30, -52); drawWorkbench(30, 52);
-  drawWorkbench(-78, 82);  drawWorkbench(78, -82);
-  drawWorkbench(-108, -70); drawWorkbench(108, 70);
+  drawWorkbench(-30, -52, 0, 'z'); drawWorkbench(30, 52, 0, 'z');
+  drawWorkbench(-78, 82, 0, 'z');  drawWorkbench(78, -82, 0, 'z');
+  drawWorkbench(-108, -70, 0, 'z'); drawWorkbench(108, 70, 0, 'z');
   drawWorkbench(-32, 14, DECK_Y, 'z'); drawWorkbench(32, -14, DECK_Y, 'z');   // deck stations (vertical)
   drawWorkbench(14, -27, DECK_Y, 'z'); drawWorkbench(-14, 27, DECK_Y, 'z');   // deck edge stations (vertical, clear of the jump-in gaps)
 
