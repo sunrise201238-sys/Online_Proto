@@ -119,7 +119,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 0
       },
       {
-        "minX": -60,
+        "minX": -52,
         "maxX": -8,
         "minZ": -32.5,
         "maxZ": -31.5,
@@ -128,14 +128,14 @@ const GENERATED_ARENA_COLLISION_DATA = {
       },
       {
         "minX": 8,
-        "maxX": 60,
+        "maxX": 52,
         "minZ": -32.5,
         "maxZ": -31.5,
         "minY": 4,
         "maxY": 12
       },
       {
-        "minX": -60,
+        "minX": -52,
         "maxX": -8,
         "minZ": 31.5,
         "maxZ": 32.5,
@@ -144,7 +144,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       },
       {
         "minX": 8,
-        "maxX": 60,
+        "maxX": 52,
         "minZ": 31.5,
         "maxZ": 32.5,
         "minY": 4,
@@ -266,42 +266,6 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxX": 82,
         "minZ": 22,
         "maxZ": 22.799999999999997,
-        "minY": 0,
-        "maxY": 6,
-        "topBuffer": 0
-      },
-      {
-        "minX": -7.800000000000001,
-        "maxX": -7,
-        "minZ": -44,
-        "maxZ": -32,
-        "minY": 0,
-        "maxY": 6,
-        "topBuffer": 0
-      },
-      {
-        "minX": 7,
-        "maxX": 7.800000000000001,
-        "minZ": -44,
-        "maxZ": -32,
-        "minY": 0,
-        "maxY": 6,
-        "topBuffer": 0
-      },
-      {
-        "minX": -7.800000000000001,
-        "maxX": -7,
-        "minZ": 32,
-        "maxZ": 44,
-        "minY": 0,
-        "maxY": 6,
-        "topBuffer": 0
-      },
-      {
-        "minX": 7,
-        "maxX": 7.800000000000001,
-        "minZ": 32,
-        "maxZ": 44,
         "minY": 0,
         "maxY": 6,
         "topBuffer": 0
@@ -2070,28 +2034,6 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxTop": 4,
         "type": "ramp",
         "axis": "x",
-        "lowY": 0,
-        "highY": 4
-      },
-      {
-        "minX": -7,
-        "maxX": 7,
-        "minZ": 32,
-        "maxZ": 44,
-        "maxTop": 4,
-        "type": "ramp",
-        "axis": "z",
-        "lowY": 4,
-        "highY": 0
-      },
-      {
-        "minX": -7,
-        "maxX": 7,
-        "minZ": -44,
-        "maxZ": -32,
-        "maxTop": 4,
-        "type": "ramp",
-        "axis": "z",
         "lowY": 0,
         "highY": 4
       },

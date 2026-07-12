@@ -7818,11 +7818,11 @@ function buildFactory2Arena() {
   // Long-edge safety fences (sheet metal, tops at 12 — unjumpable) with a
   // 16-wide jump-in gap at the middle of each side: two extra contest points
   // Airport doesn't have. Ends stay fenced except at the ramp mouths.
-  // Long-edge fences run corner-to-corner (only the sloped mid openings
-  // break them) — the old [-52..-8]/[8..52] spans left four unfenced 8-wide
-  // corner notches that neither players nor the pathfinder could use well.
+  // Long-edge fences leave a 16-wide jump-in gap mid-side plus open 8-wide
+  // corner notches — jump-only entrances (the pathfinder's same-component
+  // links let bots use the mid gaps; see navgrid.js SAME_COMPONENT_LINKS).
   for (const side of [-1, 1]) {
-    for (const [fx0, fx1] of [[-60, -8], [8, 60]]) {
+    for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
       const fbox = { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8.5, minZ: side * 32 - 0.6, maxZ: side * 32 + 0.6 };
       const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
       fadeTall(fence, fbox);
@@ -7849,17 +7849,6 @@ function buildFactory2Arena() {
   for (const sx of [-1, 1]) {
     for (const rz of [-22.4, -9.6, 9.6, 22.4]) {
       addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: cautionMat, topBuffer: 0 });
-    }
-  }
-  // Mid-side opening slopes: the 16-wide fence gaps get a short walk-up
-  // slope, making the openings real ROUTES for bots too — the pathfinder
-  // links whatever is walkable, so this needs zero bot-logic changes.
-  // Same rail treatment as the main ramps (no sideways entry into the slab).
-  addRamp({ minX: -7, maxX: 7, minZ: 32, maxZ: 44, axis: 'z', lowY: 4, highY: 0, material: deckSteel });
-  addRamp({ minX: -7, maxX: 7, minZ: -44, maxZ: -32, axis: 'z', lowY: 0, highY: 4, material: deckSteel });
-  for (const side of [-1, 1]) {
-    for (const rx of [-7.4, 7.4]) {
-      addBlockingBox({ x: rx, y: 3, z: side * 38, sx: 0.8, sy: 6, sz: 12, material: cautionMat, topBuffer: 0 });
     }
   }
   // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
