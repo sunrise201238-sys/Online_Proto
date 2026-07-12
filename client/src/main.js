@@ -331,7 +331,7 @@ const MAP_DATA = {
   arena1: { name: 'Plain Field' },
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
-  factory2: { name: 'Factory 2' },   // offline-only until tuned (not in ONLINE_AVAILABLE_MAPS / shared arena.js)
+  factory2: { name: 'Factory 2' },
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -5814,7 +5814,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'square', 'lobby', 'station', 'flashpoint', 'airport']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport']);
 
 // Host-only step: select 1v1 or 2v2. Only shown once per session (gated by
 // onl.modePushedToServer). Joiners skip this and inherit the lobby's mode.
@@ -7759,8 +7759,9 @@ function buildStreetsArena() {
 // cover that passes the sizing rules (true cover >= 8 tall, walls >= 12,
 // vault clutter <= 2.5). Tall structures register occlude-fade (turn
 // transparent when they block the view); low objects rely on the unit's
-// X-ray rear-shadow, which needs no registration. OFFLINE-ONLY for now —
-// intentionally NOT in shared arena.js / ONLINE_AVAILABLE_MAPS until tuned.
+// X-ray rear-shadow, which needs no registration. Online since 0.4.6: the
+// baked collision in shared arena.js is exported FROM this builder
+// (__exportArenaCollision('factory2')) — re-export after any geometry change.
 function buildFactory2Arena() {
   const concrete = new THREE.MeshStandardMaterial({ color: 0x2d3540, roughness: 0.92 });
   const floorPaint = new THREE.MeshStandardMaterial({ color: 0x37424f, roughness: 0.85 });
