@@ -7848,6 +7848,17 @@ function buildFactory2Arena() {
       addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: cautionMat, topBuffer: 0 });
     }
   }
+  // Mid-side opening slopes: the 16-wide fence gaps get a short walk-up
+  // slope, making the openings real ROUTES for bots too — the pathfinder
+  // links whatever is walkable, so this needs zero bot-logic changes.
+  // Same rail treatment as the main ramps (no sideways entry into the slab).
+  addRamp({ minX: -7, maxX: 7, minZ: 32, maxZ: 44, axis: 'z', lowY: 4, highY: 0, material: deckSteel });
+  addRamp({ minX: -7, maxX: 7, minZ: -44, maxZ: -32, axis: 'z', lowY: 0, highY: 4, material: deckSteel });
+  for (const side of [-1, 1]) {
+    for (const rx of [-7.4, 7.4]) {
+      addBlockingBox({ x: rx, y: 3, z: side * 38, sx: 0.8, sy: 6, sz: 12, material: cautionMat, topBuffer: 0 });
+    }
+  }
   // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
   // machine cabinets, 11-wide weave gaps. All tops >= deck+8 (true cover).
   const deckCab = (z) => {

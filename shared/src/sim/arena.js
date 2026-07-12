@@ -271,6 +271,42 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 0
       },
       {
+        "minX": -7.800000000000001,
+        "maxX": -7,
+        "minZ": -44,
+        "maxZ": -32,
+        "minY": 0,
+        "maxY": 6,
+        "topBuffer": 0
+      },
+      {
+        "minX": 7,
+        "maxX": 7.800000000000001,
+        "minZ": -44,
+        "maxZ": -32,
+        "minY": 0,
+        "maxY": 6,
+        "topBuffer": 0
+      },
+      {
+        "minX": -7.800000000000001,
+        "maxX": -7,
+        "minZ": 32,
+        "maxZ": 44,
+        "minY": 0,
+        "maxY": 6,
+        "topBuffer": 0
+      },
+      {
+        "minX": 7,
+        "maxX": 7.800000000000001,
+        "minZ": 32,
+        "maxZ": 44,
+        "minY": 0,
+        "maxY": 6,
+        "topBuffer": 0
+      },
+      {
         "minX": -3.5,
         "maxX": 3.5,
         "minZ": -23,
@@ -2034,6 +2070,28 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxTop": 4,
         "type": "ramp",
         "axis": "x",
+        "lowY": 0,
+        "highY": 4
+      },
+      {
+        "minX": -7,
+        "maxX": 7,
+        "minZ": 32,
+        "maxZ": 44,
+        "maxTop": 4,
+        "type": "ramp",
+        "axis": "z",
+        "lowY": 4,
+        "highY": 0
+      },
+      {
+        "minX": -7,
+        "maxX": 7,
+        "minZ": -44,
+        "maxZ": -32,
+        "maxTop": 4,
+        "type": "ramp",
+        "axis": "z",
         "lowY": 0,
         "highY": 4
       },
