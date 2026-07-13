@@ -7861,7 +7861,7 @@ function buildRangeArena() {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 340), floorMat);
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
   scene.add(floor); arenaDecor.push(floor);
-  addBoundaryIndicator(70, 85, 14);
+  addBoundaryIndicator(110, 85, 14);
   // Distance markings from the firing line: a thin line every 10 units and
   // BIG painted numbers on the floor every 20 (range-hall style), plus small
   // side labels on the tens.
@@ -7879,7 +7879,7 @@ function buildRangeArena() {
   for (let d = 10; d <= 120; d += 10) {
     const z = RANGE_TARGET_Z + d;
     if (z > 80) break;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(136, 0.5), stripeMat);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(216, 0.5), stripeMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
     if (d % 20 === 0) {
@@ -7888,7 +7888,7 @@ function buildRangeArena() {
       scene.add(big); arenaDecor.push(big);
     }
     const lbl = mkLabel(d, false);
-    lbl.rotation.x = -Math.PI / 2; lbl.position.set(63, 0.03, z);
+    lbl.rotation.x = -Math.PI / 2; lbl.position.set(102, 0.03, z);
     scene.add(lbl); arenaDecor.push(lbl);
   }
 }
@@ -7947,10 +7947,10 @@ function setupRangeTargets() {
   state.range = { recs: [], lastDraw: 0, dirty: true };
   const wu = UNIT_DATA.unit1;
   const defs = [
-    { x: -45, speed: 0 },
-    { x: 0, speed: wu.walkSpeed, travel: 20 },                      // walk-speed slider
-    { x: 45, speed: wu.walkSpeed + wu.sprintSpeed, travel: 20 },    // sprint-speed slider
-    { x: 62, speed: 0, reset: true }
+    { x: -85, speed: 0 },
+    { x: 0, speed: wu.walkSpeed, travel: 25 },                      // walk-speed slider
+    { x: 80, speed: wu.walkSpeed + wu.sprintSpeed, travel: 25 },    // sprint-speed slider
+    { x: 0, z: 78, speed: 0, reset: true }                          // RESET: back wall, behind the shooter
   ];
   for (const d of defs) {
     const t = createMech(0xffffff, UNIT_DATA.unit1);
@@ -7962,11 +7962,12 @@ function setupRangeTargets() {
     t.body.type = CANNON.Body.STATIC;
     t.body.mass = 0;
     t.body.updateMassProperties();
-    t.body.position.set(d.x, 2.45, RANGE_TARGET_Z);
+    t.body.position.set(d.x, 2.45, d.z ?? RANGE_TARGET_Z);
     t.rangeHomeX = d.x; t.rangeSpeed = d.speed; t.rangeDir = 1; t.rangeIsReset = !!d.reset;
     t.rangeTravel = d.travel ?? RANGE_TRAVEL;
     const board = makeRangeBoardMesh(!!d.reset);
-    board.position.set(0, 0.35, -0.9);   // just behind the capsule, facing the player
+    board.position.set(0, 0.35, d.reset ? 0.9 : -0.9);   // behind the capsule, facing the shooter
+    if (d.reset) board.rotation.y = Math.PI;             // back-wall sign faces the field
     board.visible = true;
     t.root.add(board);
     if (!d.reset) {
@@ -7989,6 +7990,10 @@ function tickRange(now, dt) {
   const R = state.range;
   if (!R || !state.rangeTargets) return;
   for (const t of state.rangeTargets) {
+    // Signs never rotate: whatever facing logic touches the state.enemy slot
+    // gets undone here every tick, so all four boards stay square-on.
+    t.root.rotation.set(0, 0, 0);
+    if (t.body.quaternion) t.body.quaternion.set(0, 0, 0, 1);
     if (t.rangeSpeed) {
       // Sliders RECEIVE STUN like real units: speed scales by the active stun.
       const stun = now < t.state.hitStunUntil ? t.state.hitStunScale : 1;
