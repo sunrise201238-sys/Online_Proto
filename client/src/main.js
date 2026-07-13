@@ -7948,8 +7948,8 @@ function drawRangeScreen(rec) {
   const { ctx, tex } = rec.screen;
   ctx.fillStyle = '#f4f6f9'; ctx.fillRect(0, 0, 256, 400);
   ctx.fillStyle = '#dde4ec'; ctx.fillRect(0, 0, 256, 88);
-  ctx.fillStyle = '#1c2530'; ctx.font = 'bold 64px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText(String(Math.round(rec.dmg * 10) / 10), 128, 66);
+  ctx.fillStyle = '#1c2530'; ctx.font = 'bold 52px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('DMG ' + Math.round(rec.dmg * 10) / 10, 128, 62);
   ctx.strokeStyle = '#8fb6cc'; ctx.setLineDash([6, 5]); ctx.lineWidth = 2;
   ctx.beginPath(); ctx.roundRect(128 - 51, 244 - 102, 102, 204, 51); ctx.stroke();
   ctx.setLineDash([]);
@@ -8001,7 +8001,7 @@ function setupRangeTargets() {
       // GIANT fixed score screen above the lane's HOME position — which is
       // the exact MIDDLE of the slider's sweep — readable from the line.
       const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 40.6), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
-      scr.position.set(d.x, 24, RANGE_TARGET_Z - 3);
+      scr.position.set(d.x, 31, RANGE_TARGET_Z - 3);   // bottom edge clears the sign board top
       scene.add(scr);
       // NOT in arenaDecor: setupRangeTargets runs before buildArenaForMap,
       // whose clearArenaDecor() would wipe them. Disposed in cleanupMatch.
