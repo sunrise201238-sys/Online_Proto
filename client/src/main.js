@@ -1390,7 +1390,13 @@ const MG_TRACER_SCALE = 0.5;
 // fades in place instead of vanishing the instant the bullet stops.
 const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
 const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
-const BULLET_TRAIL_COLOR = 0x3a3f4a;  // dark slate — light grey washed out on bright ground (Airport)
+// Per-map bullet-trail color: dark slate on bright-ground maps (light grey
+// washed out there), light grey on dark maps (slate vanished there). Color
+// only — shape/opacity/fade identical everywhere.
+const BULLET_TRAIL_COLOR_LIGHT = 0xbbbbbb;
+const BULLET_TRAIL_COLOR_DARK = 0x3a3f4a;
+const BULLET_TRAIL_DARK_MAPS = new Set(['square', 'lobby', 'airport']);
+const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLET_TRAIL_COLOR_DARK : BULLET_TRAIL_COLOR_LIGHT);
 const BULLET_TRAIL_OPACITY = 0.55;
 
 function bulletTrailFadeMsFor(unit) {
@@ -1405,7 +1411,7 @@ function buildBulletTrail() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
   const material = new THREE.LineBasicMaterial({
-    color: BULLET_TRAIL_COLOR,
+    color: bulletTrailColor(),
     transparent: true,
     opacity: BULLET_TRAIL_OPACITY,
     fog: false
