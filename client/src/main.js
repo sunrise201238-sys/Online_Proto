@@ -7861,23 +7861,34 @@ function buildRangeArena() {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 340), floorMat);
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
   scene.add(floor); arenaDecor.push(floor);
-  addBoundaryIndicator(45, 85, 14);
-  // Distance lines every 10 units from the firing line, labelled at the side.
+  addBoundaryIndicator(70, 85, 14);
+  // Distance markings from the firing line: a thin line every 10 units and
+  // BIG painted numbers on the floor every 20 (range-hall style), plus small
+  // side labels on the tens.
+  const mkLabel = (d, big) => {
+    const c = document.createElement('canvas'); c.width = big ? 256 : 128; c.height = big ? 128 : 64;
+    const g = c.getContext('2d');
+    g.fillStyle = big ? '#4a5568' : '#39414f';
+    g.font = 'bold ' + (big ? 96 : 44) + 'px system-ui'; g.textAlign = 'center';
+    g.fillText(String(d), c.width / 2, big ? 96 : 46);
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(big ? 18 : 6, big ? 9 : 3),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })
+    );
+  };
   for (let d = 10; d <= 120; d += 10) {
     const z = RANGE_TARGET_Z + d;
     if (z > 80) break;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(84, 0.5), stripeMat);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(136, 0.5), stripeMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
-    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
-    const g = c.getContext('2d');
-    g.fillStyle = '#39414f'; g.font = 'bold 44px system-ui'; g.textAlign = 'center';
-    g.fillText(String(d), 64, 46);
-    const lbl = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 3),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })
-    );
-    lbl.rotation.x = -Math.PI / 2; lbl.position.set(38, 0.03, z);
+    if (d % 20 === 0) {
+      const big = mkLabel(d, true);
+      big.rotation.x = -Math.PI / 2; big.position.set(0, 0.03, z + 5.5);
+      scene.add(big); arenaDecor.push(big);
+    }
+    const lbl = mkLabel(d, false);
+    lbl.rotation.x = -Math.PI / 2; lbl.position.set(63, 0.03, z);
     scene.add(lbl); arenaDecor.push(lbl);
   }
 }
@@ -7936,10 +7947,10 @@ function setupRangeTargets() {
   state.range = { recs: [], lastDraw: 0, dirty: true };
   const wu = UNIT_DATA.unit1;
   const defs = [
-    { x: -20, speed: 0 },
-    { x: 0, speed: wu.walkSpeed },                      // walk-speed slider
-    { x: 20, speed: wu.walkSpeed + wu.sprintSpeed },    // sprint-speed slider
-    { x: 35, speed: 0, reset: true }
+    { x: -45, speed: 0 },
+    { x: 0, speed: wu.walkSpeed, travel: 20 },                      // walk-speed slider
+    { x: 45, speed: wu.walkSpeed + wu.sprintSpeed, travel: 20 },    // sprint-speed slider
+    { x: 62, speed: 0, reset: true }
   ];
   for (const d of defs) {
     const t = createMech(0xffffff, UNIT_DATA.unit1);
@@ -7953,6 +7964,7 @@ function setupRangeTargets() {
     t.body.updateMassProperties();
     t.body.position.set(d.x, 2.45, RANGE_TARGET_Z);
     t.rangeHomeX = d.x; t.rangeSpeed = d.speed; t.rangeDir = 1; t.rangeIsReset = !!d.reset;
+    t.rangeTravel = d.travel ?? RANGE_TRAVEL;
     const board = makeRangeBoardMesh(!!d.reset);
     board.position.set(0, 0.35, -0.9);   // just behind the capsule, facing the player
     board.visible = true;
@@ -7981,8 +7993,8 @@ function tickRange(now, dt) {
       // Sliders RECEIVE STUN like real units: speed scales by the active stun.
       const stun = now < t.state.hitStunUntil ? t.state.hitStunScale : 1;
       let x = t.body.position.x + t.rangeDir * t.rangeSpeed * stun * dt;
-      if (x > t.rangeHomeX + RANGE_TRAVEL) { x = t.rangeHomeX + RANGE_TRAVEL; t.rangeDir = -1; }
-      if (x < t.rangeHomeX - RANGE_TRAVEL) { x = t.rangeHomeX - RANGE_TRAVEL; t.rangeDir = 1; }
+      if (x > t.rangeHomeX + t.rangeTravel) { x = t.rangeHomeX + t.rangeTravel; t.rangeDir = -1; }
+      if (x < t.rangeHomeX - t.rangeTravel) { x = t.rangeHomeX - t.rangeTravel; t.rangeDir = 1; }
       t.body.position.x = x;
     }
     if (t.rangeRec) {
