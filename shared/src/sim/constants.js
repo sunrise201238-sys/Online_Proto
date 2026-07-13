@@ -60,10 +60,9 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    // 27 = pellet-cluster fighting distance. The bot band rule (sweet spot =
-    // lockRange, edges ±7) then reproduces the shotgun's old dedicated band
-    // (20–34) with no special case.
-    lockRange: 27,
+    // Pellet-cluster fighting distance; the bot band rule (sweet spot =
+    // lockRange, edges ±7) gives the shotgun a 33–47 band.
+    lockRange: 40,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -408,10 +407,9 @@ export const PROJECTILE_HIT_STUN_MS = 100;
 
 // Shotgun cluster spread. Pellets spawn clustered at the muzzle and grow to
 // the full pattern over this many world units of travel distance. At 70
-// (~2.6x the SG's lockRange 27) the pattern stays tight across the whole
-// locked-fire envelope — only ~39% open (radius ~1.2) even at the edge of
-// lock — trading graze coverage against dodgers for concentrated on-target
-// damage.
+// (1.75x the SG's lockRange 40) the pattern stays tight across the locked-
+// fire envelope — ~57% open (radius ~1.8) at lock range — trading graze
+// coverage against dodgers for concentrated on-target damage.
 export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
 // Hand-designed irregular 8-point shotgun pattern (pattern-plane [x, y]
 // coordinates; max radius ≤ 3.8, no two points closer than ~1.6). One

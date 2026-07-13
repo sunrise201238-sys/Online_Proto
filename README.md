@@ -25,7 +25,7 @@ Eight pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.
 | | Mag | Damage | Fire rate | Projectile speed | Lock range | Reload |
 |---|---|---|---|---|---|---|
 | Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 600 | 56 | 1.5 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 27 | 1.2 s (auto, per round) |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2000 | 120 | 2.5 s + 1 s charge |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 600 | 80 | 7 s |
@@ -50,16 +50,16 @@ Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Atsuko, Mika) deliberately trade standing-target accuracy at range for taxing dodgers. The shotgun ignores the cones entirely: its pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — within her lock range it is still a tight ~2.2-wide cluster (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Atsuko, Mika) deliberately trade standing-target accuracy at range for taxing dodgers. The shotgun ignores the cones entirely: its pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at her lock range it is still a tight ~3.3-wide cluster (details below).
 
-**Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 20–34, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
+**Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
 ### Unit 2 — the shotgun blast
 
 - A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40).
-- The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At her lock range (27) it is only ~39% open (~2.2 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
+- The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At her lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
 - One blast = one simulated/networked object instead of 8, which is what fixed the online "shotgun lag".
 
 ### Aris (Unit 7) — flight & laser bolts
