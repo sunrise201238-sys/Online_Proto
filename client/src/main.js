@@ -389,12 +389,17 @@ state.dummyMode = false;
 function getAllFighters() {
   const out = [];
   if (state.player) out.push(state.player);
+  // Shooting Range: the sign dummies are real fighters (lockable, beam-able,
+  // cleaned up by the same teardown). They're pushed in DEF ORDER so the
+  // target cycle runs stand > walk > sprint > reset (state.enemy aliases one
+  // of them — pushing it separately would scramble the ring).
+  if (state.rangeTargets) {
+    out.push(...state.rangeTargets);
+    return out;
+  }
   if (state.enemy) out.push(state.enemy);
   if (state.ally) out.push(state.ally);
   if (state.enemy2) out.push(state.enemy2);
-  // Shooting Range: the sign dummies are real fighters (lockable, beam-able,
-  // cleaned up by the same teardown). state.enemy aliases targets[0] — skip dupes.
-  if (state.rangeTargets) for (const t of state.rangeTargets) if (!out.includes(t)) out.push(t);
   return out;
 }
 function getTeamOf(mech) {
@@ -7890,11 +7895,13 @@ function buildRangeArena() {
     const line = new THREE.Mesh(new THREE.PlaneGeometry(256, 0.5), stripeMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
-    // BIG number every 10 units, directly ON its line, centered on the
-    // walking lane (x -40) where the player spawns — no counting, no guessing.
-    const big = mkLabel(d, true);
-    big.rotation.x = -Math.PI / 2; big.position.set(-40, 0.03, z);
-    scene.add(big); arenaDecor.push(big);
+    // BIG number every 10 units, directly ON its line, repeated in front of
+    // EVERY target lane — no counting, no guessing, from any lane.
+    for (const lx of [-100, -40, 70]) {
+      const big = mkLabel(d, true);
+      big.rotation.x = -Math.PI / 2; big.position.set(lx, 0.03, z);
+      scene.add(big); arenaDecor.push(big);
+    }
   }
   // Tall lane dividers between the three target stations (real walls —
   // each lane practices independently).
@@ -7935,17 +7942,21 @@ function makeRangeBoardMesh(isReset) {
 
 // Redraw one target's score screen (throttled by tickRange).
 function drawRangeScreen(rec) {
+  // 256x400 canvas: an 88px header band carries a BIG centered damage
+  // number (readable from the firing line); the grouping area below keeps
+  // the capsule centered at (128, 244) at 32 px/unit.
   const { ctx, tex } = rec.screen;
-  ctx.fillStyle = '#f4f6f9'; ctx.fillRect(0, 0, 256, 320);
+  ctx.fillStyle = '#f4f6f9'; ctx.fillRect(0, 0, 256, 400);
+  ctx.fillStyle = '#dde4ec'; ctx.fillRect(0, 0, 256, 88);
+  ctx.fillStyle = '#1c2530'; ctx.font = 'bold 64px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(String(Math.round(rec.dmg * 10) / 10), 128, 66);
   ctx.strokeStyle = '#8fb6cc'; ctx.setLineDash([6, 5]); ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(128 - 51, 160 - 102, 102, 204, 51); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(128 - 51, 244 - 102, 102, 204, 51); ctx.stroke();
   ctx.setLineDash([]);
   for (const d of rec.dots) {
     ctx.fillStyle = d.hit ? '#e0a51e' : '#d43c30';
-    ctx.beginPath(); ctx.arc(128 + d.x * 32, 160 - d.y * 32, 4, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(128 + d.x * 32, 244 - d.y * 32, 4, 0, 7); ctx.fill();
   }
-  ctx.fillStyle = '#1c2530'; ctx.font = 'bold 26px system-ui'; ctx.textAlign = 'left';
-  ctx.fillText('DMG ' + Math.round(rec.dmg * 10) / 10, 10, 32);
   tex.needsUpdate = true;
 }
 
@@ -7986,10 +7997,10 @@ function setupRangeTargets() {
     board.visible = true;
     t.root.add(board);
     if (!d.reset) {
-      const rec = { dots: [], dmg: 0, screen: makeRangeCanvas(256, 320) };
-      // GIANT fixed score screen above the lane's HOME position (doesn't
-      // ride the sliders) — readable from the firing line, no walking up.
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 32.5), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
+      const rec = { dots: [], dmg: 0, screen: makeRangeCanvas(256, 400) };
+      // GIANT fixed score screen above the lane's HOME position — which is
+      // the exact MIDDLE of the slider's sweep — readable from the line.
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 40.6), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
       scr.position.set(d.x, 24, RANGE_TARGET_Z - 3);
       scene.add(scr);
       // NOT in arenaDecor: setupRangeTargets runs before buildArenaForMap,
