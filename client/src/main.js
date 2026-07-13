@@ -7892,7 +7892,11 @@ function buildRangeArena() {
   for (let d = 10; d <= 120; d += 10) {
     const z = RANGE_TARGET_Z + d;
     if (z > 80) break;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(256, 0.5), stripeMat);
+    // The 50 line is RED — the landmark distance, visible at a glance.
+    const lineMat = d === 50
+      ? new THREE.MeshStandardMaterial({ color: 0xd43c30, roughness: 0.8 })
+      : stripeMat;
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(256, d === 50 ? 0.9 : 0.5), lineMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
     // BIG number every 10 units, directly ON its line, repeated in front of
@@ -8000,8 +8004,8 @@ function setupRangeTargets() {
       const rec = { dots: [], dmg: 0, screen: makeRangeCanvas(256, 400) };
       // GIANT fixed score screen above the lane's HOME position — which is
       // the exact MIDDLE of the slider's sweep — readable from the line.
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 40.6), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
-      scr.position.set(d.x, 31, RANGE_TARGET_Z - 3);   // bottom edge clears the sign board top
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(30, 46.9), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
+      scr.position.set(d.x, 34.5, RANGE_TARGET_Z - 3);   // bottom edge clears the sign board top
       scene.add(scr);
       // NOT in arenaDecor: setupRangeTargets runs before buildArenaForMap,
       // whose clearArenaDecor() would wipe them. Disposed in cleanupMatch.
