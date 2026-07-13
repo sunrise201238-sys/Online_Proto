@@ -8143,21 +8143,15 @@ function buildFactoryArena() {
 
   // ===== Workbenches (10 spots — bigger map, more cover) =====
   const drawWorkbench = (x, z) => {
-    // 4 thick legs
-    for (const ox of [-3.5, 3.5]) {
-      for (const oz of [-2, 2]) {
-        addBlockingBox({ x: x + ox, y: 1.6, z: z + oz, sx: 0.7, sy: 3.2, sz: 0.7, material: roller });
-      }
-    }
-    // Tabletop (8m × 4.5m × 0.5m)
-    addBlockingBox({ x, y: 3.4, z, sx: 8, sy: 0.5, sz: 4.5, material: machine });
-    // Toolbox at one end
-    addBlockingBox({ x: x - 2.6, y: 4.4, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
-    // Vise / parts cluster at the other end
-    addBlockingBox({ x: x + 2.4, y: 4.2, z: z + 1, sx: 1.4, sy: 1.0, sz: 1.4, material: stripe });
-    addBlockingBox({ x: x + 2.6, y: 4.6, z: z - 1, sx: 1.0, sy: 1.6, sz: 1.0, material: roller });
-    // Backsplash panel — the back of the bench rises to give full cover
-    addBlockingBox({ x, y: 5.5, z: z + 2.4, sx: 7.5, sy: 3.6, sz: 0.4, material: machineTop });
+    // Solid station (no see-through legs): full base cabinet, worktop, tools,
+    // and a backsplash to 8.2 — the old 7.3 top left the capsule's head band
+    // (up to 8) exposed. Taller than the unit -> occlude-fade.
+    addBlockingBox({ x, y: 1.7, z, sx: 8, sy: 3.4, sz: 4.5, material: machine });
+    addBlockingBox({ x, y: 3.65, z, sx: 8.4, sy: 0.5, sz: 4.9, material: roller });
+    addBlockingBox({ x: x - 2.6, y: 4.65, z, sx: 2.4, sy: 1.5, sz: 1.6, material: machineTop });
+    addBlockingBox({ x: x + 2.4, y: 4.4, z: z + 1, sx: 1.4, sy: 1.0, sz: 1.4, material: stripe });
+    const splash = addBlockingBox({ x, y: 6.05, z: z + 2.4, sx: 8, sy: 4.3, sz: 0.5, material: machineTop.clone() });
+    registerWallFade(splash, { minX: x - 4, maxX: x + 4, minY: 3.9, maxY: 8.2, minZ: z + 2.15, maxZ: z + 2.65, occlude: true });
   };
   const workbenches = [
     [-70, -75], [70, -75], [-70, 75], [70, 75],
@@ -8174,8 +8168,10 @@ function buildFactoryArena() {
     addBlockingBox({ x: x + 2.0, y: 5.0, z, sx: 0.8, sy: 8, sz: 4, material: machine });
     // Crossbeam
     addBlockingBox({ x, y: 8.5, z, sx: 5, sy: 1.4, sz: 4, material: machineAlt });
-    // Hydraulic ram
-    addBlockingBox({ x, y: 6.0, z, sx: 1.6, sy: 2.0, sz: 1.6, material: roller });
+    // Solid press body between the uprights — the frame used to be
+    // shoot-through in the 2..7.8 band (only the thin ram in the way).
+    const fill = addBlockingBox({ x, y: 4.9, z, sx: 3.2, sy: 5.8, sz: 4, material: machineAlt.clone() });
+    registerWallFade(fill, { minX: x - 2.4, maxX: x + 2.4, minY: 0, maxY: 9.2, minZ: z - 2, maxZ: z + 2, occlude: true });
     // Caution stripe at the base
     addBlockingBox({ x, y: 0.05, z, sx: 6.6, sy: 0.06, sz: 5.6, material: cautionMat });
   };
@@ -8220,6 +8216,12 @@ function buildFactoryArena() {
     addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
     addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
     addBlockingBox({ x, y: 6.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
+    // Full-width stock fills: the rack used to be see-through shelving that
+    // looked like cover but wasn't. Solid to 8.8 now; fills fade together.
+    const fillA = addBlockingBox({ x, y: 4.5, z, sx: 5.2, sy: 2.6, sz: 1.7, material: crate.clone() });
+    const fillB = addBlockingBox({ x, y: 7.5, z, sx: 5.2, sy: 2.6, sz: 1.7, material: crateAlt.clone() });
+    const rbox = { minX: x - 2.7, maxX: x + 2.7, minY: 0, maxY: 8.8, minZ: z - 0.9, maxZ: z + 0.9, occlude: true };
+    registerWallFade(fillA, rbox); registerWallFade(fillB, rbox);
     addBlockingBox({ x: x + 1.5, y: 9.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
   };
   // Along z=±100 walls
@@ -8242,9 +8244,14 @@ function buildFactoryArena() {
   // ===== Workstation machinery along the long walls (just inside the rack rows) =====
   const machineLine = (z) => {
     [[-115, 14], [-50, 12], [0, 16], [50, 12], [115, 14]].forEach(([x, w]) => {
-      addBlockingBox({ x, y: 2.6, z, sx: w, sy: 5.2, sz: 5.5, material: machine });
-      addBlockingBox({ x, y: 5.7, z, sx: w * 0.5, sy: 1.5, sz: 2.5, material: machineTop });
-      addBlockingBox({ x, y: 7.0, z, sx: w * 0.25, sy: 1.0, sz: 1.0, material: stripe });
+      // Body raised 5.2 -> 8.2: the old top sat UNDER the 5.6 muzzle — a wall
+      // of machines that blocked nothing. Details ride the new top and fade
+      // WITH the body (cap alignment).
+      const mbox = { minX: x - w / 2, maxX: x + w / 2, minY: 0, maxY: 10.7, minZ: z - 2.75, maxZ: z + 2.75, occlude: true };
+      const body = addBlockingBox({ x, y: 4.1, z, sx: w, sy: 8.2, sz: 5.5, material: machine.clone() });
+      const cap = addBlockingBox({ x, y: 8.95, z, sx: w * 0.5, sy: 1.5, sz: 2.5, material: machineTop.clone() });
+      const vent = addBlockingBox({ x, y: 10.2, z, sx: w * 0.25, sy: 1.0, sz: 1.0, material: stripe.clone() });
+      registerWallFade(body, mbox); registerWallFade(cap, mbox); registerWallFade(vent, mbox);
     });
   };
   machineLine(-90);
@@ -8261,7 +8268,12 @@ function buildFactoryArena() {
     addBlockingBox({ x: x + 2.9, y: 1.5, z, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
     addBlockingBox({ x, y: 1.5, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
     addBlockingBox({ x: x + 2.9, y: 1.5, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
-    addBlockingBox({ x: x + 1.45, y: 4.4, z: z + 1.45, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
+    // Stack raised to three levels (top 8.7): the old two-level top (5.8)
+    // left the head band exposed. Third-level crate fades (taller than unit).
+    addBlockingBox({ x, y: 4.4, z, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
+    addBlockingBox({ x: x + 2.9, y: 4.4, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
+    const top = addBlockingBox({ x: x + 1.45, y: 7.3, z: z + 1.45, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt.clone() });
+    registerWallFade(top, { minX: x - 1.4, maxX: x + 4.35, minY: 0, maxY: 8.7, minZ: z - 1.4, maxZ: z + 4.35, occlude: true });
   });
 
   // ===== Tool carts (NEW — low cover scattered around) =====
