@@ -631,7 +631,7 @@ const SNIPER_CANCEL_MIN_CHARGE_MS = 500;
 const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the rationale.
-const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 100;
+const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
 // Spawn protection — fighters take no damage for this long at round start
 // (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
 const SPAWN_IMMUNITY_MS = 3000;
@@ -2318,7 +2318,10 @@ function spawnBeamOffline(owner, target) {
     damage: u.damage,
     hitStunMs: u.stun?.ms ?? 100,
     hitStunScale: u.stun?.moveScale ?? 0.25,
-    hitIds: []
+    hitIds: [],
+    // Shooting Range: remember the aimed sign so an untouched beam can print
+    // its red miss dot when it expires.
+    rangeAim: (state.mapKey === 'range' && target.state.isRangeTarget) ? target : null
   });
   spawnBeamMesh(ox, oy, oz, dir.x, dir.y, dir.z, length, radius, durationMs);
 }
@@ -2328,7 +2331,16 @@ function updateBeamDamage(now) {
   const fighters = getAllFighters();
   for (let i = state.beams.length - 1; i >= 0; i -= 1) {
     const b = state.beams[i];
-    if (now >= b.expiresAt) { state.beams.splice(i, 1); continue; }
+    if (now >= b.expiresAt) {
+      // Shooting Range: quick beam that never touched its aimed sign — red
+      // dot where the laser centerline crosses that sign's plane.
+      if (b.rangeAim && !b.hitIds.includes(b.rangeAim)) {
+        const c = rangeSegPlaneCross(b.ox, b.oy, b.oz,
+          b.ox + b.dx * b.length, b.oy + b.dy * b.length, b.oz + b.dz * b.length, b.rangeAim);
+        if (c) recordRangeDot(b.rangeAim, c.x, c.y, false);
+      }
+      state.beams.splice(i, 1); continue;
+    }
     // Real cylinder: the beam's drawn 3D line vs each enemy's capsule (1.6
     // vertical free band + 1.6 radius — same body model the projectiles use).
     const beamLine = new THREE.Line3(
@@ -2361,6 +2373,12 @@ function updateBeamDamage(now) {
       m.body.velocity.set(0, 0, 0);
       spawnHitEffect(m.root.position, m === state.player ? 0x67f2ff : 0xff73d2);
       b.hitIds.push(m);
+      // Shooting Range: yellow dot where the laser centerline crosses the sign.
+      if (state.mapKey === 'range' && st.isRangeTarget) {
+        const c = rangeSegPlaneCross(b.ox, b.oy, b.oz,
+          b.ox + b.dx * b.length, b.oy + b.dy * b.length, b.oz + b.dz * b.length, m);
+        recordRangeDot(m, c ? c.x : near.x, c ? c.y : near.y, true);
+      }
     }
     deleteProjectilesInBeam(b, b.radius);   // #1: the laser deletes projectiles it touches
   }
@@ -2602,6 +2620,28 @@ function updateChargedBeams(now, dt) {
       tst.momentumVX = 0; tst.momentumVZ = 0; t.body.velocity.set(0, 0, 0);
       spawnHitEffect(t.root.position, t === state.player ? 0x67f2ff : 0xff73d2);
       m.chargedBeamHitIds.push(t);
+      // Shooting Range: yellow dot where the laser centerline crosses the sign.
+      if (state.mapKey === 'range' && tst.isRangeTarget) {
+        const c = rangeSegPlaneCross(ox, oy, oz,
+          ox + st.chargedBeamDirX * length, oy + tanY * length, oz + st.chargedBeamDirZ * length, t);
+        recordRangeDot(t, c ? c.x : near.x, c ? c.y : near.y, true);
+      }
+    }
+    // Shooting Range: while the channel sweeps, print throttled red marks
+    // where the laser centerline crosses a paper it is NOT damaging (already
+    // spent its one hit, or aimed off the capsule) — the sweep leaves a trail.
+    if (state.mapKey === 'range' && m === state.player) {
+      if (!m.rangeBeamNextDotAt || now >= m.rangeBeamNextDotAt) {
+        m.rangeBeamNextDotAt = now + 120;
+        for (const t of state.rangeTargets ?? []) {
+          if (m.chargedBeamHitIds.includes(t)) continue;
+          const c = rangeSegPlaneCross(ox, oy, oz,
+            ox + st.chargedBeamDirX * length, oy + tanY * length, oz + st.chargedBeamDirZ * length, t);
+          if (!c) continue;
+          const rx = c.x - t.root.position.x, ry = c.y - t.root.position.y;
+          if (Math.abs(rx) <= 4.2 && ry >= -5 && ry <= 7.7) recordRangeDot(t, c.x, c.y, false);
+        }
+      }
     }
     deleteProjectilesInBeam(beamLike, radius);
     // --- Visual: stretch + orient the persistent mesh along the beam ---
@@ -7982,6 +8022,16 @@ function drawRangeScreen(rec) {
     ctx.beginPath(); ctx.arc(128 + d.x * 32, 244 - d.y * 32, 4, 0, 7); ctx.fill();
   }
   tex.needsUpdate = true;
+}
+
+// Where the segment a->b crosses sign t's z-plane (null if it doesn't reach).
+// Beams use their CENTERLINE here — the fat cylinder can graze-hit a capsule,
+// but the printed landing spot is always the middle of the laser.
+function rangeSegPlaneCross(ax, ay, az, bx, by, bz, t) {
+  const tz = t.root.position.z;
+  if ((az > tz) === (bz > tz)) return null;
+  const f = (tz - az) / (bz - az || 1);
+  return { x: ax + (bx - ax) * f, y: ay + (by - ay) * f };
 }
 
 function recordRangeDot(target, wx, wy, hit) {

@@ -407,12 +407,12 @@ export const PROJECTILE_TTL_S = 2.2;
 export const PROJECTILE_HIT_STUN_MS = 100;
 
 // Shotgun cluster spread. Pellets spawn clustered at the muzzle and grow to
-// the full pattern over this many world units of travel distance. At 100
-// (~3.7x the SG's lockRange 27) the pattern stays a tight slug across the
-// whole locked-fire envelope — only ~27% open (radius ~0.85) even at the
-// edge of lock — trading graze coverage against dodgers for concentrated
-// on-target damage.
-export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 100;
+// the full pattern over this many world units of travel distance. At 70
+// (~2.6x the SG's lockRange 27) the pattern stays tight across the whole
+// locked-fire envelope — only ~39% open (radius ~1.2) even at the edge of
+// lock — trading graze coverage against dodgers for concentrated on-target
+// damage.
+export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
 // Hand-designed irregular 8-point shotgun pattern (pattern-plane [x, y]
 // coordinates; max radius ≤ 3.8, no two points closer than ~1.6). One
 // VOLLEY object flies per trigger pull; these points — rotated by the
