@@ -35,6 +35,8 @@ export const UNIT_DATA = {
     firePerMinute: 850,        // ≈ 70.59 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,
     magCapacity: 30,
     reloadMs: 1500,
@@ -67,6 +69,8 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     reloadMs: 1200,
@@ -95,6 +99,8 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 50,
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -129,6 +135,8 @@ export const UNIT_DATA = {
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.06,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
 
     magCapacity: 30,
@@ -161,6 +169,8 @@ export const UNIT_DATA = {
     firePerMinute: 1200,       // = 50 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
     reloadMs: 7000,
@@ -189,6 +199,8 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
@@ -229,6 +241,8 @@ export const UNIT_DATA = {
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 15,
     magCapacity: 8,
     reloadMs: 1200,
@@ -267,6 +281,8 @@ export const UNIT_DATA = {
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 50,
     reloadMs: 1500,
