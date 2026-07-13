@@ -8269,7 +8269,7 @@ function buildFactoryArena() {
 
   // ===== Crate stack clusters scattered as proper cover (3m cubes stacked) =====
   const crateClusters = [
-    [-15, -15], [15, 15], [-30, 35], [30, -35],
+    [-15, -15], [15, 15], [-34, 35], [34, -35],
     [0, -55], [0, 55], [-85, -55], [85, 55],
     [-30, -50], [30, 50]
   ];

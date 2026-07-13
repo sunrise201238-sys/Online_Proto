@@ -404,8 +404,7 @@ export const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 27;
 // are both the pellet HITBOXES and the pellet VISUALS, so they can never
 // drift apart. Pellets die individually via the volley's pelletMask.
 export const SHOTGUN_PATTERN = [
-  [0.0, 0.35], [2.1, 1.9], [-1.7, 2.6], [-3.1, -0.4],
-  [-1.5, -2.4], [0.9, -3.3], [3.3, -1.2], [1.4, -0.9]
+  [0.000, 0.315], [1.890, 1.710], [-1.530, 2.340], [-2.790, -0.360], [-1.350, -2.160], [0.810, -2.970], [2.970, -1.080], [1.260, -0.810]
 ];
 
 // Sniper-specific.
