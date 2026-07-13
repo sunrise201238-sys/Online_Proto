@@ -348,12 +348,12 @@ const MAP_DATA = {
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
   factory2: { name: 'Factory 2' },
-  range: { name: 'Shooting Range' },   // offline-only practice range (hidden from the online picker)
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
   flashpoint: { name: 'Flashpoint' },
-  airport: { name: 'Airport' }
+  airport: { name: 'Airport' },
+  range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
 };
 
 const state = {
@@ -7882,14 +7882,16 @@ function buildRangeArena() {
     const line = new THREE.Mesh(new THREE.PlaneGeometry(216, 0.5), stripeMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
-    if (d % 20 === 0) {
-      const big = mkLabel(d, true);
-      big.rotation.x = -Math.PI / 2; big.position.set(0, 0.03, z + 5.5);
-      scene.add(big); arenaDecor.push(big);
-    }
-    const lbl = mkLabel(d, false);
-    lbl.rotation.x = -Math.PI / 2; lbl.position.set(102, 0.03, z);
-    scene.add(lbl); arenaDecor.push(lbl);
+    // BIG number every 10 units, sitting directly ON its line — no counting.
+    const big = mkLabel(d, true);
+    big.rotation.x = -Math.PI / 2; big.position.set(0, 0.03, z);
+    scene.add(big); arenaDecor.push(big);
+  }
+  // Thin lane dividers between the three target stations (real walls —
+  // each lane practices independently).
+  const dividerMat = new THREE.MeshStandardMaterial({ color: 0x8a94a4, roughness: 0.7 });
+  for (const dx of [-55, 27]) {
+    addBlockingBox({ x: dx, y: 5, z: -55, sx: 0.6, sy: 10, sz: 40, material: dividerMat });
   }
 }
 
@@ -7949,7 +7951,7 @@ function setupRangeTargets() {
   const defs = [
     { x: -85, speed: 0 },
     { x: 0, speed: wu.walkSpeed, travel: 25 },                      // walk-speed slider
-    { x: 80, speed: wu.walkSpeed + wu.sprintSpeed, travel: 25 },    // sprint-speed slider
+    { x: 68, speed: wu.walkSpeed + wu.sprintSpeed, travel: 38 },    // sprint-speed slider (long run)
     { x: 0, z: 78, speed: 0, reset: true }                          // RESET: back wall, behind the shooter
   ];
   for (const d of defs) {
@@ -7972,10 +7974,12 @@ function setupRangeTargets() {
     t.root.add(board);
     if (!d.reset) {
       const rec = { dots: [], dmg: 0, screen: makeRangeCanvas(256, 320) };
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(8, 10), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
-      scr.position.set(0, 11.5, -0.9);
-      scr.visible = true;
-      t.root.add(scr);
+      // GIANT fixed score screen above the lane's HOME position (doesn't
+      // ride the sliders) — readable from the firing line, no walking up.
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 32.5), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
+      scr.position.set(d.x, 24, RANGE_TARGET_Z - 3);
+      scene.add(scr);
+      arenaDecor.push(scr);
       t.rangeRec = rec;
       state.range.recs.push(rec);
       drawRangeScreen(rec);
