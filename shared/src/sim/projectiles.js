@@ -70,7 +70,7 @@ export function spawnProjectiles(matchState, owner, target) {
     // serialized, transmitted, parsed, cloned, and rendered (the online
     // "one shotgun lags the match" report). Mirrors offline main.js.
     const yaw = (Math.random() - 0.5) * u.spreadAngle * 0.08;
-    const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.35 * 0.08;
+    const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.08;
     const dir = applyYawPitch(baseDir, yaw, pitch);
     const projectile = createProjectile({
       id: nextProjectileId(),
@@ -101,7 +101,7 @@ export function spawnProjectiles(matchState, owner, target) {
     const ha = (u.horizontalAngle && haDist > (u.horizontalTriggerRange ?? 0)) ? u.horizontalAngle : 0;
     for (let i = 0; i < u.spreadCount; i += 1) {
       const yaw = (Math.random() - 0.5) * u.spreadAngle + (Math.random() - 0.5) * ha;
-      const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.35;
+      const pitch = (Math.random() - 0.5) * u.spreadAngle;
       const dir = applyYawPitch(baseDir, yaw, pitch);
       const projectile = createProjectile({
         id: nextProjectileId(),
