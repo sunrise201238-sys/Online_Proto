@@ -134,8 +134,8 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.02,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    spreadAngle: 0.06,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
 
@@ -287,7 +287,7 @@ export const UNIT_DATA = {
     magCapacity: 50,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 
