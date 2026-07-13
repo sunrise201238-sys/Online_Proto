@@ -348,6 +348,7 @@ const MAP_DATA = {
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
   factory2: { name: 'Factory 2' },
+  range: { name: 'Shooting Range' },   // offline-only practice range (hidden from the online picker)
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -391,6 +392,9 @@ function getAllFighters() {
   if (state.enemy) out.push(state.enemy);
   if (state.ally) out.push(state.ally);
   if (state.enemy2) out.push(state.enemy2);
+  // Shooting Range: the sign dummies are real fighters (lockable, beam-able,
+  // cleaned up by the same teardown). state.enemy aliases targets[0] — skip dupes.
+  if (state.rangeTargets) for (const t of state.rangeTargets) if (!out.includes(t)) out.push(t);
   return out;
 }
 function getTeamOf(mech) {
@@ -1267,7 +1271,7 @@ function setupHUD() {
   });
   // 2v2 only: target switch button above SHOOT. Cycles state.playerCurrentTarget
   // between the live enemies. Single-tap action — no held state.
-  if (state.mode === '2v2') {
+  if (state.mode === '2v2' || state.mapKey === 'range') {
     const tb = document.createElement('button');
     tb.dataset.k = 'target';
     tb.className = 'btn-target';
@@ -1395,7 +1399,7 @@ const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
 // only — shape/opacity/fade identical everywhere.
 const BULLET_TRAIL_COLOR_LIGHT = 0xbbbbbb;
 const BULLET_TRAIL_COLOR_DARK = 0x3a3f4a;
-const BULLET_TRAIL_DARK_MAPS = new Set(['square', 'lobby', 'airport']);
+const BULLET_TRAIL_DARK_MAPS = new Set(['square', 'lobby', 'airport', 'range']);
 const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLET_TRAIL_COLOR_DARK : BULLET_TRAIL_COLOR_LIGHT);
 const BULLET_TRAIL_OPACITY = 0.55;
 
@@ -1921,6 +1925,7 @@ function projectileHitsSurface(prevPos, nextPos) {
 
 function updateProjectileSystem(dt) {
   const now = performance.now();
+  if (state.mapKey === 'range') tickRange(now, dt);
   for (let i = state.projectiles.length - 1; i >= 0; i -= 1) {
     const p = state.projectiles[i];
     p.ttl -= dt;
@@ -2066,6 +2071,20 @@ function updateProjectileSystem(dt) {
     // Re-orient tracer projectiles (sniper / MG) so the streak follows
     // velocity. No-op for sphere projectiles (shotgun).
     orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
+    // Shooting Range: print MISS dots where the shot crosses the sign's
+    // plane (points inside the capsule are recorded by the hit block below,
+    // so only geometric misses plot here — no double dots).
+    if (state.mapKey === 'range' && p.target?.state?.isRangeTarget) {
+      const tr = p.target.root.position;
+      const crossed = (prevPos.z > tr.z) !== (p.mesh.position.z > tr.z);
+      if (crossed) {
+        const f = (tr.z - prevPos.z) / (p.mesh.position.z - prevPos.z || 1);
+        const cx = prevPos.x + (p.mesh.position.x - prevPos.x) * f;
+        const cy = prevPos.y + (p.mesh.position.y - prevPos.y) * f;
+        const rx = cx - tr.x, ry = cy - tr.y;
+        if (Math.abs(rx) > 1.6 || ry > 3.2 || ry < -3.2) recordRangeDot(p.target, cx, cy, false);
+      }
+    }
     // Bullet trail: tail trails by (fadeMs / 1000) * speed, clamped to the
     // spawn position for the first fadeMs so the line doesn't extend behind
     // the muzzle. Skipped for shotgun (no trail).
@@ -2157,6 +2176,9 @@ function updateProjectileSystem(dt) {
       p.target.state.momentumVX = 0;
       p.target.state.momentumVZ = 0;
       spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
+      if (state.mapKey === 'range' && p.target.state.isRangeTarget) {
+        recordRangeDot(p.target, nearest.x, nearest.y, true);   // HIT dot at the impact point
+      }
       p.target.body.velocity.set(0, 0, 0);
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
@@ -5078,6 +5100,10 @@ function cleanupMatch() {
   state.ally = null;
   state.enemy2 = null;
   state.playerCurrentTarget = null;
+  // Range targets are in getAllFighters(), so the fighter teardown above
+  // already disposed them — just drop the references (records die with them).
+  state.rangeTargets = null;
+  state.range = null;
   state.projectiles.forEach((p) => {
     disposeProjectileMesh(p.mesh);
     if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
@@ -5104,7 +5130,15 @@ function startMatch() {
   clearMenus();
   renderer.domElement.style.pointerEvents = 'auto';
   state.player = createMech(0x62d7ff, UNIT_DATA[state.playerUnitKey], true);
-  state.enemy = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey]);
+  if (state.mapKey === 'range') {
+    // Shooting Range: solo practice — whatever opponent/teammates were picked
+    // are ignored. Four sign dummies replace the enemy (state.enemy aliases
+    // the first one so every enemy-assuming system keeps working).
+    state.mode = '1v1';
+    setupRangeTargets();
+  } else {
+    state.enemy = createMech(0xff7ad5, UNIT_DATA[state.enemyUnitKey]);
+  }
   state.player.state.team = 'A';
   state.enemy.state.team = 'B';
   if (state.mode === '2v2') {
@@ -5145,6 +5179,9 @@ function startMatch() {
     // end-ramps (z ±40..50) and the baggage carousels (|x| <= 102).
     state.player.body.position.set(-118, 2.45, -72);
     state.enemy.body.position.set(118, 2.45, 72);
+  } else if (state.mapKey === 'range') {
+    // Targets are already placed on the firing line by setupRangeTargets().
+    state.player.body.position.set(0, 2.45, RANGE_TARGET_Z + 30);
   } else {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
@@ -5921,7 +5958,8 @@ function showOnlineBotUnitPicker(onl, conn) {
 function showOnlineMapPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
-  const mapEntries = Object.entries(MAP_DATA);
+  // The Shooting Range is offline-only and fully HIDDEN online (not grayed).
+  const mapEntries = Object.entries(MAP_DATA).filter(([id]) => id !== 'range');
   const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
   menu.innerHTML = `
     <h2>Pick a Map</h2>
@@ -7220,6 +7258,16 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xfff6e0);
     key.intensity = 1.05;
+  } else if (mapKey === 'range') {
+    // Shooting Range: bright indoor practice hall (dark trails read on it).
+    scene.background.setHex(0xcdd6e2);
+    scene.fog.color.setHex(0xcdd6e2);
+    scene.fog.near = 140;
+    scene.fog.far = 420;
+    ambient.color.setHex(0xffffff);
+    ambient.intensity = 1.05;
+    key.color.setHex(0xffffff);
+    key.intensity = 1.2;
   } else if (mapKey === 'station') {
     // Industrial terminal hall: cool steel-grey base with sodium-yellow platform lights.
     scene.background.setHex(0x10141c);
@@ -7264,6 +7312,7 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
   else if (mapKey === 'factory2') buildFactory2Arena();
+  else if (mapKey === 'range') buildRangeArena();
   else if (mapKey === 'square') buildSquareArena();
   else if (mapKey === 'lobby') buildLobbyArena();
   else if (mapKey === 'station') buildStationArena();
@@ -7791,6 +7840,165 @@ function buildStreetsArena() {
   // those remain visible decor past the boundary. HALF_X bounds the avenue
   // a few units past the corner sign towers (x=±110).
   addBoundaryIndicator(128, 92, 28);
+}
+
+// ===========================================================================
+// Shooting Range (mapKey 'range') — OFFLINE-ONLY practice mode.
+// Four lockable sign dummies on the firing line: stationary, walk-speed
+// slider, sprint-speed slider, and a RESET sign. Screens above each sign
+// accumulate grouping dots (hits yellow / misses red, plotted where the
+// shot crosses the sign plane) and total damage — shooting RESET clears
+// them. Sliders receive stun like real units. Records are session-only
+// (match teardown wipes them); constant memory (dots rasterize to a canvas).
+// ===========================================================================
+const RANGE_HP = 1e9;
+const RANGE_TARGET_Z = -70;
+const RANGE_TRAVEL = 10;          // slider half-travel around its lane
+
+function buildRangeArena() {
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0xb9c2cf, roughness: 0.9 });
+  const stripeMat = new THREE.MeshStandardMaterial({ color: 0x6b7686, roughness: 0.8 });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 340), floorMat);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
+  scene.add(floor); arenaDecor.push(floor);
+  addBoundaryIndicator(45, 85, 14);
+  // Distance lines every 10 units from the firing line, labelled at the side.
+  for (let d = 10; d <= 120; d += 10) {
+    const z = RANGE_TARGET_Z + d;
+    if (z > 80) break;
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(84, 0.5), stripeMat);
+    line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
+    scene.add(line); arenaDecor.push(line);
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#39414f'; g.font = 'bold 44px system-ui'; g.textAlign = 'center';
+    g.fillText(String(d), 64, 46);
+    const lbl = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 3),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })
+    );
+    lbl.rotation.x = -Math.PI / 2; lbl.position.set(38, 0.03, z);
+    scene.add(lbl); arenaDecor.push(lbl);
+  }
+}
+
+const makeRangeCanvas = (w, h) => {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  return { ctx: c.getContext('2d'), tex: new THREE.CanvasTexture(c) };
+};
+
+// Static sign face: bullseye rings + the UNIVERSAL hit capsule outline
+// (3.2 wide, 6.4 free band + caps = spans root ±3.2) at true world scale.
+function makeRangeBoardMesh(isReset) {
+  const { ctx, tex } = makeRangeCanvas(isReset ? 128 : 256, isReset ? 128 : 320);
+  if (isReset) {
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 30px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('RESET', 64, 74);
+  } else {
+    ctx.fillStyle = '#fdfdfb'; ctx.fillRect(0, 0, 256, 320);
+    ctx.strokeStyle = '#c8ccd4'; ctx.lineWidth = 2;
+    for (let r = 1; r <= 4; r += 1) { ctx.beginPath(); ctx.arc(128, 160, r * 28, 0, 7); ctx.stroke(); }
+    ctx.strokeStyle = '#3878a0'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(128 - 51, 160 - 102, 102, 204, 51); ctx.stroke();
+  }
+  tex.needsUpdate = true;
+  const s = isReset ? 4 : 8;
+  return new THREE.Mesh(new THREE.PlaneGeometry(s, isReset ? 4 : 10), new THREE.MeshBasicMaterial({ map: tex }));
+}
+
+// Redraw one target's score screen (throttled by tickRange).
+function drawRangeScreen(rec) {
+  const { ctx, tex } = rec.screen;
+  ctx.fillStyle = '#f4f6f9'; ctx.fillRect(0, 0, 256, 320);
+  ctx.strokeStyle = '#8fb6cc'; ctx.setLineDash([6, 5]); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(128 - 51, 160 - 102, 102, 204, 51); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const d of rec.dots) {
+    ctx.fillStyle = d.hit ? '#e0a51e' : '#d43c30';
+    ctx.beginPath(); ctx.arc(128 + d.x * 32, 160 - d.y * 32, 4, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#1c2530'; ctx.font = 'bold 26px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('DMG ' + Math.round(rec.dmg * 10) / 10, 10, 32);
+  tex.needsUpdate = true;
+}
+
+function recordRangeDot(target, wx, wy, hit) {
+  const rec = target.rangeRec;
+  if (!rec || !state.range) return;
+  rec.dots.push({ x: wx - target.root.position.x, y: wy - target.root.position.y, hit });
+  if (rec.dots.length > 400) rec.dots.shift();   // bounded
+  state.range.dirty = true;
+}
+
+function setupRangeTargets() {
+  state.rangeTargets = [];
+  state.range = { recs: [], lastDraw: 0, dirty: true };
+  const wu = UNIT_DATA.unit1;
+  const defs = [
+    { x: -20, speed: 0 },
+    { x: 0, speed: wu.walkSpeed },                      // walk-speed slider
+    { x: 20, speed: wu.walkSpeed + wu.sprintSpeed },    // sprint-speed slider
+    { x: 35, speed: 0, reset: true }
+  ];
+  for (const d of defs) {
+    const t = createMech(0xffffff, UNIT_DATA.unit1);
+    t.root.traverse((o) => { o.visible = false; });   // hide the unit art
+    t.root.visible = true;
+    t.state.hp = RANGE_HP;
+    t.state.team = 'B';
+    t.state.isRangeTarget = true;
+    t.body.type = CANNON.Body.STATIC;
+    t.body.mass = 0;
+    t.body.updateMassProperties();
+    t.body.position.set(d.x, 2.45, RANGE_TARGET_Z);
+    t.rangeHomeX = d.x; t.rangeSpeed = d.speed; t.rangeDir = 1; t.rangeIsReset = !!d.reset;
+    const board = makeRangeBoardMesh(!!d.reset);
+    board.position.set(0, 0.35, -0.9);   // just behind the capsule, facing the player
+    board.visible = true;
+    t.root.add(board);
+    if (!d.reset) {
+      const rec = { dots: [], dmg: 0, screen: makeRangeCanvas(256, 320) };
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(8, 10), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
+      scr.position.set(0, 11.5, -0.9);
+      scr.visible = true;
+      t.root.add(scr);
+      t.rangeRec = rec;
+      state.range.recs.push(rec);
+      drawRangeScreen(rec);
+    }
+    state.rangeTargets.push(t);
+  }
+  state.enemy = state.rangeTargets[0];
+  state.playerCurrentTarget = state.rangeTargets[0];
+}
+
+function tickRange(now, dt) {
+  const R = state.range;
+  if (!R || !state.rangeTargets) return;
+  for (const t of state.rangeTargets) {
+    if (t.rangeSpeed) {
+      // Sliders RECEIVE STUN like real units: speed scales by the active stun.
+      const stun = now < t.state.hitStunUntil ? t.state.hitStunScale : 1;
+      let x = t.body.position.x + t.rangeDir * t.rangeSpeed * stun * dt;
+      if (x > t.rangeHomeX + RANGE_TRAVEL) { x = t.rangeHomeX + RANGE_TRAVEL; t.rangeDir = -1; }
+      if (x < t.rangeHomeX - RANGE_TRAVEL) { x = t.rangeHomeX - RANGE_TRAVEL; t.rangeDir = 1; }
+      t.body.position.x = x;
+    }
+    if (t.rangeRec) {
+      const dmg = RANGE_HP - t.state.hp;
+      if (dmg !== t.rangeRec.dmg) { t.rangeRec.dmg = dmg; R.dirty = true; }
+    } else if (t.rangeIsReset && t.state.hp < RANGE_HP) {
+      for (const t2 of state.rangeTargets) t2.state.hp = RANGE_HP;
+      for (const rec of R.recs) { rec.dots.length = 0; rec.dmg = 0; }
+      R.dirty = true;
+    }
+  }
+  if (R.dirty && now - R.lastDraw > 300) {
+    R.lastDraw = now;
+    R.dirty = false;
+    for (const rec of R.recs) drawRangeScreen(rec);
+  }
 }
 
 // Factory 2 — industrial remake of Factory using Airport's design philosophy:
@@ -10509,7 +10717,8 @@ function animate() {
         runBotAIForMech(state.enemy, pickBotTargetOf(state.enemy), now);
         runBotAIForMech(state.ally, pickBotTargetOf(state.ally), now);
         runBotAIForMech(state.enemy2, pickBotTargetOf(state.enemy2), now);
-      } else {
+      } else if (state.mapKey !== 'range') {
+        // Range dummies have no AI — tickRange moves the sliders instead.
         updateEnemy(now);
       }
       applyRepulsion(now);
