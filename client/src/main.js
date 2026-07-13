@@ -2018,6 +2018,20 @@ function updateProjectileSystem(dt) {
           dead = true;
           hitThis = false;
         }
+        // Shooting Range: every PELLET prints its own dot — hits at the
+        // impact point, misses where the pellet crosses the sign plane.
+        // (The volley branch never reaches the generic recording hooks.)
+        if (state.mapKey === 'range' && p.target.state.isRangeTarget) {
+          if (hitThis) {
+            recordRangeDot(p.target, sweepEnd.x, sweepEnd.y, true);
+          } else {
+            const tz = p.target.root.position.z;
+            if ((a.z > tz) !== (b.z > tz)) {
+              const f = (tz - a.z) / (b.z - a.z || 1);
+              recordRangeDot(p.target, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, false);
+            }
+          }
+        }
         if (hitThis) {
           pelletsHit += 1;
           dead = true;       // pellets despawn on hit, as before
