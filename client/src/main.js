@@ -7960,9 +7960,16 @@ function buildFactory2Arena() {
 
   // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
   const drawStack = (x, z, b = 0) => {
+    // Palletized cargo stack (same footprint/cover heights): pallet, big
+    // rimmed crate, two aligned mid crates, strapped top crate.
     const box = { minX: x - 3.2, maxX: x + 3.2, minY: b, maxY: b + 8, minZ: z - 3.2, maxZ: z + 3.2 };
-    fadeTall(addBlockingBox({ x, y: b + 2, z, sx: 6, sy: 4, sz: 6, material: crate }), box);
-    fadeTall(addBlockingBox({ x: x + 0.3, y: b + 6, z: z - 0.2, sx: 5.4, sy: 4, sz: 5.4, material: crateAlt }), box);
+    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: rackFrame });
+    fadeTall(addBlockingBox({ x, y: b + 2.0, z, sx: 6, sy: 3.0, sz: 6, material: crate }), box);
+    addBlockingBox({ x, y: b + 3.58, z, sx: 6.15, sy: 0.16, sz: 6.15, material: beam });
+    fadeTall(addBlockingBox({ x: x - 1.53, y: b + 5.0, z, sx: 3.1, sy: 2.6, sz: 5.9, material: crateAlt }), box);
+    fadeTall(addBlockingBox({ x: x + 1.53, y: b + 5.0, z, sx: 3.1, sy: 2.6, sz: 5.9, material: machine }), box);
+    fadeTall(addBlockingBox({ x, y: b + 7.15, z, sx: 4.2, sy: 1.7, sz: 4.2, material: crateAlt }), box);
+    addBlockingBox({ x, y: b + 7.15, z, sx: 4.3, sy: 0.45, sz: 4.3, material: cautionMat });
   };
   drawStack(-12, 52);  drawStack(12, -52);
   drawStack(-98, 84);  drawStack(98, -84);
@@ -8264,16 +8271,18 @@ function buildFactoryArena() {
     [-30, -50], [30, 50]
   ];
   crateClusters.forEach(([x, z]) => {
-    addBlockingBox({ x, y: 1.5, z, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
-    addBlockingBox({ x: x + 2.9, y: 1.5, z, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
-    addBlockingBox({ x, y: 1.5, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
-    addBlockingBox({ x: x + 2.9, y: 1.5, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
-    // Stack raised to three levels (top 8.7): the old two-level top (5.8)
-    // left the head band exposed. Third-level crate fades (taller than unit).
-    addBlockingBox({ x, y: 4.4, z, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt });
-    addBlockingBox({ x: x + 2.9, y: 4.4, z: z + 2.9, sx: 2.8, sy: 2.8, sz: 2.8, material: crate });
-    const top = addBlockingBox({ x: x + 1.45, y: 7.3, z: z + 1.45, sx: 2.8, sy: 2.8, sz: 2.8, material: crateAlt.clone() });
-    registerWallFade(top, { minX: x - 1.4, maxX: x + 4.35, minY: 0, maxY: 8.7, minZ: z - 1.4, maxZ: z + 4.35, occlude: true });
+    const cx = x + 1.45, cz = z + 1.45;
+    // Palletized cargo stack: pallet slab, one big rimmed crate, two aligned
+    // mid crates in mixed industrial colors, one strapped top crate — a
+    // deliberate taper to 8.7 (true cover), not a pile of cubes.
+    addBlockingBox({ x: cx, y: 0.25, z: cz, sx: 5.8, sy: 0.5, sz: 5.8, material: rackFrame });
+    addBlockingBox({ x: cx, y: 2.05, z: cz, sx: 5.6, sy: 3.1, sz: 5.6, material: crate });
+    addBlockingBox({ x: cx, y: 3.68, z: cz, sx: 5.75, sy: 0.16, sz: 5.75, material: beam });
+    addBlockingBox({ x: cx - 1.43, y: 5.15, z: cz, sx: 2.9, sy: 2.7, sz: 5.5, material: crateAlt });
+    addBlockingBox({ x: cx + 1.43, y: 5.15, z: cz, sx: 2.9, sy: 2.7, sz: 5.5, material: machine });
+    const top = addBlockingBox({ x: cx, y: 7.6, z: cz, sx: 3.9, sy: 2.2, sz: 3.9, material: crate.clone() });
+    addBlockingBox({ x: cx, y: 7.6, z: cz, sx: 4.0, sy: 0.5, sz: 4.0, material: cautionMat });
+    registerWallFade(top, { minX: cx - 2.9, maxX: cx + 2.9, minY: 0, maxY: 8.7, minZ: cz - 2.9, maxZ: cz + 2.9, occlude: true });
   });
 
   // ===== Tool carts (NEW — low cover scattered around) =====
