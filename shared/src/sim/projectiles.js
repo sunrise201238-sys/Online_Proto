@@ -69,8 +69,11 @@ export function spawnProjectiles(matchState, owner, target) {
     // Replaces 8 independent projectiles — 8× fewer objects simulated,
     // serialized, transmitted, parsed, cloned, and rendered (the online
     // "one shotgun lags the match" report). Mirrors offline main.js.
-    const yaw = (Math.random() - 0.5) * u.spreadAngle * 0.08;
-    const pitch = (Math.random() - 0.5) * u.spreadAngle * 0.08;
+    // Round jitter: sample a DISK (independent per-axis uniforms make a square).
+    const jR = (u.spreadAngle * 0.08 / 2) * Math.sqrt(Math.random());
+    const jT = Math.random() * Math.PI * 2;
+    const yaw = jR * Math.cos(jT);
+    const pitch = jR * Math.sin(jT);
     const dir = applyYawPitch(baseDir, yaw, pitch);
     const projectile = createProjectile({
       id: nextProjectileId(),
@@ -100,8 +103,13 @@ export function spawnProjectiles(matchState, owner, target) {
     const haDist = Math.hypot(target.pos.x - owner.pos.x, target.pos.z - owner.pos.z);
     const ha = (u.horizontalAngle && haDist > (u.horizontalTriggerRange ?? 0)) ? u.horizontalAngle : 0;
     for (let i = 0; i < u.spreadCount; i += 1) {
-      const yaw = (Math.random() - 0.5) * u.spreadAngle + (Math.random() - 0.5) * ha;
-      const pitch = (Math.random() - 0.5) * u.spreadAngle;
+      // SA is a truly ROUND cone: sample a disk (angle + sqrt-radius) —
+      // independent per-axis uniforms would fill a SQUARE. HA then adds its
+      // horizontal-only scatter on top.
+      const saR = (u.spreadAngle / 2) * Math.sqrt(Math.random());
+      const saT = Math.random() * Math.PI * 2;
+      const yaw = saR * Math.cos(saT) + (Math.random() - 0.5) * ha;
+      const pitch = saR * Math.sin(saT);
       const dir = applyYawPitch(baseDir, yaw, pitch);
       const projectile = createProjectile({
         id: nextProjectileId(),

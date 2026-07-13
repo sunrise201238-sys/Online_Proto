@@ -1575,8 +1575,11 @@ function spawnProjectiles(owner, target) {
   // carries the whole SHOTGUN_PATTERN. Pellet positions (hitbox AND visual)
   // derive from volleyPelletOffset, per-pellet deaths flip pelletMask bits.
   if (isShotgun) {
-    const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.08;
-    const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle * 0.08;
+    // Round jitter disk (mirrors shared projectiles.js).
+    const jR = (owner.unit.spreadAngle * 0.08 / 2) * Math.sqrt(Math.random());
+    const jT = Math.random() * Math.PI * 2;
+    const yaw = jR * Math.cos(jT);
+    const pitch = jR * Math.sin(jT);
     const dir = baseDir.clone()
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
       .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
@@ -1615,8 +1618,11 @@ function spawnProjectiles(owner, target) {
     // scatter beyond horizontalTriggerRange, measured at fire time.
     const haDist = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
     const ha = (owner.unit.horizontalAngle && haDist > (owner.unit.horizontalTriggerRange ?? 0)) ? owner.unit.horizontalAngle : 0;
-    const yaw = (Math.random() - 0.5) * owner.unit.spreadAngle + (Math.random() - 0.5) * ha;
-    const pitch = (Math.random() - 0.5) * owner.unit.spreadAngle;
+    // Round SA cone via disk sampling + HA horizontal-only (mirrors shared).
+    const saR = (owner.unit.spreadAngle / 2) * Math.sqrt(Math.random());
+    const saT = Math.random() * Math.PI * 2;
+    const yaw = saR * Math.cos(saT) + (Math.random() - 0.5) * ha;
+    const pitch = saR * Math.sin(saT);
     const dir = baseDir.clone()
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
       .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
