@@ -6970,6 +6970,18 @@ function updateWallFade() {
         { x: pr.position.x, y: pr.position.y + 1.6, z: pr.position.z },
         b
       );
+      // occludeEnemy (Streets bridge deck/rails): ALSO fade while the box
+      // hides a living enemy from the camera — you always see your target.
+      if (!blocking && b.occludeEnemy) {
+        for (const en of [state.enemy, state.enemy2]) {
+          const er = en?.root;
+          if (er && en.state?.hp > 0 && segmentHitsObstacle(
+            camera.position,
+            { x: er.position.x, y: er.position.y + 1.6, z: er.position.z },
+            b
+          )) { blocking = true; break; }
+        }
+      }
     } else {
       // Proximity mode (edge walls, plateau, overhead signage): fade when the
       // camera closes within 14 units of the box.
@@ -7569,7 +7581,7 @@ function buildStreetsArena() {
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minY: BRIDGE_TOP - 0.8, maxY: BRIDGE_TOP,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-    occlude: true
+    occlude: true, occludeEnemy: true
   });
   // Railings along bridge sides
   const RAIL_H = 1.6;
@@ -7580,7 +7592,7 @@ function buildStreetsArena() {
       minX: railX - 0.2, maxX: railX + 0.2,
       minY: BRIDGE_TOP, maxY: BRIDGE_TOP + RAIL_H,
       minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-      occlude: true
+      occlude: true, occludeEnemy: true
     });
   }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
@@ -7733,9 +7745,11 @@ function buildStreetsArena() {
   // Each pair runs from the plaza edge (x=±32) inward to x=±12, leaving a central
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
-  for (const [px, pz] of [[-22, -38], [22, -38], [-22, 38], [22, 38]]) {
-    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 20, sy: 6.5, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 20, 6.5, 2.4);
+  for (const [px, pz] of [[-20, -38], [20, -38], [-20, 38], [20, 38]]) {
+    // Shortened 20 -> 16 from the OUTER end (inner edge stays at x ±12, so
+    // the central bridge-ramp opening is unchanged; the outer pass widens).
+    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 16, sy: 6.5, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 16, 6.5, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
