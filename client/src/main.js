@@ -5101,7 +5101,15 @@ function cleanupMatch() {
   state.enemy2 = null;
   state.playerCurrentTarget = null;
   // Range targets are in getAllFighters(), so the fighter teardown above
-  // already disposed them — just drop the references (records die with them).
+  // already disposed them. Score screens are scene-level — remove them here.
+  if (state.range?.screens) {
+    for (const s of state.range.screens) {
+      scene.remove(s);
+      s.material?.map?.dispose?.();
+      s.material?.dispose?.();
+      s.geometry?.dispose?.();
+    }
+  }
   state.rangeTargets = null;
   state.range = null;
   state.projectiles.forEach((p) => {
@@ -5180,8 +5188,8 @@ function startMatch() {
     state.player.body.position.set(-118, 2.45, -72);
     state.enemy.body.position.set(118, 2.45, 72);
   } else if (state.mapKey === 'range') {
-    // Targets are already placed on the firing line by setupRangeTargets().
-    state.player.body.position.set(0, 2.45, RANGE_TARGET_Z + 30);
+    // 100 units out, centered on the walking lane, pre-locked on its slider.
+    state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
   } else {
     state.player.body.position.set(-24, 2.45, 0);
     state.enemy.body.position.set(24, 2.45, 0);
@@ -7861,7 +7869,7 @@ function buildRangeArena() {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 340), floorMat);
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.005;
   scene.add(floor); arenaDecor.push(floor);
-  addBoundaryIndicator(110, 85, 14);
+  addBoundaryIndicator(130, 85, 14);
   // Distance markings from the firing line: a thin line every 10 units and
   // BIG painted numbers on the floor every 20 (range-hall style), plus small
   // side labels on the tens.
@@ -7879,19 +7887,20 @@ function buildRangeArena() {
   for (let d = 10; d <= 120; d += 10) {
     const z = RANGE_TARGET_Z + d;
     if (z > 80) break;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(216, 0.5), stripeMat);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(256, 0.5), stripeMat);
     line.rotation.x = -Math.PI / 2; line.position.set(0, 0.02, z);
     scene.add(line); arenaDecor.push(line);
-    // BIG number every 10 units, sitting directly ON its line — no counting.
+    // BIG number every 10 units, directly ON its line, centered on the
+    // walking lane (x -40) where the player spawns — no counting, no guessing.
     const big = mkLabel(d, true);
-    big.rotation.x = -Math.PI / 2; big.position.set(0, 0.03, z);
+    big.rotation.x = -Math.PI / 2; big.position.set(-40, 0.03, z);
     scene.add(big); arenaDecor.push(big);
   }
-  // Thin lane dividers between the three target stations (real walls —
+  // Tall lane dividers between the three target stations (real walls —
   // each lane practices independently).
   const dividerMat = new THREE.MeshStandardMaterial({ color: 0x8a94a4, roughness: 0.7 });
-  for (const dx of [-55, 27]) {
-    addBlockingBox({ x: dx, y: 5, z: -55, sx: 0.6, sy: 10, sz: 40, material: dividerMat });
+  for (const dx of [-80, 0]) {
+    addBlockingBox({ x: dx, y: 15, z: -55, sx: 0.6, sy: 30, sz: 40, material: dividerMat });
   }
 }
 
@@ -7916,8 +7925,12 @@ function makeRangeBoardMesh(isReset) {
     ctx.beginPath(); ctx.roundRect(128 - 51, 160 - 102, 102, 204, 51); ctx.stroke();
   }
   tex.needsUpdate = true;
-  const s = isReset ? 4 : 8;
-  return new THREE.Mesh(new THREE.PlaneGeometry(s, isReset ? 4 : 10), new THREE.MeshBasicMaterial({ map: tex }));
+  if (isReset) {
+    // The reset "button" is a solid cube — reads as a button, shootable from
+    // any angle (RESET label on every face).
+    return new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial({ map: tex }));
+  }
+  return new THREE.Mesh(new THREE.PlaneGeometry(8, 10), new THREE.MeshBasicMaterial({ map: tex }));
 }
 
 // Redraw one target's score screen (throttled by tickRange).
@@ -7946,12 +7959,12 @@ function recordRangeDot(target, wx, wy, hit) {
 
 function setupRangeTargets() {
   state.rangeTargets = [];
-  state.range = { recs: [], lastDraw: 0, dirty: true };
+  state.range = { recs: [], screens: [], lastDraw: 0, dirty: true };
   const wu = UNIT_DATA.unit1;
   const defs = [
-    { x: -85, speed: 0 },
-    { x: 0, speed: wu.walkSpeed, travel: 25 },                      // walk-speed slider
-    { x: 68, speed: wu.walkSpeed + wu.sprintSpeed, travel: 38 },    // sprint-speed slider (long run)
+    { x: -100, speed: 0 },
+    { x: -40, speed: wu.walkSpeed, travel: 25 },                    // walk-speed slider
+    { x: 70, speed: wu.walkSpeed + wu.sprintSpeed, travel: 57 },    // sprint-speed slider (114-unit run)
     { x: 0, z: 78, speed: 0, reset: true }                          // RESET: back wall, behind the shooter
   ];
   for (const d of defs) {
@@ -7979,15 +7992,18 @@ function setupRangeTargets() {
       const scr = new THREE.Mesh(new THREE.PlaneGeometry(26, 32.5), new THREE.MeshBasicMaterial({ map: rec.screen.tex }));
       scr.position.set(d.x, 24, RANGE_TARGET_Z - 3);
       scene.add(scr);
-      arenaDecor.push(scr);
+      // NOT in arenaDecor: setupRangeTargets runs before buildArenaForMap,
+      // whose clearArenaDecor() would wipe them. Disposed in cleanupMatch.
+      state.range.screens.push(scr);
       t.rangeRec = rec;
       state.range.recs.push(rec);
       drawRangeScreen(rec);
     }
     state.rangeTargets.push(t);
   }
-  state.enemy = state.rangeTargets[0];
-  state.playerCurrentTarget = state.rangeTargets[0];
+  // Start locked on the WALK slider (index 1) — the spawn faces its lane.
+  state.enemy = state.rangeTargets[1];
+  state.playerCurrentTarget = state.rangeTargets[1];
 }
 
 function tickRange(now, dt) {
