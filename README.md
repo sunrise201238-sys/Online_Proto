@@ -66,6 +66,14 @@ Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 
 
 The HA guns all hold 17–22% against the sprinter while HA-0 Hina lands ~2% — the anti-dodge role of HA in one row. Note Hoshino was tested well beyond her band (lock 40): at 50 the cluster is ~71% open and the 0.17 s flight lets a sprinter displace ~4.6 units, so whole blasts whiff.
 
+*Test environment:* Shooting Range (offline practice map). The shooter stands on the 50-unit line and empties the shot count into each lane in turn; the sliders ping-pong along their trails at true in-sim speeds (walk 16, walk+sprint 27.8). Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Left screen = stationary lane, middle = walk, right = sprint. Hit counts in the table are the screen damage ÷ per-hit damage.
+
+| | |
+|---|---|
+| **Saori** — 270 / 175.5 / 58.5 ![Saori at 50 units](docs/img/range50-saori.jpg) | **Hina** — 240 / 144 / 4 ![Hina at 50 units](docs/img/range50-hina.jpg) |
+| **Mika** — 236 / 132 / 52 ![Mika at 50 units](docs/img/range50-mika.jpg) | **Atsuko** — 208 / 124 / 40 ![Atsuko at 50 units](docs/img/range50-atsuko.jpg) |
+| **Hoshino** — 145 / 50 / 0 ![Hoshino at 50 units](docs/img/range50-hoshino.jpg) | |
+
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
 ### Unit 2 — the shotgun blast
