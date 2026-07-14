@@ -2818,6 +2818,24 @@ function applyRepulsion(now) {
   }
 }
 
+// Advance a 16ms boost-economy clock stored on st[field]; returns how many
+// whole ticks elapsed since the last call. drain/regen are per-TICK (62.5Hz)
+// amounts — mirroring shared movement.js — so charging them once per render
+// frame tied the whole economy to the device's fps (60fps phone under-drained,
+// 144Hz desktop double-billed). Elapsed time is capped per call at 33.4ms —
+// parity with the render loop's dt cap (1/30s) — so low fps dilates the boost
+// economy exactly like it dilates movement, and a frozen tab doesn't
+// fast-forward the gauge on wake.
+function stepBoostTicks(st, field, now) {
+  let c = st[field];
+  if (!c) c = st[field] = { t: now, acc: 16 };   // first call charges one tick, like the old per-frame code
+  c.acc += Math.min(now - c.t, 33.4);
+  c.t = now;
+  const n = Math.floor(c.acc / 16);
+  c.acc -= n * 16;
+  return n;
+}
+
 function updateBoost(mech, now, action) {
   const s = mech.state;
   const groundY = getGroundLevelY(mech) + 0.1;
@@ -2838,10 +2856,13 @@ function updateBoost(mech, now, action) {
   const drain = mech.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
   const regen = mech.unit.boostRegen ?? BOOST_REGEN_PER_TICK;
   const cap = mech.unit.boostCap ?? BOOST_CAP;
+  const ticks = stepBoostTicks(s, 'boostClock', now);
   if (consume) {
-    s.boost = Math.max(0, s.boost - drain);
+    if (ticks) s.boost = Math.max(0, s.boost - drain * ticks);
     s.refillPausedUntil = now + 500;
-  } else if (grounded && now >= s.refillPausedUntil) s.boost = Math.min(cap, s.boost + regen);
+  } else if (grounded && now >= s.refillPausedUntil && ticks) {
+    s.boost = Math.min(cap, s.boost + regen * ticks);
+  }
 
   if (s.boost <= 0) {
     if (s.emptyRecoverUntil <= now) s.emptyRecoverUntil = now + 100;
@@ -3079,10 +3100,13 @@ function updatePlayer(now) {
       // already paid for the lift — charging drain too was a double-charge.
       const climbRate = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
       if (st.jumpVelocity <= climbRate + 0.01) {
-        st.boost = Math.max(0, st.boost - (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
+        // Fixed 16ms stepping (see stepBoostTicks). Clock resets whenever the
+        // drain condition drops, so climb start always charges exactly one tick.
+        const n = stepBoostTicks(st, 'climbClock', now);
+        if (n) st.boost = Math.max(0, st.boost - n * (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
         st.refillPausedUntil = now + 500;
-      }
-    }
+      } else st.climbClock = undefined;
+    } else st.climbClock = undefined;
   }
 
   // Resolve the current lock target. Defaults to state.enemy (1v1) but can
