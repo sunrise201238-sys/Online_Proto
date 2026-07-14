@@ -54,6 +54,18 @@ Unit 8 trades burst for uptime: the lowest burst DPS of the bullet weapons, but 
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
+**Measured hit rates** (Shooting Range, shooter standing still at 50 units, 60 shots per target — Hoshino 7 blasts = 56 pellets):
+
+| @50 units | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
+|---|---|---|---|
+| Saori (4.5 dmg, SA.02+HA.04) | 60/60 — **100%** | 39 — 65% | 13 — 22% |
+| Hina (4 dmg, SA.04, HA 0) | 60/60 — **100%** | 36 — 60% | **1 — 1.7%** |
+| Mika (4 dmg, SA.04+HA.04) | 59 — 98% | 33 — 55% | 13 — 22% |
+| Atsuko (4 dmg, SA.06+HA.04) | 52 — 87% | 31 — 52% | 10 — 17% |
+| Hoshino (5/pellet, 56 pellets) | 29 — 52% | 10 — 18% | **0** |
+
+The HA guns all hold 17–22% against the sprinter while HA-0 Hina lands ~2% — the anti-dodge role of HA in one row. Note Hoshino was tested well beyond her band (lock 40): at 50 the cluster is ~71% open and the 0.17 s flight lets a sprinter displace ~4.6 units, so whole blasts whiff.
+
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
 ### Unit 2 — the shotgun blast
