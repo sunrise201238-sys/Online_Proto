@@ -32,7 +32,7 @@ export const UNIT_DATA = {
     // Weapon spec
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 850,        // ≈ 70.59 ms cooldown
+    firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -308,7 +308,7 @@ export const UNIT_DATA = {
     // per-shot damage, smaller mag.
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 950,        // ≈ 63.16 ms cooldown — lands in the 64 ms tick slot (15.6/s online), one tier above Saori's 80 ms
+    firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange

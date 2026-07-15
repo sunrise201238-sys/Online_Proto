@@ -64,7 +64,7 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 850,        // ≈ 70.59 ms cooldown
+    firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -352,7 +352,7 @@ const UNIT_DATA = {
     // per-shot damage, smaller mag.
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 950,        // ≈ 63.16 ms cooldown — lands in the 64 ms tick slot (15.6/s online), one tier above Saori's 80 ms
+    firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -1689,11 +1689,31 @@ function disposeProjectileMesh(mesh) {
   if (mesh.material) mesh.material.dispose();
 }
 
+// Offline fire cadence on the server's 16ms lattice — companion of the
+// stepBoostTicks fix (same frame-rate-dependence bug class). The gate
+// compares lattice time against the last shot, and on success the shot is
+// STAMPED at its SCHEDULED lattice slot rather than at the frame that
+// noticed it — a late frame can't push the whole schedule late, so the
+// bookkeeping is drift-free and every gun's real cadence equals its online
+// tick slot (ceil(cooldown/16) ticks) at ANY display refresh rate. Shots
+// still spawn visually on the noticing frame (≤1 frame of jitter). After an
+// idle gap (trigger released, reload, no target) the schedule re-anchors to
+// the current tick instead of allowing catch-up bursts.
+const FIRE_TICK_MS = 16;
+const fireLattice = (t) => Math.floor(t / FIRE_TICK_MS) * FIRE_TICK_MS;
+function fireGatePass(st, cooldownMs, now) {
+  const tickNow = fireLattice(now);
+  if (tickNow - st.lastFireAt < cooldownMs) return false;
+  const cdq = Math.ceil(cooldownMs / FIRE_TICK_MS) * FIRE_TICK_MS;
+  const scheduled = st.lastFireAt + cdq;
+  st.lastFireAt = (tickNow - scheduled < cdq) ? scheduled : tickNow;
+  return true;
+}
+
 function spawnProjectiles(owner, target) {
   const now = performance.now();
   if (owner.unit.magCapacity != null && owner.state.ammo <= 0) return;
-  if (now - owner.state.lastFireAt < owner.unit.fireCooldownMs) return;
-  owner.state.lastFireAt = now;
+  if (!fireGatePass(owner.state, owner.unit.fireCooldownMs, now)) return;
   if (owner.unit.magCapacity != null) owner.state.ammo -= 1;
 
   // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
@@ -1951,7 +1971,7 @@ function attemptFire(owner, target, now) {
     if (owner.state.airborne) return false;
     if (owner.state.sniperChargeTarget) return false;
     if (u.magCapacity != null && owner.state.ammo <= 0) return false;
-    if (now - owner.state.lastFireAt < u.fireCooldownMs) return false;
+    if (fireLattice(now) - owner.state.lastFireAt < u.fireCooldownMs) return false;
     const chargeMs = u.chargeMs ?? 1000;
     owner.state.sniperChargeUntil = now + chargeMs;
     owner.state.sniperChargeStartAt = now;
@@ -2430,8 +2450,7 @@ function spawnBeamOffline(owner, target) {
   // Same ammo + fire-cooldown bookkeeping as spawnProjectiles (which the beam
   // path replaces), so Kei's beam consumes ammo and respects the fire cooldown.
   if (u.magCapacity != null && owner.state.ammo <= 0) return;
-  if (now - owner.state.lastFireAt < u.fireCooldownMs) return;
-  owner.state.lastFireAt = now;
+  if (!fireGatePass(owner.state, u.fireCooldownMs, now)) return;
   if (u.magCapacity != null) owner.state.ammo -= 1;
   const ox = owner.root.position.x;
   const oy = owner.root.position.y + 0.8;   // muzzle height (matches projectile spawn)
@@ -2600,7 +2619,7 @@ function startChargedBeam(owner, target) {
 
 function endChargedBeam(owner, now) {
   owner.state.chargedBeamUntil = 0;
-  owner.state.lastFireAt = now;          // cooldown resumes from here
+  owner.state.lastFireAt = fireLattice(now);   // cooldown resumes from here (on the 16ms lattice)
   owner.chargedBeamHitIds = null;
   fadeOutChargedBeamVisual(owner);
 }
