@@ -297,7 +297,7 @@ body.pseudo-fullscreen #app {
 }
 
 /* Unit thumbnail picker (shared by offline + online unit selection) */
-.menu .unit-grid { display: grid; grid-template-columns: repeat(2, 132px); gap: 12px; justify-content: center; margin: 4px 0 6px; }
+.menu .unit-grid { display: grid; grid-template-columns: repeat(4, 132px); gap: 12px; justify-content: center; margin: 4px 0 6px; }
 .menu .unit-card { width: 132px; padding: 8px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 12px; border: 2px solid #3a5566; background: #131e2a; color: #e5fbff; cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease; }
 .menu .unit-card:hover { border-color: #5a7d96; }
 .menu .unit-card .unit-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #0b1119; pointer-events: none; }

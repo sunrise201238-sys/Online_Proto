@@ -6797,9 +6797,21 @@ function showProfilePopup(card, spriteKey, char, onConfirm) {
   const img = popup.querySelector('img');
   if (img) img.addEventListener('load', place);
 }
+// Selection-grid display order: weapon categories grouped, four to a row —
+// AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
+// from this list (future additions) sort to the end in UNIT_DATA order.
+const UNIT_GRID_ORDER = [
+  'unit1', 'unit9', 'unit4', 'unit8',    // Saori  Asuna  Atsuko Mika
+  'unit2', 'unit11', 'unit12', 'unit5',  // Hoshino Haruka Koyuki Hina
+  'unit10', 'unit7', 'unit3', 'unit6'    // Fubuki Aris   Aru    Kei
+];
+
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
-// Weapon is the part of unit.name after the "/".
+// Weapon is the part of unit.name after the "/". Cards render in
+// UNIT_GRID_ORDER regardless of the entries' object order.
 function unitGridHTML(unitEntries) {
+  const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
+  unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
     const thumb = `${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png`;
