@@ -6916,9 +6916,9 @@ function showGuidePopup() {
           </ul>
           <div class="guide-list-gap"></div>
           <ul>
-            <li>Double-tap sprint to lock it on — handy on mobile. Mind the drain.</li>
-            <li>Character can't be hit during a dodge.</li>
-            <li>Sniper has a forced aim time. Sprint can cancel the aim and fire instantly (costs stamina).</li>
+            <li><strong style="color: #ffe14d;">Double-tap sprint to lock it on</strong> — handy on mobile. Mind the drain.</li>
+            <li><strong>Character can't be hit during a dodge.</strong></li>
+            <li>Sniper has a forced aim time. Sprint can cancel the aim and fire faster (costs stamina).</li>
           </ul>
         </div>
       </div>
