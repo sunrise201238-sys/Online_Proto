@@ -348,16 +348,17 @@ const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — cloned from Unit 1 / Assault Rifle (to be tuned later).
+    // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
+    // per-shot damage, smaller mag.
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 850,        // ≈ 70.59 ms cooldown
+    firePerMinute: 1000,       // = 60 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 4.5,
-    magCapacity: 30,
+    damage: 4,
+    magCapacity: 25,
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
