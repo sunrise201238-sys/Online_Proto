@@ -380,7 +380,9 @@ const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — cloned from Unit 7 / Rifle (to be tuned later).
+    // Weapon spec — Aris-derived, tuned 2026-07-14: ordinary bullet (no
+    // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
+    // manual reload.
     lockRange: 56,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
@@ -388,14 +390,11 @@ const UNIT_DATA = {
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 15,
-    magCapacity: 8,
-    reloadMs: 1200,
-    autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 },
-    // Laser bolt: hitbox and visual both derive from this entry (see the
-    // Unit 7 note) — Fubuki fires the same bolt, she just can't fly.
-    beamBolt: { length: 64, radius: 0.4 }
+    damage: 10,
+    magCapacity: 30,
+    reloadMs: 2000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit11: {
     name: 'Unit 11 / Shotgun',
