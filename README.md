@@ -25,34 +25,34 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | | Mag | Damage | Fire rate | Projectile speed | Lock range | Reload |
 |---|---|---|---|---|---|---|
 | Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~850 RPM | 600 | 56 | 1.5 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2000 | 120 | 2.5 s + 1 s charge |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 600 | 80 | 7 s |
-| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
-| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
-| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~1000 RPM | 600 | 56 | 1.5 s |
-| Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
+| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 4 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4 / shot | ~650 RPM | 600 | 80 | 5 s |
+| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 600 | 80 | 7 s |
+| Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
+| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2000 | 120 | 2.5 s + 1 s charge |
+| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
 **Handling (stun + spread):**
 
 | | Stun | Spread (SA) | Horizontal spread (HA) | Sure-hit vs standing |
 |---|---|---|---|---|
 | Unit 1 — Saori | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
-| Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
-| Unit 5 — Hina | 50 ms @ 0.85 | 0.04 | — | ~80 |
-| Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
-| Unit 7 — Aris | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 8 — Mika | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
 | Unit 9 — Asuna | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 10 — Fubuki | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
+| Unit 8 — Mika | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
+| Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
 | Unit 12 — Koyuki | 50 ms @ 0.50 | 0.04 | 0.03 | ~46 |
+| Unit 5 — Hina | 50 ms @ 0.85 | 0.04 | — | ~80 |
+| Unit 10 — Fubuki | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 7 — Aris | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
 
 Unit 8 trades burst for uptime: modest burst DPS, but 200 damage per magazine and ~5.5 s of uninterrupted fire where most others reload every ~2 s.
 
