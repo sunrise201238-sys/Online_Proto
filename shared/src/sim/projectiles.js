@@ -340,12 +340,18 @@ export function volleyAxes(vel) {
 
 // World-space offset of pattern slot k: pattern point, rotated by the
 // volley's per-shot rotation, laid onto the axes, scaled by spread growth.
-export function volleyPelletOffset(k, axes, rot, factor) {
+// stretchX (unit.volleyStretchX, default 1) widens the pattern along the
+// HORIZONTAL axis only, applied AFTER the random rotation — the rotated
+// cloud is direction-neutral, so the horizontal spread widens by exactly
+// that factor while the vertical distribution stays untouched (Haruka's
+// 1.4x fan). Stretching only ever GROWS pellet separations, so the
+// pattern's min-spacing guarantee survives.
+export function volleyPelletOffset(k, axes, rot, factor, stretchX = 1) {
   const px = SHOTGUN_PATTERN[k][0];
   const py = SHOTGUN_PATTERN[k][1];
   const c = Math.cos(rot);
   const s = Math.sin(rot);
-  const rx2 = px * c - py * s;
+  const rx2 = (px * c - py * s) * stretchX;
   const ry2 = px * s + py * c;
   return {
     x: (axes.rX * rx2 + axes.uX * ry2) * factor,
@@ -410,6 +416,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   const factor = volleySpreadFactor(p);
   const axes = volleyAxes(p.vel);
   const owner = matchState.fighters[p.ownerId];
+  const stretchX = owner?.unit?.volleyStretchX ?? 1;
   const sameTeam = owner?.team && target.team && owner.team === target.team;
   const targetable = target.hp > 0 && !sameTeam
     && now >= target.invulnerableUntil && now > target.stepUntil;
@@ -420,7 +427,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   let pelletsHit = 0;
   for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
     if (!(p.pelletMask & (1 << k))) continue;
-    const off = volleyPelletOffset(k, axes, p.volleyRot, factor);
+    const off = volleyPelletOffset(k, axes, p.volleyRot, factor, stretchX);
     const a = { x: prevPos.x + off.x, y: prevPos.y + off.y, z: prevPos.z + off.z };
     const b = { x: p.pos.x + off.x, y: p.pos.y + off.y, z: p.pos.z + off.z };
     let hitThis = false;

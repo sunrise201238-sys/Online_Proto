@@ -368,20 +368,27 @@ export const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — cloned from Unit 2 / Shotgun (to be tuned later).
+    // Weapon spec — Hoshino-derived, tuned 2026-07-14: WIDE shotgun. Her
+    // volley pattern is stretched 1.4x horizontally (volleyStretchX below;
+    // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
+    // Hoshino's concentrated slug.
     lockRange: 40,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
+    damage: 3.5,             // per pellet (volley max 8 x 3.5 = 28 point-blank)
     magCapacity: 7,
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 100, moveScale: 0.25 },
+    // Horizontal-only pattern widening (see volleyPelletOffset): applied
+    // after the per-shot random rotation, so blasts stay randomized while
+    // the cloud is 1.4x wider and exactly as tall as Hoshino's.
+    volleyStretchX: 1.4
   },
   unit12: {
     id: 'unit12',

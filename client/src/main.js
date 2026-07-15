@@ -414,19 +414,26 @@ const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — cloned from Unit 2 / Shotgun (to be tuned later).
+    // Weapon spec — Hoshino-derived, tuned 2026-07-14: WIDE shotgun. Her
+    // volley pattern is stretched 1.4x horizontally (volleyStretchX below;
+    // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
+    // Hoshino's concentrated slug.
     lockRange: 40,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
+    damage: 3.5,             // per pellet (volley max 8 x 3.5 = 28 point-blank)
     magCapacity: 7,
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 100, moveScale: 0.25 },
+    // Horizontal-only pattern widening (see volleyPelletOffset): applied
+    // after the per-shot random rotation, so blasts stay randomized while
+    // the cloud is 1.4x wider and exactly as tall as Hoshino's.
+    volleyStretchX: 1.4
   },
   unit12: {
     name: 'Unit 12 / Machine Gun',
@@ -2115,6 +2122,7 @@ function updateProjectileSystem(dt) {
       p.center.addScaledVector(p.vel, dt);
       const factor = Math.min(1, p.center.distanceTo(p.spawnPos) / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
       const axes = volleyAxes(p.vel);
+      const stretchX = p.owner?.unit?.volleyStretchX ?? 1;
       const sameTeam = p.owner?.state?.team && tgtState.team && p.owner.state.team === tgtState.team;
       const targetable = tgtState.hp > 0 && !sameTeam
         && now >= tgtState.invulnerableUntil && now > tgtState.stepUntil;
@@ -2124,7 +2132,7 @@ function updateProjectileSystem(dt) {
       for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
         const bit = 1 << k;
         if (!(p.pelletMask & bit)) continue;
-        const off = volleyPelletOffset(k, axes, p.volleyRot, factor);
+        const off = volleyPelletOffset(k, axes, p.volleyRot, factor, stretchX);
         const a = new THREE.Vector3(prevCenter.x + off.x, prevCenter.y + off.y, prevCenter.z + off.z);
         const b = new THREE.Vector3(p.center.x + off.x, p.center.y + off.y, p.center.z + off.z);
         let hitThis = false;
@@ -5664,7 +5672,10 @@ function syncOnlineProjectiles(snap) {
           scene.add(pm);
           pelletMeshes.push(pm);
         }
-        entry = { mesh: null, trail: null, trailFadeMs: 0, boltLen: 0, pelletMeshes };
+        entry = {
+          mesh: null, trail: null, trailFadeMs: 0, boltLen: 0, pelletMeshes,
+          stretchX: ownerUnit.volleyStretchX ?? 1
+        };
         meshes.set(sp.id, entry);
       }
       const vdx = sp.pos.x - sp.spawnX;
@@ -5680,7 +5691,7 @@ function syncOnlineProjectiles(snap) {
           entry.pelletMeshes[k] = null;
           continue;
         }
-        const off = volleyPelletOffset(k, axes, sp.volleyRot, factor);
+        const off = volleyPelletOffset(k, axes, sp.volleyRot, factor, entry.stretchX ?? 1);
         pm.position.set(sp.pos.x + off.x, sp.pos.y + off.y, sp.pos.z + off.z);
       }
       continue;
