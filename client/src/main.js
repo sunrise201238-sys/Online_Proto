@@ -6853,7 +6853,10 @@ function wireUnitGrid(menu, onPick) {
       e.stopPropagation();
       const key = card.dataset.unitCard;
       if (pendingKey === key) { clearPending(); onPick(key); return; }
-      clearPending();
+      // A profile is already open and this tap is on a DIFFERENT card: the
+      // tap only dismisses the open profile — it does NOT chain straight
+      // into the new card's preview (tap again to open that one).
+      if (pendingKey) { clearPending(); return; }
       pendingKey = key;
       card.classList.add('selecting');
       const u = UNIT_DATA[key];
