@@ -200,7 +200,7 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 80,
     projectileSpeed: 600,
-    firePerMinute: 1200,       // = 50 ms cooldown
+    firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.04,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange

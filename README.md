@@ -31,7 +31,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4 / shot | ~650 RPM | 600 | 80 | 5 s |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 600 | 80 | 7 s |
+| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
 | Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2000 | 120 | 2.5 s + 1 s charge |
