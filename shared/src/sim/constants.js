@@ -416,7 +416,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.04,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 4,
+    damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
     reloadMs: 5000,
     autoReload: false,
