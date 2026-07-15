@@ -6786,8 +6786,9 @@ function showProfilePopup(card, unit, onConfirm) {
   document.body.appendChild(popup);
   _activeProfilePopup = popup;
   // Tapping the profile art confirms the pending selection — same as a second
-  // tap on the thumbnail.
-  popup.addEventListener('pointerdown', (e) => {
+  // tap on the thumbnail. Click-based like the cards: a scroll that starts on
+  // the popup must not confirm the pick.
+  popup.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (onConfirm) onConfirm();
@@ -6841,8 +6842,13 @@ function wireUnitGrid(menu, onPick) {
     grid.querySelectorAll('.unit-card.selecting').forEach((c) => c.classList.remove('selecting'));
     removeProfilePopup();
   };
+  // Cards act on CLICK, not pointerdown: the browser only fires click when
+  // the touch did NOT turn into a scroll, so dragging through the grid can't
+  // pop profiles anymore (the old pointerdown fired before the browser knew
+  // the gesture was a scroll). Taps still feel instant — no legacy tap delay
+  // with the viewport meta in place.
   grid.querySelectorAll('.unit-card').forEach((card) => {
-    card.addEventListener('pointerdown', (e) => {
+    card.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const key = card.dataset.unitCard;
@@ -6854,8 +6860,10 @@ function wireUnitGrid(menu, onPick) {
       showProfilePopup(card, u, () => { clearPending(); onPick(key); });
     });
   });
-  // Tap anywhere else in the menu → cancel the preview, back to plain selection.
-  menu.addEventListener('pointerdown', () => { if (pendingKey) clearPending(); });
+  // Tap anywhere else in the menu → cancel the preview, back to plain
+  // selection. Also click-based (same scroll-safety), and card clicks
+  // stopPropagation so a confirm tap doesn't cancel itself here first.
+  menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
 }
 
 function showUnitPicker(title, onPick) {
