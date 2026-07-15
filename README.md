@@ -29,7 +29,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
 | Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 4 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4 / shot | ~650 RPM | 600 | 80 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1200 RPM | 600 | 80 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
@@ -47,7 +47,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 8 — Mika | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
-| Unit 12 — Koyuki | 50 ms @ 0.50 | 0.04 | 0.03 | ~46 |
+| Unit 12 — Koyuki | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
 | Unit 5 — Hina | 50 ms @ 0.85 | 0.04 | — | ~80 |
 | Unit 10 — Fubuki | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Unit 7 — Aris | 100 ms @ 0.25 | 0.02 | — | ~160 |
@@ -86,7 +86,7 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 
 ### Units 2 & 11 — the shotgun blast
 
-- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 for Hoshino / × 4 for Haruka (all 8 point-blank = 40 / 32).
+- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
 - **Haruka's wide fan (Unit 11):** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Hoshino's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Hoshino's concentrated slug.
 - One blast = one simulated/networked object instead of 8, which is what fixed the online "shotgun lag".

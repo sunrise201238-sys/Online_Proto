@@ -425,7 +425,7 @@ const UNIT_DATA = {
     spreadAngle: THREE.MathUtils.degToRad(16),
     horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank)
+    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     reloadMs: 1200,
     autoReload: true,
@@ -452,20 +452,21 @@ const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — Hina-derived, tuned 2026-07-14: slower cadence with HA
-    // anti-dodge scatter, smaller mag, quicker reload, meatier stun.
+    // Weapon spec — Hina-derived, tuned 2026-07-14/15: slower cadence with
+    // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
+    // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
     projectileSpeed: 600,
     firePerMinute: 650,        // ≈ 92.31 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0.03,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 100,
     reloadMs: 5000,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
