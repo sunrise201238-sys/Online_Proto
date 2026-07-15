@@ -26,7 +26,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 |---|---|---|---|---|---|---|
 | Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 4 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
+| Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
 | Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |

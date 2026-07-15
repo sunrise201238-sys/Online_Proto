@@ -136,7 +136,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.06,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 4,
+    damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
     reloadMs: 1500,
