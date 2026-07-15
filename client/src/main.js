@@ -47,7 +47,7 @@ const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'saori', char: 'Saori', accent: 0x3a4a78,
+    spriteKey: 'saori', char: 'Saori', weapon: 'M4', accent: 0x3a4a78,
 
     // Pilot stats
     hp: 150,
@@ -78,7 +78,7 @@ const UNIT_DATA = {
   unit2: {
     name: 'Unit 2 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'hoshino', char: 'Hoshino', accent: 0xff9ec7,
+    spriteKey: 'hoshino', char: 'Hoshino', weapon: 'Beretta 1301', accent: 0xff9ec7,
 
     // Pilot stats
     hp: 150,
@@ -111,7 +111,7 @@ const UNIT_DATA = {
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'aru', char: 'Aru', accent: 0xff7a8a,
+    spriteKey: 'aru', char: 'Aru', weapon: 'PSG1', accent: 0xff7a8a,
 
     // Pilot stats
     hp: 150,
@@ -148,7 +148,7 @@ const UNIT_DATA = {
   unit4: {
     name: 'Unit 4 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'atsuko', char: 'Atsuko', accent: 0xe8a13a,
+    spriteKey: 'atsuko', char: 'Atsuko', weapon: 'evo3', accent: 0xe8a13a,
 
     // Pilot stats
     hp: 150,
@@ -183,7 +183,7 @@ const UNIT_DATA = {
   unit5: {
     name: 'Unit 5 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'hina', char: 'Hina', accent: 0x6fcf8f,
+    spriteKey: 'hina', char: 'Hina', weapon: 'MG42', accent: 0x6fcf8f,
 
     // Pilot stats
     hp: 150,
@@ -214,7 +214,7 @@ const UNIT_DATA = {
   unit6: {
     name: 'Unit 6 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'kei', char: 'Kei', accent: 0x9a7be0,
+    spriteKey: 'kei', char: 'Kei', weapon: 'Laser', accent: 0x9a7be0,
 
     // Pilot stats
     hp: 150,
@@ -251,7 +251,7 @@ const UNIT_DATA = {
   unit7: {
     name: 'Unit 7 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'aris', char: 'Aris', accent: 0x6fd9e8,
+    spriteKey: 'aris', char: 'Aris', weapon: 'Laser', accent: 0x6fd9e8,
 
     // Pilot stats
     hp: 150,
@@ -303,7 +303,7 @@ const UNIT_DATA = {
   unit8: {
     name: 'Unit 8 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'mika', char: 'Mika', accent: 0xf4b8e4,
+    spriteKey: 'mika', char: 'Mika', weapon: 'Lanchester Mk.1', accent: 0xf4b8e4,
 
     // Pilot stats
     hp: 150,
@@ -334,7 +334,7 @@ const UNIT_DATA = {
   unit9: {
     name: 'Unit 9 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'asuna', char: 'Asuna', accent: 0x3fbde8,
+    spriteKey: 'asuna', char: 'Asuna', weapon: 'FAMAS', accent: 0x3fbde8,
 
     // Pilot stats
     hp: 150,
@@ -366,7 +366,7 @@ const UNIT_DATA = {
   unit10: {
     name: 'Unit 10 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'fubuki', char: 'Fubuki', accent: 0x6f86b8,
+    spriteKey: 'fubuki', char: 'Fubuki', weapon: 'Ruger Mini-14', accent: 0x6f86b8,
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
@@ -400,7 +400,7 @@ const UNIT_DATA = {
   unit11: {
     name: 'Unit 11 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'haruka', char: 'Haruka', accent: 0x7a5f96,
+    spriteKey: 'haruka', char: 'Haruka', weapon: 'SDASS', accent: 0x7a5f96,
 
     // Pilot stats
     hp: 150,
@@ -438,7 +438,7 @@ const UNIT_DATA = {
   unit12: {
     name: 'Unit 12 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'koyuki', char: 'Koyuki', accent: 0xff8ac8,
+    spriteKey: 'koyuki', char: 'Koyuki', weapon: 'M60', accent: 0xff8ac8,
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 150,
@@ -6769,11 +6769,20 @@ let _activeProfilePopup = null;
 function removeProfilePopup() {
   if (_activeProfilePopup) { _activeProfilePopup.remove(); _activeProfilePopup = null; }
 }
-function showProfilePopup(card, spriteKey, char, onConfirm) {
+function showProfilePopup(card, unit, onConfirm) {
   removeProfilePopup();
+  const { spriteKey, char, weapon } = unit;
   const popup = document.createElement('div');
   popup.className = 'unit-profile-popup';
-  popup.innerHTML = `<img src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />`;
+  // Side card: full profile art on the left; the unit's weapon render + its
+  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside.
+  const weaponPanel = weapon
+    ? `<div class="weapon-panel">
+        <div class="weapon-name">${weapon}</div>
+        <img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="${weapon}" draggable="false" />
+      </div>`
+    : '';
+  popup.innerHTML = `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}`;
   document.body.appendChild(popup);
   _activeProfilePopup = popup;
   // Tapping the profile art confirms the pending selection — same as a second
@@ -6795,8 +6804,7 @@ function showProfilePopup(card, spriteKey, char, onConfirm) {
     popup.style.top = `${top}px`;
   };
   place();
-  const img = popup.querySelector('img');
-  if (img) img.addEventListener('load', place);
+  popup.querySelectorAll('img').forEach((img) => img.addEventListener('load', place));
 }
 // Selection-grid display order: weapon categories grouped, four to a row —
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
@@ -6843,7 +6851,7 @@ function wireUnitGrid(menu, onPick) {
       pendingKey = key;
       card.classList.add('selecting');
       const u = UNIT_DATA[key];
-      showProfilePopup(card, u.spriteKey, u.char, () => { clearPending(); onPick(key); });
+      showProfilePopup(card, u, () => { clearPending(); onPick(key); });
     });
   });
   // Tap anywhere else in the menu → cancel the preview, back to plain selection.

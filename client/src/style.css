@@ -304,5 +304,9 @@ body.pseudo-fullscreen #app {
 .menu .unit-card .unit-label { font-size: 13px; line-height: 1.35; font-weight: 600; text-align: center; pointer-events: none; }
 .menu .unit-card.selecting { border-color: #6ab8ff; box-shadow: 0 0 0 2px rgba(106, 184, 255, 0.55), 0 0 18px 3px rgba(106, 184, 255, 0.7); }
 
-.unit-profile-popup { position: fixed; z-index: 300; padding: 6px; border-radius: 12px; border: 2px solid #6ab8ff; background: rgba(10, 16, 26, 0.96); box-shadow: 0 0 22px 5px rgba(106, 184, 255, 0.5); cursor: pointer; }
-.unit-profile-popup img { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 8px; }
+.unit-profile-popup { position: fixed; z-index: 300; display: flex; gap: 6px; align-items: stretch; padding: 6px; border-radius: 12px; border: 2px solid #6ab8ff; background: rgba(10, 16, 26, 0.96); box-shadow: 0 0 22px 5px rgba(106, 184, 255, 0.5); cursor: pointer; }
+.unit-profile-popup .profile-face { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 8px; align-self: center; }
+/* Side card: weapon render + real-world weapon name beside the portrait. */
+.unit-profile-popup .weapon-panel { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: #0b1119; border: 1px solid #2c4356; border-radius: 8px; padding: 6px; }
+.unit-profile-popup .weapon-name { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd76a; text-align: center; border-bottom: 1px solid #274058; padding-bottom: 4px; }
+.unit-profile-popup .weapon-panel img { display: block; width: 100%; height: auto; }
