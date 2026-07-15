@@ -386,10 +386,10 @@ export const UNIT_DATA = {
     id: 'unit12',
     name: 'Unit 12 / Machine Gun',
 
-    // Pilot stats (Hina copy — including the walkSpeed 8 mobility tax)
+    // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 150,
     boostCap: 250,
-    walkSpeed: 8,
+    walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -398,19 +398,20 @@ export const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — cloned from Unit 5 / Machine Gun (to be tuned later).
+    // Weapon spec — Hina-derived, tuned 2026-07-14: slower cadence with HA
+    // anti-dodge scatter, smaller mag, quicker reload, meatier stun.
     lockRange: 80,
     projectileSpeed: 600,
-    firePerMinute: 1200,       // = 50 ms cooldown
+    firePerMinute: 650,        // ≈ 92.31 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0.03,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
-    magCapacity: 250,
-    reloadMs: 7000,
+    magCapacity: 100,
+    reloadMs: 5000,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as Hina
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 
