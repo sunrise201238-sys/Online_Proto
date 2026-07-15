@@ -380,7 +380,7 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 3.5,             // per pellet (volley max 8 x 3.5 = 28 point-blank)
+    damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank)
     magCapacity: 7,
     reloadMs: 1200,
     autoReload: true,
