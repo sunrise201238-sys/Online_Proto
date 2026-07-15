@@ -330,6 +330,134 @@ const UNIT_DATA = {
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  unit9: {
+    name: 'Unit 9 / Assault Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'asuna', char: 'Asuna', accent: 0x3fbde8,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — cloned from Unit 1 / Assault Rifle (to be tuned later).
+    lockRange: 56,
+    projectileSpeed: 600,
+    firePerMinute: 850,        // ≈ 70.59 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4.5,
+    magCapacity: 30,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit10: {
+    name: 'Unit 10 / Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'fubuki', char: 'Fubuki', accent: 0x6f86b8,
+
+    // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
+    // standard jump cooldown/cost and NO flight/air-pop fields.
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — cloned from Unit 7 / Rifle (to be tuned later).
+    lockRange: 56,
+    projectileSpeed: 600,
+    firePerMinute: 250,        // = 240 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 15,
+    magCapacity: 8,
+    reloadMs: 1200,
+    autoReload: true,
+    stun: { ms: 100, moveScale: 0.25 },
+    // Laser bolt: hitbox and visual both derive from this entry (see the
+    // Unit 7 note) — Fubuki fires the same bolt, she just can't fly.
+    beamBolt: { length: 64, radius: 0.4 }
+  },
+  unit11: {
+    name: 'Unit 11 / Shotgun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'haruka', char: 'Haruka', accent: 0x7a5f96,
+
+    // Pilot stats
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — cloned from Unit 2 / Shotgun (to be tuned later).
+    lockRange: 40,
+    projectileSpeed: 300,
+    firePerMinute: 250,         // ≈ 697.67 ms cooldown
+    spreadCount: 8,
+    spreadAngle: THREE.MathUtils.degToRad(16),
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
+    magCapacity: 7,
+    reloadMs: 1200,
+    autoReload: true,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit12: {
+    name: 'Unit 12 / Machine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'koyuki', char: 'Koyuki', accent: 0xff8ac8,
+
+    // Pilot stats (Hina copy — including the walkSpeed 8 mobility tax)
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 8,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — cloned from Unit 5 / Machine Gun (to be tuned later).
+    lockRange: 80,
+    projectileSpeed: 600,
+    firePerMinute: 1200,       // = 50 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4,
+    magCapacity: 250,
+    reloadMs: 7000,
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as Hina
   }
 };
 
