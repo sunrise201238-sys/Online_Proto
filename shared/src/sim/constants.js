@@ -308,7 +308,7 @@ export const UNIT_DATA = {
     // per-shot damage, smaller mag.
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 900,        // ≈ 66.67 ms cooldown
+    firePerMinute: 950,        // ≈ 63.16 ms cooldown — lands in the 64 ms tick slot (15.6/s online), one tier above Saori's 80 ms
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
