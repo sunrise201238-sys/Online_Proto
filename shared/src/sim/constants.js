@@ -411,7 +411,7 @@ export const UNIT_DATA = {
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
     projectileSpeed: 600,
-    firePerMinute: 650,        // ≈ 92.31 ms cooldown
+    firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0.04,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
