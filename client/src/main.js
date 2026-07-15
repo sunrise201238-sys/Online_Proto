@@ -352,7 +352,7 @@ const UNIT_DATA = {
     // per-shot damage, smaller mag.
     lockRange: 56,
     projectileSpeed: 600,
-    firePerMinute: 1000,       // = 60 ms cooldown
+    firePerMinute: 900,        // ≈ 66.67 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
