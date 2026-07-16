@@ -6439,6 +6439,11 @@ function ensureOnlineMatchSetup(snap) {
   // Save the snapshot-id → mech mapping for per-frame mirroring.
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
 
+  // Keep the client's map state in sync: per-map visuals read state.mapKey
+  // (bullet-trail color picks dark/light per map) — without this, online
+  // matches kept whatever map was last played OFFLINE (or none) and trails
+  // rendered the wrong color on dark-ground maps.
+  state.mapKey = mapKey;
   buildArenaForMap(mapKey);
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
