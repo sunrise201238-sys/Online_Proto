@@ -639,8 +639,11 @@ function runBotAIForMech(me, opp, now) {
 function cyclePlayerTarget() {
   // Online: server is authoritative on fighter.targetId. Set the input flag
   // and the next sent input frame will carry targetSwitch=true; the server
-  // cycles, the snapshot mirror updates state.playerCurrentTarget.
+  // cycles, the snapshot mirror updates state.playerCurrentTarget. Dead
+  // fighter (spectating): inert — the reticle mirrors the spectated ally's
+  // target; don't let the server cycle a corpse's targetId.
   if (state.online) {
+    if (state.player && state.player.state.hp <= 0) return;
     input.targetSwitchTap = true;
     return;
   }
@@ -4776,24 +4779,31 @@ function applyImmunityGlow(mech, immune) {
 
 function updateLocksAndReticle() {
   const nowMs = performance.now();
-  // When the player is dead, hide the reticle entirely (spectating ally) —
-  // it'd otherwise hover on whatever lock target the player had at death,
-  // which doesn't reflect the ally's combat.
-  if (state.player.state.hp <= 0) {
+  // Reticle is evaluated from the mech the camera follows: the player, or —
+  // when the player is dead and spectating — the ally, so the lock bracket
+  // stays up and reads the SPECTATED unit's fight. Hidden only when nobody
+  // on the player's team is left alive to view from.
+  const viewer = cameraFocusMech();
+  if (!viewer || viewer.state.hp <= 0) {
     if (state.reticle) state.reticle.visible = false;
     return;
   }
   if (state.reticle) state.reticle.visible = true;
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
-  // with the target switch button.
+  // with the target switch button; while spectating, updateCamera mirrors
+  // the ally's own target into it each frame.
   const tgt = state.playerCurrentTarget ?? state.enemy;
-  const dist = state.player.root.position.distanceTo(tgt.root.position);
-  state.player.state.redLock = dist <= state.player.unit.lockRange;
-  // Enemy bots compute their own redLock against their own targets via the AI
-  // loop's runBotAIForMech swap; here we only refresh the primary enemy's
-  // redLock against the player (1v1 parity, harmless in 2v2).
-  state.enemy.state.redLock = state.player.root.position.distanceTo(state.enemy.root.position) <= state.enemy.unit.lockRange;
+  const dist = viewer.root.position.distanceTo(tgt.root.position);
+  if (viewer === state.player) {
+    state.player.state.redLock = dist <= state.player.unit.lockRange;
+    // Enemy bots compute their own redLock against their own targets via the AI
+    // loop's runBotAIForMech swap; here we only refresh the primary enemy's
+    // redLock against the player (1v1 parity, harmless in 2v2).
+    state.enemy.state.redLock = state.player.root.position.distanceTo(state.enemy.root.position) <= state.enemy.unit.lockRange;
+  }
+  // Spectating: no redLock writes — the ally's own is authoritative (bot AI
+  // offline, snapshot mirror online).
 
   // Reticle is GREEN by default and turns RED only while the current target is
   // firing. lastFireAt is monotonic so we detect any forward jump.
@@ -4805,12 +4815,15 @@ function updateLocksAndReticle() {
   const enemyFiring = nowMs < state.reticleEnemyFiringUntil;
 
   // Sniper charge warning: RED while the lock target (Aru or Kei) is mid-charge
-  // with ME as the charge target — a continuous danger signal from glint to
-  // shot. Offline stores the target as a mech ref; online mirrors { id }.
+  // with the VIEWED mech as the charge target — a continuous danger signal from
+  // glint to shot. Offline stores the target as a mech ref; online mirrors { id }.
   const chargeTgt = tgt.state.sniperChargeTarget;
+  const viewerId = !state.online ? null
+    : viewer === state.player ? state.online.myPlayerId
+    : state.online.slotMap?.allyId;
   const chargingAtMe = !!chargeTgt && (state.online
-    ? chargeTgt.id === state.online.myPlayerId
-    : chargeTgt === state.player);
+    ? chargeTgt.id === viewerId
+    : chargeTgt === viewer);
 
   // Kei's charged sweep channel: stay red for the channel's WHOLE duration —
   // the beam sweeps and can hit anyone, so no "at me" filter. Returns to green
@@ -4819,15 +4832,15 @@ function updateLocksAndReticle() {
   // start/endChargedBeam, online syncOnlineChargedBeams).
   const sweepChannelActive = !!tgt.chargedBeamVisual;
 
-  // Range-tier reticle (Aru's rangeDamage zones). Applies when I am Aru
-  // (my damage tier on the target) or my lock target is an Aru (which of HER
-  // zones I'm standing in) — same distance either way. XZ distance, matching
-  // the fire-time damage tier calc.
-  const rd = state.player.unit?.rangeDamage ?? tgt.unit?.rangeDamage;
+  // Range-tier reticle (Aru's rangeDamage zones). Applies when the viewed
+  // mech is Aru (her damage tier on the target) or its lock target is an Aru
+  // (which of HER zones it's standing in) — same distance either way. XZ
+  // distance, matching the fire-time damage tier calc.
+  const rd = viewer.unit?.rangeDamage ?? tgt.unit?.rangeDamage;
   const tex = getReticleTierTextures();
   let tierTex = tex.base;
   if (rd) {
-    const distXZ = Math.hypot(tgt.root.position.x - state.player.root.position.x, tgt.root.position.z - state.player.root.position.z);
+    const distXZ = Math.hypot(tgt.root.position.x - viewer.root.position.x, tgt.root.position.z - viewer.root.position.z);
     tierTex = distXZ >= rd.midDist ? tex.far : distXZ >= rd.nearDist ? tex.mid : tex.base;
   }
   if (state.reticle.material.map !== tierTex) {
@@ -5251,20 +5264,22 @@ function updateCamera() {
   // one respawn tick away from returning; don't restyle the ally for that
   // one-frame window).
   if (cam && cam !== state.player && !cam.isOwnSprite) {
-    const playerOut = (state.mainMode === 'trio' && state.trioRosters)
+    const playerOut = (!state.online && state.mainMode === 'trio' && state.trioRosters)
       ? trioSlotRemaining('player') <= 0
-      : true;   // SD: a dead player never comes back
+      : true;   // SD + online: a dead player never comes back
     if (playerOut) rebuildMechSpriteAsOwn(cam);
   }
   let tgt;
   if (cam === state.player) {
     tgt = state.playerCurrentTarget ?? state.enemy;
   } else {
-    // Spectating: follow the ALLY'S actual target (its bot-AI lock when it
-    // has one), and mirror it into the player's target/reticle so the
+    // Spectating: follow the ALLY'S actual target — offline its bot-AI lock,
+    // online the server-authoritative targetId (slotMap resolution via
+    // laserTargetOf) — and mirror it into the player's target/reticle so the
     // spectator sees exactly what the spectated unit is fighting.
-    tgt = cam.state.botTargetRef ?? pickClosestEnemyOf(cam) ?? state.enemy;
-    if (!state.online && tgt && tgt.state.hp > 0 && state.playerCurrentTarget !== tgt) {
+    tgt = (state.online ? laserTargetOf(cam) : cam.state.botTargetRef)
+      ?? pickClosestEnemyOf(cam) ?? state.enemy;
+    if (tgt && tgt.state.hp > 0 && state.playerCurrentTarget !== tgt) {
       state.playerCurrentTarget = tgt;
       if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
       if (state.reticle) tgt.root.add(state.reticle);
@@ -6648,8 +6663,10 @@ function runOnlineMatchFrame(dt, onl, conn) {
 
   // Sync the player's local current-target reference to whatever the server
   // says (cameraFighter.targetId). The server is authoritative for cycle
-  // behaviour — client just reparents the reticle to match.
-  if (cameraFighter?.targetId && state.mode === '2v2' && onl.slotMap) {
+  // behaviour — client just reparents the reticle to match. Only while MY
+  // fighter is alive: once dead, updateCamera mirrors the spectated ally's
+  // target instead, and this block would fight it with the corpse's stale id.
+  if (cameraFighter?.targetId && cameraFighter.hp > 0 && state.mode === '2v2' && onl.slotMap) {
     const tgt = cameraFighter.targetId === onl.slotMap.enemyId ? state.enemy
       : cameraFighter.targetId === onl.slotMap.enemy2Id ? state.enemy2
       : null;
