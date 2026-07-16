@@ -1540,7 +1540,7 @@ const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
 // only — shape/opacity/fade identical everywhere.
 const BULLET_TRAIL_COLOR_LIGHT = 0xbbbbbb;
 const BULLET_TRAIL_COLOR_DARK = 0x3a3f4a;
-const BULLET_TRAIL_DARK_MAPS = new Set(['square', 'lobby', 'airport', 'range']);
+const BULLET_TRAIL_DARK_MAPS = new Set(['lobby', 'airport', 'range']);
 const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLET_TRAIL_COLOR_DARK : BULLET_TRAIL_COLOR_LIGHT);
 const BULLET_TRAIL_OPACITY = 0.55;
 
