@@ -495,6 +495,15 @@ const MAP_DATA = {
 const state = {
   phase: 'select',
   mode: '1v1',                  // '1v1' | '2v2'
+  // Main mode. 'sd' (Sudden Death) = the classic first-death-decides rules.
+  // 'trio' = each player/bot drafts an ORDERED roster of three units
+  // (repeats allowed); a dead unit is replaced by the next roster entry at
+  // the team spawn (spawn immunity applies) until the roster runs dry, and
+  // the team whose rosters are all empty loses. Offline only for now.
+  mainMode: 'sd',               // 'sd' | 'trio'
+  trioRosters: null,            // trio: { player: [k,k,k], ally, enemy, enemy2 } (SD: null)
+  rosterIdx: null,              // trio: per-slot cursor into trioRosters
+  spawnPoints: null,            // per-slot match spawn positions (trio respawns reuse them)
   playerUnitKey: 'unit1',
   enemyUnitKey: 'unit2',
   allyUnitKey: 'unit1',         // 2v2: your bot ally's unit
@@ -1172,6 +1181,7 @@ function createMech(color, unitData, isOwnUnit = false) {
     trail: [],
     torso: sprite,
     sprite,
+    isOwnSprite: isOwnUnit,   // rear art + X-ray silhouette (rebuilt for spectated allies)
     modelYOffset: 2.35,
     legLength: 2.35,
     grounded: false,
@@ -1382,6 +1392,8 @@ function setupHUD() {
   hud.innerHTML = `
     <div class="health"><div id="health-fill"></div></div>
     <div class="enemy-health"><div id="enemy-health-fill"></div></div>
+    <div class="trio-count trio-count-own" id="trio-own"></div>
+    <div class="trio-count trio-count-enemy" id="trio-enemy"></div>
     ${teamBarsHtml}
     <div class="boost"><div id="boost-fill"></div></div>
     <div class="joy" id="joy"><div class="stick"></div></div>
@@ -1510,7 +1522,9 @@ function setupHUD() {
     boost: hud.querySelector('#boost-fill'),
     shootBtn: hud.querySelector('.btn-shoot'),
     ammoCount: hud.querySelector('.btn-shoot .ammo-count'),
-    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle')
+    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle'),
+    trioOwn: hud.querySelector('#trio-own'),        // Trio only: remaining-units dots
+    trioEnemy: hud.querySelector('#trio-enemy')
   };
 }
 
@@ -5195,15 +5209,50 @@ function updateMechXRayVisibility() {
   for (const ghost of mech.xRayGhosts) ghost.visible = blocked;
 }
 
+// The fighter the camera is framing: the player while alive; their ally in
+// spectator mode (player dead, ally up). Per-map "see your own unit" visuals
+// (wall fade, X-ray silhouette) key off this so a spectator inherits them.
+function cameraFocusMech() {
+  const playerAlive = (state.player?.state.hp ?? 0) > 0;
+  if (playerAlive || !state.ally) return state.player;
+  return (state.ally.state.hp > 0) ? state.ally : state.player;
+}
+
+// Swap a mech's billboard to the own-unit art set (rear poses + through-wall
+// X-ray silhouette). Used when the camera starts spectating an ally so the
+// followed unit reads exactly like your own did. Old materials are disposed;
+// textures stay (they're cached and shared).
+function rebuildMechSpriteAsOwn(mech) {
+  const old = mech.sprite;
+  if (old) {
+    mech.root.remove(old);
+    old.userData?.stateRig?.shadowMat?.dispose?.();
+    old.material?.dispose?.();
+  }
+  const sprite = makeUnitSprite(mech.unit, true);
+  mech.root.add(sprite);
+  mech.sprite = sprite;
+  mech.torso = sprite;
+  mech.isOwnSprite = true;
+}
+
 function updateCamera() {
   // Camera frames a LIVE fighter on the player's team and that fighter's
   // current target. Normally that's the player + state.playerCurrentTarget.
   // When the player has died but their ally is still up, the camera switches
   // to the ally (spectator mode) and follows whatever enemy the ally is
   // currently fighting (its closest live opponent).
-  const playerAlive = (state.player?.state.hp ?? 0) > 0;
-  const allyAlive = (state.ally?.state.hp ?? 0) > 0;
-  const cam = playerAlive ? state.player : (allyAlive ? state.ally : state.player);
+  const cam = cameraFocusMech();
+  // Spectated unit gets the own-unit visual kit (rear art + X-ray) once —
+  // but only when the player is out for GOOD (in Trio a dead player may be
+  // one respawn tick away from returning; don't restyle the ally for that
+  // one-frame window).
+  if (cam && cam !== state.player && !cam.isOwnSprite) {
+    const playerOut = (state.mainMode === 'trio' && state.trioRosters)
+      ? trioSlotRemaining('player') <= 0
+      : true;   // SD: a dead player never comes back
+    if (playerOut) rebuildMechSpriteAsOwn(cam);
+  }
   let tgt;
   if (cam === state.player) {
     tgt = state.playerCurrentTarget ?? state.enemy;
@@ -5258,6 +5307,18 @@ function updateHud(now = performance.now()) {
   }
   hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
+  // Trio: remaining-units dots under each side's HP bar ("just a count").
+  if (hudRefs.trioOwn && hudRefs.trioEnemy) {
+    if (state.mainMode === 'trio' && state.trioRosters) {
+      const own = trioSlotRemaining('player') + (state.mode === '2v2' ? trioSlotRemaining('ally') : 0);
+      const foe = trioSlotRemaining('enemy') + (state.mode === '2v2' ? trioSlotRemaining('enemy2') : 0);
+      hudRefs.trioOwn.textContent = '⬤ '.repeat(own).trim();
+      hudRefs.trioEnemy.textContent = '⬤ '.repeat(foe).trim();
+    } else {
+      hudRefs.trioOwn.textContent = '';
+      hudRefs.trioEnemy.textContent = '';
+    }
+  }
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
   const u = state.player.unit;
@@ -5454,6 +5515,17 @@ function startMatch() {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
     }
+  }
+  // Trio bookkeeping: per-slot roster cursor + the spawn positions recorded
+  // for mid-match respawns (next roster unit spawns where its team started).
+  // The Shooting Range ignores Trio entirely (solo practice stays SD-style).
+  state.rosterIdx = { player: 0, ally: 0, enemy: 0, enemy2: 0 };
+  const trioActive = state.mainMode === 'trio' && state.mapKey !== 'range' && state.trioRosters;
+  if (!trioActive) state.trioRosters = null;
+  state.spawnPoints = {};
+  for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
+    const m = state[s];
+    if (m) state.spawnPoints[s] = { x: m.body.position.x, y: m.body.position.y, z: m.body.position.z };
   }
   buildArenaForMap(state.mapKey);
   const now = performance.now();
@@ -6706,6 +6778,10 @@ function showSelectMenu() {
   menu.className = 'menu';
   menu.innerHTML = `<h2>Select Your Unit</h2>
     <div class="menu-divider">— Offline —</div>
+    <div class="mode-chip main-mode-chip">
+      <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Sudden Death</button>
+      <button data-main-mode="trio" class="${state.mainMode === 'trio' ? 'mode-active' : ''}">Trio</button>
+    </div>
     <div class="mode-chip">
       <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
       <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
@@ -6717,11 +6793,19 @@ function showSelectMenu() {
     <button data-guide class="guide-btn">Guide</button>`;
   app.appendChild(menu);
 
-  menu.querySelectorAll('.mode-chip button').forEach((btn) => {
+  menu.querySelectorAll('.mode-chip button[data-mode]').forEach((btn) => {
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       state.mode = btn.dataset.mode;
-      menu.querySelectorAll('.mode-chip button').forEach((b) => b.classList.remove('mode-active'));
+      menu.querySelectorAll('.mode-chip button[data-mode]').forEach((b) => b.classList.remove('mode-active'));
+      btn.classList.add('mode-active');
+    });
+  });
+  menu.querySelectorAll('.main-mode-chip button[data-main-mode]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      state.mainMode = btn.dataset.mainMode;
+      menu.querySelectorAll('.main-mode-chip button[data-main-mode]').forEach((b) => b.classList.remove('mode-active'));
       btn.classList.add('mode-active');
     });
   });
@@ -6744,18 +6828,49 @@ function showSelectMenu() {
   });
 
   wireUnitGrid(menu, (key) => {
-    state.playerUnitKey = key;
     clearMenus();
-    proceedAfterPlayerPick();
+    if (state.mainMode === 'trio') {
+      pickUnits('Select Your Unit', 3, (arr) => {
+        assignRoster('player', arr);
+        proceedAfterPlayerPick();
+      }, [key]);
+    } else {
+      assignRoster('player', [key]);
+      proceedAfterPlayerPick();
+    }
   });
 }
 
+// Trio roster collection: run the standard unit picker `count` times in a row
+// (repeats allowed — the grid never disables anything), titles numbered
+// "(n/count)". SD passes count 1 and the flow is byte-identical to before.
+function pickUnits(baseTitle, count, cb, acc = []) {
+  if (acc.length >= count) { cb(acc); return; }
+  const title = count > 1 ? `${baseTitle} (${acc.length + 1}/${count})` : baseTitle;
+  showUnitPicker(title, (key) => {
+    acc.push(key);
+    pickUnits(baseTitle, count, cb, acc);
+  });
+}
+
+// Store a slot's picked roster. The legacy single-unit key keeps pointing at
+// the roster's OPENER so every existing reader (startMatch, HUD, rematch)
+// works unchanged; trioRosters carries the full order for mid-match respawns.
+function assignRoster(slot, arr) {
+  if (!state.trioRosters) state.trioRosters = {};
+  state.trioRosters[slot] = arr;
+  const keyField = { player: 'playerUnitKey', ally: 'allyUnitKey', enemy: 'enemyUnitKey', enemy2: 'enemy2UnitKey' }[slot];
+  state[keyField] = arr[0];
+}
+
+function trioPickCount() { return state.mainMode === 'trio' ? 3 : 1; }
+
 // 2v2 flow: player pick → (ally pick) → enemy pick → (enemy2 pick) → map.
-// In 1v1 the bracketed steps are skipped and the chain is identical to before.
+// In 1v1 the bracketed steps are skipped. Trio repeats every picker 3x.
 function proceedAfterPlayerPick() {
   if (state.mode === '2v2') {
-    showUnitPicker('Select Ally Unit', (key) => {
-      state.allyUnitKey = key;
+    pickUnits('Select Ally Unit', trioPickCount(), (arr) => {
+      assignRoster('ally', arr);
       proceedToEnemyPick();
     });
   } else {
@@ -6763,11 +6878,11 @@ function proceedAfterPlayerPick() {
   }
 }
 function proceedToEnemyPick() {
-  showUnitPicker('Select Enemy Unit', (key) => {
-    state.enemyUnitKey = key;
+  pickUnits('Select Enemy Unit', trioPickCount(), (arr) => {
+    assignRoster('enemy', arr);
     if (state.mode === '2v2') {
-      showUnitPicker('Select Enemy 2 Unit', (key2) => {
-        state.enemy2UnitKey = key2;
+      pickUnits('Select Enemy 2 Unit', trioPickCount(), (arr2) => {
+        assignRoster('enemy2', arr2);
         showMapPicker();
       });
     } else {
@@ -7202,10 +7317,82 @@ function syncKeyboardMovement() {
   input.y = y / len;
 }
 
+// Dev hook: `?headless=1` drives the render loop with a setTimeout shim so
+// automated checks can run the offline sim in a HIDDEN tab (browsers freeze
+// requestAnimationFrame there, which parks the whole game). Never active for
+// players — plain URLs keep the real vsync'd rAF (and its pause-when-hidden
+// behavior).
+if (new URLSearchParams(window.location.search).has('headless')) {
+  window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+}
+
 setupRootTouchAction();
 setupFullscreenToggle();
 showSelectMenu();
 animate();
+
+// ---------------------------------------------------------------------------
+// Trio mode (offline): a dead unit is replaced by the next entry of its
+// slot's roster — a brand-new mech at the team's recorded spawn point with
+// the standard spawn immunity. The killer keeps position/HP/boost (no kill
+// reward); a slot whose roster is exhausted stays dead; the team loses when
+// every one of its rosters is empty.
+// ---------------------------------------------------------------------------
+const TRIO_SLOT_COLORS = { player: 0x62d7ff, enemy: 0xff7ad5, ally: 0x86f7c2, enemy2: 0xff5a8a };
+
+function respawnSlotMech(slotName, unitKey) {
+  const old = state[slotName];
+  const now = performance.now();
+  // Tear the dead mech down the same way cleanupMatch does per-mech.
+  disposeGlintImmediate(old);
+  removeImmunityAuraFromMech(old);
+  scene.remove(old.root);
+  world.removeBody(old.body);
+  old.trail.forEach((t) => scene.remove(t.mesh));
+
+  const fresh = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  fresh.state.team = old.state.team;
+  const sp = state.spawnPoints?.[slotName];
+  if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
+  fresh.state.lastFireAt = now;
+  fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
+  if (slotName === 'enemy' || slotName === 'enemy2') fresh.state.nextFireAt = now + 650;
+  state[slotName] = fresh;
+
+  // Re-home anything that rode on the old mech's root, and repoint the
+  // player's lock if it was aiming at the replaced unit. In-flight
+  // projectiles keep their stale reference safely: the old mech is dead
+  // (hp 0), so every hit test skips it and they simply fly out.
+  for (const attached of [state.reticle, state.allyArrow, state.enemyArrow]) {
+    if (attached && attached.parent === old.root) fresh.root.add(attached);
+  }
+  if (state.playerCurrentTarget === old) {
+    state.playerCurrentTarget = fresh;
+    state.reticleLastEnemyFireAt = fresh.state.lastFireAt;
+    state.reticleEnemyFiringUntil = 0;
+  }
+}
+
+// Roster units left on a slot, counting the live current unit.
+function trioSlotRemaining(slotName) {
+  const mech = state[slotName];
+  const roster = state.trioRosters?.[slotName];
+  if (!mech || !roster) return 0;
+  return Math.max(0, roster.length - state.rosterIdx[slotName] - (mech.state.hp <= 0 ? 1 : 0));
+}
+
+// Advance dead slots to their next roster unit (no-op once exhausted).
+function tickTrioRespawns() {
+  for (const slotName of ['player', 'ally', 'enemy', 'enemy2']) {
+    const mech = state[slotName];
+    const roster = state.trioRosters?.[slotName];
+    if (!mech || !roster || mech.state.hp > 0) continue;
+    const nextIdx = state.rosterIdx[slotName] + 1;
+    if (nextIdx >= roster.length) continue;   // roster spent — stays dead
+    state.rosterIdx[slotName] = nextIdx;
+    respawnSlotMech(slotName, roster[nextIdx]);
+  }
+}
 
 function showEndMenu(win) {
   state.phase = 'end';
@@ -7360,9 +7547,10 @@ function updateWallFade() {
     let blocking;
     if (b.occlude) {
       // Occlusion mode (Streets buildings): fade only while the box actually
-      // sits between the camera and the player unit — walking past or
-      // fighting beside it keeps it fully solid (no seeing through cover).
-      const pr = state.player?.root;
+      // sits between the camera and the FOCUSED unit (the player, or the
+      // spectated ally) — walking past or fighting beside it keeps it fully
+      // solid (no seeing through cover).
+      const pr = cameraFocusMech()?.root;
       blocking = !!pr && segmentHitsObstacle(
         camera.position,
         { x: pr.position.x, y: pr.position.y + 1.6, z: pr.position.z },
@@ -7739,6 +7927,11 @@ function mapPhoto(opts = {}) {
   return url;
 }
 if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
+
+// Dev hook: read-only-ish handle on the live client state for console
+// debugging / automated preview checks (same family as __exportArenaCollision
+// and __mapPhoto). Offline client only — never used by game code.
+if (typeof window !== 'undefined') window.__gvgState = state;
 
 function buildPlainFieldArena() {
   // Plain Field is intentionally featureless — just the boundary so players
@@ -11174,9 +11367,18 @@ function animate() {
       updateWallFade();
       updateHud();
 
-      // Win condition. 1v1: existing player-vs-enemy check. 2v2: team A
-      // (player + ally) wins when team B has both at 0 HP, and vice versa.
-      if (state.mode === '2v2') {
+      // Win condition. Trio: dead units are replaced from their roster
+      // first; a team is out only when every roster on it is spent.
+      // Sudden Death (classic): first death decides — 1v1 player-vs-enemy,
+      // 2v2 team-wipe.
+      if (state.mainMode === 'trio' && state.trioRosters) {
+        tickTrioRespawns();
+        const teamAOut = trioSlotRemaining('player') <= 0
+          && (state.mode !== '2v2' || trioSlotRemaining('ally') <= 0);
+        const teamBOut = trioSlotRemaining('enemy') <= 0
+          && (state.mode !== '2v2' || trioSlotRemaining('enemy2') <= 0);
+        if (teamAOut || teamBOut) showEndMenu(teamBOut);
+      } else if (state.mode === '2v2') {
         const teamADead = state.player.state.hp <= 0 && (state.ally?.state.hp ?? 0) <= 0;
         const teamBDead = state.enemy.state.hp <= 0 && (state.enemy2?.state.hp ?? 0) <= 0;
         if (teamADead || teamBDead) showEndMenu(teamBDead);
