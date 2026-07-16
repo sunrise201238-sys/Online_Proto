@@ -62,25 +62,29 @@ Unit 8 trades burst for uptime: modest burst DPS, but 200 damage per magazine an
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
-**Measured hit rates** (Shooting Range, shooter standing still at 50 units, 60 shots per target — Hoshino 7 blasts = 56 pellets):
+**Measured hit rates** (Shooting Range; every unit fires from her own lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates):
 
-| @50 units | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
+| @ own lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
-| Saori (4.5 dmg, SA.02+HA.04) | 60/60 — **100%** | 39 — 65% | 13 — 22% |
-| Hina (4 dmg, SA.04, HA 0) | 60/60 — **100%** | 36 — 60% | **1 — 1.7%** |
-| Mika (4 dmg, SA.04+HA.04) | 59 — 98% | 33 — 55% | 13 — 22% |
-| Atsuko (4 dmg, SA.06+HA.04) | 52 — 87% | 31 — 52% | 10 — 17% |
-| Hoshino (5/pellet, 56 pellets) | 29 — 52% | 10 — 18% | **0** |
+| Saori @56 | 99% | 69% | 6% |
+| Asuna @56 | 100% | 64% | 8% |
+| Atsuko @50 | 85% | 57% | 16% |
+| Mika @50 | 97% | 67% | 11% |
+| Hoshino @40 | 75% | 30% | 0% |
+| Haruka @40 | 61% | 30% | 4% |
+| Koyuki @80 | 76% | 40% | 3% |
+| Hina @80 | 100% | 25% | 0% |
 
-The HA guns all hold 17–22% against the sprinter while HA-0 Hina lands ~2% — the anti-dodge role of HA in one row. Note Hoshino was tested well beyond her band (lock 40): at 50 the cluster is ~71% open and the 0.17 s flight lets a sprinter displace ~4.6 units, so whole blasts whiff.
+*Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
-*Test environment:* Shooting Range (offline practice map). The shooter stands on the 50-unit line and empties the shot count into each lane in turn; the sliders ping-pong along their trails at true in-sim speeds (walk 16, walk+sprint 27.8). Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Left screen = stationary lane, middle = walk, right = sprint. Hit counts in the table are the screen damage ÷ per-hit damage.
+Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
 
 | | |
 |---|---|
-| **Saori** — 270 / 175.5 / 58.5 ![Saori at 50 units](docs/img/range50-saori.jpg) | **Hina** — 240 / 144 / 4 ![Hina at 50 units](docs/img/range50-hina.jpg) |
-| **Mika** — 236 / 132 / 52 ![Mika at 50 units](docs/img/range50-mika.jpg) | **Atsuko** — 208 / 124 / 40 ![Atsuko at 50 units](docs/img/range50-atsuko.jpg) |
-| **Hoshino** — 145 / 50 / 0 ![Hoshino at 50 units](docs/img/range50-hoshino.jpg) | |
+| **Saori @56** — 445.5 / 310.5 / 27 ![Saori](docs/img/lockrange/saori100shots.png) | **Asuna @56** — 400 / 256 / 32 ![Asuna](docs/img/lockrange/asuna100shots.png) |
+| **Atsuko @50** — 297.5 / 199.5 / 56 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Mika @50** — 388 / 268 / 44 ![Mika](docs/img/lockrange/mika100shots.png) |
+| **Hoshino @40** — 210 / 85 / 0 ![Hoshino](docs/img/lockrange/hoshino7shots.png) | **Haruka @40** — 170 / 85 / 10 ![Haruka](docs/img/lockrange/haruka7shots.png) |
+| **Koyuki @80** — 342 / 180 / 13.5 ![Koyuki](docs/img/lockrange/koyuki100shots.png) | **Hina @80** — 400 / 100 / 0 ![Hina](docs/img/lockrange/hina100shots.png) |
 
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
