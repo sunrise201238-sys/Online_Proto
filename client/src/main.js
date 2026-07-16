@@ -6152,8 +6152,11 @@ function computeOnlineUiPhase(onl, conn) {
   // Host has to choose Duel/Trio + 1v1/2v2 before anything else — and only
   // once. Joiners (p2/p3/p4) skip this — they inherit the lobby's mode.
   if (myId === 'p1' && !onl.modePushedToServer) return 'pick-mode';
-  // Trio needs the full ordered 3-pick; Duel just the single unit.
-  const needUnits = cfg?.mainMode === 'trio'
+  // Trio needs the full ordered 3-pick; Duel just the single unit. The
+  // host's local pick wins until the server's config echo reflects it
+  // (joiners have no local pick and read the lobby's mainMode).
+  const trio = (onl.pickedMainMode ?? cfg?.mainMode) === 'trio';
+  const needUnits = trio
     ? !(Array.isArray(myCfg.unitKeys) && myCfg.unitKeys.length === 3)
     : !myCfg.unitKey;
   if (needUnits) return 'pick-unit';
@@ -6265,6 +6268,7 @@ function showOnlineModePicker(onl) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   const renderStage = (mainMode) => {
+    markMenuSwap();   // innerHTML swap without clearMenus — same ghost-click exposure
     if (!mainMode) {
       menu.innerHTML = `
         <h2>Choose Mode</h2>
@@ -6291,6 +6295,11 @@ function showOnlineModePicker(onl) {
     menu.querySelectorAll('button[data-mode-pick]').forEach((btn) => {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
+        // Remember the pick locally: the phase flips to pick-unit on the next
+        // frame, usually BEFORE the server's lobby:config echo returns — the
+        // stale config still says 'sd' and the host would briefly get the
+        // single-pick Duel picker in a Trio lobby.
+        onl.pickedMainMode = mainMode;
         onl.conn.sendSetMode(btn.dataset.modePick, mainMode);
         onl.modePushedToServer = true;
       });
@@ -6311,9 +6320,12 @@ function showOnlineUnitPicker(onl, conn) {
   // them yet. Remove the filters once the unit is migrated to shared.
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
   // Mention which mode the lobby is in so non-hosts know what they joined.
+  // Host's local main-mode pick wins until the server echo lands (see
+  // computeOnlineUiPhase) — otherwise this can render as the Duel picker
+  // for one round-trip.
   const cfg = conn?.getLobbyConfig?.();
   const mode = cfg?.mode ?? '1v1';
-  const trio = cfg?.mainMode === 'trio';
+  const trio = (onl.pickedMainMode ?? cfg?.mainMode) === 'trio';
   // Trio: three ordered picks (repeats allowed), held on onl so the menu can
   // fully RE-RENDER after each confirm — same unmistakable per-pick feedback
   // as the offline flow (title swap alone read as "the popup just closed").
@@ -7513,6 +7525,31 @@ if (new URLSearchParams(window.location.search).has('headless')) {
   window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
 }
 
+// ---------------------------------------------------------------------------
+// Ghost-click guard. Menu-swapping controls fire on pointerdown, so the
+// browser's follow-up click (dispatched at finger/mouse RELEASE) lands on
+// whatever the fresh menu placed under that point — on real devices it
+// retargets to the new element and silently presses it. (Field case: the
+// online host's release-click off the 1v1/2v2 button landed inside the
+// just-rendered unit grid, opening a phantom profile and poisoning the
+// two-tap picker — the next real tap only "dismissed".) Any click whose
+// pointerdown happened BEFORE the latest menu swap is by definition stale:
+// eat it in the capture phase before any menu handler sees it. Genuine taps
+// always begin (pointerdown) after the swap, so none are ever swallowed.
+// NOTE: declared BEFORE the boot calls below — showSelectMenu() runs
+// clearMenus() → markMenuSwap(), which reads these bindings.
+// ---------------------------------------------------------------------------
+let _lastPointerDownAt = 0;
+let _menuSwapAt = 0;
+function markMenuSwap() { _menuSwapAt = performance.now(); }
+document.addEventListener('pointerdown', () => { _lastPointerDownAt = performance.now(); }, true);
+document.addEventListener('click', (e) => {
+  if (_lastPointerDownAt < _menuSwapAt) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
 setupRootTouchAction();
 setupFullscreenToggle();
 showSelectMenu();
@@ -7706,6 +7743,7 @@ function showPauseMenu() {
 }
 
 function clearMenus() {
+  markMenuSwap();
   removeProfilePopup();
   document.querySelectorAll('.menu').forEach((menu) => menu.remove());
 }

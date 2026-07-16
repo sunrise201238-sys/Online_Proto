@@ -574,6 +574,35 @@ io.on('connection', (socket) => {
       lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
       lb.rematchRequested[slot] = false;
     }
+    // Host left outside an active match (waiting room / end menu): promote
+    // the longest-tenured remaining player to p1. Without this the lobby
+    // sits headless — joiners can pick units but nobody can choose the map,
+    // start, or rematch (field case: a host refresh mid-setup rejoined as
+    // p2 while the ghost p1 socket drained, then the freed p1 stayed empty).
+    if (slot === 'p1' && lb.state !== 'active' && lb.players.size > 0) {
+      const entry = [...lb.players.entries()].find(([, s]) => SLOT_IDS.includes(s));
+      if (entry) {
+        const [sid, oldSlot] = entry;
+        lb.players.set(sid, 'p1');
+        lb.config.p1 = lb.config[oldSlot];
+        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null };
+        lb.lastAcked.p1 = -1;
+        lb.rematchRequested.p1 = false;
+        lb.rematchRequested[oldSlot] = false;
+        const s = io.sockets.sockets.get(sid);
+        if (s) {
+          s.emit('player:assigned', {
+            playerId: 'p1',
+            team: teamOf('p1'),
+            mode: 'online-ready',
+            lobbyId: lb.id,
+            lobbyMode: lb.mode,
+            matchState: lb.state
+          });
+        }
+        console.log(`[${lb.id}] host left — promoted ${oldSlot} to p1`);
+      }
+    }
     if (lb.players.size === 0) {
       // Last player left — drop the whole lobby. Otherwise it'd loiter and
       // pickLobbyForJoin would funnel future joiners into a stale 'ended'.
