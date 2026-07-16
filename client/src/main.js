@@ -6185,12 +6185,14 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
       showOnlineModePicker(onl);
       break;
     case 'pick-unit':
+      onl.trioUnitPicks = [];   // fresh entry — no stale partial picks
       showOnlineUnitPicker(onl, conn);
       break;
     case 'pick-map':
       showOnlineMapPicker(onl, conn);
       break;
     case 'pick-bot-unit':
+      onl.botUnitPicks = [];    // fresh entry — no stale partial picks
       showOnlineBotUnitPicker(onl, conn);
       break;
     case 'waiting-opp':
@@ -6312,13 +6314,19 @@ function showOnlineUnitPicker(onl, conn) {
   const cfg = conn?.getLobbyConfig?.();
   const mode = cfg?.mode ?? '1v1';
   const trio = cfg?.mainMode === 'trio';
-  // Trio: three ordered picks (repeats allowed) collected locally, then sent
-  // as one atomic { unitKeys } configure. Duel: single pick, as before.
-  const picks = [];
-  const title = () => trio ? `Pick Your Unit (${picks.length + 1}/3)` : 'Pick Your Unit';
+  // Trio: three ordered picks (repeats allowed), held on onl so the menu can
+  // fully RE-RENDER after each confirm — same unmistakable per-pick feedback
+  // as the offline flow (title swap alone read as "the popup just closed").
+  // Sent as one atomic { unitKeys } configure after the third. Duel: single
+  // pick, as before.
+  const picks = onl.trioUnitPicks ?? (onl.trioUnitPicks = []);
+  const pickedLine = picks.length
+    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
+    : '';
   menu.innerHTML = `
-    <h2>${title()}</h2>
+    <h2>${trio ? `Pick Your Unit (${picks.length + 1}/3)` : 'Pick Your Unit'}</h2>
     <div class="menu-divider">Online ${trio ? 'Trio ' : ''}${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
+    ${pickedLine}
     ${unitGridHTML(unitEntries)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
@@ -6329,11 +6337,19 @@ function showOnlineUnitPicker(onl, conn) {
       return;
     }
     picks.push(key);
-    if (picks.length === 3) onl.conn.sendConfigure({ unitKeys: picks.slice() });
-    else menu.querySelector('h2').textContent = title();
+    if (picks.length === 3) {
+      onl.conn.sendConfigure({ unitKeys: picks.slice() });
+      onl.trioUnitPicks = [];
+      // Menu stays up for the snapshot-echo moment; the phase machine
+      // replaces it as soon as the server confirms the roster.
+    } else {
+      clearMenus();
+      showOnlineUnitPicker(onl, conn);
+    }
   });
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    onl.trioUnitPicks = [];
     showSelectMenu();
   });
 }
@@ -6348,11 +6364,16 @@ function showOnlineBotUnitPicker(onl, conn) {
   const trio = conn?.getLobbyConfig?.()?.mainMode === 'trio';
   // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
-  const picks = [];
-  const title = () => trio ? `Pick Bot Unit (${picks.length + 1}/3)` : 'Pick Bot Unit';
+  // Trio picks live on onl so each confirm can fully re-render the menu
+  // (clear per-pick feedback — see showOnlineUnitPicker).
+  const picks = onl.botUnitPicks ?? (onl.botUnitPicks = []);
+  const pickedLine = picks.length
+    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
+    : '';
   menu.innerHTML = `
-    <h2>${title()}</h2>
+    <h2>${trio ? `Pick Bot Unit (${picks.length + 1}/3)` : 'Pick Bot Unit'}</h2>
     <div class="menu-divider">Bot in slot ${slot}</div>
+    ${pickedLine}
     ${unitGridHTML(unitEntries)}
     <button data-back class="online-leave-btn">Back</button>
   `;
@@ -6366,13 +6387,16 @@ function showOnlineBotUnitPicker(onl, conn) {
     picks.push(key);
     if (picks.length === 3) {
       onl.conn.sendConfigure({ botSlot: slot, botUnitKeys: picks.slice() });
+      onl.botUnitPicks = [];
       onl.pickingBotSlot = null;
     } else {
-      menu.querySelector('h2').textContent = title();
+      clearMenus();
+      showOnlineBotUnitPicker(onl, conn);
     }
   });
   menu.querySelector('button[data-back]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    onl.botUnitPicks = [];
     onl.pickingBotSlot = null;
   });
 }
