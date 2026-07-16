@@ -319,3 +319,8 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .weapon-panel { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: #0b1119; border: 1px solid #2c4356; border-radius: 8px; padding: 6px; }
 .unit-profile-popup .weapon-name { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd76a; text-align: center; border-bottom: 1px solid #274058; padding-bottom: 4px; }
 .unit-profile-popup .weapon-panel img { display: block; width: 100%; height: auto; }
+/* Random card: light-gray mystery thumbnail + popup face, gray question mark.
+   The thumb inherits the grid's sizing from .unit-thumb / .map-thumb. */
+.menu .unit-card .random-thumb { display: flex; align-items: center; justify-content: center; background: #cfd4d9; color: #7a838a; font-size: 30px; font-weight: 800; }
+.unit-profile-popup .random-face { display: flex; align-items: center; justify-content: center; width: 110px; max-width: 21vw; height: 140px; border-radius: 8px; background: #cfd4d9; color: #7a838a; font-size: 64px; font-weight: 800; }
+.unit-profile-popup .random-face-wide { width: 260px; max-width: 62vw; height: 160px; }

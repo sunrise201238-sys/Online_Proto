@@ -6358,7 +6358,7 @@ function showOnlineUnitPicker(onl, conn) {
       clearMenus();
       showOnlineUnitPicker(onl, conn);
     }
-  });
+  }, () => picks);   // Random never repeats a unit within this roster
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onl.trioUnitPicks = [];
@@ -6405,7 +6405,7 @@ function showOnlineBotUnitPicker(onl, conn) {
       clearMenus();
       showOnlineBotUnitPicker(onl, conn);
     }
-  });
+  }, () => picks);   // Random never repeats a unit within this bot's roster
   menu.querySelector('button[data-back]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onl.botUnitPicks = [];
@@ -7043,13 +7043,15 @@ function showSelectMenu() {
 // Trio roster collection: run the standard unit picker `count` times in a row
 // (repeats allowed — the grid never disables anything), titles numbered
 // "(n/count)". SD passes count 1 and the flow is byte-identical to before.
+// The units already in `acc` are passed as the Random card's exclusion list,
+// so a roll never duplicates a unit within this one roster.
 function pickUnits(baseTitle, count, cb, acc = []) {
   if (acc.length >= count) { cb(acc); return; }
   const title = count > 1 ? `${baseTitle} (${acc.length + 1}/${count})` : baseTitle;
   showUnitPicker(title, (key) => {
     acc.push(key);
     pickUnits(baseTitle, count, cb, acc);
-  });
+  }, acc);
 }
 
 // Store a slot's picked roster. The legacy single-unit key keeps pointing at
@@ -7154,6 +7156,15 @@ function showMapProfilePopup(card, mapId, mapName, onConfirm) {
     `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />`,
     onConfirm);
 }
+
+// Random-card preview: a light-gray mystery face with a question mark — the
+// pick stays hidden until the confirming tap rolls it. `wide` uses the map
+// popup's landscape proportions.
+function showRandomProfilePopup(card, wide, onConfirm) {
+  spawnProfilePopup(card,
+    `<div class="random-face${wide ? ' random-face-wide' : ''}">?</div>`,
+    onConfirm);
+}
 // Selection-grid display order: weapon categories grouped, four to a row —
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
 // from this list (future additions) sort to the end in UNIT_DATA order.
@@ -7166,6 +7177,10 @@ const UNIT_GRID_ORDER = [
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
 // Weapon is the part of unit.name after the "/". Cards render in
 // UNIT_GRID_ORDER regardless of the entries' object order.
+// Sentinel key for the Random card in both pickers. Never a real pick —
+// wireUnitGrid / wireMapGrid resolve it to a concrete key at confirm time.
+const RANDOM_PICK_KEY = '__random';
+
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
@@ -7176,11 +7191,18 @@ function unitGridHTML(unitEntries) {
       <img class="unit-thumb" src="${thumb}" alt="${u.char || id}" draggable="false" />
       <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
     </button>`;
-  }).join('')}</div>`;
+  }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">
+      <span class="unit-thumb random-thumb">?</span>
+      <span class="unit-label">Random</span>
+    </button></div>`;
 }
 // Wire preview→confirm onto a menu containing a .unit-grid. onPick(unitKey)
-// fires on the confirming (second) tap of the same card.
-function wireUnitGrid(menu, onPick) {
+// fires on the confirming (second) tap of the same card. The Random card
+// resolves to a concrete unit at confirm time, drawn uniformly from this
+// grid's own cards minus `getExcluded()` — callers pass the units already
+// picked in the CURRENT roster so one player never rolls a repeat (repeats
+// across different players stay legal).
+function wireUnitGrid(menu, onPick, getExcluded = () => []) {
   const grid = menu.querySelector('.unit-grid');
   if (!grid) return;
   let pendingKey = null;
@@ -7189,6 +7211,16 @@ function wireUnitGrid(menu, onPick) {
     grid.querySelectorAll('.unit-card.selecting').forEach((c) => c.classList.remove('selecting'));
     removeProfilePopup();
   };
+  const resolveRandomUnit = () => {
+    const pool = [...grid.querySelectorAll('[data-unit-card]')]
+      .map((c) => c.dataset.unitCard)
+      .filter((k) => k !== RANDOM_PICK_KEY);
+    const excluded = new Set(getExcluded());
+    const eligible = pool.filter((k) => !excluded.has(k));
+    const from = eligible.length ? eligible : pool;   // defensive: never empty
+    return from[Math.floor(Math.random() * from.length)];
+  };
+  const confirm = (key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomUnit() : key);
   // Cards act on CLICK, not pointerdown: the browser only fires click when
   // the touch did NOT turn into a scroll, so dragging through the grid can't
   // pop profiles anymore (the old pointerdown fired before the browser knew
@@ -7199,15 +7231,18 @@ function wireUnitGrid(menu, onPick) {
       e.preventDefault();
       e.stopPropagation();
       const key = card.dataset.unitCard;
-      if (pendingKey === key) { clearPending(); onPick(key); return; }
+      if (pendingKey === key) { clearPending(); confirm(key); return; }
       // A profile is already open and this tap is on a DIFFERENT card: the
       // tap only dismisses the open profile — it does NOT chain straight
       // into the new card's preview (tap again to open that one).
       if (pendingKey) { clearPending(); return; }
       pendingKey = key;
       card.classList.add('selecting');
-      const u = UNIT_DATA[key];
-      showProfilePopup(card, u, () => { clearPending(); onPick(key); });
+      if (key === RANDOM_PICK_KEY) {
+        showRandomProfilePopup(card, false, () => { clearPending(); confirm(key); });
+      } else {
+        showProfilePopup(card, UNIT_DATA[key], () => { clearPending(); confirm(key); });
+      }
     });
   });
   // Tap anywhere else in the menu → cancel the preview, back to plain
@@ -7226,7 +7261,10 @@ function mapGridHTML(mapEntries, disabled = new Set()) {
       <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false" />
       <span class="unit-label">${m.name}${off ? '<br>(offline only)' : ''}</span>
     </button>`;
-  }).join('')}</div>`;
+  }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
+      <span class="unit-thumb map-thumb random-thumb">?</span>
+      <span class="unit-label">Random</span>
+    </button></div>`;
 }
 function wireMapGrid(menu, onPick) {
   const grid = menu.querySelector('.map-grid');
@@ -7237,22 +7275,36 @@ function wireMapGrid(menu, onPick) {
     grid.querySelectorAll('.map-card.selecting').forEach((c) => c.classList.remove('selecting'));
     removeProfilePopup();
   };
+  // Random map: uniform over this grid's ENABLED cards, minus the Shooting
+  // Range (practice map — never a random battleground; it's absent online
+  // and excluded offline).
+  const resolveRandomMap = () => {
+    const pool = [...grid.querySelectorAll('.map-card:not([disabled])')]
+      .map((c) => c.dataset.mapCard)
+      .filter((k) => k !== RANDOM_PICK_KEY && k !== 'range');
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+  const confirm = (key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomMap() : key);
   grid.querySelectorAll('.map-card:not([disabled])').forEach((card) => {
     card.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const key = card.dataset.mapCard;
-      if (pendingKey === key) { clearPending(); onPick(key); return; }
+      if (pendingKey === key) { clearPending(); confirm(key); return; }
       if (pendingKey) { clearPending(); return; }
       pendingKey = key;
       card.classList.add('selecting');
-      showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); onPick(key); });
+      if (key === RANDOM_PICK_KEY) {
+        showRandomProfilePopup(card, true, () => { clearPending(); confirm(key); });
+      } else {
+        showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); confirm(key); });
+      }
     });
   });
   menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
 }
 
-function showUnitPicker(title, onPick) {
+function showUnitPicker(title, onPick, excluded = []) {
   const unitEntries = Object.entries(UNIT_DATA);
   const menu = document.createElement('div');
   menu.className = 'menu';
@@ -7261,7 +7313,7 @@ function showUnitPicker(title, onPick) {
   wireUnitGrid(menu, (key) => {
     clearMenus();
     onPick(key);
-  });
+  }, () => excluded);
 }
 function showMapPicker() {
   const mapEntries = Object.entries(MAP_DATA);
