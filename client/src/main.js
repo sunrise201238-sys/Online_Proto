@@ -495,7 +495,7 @@ const MAP_DATA = {
 const state = {
   phase: 'select',
   mode: '1v1',                  // '1v1' | '2v2'
-  // Main mode. 'sd' (Sudden Death) = the classic first-death-decides rules.
+  // Main mode. 'sd' = "Duel" in the UI — the classic first-death-decides rules.
   // 'trio' = each player/bot drafts an ORDERED roster of three units
   // (repeats allowed); a dead unit is replaced by the next roster entry at
   // the team spawn (spawn immunity applies) until the roster runs dry, and
@@ -646,6 +646,9 @@ function cyclePlayerTarget() {
   }
   // Offline: mutate local state directly.
   if (!state.player) return;
+  // Spectator (dead player, camera on the ally): the reticle mirrors the
+  // spectated ally's own target each frame — the TARGET button is inert.
+  if (state.player.state.hp <= 0) return;
   const enemies = getEnemiesOf(state.player).filter((f) => f.state.hp > 0);
   if (enemies.length === 0) return;
   const current = state.playerCurrentTarget;
@@ -5257,7 +5260,17 @@ function updateCamera() {
   if (cam === state.player) {
     tgt = state.playerCurrentTarget ?? state.enemy;
   } else {
-    tgt = pickClosestEnemyOf(cam) ?? state.enemy;
+    // Spectating: follow the ALLY'S actual target (its bot-AI lock when it
+    // has one), and mirror it into the player's target/reticle so the
+    // spectator sees exactly what the spectated unit is fighting.
+    tgt = cam.state.botTargetRef ?? pickClosestEnemyOf(cam) ?? state.enemy;
+    if (!state.online && tgt && tgt.state.hp > 0 && state.playerCurrentTarget !== tgt) {
+      state.playerCurrentTarget = tgt;
+      if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+      if (state.reticle) tgt.root.add(state.reticle);
+      state.reticleLastEnemyFireAt = tgt.state.lastFireAt;
+      state.reticleEnemyFiringUntil = 0;
+    }
   }
   // Auto-fallback: if the chosen target is dead, swing the camera to the
   // closest live enemy of the camera fighter. Belt-and-suspenders — the
@@ -6779,7 +6792,7 @@ function showSelectMenu() {
   menu.innerHTML = `<h2>Select Your Unit</h2>
     <div class="menu-divider">— Offline —</div>
     <div class="mode-chip main-mode-chip">
-      <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Sudden Death</button>
+      <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Duel</button>
       <button data-main-mode="trio" class="${state.mainMode === 'trio' ? 'mode-active' : ''}">Trio</button>
     </div>
     <div class="mode-chip">
