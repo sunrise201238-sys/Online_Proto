@@ -6217,22 +6217,16 @@ function showOnlineMapPicker(onl, conn) {
   // The Shooting Range is offline-only and fully HIDDEN online (not grayed).
   const mapEntries = Object.entries(MAP_DATA).filter(([id]) => id !== 'range');
   const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
+  const disabled = new Set(mapEntries.map(([id]) => id).filter((id) => !ONLINE_AVAILABLE_MAPS.has(id)));
   menu.innerHTML = `
     <h2>Pick a Map</h2>
     <div class="menu-divider">Online ${mode} — you are p1 (host)</div>
-    ${mapEntries.map(([id, m]) => {
-      const enabled = ONLINE_AVAILABLE_MAPS.has(id);
-      const label = enabled ? m.name : `${m.name} (offline only)`;
-      return `<button data-map="${id}"${enabled ? '' : ' disabled'}>${label}</button>`;
-    }).join('')}
+    ${mapGridHTML(mapEntries, disabled)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
-  menu.querySelectorAll('button[data-map]:not([disabled])').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      onl.conn.sendConfigure({ mapKey: btn.dataset.map });
-    });
+  wireMapGrid(menu, (key) => {
+    onl.conn.sendConfigure({ mapKey: key });
   });
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -6788,25 +6782,17 @@ let _activeProfilePopup = null;
 function removeProfilePopup() {
   if (_activeProfilePopup) { _activeProfilePopup.remove(); _activeProfilePopup = null; }
 }
-function showProfilePopup(card, unit, onConfirm) {
+// Shared popup shell for the two-tap pickers (units AND maps): builds the
+// floating card next to `card`, wires the click-to-confirm (click-based so a
+// scroll that starts on the popup can't confirm), and keeps it repositioned
+// as its images load. Callers only supply the inner markup.
+function spawnProfilePopup(card, innerHTML, onConfirm) {
   removeProfilePopup();
-  const { spriteKey, char, weapon } = unit;
   const popup = document.createElement('div');
   popup.className = 'unit-profile-popup';
-  // Side card: full profile art on the left; the unit's weapon render + its
-  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside.
-  const weaponPanel = weapon
-    ? `<div class="weapon-panel">
-        <div class="weapon-name">${weapon}</div>
-        <img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="${weapon}" draggable="false" />
-      </div>`
-    : '';
-  popup.innerHTML = `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}`;
+  popup.innerHTML = innerHTML;
   document.body.appendChild(popup);
   _activeProfilePopup = popup;
-  // Tapping the profile art confirms the pending selection — same as a second
-  // tap on the thumbnail. Click-based like the cards: a scroll that starts on
-  // the popup must not confirm the pick.
   popup.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -6825,6 +6811,29 @@ function showProfilePopup(card, unit, onConfirm) {
   };
   place();
   popup.querySelectorAll('img').forEach((img) => img.addEventListener('load', place));
+}
+
+function showProfilePopup(card, unit, onConfirm) {
+  const { spriteKey, char, weapon } = unit;
+  // Side card: full profile art on the left; the unit's weapon render + its
+  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside.
+  const weaponPanel = weapon
+    ? `<div class="weapon-panel">
+        <div class="weapon-name">${weapon}</div>
+        <img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="${weapon}" draggable="false" />
+      </div>`
+    : '';
+  spawnProfilePopup(card,
+    `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}`,
+    onConfirm);
+}
+
+// Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
+// __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
+function showMapProfilePopup(card, mapId, mapName, onConfirm) {
+  spawnProfilePopup(card,
+    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />`,
+    onConfirm);
 }
 // Selection-grid display order: weapon categories grouped, four to a row —
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
@@ -6888,6 +6897,42 @@ function wireUnitGrid(menu, onPick) {
   menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
 }
 
+// Map-card grid + two-tap wiring — the map-picker twins of unitGridHTML /
+// wireUnitGrid (same scroll-safe click activation, same preview→confirm flow,
+// same dismiss-only tap on other cards). Disabled ids render dimmed and inert.
+function mapGridHTML(mapEntries, disabled = new Set()) {
+  return `<div class="unit-grid map-grid">${mapEntries.map(([id, m]) => {
+    const off = disabled.has(id);
+    return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
+      <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false" />
+      <span class="unit-label">${m.name}${off ? '<br>(offline only)' : ''}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+function wireMapGrid(menu, onPick) {
+  const grid = menu.querySelector('.map-grid');
+  if (!grid) return;
+  let pendingKey = null;
+  const clearPending = () => {
+    pendingKey = null;
+    grid.querySelectorAll('.map-card.selecting').forEach((c) => c.classList.remove('selecting'));
+    removeProfilePopup();
+  };
+  grid.querySelectorAll('.map-card:not([disabled])').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const key = card.dataset.mapCard;
+      if (pendingKey === key) { clearPending(); onPick(key); return; }
+      if (pendingKey) { clearPending(); return; }
+      pendingKey = key;
+      card.classList.add('selecting');
+      showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); onPick(key); });
+    });
+  });
+  menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
+}
+
 function showUnitPicker(title, onPick) {
   const unitEntries = Object.entries(UNIT_DATA);
   const menu = document.createElement('div');
@@ -6908,7 +6953,7 @@ function showMapPicker() {
       <input type="checkbox" id="dummy-mode-toggle" />
       Dummy (BOT projectile damage = 0)
     </label>
-    ${mapEntries.map(([id, map]) => `<button data-map="${id}">${map.name}</button>`).join('')}`;
+    ${mapGridHTML(mapEntries)}`;
   app.appendChild(mapMenu);
   const dummyModeToggle = mapMenu.querySelector('#dummy-mode-toggle');
   dummyModeToggle.checked = !!state.dummyMode;
@@ -6916,12 +6961,9 @@ function showMapPicker() {
     state.dummyMode = dummyModeToggle.checked;
   });
 
-  mapMenu.querySelectorAll('button[data-map]').forEach((mapButton) => {
-    mapButton.addEventListener('pointerdown', (mapEvent) => {
-      mapEvent.preventDefault();
-      state.mapKey = mapButton.dataset.map;
-      startMatch();
-    });
+  wireMapGrid(mapMenu, (key) => {
+    state.mapKey = key;
+    startMatch();
   });
 }
 
@@ -7650,6 +7692,48 @@ function exportArenaCollision(mapKey) {
   return json;
 }
 if (typeof window !== 'undefined') window.__exportArenaCollision = exportArenaCollision;
+
+// Dev hook (sibling of __exportArenaCollision): 3/4 aerial "profile photo"
+// of the CURRENTLY LOADED map — the map-picker preview art is captured with
+// this. Call from a running match once the arena is built. Hides fighters,
+// drops fog, renders ONE high-res frame from a detached photo camera and
+// returns a PNG data URL (the drawing buffer is read back synchronously in
+// the same task, so preserveDrawingBuffer isn't needed), then restores
+// everything. Gameplay is untouched — the live camera/renderer settings are
+// put back before the next animate() frame runs.
+// Console usage:
+//   __mapPhoto()  or  __mapPhoto({ dist: 240, yaw: 2.4, cx: 0, cz: -10 })
+function mapPhoto(opts = {}) {
+  const {
+    size = 1024,        // output resolution (square PNG)
+    dist = 220,         // horizontal distance from the look-at point
+    height = 0.85,      // camera height as a fraction of dist (~40 deg elevation)
+    yaw = Math.PI / 4,  // compass angle of the camera around the center
+    cx = 0, cz = 0,     // look-at point (map center)
+    fov = 45
+  } = opts;
+  const cam = new THREE.PerspectiveCamera(fov, 1, 1, 4000);
+  cam.position.set(cx + Math.cos(yaw) * dist, dist * height, cz + Math.sin(yaw) * dist);
+  cam.lookAt(cx, 0, cz);
+  const fighters = getAllFighters();
+  const vis = fighters.map((m) => m.root.visible);
+  fighters.forEach((m) => { m.root.visible = false; });
+  const fog = scene.fog;
+  scene.fog = null;
+  const prevSize = new THREE.Vector2();
+  renderer.getSize(prevSize);
+  const prevRatio = renderer.getPixelRatio();
+  renderer.setPixelRatio(1);
+  renderer.setSize(size, size, false);
+  renderer.render(scene, cam);
+  const url = renderer.domElement.toDataURL('image/png');
+  renderer.setPixelRatio(prevRatio);
+  renderer.setSize(prevSize.x, prevSize.y, false);
+  scene.fog = fog;
+  fighters.forEach((m, i) => { m.root.visible = vis[i]; });
+  return url;
+}
+if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
 
 function buildPlainFieldArena() {
   // Plain Field is intentionally featureless — just the boundary so players
