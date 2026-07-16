@@ -44,7 +44,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
 | Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2000 | 120 | 2.5 s + 1 s charge |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
 | Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
 **Handling (stun + spread):**
@@ -114,7 +114,7 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 ### Sniper charge & sprint-cancel
 
 - Both snipers hold their shot on a **1 s charge** (locked in place). Holding sprint cancels the charge and fires early — but never before a **0.5 s floor** (costs ½ a dodge's boost). So the shooter picks any release point in the **0.5–1 s** window, and the target always gets at least that much glint-to-bullet warning.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **2000 u/s** (near-hitscan — only ~0.06 s flight even at max range); Kei's beam is instant.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Kei's beam is instant.
 
 ### Aru (Unit 3) — range zones & the lock reticle
 
