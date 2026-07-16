@@ -5264,9 +5264,11 @@ function updateCamera() {
   // one respawn tick away from returning; don't restyle the ally for that
   // one-frame window).
   if (cam && cam !== state.player && !cam.isOwnSprite) {
-    const playerOut = (!state.online && state.mainMode === 'trio' && state.trioRosters)
-      ? trioSlotRemaining('player') <= 0
-      : true;   // SD + online: a dead player never comes back
+    const playerOut = state.online
+      ? mechSlotRemaining(state.player) <= 0            // Trio roster spent, or Duel death
+      : ((state.mainMode === 'trio' && state.trioRosters)
+        ? trioSlotRemaining('player') <= 0
+        : true);   // offline SD: a dead player never comes back
     if (playerOut) rebuildMechSpriteAsOwn(cam);
   }
   let tgt;
@@ -5336,10 +5338,19 @@ function updateHud(now = performance.now()) {
   hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
   // Trio: remaining-units dots under each side's HP bar ("just a count").
+  // Offline reads the local rosters; online reads the snapshot-mirrored
+  // roster fields on each mech.
   if (hudRefs.trioOwn && hudRefs.trioEnemy) {
-    if (state.mainMode === 'trio' && state.trioRosters) {
-      const own = trioSlotRemaining('player') + (state.mode === '2v2' ? trioSlotRemaining('ally') : 0);
-      const foe = trioSlotRemaining('enemy') + (state.mode === '2v2' ? trioSlotRemaining('enemy2') : 0);
+    let own = null;
+    let foe = null;
+    if (!state.online && state.mainMode === 'trio' && state.trioRosters) {
+      own = trioSlotRemaining('player') + (state.mode === '2v2' ? trioSlotRemaining('ally') : 0);
+      foe = trioSlotRemaining('enemy') + (state.mode === '2v2' ? trioSlotRemaining('enemy2') : 0);
+    } else if (state.online && state.player?.state.roster) {
+      own = mechSlotRemaining(state.player) + (state.mode === '2v2' ? mechSlotRemaining(state.ally) : 0);
+      foe = mechSlotRemaining(state.enemy) + (state.mode === '2v2' ? mechSlotRemaining(state.enemy2) : 0);
+    }
+    if (own != null) {
       hudRefs.trioOwn.textContent = '⬤ '.repeat(own).trim();
       hudRefs.trioEnemy.textContent = '⬤ '.repeat(foe).trim();
     } else {
@@ -5749,6 +5760,8 @@ function mirrorFighterToMech(fighter, mech) {
   s.chargedBeamDirZ = fighter.chargedBeamDirZ ?? 0;
   s.chargedBeamPitch = fighter.chargedBeamPitch ?? 0;   // steered vertical aim, used by the beam visual
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
+  s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
+  s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
   //
@@ -6102,6 +6115,9 @@ function interpolateRemoteFighter(remoteId, prevSnap, latestSnap, lastSnapAt, no
   if (!latestF) return null;
   const prevF = prevSnap?.fighters?.[remoteId];
   if (!prevF) return latestF;
+  // Trio respawn boundary: don't lerp from the death spot to the spawn
+  // point — the swap is a teleport, not a movement.
+  if (prevF.unitKey !== latestF.unitKey) return latestF;
 
   const elapsed = now - lastSnapAt;
   const alpha = Math.max(0, Math.min(1, elapsed / SIM_TICK_RATE_MS));
@@ -6133,10 +6149,14 @@ function computeOnlineUiPhase(onl, conn) {
   // 'waiting' — drive UI off picks.
   const cfg = conn.getLobbyConfig();
   const myCfg = cfg?.config?.[myId] ?? {};
-  // Host has to choose 1v1 vs 2v2 before anything else — and only once.
-  // Joiners (p2/p3/p4) skip this — they inherit the lobby's existing mode.
+  // Host has to choose Duel/Trio + 1v1/2v2 before anything else — and only
+  // once. Joiners (p2/p3/p4) skip this — they inherit the lobby's mode.
   if (myId === 'p1' && !onl.modePushedToServer) return 'pick-mode';
-  if (!myCfg.unitKey) return 'pick-unit';
+  // Trio needs the full ordered 3-pick; Duel just the single unit.
+  const needUnits = cfg?.mainMode === 'trio'
+    ? !(Array.isArray(myCfg.unitKeys) && myCfg.unitKeys.length === 3)
+    : !myCfg.unitKey;
+  if (needUnits) return 'pick-unit';
   if (myId === 'p1' && !myCfg.mapKey) return 'pick-map';
   // Host tapping a bot slot opens the bot-unit picker (1v1 or 2v2).
   if (onl.pickingBotSlot && myId === 'p1') return 'pick-bot-unit';
@@ -6235,31 +6255,51 @@ function refreshEndMenuIfStale(onl, conn) {
 
 const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport']);
 
-// Host-only step: select 1v1 or 2v2. Only shown once per session (gated by
-// onl.modePushedToServer). Joiners skip this and inherit the lobby's mode.
+// Host-only step, two layers: main mode (Duel | Trio) first, then team
+// size (1v1 | 2v2). Both ride one match:set-mode once the second pick
+// lands. Only shown once per session (gated by onl.modePushedToServer);
+// joiners skip this and inherit the lobby's mode.
 function showOnlineModePicker(onl) {
   const menu = document.createElement('div');
   menu.className = 'menu';
-  menu.innerHTML = `
-    <h2>Choose Mode</h2>
-    <div class="menu-divider">Online — you are p1 (host)</div>
-    <button data-mode-pick="1v1" class="online-play-btn">1v1</button>
-    <button data-mode-pick="2v2" class="online-play-btn">2v2</button>
-    <button data-leave class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelectorAll('button[data-mode-pick]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      const mode = btn.dataset.modePick;
-      onl.conn.sendSetMode(mode);
-      onl.modePushedToServer = true;
+  const renderStage = (mainMode) => {
+    if (!mainMode) {
+      menu.innerHTML = `
+        <h2>Choose Mode</h2>
+        <div class="menu-divider">Online — you are p1 (host)</div>
+        <button data-main-mode-pick="sd" class="online-play-btn">Duel</button>
+        <button data-main-mode-pick="trio" class="online-play-btn">Trio</button>
+        <button data-leave class="online-leave-btn">Leave</button>
+      `;
+    } else {
+      menu.innerHTML = `
+        <h2>${mainMode === 'trio' ? 'Trio' : 'Duel'} — Team Size</h2>
+        <div class="menu-divider">Online — you are p1 (host)</div>
+        <button data-mode-pick="1v1" class="online-play-btn">1v1</button>
+        <button data-mode-pick="2v2" class="online-play-btn">2v2</button>
+        <button data-leave class="online-leave-btn">Leave</button>
+      `;
+    }
+    menu.querySelectorAll('button[data-main-mode-pick]').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        renderStage(btn.dataset.mainModePick);
+      });
     });
-  });
-  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    showSelectMenu();
-  });
+    menu.querySelectorAll('button[data-mode-pick]').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        onl.conn.sendSetMode(btn.dataset.modePick, mainMode);
+        onl.modePushedToServer = true;
+      });
+    });
+    menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      showSelectMenu();
+    });
+  };
+  renderStage(null);
+  app.appendChild(menu);
 }
 
 function showOnlineUnitPicker(onl, conn) {
@@ -6269,16 +6309,28 @@ function showOnlineUnitPicker(onl, conn) {
   // them yet. Remove the filters once the unit is migrated to shared.
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
   // Mention which mode the lobby is in so non-hosts know what they joined.
-  const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
+  const cfg = conn?.getLobbyConfig?.();
+  const mode = cfg?.mode ?? '1v1';
+  const trio = cfg?.mainMode === 'trio';
+  // Trio: three ordered picks (repeats allowed) collected locally, then sent
+  // as one atomic { unitKeys } configure. Duel: single pick, as before.
+  const picks = [];
+  const title = () => trio ? `Pick Your Unit (${picks.length + 1}/3)` : 'Pick Your Unit';
   menu.innerHTML = `
-    <h2>Pick Your Unit</h2>
-    <div class="menu-divider">Online ${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
+    <h2>${title()}</h2>
+    <div class="menu-divider">Online ${trio ? 'Trio ' : ''}${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
     ${unitGridHTML(unitEntries)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
   wireUnitGrid(menu, (key) => {
-    onl.conn.sendConfigure({ unitKey: key });
+    if (!trio) {
+      onl.conn.sendConfigure({ unitKey: key });
+      return;
+    }
+    picks.push(key);
+    if (picks.length === 3) onl.conn.sendConfigure({ unitKeys: picks.slice() });
+    else menu.querySelector('h2').textContent = title();
   });
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -6286,24 +6338,38 @@ function showOnlineUnitPicker(onl, conn) {
   });
 }
 
-// Host taps a bot slot → pick which unit that bot uses (1v1 or 2v2). Sends
-// { botSlot, botUnitKey }; the server stores it per-slot in lobby.botUnits.
+// Host taps a bot slot → pick which unit that bot uses (1v1 or 2v2). Duel
+// sends { botSlot, botUnitKey }; Trio collects three ordered picks and sends
+// { botSlot, botUnitKeys }. The server stores it per-slot in lobby.botUnits.
 function showOnlineBotUnitPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   const slot = onl.pickingBotSlot;
+  const trio = conn?.getLobbyConfig?.()?.mainMode === 'trio';
   // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
+  const picks = [];
+  const title = () => trio ? `Pick Bot Unit (${picks.length + 1}/3)` : 'Pick Bot Unit';
   menu.innerHTML = `
-    <h2>Pick Bot Unit</h2>
+    <h2>${title()}</h2>
     <div class="menu-divider">Bot in slot ${slot}</div>
     ${unitGridHTML(unitEntries)}
     <button data-back class="online-leave-btn">Back</button>
   `;
   app.appendChild(menu);
   wireUnitGrid(menu, (key) => {
-    onl.conn.sendConfigure({ botSlot: slot, botUnitKey: key });
-    onl.pickingBotSlot = null;   // back to the queue room next frame
+    if (!trio) {
+      onl.conn.sendConfigure({ botSlot: slot, botUnitKey: key });
+      onl.pickingBotSlot = null;   // back to the queue room next frame
+      return;
+    }
+    picks.push(key);
+    if (picks.length === 3) {
+      onl.conn.sendConfigure({ botSlot: slot, botUnitKeys: picks.slice() });
+      onl.pickingBotSlot = null;
+    } else {
+      menu.querySelector('h2').textContent = title();
+    }
   });
   menu.querySelector('button[data-back]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -6338,23 +6404,33 @@ function showOnlineWaitingOpp(onl, conn) {
   const cfg = conn.getLobbyConfig();
   const myId = onl.myPlayerId;
   const mode = cfg?.mode ?? '1v1';
+  const trio = cfg?.mainMode === 'trio';
   const isHost = myId === 'p1';
   const slots = mode === '2v2' ? ONLINE_SLOT_IDS : ONLINE_SLOT_IDS.slice(0, 2);
   const occupied = new Set(cfg?.occupied ?? []);
   const myCfg = cfg?.config?.[myId] ?? {};
   const mapKey = myCfg.mapKey || cfg?.config?.p1?.mapKey;
   const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
+  const myPicked = trio ? (Array.isArray(myCfg.unitKeys) && myCfg.unitKeys.length === 3) : !!myCfg.unitKey;
 
   // Headline text. Both modes use the manual-start flow: the host picks unit +
   // map then starts; everyone else waits for the host.
   let waitingText;
   if (isHost) {
-    if (!myCfg.unitKey) waitingText = 'Pick your unit…';
+    if (!myPicked) waitingText = trio ? 'Pick your units…' : 'Pick your unit…';
     else if (!myCfg.mapKey) waitingText = 'Pick a map…';
     else waitingText = 'Lobby — start when ready';
   } else {
     waitingText = 'Waiting for host to start…';
   }
+
+  // Trio: the slot's resolved roster from the server, shown one unit per
+  // line ("in 3 lines manner"). Null = human still picking.
+  const rosterLines = (s, useChar) => {
+    const r = cfg?.rosters?.[s];
+    if (!Array.isArray(r)) return null;
+    return r.map((k) => (useChar ? UNIT_DATA[k]?.char : UNIT_DATA[k]?.name) ?? k).join('<br>');
+  };
 
   // Roster grouped by team. Each team gets its own <section> with a header
   // and one row per slot on that side. Empty non-host slots show a Join
@@ -6364,27 +6440,30 @@ function showOnlineWaitingOpp(onl, conn) {
     const isMe = s === myId;
     const isOccupied = occupied.has(s);
     const slotCfg = cfg?.config?.[s] ?? {};
-    const unitName = slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null;
+    const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null);
+    const sep = trio ? '<br>' : ' ';   // Trio rosters stack under the label, one unit per line
     let statusHtml;
     if (isMe) {
-      statusHtml = `<span class="roster-status">${unitName ? `You — ${unitName}` : 'You'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `You —${sep}${unitName}` : 'You'}</span>`;
     } else if (isOccupied) {
-      statusHtml = `<span class="roster-status">${unitName ? `Player — ${unitName}` : 'Player (picking…)'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `Player —${sep}${unitName}` : 'Player (picking…)'}</span>`;
     } else if (s === 'p1') {
       // Host slot is locked — no Join button. Reaches here only briefly,
       // during connect-time before p1 is assigned.
       statusHtml = `<span class="roster-status">(host slot)</span>`;
     } else {
-      // Empty slot = a bot until a human takes it. Show its (host-chosen) unit.
-      // Host taps to change that bot's unit; non-hosts get a Join button in 2v2
-      // (team-switch). 1v1 has no Join (two slots, auto-assigned).
+      // Empty slot = a bot until a human takes it. Show its (host-chosen) unit
+      // (Trio: full roster, one per line). Host taps to change; non-hosts get
+      // a Join button in 2v2 (team-switch). 1v1 has no Join.
       const botUnitKey = cfg?.botUnits?.[s] || 'unit1';
-      const botChar = UNIT_DATA[botUnitKey]?.char || 'Saori';
+      const botLabel = trio
+        ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.char ?? 'Saori'}`
+        : `${UNIT_DATA[botUnitKey]?.char || 'Saori'} (BOT)`;
       if (isHost) {
-        statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botChar} (BOT) — tap to change</span>`;
+        statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botLabel} — tap to change</span>`;
       } else {
         const joinBtn = mode === '2v2' ? `<button class="roster-join" data-join-slot="${s}">Join</button>` : '';
-        statusHtml = `<span class="roster-status">${botChar} (BOT)</span>${joinBtn}`;
+        statusHtml = `<span class="roster-status">${botLabel}</span>${joinBtn}`;
       }
     }
     return `<div class="roster-row roster-team-${team}">
@@ -6406,12 +6485,12 @@ function showOnlineWaitingOpp(onl, conn) {
 
   // Mode is chosen on the main menu before entering the online flow.
   // Display it here as read-only — no toggle.
-  const modeChip = `<div class="menu-divider">Mode: ${mode}</div>`;
+  const modeChip = `<div class="menu-divider">Mode: ${trio ? 'Trio' : 'Duel'} ${mode}</div>`;
 
   // Host's explicit Start button (both modes). Enabled once they've picked
-  // unit + map (server rejects otherwise). Starting with an empty opponent slot
-  // fills it with a bot (1v1 → Saori); a human who joins first takes the slot.
-  const canStart = isHost && !!myCfg.unitKey && !!myCfg.mapKey;
+  // unit(s) + map (server rejects otherwise). Starting with an empty opponent
+  // slot fills it with a bot (1v1 → Saori); a human who joins first takes it.
+  const canStart = isHost && myPicked && !!myCfg.mapKey;
   const startBtnHtml = isHost
     ? `<button id="online-start-now" class="online-play-btn"${canStart ? '' : ' disabled'}>Start Match</button>`
     : '';
@@ -6473,9 +6552,13 @@ function ensureOnlineMatchSetup(snap) {
   const enemyId = enemyIds[0];
   const enemy2Id = enemyIds[1] || null;
 
-  const unitSig = activeSlots.map((id) => `${id}:${snap.fighters[id]?.unitKey ?? ''}`).join('|');
+  // NOTE: unit keys are deliberately NOT in the signature — a Trio respawn
+  // changes a fighter's unitKey mid-match, and a full rebuild here would
+  // reconstruct the whole arena. Unit changes (Trio respawns, rematch
+  // repicks) are handled surgically per-mech in runOnlineMatchFrame via
+  // rebuildOnlineMechForSlot.
   const mapKey = snap.mapKey;
-  const sig = `${mapKey}|${unitSig}|${cameraId}|${mode}`;
+  const sig = `${mapKey}|${cameraId}|${mode}`;
   if (onl.mechsCreatedFor === sig) return;
 
   // Tear down old mechs/arena/HUD/projectile meshes. getAllFighters covers
@@ -6513,24 +6596,30 @@ function ensureOnlineMatchSetup(snap) {
   state.mode = mode;
 
   // Build new mechs. Same colour palette as offline so it reads consistently.
+  // mech.unitKey tags what the mech was built as — runOnlineMatchFrame
+  // compares it against the snapshot to catch Trio respawn unit swaps.
   state.player = createMech(0x62d7ff, UNIT_DATA[snap.fighters[cameraId].unitKey], true);
+  state.player.unitKey = snap.fighters[cameraId].unitKey;
   state.player.state.team = myTeam;
   const myPos = snap.fighters[cameraId].pos;
   state.player.body.position.set(myPos.x, myPos.y, myPos.z);
 
   state.enemy = createMech(0xff7ad5, UNIT_DATA[snap.fighters[enemyId].unitKey]);
+  state.enemy.unitKey = snap.fighters[enemyId].unitKey;
   state.enemy.state.team = teamOfSlot(enemyId);
   const ePos = snap.fighters[enemyId].pos;
   state.enemy.body.position.set(ePos.x, ePos.y, ePos.z);
 
   if (mode === '2v2' && allyId) {
     state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey]);
+    state.ally.unitKey = snap.fighters[allyId].unitKey;
     state.ally.state.team = myTeam;
     const aPos = snap.fighters[allyId].pos;
     state.ally.body.position.set(aPos.x, aPos.y, aPos.z);
   }
   if (mode === '2v2' && enemy2Id) {
     state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey]);
+    state.enemy2.unitKey = snap.fighters[enemy2Id].unitKey;
     state.enemy2.state.team = teamOfSlot(enemy2Id);
     const e2Pos = snap.fighters[enemy2Id].pos;
     state.enemy2.body.position.set(e2Pos.x, e2Pos.y, e2Pos.z);
@@ -6571,11 +6660,55 @@ function ensureOnlineMatchSetup(snap) {
   onl.mechsCreatedFor = sig;
 }
 
+// Online cousin of respawnSlotMech: swap one slot's mech to a new unit
+// without touching the arena or the other fighters. All sim state (position,
+// hp, immunity, timers) comes from the next snapshot mirror — this only
+// rebuilds the visual/physics shell and re-homes whatever rode on the old
+// root. Used for Trio respawns and rematch unit repicks.
+function rebuildOnlineMechForSlot(slotName, unitKey) {
+  const old = state[slotName];
+  if (!old || !UNIT_DATA[unitKey]) return;
+  disposeGlintImmediate(old);
+  removeImmunityAuraFromMech(old);
+  if (old.chargedBeamVisual) { scene.remove(old.chargedBeamVisual); old.chargedBeamVisual = null; }
+  scene.remove(old.root);
+  world.removeBody(old.body);
+  old.trail.forEach((t) => scene.remove(t.mesh));
+
+  const fresh = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  fresh.unitKey = unitKey;
+  fresh.state.team = old.state.team;
+  fresh.body.position.copy(old.body.position);   // one-frame placeholder; the mirror overwrites
+  state[slotName] = fresh;
+
+  for (const attached of [state.reticle, state.allyArrow, state.enemyArrow]) {
+    if (attached && attached.parent === old.root) fresh.root.add(attached);
+  }
+  if (state.playerCurrentTarget === old) {
+    state.playerCurrentTarget = fresh;
+    state.reticleLastEnemyFireAt = fresh.state.lastFireAt;
+    state.reticleEnemyFiringUntil = 0;
+  }
+}
+
 function runOnlineMatchFrame(dt, onl, conn) {
   const snap = conn.getLatestSnapshot();
   if (!snap) return;
   ensureOnlineMatchSetup(snap);
   if (!state.player || !state.enemy) return;
+
+  // Trio respawn detection: a fighter whose snapshot unitKey no longer
+  // matches its mech swapped to the next roster unit — rebuild that mech.
+  if (onl.slotMap) {
+    const sm = onl.slotMap;
+    for (const [slotName, id] of [['player', sm.cameraId], ['ally', sm.allyId], ['enemy', sm.enemyId], ['enemy2', sm.enemy2Id]]) {
+      const mech = state[slotName];
+      const f = id ? snap.fighters[id] : null;
+      if (mech && f && mech.unitKey && mech.unitKey !== f.unitKey) {
+        rebuildOnlineMechForSlot(slotName, f.unitKey);
+      }
+    }
+  }
 
   const prevSnap = conn.getPreviousSnapshot();
   const lastSnapAt = conn.getLastSnapshotAt();
@@ -7409,6 +7542,15 @@ function trioSlotRemaining(slotName) {
   const roster = state.trioRosters?.[slotName];
   if (!mech || !roster) return 0;
   return Math.max(0, roster.length - state.rosterIdx[slotName] - (mech.state.hp <= 0 ? 1 : 0));
+}
+
+// Online mirror of trioSlotRemaining: remaining units straight off the
+// snapshot-mirrored roster fields. Duel (no roster): 1 while alive, else 0.
+function mechSlotRemaining(mech) {
+  if (!mech) return 0;
+  const s = mech.state;
+  if (!s.roster) return s.hp > 0 ? 1 : 0;
+  return Math.max(0, s.roster.length - s.rosterIdx - (s.hp <= 0 ? 1 : 0));
 }
 
 // Advance dead slots to their next roster unit (no-op once exhausted).

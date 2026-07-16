@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import {
   createMatchState,
+  respawnFighterNext,
   buildSnapshot,
   tickMatch,
   tickBot,
@@ -54,17 +55,18 @@ function createLobby() {
     match: null,
     state: 'waiting',                 // 'waiting' | 'active' | 'ended'
     mode: '1v1',                      // '1v1' | '2v2' — host pushes via match:set-mode
+    mainMode: 'sd',                   // 'sd' ("Duel") | 'trio' — host pushes via match:set-mode
     botSlots: new Set(),              // slots filled with bots while state==='active'
-    botUnits: {},                     // slot -> host-chosen bot unit; empty = per-mode default
+    botUnits: {},                     // slot -> host-chosen bot unit (Duel: key; Trio: [k,k,k])
     inputs: {
       p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
     },
     lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
     config: {
-      p1: { unitKey: null, mapKey: null },
-      p2: { unitKey: null, mapKey: null },
-      p3: { unitKey: null, mapKey: null },
-      p4: { unitKey: null, mapKey: null }
+      p1: { unitKey: null, unitKeys: null, mapKey: null },
+      p2: { unitKey: null, unitKeys: null, mapKey: null },
+      p3: { unitKey: null, unitKeys: null, mapKey: null },
+      p4: { unitKey: null, unitKeys: null, mapKey: null }
     },
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
     startedAt: 0,
@@ -113,11 +115,39 @@ function occupiedSlotsOf(lobby) {
 
 // The unit a bot in slot `s` should use: the host's per-slot pick if set, else
 // the per-mode default (1v1 → Saori/unit1; 2v2 → cycle unit1..unit6 by slot).
+// The stored pick may be a Trio roster array — its lead unit stands in for
+// Duel semantics.
 function botUnitKeyFor(lobby, s) {
-  if (lobby.botUnits[s]) return lobby.botUnits[s];
+  const stored = lobby.botUnits[s];
+  if (stored) return Array.isArray(stored) ? stored[0] : stored;
   if (lobby.mode === '1v1') return 'unit1';
   const idx = activeSlots(lobby.mode).indexOf(s);
   return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][(idx >= 0 ? idx : 0) % 6];
+}
+
+// Trio roster for a bot slot: the host's 3-pick if stored, else 3 copies of
+// the slot's Duel unit (a stored single key also expands ×3).
+function botRosterFor(lobby, s) {
+  const stored = lobby.botUnits[s];
+  if (Array.isArray(stored) && stored.length === 3) return stored;
+  const k = botUnitKeyFor(lobby, s);
+  return [k, k, k];
+}
+
+// Trio roster for any active slot (human or bot). Humans without a full
+// 3-pick fall back to 3 copies of their Duel unit (or unit1).
+function rosterForSlot(lobby, s, occupied) {
+  if (occupied.has(s)) {
+    const cfg = lobby.config[s];
+    if (Array.isArray(cfg.unitKeys) && cfg.unitKeys.length === 3) return cfg.unitKeys;
+    const k = cfg.unitKey || 'unit1';
+    return [k, k, k];
+  }
+  return botRosterFor(lobby, s);
+}
+
+function isValidRoster(v) {
+  return Array.isArray(v) && v.length === 3 && v.every((k) => typeof k === 'string' && UNIT_DATA[k]);
 }
 
 function startMatchFor(lobby) {
@@ -140,6 +170,14 @@ function startMatchFor(lobby) {
     return botUnitKeyFor(lobby, s);
   };
 
+  // Trio: every active slot gets an ordered 3-unit roster (humans from
+  // their 3-pick, bots from the host's picks / ×3 defaults).
+  let rosters = null;
+  if (lobby.mainMode === 'trio') {
+    rosters = {};
+    for (const s of slots) rosters[s] = rosterForSlot(lobby, s, occupied);
+  }
+
   lobby.match = createMatchState({
     mapKey,
     mode: lobby.mode,
@@ -147,6 +185,7 @@ function startMatchFor(lobby) {
     p2UnitKey: unitFor('p2'),
     p3UnitKey: unitFor('p3'),
     p4UnitKey: unitFor('p4'),
+    rosters,
     startTime
   });
   lobby.state = 'active';
@@ -158,7 +197,7 @@ function startMatchFor(lobby) {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode });
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode });
   emitLobbyConfig(lobby);
   console.log(`[${lobby.id}] ${lobby.mode} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
 }
@@ -181,13 +220,27 @@ function maybeStartMatchFor(lobby) {
 
 function emitLobbyConfig(lobby) {
   const botUnits = {};
+  const occupied = occupiedSlotsOf(lobby);
   for (const s of activeSlots(lobby.mode)) botUnits[s] = botUnitKeyFor(lobby, s);
+  // Trio: resolved roster per active slot for the queue-room display.
+  // Humans who haven't finished their 3-pick show null ("picking…").
+  let rosters = null;
+  if (lobby.mainMode === 'trio') {
+    rosters = {};
+    for (const s of activeSlots(lobby.mode)) {
+      rosters[s] = (occupied.has(s) && !isValidRoster(lobby.config[s].unitKeys))
+        ? null
+        : rosterForSlot(lobby, s, occupied);
+    }
+  }
   io.to(lobby.id).emit('lobby:config', {
     state: lobby.state,
     mode: lobby.mode,
+    mainMode: lobby.mainMode,
     config: lobby.config,
     botUnits,
-    occupied: Array.from(occupiedSlotsOf(lobby)),
+    rosters,
+    occupied: Array.from(occupied),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
   });
@@ -234,18 +287,39 @@ function tickLobby(lobby) {
     cur.targetSwitch = false;
   }
 
-  // 4. End-of-match check.
-  const f = lobby.match.fighters;
+  // 4. Trio respawns — a dead slot with roster left swaps to its next unit
+  //    at the recorded spawn point (fresh 3 s immunity; the killer keeps all
+  //    its state). Runs before the end check so a mid-swap death is never
+  //    counted as a team wipe. Respawned BOTS hold fire briefly (offline
+  //    parity: respawnSlotMech's +650 ms nextFireAt).
+  if (lobby.match.trio) {
+    for (const s of activeSlots(lobby.mode)) {
+      const fighter = lobby.match.fighters[s];
+      if (fighter && fighter.hp <= 0) {
+        const fresh = respawnFighterNext(lobby.match, s);
+        if (fresh && lobby.botSlots.has(s)) fresh.nextFireAt = lobby.match.now + 650;
+      }
+    }
+  }
+
+  // 5. End-of-match check. A slot is "out" when its unit is dead AND (Trio)
+  //    its roster is spent — in Duel there's no roster, so out = dead.
+  const slotOut = (id) => {
+    const fighter = lobby.match.fighters[id];
+    if (!fighter) return true;
+    if (fighter.hp > 0) return false;
+    return !fighter.roster || fighter.rosterIdx >= fighter.roster.length - 1;
+  };
   if (lobby.mode === '2v2') {
-    const teamADead = (f.p1?.hp ?? 0) <= 0 && (f.p3?.hp ?? 0) <= 0;
-    const teamBDead = (f.p2?.hp ?? 0) <= 0 && (f.p4?.hp ?? 0) <= 0;
-    if (teamADead || teamBDead) {
+    const teamAOut = slotOut('p1') && slotOut('p3');
+    const teamBOut = slotOut('p2') && slotOut('p4');
+    if (teamAOut || teamBOut) {
       io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
-      endMatchFor(lobby, teamADead ? 'B' : 'A', 'ko');
+      endMatchFor(lobby, teamAOut ? 'B' : 'A', 'ko');
       return;
     }
-  } else if ((f.p1?.hp ?? 0) <= 0 || (f.p2?.hp ?? 0) <= 0) {
-    const winner = f.p1.hp <= 0 ? 'p2' : 'p1';
+  } else if (slotOut('p1') || slotOut('p2')) {
+    const winner = slotOut('p1') ? 'p2' : 'p1';
     io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
     endMatchFor(lobby, winner, 'ko');
     return;
@@ -346,6 +420,14 @@ io.on('connection', (socket) => {
       lb.config[slot].unitKey = cfg.unitKey;
       dirty = true;
     }
+    // Trio: the player's ordered 3-unit roster (repeats allowed). The lead
+    // unit doubles as the Duel unitKey so mainMode flips never leave a slot
+    // with no pick at all.
+    if (cfg && isValidRoster(cfg.unitKeys)) {
+      lb.config[slot].unitKeys = cfg.unitKeys.slice();
+      lb.config[slot].unitKey = cfg.unitKeys[0];
+      dirty = true;
+    }
     if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
       lb.config[slot].mapKey = cfg.mapKey;
       dirty = true;
@@ -361,6 +443,14 @@ io.on('connection', (socket) => {
       lb.botUnits[cfg.botSlot] = cfg.botUnitKey;
       dirty = true;
     }
+    // Trio bot roster (host only) — same occupancy gates as botUnitKey.
+    if (cfg && slot === 'p1' && typeof cfg.botSlot === 'string'
+        && isValidRoster(cfg.botUnitKeys)
+        && cfg.botSlot !== 'p1' && activeSlots(lb.mode).includes(cfg.botSlot)
+        && !occupiedSlotsOf(lb).has(cfg.botSlot)) {
+      lb.botUnits[cfg.botSlot] = cfg.botUnitKeys.slice();
+      dirty = true;
+    }
 
     if (dirty) {
       emitLobbyConfig(lb);
@@ -374,7 +464,15 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     if (slot !== 'p1') return;
     if (lb.state === 'active') return;
-    if (data?.mode !== '1v1' && data?.mode !== '2v2') return;
+    // Main mode ('sd' = Duel | 'trio') rides the same message as the team
+    // size — the host picks both up front.
+    if (data?.mainMode === 'sd' || data?.mainMode === 'trio') {
+      lb.mainMode = data.mainMode;
+    }
+    if (data?.mode !== '1v1' && data?.mode !== '2v2') {
+      if (data?.mainMode) emitLobbyConfig(lb);
+      return;
+    }
     lb.mode = data.mode;
     if (lb.mode === '1v1') {
       const reassigned = [];
@@ -408,9 +506,10 @@ io.on('connection', (socket) => {
     lb.players.set(socket.id, newSlot);
     lb.config[newSlot] = {
       unitKey: lb.config[slot].unitKey,
+      unitKeys: lb.config[slot].unitKeys,
       mapKey: null
     };
-    lb.config[slot] = { unitKey: null, mapKey: null };
+    lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
     lb.lastAcked[newSlot] = -1;
     lb.lastAcked[slot] = -1;
     lb.rematchRequested[newSlot] = false;
@@ -434,6 +533,8 @@ io.on('connection', (socket) => {
     if (slot !== 'p1') return;
     if (lb.state === 'active') return;
     if (!lb.config.p1.unitKey || !lb.config.p1.mapKey) return;
+    // Trio: the host must have a complete 3-pick before starting.
+    if (lb.mainMode === 'trio' && !isValidRoster(lb.config.p1.unitKeys)) return;
     startMatchFor(lb);   // 1v1 or 2v2: empty opponent slots fill with bots
   });
 
@@ -470,7 +571,7 @@ io.on('connection', (socket) => {
       }
     }
     if (SLOT_IDS.includes(slot)) {
-      lb.config[slot] = { unitKey: null, mapKey: null };
+      lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
       lb.rematchRequested[slot] = false;
     }
     if (lb.players.size === 0) {

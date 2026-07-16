@@ -155,6 +155,11 @@ export function createProjectile({
 // onto). For human-controlled fighters the targetId is mutated via the
 // targetSwitch input flag; for bot-controlled fighters the server driver
 // picks it before each tick.
+// Trio: `rosters` maps slot id → ordered array of 3 unit keys (repeats
+// allowed). When present each fighter starts as roster[0] and carries
+// `roster` + `rosterIdx` in its snapshot state; on death the server calls
+// respawnFighterNext to swap in the next unit at the slot's recorded
+// spawn point. Omitted (null) = classic Duel, no roster fields at all.
 export function createMatchState({
   mapKey = 'arena1',
   mode = '1v1',
@@ -162,10 +167,17 @@ export function createMatchState({
   p2UnitKey = 'unit2',
   p3UnitKey = 'unit1',
   p4UnitKey = 'unit2',
+  rosters = null,
   startTime = 0
 } = {}) {
   if (!MAP_DATA[mapKey]) throw new Error(`Unknown map: ${mapKey}`);
   const arena = getArena(mapKey);
+  if (rosters) {
+    p1UnitKey = rosters.p1?.[0] ?? p1UnitKey;
+    p2UnitKey = rosters.p2?.[0] ?? p2UnitKey;
+    p3UnitKey = rosters.p3?.[0] ?? p3UnitKey;
+    p4UnitKey = rosters.p4?.[0] ?? p4UnitKey;
+  }
   const fighters = {
     p1: createFighter('p1', p1UnitKey, arena.spawns.p1),
     p2: createFighter('p2', p2UnitKey, arena.spawns.p2)
@@ -174,6 +186,13 @@ export function createMatchState({
   fighters.p2.team = 'B';
   fighters.p1.targetId = 'p2';
   fighters.p2.targetId = 'p1';
+
+  // Per-slot spawn points, kept on the match state so Trio respawns land
+  // exactly where the slot's first unit spawned.
+  const spawnPoints = {
+    p1: { x: arena.spawns.p1.x, y: arena.spawns.p1.y ?? GROUND_BASE_Y, z: arena.spawns.p1.z },
+    p2: { x: arena.spawns.p2.x, y: arena.spawns.p2.y ?? GROUND_BASE_Y, z: arena.spawns.p2.z }
+  };
 
   if (mode === '2v2') {
     // 2v2 teammates spawn next to their counterpart, offset Z+12 (mirrors the
@@ -199,11 +218,24 @@ export function createMatchState({
     // Bot drivers / human target-switch can override later.
     fighters.p3.targetId = 'p4';
     fighters.p4.targetId = 'p3';
+    spawnPoints.p3 = { x: p3Spawn.x, y: p3Spawn.y ?? GROUND_BASE_Y, z: p3Spawn.z };
+    spawnPoints.p4 = { x: p4Spawn.x, y: p4Spawn.y ?? GROUND_BASE_Y, z: p4Spawn.z };
   }
 
   // Spawn protection — all fighters immune for the first SPAWN_IMMUNITY_MS.
   for (const f of Object.values(fighters)) {
     f.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
+  }
+
+  // Trio: each fighter carries its ordered roster + current index. These
+  // travel in every snapshot, so clients read remaining-unit counts and
+  // detect mid-match unit swaps straight off the fighter.
+  if (rosters) {
+    for (const f of Object.values(fighters)) {
+      const r = rosters[f.id];
+      f.roster = Array.isArray(r) && r.length ? r.slice() : [f.unitKey];
+      f.rosterIdx = 0;
+    }
   }
 
   return {
@@ -212,6 +244,8 @@ export function createMatchState({
     now: startTime,
     mode,
     mapKey,
+    trio: !!rosters,
+    spawnPoints,
     fighters,
     projectiles: [],
     // Active 照射ビーム beams (Kei). Server-authoritative one-hit damage volumes
@@ -245,6 +279,30 @@ export function pickClosestEnemyId(matchState, fighter) {
     if (d < bestDist) { bestDist = d; bestId = e.id; }
   }
   return bestId;
+}
+
+// Trio respawn: replace a dead fighter with its next roster unit at the
+// slot's recorded spawn point, with fresh spawn immunity. The killer keeps
+// all its state (no reward) — we only ever touch the dead slot. Returns the
+// fresh fighter, or null when the roster is spent (slot stays dead) or the
+// match isn't Trio.
+export function respawnFighterNext(matchState, id) {
+  const old = matchState.fighters[id];
+  if (!old || !old.roster) return null;
+  const nextIdx = old.rosterIdx + 1;
+  if (nextIdx >= old.roster.length) return null;
+  const fresh = createFighter(id, old.roster[nextIdx], matchState.spawnPoints[id]);
+  fresh.team = old.team;
+  fresh.roster = old.roster;
+  fresh.rosterIdx = nextIdx;
+  fresh.invulnerableUntil = matchState.now + SPAWN_IMMUNITY_MS;
+  // Keep the old lock if that enemy is still alive; otherwise closest.
+  const oldTgt = matchState.fighters[old.targetId];
+  fresh.targetId = (oldTgt && oldTgt.team !== old.team && oldTgt.hp > 0)
+    ? old.targetId
+    : (pickClosestEnemyId(matchState, fresh) ?? old.targetId);
+  matchState.fighters[id] = fresh;
+  return fresh;
 }
 
 // Snapshot extraction — what the server sends to clients each tick. By

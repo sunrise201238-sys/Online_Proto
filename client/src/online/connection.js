@@ -149,11 +149,11 @@ export function createConnection() {
       socket.emit('match:configure', cfg);
     },
 
-    // Host-only: toggle lobby mode between '1v1' and '2v2'. Server rejects
-    // if not p1 or if a match is active.
-    sendSetMode: (mode) => {
+    // Host-only: set lobby mode ('1v1' | '2v2') and optionally the main
+    // mode ('sd' = Duel | 'trio'). Server rejects if not p1 or mid-match.
+    sendSetMode: (mode, mainMode) => {
       if (!connected) return;
-      socket.emit('match:set-mode', { mode });
+      socket.emit('match:set-mode', mainMode ? { mode, mainMode } : { mode });
     },
 
     // Host-only (2v2): start the match now with bot-fill for empty slots.
