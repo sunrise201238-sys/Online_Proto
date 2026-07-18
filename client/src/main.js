@@ -7277,11 +7277,11 @@ function wireMapGrid(menu, onPick) {
   };
   // Random map: uniform over this grid's ENABLED cards, minus the Shooting
   // Range (practice map — never a random battleground; it's absent online
-  // and excluded offline).
+  // and excluded offline) and Plain Field (arena1 — manual pick only).
   const resolveRandomMap = () => {
     const pool = [...grid.querySelectorAll('.map-card:not([disabled])')]
       .map((c) => c.dataset.mapCard)
-      .filter((k) => k !== RANDOM_PICK_KEY && k !== 'range');
+      .filter((k) => k !== RANDOM_PICK_KEY && k !== 'range' && k !== 'arena1');
     return pool[Math.floor(Math.random() * pool.length)];
   };
   const confirm = (key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomMap() : key);
