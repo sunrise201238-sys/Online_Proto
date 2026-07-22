@@ -4963,17 +4963,29 @@ function hideEnemyEdgeArrow() {
 //   2. state.allyEdgeArrow — a DOM arrow pinned to the screen edge that points
 //      toward the teammate whenever they're OUT OF FRAME (off to the side or
 //      behind the camera), so the player always knows which way to look.
+// The camera-focus mech's TEAMMATE — what the "friendly" indicators track.
+// Normally that's the player's ally; while spectating it re-anchors to the
+// WATCHED unit's partner (spectating an enemy marks the other enemy), so the
+// arrows never sit stuck in the player slot's point of view.
+function teammateOfMech(mech) {
+  if (mech === state.player) return state.ally;
+  if (mech === state.ally) return state.player;
+  if (mech === state.enemy) return state.enemy2;
+  if (mech === state.enemy2) return state.enemy;
+  return null;
+}
+
 const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
-  const ally = state.ally;
-  const active = state.mode === '2v2' && !!ally && ally.state.hp > 0;
+  const mate = state.mode === '2v2' ? teammateOfMech(cameraFocusMech()) : null;
+  const active = !!mate && mate.state.hp > 0;
 
-  // Teammate sniper wind-up: the ally's arrow carries a glint while they're
+  // Teammate sniper wind-up: the arrow carries a glint while they're
   // mid-charge (or Kei mid-sweep) — using the teammate's OWN glint art.
   const allyGlint = active
-    && (!!ally.state.sniperChargeTarget || !!ally.chargedBeamVisual);
-  const allyGlintBeam = active && !!ally.unit?.beam;
+    && (!!mate.state.sniperChargeTarget || !!mate.chargedBeamVisual);
+  const allyGlintBeam = active && !!mate.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
   const arrow = state.allyArrow;
@@ -4981,10 +4993,13 @@ function updateAllyArrow() {
     if (!active) {
       arrow.visible = false;
     } else {
+      // The tracked teammate changes with the spectate slot — reparent to
+      // whoever it is now (no-op while it's unchanged).
+      if (arrow.parent !== mate.root) mate.root.add(arrow);
       arrow.visible = true;
       const bob = Math.sin(performance.now() * 0.004) * 0.18;
       arrow.position.set(0, 4.6 + bob, 0);
-      const camDist = camera.position.distanceTo(ally.root.position);
+      const camDist = camera.position.distanceTo(mate.root.position);
       const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
       arrow.scale.setScalar(2.55 * distScale);
     }
@@ -5002,7 +5017,7 @@ function updateAllyArrow() {
 
   // Anchor on the teammate's torso (not the higher chevron) so the on/off
   // screen decision matches where the player perceives the unit.
-  _allyArrowNdc.set(ally.root.position.x, ally.root.position.y + 2.0, ally.root.position.z);
+  _allyArrowNdc.set(mate.root.position.x, mate.root.position.y + 2.0, mate.root.position.z);
   const camZ = _allyArrowCam.copy(_allyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
   const inFront = camZ < 0;        // camera looks down -z in its own space
   _allyArrowNdc.project(camera);   // -> NDC; x,y in [-1,1] means on screen
@@ -5052,13 +5067,17 @@ function updateAllyArrow() {
   }
 }
 
-// The enemy that ISN'T currently locked, in 2v2 — the live one of the two that
-// the player's reticle is not on. Used to mark the "other" threat (the locked
-// one already wears the green reticle). Returns null in 1v1 or if none qualify.
-function getUnlockedEnemy() {
-  if (state.mode !== '2v2') return null;
+// The enemy that ISN'T currently locked, in 2v2 — the live opponent OF THE
+// VIEWED MECH that the reticle is not on. Used to mark the "other" threat
+// (the locked one already wears the green reticle). Normally the viewer is
+// the player; while spectating it's the watched unit, so the red arrow marks
+// that unit's off-lock opponent (spectating an enemy → a Team-1 mech).
+// state.playerCurrentTarget already mirrors the watched unit's own target.
+// Returns null in 1v1 or if none qualify.
+function getUnlockedEnemy(viewer = state.player) {
+  if (state.mode !== '2v2' || !viewer) return null;
   const locked = state.playerCurrentTarget;
-  for (const e of [state.enemy, state.enemy2]) {
+  for (const e of getEnemiesOf(viewer)) {
     if (e && e.state.hp > 0 && e !== locked) return e;
   }
   return null;
@@ -5071,7 +5090,7 @@ function getUnlockedEnemy() {
 const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
 function updateEnemyArrow() {
-  const foe = getUnlockedEnemy();
+  const foe = getUnlockedEnemy(cameraFocusMech());
   const active = !!foe;
 
   // Sniper-charge glint on the arrow: shows whenever the tracked (unlocked)
