@@ -1529,7 +1529,7 @@ function setupHUD() {
     shootBtn: hud.querySelector('.btn-shoot'),
     ammoCount: hud.querySelector('.btn-shoot .ammo-count'),
     reloadRing: hud.querySelector('.btn-shoot .reload-ring circle'),
-    trioOwn: hud.querySelector('#trio-own'),        // Trio only: remaining-units dots
+    trioOwn: hud.querySelector('#trio-own'),        // remaining-units weapon icons (Trio + Duel)
     trioEnemy: hud.querySelector('#trio-enemy')
   };
 }
@@ -5359,20 +5359,22 @@ function updateHud(now = performance.now()) {
   }
   hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
-  // Trio: remaining-units row under each side's HP bar — one small weapon
-  // render per unit left (current fielded unit first, teammate's after).
-  // Offline reads the local rosters; online reads the snapshot-mirrored
-  // roster fields on each mech.
+  // Remaining-units row under each side's HP bar — one small weapon render
+  // per unit left (current fielded unit first), one line per team member.
+  // Trio shows the whole living roster; Duel shows the single unit while it
+  // lives. Offline reads the local rosters/keys; online reads the
+  // snapshot-mirrored roster fields (or the mech's built unitKey in Duel).
+  // The Shooting Range keeps its HUD icon-free.
   // Perf: the row's DOM is rebuilt ONLY when the unit list changes (deaths/
   // respawns — a handful per match); every other frame is one cached string
   // compare, so this costs no more than the old text dots did.
   if (hudRefs.trioOwn && hudRefs.trioEnemy) {
     let own = null;
     let foe = null;
-    if (!state.online && state.mainMode === 'trio' && state.trioRosters) {
+    if (!state.online && state.mapKey !== 'range') {
       own = [trioRemainingUnitKeys('player')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('ally')] : []);
       foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
-    } else if (state.online && state.player?.state.roster) {
+    } else if (state.online) {
       own = [mechRemainingUnitKeys(state.player)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.ally)] : []);
       foe = [mechRemainingUnitKeys(state.enemy)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.enemy2)] : []);
     }
@@ -7689,15 +7691,22 @@ function mechSlotRemaining(mech) {
 
 // Remaining unit KEYS for a slot, current live unit first — the data behind
 // the HUD's weapon-icon rows. Same accounting as the count helpers above.
+// Duel (no roster): the slot's single unit, shown while it lives.
 function trioRemainingUnitKeys(slotName) {
   const mech = state[slotName];
+  if (!mech) return [];
   const roster = state.trioRosters?.[slotName];
-  if (!mech || !roster) return [];
+  if (!roster) {
+    const keyField = { player: 'playerUnitKey', ally: 'allyUnitKey', enemy: 'enemyUnitKey', enemy2: 'enemy2UnitKey' }[slotName];
+    const k = state[keyField];
+    return (k && mech.state.hp > 0) ? [k] : [];
+  }
   return roster.slice(state.rosterIdx[slotName] + (mech.state.hp <= 0 ? 1 : 0));
 }
 function mechRemainingUnitKeys(mech) {
-  if (!mech || !mech.state.roster) return [];
+  if (!mech) return [];
   const s = mech.state;
+  if (!s.roster) return (mech.unitKey && s.hp > 0) ? [mech.unitKey] : [];
   return s.roster.slice(s.rosterIdx + (s.hp <= 0 ? 1 : 0));
 }
 
