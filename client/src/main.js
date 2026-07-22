@@ -2153,7 +2153,10 @@ function updateProjectileSystem(dt) {
         const maxTurn = THREE.MathUtils.degToRad(turnDeg);
         const wrapped = wrapAngle(desiredAngle - currentAngle);
         const turn = THREE.MathUtils.clamp(wrapped, -maxTurn, maxTurn);
-        const speed = p.vel.length();
+        // HORIZONTAL magnitude, not 3D (mirrors shared projectiles.js): this
+        // rotates in the XZ plane only — full 3D speed here inflated the
+        // horizontal component of pitched shots every frame (flatten bug).
+        const speed = Math.hypot(p.vel.x, p.vel.z);
         const next = currentAngle + turn;
         p.vel.x = Math.cos(next) * speed;
         p.vel.z = Math.sin(next) * speed;
@@ -2262,7 +2265,9 @@ function updateProjectileSystem(dt) {
       const maxTurn = THREE.MathUtils.degToRad(turnDeg);
       const wrapped = wrapAngle(desiredAngle - currentAngle);
       const turn = THREE.MathUtils.clamp(wrapped, -maxTurn, maxTurn);
-      const speed = p.vel.length();
+      // HORIZONTAL magnitude, not 3D (mirrors shared projectiles.js) — see
+      // the volley homing block above for the flatten-bug details.
+      const speed = Math.hypot(p.vel.x, p.vel.z);
       const next = currentAngle + turn;
       p.vel.x = Math.cos(next) * speed;
       p.vel.z = Math.sin(next) * speed;

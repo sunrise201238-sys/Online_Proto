@@ -221,9 +221,14 @@ export function updateLocks(matchState) {
   for (const f of Object.values(matchState.fighters)) {
     const tgt = f.targetId ? matchState.fighters[f.targetId] : null;
     if (!tgt) { f.redLock = false; continue; }
+    // Full 3D distance — mirrors offline updateLocksAndReticle
+    // (root.distanceTo). The old XZ-only check kept red-lock ON for a
+    // high-altitude Aris hovering over her target, which armed the homing
+    // flag offline would never set at that separation.
     const dx = f.pos.x - tgt.pos.x;
+    const dy = f.pos.y - tgt.pos.y;
     const dz = f.pos.z - tgt.pos.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     f.redLock = dist <= f.unit.lockRange;
   }
 }

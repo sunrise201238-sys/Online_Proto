@@ -213,7 +213,12 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       const maxTurn = degToRad(turnDeg);
       const wrapped = wrapAngle(desiredAngle - currentAngle);
       const turn = clamp(wrapped, -maxTurn, maxTurn);
-      const speed = vec3Length(p.vel);
+      // HORIZONTAL magnitude, not 3D: this block rotates the velocity in the
+      // XZ plane only, so pouring the full 3D speed into x/z inflated the
+      // horizontal component of pitched shots every tick — a high-altitude
+      // shot progressively flattened and sped up (even at turn = 0, where
+      // this is supposed to be a no-op). vel.y is untouched either way.
+      const speed = Math.hypot(p.vel.x, p.vel.z);
       const nextAngle = currentAngle + turn;
       p.vel.x = Math.cos(nextAngle) * speed;
       p.vel.z = Math.sin(nextAngle) * speed;
@@ -402,7 +407,8 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
     const maxTurn = degToRad(turnDeg);
     const wrapped = wrapAngle(desiredAngle - currentAngle);
     const turn = clamp(wrapped, -maxTurn, maxTurn);
-    const speed = vec3Length(p.vel);
+    // HORIZONTAL magnitude — see the bullet homing block above.
+    const speed = Math.hypot(p.vel.x, p.vel.z);
     const nextAngle = currentAngle + turn;
     p.vel.x = Math.cos(nextAngle) * speed;
     p.vel.z = Math.sin(nextAngle) * speed;
