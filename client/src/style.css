@@ -15,9 +15,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .enemy2-health { position: absolute; top: 30px; right: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #enemy2-health-fill { width: 100%; height: 100%; background: #ff9d5a; }
 /* Trio: remaining-units dots under each side's HP stack (empty in SD). */
-.trio-count { position: absolute; top: 44px; font-size: 9px; letter-spacing: 2px; color: #e5fbff; opacity: 0.85; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.trio-count { position: absolute; top: 44px; white-space: nowrap; opacity: 0.9; }
 .trio-count-own { left: 16px; }
 .trio-count-enemy { right: 16px; text-align: right; }
+/* Small weapon renders as the remaining-units indicators (one per unit left). */
+.trio-count .trio-weapon-icon { height: 11px; width: auto; margin-right: 4px; vertical-align: middle; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
+.trio-count-enemy .trio-weapon-icon { margin-right: 0; margin-left: 4px; }
 .boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 8px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #boost-fill { height: 100%; width: 100%; background: #90ff63; }
 

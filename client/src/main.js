@@ -5314,6 +5314,22 @@ function updateCamera() {
   camera.updateProjectionMatrix();
 }
 
+// Rebuild a Trio weapon-icon row only when its unit list actually changed —
+// the per-frame path is a single string compare against the cached signature.
+function renderTrioIconRow(el, keys, sigField) {
+  const sig = keys ? keys.join('|') : '';
+  if (hudRefs[sigField] === sig) return;
+  hudRefs[sigField] = sig;
+  el.innerHTML = keys && keys.length
+    ? keys.map((k) => {
+      const u = UNIT_DATA[k];
+      return u
+        ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
+        : '';
+    }).join('')
+    : '';
+}
+
 function updateHud(now = performance.now()) {
   // `now` defaults to performance.now() for offline (where mech.state
   // timestamps are stored in performance.now() reference). Online passes the
@@ -5337,26 +5353,25 @@ function updateHud(now = performance.now()) {
   }
   hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
   hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
-  // Trio: remaining-units dots under each side's HP bar ("just a count").
+  // Trio: remaining-units row under each side's HP bar — one small weapon
+  // render per unit left (current fielded unit first, teammate's after).
   // Offline reads the local rosters; online reads the snapshot-mirrored
   // roster fields on each mech.
+  // Perf: the row's DOM is rebuilt ONLY when the unit list changes (deaths/
+  // respawns — a handful per match); every other frame is one cached string
+  // compare, so this costs no more than the old text dots did.
   if (hudRefs.trioOwn && hudRefs.trioEnemy) {
     let own = null;
     let foe = null;
     if (!state.online && state.mainMode === 'trio' && state.trioRosters) {
-      own = trioSlotRemaining('player') + (state.mode === '2v2' ? trioSlotRemaining('ally') : 0);
-      foe = trioSlotRemaining('enemy') + (state.mode === '2v2' ? trioSlotRemaining('enemy2') : 0);
+      own = trioRemainingUnitKeys('player').concat(state.mode === '2v2' ? trioRemainingUnitKeys('ally') : []);
+      foe = trioRemainingUnitKeys('enemy').concat(state.mode === '2v2' ? trioRemainingUnitKeys('enemy2') : []);
     } else if (state.online && state.player?.state.roster) {
-      own = mechSlotRemaining(state.player) + (state.mode === '2v2' ? mechSlotRemaining(state.ally) : 0);
-      foe = mechSlotRemaining(state.enemy) + (state.mode === '2v2' ? mechSlotRemaining(state.enemy2) : 0);
+      own = mechRemainingUnitKeys(state.player).concat(state.mode === '2v2' ? mechRemainingUnitKeys(state.ally) : []);
+      foe = mechRemainingUnitKeys(state.enemy).concat(state.mode === '2v2' ? mechRemainingUnitKeys(state.enemy2) : []);
     }
-    if (own != null) {
-      hudRefs.trioOwn.textContent = '⬤ '.repeat(own).trim();
-      hudRefs.trioEnemy.textContent = '⬤ '.repeat(foe).trim();
-    } else {
-      hudRefs.trioOwn.textContent = '';
-      hudRefs.trioEnemy.textContent = '';
-    }
+    renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig');
+    renderTrioIconRow(hudRefs.trioEnemy, foe, 'trioEnemySig');
   }
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
@@ -7664,6 +7679,20 @@ function mechSlotRemaining(mech) {
   const s = mech.state;
   if (!s.roster) return s.hp > 0 ? 1 : 0;
   return Math.max(0, s.roster.length - s.rosterIdx - (s.hp <= 0 ? 1 : 0));
+}
+
+// Remaining unit KEYS for a slot, current live unit first — the data behind
+// the HUD's weapon-icon rows. Same accounting as the count helpers above.
+function trioRemainingUnitKeys(slotName) {
+  const mech = state[slotName];
+  const roster = state.trioRosters?.[slotName];
+  if (!mech || !roster) return [];
+  return roster.slice(state.rosterIdx[slotName] + (mech.state.hp <= 0 ? 1 : 0));
+}
+function mechRemainingUnitKeys(mech) {
+  if (!mech || !mech.state.roster) return [];
+  const s = mech.state;
+  return s.roster.slice(s.rosterIdx + (s.hp <= 0 ? 1 : 0));
 }
 
 // Advance dead slots to their next roster unit (no-op once exhausted).
