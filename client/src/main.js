@@ -8227,7 +8227,7 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xeaf2ff);
     key.intensity = 1.4;
-  } else if (mapKey === 'factory' || mapKey === 'factory2') {
+  } else if (mapKey === 'factory') {
     scene.background.setHex(0x141821);
     scene.fog.color.setHex(0x14181f);
     scene.fog.near = 40;
@@ -8256,11 +8256,13 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
-  } else if (mapKey === 'flashpoint') {
+  } else if (mapKey === 'flashpoint' || mapKey === 'factory2') {
     // Industrial CQB arena, well-lit for readability. Cool steel-blue base
     // ambient with a warm sodium key light over the concrete; fog kept
     // mid-range so the room dividers still read as silhouettes at the back
-    // of the hall without losing target visibility.
+    // of the hall without losing target visibility. Factory 2 shares this
+    // tone (user call 2026-07-18); classic Factory keeps the darker night
+    // palette above.
     scene.background.setHex(0x2a3140);
     scene.fog.color.setHex(0x2c3340);
     scene.fog.near = 45;
@@ -11241,6 +11243,9 @@ function buildAirportArena() {
   seatRow(-70, 57, 24);
 
   // ===== Overhead signage gantries (visual only, high above fire lanes) =====
+  // Occlusion-fade like the Streets bridge: the grey beam AND its blue sign
+  // panels go translucent whenever they sit between the camera and the
+  // focused unit or a living enemy — never just from camera proximity.
   for (const gx of [-40, 40]) {
     const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 150), mullionMat.clone());
     beam.position.set(gx, 14.5, 0);
@@ -11248,7 +11253,8 @@ function buildAirportArena() {
     registerWallFade(beam, {
       minX: gx - 0.75, maxX: gx + 0.75,
       minY: 13.75, maxY: 15.25,
-      minZ: -75, maxZ: 75
+      minZ: -75, maxZ: 75,
+      occlude: true, occludeEnemy: true
     });
     for (const sz of [-55, 0, 55]) {
       const panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 11), signBlue.clone());
@@ -11257,7 +11263,8 @@ function buildAirportArena() {
       registerWallFade(panel, {
         minX: gx - 0.2, maxX: gx + 0.2,
         minY: 10.3, maxY: 13.7,
-        minZ: sz - 5.5, maxZ: sz + 5.5
+        minZ: sz - 5.5, maxZ: sz + 5.5,
+        occlude: true, occludeEnemy: true
       });
     }
   }
