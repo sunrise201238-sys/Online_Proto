@@ -371,12 +371,13 @@ export function tickBot(matchState, botId, now) {
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
 
   // The dodge comes due: one i-frame step, then a 150 ms sprint in the same
-  // direction (the guess/schedule is spent either way). Reserve-gated: while
-  // suppressed below the reserve the dodge stays unaffordable (tryStartStep
-  // still enforces the raw step cost underneath, human-identical).
+  // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
+  // (like Defense): gates at the raw step cost only — tryStartStep enforces
+  // STEP_BOOST_COST underneath, human-identical — so even a suppressed bot
+  // may spend its last savings to survive a sniper shot.
   if (me.botGlintStepAt != null && now >= me.botGlintStepAt) {
     me.botGlintStepAt = null;
-    if (now > me.stepUntil && me.boost >= BOT_BOOST_RESERVE) {
+    if (now > me.stepUntil) {
       // Continue the committed Defense escape line if one is active so the
       // dodge reads as part of the same evade; otherwise pick a random side.
       let sdx, sdz;

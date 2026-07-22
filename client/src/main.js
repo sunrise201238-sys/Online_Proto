@@ -3646,10 +3646,10 @@ function updateEnemy(now) {
     if (
       now > (eState.stepUntil || 0)
       && now >= (eState.stepCooldownUntil || 0)
-      // Reserve-gated (falls back to the raw step cost if the reserve is
-      // ever tuned below it): while suppressed under the reserve, the dodge
-      // stays unaffordable — snipers finish pressured targets.
-      && eState.boost >= Math.max(BOT_BOOST_RESERVE, STEP_BOOST_COST)
+      // SURVIVAL EXEMPTION (like Defense): the glint dodge gates at the raw
+      // step cost, not the strategic reserve — even a suppressed bot may
+      // spend its last savings to survive a sniper shot.
+      && eState.boost >= STEP_BOOST_COST
     ) {
       // Continue the committed Defense escape line if one is active so the
       // dodge reads as part of the same evade; otherwise pick a random side.
