@@ -1398,8 +1398,8 @@ function setupHUD() {
   hud.innerHTML = `
     <div class="health"><div id="health-fill"></div></div>
     <div class="enemy-health"><div id="enemy-health-fill"></div></div>
-    <div class="trio-count trio-count-own" id="trio-own"></div>
-    <div class="trio-count trio-count-enemy" id="trio-enemy"></div>
+    <div class="trio-count trio-count-own${state.mode === '2v2' ? ' trio-count-2v2' : ''}" id="trio-own"></div>
+    <div class="trio-count trio-count-enemy${state.mode === '2v2' ? ' trio-count-2v2' : ''}" id="trio-enemy"></div>
     ${teamBarsHtml}
     <div class="boost"><div id="boost-fill"></div></div>
     <div class="joy" id="joy"><div class="stick"></div></div>
@@ -5314,19 +5314,25 @@ function updateCamera() {
   camera.updateProjectionMatrix();
 }
 
-// Rebuild a Trio weapon-icon row only when its unit list actually changed —
+// Rebuild a Trio weapon-icon block only when its unit lists actually changed —
 // the per-frame path is a single string compare against the cached signature.
-function renderTrioIconRow(el, keys, sigField) {
-  const sig = keys ? keys.join('|') : '';
+// `lines` is one key-array per team member (own side: player then ally;
+// enemy side: enemy then enemy2) — each renders as its own row so teammates'
+// weapons never share a line.
+function renderTrioIconRow(el, lines, sigField) {
+  const sig = lines ? lines.map((l) => l.join('|')).join('/') : '';
   if (hudRefs[sigField] === sig) return;
   hudRefs[sigField] = sig;
-  el.innerHTML = keys && keys.length
-    ? keys.map((k) => {
-      const u = UNIT_DATA[k];
-      return u
-        ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
-        : '';
-    }).join('')
+  el.innerHTML = lines
+    ? lines
+      .filter((l) => l.length)
+      .map((l) => `<div class="trio-line">${l.map((k) => {
+        const u = UNIT_DATA[k];
+        return u
+          ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
+          : '';
+      }).join('')}</div>`)
+      .join('')
     : '';
 }
 
@@ -5364,11 +5370,11 @@ function updateHud(now = performance.now()) {
     let own = null;
     let foe = null;
     if (!state.online && state.mainMode === 'trio' && state.trioRosters) {
-      own = trioRemainingUnitKeys('player').concat(state.mode === '2v2' ? trioRemainingUnitKeys('ally') : []);
-      foe = trioRemainingUnitKeys('enemy').concat(state.mode === '2v2' ? trioRemainingUnitKeys('enemy2') : []);
+      own = [trioRemainingUnitKeys('player')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('ally')] : []);
+      foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
     } else if (state.online && state.player?.state.roster) {
-      own = mechRemainingUnitKeys(state.player).concat(state.mode === '2v2' ? mechRemainingUnitKeys(state.ally) : []);
-      foe = mechRemainingUnitKeys(state.enemy).concat(state.mode === '2v2' ? mechRemainingUnitKeys(state.enemy2) : []);
+      own = [mechRemainingUnitKeys(state.player)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.ally)] : []);
+      foe = [mechRemainingUnitKeys(state.enemy)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.enemy2)] : []);
     }
     renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig');
     renderTrioIconRow(hudRefs.trioEnemy, foe, 'trioEnemySig');

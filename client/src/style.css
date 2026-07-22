@@ -15,10 +15,15 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .enemy2-health { position: absolute; top: 30px; right: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #enemy2-health-fill { width: 100%; height: 100%; background: #ff9d5a; }
 /* Trio: remaining-units dots under each side's HP stack (empty in SD). */
-.trio-count { position: absolute; top: 44px; white-space: nowrap; opacity: 0.9; }
+/* Remaining-units weapon icons: tucked right under the HP bars. 1v1 — the
+   single bar ends at y=24, icons start at 27; 2v2 — the ally/enemy2 bars end
+   at y=40, so the block drops to 43 to stay clear of them. One .trio-line per
+   team member (player's row above the ally's; enemy side mirrored). */
+.trio-count { position: absolute; top: 27px; white-space: nowrap; opacity: 0.9; }
+.trio-count.trio-count-2v2 { top: 43px; }
 .trio-count-own { left: 16px; }
 .trio-count-enemy { right: 16px; text-align: right; }
-/* Small weapon renders as the remaining-units indicators (one per unit left). */
+.trio-count .trio-line { height: 13px; line-height: 13px; margin-bottom: 2px; }
 .trio-count .trio-weapon-icon { height: 11px; width: auto; margin-right: 4px; vertical-align: middle; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
 .trio-count-enemy .trio-weapon-icon { margin-right: 0; margin-left: 4px; }
 .boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 8px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
