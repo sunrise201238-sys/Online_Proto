@@ -8033,6 +8033,14 @@ function updateWallFade() {
       const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
       blocking = d < 14;
     }
+    // Fade leader (Airport gantry signs): a mesh linked to a leader also
+    // fades whenever the leader is blocking, so attachments never stay
+    // solid while their carrier goes ghost. Leaders are registered before
+    // their followers, so this frame's leader result is already stored.
+    mesh.userData.fadeBlocking = blocking;
+    if (!blocking && mesh.userData.fadeLeader) {
+      blocking = !!mesh.userData.fadeLeader.userData.fadeBlocking;
+    }
     const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
     // Depth-toggled groups (Station's trains): write depth while solid
@@ -8256,13 +8264,11 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
-  } else if (mapKey === 'flashpoint' || mapKey === 'factory2') {
+  } else if (mapKey === 'flashpoint') {
     // Industrial CQB arena, well-lit for readability. Cool steel-blue base
     // ambient with a warm sodium key light over the concrete; fog kept
     // mid-range so the room dividers still read as silhouettes at the back
-    // of the hall without losing target visibility. Factory 2 shares this
-    // tone (user call 2026-07-18); classic Factory keeps the darker night
-    // palette above.
+    // of the hall without losing target visibility.
     scene.background.setHex(0x2a3140);
     scene.fog.color.setHex(0x2c3340);
     scene.fog.near = 45;
@@ -8271,9 +8277,11 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xfff0d0);
     key.intensity = 1.3;
-  } else if (mapKey === 'airport') {
+  } else if (mapKey === 'airport' || mapKey === 'factory2') {
     // Bright daylight departure hall: white terminal light, pale sky seen
     // through the glass curtain walls, long fog range for the big sightlines.
+    // Factory 2 shares this daylight tone (user call 2026-07-18, replacing
+    // its brief Flashpoint palette); classic Factory keeps the night tone.
     scene.background.setHex(0x9db8cc);
     scene.fog.color.setHex(0xaebfd0);
     scene.fog.near = 80;
@@ -11266,6 +11274,10 @@ function buildAirportArena() {
         minZ: sz - 5.5, maxZ: sz + 5.5,
         occlude: true, occludeEnemy: true
       });
+      // Signs ride their beam: whenever the beam fades (its 150-long box is
+      // hit in plenty of geometries a single panel's small box isn't), the
+      // panels fade with it — never a ghost bar carrying solid signs.
+      panel.userData.fadeLeader = beam;
     }
   }
 
