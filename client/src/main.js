@@ -811,8 +811,15 @@ const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
 const SPAWN_IMMUNITY_MS = 3000;
 
 // --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
-const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;
 const BOT_SPRINT_MIN_BOOST = 8;
+// Strategic reserve: bots never VOLUNTARILY spend below this — one knob
+// gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
+// cruise/jump funding, the anti-glint dodge). The sole exception is
+// Defense: escaping live fire may burn down to BOT_SPRINT_MIN_BOOST.
+// This is purely a bot DECISION threshold — the stamina MECHANICS
+// (costs, drain, regen, caps, empty-recovery) stay identical to the
+// human player's.
+const BOT_BOOST_RESERVE = 60;
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -3503,7 +3510,9 @@ function botStartJump(now) {
   const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
   if (!state.enemy.grounded || eState.airborne) return false;
   if (now < eState.jumpCooldownUntil) return false;
-  if (eState.boost < jumpBoostCost + BOT_SPRINT_MIN_BOOST) return false;
+  // Jump funding respects the strategic reserve (falls back to cost + floor
+  // if the reserve is ever tuned below that).
+  if (eState.boost < Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST)) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
   eState.refillPausedUntil = now + 500;
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -3637,7 +3646,10 @@ function updateEnemy(now) {
     if (
       now > (eState.stepUntil || 0)
       && now >= (eState.stepCooldownUntil || 0)
-      && eState.boost >= STEP_BOOST_COST
+      // Reserve-gated (falls back to the raw step cost if the reserve is
+      // ever tuned below it): while suppressed under the reserve, the dodge
+      // stays unaffordable — snipers finish pressured targets.
+      && eState.boost >= Math.max(BOT_BOOST_RESERVE, STEP_BOOST_COST)
     ) {
       // Continue the committed Defense escape line if one is active so the
       // dodge reads as part of the same evade; otherwise pick a random side.
@@ -4324,11 +4336,12 @@ function updateEnemy(now) {
     let tz = dir.z * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    // Occasional sprint with hysteresis. A boost reserve keeps at least one
-    // good evade in the tank — Defense should never find the gauge empty.
-    const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
-    if (eState.boost >= BOT_SPRINT_READY_BOOST) eState.botPursueSprinting = true;
-    if (eState.boost <= reserveBoost) eState.botPursueSprinting = false;
+    // Sprint down to the strategic reserve, no further. Both hysteresis
+    // bounds sit on the one knob (band collapsed by design) — the dispatch
+    // floor produces the same duty-cycle behavior either way, and the
+    // reserve keeps a full dodge + margin in the tank at all times.
+    if (eState.boost >= BOT_BOOST_RESERVE) eState.botPursueSprinting = true;
+    if (eState.boost <= BOT_BOOST_RESERVE) eState.botPursueSprinting = false;
     wantSprint = !!eState.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && state.enemy.grounded && !eState.airborne) {
@@ -4443,8 +4456,11 @@ function updateEnemy(now) {
       for (let k = nav.idx; k < nav.path.length; k += 1) {
         if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
       }
-      const jumpCost = (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10;
-      wantSprint = !(jumpAhead && eState.boost < jumpCost);
+      // Bank target: the strategic reserve already exceeds jump cost + pad
+      // at current tuning; the Math.max keeps the old jump-funding guarantee
+      // if the reserve is ever tuned below it.
+      const jumpBank = Math.max(BOT_BOOST_RESERVE, (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
+      wantSprint = !(jumpAhead && eState.boost < jumpBank);
     } else {
       // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
       // pull toward the player, wall-follow corner turns — the pre-
@@ -4634,7 +4650,10 @@ function updateEnemy(now) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
-  const botCanSprint = eState.boost >= BOT_SPRINT_MIN_BOOST && now >= eState.emptyRecoverUntil;
+  // Defense (escaping live fire) may spend down to the hard floor; every
+  // other state stops at the strategic reserve.
+  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST : BOT_BOOST_RESERVE;
+  const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
   if (jumpThisTick) {
     eState.botAirSteerX = jumpDirX;

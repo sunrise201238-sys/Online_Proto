@@ -19,12 +19,16 @@ import { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
 import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS } from './constants.js';
 
-// --- Bot tactical-sprint tunables ---
-// Hysteresis: bot only initiates a new sprint burst once boost has refilled
-// to BOT_SPRINT_READY_BOOST. This prevents the stutter-step that happens when
-// boost barely crosses 0 and is immediately spent again.
-const BOT_SPRINT_READY_BOOST = STEP_BOOST_COST;            // 48
+// --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
+// Strategic reserve: bots never VOLUNTARILY spend below this — one knob
+// gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
+// cruise/jump funding, the anti-glint dodge). The sole exception is
+// Defense: escaping live fire may burn down to BOT_SPRINT_MIN_BOOST.
+// This is purely a bot DECISION threshold — the stamina MECHANICS
+// (costs, drain, regen, caps, empty-recovery) stay identical to the
+// human player's.
+const BOT_BOOST_RESERVE = 60;
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -292,6 +296,17 @@ export function pickBotTargetId(matchState, fighter) {
   return bestId;
 }
 
+// Bot jump funding: the shared tryStartJump gates at the raw jump cost
+// (human mechanics — untouched); bots additionally respect the strategic
+// reserve so a hop never leaves them without an emergency dodge. This also
+// closes an old offline/online gap — offline botStartJump always carried a
+// +BOT_SPRINT_MIN_BOOST margin that the online path lacked.
+function botTryJump(me, now) {
+  const funded = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
+  if (me.boost < funded) return false;
+  return tryStartJump(me, now);
+}
+
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
@@ -356,10 +371,12 @@ export function tickBot(matchState, botId, now) {
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
 
   // The dodge comes due: one i-frame step, then a 150 ms sprint in the same
-  // direction (the guess/schedule is spent either way).
+  // direction (the guess/schedule is spent either way). Reserve-gated: while
+  // suppressed below the reserve the dodge stays unaffordable (tryStartStep
+  // still enforces the raw step cost underneath, human-identical).
   if (me.botGlintStepAt != null && now >= me.botGlintStepAt) {
     me.botGlintStepAt = null;
-    if (now > me.stepUntil) {
+    if (now > me.stepUntil && me.boost >= BOT_BOOST_RESERVE) {
       // Continue the committed Defense escape line if one is active so the
       // dodge reads as part of the same evade; otherwise pick a random side.
       let sdx, sdz;
@@ -1009,19 +1026,22 @@ export function tickBot(matchState, botId, now) {
     let tz = dirZ * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    const reserveBoost = BOT_SPRINT_MIN_BOOST + 25;
-    if (me.boost >= BOT_SPRINT_READY_BOOST) me.botPursueSprinting = true;
-    if (me.boost <= reserveBoost) me.botPursueSprinting = false;
+    // Sprint down to the strategic reserve, no further. Both hysteresis
+    // bounds sit on the one knob (band collapsed by design) — the dispatch
+    // floor produces the same duty-cycle behavior either way, and the
+    // reserve keeps a full dodge + margin in the tank at all times.
+    if (me.boost >= BOT_BOOST_RESERVE) me.botPursueSprinting = true;
+    if (me.boost <= BOT_BOOST_RESERVE) me.botPursueSprinting = false;
     wantSprint = !!me.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && me.grounded && !me.airborne) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
-        if (tryStartJump(me, now)) jumpThisTick = true;
+        if (botTryJump(me, now)) jumpThisTick = true;
       } else if (onHighGround) {
         const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
         if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
           jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (tryStartJump(me, now)) jumpThisTick = true;
+          if (botTryJump(me, now)) jumpThisTick = true;
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
@@ -1031,7 +1051,7 @@ export function tickBot(matchState, botId, now) {
         const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (tryStartJump(me, now)) jumpThisTick = true;
+          if (botTryJump(me, now)) jumpThisTick = true;
         }
       }
     }
@@ -1101,7 +1121,7 @@ export function tickBot(matchState, botId, now) {
         const jln = Math.hypot(jdx, jdz) || 1;
         jumpDirX = jdx / jln;
         jumpDirZ = jdz / jln;
-        if (tryStartJump(me, now)) jumpThisTick = true;
+        if (botTryJump(me, now)) jumpThisTick = true;
       }
       let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
       const wl = Math.hypot(tx, tz) || 1;
@@ -1118,8 +1138,11 @@ export function tickBot(matchState, botId, now) {
       for (let k = nav.idx; k < nav.path.length; k += 1) {
         if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
       }
-      const jumpCost = (me.unit?.jumpBoostCost ?? 48) + 10;
-      wantSprint = !(jumpAhead && me.boost < jumpCost);
+      // Bank target: the strategic reserve already exceeds jump cost + pad
+      // at current tuning; the Math.max keeps the old jump-funding guarantee
+      // if the reserve is ever tuned below it.
+      const jumpBank = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + 10);
+      wantSprint = !(jumpAhead && me.boost < jumpBank);
     } else {
       // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
       // pull toward the player. The pull FADES OUT near walls so it can't
@@ -1152,7 +1175,7 @@ export function tickBot(matchState, botId, now) {
       const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (tryStartJump(me, now)) jumpThisTick = true;
+        if (botTryJump(me, now)) jumpThisTick = true;
       }
     }
   } else if (botS === 'engage') {
@@ -1186,7 +1209,7 @@ export function tickBot(matchState, botId, now) {
       const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (tryStartJump(me, now)) jumpThisTick = true;
+        if (botTryJump(me, now)) jumpThisTick = true;
       }
     }
 
@@ -1246,7 +1269,7 @@ export function tickBot(matchState, botId, now) {
               && ledge.toX * (me.botDefenseDirX ?? sideX) + ledge.toZ * (me.botDefenseDirZ ?? sideZ) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (tryStartJump(me, now)) {
+            if (botTryJump(me, now)) {
               jumpThisTick = true;
               vaulted = true;
               me.botDefenseStuckTicks = 0;
@@ -1297,7 +1320,10 @@ export function tickBot(matchState, botId, now) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
-  const botCanSprint = me.boost >= BOT_SPRINT_MIN_BOOST && now >= me.emptyRecoverUntil;
+  // Defense (escaping live fire) may spend down to the hard floor; every
+  // other state stops at the strategic reserve.
+  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST : BOT_BOOST_RESERVE;
+  const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
   if (jumpThisTick) {
     me.botAirSteerX = jumpDirX;
