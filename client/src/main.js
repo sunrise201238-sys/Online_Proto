@@ -8215,8 +8215,9 @@ function applyMapAmbience(mapKey) {
   ambient.intensity = 0.7;
   key.color.setHex(0xe5eeff);
   key.intensity = 1.15;
-  if (mapKey === 'square' || mapKey === 'arena2') {
-    // Overcast daylight palette — shared by Square and Streets.
+  if (mapKey === 'square') {
+    // Overcast daylight palette — Square only (Streets moved to the bright
+    // Airport daylight below, user call 2026-07-18).
     scene.background.setHex(0x6e8ba3);
     scene.fog.color.setHex(0x8ea3b6);
     scene.fog.near = 70;
@@ -8277,11 +8278,12 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xfff0d0);
     key.intensity = 1.3;
-  } else if (mapKey === 'airport' || mapKey === 'factory2') {
+  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2') {
     // Bright daylight departure hall: white terminal light, pale sky seen
     // through the glass curtain walls, long fog range for the big sightlines.
-    // Factory 2 shares this daylight tone (user call 2026-07-18, replacing
-    // its brief Flashpoint palette); classic Factory keeps the night tone.
+    // Factory 2 and Streets share this daylight tone (user calls 2026-07-18);
+    // classic Factory keeps the night tone, Square keeps the overcast one.
+    // Bullet-trail colors are deliberately untouched by these tone moves.
     scene.background.setHex(0x9db8cc);
     scene.fog.color.setHex(0xaebfd0);
     scene.fog.near = 80;
