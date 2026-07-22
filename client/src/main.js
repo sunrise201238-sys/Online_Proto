@@ -525,6 +525,13 @@ const state = {
   matchStartAt: 0
 };
 state.dummyMode = false;
+// Spectator mode (offline map-picker toggle, like Dummy): a BOT takes over
+// the player's slot and the human just watches. spectatorMode is the sticky
+// checkbox; spectatorActive is the per-match flag (off on the Shooting
+// Range and always off online); spectateSlot is the slot being watched.
+state.spectatorMode = false;
+state.spectatorActive = false;
+state.spectateSlot = null;
 
 // ---- 2v2 team helpers ----
 // All four fighters carry a `team` field on their .state object: 'A' for the
@@ -649,6 +656,22 @@ function cyclePlayerTarget() {
   }
   // Offline: mutate local state directly.
   if (!state.player) return;
+  // Spectator mode: TARGET cycles the SPECTATED unit instead — through every
+  // slot that's still in the match, both teams included.
+  if (state.spectatorActive) {
+    const order = state.mode === '2v2' ? ['player', 'ally', 'enemy', 'enemy2'] : ['player', 'enemy'];
+    const watchable = order.filter((s) => {
+      const m = state[s];
+      if (!m) return false;
+      if (m.state.hp > 0) return true;
+      // Trio: a dead slot with roster left respawns within a frame.
+      return !!(state.mainMode === 'trio' && state.trioRosters && trioSlotRemaining(s) > 0);
+    });
+    if (!watchable.length) return;
+    const idx = watchable.indexOf(state.spectateSlot);
+    state.spectateSlot = watchable[(idx + 1) % watchable.length];
+    return;
+  }
   // Spectator (dead player, camera on the ally): the reticle mirrors the
   // spectated ally's own target each frame — the TARGET button is inert.
   if (state.player.state.hp <= 0) return;
@@ -1430,7 +1453,8 @@ function setupHUD() {
   });
   // 2v2 only: target switch button above SHOOT. Cycles state.playerCurrentTarget
   // between the live enemies. Single-tap action — no held state.
-  if (state.mode === '2v2' || state.mapKey === 'range') {
+  // Spectator mode needs TARGET even in 1v1 — it cycles the spectated unit.
+  if (state.mode === '2v2' || state.mapKey === 'range' || state.spectatorActive) {
     const tb = document.createElement('button');
     tb.dataset.k = 'target';
     tb.className = 'btn-target';
@@ -5234,27 +5258,54 @@ function updateMechXRayVisibility() {
 // spectator mode (player dead, ally up). Per-map "see your own unit" visuals
 // (wall fade, X-ray silhouette) key off this so a spectator inherits them.
 function cameraFocusMech() {
+  if (state.spectatorActive) return spectateMech();
   const playerAlive = (state.player?.state.hp ?? 0) > 0;
   if (playerAlive || !state.ally) return state.player;
   return (state.ally.state.hp > 0) ? state.ally : state.player;
 }
 
-// Swap a mech's billboard to the own-unit art set (rear poses + through-wall
-// X-ray silhouette). Used when the camera starts spectating an ally so the
-// followed unit reads exactly like your own did. Old materials are disposed;
-// textures stay (they're cached and shared).
-function rebuildMechSpriteAsOwn(mech) {
+// Swap a mech's billboard between the own-unit art set (rear poses +
+// through-wall X-ray silhouette) and the standard front-facing set. No-op
+// when already in the requested view. Old materials are disposed; textures
+// stay (they're cached and shared). Spectator mode flips these both ways as
+// the watched unit changes; the ally-spectate path only ever goes to `own`.
+function setMechSpriteView(mech, own) {
+  if (!mech || !!mech.isOwnSprite === !!own) return;
   const old = mech.sprite;
   if (old) {
     mech.root.remove(old);
     old.userData?.stateRig?.shadowMat?.dispose?.();
     old.material?.dispose?.();
   }
-  const sprite = makeUnitSprite(mech.unit, true);
+  const sprite = makeUnitSprite(mech.unit, own);
   mech.root.add(sprite);
   mech.sprite = sprite;
   mech.torso = sprite;
-  mech.isOwnSprite = true;
+  mech.isOwnSprite = own;
+}
+
+function rebuildMechSpriteAsOwn(mech) {
+  setMechSpriteView(mech, true);
+}
+
+// Spectator mode: resolve the currently watched mech. Auto-advances to any
+// live slot when the watched one is out for good (its Trio respawn window
+// counts as still-in — the slot ref swaps to the fresh mech automatically).
+function spectateMech() {
+  const current = state[state.spectateSlot];
+  if (current && (current.state.hp > 0
+    || !!(state.mainMode === 'trio' && state.trioRosters && trioSlotRemaining(state.spectateSlot) > 0))) {
+    return current;
+  }
+  const order = state.mode === '2v2' ? ['player', 'ally', 'enemy', 'enemy2'] : ['player', 'enemy'];
+  for (const s of order) {
+    const m = state[s];
+    if (m && m.state.hp > 0) {
+      state.spectateSlot = s;
+      return m;
+    }
+  }
+  return current ?? state.player;
 }
 
 function updateCamera() {
@@ -5264,11 +5315,16 @@ function updateCamera() {
   // to the ally (spectator mode) and follows whatever enemy the ally is
   // currently fighting (its closest live opponent).
   const cam = cameraFocusMech();
-  // Spectated unit gets the own-unit visual kit (rear art + X-ray) once —
-  // but only when the player is out for GOOD (in Trio a dead player may be
-  // one respawn tick away from returning; don't restyle the ally for that
-  // one-frame window).
-  if (cam && cam !== state.player && !cam.isOwnSprite) {
+  if (state.spectatorActive) {
+    // Spectator: exactly the watched unit wears the own-unit kit (rear art +
+    // X-ray); everyone else shows front art — flipping live as TARGET cycles.
+    // setMechSpriteView is a no-op on matching views, so this is per-frame safe.
+    getAllFighters().forEach((m) => setMechSpriteView(m, m === cam));
+  } else if (cam && cam !== state.player && !cam.isOwnSprite) {
+    // Spectated unit gets the own-unit visual kit (rear art + X-ray) once —
+    // but only when the player is out for GOOD (in Trio a dead player may be
+    // one respawn tick away from returning; don't restyle the ally for that
+    // one-frame window).
     const playerOut = state.online
       ? mechSlotRemaining(state.player) <= 0            // Trio roster spent, or Duel death
       : ((state.mainMode === 'trio' && state.trioRosters)
@@ -5277,7 +5333,7 @@ function updateCamera() {
     if (playerOut) rebuildMechSpriteAsOwn(cam);
   }
   let tgt;
-  if (cam === state.player) {
+  if (cam === state.player && !state.spectatorActive) {
     tgt = state.playerCurrentTarget ?? state.enemy;
   } else {
     // Spectating: follow the ALLY'S actual target — offline its bot-AI lock,
@@ -5589,6 +5645,10 @@ function startMatch() {
   state.rosterIdx = { player: 0, ally: 0, enemy: 0, enemy2: 0 };
   const trioActive = state.mainMode === 'trio' && state.mapKey !== 'range' && state.trioRosters;
   if (!trioActive) state.trioRosters = null;
+  // Spectator: a bot plays the player's slot; the human watches and cycles
+  // the spectated unit with TARGET. Off on the Shooting Range (solo practice).
+  state.spectatorActive = !!(state.spectatorMode && state.mapKey !== 'range');
+  state.spectateSlot = state.spectatorActive ? 'player' : null;
   state.spawnPoints = {};
   for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
     const m = state[s];
@@ -6658,6 +6718,10 @@ function ensureOnlineMatchSetup(snap) {
 
   // Tell the HUD layout which mode it is BEFORE setupHUD reads state.mode.
   state.mode = mode;
+  // Spectator mode is an offline-only toggle — never let a leftover flag
+  // from an offline spectator match reroute the online camera/reticle.
+  state.spectatorActive = false;
+  state.spectateSlot = null;
 
   // Build new mechs. Same colour palette as offline so it reads consistently.
   // mech.unitKey tags what the mech was built as — runOnlineMatchFrame
@@ -7348,9 +7412,13 @@ function showMapPicker() {
   const mapMenu = document.createElement('div');
   mapMenu.className = 'menu';
   mapMenu.innerHTML = `<h2>Select Map</h2>
-    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 14px;color:#d8fcff;">
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 6px;color:#d8fcff;">
       <input type="checkbox" id="dummy-mode-toggle" />
       Dummy (BOT projectile damage = 0)
+    </label>
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 14px;color:#d8fcff;">
+      <input type="checkbox" id="spectator-mode-toggle" />
+      Spectator (BOT plays your unit)
     </label>
     ${mapGridHTML(mapEntries)}`;
   app.appendChild(mapMenu);
@@ -7358,6 +7426,11 @@ function showMapPicker() {
   dummyModeToggle.checked = !!state.dummyMode;
   dummyModeToggle.addEventListener('change', () => {
     state.dummyMode = dummyModeToggle.checked;
+  });
+  const spectatorModeToggle = mapMenu.querySelector('#spectator-mode-toggle');
+  spectatorModeToggle.checked = !!state.spectatorMode;
+  spectatorModeToggle.addEventListener('change', () => {
+    state.spectatorMode = spectatorModeToggle.checked;
   });
 
   wireMapGrid(mapMenu, (key) => {
@@ -7735,10 +7808,15 @@ function showEndMenu(win) {
   hideEnemyEdgeArrow();
   clearMenus();
 
+  // Spectator: the human wasn't playing — announce the winning side instead
+  // of a personal verdict. Team 1 = the player's picked side (left/blue).
+  const title = state.spectatorActive
+    ? (win ? 'TEAM 1 WINS' : 'TEAM 2 WINS')
+    : (win ? 'YOU WIN' : 'YOU LOSE');
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `
-    <h2>${win ? 'YOU WIN' : 'YOU LOSE'}</h2>
+    <h2>${title}</h2>
     <button id="rematch">Rematch</button>
     <button id="select">Select Unit</button>
   `;
@@ -11662,10 +11740,22 @@ function animate() {
       syncKeyboardMovement();
       const playerSprintHeld = !!(input.boostHeld || input.sprintLocked);
       getAllFighters().forEach((m) => {
+        // Spectator: the player-slot unit is a bot — the human's sprint key
+        // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickSniperCharge(m, now, m === state.player ? playerSprintHeld : false);
+        tickSniperCharge(m, now, (m === state.player && !state.spectatorActive) ? playerSprintHeld : false);
       });
-      updatePlayer(now);
+      if (state.spectatorActive) {
+        // Spectator: a BOT drives the player's slot with the same driver and
+        // LoS-aware target pick as every other bot. Combat inputs are inert —
+        // clear the one-shot taps so they can't leak into the next match.
+        input.shootTap = false;
+        input.stepTap = false;
+        input.jump = false;
+        runBotAIForMech(state.player, pickBotTargetOf(state.player), now);
+      } else {
+        updatePlayer(now);
+      }
       if (state.mode === '2v2') {
         runBotAIForMech(state.enemy, pickBotTargetOf(state.enemy), now);
         runBotAIForMech(state.ally, pickBotTargetOf(state.ally), now);
