@@ -2080,13 +2080,13 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
 
 function getProjectileDamage(projectile) {
   // Dummy mode zeroes damage from EVERY bot — both enemies AND the player's
-  // ally bot. Only the player's own bullets do damage. Lets the player
-  // freely test/observe without anyone else being able to land hits.
-  if (state.dummyMode
-      && projectile.owner !== state.player
-      && (projectile.owner === state.enemy
-          || projectile.owner === state.enemy2
-          || projectile.owner === state.ally)) return 0;
+  // ally bot; only the player's own bullets do damage. In SPECTATOR mode the
+  // player's slot is a bot too, so dummy zeroes EVERYONE (pure exhibition —
+  // nobody can land a hit). The owner is compared against the current player
+  // slot only: the old slot-identity list went stale across Trio respawns
+  // (in-flight bullets from a replaced mech matched no slot) and let bot
+  // damage leak through.
+  if (state.dummyMode && (state.spectatorActive || projectile.owner !== state.player)) return 0;
   return projectile.damage;
 }
 
@@ -2567,7 +2567,7 @@ function updateBeamDamage(now) {
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       let dmg = b.damage;
-      if (state.dummyMode && b.owner !== state.player) dmg = 0;  // dummy: only player damages
+      if (state.dummyMode && (state.spectatorActive || b.owner !== state.player)) dmg = 0;  // dummy: only player damages (spectator: nobody)
       st.hp = Math.max(0, st.hp - dmg);
       if (now >= st.hitStunUntil || b.hitStunScale < st.hitStunScale) {
         st.hitStunScale = b.hitStunScale;
@@ -2816,7 +2816,7 @@ function updateChargedBeams(now, dt) {
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.
       let dmg = u.beam?.chargedDamage ?? u.damage;
-      if (state.dummyMode && m !== state.player) dmg = 0;
+      if (state.dummyMode && (state.spectatorActive || m !== state.player)) dmg = 0;   // dummy: only player damages (spectator: nobody)
       tst.hp = Math.max(0, tst.hp - dmg);
       if (now >= tst.hitStunUntil || (u.stun?.moveScale ?? 0.25) < tst.hitStunScale) {
         tst.hitStunScale = u.stun?.moveScale ?? 0.25;
