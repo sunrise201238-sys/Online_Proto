@@ -5407,7 +5407,6 @@ function updateHud(now = performance.now()) {
   // higher-HP / higher-boost character's bar still reads full at full state.
   const playerHpMax = state.player.unit.hp ?? MAX_HP;
   const enemyHpMax = state.enemy.unit.hp ?? MAX_HP;
-  const playerBoostMax = state.player.unit.boostCap ?? BOOST_CAP;
   hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
   if (hudRefs.allyHp && state.ally) {
@@ -5418,8 +5417,12 @@ function updateHud(now = performance.now()) {
     const enemy2HpMax = state.enemy2.unit.hp ?? MAX_HP;
     hudRefs.enemy2Hp.style.width = `${(state.enemy2.state.hp / enemy2HpMax) * 100}%`;
   }
-  hudRefs.boost.style.width = `${(state.player.state.boost / playerBoostMax) * 100}%`;
-  hudRefs.boost.style.background = state.player.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
+  // Spectator: the boost bar and ammo readout below follow the WATCHED unit
+  // (cycling with TARGET), not the bot-driven player slot.
+  const shown = state.spectatorActive ? (cameraFocusMech() ?? state.player) : state.player;
+  const shownBoostMax = shown.unit.boostCap ?? BOOST_CAP;
+  hudRefs.boost.style.width = `${(shown.state.boost / shownBoostMax) * 100}%`;
+  hudRefs.boost.style.background = shown.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
   // Remaining-units row under each side's HP bar — one small weapon render
   // per unit left (current fielded unit first), one line per team member.
   // Trio shows the whole living roster; Duel shows the single unit while it
@@ -5444,8 +5447,8 @@ function updateHud(now = performance.now()) {
   }
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
-  const u = state.player.unit;
-  const s = state.player.state;
+  const u = shown.unit;
+  const s = shown.state;
   if (u.magCapacity != null && hudRefs.ammoCount) {
     hudRefs.ammoCount.textContent = String(s.ammo);
     const isMg = !u.autoReload;
@@ -7412,14 +7415,16 @@ function showMapPicker() {
   const mapMenu = document.createElement('div');
   mapMenu.className = 'menu';
   mapMenu.innerHTML = `<h2>Select Map</h2>
-    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 6px;color:#d8fcff;">
-      <input type="checkbox" id="dummy-mode-toggle" />
-      Dummy (BOT projectile damage = 0)
-    </label>
-    <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 14px;color:#d8fcff;">
-      <input type="checkbox" id="spectator-mode-toggle" />
-      Spectator (BOT plays your unit)
-    </label>
+    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:10px auto 14px;">
+      <label style="display:flex;align-items:center;gap:8px;color:#d8fcff;">
+        <input type="checkbox" id="dummy-mode-toggle" />
+        Dummy (BOT projectile damage = 0)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;color:#d8fcff;">
+        <input type="checkbox" id="spectator-mode-toggle" />
+        Spectator (BOT plays your unit)
+      </label>
+    </div>
     ${mapGridHTML(mapEntries)}`;
   app.appendChild(mapMenu);
   const dummyModeToggle = mapMenu.querySelector('#dummy-mode-toggle');
