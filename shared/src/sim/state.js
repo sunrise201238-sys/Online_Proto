@@ -93,6 +93,12 @@ export function createFighter(id, unitKey, spawn) {
     sniperChargeUntil: 0,
     sniperChargeStartAt: 0,
     sniperChargeTargetId: null,
+    // Floating unlock: when the DEFENDER is confirmed to have seen the glint.
+    // attemptFire presets it to the charge start (correct for offline/bot
+    // defenders); the server bumps it to the pessimistic cap for human
+    // targets and lets their client's ack improve it. The cancel floor
+    // counts from here.
+    sniperGlintAt: 0,
     // Kei full-charge sweep channel (chargedBeamUntil>now = active; owner locked,
     // beam steers toward chargedBeamDir; one hit per fighter via chargedBeamHitIds).
     chargedBeamUntil: 0,

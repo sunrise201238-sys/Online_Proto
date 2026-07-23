@@ -74,6 +74,11 @@ export function attemptFire(matchState, owner, target, now) {
     const chargeMs = u.chargeMs ?? 1000;
     owner.sniperChargeUntil = now + chargeMs;
     owner.sniperChargeStartAt = now;
+    // Default glint confirmation = charge start (offline renders the glint the
+    // same frame; bot defenders "see" server-side instantly). The server
+    // overrides this for HUMAN online defenders (pessimistic cap, improved by
+    // the client's glint ack).
+    owner.sniperGlintAt = now;
     owner.sniperChargeTargetId = target.id;
     owner.vel.x = 0;
     owner.vel.z = 0;
@@ -110,8 +115,12 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
 
   const sprintHeld = !!(input && (input.boost || input.sprintLocked));
   const chargeStartAt = fighter.sniperChargeUntil - (fighter.unit.chargeMs ?? 1000);
+  // Floating unlock: the fastest release counts from the DEFENDER's confirmed
+  // glint (sniperGlintAt), not the attacker's press. Offline/bot defenders
+  // confirm at charge start, so the fallback keeps behavior identical there.
+  const unlockAt = (fighter.sniperGlintAt || chargeStartAt) + SNIPER_CANCEL_MIN_CHARGE_MS;
   const cancelled = sprintHeld
-    && now >= chargeStartAt + SNIPER_CANCEL_MIN_CHARGE_MS
+    && now >= unlockAt
     && now < fighter.sniperChargeUntil
     && fighter.boost >= SNIPER_CANCEL_BOOST_COST;
   if (cancelled) {
@@ -119,6 +128,12 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
     fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
     fighter.sniperChargeUntil = now;
     matchState.events.push({ type: 'sniper-charge-cancel', ownerId: fighter.id });
+  }
+  // A SCHEDULED release (bot floor-snaps / random-window releases) landing
+  // before the unlock slides to it. Full natural charges are never affected:
+  // chargeMs (1000) always exceeds the worst-case unlock (cap 200 + 500).
+  if (!cancelled && now >= fighter.sniperChargeUntil && now < unlockAt) {
+    fighter.sniperChargeUntil = unlockAt;
   }
 
   if (now < fighter.sniperChargeUntil) {

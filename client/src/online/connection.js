@@ -142,6 +142,14 @@ export function createConnection() {
       socket.emit('match:rematch-request');
     },
 
+    // Floating sniper unlock: confirm to the server that a charge aimed at
+    // ME just rendered its glint — the shooter's 0.5 s cancel floor counts
+    // from this confirmation instead of their button press.
+    sendGlintAck: (shooterId) => {
+      if (!connected) return;
+      socket.emit('charge:glint-ack', { shooterId });
+    },
+
     // Send a config choice (unitKey and/or mapKey). Server validates and
     // echoes the new state back via lobby:config.
     sendConfigure: (cfg) => {

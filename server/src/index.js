@@ -13,7 +13,8 @@ import {
   TICK_RATE_MS,
   TICK_DT,
   UNIT_DATA,
-  MAP_DATA
+  MAP_DATA,
+  GLINT_CONFIRM_CAP_MS
 } from '@gvg/shared/src/sim/index.js';
 
 // Slot ids match the shared-sim fighter ids one-to-one. In 1v1 only p1/p2
@@ -58,6 +59,7 @@ function createLobby() {
     mainMode: 'sd',                   // 'sd' ("Duel") | 'trio' — host pushes via match:set-mode
     botSlots: new Set(),              // slots filled with bots while state==='active'
     botUnits: {},                     // slot -> host-chosen bot unit (Duel: key; Trio: [k,k,k])
+    glintCharges: new Map(),          // slot -> "slot:chargeStartAt" of the last seen charge (floating-unlock bookkeeping)
     inputs: {
       p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
     },
@@ -285,6 +287,23 @@ function tickLobby(lobby) {
     cur.stepTap = false;
     cur.shootTap = false;
     cur.targetSwitch = false;
+  }
+
+  // 3.5 Floating sniper unlock: a NEW charge aimed at a HUMAN defender gets
+  //     its glint confirmation bumped to the pessimistic cap — the target's
+  //     client ack (charge:glint-ack) then improves it to the real moment
+  //     the glint rendered. Bot/offline defenders keep attemptFire's
+  //     instant-confirm default, so only online-vs-human behavior changes.
+  for (const s of activeSlots(lobby.mode)) {
+    const fighter = lobby.match.fighters[s];
+    if (!fighter || !fighter.sniperChargeTargetId) { lobby.glintCharges.delete(s); continue; }
+    const key = `${s}:${fighter.sniperChargeStartAt}`;
+    if (lobby.glintCharges.get(s) !== key) {
+      lobby.glintCharges.set(s, key);
+      const targetSlot = fighter.sniperChargeTargetId;
+      const targetHuman = occupiedSlotsOf(lobby).has(targetSlot) && !lobby.botSlots.has(targetSlot);
+      if (targetHuman) fighter.sniperGlintAt = fighter.sniperChargeStartAt + GLINT_CONFIRM_CAP_MS;
+    }
   }
 
   // 4. Trio respawns — a dead slot with roster left swaps to its next unit
@@ -536,6 +555,18 @@ io.on('connection', (socket) => {
     // Trio: the host must have a complete 3-pick before starting.
     if (lb.mainMode === 'trio' && !isValidRoster(lb.config.p1.unitKeys)) return;
     startMatchFor(lb);   // 1v1 or 2v2: empty opponent slots fill with bots
+  });
+
+  // Floating sniper unlock: the charge target's client confirms the glint
+  // rendered. Improves (never worsens) the pessimistic cap set in tickLobby.
+  socket.on('charge:glint-ack', (data) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match) return;
+    const slot = lb.players.get(socket.id);
+    if (!SLOT_IDS.includes(slot)) return;
+    const shooter = data && typeof data.shooterId === 'string' ? lb.match.fighters[data.shooterId] : null;
+    if (!shooter || shooter.sniperChargeTargetId !== slot) return;
+    shooter.sniperGlintAt = Math.min(shooter.sniperGlintAt, Date.now());
   });
 
   socket.on('match:rematch-request', () => {

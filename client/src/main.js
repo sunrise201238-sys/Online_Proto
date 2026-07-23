@@ -2050,9 +2050,15 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   // glint-to-bullet window. Gating registration (not deferring the fire) also
   // means the boost cost is paid exactly once, on the tick the shot releases.
   let wasCancelled = false;
+  // Floating unlock (mirrors shared actions.js): the floor counts from the
+  // defender's confirmed glint. Offline renders the glint on the very frame
+  // the charge starts, so sniperGlintAt stays unset and the fallback keeps
+  // this byte-identical to the old charge-age gate.
+  const _chargeStartAt = mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000);
+  const _unlockAt = (mech.state.sniperGlintAt || _chargeStartAt) + SNIPER_CANCEL_MIN_CHARGE_MS;
   if (
     sprintHeld
-    && now >= mech.state.sniperChargeUntil - (mech.unit.chargeMs ?? 1000) + SNIPER_CANCEL_MIN_CHARGE_MS
+    && now >= _unlockAt
     && now < mech.state.sniperChargeUntil
     && mech.state.boost >= SNIPER_CANCEL_BOOST_COST
   ) {
@@ -5908,8 +5914,15 @@ function mirrorFighterToMech(fighter, mech) {
   const isCharging = !!fighter.sniperChargeTargetId;
   s.sniperChargeTarget = isCharging ? { id: fighter.sniperChargeTargetId } : null;
   s.sniperChargeUntil = fighter.sniperChargeUntil;
-  if (isCharging && !wasCharging) createGlintForMech(mech);
-  else if (!isCharging && wasCharging) removeGlintFromMech(mech);
+  if (isCharging && !wasCharging) {
+    createGlintForMech(mech);
+    // Floating unlock ack: a charge aimed at ME just became visible — tell
+    // the server, so the shooter's 0.5 s floor counts from what I actually
+    // saw rather than from their button press.
+    if (state.online?.conn && fighter.sniperChargeTargetId === state.online.myPlayerId) {
+      state.online.conn.sendGlintAck(fighter.id);
+    }
+  } else if (!isCharging && wasCharging) removeGlintFromMech(mech);
 }
 
 function syncOnlineProjectiles(snap) {

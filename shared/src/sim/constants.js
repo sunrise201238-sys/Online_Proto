@@ -567,6 +567,14 @@ export const SNIPER_CANCEL_BOOST_COST = STEP_BOOST_COST / 2;
 // floor releases the shot exactly at the floor; pressing sprint after the
 // floor still fires immediately.
 export const SNIPER_CANCEL_MIN_CHARGE_MS = 500;
+// Floating unlock: online, the cancel floor counts from the moment the
+// DEFENDER's client confirms the glint rendered (fighter.sniperGlintAt),
+// not from the attacker's button press — restoring the "500 ms of SEEN
+// warning" contract under network delay. This cap bounds how long the
+// server waits for that confirmation (availability, not anti-cheat): if
+// the ack hasn't arrived within it, the charge proceeds pessimistically.
+// Offline and bot defenders confirm instantly, so nothing changes there.
+export const GLINT_CONFIRM_CAP_MS = 200;
 // Minimum on-screen glint duration so an instant sprint-cancel still flashes
 // a hint at the target instead of vanishing within a single frame.
 export const SNIPER_GLINT_MIN_FLASH_MS = 100;
