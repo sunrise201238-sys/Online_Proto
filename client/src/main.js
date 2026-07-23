@@ -6485,6 +6485,7 @@ function showOnlineUnitPicker(onl, conn) {
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
+  const onlinePool = unitEntries.map(([id]) => id);
   wireUnitGrid(menu, (key) => {
     if (!trio) {
       onl.conn.sendConfigure({ unitKey: key });
@@ -6500,7 +6501,17 @@ function showOnlineUnitPicker(onl, conn) {
       clearMenus();
       showOnlineUnitPicker(onl, conn);
     }
-  }, () => picks);   // Random never repeats a unit within this roster
+  }, () => picks, () => {
+    // All Random: roll every remaining pick (keeping any already made) and
+    // submit — the phase machine moves the page on when the server echoes.
+    if (!trio) {
+      onl.conn.sendConfigure({ unitKey: rollRandomUnit([], onlinePool) });
+      return;
+    }
+    while (picks.length < 3) picks.push(rollRandomUnit(picks, onlinePool));
+    onl.conn.sendConfigure({ unitKeys: picks.slice() });
+    onl.trioUnitPicks = [];
+  });
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onl.trioUnitPicks = [];
@@ -6532,6 +6543,7 @@ function showOnlineBotUnitPicker(onl, conn) {
     <button data-back class="online-leave-btn">Back</button>
   `;
   app.appendChild(menu);
+  const botPool = unitEntries.map(([id]) => id);
   wireUnitGrid(menu, (key) => {
     if (!trio) {
       onl.conn.sendConfigure({ botSlot: slot, botUnitKey: key });
@@ -6547,7 +6559,18 @@ function showOnlineBotUnitPicker(onl, conn) {
       clearMenus();
       showOnlineBotUnitPicker(onl, conn);
     }
-  }, () => picks);   // Random never repeats a unit within this bot's roster
+  }, () => picks, () => {
+    // All Random: complete this bot's roster (keeping picks already made).
+    if (!trio) {
+      onl.conn.sendConfigure({ botSlot: slot, botUnitKey: rollRandomUnit([], botPool) });
+      onl.pickingBotSlot = null;
+      return;
+    }
+    while (picks.length < 3) picks.push(rollRandomUnit(picks, botPool));
+    onl.conn.sendConfigure({ botSlot: slot, botUnitKeys: picks.slice() });
+    onl.botUnitPicks = [];
+    onl.pickingBotSlot = null;
+  });
   menu.querySelector('button[data-back]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onl.botUnitPicks = [];
@@ -7114,6 +7137,8 @@ function showSelectMenu() {
   clearMenus();
   state.phase = 'select';
   state.running = false;
+  // An abandoned All Random chain must never leak into manual picking.
+  state.allRandomFill = false;
   state.hud?.remove();
   renderer.domElement.style.pointerEvents = 'none';
 
@@ -7183,6 +7208,21 @@ function showSelectMenu() {
       assignRoster('player', [key]);
       proceedAfterPlayerPick();
     }
+  }, () => [], () => {
+    // All Random from the very first pick: arm the flag, then let the normal
+    // chain run — every picker in it auto-fills and the flow lands straight
+    // on the map screen.
+    clearMenus();
+    state.allRandomFill = true;
+    if (state.mainMode === 'trio') {
+      pickUnits('Select Your Unit', 3, (arr) => {
+        assignRoster('player', arr);
+        proceedAfterPlayerPick();
+      });
+    } else {
+      assignRoster('player', [rollRandomUnit([])]);
+      proceedAfterPlayerPick();
+    }
   });
 }
 
@@ -7191,13 +7231,28 @@ function showSelectMenu() {
 // "(n/count)". SD passes count 1 and the flow is byte-identical to before.
 // The units already in `acc` are passed as the Random card's exclusion list,
 // so a roll never duplicates a unit within this one roster.
+// All Random: once state.allRandomFill is armed, every remaining picker in
+// the offline chain auto-fills (rolls respecting the per-roster no-repeat
+// rule) without showing UI — the flow runs straight through to the map.
 function pickUnits(baseTitle, count, cb, acc = []) {
+  if (state.allRandomFill) {
+    while (acc.length < count) acc.push(rollRandomUnit(acc));
+    cb(acc);
+    return;
+  }
   if (acc.length >= count) { cb(acc); return; }
   const title = count > 1 ? `${baseTitle} (${acc.length + 1}/${count})` : baseTitle;
   showUnitPicker(title, (key) => {
     acc.push(key);
     pickUnits(baseTitle, count, cb, acc);
-  }, acc);
+  }, acc, () => {
+    // All Random tapped mid-roster: keep the picks already made, roll the
+    // rest of this roster, then arm the flag so every later slot auto-fills.
+    state.allRandomFill = true;
+    while (acc.length < count) acc.push(rollRandomUnit(acc));
+    clearMenus();
+    cb(acc);
+  });
 }
 
 // Store a slot's picked roster. The legacy single-unit key keeps pointing at
@@ -7305,10 +7360,10 @@ function showMapProfilePopup(card, mapId, mapName, onConfirm) {
 
 // Random-card preview: a light-gray mystery face with a question mark — the
 // pick stays hidden until the confirming tap rolls it. `wide` uses the map
-// popup's landscape proportions.
-function showRandomProfilePopup(card, wide, onConfirm) {
+// popup's landscape proportions; `gold` is the All Random golden theme.
+function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
   spawnProfilePopup(card,
-    `<div class="random-face${wide ? ' random-face-wide' : ''}">?</div>`,
+    `<div class="random-face${wide ? ' random-face-wide' : ''}${gold ? ' all-random' : ''}">?</div>`,
     onConfirm);
 }
 // Selection-grid display order: weapon categories grouped, four to a row —
@@ -7323,9 +7378,22 @@ const UNIT_GRID_ORDER = [
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
 // Weapon is the part of unit.name after the "/". Cards render in
 // UNIT_GRID_ORDER regardless of the entries' object order.
-// Sentinel key for the Random card in both pickers. Never a real pick —
-// wireUnitGrid / wireMapGrid resolve it to a concrete key at confirm time.
+// Sentinel keys for the Random / All Random cards. Never real picks —
+// wireUnitGrid / wireMapGrid resolve them at confirm time. All Random
+// (unit pickers only, golden theme) fills every remaining unit slot in the
+// current selection flow and moves the page on; the map picker has no
+// All Random by design.
 const RANDOM_PICK_KEY = '__random';
+const ALL_RANDOM_PICK_KEY = '__allrandom';
+
+// Roll one unit key, excluding `excluded` (the no-repeat-within-one-roster
+// rule — same as the Random card). Pool defaults to every unit (offline);
+// online callers pass their eligibility-filtered pool.
+function rollRandomUnit(excluded, pool = Object.keys(UNIT_DATA)) {
+  const eligible = pool.filter((k) => !excluded.includes(k));
+  const from = eligible.length ? eligible : pool;
+  return from[Math.floor(Math.random() * from.length)];
+}
 
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
@@ -7340,6 +7408,9 @@ function unitGridHTML(unitEntries) {
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">
       <span class="unit-thumb random-thumb">?</span>
       <span class="unit-label">Random</span>
+    </button><button class="unit-card" data-unit-card="${ALL_RANDOM_PICK_KEY}">
+      <span class="unit-thumb random-thumb all-random">?</span>
+      <span class="unit-label">All Random</span>
     </button></div>`;
 }
 // Wire preview→confirm onto a menu containing a .unit-grid. onPick(unitKey)
@@ -7348,9 +7419,11 @@ function unitGridHTML(unitEntries) {
 // grid's own cards minus `getExcluded()` — callers pass the units already
 // picked in the CURRENT roster so one player never rolls a repeat (repeats
 // across different players stay legal).
-function wireUnitGrid(menu, onPick, getExcluded = () => []) {
+function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) {
   const grid = menu.querySelector('.unit-grid');
   if (!grid) return;
+  // Pickers without an All Random flow (none today, but defensive) drop the card.
+  if (!onAllRandom) grid.querySelector(`[data-unit-card="${ALL_RANDOM_PICK_KEY}"]`)?.remove();
   let pendingKey = null;
   const clearPending = () => {
     pendingKey = null;
@@ -7360,13 +7433,16 @@ function wireUnitGrid(menu, onPick, getExcluded = () => []) {
   const resolveRandomUnit = () => {
     const pool = [...grid.querySelectorAll('[data-unit-card]')]
       .map((c) => c.dataset.unitCard)
-      .filter((k) => k !== RANDOM_PICK_KEY);
+      .filter((k) => k !== RANDOM_PICK_KEY && k !== ALL_RANDOM_PICK_KEY);
     const excluded = new Set(getExcluded());
     const eligible = pool.filter((k) => !excluded.has(k));
     const from = eligible.length ? eligible : pool;   // defensive: never empty
     return from[Math.floor(Math.random() * from.length)];
   };
-  const confirm = (key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomUnit() : key);
+  const confirm = (key) => {
+    if (key === ALL_RANDOM_PICK_KEY) { onAllRandom(); return; }
+    onPick(key === RANDOM_PICK_KEY ? resolveRandomUnit() : key);
+  };
   // Cards act on CLICK, not pointerdown: the browser only fires click when
   // the touch did NOT turn into a scroll, so dragging through the grid can't
   // pop profiles anymore (the old pointerdown fired before the browser knew
@@ -7384,8 +7460,8 @@ function wireUnitGrid(menu, onPick, getExcluded = () => []) {
       if (pendingKey) { clearPending(); return; }
       pendingKey = key;
       card.classList.add('selecting');
-      if (key === RANDOM_PICK_KEY) {
-        showRandomProfilePopup(card, false, () => { clearPending(); confirm(key); });
+      if (key === RANDOM_PICK_KEY || key === ALL_RANDOM_PICK_KEY) {
+        showRandomProfilePopup(card, false, () => { clearPending(); confirm(key); }, key === ALL_RANDOM_PICK_KEY);
       } else {
         showProfilePopup(card, UNIT_DATA[key], () => { clearPending(); confirm(key); });
       }
@@ -7450,7 +7526,7 @@ function wireMapGrid(menu, onPick) {
   menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
 }
 
-function showUnitPicker(title, onPick, excluded = []) {
+function showUnitPicker(title, onPick, excluded = [], onAllRandom = null) {
   const unitEntries = Object.entries(UNIT_DATA);
   const menu = document.createElement('div');
   menu.className = 'menu';
@@ -7459,9 +7535,10 @@ function showUnitPicker(title, onPick, excluded = []) {
   wireUnitGrid(menu, (key) => {
     clearMenus();
     onPick(key);
-  }, () => excluded);
+  }, () => excluded, onAllRandom);
 }
 function showMapPicker() {
+  state.allRandomFill = false;   // the All Random chain ends here
   const mapEntries = Object.entries(MAP_DATA);
   const mapMenu = document.createElement('div');
   mapMenu.className = 'menu';
