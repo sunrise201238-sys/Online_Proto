@@ -629,6 +629,10 @@ function pickBotTargetOf(mech) {
 // values, then we restore in a finally block.
 function runBotAIForMech(me, opp, now) {
   if (!me || !opp || me.state.hp <= 0) return;
+  // Capture the TRUE fighter list before aliasing scrambles the slots — the
+  // anti-glint scan inside updateEnemy must see every real mech (a call to
+  // getAllFighters() mid-alias would duplicate opp and drop a slot).
+  _botTrueFighters = getAllFighters();
   const savedEnemy = state.enemy;
   const savedPlayer = state.player;
   state.enemy = me;
@@ -638,8 +642,12 @@ function runBotAIForMech(me, opp, now) {
   } finally {
     state.enemy = savedEnemy;
     state.player = savedPlayer;
+    _botTrueFighters = null;
   }
 }
+// True fighter list during runBotAIForMech's alias window (see above); null
+// when updateEnemy runs un-aliased (the classic 1v1 call).
+let _botTrueFighters = null;
 // Cycle the player's lock target between the live enemies. In 1v1 there's
 // only one — no-op. In 2v2 it flips between enemy and enemy2 (skipping any
 // that have hit 0 HP). Reparents the reticle sprite to the new target.
@@ -831,10 +839,14 @@ const BOT_FIRE_REACT_MS = 280;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Mirrors BOT_GLINT_REACT_MS in shared/src/sim/ai.js — humanlike delay before
-// the bot "notices" a sniper glint (Defense entry + its guessed dodge both
-// wait on it), so a floor-canceled snap shot beats a bot that hasn't reacted.
-const BOT_GLINT_REACT_MS = 540;
+// Mirrors shared/src/sim/ai.js — humanlike delay from a glint appearing to
+// the bot's dodge. Two knobs so the locked / non-locked cases can be tuned
+// apart later: REACT_MS = the charging sniper IS the bot's lock target;
+// REACT_UNLOCKED_MS = any OTHER enemy charging at the bot. At 520 ms a
+// floor-canceled snap still lands first at close range (< ~50 u); beyond
+// that its flight time pushes impact past the dodge's i-frames.
+const BOT_GLINT_REACT_MS = 520;
+const BOT_GLINT_REACT_UNLOCKED_MS = 520;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -3668,18 +3680,37 @@ function updateEnemy(now) {
   const side = new THREE.Vector3(-dir.z, 0, dir.x);
   const eState = state.enemy.state;
 
-  // --- Anti-sniper glint response: dodge a fixed BOT_GLINT_REACT_MS after the
-  // glint appears (mirrors tickBot in shared/src/sim/ai.js). One step per
-  // charge; the schedule survives the glint vanishing so a late/full-charge
-  // shot is still covered.
+  // --- Anti-sniper glint response (mirrors tickBot in shared/src/sim/ai.js):
+  // dodge a fixed reaction delay after a glint AIMED AT ME appears — from ANY
+  // enemy, locked or not (humans see off-lock glints on the edge indicator
+  // too; no LoS check, matching the locked case). Earliest-started active
+  // charge wins; one step per charge, one schedule at a time — an overlapping
+  // second charge gets its own dodge only after the first resolves. The
+  // schedule survives the glint vanishing so a late/full-charge shot is still
+  // covered. `sniperCharging` (locked-target charge) keeps driving the
+  // regular Defense durations below unchanged. Anyone charging AT me is an
+  // enemy by construction, so the scan needs no team logic.
   const sniperCharging = state.player.state.sniperChargeTarget === state.enemy;
-  if (sniperCharging) {
-    if (!eState.botGlintAt) {
-      eState.botGlintAt = now;
-      eState.botGlintStepAt = now + BOT_GLINT_REACT_MS;
+  let glintThreat = null;
+  for (const m of (_botTrueFighters ?? getAllFighters())) {
+    if (!m || m === state.enemy || m.state.hp <= 0) continue;
+    if (m.state.sniperChargeTarget !== state.enemy) continue;
+    if (!glintThreat || m.state.sniperChargeStartAt < glintThreat.state.sniperChargeStartAt) glintThreat = m;
+  }
+  if (glintThreat) {
+    const sameCharge = eState.botGlintKeyRef === glintThreat
+      && eState.botGlintKeyStart === glintThreat.state.sniperChargeStartAt;
+    if (!sameCharge && eState.botGlintStepAt == null) {
+      eState.botGlintKeyRef = glintThreat;
+      eState.botGlintKeyStart = glintThreat.state.sniperChargeStartAt;
+      eState.botGlintAtkRef = glintThreat;
+      eState.botGlintStepAt = now + (glintThreat === state.player
+        ? BOT_GLINT_REACT_MS
+        : BOT_GLINT_REACT_UNLOCKED_MS);
     }
-  } else {
-    eState.botGlintAt = null;
+  } else if (eState.botGlintStepAt == null) {
+    eState.botGlintKeyRef = null;
+    eState.botGlintKeyStart = 0;
   }
   // A fresh hit means the shot already landed — drop the now-pointless dodge.
   // (botPrevHitStun is only advanced by the threat block below, so the rising
@@ -3697,10 +3728,23 @@ function updateEnemy(now) {
       // spend its last savings to survive a sniper shot.
       && eState.boost >= STEP_BOOST_COST
     ) {
-      // Continue the committed Defense escape line if one is active so the
-      // dodge reads as part of the same evade; otherwise pick a random side.
+      // Direction: perpendicular to the ATTACKER's line of fire. A NON-locked
+      // attacker gets a strict perpendicular (overriding any active Defense
+      // direction for this dodge+follow-up window — Defense itself stays
+      // keyed to the locked target and re-arms afterwards if still
+      // triggered). The locked attacker keeps today's behavior: continue a
+      // committed Defense escape line, else a random lateral vs the locked
+      // target (== perpendicular to it).
       let sdx, sdz;
-      if (eState.botState === 'defense' && eState.botDefenseDirX != null) {
+      const glintAtk = eState.botGlintAtkRef;
+      if (glintAtk && glintAtk !== state.player && glintAtk.state.hp > 0) {
+        const adx = state.enemy.body.position.x - glintAtk.body.position.x;
+        const adz = state.enemy.body.position.z - glintAtk.body.position.z;
+        const ad = Math.hypot(adx, adz) || 1;
+        const lat = Math.random() < 0.5 ? 1 : -1;
+        sdx = (-adz / ad) * lat;
+        sdz = (adx / ad) * lat;
+      } else if (eState.botState === 'defense' && eState.botDefenseDirX != null) {
         sdx = eState.botDefenseDirX; sdz = eState.botDefenseDirZ;
       } else {
         const lat = Math.random() < 0.5 ? 1 : -1;
@@ -3722,13 +3766,14 @@ function updateEnemy(now) {
       eState.boost = Math.max(0, eState.boost - STEP_BOOST_COST);
       eState.refillPausedUntil = now + 500;
       clearIncomingHoming(state.enemy, now);
-      // "Dodge + 150 ms sprint": after the i-frame step ends, keep sprinting the
-      // same way for 150 ms via a brief Defense commit.
+      // "Dodge + sprint": after the i-frame step ends, keep sprinting the
+      // same way for 520 ms via a brief Defense commit (REPLACES any prior
+      // Defense countdown by design — live triggers re-arm it afterwards).
       eState.botState = 'defense';
       eState.botStateEnteredAt = now;
       eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
       eState.botDefenseDirAt = now;
-      eState.botDefenseUntil = eState.stepUntil + 500;
+      eState.botDefenseUntil = eState.stepUntil + 520;
       eState.botDefenseInCover = false;
       eState.botDefenseCoverAt = 0;
       eState.botDefensePeekDone = false;

@@ -139,7 +139,7 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 
 **Bots vs. the sniper.**
 - **As the shooter:** Aru bots release at the **0.5 s floor 90%** of the time (a fast snap) and at a random 0.5–1 s the other 10%. Kei bots snap at the floor **70%** and hold to the **full-charge sweep 30%**.
-- **On defense:** when a glint appears, the bot ignores it for a fixed **0.54 s**, then does **one** lateral dodge (0.3 s i-frames) followed by a **0.5 s** committed sprint in the same direction — refreshed while the charge persists. A floor-snap (release at 0.5 s) arrives ~0.5–0.56 s in, so it beats the dodge at all but the longest ranges; a held shot can be dodged, and one held past ~0.9 s whiffs the dash entirely.
+- **On defense:** when a glint aimed at it appears — from **any** enemy, locked or not (mirroring the human's edge-indicator awareness; earliest active charge wins) — the bot ignores it for a fixed **0.52 s**, then does **one** dodge (0.3 s i-frames) followed by a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire. Its lock and return fire stay on its current target throughout. A floor-snap (release at 0.5 s) still beats the dodge inside ~50 units where flight time is negligible; from farther out the i-frames now cover it, and a shot held past ~0.9 s whiffs the dash entirely.
 
 ## Controls
 

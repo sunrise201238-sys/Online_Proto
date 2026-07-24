@@ -40,11 +40,16 @@ const BOT_FIRE_REACT_MS = 280;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Anti-sniper humanization: the bot only "notices" a sniper glint after this
-// reaction delay — Defense entry AND its guessed dodge both wait on it. A
-// floor-canceled snap shot (SNIPER_CANCEL_MIN_CHARGE_MS) therefore arrives
-// before a bot that hasn't reacted yet, instead of being dodged on frame one.
-const BOT_GLINT_REACT_MS = 540;
+// Anti-sniper humanization: the bot dodges only after this reaction delay
+// from the glint appearing. Two knobs (mirrored in client/src/main.js) so
+// the locked and non-locked cases can be tuned apart later:
+//   BOT_GLINT_REACT_MS          — the charging sniper IS the bot's lock target
+//   BOT_GLINT_REACT_UNLOCKED_MS — any OTHER enemy charging at the bot
+// At 520 ms, a floor-canceled snap (SNIPER_CANCEL_MIN_CHARGE_MS = 500) still
+// lands first at close range (< ~50 u), but from mid/long range its flight
+// time pushes the impact past the dodge's i-frames — range now matters.
+const BOT_GLINT_REACT_MS = 520;
+const BOT_GLINT_REACT_UNLOCKED_MS = 520;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -352,25 +357,40 @@ export function tickBot(matchState, botId, now) {
   const sideX = -dirZ;
   const sideZ = dirX;
 
-  // --- Anti-sniper glint response: dodge a fixed BOT_GLINT_REACT_MS after the
-  // glint appears (mirrors updateEnemy in main.js). One step per charge; the
-  // schedule survives the glint vanishing so a late/full-charge shot is still
-  // covered.
+  // --- Anti-sniper glint response (mirrors updateEnemy in main.js): dodge a
+  // fixed reaction delay after a glint AIMED AT ME appears — from ANY enemy,
+  // locked or not (humans see off-lock glints on the edge indicator too; no
+  // LoS check, matching the locked case). The earliest-started active charge
+  // wins; one step per charge, one schedule at a time — a charge that
+  // overlaps a pending/spent dodge gets its own dodge only after the first
+  // charge resolves. The schedule survives the glint vanishing so a
+  // late/full-charge shot is still covered. `sniperCharging` (locked-target
+  // charge) keeps driving the regular Defense durations below unchanged.
   const sniperCharging = opp.sniperChargeTargetId === me.id;
-  if (sniperCharging) {
-    if (!me.botGlintAt) {
-      me.botGlintAt = now;
-      me.botGlintStepAt = now + BOT_GLINT_REACT_MS;
+  let glintThreat = null;
+  for (const f of Object.values(matchState.fighters)) {
+    if (!f || f === me || f.hp <= 0) continue;
+    if (f.sniperChargeTargetId !== me.id) continue;
+    if (!glintThreat || f.sniperChargeStartAt < glintThreat.sniperChargeStartAt) glintThreat = f;
+  }
+  if (glintThreat) {
+    const glintKey = `${glintThreat.id}:${glintThreat.sniperChargeStartAt}`;
+    if (me.botGlintKey !== glintKey && me.botGlintStepAt == null) {
+      me.botGlintKey = glintKey;
+      me.botGlintAttackerId = glintThreat.id;
+      me.botGlintStepAt = now + (glintThreat.id === opp.id
+        ? BOT_GLINT_REACT_MS
+        : BOT_GLINT_REACT_UNLOCKED_MS);
     }
-  } else {
-    me.botGlintAt = null;
+  } else if (me.botGlintStepAt == null) {
+    me.botGlintKey = null;
   }
   // A fresh hit means the shot already landed — drop the now-pointless dodge.
   // (botPrevHitStun is only advanced by the threat block below, so the rising
   // edge is still visible here.)
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
 
-  // The dodge comes due: one i-frame step, then a 150 ms sprint in the same
+  // The dodge comes due: one i-frame step, then a 520 ms sprint in the same
   // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
   // (like Defense): gates at the raw step cost only — tryStartStep enforces
   // STEP_BOOST_COST underneath, human-identical — so even a suppressed bot
@@ -378,23 +398,37 @@ export function tickBot(matchState, botId, now) {
   if (me.botGlintStepAt != null && now >= me.botGlintStepAt) {
     me.botGlintStepAt = null;
     if (now > me.stepUntil) {
-      // Continue the committed Defense escape line if one is active so the
-      // dodge reads as part of the same evade; otherwise pick a random side.
+      // Direction: perpendicular to the ATTACKER's line of fire. A NON-locked
+      // attacker gets a strict perpendicular (overriding any active Defense
+      // direction for this dodge+follow-up window — the Defense system itself
+      // stays keyed to the locked target and re-arms afterwards if its
+      // trigger is still live). The locked attacker keeps today's behavior:
+      // continue a committed Defense escape line if one is active, else a
+      // random lateral vs the locked target (== perpendicular to it).
       let sdx, sdz;
-      if (me.botState === 'defense' && me.botDefenseDirX != null) {
+      const glintAtk = me.botGlintAttackerId ? matchState.fighters[me.botGlintAttackerId] : null;
+      if (glintAtk && glintAtk !== opp && glintAtk.hp > 0) {
+        const adx = me.pos.x - glintAtk.pos.x;
+        const adz = me.pos.z - glintAtk.pos.z;
+        const ad = Math.sqrt(adx * adx + adz * adz) || 1;
+        const lat = Math.random() < 0.5 ? 1 : -1;
+        sdx = (-adz / ad) * lat;
+        sdz = (adx / ad) * lat;
+      } else if (me.botState === 'defense' && me.botDefenseDirX != null) {
         sdx = me.botDefenseDirX; sdz = me.botDefenseDirZ;
       } else {
         const lat = Math.random() < 0.5 ? 1 : -1;
         sdx = sideX * lat; sdz = sideZ * lat;
       }
       if (tryStartStep(matchState, me, sdx, sdz, now, obstacles)) {
-        // "Dodge + 150 ms sprint": after the i-frame step ends, keep sprinting
-        // the same way for 150 ms via a brief Defense commit.
+        // "Dodge + sprint": after the i-frame step ends, keep sprinting the
+        // same way for 520 ms via a brief Defense commit (REPLACES any prior
+        // Defense countdown by design — live triggers re-arm it afterwards).
         me.botState = 'defense';
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
         me.botDefenseDirAt = now;
-        me.botDefenseUntil = me.stepUntil + 500;
+        me.botDefenseUntil = me.stepUntil + 520;
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
         me.botDefensePeekDone = false;
