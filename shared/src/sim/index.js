@@ -13,7 +13,8 @@ export {
   groundHeightAt,
   surfaceHeightAtXZ,
   projectileHitsSurface,
-  getGroundLevelY
+  getGroundLevelY,
+  obstaclesNearSegment
 } from './physics.js';
 export {
   tickBoost,

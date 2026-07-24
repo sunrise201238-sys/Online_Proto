@@ -82,6 +82,92 @@ export function raycastObstacleDistance(origin, dir, maxLen, obstacles) {
   return best;
 }
 
+// --- Projectile broadphase --------------------------------------------------
+// Static XZ grid over a map's obstacle list, built lazily ONCE per obstacle
+// array (arenas are module-level singletons, so once per map per process) and
+// cached by array identity. obstaclesNearSegment returns a conservative
+// SUPERSET of the obstacles whose AABB can intersect the swept segment: any
+// intersection point lies inside both the obstacle's AABB and the segment's
+// XZ bounds, hence inside a queried cell — the grid can only ADD candidates,
+// never hide one. Correctness stays with the precise slab test, which still
+// runs on every candidate. Y is ignored (XZ-only cells): vertical misses are
+// filtered by the slab test like before.
+// The returned array is a reused scratch buffer (or the obstacles array
+// itself on small maps) — consume it before the next query, never store it.
+const BROADPHASE_CELL = 24;
+const BROADPHASE_MIN_OBSTACLES = 24;   // below this, brute force is already optimal
+const _gridCache = new WeakMap();
+const _bpScratch = [];
+
+function buildObstacleGrid(obstacles) {
+  let minX = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxZ = -Infinity;
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const o = obstacles[i];
+    if (o.minX < minX) minX = o.minX;
+    if (o.minZ < minZ) minZ = o.minZ;
+    if (o.maxX > maxX) maxX = o.maxX;
+    if (o.maxZ > maxZ) maxZ = o.maxZ;
+  }
+  const cols = Math.max(1, Math.ceil((maxX - minX) / BROADPHASE_CELL));
+  const rows = Math.max(1, Math.ceil((maxZ - minZ) / BROADPHASE_CELL));
+  const cells = new Array(cols * rows).fill(null);
+  for (let idx = 0; idx < obstacles.length; idx += 1) {
+    const o = obstacles[idx];
+    const c0 = Math.min(cols - 1, Math.max(0, Math.floor((o.minX - minX) / BROADPHASE_CELL)));
+    const c1 = Math.min(cols - 1, Math.max(0, Math.floor((o.maxX - minX) / BROADPHASE_CELL)));
+    const r0 = Math.min(rows - 1, Math.max(0, Math.floor((o.minZ - minZ) / BROADPHASE_CELL)));
+    const r1 = Math.min(rows - 1, Math.max(0, Math.floor((o.maxZ - minZ) / BROADPHASE_CELL)));
+    for (let r = r0; r <= r1; r += 1) {
+      for (let c = c0; c <= c1; c += 1) {
+        const key = r * cols + c;
+        if (cells[key] === null) cells[key] = [];
+        cells[key].push(idx);
+      }
+    }
+  }
+  // seen[] + stamp give O(1) dedupe for obstacles spanning several queried
+  // cells without allocating a Set per query.
+  return { minX, minZ, cols, rows, cells, seen: new Float64Array(obstacles.length), stamp: 0 };
+}
+
+export function obstaclesNearSegment(obstacles, p0, p1) {
+  let grid = _gridCache.get(obstacles);
+  if (grid === undefined) {
+    grid = obstacles.length >= BROADPHASE_MIN_OBSTACLES ? buildObstacleGrid(obstacles) : null;
+    _gridCache.set(obstacles, grid);
+  }
+  if (grid === null) return obstacles;
+  // Same `/ BROADPHASE_CELL` floor math as the build pass — build and query
+  // must bucket identically or an on-boundary obstacle could be missed.
+  const sMinX = p0.x < p1.x ? p0.x : p1.x;
+  const sMaxX = p0.x < p1.x ? p1.x : p0.x;
+  const sMinZ = p0.z < p1.z ? p0.z : p1.z;
+  const sMaxZ = p0.z < p1.z ? p1.z : p0.z;
+  const c0 = Math.min(grid.cols - 1, Math.max(0, Math.floor((sMinX - grid.minX) / BROADPHASE_CELL)));
+  const c1 = Math.min(grid.cols - 1, Math.max(0, Math.floor((sMaxX - grid.minX) / BROADPHASE_CELL)));
+  const r0 = Math.min(grid.rows - 1, Math.max(0, Math.floor((sMinZ - grid.minZ) / BROADPHASE_CELL)));
+  const r1 = Math.min(grid.rows - 1, Math.max(0, Math.floor((sMaxZ - grid.minZ) / BROADPHASE_CELL)));
+  grid.stamp += 1;
+  const stamp = grid.stamp;
+  _bpScratch.length = 0;
+  for (let r = r0; r <= r1; r += 1) {
+    for (let c = c0; c <= c1; c += 1) {
+      const cell = grid.cells[r * grid.cols + c];
+      if (cell === null) continue;
+      for (let k = 0; k < cell.length; k += 1) {
+        const idx = cell[k];
+        if (grid.seen[idx] === stamp) continue;
+        grid.seen[idx] = stamp;
+        _bpScratch.push(obstacles[idx]);
+      }
+    }
+  }
+  return _bpScratch;
+}
+
 // Does the horizontal segment (x0,z0)→(x1,z1), walked at body-center height
 // `y`, cross any obstacle a unit cannot WALK through? Uses the same y-window
 // as unitOverlapsObstacle (topBuffer semantics) — a 2.4-high belt blocks

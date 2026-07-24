@@ -32,7 +32,7 @@ import {
   closestPointOnSegment
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
-import { segmentHitsObstacle, projectileHitsSurface, raycastObstacleDistance } from './physics.js';
+import { segmentHitsObstacle, projectileHitsSurface, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
@@ -267,10 +267,12 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // the target isn't hit (or passes through), sweep the full step as before.
     const sweepEnd = botHit ? nearest : p.pos;
 
-    // Swept obstacle hit (skip noProjectile-tagged obstacles).
+    // Swept obstacle hit (skip noProjectile-tagged obstacles). The broadphase
+    // only narrows the candidate list; the slab test stays authoritative.
     let killed = false;
-    for (let j = 0; j < obstacles.length; j += 1) {
-      const o = obstacles[j];
+    const cand = obstaclesNearSegment(obstacles, prevPos, sweepEnd);
+    for (let j = 0; j < cand.length; j += 1) {
+      const o = cand[j];
       if (o.noProjectile) continue;
       if (!segmentHitsObstacle(prevPos, sweepEnd, o)) continue;
       _despawn(matchState, projectiles, i, p, 'obstacle');
@@ -449,8 +451,9 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
       }
     }
     let dead = false;
-    for (let j = 0; j < obstacles.length; j += 1) {
-      const o = obstacles[j];
+    const cand = obstaclesNearSegment(obstacles, a, sweepEnd);
+    for (let j = 0; j < cand.length; j += 1) {
+      const o = cand[j];
       if (o.noProjectile) continue;
       if (!segmentHitsObstacle(a, sweepEnd, o)) continue;
       dead = true;
