@@ -5423,15 +5423,17 @@ function updateCamera() {
 // the per-frame path is a single string compare against the cached signature.
 // `lines` is one key-array per team member (own side: player then ally;
 // enemy side: enemy then enemy2) — each renders as its own row so teammates'
-// weapons never share a line.
-function renderTrioIconRow(el, lines, sigField) {
-  const sig = lines ? lines.map((l) => l.join('|')).join('/') : '';
+// weapons never share a line. `markInPlay` (Trio only) prefixes each line's
+// FIRST icon — the member's currently fielded weapon — with a small glowing
+// golden bar; Duel skips it (a one-icon line needs no marker).
+function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
+  const sig = (lines ? lines.map((l) => l.join('|')).join('/') : '') + (markInPlay ? '!' : '');
   if (hudRefs[sigField] === sig) return;
   hudRefs[sigField] = sig;
   el.innerHTML = lines
     ? lines
       .filter((l) => l.length)
-      .map((l) => `<div class="trio-line">${l.map((k) => {
+      .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
         const u = UNIT_DATA[k];
         return u
           ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
@@ -5479,15 +5481,18 @@ function updateHud(now = performance.now()) {
   if (hudRefs.trioOwn && hudRefs.trioEnemy) {
     let own = null;
     let foe = null;
+    let trioMode = false;
     if (!state.online && state.mapKey !== 'range') {
       own = [trioRemainingUnitKeys('player')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('ally')] : []);
       foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
+      trioMode = !!(state.mainMode === 'trio' && state.trioRosters);
     } else if (state.online) {
       own = [mechRemainingUnitKeys(state.player)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.ally)] : []);
       foe = [mechRemainingUnitKeys(state.enemy)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.enemy2)] : []);
+      trioMode = !!state.player?.state.roster;
     }
-    renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig');
-    renderTrioIconRow(hudRefs.trioEnemy, foe, 'trioEnemySig');
+    renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig', trioMode);
+    renderTrioIconRow(hudRefs.trioEnemy, foe, 'trioEnemySig', trioMode);
   }
   if (state.speedLines) state.speedLines.style.opacity = '0';
 

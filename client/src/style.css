@@ -26,6 +26,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .trio-count .trio-line { height: 13px; line-height: 13px; margin-bottom: 2px; }
 .trio-count .trio-weapon-icon { height: 11px; width: auto; margin-right: 4px; vertical-align: middle; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
 .trio-count-enemy .trio-weapon-icon { margin-right: 0; margin-left: 4px; }
+/* In-play marker (Trio): thin glowing golden bar left of each line's first
+   icon — the member's currently fielded weapon. Sits 2px from the icon
+   (slightly tighter than the 4px inter-icon gap). */
+.trio-count .trio-inplay-bar { display: inline-block; width: 2px; height: 11px; margin-right: 2px; vertical-align: middle; background: #ffd76a; border-radius: 1px; box-shadow: 0 0 4px 1px rgba(255, 215, 106, 0.85); }
+.trio-count-enemy .trio-inplay-bar + .trio-weapon-icon { margin-left: 2px; }
+.trio-count-enemy .trio-inplay-bar { margin-right: 0; }
 .boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 8px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #boost-fill { height: 100%; width: 100%; background: #90ff63; }
 
