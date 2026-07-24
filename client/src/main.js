@@ -900,6 +900,7 @@ const SPRITE_MOTION_HOLD_MS = 150; // bridge brief gaps in a bot's sprint/dodge 
 const _unitTexLoader = new THREE.TextureLoader();
 const _unitArtCache = {};         // `${spriteKey}_${state}` → loaded THREE.Texture
 const _unitArtPending = {};       // `${spriteKey}_${state}` → [callbacks] awaiting load
+const _placeholderTexCache = {};  // `${char}|${accent}` → shared placeholder CanvasTexture
 
 // Procedural stand-in so the game renders before real PNGs are dropped in.
 function makeUnitPlaceholderTexture(label, accentHex = 0x88aadd) {
@@ -962,7 +963,12 @@ function loadUnitArt(spriteKey, state, onReady) {
 // updater swaps `mat.map` to match the fighter's pose. Anchored at the feet
 // (bottom-center). The state rig hangs off sprite.userData for the updater.
 function makeUnitSprite(unitData, isOwnUnit = false) {
-  const placeholder = makeUnitPlaceholderTexture(unitData.char || '?', unitData.accent);
+  // Placeholder textures are pure functions of (char, accent) — share one per
+  // unit across every mech built in the session instead of re-drawing and
+  // re-uploading a fresh canvas on each (re)spawn.
+  const phKey = `${unitData.char || '?'}|${unitData.accent ?? ''}`;
+  const placeholder = _placeholderTexCache[phKey]
+    ?? (_placeholderTexCache[phKey] = makeUnitPlaceholderTexture(unitData.char || '?', unitData.accent));
   const mat = new THREE.SpriteMaterial({
     map: placeholder,
     transparent: true,
@@ -1056,6 +1062,21 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
     }
   }
   return sprite;
+}
+
+// Push one unit's pose art through decode AND GPU upload now (called at match
+// load), so a mid-match (re)spawn never pays a texture-upload hitch. Mirrors
+// makeUnitSprite's exact art keys: front vs "_rear" body set, the
+// "_rear_shadow" X-ray set for the own-unit slot, and the extra 'fly' pose
+// for flight units.
+function warmUnitArt(unitData, own = false) {
+  if (!unitData?.spriteKey) return;
+  const bodySuffix = own ? '_rear' : '';
+  const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
+  for (const s of states) {
+    loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, (tex) => renderer.initTexture?.(tex));
+    if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, (tex) => renderer.initTexture?.(tex));
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -5548,6 +5569,9 @@ function cleanupMatch() {
     state.online = null;
     hideOnlineOverlay();
   }
+  // Unused pre-built respawn mechs were never added to the scene/world —
+  // dropping the refs is the whole teardown (shared textures stay cached).
+  state.prebuiltMechs = null;
   getAllFighters().forEach((m) => {
     if (!m) return;
     disposeGlintImmediate(m);
@@ -5708,6 +5732,23 @@ function startMatch() {
   for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
     const m = state[s];
     if (m) state.spawnPoints[s] = { x: m.body.position.x, y: m.body.position.y, z: m.body.position.z };
+  }
+  // Trio: pre-build every future roster unit and pre-warm all fielded art
+  // now (load time), so a mid-match respawn swaps in a ready mech instead of
+  // paying mech construction + texture upload during the fight.
+  state.prebuiltMechs = null;
+  if (trioActive) {
+    state.prebuiltMechs = { player: [], ally: [], enemy: [], enemy2: [] };
+    for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
+      const roster = state.trioRosters[s];
+      if (!state[s] || !roster) continue;
+      for (const key of roster.slice(1)) {
+        if (!UNIT_DATA[key]) continue;
+        state.prebuiltMechs[s].push(buildDetachedMech(s, key));
+        warmUnitArt(UNIT_DATA[key], s === 'player');
+      }
+      warmUnitArt(state[s].unit, s === 'player');
+    }
   }
   buildArenaForMap(state.mapKey);
   const now = performance.now();
@@ -6841,6 +6882,23 @@ function ensureOnlineMatchSetup(snap) {
   // Save the snapshot-id → mech mapping for per-frame mirroring.
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
 
+  // Trio: pre-build each slot's future roster units and pre-warm all fielded
+  // art (mirrors the offline match-start prebuild), so a Trio respawn swaps
+  // in a ready mech instead of constructing one mid-match.
+  state.prebuiltMechs = { player: [], ally: [], enemy: [], enemy2: [] };
+  for (const [slotName, id] of [['player', cameraId], ['ally', allyId], ['enemy', enemyId], ['enemy2', enemy2Id]]) {
+    const f = id ? snap.fighters[id] : null;
+    if (!f) continue;
+    if (f.roster) {
+      for (const key of f.roster.slice((f.rosterIdx ?? 0) + 1)) {
+        if (!UNIT_DATA[key]) continue;
+        state.prebuiltMechs[slotName].push(buildDetachedMech(slotName, key));
+        warmUnitArt(UNIT_DATA[key], slotName === 'player');
+      }
+    }
+    if (UNIT_DATA[f.unitKey]) warmUnitArt(UNIT_DATA[f.unitKey], slotName === 'player');
+  }
+
   // Keep the client's map state in sync: per-map visuals read state.mapKey
   // (bullet-trail color picks dark/light per map) — without this, online
   // matches kept whatever map was last played OFFLINE (or none) and trails
@@ -6888,7 +6946,8 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   world.removeBody(old.body);
   old.trail.forEach((t) => scene.remove(t.mesh));
 
-  const fresh = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  const fresh = takePrebuiltMech(slotName, unitKey)
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
   fresh.unitKey = unitKey;
   fresh.state.team = old.state.team;
   fresh.body.position.copy(old.body.position);   // one-frame placeholder; the mirror overwrites
@@ -7860,6 +7919,29 @@ animate();
 // ---------------------------------------------------------------------------
 const TRIO_SLOT_COLORS = { player: 0x62d7ff, enemy: 0xff7ad5, ally: 0x86f7c2, enemy2: 0xff5a8a };
 
+// Build a slot's future roster mech NOW (match-load time) and park it outside
+// the scene/world; respawn swaps it in instead of constructing mid-fight —
+// the construction burst is what read as a respawn hitch on phones.
+function buildDetachedMech(slotName, unitKey) {
+  const mech = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  mech.unitKey = unitKey;
+  scene.remove(mech.root);
+  world.removeBody(mech.body);
+  return mech;
+}
+
+// Take the slot's next pre-built mech if it matches the wanted unit (rosters
+// only advance in order, so a mismatch means a repick/rebuild — return null
+// and let the caller construct fresh).
+function takePrebuiltMech(slotName, unitKey) {
+  const pre = state.prebuiltMechs?.[slotName];
+  if (!pre || pre[0]?.unitKey !== unitKey) return null;
+  const mech = pre.shift();
+  scene.add(mech.root);
+  world.addBody(mech.body);
+  return mech;
+}
+
 function respawnSlotMech(slotName, unitKey) {
   const old = state[slotName];
   const now = performance.now();
@@ -7870,7 +7952,8 @@ function respawnSlotMech(slotName, unitKey) {
   world.removeBody(old.body);
   old.trail.forEach((t) => scene.remove(t.mesh));
 
-  const fresh = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  const fresh = takePrebuiltMech(slotName, unitKey)
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
   fresh.state.team = old.state.team;
   const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
