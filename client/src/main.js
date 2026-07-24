@@ -1064,18 +1064,34 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   return sprite;
 }
 
-// Push one unit's pose art through decode AND GPU upload now (called at match
-// load), so a mid-match (re)spawn never pays a texture-upload hitch. Mirrors
-// makeUnitSprite's exact art keys: front vs "_rear" body set, the
-// "_rear_shadow" X-ray set for the own-unit slot, and the extra 'fly' pose
-// for flight units.
+// GPU-upload queue for pre-warmed art: PNGs decode whenever their download
+// lands, but the upload (renderer.initTexture) is drained ONE texture per
+// frame by the render loop — a burst of late arrivals on a slow connection
+// can never stack several uploads into a single frame.
+const _texWarmQueue = [];
+const _texWarmSeen = new WeakSet();
+function queueTexWarm(tex) {
+  if (_texWarmSeen.has(tex)) return;
+  _texWarmSeen.add(tex);
+  _texWarmQueue.push(tex);
+}
+function drainTexWarmQueue() {
+  if (_texWarmQueue.length) renderer.initTexture?.(_texWarmQueue.shift());
+}
+
+// Start one unit's pose art through decode + (queued) GPU upload. Called from
+// the pickers/queue room the moment a unit is known — download dead time is
+// the menus, not the fight — and again (idempotent, cache-deduped) at match
+// setup as a safety net. Mirrors makeUnitSprite's exact art keys: front vs
+// "_rear" body set, the "_rear_shadow" X-ray set for the own-unit slot, and
+// the extra 'fly' pose for flight units.
 function warmUnitArt(unitData, own = false) {
   if (!unitData?.spriteKey) return;
   const bodySuffix = own ? '_rear' : '';
   const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
   for (const s of states) {
-    loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, (tex) => renderer.initTexture?.(tex));
-    if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, (tex) => renderer.initTexture?.(tex));
+    loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, queueTexWarm);
+    if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, queueTexWarm);
   }
 }
 
@@ -6663,6 +6679,21 @@ function showOnlineWaitingOpp(onl, conn) {
   const mapName = mapKey ? MAP_DATA[mapKey]?.name : null;
   const myPicked = trio ? (Array.isArray(myCfg.unitKeys) && myCfg.unitKeys.length === 3) : !!myCfg.unitKey;
 
+  // Queue-room dead time = download time: start the art loads for every unit
+  // currently visible in the lobby config (players and bots alike), so the
+  // PNGs and their one-per-frame GPU uploads finish before the match starts
+  // instead of trickling into the first seconds of the fight. Re-running on
+  // every config update is free — loads and uploads are cache-deduped.
+  for (const s of slots) {
+    const isMe = s === myId;
+    if (trio) {
+      for (const k of cfg?.rosters?.[s] ?? []) warmUnitArt(UNIT_DATA[k], isMe);
+    } else {
+      const k = cfg?.config?.[s]?.unitKey ?? (occupied.has(s) ? null : (cfg?.botUnits?.[s] || 'unit1'));
+      if (k) warmUnitArt(UNIT_DATA[k], isMe);
+    }
+  }
+
   // Headline text. Both modes use the manual-start flow: the host picks unit +
   // map then starts; everyone else waits for the host.
   let waitingText;
@@ -7332,6 +7363,9 @@ function assignRoster(slot, arr) {
   state.trioRosters[slot] = arr;
   const keyField = { player: 'playerUnitKey', ally: 'allyUnitKey', enemy: 'enemyUnitKey', enemy2: 'enemy2UnitKey' }[slot];
   state[keyField] = arr[0];
+  // Kick this slot's art downloads NOW — the remaining pickers and the map
+  // screen are dead time, so the PNGs land before the fight starts.
+  for (const k of arr) warmUnitArt(UNIT_DATA[k], slot === 'player');
 }
 
 function trioPickCount() { return state.mainMode === 'trio' ? 3 : 1; }
@@ -11975,6 +12009,9 @@ function animate() {
   try {
     const dt = Math.min(clock.getDelta(), 1 / 30);
     const now = performance.now();
+    // One queued pre-warm texture upload per frame (menus included) — see
+    // queueTexWarm. No-op when the queue is empty.
+    drainTexWarmQueue();
 
     if (state.online) {
       syncKeyboardMovement();
