@@ -181,9 +181,14 @@ export function triggerDashDefense(fighter, now) {
 }
 
 // Try to start a step (dodge). Returns true if step started.
+// Every step stat is per-unit tunable (unit.stepBoostCost / stepDurationMs /
+// stepCooldownMs / stepDistance), falling back to the STEP_* globals — same
+// pattern as the jump family. stepDurationMs doubles as the i-frame window
+// (hit tests read stepUntil), so tuning it is a balance lever, not just feel.
 export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
+  const u = fighter.unit;
   if (now < fighter.stepCooldownUntil) return false;
-  if (fighter.boost < STEP_BOOST_COST) return false;
+  if (fighter.boost < (u?.stepBoostCost ?? STEP_BOOST_COST)) return false;
 
   let dx = dirX;
   let dz = dirZ;
@@ -200,17 +205,18 @@ export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
   dx /= len; dz /= len;
 
   fighter.stepStartAt = now;
-  fighter.stepUntil = now + STEP_DURATION_MS;
-  fighter.stepCooldownUntil = now + STEP_COOLDOWN_MS;
+  fighter.stepUntil = now + (u?.stepDurationMs ?? STEP_DURATION_MS);
+  fighter.stepCooldownUntil = now + (u?.stepCooldownMs ?? STEP_COOLDOWN_MS);
   fighter.stepFromX = fighter.pos.x;
   fighter.stepFromZ = fighter.pos.z;
-  fighter.stepToX = fighter.stepFromX + dx * STEP_DISTANCE;
-  fighter.stepToZ = fighter.stepFromZ + dz * STEP_DISTANCE;
+  const stepDist = u?.stepDistance ?? STEP_DISTANCE;
+  fighter.stepToX = fighter.stepFromX + dx * stepDist;
+  fighter.stepToZ = fighter.stepFromZ + dz * stepDist;
   fighter.queuedMomentumVX = fighter.momentumVX * 0.65 + fighter.vel.x * 0.35;
   fighter.queuedMomentumVZ = fighter.momentumVZ * 0.65 + fighter.vel.z * 0.35;
   fighter.momentumVX = 0;
   fighter.momentumVZ = 0;
-  fighter.boost = Math.max(0, fighter.boost - STEP_BOOST_COST);
+  fighter.boost = Math.max(0, fighter.boost - (u?.stepBoostCost ?? STEP_BOOST_COST));
   fighter.refillPausedUntil = now + 500;
   clearIncomingHoming(matchState, fighter, now);
   return true;

@@ -37,6 +37,10 @@ const app = document.getElementById('app');
 //   jumpHoverMs    apex hang-time before fall                  (default JUMP_HOVER_MS)
 //   jumpCooldownMs time between consecutive jumps              (default JUMP_COOLDOWN_MS)
 //   jumpBoostCost  boost cost to start a jump                  (default JUMP_BOOST_COST)
+//   stepBoostCost  boost cost of a dodge (step)                (default STEP_BOOST_COST)
+//   stepDurationMs dodge length — ALSO the i-frame window      (default STEP_DURATION_MS)
+//   stepCooldownMs time between consecutive dodges             (default STEP_COOLDOWN_MS)
+//   stepDistance   ground distance a dodge travels             (default STEP_DISTANCE)
 //
 // Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
 // engine consumes `fireCooldownMs` which is auto-derived from RPM by the
@@ -3304,7 +3308,11 @@ function updatePlayer(now) {
   }
 
   if (input.stepTap) {
-    if (!inStep && canInputMove && now >= stepState.stepCooldownUntil && stepState.boost >= STEP_BOOST_COST) {
+    // Per-unit step stats (stepBoostCost / stepDurationMs / stepCooldownMs /
+    // stepDistance) with STEP_* global fallbacks — mirrors tryStartStep in
+    // shared/src/sim/actions.js. stepDurationMs doubles as the i-frame window.
+    const stepU = state.player.unit;
+    if (!inStep && canInputMove && now >= stepState.stepCooldownUntil && stepState.boost >= (stepU?.stepBoostCost ?? STEP_BOOST_COST)) {
       let stepDir = move.clone();
       if (stepDir.lengthSq() < 0.03) stepDir.set(state.player.body.velocity.x, 0, state.player.body.velocity.z);
       if (stepDir.lengthSq() < 0.03) stepDir.set(p.x - e.x, 0, p.z - e.z);
@@ -3312,17 +3320,18 @@ function updatePlayer(now) {
       stepDir.normalize();
 
       stepState.stepStartAt = now;
-      stepState.stepUntil = now + STEP_DURATION_MS;
-      stepState.stepCooldownUntil = now + STEP_COOLDOWN_MS;
+      stepState.stepUntil = now + (stepU?.stepDurationMs ?? STEP_DURATION_MS);
+      stepState.stepCooldownUntil = now + (stepU?.stepCooldownMs ?? STEP_COOLDOWN_MS);
       stepState.stepFromX = state.player.body.position.x;
       stepState.stepFromZ = state.player.body.position.z;
-      stepState.stepToX = stepState.stepFromX + stepDir.x * STEP_DISTANCE;
-      stepState.stepToZ = stepState.stepFromZ + stepDir.z * STEP_DISTANCE;
+      const stepDist = stepU?.stepDistance ?? STEP_DISTANCE;
+      stepState.stepToX = stepState.stepFromX + stepDir.x * stepDist;
+      stepState.stepToZ = stepState.stepFromZ + stepDir.z * stepDist;
       stepState.queuedMomentumVX = state.player.state.momentumVX * 0.65 + state.player.body.velocity.x * 0.35;
       stepState.queuedMomentumVZ = state.player.state.momentumVZ * 0.65 + state.player.body.velocity.z * 0.35;
       state.player.state.momentumVX = 0;
       state.player.state.momentumVZ = 0;
-      state.player.state.boost = Math.max(0, state.player.state.boost - STEP_BOOST_COST);
+      state.player.state.boost = Math.max(0, state.player.state.boost - (stepU?.stepBoostCost ?? STEP_BOOST_COST));
       input.sprintLocked = false;
       state.player.state.refillPausedUntil = now + 500;
       clearIncomingHoming(state.player, now);
@@ -3724,9 +3733,9 @@ function updateEnemy(now) {
       now > (eState.stepUntil || 0)
       && now >= (eState.stepCooldownUntil || 0)
       // SURVIVAL EXEMPTION (like Defense): the glint dodge gates at the raw
-      // step cost, not the strategic reserve — even a suppressed bot may
-      // spend its last savings to survive a sniper shot.
-      && eState.boost >= STEP_BOOST_COST
+      // step cost (the unit's own, if declared), not the strategic reserve —
+      // even a suppressed bot may spend its last savings to survive a shot.
+      && eState.boost >= (state.enemy.unit?.stepBoostCost ?? STEP_BOOST_COST)
     ) {
       // Direction: perpendicular to the ATTACKER's line of fire. A NON-locked
       // attacker gets a strict perpendicular (overriding any active Defense
@@ -3752,18 +3761,20 @@ function updateEnemy(now) {
       }
       const sLen = Math.hypot(sdx, sdz) || 1;
       sdx /= sLen; sdz /= sLen;
+      const botStepU = state.enemy.unit;
       eState.stepStartAt = now;
-      eState.stepUntil = now + STEP_DURATION_MS;
-      eState.stepCooldownUntil = now + STEP_COOLDOWN_MS;
+      eState.stepUntil = now + (botStepU?.stepDurationMs ?? STEP_DURATION_MS);
+      eState.stepCooldownUntil = now + (botStepU?.stepCooldownMs ?? STEP_COOLDOWN_MS);
       eState.stepFromX = state.enemy.body.position.x;
       eState.stepFromZ = state.enemy.body.position.z;
-      eState.stepToX = eState.stepFromX + sdx * STEP_DISTANCE;
-      eState.stepToZ = eState.stepFromZ + sdz * STEP_DISTANCE;
+      const botStepDist = botStepU?.stepDistance ?? STEP_DISTANCE;
+      eState.stepToX = eState.stepFromX + sdx * botStepDist;
+      eState.stepToZ = eState.stepFromZ + sdz * botStepDist;
       eState.queuedMomentumVX = eState.momentumVX * 0.65 + state.enemy.body.velocity.x * 0.35;
       eState.queuedMomentumVZ = eState.momentumVZ * 0.65 + state.enemy.body.velocity.z * 0.35;
       eState.momentumVX = 0;
       eState.momentumVZ = 0;
-      eState.boost = Math.max(0, eState.boost - STEP_BOOST_COST);
+      eState.boost = Math.max(0, eState.boost - (botStepU?.stepBoostCost ?? STEP_BOOST_COST));
       eState.refillPausedUntil = now + 500;
       clearIncomingHoming(state.enemy, now);
       // "Dodge + sprint": after the i-frame step ends, keep sprinting the

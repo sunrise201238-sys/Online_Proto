@@ -4,8 +4,11 @@
 // Pilot stats per unit fall back to the global defaults further down
 // (MAX_HP, BOOST_CAP, WALK_SPEED, BOOST_MOVE_SPEED, BOOST_DASH_DRAIN_PER_TICK,
 // BOOST_REGEN_PER_TICK, JUMP_INITIAL_VELOCITY, JUMP_HOVER_MS,
-// JUMP_COOLDOWN_MS, JUMP_BOOST_COST). All three current units declare every
-// field explicitly so the schema is visible — mirrors client/src/main.js.
+// JUMP_COOLDOWN_MS, JUMP_BOOST_COST; the dodge family is likewise per-unit
+// tunable via optional stepBoostCost / stepDurationMs (ALSO the i-frame
+// window) / stepCooldownMs / stepDistance falling back to the STEP_*
+// globals). Units declare core fields explicitly so the schema is visible —
+// mirrors client/src/main.js.
 //
 // Fire rate is authored as `firePerMinute` (RPM, real-gun-spec style). The
 // engine consumes `fireCooldownMs` (per-shot minimum delay in ms) which is
