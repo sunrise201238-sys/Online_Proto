@@ -1425,6 +1425,9 @@ function setupHUD() {
   const teamBarsHtml = state.mode === '2v2' ? `
     <div class="ally-health"><div id="ally-health-fill"></div></div>
     <div class="enemy2-health"><div id="enemy2-health-fill"></div></div>` : '';
+  // In-match, the fullscreen button docks left of the PAUSE pill so it never
+  // covers the Trio weapon rows; menus restore its top-left home.
+  document.getElementById('fullscreen-btn')?.classList.add('in-match');
   hud.innerHTML = `
     <div class="health"><div id="health-fill"></div></div>
     <div class="enemy-health"><div id="enemy-health-fill"></div></div>
@@ -7144,6 +7147,8 @@ function showSelectMenu() {
   state.running = false;
   // An abandoned All Random chain must never leak into manual picking.
   state.allRandomFill = false;
+  // Outside gameplay the fullscreen button returns to its top-left home.
+  document.getElementById('fullscreen-btn')?.classList.remove('in-match');
   state.hud?.remove();
   renderer.domElement.style.pointerEvents = 'none';
 
