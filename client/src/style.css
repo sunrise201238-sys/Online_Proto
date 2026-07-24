@@ -162,12 +162,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   border-color: rgba(180, 220, 255, 0.85);
 }
 /* In-match: the FS button leaves the top-left (where it overlapped the Trio
-   weapon rows) and docks just LEFT of the centered PAUSE pill. Menus and
-   selection screens keep the original top-left spot. */
+   weapon rows) and docks just RIGHT of the player HP bar (left:16 + 180 wide
+   + 8px gap), top-aligned with it. Same spot online and offline — it doesn't
+   depend on the PAUSE pill. Menus keep the original top-left spot. */
 .fullscreen-btn.in-match {
-  top: 23px;
-  left: calc(50% - 58px);
-  transform: translateX(-100%);
+  top: 14px;
+  left: 204px;
 }
 
 /* Pseudo-fullscreen mode. Toggle adds .pseudo-fullscreen to <body>;
