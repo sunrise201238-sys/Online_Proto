@@ -577,13 +577,16 @@ export const SNIPER_CANCEL_MIN_CHARGE_MS = 500;
 // server waits for that confirmation (availability, not anti-cheat): if
 // the ack hasn't arrived within it, the charge proceeds pessimistically.
 // Offline and bot defenders confirm instantly, so nothing changes there.
-// SET TO 1000 (2026-07-25, user verdict — "defender's warning is sacred"):
-// normal connections ack in ~30-100 ms so nothing changes; against a
-// non-confirming defender (backgrounded tab, stalled client, zombie
-// connection) the earliest cancel becomes commit+1500, and via the
-// early-release slide in tickSniperCharge even a full 1000 ms hold slides
-// to 1500 — the attacker bears the whole cost, hard-bounded at 1.5 s.
-export const GLINT_CONFIRM_CAP_MS = 1000;
+// SET TO 500 (2026-07-25, final user verdict after touring 200/500/1000/
+// uncapped): normal connections ack in ~30-100 ms so nothing changes;
+// against a non-confirming defender (backgrounded tab, stalled client,
+// zombie connection) the earliest cancel becomes commit + 500 + 500 =
+// commit + 1000 — which lands EXACTLY on the full-charge auto-release, so
+// the attacker's worst case is simply "this shot becomes a normal full
+// charge". No release can ever exceed chargeMs; the tickSniperCharge
+// early-release slide is a no-op at this value. (Note: this tidy
+// coincidence assumes chargeMs stays 1000 — revisit if that changes.)
+export const GLINT_CONFIRM_CAP_MS = 500;
 // Minimum on-screen glint duration so an instant sprint-cancel still flashes
 // a hint at the target instead of vanishing within a single frame.
 export const SNIPER_GLINT_MIN_FLASH_MS = 100;
