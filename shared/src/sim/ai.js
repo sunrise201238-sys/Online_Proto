@@ -40,17 +40,24 @@ const BOT_FIRE_REACT_MS = 280;
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Anti-sniper humanization: the bot dodges only after this reaction delay
-// from the glint appearing. Two knobs (mirrored in client/src/main.js) so
-// the locked and non-locked cases can be tuned apart later:
-//   BOT_GLINT_REACT_MS          — the charging sniper IS the bot's lock target
-//   BOT_GLINT_REACT_UNLOCKED_MS — any OTHER enemy charging at the bot
-// At 500 ms the dodge starts the same tick as the fastest possible cancel
-// (SNIPER_CANCEL_MIN_CHARGE_MS = 500), so flight time makes EVERY floor snap
-// dodgeable at any range; only held releases (or a defender whose dodge is
-// cooldown/boost-blocked) land.
+// Anti-sniper humanization: the bot rolls its reaction PER CHARGE (mirrored
+// in client/src/main.js) — a defensive mixed strategy against the sniper's
+// own 70/30 snap/hold mix:
+//   70% (FAST_CHANCE): react at 500 ms — the dodge starts the same tick as
+//       the fastest possible cancel, so its i-frames (~512-812) cover EVERY
+//       floor snap at any range… while a full hold (impact ~1040) sails in
+//       after they end.
+//   30%: react at 800 ms — deliberately "late": floor snaps land first (the
+//       hit cancels the pending dodge, so it isn't wasted), but the i-frames
+//       (~800-1100) sit exactly on a FULL HOLD's impact and dodge it.
+// Neither side can be read: shooter rolls snap/hold, defender rolls
+// fast/slow, equilibrium ≈ 42% of charges convert.
+//   BOT_GLINT_REACT_MS          — fast roll when the sniper IS the lock target
+//   BOT_GLINT_REACT_UNLOCKED_MS — fast roll for any OTHER enemy (separable)
 const BOT_GLINT_REACT_MS = 500;
 const BOT_GLINT_REACT_UNLOCKED_MS = 500;
+const BOT_GLINT_REACT_SLOW_MS = 800;
+const BOT_GLINT_REACT_FAST_CHANCE = 0.7;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -379,9 +386,13 @@ export function tickBot(matchState, botId, now) {
     if (me.botGlintKey !== glintKey && me.botGlintStepAt == null) {
       me.botGlintKey = glintKey;
       me.botGlintAttackerId = glintThreat.id;
-      me.botGlintStepAt = now + (glintThreat.id === opp.id
+      // Per-charge defensive roll: fast (snap-dodger) or slow (hold-dodger).
+      const fastReact = glintThreat.id === opp.id
         ? BOT_GLINT_REACT_MS
-        : BOT_GLINT_REACT_UNLOCKED_MS);
+        : BOT_GLINT_REACT_UNLOCKED_MS;
+      me.botGlintStepAt = now + (Math.random() < BOT_GLINT_REACT_FAST_CHANCE
+        ? fastReact
+        : BOT_GLINT_REACT_SLOW_MS);
     }
   } else if (me.botGlintStepAt == null) {
     me.botGlintKey = null;
