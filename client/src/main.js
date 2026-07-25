@@ -4816,12 +4816,12 @@ function updateEnemy(now) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
         // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
-        // to full charge (the sweep channel). Other snipers (Aru): 75% floor
-        // snap / 25% held to FULL charge — the hold lands after a defender's
+        // to full charge (the sweep channel). Other snipers (Aru): 70% floor
+        // snap / 30% held to FULL charge — the hold lands after a defender's
         // spent dodge i-frames, the snap punishes non-dodgers.
         s.sniperChargeUntil = now + (u.beam
           ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
-          : (Math.random() < 0.75 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
+          : (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
         s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
       } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
