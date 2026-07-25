@@ -846,11 +846,12 @@ const BOT_HIT_EVADE_MS = 350;
 // Mirrors shared/src/sim/ai.js — humanlike delay from a glint appearing to
 // the bot's dodge. Two knobs so the locked / non-locked cases can be tuned
 // apart later: REACT_MS = the charging sniper IS the bot's lock target;
-// REACT_UNLOCKED_MS = any OTHER enemy charging at the bot. At 520 ms a
-// floor-canceled snap still lands first at close range (< ~50 u); beyond
-// that its flight time pushes impact past the dodge's i-frames.
-const BOT_GLINT_REACT_MS = 520;
-const BOT_GLINT_REACT_UNLOCKED_MS = 520;
+// REACT_UNLOCKED_MS = any OTHER enemy charging at the bot. At 500 ms the
+// dodge starts the same tick as the fastest possible cancel, so flight time
+// makes EVERY floor snap dodgeable at any range; only held releases (or a
+// cooldown/boost-blocked defender) land.
+const BOT_GLINT_REACT_MS = 500;
+const BOT_GLINT_REACT_UNLOCKED_MS = 500;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -4815,11 +4816,12 @@ function updateEnemy(now) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
         // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
-        // to full charge (the sweep channel). Other snipers: 90% floor / 10%
-        // random point in the cancel window.
+        // to full charge (the sweep channel). Other snipers (Aru): 75% floor
+        // snap / 25% held to FULL charge — the hold lands after a defender's
+        // spent dodge i-frames, the snap punishes non-dodgers.
         s.sniperChargeUntil = now + (u.beam
           ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
-          : (Math.random() < 0.9 ? SNIPER_CANCEL_MIN_CHARGE_MS : PhaserLikeBetween(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000)));
+          : (Math.random() < 0.75 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
         s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
       } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;

@@ -45,11 +45,12 @@ const BOT_HIT_EVADE_MS = 350;
 // the locked and non-locked cases can be tuned apart later:
 //   BOT_GLINT_REACT_MS          — the charging sniper IS the bot's lock target
 //   BOT_GLINT_REACT_UNLOCKED_MS — any OTHER enemy charging at the bot
-// At 520 ms, a floor-canceled snap (SNIPER_CANCEL_MIN_CHARGE_MS = 500) still
-// lands first at close range (< ~50 u), but from mid/long range its flight
-// time pushes the impact past the dodge's i-frames — range now matters.
-const BOT_GLINT_REACT_MS = 520;
-const BOT_GLINT_REACT_UNLOCKED_MS = 520;
+// At 500 ms the dodge starts the same tick as the fastest possible cancel
+// (SNIPER_CANCEL_MIN_CHARGE_MS = 500), so flight time makes EVERY floor snap
+// dodgeable at any range; only held releases (or a defender whose dodge is
+// cooldown/boost-blocked) land.
+const BOT_GLINT_REACT_MS = 500;
+const BOT_GLINT_REACT_UNLOCKED_MS = 500;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -1423,11 +1424,12 @@ export function tickBot(matchState, botId, now) {
       const fired = attemptFire(matchState, me, opp, now);
       if (fired) {
         // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
-        // to full charge (the sweep channel). Other snipers: 90% floor / 10%
-        // random point in the cancel window.
+        // to full charge (the sweep channel). Other snipers (Aru): 75% floor
+        // snap / 25% held to FULL charge — the hold lands after a defender's
+        // spent dodge i-frames, the snap punishes non-dodgers.
         me.sniperChargeUntil = now + (u.beam
           ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
-          : (Math.random() < 0.9 ? SNIPER_CANCEL_MIN_CHARGE_MS : between(SNIPER_CANCEL_MIN_CHARGE_MS, u.chargeMs ?? 1000)));
+          : (Math.random() < 0.75 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
         me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
