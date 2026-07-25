@@ -844,11 +844,11 @@ const BOT_FIRE_REACT_MS = 280;
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
 // Mirrors shared/src/sim/ai.js — the bot rolls its anti-glint reaction PER
-// CHARGE, a defensive mixed strategy vs the sniper's 70/30 snap/hold mix.
+// CHARGE, a defensive mixed strategy vs the sniper's 50/50 snap/hold flip.
 // The slow roll is charger-aware:
-//   ANTI-ARU (bullet snipers): 70% fast 500 ms / 30% slow 800 ms (snaps
+//   ANTI-ARU (bullet snipers): 50% fast 500 ms / 50% slow 800 ms (snaps
 //   land first and cancel the pending dodge; i-frames ~800-1100 sit on the
-//   full hold's impact). ANTI-KEI (beam snipers): 70% fast 500 ms / 30%
+//   full hold's impact). ANTI-KEI (beam snipers): 50% fast 500 ms / 50%
 //   slow 1000 ms — the dodge lands ON the sweep channel's opening, then the
 //   follow-up sprint outruns the steer at normal fighting ranges.
 // REACT_MS = fast roll vs the locked attacker; REACT_UNLOCKED_MS = fast
@@ -857,7 +857,7 @@ const BOT_GLINT_REACT_MS = 500;
 const BOT_GLINT_REACT_UNLOCKED_MS = 500;
 const BOT_GLINT_REACT_SLOW_MS = 800;        // anti-Aru slow roll
 const BOT_GLINT_REACT_SLOW_BEAM_MS = 1000;  // anti-Kei slow roll
-const BOT_GLINT_REACT_FAST_CHANCE = 0.7;
+const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -4830,13 +4830,13 @@ function updateEnemy(now) {
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
-        // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
-        // to full charge (the sweep channel). Other snipers (Aru): 70% floor
-        // snap / 30% held to FULL charge — the hold lands after a defender's
-        // spent dodge i-frames, the snap punishes non-dodgers.
-        s.sniperChargeUntil = now + (u.beam
-          ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
-          : (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
+        // Sniper release timing — a 50/50 coin flip for BOTH snipers:
+        // Kei (beam): quick floor beam OR the full-charge sweep channel.
+        // Aru: exact floor snap OR held to FULL charge. The hold lands after
+        // a defender's spent dodge i-frames, the snap punishes non-dodgers.
+        s.sniperChargeUntil = now + (Math.random() < 0.5
+          ? SNIPER_CANCEL_MIN_CHARGE_MS
+          : (u.chargeMs ?? 1000));
         s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
       } else s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;

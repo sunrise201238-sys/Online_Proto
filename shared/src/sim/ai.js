@@ -42,14 +42,14 @@ const BOT_FIRE_REACT_MS = 280;
 const BOT_HIT_EVADE_MS = 350;
 // Anti-sniper humanization: the bot rolls its reaction PER CHARGE (mirrored
 // in client/src/main.js) — a defensive mixed strategy against the sniper's
-// own 70/30 snap/hold mix. The slow roll is charger-aware:
-//   ANTI-ARU (bullet snipers): 70% react at 500 ms (i-frames ~512-812 cover
+// own 50/50 snap/hold coin flip. The slow roll is charger-aware:
+//   ANTI-ARU (bullet snipers): 50% react at 500 ms (i-frames ~512-812 cover
 //       every floor snap at any range; a full hold at ~1040 sails in after)
-//       / 30% react at 800 ms (snaps land first and cancel the pending
+//       / 50% react at 800 ms (snaps land first and cancel the pending
 //       dodge; i-frames ~800-1100 sit exactly on the full hold's impact).
-//       Equilibrium vs the 70/30 shooter ≈ 58% dodged.
-//   ANTI-KEI (beam snipers, unit.beam): 70% react at 500 ms (covers the
-//       instant quick beam) / 30% react at 1000 ms — the dodge lands ON the
+//       Equilibrium vs the 50/50 shooter = 50% dodged.
+//   ANTI-KEI (beam snipers, unit.beam): 50% react at 500 ms (covers the
+//       instant quick beam) / 50% react at 1000 ms — the dodge lands ON the
 //       sweep channel's aimed opening, then the follow-up sprint outruns
 //       the ~10°/s steer at normal fighting ranges. An 800 ms roll would be
 //       dead weight vs Kei (quick beam pre-empts it, sweep outlives it).
@@ -59,7 +59,7 @@ const BOT_GLINT_REACT_MS = 500;
 const BOT_GLINT_REACT_UNLOCKED_MS = 500;
 const BOT_GLINT_REACT_SLOW_MS = 800;        // anti-Aru slow roll
 const BOT_GLINT_REACT_SLOW_BEAM_MS = 1000;  // anti-Kei slow roll
-const BOT_GLINT_REACT_FAST_CHANCE = 0.7;
+const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
 const BOT_DIRE_SEARCH_MS = 4000;
@@ -1441,13 +1441,13 @@ export function tickBot(matchState, botId, now) {
     } else if (u.sniperCharge) {
       const fired = attemptFire(matchState, me, opp, now);
       if (fired) {
-        // Sniper release timing. Kei (beam): 70% quick at the floor / 30% holds
-        // to full charge (the sweep channel). Other snipers (Aru): 70% floor
-        // snap / 30% held to FULL charge — the hold lands after a defender's
-        // spent dodge i-frames, the snap punishes non-dodgers.
-        me.sniperChargeUntil = now + (u.beam
-          ? (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000))
-          : (Math.random() < 0.7 ? SNIPER_CANCEL_MIN_CHARGE_MS : (u.chargeMs ?? 1000)));
+        // Sniper release timing — a 50/50 coin flip for BOTH snipers:
+        // Kei (beam): quick floor beam OR the full-charge sweep channel.
+        // Aru: exact floor snap OR held to FULL charge. The hold lands after
+        // a defender's spent dodge i-frames, the snap punishes non-dodgers.
+        me.sniperChargeUntil = now + (Math.random() < 0.5
+          ? SNIPER_CANCEL_MIN_CHARGE_MS
+          : (u.chargeMs ?? 1000));
         me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
