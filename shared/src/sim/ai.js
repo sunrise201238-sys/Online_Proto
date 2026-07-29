@@ -43,22 +43,23 @@ const BOT_HIT_EVADE_MS = 350;
 // Anti-sniper humanization: the bot rolls its reaction PER CHARGE (mirrored
 // in client/src/main.js) — a defensive mixed strategy against the sniper's
 // own 50/50 snap/hold coin flip. The slow roll is charger-aware:
-//   ANTI-ARU (bullet snipers): 50% react at 500 ms (i-frames ~512-812 cover
+//   ANTI-ARU (bullet snipers): 50% react at 400 ms (i-frames ~400-712 cover
 //       every floor snap at any range; a full hold at ~1040 sails in after)
 //       / 50% react at 800 ms (snaps land first and cancel the pending
 //       dodge; i-frames ~800-1100 sit exactly on the full hold's impact).
 //       Equilibrium vs the 50/50 shooter = 50% dodged.
-//   ANTI-KEI (beam snipers, unit.beam): 50% react at 500 ms (covers the
-//       instant quick beam) / 50% react at 1000 ms — the dodge lands ON the
-//       sweep channel's aimed opening, then the follow-up sprint outruns
-//       the ~10°/s steer at normal fighting ranges. An 800 ms roll would be
-//       dead weight vs Kei (quick beam pre-empts it, sweep outlives it).
+//   ANTI-KEI (beam snipers, unit.beam): 50% react at 400 ms (covers the
+//       instant quick beam) / 50% react at 900 ms — the dodge starts just
+//       ahead of the sweep channel's aimed opening (~1000), i-frames
+//       ~900-1200 blanket it, then the follow-up sprint outruns the ~10°/s
+//       steer at normal fighting ranges. An 800 ms roll would be dead
+//       weight vs Kei (quick beam pre-empts it, sweep outlives it).
 //   BOT_GLINT_REACT_MS          — fast roll when the sniper IS the lock target
 //   BOT_GLINT_REACT_UNLOCKED_MS — fast roll for any OTHER enemy (separable)
-const BOT_GLINT_REACT_MS = 500;
-const BOT_GLINT_REACT_UNLOCKED_MS = 500;
+const BOT_GLINT_REACT_MS = 400;
+const BOT_GLINT_REACT_UNLOCKED_MS = 400;
 const BOT_GLINT_REACT_SLOW_MS = 800;        // anti-Aru slow roll
-const BOT_GLINT_REACT_SLOW_BEAM_MS = 1000;  // anti-Kei slow roll
+const BOT_GLINT_REACT_SLOW_BEAM_MS = 900;   // anti-Kei slow roll
 const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
 // No clear line to the player for this long => enter "dire search": drop all
 // range discipline and beeline to the player until a clear line is regained.
