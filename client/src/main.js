@@ -6924,6 +6924,10 @@ function ensureOnlineMatchSetup(snap) {
     scene.remove(m.root);
     world.removeBody(m.body);
     m.trail.forEach((t) => scene.remove(t.mesh));
+    // Same mid-sweep orphan guard as respawnSlotMech / rebuildOnlineMechForSlot:
+    // a lobby/map teardown during a live sweep channel must take the scene-level
+    // beam group with it.
+    if (m.chargedBeamVisual) { scene.remove(m.chargedBeamVisual); m.chargedBeamVisual = null; }
   });
   state.player = null;
   state.enemy = null;
@@ -8059,6 +8063,10 @@ function respawnSlotMech(slotName, unitKey) {
   scene.remove(old.root);
   world.removeBody(old.body);
   old.trail.forEach((t) => scene.remove(t.mesh));
+  // A Kei killed MID-SWEEP leaves a scene-level beam group on the old mech;
+  // without this it orphans forever (the replaced mech leaves getAllFighters,
+  // so no later cleanup can reach it). Mirrors rebuildOnlineMechForSlot.
+  if (old.chargedBeamVisual) { scene.remove(old.chargedBeamVisual); old.chargedBeamVisual = null; }
 
   const fresh = takePrebuiltMech(slotName, unitKey)
     ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
