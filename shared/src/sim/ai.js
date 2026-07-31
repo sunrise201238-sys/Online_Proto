@@ -1463,20 +1463,24 @@ export function tickBot(matchState, botId, now) {
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
     } else {
-      if (u.spreadCount === 1 && me.machineBurstRemaining <= 0) {
+      // Burst gating applies to every single-projectile gun AND to any
+      // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
+      // carry cap 4 — four blasts per trigger pull, then the usual rest).
+      const bursted = u.spreadCount === 1 || u.botFireCap;
+      if (bursted && me.machineBurstRemaining <= 0) {
         me.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = me.lastFireAt;
       attemptFire(matchState, me, opp, now);
       const fired = me.lastFireAt !== firedAt;
-      if (u.spreadCount === 1) {
+      if (bursted) {
         if (fired) me.machineBurstRemaining -= 1;
         me.nextFireAt = me.machineBurstRemaining > 0
           ? now + u.fireCooldownMs
           : now + between(800, 1500);
         if (me.machineBurstRemaining <= 0) me.machineBurstRemaining = 0;
       } else {
-        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
+        // Capless multi-pellet pacing — pace shots near the weapon's
         // mechanical fire cooldown so the bot uses its full per-shot DPS
         // instead of dawdling 1+ s between shots. Small jitter avoids a
         // perfectly robotic cadence; the magazine + autoReload still impose

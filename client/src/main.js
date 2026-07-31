@@ -109,6 +109,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
+    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 }
@@ -444,6 +445,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
+    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
@@ -4904,13 +4906,17 @@ function updateEnemy(now) {
     } else {
       // Universal burst: derive length from magCapacity so different weapons
       // (5-round mag, 30-round MG, future 100-round LMG) all feel right.
-      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) {
+      // Burst gating applies to every single-projectile gun AND to any
+      // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
+      // carry cap 4 — four blasts per trigger pull, then the usual rest).
+      const bursted = u.spreadCount === 1 || u.botFireCap;
+      if (bursted && s.machineBurstRemaining <= 0) {
         s.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
-      if (u.spreadCount === 1) {
+      if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
         // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
         // firePerMinute and the bot's DPS scales with it. Inter-burst pause
@@ -4921,7 +4927,7 @@ function updateEnemy(now) {
           : now + PhaserLikeBetween(800, 1500);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
-        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
+        // Capless multi-pellet pacing — pace shots near the weapon's
         // mechanical fire cooldown so the bot uses its full per-shot DPS
         // instead of dawdling 1+ s between shots. Small jitter avoids a
         // perfectly robotic cadence; the magazine + autoReload still impose
