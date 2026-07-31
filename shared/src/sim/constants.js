@@ -264,6 +264,9 @@ export const UNIT_DATA = {
   unit8: {
     id: 'unit8',
     name: 'Unit 8 / Submachine Gun',
+    // Mika — hidden from all pickers/random pools since 0.5.9 (client
+    // `hidden` flag; Marina/unit13 took her slot). Sim stats stay so the
+    // server still validates and simulates her if an old roster carries her.
 
     // Pilot stats
     hp: 150,
@@ -424,6 +427,40 @@ export const UNIT_DATA = {
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit13: {
+    id: 'unit13',
+    name: 'Unit 13 / Submachine Gun',
+
+    // Pilot stats — Atsuko template (0.5.9): same mobility block.
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Atsuko's envelope pushed to the 48 ms tick slot (Hina's
+    // cadence) with the PPSh drum: same 3.5 damage and 0.06 spread, but no
+    // HA scatter and a 71-round mag on the quick 1.5 s reload.
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
+    spreadCount: 1,
+    spreadAngle: 0.06,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3.5,               // 9mm — Atsuko's bullet on Hina's cadence
+
+    magCapacity: 71,
+    reloadMs: 1500,
+    autoReload: false,
+    // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 

@@ -308,6 +308,13 @@ const UNIT_DATA = {
     name: 'Unit 8 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'mika', char: 'Mika', weapon: 'Lanchester Mk.1', accent: 0xf4b8e4,
+    // Hidden since 0.5.9 — Marina (unit13) took her selection slot. Every
+    // picker grid and random/all-random pool filters on this flag, so she
+    // can't be seen or rolled in-game; stats stay for compat (old rosters,
+    // server validation). To bring her back: delete this flag AND re-add
+    // 'unit8' to UNIT_GRID_ORDER (units missing from that list sort to the
+    // grid's end, outside their weapon-category row).
+    hidden: true,
 
     // Pilot stats
     hp: 150,
@@ -471,6 +478,41 @@ const UNIT_DATA = {
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit13: {
+    name: 'Unit 13 / Submachine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'marina', char: 'Marina', weapon: 'PPSh-41', accent: 0xe0384a,
+
+    // Pilot stats — Atsuko template (0.5.9): same mobility block.
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Atsuko's envelope pushed to the 48 ms tick slot (Hina's
+    // cadence) with the PPSh drum: same 3.5 damage and 0.06 spread, but no
+    // HA scatter and a 71-round mag on the quick 1.5 s reload.
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
+    spreadCount: 1,
+    spreadAngle: 0.06,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3.5,               // 9mm — Atsuko's bullet on Hina's cadence
+
+    magCapacity: 71,
+    reloadMs: 1500,
+    autoReload: false,
+    // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 
@@ -6599,7 +6641,8 @@ function showOnlineUnitPicker(onl, conn) {
   menu.className = 'menu';
   // offlineOnly units (Aris) are hidden online: the server sim doesn't know
   // them yet. Remove the filters once the unit is migrated to shared.
-  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
+  // hidden units (Mika) are out of every picker, online and offline.
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
   // Mention which mode the lobby is in so non-hosts know what they joined.
   // Host's local main-mode pick wins until the server echo lands (see
   // computeOnlineUiPhase) — otherwise this can render as the Duel picker
@@ -6667,7 +6710,8 @@ function showOnlineBotUnitPicker(onl, conn) {
   const slot = onl.pickingBotSlot;
   const trio = conn?.getLobbyConfig?.()?.mainMode === 'trio';
   // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
-  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly);
+  // hidden units (Mika) are out of every picker, online and offline.
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
   // Trio picks live on onl so each confirm can fully re-render the menu
   // (clear per-pick feedback — see showOnlineUnitPicker).
   const picks = onl.botUnitPicks ?? (onl.botUnitPicks = []);
@@ -7320,7 +7364,7 @@ function showSelectMenu() {
   state.hud?.remove();
   renderer.domElement.style.pointerEvents = 'none';
 
-  const unitEntries = Object.entries(UNIT_DATA);
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
 
   const menu = document.createElement('div');
   menu.className = 'menu';
@@ -7551,7 +7595,7 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
 // from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
-  'unit1', 'unit9', 'unit4', 'unit8',    // Saori  Asuna  Atsuko Mika
+  'unit1', 'unit9', 'unit4', 'unit13',   // Saori  Asuna  Atsuko Marina (Mika's old slot — unit8 hidden)
   'unit2', 'unit11', 'unit12', 'unit5',  // Hoshino Haruka Koyuki Hina
   'unit10', 'unit7', 'unit3', 'unit6'    // Fubuki Aris   Aru    Kei
 ];
@@ -7568,9 +7612,10 @@ const RANDOM_PICK_KEY = '__random';
 const ALL_RANDOM_PICK_KEY = '__allrandom';
 
 // Roll one unit key, excluding `excluded` (the no-repeat-within-one-roster
-// rule — same as the Random card). Pool defaults to every unit (offline);
-// online callers pass their eligibility-filtered pool.
-function rollRandomUnit(excluded, pool = Object.keys(UNIT_DATA)) {
+// rule — same as the Random card). Pool defaults to every visible unit
+// (offline — hidden units are never rolled); online callers pass their
+// eligibility-filtered pool.
+function rollRandomUnit(excluded, pool = Object.keys(UNIT_DATA).filter((k) => !UNIT_DATA[k].hidden)) {
   const eligible = pool.filter((k) => !excluded.includes(k));
   const from = eligible.length ? eligible : pool;
   return from[Math.floor(Math.random() * from.length)];
@@ -7708,7 +7753,7 @@ function wireMapGrid(menu, onPick) {
 }
 
 function showUnitPicker(title, onPick, excluded = [], onAllRandom = null) {
-  const unitEntries = Object.entries(UNIT_DATA);
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h2>${title}</h2>${unitGridHTML(unitEntries)}`;

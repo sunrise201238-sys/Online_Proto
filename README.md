@@ -36,7 +36,7 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies):
+Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies). A thirteenth unit, Mika (Unit 8), is fully defined in the code but **hidden from selection since 0.5.9** — Marina (Unit 13) took her picker slot, and hidden units can't be rolled by Random/All Random either:
 
 **Weapons:**
 
@@ -45,7 +45,8 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| Unit 8 — Submachine Gun (Mika) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
+| Unit 13 — Submachine Gun (Marina) | 71 | 3.5 / shot | ~1250 RPM | 600 | 50 | 1.5 s |
+| Unit 8 — Submachine Gun (Mika, *hidden*) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
@@ -62,7 +63,8 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 1 — Saori | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | Unit 9 — Asuna | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
-| Unit 8 — Mika | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
+| Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | — | ~53 |
+| Unit 8 — Mika (*hidden*) | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
 | Unit 12 — Koyuki | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
@@ -73,6 +75,8 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
 
 Unit 8 trades burst for uptime: modest burst DPS, but 200 damage per magazine and ~5.5 s of uninterrupted fire where most others reload every ~2 s.
+
+Unit 13 is Atsuko's bullet on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis, no HA scatter, and a 71-round drum — ~3.4 s of continuous fire (≈248 damage per drum) behind the quick 1.5 s SMG reload.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
