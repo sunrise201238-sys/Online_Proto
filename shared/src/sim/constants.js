@@ -177,7 +177,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
-    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
+    botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -359,6 +359,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 10,
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -429,7 +430,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
-    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -465,7 +466,7 @@ export const UNIT_DATA = {
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
-    botFireCap: 35,         // bot: shots per trigger pull (fire cap, 2026-08-01)
+    botFireCap: 71,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
