@@ -45,7 +45,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| Unit 13 — Submachine Gun (Marina) | 71 | 3 / shot | ~1250 RPM | 600 | 50 | 2 s |
+| Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
@@ -72,7 +72,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis, no HA scatter, and a 71-round drum — ~3.4 s of continuous fire (≈213 damage per drum) behind a 2 s reload.
+Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis, no HA scatter, and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
