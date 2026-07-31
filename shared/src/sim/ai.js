@@ -186,10 +186,14 @@ function botHasLineOfSight(p0, p1, obstacles) {
   return true;
 }
 
-// Universal burst size for continuous-fire weapons (spreadCount === 1): about
-// half the mag per trigger pull, clamped so tiny or huge mags still feel
-// right. Derives from magCapacity so re-tuning a weapon re-tunes the bot.
+// Burst size for continuous-fire weapons (spreadCount === 1). Units with a
+// botFireCap fire EXACTLY that many per trigger pull (bounded by remaining
+// ammo — an empty mag ends the burst early into the reload); units without
+// one keep the legacy rule: about half the mag, clamped so tiny or huge
+// mags still feel right (2026-08-01: all listed autos carry explicit caps;
+// the formula now only serves Fubuki/Aris and future unlisted guns).
 function botBurstSize(unit) {
+  if (unit.botFireCap) return unit.botFireCap;
   if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
 }
@@ -1430,6 +1434,12 @@ export function tickBot(matchState, botId, now) {
         ? u.reloadMs
         : Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);
       me.nextFireAt = now + wait;
+      me.machineBurstRemaining = 0;
+    } else if (now < opp.invulnerableUntil) {
+      // Target is spawn-immune — no shot can hurt it, so hold fire instead
+      // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
+      // regular 220 ms poll, whichever comes first (the target can change).
+      me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
       { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },

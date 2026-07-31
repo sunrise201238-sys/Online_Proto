@@ -75,6 +75,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -177,6 +178,7 @@ const UNIT_DATA = {
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
@@ -211,6 +213,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
+    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -338,6 +341,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 50,
+    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
@@ -370,6 +374,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 25,
+    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -475,6 +480,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
+    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -3611,11 +3617,14 @@ function botHasLineOfSight(p0, p1) {
   return true;
 }
 
-// Universal burst size for continuous-fire weapons (spreadCount === 1): about
-// half the magazine per trigger pull, clamped so a 5-round mag still feels
-// like a burst and a 100-round mag doesn't fire forever. Derives from
-// magCapacity so re-tuning a weapon's mag automatically re-tunes the bot.
+// Burst size for continuous-fire weapons (spreadCount === 1). Units with a
+// botFireCap fire EXACTLY that many per trigger pull (bounded by remaining
+// ammo — an empty mag ends the burst early into the reload); units without
+// one keep the legacy rule: about half the mag, clamped so tiny or huge
+// mags still feel right (2026-08-01: all listed autos carry explicit caps;
+// the formula now only serves Fubuki/Aris and future unlisted guns).
 function botBurstSize(unit) {
+  if (unit.botFireCap) return unit.botFireCap;
   if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
 }
@@ -4864,6 +4873,12 @@ function updateEnemy(now) {
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
+      s.machineBurstRemaining = 0;
+    } else if (now < state.player.state.invulnerableUntil) {
+      // Target is spawn-immune — no shot can hurt it, so hold fire instead
+      // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
+      // regular 220 ms poll, whichever comes first (the target can change).
+      s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
       { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },

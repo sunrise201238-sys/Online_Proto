@@ -157,6 +157,8 @@ Three properties the table encodes: glint duration equals the release time on **
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
+**Bot trigger discipline (auto weapons).** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts: Saori 30, Asuna 25, Atsuko 30, Marina 35, Koyuki 25, Hina 50 (units without a cap fire about half a magazine, clamped 3–20). A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire entirely at immune targets and wake the moment immunity lapses.
+
 ## Controls
 
 | | |

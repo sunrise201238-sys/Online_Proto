@@ -42,6 +42,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -142,6 +143,7 @@ export const UNIT_DATA = {
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
@@ -175,6 +177,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
+    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -290,6 +293,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 50,
+    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
@@ -321,6 +325,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 25,
+    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -424,6 +429,7 @@ export const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
+    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -459,6 +465,7 @@ export const UNIT_DATA = {
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
+    botFireCap: 35,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
