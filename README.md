@@ -36,7 +36,7 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies). A thirteenth unit, Mika (Unit 8), is fully defined in the code but **hidden from selection since 0.5.9** — Marina (Unit 13) took her picker slot, and hidden units can't be rolled by Random/All Random either:
+Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies):
 
 **Weapons:**
 
@@ -46,7 +46,6 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
 | Unit 13 — Submachine Gun (Marina) | 71 | 3 / shot | ~1250 RPM | 600 | 50 | 2 s |
-| Unit 8 — Submachine Gun (Mika, *hidden*) | 50 | 4 / shot | ~600 RPM | 600 | 50 | 1.5 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
@@ -64,7 +63,6 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 9 — Asuna | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
 | Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | — | ~53 |
-| Unit 8 — Mika (*hidden*) | 50 ms @ 0.50 | 0.04 | 0.04 | ~40 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
 | Unit 12 — Koyuki | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
@@ -74,13 +72,11 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 8 trades burst for uptime: modest burst DPS, but 200 damage per magazine and ~5.5 s of uninterrupted fire where most others reload every ~2 s.
-
 Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis, no HA scatter, and a 71-round drum — ~3.4 s of continuous fire (≈213 damage per drum) behind a 2 s reload.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Atsuko, Mika) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Haruka's pattern is additionally stretched 1.4× horizontally (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Atsuko) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Haruka's pattern is additionally stretched 1.4× horizontally (details below).
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
@@ -91,7 +87,7 @@ Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slo
 | Saori @56 | 99% | 69% | 6% |
 | Asuna @56 | 100% | 64% | 8% |
 | Atsuko @50 | 85% | 57% | 16% |
-| Mika @50 | 97% | 67% | 11% |
+| Marina @50 | 100% | 51% | 23% |
 | Hoshino @40 | 75% | 30% | 0% |
 | Haruka @40 | 61% | 30% | 4% |
 | Koyuki @80 | 76% | 40% | 3% |
@@ -104,7 +100,7 @@ Standouts under the strict protocol: perpendicular sprint is near-untouchable fo
 | | |
 |---|---|
 | **Saori @56** — 445.5 / 310.5 / 27 ![Saori](docs/img/lockrange/saori100shots.png) | **Asuna @56** — 400 / 256 / 32 ![Asuna](docs/img/lockrange/asuna100shots.png) |
-| **Atsuko @50** — 297.5 / 199.5 / 56 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Mika @50** — 388 / 268 / 44 ![Mika](docs/img/lockrange/mika100shots.png) |
+| **Atsuko @50** — 297.5 / 199.5 / 56 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Marina @50** — 300 / 153 / 69 ![Marina](docs/img/lockrange/marina100shots.png) |
 | **Hoshino @40** — 210 / 85 / 0 ![Hoshino](docs/img/lockrange/hoshino7shots.png) | **Haruka @40** — 170 / 85 / 10 ![Haruka](docs/img/lockrange/haruka7shots.png) |
 | **Koyuki @80** — 342 / 180 / 13.5 ![Koyuki](docs/img/lockrange/koyuki100shots.png) | **Hina @80** — 400 / 100 / 0 ![Hina](docs/img/lockrange/hina100shots.png) |
 
