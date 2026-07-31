@@ -497,8 +497,9 @@ const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — Atsuko's envelope pushed to the 48 ms tick slot (Hina's
-    // cadence) with the PPSh drum: same 3.5 damage and 0.06 spread, but no
-    // HA scatter and a 71-round mag on the quick 1.5 s reload.
+    // cadence) with the PPSh drum: lighter 3-damage bullet and the same 0.06
+    // spread, no HA scatter, 71-round mag on a 2 s reload (tuned 2026-07-31
+    // from 3.5/1.5 s).
     lockRange: 50,
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
@@ -506,10 +507,10 @@ const UNIT_DATA = {
     spreadAngle: 0.06,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 3.5,               // 9mm — Atsuko's bullet on Hina's cadence
+    damage: 3,                 // lightest bullet in the game — the 48 ms cadence is the payload
 
     magCapacity: 71,
-    reloadMs: 1500,
+    reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
     stun: { ms: 50, moveScale: 0.50 }
