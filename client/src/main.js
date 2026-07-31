@@ -51,7 +51,7 @@ const UNIT_DATA = {
   unit1: {
     name: 'Unit 1 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'saori', char: 'Saori', weapon: 'M4', accent: 0x3a4a78,
+    char: 'Unit 1', weapon: 'M4', accent: 0x3a4a78,
 
     // Pilot stats
     hp: 150,
@@ -82,7 +82,7 @@ const UNIT_DATA = {
   unit2: {
     name: 'Unit 2 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'hoshino', char: 'Hoshino', weapon: 'Beretta 1301', accent: 0xff9ec7,
+    char: 'Unit 2', weapon: 'Beretta 1301', accent: 0xff9ec7,
 
     // Pilot stats
     hp: 150,
@@ -115,7 +115,7 @@ const UNIT_DATA = {
   unit3: {
     name: 'Unit 3 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'aru', char: 'Aru', weapon: 'PSG1', accent: 0xff7a8a,
+    char: 'Unit 3', weapon: 'PSG1', accent: 0xff7a8a,
 
     // Pilot stats
     hp: 150,
@@ -152,7 +152,7 @@ const UNIT_DATA = {
   unit4: {
     name: 'Unit 4 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'atsuko', char: 'Atsuko', weapon: 'evo3', accent: 0xe8a13a,
+    char: 'Unit 4', weapon: 'evo3', accent: 0xe8a13a,
 
     // Pilot stats
     hp: 150,
@@ -187,7 +187,7 @@ const UNIT_DATA = {
   unit5: {
     name: 'Unit 5 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'hina', char: 'Hina', weapon: 'MG42', accent: 0x6fcf8f,
+    char: 'Unit 5', weapon: 'MG42', accent: 0x6fcf8f,
 
     // Pilot stats
     hp: 150,
@@ -216,9 +216,9 @@ const UNIT_DATA = {
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   },
   unit6: {
-    name: 'Unit 6 / Sniper Rifle',
+    name: 'Unit 6 / Laser Sniper',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'kei', char: 'Kei', weapon: 'Laser', accent: 0x9a7be0,
+    char: 'Unit 6', weapon: 'Laser Sniper', accent: 0x9a7be0,
 
     // Pilot stats
     hp: 150,
@@ -253,9 +253,9 @@ const UNIT_DATA = {
     beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
   },
   unit7: {
-    name: 'Unit 7 / Rifle',
+    name: 'Unit 7 / Laser Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'aris', char: 'Aris', weapon: 'Laser', accent: 0x6fd9e8,
+    char: 'Unit 7', weapon: 'Laser Rifle', accent: 0x6fd9e8,
 
     // Pilot stats
     hp: 150,
@@ -307,7 +307,7 @@ const UNIT_DATA = {
   unit8: {
     name: 'Unit 8 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'mika', char: 'Mika', weapon: 'Lanchester Mk.1', accent: 0xf4b8e4,
+    char: 'Unit 8', weapon: 'Lanchester Mk.1', accent: 0xf4b8e4,
     // Hidden since 0.5.9 — Marina (unit13) took her selection slot. Every
     // picker grid and random/all-random pool filters on this flag, so she
     // can't be seen or rolled in-game; stats stay for compat (old rosters,
@@ -345,7 +345,7 @@ const UNIT_DATA = {
   unit9: {
     name: 'Unit 9 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'asuna', char: 'Asuna', weapon: 'FAMAS', accent: 0x3fbde8,
+    char: 'Unit 9', weapon: 'FAMAS', accent: 0x3fbde8,
 
     // Pilot stats
     hp: 150,
@@ -377,7 +377,7 @@ const UNIT_DATA = {
   unit10: {
     name: 'Unit 10 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'fubuki', char: 'Fubuki', weapon: 'Ruger Mini-14', accent: 0x6f86b8,
+    char: 'Unit 10', weapon: 'Ruger Mini-14', accent: 0x6f86b8,
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
@@ -411,7 +411,7 @@ const UNIT_DATA = {
   unit11: {
     name: 'Unit 11 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'haruka', char: 'Haruka', weapon: 'SDASS', accent: 0x7a5f96,
+    char: 'Unit 11', weapon: 'SDASS', accent: 0x7a5f96,
 
     // Pilot stats
     hp: 150,
@@ -449,7 +449,7 @@ const UNIT_DATA = {
   unit12: {
     name: 'Unit 12 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'koyuki', char: 'Koyuki', weapon: 'M60', accent: 0xff8ac8,
+    char: 'Unit 12', weapon: 'M60', accent: 0xff8ac8,
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 150,
@@ -482,7 +482,7 @@ const UNIT_DATA = {
   unit13: {
     name: 'Unit 13 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'marina', char: 'Marina', weapon: 'PPSh-41', accent: 0xe0384a,
+    char: 'Unit 13', weapon: 'PPSh-41', accent: 0xe0384a,
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
     hp: 150,
@@ -949,12 +949,12 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
 });
 
 // ----------------------------------------------------------------------------
-// Unit character billboards (Blue Archive SD models), STATE-DRIVEN.
+// Unit character billboards (procedural placeholders), STATE-DRIVEN.
 // Each mech renders as a camera-facing sprite instead of the old box-mech, and
-// swaps its texture to match the fighter's current pose. Real art lives in
+// swaps its texture to match the fighter's current pose. Real art would live in
 // client/public/units/<spriteKey>_<state>.png (transparent portrait, feet near
-// the bottom edge), one PNG per state below. Until those exist a labelled
-// placeholder stands in, so the game still runs without the assets.
+// the bottom edge), one PNG per state below. DEMO BUILD: no unit ships a
+// spriteKey, so every mech renders the labelled accent-colored placeholder.
 //
 // State priority (highest first): dodge > sprint > shoot > stand. Sprint/dodge
 // outrank shoot, so a unit firing while dashing/running keeps its motion pose
@@ -978,9 +978,6 @@ function makeUnitPlaceholderTexture(label, accentHex = 0x88aadd) {
   const x = cv.getContext('2d');
   const accent = '#' + (accentHex >>> 0).toString(16).padStart(6, '0').slice(-6);
 
-  // halo
-  x.strokeStyle = '#ffe27a'; x.lineWidth = 8;
-  x.beginPath(); x.ellipse(W / 2, 74, 52, 16, 0, 0, Math.PI * 2); x.stroke();
   // body
   x.fillStyle = accent;
   x.beginPath();
@@ -5593,8 +5590,9 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
       .filter((l) => l.length)
       .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
         const u = UNIT_DATA[k];
+        // DEMO BUILD: weapon renders are gone — a text name tag stands in.
         return u
-          ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
+          ? `<span class="trio-weapon-tag">${u.weapon ?? k}</span>`
           : '';
       }).join('')}</div>`)
       .join('')
@@ -6858,8 +6856,8 @@ function showOnlineWaitingOpp(onl, conn) {
       // a Join button in 2v2 (team-switch). 1v1 has no Join.
       const botUnitKey = cfg?.botUnits?.[s] || 'unit1';
       const botLabel = trio
-        ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.char ?? 'Saori'}`
-        : `${UNIT_DATA[botUnitKey]?.char || 'Saori'} (BOT)`;
+        ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.char ?? 'Unit 1'}`
+        : `${UNIT_DATA[botUnitKey]?.char || 'Unit 1'} (BOT)`;
       if (isHost) {
         statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botLabel} — tap to change</span>`;
       } else {
@@ -7563,17 +7561,17 @@ function spawnProfilePopup(card, innerHTML, onConfirm) {
 }
 
 function showProfilePopup(card, unit, onConfirm) {
-  const { spriteKey, char, weapon } = unit;
-  // Side card: full profile art on the left; the unit's weapon render + its
-  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside.
+  const { char, weapon, accent } = unit;
+  // DEMO BUILD: no profile art or weapon renders — an accent-colored plate
+  // with the unit label on the left, the weapon NAME on the panel beside.
+  const accentCss = '#' + ((accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
         <div class="weapon-name">${weapon}</div>
-        <img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="${weapon}" draggable="false" />
       </div>`
     : '';
   spawnProfilePopup(card,
-    `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}`,
+    `<div class="profile-face demo-face" style="background:${accentCss}">${char || ''}</div>${weaponPanel}`,
     onConfirm);
 }
 
@@ -7628,9 +7626,11 @@ function unitGridHTML(unitEntries) {
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
-    const thumb = `${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png`;
+    // DEMO BUILD: thumbnails are accent-colored number tiles, not art.
+    const accentCss = '#' + ((u.accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
+    const num = id.replace(/^unit/, '');
     return `<button class="unit-card" data-unit-card="${id}">
-      <img class="unit-thumb" src="${thumb}" alt="${u.char || id}" draggable="false" />
+      <span class="unit-thumb demo-thumb" style="background:${accentCss}">${num}</span>
       <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
     </button>`;
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">

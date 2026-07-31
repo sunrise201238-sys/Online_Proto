@@ -2,6 +2,8 @@
 
 A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single stock) and **Trio** (three-unit rosters). Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
 
+> **Demo build** (branch `Demo_Version`): all character art and character names are removed. Units are identified by number and accent color; in-game weapon indicators show weapon name tags.
+
 ## Modes
 
 Two main modes, each playable **1v1 or 2v2**, offline and online:
@@ -19,7 +21,7 @@ Two main modes, each playable **1v1 or 2v2**, offline and online:
 
 ### Online
 - **Mode selection**: the host picks **Duel or Trio**, then **1v1 or 2v2**; joiners inherit the lobby's modes.
-- **1v1**: the host presses **Start Match** when ready. The opponent slot holds a bot (default **Saori / Unit 1**) until a second human queues in and takes it — start early to play the bot, or wait for a player.
+- **1v1**: the host presses **Start Match** when ready. The opponent slot holds a bot (default **Unit 1 / Unit 1**) until a second human queues in and takes it — start early to play the bot, or wait for a player.
 - **2v2**: the host presses **Start Match** when ready; empty player slots fill with bots. Up to four humans can play (any split between teams); bots fill any remaining slots.
 - **Bot unit selection**: in the lobby, the host can tap any bot slot to pick which unit that bot plays — in Trio, its three units in order (default: three copies of the slot's usual unit). A human joining the slot always overrides the bot.
 - **Trio queue room**: every slot's roster is shown in three lines and updates live as picks land.
@@ -42,41 +44,41 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 
 | | Mag | Damage | Fire rate | Projectile speed | Lock range | Reload |
 |---|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
-| Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
-| Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
-| Unit 7 — Rifle (Aris) | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
-| Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
+| Unit 1 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
+| Unit 9 — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
+| Unit 4 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
+| Unit 13 — Submachine Gun | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
+| Unit 2 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
+| Unit 12 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
+| Unit 5 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
+| Unit 10 — Rifle | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
+| Unit 7 — Laser Rifle | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
+| Unit 3 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
+| Unit 6 — Laser Sniper | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
 **Handling (stun + spread):**
 
 | | Stun | Spread (SA) | Horizontal spread (HA) | Sure-hit vs standing |
 |---|---|---|---|---|
-| Unit 1 — Saori | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 9 — Asuna | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | — | ~53 |
-| Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
-| Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
-| Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
-| Unit 12 — Koyuki | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
-| Unit 5 — Hina | 50 ms @ 0.85 | 0.04 | — | ~80 |
-| Unit 10 — Fubuki | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 7 — Aris | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
+| Unit 1 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
+| Unit 9 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
+| Unit 4 | 50 ms @ 0.50 | 0.06 | — | ~53 |
+| Unit 13 | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
+| Unit 2 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
+| Unit 11 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
+| Unit 12 | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
+| Unit 5 | 50 ms @ 0.85 | 0.04 | — | ~80 |
+| Unit 10 | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 7 | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 3 | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Unit 6 | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Marina carries the 0.04 HA), the modern EVO3 shoots tight (Atsuko dropped hers — sure-hit ~53).
+Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Unit 13 carries the 0.04 HA), the modern EVO3 shoots tight (Unit 4 dropped hers — sure-hit ~53).
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Marina) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Haruka's pattern is additionally stretched 1.4× horizontally (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Unit 13) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Unit 11's pattern is additionally stretched 1.4× horizontally (details below).
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
@@ -84,25 +86,19 @@ Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slo
 
 | @ own lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
-| Saori @56 | 99% | 69% | 6% |
-| Asuna @56 | 100% | 64% | 8% |
-| Atsuko @50 | 100% | 62% | 12% |
-| Marina @50 | 85% | 61% | 18% |
-| Hoshino @40 | 75% | 30% | 0% |
-| Haruka @40 | 61% | 30% | 4% |
-| Koyuki @80 | 76% | 40% | 3% |
-| Hina @80 | 100% | 25% | 0% |
+| Unit 1 @56 | 99% | 69% | 6% |
+| Unit 9 @56 | 100% | 64% | 8% |
+| Unit 4 @50 | 100% | 62% | 12% |
+| Unit 13 @50 | 85% | 61% | 18% |
+| Unit 2 @40 | 75% | 30% | 0% |
+| Unit 11 @40 | 61% | 30% | 4% |
+| Unit 12 @80 | 76% | 40% | 3% |
+| Unit 5 @80 | 100% | 25% | 0% |
 
 *Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
 Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
 
-| | |
-|---|---|
-| **Saori @56** — 445.5 / 310.5 / 27 ![Saori](docs/img/lockrange/saori100shots.png) | **Asuna @56** — 400 / 256 / 32 ![Asuna](docs/img/lockrange/asuna100shots.png) |
-| **Atsuko @50** — 350 / 217 / 42 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Marina @50** — 212.5 / 152.5 / 45 ![Marina](docs/img/lockrange/marina100shots.png) |
-| **Hoshino @40** — 210 / 85 / 0 ![Hoshino](docs/img/lockrange/hoshino7shots.png) | **Haruka @40** — 170 / 85 / 10 ![Haruka](docs/img/lockrange/haruka7shots.png) |
-| **Koyuki @80** — 342 / 180 / 13.5 ![Koyuki](docs/img/lockrange/koyuki100shots.png) | **Hina @80** — 400 / 100 / 0 ![Hina](docs/img/lockrange/hina100shots.png) |
 
 Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
 
@@ -110,10 +106,10 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 
 - A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **Haruka's wide fan (Unit 11):** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Hoshino's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Hoshino's concentrated slug.
+- **Unit 11's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Unit 2's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Unit 2's concentrated slug.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
-### Aris (Unit 7) — flight & laser bolts
+### Unit 7 — flight & laser bolts
 
 - **Flight kit**: a jump tap in the air re-fires the jump impulse (12 boost per pop, no cooldown); *holding* jump sustains a climb at sprint speed; air-sprint flies **level** (dedicated fly art); the air-dodge holds altitude. Boost does not regen while airborne — altitude is a spent resource.
 - Sprinting into a jump **carries the sprint momentum** through the air.
@@ -135,25 +131,25 @@ Projectiles fly straight (homing is zeroed universally); red-lock is an in-range
 | 1.00 (server auto-fires) | 1.00 | 1.00 | **0.90** |
 
 Three properties the table encodes: glint duration equals the release time on **every** screen (both endpoints of the interval shift by the same delivery delay, so its length is preserved for any observer); the defender's read & decide time is always the release time minus their round trip (one delivery lost at each end); and the earliest-release fence sits at ack + 0.5 s precisely so the read & decide column can never fall below 0.50 — the guarantee is produced by *placing the fence*, not by adjusting any clock. The full charge is the one release with no fence involvement: it fires at press + 1.0 s flat, so its read & decide time shrinks with the defender's round trip (lag-taxed like every ordinary attack), while the fast cancel's 0.50 is lag-proof.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Kei's beam is instant.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Unit 3's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Unit 6's beam is instant.
 
-### Aru (Unit 3) — range zones & the lock reticle
+### Unit 3 — range zones & the lock reticle
 
 - Damage is tiered by distance, **locked at fire time**: under 15 units → **20**, 15–50 → **35**, beyond 50 → **50**. Rushing a sniper is real counterplay; long range stays lethal.
-- The lock reticle shows the current zone — plain brackets (<15), **+ cross ticks** (15–50), **+ inner bars** (50+). It appears both when *you* play Aru (your tier on the target) and when your lock target *is* an Aru (which of her zones you're standing in).
-- The reticle turns **red** not just when your target fires, but for the whole time a sniper (Aru **or** Kei) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
+- The lock reticle shows the current zone — plain brackets (<15), **+ cross ticks** (15–50), **+ inner bars** (50+). It appears both when *you* play Unit 3 (your tier on the target) and when your lock target *is* an Unit 3 (which of her zones you're standing in).
+- The reticle turns **red** not just when your target fires, but for the whole time a sniper (Unit 3 **or** Unit 6) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
 
-### Kei (Unit 6) — 照射ビーム laser
+### Unit 6 — 照射ビーム laser
 
 - Fires an instant **hitscan beam** (30 damage, one hit per enemy per beam, blocked by walls, ~0.5 s fade) instead of a bullet. The beam also **deletes projectiles** it touches.
 - Holding the charge to the full **1 s** fires a **sweep channel**: a 1 s locked, steerable beam (1.5× width, **20 damage**, one hit per enemy for the whole channel). The stick steers it — horizontal and vertical — at ~10°/s; sprint cancels the channel. The fire cooldown is paused during the channel and starts when it ends.
 - Her glint grows toward **2×** size as the charge fills, telegraphing a full-charge sweep.
 
 **Bots vs. the sniper.**
-- **As the shooter:** both sniper bots flip a **50/50 coin** per shot — release at the **0.5 s floor** (a fast snap; for Kei, the quick beam) or hold to the **full 1 s charge** (for Kei, the sweep channel). No in-between releases.
+- **As the shooter:** both sniper bots flip a **50/50 coin** per shot — release at the **0.5 s floor** (a fast snap; for Unit 6, the quick beam) or hold to the **full 1 s charge** (for Unit 6, the sweep channel). No in-between releases.
 - **On defense:** when a glint aimed at it appears — from **any** enemy, locked or not (mirroring the human's edge-indicator awareness; earliest active charge wins) — the bot **rolls its reaction per charge**, and the slow roll is charger-aware:
-  - **Anti-Aru** (bullet snipers): **50% at 0.4 s** (i-frames open ahead of the earliest possible cancel, covering **every floor snap at any range** — but a full hold sails in after they end) / **50% at 0.8 s** (deliberately late: a snap lands first and cancels the pending dodge, but the i-frames ~0.8–1.1 s sit exactly on the **full hold's** impact). Against the shooter's 50/50 snap/hold flip neither side can be read; equilibrium **~50% of charges convert** (snaps beat slow rolls, holds beat fast rolls).
-  - **Anti-Kei** (beam snipers): **50% at 0.4 s** (covers the instant quick beam) / **50% at 0.9 s** — the dodge starts just ahead of the **sweep channel's** aimed opening (i-frames ~0.9–1.2 s blanket it) and the follow-up sprint outruns the beam's steering at normal fighting ranges. (An 0.8 s roll would be dead weight here: the quick beam pre-empts it and the sweep outlives it.)
+  - **Anti-Unit 3** (bullet snipers): **50% at 0.4 s** (i-frames open ahead of the earliest possible cancel, covering **every floor snap at any range** — but a full hold sails in after they end) / **50% at 0.8 s** (deliberately late: a snap lands first and cancels the pending dodge, but the i-frames ~0.8–1.1 s sit exactly on the **full hold's** impact). Against the shooter's 50/50 snap/hold flip neither side can be read; equilibrium **~50% of charges convert** (snaps beat slow rolls, holds beat fast rolls).
+  - **Anti-Unit 6** (beam snipers): **50% at 0.4 s** (covers the instant quick beam) / **50% at 0.9 s** — the dodge starts just ahead of the **sweep channel's** aimed opening (i-frames ~0.9–1.2 s blanket it) and the follow-up sprint outruns the beam's steering at normal fighting ranges. (An 0.8 s roll would be dead weight here: the quick beam pre-empts it and the sweep outlives it.)
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
@@ -168,7 +164,7 @@ Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s 
 
 ## Maps
 
-Nine arenas: Plain Field, Streets, Factory, Factory 2, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** — only flight gets up there, making them Aris's high ground. The offline map list also carries the **Shooting Range** — the no-opponent practice map behind the measured hit-rate tables above (target sliders, per-lane score screens); the map Random card never rolls it.
+Nine arenas: Plain Field, Streets, Factory, Factory 2, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** — only flight gets up there, making them Unit 7's high ground. The offline map list also carries the **Shooting Range** — the no-opponent practice map behind the measured hit-rate tables above (target sliders, per-lane score screens); the map Random card never rolls it.
 
 **Factory 2** is the industrial remake of Factory built on Airport's design philosophy: one central organizing anchor — a raised **assembly deck** with four railed walk-up ramps plus jump-through fence openings (two 16-wide mid-side gaps and four corner notches) that bots use too, via the pathfinder's shortcut links — surrounded by dense, trustworthy cover (CNC machines, shipping containers, double-height crate stacks, partition walls, solid workstations) that passes the sizing rules everywhere: true cover is 8+ tall with real depth, vault clutter stays under 2.5. Two walkable conveyors flank the deck; everything is ramp-accessible (no flight-only spots). The layout is point-symmetric, and its online collision data is auto-exported from the offline builder so both modes are guaranteed identical.
 
@@ -222,7 +218,7 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 - **Friendly fire** in 2v2 is off — bullets pass through teammates.
 - **Map collision data** for the online server is auto-extracted from offline at build time. Visual mesh is always rendered by the offline arena-build code on the client.
 - **Pre-game loading.** Every unit visible in a pick (offline pickers) or in the lobby config (online queue room) starts its sprite-art downloads immediately — menu dead time absorbs the network wait — and GPU uploads are drip-fed one texture per frame. At match load, each Trio slot's 2nd/3rd roster units are additionally pre-built as complete (hidden) mechs, so a mid-match respawn is a pure swap-in: no construction, no decode, no upload during the fight.
-- **Projectile broadphase (online sim).** Each map's obstacle boxes are indexed once into a 24-unit ground grid; every tick, each projectile (bullets, sniper rounds, laser bolts, every shotgun pellet) tests only the obstacles near its own flight segment for that tick instead of the whole map. The precise sweep test stays the final authority, so hit results are bit-identical to a full scan (differential-verified on all maps) — but dense maps (Factory: 380 boxes) now cost the same as open ones, which removed the server-side lag during shotgun / high-RPM fights. Kei's hitscan beams and all non-weapon scans (bot sight, pathfinding, movement) deliberately keep the plain full scan.
+- **Projectile broadphase (online sim).** Each map's obstacle boxes are indexed once into a 24-unit ground grid; every tick, each projectile (bullets, sniper rounds, laser bolts, every shotgun pellet) tests only the obstacles near its own flight segment for that tick instead of the whole map. The precise sweep test stays the final authority, so hit results are bit-identical to a full scan (differential-verified on all maps) — but dense maps (Factory: 380 boxes) now cost the same as open ones, which removed the server-side lag during shotgun / high-RPM fights. Unit 6's hitscan beams and all non-weapon scans (bot sight, pathfinding, movement) deliberately keep the plain full scan.
 
 ## Status
 
