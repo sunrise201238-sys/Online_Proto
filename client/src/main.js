@@ -987,11 +987,17 @@ function makeUnitPlaceholderTexture(label, accentHex = 0x88aadd) {
   // head
   x.fillStyle = '#ffe0d0';
   x.beginPath(); x.arc(W / 2, 118, 40, 0, Math.PI * 2); x.fill();
-  // name plate
+  // name plate — wide enough for full weapon names; the font steps down
+  // until the label fits (e.g. "Lanchester Mk.1" at ~20px, "M4" stays 30px).
   x.fillStyle = 'rgba(8,16,30,0.82)';
-  x.fillRect(W / 2 - 80, H - 66, 160, 42);
+  x.fillRect(W / 2 - 104, H - 66, 208, 42);
   x.fillStyle = '#eaf6ff';
-  x.font = 'bold 30px sans-serif';
+  let fs = 30;
+  x.font = `bold ${fs}px sans-serif`;
+  while (fs > 14 && x.measureText(label).width > 196) {
+    fs -= 2;
+    x.font = `bold ${fs}px sans-serif`;
+  }
   x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(label, W / 2, H - 44);
 
@@ -1028,12 +1034,15 @@ function loadUnitArt(spriteKey, state, onReady) {
 // updater swaps `mat.map` to match the fighter's pose. Anchored at the feet
 // (bottom-center). The state rig hangs off sprite.userData for the updater.
 function makeUnitSprite(unitData, isOwnUnit = false) {
-  // Placeholder textures are pure functions of (char, accent) — share one per
+  // Placeholder textures are pure functions of (label, accent) — share one per
   // unit across every mech built in the session instead of re-drawing and
   // re-uploading a fresh canvas on each (re)spawn.
-  const phKey = `${unitData.char || '?'}|${unitData.accent ?? ''}`;
+  // DEMO BUILD: the in-game nameplate shows the WEAPON name (M4, PPSh-41 …),
+  // not the unit number — units read by color, weapons by plate.
+  const phLabel = unitData.weapon || unitData.char || '?';
+  const phKey = `${phLabel}|${unitData.accent ?? ''}`;
   const placeholder = _placeholderTexCache[phKey]
-    ?? (_placeholderTexCache[phKey] = makeUnitPlaceholderTexture(unitData.char || '?', unitData.accent));
+    ?? (_placeholderTexCache[phKey] = makeUnitPlaceholderTexture(phLabel, unitData.accent));
   const mat = new THREE.SpriteMaterial({
     map: placeholder,
     transparent: true,
@@ -5590,10 +5599,15 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
       .filter((l) => l.length)
       .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
         const u = UNIT_DATA[k];
-        // DEMO BUILD: weapon renders are gone — a text name tag stands in.
-        return u
-          ? `<span class="trio-weapon-tag">${u.weapon ?? k}</span>`
-          : '';
+        if (!u) return '';
+        // DEMO BUILD: weapon renders are gone — a text name tag stands in,
+        // tinted with the unit's accent so the tag doubles as a who-is-who
+        // color key. Text flips dark/light by accent luminance for contrast.
+        const a = (u.accent ?? 0x88aadd) >>> 0;
+        const lum = 0.299 * ((a >> 16) & 255) + 0.587 * ((a >> 8) & 255) + 0.114 * (a & 255);
+        const bg = '#' + a.toString(16).padStart(6, '0').slice(-6);
+        const fg = lum > 140 ? '#0b1220' : '#f2f9ff';
+        return `<span class="trio-weapon-tag" style="background:${bg};color:${fg}">${u.weapon ?? k}</span>`;
       }).join('')}</div>`)
       .join('')
     : '';
