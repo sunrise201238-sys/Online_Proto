@@ -87,7 +87,7 @@ Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slo
 | Saori @56 | 99% | 69% | 6% |
 | Asuna @56 | 100% | 64% | 8% |
 | Atsuko @50 | 85% | 57% | 16% |
-| Marina @50 | 100% | 51% | 23% |
+| Marina @50 | 100% | 64% | 21% |
 | Hoshino @40 | 75% | 30% | 0% |
 | Haruka @40 | 61% | 30% | 4% |
 | Koyuki @80 | 76% | 40% | 3% |
@@ -100,7 +100,7 @@ Standouts under the strict protocol: perpendicular sprint is near-untouchable fo
 | | |
 |---|---|
 | **Saori @56** — 445.5 / 310.5 / 27 ![Saori](docs/img/lockrange/saori100shots.png) | **Asuna @56** — 400 / 256 / 32 ![Asuna](docs/img/lockrange/asuna100shots.png) |
-| **Atsuko @50** — 297.5 / 199.5 / 56 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Marina @50** — 300 / 153 / 69 ![Marina](docs/img/lockrange/marina100shots.png) |
+| **Atsuko @50** — 297.5 / 199.5 / 56 ![Atsuko](docs/img/lockrange/atsuko100shots.png) | **Marina @50** — 250 / 160 / 52.5 ![Marina](docs/img/lockrange/marina100shots.png) |
 | **Hoshino @40** — 210 / 85 / 0 ![Hoshino](docs/img/lockrange/hoshino7shots.png) | **Haruka @40** — 170 / 85 / 10 ![Haruka](docs/img/lockrange/haruka7shots.png) |
 | **Koyuki @80** — 342 / 180 / 13.5 ![Koyuki](docs/img/lockrange/koyuki100shots.png) | **Hina @80** — 400 / 100 / 0 ![Hina](docs/img/lockrange/hina100shots.png) |
 
