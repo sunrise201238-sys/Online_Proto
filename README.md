@@ -61,8 +61,8 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 |---|---|---|---|---|
 | Unit 1 — Saori | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | Unit 9 — Asuna | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
-| Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | — | ~53 |
+| Unit 4 — Atsuko | 50 ms @ 0.50 | 0.06 | — | ~53 |
+| Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
 | Unit 12 — Koyuki | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
@@ -72,11 +72,11 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 3 — Aru | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Unit 6 — Kei | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis, no HA scatter, and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum.
+Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Marina carries the 0.04 HA), the modern EVO3 shoots tight (Atsuko dropped hers — sure-hit ~53).
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Atsuko) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Haruka's pattern is additionally stretched 1.4× horizontally (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Marina) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Haruka's pattern is additionally stretched 1.4× horizontally (details below).
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 

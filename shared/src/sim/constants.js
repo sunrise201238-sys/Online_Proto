@@ -137,7 +137,7 @@ export const UNIT_DATA = {
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.06,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0,          // HA 0.04 -> 0 (2026-07-31, moved to Marina): modern EVO3 shoots tight; sure-hit ~53
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
@@ -445,15 +445,16 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — Atsuko's envelope pushed to the 48 ms tick slot (Hina's
-    // cadence) with the PPSh drum: lightest bullet in the game and the same
-    // 0.06 spread, no HA scatter, 71-round mag on a 2 s reload (tuned
-    // 2026-07-31: damage 3.5 -> 3 -> 2.5, reload 1.5 s -> 2 s).
+    // cadence) with the PPSh drum: lightest bullet in the game, 71-round mag
+    // on a 2 s reload (tuned 2026-07-31: damage 3.5 -> 3 -> 2.5, reload
+    // 1.5 s -> 2 s; HA 0 -> 0.04 taken from Atsuko — the WWII hose sprays
+    // wide, sure-hit drops to ~32).
     lockRange: 50,
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.06,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
