@@ -57,6 +57,24 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 3 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
 | Unit 6 — Laser Sniper | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
+**Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
+
+| Unit | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
+|---|---|---|---|---|
+| Unit 2 / Unit 11 | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
+| Unit 5 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
+| Unit 7 | 4.17/s | 15 / bolt | **62.5** | ~12.5 (bolt-regen limited) |
+| Unit 4 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
+| Unit 13 | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
+| Unit 9 | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
+| Unit 1 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
+| Unit 10 | 4.17/s | 10 | **41.7** | 33.5 |
+| Unit 12 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
+| Unit 3 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
+| Unit 6 | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
+
+Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Unit 7's burst is real for its 8-bolt spike (120 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+
 **Handling (stun + spread):**
 
 | | Stun | Spread (SA) | Horizontal spread (HA) | Sure-hit vs standing |
