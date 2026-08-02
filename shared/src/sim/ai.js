@@ -28,7 +28,7 @@ const BOT_SPRINT_MIN_BOOST = 8;
 // This is purely a bot DECISION threshold — the stamina MECHANICS
 // (costs, drain, regen, caps, empty-recovery) stay identical to the
 // human player's.
-const BOT_BOOST_RESERVE = 150;
+const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): reserve = full cap - travel sprints only from a topped-up tank
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -186,10 +186,14 @@ function botHasLineOfSight(p0, p1, obstacles) {
   return true;
 }
 
-// Universal burst size for continuous-fire weapons (spreadCount === 1): about
-// half the mag per trigger pull, clamped so tiny or huge mags still feel
-// right. Derives from magCapacity so re-tuning a weapon re-tunes the bot.
+// Burst size for continuous-fire weapons (spreadCount === 1). Units with a
+// botFireCap fire EXACTLY that many per trigger pull (bounded by remaining
+// ammo — an empty mag ends the burst early into the reload); units without
+// one keep the legacy rule: about half the mag, clamped so tiny or huge
+// mags still feel right (2026-08-01: all listed autos carry explicit caps;
+// the formula now only serves Fubuki/Aris and future unlisted guns).
 function botBurstSize(unit) {
+  if (unit.botFireCap) return unit.botFireCap;
   if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
 }
@@ -1421,15 +1425,21 @@ export function tickBot(matchState, botId, now) {
   // --- Firing: LoS-aware + universal burst sizing ---
   if (now >= me.nextFireAt) {
     const u = me.unit;
-    if (now < me.invulnerableUntil) {
-      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
-      me.nextFireAt = me.invulnerableUntil;
-      me.machineBurstRemaining = 0;
-    } else if (u.magCapacity != null && me.ammo <= 0) {
+    // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
+    // shots from an immune attacker deal full damage (every hit check is
+    // target-side), and humans can already shoot while protected. Only the
+    // TARGET-immunity hold below remains.
+    if (u.magCapacity != null && me.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);
       me.nextFireAt = now + wait;
+      me.machineBurstRemaining = 0;
+    } else if (now < opp.invulnerableUntil) {
+      // Target is spawn-immune — no shot can hurt it, so hold fire instead
+      // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
+      // regular 220 ms poll, whichever comes first (the target can change).
+      me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
       { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
@@ -1453,20 +1463,24 @@ export function tickBot(matchState, botId, now) {
       } else me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
     } else {
-      if (u.spreadCount === 1 && me.machineBurstRemaining <= 0) {
+      // Burst gating applies to every single-projectile gun AND to any
+      // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
+      // carry cap 4 — four blasts per trigger pull, then the usual rest).
+      const bursted = u.spreadCount === 1 || u.botFireCap;
+      if (bursted && me.machineBurstRemaining <= 0) {
         me.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = me.lastFireAt;
       attemptFire(matchState, me, opp, now);
       const fired = me.lastFireAt !== firedAt;
-      if (u.spreadCount === 1) {
+      if (bursted) {
         if (fired) me.machineBurstRemaining -= 1;
         me.nextFireAt = me.machineBurstRemaining > 0
           ? now + u.fireCooldownMs
           : now + between(800, 1500);
         if (me.machineBurstRemaining <= 0) me.machineBurstRemaining = 0;
       } else {
-        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
+        // Capless multi-pellet pacing — pace shots near the weapon's
         // mechanical fire cooldown so the bot uses its full per-shot DPS
         // instead of dawdling 1+ s between shots. Small jitter avoids a
         // perfectly robotic cadence; the magazine + autoReload still impose

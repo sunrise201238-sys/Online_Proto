@@ -74,9 +74,9 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 3 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Unit 6 | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s her stun refresh and dodge-cancel pressure are the payload; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Unit 13 carries the 0.04 HA), the modern EVO3 shoots tight (Unit 4 dropped hers — sure-hit ~53).
+Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: at 20.8 hits/s the pressure is the **hit itself** — each landed hit cancels a bot's queued dodge, and the sprint-outs she forces drain the target's boost; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Unit 13 carries the 0.04 HA), the modern EVO3 shoots tight (Unit 4 dropped hers — sure-hit ~53).
 
-**Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — 0.25 means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins.
+**Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **In practice the slow itself is a minor stat**: sprinting pays straight through it (and everyone sprints away from fire anyway, stun or not), while a walking target was already highly hittable — so the currencies that actually decide fights are the landed hits themselves (each one cancels a bot's queued dodge) and the boost the target burns escaping, not the movement penalty.
 
 **Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Unit 13) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Unit 11's pattern is additionally stretched 1.4× horizontally (details below).
 
@@ -100,7 +100,7 @@ Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick s
 Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
 
 
-Projectiles fly straight (homing is zeroed universally); red-lock is an in-range indicator.
+Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
 
 ### Units 2 & 11 — the shotgun blast
 
@@ -153,6 +153,23 @@ Three properties the table encodes: glint duration equals the release time on **
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
+**Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Shots inside a burst pace at the weapon's own RPM-derived cooldown, so retuning a fire rate retunes the bot with it. Every auto's cap equals its **full magazine** — an auto bot fires until the mag runs dry and rolls straight into the reload; the shotguns are burst-gated at 4 blasts per pull; the snipers run their charge cycle instead of bursting.
+
+| Unit | Fire cap | Meaning |
+|---|---|---|
+| Unit 1 | 30 | full mag |
+| Unit 9 | 25 | full mag |
+| Unit 4 | 30 | full mag |
+| Unit 13 | 71 | full drum |
+| Unit 10 | 30 | full mag |
+| Unit 12 | 100 | full mag |
+| Unit 5 | 250 | full drum (~12 s of continuous fire) |
+| Unit 2 / Unit 11 | 4 | 4 blasts per trigger pull |
+| Unit 7 | 4 | legacy formula (half mag) |
+| Unit 3 / Unit 6 | — | charge cycle, no bursts |
+
+A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
+
 ## Controls
 
 | | |
@@ -160,7 +177,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | **Mobile** | On-screen joystick + buttons |
 | **PC** | `WASD` move · `J` fire · `K` sprint · `L` dodge · `Space` jump · `U` switch target (2v2) |
 
-Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
+Double-tap `K` (or the sprint button) to lock sprint. The lock releases only after the stick/keys stay **neutral for a sustained 0.18 s** — flipping direction through the joystick center (left→right) or swapping movement keys keeps the locked sprint alive; letting go still stops it almost instantly. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
 
 ## Maps
 
@@ -214,7 +231,7 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 - **Server authoritative.** Shared sim runs on the server at ~62.5 Hz; clients predict their own local fighter and reconcile against snapshots.
 - **Bot AI** has one logical state machine (Defense > Maze > Engage > Pursue) with identical numbers in both offline (`updateEnemy` in `client/src/main.js`) and online (`tickBot` in `shared/src/sim/ai.js`) implementations.
 - **Universal pathfinder.** Maze is route-first: a nav grid is derived from each map's collision data (4-unit cells, A* plus a firing-position search), with jump-links bridging separated walk islands (e.g. Station's raised platforms) so bots climb instead of grinding walls. Heuristic wall-following remains the no-route fallback. Bots hold a per-weapon range band centered on their lock range (sweet spot ±7) — one rule for every weapon.
-- **Stamina economy** is shared by humans and bots — same cap (250), drain (1.1/tick), regen (4.59/tick), and empty-recovery lockout. Bot decisions layer a **strategic reserve (150 boost)** on top: travel spending (sprint dispatch, pursuit, route jumps) never voluntarily digs below it. Two survival exemptions spend through the reserve — Defense escapes under live fire (down to the hard floor of 8) and the anti-glint dodge (gated only by the unit's raw step cost — 48 by default; step cost/duration/cooldown/distance are per-unit tunable like the jump family). The reserve is purely a decision threshold; the mechanics underneath stay human-identical.
+- **Stamina economy** is shared by humans and bots — same cap (250), drain (1.1/tick), regen (4.59/tick), and empty-recovery lockout. Bot decisions layer a **strategic reserve (250 boost — the full cap)** on top: travel spending (sprint dispatch, pursuit, route jumps) never voluntarily digs below it, so bots only start travel sprints from a topped-up tank. Two survival exemptions spend through the reserve — Defense escapes under live fire (down to the hard floor of 8) and the anti-glint dodge (gated only by the unit's raw step cost — 48 by default; step cost/duration/cooldown/distance are per-unit tunable like the jump family). The reserve is purely a decision threshold; the mechanics underneath stay human-identical.
 - **Friendly fire** in 2v2 is off — bullets pass through teammates.
 - **Map collision data** for the online server is auto-extracted from offline at build time. Visual mesh is always rendered by the offline arena-build code on the client.
 - **Pre-game loading.** Every unit visible in a pick (offline pickers) or in the lobby config (online queue room) starts its sprite-art downloads immediately — menu dead time absorbs the network wait — and GPU uploads are drip-fed one texture per frame. At match load, each Trio slot's 2nd/3rd roster units are additionally pre-built as complete (hidden) mechs, so a mid-match respawn is a pure swap-in: no construction, no decode, no upload during the fight.

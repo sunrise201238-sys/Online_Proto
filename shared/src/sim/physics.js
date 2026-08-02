@@ -290,24 +290,96 @@ export function surfaceHeightAtXZ(x, z, surfaces) {
   return best;
 }
 
+// Impact fraction (t in [0,1]) where the segment p0→p1 FIRST enters AABB o,
+// or -1 on miss — the slab test with its tMin returned instead of discarded.
+// Used to clamp death positions/visuals to the wall face: a sniper round
+// steps ~40 u per tick, and an unclamped death leaves its trail stabbing
+// through cover (2026-08-01).
+export function segmentObstacleImpactT(p0, p1, o) {
+  let tMin = 0;
+  let tMax = 1;
+  const axes = [
+    [p0.x, p1.x - p0.x, o.minX, o.maxX],
+    [p0.y, p1.y - p0.y, o.minY, o.maxY],
+    [p0.z, p1.z - p0.z, o.minZ, o.maxZ]
+  ];
+  for (let a = 0; a < 3; a += 1) {
+    const [start, delta, lo, hi] = axes[a];
+    if (Math.abs(delta) < 1e-9) {
+      if (start < lo || start > hi) return -1;
+    } else {
+      const t1 = (lo - start) / delta;
+      const t2 = (hi - start) / delta;
+      const tNear = t1 < t2 ? t1 : t2;
+      const tFar = t1 < t2 ? t2 : t1;
+      if (tNear > tMin) tMin = tNear;
+      if (tFar < tMax) tMax = tFar;
+      if (tMin > tMax) return -1;
+    }
+  }
+  return tMin;
+}
+
+// Earliest fraction (t in [0,1]) where the segment crosses a walkable
+// surface, or -1 if none — the T-returning twin of projectileHitsSurface
+// (same per-surface sign-flip walk; the crossing lands at the midpoint of
+// the flip pair). Used for precise death clamping only.
+export function surfaceImpactT(prevPos, nextPos, surfaces) {
+  if (!surfaces.length) return -1;
+  const samples = 8;
+  let best = -1;
+  for (let si = 0; si < surfaces.length; si += 1) {
+    const s = surfaces[si];
+    let prevDelta = null;
+    let prevT = 0;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = prevPos.x + (nextPos.x - prevPos.x) * t;
+      const z = prevPos.z + (nextPos.z - prevPos.z) * t;
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = prevPos.y + (nextPos.y - prevPos.y) * t;
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) {
+        if (best < 0 || t < best) best = t;
+        break;
+      }
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
+        const tc = (prevT + t) / 2;
+        if (best < 0 || tc < best) best = tc;
+        break;
+      }
+      prevDelta = delta;
+      prevT = t;
+    }
+  }
+  return best;
+}
+
 // Walk a projectile's segment through a few sample points and return true
-// if it crosses any walkable surface. Mirrors projectileHitsSurface in
-// main.js (8 samples, sign-flip detection on `delta = y - h`).
+// if it crosses a walkable surface. The sign-flip test runs PER SURFACE
+// (delta resets whenever the sample leaves that surface's footprint):
+// comparing against the max of the whole stack conflated different decks —
+// a level shot that passed OVER a sidewalk (delta +) and then UNDER the
+// Streets bridge deck (delta -) "flipped" and died in open air (2026-08-01
+// fix). A real slab crossing still flips against the slab's own height.
+// Mirrors projectileHitsSurface in main.js.
 export function projectileHitsSurface(prevPos, nextPos, surfaces) {
   if (!surfaces.length) return false;
   const samples = 8;
-  let prevDelta = null;
-  for (let i = 0; i <= samples; i += 1) {
-    const t = i / samples;
-    const x = prevPos.x + (nextPos.x - prevPos.x) * t;
-    const y = prevPos.y + (nextPos.y - prevPos.y) * t;
-    const z = prevPos.z + (nextPos.z - prevPos.z) * t;
-    const h = surfaceHeightAtXZ(x, z, surfaces);
-    if (h === -Infinity) continue;
-    const delta = y - h;
-    if (Math.abs(delta) < 0.04) return true;
-    if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-    prevDelta = delta;
+  for (let si = 0; si < surfaces.length; si += 1) {
+    const s = surfaces[si];
+    let prevDelta = null;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = prevPos.x + (nextPos.x - prevPos.x) * t;
+      const z = prevPos.z + (nextPos.z - prevPos.z) * t;
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = prevPos.y + (nextPos.y - prevPos.y) * t;
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) return true;
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
+      prevDelta = delta;
+    }
   }
   return false;
 }

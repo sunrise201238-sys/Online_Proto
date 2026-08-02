@@ -32,7 +32,7 @@ import {
   closestPointOnSegment
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
-import { segmentHitsObstacle, projectileHitsSurface, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
+import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
@@ -269,20 +269,29 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
 
     // Swept obstacle hit (skip noProjectile-tagged obstacles). The broadphase
     // only narrows the candidate list; the slab test stays authoritative.
-    let killed = false;
+    // Precise death clamp (2026-08-01): take the NEAREST impact fraction and
+    // pull p.pos back to the wall face before despawning, so the despawn
+    // event's pos (new field) marks the true impact — clients clamp the
+    // fading bullet trail there instead of overshooting through cover.
+    let deathT = -1;
+    let deathReason = null;
     const cand = obstaclesNearSegment(obstacles, prevPos, sweepEnd);
     for (let j = 0; j < cand.length; j += 1) {
       const o = cand[j];
       if (o.noProjectile) continue;
-      if (!segmentHitsObstacle(prevPos, sweepEnd, o)) continue;
-      _despawn(matchState, projectiles, i, p, 'obstacle');
-      killed = true;
-      break;
+      const t = segmentObstacleImpactT(prevPos, sweepEnd, o);
+      if (t >= 0 && (deathT < 0 || t < deathT)) { deathT = t; deathReason = 'obstacle'; }
     }
-    if (killed) continue;
-
-    if (projectileHitsSurface(prevPos, sweepEnd, surfaces)) {
-      _despawn(matchState, projectiles, i, p, 'surface');
+    if (!deathReason && projectileHitsSurface(prevPos, sweepEnd, surfaces)) {
+      const st = surfaceImpactT(prevPos, sweepEnd, surfaces);
+      deathT = st >= 0 ? st : 1;
+      deathReason = 'surface';
+    }
+    if (deathReason) {
+      p.pos.x = prevPos.x + (sweepEnd.x - prevPos.x) * deathT;
+      p.pos.y = prevPos.y + (sweepEnd.y - prevPos.y) * deathT;
+      p.pos.z = prevPos.z + (sweepEnd.z - prevPos.z) * deathT;
+      _despawn(matchState, projectiles, i, p, deathReason, { x: p.pos.x, y: p.pos.y, z: p.pos.z });
       continue;
     }
 
@@ -317,9 +326,13 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
   }
 }
 
-function _despawn(matchState, projectiles, idx, p, reason) {
+function _despawn(matchState, projectiles, idx, p, reason, pos = null) {
   projectiles.splice(idx, 1);
-  matchState.events.push({ type: 'despawn', id: p.id, reason });
+  const ev = { type: 'despawn', id: p.id, reason };
+  // Wall/deck deaths carry the precise impact point (2026-08-01) so clients
+  // can clamp the fading bullet trail to the face instead of overshooting.
+  if (pos) ev.pos = pos;
+  matchState.events.push(ev);
 }
 
 // ---------------------------------------------------------------------------

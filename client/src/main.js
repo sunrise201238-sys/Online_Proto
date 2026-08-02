@@ -75,6 +75,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -108,6 +109,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
+    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 }
@@ -177,6 +179,7 @@ const UNIT_DATA = {
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
@@ -211,6 +214,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
+    botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -338,6 +342,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 50,
+    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
@@ -370,6 +375,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 25,
+    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -404,6 +410,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 10,
     magCapacity: 30,
+    botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -438,6 +445,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
+    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
@@ -475,6 +483,7 @@ const UNIT_DATA = {
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -511,6 +520,7 @@ const UNIT_DATA = {
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
+    botFireCap: 71,         // bot: shots per trigger pull = full drum (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
@@ -850,6 +860,12 @@ const STEP_BOOST_COST = 48;
 const STEP_HOMING_CUT_MS = 260;
 // --- Jump defaults (used when a unit's UNIT_DATA entry omits the field) ---
 const JUMP_BOOST_COST = STEP_BOOST_COST;     // unit.jumpBoostCost default (= 48)
+// Sprint-lock release grace: a joystick flip (left→right) crosses the center
+// deadzone for a few frames and used to read as the let-go-to-stop gesture,
+// killing the locked sprint mid-flip. Only a neutral stick SUSTAINED this
+// long releases the lock. Kept well under the 260 ms double-tap window so
+// the two gestures can't tangle. Mirrors shared/src/sim/constants.js.
+const SPRINT_LOCK_RELEASE_GRACE_MS = 180;
 const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default
 const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default
 const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default
@@ -875,7 +891,7 @@ const BOT_SPRINT_MIN_BOOST = 8;
 // This is purely a bot DECISION threshold — the stamina MECHANICS
 // (costs, drain, regen, caps, empty-recovery) stay identical to the
 // human player's.
-const BOT_BOOST_RESERVE = 150;
+const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): reserve = full cap - travel sprints only from a topped-up tank
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -913,6 +929,7 @@ const input = {
   boost: false,
   boostHeld: false,
   sprintLocked: false,
+  dirNeutralSince: 0,     // sprint-lock release grace: when the stick went neutral (0 = has direction)
   jump: false,
   stepTap: false,
   shootTap: false,
@@ -1529,8 +1546,35 @@ function makeAllyArrowSprite(fillHex = '#86f7c2') {
   return s;
 }
 
+// Tear down the current HUD: detach its DOM, abort the window-level joystick
+// listeners setupHUD registered (they used to LEAK — two per match, each
+// closure pinning that match's whole HUD DOM tree), and reset every
+// touch-driven input flag so no stale stick deflection or held button
+// survives into the next match/menu. (The leaked pointerup used to do that
+// zeroing by accident on the next finger release; now it's explicit.)
+function teardownHud() {
+  state.hudAbort?.abort();
+  state.hudAbort = null;
+  state.hud?.remove();
+  state.hud = null;
+  input.x = 0;
+  input.y = 0;
+  input.boost = false;
+  input.boostHeld = false;
+  input.sprintLocked = false;
+  input.shootTap = false;
+  input.shootHold = false;
+  input.jump = false;
+  input.stepTap = false;
+  input.dirNeutralSince = 0;
+}
+
 function setupHUD() {
-  if (state.hud) state.hud.remove();
+  teardownHud();
+  // Window-level joystick listeners below register against this controller's
+  // signal, so teardownHud() can remove exactly this HUD's pair and nothing else.
+  const hudAbort = new AbortController();
+  state.hudAbort = hudAbort;
   const hud = document.createElement('div');
   hud.className = 'touch-hud';
   const teamBarsHtml = state.mode === '2v2' ? `
@@ -1617,7 +1661,7 @@ function setupHUD() {
   window.addEventListener('pointermove', (e) => {
     if (pointerId !== e.pointerId) return;
     applyStick(e.clientX, e.clientY);
-  });
+  }, { signal: hudAbort.signal });
 
   window.addEventListener('pointerup', (e) => {
     if (pointerId !== e.pointerId) return;
@@ -1629,7 +1673,7 @@ function setupHUD() {
     input.boost = false;
     input.boostHeld = false;
     stick.style.transform = 'translate(0px,0px)';
-  });
+  }, { signal: hudAbort.signal });
 
   hud.querySelectorAll('button').forEach((btn) => {
     if (btn.id === 'pause-btn') return;
@@ -1822,7 +1866,11 @@ function buildProjectileMesh(unit, isRedLock) {
   ];
   const geom = new THREE.LatheGeometry(profile, 10);
   geom.translate(0, -half, 0);
-  const color = isRedLock ? 0xffd28a : 0xfff4d0;
+  // One tracer color for everyone (2026-08-01): the amber in-lock tint
+  // (0xffd28a, a vestige of the removed lock-on homing mechanic) is gone —
+  // in-range status is deliberately not signalled to players. The isRedLock
+  // parameter is kept so call sites stay untouched; it is now unused here.
+  const color = 0xfff4d0;
   const mesh = new THREE.Mesh(
     geom,
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false })
@@ -2243,22 +2291,100 @@ function segmentHitsObstacle(p0, p1, o) {
   return true;
 }
 
+// Sign-flip test runs PER SURFACE (delta resets whenever the sample leaves
+// that surface's footprint): comparing against the max of the whole stack
+// conflated different decks — a level shot that passed OVER a sidewalk
+// (delta +) and then UNDER the Streets bridge deck (delta -) "flipped" and
+// died in open air (2026-08-01 fix). A real slab crossing still flips
+// against the slab's own height. Mirrors shared/src/sim/physics.js.
 function projectileHitsSurface(prevPos, nextPos) {
   const samples = 8;
-  let prevDelta = null;
-  for (let i = 0; i <= samples; i += 1) {
-    const t = i / samples;
-    const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-    const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-    const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-    const h = surfaceHeightAtXZ(x, z);
-    if (h === -Infinity) continue;
-    const delta = y - h;
-    if (Math.abs(delta) < 0.04) return true;
-    if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-    prevDelta = delta;
+  for (const s of arenaSurfaces) {
+    let prevDelta = null;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
+      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) return true;
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
+      prevDelta = delta;
+    }
   }
   return false;
+}
+
+// Impact fraction (t in [0,1]) where segment p0→p1 FIRST enters AABB o, or
+// -1 on miss — segmentHitsObstacle's slab test with tMin returned instead of
+// discarded. Mirrors shared/src/sim/physics.js. Used to clamp death visuals
+// (bullet trails) to the wall face (2026-08-01).
+function segmentObstacleImpactT(p0, p1, o) {
+  let tMin = 0;
+  let tMax = 1;
+  const axes = [
+    [p0.x, p1.x - p0.x, o.minX, o.maxX],
+    [p0.y, p1.y - p0.y, o.minY, o.maxY],
+    [p0.z, p1.z - p0.z, o.minZ, o.maxZ]
+  ];
+  for (const [start, delta, lo, hi] of axes) {
+    if (Math.abs(delta) < 1e-9) {
+      if (start < lo || start > hi) return -1;
+    } else {
+      const t1 = (lo - start) / delta;
+      const t2 = (hi - start) / delta;
+      const tNear = t1 < t2 ? t1 : t2;
+      const tFar = t1 < t2 ? t2 : t1;
+      if (tNear > tMin) tMin = tNear;
+      if (tFar < tMax) tMax = tFar;
+      if (tMin > tMax) return -1;
+    }
+  }
+  return tMin;
+}
+
+// Earliest fraction where the segment crosses a walkable surface, or -1 —
+// the T-returning twin of projectileHitsSurface (crossing lands at the
+// midpoint of the flip pair). Mirrors shared/src/sim/physics.js.
+function surfaceImpactT(prevPos, nextPos) {
+  const samples = 8;
+  let best = -1;
+  for (const s of arenaSurfaces) {
+    let prevDelta = null;
+    let prevT = 0;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
+      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) {
+        if (best < 0 || t < best) best = t;
+        break;
+      }
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
+        const tc = (prevT + t) / 2;
+        if (best < 0 || tc < best) best = tc;
+        break;
+      }
+      prevDelta = delta;
+      prevT = t;
+    }
+  }
+  return best;
+}
+
+// Pull a bullet trail's HEAD vertex back to the given point — used on wall/
+// deck deaths so the fading streak ends at the impact face instead of the
+// projectile's overshot post-step position (a sniper round steps ~40 u per
+// frame and its 1 s fade left a streak stabbing through cover).
+function clampTrailHead(trail, x, y, z) {
+  if (!trail) return;
+  const pos = trail.geometry.attributes.position.array;
+  pos[3] = x; pos[4] = y; pos[5] = z;
+  trail.geometry.attributes.position.needsUpdate = true;
 }
 
 function updateProjectileSystem(dt) {
@@ -2503,17 +2629,24 @@ function updateProjectileSystem(dt) {
     // Swept test: catches fast/homing projectiles that would otherwise tunnel through
     // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
     // unit-only fences) are skipped so bullets fly through them.
+    // Precise death clamp (2026-08-01): take the NEAREST impact fraction and
+    // pull the trail head back to the face before the fade handoff — the trail
+    // was updated to the overshot post-step position earlier this frame.
+    let deathT = -1;
     for (const obstacle of arenaObstacles) {
       if (obstacle.noProjectile) continue;
-      if (!segmentHitsObstacle(prevPos, sweepEnd, obstacle)) continue;
-      despawnProjectileTrail(p, now);
-      disposeProjectileMesh(p.mesh);
-      state.projectiles.splice(i, 1);
-      p.ttl = 0;
-      break;
+      const t = segmentObstacleImpactT(prevPos, sweepEnd, obstacle);
+      if (t >= 0 && (deathT < 0 || t < deathT)) deathT = t;
     }
-    if (p.ttl <= 0) continue;
-    if (projectileHitsSurface(prevPos, sweepEnd)) {
+    if (deathT < 0 && projectileHitsSurface(prevPos, sweepEnd)) {
+      const st = surfaceImpactT(prevPos, sweepEnd);
+      deathT = st >= 0 ? st : 1;
+    }
+    if (deathT >= 0) {
+      clampTrailHead(p.trail,
+        prevPos.x + (sweepEnd.x - prevPos.x) * deathT,
+        prevPos.y + (sweepEnd.y - prevPos.y) * deathT,
+        prevPos.z + (sweepEnd.z - prevPos.z) * deathT);
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
@@ -3254,10 +3387,17 @@ function updatePlayer(now) {
   const stepState = state.player.state;
   const inStep = now <= stepState.stepUntil;
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  // Sprint-lock release grace (2026-08-01): a joystick flip (left→right)
+  // crosses the neutral deadzone for a few frames and used to read as the
+  // let-go-to-stop gesture, killing the lock mid-flip. Only a SUSTAINED
+  // neutral (>= SPRINT_LOCK_RELEASE_GRACE_MS) releases the lock now.
+  if (hasDirInput) input.dirNeutralSince = 0;
+  else if (!input.dirNeutralSince) input.dirNeutralSince = now;
+  const dirReleased = !hasDirInput && now - input.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
-  if (!hasDirInput || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
+  if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
   input.boost = input.boostHeld || input.sprintLocked;
 
   const forward = new THREE.Vector3();
@@ -3617,11 +3757,14 @@ function botHasLineOfSight(p0, p1) {
   return true;
 }
 
-// Universal burst size for continuous-fire weapons (spreadCount === 1): about
-// half the magazine per trigger pull, clamped so a 5-round mag still feels
-// like a burst and a 100-round mag doesn't fire forever. Derives from
-// magCapacity so re-tuning a weapon's mag automatically re-tunes the bot.
+// Burst size for continuous-fire weapons (spreadCount === 1). Units with a
+// botFireCap fire EXACTLY that many per trigger pull (bounded by remaining
+// ammo — an empty mag ends the burst early into the reload); units without
+// one keep the legacy rule: about half the mag, clamped so tiny or huge
+// mags still feel right (2026-08-01: all listed autos carry explicit caps;
+// the formula now only serves Fubuki/Aris and future unlisted guns).
 function botBurstSize(unit) {
+  if (unit.botFireCap) return unit.botFireCap;
   if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
   return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
 }
@@ -4861,15 +5004,21 @@ function updateEnemy(now) {
   if (now >= eState.nextFireAt) {
     const u = state.enemy.unit;
     const s = eState;
-    if (now < s.invulnerableUntil) {
-      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
-      s.nextFireAt = s.invulnerableUntil;
-      s.machineBurstRemaining = 0;
-    } else if (u.magCapacity != null && s.ammo <= 0) {
+    // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
+    // shots from an immune attacker deal full damage (every hit check is
+    // target-side), and humans can already shoot while protected. Only the
+    // TARGET-immunity hold below remains.
+    if (u.magCapacity != null && s.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
+      s.machineBurstRemaining = 0;
+    } else if (now < state.player.state.invulnerableUntil) {
+      // Target is spawn-immune — no shot can hurt it, so hold fire instead
+      // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
+      // regular 220 ms poll, whichever comes first (the target can change).
+      s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
       { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
@@ -4894,13 +5043,17 @@ function updateEnemy(now) {
     } else {
       // Universal burst: derive length from magCapacity so different weapons
       // (5-round mag, 30-round MG, future 100-round LMG) all feel right.
-      if (u.spreadCount === 1 && s.machineBurstRemaining <= 0) {
+      // Burst gating applies to every single-projectile gun AND to any
+      // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
+      // carry cap 4 — four blasts per trigger pull, then the usual rest).
+      const bursted = u.spreadCount === 1 || u.botFireCap;
+      if (bursted && s.machineBurstRemaining <= 0) {
         s.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
-      if (u.spreadCount === 1) {
+      if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
         // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
         // firePerMinute and the bot's DPS scales with it. Inter-burst pause
@@ -4911,7 +5064,7 @@ function updateEnemy(now) {
           : now + PhaserLikeBetween(800, 1500);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
       } else {
-        // Multi-pellet (shotgun-style) pacing — pace shots near the weapon's
+        // Capless multi-pellet pacing — pace shots near the weapon's
         // mechanical fire cooldown so the bot uses its full per-shot DPS
         // instead of dawdling 1+ s between shots. Small jitter avoids a
         // perfectly robotic cadence; the magazine + autoReload still impose
@@ -5966,7 +6119,7 @@ function hideOnlineOverlay() {
 function startOnlineMatch() {
   cleanupMatch();
   clearMenus();
-  state.hud?.remove();
+  teardownHud();
   renderer.domElement.style.pointerEvents = 'auto';
 
   // No mechs / arena created yet — we defer that until the player has picked
@@ -6033,9 +6186,16 @@ function buildOnlineInputFrame() {
   // three flags. Doing the same derivation here makes the online PC path
   // behave identically.
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  // Sprint-lock release grace — same rule as updatePlayer (see the comment
+  // there): only a SUSTAINED neutral stick releases the lock, so joystick
+  // flips through center keep the locked sprint online too.
+  const nowMs = performance.now();
+  if (hasDirInput) input.dirNeutralSince = 0;
+  else if (!input.dirNeutralSince) input.dirNeutralSince = nowMs;
+  const dirReleased = !hasDirInput && nowMs - input.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   const playerBoost = state.player?.state?.boost;
   if (
-    !hasDirInput
+    dirReleased
     || input.jump
     || input.stepTap
     || (playerBoost != null && playerBoost <= 0)
@@ -6223,12 +6383,22 @@ function syncOnlineProjectiles(snap) {
     }
   }
   // Despawn anything no longer in the snapshot — hand any trail off to the
-  // dying list so it fades in place instead of vanishing instantly.
+  // dying list so it fades in place instead of vanishing instantly. Wall/deck
+  // despawn events carry the precise impact point (2026-08-01): clamp the
+  // dying trail's head there, so the streak ends at the face instead of at
+  // the last snapshot position (which for a sniper round sits up to a full
+  // 40 u tick-step short of — or, offline, past — the wall).
+  const despawnPos = new Map();
+  for (const ev of snap.events ?? []) {
+    if (ev.type === 'despawn' && ev.pos) despawnPos.set(ev.id, ev.pos);
+  }
   for (const [id, entry] of meshes.entries()) {
     if (liveIds.has(id)) continue;
     disposeProjectileMesh(entry.mesh);
     if (entry.pelletMeshes) for (const pm of entry.pelletMeshes) disposeProjectileMesh(pm);
     if (entry.trail) {
+      const ip = despawnPos.get(id);
+      if (ip) clampTrailHead(entry.trail, ip.x, ip.y, ip.z);
       state.dyingBulletTrails.push({
         trail: entry.trail,
         diesAt: now + entry.trailFadeMs,
@@ -7000,7 +7170,7 @@ function ensureOnlineMatchSetup(snap) {
   state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
   if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
-  if (state.hud) { state.hud.remove(); state.hud = null; }
+  teardownHud();
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
     disposeProjectileMesh(op.mesh);
@@ -7375,7 +7545,7 @@ function showSelectMenu() {
   state.allRandomFill = false;
   // Outside gameplay the fullscreen button returns to its top-left home.
   document.getElementById('fullscreen-btn')?.classList.remove('in-match');
-  state.hud?.remove();
+  teardownHud();
   renderer.domElement.style.pointerEvents = 'none';
 
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
@@ -8023,8 +8193,10 @@ window.addEventListener('keyup', (e) => {
   else if (k === ' ') input.jump = false;
   else if (k === 'k') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
   else if (k === 'j') input.shootHold = false;
-  const hasKeyboardDir = keyState.up || keyState.down || keyState.left || keyState.right;
-  if (!hasKeyboardDir) input.sprintLocked = false;
+  // NOTE (2026-08-01): all-dir-keys-released no longer clears the sprint lock
+  // here — the per-frame paths (updatePlayer / the online input builder) do
+  // it via the SPRINT_LOCK_RELEASE_GRACE_MS rule, so an A→D swap with a
+  // brief no-key gap keeps the lock, same as a joystick flip.
 });
 
 function syncKeyboardMovement() {
@@ -9218,10 +9390,13 @@ function buildStreetsArena() {
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
   for (const [px, pz] of [[-20, -38], [20, -38], [-20, 38], [20, 38]]) {
-    // Shortened 20 -> 16 from the OUTER end (inner edge stays at x ±12, so
-    // the central bridge-ramp opening is unchanged; the outer pass widens).
-    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 16, sy: 6.5, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 16, 6.5, 2.4);
+    // Shortened 20 -> 16 (outer end, older pass), then 16 -> 12 from BOTH
+    // ends (2026-08-01, centers unchanged at x ±20 → spans x 14..26): widens
+    // the ramp-side choke (slope gate x≈8.2 ⇄ planter 12→14, gap 3.8→5.8)
+    // AND the plaza-side choke (planter 28→26 ⇄ plaza edge 32, gap 4→6) so
+    // units navigate the bridge-end passes without hugging geometry.
+    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 12, sy: 6.5, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 12, 6.5, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });

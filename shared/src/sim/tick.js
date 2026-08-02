@@ -7,6 +7,7 @@
 import {
   BOOST_MOVE_SPEED,
   WALK_SPEED,
+  SPRINT_LOCK_RELEASE_GRACE_MS,
   STEP_DISTANCE,
   STEP_DURATION_MS,
   STEP_BOOST_COST,
@@ -91,10 +92,17 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
   let sprintLocked = input.sprintLocked;
+  // Sprint-lock release grace (2026-08-01, mirrors the client rule): a stick
+  // flip crosses the neutral deadzone for a few frames — only a SUSTAINED
+  // neutral counts as the let-go-to-stop release. Tracked per fighter on the
+  // server clock; server-internal field, never serialized.
+  if (hasDirInput) fighter.dirNeutralSince = 0;
+  else if (!fighter.dirNeutralSince) fighter.dirNeutralSince = now;
+  const dirReleased = !hasDirInput && now - fighter.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(fighter.unit?.flight && fighter.airborne);
-  if (!hasDirInput || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
+  if (dirReleased || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
   const boostActive = input.boost || sprintLocked;
 
   const recoveringFromDash = now < fighter.dashRecoverUntil;
