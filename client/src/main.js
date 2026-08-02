@@ -9234,10 +9234,13 @@ function buildStreetsArena() {
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
   for (const [px, pz] of [[-20, -38], [20, -38], [-20, 38], [20, 38]]) {
-    // Shortened 20 -> 16 from the OUTER end (inner edge stays at x ±12, so
-    // the central bridge-ramp opening is unchanged; the outer pass widens).
-    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 16, sy: 6.5, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 16, 6.5, 2.4);
+    // Shortened 20 -> 16 (outer end, older pass), then 16 -> 12 from BOTH
+    // ends (2026-08-01, centers unchanged at x ±20 → spans x 14..26): widens
+    // the ramp-side choke (slope gate x≈8.2 ⇄ planter 12→14, gap 3.8→5.8)
+    // AND the plaza-side choke (planter 28→26 ⇄ plaza edge 32, gap 4→6) so
+    // units navigate the bridge-end passes without hugging geometry.
+    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 12, sy: 6.5, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 12, 6.5, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
