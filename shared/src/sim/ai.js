@@ -1425,11 +1425,11 @@ export function tickBot(matchState, botId, now) {
   // --- Firing: LoS-aware + universal burst sizing ---
   if (now >= me.nextFireAt) {
     const u = me.unit;
-    if (now < me.invulnerableUntil) {
-      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
-      me.nextFireAt = me.invulnerableUntil;
-      me.machineBurstRemaining = 0;
-    } else if (u.magCapacity != null && me.ammo <= 0) {
+    // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
+    // shots from an immune attacker deal full damage (every hit check is
+    // target-side), and humans can already shoot while protected. Only the
+    // TARGET-immunity hold below remains.
+    if (u.magCapacity != null && me.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);

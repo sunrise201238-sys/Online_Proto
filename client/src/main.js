@@ -4875,11 +4875,11 @@ function updateEnemy(now) {
   if (now >= eState.nextFireAt) {
     const u = state.enemy.unit;
     const s = eState;
-    if (now < s.invulnerableUntil) {
-      // Spawn immunity — no shot can land yet, so hold fire until it lapses.
-      s.nextFireAt = s.invulnerableUntil;
-      s.machineBurstRemaining = 0;
-    } else if (u.magCapacity != null && s.ammo <= 0) {
+    // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
+    // shots from an immune attacker deal full damage (every hit check is
+    // target-side), and humans can already shoot while protected. Only the
+    // TARGET-immunity hold below remains.
+    if (u.magCapacity != null && s.ammo <= 0) {
       const wait = u.autoReload
         ? u.reloadMs
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
