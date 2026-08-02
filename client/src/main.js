@@ -2279,6 +2279,77 @@ function projectileHitsSurface(prevPos, nextPos) {
   return false;
 }
 
+// Impact fraction (t in [0,1]) where segment p0→p1 FIRST enters AABB o, or
+// -1 on miss — segmentHitsObstacle's slab test with tMin returned instead of
+// discarded. Mirrors shared/src/sim/physics.js. Used to clamp death visuals
+// (bullet trails) to the wall face (2026-08-01).
+function segmentObstacleImpactT(p0, p1, o) {
+  let tMin = 0;
+  let tMax = 1;
+  const axes = [
+    [p0.x, p1.x - p0.x, o.minX, o.maxX],
+    [p0.y, p1.y - p0.y, o.minY, o.maxY],
+    [p0.z, p1.z - p0.z, o.minZ, o.maxZ]
+  ];
+  for (const [start, delta, lo, hi] of axes) {
+    if (Math.abs(delta) < 1e-9) {
+      if (start < lo || start > hi) return -1;
+    } else {
+      const t1 = (lo - start) / delta;
+      const t2 = (hi - start) / delta;
+      const tNear = t1 < t2 ? t1 : t2;
+      const tFar = t1 < t2 ? t2 : t1;
+      if (tNear > tMin) tMin = tNear;
+      if (tFar < tMax) tMax = tFar;
+      if (tMin > tMax) return -1;
+    }
+  }
+  return tMin;
+}
+
+// Earliest fraction where the segment crosses a walkable surface, or -1 —
+// the T-returning twin of projectileHitsSurface (crossing lands at the
+// midpoint of the flip pair). Mirrors shared/src/sim/physics.js.
+function surfaceImpactT(prevPos, nextPos) {
+  const samples = 8;
+  let best = -1;
+  for (const s of arenaSurfaces) {
+    let prevDelta = null;
+    let prevT = 0;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
+      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) {
+        if (best < 0 || t < best) best = t;
+        break;
+      }
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
+        const tc = (prevT + t) / 2;
+        if (best < 0 || tc < best) best = tc;
+        break;
+      }
+      prevDelta = delta;
+      prevT = t;
+    }
+  }
+  return best;
+}
+
+// Pull a bullet trail's HEAD vertex back to the given point — used on wall/
+// deck deaths so the fading streak ends at the impact face instead of the
+// projectile's overshot post-step position (a sniper round steps ~40 u per
+// frame and its 1 s fade left a streak stabbing through cover).
+function clampTrailHead(trail, x, y, z) {
+  if (!trail) return;
+  const pos = trail.geometry.attributes.position.array;
+  pos[3] = x; pos[4] = y; pos[5] = z;
+  trail.geometry.attributes.position.needsUpdate = true;
+}
+
 function updateProjectileSystem(dt) {
   const now = performance.now();
   if (state.mapKey === 'range') tickRange(now, dt);
@@ -2521,17 +2592,24 @@ function updateProjectileSystem(dt) {
     // Swept test: catches fast/homing projectiles that would otherwise tunnel through
     // an obstacle between frames. Obstacles flagged `noProjectile` (e.g. invisible
     // unit-only fences) are skipped so bullets fly through them.
+    // Precise death clamp (2026-08-01): take the NEAREST impact fraction and
+    // pull the trail head back to the face before the fade handoff — the trail
+    // was updated to the overshot post-step position earlier this frame.
+    let deathT = -1;
     for (const obstacle of arenaObstacles) {
       if (obstacle.noProjectile) continue;
-      if (!segmentHitsObstacle(prevPos, sweepEnd, obstacle)) continue;
-      despawnProjectileTrail(p, now);
-      disposeProjectileMesh(p.mesh);
-      state.projectiles.splice(i, 1);
-      p.ttl = 0;
-      break;
+      const t = segmentObstacleImpactT(prevPos, sweepEnd, obstacle);
+      if (t >= 0 && (deathT < 0 || t < deathT)) deathT = t;
     }
-    if (p.ttl <= 0) continue;
-    if (projectileHitsSurface(prevPos, sweepEnd)) {
+    if (deathT < 0 && projectileHitsSurface(prevPos, sweepEnd)) {
+      const st = surfaceImpactT(prevPos, sweepEnd);
+      deathT = st >= 0 ? st : 1;
+    }
+    if (deathT >= 0) {
+      clampTrailHead(p.trail,
+        prevPos.x + (sweepEnd.x - prevPos.x) * deathT,
+        prevPos.y + (sweepEnd.y - prevPos.y) * deathT,
+        prevPos.z + (sweepEnd.z - prevPos.z) * deathT);
       despawnProjectileTrail(p, now);
       disposeProjectileMesh(p.mesh);
       state.projectiles.splice(i, 1);
@@ -6262,12 +6340,22 @@ function syncOnlineProjectiles(snap) {
     }
   }
   // Despawn anything no longer in the snapshot — hand any trail off to the
-  // dying list so it fades in place instead of vanishing instantly.
+  // dying list so it fades in place instead of vanishing instantly. Wall/deck
+  // despawn events carry the precise impact point (2026-08-01): clamp the
+  // dying trail's head there, so the streak ends at the face instead of at
+  // the last snapshot position (which for a sniper round sits up to a full
+  // 40 u tick-step short of — or, offline, past — the wall).
+  const despawnPos = new Map();
+  for (const ev of snap.events ?? []) {
+    if (ev.type === 'despawn' && ev.pos) despawnPos.set(ev.id, ev.pos);
+  }
   for (const [id, entry] of meshes.entries()) {
     if (liveIds.has(id)) continue;
     disposeProjectileMesh(entry.mesh);
     if (entry.pelletMeshes) for (const pm of entry.pelletMeshes) disposeProjectileMesh(pm);
     if (entry.trail) {
+      const ip = despawnPos.get(id);
+      if (ip) clampTrailHead(entry.trail, ip.x, ip.y, ip.z);
       state.dyingBulletTrails.push({
         trail: entry.trail,
         diesAt: now + entry.trailFadeMs,
