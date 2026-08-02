@@ -104,7 +104,7 @@ Standouts under the strict protocol: perpendicular sprint is near-untouchable fo
 | **Hoshino @40** — 210 / 85 / 0 ![Hoshino](docs/img/lockrange/hoshino7shots.png) | **Haruka @40** — 170 / 85 / 10 ![Haruka](docs/img/lockrange/haruka7shots.png) |
 | **Koyuki @80** — 342 / 180 / 13.5 ![Koyuki](docs/img/lockrange/koyuki100shots.png) | **Hina @80** — 400 / 100 / 0 ![Hina](docs/img/lockrange/hina100shots.png) |
 
-Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range shows up only subtly — the sim's `redLock` flag warms the shooter's tracer tint and drives the bots' engage bands; the reticle doesn't signal it.
+Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
 
 ### Units 2 & 11 — the shotgun blast
 

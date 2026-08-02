@@ -1860,7 +1860,11 @@ function buildProjectileMesh(unit, isRedLock) {
   ];
   const geom = new THREE.LatheGeometry(profile, 10);
   geom.translate(0, -half, 0);
-  const color = isRedLock ? 0xffd28a : 0xfff4d0;
+  // One tracer color for everyone (2026-08-01): the amber in-lock tint
+  // (0xffd28a, a vestige of the removed lock-on homing mechanic) is gone —
+  // in-range status is deliberately not signalled to players. The isRedLock
+  // parameter is kept so call sites stay untouched; it is now unused here.
+  const color = 0xfff4d0;
   const mesh = new THREE.Mesh(
     geom,
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false })
