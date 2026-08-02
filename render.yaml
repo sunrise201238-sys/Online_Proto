@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: gvg-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start --workspace server
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+
+  - type: web
+    name: gvg-client
+    runtime: static
+    buildCommand: npm install && npm run build --workspace client
+    staticPublishPath: client/dist
+    autoDeploy: true
+    envVars:
+      # After the first deploy, edit this in the Render dashboard to point at
+      # the gvg-server service's public URL, then redeploy the client. The
+      # value is baked into the static build at compile time (Vite env).
+      - key: VITE_SERVER_URL
+        value: https://gvg-server.onrender.com
