@@ -520,6 +520,7 @@ const UNIT_DATA = {
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
+    botFireCap: 71,         // bot: shots per trigger pull = full drum (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
