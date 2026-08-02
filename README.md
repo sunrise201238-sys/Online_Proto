@@ -157,7 +157,22 @@ Three properties the table encodes: glint duration equals the release time on **
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
-**Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Since 2026-08-01 every auto's cap equals its **full magazine** — Saori 30, Asuna 25, Atsuko 30, Marina 71, Fubuki 30, Koyuki 100, Hina 250 — so in practice an auto bot fires until the mag runs dry and rolls straight into the reload (Aris keeps the legacy half-mag burst of 4). The shotguns are burst-gated too: **4 blasts per trigger pull** at their own blast cooldown, then the rest. A burst still ends early if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full) or if the target is **spawn-immune** — bots hold fire entirely at immune targets and wake the moment immunity lapses.
+**Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Shots inside a burst pace at the weapon's own RPM-derived cooldown, so retuning a fire rate retunes the bot with it. Every auto's cap equals its **full magazine** — an auto bot fires until the mag runs dry and rolls straight into the reload; the shotguns are burst-gated at 4 blasts per pull; the snipers run their charge cycle instead of bursting.
+
+| Unit | Fire cap | Meaning |
+|---|---|---|
+| Saori | 30 | full mag |
+| Asuna | 25 | full mag |
+| Atsuko | 30 | full mag |
+| Marina | 71 | full drum |
+| Fubuki | 30 | full mag |
+| Koyuki | 100 | full mag |
+| Hina | 250 | full drum (~12 s of continuous fire) |
+| Hoshino / Haruka | 4 | 4 blasts per trigger pull |
+| Aris | 4 | legacy formula (half mag) |
+| Aru / Kei | — | charge cycle, no bursts |
+
+A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
 
 ## Controls
 
@@ -166,7 +181,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | **Mobile** | On-screen joystick + buttons |
 | **PC** | `WASD` move · `J` fire · `K` sprint · `L` dodge · `Space` jump · `U` switch target (2v2) |
 
-Double-tap `K` (or the sprint button) to lock sprint. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
+Double-tap `K` (or the sprint button) to lock sprint. The lock releases only after the stick/keys stay **neutral for a sustained 0.18 s** — flipping direction through the joystick center (left→right) or swapping movement keys keeps the locked sprint alive; letting go still stops it almost instantly. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
 
 ## Maps
 
