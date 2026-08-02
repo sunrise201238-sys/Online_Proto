@@ -538,6 +538,12 @@ export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
 export const SPAWN_IMMUNITY_MS = 3000;
+// Sprint-lock release grace: a joystick flip (left→right) crosses the center
+// deadzone for a few frames and used to read as the let-go-to-stop gesture,
+// killing the locked sprint mid-flip. Only a neutral stick SUSTAINED this
+// long releases the lock. Kept well under the 260 ms double-tap window so
+// the two gestures can't tangle. Mirrored in client/src/main.js.
+export const SPRINT_LOCK_RELEASE_GRACE_MS = 180;
 
 // Repulsion (soft-collide) between fighters.
 export const REPULSION_RANGE = 3;

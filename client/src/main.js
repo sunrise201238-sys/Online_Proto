@@ -860,6 +860,12 @@ const STEP_BOOST_COST = 48;
 const STEP_HOMING_CUT_MS = 260;
 // --- Jump defaults (used when a unit's UNIT_DATA entry omits the field) ---
 const JUMP_BOOST_COST = STEP_BOOST_COST;     // unit.jumpBoostCost default (= 48)
+// Sprint-lock release grace: a joystick flip (left→right) crosses the center
+// deadzone for a few frames and used to read as the let-go-to-stop gesture,
+// killing the locked sprint mid-flip. Only a neutral stick SUSTAINED this
+// long releases the lock. Kept well under the 260 ms double-tap window so
+// the two gestures can't tangle. Mirrors shared/src/sim/constants.js.
+const SPRINT_LOCK_RELEASE_GRACE_MS = 180;
 const JUMP_INITIAL_VELOCITY = 30;            // unit.jumpVelocity default
 const JUMP_HOVER_MS = 300;                   // unit.jumpHoverMs default
 const JUMP_COOLDOWN_MS = 1500;               // unit.jumpCooldownMs default
@@ -923,6 +929,7 @@ const input = {
   boost: false,
   boostHeld: false,
   sprintLocked: false,
+  dirNeutralSince: 0,     // sprint-lock release grace: when the stick went neutral (0 = has direction)
   jump: false,
   stepTap: false,
   shootTap: false,
@@ -3265,10 +3272,17 @@ function updatePlayer(now) {
   const stepState = state.player.state;
   const inStep = now <= stepState.stepUntil;
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  // Sprint-lock release grace (2026-08-01): a joystick flip (left→right)
+  // crosses the neutral deadzone for a few frames and used to read as the
+  // let-go-to-stop gesture, killing the lock mid-flip. Only a SUSTAINED
+  // neutral (>= SPRINT_LOCK_RELEASE_GRACE_MS) releases the lock now.
+  if (hasDirInput) input.dirNeutralSince = 0;
+  else if (!input.dirNeutralSince) input.dirNeutralSince = now;
+  const dirReleased = !hasDirInput && now - input.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
-  if (!hasDirInput || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
+  if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
   input.boost = input.boostHeld || input.sprintLocked;
 
   const forward = new THREE.Vector3();
@@ -6051,9 +6065,16 @@ function buildOnlineInputFrame() {
   // three flags. Doing the same derivation here makes the online PC path
   // behave identically.
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  // Sprint-lock release grace — same rule as updatePlayer (see the comment
+  // there): only a SUSTAINED neutral stick releases the lock, so joystick
+  // flips through center keep the locked sprint online too.
+  const nowMs = performance.now();
+  if (hasDirInput) input.dirNeutralSince = 0;
+  else if (!input.dirNeutralSince) input.dirNeutralSince = nowMs;
+  const dirReleased = !hasDirInput && nowMs - input.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   const playerBoost = state.player?.state?.boost;
   if (
-    !hasDirInput
+    dirReleased
     || input.jump
     || input.stepTap
     || (playerBoost != null && playerBoost <= 0)
@@ -8039,8 +8060,10 @@ window.addEventListener('keyup', (e) => {
   else if (k === ' ') input.jump = false;
   else if (k === 'k') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
   else if (k === 'j') input.shootHold = false;
-  const hasKeyboardDir = keyState.up || keyState.down || keyState.left || keyState.right;
-  if (!hasKeyboardDir) input.sprintLocked = false;
+  // NOTE (2026-08-01): all-dir-keys-released no longer clears the sprint lock
+  // here — the per-frame paths (updatePlayer / the online input builder) do
+  // it via the SPRINT_LOCK_RELEASE_GRACE_MS rule, so an A→D swap with a
+  // brief no-key gap keeps the lock, same as a joystick flip.
 });
 
 function syncKeyboardMovement() {
