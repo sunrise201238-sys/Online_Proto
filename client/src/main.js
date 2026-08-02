@@ -1540,8 +1540,35 @@ function makeAllyArrowSprite(fillHex = '#86f7c2') {
   return s;
 }
 
+// Tear down the current HUD: detach its DOM, abort the window-level joystick
+// listeners setupHUD registered (they used to LEAK — two per match, each
+// closure pinning that match's whole HUD DOM tree), and reset every
+// touch-driven input flag so no stale stick deflection or held button
+// survives into the next match/menu. (The leaked pointerup used to do that
+// zeroing by accident on the next finger release; now it's explicit.)
+function teardownHud() {
+  state.hudAbort?.abort();
+  state.hudAbort = null;
+  state.hud?.remove();
+  state.hud = null;
+  input.x = 0;
+  input.y = 0;
+  input.boost = false;
+  input.boostHeld = false;
+  input.sprintLocked = false;
+  input.shootTap = false;
+  input.shootHold = false;
+  input.jump = false;
+  input.stepTap = false;
+  input.dirNeutralSince = 0;
+}
+
 function setupHUD() {
-  if (state.hud) state.hud.remove();
+  teardownHud();
+  // Window-level joystick listeners below register against this controller's
+  // signal, so teardownHud() can remove exactly this HUD's pair and nothing else.
+  const hudAbort = new AbortController();
+  state.hudAbort = hudAbort;
   const hud = document.createElement('div');
   hud.className = 'touch-hud';
   const teamBarsHtml = state.mode === '2v2' ? `
@@ -1628,7 +1655,7 @@ function setupHUD() {
   window.addEventListener('pointermove', (e) => {
     if (pointerId !== e.pointerId) return;
     applyStick(e.clientX, e.clientY);
-  });
+  }, { signal: hudAbort.signal });
 
   window.addEventListener('pointerup', (e) => {
     if (pointerId !== e.pointerId) return;
@@ -1640,7 +1667,7 @@ function setupHUD() {
     input.boost = false;
     input.boostHeld = false;
     stick.style.transform = 'translate(0px,0px)';
-  });
+  }, { signal: hudAbort.signal });
 
   hud.querySelectorAll('button').forEach((btn) => {
     if (btn.id === 'pause-btn') return;
@@ -6076,7 +6103,7 @@ function hideOnlineOverlay() {
 function startOnlineMatch() {
   cleanupMatch();
   clearMenus();
-  state.hud?.remove();
+  teardownHud();
   renderer.domElement.style.pointerEvents = 'auto';
 
   // No mechs / arena created yet — we defer that until the player has picked
@@ -7127,7 +7154,7 @@ function ensureOnlineMatchSetup(snap) {
   state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
   if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
-  if (state.hud) { state.hud.remove(); state.hud = null; }
+  teardownHud();
   hudRefs = null;
   for (const op of onl.projectileMeshes.values()) {
     disposeProjectileMesh(op.mesh);
@@ -7502,7 +7529,7 @@ function showSelectMenu() {
   state.allRandomFill = false;
   // Outside gameplay the fullscreen button returns to its top-left home.
   document.getElementById('fullscreen-btn')?.classList.remove('in-match');
-  state.hud?.remove();
+  teardownHud();
   renderer.domElement.style.pointerEvents = 'none';
 
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
