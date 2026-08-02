@@ -2247,20 +2247,27 @@ function segmentHitsObstacle(p0, p1, o) {
   return true;
 }
 
+// Sign-flip test runs PER SURFACE (delta resets whenever the sample leaves
+// that surface's footprint): comparing against the max of the whole stack
+// conflated different decks — a level shot that passed OVER a sidewalk
+// (delta +) and then UNDER the Streets bridge deck (delta -) "flipped" and
+// died in open air (2026-08-01 fix). A real slab crossing still flips
+// against the slab's own height. Mirrors shared/src/sim/physics.js.
 function projectileHitsSurface(prevPos, nextPos) {
   const samples = 8;
-  let prevDelta = null;
-  for (let i = 0; i <= samples; i += 1) {
-    const t = i / samples;
-    const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-    const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-    const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-    const h = surfaceHeightAtXZ(x, z);
-    if (h === -Infinity) continue;
-    const delta = y - h;
-    if (Math.abs(delta) < 0.04) return true;
-    if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-    prevDelta = delta;
+  for (const s of arenaSurfaces) {
+    let prevDelta = null;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
+      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) return true;
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
+      prevDelta = delta;
+    }
   }
   return false;
 }

@@ -291,23 +291,30 @@ export function surfaceHeightAtXZ(x, z, surfaces) {
 }
 
 // Walk a projectile's segment through a few sample points and return true
-// if it crosses any walkable surface. Mirrors projectileHitsSurface in
-// main.js (8 samples, sign-flip detection on `delta = y - h`).
+// if it crosses a walkable surface. The sign-flip test runs PER SURFACE
+// (delta resets whenever the sample leaves that surface's footprint):
+// comparing against the max of the whole stack conflated different decks —
+// a level shot that passed OVER a sidewalk (delta +) and then UNDER the
+// Streets bridge deck (delta -) "flipped" and died in open air (2026-08-01
+// fix). A real slab crossing still flips against the slab's own height.
+// Mirrors projectileHitsSurface in main.js.
 export function projectileHitsSurface(prevPos, nextPos, surfaces) {
   if (!surfaces.length) return false;
   const samples = 8;
-  let prevDelta = null;
-  for (let i = 0; i <= samples; i += 1) {
-    const t = i / samples;
-    const x = prevPos.x + (nextPos.x - prevPos.x) * t;
-    const y = prevPos.y + (nextPos.y - prevPos.y) * t;
-    const z = prevPos.z + (nextPos.z - prevPos.z) * t;
-    const h = surfaceHeightAtXZ(x, z, surfaces);
-    if (h === -Infinity) continue;
-    const delta = y - h;
-    if (Math.abs(delta) < 0.04) return true;
-    if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-    prevDelta = delta;
+  for (let si = 0; si < surfaces.length; si += 1) {
+    const s = surfaces[si];
+    let prevDelta = null;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = prevPos.x + (nextPos.x - prevPos.x) * t;
+      const z = prevPos.z + (nextPos.z - prevPos.z) * t;
+      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
+      const y = prevPos.y + (nextPos.y - prevPos.y) * t;
+      const delta = y - s.heightAt(x, z);
+      if (Math.abs(delta) < 0.04) return true;
+      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
+      prevDelta = delta;
+    }
   }
   return false;
 }
