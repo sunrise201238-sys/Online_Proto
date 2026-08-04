@@ -1299,6 +1299,15 @@ function updateMechAnimations(dt, now) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
+    // DEMO BUILD: hold the weapon tag at a roughly constant on-screen size —
+    // base size inside the own-unit camera distance, scaling up with range
+    // (capped) so far enemies' tags stay readable.
+    const tag = m.weaponTag;
+    if (tag) {
+      const d = camera.position.distanceTo(m.root.position);
+      const s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(1, d / UNIT_TAG_REF_DIST));
+      tag.scale.set(s * tag.userData.tagAspect, s, 1);
+    }
   }
 }
 
@@ -1307,8 +1316,15 @@ function updateMechAnimations(dt, now) {
 // background doubles as the who-is-who color key; text flips dark/light by
 // accent luminance, same threshold as the HUD roster tags. One canvas texture
 // per (weapon, accent), shared by every mech that shows it.
-const UNIT_TAG_HEIGHT = 0.85;   // world-units tall
-const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.55;  // just above the head
+const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
+const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
+// Distance compensation: past the own-unit camera distance the tag scales up
+// with range (holding a roughly constant on-screen size) so enemy tags stay
+// readable across the map, capped so far tags never balloon. At or inside the
+// reference distance it stays base size — no close-range view blocking. The
+// tag is bottom-anchored, so the boost grows it upward, never into the head.
+const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
+const UNIT_TAG_MAX_BOOST = 3.5;
 const _weaponTagTexCache = {};  // `${weapon}|${accent}` → { tex, aspect }
 
 function makeWeaponTagTexture(label, accentHex = 0x88aadd) {
@@ -1346,8 +1362,10 @@ function makeWeaponTagSprite(unitData) {
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
+  s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
   s.position.y = UNIT_TAG_Y;
+  s.userData.tagAspect = entry.aspect;     // per-frame distance scaling reads this
   return s;
 }
 
@@ -1364,8 +1382,10 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
   // indicators. roleKey picks the art set (player | ally | enemy1 | enemy2).
   const sprite = makeUnitSprite(unitData, isOwnUnit, roleKey);
   root.add(sprite);
-  // DEMO BUILD: weapon-name tag floating above the head.
-  root.add(makeWeaponTagSprite(unitData));
+  // DEMO BUILD: weapon-name tag floating above the head. Kept on the mech so
+  // updateMechAnimations can distance-scale it every frame.
+  const weaponTag = makeWeaponTagSprite(unitData);
+  root.add(weaponTag);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
@@ -1393,6 +1413,7 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
     body,
     unit: unitData,
     roleKey,                  // demo art set for this slot (survives sprite view swaps)
+    weaponTag,                // overhead name tag — distance-scaled per frame
     thrusters: [],
     plumeLight,
     trail: [],
@@ -7816,14 +7837,16 @@ function unitMenuName(u) {
 }
 
 function showProfilePopup(card, unit, onConfirm) {
-  const { weapon, accent } = unit;
+  const { weapon, accent, name } = unit;
   // DEMO BUILD: no character art — an accent-colored plate with the GUN name
-  // on the left, the weapon silhouette + name on the panel beside.
+  // on the left; the panel beside shows the weapon silhouette over its
+  // CATEGORY (the gun name already sits on the plate).
   const accentCss = '#' + ((accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
+  const category = ((name ?? '').split('/')[1] || name || '').trim();
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
         <img class="weapon-render" src="${weaponArtUrl(weapon)}" alt="" draggable="false" />
-        <div class="weapon-name">${weapon}</div>
+        <div class="weapon-name">${category || weapon}</div>
       </div>`
     : '';
   spawnProfilePopup(card,
