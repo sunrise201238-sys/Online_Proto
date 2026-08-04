@@ -5755,14 +5755,15 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
       .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
         const u = UNIT_DATA[k];
         if (!u) return '';
-        // DEMO BUILD: weapon renders are gone — a text name tag stands in,
-        // tinted with the unit's accent so the tag doubles as a who-is-who
-        // color key. Text flips dark/light by accent luminance for contrast.
+        // DEMO BUILD: weapon silhouette on the unit's accent so the tag
+        // doubles as a who-is-who color key. The black silhouette flips to
+        // white (CSS invert) on dark accents for contrast — same luminance
+        // threshold the old text tag used.
         const a = (u.accent ?? 0x88aadd) >>> 0;
         const lum = 0.299 * ((a >> 16) & 255) + 0.587 * ((a >> 8) & 255) + 0.114 * (a & 255);
         const bg = '#' + a.toString(16).padStart(6, '0').slice(-6);
-        const fg = lum > 140 ? '#0b1220' : '#f2f9ff';
-        return `<span class="trio-weapon-tag" style="background:${bg};color:${fg}">${u.weapon ?? k}</span>`;
+        const inv = lum > 140 ? '' : 'filter:invert(1)';
+        return `<span class="trio-weapon-tag" style="background:${bg}"><img src="${weaponArtUrl(u.weapon)}" alt="${u.weapon ?? k}" style="${inv}" draggable="false"></span>`;
       }).join('')}</div>`)
       .join('')
     : '';

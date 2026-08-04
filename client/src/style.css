@@ -359,7 +359,8 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .weapon-panel .weapon-render { background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; }
 /* Profile popup: accent-colored plate with the unit label (random-face proportions). */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; color: rgba(8, 14, 24, 0.9); font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
-/* Trio/Duel HUD: weapon NAME tag replacing the old weapon-render icon. */
-.trio-count .trio-weapon-tag { display: inline-block; height: 11px; line-height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; font-size: 9px; font-weight: 700; letter-spacing: 0.02em; color: #eaf6ff; background: rgba(12, 20, 32, 0.72); border-radius: 3px; }
+/* Trio/Duel HUD: weapon silhouette tag on the unit's accent color. */
+.trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; background: rgba(12, 20, 32, 0.72); border-radius: 3px; }
+.trio-count .trio-weapon-tag img { display: block; height: 9px; width: auto; max-width: 36px; object-fit: contain; }
 .trio-count-enemy .trio-weapon-tag { margin-right: 0; margin-left: 4px; }
 .trio-count-enemy .trio-inplay-bar + .trio-weapon-tag { margin-left: 2px; }
