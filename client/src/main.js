@@ -1324,7 +1324,7 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTT
 // floored at MIN_BOOST × base — readable without blocking the view. The
 // tag is bottom-anchored, so the boost grows it upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
-const UNIT_TAG_MIN_BOOST = 1.35; // floor: close-range tags render at 1.35x base
+const UNIT_TAG_MIN_BOOST = 2.7; // floor: close-range tags render at 2.7x base
 const UNIT_TAG_MAX_BOOST = 3.5;
 const _weaponTagTexCache = {};  // weapon label → { tex, aspect }
 

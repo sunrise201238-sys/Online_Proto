@@ -363,8 +363,9 @@ body.pseudo-fullscreen #app {
 /* Profile popup: unified dark plate with the gun name (random-face
    proportions). Side padding keeps two-line names off the plate edge. */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; background: #0b1119; border: 1px solid #2c4356; color: #eaf6ff; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
-/* Trio/Duel HUD: white weapon silhouette on the unified dark tag. */
-.trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; background: rgba(11, 17, 25, 0.92); border-radius: 3px; }
-.trio-count .trio-weapon-tag img { display: block; height: 9px; width: auto; max-width: 36px; object-fit: contain; filter: invert(1); }
+/* Trio/Duel HUD: white weapon silhouette on the unified dark tag (1.5x the
+   original 11/9px size for readability). */
+.trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 16.5px; margin-right: 4px; padding: 0 4px; vertical-align: middle; background: rgba(11, 17, 25, 0.92); border-radius: 4px; }
+.trio-count .trio-weapon-tag img { display: block; height: 13.5px; width: auto; max-width: 54px; object-fit: contain; filter: invert(1); }
 .trio-count-enemy .trio-weapon-tag { margin-right: 0; margin-left: 4px; }
 .trio-count-enemy .trio-inplay-bar + .trio-weapon-tag { margin-left: 2px; }
