@@ -350,9 +350,13 @@ body.pseudo-fullscreen #app {
 .menu .unit-card .random-thumb.all-random { background: #ecdda6; color: #9a7f2e; }
 .unit-profile-popup .random-face.all-random { background: #ecdda6; color: #9a7f2e; }
 
-/* ---- DEMO BUILD: art-free stand-ins ---- */
-/* Unit-grid tile: accent-colored square showing the unit number. */
-.menu .unit-card .demo-thumb { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: rgba(8, 14, 24, 0.85); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25); }
+/* ---- DEMO BUILD: neutral stand-ins ---- */
+/* Unit-grid tile: weapon silhouette on a light plate over the unit's accent
+   color (black silhouettes need the light backing to read on dark accents). */
+.menu .unit-card .demo-thumb { display: flex; align-items: center; justify-content: center; }
+.menu .unit-card .demo-thumb img { width: 88%; max-height: 62%; object-fit: contain; background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 3px 4px; box-sizing: border-box; pointer-events: none; }
+/* Profile popup: weapon silhouette on the same light plate above the name. */
+.unit-profile-popup .weapon-panel .weapon-render { background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; }
 /* Profile popup: accent-colored plate with the unit label (random-face proportions). */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; color: rgba(8, 14, 24, 0.9); font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
 /* Trio/Duel HUD: weapon NAME tag replacing the old weapon-render icon. */

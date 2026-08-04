@@ -2,7 +2,7 @@
 
 A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single stock) and **Trio** (three-unit rosters). Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
 
-> **Demo build** (branch `Demo_Version`): all character art and character names are removed. Units are identified by number and accent color; in-game weapon indicators show weapon name tags.
+> **Demo build** (branch `0.6.3_Demo_Version`): all character art and character names are removed. In-game, fighters render as neutral stick figures colored by role — blue you, green ally, red/orange enemies — with a dark through-wall silhouette for your own unit; every unit in the same slot shares the same figure. In menus, units are identified by number, accent color, and their weapon's silhouette; in-game weapon indicators show weapon name tags.
 
 ## Modes
 
@@ -10,7 +10,7 @@ Two main modes, each playable **1v1 or 2v2**, offline and online:
 
 - **Duel** — classic single stock: one unit per fighter; a team loses when all its fighters are down.
 - **Trio** — three-unit stock: every slot (human or bot) fields an **ordered roster of three units**, repeats allowed. When a unit dies, the slot's next unit respawns at its original spawn point with the standard 3 s spawn immunity; the killer keeps position / HP / boost — no kill reward. A team loses when every roster on its side is spent. Each fighter's remaining units show as a row of small weapon renders under their side's HP bars (one line per team member; Duel shows its single unit the same way), and a small golden glow-bar marks each Trio line's currently fielded weapon.
-- **Spectating (2v2, both modes)**: if you're out for good while your ally fights on, the camera follows the ally with your own-unit visual kit (rear art + through-wall X-ray); the lock reticle stays up and mirrors the ally's actual target (the TARGET button goes inert).
+- **Spectating (2v2, both modes)**: if you're out for good while your ally fights on, the camera follows the ally with your own-unit visual kit (through-wall X-ray silhouette); the lock reticle stays up and mirrors the ally's actual target (the TARGET button goes inert).
 
 ### Offline
 - **1v1**: you vs one enemy bot.
@@ -129,7 +129,7 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 ### Unit 7 — flight & laser bolts
 
-- **Flight kit**: a jump tap in the air re-fires the jump impulse (12 boost per pop, no cooldown); *holding* jump sustains a climb at sprint speed; air-sprint flies **level** (dedicated fly art); the air-dodge holds altitude. Boost does not regen while airborne — altitude is a spent resource.
+- **Flight kit**: a jump tap in the air re-fires the jump impulse (12 boost per pop, no cooldown); *holding* jump sustains a climb at sprint speed; air-sprint flies **level** (reuses the sprint art in the demo); the air-dodge holds altitude. Boost does not regen while airborne — altitude is a spent resource.
 - Sprinting into a jump **carries the sprint momentum** through the air.
 - Her shot is a **64-unit-long laser bolt**: the thin cyan cylinder you see *is* the hitbox (both derive from one spec entry). It grows out of the muzzle — the body never reaches behind the spawn point — and hits with its whole length, so a dodge must clear the entire passing beam, not just its nose.
 

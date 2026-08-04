@@ -966,12 +966,14 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
 });
 
 // ----------------------------------------------------------------------------
-// Unit character billboards (procedural placeholders), STATE-DRIVEN.
+// Unit character billboards, STATE-DRIVEN.
 // Each mech renders as a camera-facing sprite instead of the old box-mech, and
-// swaps its texture to match the fighter's current pose. Real art would live in
-// client/public/units/<spriteKey>_<state>.png (transparent portrait, feet near
-// the bottom edge), one PNG per state below. DEMO BUILD: no unit ships a
-// spriteKey, so every mech renders the labelled accent-colored placeholder.
+// swaps its texture to match the fighter's current pose. DEMO BUILD: art is
+// ROLE-based, not per-unit — one neutral stick figure per match slot, colored
+// by role (blue you / green ally / red+orange enemies), loaded from
+// client/public/units/<role>_<state>.png with roles player | ally | enemy1 |
+// enemy2. The labelled accent-colored placeholder stays as the loading/404
+// fallback.
 //
 // State priority (highest first): dodge > sprint > shoot > stand. Sprint/dodge
 // outrank shoot, so a unit firing while dashing/running keeps its motion pose
@@ -1050,7 +1052,7 @@ function loadUnitArt(spriteKey, state, onReady) {
 // and preloads one texture per state (stand/sprint/dodge/shoot); the per-frame
 // updater swaps `mat.map` to match the fighter's pose. Anchored at the feet
 // (bottom-center). The state rig hangs off sprite.userData for the updater.
-function makeUnitSprite(unitData, isOwnUnit = false) {
+function makeUnitSprite(unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'player' : 'enemy1') {
   // Placeholder textures are pure functions of (label, accent) — share one per
   // unit across every mech built in the session instead of re-drawing and
   // re-uploading a fresh canvas on each (re)spawn.
@@ -1071,13 +1073,12 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   sprite.center.set(0.5, 0);                 // anchor at feet (bottom-center)
   sprite.position.y = UNIT_SPRITE_FOOT_Y;
 
-  // The local player's own unit is seen from behind (camera sits behind it), so
-  // it renders the rear-facing "_rear" art set; every other unit faces the
-  // camera and keeps the default front art.
-  const bodySuffix = isOwnUnit ? '_rear' : '';
+  // DEMO BUILD: the role figures are direction-agnostic (featureless stick
+  // figures), so there is no separate "_rear" art set — the own unit renders
+  // the same front art as everyone else.
 
   // Through-wall X-ray silhouette — OWN UNIT ONLY. A second billboard riding on
-  // the body draws the matching "_rear_shadow" art ONLY where the unit is hidden
+  // the body draws the matching "_shadow" art ONLY where the unit is hidden
   // behind cover. The depthFunc flip (GreaterDepth, same trick as
   // MECH_OCCLUSION_GHOST) passes only where the depth buffer is CLOSER than the
   // sprite — i.e. behind a wall — so the un-occluded part keeps the normal art
@@ -1086,7 +1087,7 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   // poisons the depth buffer. Added as a CHILD of the body sprite, so it inherits
   // the body's world position AND per-pose scale automatically — always
   // pixel-aligned. Hidden until its real shadow art loads, so a missing
-  // "_rear_shadow" PNG simply means no X-ray. Other units never build it, so they
+  // "_shadow" PNG simply means no X-ray. Other units never build it, so they
   // never X-ray through walls.
   let shadowMat = null;
   let shadowSprite = null;
@@ -1126,30 +1127,32 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   };
   sprite.userData.stateRig = rig;
 
-  if (unitData.spriteKey) {
-    // Flight units (Aris) also load the 'fly' pose — the air-sprint art.
-    // Non-flight units skip it (no <key>_fly.png exists for them).
-    const spriteStates = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
-    for (const state of spriteStates) {
-      // Own unit pulls the "_rear" art set; other units the default front art.
-      loadUnitArt(unitData.spriteKey, `${state}${bodySuffix}`, (tex) => {
-        rig.tex[state] = tex;
-        // Show the stand pose as soon as it arrives (first real art on screen).
-        if (state === 'stand' && (rig.shown === null || rig.shown === 'stand')) {
-          mat.map = tex;
-          mat.needsUpdate = true;
-          applyScale(tex);
-          rig.shown = 'stand';
-        }
-      });
-      // Matching through-wall silhouette ("<key>_<state>_rear_shadow.png") — own
-      // unit only; the updater swaps shadowMat.map to follow the visible pose as
-      // these arrive. Other units skip this load entirely (no X-ray for them).
-      if (isOwnUnit) {
-        loadUnitArt(unitData.spriteKey, `${state}_rear_shadow`, (tex) => {
-          rig.texShadow[state] = tex;
-        });
+  // DEMO BUILD: pose art comes from the roleKey, not the unit — every unit in
+  // the same slot shares the same figure. Flight units (Unit 7) also want the
+  // 'fly' pose; the demo set has no dedicated fly art, so it reuses sprint
+  // (same texture object via the cache — no extra download).
+  const spriteStates = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
+  for (const state of spriteStates) {
+    const fileState = state === 'fly' ? 'sprint' : state;
+    loadUnitArt(roleKey, fileState, (tex) => {
+      rig.tex[state] = tex;
+      // Show the stand pose as soon as it arrives (first real art on screen).
+      if (state === 'stand' && (rig.shown === null || rig.shown === 'stand')) {
+        mat.map = tex;
+        mat.needsUpdate = true;
+        applyScale(tex);
+        rig.shown = 'stand';
       }
+    });
+    // Matching through-wall silhouette — own unit only; the updater swaps
+    // shadowMat.map to follow the visible pose as these arrive. The dark
+    // "player_<state>_shadow" set serves EVERY role (the silhouette is a
+    // generic figure), so a spectated ally keeps its X-ray too. Other units
+    // skip this load entirely (no X-ray for them).
+    if (isOwnUnit) {
+      loadUnitArt('player', `${fileState}_shadow`, (tex) => {
+        rig.texShadow[state] = tex;
+      });
     }
   }
   return sprite;
@@ -1170,20 +1173,18 @@ function drainTexWarmQueue() {
   if (_texWarmQueue.length) renderer.initTexture?.(_texWarmQueue.shift());
 }
 
-// Start one unit's pose art through decode + (queued) GPU upload. Called from
-// the pickers/queue room the moment a unit is known — download dead time is
-// the menus, not the fight — and again (idempotent, cache-deduped) at match
-// setup as a safety net. Mirrors makeUnitSprite's exact art keys: front vs
-// "_rear" body set, the "_rear_shadow" X-ray set for the own-unit slot, and
-// the extra 'fly' pose for flight units.
+// Start pose art through decode + (queued) GPU upload. Called from the
+// pickers/queue room the moment a unit is known — download dead time is the
+// menus, not the fight — and again (idempotent, cache-deduped) at match setup
+// as a safety net. DEMO BUILD: art is role-based and shared by every unit, so
+// one pass warms the whole set (4 roles × 4 poses + the player X-ray
+// silhouettes); the arguments are accepted for call-site compatibility and
+// ignored. 'fly' reuses sprint art, so it needs no warm of its own.
 function warmUnitArt(unitData, own = false) {
-  if (!unitData?.spriteKey) return;
-  const bodySuffix = own ? '_rear' : '';
-  const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
-  for (const s of states) {
-    loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, queueTexWarm);
-    if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, queueTexWarm);
+  for (const role of ['player', 'ally', 'enemy1', 'enemy2']) {
+    for (const s of UNIT_SPRITE_STATES) loadUnitArt(role, s, queueTexWarm);
   }
+  for (const s of UNIT_SPRITE_STATES) loadUnitArt('player', `${s}_shadow`, queueTexWarm);
 }
 
 // ----------------------------------------------------------------------------
@@ -1276,7 +1277,7 @@ function updateUnitSpriteState(m, rig, dt, now) {
 
   // Keep the through-wall silhouette one-for-one with the visible pose — OWN UNIT
   // ONLY (rig.shadowSprite is null for every other unit, which skips this block).
-  // Tracked separately from `shown` because a pose's "_rear_shadow" PNG can finish
+  // Tracked separately from `shown` because a pose's "_shadow" PNG can finish
   // loading a few frames after the body PNG (or be absent). The shadow child stays
   // hidden until a real shadow texture is applied, so a missing PNG just means no
   // X-ray rather than a stray placeholder showing through walls.
@@ -1302,17 +1303,17 @@ function updateMechAnimations(dt, now) {
 }
 
 // `isOwnUnit` is true only for the local player's own mech (the createMech calls
-// that pass `true`, offline + online). The camera sits behind that unit, so it
-// renders the rear-facing "_rear" art set AND gets the through-wall X-ray
+// that pass `true`, offline + online). That unit gets the through-wall X-ray
 // silhouette — it's the one the player needs to see when their own movement tucks
-// it behind cover. Every other unit faces the camera (front art) with no X-ray.
+// it behind cover. Every other unit renders the same role art with no X-ray.
 // `color` (team tint) is no longer used for the body itself.
-function createMech(color, unitData, isOwnUnit = false) {
+function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'player' : 'enemy1') {
   const root = new THREE.Group();
 
   // Character billboard replaces the old box-mech body. Team identity reads
-  // from the reticle / floating triangle / HP indicators, not body color.
-  const sprite = makeUnitSprite(unitData, isOwnUnit);
+  // from the role-colored figure plus the reticle / floating triangle / HP
+  // indicators. roleKey picks the art set (player | ally | enemy1 | enemy2).
+  const sprite = makeUnitSprite(unitData, isOwnUnit, roleKey);
   root.add(sprite);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
@@ -1340,12 +1341,13 @@ function createMech(color, unitData, isOwnUnit = false) {
     root,
     body,
     unit: unitData,
+    roleKey,                  // demo art set for this slot (survives sprite view swaps)
     thrusters: [],
     plumeLight,
     trail: [],
     torso: sprite,
     sprite,
-    isOwnSprite: isOwnUnit,   // rear art + X-ray silhouette (rebuilt for spectated allies)
+    isOwnSprite: isOwnUnit,   // X-ray silhouette kit (rebuilt for spectated allies)
     modelYOffset: 2.35,
     legLength: 2.35,
     grounded: false,
@@ -1413,7 +1415,7 @@ function createMech(color, unitData, isOwnUnit = false) {
 
   // The character billboard created above (mech.sprite) is the unit body; its
   // state rig swaps poses (stand/sprint/dodge/shoot) each frame in
-  // updateMechAnimations(), driven by the unit's <spriteKey>_<state>.png art.
+  // updateMechAnimations(), driven by the slot's <role>_<state>.png art.
 
   return mech;
 }
@@ -5625,8 +5627,8 @@ function cameraFocusMech() {
   return (state.ally.state.hp > 0) ? state.ally : state.player;
 }
 
-// Swap a mech's billboard between the own-unit art set (rear poses +
-// through-wall X-ray silhouette) and the standard front-facing set. No-op
+// Swap a mech's billboard between the own-unit kit (through-wall X-ray
+// silhouette; same role body art) and the standard no-X-ray build. No-op
 // when already in the requested view. Old materials are disposed; textures
 // stay (they're cached and shared). Spectator mode flips these both ways as
 // the watched unit changes; the ally-spectate path only ever goes to `own`.
@@ -5638,7 +5640,7 @@ function setMechSpriteView(mech, own) {
     old.userData?.stateRig?.shadowMat?.dispose?.();
     old.material?.dispose?.();
   }
-  const sprite = makeUnitSprite(mech.unit, own);
+  const sprite = makeUnitSprite(mech.unit, own, mech.roleKey);
   mech.root.add(sprite);
   mech.sprite = sprite;
   mech.torso = sprite;
@@ -5677,12 +5679,12 @@ function updateCamera() {
   // currently fighting (its closest live opponent).
   const cam = cameraFocusMech();
   if (state.spectatorActive) {
-    // Spectator: exactly the watched unit wears the own-unit kit (rear art +
-    // X-ray); everyone else shows front art — flipping live as TARGET cycles.
+    // Spectator: exactly the watched unit wears the own-unit kit (X-ray
+    // silhouette); everyone else shows the plain build — flipping live as TARGET cycles.
     // setMechSpriteView is a no-op on matching views, so this is per-frame safe.
     getAllFighters().forEach((m) => setMechSpriteView(m, m === cam));
   } else if (cam && cam !== state.player && !cam.isOwnSprite) {
-    // Spectated unit gets the own-unit visual kit (rear art + X-ray) once —
+    // Spectated unit gets the own-unit visual kit (X-ray silhouette) once —
     // but only when the player is out for GOOD (in Trio a dead player may be
     // one respawn tick away from returning; don't restyle the ally for that
     // one-frame window).
@@ -5959,8 +5961,8 @@ function startMatch() {
   if (state.mode === '2v2') {
     // Ally: cyan-tinted so the player can tell it apart from themselves.
     // Enemy 2: paler pink so two enemies are visually distinguishable.
-    state.ally = createMech(0x86f7c2, UNIT_DATA[state.allyUnitKey]);
-    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[state.enemy2UnitKey]);
+    state.ally = createMech(0x86f7c2, UNIT_DATA[state.allyUnitKey], false, 'ally');
+    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[state.enemy2UnitKey], false, 'enemy2');
     state.ally.state.team = 'A';
     state.enemy2.state.team = 'B';
   }
@@ -7202,14 +7204,14 @@ function ensureOnlineMatchSetup(snap) {
   state.enemy.body.position.set(ePos.x, ePos.y, ePos.z);
 
   if (mode === '2v2' && allyId) {
-    state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey]);
+    state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey], false, 'ally');
     state.ally.unitKey = snap.fighters[allyId].unitKey;
     state.ally.state.team = myTeam;
     const aPos = snap.fighters[allyId].pos;
     state.ally.body.position.set(aPos.x, aPos.y, aPos.z);
   }
   if (mode === '2v2' && enemy2Id) {
-    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey]);
+    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey], false, 'enemy2');
     state.enemy2.unitKey = snap.fighters[enemy2Id].unitKey;
     state.enemy2.state.team = teamOfSlot(enemy2Id);
     const e2Pos = snap.fighters[enemy2Id].pos;
@@ -7284,7 +7286,7 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   old.trail.forEach((t) => scene.remove(t.mesh));
 
   const fresh = takePrebuiltMech(slotName, unitKey)
-    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
   fresh.unitKey = unitKey;
   fresh.state.team = old.state.team;
   fresh.body.position.copy(old.body.position);   // one-frame placeholder; the mirror overwrites
@@ -7744,13 +7746,21 @@ function spawnProfilePopup(card, innerHTML, onConfirm) {
   popup.querySelectorAll('img').forEach((img) => img.addEventListener('load', place));
 }
 
+// DEMO BUILD: weapon silhouette art, keyed by a slug of the unit's `weapon`
+// field ("PPSh-41" → weapons/ppsh-41.png, "Beretta 1301" → beretta-1301.png).
+function weaponArtUrl(weapon) {
+  const slug = String(weapon).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${import.meta.env.BASE_URL}weapons/${slug}.png`;
+}
+
 function showProfilePopup(card, unit, onConfirm) {
   const { char, weapon, accent } = unit;
-  // DEMO BUILD: no profile art or weapon renders — an accent-colored plate
-  // with the unit label on the left, the weapon NAME on the panel beside.
+  // DEMO BUILD: no character art — an accent-colored plate with the unit label
+  // on the left, the weapon silhouette + NAME on the panel beside.
   const accentCss = '#' + ((accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
+        <img class="weapon-render" src="${weaponArtUrl(weapon)}" alt="" draggable="false" />
         <div class="weapon-name">${weapon}</div>
       </div>`
     : '';
@@ -7810,11 +7820,11 @@ function unitGridHTML(unitEntries) {
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
-    // DEMO BUILD: thumbnails are accent-colored number tiles, not art.
+    // DEMO BUILD: thumbnails are the weapon silhouette on the unit's accent
+    // color (the unit number stays in the label below the tile).
     const accentCss = '#' + ((u.accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
-    const num = id.replace(/^unit/, '');
     return `<button class="unit-card" data-unit-card="${id}">
-      <span class="unit-thumb demo-thumb" style="background:${accentCss}">${num}</span>
+      <span class="unit-thumb demo-thumb" style="background:${accentCss}"><img src="${weaponArtUrl(u.weapon)}" alt="" draggable="false"></span>
       <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
     </button>`;
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">
@@ -8263,12 +8273,14 @@ animate();
 // every one of its rosters is empty.
 // ---------------------------------------------------------------------------
 const TRIO_SLOT_COLORS = { player: 0x62d7ff, enemy: 0xff7ad5, ally: 0x86f7c2, enemy2: 0xff5a8a };
+// DEMO BUILD: state-slot name → role art set (the 'enemy' slot wears enemy1).
+const TRIO_SLOT_ROLES = { player: 'player', enemy: 'enemy1', ally: 'ally', enemy2: 'enemy2' };
 
 // Build a slot's future roster mech NOW (match-load time) and park it outside
 // the scene/world; respawn swaps it in instead of constructing mid-fight —
 // the construction burst is what read as a respawn hitch on phones.
 function buildDetachedMech(slotName, unitKey) {
-  const mech = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+  const mech = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
   mech.unitKey = unitKey;
   scene.remove(mech.root);
   world.removeBody(mech.body);
@@ -8302,7 +8314,7 @@ function respawnSlotMech(slotName, unitKey) {
   if (old.chargedBeamVisual) { scene.remove(old.chargedBeamVisual); old.chargedBeamVisual = null; }
 
   const fresh = takePrebuiltMech(slotName, unitKey)
-    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
   fresh.state.team = old.state.team;
   const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
