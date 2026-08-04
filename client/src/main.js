@@ -6844,7 +6844,7 @@ function showOnlineUnitPicker(onl, conn) {
   // pick, as before.
   const picks = onl.trioUnitPicks ?? (onl.trioUnitPicks = []);
   const pickedLine = picks.length
-    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
+    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.weapon ?? k).join(' · ')}</div>`
     : '';
   menu.innerHTML = `
     <h2>${trio ? `Pick Your Unit (${picks.length + 1}/3)` : 'Pick Your Unit'}</h2>
@@ -6903,7 +6903,7 @@ function showOnlineBotUnitPicker(onl, conn) {
   // (clear per-pick feedback — see showOnlineUnitPicker).
   const picks = onl.botUnitPicks ?? (onl.botUnitPicks = []);
   const pickedLine = picks.length
-    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
+    ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.weapon ?? k).join(' · ')}</div>`
     : '';
   menu.innerHTML = `
     <h2>${trio ? `Pick Bot Unit (${picks.length + 1}/3)` : 'Pick Bot Unit'}</h2>
@@ -7011,11 +7011,12 @@ function showOnlineWaitingOpp(onl, conn) {
   }
 
   // Trio: the slot's resolved roster from the server, shown one unit per
-  // line ("in 3 lines manner"). Null = human still picking.
+  // line ("in 3 lines manner"). Null = human still picking. DEMO BUILD:
+  // compact form = gun name, full form = "Gun / Category" via unitMenuName.
   const rosterLines = (s, useChar) => {
     const r = cfg?.rosters?.[s];
     if (!Array.isArray(r)) return null;
-    return r.map((k) => (useChar ? UNIT_DATA[k]?.char : UNIT_DATA[k]?.name) ?? k).join('<br>');
+    return r.map((k) => (useChar ? UNIT_DATA[k]?.weapon : unitMenuName(UNIT_DATA[k])) ?? k).join('<br>');
   };
 
   // Roster grouped by team. Each team gets its own <section> with a header
@@ -7026,7 +7027,7 @@ function showOnlineWaitingOpp(onl, conn) {
     const isMe = s === myId;
     const isOccupied = occupied.has(s);
     const slotCfg = cfg?.config?.[s] ?? {};
-    const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null);
+    const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? unitMenuName(UNIT_DATA[slotCfg.unitKey]) : null);
     const sep = trio ? '<br>' : ' ';   // Trio rosters stack under the label, one unit per line
     let statusHtml;
     if (isMe) {
@@ -7043,8 +7044,8 @@ function showOnlineWaitingOpp(onl, conn) {
       // a Join button in 2v2 (team-switch). 1v1 has no Join.
       const botUnitKey = cfg?.botUnits?.[s] || 'unit1';
       const botLabel = trio
-        ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.char ?? 'Unit 1'}`
-        : `${UNIT_DATA[botUnitKey]?.char || 'Unit 1'} (BOT)`;
+        ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.weapon ?? 'M4'}`
+        : `${UNIT_DATA[botUnitKey]?.weapon || 'M4'} (BOT)`;
       if (isHost) {
         statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botLabel} — tap to change</span>`;
       } else {
@@ -7754,10 +7755,19 @@ function weaponArtUrl(weapon) {
   return `${import.meta.env.BASE_URL}weapons/${slug}.png`;
 }
 
+// DEMO BUILD: menu display name — the GUN name + its category ("M4 / Assault
+// Rifle") instead of the old "Unit N / Category". The laser units collapse to
+// one term (their weapon name IS the category).
+function unitMenuName(u) {
+  if (!u) return null;
+  const cat = (u.name.split('/')[1] || u.name).trim();
+  return u.weapon && u.weapon !== cat ? `${u.weapon} / ${cat}` : cat;
+}
+
 function showProfilePopup(card, unit, onConfirm) {
-  const { char, weapon, accent } = unit;
-  // DEMO BUILD: no character art — an accent-colored plate with the unit label
-  // on the left, the weapon silhouette + NAME on the panel beside.
+  const { weapon, accent } = unit;
+  // DEMO BUILD: no character art — an accent-colored plate with the GUN name
+  // on the left, the weapon silhouette + name on the panel beside.
   const accentCss = '#' + ((accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
@@ -7766,7 +7776,7 @@ function showProfilePopup(card, unit, onConfirm) {
       </div>`
     : '';
   spawnProfilePopup(card,
-    `<div class="profile-face demo-face" style="background:${accentCss}">${char || ''}</div>${weaponPanel}`,
+    `<div class="profile-face demo-face" style="background:${accentCss}">${weapon || ''}</div>${weaponPanel}`,
     onConfirm);
 }
 
@@ -7822,11 +7832,13 @@ function unitGridHTML(unitEntries) {
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
     // DEMO BUILD: thumbnails are the weapon silhouette on the unit's accent
-    // color (the unit number stays in the label below the tile).
+    // color; the label is the GUN name over its category (lasers collapse to
+    // one line — their weapon name is the category).
     const accentCss = '#' + ((u.accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
+    const label = u.weapon && u.weapon !== weapon ? `${u.weapon}<br>${weapon}` : weapon;
     return `<button class="unit-card" data-unit-card="${id}">
       <span class="unit-thumb demo-thumb" style="background:${accentCss}"><img src="${weaponArtUrl(u.weapon)}" alt="" draggable="false"></span>
-      <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
+      <span class="unit-label">${label}</span>
     </button>`;
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">
       <span class="unit-thumb random-thumb">?</span>
