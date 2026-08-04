@@ -979,7 +979,7 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
 // outrank shoot, so a unit firing while dashing/running keeps its motion pose
 // (no shoot-frame cut-in); only a unit firing while standing still shows shoot.
 // ----------------------------------------------------------------------------
-const UNIT_SPRITE_HEIGHT = 6.4;   // world-units tall (feet → top of head/halo)
+const UNIT_SPRITE_HEIGHT = 5.76;  // world-units tall (feet → top of head; 6.4 shrunk 10% for the demo figures)
 const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
 const UNIT_SPRITE_STATES = ['stand', 'sprint', 'dodge', 'shoot'];  // PNG suffixes
 const SPRITE_SHOOT_HOLD_MS = 200; // how long the shoot pose holds after a shot
