@@ -351,17 +351,20 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .random-face.all-random { background: #ecdda6; color: #9a7f2e; }
 
 /* ---- DEMO BUILD: neutral stand-ins ---- */
-/* Unit-grid tile: weapon silhouette on a light plate over the unit's accent
-   color (black silhouettes need the light backing to read on dark accents). */
-.menu .unit-card .demo-thumb { display: flex; align-items: center; justify-content: center; }
-.menu .unit-card .demo-thumb img { width: 88%; max-height: 62%; object-fit: contain; background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 3px 4px; box-sizing: border-box; pointer-events: none; }
-/* Profile popup: weapon silhouette on the same light plate above the name. */
-.unit-profile-popup .weapon-panel .weapon-render { background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; }
-/* Profile popup: accent-colored plate with the gun name (random-face
+/* One unified plate style for every weapon-identity surface (selection tiles,
+   profile plate, HUD roster tags, overhead tag texture): dark navy plate,
+   steel edge, white silhouette / light text. No per-unit accent colors —
+   who-is-who reads from the role-colored figures in the arena. */
+/* Unit-grid tile: white weapon silhouette on the dark plate. */
+.menu .unit-card .demo-thumb { display: flex; align-items: center; justify-content: center; border: 1px solid #2c4356; box-sizing: border-box; }
+.menu .unit-card .demo-thumb img { width: 94%; max-height: 84%; object-fit: contain; filter: invert(1); pointer-events: none; }
+/* Profile popup: white weapon silhouette above the category name. */
+.unit-profile-popup .weapon-panel .weapon-render { filter: invert(1); }
+/* Profile popup: unified dark plate with the gun name (random-face
    proportions). Side padding keeps two-line names off the plate edge. */
-.unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; color: rgba(8, 14, 24, 0.9); font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
-/* Trio/Duel HUD: weapon silhouette tag on the unit's accent color. */
-.trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; background: rgba(12, 20, 32, 0.72); border-radius: 3px; }
-.trio-count .trio-weapon-tag img { display: block; height: 9px; width: auto; max-width: 36px; object-fit: contain; }
+.unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; background: #0b1119; border: 1px solid #2c4356; color: #eaf6ff; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+/* Trio/Duel HUD: white weapon silhouette on the unified dark tag. */
+.trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; background: rgba(11, 17, 25, 0.92); border-radius: 3px; }
+.trio-count .trio-weapon-tag img { display: block; height: 9px; width: auto; max-width: 36px; object-fit: contain; filter: invert(1); }
 .trio-count-enemy .trio-weapon-tag { margin-right: 0; margin-left: 4px; }
 .trio-count-enemy .trio-inplay-bar + .trio-weapon-tag { margin-left: 2px; }

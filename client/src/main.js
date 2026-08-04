@@ -1312,10 +1312,10 @@ function updateMechAnimations(dt, now) {
 }
 
 // DEMO BUILD: floating weapon-name tag above each unit's head — the in-world
-// who-carries-what read (role figures are identical within a slot). Accent
-// background doubles as the who-is-who color key; text flips dark/light by
-// accent luminance, same threshold as the HUD roster tags. One canvas texture
-// per (weapon, accent), shared by every mech that shows it.
+// who-carries-what read (role figures are identical within a slot). Unified
+// demo plate style: dark navy pill, steel edge, light text — same look as the
+// selection tiles and HUD roster tags (who-is-who reads from the role-colored
+// figures, not the tag). One canvas texture per weapon, shared by every mech.
 const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
 // Distance compensation: past the own-unit camera distance the tag scales up
@@ -1326,9 +1326,9 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTT
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
 const UNIT_TAG_MIN_BOOST = 1.35; // floor: close-range tags render at 1.35x base
 const UNIT_TAG_MAX_BOOST = 3.5;
-const _weaponTagTexCache = {};  // `${weapon}|${accent}` → { tex, aspect }
+const _weaponTagTexCache = {};  // weapon label → { tex, aspect }
 
-function makeWeaponTagTexture(label, accentHex = 0x88aadd) {
+function makeWeaponTagTexture(label) {
   const H = 96, PAD = 26, R = 18;
   const cv = document.createElement('canvas');
   const x = cv.getContext('2d');
@@ -1336,17 +1336,19 @@ function makeWeaponTagTexture(label, accentHex = 0x88aadd) {
   x.font = font;
   cv.width = Math.ceil(x.measureText(label).width) + PAD * 2;
   cv.height = H;
-  const a = (accentHex ?? 0x88aadd) >>> 0;
-  const lum = 0.299 * ((a >> 16) & 255) + 0.587 * ((a >> 8) & 255) + 0.114 * (a & 255);
-  x.fillStyle = '#' + a.toString(16).padStart(6, '0').slice(-6);
   x.beginPath();
   x.moveTo(R, 0); x.lineTo(cv.width - R, 0); x.arcTo(cv.width, 0, cv.width, R, R);
   x.lineTo(cv.width, H - R); x.arcTo(cv.width, H, cv.width - R, H, R);
   x.lineTo(R, H); x.arcTo(0, H, 0, H - R, R);
   x.lineTo(0, R); x.arcTo(0, 0, R, 0, R);
-  x.closePath(); x.fill();
-  x.font = font;   // the canvas resize above reset the context state
-  x.fillStyle = lum > 140 ? '#0b1220' : '#f2f9ff';
+  x.closePath();
+  x.fillStyle = 'rgba(11, 17, 25, 0.92)';
+  x.fill();
+  x.strokeStyle = '#2c4356';
+  x.lineWidth = 6;   // half the stroke clips outside the canvas → ~3px edge
+  x.stroke();
+  x.font = font;     // the canvas resize above reset the context state
+  x.fillStyle = '#eaf6ff';
   x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(label, cv.width / 2, H / 2 + 2);
   const tex = new THREE.CanvasTexture(cv);
@@ -1356,9 +1358,8 @@ function makeWeaponTagTexture(label, accentHex = 0x88aadd) {
 
 function makeWeaponTagSprite(unitData) {
   const label = unitData.weapon || unitData.char || '?';
-  const key = `${label}|${unitData.accent ?? ''}`;
-  const entry = _weaponTagTexCache[key]
-    ?? (_weaponTagTexCache[key] = makeWeaponTagTexture(label, unitData.accent));
+  const entry = _weaponTagTexCache[label]
+    ?? (_weaponTagTexCache[label] = makeWeaponTagTexture(label));
   // depthWrite off: the translucent pill must never punch holes for the
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthWrite: false, fog: false });
@@ -5828,15 +5829,10 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
       .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
         const u = UNIT_DATA[k];
         if (!u) return '';
-        // DEMO BUILD: weapon silhouette on the unit's accent so the tag
-        // doubles as a who-is-who color key. The black silhouette flips to
-        // white (CSS invert) on dark accents for contrast — same luminance
-        // threshold the old text tag used.
-        const a = (u.accent ?? 0x88aadd) >>> 0;
-        const lum = 0.299 * ((a >> 16) & 255) + 0.587 * ((a >> 8) & 255) + 0.114 * (a & 255);
-        const bg = '#' + a.toString(16).padStart(6, '0').slice(-6);
-        const inv = lum > 140 ? '' : 'filter:invert(1)';
-        return `<span class="trio-weapon-tag" style="background:${bg}"><img src="${weaponArtUrl(u.weapon)}" alt="${u.weapon ?? k}" style="${inv}" draggable="false"></span>`;
+        // DEMO BUILD: weapon silhouette on the unified dark tag (flipped to
+        // white by the CSS invert); who-is-who reads from the role-colored
+        // figures in the arena, not from the tag.
+        return `<span class="trio-weapon-tag"><img src="${weaponArtUrl(u.weapon)}" alt="${u.weapon ?? k}" draggable="false"></span>`;
       }).join('')}</div>`)
       .join('')
     : '';
@@ -7838,11 +7834,10 @@ function unitMenuName(u) {
 }
 
 function showProfilePopup(card, unit, onConfirm) {
-  const { weapon, accent, name } = unit;
-  // DEMO BUILD: no character art — an accent-colored plate with the GUN name
+  const { weapon, name } = unit;
+  // DEMO BUILD: no character art — the unified dark plate with the GUN name
   // on the left; the panel beside shows the weapon silhouette over its
   // CATEGORY (the gun name already sits on the plate).
-  const accentCss = '#' + ((accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
   const category = ((name ?? '').split('/')[1] || name || '').trim();
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
@@ -7851,7 +7846,7 @@ function showProfilePopup(card, unit, onConfirm) {
       </div>`
     : '';
   spawnProfilePopup(card,
-    `<div class="profile-face demo-face" style="background:${accentCss}">${weapon || ''}</div>${weaponPanel}`,
+    `<div class="profile-face demo-face">${weapon || ''}</div>${weaponPanel}`,
     onConfirm);
 }
 
@@ -7906,13 +7901,12 @@ function unitGridHTML(unitEntries) {
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
-    // DEMO BUILD: thumbnails are the weapon silhouette on the unit's accent
-    // color; the label is the GUN name over its category (lasers collapse to
+    // DEMO BUILD: thumbnails are the weapon silhouette on the unified dark
+    // plate; the label is the GUN name over its category (lasers collapse to
     // one line — their weapon name is the category).
-    const accentCss = '#' + ((u.accent ?? 0x88aadd) >>> 0).toString(16).padStart(6, '0').slice(-6);
     const label = u.weapon && u.weapon !== weapon ? `${u.weapon}<br>${weapon}` : weapon;
     return `<button class="unit-card" data-unit-card="${id}">
-      <span class="unit-thumb demo-thumb" style="background:${accentCss}"><img src="${weaponArtUrl(u.weapon)}" alt="" draggable="false"></span>
+      <span class="unit-thumb demo-thumb"><img src="${weaponArtUrl(u.weapon)}" alt="" draggable="false"></span>
       <span class="unit-label">${label}</span>
     </button>`;
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">

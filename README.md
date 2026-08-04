@@ -2,7 +2,7 @@
 
 A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single stock) and **Trio** (three-unit rosters). Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
 
-> **Demo build** (branch `0.6.3_Demo_Version`): all character art and character names are removed. In-game, fighters render as neutral stick figures colored by role — blue you, green ally, red/orange enemies — with a dark through-wall silhouette for your own unit; every unit in the same slot shares the same figure. In menus, units are identified by number, accent color, and their weapon's silhouette; the in-game roster indicator shows the same weapon silhouettes on accent-colored tags, and every fighter carries its weapon name on an accent-colored tag above its head.
+> **Demo build** (branch `0.6.3_Demo_Version`): all character art and character names are removed. In-game, fighters render as neutral stick figures colored by role — blue you, green ally, red/orange enemies — with a dark through-wall silhouette for your own unit; every unit in the same slot shares the same figure. In menus, units are identified by their gun's name and silhouette; the in-game roster indicator shows the same silhouettes, and every fighter carries its weapon name on a tag above its head — all weapon-identity UI shares one dark-plate style.
 
 ## Modes
 
