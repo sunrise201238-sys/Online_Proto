@@ -220,7 +220,7 @@ const UNIT_DATA = {
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   },
   unit6: {
-    name: 'Unit 6 / Laser Sniper',
+    name: 'Unit 6 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 6', weapon: 'Laser Sniper', accent: 0x9a7be0,
 
@@ -257,7 +257,7 @@ const UNIT_DATA = {
     beam: { durationMs: 500, radius: 1.6, chargedDamage: 20 }
   },
   unit7: {
-    name: 'Unit 7 / Laser Rifle',
+    name: 'Unit 7 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 7', weapon: 'Laser Rifle', accent: 0x6fd9e8,
 
@@ -979,7 +979,7 @@ const MECH_OCCLUSION_GHOST = new THREE.MeshBasicMaterial({
 // outrank shoot, so a unit firing while dashing/running keeps its motion pose
 // (no shoot-frame cut-in); only a unit firing while standing still shows shoot.
 // ----------------------------------------------------------------------------
-const UNIT_SPRITE_HEIGHT = 5.76;  // world-units tall (feet → top of head; 6.4 shrunk 10% for the demo figures)
+const UNIT_SPRITE_HEIGHT = 5.472; // world-units tall (feet → top of head; 6.4 shrunk 10% then 5% for the demo figures)
 const UNIT_SPRITE_FOOT_Y = -3.2;  // sprite-local Y of the feet (matches old leg bottoms)
 const UNIT_SPRITE_STATES = ['stand', 'sprint', 'dodge', 'shoot'];  // PNG suffixes
 const SPRITE_SHOOT_HOLD_MS = 200; // how long the shoot pose holds after a shot
@@ -1302,6 +1302,55 @@ function updateMechAnimations(dt, now) {
   }
 }
 
+// DEMO BUILD: floating weapon-name tag above each unit's head — the in-world
+// who-carries-what read (role figures are identical within a slot). Accent
+// background doubles as the who-is-who color key; text flips dark/light by
+// accent luminance, same threshold as the HUD roster tags. One canvas texture
+// per (weapon, accent), shared by every mech that shows it.
+const UNIT_TAG_HEIGHT = 0.85;   // world-units tall
+const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.55;  // just above the head
+const _weaponTagTexCache = {};  // `${weapon}|${accent}` → { tex, aspect }
+
+function makeWeaponTagTexture(label, accentHex = 0x88aadd) {
+  const H = 96, PAD = 26, R = 18;
+  const cv = document.createElement('canvas');
+  const x = cv.getContext('2d');
+  const font = '700 52px sans-serif';
+  x.font = font;
+  cv.width = Math.ceil(x.measureText(label).width) + PAD * 2;
+  cv.height = H;
+  const a = (accentHex ?? 0x88aadd) >>> 0;
+  const lum = 0.299 * ((a >> 16) & 255) + 0.587 * ((a >> 8) & 255) + 0.114 * (a & 255);
+  x.fillStyle = '#' + a.toString(16).padStart(6, '0').slice(-6);
+  x.beginPath();
+  x.moveTo(R, 0); x.lineTo(cv.width - R, 0); x.arcTo(cv.width, 0, cv.width, R, R);
+  x.lineTo(cv.width, H - R); x.arcTo(cv.width, H, cv.width - R, H, R);
+  x.lineTo(R, H); x.arcTo(0, H, 0, H - R, R);
+  x.lineTo(0, R); x.arcTo(0, 0, R, 0, R);
+  x.closePath(); x.fill();
+  x.font = font;   // the canvas resize above reset the context state
+  x.fillStyle = lum > 140 ? '#0b1220' : '#f2f9ff';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(label, cv.width / 2, H / 2 + 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { tex, aspect: cv.width / H };
+}
+
+function makeWeaponTagSprite(unitData) {
+  const label = unitData.weapon || unitData.char || '?';
+  const key = `${label}|${unitData.accent ?? ''}`;
+  const entry = _weaponTagTexCache[key]
+    ?? (_weaponTagTexCache[key] = makeWeaponTagTexture(label, unitData.accent));
+  // depthWrite off: the translucent pill must never punch holes for the
+  // sprites behind it; depth TEST stays on so walls occlude it like the body.
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthWrite: false, fog: false });
+  const s = new THREE.Sprite(mat);
+  s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
+  s.position.y = UNIT_TAG_Y;
+  return s;
+}
+
 // `isOwnUnit` is true only for the local player's own mech (the createMech calls
 // that pass `true`, offline + online). That unit gets the through-wall X-ray
 // silhouette — it's the one the player needs to see when their own movement tucks
@@ -1315,6 +1364,8 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
   // indicators. roleKey picks the art set (player | ally | enemy1 | enemy2).
   const sprite = makeUnitSprite(unitData, isOwnUnit, roleKey);
   root.add(sprite);
+  // DEMO BUILD: weapon-name tag floating above the head.
+  root.add(makeWeaponTagSprite(unitData));
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
