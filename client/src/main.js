@@ -1300,12 +1300,12 @@ function updateMechAnimations(dt, now) {
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
     // DEMO BUILD: hold the weapon tag at a roughly constant on-screen size —
-    // base size inside the own-unit camera distance, scaling up with range
-    // (capped) so far enemies' tags stay readable.
+    // floored at MIN_BOOST up close, scaling up with range (capped) so far
+    // enemies' tags stay readable.
     const tag = m.weaponTag;
     if (tag) {
       const d = camera.position.distanceTo(m.root.position);
-      const s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(1, d / UNIT_TAG_REF_DIST));
+      const s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       tag.scale.set(s * tag.userData.tagAspect, s, 1);
     }
   }
@@ -1320,10 +1320,11 @@ const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
 // Distance compensation: past the own-unit camera distance the tag scales up
 // with range (holding a roughly constant on-screen size) so enemy tags stay
-// readable across the map, capped so far tags never balloon. At or inside the
-// reference distance it stays base size — no close-range view blocking. The
+// readable across the map, capped so far tags never balloon. Close range is
+// floored at MIN_BOOST × base — readable without blocking the view. The
 // tag is bottom-anchored, so the boost grows it upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
+const UNIT_TAG_MIN_BOOST = 1.35; // floor: close-range tags render at 1.35x base
 const UNIT_TAG_MAX_BOOST = 3.5;
 const _weaponTagTexCache = {};  // `${weapon}|${accent}` → { tex, aspect }
 

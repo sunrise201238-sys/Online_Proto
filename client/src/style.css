@@ -357,8 +357,9 @@ body.pseudo-fullscreen #app {
 .menu .unit-card .demo-thumb img { width: 88%; max-height: 62%; object-fit: contain; background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 3px 4px; box-sizing: border-box; pointer-events: none; }
 /* Profile popup: weapon silhouette on the same light plate above the name. */
 .unit-profile-popup .weapon-panel .weapon-render { background: rgba(255, 255, 255, 0.92); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; }
-/* Profile popup: accent-colored plate with the unit label (random-face proportions). */
-.unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; color: rgba(8, 14, 24, 0.9); font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+/* Profile popup: accent-colored plate with the gun name (random-face
+   proportions). Side padding keeps two-line names off the plate edge. */
+.unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; color: rgba(8, 14, 24, 0.9); font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
 /* Trio/Duel HUD: weapon silhouette tag on the unit's accent color. */
 .trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; height: 11px; margin-right: 4px; padding: 0 3px; vertical-align: middle; background: rgba(12, 20, 32, 0.72); border-radius: 3px; }
 .trio-count .trio-weapon-tag img { display: block; height: 9px; width: auto; max-width: 36px; object-fit: contain; }
