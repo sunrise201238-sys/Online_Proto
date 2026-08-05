@@ -350,8 +350,8 @@ export const UNIT_DATA = {
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 10,
-    magCapacity: 30,
-    botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
+    magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
+    botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }

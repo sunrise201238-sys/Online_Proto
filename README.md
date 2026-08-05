@@ -52,7 +52,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 11 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
 | Unit 5 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
-| Unit 10 — Rifle | 30 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
+| Unit 10 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
 | Unit 7 — Laser | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
 | Unit 3 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
 | Unit 6 — Railgun | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
@@ -68,7 +68,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | Unit 13 | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
 | Unit 9 | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | Unit 1 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
-| Unit 10 | 4.17/s | 10 | **41.7** | 33.5 |
+| Unit 10 | 4.17/s | 10 | **41.7** | 30.5 |
 | Unit 12 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
 | Unit 3 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Unit 6 | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
@@ -179,7 +179,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | Unit 9 | 25 | full mag |
 | Unit 4 | 30 | full mag |
 | Unit 13 | 71 | full drum |
-| Unit 10 | 30 | full mag |
+| Unit 10 | 20 | full mag |
 | Unit 12 | 100 | full mag |
 | Unit 5 | 250 | full drum (~12 s of continuous fire) |
 | Unit 2 / Unit 11 | 4 | 4 blasts per trigger pull |

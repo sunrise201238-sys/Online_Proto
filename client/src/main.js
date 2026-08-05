@@ -371,7 +371,7 @@ const UNIT_DATA = {
   unit10: {
     name: 'Unit 10 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    char: 'Unit 10', weapon: 'Ruger Mini-14', accent: 0x6f86b8,
+    char: 'Unit 10', weapon: 'M14', accent: 0x6f86b8,
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
@@ -387,8 +387,8 @@ const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — Aris-derived, tuned 2026-07-14: ordinary bullet (no
-    // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
-    // manual reload.
+    // laser bolt), heavier per-shot chunk on a 20-round mag with a slow
+    // manual reload (mag 30 -> 20, 2026-08-05).
     lockRange: 56,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
@@ -397,8 +397,8 @@ const UNIT_DATA = {
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 10,
-    magCapacity: 30,
-    botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
+    magCapacity: 20,
+    botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -479,7 +479,7 @@ const UNIT_DATA = {
   unit13: {
     name: 'Unit 13 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    char: 'Unit 13', weapon: 'PPSh-41', accent: 0xe0384a,
+    char: 'Unit 13', weapon: 'PPSh', accent: 0xe0384a,
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
     hp: 150,
@@ -1044,7 +1044,7 @@ function makeUnitSprite(unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'play
   // Placeholder textures are pure functions of (label, accent) — share one per
   // unit across every mech built in the session instead of re-drawing and
   // re-uploading a fresh canvas on each (re)spawn.
-  // DEMO BUILD: the in-game nameplate shows the WEAPON name (M4, PPSh-41 …),
+  // DEMO BUILD: the in-game nameplate shows the WEAPON name (M4, PPSh …),
   // not the unit number — units read by color, weapons by plate.
   const phLabel = unitData.weapon || unitData.char || '?';
   const phKey = `${phLabel}|${unitData.accent ?? ''}`;
@@ -7821,7 +7821,7 @@ function spawnProfilePopup(card, innerHTML, onConfirm) {
 }
 
 // DEMO BUILD: weapon silhouette art, keyed by a slug of the unit's `weapon`
-// field ("PPSh-41" → weapons/ppsh-41.png, "Beretta 1301" → beretta-1301.png).
+// field ("PPSh" → weapons/ppsh.png, "Beretta 1301" → beretta-1301.png).
 function weaponArtUrl(weapon) {
   const slug = String(weapon).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return `${import.meta.env.BASE_URL}weapons/${slug}.png`;
