@@ -545,7 +545,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,
     horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 3,
+    damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,
     botFireCap: 50,         // bot: shots per trigger pull = full mag (fire cap policy)

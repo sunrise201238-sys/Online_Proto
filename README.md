@@ -47,7 +47,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | M4 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| P90 — Submachine Gun | 50 | 3 / shot | ~900 RPM | 600 | 50 | 2 s |
+| P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 | 2 s |
 | Beretta 1301 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | M1014 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
@@ -67,9 +67,9 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
+| P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
 | M14 | 4.17/s | 10 | **41.7** | 30.5 |
 | M60 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
-| P90 | 12.5/s (80 ms) | 3 | **37.5** | 25.3 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
@@ -92,7 +92,7 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Railgun | 100 ms @ 0.25 | — (beam) | — | instant |
 
-P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s) at 3 damage on a 50-round mag behind a 2 s reload — 4 s of continuous fire (150 damage per mag). She wears the AR spread profile (SA 0.02 + HA 0.04 — sure-hit ~53, the same accuracy family as the M4 and FAMAS) with the SMG's light 50 ms stun: a long-trigger chip gun that trades the ARs' per-shot weight for staying on the trigger twice as long.
+P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s) at 3.5 damage on a 50-round mag behind a 2 s reload — 4 s of continuous fire (175 damage per mag). She wears the AR spread profile (SA 0.02 + HA 0.04 — sure-hit ~53, the same accuracy family as the M4 and FAMAS) with the SMG's light 50 ms stun: a long-trigger chip gun that trades the ARs' per-shot weight for staying on the trigger twice as long.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **In practice the slow itself is a minor stat**: sprinting pays straight through it (and everyone sprints away from fire anyway, stun or not), while a walking target was already highly hittable — so the currencies that actually decide fights are the damage actually landed and the boost the target burns escaping, not the movement penalty.
 
