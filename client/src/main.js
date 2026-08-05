@@ -1288,13 +1288,15 @@ function updateMechAnimations(dt, now) {
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
     // DEMO BUILD: weapon-tag sizing. The own/spectated unit (isOwnSprite —
-    // the one the camera rides) keeps the plain base-size tag so it never
-    // crowds the view; every other unit's tag scales with distance (floored
-    // up close, growing to the far cap) so enemies stay readable at range.
+    // the one the camera rides) AND the ally keep the plain base-size tag —
+    // both are usually near the camera and the ally reads by its green
+    // figure; a distance-boosted tag on either just crowds the view. Only
+    // ENEMY tags scale with distance (floored up close, growing to the far
+    // cap) so they stay readable at range.
     const tag = m.weaponTag;
     if (tag) {
       let s = UNIT_TAG_HEIGHT;
-      if (!m.isOwnSprite) {
+      if (!m.isOwnSprite && m.roleKey !== 'ally') {
         const d = camera.position.distanceTo(m.root.position);
         s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       }
