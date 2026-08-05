@@ -222,7 +222,7 @@ const UNIT_DATA = {
   unit6: {
     name: 'Unit 6 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    char: 'Unit 6', weapon: 'Laser Sniper', accent: 0x9a7be0,
+    char: 'Unit 6', weapon: 'Railgun', accent: 0x9a7be0,
 
     // Pilot stats
     hp: 150,
@@ -259,7 +259,7 @@ const UNIT_DATA = {
   unit7: {
     name: 'Unit 7 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    char: 'Unit 7', weapon: 'Laser Rifle', accent: 0x6fd9e8,
+    char: 'Unit 7', weapon: 'Laser', accent: 0x6fd9e8,
 
     // Pilot stats
     hp: 150,
