@@ -1299,13 +1299,17 @@ function updateMechAnimations(dt, now) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
-    // DEMO BUILD: hold the weapon tag at a roughly constant on-screen size —
-    // floored at MIN_BOOST up close, scaling up with range (capped) so far
-    // enemies' tags stay readable.
+    // DEMO BUILD: weapon-tag sizing. The own/spectated unit (isOwnSprite —
+    // the one the camera rides) keeps the plain base-size tag so it never
+    // crowds the view; every other unit's tag scales with distance (floored
+    // up close, growing to the far cap) so enemies stay readable at range.
     const tag = m.weaponTag;
     if (tag) {
-      const d = camera.position.distanceTo(m.root.position);
-      const s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+      let s = UNIT_TAG_HEIGHT;
+      if (!m.isOwnSprite) {
+        const d = camera.position.distanceTo(m.root.position);
+        s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+      }
       tag.scale.set(s * tag.userData.tagAspect, s, 1);
     }
   }
@@ -1318,14 +1322,14 @@ function updateMechAnimations(dt, now) {
 // figures, not the tag). One canvas texture per weapon, shared by every mech.
 const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
-// Distance compensation: past the own-unit camera distance the tag scales up
-// with range (holding a roughly constant on-screen size) so enemy tags stay
-// readable across the map, capped so far tags never balloon. Close range is
-// floored at MIN_BOOST × base — readable without blocking the view. The
-// tag is bottom-anchored, so the boost grows it upward, never into the head.
+// Distance compensation — OTHER units only (the own/spectated unit sits right
+// under the camera and keeps the plain base-size tag). Their tags scale up
+// with range so enemies stay readable across the map: floored at MIN_BOOST
+// up close, growing to MAX_BOOST at long range. The tag is bottom-anchored,
+// so the boost grows it upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
-const UNIT_TAG_MIN_BOOST = 2.7; // floor: close-range tags render at 2.7x base
-const UNIT_TAG_MAX_BOOST = 3.5;
+const UNIT_TAG_MIN_BOOST = 2.7; // floor for other units' tags at close range
+const UNIT_TAG_MAX_BOOST = 5;   // far-range ceiling (reached at ~70 units)
 const _weaponTagTexCache = {};  // weapon label → { tex, aspect }
 
 function makeWeaponTagTexture(label) {
