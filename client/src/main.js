@@ -7842,15 +7842,16 @@ function showProfilePopup(card, unit, onConfirm) {
   // on the left; the panel beside shows the weapon silhouette over its
   // CATEGORY (the gun name already sits on the plate).
   const category = ((name ?? '').split('/')[1] || name || '').trim();
-  // The golden category sits UNDER the gun name on the plate (filling its
-  // empty lower half); the side panel carries just the weapon silhouette.
+  // Panel layout: silhouette on top, divider line, then the golden category
+  // in the panel's lower slot (below the line — per the user's reference).
   const weaponPanel = weapon
     ? `<div class="weapon-panel">
         <img class="weapon-render" src="${weaponArtUrl(weapon)}" alt="" draggable="false" />
+        <div class="weapon-name demo-cat-below">${category}</div>
       </div>`
     : '';
   spawnProfilePopup(card,
-    `<div class="profile-face demo-face"><span>${weapon || ''}</span><span class="demo-face-cat">${category}</span></div>${weaponPanel}`,
+    `<div class="profile-face demo-face">${weapon || ''}</div>${weaponPanel}`,
     onConfirm);
 }
 
