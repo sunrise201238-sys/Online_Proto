@@ -368,7 +368,9 @@ body.pseudo-fullscreen #app {
    panel height — the silhouette floats centered (object-fit letterbox) in
    the large upper area, the golden category floats centered in the slim
    lower band. */
-.unit-profile-popup .weapon-panel .weapon-render { flex: 7 1 0; min-height: 0; width: 100%; object-fit: contain; border-bottom: 1px solid #274058; padding-bottom: 6px; }
+/* The border rides the img, which carries the invert(1) filter — the filter
+   inverts the border color too, so BLACK here renders as a WHITE line. */
+.unit-profile-popup .weapon-panel .weapon-render { flex: 7 1 0; min-height: 0; width: 100%; object-fit: contain; border-bottom: 1px solid #000; padding-bottom: 6px; }
 .unit-profile-popup .weapon-name.demo-cat-below { border-bottom: none; padding-bottom: 0; flex: 3 1 0; display: flex; align-items: center; justify-content: center; }
 /* Trio/Duel HUD: white weapon silhouette on the unified dark tag (1.5x the
    original 11/9px size for readability). Every pill is the SAME fixed box —
