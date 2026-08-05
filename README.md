@@ -2,7 +2,7 @@
 
 A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single stock) and **Trio** (three-unit rosters). Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.
 
-> **Demo build** (branch `0.6.3_Demo_Version`): all character art and character names are removed. In-game, fighters render as neutral stick figures colored by role — blue you, green ally, red/orange enemies — with a dark through-wall silhouette for your own unit; every unit in the same slot shares the same figure. In menus, units are identified by their gun's name and silhouette; the in-game roster indicator shows the same silhouettes, and every fighter carries its weapon name on a tag above its head — all weapon-identity UI shares one dark-plate style.
+> **Demo build** (branch `Demo_0.6.5_Update`): all character art and character names are removed. In-game, fighters render as neutral stick figures colored by role — blue you, green ally, red/orange enemies — with a dark through-wall silhouette for your own unit; every unit in the same slot shares the same figure. In menus, units are identified by their gun's name and silhouette; the in-game roster indicator shows the same silhouettes, and every fighter carries its weapon name on a tag above its head — all weapon-identity UI shares one dark-plate style.
 
 ## Modes
 
@@ -21,7 +21,7 @@ Two main modes, each playable **1v1 or 2v2**, offline and online:
 
 ### Online
 - **Mode selection**: the host picks **Duel or Trio**, then **1v1 or 2v2**; joiners inherit the lobby's modes.
-- **1v1**: the host presses **Start Match** when ready. The opponent slot holds a bot (default **Unit 1 / Unit 1**) until a second human queues in and takes it — start early to play the bot, or wait for a player.
+- **1v1**: the host presses **Start Match** when ready. The opponent slot holds a bot (default **M4**) until a second human queues in and takes it — start early to play the bot, or wait for a player.
 - **2v2**: the host presses **Start Match** when ready; empty player slots fill with bots. Up to four humans can play (any split between teams); bots fill any remaining slots.
 - **Bot unit selection**: in the lobby, the host can tap any bot slot to pick which unit that bot plays — in Trio, its three units in order (default: three copies of the slot's usual unit). A human joining the slot always overrides the bot.
 - **Trio queue room**: every slot's roster is shown in three lines and updates live as picks land.
@@ -38,65 +38,65 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies):
+Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — MG42 walks at 8, M60 at 12):
 
 **Weapons:**
 
 | | Mag | Damage | Fire rate | Projectile speed | Lock range | Reload |
 |---|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
-| Unit 9 — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
-| Unit 4 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| Unit 13 — Submachine Gun | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
-| Unit 2 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
-| Unit 12 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
-| Unit 5 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
-| Unit 10 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
-| Unit 7 — Laser | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
-| Unit 6 — Railgun | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
+| M4 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
+| FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
+| evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
+| PPSh — Submachine Gun | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
+| Beretta 1301 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
+| M1014 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
+| M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
+| MG42 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
+| M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
+| Laser — Rifle | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
+| PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
+| Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
 **Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
 
-| Unit | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
+| Weapon | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| Unit 2 / Unit 11 | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
-| Unit 5 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
-| Unit 7 | 4.17/s | 15 / bolt | **62.5** | ~12.5 (bolt-regen limited) |
-| Unit 4 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
-| Unit 13 | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
-| Unit 9 | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
-| Unit 1 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
-| Unit 10 | 4.17/s | 10 | **41.7** | 30.5 |
-| Unit 12 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
-| Unit 3 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
-| Unit 6 | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
+| Beretta 1301 / M1014 | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
+| MG42 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
+| Laser | 4.17/s | 15 / bolt | **62.5** | ~12.5 (bolt-regen limited) |
+| evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
+| PPSh | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
+| FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
+| M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
+| M14 | 4.17/s | 10 | **41.7** | 30.5 |
+| M60 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
+| PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
+| Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Unit 7's burst is real for its 8-bolt spike (120 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Laser's burst is real for its 8-bolt spike (120 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
 
 **Handling (stun + spread):**
 
 | | Stun | Spread (SA) | Horizontal spread (HA) | Sure-hit vs standing |
 |---|---|---|---|---|
-| Unit 1 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 9 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
-| Unit 4 | 50 ms @ 0.50 | 0.06 | — | ~53 |
-| Unit 13 | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
-| Unit 2 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
-| Unit 11 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
-| Unit 12 | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
-| Unit 5 | 50 ms @ 0.85 | 0.04 | — | ~80 |
-| Unit 10 | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 7 | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 3 | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Unit 6 | 100 ms @ 0.25 | — (beam) | — | instant |
+| M4 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
+| FAMAS | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
+| evo3 | 50 ms @ 0.50 | 0.06 | — | ~53 |
+| PPSh | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
+| Beretta 1301 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
+| M1014 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
+| M60 | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
+| MG42 | 50 ms @ 0.85 | 0.04 | — | ~80 |
+| M14 | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Laser | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| Railgun | 100 ms @ 0.25 | — (beam) | — | instant |
 
-Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: her value is steady chip on the longest trigger in the SMG class, plus the boost her stream forces targets to burn escaping; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (Unit 13 carries the 0.04 HA), the modern EVO3 shoots tight (Unit 4 dropped hers — sure-hit ~53).
+PPSh is the lightest bullet in the game on MG42's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: her value is steady chip on the longest trigger in the SMG class, plus the boost her stream forces targets to burn escaping; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (PPSh carries the 0.04 HA), the modern EVO3 shoots tight (evo3 dropped hers — sure-hit ~53).
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **In practice the slow itself is a minor stat**: sprinting pays straight through it (and everyone sprints away from fire anyway, stun or not), while a walking target was already highly hittable — so the currencies that actually decide fights are the damage actually landed and the boost the target burns escaping, not the movement penalty.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (Unit 13) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; Unit 11's pattern is additionally stretched 1.4× horizontally (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (PPSh) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; M1014's pattern is additionally stretched 1.4× horizontally (details below).
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
@@ -104,14 +104,14 @@ Unit 13 is the lightest bullet in the game on Unit 5's cadence: the 48 ms tick s
 
 | @ own lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
-| Unit 1 @56 | 99% | 69% | 6% |
-| Unit 9 @56 | 100% | 64% | 8% |
-| Unit 4 @50 | 100% | 62% | 12% |
-| Unit 13 @50 | 85% | 61% | 18% |
-| Unit 2 @40 | 75% | 30% | 0% |
-| Unit 11 @40 | 61% | 30% | 4% |
-| Unit 12 @80 | 76% | 40% | 3% |
-| Unit 5 @80 | 100% | 25% | 0% |
+| M4 @56 | 99% | 69% | 6% |
+| FAMAS @56 | 100% | 64% | 8% |
+| evo3 @50 | 100% | 62% | 12% |
+| PPSh @50 | 85% | 61% | 18% |
+| Beretta 1301 @40 | 75% | 30% | 0% |
+| M1014 @40 | 61% | 30% | 4% |
+| M60 @80 | 76% | 40% | 3% |
+| MG42 @80 | 100% | 25% | 0% |
 
 *Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
@@ -120,16 +120,16 @@ Standouts under the strict protocol: perpendicular sprint is near-untouchable fo
 
 Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
 
-### Units 2 & 11 — the shotgun blast
+### Beretta 1301 & M1014 — the shotgun blast
 
 - A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 5 (all 8 point-blank = 40, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **Unit 11's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Unit 2's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Unit 2's concentrated slug.
+- **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Beretta 1301's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Beretta 1301's concentrated slug.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
-### Unit 7 — laser bolts
+### Laser — laser bolts
 
-- The flight kit was **removed in this demo build**: Unit 7 plays as a normal ground unit (standard jump, 1.5 s cooldown, no air re-jumps, no sustained climb).
+- The flight kit was **removed in this demo build**: Laser plays as a normal ground unit (standard jump, 1.5 s cooldown, no air re-jumps, no sustained climb).
 - Sprinting into a jump **carries the sprint momentum** through the air.
 - Her shot is a **64-unit-long laser bolt**: the thin cyan cylinder you see *is* the hitbox (both derive from one spec entry). It grows out of the muzzle — the body never reaches behind the spawn point — and hits with its whole length, so a dodge must clear the entire passing beam, not just its nose.
 
@@ -149,42 +149,42 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 | 1.00 (server auto-fires) | 1.00 | 1.00 | **0.90** |
 
 Three properties the table encodes: glint duration equals the release time on **every** screen (both endpoints of the interval shift by the same delivery delay, so its length is preserved for any observer); the defender's read & decide time is always the release time minus their round trip (one delivery lost at each end); and the earliest-release fence sits at ack + 0.5 s precisely so the read & decide column can never fall below 0.50 — the guarantee is produced by *placing the fence*, not by adjusting any clock. The full charge is the one release with no fence involvement: it fires at press + 1.0 s flat, so its read & decide time shrinks with the defender's round trip (lag-taxed like every ordinary attack), while the fast cancel's 0.50 is lag-proof.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Unit 3's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Unit 6's beam is instant.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. PSG1's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Railgun's beam is instant.
 
-### Unit 3 — range zones & the lock reticle
+### PSG1 — range zones & the lock reticle
 
 - Damage is tiered by distance, **locked at fire time**: under 15 units → **20**, 15–50 → **35**, beyond 50 → **50**. Rushing a sniper is real counterplay; long range stays lethal.
-- The lock reticle shows the current zone — plain brackets (<15), **+ cross ticks** (15–50), **+ inner bars** (50+). It appears both when *you* play Unit 3 (your tier on the target) and when your lock target *is* an Unit 3 (which of her zones you're standing in).
-- The reticle turns **red** not just when your target fires, but for the whole time a sniper (Unit 3 **or** Unit 6) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
+- The lock reticle shows the current zone — plain brackets (<15), **+ cross ticks** (15–50), **+ inner bars** (50+). It appears both when *you* play PSG1 (your tier on the target) and when your lock target *is* a PSG1 (which of her zones you're standing in).
+- The reticle turns **red** not just when your target fires, but for the whole time a sniper (PSG1 **or** Railgun) is **mid-charge with you as the target** — a continuous danger signal from glint to shot.
 
-### Unit 6 — 照射ビーム laser
+### Railgun — beam & sweep channel
 
 - Fires an instant **hitscan beam** (30 damage, one hit per enemy per beam, blocked by walls, ~0.5 s fade) instead of a bullet. The beam also **deletes projectiles** it touches.
 - Holding the charge to the full **1 s** fires a **sweep channel**: a 1 s locked, steerable beam (1.5× width, **20 damage**, one hit per enemy for the whole channel). The stick steers it — horizontal and vertical — at ~10°/s; sprint cancels the channel. The fire cooldown is paused during the channel and starts when it ends.
 - Her glint grows toward **2×** size as the charge fills, telegraphing a full-charge sweep.
 
 **Bots vs. the sniper.**
-- **As the shooter:** both sniper bots flip a **50/50 coin** per shot — release at the **0.5 s floor** (a fast snap; for Unit 6, the quick beam) or hold to the **full 1 s charge** (for Unit 6, the sweep channel). No in-between releases.
+- **As the shooter:** both sniper bots flip a **50/50 coin** per shot — release at the **0.5 s floor** (a fast snap; for Railgun, the quick beam) or hold to the **full 1 s charge** (for Railgun, the sweep channel). No in-between releases.
 - **On defense:** when a glint aimed at it appears — from **any** enemy, locked or not (mirroring the human's edge-indicator awareness; earliest active charge wins) — the bot **rolls its reaction per charge**, and the slow roll is charger-aware:
-  - **Anti-Unit 3** (bullet snipers): **50% at 0.4 s** (i-frames open ahead of the earliest possible cancel, covering **every floor snap at any range** — but a full hold sails in after they end) / **50% at 0.8 s** (deliberately late: a snap lands first and cancels the pending dodge, but the i-frames ~0.8–1.1 s sit exactly on the **full hold's** impact). Against the shooter's 50/50 snap/hold flip neither side can be read; equilibrium **~50% of charges convert** (snaps beat slow rolls, holds beat fast rolls).
-  - **Anti-Unit 6** (beam snipers): **50% at 0.4 s** (covers the instant quick beam) / **50% at 0.9 s** — the dodge starts just ahead of the **sweep channel's** aimed opening (i-frames ~0.9–1.2 s blanket it) and the follow-up sprint outruns the beam's steering at normal fighting ranges. (An 0.8 s roll would be dead weight here: the quick beam pre-empts it and the sweep outlives it.)
+  - **Anti-PSG1** (bullet snipers): **50% at 0.4 s** (i-frames open ahead of the earliest possible cancel, covering **every floor snap at any range** — but a full hold sails in after they end) / **50% at 0.8 s** (deliberately late: a snap lands first and cancels the pending dodge, but the i-frames ~0.8–1.1 s sit exactly on the **full hold's** impact). Against the shooter's 50/50 snap/hold flip neither side can be read; equilibrium **~50% of charges convert** (snaps beat slow rolls, holds beat fast rolls).
+  - **Anti-Railgun** (beam snipers): **50% at 0.4 s** (covers the instant quick beam) / **50% at 0.9 s** — the dodge starts just ahead of the **sweep channel's** aimed opening (i-frames ~0.9–1.2 s blanket it) and the follow-up sprint outruns the beam's steering at normal fighting ranges. (An 0.8 s roll would be dead weight here: the quick beam pre-empts it and the sweep outlives it.)
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
 **Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Shots inside a burst pace at the weapon's own RPM-derived cooldown, so retuning a fire rate retunes the bot with it. Every auto's cap equals its **full magazine** — an auto bot fires until the mag runs dry and rolls straight into the reload; the shotguns are burst-gated at 4 blasts per pull; the snipers run their charge cycle instead of bursting.
 
-| Unit | Fire cap | Meaning |
+| Weapon | Fire cap | Meaning |
 |---|---|---|
-| Unit 1 | 30 | full mag |
-| Unit 9 | 25 | full mag |
-| Unit 4 | 30 | full mag |
-| Unit 13 | 71 | full drum |
-| Unit 10 | 20 | full mag |
-| Unit 12 | 100 | full mag |
-| Unit 5 | 250 | full drum (~12 s of continuous fire) |
-| Unit 2 / Unit 11 | 4 | 4 blasts per trigger pull |
-| Unit 7 | 4 | legacy formula (half mag) |
-| Unit 3 / Unit 6 | — | charge cycle, no bursts |
+| M4 | 30 | full mag |
+| FAMAS | 25 | full mag |
+| evo3 | 30 | full mag |
+| PPSh | 71 | full drum |
+| M14 | 20 | full mag |
+| M60 | 100 | full mag |
+| MG42 | 250 | full drum (~12 s of continuous fire) |
+| Beretta 1301 / M1014 | 4 | 4 blasts per trigger pull |
+| Laser | 4 | legacy formula (half mag) |
+| PSG1 / Railgun | — | charge cycle, no bursts |
 
 A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
 
@@ -253,7 +253,7 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 - **Friendly fire** in 2v2 is off — bullets pass through teammates.
 - **Map collision data** for the online server is auto-extracted from offline at build time. Visual mesh is always rendered by the offline arena-build code on the client.
 - **Pre-game loading.** Every unit visible in a pick (offline pickers) or in the lobby config (online queue room) starts its sprite-art downloads immediately — menu dead time absorbs the network wait — and GPU uploads are drip-fed one texture per frame. At match load, each Trio slot's 2nd/3rd roster units are additionally pre-built as complete (hidden) mechs, so a mid-match respawn is a pure swap-in: no construction, no decode, no upload during the fight.
-- **Projectile broadphase (online sim).** Each map's obstacle boxes are indexed once into a 24-unit ground grid; every tick, each projectile (bullets, sniper rounds, laser bolts, every shotgun pellet) tests only the obstacles near its own flight segment for that tick instead of the whole map. The precise sweep test stays the final authority, so hit results are bit-identical to a full scan (differential-verified on all maps) — but dense maps (Factory: 380 boxes) now cost the same as open ones, which removed the server-side lag during shotgun / high-RPM fights. Unit 6's hitscan beams and all non-weapon scans (bot sight, pathfinding, movement) deliberately keep the plain full scan.
+- **Projectile broadphase (online sim).** Each map's obstacle boxes are indexed once into a 24-unit ground grid; every tick, each projectile (bullets, sniper rounds, laser bolts, every shotgun pellet) tests only the obstacles near its own flight segment for that tick instead of the whole map. The precise sweep test stays the final authority, so hit results are bit-identical to a full scan (differential-verified on all maps) — but dense maps (Factory: 380 boxes) now cost the same as open ones, which removed the server-side lag during shotgun / high-RPM fights. Railgun's hitscan beams and all non-weapon scans (bot sight, pathfinding, movement) deliberately keep the plain full scan.
 
 ## Status
 
