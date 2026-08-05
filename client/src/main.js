@@ -1320,7 +1320,7 @@ function updateMechAnimations(dt, now) {
 // demo plate style: dark navy pill, steel edge, light text — same look as the
 // selection tiles and HUD roster tags (who-is-who reads from the role-colored
 // figures, not the tag). One canvas texture per weapon, shared by every mech.
-const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
+const UNIT_TAG_HEIGHT = 1.5;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
 // Distance compensation — OTHER units only (the own/spectated unit sits right
 // under the camera and keeps the plain base-size tag). Their tags scale up
