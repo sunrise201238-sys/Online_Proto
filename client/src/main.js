@@ -480,6 +480,10 @@ const UNIT_DATA = {
     name: 'Unit 13 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 13', weapon: 'PPSh', accent: 0xe0384a,
+    // HIDDEN since 0.6.5 (P90/unit14 took her picker slot — same treatment
+    // as Mika/unit8): kept fully in code and sim, absent from every picker
+    // and random pool.
+    hidden: true,
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
     hp: 150,
@@ -512,6 +516,42 @@ const UNIT_DATA = {
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
+    stun: { ms: 50, moveScale: 0.50 }
+  },
+  unit14: {
+    name: 'Unit 14 / Submachine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    char: 'Unit 14', weapon: 'P90', accent: 0x4ac0b0,
+
+    // Pilot stats — PPSh/Atsuko template: same mobility block.
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — PPSh-derived (2026-08-05, replaces the hidden PPSh in
+    // the pickers): FAMAS's cadence in the SMG chassis — 50-round mag,
+    // 3 damage, AR spread profile (SA 0.02 + HA 0.04, sure-hit ~53).
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 900,        // ≈ 66.7 ms cooldown — 80 ms tick slot (12.5/s), FAMAS's rung
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3,
+
+    magCapacity: 50,
+    botFireCap: 50,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 2000,
+    autoReload: false,
+    // Per-weapon hit-stun. SMG = short + light.
     stun: { ms: 50, moveScale: 0.50 }
   }
 };
@@ -7875,9 +7915,9 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
 // from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
-  'unit1', 'unit9', 'unit4', 'unit13',   // Saori  Asuna  Atsuko Marina (Mika's old slot — unit8 hidden)
-  'unit2', 'unit11', 'unit12', 'unit5',  // Hoshino Haruka Koyuki Hina
-  'unit10', 'unit7', 'unit3', 'unit6'    // Fubuki Aris   Aru    Kei
+  'unit1', 'unit9', 'unit4', 'unit14',   // M4  FAMAS  evo3  P90 (PPSh/unit13 hidden — her old slot; Mika/unit8 hidden too)
+  'unit2', 'unit11', 'unit12', 'unit5',  // Beretta 1301  M1014  M60  MG42
+  'unit10', 'unit7', 'unit3', 'unit6'    // M14  Laser  PSG1  Railgun
 ];
 
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where

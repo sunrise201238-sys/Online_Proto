@@ -47,7 +47,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | M4 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 | 1.5 s |
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 | 1.5 s |
-| PPSh — Submachine Gun | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 | 2 s |
+| P90 — Submachine Gun | 50 | 3 / shot | ~900 RPM | 600 | 50 | 2 s |
 | Beretta 1301 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | M1014 — Shotgun | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 | 1.2 s (auto, per round) |
 | M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
@@ -65,11 +65,11 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | MG42 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
 | Laser | 4.17/s | 15 / bolt | **62.5** | ~12.5 (bolt-regen limited) |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
-| PPSh | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | M14 | 4.17/s | 10 | **41.7** | 30.5 |
 | M60 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
+| P90 | 12.5/s (80 ms) | 3 | **37.5** | 25.3 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
@@ -82,7 +82,7 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | M4 | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | FAMAS | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | evo3 | 50 ms @ 0.50 | 0.06 | — | ~53 |
-| PPSh | 50 ms @ 0.50 | 0.06 | 0.04 | ~32 |
+| P90 | 50 ms @ 0.50 | 0.02 | 0.04 | ~53 |
 | Beretta 1301 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | M1014 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
 | M60 | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
@@ -92,11 +92,11 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Railgun | 100 ms @ 0.25 | — (beam) | — | instant |
 
-PPSh is the lightest bullet in the game on MG42's cadence: the 48 ms tick slot (20.8 shots/s) in an SMG chassis and a 71-round drum — ~3.4 s of continuous fire (≈178 damage per drum) behind a 2 s reload. Suppression-first: her value is steady chip on the longest trigger in the SMG class, plus the boost her stream forces targets to burn escaping; the kill usually needs cross-fire or a second drum. Since 0.5.9 the SMG spread profiles follow the real guns: the WWII PPSh hoses wide (PPSh carries the 0.04 HA), the modern EVO3 shoots tight (evo3 dropped hers — sure-hit ~53).
+P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s) at 3 damage on a 50-round mag behind a 2 s reload — 4 s of continuous fire (150 damage per mag). She wears the AR spread profile (SA 0.02 + HA 0.04 — sure-hit ~53, the same accuracy family as the M4 and FAMAS) with the SMG's light 50 ms stun: a long-trigger chip gun that trades the ARs' per-shot weight for staying on the trigger twice as long.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **In practice the slow itself is a minor stat**: sprinting pays straight through it (and everyone sprints away from fire anyway, stun or not), while a walking target was already highly hittable — so the currencies that actually decide fights are the damage actually landed and the boost the target burns escaping, not the movement penalty.
 
-**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns (PPSh) deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; M1014's pattern is additionally stretched 1.4× horizontally (details below).
+**Reading the spread columns:** both are random cone angles in radians. **SA** is a perfectly ROUND random cone (equal scatter in both axes); **HA** adds extra scatter on the *horizontal axis only* — the axis enemies dodge along — so HA is pure anti-dodge coverage with no vertical waste. Total horizontal cone = SA + HA. Since angular error grows with distance, each gun has a **sure-hit range** against a stationary target (≈ 3.2 ÷ (SA + HA)); beyond it, hit chance falls off roughly as sure-hit ÷ distance. Wide-HA guns deliberately trade standing-target accuracy at range for taxing dodgers. The shotguns ignore the cones entirely: their pellets fly a fixed 8-point pattern that opens toward ~5.8 wide over the first 70 units of flight — at lock range it is still a tight ~3.3-wide cluster; M1014's pattern is additionally stretched 1.4× horizontally (details below).
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows.
 
@@ -107,7 +107,6 @@ PPSh is the lightest bullet in the game on MG42's cadence: the 48 ms tick slot (
 | M4 @56 | 99% | 69% | 6% |
 | FAMAS @56 | 100% | 64% | 8% |
 | evo3 @50 | 100% | 62% | 12% |
-| PPSh @50 | 85% | 61% | 18% |
 | Beretta 1301 @40 | 75% | 30% | 0% |
 | M1014 @40 | 61% | 30% | 4% |
 | M60 @80 | 76% | 40% | 3% |
@@ -178,7 +177,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | M4 | 30 | full mag |
 | FAMAS | 25 | full mag |
 | evo3 | 30 | full mag |
-| PPSh | 71 | full drum |
+| P90 | 50 | full mag |
 | M14 | 20 | full mag |
 | M60 | 100 | full mag |
 | MG42 | 250 | full drum (~12 s of continuous fire) |

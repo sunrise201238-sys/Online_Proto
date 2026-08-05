@@ -464,6 +464,43 @@ export const UNIT_DATA = {
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  unit14: {
+    id: 'unit14',
+    name: 'Unit 14 / Submachine Gun',
+    // P90 (2026-08-05): replaces the client-hidden unit13 in the pickers —
+    // unit13 stays fully simulated, same treatment as Mika/unit8.
+
+    // Pilot stats — PPSh/Atsuko template: same mobility block.
+    hp: 150,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — PPSh-derived: FAMAS's cadence in the SMG chassis —
+    // 50-round mag, 3 damage, AR spread profile (SA 0.02 + HA 0.04,
+    // sure-hit ~53).
+    lockRange: 50,
+    projectileSpeed: 600,
+    firePerMinute: 900,        // ≈ 66.7 ms cooldown — 80 ms tick slot (12.5/s), FAMAS's rung
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3,
+
+    magCapacity: 50,
+    botFireCap: 50,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 2000,
+    autoReload: false,
+    // Per-weapon hit-stun. SMG = short + light.
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 
