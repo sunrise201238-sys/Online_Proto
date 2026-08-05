@@ -1294,23 +1294,14 @@ function updateMechAnimations(dt, now) {
     // their tags stay readable at range.
     const tag = m.weaponTag;
     if (tag) {
-      // A tag is a SEEN-unit visual: hide it whenever the camera-to-unit
-      // line is blocked by an arena obstacle (same AABB scan the X-ray
-      // silhouette uses). The depth-test-free crosshair and team chevrons
-      // keep marking blocked units through cover.
-      const bp = m.body.position;
-      tag.visible = botHasLineOfSight(
-        { x: camera.position.x, y: camera.position.y, z: camera.position.z },
-        { x: bp.x, y: bp.y, z: bp.z }
-      );
-      if (tag.visible) {
-        let s = UNIT_TAG_HEIGHT;
-        if (!m.isOwnSprite) {
-          const d = camera.position.distanceTo(m.root.position);
-          s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
-        }
-        tag.scale.set(s * tag.userData.tagAspect, s, 1);
+      // Tags show through cover (depthTest off on the material), so no
+      // visibility gating here — just the distance sizing.
+      let s = UNIT_TAG_HEIGHT;
+      if (!m.isOwnSprite) {
+        const d = camera.position.distanceTo(m.root.position);
+        s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       }
+      tag.scale.set(s * tag.userData.tagAspect, s, 1);
     }
   }
 }
@@ -1366,15 +1357,16 @@ function makeWeaponTagSprite(unitData) {
     ?? (_weaponTagTexCache[label] = makeWeaponTagTexture(label));
   // depthWrite off: the translucent pill must never punch holes for the
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
-  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthWrite: false, fog: false });
+  // depthTest OFF: the tag shows through cover (like the crosshair and team
+  // chevrons), so a blocked unit still reads by its weapon tag.
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
   s.position.y = UNIT_TAG_Y;
   s.userData.tagAspect = entry.aspect;     // per-frame distance scaling reads this
   // Draw AFTER the lock reticle (renderOrder 9999) so the crosshair brackets
-  // never cover the tag. Depth test stays ON, so walls still occlude it —
-  // and the per-frame LoS check hides it outright when the unit is blocked.
+  // never cover the tag.
   s.renderOrder = 10000;
   return s;
 }
