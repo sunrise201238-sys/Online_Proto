@@ -339,7 +339,7 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .map-face { width: 260px; max-width: 62vw; }
 .unit-profile-popup .profile-face { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 8px; align-self: center; }
 /* Side card: weapon render + real-world weapon name beside the portrait. */
-.unit-profile-popup .weapon-panel { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: #0b1119; border: 1px solid #2c4356; border-radius: 8px; padding: 6px; }
+.unit-profile-popup .weapon-panel { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: #0b1119; border: 1px solid #2c4356; border-radius: 8px; padding: 6px; }
 .unit-profile-popup .weapon-name { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd76a; text-align: center; border-bottom: 1px solid #274058; padding-bottom: 4px; }
 .unit-profile-popup .weapon-panel img { display: block; width: 100%; height: auto; }
 /* Random card: light-gray mystery thumbnail + popup face, gray question mark.
@@ -364,10 +364,12 @@ body.pseudo-fullscreen #app {
 /* Profile popup: unified dark plate with the gun name (random-face
    proportions). Side padding keeps two-line names off the plate edge. */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; background: #0b1119; border: 1px solid #2c4356; color: #eaf6ff; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
-/* Panel category sits BELOW the divider line (in the panel's lower slot):
-   flip the .weapon-name border/padding from bottom to top, and let the slot
-   fill the remaining panel height with the text centered in it. */
-.unit-profile-popup .weapon-name.demo-cat-below { border-bottom: none; padding-bottom: 0; border-top: 1px solid #274058; padding-top: 4px; flex: 1; display: flex; align-items: center; justify-content: center; }
+/* Panel category below the divider: the ORIGINAL panel layout is untouched
+   (silhouette centered in the panel, divider line under it — the line now
+   rides the image's border), and the text alone is pinned near the panel's
+   bottom edge, out of the flex flow. */
+.unit-profile-popup .weapon-panel .weapon-render { border-bottom: 1px solid #274058; padding-bottom: 6px; }
+.unit-profile-popup .weapon-name.demo-cat-below { border-bottom: none; padding-bottom: 0; position: absolute; left: 6px; right: 6px; bottom: 10px; }
 /* Trio/Duel HUD: white weapon silhouette on the unified dark tag (1.5x the
    original 11/9px size for readability). Every pill is the SAME fixed box —
    guns center inside it — so the indicators line up at one uniform size. */
