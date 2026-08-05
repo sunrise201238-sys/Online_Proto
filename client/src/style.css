@@ -358,7 +358,7 @@ body.pseudo-fullscreen #app {
    who-is-who reads from the role-colored figures in the arena. */
 /* Unit-grid tile: white weapon silhouette on the dark plate. */
 .menu .unit-card .demo-thumb { display: flex; align-items: center; justify-content: center; border: 1px solid #2c4356; box-sizing: border-box; }
-.menu .unit-card .demo-thumb img { width: 94%; max-height: 84%; object-fit: contain; filter: invert(1); pointer-events: none; }
+.menu .unit-card .demo-thumb img { width: 100%; max-height: 92%; object-fit: contain; filter: invert(1); pointer-events: none; }
 /* Profile popup: white weapon silhouette above the category name. */
 .unit-profile-popup .weapon-panel .weapon-render { filter: invert(1); }
 /* Profile popup: unified dark plate with the gun name (random-face
