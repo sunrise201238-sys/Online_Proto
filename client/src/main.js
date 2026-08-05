@@ -270,15 +270,8 @@ const UNIT_DATA = {
     boostRegen: 4.59,
     jumpVelocity: 30,
     jumpHoverMs: 300,
-    // No jump cooldown — airborne again the moment she lands. The player path
-    // debounces re-trigger by 250 ms (double-fire guard at high frame rates);
-    // bots get a 1.5 s floor in botStartJump so the perch reflex can't
-    // bunny-hop her (bots play her grounded — no flight AI yet).
-    jumpCooldownMs: 0,
+    jumpCooldownMs: 1500,
     jumpBoostCost: 48,
-    // Mid-air re-jump pops cost less than the ground jump (tap-flying is her
-    // identity); only the air-pop path reads this.
-    airJumpBoostCost: 12,
 
     // Weapon spec
     lockRange: 56,
@@ -293,14 +286,9 @@ const UNIT_DATA = {
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
-    // FLIGHT (mirrored in shared/src/sim tick.js+movement.js — keep in
-    // sync): a JUMP tap in air re-fires the full jump impulse
-    // (airJumpBoostCost per pop, no cooldown beyond the 250 ms debounce);
-    // holding JUMP sustains the climb
-    // at sprint speed/drain after the impulse decays; air-sprint flies LEVEL
-    // (uses the 'fly' art); the air-dodge holds altitude too. Releasing
-    // everything falls normally. Uncapped height during tuning.
-    flight: true,
+    // Flight kit REMOVED for the demo (2026-08-05 user order): no `flight`
+    // flag, no airJumpBoostCost, standard 1500 ms jump cooldown — she plays
+    // as a normal ground unit. Mirrored in shared/src/sim/constants.js.
     // Laser bolt: the projectile's hitbox is a thin 64-long cylinder and the
     // transparent bright-cyan visual is that exact shape (both derive from
     // this one entry, so they can never drift apart). NOTE: 64 exceeds her
@@ -1320,7 +1308,7 @@ function updateMechAnimations(dt, now) {
 // demo plate style: dark navy pill, steel edge, light text — same look as the
 // selection tiles and HUD roster tags (who-is-who reads from the role-colored
 // figures, not the tag). One canvas texture per weapon, shared by every mech.
-const UNIT_TAG_HEIGHT = 1.5;    // world-units tall at reference distance
+const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
 // Distance compensation — OTHER units only (the own/spectated unit sits right
 // under the camera and keeps the plain base-size tag). Their tags scale up
@@ -1329,7 +1317,7 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTT
 // so the boost grows it upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
 const UNIT_TAG_MIN_BOOST = 2.7; // floor for other units' tags at close range
-const UNIT_TAG_MAX_BOOST = 5;   // far-range ceiling (reached at ~70 units)
+const UNIT_TAG_MAX_BOOST = 7.5; // far-range ceiling (reached at ~105 units)
 const _weaponTagTexCache = {};  // weapon label → { tex, aspect }
 
 function makeWeaponTagTexture(label) {
@@ -5830,13 +5818,16 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
   el.innerHTML = lines
     ? lines
       .filter((l) => l.length)
-      .map((l) => `<div class="trio-line">${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
+      .map((l) => `<div class="trio-line">${l.map((k, i) => {
         const u = UNIT_DATA[k];
         if (!u) return '';
         // DEMO BUILD: weapon silhouette on the unified dark tag (flipped to
         // white by the CSS invert); who-is-who reads from the role-colored
-        // figures in the arena, not from the tag.
-        return `<span class="trio-weapon-tag"><img src="${weaponArtUrl(u.weapon)}" alt="${u.weapon ?? k}" draggable="false"></span>`;
+        // figures in the arena, not from the tag. The line's FIRST icon —
+        // the currently fielded weapon — renders GOLDEN (replaces the old
+        // glow-bar prefix); Duel lines skip the marker.
+        const inPlay = markInPlay && i === 0 ? ' trio-inplay' : '';
+        return `<span class="trio-weapon-tag${inPlay}"><img src="${weaponArtUrl(u.weapon)}" alt="${u.weapon ?? k}" draggable="false"></span>`;
       }).join('')}</div>`)
       .join('')
     : '';

@@ -9,7 +9,7 @@ A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single 
 Two main modes, each playable **1v1 or 2v2**, offline and online:
 
 - **Duel** — classic single stock: one unit per fighter; a team loses when all its fighters are down.
-- **Trio** — three-unit stock: every slot (human or bot) fields an **ordered roster of three units**, repeats allowed. When a unit dies, the slot's next unit respawns at its original spawn point with the standard 3 s spawn immunity; the killer keeps position / HP / boost — no kill reward. A team loses when every roster on its side is spent. Each fighter's remaining units show as a row of small weapon renders under their side's HP bars (one line per team member; Duel shows its single unit the same way), and a small golden glow-bar marks each Trio line's currently fielded weapon.
+- **Trio** — three-unit stock: every slot (human or bot) fields an **ordered roster of three units**, repeats allowed. When a unit dies, the slot's next unit respawns at its original spawn point with the standard 3 s spawn immunity; the killer keeps position / HP / boost — no kill reward. A team loses when every roster on its side is spent. Each fighter's remaining units show as a row of small weapon renders under their side's HP bars (one line per team member; Duel shows its single unit the same way), and each Trio line's currently fielded weapon renders its silhouette in gold.
 - **Spectating (2v2, both modes)**: if you're out for good while your ally fights on, the camera follows the ally with your own-unit visual kit (through-wall X-ray silhouette); the lock reticle stays up and mirrors the ally's actual target (the TARGET button goes inert).
 
 ### Offline
@@ -127,9 +127,9 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 - **Unit 11's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Unit 2's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Unit 2's concentrated slug.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
-### Unit 7 — flight & laser bolts
+### Unit 7 — laser bolts
 
-- **Flight kit**: a jump tap in the air re-fires the jump impulse (12 boost per pop, no cooldown); *holding* jump sustains a climb at sprint speed; air-sprint flies **level** (reuses the sprint art in the demo); the air-dodge holds altitude. Boost does not regen while airborne — altitude is a spent resource.
+- The flight kit was **removed in this demo build**: Unit 7 plays as a normal ground unit (standard jump, 1.5 s cooldown, no air re-jumps, no sustained climb).
 - Sprinting into a jump **carries the sprint momentum** through the air.
 - Her shot is a **64-unit-long laser bolt**: the thin cyan cylinder you see *is* the hitbox (both derive from one spec entry). It grows out of the muzzle — the body never reaches behind the spawn point — and hits with its whole length, so a dodge must clear the entire passing beam, not just its nose.
 
@@ -199,7 +199,7 @@ Double-tap `K` (or the sprint button) to lock sprint. The lock releases only aft
 
 ## Maps
 
-Nine arenas: Plain Field, Streets, Factory, Factory 2, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** — only flight gets up there, making them Unit 7's high ground. The offline map list also carries the **Shooting Range** — the no-opponent practice map behind the measured hit-rate tables above (target sliders, per-lane score screens); the map Random card never rolls it.
+Nine arenas: Plain Field, Streets, Factory, Factory 2, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** (originally flight-only high ground; with the demo's flight kit removed, no unit reaches them). The offline map list also carries the **Shooting Range** — the no-opponent practice map behind the measured hit-rate tables above (target sliders, per-lane score screens); the map Random card never rolls it.
 
 **Factory 2** is the industrial remake of Factory built on Airport's design philosophy: one central organizing anchor — a raised **assembly deck** with four railed walk-up ramps plus jump-through fence openings (two 16-wide mid-side gaps and four corner notches) that bots use too, via the pathfinder's shortcut links — surrounded by dense, trustworthy cover (CNC machines, shipping containers, double-height crate stacks, partition walls, solid workstations) that passes the sizing rules everywhere: true cover is 8+ tall with real depth, vault clutter stays under 2.5. Two walkable conveyors flank the deck; everything is ramp-accessible (no flight-only spots). The layout is point-symmetric, and its online collision data is auto-exported from the offline builder so both modes are guaranteed identical.
 

@@ -232,14 +232,8 @@ export const UNIT_DATA = {
     boostRegen: 4.59,
     jumpVelocity: 30,
     jumpHoverMs: 300,
-    // No jump cooldown — airborne again the moment she lands. tryStartJump
-    // floors the effective cooldown (250 ms players / 1.5 s bots) so
-    // same-press re-triggers and bot perch bunny-hopping can't happen.
-    jumpCooldownMs: 0,
+    jumpCooldownMs: 1500,
     jumpBoostCost: 48,
-    // Mid-air re-jump pops cost less than the ground jump (tap-flying is her
-    // identity); only the air-pop path in applyInput reads this.
-    airJumpBoostCost: 12,
 
     // Weapon spec
     lockRange: 56,
@@ -254,12 +248,9 @@ export const UNIT_DATA = {
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
-    // FLIGHT (players only — bots play her grounded, no flight AI): a JUMP
-    // tap in air re-fires the full jump impulse (airJumpBoostCost per pop);
-    // holding JUMP sustains the climb at sprint speed, drained only while
-    // the thruster actually sustains it; air-sprint flies level; the
-    // air-dodge holds altitude. No boost regen while airborne.
-    flight: true,
+    // Flight kit REMOVED for the demo (2026-08-05 user order): no `flight`
+    // flag, no airJumpBoostCost, standard 1500 ms jump cooldown — she plays
+    // as a normal ground unit. Mirrored in client/src/main.js UNIT_DATA.
     // Laser bolt: the projectile's hitbox is a thin beamBolt-sized cylinder
     // that grows out of the muzzle; the client draws the transparent cyan
     // visual from this same entry, so hitbox and visual can't drift apart.
