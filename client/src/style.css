@@ -365,8 +365,9 @@ body.pseudo-fullscreen #app {
    proportions). Side padding keeps two-line names off the plate edge. */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; background: #0b1119; border: 1px solid #2c4356; color: #eaf6ff; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
 /* Panel category sits BELOW the divider line (in the panel's lower slot):
-   flip the .weapon-name border/padding from bottom to top. */
-.unit-profile-popup .weapon-name.demo-cat-below { border-bottom: none; padding-bottom: 0; border-top: 1px solid #274058; padding-top: 4px; }
+   flip the .weapon-name border/padding from bottom to top, and let the slot
+   fill the remaining panel height with the text centered in it. */
+.unit-profile-popup .weapon-name.demo-cat-below { border-bottom: none; padding-bottom: 0; border-top: 1px solid #274058; padding-top: 4px; flex: 1; display: flex; align-items: center; justify-content: center; }
 /* Trio/Duel HUD: white weapon silhouette on the unified dark tag (1.5x the
    original 11/9px size for readability). Every pill is the SAME fixed box —
    guns center inside it — so the indicators line up at one uniform size. */
