@@ -1288,19 +1288,29 @@ function updateMechAnimations(dt, now) {
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
     // DEMO BUILD: weapon-tag sizing. The own/spectated unit (isOwnSprite —
-    // the one the camera rides) AND the ally keep the plain base-size tag —
-    // both are usually near the camera and the ally reads by its green
-    // figure; a distance-boosted tag on either just crowds the view. Only
-    // ENEMY tags scale with distance (floored up close, growing to the far
-    // cap) so they stay readable at range.
+    // the one the camera rides) keeps the plain base-size tag so it never
+    // crowds the view; every OTHER unit — ally and enemies alike — scales
+    // with camera distance (floored up close, growing to the far cap) so
+    // their tags stay readable at range.
     const tag = m.weaponTag;
     if (tag) {
-      let s = UNIT_TAG_HEIGHT;
-      if (!m.isOwnSprite && m.roleKey !== 'ally') {
-        const d = camera.position.distanceTo(m.root.position);
-        s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+      // A tag is a SEEN-unit visual: hide it whenever the camera-to-unit
+      // line is blocked by an arena obstacle (same AABB scan the X-ray
+      // silhouette uses). The depth-test-free crosshair and team chevrons
+      // keep marking blocked units through cover.
+      const bp = m.body.position;
+      tag.visible = botHasLineOfSight(
+        { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+        { x: bp.x, y: bp.y, z: bp.z }
+      );
+      if (tag.visible) {
+        let s = UNIT_TAG_HEIGHT;
+        if (!m.isOwnSprite) {
+          const d = camera.position.distanceTo(m.root.position);
+          s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+        }
+        tag.scale.set(s * tag.userData.tagAspect, s, 1);
       }
-      tag.scale.set(s * tag.userData.tagAspect, s, 1);
     }
   }
 }
@@ -1362,6 +1372,10 @@ function makeWeaponTagSprite(unitData) {
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
   s.position.y = UNIT_TAG_Y;
   s.userData.tagAspect = entry.aspect;     // per-frame distance scaling reads this
+  // Draw AFTER the lock reticle (renderOrder 9999) so the crosshair brackets
+  // never cover the tag. Depth test stays ON, so walls still occlude it —
+  // and the per-frame LoS check hides it outright when the unit is blocked.
+  s.renderOrder = 10000;
   return s;
 }
 
