@@ -406,7 +406,7 @@ const UNIT_DATA = {
   unit11: {
     name: 'Unit 11 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    char: 'Unit 11', weapon: 'SDASS', accent: 0x7a5f96,
+    char: 'Unit 11', weapon: 'M1014', accent: 0x7a5f96,
 
     // Pilot stats
     hp: 150,
