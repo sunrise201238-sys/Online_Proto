@@ -281,7 +281,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 15,
+    damage: 12,                  // 15 -> 12 (2026-08-06 user tune)
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
@@ -8373,21 +8373,35 @@ function showProfilePopup(card, unit, onConfirm) {
         <div class="weapon-name demo-cat-below">${category}</div>
       </div>`
     : '';
+  // Damage cell (user formats 2026-08-06): shotguns 'per pellet ×count';
+  // PSG1's range tiers 'far/mid/near' (50/35/20 — full damage beyond
+  // midDist); Railgun 'quick/charged beam' (30/20). All read live from the
+  // unit data. The label shortens to 'Dmg' so the widest form (50/35/20)
+  // still fits the 21vw phone face on one line.
   const dmg = (unit.spreadCount ?? 1) > 1
-    ? `${unit.damage} ×${unit.spreadCount}`   // shotguns: per pellet × pellet count
-    : `${unit.damage}`;
+    ? `${unit.damage} ×${unit.spreadCount}`
+    : unit.rangeDamage
+      ? `${unit.damage}/${unit.rangeDamage.mid}/${unit.rangeDamage.near}`
+      : unit.beam?.chargedDamage != null
+        ? `${unit.damage}/${unit.beam.chargedDamage}`
+        : `${unit.damage}`;
   // Labels are kept SHORT (one word; the fire-rate unit lives in the label)
   // so every row stays on ONE line even at the face's phone-width cap
   // (21vw < 110px in portrait); values right-stick via the row flex.
   const rows = [
     ['Mag', `${unit.magCapacity}`],
-    ['Damage', dmg],
+    ['Dmg', dmg],
     ['RPM', `${unit.firePerMinute}`],
     ['Spd', bulletSpeedTier(unit)],   // shortest label — 'Instant' must fit the 21vw face
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
     ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]
-  ].map(([l, v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-value">${v}</span></div>`).join('');
+  ].map(([l, v]) => {
+    // Long plain-text values (PSG1's 50/35/20, 'Instant') step down a font
+    // size so the row still fits the 21vw phone face on one line.
+    const tight = !v.includes('<') && v.length >= 7 ? ' stat-tight' : '';
+    return `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-value${tight}">${v}</span></div>`;
+  }).join('');
   const nameCls = (weapon ?? '').length > 8 ? ' stat-name-long' : '';
   spawnProfilePopup(card,
     `<div class="profile-face demo-face demo-face-stats"><div class="stat-name${nameCls}">${weapon || ''}</div>${rows}</div>${weaponPanel}`,

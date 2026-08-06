@@ -243,7 +243,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 15,
+    damage: 12,                  // 15 -> 12 (2026-08-06 user tune)
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
