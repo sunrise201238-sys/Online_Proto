@@ -585,11 +585,13 @@ export function tickBot(matchState, botId, now) {
     me.botStuckCheckZ = me.pos.z;
     me.botStuckCheckAt = now;
     me.botPathLen = 0;
-  } else if (now - me.botStuckCheckAt >= 1500) {
-    const windowStale = now - me.botStuckCheckAt > 2200;
+  } else if (now - me.botStuckCheckAt >= 1000) {   // 1.5 s -> 1 s (2026-08-05 trim)
+    const windowStale = now - me.botStuckCheckAt > 1700;
     const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
-    const wedged = net < 2.5 && me.botPathLen < 6;
-    const spinning = me.botPathLen > 18 && net < 6;
+    // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
+    // movement rates that count as wedged/spinning are unchanged.
+    const wedged = net < 1.7 && me.botPathLen < 4;
+    const spinning = me.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
         && !me.airborne
@@ -858,15 +860,31 @@ export function tickBot(matchState, botId, now) {
   let nextState = prevState;
   const inDefenseGrace = prevState === 'defense' && now < (me.botDefenseUntil ?? 0);
 
+  // PROACTIVE ROUTE (2026-08-05): test the walk itself instead of waiting
+  // for the stuck clocks to prove a wall. Out of band with the straight
+  // approach blocked: sightless fires INSTANTLY (the original fast lane);
+  // SIGHTED (seeing the target over a low wall / across unwalkable ground)
+  // fires after a 250 ms persistence — long enough that a graze the
+  // avoidance slide already handles never cuts normal play into Maze.
+  const towardBlocked = !walkTowardClear(Math.min(dist, 30));
+  const approachBlocked = !inBandDist && towardBlocked;
+  // Sighted variant is APPROACH-only (dist beyond the band's upper edge):
+  // a too-close bot retreating over a crate must stay Engage's problem.
+  const sightedBlocked = dist > upperRange && towardBlocked;
+  if (!sightedBlocked) me.botApproachBlockedSince = null;
+  else if (me.botApproachBlockedSince == null) me.botApproachBlockedSince = now;
+  const approachBlockedLong = sightedBlocked
+    && now - me.botApproachBlockedSince >= 250;
+
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
-  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
-      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
-    // Wedged, spinning, stalled, or sightless for 2 s — commit to going
-    // AROUND whatever is in the way. FAST LANE (4th condition): can't see
-    // the target, too far to fight, AND the straight walk is blocked —
-    // nothing to debounce, route NOW instead of beelining into a wall for
-    // 2 s (the awkward approach at every match start). In-band sight
+  } else if (stuckTriggered || noProgressTime > 1500 || noLoSTime > 2000
+      || (!playerHasLoS && approachBlocked)
+      || approachBlockedLong) {
+    // Wedged, spinning, stalled (1.5 s — trimmed from 2 s, 2026-08-05),
+    // sightless for 2 s, or the approach walk is BLOCKED (instant when
+    // sightless, 250 ms persistence when sighted) — commit to going AROUND
+    // whatever is in the way instead of beelining into it. In-band sight
     // flickers (the cover peek-dance) still get the full 2 s buffer.
     nextState = 'maze';
   } else if (prevState === 'maze') {
