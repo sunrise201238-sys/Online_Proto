@@ -108,6 +108,11 @@ const BOT_CLIMB_MAX_RISE = 4.8;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
+// STATION-SPECIFIC BOT RULES master switch (2026-08-05): HIDDEN, not
+// deleted — the deck-spawn experiment runs with these off. Flip to true to
+// re-enable the station perch pull, low-level discouragement dwell, mount
+// hold, and descent suppression in one move. Mirrored in client main.js.
+const STATION_BOT_RULES = false;
 const BOT_LEDGE_JUMP_REACH = 4.5;
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
@@ -1141,7 +1146,7 @@ export function tickBot(matchState, botId, now) {
         // valid from the deck edge, so hopping down to close a small gap
         // is a needless descent. EXCEPTIONS that still descend: sight lost,
         // or the target pulled well past the band (those need the chase).
-        const holdUp = matchState.mapKey === 'station'
+        const holdUp = STATION_BOT_RULES && matchState.mapKey === 'station'
           && now < (me.botMountHoldUntil ?? 0)
           && playerHasLoS
           && dist < upperRange + 12;
@@ -1163,9 +1168,9 @@ export function tickBot(matchState, botId, now) {
           if (botTryJump(me, now)) {
             jumpThisTick = true;
             // STATION MOUNT HOLD: see the onHighGround branch above.
-            if (matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+            if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
           }
-        } else if (matchState.mapKey === 'station' && perch
+        } else if (STATION_BOT_RULES && matchState.mapKey === 'station' && perch
             && (perch.toX * dirX + perch.toZ * dirZ > 0.2 || perch.dist < 12)) {
           // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
           // on this one map the decks are the strong positions but they're
@@ -1337,7 +1342,7 @@ export function tickBot(matchState, botId, now) {
     // completes the mount. Short exchanges and transit are untouched; the
     // continuity check restarts the clock after any gap (state change,
     // death, leaving the low floor). Other maps skip all of it.
-    if (matchState.mapKey === 'station' && !onHighGround) {
+    if (STATION_BOT_RULES && matchState.mapKey === 'station' && !onHighGround) {
       const cont = now - (me.botLowDwellTickAt ?? 0) < 250;
       me.botLowDwellTickAt = now;
       if (!cont || me.botLowDwellSince == null) me.botLowDwellSince = now;
@@ -1367,7 +1372,7 @@ export function tickBot(matchState, botId, now) {
           // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
           // aid for a beat (see onHighGround branch) so the bot doesn't
           // yo-yo straight back down.
-          if (matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+          if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
         }
       }
     }
@@ -1426,7 +1431,7 @@ export function tickBot(matchState, botId, now) {
             jumpThisTick = true;
             me.botDefenseStuckTicks = 0;
             // STATION MOUNT HOLD: an escape mount also holds the deck.
-            if (matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+            if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -1456,7 +1461,7 @@ export function tickBot(matchState, botId, now) {
               jumpThisTick = true;
               vaulted = true;
               // STATION MOUNT HOLD: an escape mount also holds the deck.
-              if (matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+              if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
               me.botDefenseStuckTicks = 0;
             }
           }

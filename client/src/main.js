@@ -3788,6 +3788,11 @@ const BOT_CLIMB_MAX_RISE = 4.8;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
+// STATION-SPECIFIC BOT RULES master switch (2026-08-05): HIDDEN, not
+// deleted — the deck-spawn experiment runs with these off. Flip to true to
+// re-enable the station perch pull, low-level discouragement dwell, mount
+// hold, and descent suppression in one move. Mirrored in shared ai.js.
+const STATION_BOT_RULES = false;
 const BOT_LEDGE_JUMP_REACH = 4.5;
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
@@ -4817,7 +4822,7 @@ function updateEnemy(now) {
         // is a needless descent. EXCEPTIONS that still descend: sight lost,
         // or the target pulled well past the band (those need the chase).
         // Mirrored in shared/src/sim/ai.js.
-        const holdUp = state.mapKey === 'station'
+        const holdUp = STATION_BOT_RULES && state.mapKey === 'station'
           && now < (eState.botMountHoldUntil ?? 0)
           && playerHasLoS
           && dist < upperRange + 12;
@@ -4839,9 +4844,9 @@ function updateEnemy(now) {
           if (botStartJump(now)) {
             jumpThisTick = true;
             // STATION MOUNT HOLD: see the onHighGround branch above.
-            if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
           }
-        } else if (state.mapKey === 'station' && perch
+        } else if (STATION_BOT_RULES && state.mapKey === 'station' && perch
             && (perch.toX * dir.x + perch.toZ * dir.z > 0.2 || perch.dist < 12)) {
           // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
           // on this one map the decks are the strong positions but they're
@@ -5022,7 +5027,7 @@ function updateEnemy(now) {
     // continuity check restarts the clock after any gap (state change,
     // death, leaving the low floor). Other maps skip all of it.
     // Mirrored in shared/src/sim/ai.js.
-    if (state.mapKey === 'station' && !onHighGround) {
+    if (STATION_BOT_RULES && state.mapKey === 'station' && !onHighGround) {
       const cont = now - (eState.botLowDwellTickAt ?? 0) < 250;
       eState.botLowDwellTickAt = now;
       if (!cont || eState.botLowDwellSince == null) eState.botLowDwellSince = now;
@@ -5052,7 +5057,7 @@ function updateEnemy(now) {
           // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
           // aid for a beat (see onHighGround branch) so the bot doesn't
           // yo-yo straight back down.
-          if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+          if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
         }
       }
     }
@@ -5120,7 +5125,7 @@ function updateEnemy(now) {
             jumpThisTick = true;
             eState.botDefenseStuckTicks = 0;
             // STATION MOUNT HOLD: an escape mount also holds the deck.
-            if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -5154,7 +5159,7 @@ function updateEnemy(now) {
               jumpThisTick = true;
               vaulted = true;
               // STATION MOUNT HOLD: an escape mount also holds the deck.
-              if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+              if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
               eState.botDefenseStuckTicks = 0;
             }
           }
@@ -6221,10 +6226,12 @@ function startMatch() {
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station: spawn at the far west/east ends of the track corridor (tracks at y=0).
-    // Platforms on either side are raised 4m — players must jump up to reach them.
-    state.player.body.position.set(-128, 2.45, 0);
-    state.enemy.body.position.set(128, 2.45, 0);
+    // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
+    // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
+    // y = 4 + 2.45). The old track-corridor spawns (±128, 0) anchored every
+    // fight to the railway axis. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-100, 6.45, -70);
+    state.enemy.body.position.set(100, 6.45, 70);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);

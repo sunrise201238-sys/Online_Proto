@@ -9539,7 +9539,11 @@ const ARENA_SPAWNS = {
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
-  station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
+  // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
+  // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
+  // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
+  // fight to the railway axis. Old values: p1 (-128, 0), p2 (128, 0).
+  station: { p1: { x: -100, y: GROUND_BASE_Y + 4, z: -70 }, p2: { x: 100, y: GROUND_BASE_Y + 4, z: 70 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
   airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };
