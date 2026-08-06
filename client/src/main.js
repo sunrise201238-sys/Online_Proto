@@ -1336,10 +1336,10 @@ function updateMechAnimations(dt, now) {
     if (tag) {
       // Tags show through cover (depthTest off on the material), so no
       // visibility gating here — just the distance sizing.
-      let s = UNIT_TAG_HEIGHT;
+      let s = UNIT_TAG_HEIGHT * UNIT_TAG_OWN_BOOST;
       if (!m.isOwnSprite) {
         const d = camera.position.distanceTo(m.root.position);
-        s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+        s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
       // Health bar under the tag: same boost, plus a redraw when hp moved.
@@ -1364,14 +1364,22 @@ function updateMechAnimations(dt, now) {
 // figures, not the tag). One canvas texture per weapon, shared by every mech.
 const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
 const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 1.25;  // pill BOTTOM, above the head (raised to fit the health bar underneath)
-// Distance compensation — OTHER units only (the own/spectated unit sits right
-// under the camera and keeps the plain base-size tag). Their tags scale up
-// with range so enemies stay readable across the map: floored at MIN_BOOST
-// up close, growing to MAX_BOOST at long range. The tag is bottom-anchored,
-// so the boost grows it upward, never into the head.
+// FIXED plate: every weapon gets the same pill footprint; the silhouette is
+// contain-fitted into the centered ink box, so long guns span the width and
+// short guns center with margins (same idea as the corner-HUD pills). Kills
+// the per-weapon width jitter and lets the hp bar width match the tag's.
+const UNIT_TAG_TEX_W = 232;     // texture px — plate aspect ≈ 2.42
+const UNIT_TAG_TEX_H = 96;
+// Distance compensation. The own/spectated unit sits right under the camera
+// at ~REF_DIST and keeps a fixed OWN_BOOST size; every OTHER unit scales
+// with range, floored at MIN_BOOST up close and capped at MAX_BOOST far out.
+// The image tags read better than the old text did, so the band is tighter
+// than the text-era 1.0 / 2.7 / 7.5. The tag is bottom-anchored, so the
+// boost grows it upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
-const UNIT_TAG_MIN_BOOST = 2.7; // floor for other units' tags at close range
-const UNIT_TAG_MAX_BOOST = 7.5; // far-range ceiling (reached at ~105 units)
+const UNIT_TAG_OWN_BOOST = 1.5; // the own/spectated unit's fixed size
+const UNIT_TAG_MIN_BOOST = 2.2; // floor for other units' tags at close range
+const UNIT_TAG_MAX_BOOST = 4.5; // far-range ceiling (reached at ~63 units)
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
@@ -1379,14 +1387,16 @@ const UNIT_TAG_INK_ALLY = '#eaf6ff';
 const UNIT_TAG_INK_ENEMY = '#ff6a2c';
 
 function makeWeaponTagTexture(label, ink) {
-  const H = 96, PAD = 26, R = 18, INK_H = 58;
+  const W = UNIT_TAG_TEX_W, H = UNIT_TAG_TEX_H, PAD = 26, R = 18;
+  const BOX_W = W - PAD * 2, BOX_H = 58;   // centered ink box inside the plate
   const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
   const x = cv.getContext('2d');
-  const font = '700 52px sans-serif';
   const plate = () => {
     x.beginPath();
-    x.moveTo(R, 0); x.lineTo(cv.width - R, 0); x.arcTo(cv.width, 0, cv.width, R, R);
-    x.lineTo(cv.width, H - R); x.arcTo(cv.width, H, cv.width - R, H, R);
+    x.moveTo(R, 0); x.lineTo(W - R, 0); x.arcTo(W, 0, W, R, R);
+    x.lineTo(W, H - R); x.arcTo(W, H, W - R, H, R);
     x.lineTo(R, H); x.arcTo(0, H, 0, H - R, R);
     x.lineTo(0, R); x.arcTo(0, 0, R, 0, R);
     x.closePath();
@@ -1396,38 +1406,40 @@ function makeWeaponTagTexture(label, ink) {
     x.lineWidth = 6;   // half the stroke clips outside the canvas → ~3px edge
     x.stroke();
   };
-  // Text version first, so the tag is readable the instant the mech spawns.
-  x.font = font;
-  cv.width = Math.ceil(x.measureText(label).width) + PAD * 2;
-  cv.height = H;
+  // Text version first, so the tag is readable the instant the mech spawns —
+  // and it STAYS for weapons without art. Long names shrink to fit the box.
   plate();
-  x.font = font;     // the canvas resize above reset the context state
+  let fs = 52;
+  x.font = `700 ${fs}px sans-serif`;
+  const tw = x.measureText(label).width;
+  if (tw > BOX_W) {
+    fs = Math.floor(fs * BOX_W / tw);
+    x.font = `700 ${fs}px sans-serif`;
+  }
   x.fillStyle = ink;
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(label, cv.width / 2, H / 2 + 2);
+  x.fillText(label, W / 2, H / 2 + 2);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const entry = { tex, aspect: cv.width / H };
+  const entry = { tex, aspect: W / H };
   // Weapon-image ink: swap the text for the tinted silhouette once the PNG is
-  // in (usually instant — the menus already loaded it). On a missing image the
-  // text version simply stays. Sprites re-read entry.aspect every frame, so
-  // the width change propagates on its own.
+  // in (usually instant — the menus already loaded it). Contain-fit into the
+  // ink box, centered both ways. On a missing image the text simply stays.
   const img = new Image();
   img.onload = () => {
-    const inkW = Math.round(INK_H * (img.width / img.height));
-    cv.width = inkW + PAD * 2;
-    cv.height = H;
+    const fit = Math.min(BOX_W / img.width, BOX_H / img.height);
+    const dw = Math.round(img.width * fit), dh = Math.round(img.height * fit);
+    x.clearRect(0, 0, W, H);
     plate();
     const t = document.createElement('canvas');
-    t.width = inkW; t.height = INK_H;
+    t.width = dw; t.height = dh;
     const tx = t.getContext('2d');
-    tx.drawImage(img, 0, 0, inkW, INK_H);
+    tx.drawImage(img, 0, 0, dw, dh);
     tx.globalCompositeOperation = 'source-in';
     tx.fillStyle = ink;
-    tx.fillRect(0, 0, inkW, INK_H);
-    x.drawImage(t, PAD, (H - INK_H) / 2);
+    tx.fillRect(0, 0, dw, dh);
+    x.drawImage(t, (W - dw) / 2, (H - dh) / 2);
     tex.needsUpdate = true;
-    entry.aspect = cv.width / H;
   };
   img.src = weaponArtUrl(label);
   return entry;
@@ -1459,8 +1471,11 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
 // per unit and changes constantly), redrawn only when the fraction moves.
 // TOP-anchored: the distance boost grows it DOWNWARD, so it stays glued under
 // the tag (which is bottom-anchored and grows upward) instead of crossing it.
-const UNIT_BAR_TEX_W = 120, UNIT_BAR_TEX_H = 12;   // texture px
-const UNIT_BAR_WORLD_W = 1.8;                       // world width at base scale
+const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
+// Width matches the fixed tag plate exactly (the tag above it is the same
+// 2.42 aspect at the same boost), so the overhead stack reads as one column.
+// 0.30 tall ≈ 1.7x the original 0.18 thickness (user order 2026-08-06).
+const UNIT_BAR_WORLD_W = UNIT_TAG_HEIGHT * (UNIT_TAG_TEX_W / UNIT_TAG_TEX_H);
 const UNIT_BAR_GAP = 0.06;                          // below the tag's bottom edge
 
 function drawHealthBar(sprite, frac) {
