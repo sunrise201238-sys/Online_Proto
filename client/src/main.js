@@ -1342,29 +1342,30 @@ function updateMechAnimations(dt, now) {
     if (tag) {
       // Tags show through cover (depthTest off on the material), so no
       // visibility gating here — just the distance sizing/anchoring.
-      let s = UNIT_TAG_HEIGHT * UNIT_TAG_OWN_BOOST;
       const bar = m.healthBar;
-      if (!m.isOwnSprite) {
-        const d = camera.position.distanceTo(m.root.position);
-        s = UNIT_TAG_HEIGHT * UNIT_TAG_OTHER_APPARENT * (d / UNIT_TAG_REF_DIST);
-      }
+      const d = camera.position.distanceTo(m.root.position);
+      // Constant on-screen size for EVERYONE — the own tag just uses the
+      // smaller apparent factor, so a close-in camera can't balloon it.
+      const s = UNIT_TAG_HEIGHT * (m.isOwnSprite ? UNIT_TAG_OWN_APPARENT : UNIT_TAG_OTHER_APPARENT)
+        * (d / UNIT_TAG_REF_DIST);
       const hostile = getTeamOf(m) !== camTeam;
       if (!m.isOwnSprite && hostile) {
         // Hostiles (of the camera unit): anchor the stack a thin gap above
-        // the lock brackets.
-        const d = camera.position.distanceTo(m.root.position);
+        // the lock brackets — FLOORED at the head anchor, so a point-blank
+        // enemy's stack can never sink onto its body.
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
-        const clearY = 0.2 + UNIT_TAG_RETICLE_CLEAR * rs;
+        const clearY = Math.max(0.2 + UNIT_TAG_RETICLE_CLEAR * rs, UNIT_TAG_Y);
         const k = s / UNIT_TAG_HEIGHT;
         const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit and its teammates (never lockable by it) keep the
-        // above-the-head anchor; set per frame so a spectate handoff can
-        // never leave a stale lift.
-        tag.position.y = UNIT_TAG_Y;
-        if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
+        // The camera unit (a bit higher, clear of the aim line) and its
+        // teammates keep the above-the-head anchor; set per frame so a
+        // spectate handoff can never leave a stale lift.
+        const y = m.isOwnSprite ? UNIT_TAG_OWN_Y : UNIT_TAG_Y;
+        tag.position.y = y;
+        if (bar) bar.position.y = y - UNIT_BAR_GAP;
       }
       // Ink follows the same perspective: spectate switches flip who reads
       // hostile — swap to the other-ink texture variant (cached per
@@ -1415,17 +1416,19 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 1.25;  // pill BOTT
 // the per-weapon width jitter and lets the hp bar width match the tag's.
 const UNIT_TAG_TEX_W = 232;     // texture px — plate aspect ≈ 2.42
 const UNIT_TAG_TEX_H = 96;
-// Sizing. The own/spectated unit sits right under the camera at ~REF_DIST
-// and keeps a fixed OWN_BOOST size. Every OTHER unit's tag holds a CONSTANT
-// ON-SCREEN size: the world scale grows linearly with camera distance
-// (s ∝ d), which cancels perspective exactly — readable at any range, never
-// dominating up close (replaces the floor/cap band, whose cap made far tags
-// unreadable). OTHER_APPARENT is the on-screen size in own-tag units: 1.3 =
-// a touch smaller than the own tag's 1.5. Bottom-anchored, so growth goes
-// upward, never into the head.
+// Sizing. EVERY tag holds a CONSTANT ON-SCREEN size: the world scale grows
+// linearly with camera distance (s ∝ d), which cancels perspective exactly —
+// readable at any range, and a close-in camera can never balloon it over the
+// unit (the own tag's old fixed-world 1.5 did exactly that). APPARENT values
+// are on-screen sizes in units of "a 1.0 tag at REF_DIST": the own tag is
+// the smallest (nearest the camera's focus), others a bit larger.
+// Bottom-anchored, so growth goes upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
-const UNIT_TAG_OWN_BOOST = 1.5;     // the own/spectated unit's fixed size
-const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
+const UNIT_TAG_OWN_APPARENT = 1.0;  // the own/spectated unit's apparent size
+const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' apparent size
+// The own tag rides a bit higher than teammates' (+0.8 above the shared
+// anchor) to stay clear of the aim line.
+const UNIT_TAG_OWN_Y = UNIT_TAG_Y + 0.8;
 // ENEMY stacks ride ABOVE the lock crosshair, not above the head: the
 // anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
 // y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
@@ -1436,9 +1439,11 @@ const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
 // (9.15*0.378 ≈ 3.46 above center). 3.0 sits just inside the ink edge, in
 // the brackets' upper margin (user-tuned 2026-08-06: 3.6 → 2 → 3).
 const UNIT_TAG_RETICLE_CLEAR = 3;
-// Stack opacity, applied per frame (isOwnSprite moves on spectate handoffs):
-// the own unit's tag sits closest to the camera, so it fades the most.
-const UNIT_TAG_OPACITY_OWN = 0.5;
+// Stack opacity, applied per frame (isOwnSprite moves on spectate handoffs).
+// Uniform 0.75 since 2026-08-06: the own tag's blocking was geometric (the
+// fixed-world size ballooning up close), not an opacity problem — solved by
+// screen-sizing it above instead of fading it harder.
+const UNIT_TAG_OPACITY_OWN = 0.75;
 const UNIT_TAG_OPACITY_OTHER = 0.75;
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
