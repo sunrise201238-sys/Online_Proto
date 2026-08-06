@@ -4810,10 +4810,23 @@ function updateEnemy(now) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
         if (botStartJump(now)) jumpThisTick = true;
       } else if (onHighGround) {
-        const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
-        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
-          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
+        // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
+        // fresh mount, skip the descent aid so the bot doesn't yo-yo right
+        // back down — the 22-wide track corridor keeps the firing band
+        // valid from the deck edge, so hopping down to close a small gap
+        // is a needless descent. EXCEPTIONS that still descend: sight lost,
+        // or the target pulled well past the band (those need the chase).
+        // Mirrored in shared/src/sim/ai.js.
+        const holdUp = state.mapKey === 'station'
+          && now < (eState.botMountHoldUntil ?? 0)
+          && playerHasLoS
+          && dist < upperRange + 12;
+        if (!holdUp) {
+          const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
+          if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+            jumpDirX = exit.toX; jumpDirZ = exit.toZ;
+            if (botStartJump(now)) jumpThisTick = true;
+          }
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
@@ -4823,7 +4836,11 @@ function updateEnemy(now) {
         const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
+          if (botStartJump(now)) {
+            jumpThisTick = true;
+            // STATION MOUNT HOLD: see the onHighGround branch above.
+            if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+          }
         } else if (state.mapKey === 'station' && perch
             && (perch.toX * dir.x + perch.toZ * dir.z > 0.2 || perch.dist < 12)) {
           // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
@@ -4996,6 +5013,32 @@ function updateEnemy(now) {
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
 
+    // STATION LOW-LEVEL DISCOURAGEMENT (map-keyed, 2026-08-05 user order):
+    // fighting on the track level is tolerated only briefly. After ~3 s of
+    // continuous Engage time down there, a ramping pull (0 → 0.6 over the
+    // next 3 s; the orbit/range discipline stays dominant) drifts the bot
+    // toward the nearest mountable deck edge, and the perch jump below
+    // completes the mount. Short exchanges and transit are untouched; the
+    // continuity check restarts the clock after any gap (state change,
+    // death, leaving the low floor). Other maps skip all of it.
+    // Mirrored in shared/src/sim/ai.js.
+    if (state.mapKey === 'station' && !onHighGround) {
+      const cont = now - (eState.botLowDwellTickAt ?? 0) < 250;
+      eState.botLowDwellTickAt = now;
+      if (!cont || eState.botLowDwellSince == null) eState.botLowDwellSince = now;
+      const dwell = now - eState.botLowDwellSince;
+      if (dwell > 3000) {
+        const deck = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+        if (deck) {
+          const w = Math.min(0.6, ((dwell - 3000) / 3000) * 0.6);
+          const px2 = mx + deck.toX * w;
+          const pz2 = mz + deck.toZ * w;
+          const pl = Math.hypot(px2, pz2) || 1;
+          mx = px2 / pl; mz = pz2 / pl;
+        }
+      }
+    }
+
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
     // the orbit (just adds a jump when the chance is there); the jump cooldown
@@ -5004,7 +5047,13 @@ function updateEnemy(now) {
       const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botStartJump(now)) jumpThisTick = true;
+        if (botStartJump(now)) {
+          jumpThisTick = true;
+          // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
+          // aid for a beat (see onHighGround branch) so the bot doesn't
+          // yo-yo straight back down.
+          if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+        }
       }
     }
 
@@ -5070,6 +5119,8 @@ function updateEnemy(now) {
           if (botStartJump(now, true)) {
             jumpThisTick = true;
             eState.botDefenseStuckTicks = 0;
+            // STATION MOUNT HOLD: an escape mount also holds the deck.
+            if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -5102,6 +5153,8 @@ function updateEnemy(now) {
             if (botStartJump(now, true)) {
               jumpThisTick = true;
               vaulted = true;
+              // STATION MOUNT HOLD: an escape mount also holds the deck.
+              if (state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
               eState.botDefenseStuckTicks = 0;
             }
           }
