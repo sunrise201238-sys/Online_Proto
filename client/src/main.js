@@ -1349,10 +1349,16 @@ function updateMechAnimations(dt, now) {
       const s = UNIT_TAG_HEIGHT * (m.isOwnSprite ? UNIT_TAG_OWN_APPARENT : UNIT_TAG_OTHER_APPARENT)
         * (d / UNIT_TAG_REF_DIST);
       const hostile = getTeamOf(m) !== camTeam;
-      if (!m.isOwnSprite && hostile) {
-        // Hostiles (of the camera unit): anchor the stack a thin gap above
-        // the lock brackets — FLOORED at the head anchor, so a point-blank
-        // enemy's stack can never sink onto its body.
+      // The crosshair anchor applies only while the lock brackets are
+      // actually ON this unit (the reticle sprite rides its root); an
+      // off-lock enemy has no crosshair to clear, so it uses the head rule
+      // like a teammate (user order 2026-08-06). The stack hops when the
+      // lock switches units — accepted.
+      const lockedOn = !!(state.reticle && state.reticle.visible && state.reticle.parent === m.root);
+      if (!m.isOwnSprite && hostile && lockedOn) {
+        // The LOCKED hostile: anchor the stack a thin gap above the lock
+        // brackets — FLOORED at the head anchor, so a point-blank enemy's
+        // stack can never sink onto its body.
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = Math.max(0.2 + UNIT_TAG_RETICLE_CLEAR * rs, UNIT_TAG_Y);
         const k = s / UNIT_TAG_HEIGHT;
@@ -1360,11 +1366,11 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit and its teammates: stack bottom rides the head at
-        // a screen-fixed gap, bar + tag growing UPWARD — every part of the
-        // layout scales with k, so the whole stack is pixel-stable on screen
-        // and can never sink onto the head. Set per frame so a spectate
-        // handoff can never leave a stale lift.
+        // The camera unit, its teammates, and OFF-LOCK enemies: stack bottom
+        // rides the head at a screen-fixed gap, bar + tag growing UPWARD —
+        // every part of the layout scales with k, so the whole stack is
+        // pixel-stable on screen and can never sink onto the head. Set per
+        // frame so a spectate handoff can never leave a stale lift.
         const k = s / UNIT_TAG_HEIGHT;
         const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
         const bottom = UNIT_TAG_HEAD_TOP + UNIT_TAG_TEAM_GAP * k;
