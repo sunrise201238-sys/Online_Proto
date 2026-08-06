@@ -122,14 +122,22 @@ const BOT_ELEV_STEER_WEIGHT = 2.4;
 const BOT_AIR_STEER_MS = 900;
 
 // Repulsion vector from blocking obstacles within `radius`. Skips obstacles
-// the bot is over or under (same skip math as resolveUnitObstacleCollisions),
-// and skips `noProjectile`-flagged obstacles since those have a dedicated
-// jump handler (e.g. station's platform-edge walls).
+// the bot is over or under (same skip math as resolveUnitObstacleCollisions).
+// JUMPABLE `noProjectile` fences (height <= BOT_CLIMB_MAX_RISE — station /
+// flashpoint 4-high platform edges) are skipped so the dedicated jump handler
+// can walk the bot up to them. UNJUMPABLE ones (square's 14-high fountain
+// colonnade, streets' tall under-bridge blockers) DO repel: they block
+// movement like any wall but were invisible to this steering, so straight-
+// line behaviors (Defense escapes, kiting, dodge follow-ups) pinned bots
+// against them while enemies shot straight through (fixed 2026-08-05).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
   let rx = 0, rz = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
+    // streets bridge deck over its 6-high under-deck end walls — passes over
+    // it freely and must not be shoved sideways.)
+    if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
     const topBuffer = o.topBuffer ?? 4;
     if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
@@ -175,13 +183,59 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
   return { rx: (dx / d) * strength, rz: (dz / d) * strength };
 }
 
+// Sight vs a walkable surface (2026-08-06): decks/ramps are NOT obstacle
+// boxes, so without this a sight ray passed straight through a bridge
+// slope's solid wedge (Streets bots blazing at each other across the ramp)
+// or an elevated deck's floor. RAMPS are solid fill — the ray is blocked
+// wherever it dips below the ramp's local height inside the footprint (both
+// the ray's y and the ramp height are linear along the ray, so checking the
+// clipped interval's endpoints is exact). FLAT elevated decks stand on open
+// pillars, so only CROSSING the deck plane blocks — two units both under
+// the bridge keep their sight lines. 0.4 epsilon forgives grazes at lips.
+function sightHitsSurface(p0, p1, s) {
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  let t0 = 0, t1 = 1;
+  // Liang-Barsky clip of the XZ segment to the surface rect.
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i++) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return false;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+  }
+  const dy = p1.y - p0.y;
+  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
+  const EPS = 0.4;
+  if (s.type === 'ramp') {
+    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+    return yA < hA - EPS || yB < hB - EPS;
+  }
+  const top = s.top ?? s.maxTop;
+  if (top == null) return false;
+  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
+}
+
 // Line-of-sight check using the same swept-AABB math projectiles use, so the
 // bot only "sees" through gaps a bullet would actually pass through.
-function botHasLineOfSight(p0, p1, obstacles) {
+// `surfaces` adds the deck/ramp masses (see sightHitsSurface) — optional so
+// exotic callers without surface data stay safe.
+function botHasLineOfSight(p0, p1, obstacles, surfaces) {
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
     if (o.noProjectile) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  if (surfaces) {
+    for (let i = 0; i < surfaces.length; i++) {
+      if (sightHitsSurface(p0, p1, surfaces[i])) return false;
+    }
   }
   return true;
 }
@@ -296,6 +350,7 @@ export function pickBotTargetId(matchState, fighter) {
   if (enemies.length === 0) return null;
   if (enemies.length === 1) return enemies[0].id;
   const obstacles = getArena(matchState.mapKey).obstacles;
+  const sightSurfaces = getArena(matchState.mapKey).surfaces;
   let bestId = enemies[0].id;
   let bestScore = Infinity;
   let currentScore = null;
@@ -304,7 +359,7 @@ export function pickBotTargetId(matchState, fighter) {
     const seen = botHasLineOfSight(
       { x: fighter.pos.x, y: fighter.pos.y + BOT_LOS_EYE_HEIGHT, z: fighter.pos.z },
       { x: e.pos.x, y: e.pos.y + BOT_LOS_EYE_HEIGHT, z: e.pos.z },
-      obstacles
+      obstacles, sightSurfaces
     );
     const score = d + (seen ? 0 : BOT_TARGET_BLOCKED_PENALTY);
     if (e.id === fighter.targetId) currentScore = score;
@@ -324,6 +379,18 @@ export function pickBotTargetId(matchState, fighter) {
 function botTryJump(me, now) {
   const funded = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
   if (me.boost < funded) return false;
+  return tryStartJump(me, now);
+}
+
+// SURVIVAL jump funding (2026-08-05): the Defense hop/vault is an escape
+// move, and Defense's own sprint drains below the 250 travel reserve within
+// a few ticks — reserve-gated funding made the hop nearly unaffordable in
+// practice. Same doctrine as the two existing survival exemptions (Defense
+// sprints to the hard floor, the anti-glint dodge pays raw step cost):
+// fund at the raw jump cost + the sprint floor. Travel jumps (pursue perch,
+// elevation aids) keep the reserve gate — bots still hoard for the road.
+function botTryJumpSurvival(me, now) {
+  if (me.boost < (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST) return false;
   return tryStartJump(me, now);
 }
 
@@ -492,14 +559,14 @@ export function tickBot(matchState, botId, now) {
   const playerHasLoS = botHasLineOfSight(
     { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-    obstacles
+    obstacles, surfaces
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
     { x: px, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-    obstacles
+    obstacles, surfaces
   );
   // Are the next `len` units straight toward the player WALKABLE? Uses the
   // real movement rules (walkSegmentBlocked, topBuffer semantics) — the old
@@ -577,11 +644,13 @@ export function tickBot(matchState, botId, now) {
     me.botStuckCheckZ = me.pos.z;
     me.botStuckCheckAt = now;
     me.botPathLen = 0;
-  } else if (now - me.botStuckCheckAt >= 1500) {
-    const windowStale = now - me.botStuckCheckAt > 2200;
+  } else if (now - me.botStuckCheckAt >= 1000) {   // 1.5 s -> 1 s (2026-08-05 trim)
+    const windowStale = now - me.botStuckCheckAt > 1700;
     const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
-    const wedged = net < 2.5 && me.botPathLen < 6;
-    const spinning = me.botPathLen > 18 && net < 6;
+    // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
+    // movement rates that count as wedged/spinning are unchanged.
+    const wedged = net < 1.7 && me.botPathLen < 4;
+    const spinning = me.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
         && !me.airborne
@@ -801,7 +870,7 @@ export function tickBot(matchState, botId, now) {
         if (botHasLineOfSight(
           { x: px, y: fy + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: pz },
           { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-          obstacles
+          obstacles, surfaces
         )) {
           const cut = path.slice(0, i);
           cut.push({ x: px, z: pz });
@@ -850,15 +919,31 @@ export function tickBot(matchState, botId, now) {
   let nextState = prevState;
   const inDefenseGrace = prevState === 'defense' && now < (me.botDefenseUntil ?? 0);
 
+  // PROACTIVE ROUTE (2026-08-05): test the walk itself instead of waiting
+  // for the stuck clocks to prove a wall. Out of band with the straight
+  // approach blocked: sightless fires INSTANTLY (the original fast lane);
+  // SIGHTED (seeing the target over a low wall / across unwalkable ground)
+  // fires after a 250 ms persistence — long enough that a graze the
+  // avoidance slide already handles never cuts normal play into Maze.
+  const towardBlocked = !walkTowardClear(Math.min(dist, 30));
+  const approachBlocked = !inBandDist && towardBlocked;
+  // Sighted variant is APPROACH-only (dist beyond the band's upper edge):
+  // a too-close bot retreating over a crate must stay Engage's problem.
+  const sightedBlocked = dist > upperRange && towardBlocked;
+  if (!sightedBlocked) me.botApproachBlockedSince = null;
+  else if (me.botApproachBlockedSince == null) me.botApproachBlockedSince = now;
+  const approachBlockedLong = sightedBlocked
+    && now - me.botApproachBlockedSince >= 250;
+
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
-  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
-      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
-    // Wedged, spinning, stalled, or sightless for 2 s — commit to going
-    // AROUND whatever is in the way. FAST LANE (4th condition): can't see
-    // the target, too far to fight, AND the straight walk is blocked —
-    // nothing to debounce, route NOW instead of beelining into a wall for
-    // 2 s (the awkward approach at every match start). In-band sight
+  } else if (stuckTriggered || noProgressTime > 1500 || noLoSTime > 2000
+      || (!playerHasLoS && approachBlocked)
+      || approachBlockedLong) {
+    // Wedged, spinning, stalled (1.5 s — trimmed from 2 s, 2026-08-05),
+    // sightless for 2 s, or the approach walk is BLOCKED (instant when
+    // sightless, 250 ms persistence when sighted) — commit to going AROUND
+    // whatever is in the way instead of beelining into it. In-band sight
     // flickers (the cover peek-dance) still get the full 2 s buffer.
     nextState = 'maze';
   } else if (prevState === 'maze') {
@@ -1307,13 +1392,34 @@ export function tickBot(matchState, botId, now) {
         me.botDefenseInCover = false;
       }
     } else {
+      // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
+      // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
+      // the committed line (tight ~35° cone; the stuck vault below keeps
+      // its wider one), jump it the moment it's in reach and keep sprinting
+      // the same direction up top. Adds ZERO decision time: the direction
+      // never changes, the ledge is simply cleared instead of deflecting
+      // the sprint. GLINT GATE: never while an anti-glint dodge is
+      // scheduled (me.botGlintStepAt) — airborne can't dodge, and a hop
+      // there converts a guaranteed-dodgeable sniper shot into a hit.
+      if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
+        const ahead = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
+        if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
+            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
+          jumpDirX = ahead.toX;
+          jumpDirZ = ahead.toZ;
+          if (botTryJumpSurvival(me, now)) {
+            jumpThisTick = true;
+            me.botDefenseStuckTicks = 0;
+          }
+        }
+      }
       const intoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4;
       if (intoWall && avoidMag > 0.4) {
         me.botDefenseStuckTicks = (me.botDefenseStuckTicks ?? 0) + 1;
       } else {
         me.botDefenseStuckTicks = 0;
       }
-      if (me.botDefenseStuckTicks >= 2) {
+      if (!jumpThisTick && me.botDefenseStuckTicks >= 2) {
         // VAULT FIRST: if the "wall" being pressed is actually a jumpable
         // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
         // check used elsewhere, so Airport's rim glass still rejects it)
@@ -1321,14 +1427,15 @@ export function tickBot(matchState, botId, now) {
         // sprinting the same direction up top: the dodge continues with an
         // elevation change instead of a turn. Jump unaffordable (boost /
         // cooldown) or no ledge → the usual flip → slide → bail chain.
+        // Same glint gate as the proactive hop above.
         let vaulted = false;
-        if (me.grounded && !me.airborne) {
+        if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
           const ledge = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
           if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
               && ledge.toX * (me.botDefenseDirX ?? sideX) + ledge.toZ * (me.botDefenseDirZ ?? sideZ) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (botTryJump(me, now)) {
+            if (botTryJumpSurvival(me, now)) {
               jumpThisTick = true;
               vaulted = true;
               me.botDefenseStuckTicks = 0;
@@ -1444,7 +1551,7 @@ export function tickBot(matchState, botId, now) {
     } else if (!botHasLineOfSight(
       { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
       { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-      obstacles
+      obstacles, surfaces
     )) {
       // No clear shot — hold fire and check again shortly.
       me.nextFireAt = now + 220;

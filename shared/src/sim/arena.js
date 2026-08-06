@@ -9534,12 +9534,19 @@ const GENERATED_ARENA_COLLISION_DATA = {
 };
 
 const ARENA_SPAWNS = {
-  arena2: { p1: { x: -108, y: GROUND_BASE_Y, z: 0 }, p2: { x: 108, y: GROUND_BASE_Y, z: 0 } },
+  // Streets: diagonal corner spawns (ported from the demo line 2026-08-06;
+  // old values ±108, 0) — 8u clear of the boundary walls (x ±126, z ±90)
+  // and the corner towers.
+  arena2: { p1: { x: -118, y: GROUND_BASE_Y, z: -82 }, p2: { x: 118, y: GROUND_BASE_Y, z: 82 } },
   factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
-  station: { p1: { x: -128, y: GROUND_BASE_Y, z: 0 }, p2: { x: 128, y: GROUND_BASE_Y, z: 0 } },
+  // Station: deck FAR-corner spawns (ported from the demo line 2026-08-06;
+  // old track-corridor values ±128, 0) — x ±128 leaves 7u to the end wall
+  // (±135); z ±112 sits just past the corner stair block (z 102.5–107.5)
+  // and 20u off the outer wall (inner face ±132). Deck floor 4.
+  station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
   airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };

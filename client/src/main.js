@@ -288,7 +288,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 15,
+    damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
@@ -1287,11 +1287,123 @@ function updateUnitSpriteState(m, rig, dt, now) {
 
 // Drive every live fighter's sprite pose once per render frame (both modes —
 // getAllFighters() mirrors online snapshots onto the same state.* mechs).
+// ===== Overhead HP bar (ported from the demo line 2026-08-06) =====
+// A floating hp bar above every unit's head — WHITE for the camera unit's
+// team, ORANGE for its opponents (team-relative: in spectator mode the
+// WATCHED unit's side reads white). Demo rule set:
+// - CONSTANT ON-SCREEN size: world scale grows with the unit's view-axis
+//   DEPTH (not straight-line distance, which over-sizes edge-of-screen
+//   bars) — the bar reads the same at any range.
+// - The camera unit and its teammates: bar bottom rides the head at a
+//   screen-fixed gap (same pixels at every range).
+// - The LOCKED hostile: bar rides a thin gap above the crosshair brackets
+//   (the reticle's own scale law, floored at the head anchor); off-lock
+//   hostiles have no crosshair and use the head rule.
+// - Per-mech canvas, repainted only when the hp fraction moves; the ink
+//   swaps live when a spectate switch flips who reads hostile.
+// renderOrder 9997: BELOW the team chevrons (9998) and the reticle (9999),
+// so those stay readable where they overlap the bar.
+const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
+const UNIT_BAR_WORLD_W = 2.42;                      // world width at k = 1
+const UNIT_BAR_INK_ALLY = '#eaf6ff';
+const UNIT_BAR_INK_ENEMY = '#ff6a2c';
+const UNIT_BAR_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
+const UNIT_BAR_TEAM_GAP = 0.39;     // screen-fixed head clearance (scales by k)
+const UNIT_BAR_REF_DIST = 14;       // ~third-person camera distance to own unit
+const UNIT_BAR_RETICLE_CLEAR = 3;   // above-crosshair clearance, in reticle rs units
+
+function drawHealthBar(sprite, frac) {
+  const cv = sprite.material.map.image;
+  const x = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const pill = (px, py, pw, ph, r) => {
+    x.beginPath();
+    x.moveTo(px + r, py); x.lineTo(px + pw - r, py); x.arcTo(px + pw, py, px + pw, py + r, r);
+    x.lineTo(px + pw, py + ph - r); x.arcTo(px + pw, py + ph, px + pw - r, py + ph, r);
+    x.lineTo(px + r, py + ph); x.arcTo(px, py + ph, px, py + ph - r, r);
+    x.lineTo(px, py + r); x.arcTo(px, py, px + r, py, r);
+    x.closePath();
+  };
+  x.clearRect(0, 0, W, H);
+  pill(0, 0, W, H, 5);
+  x.fillStyle = 'rgba(11, 17, 25, 0.92)';
+  x.fill();
+  x.strokeStyle = '#2c4356';
+  x.lineWidth = 2;
+  x.stroke();
+  const inW = Math.round((W - 4) * frac);
+  if (inW > 0) {
+    pill(2, 2, W - 4, H - 4, 3);
+    x.save();
+    x.clip();                               // keeps the fill's corners inside the rounded track
+    x.fillStyle = sprite.userData.barInk;
+    x.fillRect(2, 2, inW, H - 4);
+    x.restore();
+  }
+  sprite.material.map.needsUpdate = true;
+}
+
+function makeHealthBarSprite(ink) {
+  const cv = document.createElement('canvas');
+  cv.width = UNIT_BAR_TEX_W;
+  cv.height = UNIT_BAR_TEX_H;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  // Shows through cover (like the chevron/reticle), never punches holes.
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  const s = new THREE.Sprite(mat);
+  s.center.set(0.5, 1);                     // TOP-anchored: spans (y - height)..y
+  s.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP + 0.3;
+  s.renderOrder = 9997;
+  s.userData.barInk = ink;
+  s.userData.barFrac = -1;                  // forces the first draw
+  return s;
+}
+
+const _barCamFwd = new THREE.Vector3();     // scratch: camera forward, for depth
+const _barWork = new THREE.Vector3();       // scratch: camera→unit vector
+
 function updateMechAnimations(dt, now) {
+  // Team-relative bar presentation: white/orange derive from the CAMERA
+  // unit's team — the player normally, the WATCHED unit in spectator mode.
+  const camTeam = getTeamOf(cameraFocusMech());
+  camera.getWorldDirection(_barCamFwd);
   for (const m of getAllFighters()) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
     if (rig) updateUnitSpriteState(m, rig, dt, now);
+    const bar = m.healthBar;
+    if (bar) {
+      const depth = Math.max(0.1,
+        _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
+      const k = depth / UNIT_BAR_REF_DIST;
+      const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
+      const hostile = getTeamOf(m) !== camTeam;
+      const lockedOn = !!(state.reticle && state.reticle.visible && state.reticle.parent === m.root);
+      if (hostile && !m.isOwnSprite && lockedOn) {
+        // The locked hostile: a thin gap above the crosshair brackets,
+        // floored at the head anchor so it can't sink onto the body.
+        const d = camera.position.distanceTo(m.root.position);
+        const rs = Math.min(4.5, Math.max(0.7, d / 22));
+        const clearY = Math.max(0.2 + UNIT_BAR_RETICLE_CLEAR * rs, UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP);
+        bar.position.y = clearY + barH;
+      } else {
+        // Everyone else rides the head at the screen-fixed gap.
+        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + barH;
+      }
+      bar.scale.set(UNIT_BAR_WORLD_W * k, barH, 1);
+      const wantInk = hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY;
+      if (bar.userData.barInk !== wantInk) {
+        bar.userData.barInk = wantInk;
+        bar.userData.barFrac = -1;          // repaint in the new ink
+      }
+      const maxHp = m.unit.hp ?? MAX_HP;
+      const frac = Math.max(0, Math.min(1, m.state.hp / maxHp));
+      if (Math.abs(frac - bar.userData.barFrac) > 0.004) {
+        bar.userData.barFrac = frac;
+        drawHealthBar(bar, frac);
+      }
+    }
   }
 }
 
@@ -1308,6 +1420,10 @@ function createMech(color, unitData, isOwnUnit = false) {
   // from the reticle / floating triangle / HP indicators, not body color.
   const sprite = makeUnitSprite(unitData, isOwnUnit);
   root.add(sprite);
+  // Overhead HP bar — the per-frame updater corrects ink (team-relative),
+  // size, and anchor; start white.
+  const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY);
+  root.add(healthBar);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
@@ -1334,6 +1450,7 @@ function createMech(color, unitData, isOwnUnit = false) {
     root,
     body,
     unit: unitData,
+    healthBar,                // overhead hp bar — scaled/anchored/repainted per frame
     thrusters: [],
     plumeLight,
     trail: [],
@@ -3683,15 +3800,22 @@ const BOT_AIR_STEER_MS = 900;
 // Returns un-normalized {rx, rz} that the caller can blend into the kiting
 // direction. Uses the same y-skip math as resolveUnitObstacleCollisions so
 // obstacles the bot is over (e.g. low platform decks) or below (high
-// overheads) don't push them. Obstacles flagged `noProjectile` (the station
-// platform-edge walls) are skipped here because they have a dedicated jump
-// handler below — repelling from them would prevent the bot from approaching
-// the platform at all.
+// overheads) don't push them. JUMPABLE `noProjectile` fences (height <=
+// BOT_CLIMB_MAX_RISE — station / flashpoint 4-high platform edges) are
+// skipped so the jump handler below can walk the bot up to them; UNJUMPABLE
+// ones (square's 14-high fountain colonnade, streets' tall under-bridge
+// blockers) DO repel — they block movement like any wall but were invisible
+// to this steering, so straight-line behaviors (Defense escapes, kiting,
+// dodge follow-ups) pinned bots against them while enemies shot straight
+// through (fixed 2026-08-05; mirrored in shared/src/sim/ai.js).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
   let rx = 0, rz = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
+    // streets bridge deck over its 6-high under-deck end walls — passes over
+    // it freely and must not be shoved sideways.)
+    if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
     const topBuffer = o.topBuffer ?? 4;
     if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
@@ -3743,10 +3867,50 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // math projectiles use, so the bot only "sees" through gaps a bullet would
 // actually pass through. Skips obstacles flagged noProjectile because bullets
 // pass through those too.
+// Sight vs a walkable surface (2026-08-06, mirrors shared/src/sim/ai.js):
+// decks/ramps are NOT obstacle boxes, so without this a sight ray passed
+// straight through a bridge slope's solid wedge or an elevated deck's floor.
+// RAMPS are solid fill — blocked wherever the ray dips below the local ramp
+// height inside the footprint (ray y and ramp height are both linear along
+// the ray, so the clipped interval's endpoints are exact). FLAT elevated
+// decks stand on open pillars — only CROSSING the deck plane blocks, so two
+// units both under the bridge keep their sight lines. 0.4 eps forgives lips.
+function sightHitsSurface(p0, p1, s) {
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  let t0 = 0, t1 = 1;
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i++) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return false;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+  }
+  const dy = p1.y - p0.y;
+  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
+  const EPS = 0.4;
+  if (s.type === 'ramp') {
+    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+    return yA < hA - EPS || yB < hB - EPS;
+  }
+  const top = s.top ?? s.maxTop;
+  if (top == null) return false;
+  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
+}
+
 function botHasLineOfSight(p0, p1) {
   for (const o of arenaObstacles) {
     if (o.noProjectile) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  for (const s of arenaSurfaces) {
+    if (sightHitsSurface(p0, p1, s)) return false;
   }
   return true;
 }
@@ -3767,14 +3931,23 @@ function botBurstSize(unit) {
 // uses (boost cost + cooldown) plus the bot's extra BOT_SPRINT_MIN_BOOST
 // margin so it never jumps itself completely dry. Returns true if a jump
 // started this tick.
-function botStartJump(now) {
+function botStartJump(now, survival = false) {
   const eState = state.enemy.state;
   const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
   if (!state.enemy.grounded || eState.airborne) return false;
   if (now < eState.jumpCooldownUntil) return false;
   // Jump funding respects the strategic reserve (falls back to cost + floor
-  // if the reserve is ever tuned below that).
-  if (eState.boost < Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST)) return false;
+  // if the reserve is ever tuned below that). SURVIVAL jumps (the Defense
+  // hop/vault, 2026-08-05) pay only raw cost + the sprint floor — same
+  // doctrine as the other survival exemptions (Defense sprints to the hard
+  // floor, anti-glint dodge at raw step cost): Defense's own sprint drains
+  // below the reserve within ticks, so reserve-gated funding made the hop
+  // nearly unaffordable. Travel jumps keep the reserve gate.
+  // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
+  const funded = survival
+    ? jumpBoostCost + BOT_SPRINT_MIN_BOOST
+    : Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
+  if (eState.boost < funded) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
   eState.refillPausedUntil = now + 500;
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -4132,11 +4305,13 @@ function updateEnemy(now) {
     eState.botStuckCheckZ = e.z;
     eState.botStuckCheckAt = now;
     eState.botPathLen = 0;
-  } else if (now - eState.botStuckCheckAt >= 1500) {
-    const windowStale = now - eState.botStuckCheckAt > 2200;
+  } else if (now - eState.botStuckCheckAt >= 1000) {   // 1.5 s -> 1 s (2026-08-05 trim)
+    const windowStale = now - eState.botStuckCheckAt > 1700;
     const net = Math.hypot(e.x - eState.botStuckCheckX, e.z - eState.botStuckCheckZ);
-    const wedged = net < 2.5 && eState.botPathLen < 6;
-    const spinning = eState.botPathLen > 18 && net < 6;
+    // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
+    // movement rates that count as wedged/spinning are unchanged.
+    const wedged = net < 1.7 && eState.botPathLen < 4;
+    const spinning = eState.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
         && !eState.airborne
@@ -4402,15 +4577,31 @@ function updateEnemy(now) {
   let nextState = prevState;
   const inDefenseGrace = prevState === 'defense' && now < (eState.botDefenseUntil ?? 0);
 
+  // PROACTIVE ROUTE (2026-08-05): test the walk itself instead of waiting
+  // for the stuck clocks to prove a wall. Out of band with the straight
+  // approach blocked: sightless fires INSTANTLY (the original fast lane);
+  // SIGHTED (seeing the target over a low wall / across unwalkable ground)
+  // fires after a 250 ms persistence — long enough that a graze the
+  // avoidance slide already handles never cuts normal play into Maze.
+  const towardBlocked = !walkTowardClear(Math.min(dist, 30));
+  const approachBlocked = !inBandDist && towardBlocked;
+  // Sighted variant is APPROACH-only (dist beyond the band's upper edge):
+  // a too-close bot retreating over a crate must stay Engage's problem.
+  const sightedBlocked = dist > upperRange && towardBlocked;
+  if (!sightedBlocked) eState.botApproachBlockedSince = null;
+  else if (eState.botApproachBlockedSince == null) eState.botApproachBlockedSince = now;
+  const approachBlockedLong = sightedBlocked
+    && now - eState.botApproachBlockedSince >= 250;
+
   if (underFire || inDefenseGrace) {
     nextState = 'defense';
-  } else if (stuckTriggered || noProgressTime > 2000 || noLoSTime > 2000
-      || (!playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 30)))) {
-    // Wedged, spinning, stalled, or sightless for 2 s — commit to going
-    // AROUND whatever is in the way. FAST LANE (4th condition): can't see
-    // the target, too far to fight, AND the straight walk is blocked —
-    // nothing to debounce, route NOW instead of beelining into a wall for
-    // 2 s (the awkward approach at every match start). In-band sight
+  } else if (stuckTriggered || noProgressTime > 1500 || noLoSTime > 2000
+      || (!playerHasLoS && approachBlocked)
+      || approachBlockedLong) {
+    // Wedged, spinning, stalled (1.5 s — trimmed from 2 s, 2026-08-05),
+    // sightless for 2 s, or the approach walk is BLOCKED (instant when
+    // sightless, 250 ms persistence when sighted) — commit to going AROUND
+    // whatever is in the way instead of beelining into it. In-band sight
     // flickers (the cover peek-dance) still get the full 2 s buffer.
     nextState = 'maze';
   } else if (prevState === 'maze') {
@@ -4880,6 +5071,27 @@ function updateEnemy(now) {
         eState.botDefenseInCover = false;
       }
     } else {
+      // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
+      // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
+      // the committed line (tight ~35° cone; the stuck vault below keeps
+      // its wider one), jump it the moment it's in reach and keep sprinting
+      // the same direction up top. Adds ZERO decision time: the direction
+      // never changes, the ledge is simply cleared instead of deflecting
+      // the sprint. GLINT GATE: never while an anti-glint dodge is
+      // scheduled (botGlintStepAt) — airborne can't dodge, and a hop there
+      // converts a guaranteed-dodgeable sniper shot into a hit.
+      if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
+        const ahead = findHighGroundPerch(e.x, e.z, myFloorY, 6);
+        if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
+            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
+          jumpDirX = ahead.toX;
+          jumpDirZ = ahead.toZ;
+          if (botStartJump(now, true)) {
+            jumpThisTick = true;
+            eState.botDefenseStuckTicks = 0;
+          }
+        }
+      }
       // Defense's wall read must be FAST — under fire there's no time for the
       // 2 s Maze trigger. Drive straight into a wall for ~2 ticks and we hand
       // off to Maze immediately (force the trigger by ageing the progress
@@ -4890,7 +5102,7 @@ function updateEnemy(now) {
       } else {
         eState.botDefenseStuckTicks = 0;
       }
-      if (eState.botDefenseStuckTicks >= 2) {
+      if (!jumpThisTick && eState.botDefenseStuckTicks >= 2) {
         // VAULT FIRST: if the "wall" being pressed is actually a jumpable
         // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
         // check used elsewhere, so Airport's rim glass still rejects it)
@@ -4898,14 +5110,15 @@ function updateEnemy(now) {
         // sprinting the same direction up top: the dodge continues with an
         // elevation change instead of a turn. Jump unaffordable (boost /
         // cooldown) or no ledge → the usual flip → slide → bail chain.
+        // Same glint gate as the proactive hop above.
         let vaulted = false;
-        if (state.enemy.grounded && !eState.airborne) {
+        if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
           const ledge = findHighGroundPerch(e.x, e.z, myFloorY, 6);
           if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
               && ledge.toX * (eState.botDefenseDirX ?? side.x) + ledge.toZ * (eState.botDefenseDirZ ?? side.z) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (botStartJump(now)) {
+            if (botStartJump(now, true)) {
               jumpThisTick = true;
               vaulted = true;
               eState.botDefenseStuckTicks = 0;
@@ -5774,6 +5987,16 @@ function updateHud(now = performance.now()) {
     const enemy2HpMax = state.enemy2.unit.hp ?? MAX_HP;
     hudRefs.enemy2Hp.style.width = `${(state.enemy2.state.hp / enemy2HpMax) * 100}%`;
   }
+  // Spectator (ported from the demo line 2026-08-06): a white glow rim on
+  // the corner bar of the WATCHED unit, so the spectator can tell which
+  // roster row they're riding. Follows TARGET cycling per frame;
+  // classList.toggle is a no-op when unchanged.
+  if (state.spectatorActive) {
+    const barFills = { player: hudRefs.hp, enemy: hudRefs.enemyHp, ally: hudRefs.allyHp, enemy2: hudRefs.enemy2Hp };
+    for (const [slot, fill] of Object.entries(barFills)) {
+      fill?.parentElement?.classList.toggle('spec-watched', slot === state.spectateSlot);
+    }
+  }
   // Spectator: the boost bar and ammo readout below follow the WATCHED unit
   // (cycling with TARGET), not the bot-driven player slot.
   const shown = state.spectatorActive ? (cameraFocusMech() ?? state.player) : state.player;
@@ -5953,9 +6176,11 @@ function startMatch() {
     state.enemy2.state.team = 'B';
   }
   if (state.mapKey === 'arena2') {
-    // Streets: spawn on opposite ends of the cross road (X axis), not the bridge lane.
-    state.player.body.position.set(-108, 2.45, 0);
-    state.enemy.body.position.set(108, 2.45, 0);
+    // Streets: diagonal CORNER spawns (ported from the demo line 2026-08-06,
+    // was ±108/0 road ends) — NW/SE corners, 8u clear of the boundary walls
+    // (x ±126, z ±90) and the corner towers. Mirrored in shared arena.js.
+    state.player.body.position.set(-118, 2.45, -82);
+    state.enemy.body.position.set(118, 2.45, 82);
   } else if (state.mapKey === 'lobby') {
     // Lobby: spawn on lower floor on opposite ends, mezzanine reachable via the central stairs.
     state.player.body.position.set(-30, 2.45, 50);
@@ -5969,10 +6194,13 @@ function startMatch() {
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station: spawn at the far west/east ends of the track corridor (tracks at y=0).
-    // Platforms on either side are raised 4m — players must jump up to reach them.
-    state.player.body.position.set(-128, 2.45, 0);
-    state.enemy.body.position.set(128, 2.45, 0);
+    // Station: deck FAR-corner spawns (ported from the demo line 2026-08-06,
+    // old track-corridor values ±128, 0): x ±128 leaves 7u to the end wall
+    // (±135); z ±112 sits just past the corner stair block (z 102.5–107.5)
+    // and 20u off the outer wall (inner face ±132). Deck floor 4 → spawn
+    // y = 4 + 2.45. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-128, 6.45, -112);
+    state.enemy.body.position.set(128, 6.45, 112);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);
@@ -5990,16 +6218,19 @@ function startMatch() {
     state.enemy.body.position.set(24, 2.45, 0);
   }
   // 2v2 placement: drop ally next to the player, enemy2 next to the enemy.
-  // Most maps offset 12 along +Z. Station's track is clear only for |z|<=11
-  // (raised side platforms beyond), so +Z there lands the 2nd unit inside a
-  // platform — offset along the track toward centre (X) instead, keeping both
-  // teammates on the clear central lane between the rail lines.
+  // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
+  // so offset along the deck toward centre (X). Streets' corner spawns sit
+  // 8u off the south/north walls, so +Z would bury the teammate in the wall —
+  // offset along Z toward centre instead. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
     if (state.mapKey === 'station') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
+    } else if (state.mapKey === 'arena2') {
+      state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
+      state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
@@ -9322,14 +9553,16 @@ function buildStreetsArena() {
 
   // ===== Akihabara dressing =====
   // Corner towers (industrial smokestacks), dressed with base/hazard/rings/cap.
-  addBlockingBox({ x: -110, y: 12, z: -94, sx: 5, sy: 24, sz: 5, material: industrialBody });
-  addBlockingBox({ x: 110, y: 12, z: 94, sx: 5, sy: 24, sz: 5, material: industrialBody });
-  addBlockingBox({ x: -110, y: 14, z: 94, sx: 5, sy: 28, sz: 5, material: industrialBody });
-  addBlockingBox({ x: 110, y: 14, z: -94, sx: 5, sy: 28, sz: 5, material: industrialBody });
-  dressTower(-110, -94, 5, 24);
-  dressTower(110, 94, 5, 24);
-  dressTower(-110, 94, 5, 28);
-  dressTower(110, -94, 5, 28);
+  // Each tower registers occlude-fade (ported from the demo line 2026-08-06):
+  // 24-28 tall at the map corners, they block the camera when fights sit at
+  // the corner spawns — fade while between camera and player, same as the
+  // storefront buildings.
+  for (const [tx, tz, th] of [[-110, -94, 24], [110, 94, 24], [-110, 94, 28], [110, -94, 28]]) {
+    fadeGroup = [addBlockingBox({ x: tx, y: th / 2, z: tz, sx: 5, sy: th, sz: 5, material: industrialBody })];
+    dressTower(tx, tz, 5, th);
+    applyBuildingFade(fadeGroup, { minX: tx - 4, maxX: tx + 4, minY: 0, maxY: th + 3, minZ: tz - 4, maxZ: tz + 4 });
+    fadeGroup = null;
+  }
 
   // Lamp posts along sidewalks
   const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110];

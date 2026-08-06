@@ -21,6 +21,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    team member (player's row above the ally's; enemy side mirrored). */
 .trio-count { position: absolute; top: 27px; white-space: nowrap; opacity: 0.9; }
 .trio-count.trio-count-2v2 { top: 43px; }
+/* Spectator: WHITE glow rim on the corner bar of the WATCHED unit — a crisp
+   1px white ring plus a wide soft halo (ported from the demo line). */
+.touch-hud .spec-watched { box-shadow: 0 0 0 1px #ffffff, 0 0 12px 4px rgba(255, 255, 255, 0.95); }
 .trio-count-own { left: 16px; }
 .trio-count-enemy { right: 16px; text-align: right; }
 .trio-count .trio-line { height: 13px; line-height: 13px; margin-bottom: 2px; }
