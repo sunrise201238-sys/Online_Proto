@@ -5563,6 +5563,15 @@ function teammateOfMech(mech) {
   return null;
 }
 
+// OVERHEAD TEAM CHEVRONS master switch (2026-08-05): HIDDEN, not deleted —
+// the weapon name tags above units carry the who-is-who read now, so the
+// floating green (ally) / red-orange (off-lock enemy) triangles are off.
+// The screen-EDGE arrows are a separate system and stay fully active.
+// NOTE: the chevron's ride-along sniper-glint halo hides with it; the edge
+// arrows keep their own glint, and the charging unit's own glint art is
+// unaffected. Flip to true to bring the triangles back.
+const OVERHEAD_TEAM_CHEVRONS = false;
+
 const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
@@ -5576,9 +5585,10 @@ function updateAllyArrow() {
   const allyGlintBeam = active && !!mate.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  // Hidden while OVERHEAD_TEAM_CHEVRONS is off (weapon tags carry identity).
   const arrow = state.allyArrow;
   if (arrow) {
-    if (!active) {
+    if (!active || !OVERHEAD_TEAM_CHEVRONS) {
       arrow.visible = false;
     } else {
       // The tracked teammate changes with the spectate slot — reparent to
@@ -5690,9 +5700,10 @@ function updateEnemyArrow() {
   const foeGlintBeam = active && !!foe.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  // Hidden while OVERHEAD_TEAM_CHEVRONS is off (weapon tags carry identity).
   const arrow = state.enemyArrow;
   if (arrow) {
-    if (!active) {
+    if (!active || !OVERHEAD_TEAM_CHEVRONS) {
       arrow.visible = false;
     } else {
       // The lock can be switched mid-match, so ride whichever enemy is unlocked.
