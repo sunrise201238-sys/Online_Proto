@@ -4104,10 +4104,50 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // math projectiles use, so the bot only "sees" through gaps a bullet would
 // actually pass through. Skips obstacles flagged noProjectile because bullets
 // pass through those too.
+// Sight vs a walkable surface (2026-08-06, mirrors shared/src/sim/ai.js):
+// decks/ramps are NOT obstacle boxes, so without this a sight ray passed
+// straight through a bridge slope's solid wedge or an elevated deck's floor.
+// RAMPS are solid fill — blocked wherever the ray dips below the local ramp
+// height inside the footprint (ray y and ramp height are both linear along
+// the ray, so the clipped interval's endpoints are exact). FLAT elevated
+// decks stand on open pillars — only CROSSING the deck plane blocks, so two
+// units both under the bridge keep their sight lines. 0.4 eps forgives lips.
+function sightHitsSurface(p0, p1, s) {
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  let t0 = 0, t1 = 1;
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i++) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return false;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+  }
+  const dy = p1.y - p0.y;
+  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
+  const EPS = 0.4;
+  if (s.type === 'ramp') {
+    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+    return yA < hA - EPS || yB < hB - EPS;
+  }
+  const top = s.top ?? s.maxTop;
+  if (top == null) return false;
+  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
+}
+
 function botHasLineOfSight(p0, p1) {
   for (const o of arenaObstacles) {
     if (o.noProjectile) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  for (const s of arenaSurfaces) {
+    if (sightHitsSurface(p0, p1, s)) return false;
   }
   return true;
 }
