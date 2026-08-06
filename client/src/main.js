@@ -1322,6 +1322,8 @@ function updateUnitSpriteState(m, rig, dt, now) {
 
 // Drive every live fighter's sprite pose once per render frame (both modes —
 // getAllFighters() mirrors online snapshots onto the same state.* mechs).
+const _tagCamFwd = new THREE.Vector3();   // scratch: camera forward, for tag depth
+const _tagWork = new THREE.Vector3();     // scratch: camera→unit vector
 function updateMechAnimations(dt, now) {
   // Team-relative tag presentation: layouts and inks derive from the CAMERA
   // unit's perspective — the player normally, the WATCHED unit in spectator
@@ -1329,6 +1331,7 @@ function updateMechAnimations(dt, now) {
   // opponents as enemies (orange, above-crosshair); the watched unit itself
   // is isOwnSprite (kept synced by updateCamera) and gets the player look.
   const camTeam = getTeamOf(cameraFocusMech());
+  camera.getWorldDirection(_tagCamFwd);
   for (const m of getAllFighters()) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
@@ -1343,11 +1346,14 @@ function updateMechAnimations(dt, now) {
       // Tags show through cover (depthTest off on the material), so no
       // visibility gating here — just the distance sizing/anchoring.
       const bar = m.healthBar;
-      const d = camera.position.distanceTo(m.root.position);
-      // Constant on-screen size for EVERYONE — the own tag just uses the
-      // smaller apparent factor, so a close-in camera can't balloon it.
+      // Constant on-screen size for EVERYONE. The compensation must counter
+      // perspective EXACTLY, and projection divides by view-axis DEPTH — not
+      // straight-line distance, which over-sized edge-of-screen tags by up
+      // to ~35% at this FOV (they sit farther by distance than by depth).
+      const depth = Math.max(0.1,
+        _tagWork.copy(m.root.position).sub(camera.position).dot(_tagCamFwd));
       const s = UNIT_TAG_HEIGHT * (m.isOwnSprite ? UNIT_TAG_OWN_APPARENT : UNIT_TAG_OTHER_APPARENT)
-        * (d / UNIT_TAG_REF_DIST);
+        * (depth / UNIT_TAG_REF_DIST);
       const hostile = getTeamOf(m) !== camTeam;
       // The crosshair anchor applies only while the lock brackets are
       // actually ON this unit (the reticle sprite rides its root); an
@@ -1358,7 +1364,10 @@ function updateMechAnimations(dt, now) {
       if (!m.isOwnSprite && hostile && lockedOn) {
         // The LOCKED hostile: anchor the stack a thin gap above the lock
         // brackets — FLOORED at the head anchor, so a point-blank enemy's
-        // stack can never sink onto its body.
+        // stack can never sink onto its body. The ANCHOR keeps the reticle's
+        // own straight-line-distance math so it stays glued to the brackets
+        // (only tag SIZING switched to depth).
+        const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = Math.max(0.2 + UNIT_TAG_RETICLE_CLEAR * rs, UNIT_TAG_Y);
         const k = s / UNIT_TAG_HEIGHT;
