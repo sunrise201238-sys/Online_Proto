@@ -188,6 +188,23 @@ Three properties the table encodes: glint duration equals the release time on **
 
 A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
 
+## Bot logic
+
+One bot brain drives every bot — all maps, all modes, offline and online (the offline client and the server run mirrored copies of the same rules; every bot slot in 1v1 / 2v2 / Trio / spectator uses the identical body).
+
+**State machine** — `Defense > Maze > Engage > Pursue`, re-evaluated every tick:
+
+- **Pursue** — closes to (or backs off to) the fighting band, **lock range ± 7**. Sprint spends down to the strategic reserve (250 — a full dodge plus margin always stays banked). Elevation aids: jump up toward a higher target when close, hop off ledges toward a lower one, and on low ground hop onto any mountable ledge it brushes within jump reach.
+- **Engage** — the in-band fight: orbits the target with a range correction toward the sweet spot, flips orbit direction to stay inside sight, and runs the peek-cover rhythm (tuck behind cover while the weapon cycles, drift out exactly when it's ready to fire). Opportunistically hops onto reachable ledges — high ground is the better vantage.
+- **Defense** — triggered by a fresh hit: a committed straight cover-sprint (may spend boost to the hard floor — survival overrides the reserve), then a tuck-and-peek once cover breaks line of sight. A jumpable ledge lying **dead ahead** on the committed escape line (within ~37°) is hopped without breaking stride — never while a sniper dodge is scheduled (airborne can't dodge), and funded at raw jump cost (survival funding, like the anti-glint dodge). If the escape wedges anyway, a wider-angle vault, then a direction flip.
+- **Maze** — the router. Asks the nav grid for a real walk route (waypoint-followed, cut at the first spot that can already fire); falls back to an opening scan, a ramp-seeker for cross-floor fights, then wall-following. Entered **proactively**: the moment the straight walk toward an out-of-band target is blocked (instantly when sightless; after 0.25 s when the target is visible over a low obstacle), plus the classic stuck detectors (a 1 s wedged/spinning window, a 1.5 s no-progress clock).
+
+**Steering** — every moving state blends "toward the goal" with a push-away from nearby walls. Fences that bullets pass through repel only when they're too tall to jump (Square's fountain colonnade, Streets' tall under-bridge panes) and only while the bot is below their top; jumpable ones (Station / Flashpoint platform edges) stay transparent to steering so the jump reflexes can reach them.
+
+**Sniper play** — covered in the sniper section above: 50/50 snap-or-hold as the shooter; as the defender, a per-charge dodge roll timed against the charger's kit, one committed perpendicular dodge + sprint.
+
+**Shelved: map-specific rules (present but switched off).** A set of Station-only behaviors was built and field-tested — steering pulls toward the platform edges during approach, a "don't linger fighting on the track level" timer that drifted sustained low fights up onto the decks, and an anti-yo-yo hold that kept bots from hopping right back down after mounting. They worked, but repositioning Station's spawn points onto the platforms solved the railway-hugging problem more cleanly, so the whole set is parked behind a single master switch (`STATION_BOT_RULES`, off in both sims) rather than deleted. The bot rules that shipped are therefore **fully map-agnostic**; the switch exists if a map ever needs the special treatment again.
+
 ## Controls
 
 | | |
