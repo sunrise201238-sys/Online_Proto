@@ -1360,12 +1360,10 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit (a bit higher, clear of the aim line) and its
-        // teammates keep the above-the-head anchor; set per frame so a
-        // spectate handoff can never leave a stale lift.
-        const y = m.isOwnSprite ? UNIT_TAG_OWN_Y : UNIT_TAG_Y;
-        tag.position.y = y;
-        if (bar) bar.position.y = y - UNIT_BAR_GAP;
+        // The camera unit and its teammates keep the above-the-head anchor;
+        // set per frame so a spectate handoff can never leave a stale lift.
+        tag.position.y = UNIT_TAG_Y;
+        if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
       }
       // Ink follows the same perspective: spectate switches flip who reads
       // hostile — swap to the other-ink texture variant (cached per
@@ -1425,10 +1423,7 @@ const UNIT_TAG_TEX_H = 96;
 // Bottom-anchored, so growth goes upward, never into the head.
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
 const UNIT_TAG_OWN_APPARENT = 1.0;  // the own/spectated unit's apparent size
-const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' apparent size
-// The own tag rides a bit higher than teammates' (+0.8 above the shared
-// anchor) to stay clear of the aim line.
-const UNIT_TAG_OWN_Y = UNIT_TAG_Y + 0.8;
+const UNIT_TAG_OTHER_APPARENT = 1.0; // other units — unified with own (2026-08-06)
 // ENEMY stacks ride ABOVE the lock crosshair, not above the head: the
 // anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
 // y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
