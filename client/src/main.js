@@ -1335,15 +1335,27 @@ function updateMechAnimations(dt, now) {
     const tag = m.weaponTag;
     if (tag) {
       // Tags show through cover (depthTest off on the material), so no
-      // visibility gating here — just the distance sizing.
+      // visibility gating here — just the distance sizing/anchoring.
       let s = UNIT_TAG_HEIGHT * UNIT_TAG_OWN_BOOST;
+      const bar = m.healthBar;
       if (!m.isOwnSprite) {
         const d = camera.position.distanceTo(m.root.position);
         s = UNIT_TAG_HEIGHT * UNIT_TAG_OTHER_APPARENT * (d / UNIT_TAG_REF_DIST);
+        // Anchor the stack just above the lock brackets (reticle scale law).
+        const rs = Math.min(4.5, Math.max(0.7, d / 22));
+        const clearY = 0.2 + UNIT_TAG_RETICLE_CLEAR * rs;
+        const k = s / UNIT_TAG_HEIGHT;
+        const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
+        if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
+        tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
+      } else {
+        // Own unit keeps the above-the-head anchor (and a spectated ally that
+        // BECOMES the own unit returns to it — the lift is set per frame).
+        tag.position.y = UNIT_TAG_Y;
+        if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
       // Health bar under the tag: same boost, plus a redraw when hp moved.
-      const bar = m.healthBar;
       if (bar) {
         const k = s / UNIT_TAG_HEIGHT;
         bar.scale.set(UNIT_BAR_WORLD_W * k, UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k, 1);
@@ -1381,6 +1393,12 @@ const UNIT_TAG_TEX_H = 96;
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
 const UNIT_TAG_OWN_BOOST = 1.5;     // the own/spectated unit's fixed size
 const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
+// Non-own stacks ride ABOVE the lock crosshair, not above the head: the
+// anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
+// y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
+// just clear of the brackets at every range. Applied to every non-own unit,
+// locked or not, so nothing jumps when the lock switches targets.
+const UNIT_TAG_RETICLE_CLEAR = 4.9; // half the bracket quad + a small margin
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
@@ -1455,9 +1473,7 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   // depthTest OFF: the tag shows through cover (like the crosshair and team
   // chevrons), so a blocked unit still reads by its weapon tag.
-  // opacity 0.5: the always-on-top fixed-size tags read as overlay, not as
-  // solid objects blocking the arena (the hp bar below matches).
-  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, fog: false });
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
@@ -1519,8 +1535,7 @@ function makeHealthBarSprite(ink) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   // Same depth setup as the tag: shows through cover, never punches holes.
-  // Same 0.5 opacity as the tag, so the stack fades as one piece.
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, fog: false });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 1);                     // top-anchored (see note above)
   s.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
