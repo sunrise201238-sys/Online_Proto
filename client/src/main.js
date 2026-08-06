@@ -1341,7 +1341,10 @@ function updateMechAnimations(dt, now) {
       if (!m.isOwnSprite) {
         const d = camera.position.distanceTo(m.root.position);
         s = UNIT_TAG_HEIGHT * UNIT_TAG_OTHER_APPARENT * (d / UNIT_TAG_REF_DIST);
-        // Anchor the stack just above the lock brackets (reticle scale law).
+      }
+      if (!m.isOwnSprite && m.roleKey && m.roleKey.startsWith('enemy')) {
+        // Enemies: anchor the stack a thin gap above the lock brackets.
+        const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = 0.2 + UNIT_TAG_RETICLE_CLEAR * rs;
         const k = s / UNIT_TAG_HEIGHT;
@@ -1349,8 +1352,9 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // Own unit keeps the above-the-head anchor (and a spectated ally that
-        // BECOMES the own unit returns to it — the lift is set per frame).
+        // Own unit AND ally (never lockable by the player) keep the
+        // above-the-head anchor; set per frame so a spectate handoff can
+        // never leave a stale lift.
         tag.position.y = UNIT_TAG_Y;
         if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
       }
@@ -1393,12 +1397,15 @@ const UNIT_TAG_TEX_H = 96;
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
 const UNIT_TAG_OWN_BOOST = 1.5;     // the own/spectated unit's fixed size
 const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
-// Non-own stacks ride ABOVE the lock crosshair, not above the head: the
+// ENEMY stacks ride ABOVE the lock crosshair, not above the head: the
 // anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
 // y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
-// just clear of the brackets at every range. Applied to every non-own unit,
-// locked or not, so nothing jumps when the lock switches targets.
-const UNIT_TAG_RETICLE_CLEAR = 4.9; // half the bracket quad + a small margin
+// a thin gap clear of the brackets at every range. Applied to every enemy,
+// locked or not, so nothing jumps when the lock switches targets. The ALLY
+// is never lockable by the player, so it keeps the player-style head anchor.
+// Ink extent: the tier ticks' round caps top out at canvas y≈23.5 of 192 →
+// 0.378 of the quad → 9.15*0.378 ≈ 3.46 above center; +0.14 thin gap.
+const UNIT_TAG_RETICLE_CLEAR = 3.6;
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
