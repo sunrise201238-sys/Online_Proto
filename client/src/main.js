@@ -6520,15 +6520,15 @@ function startMatch() {
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station deck spawns in the back-wall pocket between the ticket booths
-    // (user 2026-08-07, older values ±100/±70, ±128/±70, ±128/±112 far
-    // corner): x ±25 sits in the clear span between the roof column
-    // (x ±33..37) and the booths (x ±51..79); z ±125 leaves 7u to the outer
-    // wall (inner face ±132), which the booths seal on both sides — no
-    // cross-map sightline reaches the spawn. Deck floor 4 → spawn y = 4+2.45.
+    // Station deck spawns in the FAR corners (user 2026-08-06, older values
+    // ±100/±70 then ±128/±70): x ±128 leaves 7u to the end wall (±135);
+    // z ±112 sits just past the corner storage tank (z 102.5–107.5) and 20u
+    // off the outer wall (inner face ±132). Deck floor 4 → spawn y = 4+2.45.
+    // 2026-08-07: briefly the back-wall pockets (±25/±125) — engagements
+    // started too fast; reverted same day (user).
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-25, 6.45, -125);
-    state.enemy.body.position.set(25, 6.45, 125);
+    state.player.body.position.set(-128, 6.45, -112);
+    state.enemy.body.position.set(128, 6.45, 112);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);
@@ -6546,11 +6546,10 @@ function startMatch() {
     state.enemy.body.position.set(24, 2.45, 0);
   }
   // 2v2 placement: drop ally next to the player, enemy2 next to the enemy.
-  // Most maps offset 12 along +Z. Station spawns sit 7u off the outer back
-  // wall, so +Z would bury the teammate in the wall — offset along the deck
-  // toward centre (X) instead. Streets' corner spawns sit 8u off the
-  // south/north walls, same problem — offset along Z toward centre there.
-  // Mirrored in shared state.js.
+  // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
+  // so offset along the deck toward centre (X). Streets' corner spawns sit
+  // 8u off the south/north walls, so +Z would bury the teammate in the wall —
+  // offset along Z toward centre instead. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;

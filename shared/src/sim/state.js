@@ -202,10 +202,10 @@ export function createMatchState({
 
   if (mode === '2v2') {
     // 2v2 teammates spawn next to their counterpart, offset Z+12 (mirrors the
-    // offline client's 4-corner placement). Station's deck spawns sit 7u off
-    // the outer back wall, so +Z would bury the teammate in the wall — offset
-    // along the deck toward centre (X) instead. Streets' corner spawns sit 8u
-    // off the south/north walls, same problem — offset along Z TOWARD CENTRE.
+    // offline client's 4-corner placement). Station's deck spawns sit near the
+    // END walls — offset along the deck toward centre (X) instead. Streets'
+    // corner spawns sit 8u off the south/north walls, so +Z would bury the
+    // teammate in the wall — offset along Z TOWARD CENTRE there.
     const station = mapKey === 'station';
     const streets = mapKey === 'arena2';
     const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;

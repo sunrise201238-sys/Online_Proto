@@ -9545,12 +9545,12 @@ const ARENA_SPAWNS = {
   // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
   // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
   // fight to the railway axis. Old values: p1 (-128, 0), p2 (128, 0).
-  // 2026-08-07 (user): back-wall pocket between the ticket booths (older
-  // values ±100/±70, ±128/±70 far corner, ±128/±112) — x ±25 sits in the
-  // clear span between the roof column (x ±33..37) and the booths (x ±51..79);
-  // z ±125 leaves 7u to the outer wall (inner face ±132), which the booths
-  // seal on both sides — no cross-map sightline reaches the spawn.
-  station: { p1: { x: -25, y: GROUND_BASE_Y + 4, z: -125 }, p2: { x: 25, y: GROUND_BASE_Y + 4, z: 125 } },
+  // 2026-08-06 (user): deck spawns in the FAR corners (older values ±100/±70,
+  // ±128/±70) — x ±128 leaves 7u to the end wall (±135); z ±112 sits just
+  // past the corner storage tank (z 102.5–107.5) and 20u off the outer wall
+  // (inner face ±132). 2026-08-07: briefly moved to the back-wall pockets
+  // (±25/±125) — engagements started too fast; reverted same day (user).
+  station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
   airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };
