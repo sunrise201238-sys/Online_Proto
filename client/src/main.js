@@ -8257,18 +8257,25 @@ function stunTier(u) {
   if (st.ms >= 100) return 'Heavy';
   return st.moveScale >= 0.85 ? 'Light' : 'Normal';
 }
-// Per-weapon spread scatter icon — drawn from the REAL spread fields so it
-// recreates each setting's signature: SA = round cluster (engine falloff,
-// r ∝ √u), HA = horizontal-only smear, shotguns = their literal pellet
-// volley (M1014's volleyStretchX included). Display radius is √-compressed
-// (linear would render every rifle as one dot next to the shotguns); dot
-// positions are seeded so the icon is stable across opens. Cached per
-// weapon; drawn at 2x the 13px display size for crispness.
+// Per-weapon spread icon — a true mini-SIMULATION at the gun's OWN lock
+// range (user order 2026-08-06). The ring is a standing target's effective
+// half-width (1.8u ≈ FIGHTER_RADIUS + hit margin — the same "radius ~1.8"
+// the SG cluster comment cites) seen at u.lockRange; the dots are the
+// engine's real fire math at that distance: SA disc (r = SA/2·√u) + HA
+// horizontal-only with its trigger-range gate (mirrors fireProjectile),
+// shotguns as the literal SHOTGUN_PATTERN volley at the cluster-growth
+// factor min(1, lockRange/70), seeded rotation, M1014's post-rotation X
+// stretch included. Dots INSIDE the ring = hits on a standing target at
+// the gun's own fighting distance — the in-ring fraction tracks the
+// README's measured standing hit rates (tight guns all-in = their 100s;
+// M60's horizontal spill ≈ its 73). Seeded → stable icon; cached per
+// weapon; drawn at 2x the 26px display size.
 const _spreadIconCache = {};
+const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
-  const S = 52, C = S / 2, R = 22;   // 2x the 26px display size
+  const S = 52, C = S / 2, R = 14;    // ring radius = the 1.8u half-width
   const cv = document.createElement('canvas');
   cv.width = S;
   cv.height = S;
@@ -8276,28 +8283,33 @@ function spreadIconURL(u) {
   x.strokeStyle = '#4a6a86';
   x.lineWidth = 3;
   x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
-  const disp = (v) => Math.sqrt(Math.min(1, v / 0.3));   // SG width → circle edge
   x.fillStyle = '#eaf6ff';
-  const dot = (px, py, r) => { x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill(); };
+  const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
+  const dot = (px, py, r) => {
+    px = Math.max(3, Math.min(S - 3, px));   // wild spill stays on the canvas
+    py = Math.max(3, Math.min(S - 3, py));
+    x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+  };
+  const d = u.lockRange ?? 50;
+  let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   if ((u.spreadCount ?? 1) > 1) {
+    const factor = Math.min(1, d / 70);   // SHOTGUN_CLUSTER_SPREAD_DISTANCE
     const stretch = u.volleyStretchX ?? 1;
-    for (let p = 0; p < u.spreadCount; p++) {
-      const ang = (p / u.spreadCount) * Math.PI * 2 + 0.4;
-      const rr = (p % 2 ? 0.95 : 0.55) * disp(u.spreadAngle) * (R - 4);
-      dot(C + Math.cos(ang) * rr * (stretch > 1 ? stretch / 1.15 : 1),
-          C + Math.sin(ang) * rr / (stretch > 1 ? stretch * 0.82 : 1), 3.2);
+    const rot = rnd() * Math.PI * 2;
+    for (const [ox, oy] of SHOTGUN_PATTERN) {
+      const rx = ox * Math.cos(rot) - oy * Math.sin(rot);
+      const ry = ox * Math.sin(rot) + oy * Math.cos(rot);
+      dot(C + toPx(rx * factor * stretch), C + toPx(ry * factor), 3.0);
     }
   } else {
-    const sa = u.spreadAngle ?? 0, ha = u.horizontalAngle ?? 0;
-    let s = 7;
-    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for (let d = 0; d < 16; d++) {
-      const ang = rnd() * Math.PI * 2;
-      const saR = disp(sa) * (R - 4) * Math.sqrt(rnd());
-      let px = C + Math.cos(ang) * saR;
-      const py = C + Math.sin(ang) * saR;
-      if (ha) px += (rnd() * 2 - 1) * disp(sa + ha) * (R - 4) * 0.9;
-      dot(px, py, 2.4);
+    const ha = (u.horizontalAngle && d > (u.horizontalTriggerRange ?? 0)) ? u.horizontalAngle : 0;
+    for (let i = 0; i < 20; i++) {
+      const saR = ((u.spreadAngle ?? 0) / 2) * Math.sqrt(rnd());
+      const saT = rnd() * Math.PI * 2;
+      const yaw = saR * Math.cos(saT) + (rnd() - 0.5) * ha;
+      const pitch = saR * Math.sin(saT);
+      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2);
     }
   }
   return (_spreadIconCache[key] = cv.toDataURL('image/png'));
