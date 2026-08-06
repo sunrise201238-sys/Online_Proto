@@ -9534,7 +9534,9 @@ const GENERATED_ARENA_COLLISION_DATA = {
 };
 
 const ARENA_SPAWNS = {
-  arena2: { p1: { x: -108, y: GROUND_BASE_Y, z: 0 }, p2: { x: 108, y: GROUND_BASE_Y, z: 0 } },
+  // Streets: diagonal corner spawns (user 2026-08-06; old values ±108, 0) —
+  // 8u clear of the boundary walls (x ±126, z ±90) and the corner towers.
+  arena2: { p1: { x: -118, y: GROUND_BASE_Y, z: -82 }, p2: { x: 118, y: GROUND_BASE_Y, z: 82 } },
   factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
@@ -9543,7 +9545,10 @@ const ARENA_SPAWNS = {
   // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
   // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
   // fight to the railway axis. Old values: p1 (-128, 0), p2 (128, 0).
-  station: { p1: { x: -100, y: GROUND_BASE_Y + 4, z: -70 }, p2: { x: 100, y: GROUND_BASE_Y + 4, z: 70 } },
+  // 2026-08-06 (user): deck spawns pushed to the END walls (old ±100) —
+  // x ±128 leaves 7u to the inner platform wall (±135), clear of the corner
+  // stair blocks (the z ±70 lane runs between them).
+  station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -70 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 70 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
   airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };

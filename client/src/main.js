@@ -6462,9 +6462,11 @@ function startMatch() {
     state.enemy2.state.team = 'B';
   }
   if (state.mapKey === 'arena2') {
-    // Streets: spawn on opposite ends of the cross road (X axis), not the bridge lane.
-    state.player.body.position.set(-108, 2.45, 0);
-    state.enemy.body.position.set(108, 2.45, 0);
+    // Streets: diagonal CORNER spawns (user 2026-08-06, was ±108/0 road
+    // ends) — NW/SE corners, 8u clear of the boundary walls (x ±126, z ±90)
+    // and the corner towers. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-118, 2.45, -82);
+    state.enemy.body.position.set(118, 2.45, 82);
   } else if (state.mapKey === 'lobby') {
     // Lobby: spawn on lower floor on opposite ends, mezzanine reachable via the central stairs.
     state.player.body.position.set(-30, 2.45, 50);
@@ -6478,12 +6480,13 @@ function startMatch() {
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
-    // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
-    // y = 4 + 2.45). The old track-corridor spawns (±128, 0) anchored every
-    // fight to the railway axis. Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-100, 6.45, -70);
-    state.enemy.body.position.set(100, 6.45, 70);
+    // Station deck spawns pushed to the END walls (user 2026-08-06, was
+    // ±100/±70): x ±128 leaves 7u to the inner platform wall (x ±135) and
+    // clears the corner stair blocks (|x| 122.5–127.5 at z 42.5–47.5 /
+    // 102.5–107.5 — the z ±70 lane is between them). Deck floor 4 → spawn
+    // y = 4 + 2.45. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-128, 6.45, -70);
+    state.enemy.body.position.set(128, 6.45, 70);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);
@@ -6501,16 +6504,19 @@ function startMatch() {
     state.enemy.body.position.set(24, 2.45, 0);
   }
   // 2v2 placement: drop ally next to the player, enemy2 next to the enemy.
-  // Most maps offset 12 along +Z. Station's track is clear only for |z|<=11
-  // (raised side platforms beyond), so +Z there lands the 2nd unit inside a
-  // platform — offset along the track toward centre (X) instead, keeping both
-  // teammates on the clear central lane between the rail lines.
+  // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
+  // so offset along the deck toward centre (X). Streets' corner spawns sit
+  // 8u off the south/north walls, so +Z would bury the teammate in the wall —
+  // offset along Z toward centre instead. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
     if (state.mapKey === 'station') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
+    } else if (state.mapKey === 'arena2') {
+      state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
+      state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
@@ -9977,14 +9983,15 @@ function buildStreetsArena() {
 
   // ===== Akihabara dressing =====
   // Corner towers (industrial smokestacks), dressed with base/hazard/rings/cap.
-  addBlockingBox({ x: -110, y: 12, z: -94, sx: 5, sy: 24, sz: 5, material: industrialBody });
-  addBlockingBox({ x: 110, y: 12, z: 94, sx: 5, sy: 24, sz: 5, material: industrialBody });
-  addBlockingBox({ x: -110, y: 14, z: 94, sx: 5, sy: 28, sz: 5, material: industrialBody });
-  addBlockingBox({ x: 110, y: 14, z: -94, sx: 5, sy: 28, sz: 5, material: industrialBody });
-  dressTower(-110, -94, 5, 24);
-  dressTower(110, 94, 5, 24);
-  dressTower(-110, 94, 5, 28);
-  dressTower(110, -94, 5, 28);
+  // Each tower registers occlude-fade (2026-08-06): 24-28 tall at the map
+  // corners, they block the camera when fights sit at the new corner spawns —
+  // fade while between camera and player, same as the storefront buildings.
+  for (const [tx, tz, th] of [[-110, -94, 24], [110, 94, 24], [-110, 94, 28], [110, -94, 28]]) {
+    fadeGroup = [addBlockingBox({ x: tx, y: th / 2, z: tz, sx: 5, sy: th, sz: 5, material: industrialBody })];
+    dressTower(tx, tz, 5, th);
+    applyBuildingFade(fadeGroup, { minX: tx - 4, maxX: tx + 4, minY: 0, maxY: th + 3, minZ: tz - 4, maxZ: tz + 4 });
+    fadeGroup = null;
+  }
 
   // Lamp posts along sidewalks
   const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110];
