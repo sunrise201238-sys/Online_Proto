@@ -8239,11 +8239,86 @@ function unitMenuName(u) {
   return u.weapon && u.weapon !== cat ? `${u.weapon} / ${cat}` : cat;
 }
 
+// Tier words for the stats whose raw units would mean nothing to a new
+// player (user vocabularies, 2026-08-06). Cutoffs match the roster's actual
+// value clusters: projectile speeds are 300 (shotguns) / 600 (standard) /
+// 2500 (sniper rounds) + the Railgun's charged hitscan beam; stun has
+// exactly three settings (100ms@0.25 the strongest — 9 guns — then 50@0.50
+// and MG42's 50@0.85).
+function bulletSpeedTier(u) {
+  if (u.beam) return 'Instant';
+  if (u.projectileSpeed >= 1500) return 'Fast';
+  if (u.projectileSpeed <= 300) return 'Slow';
+  return 'Normal';
+}
+function stunTier(u) {
+  const st = u.stun;
+  if (!st) return '—';
+  if (st.ms >= 100) return 'Heavy';
+  return st.moveScale >= 0.85 ? 'Light' : 'Normal';
+}
+function spreadTierWord(u) {
+  if ((u.spreadCount ?? 1) > 1) return 'Wide';   // pellet volleys
+  const sa = u.spreadAngle ?? 0;
+  const total = sa + (u.horizontalAngle ?? 0);
+  if (total <= 0.025) return 'Pinpoint';         // snipers / laser
+  if (sa <= 0.02) return 'Tight';                // small sure-hit core + HA
+  return 'Normal';
+}
+
+// Per-weapon spread scatter icon — drawn from the REAL spread fields so it
+// recreates each setting's signature: SA = round cluster (engine falloff,
+// r ∝ √u), HA = horizontal-only smear, shotguns = their literal pellet
+// volley (M1014's volleyStretchX included). Display radius is √-compressed
+// (linear would render every rifle as one dot next to the shotguns); dot
+// positions are seeded so the icon is stable across opens. Cached per
+// weapon; drawn at 2x the 13px display size for crispness.
+const _spreadIconCache = {};
+function spreadIconURL(u) {
+  const key = u.weapon ?? '?';
+  if (_spreadIconCache[key]) return _spreadIconCache[key];
+  const S = 26, C = S / 2, R = 11;
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const x = cv.getContext('2d');
+  x.strokeStyle = '#4a6a86';
+  x.lineWidth = 2;
+  x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
+  const disp = (v) => Math.sqrt(Math.min(1, v / 0.3));   // SG width → circle edge
+  x.fillStyle = '#eaf6ff';
+  const dot = (px, py, r) => { x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill(); };
+  if ((u.spreadCount ?? 1) > 1) {
+    const stretch = u.volleyStretchX ?? 1;
+    for (let p = 0; p < u.spreadCount; p++) {
+      const ang = (p / u.spreadCount) * Math.PI * 2 + 0.4;
+      const rr = (p % 2 ? 0.95 : 0.55) * disp(u.spreadAngle) * (R - 2);
+      dot(C + Math.cos(ang) * rr * (stretch > 1 ? stretch / 1.15 : 1),
+          C + Math.sin(ang) * rr / (stretch > 1 ? stretch * 0.82 : 1), 1.8);
+    }
+  } else {
+    const sa = u.spreadAngle ?? 0, ha = u.horizontalAngle ?? 0;
+    let s = 7;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let d = 0; d < 14; d++) {
+      const ang = rnd() * Math.PI * 2;
+      const saR = disp(sa) * (R - 2) * Math.sqrt(rnd());
+      let px = C + Math.cos(ang) * saR;
+      const py = C + Math.sin(ang) * saR;
+      if (ha) px += (rnd() * 2 - 1) * disp(sa + ha) * (R - 2) * 0.9;
+      dot(px, py, 1.4);
+    }
+  }
+  return (_spreadIconCache[key] = cv.toDataURL('image/png'));
+}
+
 function showProfilePopup(card, unit, onConfirm) {
   const { weapon, name } = unit;
-  // DEMO BUILD: no character art — the unified dark plate with the GUN name
-  // on the left; the panel beside shows the weapon silhouette over its
-  // CATEGORY (the gun name already sits on the plate).
+  // DEMO BUILD: no character art — the left face carries the GUN name plus
+  // seven stat rows (2026-08-06): numbers where the unit is human (rounds,
+  // RPM, seconds), tier words + the scatter icon where it isn't. The card's
+  // size/ratio is unchanged; the panel beside shows the weapon silhouette
+  // over its CATEGORY.
   const category = ((name ?? '').split('/')[1] || name || '').trim();
   // Panel layout: silhouette on top, divider line, then the golden category
   // in the panel's lower slot (below the line — per the user's reference).
@@ -8253,8 +8328,21 @@ function showProfilePopup(card, unit, onConfirm) {
         <div class="weapon-name demo-cat-below">${category}</div>
       </div>`
     : '';
+  const dmg = (unit.spreadCount ?? 1) > 1
+    ? `${unit.damage} ×${unit.spreadCount}`   // shotguns: per pellet × pellet count
+    : `${unit.damage}`;
+  const rows = [
+    ['Mag', `${unit.magCapacity}`],
+    ['Damage', dmg],
+    ['Fire rate', `${unit.firePerMinute} RPM`],
+    ['Bullet spd', bulletSpeedTier(unit)],
+    ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
+    ['Stun', stunTier(unit)],
+    ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">${spreadTierWord(unit)}`]
+  ].map(([l, v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-value">${v}</span></div>`).join('');
+  const nameCls = (weapon ?? '').length > 8 ? ' stat-name-long' : '';
   spawnProfilePopup(card,
-    `<div class="profile-face demo-face">${weapon || ''}</div>${weaponPanel}`,
+    `<div class="profile-face demo-face demo-face-stats"><div class="stat-name${nameCls}">${weapon || ''}</div>${rows}</div>${weaponPanel}`,
     onConfirm);
 }
 

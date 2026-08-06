@@ -370,6 +370,16 @@ body.pseudo-fullscreen #app {
 /* Profile popup: unified dark plate with the gun name (random-face
    proportions). Side padding keeps two-line names off the plate edge. */
 .unit-profile-popup .demo-face { display: flex; align-items: center; justify-content: center; height: 140px; padding: 0 10px; box-sizing: border-box; background: #0b1119; border: 1px solid #2c4356; color: #eaf6ff; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+/* Weapon stats on the profile card's left face (2026-08-06): SAME 110x140
+   face — the gun name moves to the top and seven label/value stat rows fill
+   the space below. Long gun names shrink to fit on one line. */
+.unit-profile-popup .demo-face.demo-face-stats { flex-direction: column; justify-content: flex-start; padding: 7px 9px; gap: 0; }
+.unit-profile-popup .stat-name { width: 100%; font-size: 15px; font-weight: 800; letter-spacing: 0.03em; text-align: center; line-height: 1.1; margin-bottom: 4px; white-space: nowrap; }
+.unit-profile-popup .stat-name.stat-name-long { font-size: 12px; }
+.unit-profile-popup .stat-row { width: 100%; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 600; line-height: 13px; }
+.unit-profile-popup .stat-row .stat-label { color: #7e9cb4; }
+.unit-profile-popup .stat-row .stat-value { display: flex; align-items: center; gap: 3px; color: #eaf6ff; }
+.unit-profile-popup .stat-row .stat-scatter { width: 13px; height: 13px; }
 /* Panel split (user-approved sample v3): the divider sits at ~70% of the
    panel height — the silhouette floats centered (object-fit letterbox) in
    the large upper area, the golden category floats centered in the slim
