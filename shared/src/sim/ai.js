@@ -122,14 +122,19 @@ const BOT_ELEV_STEER_WEIGHT = 2.4;
 const BOT_AIR_STEER_MS = 900;
 
 // Repulsion vector from blocking obstacles within `radius`. Skips obstacles
-// the bot is over or under (same skip math as resolveUnitObstacleCollisions),
-// and skips `noProjectile`-flagged obstacles since those have a dedicated
-// jump handler (e.g. station's platform-edge walls).
+// the bot is over or under (same skip math as resolveUnitObstacleCollisions).
+// JUMPABLE `noProjectile` fences (height <= BOT_CLIMB_MAX_RISE — station /
+// flashpoint 4-high platform edges) are skipped so the dedicated jump handler
+// can walk the bot up to them. UNJUMPABLE ones (square's 14-high fountain
+// colonnade, streets' tall under-bridge blockers) DO repel: they block
+// movement like any wall but were invisible to this steering, so straight-
+// line behaviors (Defense escapes, kiting, dodge follow-ups) pinned bots
+// against them while enemies shot straight through (fixed 2026-08-05).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
   let rx = 0, rz = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    if (o.noProjectile && (o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE) continue;
     const topBuffer = o.topBuffer ?? 4;
     if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));

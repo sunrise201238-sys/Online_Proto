@@ -3805,15 +3805,19 @@ const BOT_AIR_STEER_MS = 900;
 // Returns un-normalized {rx, rz} that the caller can blend into the kiting
 // direction. Uses the same y-skip math as resolveUnitObstacleCollisions so
 // obstacles the bot is over (e.g. low platform decks) or below (high
-// overheads) don't push them. Obstacles flagged `noProjectile` (the station
-// platform-edge walls) are skipped here because they have a dedicated jump
-// handler below — repelling from them would prevent the bot from approaching
-// the platform at all.
+// overheads) don't push them. JUMPABLE `noProjectile` fences (height <=
+// BOT_CLIMB_MAX_RISE — station / flashpoint 4-high platform edges) are
+// skipped so the jump handler below can walk the bot up to them; UNJUMPABLE
+// ones (square's 14-high fountain colonnade, streets' tall under-bridge
+// blockers) DO repel — they block movement like any wall but were invisible
+// to this steering, so straight-line behaviors (Defense escapes, kiting,
+// dodge follow-ups) pinned bots against them while enemies shot straight
+// through (fixed 2026-08-05; mirrored in shared/src/sim/ai.js).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
   let rx = 0, rz = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    if (o.noProjectile && (o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE) continue;
     const topBuffer = o.topBuffer ?? 4;
     if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
