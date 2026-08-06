@@ -53,7 +53,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 | 5 s |
 | MG42 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 | 7 s |
 | M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 | 2 s |
-| Laser — Rifle | 8 | 15 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
+| Laser — Rifle | 8 | 12 / bolt | ~250 RPM | 600 | 56 | 1.2 s (auto, per round) |
 | PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 | 2.5 s + 1 s charge |
 | Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 | 2.5 s + 1 s charge |
 
@@ -63,9 +63,9 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 |---|---|---|---|---|
 | Beretta 1301 / M1014 | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
 | MG42 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
-| Laser | 4.17/s | 15 / bolt | **62.5** | ~12.5 (bolt-regen limited) |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
+| Laser | 4.17/s | 12 / bolt | **50.0** | ~10 (bolt-regen limited) |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
 | M14 | 4.17/s | 10 | **41.7** | 30.5 |
@@ -73,7 +73,7 @@ Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Laser's burst is real for its 8-bolt spike (120 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
 
 **Handling (stun + spread):**
 
@@ -116,6 +116,15 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 *Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
 Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
+
+**Score screens from these runs** (yellow dots = hits at the impact point, red dots = misses where the shot crossed the sign plane; each gun fired from its own lock range):
+
+| | |
+|---|---|
+| ![M4 — 100 shots @ lock 56](doc/shooting_range/M4_100shots.png)<br>M4 — 100 shots @ 56 | ![FAMAS — 100 shots @ lock 56](doc/shooting_range/FAMAS_100shots.png)<br>FAMAS — 100 shots @ 56 |
+| ![evo3 — 100 shots @ lock 50](doc/shooting_range/evo3_100shots.png)<br>evo3 — 100 shots @ 50 | ![P90 — 100 shots @ lock 50](doc/shooting_range/P90_100shots.png)<br>P90 — 100 shots @ 50 |
+| ![Beretta 1301 — 7 blasts @ lock 40](doc/shooting_range/Beretta-1301_7shots.png)<br>Beretta 1301 — 7 blasts (56 pellets) @ 40 | ![M1014 — 7 blasts @ lock 40](doc/shooting_range/M1014_7shots.png)<br>M1014 — 7 blasts (56 pellets) @ 40 |
+| ![M60 — 100 shots @ lock 80](doc/shooting_range/M60_100shots.png)<br>M60 — 100 shots @ 80 | ![MG42 — 100 shots @ lock 80](doc/shooting_range/MG42_100shots.png)<br>MG42 — 100 shots @ 80 |
 
 
 Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
@@ -201,6 +210,8 @@ One bot brain drives every bot — all maps, all modes, offline and online (the 
 
 **Steering** — each tick, a moving bot's direction is the sum of two pulls: "toward where it's going" plus "away from any wall it's about to touch"; the second pull is what makes bots slide around obstacles instead of walking into them. Invisible unit-only fences (the kind bullets fly through) get special sorting by height: a fence low enough to jump (Station's / Flashpoint's 4-high platform edges) gives **no push at all**, so the bot can walk right up to it — the hop itself is then fired by the jump reflexes above (the Pursue/Engage perch jump, or Defense's en-route hop) once the ledge is within jump reach; a fence too tall to jump (Square's 14-high fountain colonnade, the tall panes under Streets' bridge) pushes like any solid wall, since walking into it is pure grinding. And a fence the bot is already standing **above** (crossing the Streets bridge deck over its under-deck panes) pushes nothing — the bot passes over it freely.
 
+**Sight** — a bot "sees" its target only along lines a bullet could actually fly: the sight ray is blocked by every solid obstacle, and (since 0.6.7) by walkable **ramps and elevated decks** too — a ramp is solid fill, so nothing sees through the wedge; a bridge deck on open pillars blocks only rays that cross the deck plane, so two units both *under* the bridge still see each other. Before this, bots kept their locks straight through the Streets bridge slope and stood there firing into it; now losing the line of sight hands them to the router, which walks around.
+
 **Sniper play** — covered in the sniper section above: 50/50 snap-or-hold as the shooter; as the defender, a per-charge dodge roll timed against the charger's kit, one committed perpendicular dodge + sprint.
 
 **Shelved: map-specific rules (present but switched off).** A set of Station-only behaviors was built and field-tested — steering pulls toward the platform edges during approach, a "don't linger fighting on the track level" timer that drifted sustained low fights up onto the decks, and an anti-yo-yo hold that kept bots from hopping right back down after mounting. They worked, but repositioning Station's spawn points onto the platforms solved the railway-hugging problem more cleanly, so the whole set is parked behind a single master switch (`STATION_BOT_RULES`, off in both sims) rather than deleted. The bot rules that shipped are therefore **fully map-agnostic**; the switch exists if a map ever needs the special treatment again.
@@ -214,9 +225,18 @@ One bot brain drives every bot — all maps, all modes, offline and online (the 
 
 Double-tap `K` (or the sprint button) to lock sprint. The lock releases only after the stick/keys stay **neutral for a sustained 0.18 s** — flipping direction through the joystick center (left→right) or swapping movement keys keeps the locked sprint alive; letting go still stops it almost instantly. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
 
+## HUD & unit displays (0.6.6)
+
+- **Overhead weapon tag + HP bar** above every unit: the tag shows the unit's weapon *silhouette* on a fixed-size plate (white ink for your team, orange for enemies), with its HP bar underneath. Both hold a **constant on-screen size at any distance** (compensated by true view depth, so edge-of-screen tags don't inflate) and show through cover. Your team's stacks ride the head at a fixed screen gap; the **locked** enemy's stack rides just above the crosshair brackets (off-lock enemies use the head rule). In spectator mode the whole scheme is **relative to the watched unit** — its side reads white, its opponents orange.
+- **Camera-facing art**: whichever unit the camera rides (your own, or the spectated one) renders its rear-view art with a through-wall X-ray silhouette; every other unit faces the camera. Cycling the spectate TARGET re-skins units live, and the watched unit's corner HP bar carries a **white glow rim** so spectators always know which roster row they're riding.
+- **Corner HUD**: each side stacks weapon icons above HP bars, per team member (icons then bar, ally pair below); the in-play weapon renders golden. Online, unit figure colors follow the **server slot** — p1 blue / p2 red / p3 green / p4 orange, identical for every viewer.
+- **Profile cards** carry seven live-read stats (Mag / Dmg / RPM / Spd / Reload / Stun / Spread). Tiered damages show all tiers (PSG1 `50/35/20`, Railgun `30/20`, shotguns per-pellet `5 ×8`); speed and stun use tier words (Slow/Normal/Fast/Instant; Heavy/Normal/Light). The **Spread cell is a true simulation**: the ring is a standing target's width at range 60 (shotguns at their lock 40) and the dots are the engine's real fire math — the in-ring fraction lines up with the measured standing hit rates above.
+
 ## Maps
 
 Nine arenas: Plain Field, Streets, Factory, Factory 2, Square, Lobby, Station, Flashpoint, Airport. Each has its own cover layout and elevation; Station has raised platforms players jump up onto, and Airport centers on a raised security plateau — glass-fenced rims, four ramp entrances, and a metal-detector checkpoint as the only way across the middle. On Streets, the storefront towers are solid to their full height (they block movement, fire, and bot sight) and their **rooftops are standable** (originally flight-only high ground; with the demo's flight kit removed, no unit reaches them). The offline map list also carries the **Shooting Range** — the no-opponent practice map behind the measured hit-rate tables above (target sliders, per-lane score screens); the map Random card never rolls it.
+
+**Spawns (0.6.7):** Station spawns sit in the platforms' far corners (±128, ±112 on the decks — the old track-corridor spawns anchored every fight to the railway axis), and Streets spawns moved from the road ends to the diagonal corners (±118, ±82). 2v2 teammates offset toward the map center on both. Streets' four corner smokestacks turn transparent while they block the camera, like the storefronts.
 
 **Factory 2** is the industrial remake of Factory built on Airport's design philosophy: one central organizing anchor — a raised **assembly deck** with four railed walk-up ramps plus jump-through fence openings (two 16-wide mid-side gaps and four corner notches) that bots use too, via the pathfinder's shortcut links — surrounded by dense, trustworthy cover (CNC machines, shipping containers, double-height crate stacks, partition walls, solid workstations) that passes the sizing rules everywhere: true cover is 8+ tall with real depth, vault clutter stays under 2.5. Two walkable conveyors flank the deck; everything is ramp-accessible (no flight-only spots). The layout is point-symmetric, and its online collision data is auto-exported from the offline builder so both modes are guaranteed identical.
 
