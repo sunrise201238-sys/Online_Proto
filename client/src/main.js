@@ -1323,6 +1323,12 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // Drive every live fighter's sprite pose once per render frame (both modes —
 // getAllFighters() mirrors online snapshots onto the same state.* mechs).
 function updateMechAnimations(dt, now) {
+  // Team-relative tag presentation: layouts and inks derive from the CAMERA
+  // unit's perspective — the player normally, the WATCHED unit in spectator
+  // mode. Its teammates read as allies (white, head anchor, 0.75), its
+  // opponents as enemies (orange, above-crosshair); the watched unit itself
+  // is isOwnSprite (kept synced by updateCamera) and gets the player look.
+  const camTeam = getTeamOf(cameraFocusMech());
   for (const m of getAllFighters()) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
@@ -1342,8 +1348,10 @@ function updateMechAnimations(dt, now) {
         const d = camera.position.distanceTo(m.root.position);
         s = UNIT_TAG_HEIGHT * UNIT_TAG_OTHER_APPARENT * (d / UNIT_TAG_REF_DIST);
       }
-      if (!m.isOwnSprite && m.roleKey && m.roleKey.startsWith('enemy')) {
-        // Enemies: anchor the stack a thin gap above the lock brackets.
+      const hostile = getTeamOf(m) !== camTeam;
+      if (!m.isOwnSprite && hostile) {
+        // Hostiles (of the camera unit): anchor the stack a thin gap above
+        // the lock brackets.
         const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = 0.2 + UNIT_TAG_RETICLE_CLEAR * rs;
@@ -1352,11 +1360,29 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // Own unit AND ally (never lockable by the player) keep the
+        // The camera unit and its teammates (never lockable by it) keep the
         // above-the-head anchor; set per frame so a spectate handoff can
         // never leave a stale lift.
         tag.position.y = UNIT_TAG_Y;
         if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
+      }
+      // Ink follows the same perspective: spectate switches flip who reads
+      // hostile — swap to the other-ink texture variant (cached per
+      // label|ink) and repaint the bar in it.
+      const wantInk = hostile ? UNIT_TAG_INK_ENEMY : UNIT_TAG_INK_ALLY;
+      if (tag.userData.tagInk !== wantInk) {
+        tag.userData.tagInk = wantInk;
+        const label = m.unit.weapon || m.unit.char || '?';
+        const key = `${label}|${wantInk}`;
+        const entry = _weaponTagTexCache[key]
+          ?? (_weaponTagTexCache[key] = makeWeaponTagTexture(label, wantInk));
+        tag.userData.tagEntry = entry;
+        tag.material.map = entry.tex;
+        tag.material.needsUpdate = true;
+        if (bar) {
+          bar.userData.barInk = wantInk;
+          bar.userData.barFrac = -1;                  // force repaint in the new ink
+        }
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
       const op = m.isOwnSprite ? UNIT_TAG_OPACITY_OWN : UNIT_TAG_OPACITY_OTHER;
@@ -1496,6 +1522,7 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
   s.position.y = UNIT_TAG_Y;
   s.userData.tagEntry = entry;             // per-frame scaling reads the LIVE aspect (image swaps in async)
+  s.userData.tagInk = ink;                 // current ink — spectate switches swap the variant live
   // Draw AFTER the lock reticle (renderOrder 9999) so the crosshair brackets
   // never cover the tag.
   s.renderOrder = 10000;
