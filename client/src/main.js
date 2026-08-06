@@ -1403,9 +1403,10 @@ const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
 // a thin gap clear of the brackets at every range. Applied to every enemy,
 // locked or not, so nothing jumps when the lock switches targets. The ALLY
 // is never lockable by the player, so it keeps the player-style head anchor.
-// Ink extent: the tier ticks' round caps top out at canvas y≈23.5 of 192 →
-// 0.378 of the quad → 9.15*0.378 ≈ 3.46 above center; +0.14 thin gap.
-const UNIT_TAG_RETICLE_CLEAR = 3.6;
+// For reference — the tier ticks' round caps top out at 0.378 of the quad
+// (9.15*0.378 ≈ 3.46 above center). 2.0 tucks the stack into the upper
+// bracket area, tighter than the ink edge (user-tuned 2026-08-06).
+const UNIT_TAG_RETICLE_CLEAR = 2;
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
@@ -1480,7 +1481,9 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   // depthTest OFF: the tag shows through cover (like the crosshair and team
   // chevrons), so a blocked unit still reads by its weapon tag.
-  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  // opacity 0.75: a touch of see-through (half the strength of the old 0.5
+  // attempt) so the always-on-top stack doesn't read as a solid wall.
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
@@ -1542,7 +1545,8 @@ function makeHealthBarSprite(ink) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   // Same depth setup as the tag: shows through cover, never punches holes.
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  // Same 0.75 opacity, so the stack fades as one piece.
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 1);                     // top-anchored (see note above)
   s.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
