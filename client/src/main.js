@@ -1101,9 +1101,11 @@ function makeUnitSprite(unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'play
   sprite.center.set(0.5, 0);                 // anchor at feet (bottom-center)
   sprite.position.y = UNIT_SPRITE_FOOT_Y;
 
-  // DEMO BUILD: the role figures are direction-agnostic (featureless stick
-  // figures), so there is no separate "_rear" art set — the own unit renders
-  // the same front art as everyone else.
+  // DEMO BUILD (2026-08-06): the camera-ridden unit (own in normal play, the
+  // WATCHED unit in spectator) renders the "_rear" art set — the camera sits
+  // behind it, so it shows its back; every other unit renders front art.
+  // Spectate handoffs rebuild sprites via setMechSpriteView, so the swap
+  // follows the camera automatically.
 
   // Through-wall X-ray silhouette — OWN UNIT ONLY. A second billboard riding on
   // the body draws the matching "_shadow" art ONLY where the unit is hidden
@@ -1160,9 +1162,11 @@ function makeUnitSprite(unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'play
   // 'fly' pose; the demo set has no dedicated fly art, so it reuses sprint
   // (same texture object via the cache — no extra download).
   const spriteStates = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
+  // Camera-ridden unit → the role's "_rear" set; everyone else → front.
+  const rear = isOwnUnit ? '_rear' : '';
   for (const state of spriteStates) {
     const fileState = state === 'fly' ? 'sprint' : state;
-    loadUnitArt(roleKey, fileState, (tex) => {
+    loadUnitArt(roleKey, `${fileState}${rear}`, (tex) => {
       rig.tex[state] = tex;
       // Show the stand pose as soon as it arrives (first real art on screen).
       if (state === 'stand' && (rig.shown === null || rig.shown === 'stand')) {
@@ -1172,13 +1176,13 @@ function makeUnitSprite(unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'play
         rig.shown = 'stand';
       }
     });
-    // Matching through-wall silhouette — own unit only; the updater swaps
-    // shadowMat.map to follow the visible pose as these arrive. The dark
-    // "player_<state>_shadow" set serves EVERY role (the silhouette is a
-    // generic figure), so a spectated ally keeps its X-ray too. Other units
-    // skip this load entirely (no X-ray for them).
+    // Matching through-wall silhouette — camera-ridden unit only; the updater
+    // swaps shadowMat.map to follow the visible pose as these arrive. Every
+    // role has its OWN "_rear_shadow" set (2026-08-06 — the old shared
+    // player-front-shadow set broke X-rays when spectating other roles).
+    // Other units skip this load entirely (no X-ray for them).
     if (isOwnUnit) {
-      loadUnitArt('player', `${fileState}_shadow`, (tex) => {
+      loadUnitArt(roleKey, `${fileState}_rear_shadow`, (tex) => {
         rig.texShadow[state] = tex;
       });
     }
@@ -1209,10 +1213,15 @@ function drainTexWarmQueue() {
 // silhouettes); the arguments are accepted for call-site compatibility and
 // ignored. 'fly' reuses sprint art, so it needs no warm of its own.
 function warmUnitArt(unitData, own = false) {
+  // Every role can be the camera-ridden unit (spectator cycles all four),
+  // so warm front + rear + rear_shadow for all of them.
   for (const role of ['player', 'ally', 'enemy1', 'enemy2']) {
-    for (const s of UNIT_SPRITE_STATES) loadUnitArt(role, s, queueTexWarm);
+    for (const s of UNIT_SPRITE_STATES) {
+      loadUnitArt(role, s, queueTexWarm);
+      loadUnitArt(role, `${s}_rear`, queueTexWarm);
+      loadUnitArt(role, `${s}_rear_shadow`, queueTexWarm);
+    }
   }
-  for (const s of UNIT_SPRITE_STATES) loadUnitArt('player', `${s}_shadow`, queueTexWarm);
 }
 
 // ----------------------------------------------------------------------------
@@ -6262,6 +6271,15 @@ function updateHud(now = performance.now()) {
     const enemy2HpMax = state.enemy2.unit.hp ?? MAX_HP;
     hudRefs.enemy2Hp.style.width = `${(state.enemy2.state.hp / enemy2HpMax) * 100}%`;
   }
+  // Spectator: a golden glow rim on the corner bar of the WATCHED unit, so
+  // the spectator can tell which roster row they're riding. Follows TARGET
+  // cycling per frame; classList.toggle is a no-op when unchanged.
+  if (state.spectatorActive) {
+    const barFills = { player: hudRefs.hp, enemy: hudRefs.enemyHp, ally: hudRefs.allyHp, enemy2: hudRefs.enemy2Hp };
+    for (const [slot, fill] of Object.entries(barFills)) {
+      fill?.parentElement?.classList.toggle('spec-watched', slot === state.spectateSlot);
+    }
+  }
   // Spectator: the boost bar and ammo readout below follow the WATCHED unit
   // (cycling with TARGET), not the bot-driven player slot.
   const shown = state.spectatorActive ? (cameraFocusMech() ?? state.player) : state.player;
@@ -6330,6 +6348,9 @@ function updateHud(now = performance.now()) {
 }
 
 function cleanupMatch() {
+  // Slot-color art mapping is per-ONLINE-match — clear it so the next
+  // offline match falls back to the local-perspective roles.
+  state.artRoles = null;
   // If we were in an online match, close the socket + drop online-only meshes.
   if (state.online) {
     if (state.online.conn) state.online.conn.close();
@@ -7665,30 +7686,38 @@ function ensureOnlineMatchSetup(snap) {
   state.spectatorActive = false;
   state.spectateSlot = null;
 
-  // Build new mechs. Same colour palette as offline so it reads consistently.
-  // mech.unitKey tags what the mech was built as — runOnlineMatchFrame
+  // Build new mechs. ONLINE figure colors follow the SERVER SLOT (identical
+  // for every viewer — you spot yourself by your slot color); the mapping is
+  // recorded in state.artRoles so respawn/prebuild paths rebuild in the same
+  // colors. mech.unitKey tags what the mech was built as — runOnlineMatchFrame
   // compares it against the snapshot to catch Trio respawn unit swaps.
-  state.player = createMech(0x62d7ff, UNIT_DATA[snap.fighters[cameraId].unitKey], true);
+  state.artRoles = {
+    player: SLOT_ART_ROLES[cameraId] ?? 'player',
+    enemy: SLOT_ART_ROLES[enemyId] ?? 'enemy1',
+    ally: allyId ? (SLOT_ART_ROLES[allyId] ?? 'ally') : 'ally',
+    enemy2: enemy2Id ? (SLOT_ART_ROLES[enemy2Id] ?? 'enemy2') : 'enemy2'
+  };
+  state.player = createMech(0x62d7ff, UNIT_DATA[snap.fighters[cameraId].unitKey], true, artRoleFor('player'));
   state.player.unitKey = snap.fighters[cameraId].unitKey;
   state.player.state.team = myTeam;
   const myPos = snap.fighters[cameraId].pos;
   state.player.body.position.set(myPos.x, myPos.y, myPos.z);
 
-  state.enemy = createMech(0xff7ad5, UNIT_DATA[snap.fighters[enemyId].unitKey]);
+  state.enemy = createMech(0xff7ad5, UNIT_DATA[snap.fighters[enemyId].unitKey], false, artRoleFor('enemy'));
   state.enemy.unitKey = snap.fighters[enemyId].unitKey;
   state.enemy.state.team = teamOfSlot(enemyId);
   const ePos = snap.fighters[enemyId].pos;
   state.enemy.body.position.set(ePos.x, ePos.y, ePos.z);
 
   if (mode === '2v2' && allyId) {
-    state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey], false, 'ally');
+    state.ally = createMech(0x86f7c2, UNIT_DATA[snap.fighters[allyId].unitKey], false, artRoleFor('ally'));
     state.ally.unitKey = snap.fighters[allyId].unitKey;
     state.ally.state.team = myTeam;
     const aPos = snap.fighters[allyId].pos;
     state.ally.body.position.set(aPos.x, aPos.y, aPos.z);
   }
   if (mode === '2v2' && enemy2Id) {
-    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey], false, 'enemy2');
+    state.enemy2 = createMech(0xff5a8a, UNIT_DATA[snap.fighters[enemy2Id].unitKey], false, artRoleFor('enemy2'));
     state.enemy2.unitKey = snap.fighters[enemy2Id].unitKey;
     state.enemy2.state.team = teamOfSlot(enemy2Id);
     const e2Pos = snap.fighters[enemy2Id].pos;
@@ -7763,7 +7792,7 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   old.trail.forEach((t) => scene.remove(t.mesh));
 
   const fresh = takePrebuiltMech(slotName, unitKey)
-    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', artRoleFor(slotName));
   fresh.unitKey = unitKey;
   fresh.state.team = old.state.team;
   fresh.body.position.copy(old.body.position);   // one-frame placeholder; the mirror overwrites
@@ -8866,12 +8895,21 @@ animate();
 const TRIO_SLOT_COLORS = { player: 0x62d7ff, enemy: 0xff7ad5, ally: 0x86f7c2, enemy2: 0xff5a8a };
 // DEMO BUILD: state-slot name → role art set (the 'enemy' slot wears enemy1).
 const TRIO_SLOT_ROLES = { player: 'player', enemy: 'enemy1', ally: 'ally', enemy2: 'enemy2' };
+// ONLINE (2026-08-06): figure color follows the SERVER SLOT, identical for
+// every viewer — p1 blue(player) / p2 red(enemy1) / p3 green(ally) /
+// p4 orange(enemy2); p1+p3 = team A. The online match build fills
+// state.artRoles with this mapping for the local state slots; offline
+// leaves it null and artRoleFor falls back to the local-perspective roles.
+const SLOT_ART_ROLES = { p1: 'player', p2: 'enemy1', p3: 'ally', p4: 'enemy2' };
+function artRoleFor(slotName) {
+  return state.artRoles?.[slotName] ?? TRIO_SLOT_ROLES[slotName];
+}
 
 // Build a slot's future roster mech NOW (match-load time) and park it outside
 // the scene/world; respawn swaps it in instead of constructing mid-fight —
 // the construction burst is what read as a respawn hitch on phones.
 function buildDetachedMech(slotName, unitKey) {
-  const mech = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
+  const mech = createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', artRoleFor(slotName));
   mech.unitKey = unitKey;
   scene.remove(mech.root);
   world.removeBody(mech.body);
@@ -8905,7 +8943,7 @@ function respawnSlotMech(slotName, unitKey) {
   if (old.chargedBeamVisual) { scene.remove(old.chargedBeamVisual); old.chargedBeamVisual = null; }
 
   const fresh = takePrebuiltMech(slotName, unitKey)
-    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', TRIO_SLOT_ROLES[slotName]);
+    ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', artRoleFor(slotName));
   fresh.state.team = old.state.team;
   const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
