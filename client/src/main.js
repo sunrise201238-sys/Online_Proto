@@ -1360,10 +1360,14 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit and its teammates share ONE head anchor; set per
-        // frame so a spectate handoff can never leave a stale lift.
-        tag.position.y = UNIT_TAG_TEAM_Y;
-        if (bar) bar.position.y = UNIT_TAG_TEAM_Y - UNIT_BAR_GAP;
+        // The camera unit and its teammates: stack bottom pinned just above
+        // the head, bar + tag growing UPWARD with the distance factor, so no
+        // part can ever sink onto the head. Set per frame so a spectate
+        // handoff can never leave a stale lift.
+        const k = s / UNIT_TAG_HEIGHT;
+        const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
+        if (bar) bar.position.y = UNIT_TAG_TEAM_BOTTOM + barH;  // top-anchored: spans BOTTOM..BOTTOM+barH
+        tag.position.y = UNIT_TAG_TEAM_BOTTOM + barH + UNIT_BAR_GAP * k;
       }
       // Ink follows the same perspective: spectate switches flip who reads
       // hostile — swap to the other-ink texture variant (cached per
@@ -1548,6 +1552,13 @@ const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
 // 0.30 tall ≈ 1.7x the original 0.18 thickness (user order 2026-08-06).
 const UNIT_BAR_WORLD_W = UNIT_TAG_HEIGHT * (UNIT_TAG_TEX_W / UNIT_TAG_TEX_H);
 const UNIT_BAR_GAP = 0.06;                          // below the tag's bottom edge
+// Friendly stacks are BOTTOM-pinned at this height (≈ head + 0.39) and grow
+// UPWARD with the distance factor — a fixed head clearance with the old
+// down-growing bar sank onto far teammates' heads (bar height scales with
+// distance, the clearance didn't). Derived so the own unit's stack at its
+// ~14u riding camera (k ≈ 1) lands exactly on the old tuned positions.
+const UNIT_TAG_TEAM_BOTTOM = UNIT_TAG_TEAM_Y - UNIT_BAR_GAP
+  - UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W);
 
 function drawHealthBar(sprite, frac) {
   const cv = sprite.material.map.image;
