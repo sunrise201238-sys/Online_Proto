@@ -1455,7 +1455,9 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   // depthTest OFF: the tag shows through cover (like the crosshair and team
   // chevrons), so a blocked unit still reads by its weapon tag.
-  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  // opacity 0.5: the always-on-top fixed-size tags read as overlay, not as
+  // solid objects blocking the arena (the hp bar below matches).
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
@@ -1517,7 +1519,8 @@ function makeHealthBarSprite(ink) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   // Same depth setup as the tag: shows through cover, never punches holes.
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  // Same 0.5 opacity as the tag, so the stack fades as one piece.
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 1);                     // top-anchored (see note above)
   s.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
