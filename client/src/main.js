@@ -1360,10 +1360,12 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit and its teammates keep the above-the-head anchor;
-        // set per frame so a spectate handoff can never leave a stale lift.
-        tag.position.y = UNIT_TAG_Y;
-        if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
+        // The camera unit (a bit lower) and its teammates keep the
+        // above-the-head anchor; set per frame so a spectate handoff can
+        // never leave a stale lift.
+        const y = m.isOwnSprite ? UNIT_TAG_OWN_Y : UNIT_TAG_Y;
+        tag.position.y = y;
+        if (bar) bar.position.y = y - UNIT_BAR_GAP;
       }
       // Ink follows the same perspective: spectate switches flip who reads
       // hostile — swap to the other-ink texture variant (cached per
@@ -1424,6 +1426,8 @@ const UNIT_TAG_TEX_H = 96;
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
 const UNIT_TAG_OWN_APPARENT = 1.0;  // the own/spectated unit's apparent size
 const UNIT_TAG_OTHER_APPARENT = 1.0; // other units — unified with own (2026-08-06)
+// The own tag rides a bit LOWER than teammates' (user-tuned 2026-08-06).
+const UNIT_TAG_OWN_Y = UNIT_TAG_Y - 0.5;
 // ENEMY stacks ride ABOVE the lock crosshair, not above the head: the
 // anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
 // y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
@@ -1435,11 +1439,10 @@ const UNIT_TAG_OTHER_APPARENT = 1.0; // other units — unified with own (2026-0
 // the brackets' upper margin (user-tuned 2026-08-06: 3.6 → 2 → 3).
 const UNIT_TAG_RETICLE_CLEAR = 3;
 // Stack opacity, applied per frame (isOwnSprite moves on spectate handoffs).
-// Uniform 0.75 since 2026-08-06: the own tag's blocking was geometric (the
-// fixed-world size ballooning up close), not an opacity problem — solved by
-// screen-sizing it above instead of fading it harder.
-const UNIT_TAG_OPACITY_OWN = 0.75;
-const UNIT_TAG_OPACITY_OTHER = 0.75;
+// Fully opaque since 2026-08-06 — the transparency trial is over (blocking
+// was solved geometrically by screen-sizing); constants kept as dials.
+const UNIT_TAG_OPACITY_OWN = 1;
+const UNIT_TAG_OPACITY_OTHER = 1;
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
@@ -1447,8 +1450,13 @@ const UNIT_TAG_INK_ALLY = '#eaf6ff';
 const UNIT_TAG_INK_ENEMY = '#ff6a2c';
 
 function makeWeaponTagTexture(label, ink) {
-  const W = UNIT_TAG_TEX_W, H = UNIT_TAG_TEX_H, PAD = 26, R = 18;
-  const BOX_W = W - PAD * 2, BOX_H = 58;   // centered ink box inside the plate
+  const W = UNIT_TAG_TEX_W, H = UNIT_TAG_TEX_H, R = 18;
+  // Max-fill ink box: 10px inset on every side — enough to clear the pill's
+  // rounded corners (R 18 deviates ≤ ~5.3px from the rect) and the ~3px
+  // visible edge, so the silhouette gets as big as the plate allows. The
+  // weapon PNGs are pipeline-trimmed to ink bbox+3px, so no baked-in margin.
+  const FIT = 10;
+  const BOX_W = W - FIT * 2, BOX_H = H - FIT * 2;
   const cv = document.createElement('canvas');
   cv.width = W;
   cv.height = H;
