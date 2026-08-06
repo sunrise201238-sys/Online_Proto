@@ -6480,13 +6480,13 @@ function startMatch() {
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station deck spawns pushed to the END walls (user 2026-08-06, was
-    // ±100/±70): x ±128 leaves 7u to the inner platform wall (x ±135) and
-    // clears the corner stair blocks (|x| 122.5–127.5 at z 42.5–47.5 /
-    // 102.5–107.5 — the z ±70 lane is between them). Deck floor 4 → spawn
-    // y = 4 + 2.45. Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-128, 6.45, -70);
-    state.enemy.body.position.set(128, 6.45, 70);
+    // Station deck spawns in the FAR corners (user 2026-08-06, older values
+    // ±100/±70 then ±128/±70): x ±128 leaves 7u to the end wall (±135);
+    // z ±112 sits just past the corner stair block (z 102.5–107.5) and 20u
+    // off the outer wall (inner face ±132). Deck floor 4 → spawn y = 4+2.45.
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-128, 6.45, -112);
+    state.enemy.body.position.set(128, 6.45, 112);
   } else if (state.mapKey === 'square') {
     // Diagonal spawn across the plaza — past the cathedral and clock tower zones.
     state.player.body.position.set(-95, 2.45, -45);

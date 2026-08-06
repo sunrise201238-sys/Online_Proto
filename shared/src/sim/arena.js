@@ -9545,10 +9545,11 @@ const ARENA_SPAWNS = {
   // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
   // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
   // fight to the railway axis. Old values: p1 (-128, 0), p2 (128, 0).
-  // 2026-08-06 (user): deck spawns pushed to the END walls (old ±100) —
-  // x ±128 leaves 7u to the inner platform wall (±135), clear of the corner
-  // stair blocks (the z ±70 lane runs between them).
-  station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -70 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 70 } },
+  // 2026-08-06 (user): deck spawns in the FAR corners (older values ±100/±70,
+  // ±128/±70) — x ±128 leaves 7u to the end wall (±135); z ±112 sits just
+  // past the corner stair block (z 102.5–107.5) and 20u off the outer wall
+  // (inner face ±132).
+  station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
   airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
 };
