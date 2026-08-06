@@ -1359,6 +1359,9 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
+      const op = m.isOwnSprite ? UNIT_TAG_OPACITY_OWN : UNIT_TAG_OPACITY_OTHER;
+      tag.material.opacity = op;
+      if (bar) bar.material.opacity = op;
       // Health bar under the tag: same boost, plus a redraw when hp moved.
       if (bar) {
         const k = s / UNIT_TAG_HEIGHT;
@@ -1404,9 +1407,13 @@ const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
 // locked or not, so nothing jumps when the lock switches targets. The ALLY
 // is never lockable by the player, so it keeps the player-style head anchor.
 // For reference — the tier ticks' round caps top out at 0.378 of the quad
-// (9.15*0.378 ≈ 3.46 above center). 2.0 tucks the stack into the upper
-// bracket area, tighter than the ink edge (user-tuned 2026-08-06).
-const UNIT_TAG_RETICLE_CLEAR = 2;
+// (9.15*0.378 ≈ 3.46 above center). 3.0 sits just inside the ink edge, in
+// the brackets' upper margin (user-tuned 2026-08-06: 3.6 → 2 → 3).
+const UNIT_TAG_RETICLE_CLEAR = 3;
+// Stack opacity, applied per frame (isOwnSprite moves on spectate handoffs):
+// the own unit's tag sits closest to the camera, so it fades the most.
+const UNIT_TAG_OPACITY_OWN = 0.5;
+const UNIT_TAG_OPACITY_OTHER = 0.75;
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
@@ -1481,9 +1488,9 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   // depthTest OFF: the tag shows through cover (like the crosshair and team
   // chevrons), so a blocked unit still reads by its weapon tag.
-  // opacity 0.75: a touch of see-through (half the strength of the old 0.5
-  // attempt) so the always-on-top stack doesn't read as a solid wall.
-  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false });
+  // See-through so the always-on-top stack doesn't read as a solid wall;
+  // the per-frame loop picks OWN (0.5) vs OTHER (0.75).
+  const mat = new THREE.SpriteMaterial({ map: entry.tex, transparent: true, opacity: UNIT_TAG_OPACITY_OTHER, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
@@ -1545,8 +1552,8 @@ function makeHealthBarSprite(ink) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   // Same depth setup as the tag: shows through cover, never punches holes.
-  // Same 0.75 opacity, so the stack fades as one piece.
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false });
+  // Same opacity as the tag (per-frame), so the stack fades as one piece.
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: UNIT_TAG_OPACITY_OTHER, depthTest: false, depthWrite: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.center.set(0.5, 1);                     // top-anchored (see note above)
   s.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
