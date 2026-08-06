@@ -8272,10 +8272,13 @@ function stunTier(u) {
 // weapon; drawn at 2x the 26px display size.
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
-// Reference-distance overrides (user order 2026-08-06): the MGs and snipers
-// lock far beyond the mid-range fights they actually contest, so their icons
-// evaluate at the AR-standard 56 instead of their own longer lockRange.
-const SPREAD_ICON_RANGE_OVERRIDE = { M60: 56, MG42: 56, PSG1: 56, Railgun: 56 };
+// Reference-distance overrides (user order 2026-08-06, 56 → 60): every
+// non-shotgun evaluates at a COMMON 60 so their icons compare directly;
+// the shotguns keep their own 40 lockRange (their pattern is the point).
+const SPREAD_ICON_RANGE_OVERRIDE = {
+  M4: 60, FAMAS: 60, evo3: 60, P90: 60, M60: 60,
+  MG42: 60, M14: 60, Laser: 60, PSG1: 60, Railgun: 60
+};
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
