@@ -1333,13 +1333,34 @@ export function tickBot(matchState, botId, now) {
         me.botDefenseInCover = false;
       }
     } else {
+      // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
+      // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
+      // the committed line (tight ~35° cone; the stuck vault below keeps
+      // its wider one), jump it the moment it's in reach and keep sprinting
+      // the same direction up top. Adds ZERO decision time: the direction
+      // never changes, the ledge is simply cleared instead of deflecting
+      // the sprint. GLINT GATE: never while an anti-glint dodge is
+      // scheduled (me.botGlintStepAt) — airborne can't dodge, and a hop
+      // there converts a guaranteed-dodgeable sniper shot into a hit.
+      if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
+        const ahead = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
+        if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
+            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
+          jumpDirX = ahead.toX;
+          jumpDirZ = ahead.toZ;
+          if (botTryJump(me, now)) {
+            jumpThisTick = true;
+            me.botDefenseStuckTicks = 0;
+          }
+        }
+      }
       const intoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4;
       if (intoWall && avoidMag > 0.4) {
         me.botDefenseStuckTicks = (me.botDefenseStuckTicks ?? 0) + 1;
       } else {
         me.botDefenseStuckTicks = 0;
       }
-      if (me.botDefenseStuckTicks >= 2) {
+      if (!jumpThisTick && me.botDefenseStuckTicks >= 2) {
         // VAULT FIRST: if the "wall" being pressed is actually a jumpable
         // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
         // check used elsewhere, so Airport's rim glass still rejects it)
@@ -1347,8 +1368,9 @@ export function tickBot(matchState, botId, now) {
         // sprinting the same direction up top: the dodge continues with an
         // elevation change instead of a turn. Jump unaffordable (boost /
         // cooldown) or no ledge → the usual flip → slide → bail chain.
+        // Same glint gate as the proactive hop above.
         let vaulted = false;
-        if (me.grounded && !me.airborne) {
+        if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
           const ledge = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
           if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
               && ledge.toX * (me.botDefenseDirX ?? sideX) + ledge.toZ * (me.botDefenseDirZ ?? sideZ) > 0.3) {

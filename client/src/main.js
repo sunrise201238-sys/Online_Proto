@@ -5027,6 +5027,27 @@ function updateEnemy(now) {
         eState.botDefenseInCover = false;
       }
     } else {
+      // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
+      // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
+      // the committed line (tight ~35° cone; the stuck vault below keeps
+      // its wider one), jump it the moment it's in reach and keep sprinting
+      // the same direction up top. Adds ZERO decision time: the direction
+      // never changes, the ledge is simply cleared instead of deflecting
+      // the sprint. GLINT GATE: never while an anti-glint dodge is
+      // scheduled (botGlintStepAt) — airborne can't dodge, and a hop there
+      // converts a guaranteed-dodgeable sniper shot into a hit.
+      if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
+        const ahead = findHighGroundPerch(e.x, e.z, myFloorY, 6);
+        if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
+            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
+          jumpDirX = ahead.toX;
+          jumpDirZ = ahead.toZ;
+          if (botStartJump(now)) {
+            jumpThisTick = true;
+            eState.botDefenseStuckTicks = 0;
+          }
+        }
+      }
       // Defense's wall read must be FAST — under fire there's no time for the
       // 2 s Maze trigger. Drive straight into a wall for ~2 ticks and we hand
       // off to Maze immediately (force the trigger by ageing the progress
@@ -5037,7 +5058,7 @@ function updateEnemy(now) {
       } else {
         eState.botDefenseStuckTicks = 0;
       }
-      if (eState.botDefenseStuckTicks >= 2) {
+      if (!jumpThisTick && eState.botDefenseStuckTicks >= 2) {
         // VAULT FIRST: if the "wall" being pressed is actually a jumpable
         // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
         // check used elsewhere, so Airport's rim glass still rejects it)
@@ -5045,8 +5066,9 @@ function updateEnemy(now) {
         // sprinting the same direction up top: the dodge continues with an
         // elevation change instead of a turn. Jump unaffordable (boost /
         // cooldown) or no ledge → the usual flip → slide → bail chain.
+        // Same glint gate as the proactive hop above.
         let vaulted = false;
-        if (state.enemy.grounded && !eState.airborne) {
+        if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
           const ledge = findHighGroundPerch(e.x, e.z, myFloorY, 6);
           if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
               && ledge.toX * (eState.botDefenseDirX ?? side.x) + ledge.toZ * (eState.botDefenseDirZ ?? side.z) > 0.3) {
