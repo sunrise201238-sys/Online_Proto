@@ -1476,12 +1476,12 @@ const UNIT_TAG_INK_ENEMY = '#ff6a2c';
 
 function makeWeaponTagTexture(label, ink) {
   const W = UNIT_TAG_TEX_W, H = UNIT_TAG_TEX_H, R = 18;
-  // Max-fill ink box: 7px inset on every side (user-tuned 2026-08-06,
-  // 10 → 4 → 7) — clears the ~3px visible edge stroke with a little air,
-  // and keeps boxy silhouettes' corners clear of the rounded corners
+  // Max-fill ink box: 8px inset on every side (user-tuned 2026-08-06,
+  // 10 → 4 → 7 → 8) — clears the ~3px visible edge stroke with air, and
+  // keeps boxy silhouettes' corners clear of the rounded corners
   // (R 18 deviates ≤ ~5.3px from the rect). The weapon PNGs are
   // pipeline-trimmed to ink bbox+3px, so no baked-in margin.
-  const FIT = 7;
+  const FIT = 8;
   const BOX_W = W - FIT * 2, BOX_H = H - FIT * 2;
   const cv = document.createElement('canvas');
   cv.width = W;
