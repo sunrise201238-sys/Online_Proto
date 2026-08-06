@@ -1341,7 +1341,7 @@ function updateMechAnimations(dt, now) {
         const d = camera.position.distanceTo(m.root.position);
         s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       }
-      tag.scale.set(s * tag.userData.tagAspect, s, 1);
+      tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
     }
   }
 }
@@ -1361,40 +1361,72 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTT
 const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
 const UNIT_TAG_MIN_BOOST = 2.7; // floor for other units' tags at close range
 const UNIT_TAG_MAX_BOOST = 7.5; // far-range ceiling (reached at ~105 units)
-const _weaponTagTexCache = {};  // weapon label → { tex, aspect }
+const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
+// Tag ink: allies/own unit keep the light plate ink; enemies read orange —
+// the same #ff6a2c as the screen-edge enemy arrow.
+const UNIT_TAG_INK_ALLY = '#eaf6ff';
+const UNIT_TAG_INK_ENEMY = '#ff6a2c';
 
-function makeWeaponTagTexture(label) {
-  const H = 96, PAD = 26, R = 18;
+function makeWeaponTagTexture(label, ink) {
+  const H = 96, PAD = 26, R = 18, INK_H = 58;
   const cv = document.createElement('canvas');
   const x = cv.getContext('2d');
   const font = '700 52px sans-serif';
+  const plate = () => {
+    x.beginPath();
+    x.moveTo(R, 0); x.lineTo(cv.width - R, 0); x.arcTo(cv.width, 0, cv.width, R, R);
+    x.lineTo(cv.width, H - R); x.arcTo(cv.width, H, cv.width - R, H, R);
+    x.lineTo(R, H); x.arcTo(0, H, 0, H - R, R);
+    x.lineTo(0, R); x.arcTo(0, 0, R, 0, R);
+    x.closePath();
+    x.fillStyle = 'rgba(11, 17, 25, 0.92)';
+    x.fill();
+    x.strokeStyle = '#2c4356';
+    x.lineWidth = 6;   // half the stroke clips outside the canvas → ~3px edge
+    x.stroke();
+  };
+  // Text version first, so the tag is readable the instant the mech spawns.
   x.font = font;
   cv.width = Math.ceil(x.measureText(label).width) + PAD * 2;
   cv.height = H;
-  x.beginPath();
-  x.moveTo(R, 0); x.lineTo(cv.width - R, 0); x.arcTo(cv.width, 0, cv.width, R, R);
-  x.lineTo(cv.width, H - R); x.arcTo(cv.width, H, cv.width - R, H, R);
-  x.lineTo(R, H); x.arcTo(0, H, 0, H - R, R);
-  x.lineTo(0, R); x.arcTo(0, 0, R, 0, R);
-  x.closePath();
-  x.fillStyle = 'rgba(11, 17, 25, 0.92)';
-  x.fill();
-  x.strokeStyle = '#2c4356';
-  x.lineWidth = 6;   // half the stroke clips outside the canvas → ~3px edge
-  x.stroke();
+  plate();
   x.font = font;     // the canvas resize above reset the context state
-  x.fillStyle = '#eaf6ff';
+  x.fillStyle = ink;
   x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(label, cv.width / 2, H / 2 + 2);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  return { tex, aspect: cv.width / H };
+  const entry = { tex, aspect: cv.width / H };
+  // Weapon-image ink: swap the text for the tinted silhouette once the PNG is
+  // in (usually instant — the menus already loaded it). On a missing image the
+  // text version simply stays. Sprites re-read entry.aspect every frame, so
+  // the width change propagates on its own.
+  const img = new Image();
+  img.onload = () => {
+    const inkW = Math.round(INK_H * (img.width / img.height));
+    cv.width = inkW + PAD * 2;
+    cv.height = H;
+    plate();
+    const t = document.createElement('canvas');
+    t.width = inkW; t.height = INK_H;
+    const tx = t.getContext('2d');
+    tx.drawImage(img, 0, 0, inkW, INK_H);
+    tx.globalCompositeOperation = 'source-in';
+    tx.fillStyle = ink;
+    tx.fillRect(0, 0, inkW, INK_H);
+    x.drawImage(t, PAD, (H - INK_H) / 2);
+    tex.needsUpdate = true;
+    entry.aspect = cv.width / H;
+  };
+  img.src = weaponArtUrl(label);
+  return entry;
 }
 
-function makeWeaponTagSprite(unitData) {
+function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   const label = unitData.weapon || unitData.char || '?';
-  const entry = _weaponTagTexCache[label]
-    ?? (_weaponTagTexCache[label] = makeWeaponTagTexture(label));
+  const key = `${label}|${ink}`;
+  const entry = _weaponTagTexCache[key]
+    ?? (_weaponTagTexCache[key] = makeWeaponTagTexture(label, ink));
   // depthWrite off: the translucent pill must never punch holes for the
   // sprites behind it; depth TEST stays on so walls occlude it like the body.
   // depthTest OFF: the tag shows through cover (like the crosshair and team
@@ -1404,7 +1436,7 @@ function makeWeaponTagSprite(unitData) {
   s.center.set(0.5, 0);                    // bottom-anchored: distance boost grows it upward
   s.scale.set(UNIT_TAG_HEIGHT * entry.aspect, UNIT_TAG_HEIGHT, 1);
   s.position.y = UNIT_TAG_Y;
-  s.userData.tagAspect = entry.aspect;     // per-frame distance scaling reads this
+  s.userData.tagEntry = entry;             // per-frame scaling reads the LIVE aspect (image swaps in async)
   // Draw AFTER the lock reticle (renderOrder 9999) so the crosshair brackets
   // never cover the tag.
   s.renderOrder = 10000;
@@ -1426,7 +1458,8 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
   root.add(sprite);
   // DEMO BUILD: weapon-name tag floating above the head. Kept on the mech so
   // updateMechAnimations can distance-scale it every frame.
-  const weaponTag = makeWeaponTagSprite(unitData);
+  const weaponTag = makeWeaponTagSprite(unitData,
+    roleKey.startsWith('enemy') ? UNIT_TAG_INK_ENEMY : UNIT_TAG_INK_ALLY);
   root.add(weaponTag);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
