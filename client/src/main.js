@@ -3896,14 +3896,23 @@ function botBurstSize(unit) {
 // uses (boost cost + cooldown) plus the bot's extra BOT_SPRINT_MIN_BOOST
 // margin so it never jumps itself completely dry. Returns true if a jump
 // started this tick.
-function botStartJump(now) {
+function botStartJump(now, survival = false) {
   const eState = state.enemy.state;
   const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
   if (!state.enemy.grounded || eState.airborne) return false;
   if (now < eState.jumpCooldownUntil) return false;
   // Jump funding respects the strategic reserve (falls back to cost + floor
-  // if the reserve is ever tuned below that).
-  if (eState.boost < Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST)) return false;
+  // if the reserve is ever tuned below that). SURVIVAL jumps (the Defense
+  // hop/vault, 2026-08-05) pay only raw cost + the sprint floor — same
+  // doctrine as the other survival exemptions (Defense sprints to the hard
+  // floor, anti-glint dodge at raw step cost): Defense's own sprint drains
+  // below the reserve within ticks, so reserve-gated funding made the hop
+  // nearly unaffordable. Travel jumps keep the reserve gate.
+  // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
+  const funded = survival
+    ? jumpBoostCost + BOT_SPRINT_MIN_BOOST
+    : Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
+  if (eState.boost < funded) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
   eState.refillPausedUntil = now + 500;
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -4815,6 +4824,22 @@ function updateEnemy(now) {
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (botStartJump(now)) jumpThisTick = true;
+        } else if (state.mapKey === 'station' && perch
+            && (perch.toX * dir.x + perch.toZ * dir.z > 0.2 || perch.dist < 12)) {
+          // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
+          // on this one map the decks are the strong positions but they're
+          // jump-only (no ramps, so paths never cross them) — steer the
+          // approach toward a scanned ledge that's roughly ON THE WAY
+          // (within ~78° of the target direction, or already close — 12 covers
+          // the track corridor half-width), and the jump above fires when it
+          // comes into reach. Weight 0.6
+          // keeps the target-pull dominant; every other map skips this
+          // branch entirely (behavior byte-identical elsewhere).
+          // Mirrored in shared/src/sim/ai.js.
+          const tx = mx + perch.toX * 0.6;
+          const tz = mz + perch.toZ * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          mx = tx / tl; mz = tz / tl;
         }
       }
     }
@@ -5042,7 +5067,7 @@ function updateEnemy(now) {
             && ahead.toX * mx + ahead.toZ * mz > 0.8) {
           jumpDirX = ahead.toX;
           jumpDirZ = ahead.toZ;
-          if (botStartJump(now)) {
+          if (botStartJump(now, true)) {
             jumpThisTick = true;
             eState.botDefenseStuckTicks = 0;
           }
@@ -5074,7 +5099,7 @@ function updateEnemy(now) {
               && ledge.toX * (eState.botDefenseDirX ?? side.x) + ledge.toZ * (eState.botDefenseDirZ ?? side.z) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (botStartJump(now)) {
+            if (botStartJump(now, true)) {
               jumpThisTick = true;
               vaulted = true;
               eState.botDefenseStuckTicks = 0;

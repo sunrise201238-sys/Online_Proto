@@ -335,6 +335,18 @@ function botTryJump(me, now) {
   return tryStartJump(me, now);
 }
 
+// SURVIVAL jump funding (2026-08-05): the Defense hop/vault is an escape
+// move, and Defense's own sprint drains below the 250 travel reserve within
+// a few ticks — reserve-gated funding made the hop nearly unaffordable in
+// practice. Same doctrine as the two existing survival exemptions (Defense
+// sprints to the hard floor, the anti-glint dodge pays raw step cost):
+// fund at the raw jump cost + the sprint floor. Travel jumps (pursue perch,
+// elevation aids) keep the reserve gate — bots still hoard for the road.
+function botTryJumpSurvival(me, now) {
+  if (me.boost < (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST) return false;
+  return tryStartJump(me, now);
+}
+
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
@@ -1137,6 +1149,21 @@ export function tickBot(matchState, botId, now) {
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (botTryJump(me, now)) jumpThisTick = true;
+        } else if (matchState.mapKey === 'station' && perch
+            && (perch.toX * dirX + perch.toZ * dirZ > 0.2 || perch.dist < 12)) {
+          // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
+          // on this one map the decks are the strong positions but they're
+          // jump-only (no ramps, so paths never cross them) — steer the
+          // approach toward a scanned ledge that's roughly ON THE WAY
+          // (within ~78° of the target direction, or already close — 12 covers
+          // the track corridor half-width), and the jump above fires when it
+          // comes into reach. Weight 0.6
+          // keeps the target-pull dominant; every other map skips this
+          // branch entirely (behavior byte-identical elsewhere).
+          const tx = mx + perch.toX * 0.6;
+          const tz = mz + perch.toZ * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          mx = tx / tl; mz = tz / tl;
         }
       }
     }
@@ -1348,7 +1375,7 @@ export function tickBot(matchState, botId, now) {
             && ahead.toX * mx + ahead.toZ * mz > 0.8) {
           jumpDirX = ahead.toX;
           jumpDirZ = ahead.toZ;
-          if (botTryJump(me, now)) {
+          if (botTryJumpSurvival(me, now)) {
             jumpThisTick = true;
             me.botDefenseStuckTicks = 0;
           }
@@ -1376,7 +1403,7 @@ export function tickBot(matchState, botId, now) {
               && ledge.toX * (me.botDefenseDirX ?? sideX) + ledge.toZ * (me.botDefenseDirZ ?? sideZ) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (botTryJump(me, now)) {
+            if (botTryJumpSurvival(me, now)) {
               jumpThisTick = true;
               vaulted = true;
               me.botDefenseStuckTicks = 0;
