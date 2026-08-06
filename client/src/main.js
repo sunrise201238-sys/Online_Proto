@@ -1797,7 +1797,8 @@ function setupHUD() {
   const hudAbort = new AbortController();
   state.hudAbort = hudAbort;
   const hud = document.createElement('div');
-  hud.className = 'touch-hud';
+  // hud-2v2 repositions the shared HP bars for the interleaved icon/bar stack.
+  hud.className = state.mode === '2v2' ? 'touch-hud hud-2v2' : 'touch-hud';
   const teamBarsHtml = state.mode === '2v2' ? `
     <div class="ally-health"><div id="ally-health-fill"></div></div>
     <div class="enemy2-health"><div id="enemy2-health-fill"></div></div>` : '';
@@ -6111,7 +6112,9 @@ function renderTrioIconRow(el, lines, sigField, markInPlay = false) {
   hudRefs[sigField] = sig;
   el.innerHTML = lines
     ? lines
-      .filter((l) => l.length)
+      // Multi-line (2v2): a dead member KEEPS an empty row so the other
+      // member's icons stay aligned with their own interleaved HP bar.
+      .filter((l) => l.length || lines.length > 1)
       .map((l) => `<div class="trio-line">${l.map((k, i) => {
         const u = UNIT_DATA[k];
         if (!u) return '';

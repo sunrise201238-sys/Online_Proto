@@ -8,19 +8,25 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 #health-fill { width: 100%; height: 100%; background: #7ec5ff; }
 .enemy-health { position: absolute; top: 14px; right: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #enemy-health-fill { width: 100%; height: 100%; background: #ff6d8f; }
-/* 2v2 ally + enemy 2 HP bars — stacked directly under the primary bars,
-   same width / height as the primary so all four read at equal weight. */
-.ally-health { position: absolute; top: 30px; left: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
+/* 2v2 interleave: each unit's weapon icons sit ABOVE its own HP bar —
+   [P icons 14-32][P bar 34-44][A icons 48-66][A bar 68-78], enemy side
+   mirrored — instead of the old bars-then-icons stack. Fixed offsets: the
+   icon block leads the stack at 14, its 2v2 inter-row gap (below) leaves
+   room for the first bar, and .hud-2v2 drops the shared primary bars under
+   their icon rows. Dead members keep an empty icon row (renderTrioIconRow),
+   so an icon row never slides onto the other member's bar. */
+.hud-2v2 .health, .hud-2v2 .enemy-health { top: 34px; }
+.ally-health { position: absolute; top: 68px; left: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #ally-health-fill { width: 100%; height: 100%; background: #86f7c2; }
-.enemy2-health { position: absolute; top: 30px; right: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
+.enemy2-health { position: absolute; top: 68px; right: 16px; width: 180px; height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
 #enemy2-health-fill { width: 100%; height: 100%; background: #ff9d5a; }
-/* Trio: remaining-units dots under each side's HP stack (empty in SD). */
-/* Remaining-units weapon icons: tucked right under the HP bars. 1v1 — the
-   single bar ends at y=24, icons start at 27; 2v2 — the ally/enemy2 bars end
-   at y=40, so the block drops to 43 to stay clear of them. One .trio-line per
-   team member (player's row above the ally's; enemy side mirrored). */
+/* Remaining-units weapon icons. 1v1 — the single bar ends at y=24, icons
+   start at 27. 2v2 — the block LEADS the stack (interleave note above).
+   One .trio-line per team member (player's row above the ally's; enemy
+   side mirrored). */
 .trio-count { position: absolute; top: 27px; white-space: nowrap; opacity: 0.9; }
-.trio-count.trio-count-2v2 { top: 43px; }
+.trio-count.trio-count-2v2 { top: 14px; }
+.trio-count.trio-count-2v2 .trio-line { margin-bottom: 16px; }  /* outweighs the base 3px rule below */
 .trio-count-own { left: 16px; }
 .trio-count-enemy { right: 16px; text-align: right; }
 /* Row box sized for the 16.5px weapon pills (was 13px for the old text tags,
