@@ -3817,7 +3817,10 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
   let rx = 0, rz = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile && (o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE) continue;
+    // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
+    // streets bridge deck over its 6-high under-deck end walls — passes over
+    // it freely and must not be shoved sideways.)
+    if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
     const topBuffer = o.topBuffer ?? 4;
     if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
