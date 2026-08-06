@@ -104,13 +104,14 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 
 | @ own lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
-| M4 @56 | 99% | 69% | 6% |
-| FAMAS @56 | 100% | 64% | 8% |
-| evo3 @50 | 100% | 62% | 12% |
-| Beretta 1301 @40 | 75% | 30% | 0% |
-| M1014 @40 | 61% | 30% | 4% |
-| M60 @80 | 76% | 40% | 3% |
-| MG42 @80 | 100% | 25% | 0% |
+| M4 @56 | 100% | 75% | 7% |
+| FAMAS @56 | 100% | 72% | 11% |
+| evo3 @50 | 100% | 64% | 13% |
+| P90 @50 | 100% | 70% | 9% |
+| Beretta 1301 @40 | 79% | 25% | 0% |
+| M1014 @40 | 55% | 32% | 4% |
+| M60 @80 | 73% | 47% | 0% |
+| MG42 @80 | 100% | 18% | 0% |
 
 *Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
