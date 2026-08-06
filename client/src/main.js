@@ -8268,13 +8268,13 @@ const _spreadIconCache = {};
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
-  const S = 26, C = S / 2, R = 11;
+  const S = 52, C = S / 2, R = 22;   // 2x the 26px display size
   const cv = document.createElement('canvas');
   cv.width = S;
   cv.height = S;
   const x = cv.getContext('2d');
   x.strokeStyle = '#4a6a86';
-  x.lineWidth = 2;
+  x.lineWidth = 3;
   x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
   const disp = (v) => Math.sqrt(Math.min(1, v / 0.3));   // SG width → circle edge
   x.fillStyle = '#eaf6ff';
@@ -8283,21 +8283,21 @@ function spreadIconURL(u) {
     const stretch = u.volleyStretchX ?? 1;
     for (let p = 0; p < u.spreadCount; p++) {
       const ang = (p / u.spreadCount) * Math.PI * 2 + 0.4;
-      const rr = (p % 2 ? 0.95 : 0.55) * disp(u.spreadAngle) * (R - 2);
+      const rr = (p % 2 ? 0.95 : 0.55) * disp(u.spreadAngle) * (R - 4);
       dot(C + Math.cos(ang) * rr * (stretch > 1 ? stretch / 1.15 : 1),
-          C + Math.sin(ang) * rr / (stretch > 1 ? stretch * 0.82 : 1), 1.8);
+          C + Math.sin(ang) * rr / (stretch > 1 ? stretch * 0.82 : 1), 3.2);
     }
   } else {
     const sa = u.spreadAngle ?? 0, ha = u.horizontalAngle ?? 0;
     let s = 7;
     const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for (let d = 0; d < 14; d++) {
+    for (let d = 0; d < 16; d++) {
       const ang = rnd() * Math.PI * 2;
-      const saR = disp(sa) * (R - 2) * Math.sqrt(rnd());
+      const saR = disp(sa) * (R - 4) * Math.sqrt(rnd());
       let px = C + Math.cos(ang) * saR;
       const py = C + Math.sin(ang) * saR;
-      if (ha) px += (rnd() * 2 - 1) * disp(sa + ha) * (R - 2) * 0.9;
-      dot(px, py, 1.4);
+      if (ha) px += (rnd() * 2 - 1) * disp(sa + ha) * (R - 4) * 0.9;
+      dot(px, py, 2.4);
     }
   }
   return (_spreadIconCache[key] = cv.toDataURL('image/png'));

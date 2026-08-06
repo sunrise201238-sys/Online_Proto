@@ -379,7 +379,7 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .stat-row { width: 100%; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 600; line-height: 13px; }
 .unit-profile-popup .stat-row .stat-label { color: #7e9cb4; white-space: nowrap; }
 .unit-profile-popup .stat-row .stat-value { display: flex; align-items: center; gap: 3px; color: #eaf6ff; white-space: nowrap; }
-.unit-profile-popup .stat-row .stat-scatter { width: 13px; height: 13px; }
+.unit-profile-popup .stat-row .stat-scatter { width: 26px; height: 26px; }  /* doubled 2026-08-06 — the face's spare height goes to the spread visual */
 /* Panel split (user-approved sample v3): the divider sits at ~70% of the
    panel height — the silhouette floats centered (object-fit letterbox) in
    the large upper area, the golden category floats centered in the slim
