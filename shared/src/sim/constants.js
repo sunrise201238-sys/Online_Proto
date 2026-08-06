@@ -34,6 +34,11 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    // 2v2 BOT band override (2026-08-07, all 12 visible units): in 2v2 the
+    // bot hold band derives from lockRange2v2 — compressed into 50–70 so
+    // long-lock units stop hanging back while a teammate dies alone. 1v1
+    // keeps lockRange; the player-side lock UI ignores this field.
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
@@ -65,8 +70,9 @@ export const UNIT_DATA = {
 
     // Weapon spec
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
-    // lockRange, edges ±7) gives the shotgun a 33–47 band.
+    // lockRange, edges ±7) gives the shotgun a 33–47 band (43–57 in 2v2).
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -99,6 +105,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2500,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -135,6 +142,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 50,
+    lockRange2v2: 55,
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
@@ -170,6 +178,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -201,6 +210,7 @@ export const UNIT_DATA = {
 
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -237,6 +247,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -309,6 +320,7 @@ export const UNIT_DATA = {
     // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
     // per-shot damage, smaller mag.
     lockRange: 56,
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
@@ -343,6 +355,7 @@ export const UNIT_DATA = {
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -377,6 +390,7 @@ export const UNIT_DATA = {
     // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
     // Hoshino's concentrated slug.
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -415,6 +429,7 @@ export const UNIT_DATA = {
     // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
@@ -487,6 +502,7 @@ export const UNIT_DATA = {
     // 50-round mag, 3 damage, AR spread profile (SA 0.02 + HA 0.04,
     // sure-hit ~53).
     lockRange: 50,
+    lockRange2v2: 55,
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.7 ms cooldown — 80 ms tick slot (12.5/s), FAMAS's rung
     spreadCount: 1,

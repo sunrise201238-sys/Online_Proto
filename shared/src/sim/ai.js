@@ -548,10 +548,14 @@ export function tickBot(matchState, botId, now) {
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
-  // universal rule for every weapon: the shotgun's lockRange is tuned to 27
-  // (pellet-cluster distance), which lands its band at 20–34 — the same
-  // numbers its old dedicated special case hard-coded.
-  const lockRange = me.unit?.lockRange ?? 50;
+  // universal rule for every weapon.
+  // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
+  // compressed 50–70 team-synergy table (long locks let a teammate die
+  // alone at the front). Units without the field (hidden ones) and every
+  // other mode keep lockRange. Mirrored in client updateEnemy.
+  const lockRange = (matchState.mode === '2v2' && me.unit?.lockRange2v2)
+    ? me.unit.lockRange2v2
+    : (me.unit?.lockRange ?? 50);
   const upperRange = lockRange + 7;
   const optimalRange = Math.max(10, lockRange);
   const lowerRange = Math.max(6, lockRange - 7);
