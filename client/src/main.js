@@ -1360,14 +1360,16 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.position.y = clearY + barH;      // top-anchored: spans clearY..clearY+barH
         tag.position.y = clearY + barH + UNIT_BAR_GAP * k;
       } else {
-        // The camera unit and its teammates: stack bottom pinned just above
-        // the head, bar + tag growing UPWARD with the distance factor, so no
-        // part can ever sink onto the head. Set per frame so a spectate
+        // The camera unit and its teammates: stack bottom rides the head at
+        // a screen-fixed gap, bar + tag growing UPWARD — every part of the
+        // layout scales with k, so the whole stack is pixel-stable on screen
+        // and can never sink onto the head. Set per frame so a spectate
         // handoff can never leave a stale lift.
         const k = s / UNIT_TAG_HEIGHT;
         const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
-        if (bar) bar.position.y = UNIT_TAG_TEAM_BOTTOM + barH;  // top-anchored: spans BOTTOM..BOTTOM+barH
-        tag.position.y = UNIT_TAG_TEAM_BOTTOM + barH + UNIT_BAR_GAP * k;
+        const bottom = UNIT_TAG_HEAD_TOP + UNIT_TAG_TEAM_GAP * k;
+        if (bar) bar.position.y = bottom + barH;    // top-anchored: spans bottom..bottom+barH
+        tag.position.y = bottom + barH + UNIT_BAR_GAP * k;
       }
       // Ink follows the same perspective: spectate switches flip who reads
       // hostile — swap to the other-ink texture variant (cached per
@@ -1428,10 +1430,14 @@ const UNIT_TAG_TEX_H = 96;
 const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
 const UNIT_TAG_OWN_APPARENT = 1.0;  // the own/spectated unit's apparent size
 const UNIT_TAG_OTHER_APPARENT = 1.0; // other units — unified with own (2026-08-06)
-// Friendly-team head anchor (own unit AND teammates): 0.5 below the base
-// UNIT_TAG_Y. Two tag heights exist: this one, and the hostiles'
-// above-crosshair law (which still floors at the base UNIT_TAG_Y).
-const UNIT_TAG_TEAM_Y = UNIT_TAG_Y - 0.5;
+// Friendly-team anchor: the stack's bottom rides the HEAD at a SCREEN-FIXED
+// gap — TEAM_GAP world units per distance factor k, so on screen the gap is
+// the same pixels at every range (0.39 at k=1 = the tuned own-unit look at
+// its ~14u riding camera). A closing unit grows on screen and its stack
+// floats up with it; nothing ever breathes or touches the head. Hostiles
+// keep the above-crosshair law (floored at the base UNIT_TAG_Y) instead.
+const UNIT_TAG_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
+const UNIT_TAG_TEAM_GAP = 0.39;
 // ENEMY stacks ride ABOVE the lock crosshair, not above the head: the
 // anchor follows the RETICLE's screen-size law (9.15-unit quad centered at
 // y 0.2, scale clamp(d/22, 0.7, 4.5) — see updateReticle) so bar + tag sit
@@ -1552,13 +1558,6 @@ const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
 // 0.30 tall ≈ 1.7x the original 0.18 thickness (user order 2026-08-06).
 const UNIT_BAR_WORLD_W = UNIT_TAG_HEIGHT * (UNIT_TAG_TEX_W / UNIT_TAG_TEX_H);
 const UNIT_BAR_GAP = 0.06;                          // below the tag's bottom edge
-// Friendly stacks are BOTTOM-pinned at this height (≈ head + 0.39) and grow
-// UPWARD with the distance factor — a fixed head clearance with the old
-// down-growing bar sank onto far teammates' heads (bar height scales with
-// distance, the clearance didn't). Derived so the own unit's stack at its
-// ~14u riding camera (k ≈ 1) lands exactly on the old tuned positions.
-const UNIT_TAG_TEAM_BOTTOM = UNIT_TAG_TEAM_Y - UNIT_BAR_GAP
-  - UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W);
 
 function drawHealthBar(sprite, frac) {
   const cv = sprite.material.map.image;
