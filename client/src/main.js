@@ -1342,6 +1342,17 @@ function updateMechAnimations(dt, now) {
         s *= Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
+      // Health bar under the tag: same boost, plus a redraw when hp moved.
+      const bar = m.healthBar;
+      if (bar) {
+        const k = s / UNIT_TAG_HEIGHT;
+        bar.scale.set(UNIT_BAR_WORLD_W * k, UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k, 1);
+        const frac = Math.max(0, Math.min(1, m.state.hp / (m.unit.hp ?? MAX_HP)));
+        if (Math.abs(frac - bar.userData.barFrac) > 0.004) {
+          bar.userData.barFrac = frac;
+          drawHealthBar(bar, frac);
+        }
+      }
     }
   }
 }
@@ -1352,7 +1363,7 @@ function updateMechAnimations(dt, now) {
 // selection tiles and HUD roster tags (who-is-who reads from the role-colored
 // figures, not the tag). One canvas texture per weapon, shared by every mech.
 const UNIT_TAG_HEIGHT = 1.0;    // world-units tall at reference distance
-const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 0.8;   // pill BOTTOM, above the head
+const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 1.25;  // pill BOTTOM, above the head (raised to fit the health bar underneath)
 // Distance compensation — OTHER units only (the own/spectated unit sits right
 // under the camera and keeps the plain base-size tag). Their tags scale up
 // with range so enemies stay readable across the map: floored at MIN_BOOST
@@ -1443,6 +1454,63 @@ function makeWeaponTagSprite(unitData, ink = UNIT_TAG_INK_ALLY) {
   return s;
 }
 
+// DEMO BUILD: floating health bar hanging just under the weapon tag, in the
+// same plate style and the same team ink as the tag. Per-mech canvas (hp is
+// per unit and changes constantly), redrawn only when the fraction moves.
+// TOP-anchored: the distance boost grows it DOWNWARD, so it stays glued under
+// the tag (which is bottom-anchored and grows upward) instead of crossing it.
+const UNIT_BAR_TEX_W = 120, UNIT_BAR_TEX_H = 12;   // texture px
+const UNIT_BAR_WORLD_W = 1.8;                       // world width at base scale
+const UNIT_BAR_GAP = 0.06;                          // below the tag's bottom edge
+
+function drawHealthBar(sprite, frac) {
+  const cv = sprite.material.map.image;
+  const x = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const pill = (px, py, pw, ph, r) => {
+    x.beginPath();
+    x.moveTo(px + r, py); x.lineTo(px + pw - r, py); x.arcTo(px + pw, py, px + pw, py + r, r);
+    x.lineTo(px + pw, py + ph - r); x.arcTo(px + pw, py + ph, px + pw - r, py + ph, r);
+    x.lineTo(px + r, py + ph); x.arcTo(px, py + ph, px, py + ph - r, r);
+    x.lineTo(px, py + r); x.arcTo(px, py, px + r, py, r);
+    x.closePath();
+  };
+  x.clearRect(0, 0, W, H);
+  pill(0, 0, W, H, 5);
+  x.fillStyle = 'rgba(11, 17, 25, 0.92)';   // same plate navy as the tag
+  x.fill();
+  x.strokeStyle = '#2c4356';
+  x.lineWidth = 2;
+  x.stroke();
+  const inW = Math.round((W - 4) * frac);
+  if (inW > 0) {
+    pill(2, 2, W - 4, H - 4, 3);
+    x.save();
+    x.clip();                               // keeps the fill's corners inside the rounded track
+    x.fillStyle = sprite.userData.barInk;
+    x.fillRect(2, 2, inW, H - 4);
+    x.restore();
+  }
+  sprite.material.map.needsUpdate = true;
+}
+
+function makeHealthBarSprite(ink) {
+  const cv = document.createElement('canvas');
+  cv.width = UNIT_BAR_TEX_W;
+  cv.height = UNIT_BAR_TEX_H;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  // Same depth setup as the tag: shows through cover, never punches holes.
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false });
+  const s = new THREE.Sprite(mat);
+  s.center.set(0.5, 1);                     // top-anchored (see note above)
+  s.position.y = UNIT_TAG_Y - UNIT_BAR_GAP;
+  s.renderOrder = 10000;
+  s.userData.barInk = ink;
+  s.userData.barFrac = -1;                  // forces the first draw
+  return s;
+}
+
 // `isOwnUnit` is true only for the local player's own mech (the createMech calls
 // that pass `true`, offline + online). That unit gets the through-wall X-ray
 // silhouette — it's the one the player needs to see when their own movement tucks
@@ -1456,11 +1524,14 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
   // indicators. roleKey picks the art set (player | ally | enemy1 | enemy2).
   const sprite = makeUnitSprite(unitData, isOwnUnit, roleKey);
   root.add(sprite);
-  // DEMO BUILD: weapon-name tag floating above the head. Kept on the mech so
-  // updateMechAnimations can distance-scale it every frame.
-  const weaponTag = makeWeaponTagSprite(unitData,
-    roleKey.startsWith('enemy') ? UNIT_TAG_INK_ENEMY : UNIT_TAG_INK_ALLY);
+  // DEMO BUILD: weapon tag floating above the head + health bar hanging under
+  // it, both in the team ink. Kept on the mech so updateMechAnimations can
+  // distance-scale them every frame.
+  const tagInk = roleKey.startsWith('enemy') ? UNIT_TAG_INK_ENEMY : UNIT_TAG_INK_ALLY;
+  const weaponTag = makeWeaponTagSprite(unitData, tagInk);
   root.add(weaponTag);
+  const healthBar = makeHealthBarSprite(tagInk);
+  root.add(healthBar);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
   plumeLight.position.set(0, -2.2, -0.7);
@@ -1488,7 +1559,8 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
     body,
     unit: unitData,
     roleKey,                  // demo art set for this slot (survives sprite view swaps)
-    weaponTag,                // overhead name tag — distance-scaled per frame
+    weaponTag,                // overhead weapon tag — distance-scaled per frame
+    healthBar,                // overhead hp bar under the tag — scaled + redrawn per frame
     thrusters: [],
     plumeLight,
     trail: [],
