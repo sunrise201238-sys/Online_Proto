@@ -1797,8 +1797,7 @@ function setupHUD() {
   const hudAbort = new AbortController();
   state.hudAbort = hudAbort;
   const hud = document.createElement('div');
-  // hud-2v2 repositions the shared HP bars for the interleaved icon/bar stack.
-  hud.className = state.mode === '2v2' ? 'touch-hud hud-2v2' : 'touch-hud';
+  hud.className = 'touch-hud';
   const teamBarsHtml = state.mode === '2v2' ? `
     <div class="ally-health"><div id="ally-health-fill"></div></div>
     <div class="enemy2-health"><div id="enemy2-health-fill"></div></div>` : '';
