@@ -8257,15 +8257,6 @@ function stunTier(u) {
   if (st.ms >= 100) return 'Heavy';
   return st.moveScale >= 0.85 ? 'Light' : 'Normal';
 }
-function spreadTierWord(u) {
-  if ((u.spreadCount ?? 1) > 1) return 'Wide';   // pellet volleys
-  const sa = u.spreadAngle ?? 0;
-  const total = sa + (u.horizontalAngle ?? 0);
-  if (total <= 0.025) return 'Pinpoint';         // snipers / laser
-  if (sa <= 0.02) return 'Tight';                // small sure-hit core + HA
-  return 'Normal';
-}
-
 // Per-weapon spread scatter icon — drawn from the REAL spread fields so it
 // recreates each setting's signature: SA = round cluster (engine falloff,
 // r ∝ √u), HA = horizontal-only smear, shotguns = their literal pellet
@@ -8331,14 +8322,17 @@ function showProfilePopup(card, unit, onConfirm) {
   const dmg = (unit.spreadCount ?? 1) > 1
     ? `${unit.damage} ×${unit.spreadCount}`   // shotguns: per pellet × pellet count
     : `${unit.damage}`;
+  // Labels are kept SHORT (one word; the fire-rate unit lives in the label)
+  // so every row stays on ONE line even at the face's phone-width cap
+  // (21vw < 110px in portrait); values right-stick via the row flex.
   const rows = [
     ['Mag', `${unit.magCapacity}`],
     ['Damage', dmg],
-    ['Fire rate', `${unit.firePerMinute} RPM`],
-    ['Bullet spd', bulletSpeedTier(unit)],
+    ['RPM', `${unit.firePerMinute}`],
+    ['Spd', bulletSpeedTier(unit)],   // shortest label — 'Instant' must fit the 21vw face
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
-    ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">${spreadTierWord(unit)}`]
+    ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]
   ].map(([l, v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-value">${v}</span></div>`).join('');
   const nameCls = (weapon ?? '').length > 8 ? ' stat-name-long' : '';
   spawnProfilePopup(card,
