@@ -9269,9 +9269,10 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -77, "maxX": -53, "minZ": -81.5, "maxZ": -78.5, "minY": 0, "maxY": 15 },
       { "minX": 53, "maxX": 77, "minZ": -81.5, "maxZ": -78.5, "minY": 0, "maxY": 15 },
 
+      // Hall partition walls: the spawn-quadrant pair (54..86 @ z>0 and
+      // -86..-54 @ z<0) was removed (user 2026-08-07) — bots looped against
+      // it near the corner spawns (engage-orbit bump). Diagonal pair kept.
       { "minX": -86, "maxX": -54, "minZ": 93.75, "maxZ": 96.25, "minY": 0, "maxY": 15 },
-      { "minX": 54, "maxX": 86, "minZ": 93.75, "maxZ": 96.25, "minY": 0, "maxY": 15 },
-      { "minX": -86, "maxX": -54, "minZ": -96.25, "maxZ": -93.75, "minY": 0, "maxY": 15 },
       { "minX": 54, "maxX": 86, "minZ": -96.25, "maxZ": -93.75, "minY": 0, "maxY": 15 },
 
       { "minX": -111, "maxX": -99, "minZ": 25, "maxZ": 35, "minY": 0, "maxY": 12 },

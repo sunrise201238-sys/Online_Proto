@@ -11933,9 +11933,10 @@ function buildStationArena() {
       minZ: cz - 1.7, maxZ: cz + 1.7
     });
   };
+  // Spawn-quadrant pair (70, 95) / (-70, -95) removed (user 2026-08-07):
+  // bots looped against it near the corner spawns (engage-orbit bump).
+  // Mirrored in shared arena.js station obstacles.
   drawHallWall(-70, 95);
-  drawHallWall(70, 95);
-  drawHallWall(-70, -95);
   drawHallWall(70, -95);
 
   // ===== Info kiosks on the platforms (8 — full-cover boxes) =====
