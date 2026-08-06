@@ -1339,7 +1339,7 @@ function updateMechAnimations(dt, now) {
       let s = UNIT_TAG_HEIGHT * UNIT_TAG_OWN_BOOST;
       if (!m.isOwnSprite) {
         const d = camera.position.distanceTo(m.root.position);
-        s = UNIT_TAG_HEIGHT * Math.min(UNIT_TAG_MAX_BOOST, Math.max(UNIT_TAG_MIN_BOOST, d / UNIT_TAG_REF_DIST));
+        s = UNIT_TAG_HEIGHT * UNIT_TAG_OTHER_APPARENT * (d / UNIT_TAG_REF_DIST);
       }
       tag.scale.set(s * tag.userData.tagEntry.aspect, s, 1);
       // Health bar under the tag: same boost, plus a redraw when hp moved.
@@ -1370,16 +1370,17 @@ const UNIT_TAG_Y = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT + 1.25;  // pill BOTT
 // the per-weapon width jitter and lets the hp bar width match the tag's.
 const UNIT_TAG_TEX_W = 232;     // texture px — plate aspect ≈ 2.42
 const UNIT_TAG_TEX_H = 96;
-// Distance compensation. The own/spectated unit sits right under the camera
-// at ~REF_DIST and keeps a fixed OWN_BOOST size; every OTHER unit scales
-// with range, floored at MIN_BOOST up close and capped at MAX_BOOST far out.
-// The image tags read better than the old text did, so the band is tighter
-// than the text-era 1.0 / 2.7 / 7.5. The tag is bottom-anchored, so the
-// boost grows it upward, never into the head.
-const UNIT_TAG_REF_DIST = 14;   // ~third-person camera distance to own unit
-const UNIT_TAG_OWN_BOOST = 1.5; // the own/spectated unit's fixed size
-const UNIT_TAG_MIN_BOOST = 2.2; // floor for other units' tags at close range
-const UNIT_TAG_MAX_BOOST = 4.5; // far-range ceiling (reached at ~63 units)
+// Sizing. The own/spectated unit sits right under the camera at ~REF_DIST
+// and keeps a fixed OWN_BOOST size. Every OTHER unit's tag holds a CONSTANT
+// ON-SCREEN size: the world scale grows linearly with camera distance
+// (s ∝ d), which cancels perspective exactly — readable at any range, never
+// dominating up close (replaces the floor/cap band, whose cap made far tags
+// unreadable). OTHER_APPARENT is the on-screen size in own-tag units: 1.3 =
+// a touch smaller than the own tag's 1.5. Bottom-anchored, so growth goes
+// upward, never into the head.
+const UNIT_TAG_REF_DIST = 14;       // ~third-person camera distance to own unit
+const UNIT_TAG_OWN_BOOST = 1.5;     // the own/spectated unit's fixed size
+const UNIT_TAG_OTHER_APPARENT = 1.3; // other units' constant apparent size
 const _weaponTagTexCache = {};  // weapon label + ink → { tex, aspect }
 // Tag ink: allies/own unit keep the light plate ink; enemies read orange —
 // the same #ff6a2c as the screen-edge enemy arrow.
