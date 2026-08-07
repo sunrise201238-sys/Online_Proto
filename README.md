@@ -100,24 +100,24 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (in 1v1: shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows. **In 2v2 every bot switches to its 2v2 lock value** (the second number in the weapons table): the team's fighting bands compress into 50–70 so long-lock units stop hanging back — and letting a teammate die alone at the front — while short-lock units step up slightly. 1v1 keeps the classic values, and the change is bot-behavior only.
 
-**Measured hit rates** (Shooting Range; every unit fires from her own lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates):
+**Measured hit rates** (Shooting Range; every unit fires from her own 1v1 lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates):
 
-| @ own lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
+| @ own 1v1 lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
 | M4 @56 | 100% | 75% | 7% |
 | FAMAS @56 | 100% | 72% | 11% |
 | evo3 @50 | 100% | 64% | 13% |
 | P90 @50 | 100% | 70% | 9% |
-| Beretta 1301 @40 | 79% | 25% | 0% |
-| M1014 @40 | 55% | 32% | 4% |
+| Beretta 1301 @40 | 79% | 29% | 0% |
+| M1014 @40 | 55% | 30% | 5% |
 | M60 @80 | 73% | 47% | 0% |
 | MG42 @80 | 100% | 18% | 0% |
 
-*Test environment:* Shooting Range (offline practice map). Each unit stands at her own lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
+*Test environment:* Shooting Range (offline practice map). Each unit stands at her own 1v1 lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
 Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
 
-**Score screens from these runs** (yellow dots = hits at the impact point, red dots = misses where the shot crossed the sign plane; each gun fired from its own lock range):
+**Score screens from these runs** (yellow dots = hits at the impact point, red dots = misses where the shot crossed the sign plane; each gun fired from its own 1v1 lock range — the shotgun screens are re-shot on the 4-per-pellet build, so their DMG totals read as hits × 4):
 
 | | |
 |---|---|
