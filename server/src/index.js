@@ -124,7 +124,12 @@ function botUnitKeyFor(lobby, s) {
   if (stored) return Array.isArray(stored) ? stored[0] : stored;
   if (lobby.mode === '1v1') return 'unit1';
   const idx = activeSlots(lobby.mode).indexOf(s);
-  return ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][(idx >= 0 ? idx : 0) % 6];
+  // Visible units only — this list is what the queue room shows for empty
+  // slots. unit2 (Beretta 1301) and unit5 (MG42) were hidden in 0.7.1 when
+  // AA12/NEGEV took their picker slots, but stayed here and kept showing up
+  // in the default 2v2 room roster (user report 2026-08-09): swapped to
+  // unit11 (M1014) and unit17 (NEGEV).
+  return ['unit1', 'unit11', 'unit3', 'unit4', 'unit17', 'unit6'][(idx >= 0 ? idx : 0) % 6];
 }
 
 // Trio roster for a bot slot: the host's 3-pick if stored, else 3 copies of
