@@ -4129,11 +4129,14 @@ function updatePlayer(now) {
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 // After a stuck event, remember the pinned spot for this long and bias
-// movement away from it so the bot picks a different route around the wall
-// instead of grinding into the same corner once the perpendicular pivot
-// ends. Radius caps the influence so distant memories don't warp kiting.
-const BOT_STUCK_MEMORY_MS = 3500;
-const BOT_STUCK_MEMORY_RADIUS = 12;
+// movement away from it so the bot picks a different route instead of
+// re-treading the same corner. Radius caps the influence so the memory only
+// covers the pinned spot itself — 12/3500 sterilized Airport's whole
+// checkpoint area and pushed every plateau fight to the map ends (user
+// report 2026-08-08; 6/1500 restores the middle-fight distribution while
+// keeping the anti-re-tread benefit). Mirrored in shared ai.js.
+const BOT_STUCK_MEMORY_MS = 1500;
+const BOT_STUCK_MEMORY_RADIUS = 6;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
 // COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
