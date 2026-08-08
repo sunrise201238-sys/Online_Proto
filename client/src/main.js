@@ -4147,6 +4147,9 @@ const BOT_LOS_EYE_HEIGHT = 1.6;
 // Mirrored in shared ai.js tickBot.
 const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
 const BOT_COVER_RELOAD_EXIT_MS = 400;
+// The dash to cover funds at the survival-jump tier (raw jump 48 + sprint
+// floor 8), NOT the 250 travel reserve — a mid-fight bot can still afford it.
+const BOT_COVER_SPRINT_MIN_BOOST = 56;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -5772,9 +5775,14 @@ function updateEnemy(now) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
-  // Defense (escaping live fire) may spend down to the hard floor; every
-  // other state stops at the strategic reserve.
-  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST : BOT_BOOST_RESERVE;
+  // Sprint funding tiers: Defense (escaping live fire) may spend down to the
+  // hard floor; the COVER-RELOAD dash funds at the survival-jump tier (56,
+  // 2026-08-08 user tune — hiding a reload is a survival move); every other
+  // state stops at the strategic reserve. A cover HOLD never sprints, so it
+  // takes no tier at all.
+  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
+    : (coverMove && !coverMove.hold) ? BOT_COVER_SPRINT_MIN_BOOST
+    : BOT_BOOST_RESERVE;
   const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
   if (jumpThisTick) {
