@@ -80,7 +80,7 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 2.5,             // per pellet (volley max 8 x 2.5 = 20 point-blank; 5 -> 4 -> 2.5, 2026-08-08 user tune)
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; 4 -> 2.5 -> 3, 2026-08-08 user tune)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
@@ -398,7 +398,7 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 2.5,             // per pellet (volley max 8 x 2.5 = 20 point-blank; 5 -> 4 -> 2.5, 2026-08-08 user tune)
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; 4 -> 2.5 -> 3, 2026-08-08 user tune)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
