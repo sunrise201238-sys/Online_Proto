@@ -4139,6 +4139,14 @@ const BOT_STUCK_MEMORY_MS = 3500;
 const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
+// COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
+// least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
+// famine behind cover: walk to the nearest reachable spot that breaks the
+// LOCKED target's line of sight (single-target by spec) and hold, re-emerging
+// with EXIT_MS left so the mag fills while stepping back into band.
+// Mirrored in shared ai.js tickBot.
+const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
+const BOT_COVER_RELOAD_EXIT_MS = 400;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -4668,6 +4676,139 @@ function updateEnemy(now) {
   const myFloorY = groundHeightAt(e.x, e.z, e.y - GROUND_BASE_Y);
   const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
+
+  // --- COVER RELOAD (2026-08-08, user-designed; see the constants note) ---
+  // Movement-only override, decided here so the stall clocks below can be
+  // pinned while it runs. Defense outranks it (the window closes under fire
+  // and while the defense state is live) and the anti-glint step is a
+  // separate reflex layer that still fires. One cover search per reload
+  // cycle; a run that stops progressing bails for the rest of the cycle
+  // instead of inheriting the generic wedge remedy (whose re-path goal is a
+  // SIGHTED cell — it would fight the hide). Mirrored in shared ai.js.
+  let coverMove = null;
+  {
+    const cu = state.enemy.unit ?? {};
+    const reloadRemaining = (eState.reloadingUntil || 0) - now;
+    const coverWindow = (cu.reloadMs ?? 0) >= BOT_COVER_RELOAD_MIN_RELOAD_MS
+      && !cu.autoReload
+      && reloadRemaining > BOT_COVER_RELOAD_EXIT_MS
+      && !underFire
+      && (eState.botState ?? 'pursue') !== 'defense';
+    if (!coverWindow) {
+      eState.botCoverKey = 0;
+    } else {
+      if (eState.botCoverKey !== eState.reloadingUntil) {
+        eState.botCoverKey = eState.reloadingUntil;
+        eState.botCoverFailed = false;
+        eState.botCoverPath = null;
+        eState.botCoverMoveAnchor = null;
+      }
+      const oppEye = { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z };
+      const myEye = { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z };
+      if (!botHasLineOfSight(oppEye, myEye)) {
+        // Already hidden — hold the spot (the dispatch skips its anti-freeze
+        // nudge for a cover hold so the bot truly stands). KEEP the path —
+        // a hidden→visible flicker resumes it instead of burning a fresh
+        // 48-candidate search every other tick (adversarial finding,
+        // 2026-08-08); only the progress anchor resets so the next walking
+        // stretch opens a fresh 700 ms bail window.
+        coverMove = { hold: true, mx: 0, mz: 0 };
+        eState.botCoverMoveAnchor = null;
+      } else if (!eState.botCoverFailed) {
+        if (!eState.botCoverPath) {
+          // Ring candidates around the bot, hidden-from-target first, then
+          // A* the best few for real reachability. Jump-links are excluded —
+          // no vaulting mid-reload — and candidates are scored by walk
+          // distance plus a penalty for leaving the band, so the bot prefers
+          // cover it can fight from the moment the mag fills.
+          const cands = [];
+          for (const cr of [5, 8, 11, 14]) {
+            for (let ca = 0; ca < 12; ca += 1) {
+              const th = (ca + (cr % 2) * 0.5) * (Math.PI / 6);
+              const cx = e.x + Math.cos(th) * cr;
+              const cz = e.z + Math.sin(th) * cr;
+              const cf = groundHeightAt(cx, cz, e.y - GROUND_BASE_Y);
+              const cEye = { x: cx, y: cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: cz };
+              if (botHasLineOfSight(oppEye, cEye)) continue;
+              const cDist = Math.hypot(p.x - cx, p.z - cz);
+              const bandPen = Math.max(0, lowerRange - cDist, cDist - upperRange) * 0.5;
+              cands.push({ cx, cz, cf, score: Math.hypot(cx - e.x, cz - e.z) + bandPen });
+            }
+          }
+          cands.sort((a2, b2) => a2.score - b2.score);
+          if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+          let best = null;
+          for (let ci = 0; ci < Math.min(10, cands.length) && !best; ci += 1) {
+            const c = cands[ci];
+            // Obstacle-embedded candidates pass the hidden filter trivially
+            // (a segment INTO the box reads as blocked) — skip them before
+            // they eat the A* budget (adversarial finding, 2026-08-08).
+            const cEyeY = c.cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT;
+            let embedded = false;
+            for (const o of arenaObstacles) {
+              if (c.cx >= o.minX && c.cx <= o.maxX && c.cz >= o.minZ && c.cz <= o.maxZ
+                  && cEyeY >= o.minY && cEyeY <= o.maxY) { embedded = true; break; }
+            }
+            if (embedded) continue;
+            const cPath = findPathOnGrid(offlineNavGrid, e.x, e.z, c.cx, c.cz, myFloorY, c.cf, arenaObstacles);
+            if (!cPath || cPath.length < 2) continue;
+            let jumpy = false;
+            for (const wp of cPath) {
+              if ((wp.y ?? 0) - myFloorY > 1.7) { jumpy = true; break; }
+            }
+            if (jumpy) continue;
+            // GOAL-VERIFY: the A* goal-snap can relocate an off-grid or
+            // mis-floored candidate onto a cell the target SEES — walking
+            // there wastes the cycle's one search (adversarial finding,
+            // 2026-08-08). Commit only if the final waypoint is hidden too.
+            const gWp = cPath[cPath.length - 1];
+            const gf = gWp.y != null ? gWp.y : c.cf;
+            if (botHasLineOfSight(
+              oppEye,
+              { x: gWp.x, y: gf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: gWp.z }
+            )) continue;
+            best = { path: cPath, idx: 0 };
+          }
+          if (best) eState.botCoverPath = best;
+          else eState.botCoverFailed = true;
+        }
+        const cNav = eState.botCoverPath;
+        if (cNav) {
+          let wp = cNav.path[cNav.idx];
+          while (cNav.idx < cNav.path.length - 1
+              && Math.hypot(wp.x - e.x, wp.z - e.z) < 2) {
+            cNav.idx += 1;
+            wp = cNav.path[cNav.idx];
+          }
+          let tx = wp.x - e.x, tz = wp.z - e.z;
+          const wl = Math.hypot(tx, tz) || 1;
+          tx = tx / wl + avoid.rx * 0.6;
+          tz = tz / wl + avoid.rz * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          coverMove = { hold: false, mx: tx / tl, mz: tz / tl };
+          if (!eState.botCoverMoveAnchor
+              || Math.hypot(e.x - eState.botCoverMoveAnchor.x, e.z - eState.botCoverMoveAnchor.z) > 1) {
+            eState.botCoverMoveAnchor = { x: e.x, z: e.z, at: now };
+          } else if (now - eState.botCoverMoveAnchor.at > 700) {
+            eState.botCoverFailed = true;
+            eState.botCoverPath = null;
+            coverMove = null;
+          }
+        }
+      }
+    }
+  }
+  if (coverMove) {
+    // Pin the stall clocks: a deliberate hide must not read as wedged /
+    // stalled / sightless — those detectors' remedies all route toward
+    // SIGHTED cells and would fight the cover intent on exit.
+    eState.botLastProgressAt = now;
+    eState.botLastLoSAt = now;
+    eState.botStuckCheckX = e.x;
+    eState.botStuckCheckZ = e.z;
+    eState.botStuckCheckAt = now;
+    eState.botPathLen = 0;
+  }
 
   // --- Stuck cut-in detection over a rolling 1.5 s window, two flavors:
   //   WEDGED   — barely any net movement AND barely any path traveled.
@@ -5201,7 +5342,14 @@ function updateEnemy(now) {
   // no-progress timer shoved it into maze (the 2 s statue at match start).
   const botS = eState.botState ?? 'pursue';
 
-  if (botS === 'pursue') {
+  if (coverMove) {
+    // COVER RELOAD owns movement for the tick — the state branches below
+    // (including their jump commands) don't run, so a maze path can't vault
+    // the bot mid-hide. Never active during Defense (window check above).
+    mx = coverMove.mx;
+    mz = coverMove.mz;
+    wantSprint = false;
+  } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
@@ -5647,7 +5795,10 @@ function updateEnemy(now) {
   } else {
     state.enemy.body.velocity.x = mx * botWalkSpeed;
     state.enemy.body.velocity.z = mz * botWalkSpeed;
-    if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
+    // Anti-freeze nudge — skipped during a cover-reload HOLD, where standing
+    // dead still behind the wall is the whole point.
+    if (!(coverMove && coverMove.hold)
+        && Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
       state.enemy.body.velocity.x = side.x * 4.5;
       state.enemy.body.velocity.z = side.z * 4.5;
     }
