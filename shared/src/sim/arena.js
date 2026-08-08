@@ -9553,13 +9553,14 @@ const ARENA_SPAWNS = {
   // (±25/±125) — engagements started too fast; reverted same day (user).
   station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
-  // Airport: ground level in front of the corner ramps (feet at |z| 50, ramp
-  // x-span 88..130 — the x ±118 spawn faces one head-on). 2026-08-08 (user):
-  // ±72 -> ±68 and the 2v2 teammate offset mirrored toward centre, so all
-  // four slots start 6–18 units from a ramp foot and every bot climbs to the
-  // security plateau at match start (at ±72 with the old +Z offset the far
-  // team sat 22/34 units out and never made it up before contact).
-  airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -68 }, p2: { x: 118, y: GROUND_BASE_Y, z: 68 } }
+  // Airport: ground level right at the mouth of a corner ramp (ramp x-span
+  // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
+  // off the foot, with the 2v2 teammate offset stepping AWAY from centre so
+  // the pair lands 6u + 18u out on BOTH sides — mirrored distances are what
+  // matter (the original plain +Z offset gave one team 10u and the other
+  // 34u, so the near team always won the climb race and the far team spent
+  // the match fighting on the ground).
+  airport: { p1: { x: -130, y: GROUND_BASE_Y, z: -56 }, p2: { x: 130, y: GROUND_BASE_Y, z: 56 } }
 };
 
 function materializeSurface(surface) {

@@ -6701,15 +6701,16 @@ function startMatch() {
     state.player.body.position.set(-95, 2.45, -45);
     state.enemy.body.position.set(95, 2.45, 45);
   } else if (state.mapKey === 'airport') {
-    // Ground level in front of the corner ramps (feet at |z| 50, ramp x-span
-    // 88..130 — the x ±118 spawn faces one head-on). 2026-08-08 (user):
-    // ±72 -> ±68 and the 2v2 teammate offset mirrored toward centre, so all
-    // four slots start 6–18 units from a ramp foot and every bot climbs to
-    // the security plateau at match start (at ±72 with the old +Z offset the
-    // far team sat 22/34 units out and never made it up before contact).
+    // Ground level right at the mouth of a corner ramp (ramp x-span 88..130,
+    // feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u off the
+    // foot, with the 2v2 teammate offset stepping AWAY from centre so the
+    // pair lands 6u + 18u out on BOTH sides — mirrored distances are what
+    // matter (the original plain +Z offset gave one team 10u and the other
+    // 34u, so the near team always won the climb race and the far team spent
+    // the match fighting on the ground).
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-118, 2.45, -68);
-    state.enemy.body.position.set(118, 2.45, 68);
+    state.player.body.position.set(-130, 2.45, -56);
+    state.enemy.body.position.set(130, 2.45, 56);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -6721,20 +6722,25 @@ function startMatch() {
   // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
   // so offset along the deck toward centre (X). Streets' corner spawns sit
   // 8u off the south/north walls, so +Z would bury the teammate in the wall —
-  // offset along Z toward centre instead. AIRPORT joins the toward-centre
-  // camp (2026-08-08): a plain +Z put one team's ally 12u CLOSER to the
-  // plateau ramps and the other's 12u further, so the near team always won
-  // the climb race and the far team fought on the ground. Mirroring makes
-  // both teams' ramp distances identical. Mirrored in shared state.js.
+  // offset along Z toward centre instead. AIRPORT spawns sit 6u off a ramp
+  // foot, so its teammate steps AWAY from centre (out to 18u) — the pair
+  // straddles the ramp mouth instead of standing on the slope. Either
+  // mirrored direction works; what matters is the Math.sign: the original
+  // plain +Z put one team's ally 12u CLOSER to the ramps and the other's
+  // 12u further, so the near team always won the climb race and the far
+  // team fought on the ground all match. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
     if (state.mapKey === 'station') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2' || state.mapKey === 'airport') {
+    } else if (state.mapKey === 'arena2') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
+    } else if (state.mapKey === 'airport') {
+      state.ally.body.position.set(pp.x, pp.y, pp.z + Math.sign(pp.z) * 12);
+      state.enemy2.body.position.set(ep.x, ep.y, ep.z + Math.sign(ep.z) * 12);
     } else {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
