@@ -649,7 +649,7 @@ const UNIT_DATA = {
     spreadAngle: 0.04,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
-    damage: 4.5,               // 7.62 chunk — same 600 RPM rhythm as the M60 it clones
+    damage: 5,                 // 7.62 chunk — 4.5 -> 5 (2026-08-08 user tune): clean 20-shot kill at 100 HP, the heaviest auto bullet
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 5000,

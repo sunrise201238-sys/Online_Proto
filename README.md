@@ -50,7 +50,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 2 s |
 | AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
-| RPK — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
+| RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
 | M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
 | Laser — Rifle | 8 | 12 / bolt | ~250 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
@@ -68,9 +68,9 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | Laser | 4.17/s | 12 / bolt | **50.0** | ~10 (bolt-regen limited) |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
+| RPK | 8.9/s (112 ms) | 5 | **44.6** | 31.1 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
 | M14 | 4.17/s | 10 | **41.7** | 30.5 |
-| RPK | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
