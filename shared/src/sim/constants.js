@@ -517,6 +517,110 @@ export const UNIT_DATA = {
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light.
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  unit15: {
+    id: 'unit15',
+    name: 'Unit 15 / Shotgun',
+
+    // Pilot stats — Beretta 1301 template: same mobility block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — AA12 (2026-08-08, replaces the hidden Beretta 1301 in
+    // the pickers): the Beretta turned AUTO drum shotgun — 300 RPM
+    // hold-to-spray on an 8-shell drum with ONE long 4 s reload instead of
+    // the per-shell regen. Same pellet pattern, same 33–47 band (43–57 2v2).
+    lockRange: 40,
+    lockRange2v2: 50,
+    projectileSpeed: 300,
+    firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
+    spreadCount: 8,
+    // 16 degrees in radians, computed once.
+    spreadAngle: (16 * Math.PI) / 180,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
+    magCapacity: 8,
+    botFireCap: 8,         // bot: shots per trigger pull = full drum (fire cap policy)
+    reloadMs: 4000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit16: {
+    id: 'unit16',
+    name: 'Unit 16 / Machine Gun',
+
+    // Pilot stats — M60 template: same mobility block (walk 12).
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — RPK (2026-08-08, replaces the hidden M60 in the
+    // pickers): exact M60 stat clone.
+    lockRange: 80,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4.5,               // 7.62 chunk — same 600 RPM rhythm as the M60 it clones
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 5000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit17: {
+    id: 'unit17',
+    name: 'Unit 17 / Machine Gun',
+
+    // Pilot stats — MG42 template with the M60's lighter mobility tax
+    // (walk 12 vs the MG42's 8).
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — NEGEV (2026-08-08, replaces the hidden MG42 in the
+    // pickers): MG42 clone stepped down a tick rung — 1100 RPM on a 100
+    // mag with a 5 s reload (vs the MG42's 1250 / 250 / 7 s).
+    lockRange: 80,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 1100,       // ≈ 54.55 ms cooldown — 64 ms tick slot (15.6/s), evo3's rung
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4,
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 5000,
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   }
 };
 

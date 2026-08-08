@@ -89,6 +89,10 @@ const UNIT_DATA = {
     name: 'Unit 2 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 2', weapon: 'Beretta 1301', accent: 0xff9ec7,
+    // HIDDEN since 0.7.1 (AA12/unit15 took her picker slot — same treatment
+    // as Mika/unit8): kept fully in code and sim, absent from every picker
+    // and random pool.
+    hidden: true,
 
     // Pilot stats
     hp: 100,
@@ -199,6 +203,10 @@ const UNIT_DATA = {
     name: 'Unit 5 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 5', weapon: 'MG42', accent: 0x6fcf8f,
+    // HIDDEN since 0.7.1 (NEGEV/unit17 took her picker slot — same treatment
+    // as Mika/unit8): kept fully in code and sim, absent from every picker
+    // and random pool.
+    hidden: true,
 
     // Pilot stats
     hp: 100,
@@ -460,6 +468,10 @@ const UNIT_DATA = {
     name: 'Unit 12 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 12', weapon: 'M60', accent: 0xff8ac8,
+    // HIDDEN since 0.7.1 (RPK/unit16 took her picker slot — same treatment
+    // as Mika/unit8): kept fully in code and sim, absent from every picker
+    // and random pool.
+    hidden: true,
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 100,
@@ -569,6 +581,112 @@ const UNIT_DATA = {
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light.
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  unit15: {
+    name: 'Unit 15 / Shotgun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    char: 'Unit 15', weapon: 'AA12', accent: 0xff9ec7,
+
+    // Pilot stats — Beretta 1301 template: same mobility block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — AA12 (2026-08-08, replaces the hidden Beretta 1301 in
+    // the pickers): the Beretta turned AUTO drum shotgun — 300 RPM
+    // hold-to-spray on an 8-shell drum with ONE long 4 s reload instead of
+    // the per-shell regen. Same pellet pattern, same 33–47 band (43–57 2v2).
+    lockRange: 40,
+    lockRange2v2: 50,
+    projectileSpeed: 300,
+    firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
+    spreadCount: 8,
+    spreadAngle: THREE.MathUtils.degToRad(16),
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
+    magCapacity: 8,
+    botFireCap: 8,         // bot: shots per trigger pull = full drum (fire cap policy)
+    reloadMs: 4000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit16: {
+    name: 'Unit 16 / Machine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    char: 'Unit 16', weapon: 'RPK', accent: 0xff8ac8,
+
+    // Pilot stats — M60 template: same mobility block (walk 12).
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — RPK (2026-08-08, replaces the hidden M60 in the
+    // pickers): exact M60 stat clone.
+    lockRange: 80,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4.5,               // 7.62 chunk — same 600 RPM rhythm as the M60 it clones
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 5000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit17: {
+    name: 'Unit 17 / Machine Gun',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    char: 'Unit 17', weapon: 'NEGEV', accent: 0x6fcf8f,
+
+    // Pilot stats — MG42 template with the M60's lighter mobility tax
+    // (walk 12 vs the MG42's 8).
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — NEGEV (2026-08-08, replaces the hidden MG42 in the
+    // pickers): MG42 clone stepped down a tick rung — 1100 RPM on a 100
+    // mag with a 5 s reload (vs the MG42's 1250 / 250 / 7 s).
+    lockRange: 80,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 1100,       // ≈ 54.55 ms cooldown — 64 ms tick slot (15.6/s), evo3's rung
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 4,
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 5000,
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   }
 };
 
@@ -8374,7 +8492,8 @@ const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 // the shotguns keep their own 40 lockRange (their pattern is the point).
 const SPREAD_ICON_RANGE_OVERRIDE = {
   M4: 60, FAMAS: 60, evo3: 60, P90: 60, M60: 60,
-  MG42: 60, M14: 60, Laser: 60, PSG1: 60, Railgun: 60
+  MG42: 60, M14: 60, Laser: 60, PSG1: 60, Railgun: 60,
+  RPK: 60, NEGEV: 60   // MG clones follow the common range; AA12 (shotgun) stays on her own lock
 };
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
@@ -8491,7 +8610,7 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 // from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
   'unit1', 'unit9', 'unit4', 'unit14',   // M4  FAMAS  evo3  P90 (PPSh/unit13 hidden — her old slot; Mika/unit8 hidden too)
-  'unit2', 'unit11', 'unit12', 'unit5',  // Beretta 1301  M1014  M60  MG42
+  'unit15', 'unit11', 'unit16', 'unit17', // AA12  M1014  RPK  NEGEV (0.7.1: Beretta 1301/unit2, M60/unit12, MG42/unit5 hidden — their old slots)
   'unit10', 'unit7', 'unit3', 'unit6'    // M14  Laser  PSG1  Railgun
 ];
 

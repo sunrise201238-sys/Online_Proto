@@ -38,7 +38,7 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — MG42 walks at 8, M60 at 12):
+Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — RPK and NEGEV walk at 12):
 
 **Weapons:**
 
@@ -48,10 +48,10 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 2 s |
-| Beretta 1301 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
+| AA12 — Shotgun | 8 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
-| M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
-| MG42 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
+| RPK — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
+| NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
 | M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
 | Laser — Rifle | 8 | 12 / bolt | ~250 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
 | PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
@@ -61,19 +61,20 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 
 | Weapon | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| Beretta 1301 / M1014 | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
-| MG42 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
+| AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~35.2 (8-drum + 4 s reload) |
+| M1014 | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
+| NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | Laser | 4.17/s | 12 / bolt | **50.0** | ~10 (bolt-regen limited) |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
 | M14 | 4.17/s | 10 | **41.7** | 30.5 |
-| M60 | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
+| RPK | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 8-drum in ~1.5 s of auto fire and then pays one full 4 s reload. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
 
 **Handling (stun + spread):**
 
@@ -83,10 +84,10 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | FAMAS | 100 ms @ 0.25 | 0.02 | 0.04 | ~53 |
 | evo3 | 50 ms @ 0.50 | 0.06 | — | ~53 |
 | P90 | 50 ms @ 0.50 | 0.02 | 0.04 | ~53 |
-| Beretta 1301 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
+| AA12 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | M1014 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
-| M60 | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
-| MG42 | 50 ms @ 0.85 | 0.04 | — | ~80 |
+| RPK | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
+| NEGEV | 50 ms @ 0.85 | 0.04 | — | ~80 |
 | M14 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Laser | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
@@ -100,7 +101,7 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (in 1v1: shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows. **In 2v2 every bot switches to its 2v2 lock value** (the second number in the weapons table): the team's fighting bands compress into 50–70 so long-lock units stop hanging back — and letting a teammate die alone at the front — while short-lock units step up slightly. 1v1 keeps the classic values, and the change is bot-behavior only.
 
-**Measured hit rates** (Shooting Range; every unit fires from her own 1v1 lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates):
+**Measured hit rates** (Shooting Range; every unit fires from her own 1v1 lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates). AA12 / RPK / NEGEV inherit their stat-clone predecessors' measured rows — identical spread, projectile speed, and pattern; a fresh range pass is pending:
 
 | @ own 1v1 lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
@@ -108,10 +109,10 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 | FAMAS @56 | 100% | 72% | 11% |
 | evo3 @50 | 100% | 64% | 13% |
 | P90 @50 | 100% | 70% | 9% |
-| Beretta 1301 @40 | 79% | 29% | 0% |
+| AA12 @40 | 79% | 29% | 0% |
 | M1014 @40 | 55% | 30% | 5% |
-| M60 @80 | 73% | 47% | 0% |
-| MG42 @80 | 100% | 18% | 0% |
+| RPK @80 | 73% | 47% | 0% |
+| NEGEV @80 | 100% | 18% | 0% |
 
 *Test environment:* Shooting Range (offline practice map). Each unit stands at her own 1v1 lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
 
@@ -129,11 +130,12 @@ Standouts under the strict protocol: perpendicular sprint is near-untouchable fo
 
 Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
 
-### Beretta 1301 & M1014 — the shotgun blast
+### AA12 & M1014 — the shotgun blast
 
 - A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 3 (all 8 point-blank = 24, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Beretta 1301's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Beretta 1301's concentrated slug.
+- **AA12's drum:** unlike M1014's per-shell regen, AA12 fires her 8-shell drum full-auto (~4.8 blasts/s) and reloads it in one 4 s stroke — the burst monster of the pair, with the hardest famine window.
+- **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as AA12's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis — the dodge-catcher to AA12's concentrated cluster.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
 ### Laser — laser bolts
@@ -189,9 +191,10 @@ Three properties the table encodes: glint duration equals the release time on **
 | evo3 | 30 | full mag |
 | P90 | 50 | full mag |
 | M14 | 20 | full mag |
-| M60 | 100 | full mag |
-| MG42 | 250 | full drum (~12 s of continuous fire) |
-| Beretta 1301 / M1014 | 4 | 4 blasts per trigger pull |
+| RPK | 100 | full mag |
+| NEGEV | 100 | full mag (~6.4 s of continuous fire) |
+| AA12 | 8 | full drum |
+| M1014 | 4 | 4 blasts per trigger pull |
 | Laser | 4 | legacy formula (half mag) |
 | PSG1 / Railgun | — | charge cycle, no bursts |
 
