@@ -205,21 +205,10 @@ export function createMatchState({
     // offline client's 4-corner placement). Station's deck spawns sit near the
     // END walls — offset along the deck toward centre (X) instead. Streets'
     // corner spawns sit 8u off the south/north walls, so +Z would bury the
-    // teammate in the wall — offset along Z TOWARD CENTRE there. AIRPORT
-    // spawns sit 6u off a ramp foot, so its teammate steps AWAY from centre
-    // (out to 18u) — the pair straddles the ramp mouth instead of standing
-    // on the slope. Either mirrored direction works; what matters is the
-    // Math.sign: the original plain +Z put one team's ally 12u CLOSER to the
-    // ramps and the other's 12u further, so the near team always won the
-    // climb race and the far team fought on the ground all match.
+    // teammate in the wall — offset along Z TOWARD CENTRE there.
     const station = mapKey === 'station';
-    const zTowardCentre = mapKey === 'arena2';
-    const zAwayFromCentre = mapKey === 'airport';
-    const zOff = (s) => {
-      if (zTowardCentre) return s.z - Math.sign(s.z) * 12;
-      if (zAwayFromCentre) return s.z + Math.sign(s.z) * 12;
-      return s.z + 12;
-    };
+    const streets = mapKey === 'arena2';
+    const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const p3Spawn = {
       x: station ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,

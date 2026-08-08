@@ -6722,13 +6722,7 @@ function startMatch() {
   // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
   // so offset along the deck toward centre (X). Streets' corner spawns sit
   // 8u off the south/north walls, so +Z would bury the teammate in the wall —
-  // offset along Z toward centre instead. AIRPORT spawns sit 6u off a ramp
-  // foot, so its teammate steps AWAY from centre (out to 18u) — the pair
-  // straddles the ramp mouth instead of standing on the slope. Either
-  // mirrored direction works; what matters is the Math.sign: the original
-  // plain +Z put one team's ally 12u CLOSER to the ramps and the other's
-  // 12u further, so the near team always won the climb race and the far
-  // team fought on the ground all match. Mirrored in shared state.js.
+  // offset along Z toward centre instead. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
@@ -6738,9 +6732,6 @@ function startMatch() {
     } else if (state.mapKey === 'arena2') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
-    } else if (state.mapKey === 'airport') {
-      state.ally.body.position.set(pp.x, pp.y, pp.z + Math.sign(pp.z) * 12);
-      state.enemy2.body.position.set(ep.x, ep.y, ep.z + Math.sign(ep.z) * 12);
     } else {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
