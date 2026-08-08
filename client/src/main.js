@@ -6701,10 +6701,15 @@ function startMatch() {
     state.player.body.position.set(-95, 2.45, -45);
     state.enemy.body.position.set(95, 2.45, 45);
   } else if (state.mapKey === 'airport') {
-    // Diagonal spawn at opposite ends of the concourse, clear of the plateau
-    // end-ramps (z ±40..50) and the baggage carousels (|x| <= 102).
-    state.player.body.position.set(-118, 2.45, -72);
-    state.enemy.body.position.set(118, 2.45, 72);
+    // Ground level in front of the corner ramps (feet at |z| 50, ramp x-span
+    // 88..130 — the x ±118 spawn faces one head-on). 2026-08-08 (user):
+    // ±72 -> ±68 and the 2v2 teammate offset mirrored toward centre, so all
+    // four slots start 6–18 units from a ramp foot and every bot climbs to
+    // the security plateau at match start (at ±72 with the old +Z offset the
+    // far team sat 22/34 units out and never made it up before contact).
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-118, 2.45, -68);
+    state.enemy.body.position.set(118, 2.45, 68);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -6716,14 +6721,18 @@ function startMatch() {
   // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
   // so offset along the deck toward centre (X). Streets' corner spawns sit
   // 8u off the south/north walls, so +Z would bury the teammate in the wall —
-  // offset along Z toward centre instead. Mirrored in shared state.js.
+  // offset along Z toward centre instead. AIRPORT joins the toward-centre
+  // camp (2026-08-08): a plain +Z put one team's ally 12u CLOSER to the
+  // plateau ramps and the other's 12u further, so the near team always won
+  // the climb race and the far team fought on the ground. Mirroring makes
+  // both teams' ramp distances identical. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
     if (state.mapKey === 'station') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2') {
+    } else if (state.mapKey === 'arena2' || state.mapKey === 'airport') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {

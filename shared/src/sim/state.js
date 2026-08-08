@@ -205,10 +205,14 @@ export function createMatchState({
     // offline client's 4-corner placement). Station's deck spawns sit near the
     // END walls — offset along the deck toward centre (X) instead. Streets'
     // corner spawns sit 8u off the south/north walls, so +Z would bury the
-    // teammate in the wall — offset along Z TOWARD CENTRE there.
+    // teammate in the wall — offset along Z TOWARD CENTRE there. AIRPORT
+    // joins the toward-centre camp (2026-08-08): a plain +Z put one team's
+    // ally 12u CLOSER to the plateau ramps and the other's 12u further, so
+    // the near team always won the climb race and the far team fought on the
+    // ground. Mirroring makes both teams' ramp distances identical.
     const station = mapKey === 'station';
-    const streets = mapKey === 'arena2';
-    const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;
+    const zTowardCentre = mapKey === 'arena2' || mapKey === 'airport';
+    const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const p3Spawn = {
       x: station ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,

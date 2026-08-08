@@ -9553,7 +9553,13 @@ const ARENA_SPAWNS = {
   // (±25/±125) — engagements started too fast; reverted same day (user).
   station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
   flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
-  airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
+  // Airport: ground level in front of the corner ramps (feet at |z| 50, ramp
+  // x-span 88..130 — the x ±118 spawn faces one head-on). 2026-08-08 (user):
+  // ±72 -> ±68 and the 2v2 teammate offset mirrored toward centre, so all
+  // four slots start 6–18 units from a ramp foot and every bot climbs to the
+  // security plateau at match start (at ±72 with the old +Z offset the far
+  // team sat 22/34 units out and never made it up before contact).
+  airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -68 }, p2: { x: 118, y: GROUND_BASE_Y, z: 68 } }
 };
 
 function materializeSurface(surface) {
