@@ -607,6 +607,7 @@ const UNIT_DATA = {
     lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
+    autoFire: true,            // full-auto: hold-to-fire like the MGs (shotguns are tap-fire by default)
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -4084,8 +4085,10 @@ function updatePlayer(now) {
     if (action === 'idle') action = 'shoot';
     input.shootTap = false;
   }
-  // Player MG: continuous fire while shoot is held — no burst cap (cooldown still gates rate).
-  if (input.shootHold && state.player.unit.spreadCount === 1 && !state.player.unit.sniperCharge) {
+  // Player continuous fire while shoot is held — no burst cap (cooldown still
+  // gates rate): every single-projectile non-sniper gun, plus multi-pellet
+  // guns flagged autoFire (AA12 — 2026-08-08). Mirrored in shared tick.js.
+  if (input.shootHold && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, pTarget, now);
     if (state.player.state.lastFireAt !== firedAt) {

@@ -542,6 +542,7 @@ export const UNIT_DATA = {
     lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
+    autoFire: true,            // full-auto: hold-to-fire like the MGs (shotguns are tap-fire by default)
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,

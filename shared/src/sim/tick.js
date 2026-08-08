@@ -210,8 +210,9 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     if (action === 'idle') action = 'shoot';
   }
 
-  // Continuous-fire MG: spreadCount===1 and not sniper.
-  if (input.shootHold && opp && fighter.unit.spreadCount === 1 && !fighter.unit.sniperCharge) {
+  // Continuous-fire while shoot is held: every single-projectile non-sniper
+  // gun, plus multi-pellet guns flagged autoFire (AA12 — 2026-08-08).
+  if (input.shootHold && opp && (fighter.unit.spreadCount === 1 || fighter.unit.autoFire) && !fighter.unit.sniperCharge) {
     const before = fighter.lastFireAt;
     attemptFire(matchState, fighter, opp, now);
     if (fighter.lastFireAt !== before && action === 'idle') action = 'shoot';
