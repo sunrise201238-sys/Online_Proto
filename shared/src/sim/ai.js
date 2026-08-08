@@ -836,7 +836,13 @@ export function tickBot(matchState, botId, now) {
     const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
     // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
     // movement rates that count as wedged/spinning are unchanged.
-    const wedged = net < 1.7 && me.botPathLen < 4;
+    // WEDGED's path cap was 4 until 2026-08-08: a bot SLIDING along a wall
+    // travelled 4–12 u/s while netting nothing, which was too fast for
+    // wedged and too slow for spinning — 47% of Airport's ramp-corner
+    // grinds fell in that gap with no detector to free them. Raising the
+    // cap to spinning's 12 makes the pair partition the space: net < 1.7
+    // is stuck no matter how much wall it rubbed.
+    const wedged = net < 1.7 && me.botPathLen < 12;
     const spinning = me.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
