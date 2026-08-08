@@ -38,7 +38,7 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (150 HP, 250 boost, 16 walk, 11.76 sprint base — MG42 walks at 8, M60 at 12):
+Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — MG42 walks at 8, M60 at 12):
 
 **Weapons:**
 

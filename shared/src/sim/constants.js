@@ -21,7 +21,7 @@ export const UNIT_DATA = {
     name: 'Unit 1 / Assault Rifle',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -57,7 +57,7 @@ export const UNIT_DATA = {
     name: 'Unit 2 / Shotgun',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -92,7 +92,7 @@ export const UNIT_DATA = {
     name: 'Unit 3 / Sniper Rifle',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -129,7 +129,7 @@ export const UNIT_DATA = {
     name: 'Unit 4 / Submachine Gun',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -165,7 +165,7 @@ export const UNIT_DATA = {
     name: 'Unit 5 / Machine Gun',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 8,
     sprintSpeed: 11.76,
@@ -197,7 +197,7 @@ export const UNIT_DATA = {
     name: 'Unit 6 / Sniper Rifle',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -234,7 +234,7 @@ export const UNIT_DATA = {
     name: 'Unit 7 / Rifle',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -275,7 +275,7 @@ export const UNIT_DATA = {
     // server still validates and simulates her if an old roster carries her.
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -306,7 +306,7 @@ export const UNIT_DATA = {
     name: 'Unit 9 / Assault Rifle',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -340,7 +340,7 @@ export const UNIT_DATA = {
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -374,7 +374,7 @@ export const UNIT_DATA = {
     name: 'Unit 11 / Shotgun',
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -414,7 +414,7 @@ export const UNIT_DATA = {
     name: 'Unit 12 / Machine Gun',
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 12,
     sprintSpeed: 11.76,
@@ -448,7 +448,7 @@ export const UNIT_DATA = {
     name: 'Unit 13 / Submachine Gun',
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -487,7 +487,7 @@ export const UNIT_DATA = {
     // unit13 stays fully simulated, same treatment as Mika/unit8.
 
     // Pilot stats — PPSh/Atsuko template: same mobility block.
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -542,7 +542,7 @@ export const MAP_DATA = {
 };
 
 // Match-wide tunables.
-export const MAX_HP = 150;
+export const MAX_HP = 100;   // 150 -> 100 (2026-08-08 user tune, all units)
 export const BOOST_CAP = 250;
 export const GROUND_BASE_Y = 2.45;
 
