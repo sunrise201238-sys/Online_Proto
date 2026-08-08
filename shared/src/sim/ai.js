@@ -79,7 +79,7 @@ const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nud
 const BOT_LOS_EYE_HEIGHT = 1.6;
 // COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
 // least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
-// famine behind cover: walk to the nearest reachable spot that breaks the
+// famine behind cover: SPRINT to the nearest reachable spot that breaks the
 // LOCKED target's line of sight (single-target by spec) and hold, re-emerging
 // with EXIT_MS left so the mag fills while stepping back into band.
 const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
@@ -1309,9 +1309,12 @@ export function tickBot(matchState, botId, now) {
     // COVER RELOAD owns movement for the tick — the state branches below
     // (including their jump commands) don't run, so a maze path can't vault
     // the bot mid-hide. Never active during Defense (window check above).
+    // SPRINT to cover (2026-08-08 user tune, was walk — reserve-gated by the
+    // dispatch as usual); a HOLD stays wantSprint=false so standing behind
+    // the wall never reads as 'dash' and burns boost at zero speed.
     mx = coverMove.mx;
     mz = coverMove.mz;
-    wantSprint = false;
+    wantSprint = !coverMove.hold;
   } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
