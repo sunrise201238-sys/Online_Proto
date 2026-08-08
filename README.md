@@ -101,31 +101,26 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 
 **Preferred engage distance:** every unit's fighting range is its **lock range ± 7** — the band where bots hold position, orbit, and fire (in 1v1: shotgun 33–47, SMGs 43–57, snipers 113–127). One rule for all weapons: retune a lock range and the combat distance follows. **In 2v2 every bot switches to its 2v2 lock value** (the second number in the weapons table): the team's fighting bands compress into 50–70 so long-lock units stop hanging back — and letting a teammate die alone at the front — while short-lock units step up slightly. 1v1 keeps the classic values, and the change is bot-behavior only.
 
-**Measured hit rates** (Shooting Range; every unit fires from her own 1v1 lock range; 100 shots per lane — shotguns 7 blasts = 56 pellets, rows show pellet rates). AA12 / RPK / NEGEV inherit their stat-clone predecessors' measured rows — identical spread, projectile speed, and pattern; a fresh range pass is pending:
+**Simulated hit rates** (Monte-Carlo of the range protocol; every weapon fires from **50 units**; 200,000 shots per cell — shotgun rows show per-pellet rates):
 
-| @ own 1v1 lock range | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
+| @50 | Stationary | Walk (16 u/s) | Sprint (27.8 u/s) |
 |---|---|---|---|
-| M4 @56 | 100% | 75% | 7% |
-| FAMAS @56 | 100% | 72% | 11% |
-| evo3 @50 | 100% | 64% | 13% |
-| P90 @50 | 100% | 70% | 9% |
-| AA12 @40 | 79% | 29% | 0% |
-| M1014 @40 | 55% | 30% | 5% |
-| RPK @80 | 73% | 47% | 0% |
-| NEGEV @80 | 100% | 18% | 0% |
+| M4 | 100% | 64% | 15% |
+| FAMAS | 100% | 64% | 15% |
+| evo3 | 100% | 61% | 21% |
+| P90 | 100% | 63% | 15% |
+| AA12 | 71% | 25% | 0% |
+| M1014 | 52% | 31% | 2% |
+| RPK | 98% | 63% | 19% |
+| NEGEV | 100% | 67% | 9% |
+| M14 | 100% | 82% | 0% |
+| Laser | 100% | 100% | 12% |
+| PSG1 | 100% | 100% | 100% |
+| Railgun | 100% | 100% | 100% |
 
-*Test environment:* Shooting Range (offline practice map). Each unit stands at her own 1v1 lock range and empties the shot count into each lane in turn: a stationary sign, a walk-speed slider (16 u/s) and a sprint-speed slider (27.8 u/s) ping-ponging along their trails. **Shots are only taken while the target sign sits fully inside the giant score screen's width (both edges visible)** — i.e. only mid-trail, near-perpendicular engagements count. Near the trail edges a turning slider moves almost along the line of fire and is far easier to hit; earlier runs that fired across the whole trail inflated the mover columns and were retired. Screens accumulate per-lane damage and grouping — **yellow dots are hits** (plotted at the impact point), **red dots are misses** (plotted where the shot crosses the sign plane). Hit counts = screen damage ÷ per-hit damage.
+*How the simulation works:* the engine's exact fire math (SA sampled as a true round cone, HA as horizontal-only scatter, shotgun volleys carrying the real 8-point pattern with per-blast rotation, 71%-open growth at 50, and M1014's 1.4× stretch) fired against the game's real hit capsule — 3.2 wide, 6.4 tall, with the Laser bolt adding its 0.4 hitbox radius and the Railgun beam its 1.6. Lock-fire aims at the target's **current** position, so a moving target displaces by its speed × the projectile's flight time before impact; every shot is a mid-trail, perpendicular engagement (the same strict window the retired physical runs enforced). Earlier physical Shooting Range runs (fired from each gun's own lock range at 100 shots per lane) agreed with the simulation within roughly ±10 points; their score screens have been retired.
 
-Standouts under the strict protocol: perpendicular sprint is near-untouchable for everyone (the flight-time tax — only the wide-spread guns clip it at all), and the stationary column tracks each gun's sure-hit range faithfully.
-
-**Score screens from these runs** (yellow dots = hits at the impact point, red dots = misses where the shot crossed the sign plane; each gun fired from its own 1v1 lock range — the shotgun screens are re-shot on the 4-per-pellet build, so their DMG totals read as hits × 4):
-
-| | |
-|---|---|
-| ![M4 — 100 shots @ lock 56](doc/shooting_range/M4_100shots.png)<br>M4 — 100 shots @ 56 | ![FAMAS — 100 shots @ lock 56](doc/shooting_range/FAMAS_100shots.png)<br>FAMAS — 100 shots @ 56 |
-| ![evo3 — 100 shots @ lock 50](doc/shooting_range/evo3_100shots.png)<br>evo3 — 100 shots @ 50 | ![P90 — 100 shots @ lock 50](doc/shooting_range/P90_100shots.png)<br>P90 — 100 shots @ 50 |
-| ![Beretta 1301 — 7 blasts @ lock 40](doc/shooting_range/Beretta-1301_7shots.png)<br>Beretta 1301 — 7 blasts (56 pellets) @ 40 | ![M1014 — 7 blasts @ lock 40](doc/shooting_range/M1014_7shots.png)<br>M1014 — 7 blasts (56 pellets) @ 40 |
-| ![M60 — 100 shots @ lock 80](doc/shooting_range/M60_100shots.png)<br>M60 — 100 shots @ 80 | ![MG42 — 100 shots @ lock 80](doc/shooting_range/MG42_100shots.png)<br>MG42 — 100 shots @ 80 |
+Standouts at the common 50: perpendicular sprint is near-untouchable for ordinary bullets (the flight-time tax), but the snipers break the rule — PSG1's 2500-speed bolt and the Railgun's hitscan beam simply outrun it (100% everywhere). The Laser's fat 0.4-radius bolt absorbs the whole walk displacement (100% vs walkers), M14's tight no-HA cone makes it the best walker-tracker among ordinary bullets, and the shotgun pattern at 50 is ~71% open, so pellet rates are a coverage statement, not a weakness.
 
 
 Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
