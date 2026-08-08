@@ -522,10 +522,11 @@ export const UNIT_DATA = {
     id: 'unit15',
     name: 'Unit 15 / Shotgun',
 
-    // Pilot stats — Beretta 1301 template: same mobility block.
+    // Pilot stats — Beretta 1301 template with the MGs' mobility tax
+    // (walk 16 -> 12, 2026-08-08 user tune).
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -536,8 +537,9 @@ export const UNIT_DATA = {
 
     // Weapon spec — AA12 (2026-08-08, replaces the hidden Beretta 1301 in
     // the pickers): the Beretta turned AUTO drum shotgun — 300 RPM
-    // hold-to-spray on an 8-shell drum with ONE long 4 s reload instead of
-    // the per-shell regen. Same pellet pattern, same 33–47 band (43–57 2v2).
+    // hold-to-spray on a 20-shell drum (8 -> 20 same day) with ONE long 4 s
+    // reload instead of the per-shell regen. Same pellet pattern, same
+    // 33–47 band (43–57 2v2).
     lockRange: 40,
     lockRange2v2: 50,
     projectileSpeed: 300,
@@ -549,8 +551,8 @@ export const UNIT_DATA = {
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
-    magCapacity: 8,
-    botFireCap: 8,         // bot: shots per trigger pull = full drum (fire cap policy)
+    magCapacity: 20,
+    botFireCap: 20,         // bot: shots per trigger pull = full drum (fire cap policy)
     reloadMs: 4000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }

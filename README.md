@@ -38,7 +38,7 @@ Both offline and online pickers carry them:
 
 ## Units
 
-Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — RPK and NEGEV walk at 12):
+Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — AA12, RPK and NEGEV walk at 12):
 
 **Weapons:**
 
@@ -48,7 +48,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 2 s |
-| AA12 — Shotgun | 8 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
+| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
 | RPK — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
@@ -61,7 +61,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 
 | Weapon | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~35.2 (8-drum + 4 s reload) |
+| AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~60.4 (20-drum + 4 s reload) |
 | M1014 | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
 | NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
@@ -74,7 +74,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 8-drum in ~1.5 s of auto fire and then pays one full 4 s reload. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
 
 **Handling (stun + spread):**
 
@@ -129,7 +129,7 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 - A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 3 (all 8 point-blank = 24, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **AA12's drum:** unlike M1014's per-shell regen, AA12 fires her 8-shell drum full-auto (~4.8 blasts/s) and reloads it in one 4 s stroke — the burst monster of the pair, with the hardest famine window.
+- **AA12's drum:** unlike M1014's per-shell regen, AA12 fires her 20-shell drum full-auto (~4.8 blasts/s) and reloads it in one 4 s stroke — the sustained-pressure half of the pair, walking at the MGs' 12 to pay for it.
 - **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as AA12's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis — the dodge-catcher to AA12's concentrated cluster.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
@@ -188,7 +188,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | M14 | 20 | full mag |
 | RPK | 100 | full mag |
 | NEGEV | 100 | full mag (~6.4 s of continuous fire) |
-| AA12 | 8 | full drum |
+| AA12 | 20 | full drum |
 | M1014 | 4 | 4 blasts per trigger pull |
 | Laser | 4 | legacy formula (half mag) |
 | PSG1 / Railgun | — | charge cycle, no bursts |

@@ -587,10 +587,11 @@ const UNIT_DATA = {
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 15', weapon: 'AA12', accent: 0xff9ec7,
 
-    // Pilot stats — Beretta 1301 template: same mobility block.
+    // Pilot stats — Beretta 1301 template with the MGs' mobility tax
+    // (walk 16 -> 12, 2026-08-08 user tune).
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -601,8 +602,9 @@ const UNIT_DATA = {
 
     // Weapon spec — AA12 (2026-08-08, replaces the hidden Beretta 1301 in
     // the pickers): the Beretta turned AUTO drum shotgun — 300 RPM
-    // hold-to-spray on an 8-shell drum with ONE long 4 s reload instead of
-    // the per-shell regen. Same pellet pattern, same 33–47 band (43–57 2v2).
+    // hold-to-spray on a 20-shell drum (8 -> 20 same day) with ONE long 4 s
+    // reload instead of the per-shell regen. Same pellet pattern, same
+    // 33–47 band (43–57 2v2).
     lockRange: 40,
     lockRange2v2: 50,
     projectileSpeed: 300,
@@ -613,8 +615,8 @@ const UNIT_DATA = {
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
-    magCapacity: 8,
-    botFireCap: 8,         // bot: shots per trigger pull = full drum (fire cap policy)
+    magCapacity: 20,
+    botFireCap: 20,         // bot: shots per trigger pull = full drum (fire cap policy)
     reloadMs: 4000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -8616,7 +8618,7 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 // from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
   'unit1', 'unit9', 'unit4', 'unit14',   // M4  FAMAS  evo3  P90 (PPSh/unit13 hidden — her old slot; Mika/unit8 hidden too)
-  'unit15', 'unit11', 'unit16', 'unit17', // AA12  M1014  RPK  NEGEV (0.7.1: Beretta 1301/unit2, M60/unit12, MG42/unit5 hidden — their old slots)
+  'unit11', 'unit15', 'unit16', 'unit17', // M1014  AA12  RPK  NEGEV (0.7.1: Beretta 1301/unit2, M60/unit12, MG42/unit5 hidden — their old slots; M1014/AA12 swapped same day)
   'unit10', 'unit7', 'unit3', 'unit6'    // M14  Laser  PSG1  Railgun
 ];
 
