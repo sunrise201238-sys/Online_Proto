@@ -35,6 +35,26 @@ const CELL = 4;
 const MAX_STEP = 1.7;
 const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 
+// ===== WALL CLEARANCE (2026-08-08) =====================================
+// Walkability uses FIGHTER_RADIUS, so a cell qualifies with the body only
+// just fitting — a route may hug a wall with ZERO margin, and the follower's
+// normal drift (avoidance blend, momentum, waypoint skip-ahead) then rubs
+// the body along it. That was the Airport ramp-corner grind.
+// Cells are graded by how much room they actually have and A* PENALISES the
+// tight ones, so routes prefer the middle of a corridor and swing wide
+// around convex corners. A penalty, not a ban: nothing becomes unroutable —
+// where every cell is tight (a real chokepoint) the penalty is uniform and
+// the chosen route is unchanged.
+// Only the TIGHT grade is charged, and at just over the price of stepping
+// around it (a 1-cell detour costs 2 moves, so 1.2 tips the choice). Mid
+// cells are free on purpose: charging them too accumulates over long routes
+// and starts flipping whole map crossings (it re-routed Streets' ground
+// traverse up over the overpass), which is a bigger behaviour change than
+// this fix is meant to make.
+const CLEAR_MID = 2.0;     // body + ~0.85 slack
+const CLEAR_WIDE = 3.2;    // body + ~2 slack: comfortably off the wall
+const TIGHT_COST = [1.2, 0, 0];   // by clearance grade 0 / 1 / 2
+
 export function buildNavGrid(obstacles, surfaces) {
   // Grid bounds = obstacle bounding box. Boundary walls are obstacles in
   // both sims, so this always covers the full play area.
@@ -51,6 +71,7 @@ export function buildNavGrid(obstacles, surfaces) {
   const n = cols * rows;
   const floor = new Float32Array(n);
   const walk = new Uint8Array(n);
+  const clearGrade = new Uint8Array(n); // 0 tight / 1 mid / 2 wide (see TIGHT_COST)
   const edgeE = new Uint8Array(n); // cell i <-> i+1
   const edgeS = new Uint8Array(n); // cell i <-> i+cols
 
@@ -68,6 +89,11 @@ export function buildNavGrid(obstacles, surfaces) {
       const fy = floorAt(x, z);
       floor[i] = fy;
       walk[i] = fitsAt(x, z, fy) ? 1 : 0;
+      if (walk[i]) {
+        const y = fy + GROUND_BASE_Y;
+        clearGrade[i] = !unitOverlapsObstacle(x, y, z, obstacles, CLEAR_WIDE) ? 2
+          : (!unitOverlapsObstacle(x, y, z, obstacles, CLEAR_MID) ? 1 : 0);
+      }
     }
   }
   for (let r = 0; r < rows; r += 1) {
@@ -236,7 +262,7 @@ export function buildNavGrid(obstacles, surfaces) {
       }
     }
   }
-  return { cols, rows, minX, minZ, cell: CELL, floor, walk, edgeE, edgeS, jumpAdj, jumpLinkCount };
+  return { cols, rows, minX, minZ, cell: CELL, floor, walk, clearGrade, edgeE, edgeS, jumpAdj, jumpLinkCount };
 }
 
 // Nearest walkable cell to (x, z). `floorHint` (the actor's floor height)
@@ -281,7 +307,7 @@ function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
 // near the goal (cell centers, collinear runs collapsed), or null when no
 // walk route exists (e.g. target on a jump-only platform).
 export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null, obstacles = null) {
-  const { cols, rows, cell, minX, minZ, edgeE, edgeS } = grid;
+  const { cols, rows, cell, minX, minZ, edgeE, edgeS, clearGrade } = grid;
   const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   const goal = nearestWalkable(grid, tx, tz, goalFloor);
   if (start < 0 || goal < 0 || start === goal) return null;
@@ -336,7 +362,11 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     const c = cur % cols, r = (cur / cols) | 0;
     const step = (nb, cost) => {
       if (closed[nb]) return;
-      const ng = g[cur] + cost;
+      // WALL-CLEARANCE PENALTY: entering a cell whose body barely fits costs
+      // extra, so A* buys its way around convex corners and down the middle
+      // of corridors when the room exists. Never blocking — a uniformly
+      // tight chokepoint just costs more and still gets used.
+      const ng = g[cur] + cost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
       if (ng < g[nb]) {
         g[nb] = ng;
         parent[nb] = cur;
