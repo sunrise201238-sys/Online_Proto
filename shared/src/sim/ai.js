@@ -87,6 +87,11 @@ const BOT_COVER_RELOAD_EXIT_MS = 400;
 // The dash to cover funds at the survival-jump tier (raw jump 48 + sprint
 // floor 8), NOT the 250 travel reserve — a mid-fight bot can still afford it.
 const BOT_COVER_SPRINT_MIN_BOOST = 56;
+// The HOLD is not a statue (user, 2026-08-08): pace a NARROW arc at walk
+// speed behind the cover — direction flips every FLIP_MS, clamped to
+// SWAY_RADIUS around the hold anchor (~±2u ≈ a few degrees on the band ring).
+const BOT_COVER_SWAY_FLIP_MS = 350;
+const BOT_COVER_SWAY_RADIUS = 2.2;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -662,24 +667,54 @@ export function tickBot(matchState, botId, now) {
       && !underFire
       && (me.botState ?? 'pursue') !== 'defense';
     if (!coverWindow) {
-      me.botCoverKey = 0;
+      // Do NOT wash the plan away: the cycle identity is reloadingUntil
+      // itself, so a Defense interruption mid-rush RESUMES the same path
+      // when the window reopens (user, 2026-08-08 — was a key reset that
+      // forced a fresh search per resume). Only the anchors reset, giving
+      // the resumed run a fresh 700 ms bail window.
+      me.botCoverMoveAnchor = null;
+      me.botCoverHoldAnchor = null;
     } else {
       if (me.botCoverKey !== me.reloadingUntil) {
         me.botCoverKey = me.reloadingUntil;
         me.botCoverFailed = false;
         me.botCoverPath = null;
         me.botCoverMoveAnchor = null;
+        me.botCoverHoldAnchor = null;
       }
       const oppEye = { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z };
       const myEye = { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z };
-      if (!botHasLineOfSight(oppEye, myEye, obstacles, surfaces)) {
-        // Already hidden — hold the spot (the dispatch skips its anti-freeze
-        // nudge for a cover hold so the bot truly stands). KEEP the path —
-        // a hidden→visible flicker resumes it instead of burning a fresh
-        // 48-candidate search every other tick (adversarial finding,
-        // 2026-08-08); only the progress anchor resets so the next walking
-        // stretch opens a fresh 700 ms bail window.
-        coverMove = { hold: true, mx: 0, mz: 0 };
+      const coverHidden = !botHasLineOfSight(oppEye, myEye, obstacles, surfaces);
+      if (!coverHidden) me.botCoverHoldAnchor = null;
+      if (coverHidden) {
+        // Hidden — HOLD, but not as a statue (user): pace a narrow arc at
+        // walk speed, perpendicular to the target line so the cover stays
+        // between, clamped to SWAY_RADIUS around the hold anchor. KEEP the
+        // path — a hidden→visible flicker resumes it instead of burning a
+        // fresh search (adversarial finding); the sway is small enough that
+        // a poke-out self-corrects through the kept path next tick.
+        if (!me.botCoverHoldAnchor) {
+          me.botCoverHoldAnchor = { x: me.pos.x, z: me.pos.z };
+          me.botCoverSwayDir = (Math.random() < 0.5 ? 1 : -1);
+          me.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        if (now >= (me.botCoverSwayFlipAt ?? 0)) {
+          me.botCoverSwayDir = -(me.botCoverSwayDir ?? 1);
+          me.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        const tdx = opp.pos.x - me.pos.x, tdz = opp.pos.z - me.pos.z;
+        const tdl = Math.hypot(tdx, tdz) || 1;
+        let sx = (-tdz / tdl) * me.botCoverSwayDir;
+        let sz = (tdx / tdl) * me.botCoverSwayDir;
+        const adx = me.botCoverHoldAnchor.x - me.pos.x;
+        const adz = me.botCoverHoldAnchor.z - me.pos.z;
+        const adl = Math.hypot(adx, adz);
+        if (adl > BOT_COVER_SWAY_RADIUS) {
+          sx = sx * 0.3 + adx / adl;
+          sz = sz * 0.3 + adz / adl;
+        }
+        const sl = Math.hypot(sx, sz) || 1;
+        coverMove = { hold: true, mx: sx / sl, mz: sz / sl };
         me.botCoverMoveAnchor = null;
       } else if (!me.botCoverFailed) {
         if (!me.botCoverPath) {
@@ -1746,8 +1781,8 @@ export function tickBot(matchState, botId, now) {
   } else {
     me.vel.x = mx * botWalkSpeed;
     me.vel.z = mz * botWalkSpeed;
-    // Anti-freeze nudge — skipped during a cover-reload HOLD, where standing
-    // dead still behind the wall is the whole point.
+    // Anti-freeze nudge — skipped during a cover-reload HOLD (the hold paces
+    // its own narrow sway; the nudge must not override a flip instant).
     if (!(coverMove && coverMove.hold)
         && Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
       me.vel.x = sideX * 4.5;
