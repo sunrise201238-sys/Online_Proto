@@ -1407,6 +1407,30 @@ export function tickBot(matchState, botId, now) {
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
 
+    // WEDGE REVERSE (2026-08-08, user-ordered — Defense's first recovery
+    // stage, ported): two consecutive ticks of driving INTO a wall flips the
+    // orbit. The tangent is perpendicular to the aim line, so reversing it
+    // points away from the face just hit BY CONSTRUCTION — no need to know
+    // which wall it is. Without this the bot stuck to the wall at ~6% of
+    // walk speed until the 1 s wedge detector shipped it to Maze, which
+    // breaks off the fight entirely (10% of engage time was spent that way).
+    // Deliberately stage ONE only: measured on Defense, the reverse alone
+    // clears >70% of wedges, while its stage-2 wall-slide bails almost as
+    // often as it fires (92 slides, 91 bails). The LoS flip's 1 s cooldown
+    // is NOT consulted — a bot pressed into a wall can't wait a second —
+    // but firing here re-arms it so the two can't fight over the same tick.
+    const engageIntoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4;
+    me.botEngageWallTicks = engageIntoWall ? (me.botEngageWallTicks ?? 0) + 1 : 0;
+    if (me.botEngageWallTicks >= 2) {
+      me.botEngageWallTicks = 0;
+      me.botOrbitSign = -sign;
+      me.botOrbitFlipAt = now + 1000;
+      let rx = sideX * me.botOrbitSign + dirX * pull + avoid.rx * 0.6;
+      let rz = sideZ * me.botOrbitSign + dirZ * pull + avoid.rz * 0.6;
+      const rl = Math.hypot(rx, rz) || 1;
+      mx = rx / rl; mz = rz / rl;
+    }
+
     // STATION LOW-LEVEL DISCOURAGEMENT (map-keyed, 2026-08-05 user order):
     // fighting on the track level is tolerated only briefly. After ~3 s of
     // continuous Engage time down there, a ramping pull (0 → 0.6 over the
