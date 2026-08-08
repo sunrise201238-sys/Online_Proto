@@ -9563,8 +9563,8 @@ function materializeSurface(surface) {
     const highEnd = axis === 'x' ? maxX : maxZ;
     const span = (highEnd - lowEnd) || 1;
     const dy = highY - lowY;
-    // type/axis/lowY/highY are kept on the materialized surface so the bot
-    // AI can recognize ramps as elevation routes (mazeSeekElevationRoute).
+    // type/axis/lowY/highY are kept on the materialized surface so bot-side
+    // consumers (nav grid, surface-aware LoS) can reason about the slope.
     return { minX, maxX, minZ, maxZ, maxTop, type: 'ramp', axis, lowY, highY, heightAt(x, z) {
       const v = axis === 'x' ? x : z;
       const t = (v - lowEnd) / span;
