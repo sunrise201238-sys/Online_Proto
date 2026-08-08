@@ -6722,11 +6722,15 @@ function startMatch() {
   // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
   // so offset along the deck toward centre (X). Streets' corner spawns sit
   // 8u off the south/north walls, so +Z would bury the teammate in the wall —
-  // offset along Z toward centre instead. Mirrored in shared state.js.
+  // offset along Z toward centre instead. Airport uses Station's X form too
+  // (user, 2026-08-08): its spawns sit 6u off a ramp foot, and a Z offset
+  // would put one teammate 12u further from the ramp (or on the slope
+  // itself) — offsetting along X keeps BOTH at the ramp mouth, side by side,
+  // equidistant. Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
     } else if (state.mapKey === 'arena2') {

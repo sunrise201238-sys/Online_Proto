@@ -205,19 +205,23 @@ export function createMatchState({
     // offline client's 4-corner placement). Station's deck spawns sit near the
     // END walls — offset along the deck toward centre (X) instead. Streets'
     // corner spawns sit 8u off the south/north walls, so +Z would bury the
-    // teammate in the wall — offset along Z TOWARD CENTRE there.
-    const station = mapKey === 'station';
+    // teammate in the wall — offset along Z TOWARD CENTRE there. AIRPORT
+    // uses Station's X form too (user, 2026-08-08): its spawns sit 6u off a
+    // ramp foot, and a Z offset would put one teammate 12u further from the
+    // ramp (or on the slope itself) — offsetting along X keeps BOTH at the
+    // ramp mouth, side by side, equidistant.
+    const xOffset = mapKey === 'station' || mapKey === 'airport';
     const streets = mapKey === 'arena2';
     const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const p3Spawn = {
-      x: station ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
+      x: xOffset ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
-      z: station ? arena.spawns.p1.z : zOff(arena.spawns.p1)
+      z: xOffset ? arena.spawns.p1.z : zOff(arena.spawns.p1)
     };
     const p4Spawn = {
-      x: station ? arena.spawns.p2.x - Math.sign(arena.spawns.p2.x) * 12 : arena.spawns.p2.x,
+      x: xOffset ? arena.spawns.p2.x - Math.sign(arena.spawns.p2.x) * 12 : arena.spawns.p2.x,
       y: arena.spawns.p2.y ?? GROUND_BASE_Y,
-      z: station ? arena.spawns.p2.z : zOff(arena.spawns.p2)
+      z: xOffset ? arena.spawns.p2.z : zOff(arena.spawns.p2)
     };
     fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
     fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
