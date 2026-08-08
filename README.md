@@ -48,8 +48,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 2 s |
-| Beretta 1301 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
-| M1014 — Shotgun | 7 | 4 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
+| Beretta 1301 — Shotgun | 7 | 2.5 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
+| M1014 — Shotgun | 7 | 2.5 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
 | M60 — Machine Gun | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | MG42 — Machine Gun | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
@@ -61,7 +61,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 
 | Weapon | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| Beretta 1301 / M1014 | 4.17 blasts/s | 32 (8×4, point-blank) | **133.3** | ~26.7 (shell-regen limited) |
+| Beretta 1301 / M1014 | 4.17 blasts/s | 20 (8×2.5, point-blank) | **83.3** | ~16.7 (shell-regen limited) |
 | MG42 | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
@@ -131,7 +131,7 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 ### Beretta 1301 & M1014 — the shotgun blast
 
-- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 4 (all 8 point-blank = 32, both shotguns).
+- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 2.5 (all 8 point-blank = 20, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
 - **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as Beretta 1301's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis, lighter pellets — the dodge-catcher to Beretta 1301's concentrated slug.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
