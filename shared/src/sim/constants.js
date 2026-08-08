@@ -572,14 +572,15 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — RPK (2026-08-08, replaces the hidden M60 in the
-    // pickers): exact M60 stat clone.
+    // pickers): M60 stat clone, except SA/HA swapped with NEGEV (same day):
+    // HA 0 — the tight-cone MG (sure-hit ~80).
     lockRange: 80,
     lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — same 600 RPM rhythm as the M60 it clones
     magCapacity: 100,
@@ -607,14 +608,16 @@ export const UNIT_DATA = {
 
     // Weapon spec — NEGEV (2026-08-08, replaces the hidden MG42 in the
     // pickers): MG42 clone stepped down a tick rung — 1100 RPM on a 100
-    // mag with a 5 s reload (vs the MG42's 1250 / 250 / 7 s).
+    // mag with a 5 s reload (vs the MG42's 1250 / 250 / 7 s) — plus the
+    // HA 0.04 anti-dodge scatter (SA/HA swapped with RPK, same day;
+    // sure-hit ~40).
     lockRange: 80,
     lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown — 64 ms tick slot (15.6/s), evo3's rung
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
     horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 100,

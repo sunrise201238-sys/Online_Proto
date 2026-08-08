@@ -86,8 +86,8 @@ Reading the DPS table: the shotgun rows are the most theoretical — all 8 pelle
 | P90 | 50 ms @ 0.50 | 0.02 | 0.04 | ~53 |
 | AA12 | 100 ms @ 0.25 | pattern (see below) | — | pattern |
 | M1014 | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | pattern |
-| RPK | 100 ms @ 0.25 | 0.04 | 0.04 | ~40 |
-| NEGEV | 50 ms @ 0.85 | 0.04 | — | ~80 |
+| RPK | 100 ms @ 0.25 | 0.04 | — | ~80 |
+| NEGEV | 50 ms @ 0.85 | 0.04 | 0.04 | ~40 |
 | M14 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Laser | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
@@ -111,8 +111,8 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 | P90 | 100% | 63% | 15% |
 | AA12 | 71% | 25% | 0% |
 | M1014 | 52% | 31% | 2% |
-| RPK | 98% | 63% | 19% |
-| NEGEV | 100% | 67% | 9% |
+| RPK | 100% | 67% | 9% |
+| NEGEV | 98% | 63% | 19% |
 | M14 | 100% | 82% | 0% |
 | Laser | 100% | 100% | 12% |
 | PSG1 | 100% | 100% | 100% |
