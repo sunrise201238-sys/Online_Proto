@@ -4574,7 +4574,9 @@ function botStartJump(now, survival = false) {
 // and ones level enough to just walk onto. Returns a unit vector toward the
 // nearest reachable point on that ledge plus the horizontal distance to it,
 // or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
+// minWidth defaults to the perch floor; MAZE passes 0 — mirrors shared ai.js,
+// see the note at its Maze call site for the measurements behind the split.
+function findHighGroundPerch(px, pz, myFloorY, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
   for (const s of arenaSurfaces) {
@@ -4582,7 +4584,7 @@ function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
     // TOO NARROW TO LAND ON (user 2026-08-09) — mirrors shared ai.js; see the
     // note there. A jump carries 12-17 units, so a thinner strip gets sailed
     // clean over rather than mounted, and the bot bounces back and forth.
-    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < BOT_PERCH_MIN_WIDTH) continue;
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < minWidth) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
@@ -5636,8 +5638,10 @@ function updateEnemy(now) {
       wantSprint = true;
     }
     // Vertical Maze: hop up onto a reachable platform (Station).
+    // minWidth 0 here ONLY — Maze walks a route, so a strip too thin to be a
+    // vantage point is still a legitimate step. Mirrors shared ai.js.
     if (state.enemy.grounded && !eState.airborne) {
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS, 0);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botStartJump(now)) jumpThisTick = true;

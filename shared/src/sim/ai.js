@@ -281,7 +281,10 @@ function botBurstSize(unit) {
 // and ones level enough to just walk onto. Returns a unit vector toward the
 // nearest reachable point on that ledge plus the horizontal distance to it,
 // or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius) {
+// minWidth defaults to the perch floor. MAZE passes 0: it is following a route,
+// not shopping for a vantage point, so a narrow strip its path climbs is a
+// legitimate step — see the call site for the measurements behind that split.
+function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
   for (let i = 0; i < surfaces.length; i++) {
@@ -294,7 +297,7 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
     // being airborne meant it couldn't dodge while it happened. Only those and
     // Factory 2's belts are excluded game-wide; every other surface in the
     // climb window is 10 u or wider and behaves exactly as before.
-    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < BOT_PERCH_MIN_WIDTH) continue;
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < minWidth) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
@@ -1389,8 +1392,15 @@ export function tickBot(matchState, botId, now) {
       mx = tx / l; mz = tz / l;
       wantSprint = true;
     }
+    // minWidth 0 here ONLY (2026-08-10). Maze is walking a route, so a strip
+    // too thin to be a vantage point is still a legitimate thing to climb —
+    // the width floor added in 367a87b applied everywhere and doubled Factory
+    // belt crossings from 2.6 s to 5.3 s. Measured on the reversal breakdown:
+    // of 21 crossings-and-straight-back, 76% happened in Defense and only 10%
+    // in Maze, so the floor is worth keeping exactly where the bouncing is and
+    // dropping exactly where the routing is.
     if (me.grounded && !me.airborne) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS, 0);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botTryJump(me, now)) jumpThisTick = true;
