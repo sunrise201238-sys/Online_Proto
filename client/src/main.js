@@ -4378,6 +4378,10 @@ const BOT_TARGET_SWITCH_MARGIN = 6;
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
 const BOT_CLIMB_MIN_RISE = 1.7;
 const BOT_CLIMB_MAX_RISE = 4.8;
+// Narrowest surface still worth treating as a perch — mirrors shared ai.js.
+// Below this a jump overshoots it entirely; 6 sits in the gap between the
+// 4-wide conveyors and the next-narrowest real platform at 10.
+const BOT_PERCH_MIN_WIDTH = 6;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -4575,6 +4579,10 @@ function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
   let bestDist = searchRadius;
   for (const s of arenaSurfaces) {
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
+    // TOO NARROW TO LAND ON (user 2026-08-09) — mirrors shared ai.js; see the
+    // note there. A jump carries 12-17 units, so a thinner strip gets sailed
+    // clean over rather than mounted, and the bot bounces back and forth.
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < BOT_PERCH_MIN_WIDTH) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;

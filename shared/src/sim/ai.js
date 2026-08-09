@@ -119,6 +119,10 @@ function navGridFor(arena) {
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
 const BOT_CLIMB_MIN_RISE = 1.7;
 const BOT_CLIMB_MAX_RISE = 4.8;
+// Narrowest surface still worth treating as a perch. Below this a jump
+// overshoots it entirely (see findHighGroundPerch). 6 sits in the gap between
+// the 4-wide conveyors and the next-narrowest real platform at 10.
+const BOT_PERCH_MIN_WIDTH = 6;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -283,6 +287,14 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
   for (let i = 0; i < surfaces.length; i++) {
     const s = surfaces[i];
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
+    // TOO NARROW TO LAND ON (user 2026-08-09). A jump carries 12-17 units
+    // horizontally, so a strip thinner than this isn't a perch — the bot sails
+    // clean over it and lands on the far side, then finds the same strip 4 u
+    // behind and hops back. Factory's 4-wide conveyors did exactly that, and
+    // being airborne meant it couldn't dodge while it happened. Only those and
+    // Factory 2's belts are excluded game-wide; every other surface in the
+    // climb window is 10 u or wider and behaves exactly as before.
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < BOT_PERCH_MIN_WIDTH) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
