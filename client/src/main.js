@@ -2263,7 +2263,7 @@ const MG_TRACER_SCALE = 0.5;
 // MG / Sniper round and fades out after the bullet expires. Shotgun pellets
 // opt out so 8 pellets per shot don't make a noisy mess. The trail is a
 // 2-vertex THREE.Line — or, for the three guns listed under trail THICKNESS
-// below, a stretched cylinder — whose tail is computed analytically from the
+// below, a camera-facing ribbon — whose tail is computed analytically from the
 // projectile's velocity (projectiles fly straight — homing is 0 — so no sample
 // buffer needed). Despawned bullets hand their trail to state.dyingBulletTrails
 // so it fades in place instead of vanishing the instant the bullet stops.
@@ -2282,32 +2282,45 @@ const BULLET_TRAIL_OPACITY = 0.55;
 // has to be real geometry. Only the three slow, low-volume guns get it; the
 // other nine keep the cheap Line, which matters because the 100 ms MG fade
 // above exists precisely because trail COUNT once cost frames at MG fire-rate.
-// A cylinder (not a camera-facing ribbon) so the shape is orientation-free:
-// dying trails freeze their geometry and only fade opacity, and a ribbon would
-// visibly flatten if the camera moved during PSG1's 1 s fade.
+// Width is specified in SCREEN PIXELS and held constant along the whole streak,
+// exactly like the 1 px Line it replaces. A fixed world-space radius was tried
+// first (0b50f25) and rejected: perspective made the far end ~4x narrower than
+// the near end, so an incoming round read as a sharp wedge instead of a streak,
+// and at 0.12 the near end was 32 px wide — a slab. The Railgun beam has the
+// same foreshortening but hides it by being 13x fatter. Holding pixels constant
+// means each END takes its own world half-width from its own camera distance,
+// which is exactly what cancels the taper — so this is a camera-facing ribbon,
+// re-aimed every frame, dying trails included (see updateDyingBulletTrails).
+// Normal blending, not the beam's additive glow, because the trail must be able
+// to render DARK on bright-ground maps and additive can only ever brighten.
+//
 // Keyed by unit NAME for the same reason the fade lookup takes a whole unit:
 // offline hands in the client UNIT_DATA entry, online a wire-deserialised
 // shared one, and `name` is the only field both shapes carry.
-const BULLET_TRAIL_RADIUS_RIFLE = 0.06;   // M14 / SVD
-const BULLET_TRAIL_RADIUS_SNIPER = 0.12;  // PSG1 — deliberately the fatter one
+const BULLET_TRAIL_PX_RIFLE = 3;    // M14 / SVD
+const BULLET_TRAIL_PX_SNIPER = 5;   // PSG1 — deliberately the fatter one
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
-  [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE],   // M14
-  [UNIT_DATA.unit18?.name, BULLET_TRAIL_RADIUS_RIFLE],   // SVD
-  [UNIT_DATA.unit3?.name, BULLET_TRAIL_RADIUS_SNIPER]    // PSG1
+  [UNIT_DATA.unit10?.name, BULLET_TRAIL_PX_RIFLE],    // M14
+  [UNIT_DATA.unit18?.name, BULLET_TRAIL_PX_RIFLE],    // SVD
+  [UNIT_DATA.unit3?.name, BULLET_TRAIL_PX_SNIPER]     // PSG1
 ].filter(([name]) => name));
-// 0 = keep the 1px line. Anything above 0 is a world-space radius, so the
-// streak thins with distance the way a real tracer does.
-const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
-// One unit cylinder (length 1, radius 1, open-ended) shared by every thick
-// trail — each instance only scales/orients it, so firing costs no geometry
-// allocation. Never disposed per-trail; see disposeBulletTrail.
-let _bulletTrailGeom = null;
-const bulletTrailGeometry = () => {
-  if (!_bulletTrailGeom) _bulletTrailGeom = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
-  return _bulletTrailGeom;
+// 0 = keep the 1 px Line. Anything above 0 is a screen-space width in pixels.
+const bulletTrailWidthPxFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// World half-width that projects to `px` screen pixels at view-space DEPTH
+// `depth` — the inverse of  px = (2r) / (2 * depth * tan(fov/2)) * viewportHeight.
+// Depth, not distance-to-camera: perspective divides by the view-axis component,
+// so an off-axis point (radial 21.7 but depth 8) would come out 2.7x too wide.
+const trailHalfWidthWorld = (px, depth) => {
+  const h = renderer?.domElement?.clientHeight || window.innerHeight || 900;
+  return (px * depth * Math.tan((camera.fov * Math.PI) / 360)) / h;
 };
+// View-space depth of a world point, clamped off zero so a streak that passes
+// through the camera plane can't invert.
+const trailViewDepth = (x, y, z) =>
+  Math.max(0.1, -_trailTmp.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z);
 const _trailDir = new THREE.Vector3();
-const _trailUp = new THREE.Vector3(0, 1, 0);
+const _trailPerp = new THREE.Vector3();
+const _trailTmp = new THREE.Vector3();
 
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
@@ -2317,22 +2330,29 @@ function bulletTrailFadeMsFor(unit) {
   return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
 }
 
-function buildBulletTrail(radius = 0) {
-  if (radius > 0) {
+function buildBulletTrail(widthPx = 0) {
+  if (widthPx > 0) {
+    // Ribbon: 4 corners, 2 triangles, rewritten in place every frame. The
+    // corners are WORLD-space and the mesh keeps an identity transform, so
+    // there is nothing to position or rotate — billboardBulletTrail does it all.
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+    geometry.setIndex([0, 1, 2, 2, 1, 3]);
     const mesh = new THREE.Mesh(
-      bulletTrailGeometry(),
+      geometry,
       new THREE.MeshBasicMaterial({
         color: bulletTrailColor(),
         transparent: true,
         opacity: BULLET_TRAIL_OPACITY,
         fog: false,
         depthWrite: false,       // streaks overlap; no z-fighting between them
-        side: THREE.DoubleSide   // open-ended cylinder, visible from inside too
+        side: THREE.DoubleSide   // a flat quad — must show from either face
       })
     );
-    mesh.userData.trailRadius = radius;   // also the flag that this is a mesh trail
+    mesh.userData.trailWidthPx = widthPx;   // also the flag that this is a ribbon
+    mesh.userData.ends = null;              // {tx..hz}, kept so it can re-aim while fading
     mesh.frustumCulled = false;
-    mesh.visible = false;                 // until the first ends update gives it a length
+    mesh.visible = false;                   // until the first ends update gives it a length
     return mesh;
   }
   const geometry = new THREE.BufferGeometry();
@@ -2351,24 +2371,49 @@ function buildBulletTrail(radius = 0) {
 function disposeBulletTrail(trail) {
   if (!trail) return;
   if (trail.parent) trail.parent.remove(trail);
-  // Mesh trails share one module-level cylinder — disposing it would blank
-  // every other live trail. Only the per-trail material is ours to free.
-  if (trail.geometry && !trail.userData?.trailRadius) trail.geometry.dispose();
+  if (trail.geometry) trail.geometry.dispose();   // every trail owns its geometry
   if (trail.material) trail.material.dispose();
 }
 
+// Rebuild a ribbon trail's four corners so the streak holds the SAME pixel
+// width end to end. Each end takes its own world half-width from its own
+// distance to the camera — that per-end scaling is what cancels the
+// perspective taper a fixed-radius tube suffers from. Runs every frame the
+// camera can move, which includes while the trail is fading: its endpoints are
+// frozen, but the view of them is not, and a flat quad left un-aimed would
+// turn edge-on and vanish.
+function billboardBulletTrail(trail) {
+  const e = trail.userData.ends;
+  if (!e) return;
+  _trailDir.set(e.hx - e.tx, e.hy - e.ty, e.hz - e.tz);
+  const len = _trailDir.length();
+  if (len < 1e-6) { trail.visible = false; return; }
+  _trailDir.divideScalar(len);
+  // Sideways-on-screen = perpendicular to both the streak and the view ray.
+  // Degenerates when firing straight at/away from the camera; fall back to the
+  // camera's own right vector, which can never be parallel to the view ray.
+  _trailTmp.set(e.hx, e.hy, e.hz).sub(camera.position);
+  _trailPerp.crossVectors(_trailDir, _trailTmp);
+  if (_trailPerp.lengthSq() < 1e-12) _trailPerp.setFromMatrixColumn(camera.matrixWorld, 0);
+  _trailPerp.normalize();
+  // _trailTmp is free to reuse from here — the cross product above is done.
+  const widthPx = trail.userData.trailWidthPx;
+  const wT = trailHalfWidthWorld(widthPx, trailViewDepth(e.tx, e.ty, e.tz));
+  const wH = trailHalfWidthWorld(widthPx, trailViewDepth(e.hx, e.hy, e.hz));
+  const p = trail.geometry.attributes.position.array;
+  const nx = _trailPerp.x, ny = _trailPerp.y, nz = _trailPerp.z;
+  p[0] = e.tx - nx * wT; p[1] = e.ty - ny * wT; p[2] = e.tz - nz * wT;
+  p[3] = e.tx + nx * wT; p[4] = e.ty + ny * wT; p[5] = e.tz + nz * wT;
+  p[6] = e.hx - nx * wH; p[7] = e.hy - ny * wH; p[8] = e.hz - nz * wH;
+  p[9] = e.hx + nx * wH; p[10] = e.hy + ny * wH; p[11] = e.hz + nz * wH;
+  trail.geometry.attributes.position.needsUpdate = true;
+  trail.visible = true;
+}
+
 function updateBulletTrailEnds(trail, tx, ty, tz, hx, hy, hz) {
-  const radius = trail.userData?.trailRadius;
-  if (radius) {
-    // Stretch the unit cylinder from tail to head: centre it on the midpoint,
-    // point local +Y down the streak, scale length on Y and width on X/Z.
-    _trailDir.set(hx - tx, hy - ty, hz - tz);
-    const len = _trailDir.length();
-    if (len < 1e-6) { trail.visible = false; return; }
-    trail.visible = true;
-    trail.position.set((tx + hx) / 2, (ty + hy) / 2, (tz + hz) / 2);
-    trail.quaternion.setFromUnitVectors(_trailUp, _trailDir.divideScalar(len));
-    trail.scale.set(radius, len, radius);
+  if (trail.userData?.trailWidthPx) {
+    trail.userData.ends = { tx, ty, tz, hx, hy, hz };
+    billboardBulletTrail(trail);
     return;
   }
   const pos = trail.geometry.attributes.position.array;
@@ -2403,7 +2448,10 @@ function updateDyingBulletTrails(now) {
     }
     // Freeze the trail's geometry at its last position; just fade opacity.
     // (More faithful to how a real tracer reads — the streak dims in place,
-    // it doesn't retract.)
+    // it doesn't retract.) Ribbon trails still have to be re-aimed at the
+    // camera: the endpoints are frozen but the viewpoint is not, and a flat
+    // quad left alone would turn edge-on and disappear mid-fade.
+    if (dt.trail.userData?.trailWidthPx) billboardBulletTrail(dt.trail);
     dt.trail.material.opacity = dt.initialOpacity * (remaining / dt.fadeMs);
   }
 }
@@ -2593,7 +2641,7 @@ function spawnProjectiles(owner, target) {
     const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
     let trail = null;
     if (trailFadeMs > 0) {
-      trail = buildBulletTrail(bulletTrailRadiusFor(owner.unit));
+      trail = buildBulletTrail(bulletTrailWidthPxFor(owner.unit));
       scene.add(trail);
     }
 
@@ -7206,7 +7254,7 @@ function syncOnlineProjectiles(snap) {
       const trailFadeMs = bulletTrailFadeMsFor(ownerUnit);
       let trail = null;
       if (trailFadeMs > 0) {
-        trail = buildBulletTrail(bulletTrailRadiusFor(ownerUnit));
+        trail = buildBulletTrail(bulletTrailWidthPxFor(ownerUnit));
         scene.add(trail);
       }
       entry = {
