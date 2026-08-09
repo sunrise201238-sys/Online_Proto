@@ -53,7 +53,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
 | M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
-| Laser — Rifle | 8 | 12 / bolt | ~250 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
+| SVD — Rifle | 10 | 12 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
 | PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
 | Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
@@ -66,7 +66,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
-| Laser | 4.17/s | 12 / bolt | **50.0** | ~10 (bolt-regen limited) |
+| SVD | 4.17/s | 12 | **50.0** | 28.8 |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | RPK | 8.9/s (112 ms) | 5 | **44.6** | 31.1 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
@@ -74,7 +74,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. Laser's burst is real for its 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
 
 **Handling (stun + spread):**
 
@@ -89,7 +89,7 @@ Reading the DPS table: the shotgun rows are the most theoretical — all 8 pelle
 | RPK | 100 ms @ 0.25 | 0.04 | — | ~80 |
 | NEGEV | 50 ms @ 0.85 | 0.04 | 0.04 | ~40 |
 | M14 | 100 ms @ 0.25 | 0.02 | — | ~160 |
-| Laser | 100 ms @ 0.25 | 0.02 | — | ~160 |
+| SVD | 100 ms @ 0.25 | 0.04 | — | ~80 |
 | PSG1 | 100 ms @ 0.25 | 0.02 | — | ~160 |
 | Railgun | 100 ms @ 0.25 | — (beam) | — | instant |
 
@@ -114,13 +114,13 @@ P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s)
 | RPK | 100% | 67% | 9% |
 | NEGEV | 98% | 63% | 19% |
 | M14 | 100% | 82% | 0% |
-| Laser | 100% | 100% | 12% |
+| SVD | 100% | 67% | 9% |
 | PSG1 | 100% | 100% | 100% |
 | Railgun | 100% | 100% | 100% |
 
-*How the simulation works:* the engine's exact fire math (SA sampled as a true round cone, HA as horizontal-only scatter, shotgun volleys carrying the real 8-point pattern with per-blast rotation, 71%-open growth at 50, and M1014's 1.4× stretch) fired against the game's real hit capsule — 3.2 wide, 6.4 tall, with the Laser bolt adding its 0.4 hitbox radius and the Railgun beam its 1.6. Lock-fire aims at the target's **current** position, so a moving target displaces by its speed × the projectile's flight time before impact; every shot is a mid-trail, perpendicular engagement (the same strict window the retired physical runs enforced). Earlier physical Shooting Range runs (fired from each gun's own lock range at 100 shots per lane) agreed with the simulation within roughly ±10 points; their score screens have been retired. **Hit-stun is NOT modeled**: every shot is an independent trial against a target that never flinches, so the mover columns are a floor for sustained fire — in real combat a landed hit slows the target and makes the next hit easier, and high-cadence stun guns chain that advantage.
+*How the simulation works:* the engine's exact fire math (SA sampled as a true round cone, HA as horizontal-only scatter, shotgun volleys carrying the real 8-point pattern with per-blast rotation, 71%-open growth at 50, and M1014's 1.4× stretch) fired against the game's real hit capsule — 3.2 wide, 6.4 tall, with the Railgun beam adding its 1.6 hitbox radius. Lock-fire aims at the target's **current** position, so a moving target displaces by its speed × the projectile's flight time before impact; every shot is a mid-trail, perpendicular engagement (the same strict window the retired physical runs enforced). Earlier physical Shooting Range runs (fired from each gun's own lock range at 100 shots per lane) agreed with the simulation within roughly ±10 points; their score screens have been retired. **Hit-stun is NOT modeled**: every shot is an independent trial against a target that never flinches, so the mover columns are a floor for sustained fire — in real combat a landed hit slows the target and makes the next hit easier, and high-cadence stun guns chain that advantage.
 
-Standouts at the common 50: perpendicular sprint is near-untouchable for ordinary bullets (the flight-time tax), but the snipers break the rule — PSG1's 2500-speed bolt and the Railgun's hitscan beam simply outrun it (100% everywhere). The Laser's fat 0.4-radius bolt absorbs the whole walk displacement (100% vs walkers), M14's tight no-HA cone makes it the best walker-tracker among ordinary bullets, and the shotgun pattern at 50 is ~71% open, so pellet rates are a coverage statement, not a weakness.
+Standouts at the common 50: perpendicular sprint is near-untouchable for ordinary bullets (the flight-time tax), but the snipers break the rule — PSG1's 2500-speed bolt and the Railgun's hitscan beam simply outrun it (100% everywhere). M14's tight no-HA cone makes it the best walker-tracker among ordinary bullets (82%), SVD trades half that cone for punch and lands where the MGs sit (67%), and the shotgun pattern at 50 is ~71% open, so pellet rates are a coverage statement, not a weakness.
 
 
 Projectiles fly straight (homing is zeroed universally). The targeting reticle is an **enemy-firing indicator**, not a range indicator: green by default, it flashes red while your current target is firing and stays red for the whole time a sniper is mid-charge with you as the target (see the sniper section). Being inside lock range is not signalled to players at all — the number only shapes bot behavior (bots hold their engage band around it). A faint in-lock tracer tint that once keyed to it was removed 2026-08-01.
@@ -133,11 +133,14 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 - **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as AA12's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis — the dodge-catcher to AA12's concentrated cluster.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
-### Laser — laser bolts
+### M14 & SVD — the marksman rifles
 
-- The flight kit was **removed in this demo build**: Laser plays as a normal ground unit (standard jump, 1.5 s cooldown, no air re-jumps, no sustained climb).
-- Sprinting into a jump **carries the sprint momentum** through the air.
-- Her shot is a **64-unit-long laser bolt**: the thin cyan cylinder you see *is* the hitbox (both derive from one spec entry). It grows out of the muzzle — the body never reaches behind the spawn point — and hits with its whole length, so a dodge must clear the entire passing beam, not just its nose.
+Both fire an ordinary bullet on the same 240 ms cycle and hold the same 56 / 65 band, and neither charges — the "Rifle" label is literal, not a softer word for sniper. They split on reach versus punch:
+
+- **M14** — 10 damage on a 20-round mag, SA 0.02, sure-hit ~160. Ten shots to kill leaves ten in reserve, and its tight no-HA cone gives the best walker tracking of any ordinary bullet (82% at 50 units).
+- **SVD** — 12 damage on a 10-round mag, SA 0.04, sure-hit ~80. Nine shots to kill leaves exactly **one** spare: the same burst DPS as the retired Laser, but able to actually finish a full-HP target on one magazine, where the Laser's 8-bolt mag capped at 96 and always fell four short. Half the reach of the M14 buys a quarter off the kill time.
+
+Sprinting into a jump **carries the sprint momentum** through the air — a general rule, most visible on these two.
 
 ### Sniper charge & sprint-cancel
 
@@ -190,7 +193,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | NEGEV | 100 | full mag (~6.4 s of continuous fire) |
 | AA12 | 20 | full drum |
 | M1014 | 4 | 4 blasts per trigger pull |
-| Laser | 4 | legacy formula (half mag) |
+| SVD | 10 | full mag |
 | PSG1 / Railgun | — | charge cycle, no bursts |
 
 A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
@@ -212,7 +215,7 @@ One bot brain drives every bot — all maps, all modes, offline and online (the 
 
 **Sniper play** — covered in the sniper section above: 50/50 snap-or-hold as the shooter; as the defender, a per-charge dodge roll timed against the charger's kit, one committed perpendicular dodge + sprint.
 
-**Cover reload** — weapons with a manual reload of 3 s or more (AA12, RPK, NEGEV) don't stand in the open through it. When the drum runs dry the bot picks the nearest reachable spot that breaks its target's line of sight — scored to prefer cover it can still fight from — sprints there, and waits out the famine pacing a narrow arc behind the wall rather than standing frozen. It steps back out with 0.4 s left so the magazine fills as it re-enters the fight. Getting shot outranks all of it: Defense takes over and the plan resumes afterwards. Per-shell reloaders (M1014, Laser) are excluded by design — they're always mid-reload, so they'd never come out. The counterplay is to push: hiding beats a stationary opponent, not a committed one.
+**Cover reload** — weapons with a manual reload of 3 s or more (AA12, RPK, NEGEV) don't stand in the open through it. When the drum runs dry the bot picks the nearest reachable spot that breaks its target's line of sight — scored to prefer cover it can still fight from — sprints there, and waits out the famine pacing a narrow arc behind the wall rather than standing frozen. It steps back out with 0.4 s left so the magazine fills as it re-enters the fight. Getting shot outranks all of it: Defense takes over and the plan resumes afterwards. Per-shell reloaders (M1014) are excluded by design — they're always mid-reload, so they'd never come out. The counterplay is to push: hiding beats a stationary opponent, not a committed one.
 
 **Shelved: map-specific rules (present but switched off).** A set of Station-only behaviors was built and field-tested — steering pulls toward the platform edges during approach, a "don't linger fighting on the track level" timer that drifted sustained low fights up onto the decks, and an anti-yo-yo hold that kept bots from hopping right back down after mounting. They worked, but repositioning Station's spawn points onto the platforms solved the railway-hugging problem more cleanly, so the whole set is parked behind a single master switch (`STATION_BOT_RULES`, off in both sims) rather than deleted. The bot rules that shipped are therefore **fully map-agnostic**; the switch exists if a map ever needs the special treatment again.
 
