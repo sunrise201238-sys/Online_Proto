@@ -627,6 +627,42 @@ export const UNIT_DATA = {
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+  },
+  unit18: {
+    id: 'unit18',
+    name: 'Unit 18 / Rifle',
+
+    // Pilot stats — M14 template: same mobility block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — SVD (2026-08-09, replaces the hidden Laser in the
+    // pickers): M14 clone with a heavier round on a half-size mag and a
+    // wider cone — 10 x 12 leaves exactly one spare shot on a 100 HP kill,
+    // and SA 0.04 halves M14's sure-hit range to ~80. A marksman rifle, not
+    // a sniper: ordinary bullet, no charge, no glint (see `sniperCharge`).
+    lockRange: 56,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 250,        // = 240 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 12,
+    magCapacity: 10,
+    botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 2000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 

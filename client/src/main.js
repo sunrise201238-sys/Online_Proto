@@ -278,6 +278,10 @@ const UNIT_DATA = {
     name: 'Unit 7 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     char: 'Unit 7', weapon: 'Laser', accent: 0x6fd9e8,
+    // HIDDEN since 0.7.2 (SVD/unit18 took her picker slot — same treatment
+    // as Mika/unit8): kept fully in code and sim, absent from every picker
+    // and random pool.
+    hidden: true,
 
     // Pilot stats
     hp: 100,
@@ -693,6 +697,43 @@ const UNIT_DATA = {
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+  },
+  unit18: {
+    name: 'Unit 18 / Rifle',
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    char: 'Unit 18', weapon: 'SVD', accent: 0x6fd9e8,
+
+    // Pilot stats — M14 template: same mobility block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — SVD (2026-08-09, replaces the hidden Laser in the
+    // pickers): M14 clone with a heavier round on a half-size mag and a
+    // wider cone — 10 x 12 leaves exactly one spare shot on a 100 HP kill,
+    // and SA 0.04 halves M14's sure-hit range to ~80. A marksman rifle, not
+    // a sniper: ordinary bullet, no charge, no glint (see `sniperCharge`).
+    lockRange: 56,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 250,        // = 240 ms cooldown
+    spreadCount: 1,
+    spreadAngle: 0.04,
+    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
+    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    damage: 12,
+    magCapacity: 10,
+    botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
+    reloadMs: 2000,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
@@ -8563,7 +8604,8 @@ const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 const SPREAD_ICON_RANGE_OVERRIDE = {
   M4: 60, FAMAS: 60, evo3: 60, P90: 60, M60: 60,
   MG42: 60, M14: 60, Laser: 60, PSG1: 60, Railgun: 60,
-  RPK: 60, NEGEV: 60   // MG clones follow the common range; AA12 (shotgun) stays on her own lock
+  RPK: 60, NEGEV: 60,  // MG clones follow the common range; AA12 (shotgun) stays on her own lock
+  SVD: 60
 };
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
@@ -8681,7 +8723,7 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 const UNIT_GRID_ORDER = [
   'unit1', 'unit9', 'unit4', 'unit14',   // M4  FAMAS  evo3  P90 (PPSh/unit13 hidden — her old slot; Mika/unit8 hidden too)
   'unit11', 'unit15', 'unit16', 'unit17', // M1014  AA12  RPK  NEGEV (0.7.1: Beretta 1301/unit2, M60/unit12, MG42/unit5 hidden — their old slots; M1014/AA12 swapped same day)
-  'unit10', 'unit7', 'unit3', 'unit6'    // M14  Laser  PSG1  Railgun
+  'unit10', 'unit18', 'unit3', 'unit6'   // M14  SVD  PSG1  Railgun (0.7.2: Laser/unit7 hidden — its old slot)
 ];
 
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
