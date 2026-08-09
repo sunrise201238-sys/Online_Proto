@@ -52,8 +52,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
 | RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
-| M14 — Rifle | 20 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
-| SVD — Rifle | 10 | 12 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
+| M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 2 s |
+| SVD — Rifle | 10 | 12 / shot | 180 RPM | 600 | 56 / 65 | 2 s |
 | PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
 | Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
@@ -66,15 +66,15 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
-| SVD | 4.17/s | 12 | **50.0** | 28.8 |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | RPK | 8.9/s (112 ms) | 5 | **44.6** | 31.1 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 29.6 |
-| M14 | 4.17/s | 10 | **41.7** | 30.5 |
+| SVD | 2.98/s (336 ms) | 12 | **35.7** | 23.9 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
+| M14 | 2.98/s (336 ms) | 10 | **29.8** | 23.9 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 43–55 spread across the five mid-table autos (evo3, FAMAS, M4, RPK, P90) is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS. The two marksman rifles sit below that band on burst but hold ~24 sustained, close to the autos: their damage arrives in fewer, larger pieces rather than more slowly.
 
 **Handling (stun + spread):**
 
@@ -135,10 +135,12 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 ### M14 & SVD — the marksman rifles
 
-Both fire an ordinary bullet on the same 240 ms cycle and hold the same 56 / 65 band, and neither charges — the "Rifle" label is literal, not a softer word for sniper. They split on reach versus punch:
+Both fire an ordinary bullet on the same **336 ms cycle (180 RPM)** and hold the same 56 / 65 band, and neither charges — the "Rifle" label is literal, not a softer word for sniper. They split on reach versus punch:
 
 - **M14** — 10 damage on a 20-round mag, SA 0.02, sure-hit ~160. Ten shots to kill leaves ten in reserve, and its tight no-HA cone gives the best walker tracking of any ordinary bullet (82% at 50 units).
-- **SVD** — 12 damage on a 10-round mag, SA 0.04, sure-hit ~80. Nine shots to kill leaves exactly **one** spare: the same burst DPS as the retired Laser, but able to actually finish a full-HP target on one magazine, where the Laser's 8-bolt mag capped at 96 and always fell four short. Half the reach of the M14 buys a quarter off the kill time.
+- **SVD** — 12 damage on a 10-round mag, SA 0.04, sure-hit ~80. Nine shots to kill leaves exactly **one** spare — able to finish a full-HP target on one magazine, where the retired Laser's 8-bolt mag capped at 96 and always fell four short. Half the reach of the M14 buys a quarter off the kill time.
+
+**Cadence (2026-08-09, was ~250 RPM).** These two hold-to-fire like any other single-projectile gun, but at the old 240 ms the cooldown sat *inside* the length of a normal press: a tap unpredictably produced one round or two, which read as the fire rate randomly running fast. 180 RPM puts the real slot at **336 ms** — a press has to run past a third of a second before it doubles, so ordinary taps land one round while a deliberate hold still gives ~3/s. It costs both rifles about a fifth of their sustained damage (M14 30.5 → 23.9, SVD 28.8 → 23.9); note that at equal cadence the two now sustain identically, and SVD's edge is entirely in burst. The hidden Laser has the same problem but keeps its 250 RPM, so it is instead flagged `semiAuto` and opts out of hold-to-fire entirely — the only unit in the game that does.
 
 Sprinting into a jump **carries the sprint momentum** through the air — a general rule, most visible on these two.
 

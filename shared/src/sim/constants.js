@@ -358,7 +358,7 @@ export const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
+    firePerMinute: 180,        // = 333.33 ms, quantised to the 336 ms tick slot
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -653,7 +653,7 @@ export const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
+    firePerMinute: 180,        // = 333.33 ms, quantised to the 336 ms tick slot
     spreadCount: 1,
     spreadAngle: 0.04,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
