@@ -2304,10 +2304,12 @@ const BULLET_TRAIL_OPACITY = 0.55;
 // Keyed by unit NAME for the same reason the fade lookup takes a whole unit:
 // offline hands in the client UNIT_DATA entry, online a wire-deserialised
 // shared one, and `name` is the only field both shapes carry.
-// Chosen to match how thick the constant-pixel version looked at ~40u, so the
-// mid-range appearance carries over and only the distance behaviour changes.
-const BULLET_TRAIL_RADIUS_RIFLE = 0.03;    // M14 / SVD
-const BULLET_TRAIL_RADIUS_SNIPER = 0.05;   // PSG1 — deliberately the fatter one
+// Doubled back from 0.03 / 0.05 once the collapsed-tip and taper bugs were out
+// of the way (user 2026-08-09). M14 / SVD now sit at the same visual thickness
+// as the very first cylinder attempt (0b50f25 used radius 0.06); PSG1 is a
+// little under its 0.12.
+const BULLET_TRAIL_RADIUS_RIFLE = 0.06;    // M14 / SVD
+const BULLET_TRAIL_RADIUS_SNIPER = 0.10;   // PSG1 — deliberately the fatter one
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
   [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE],    // M14
   [UNIT_DATA.unit18?.name, BULLET_TRAIL_RADIUS_RIFLE],    // SVD
