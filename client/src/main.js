@@ -10996,8 +10996,11 @@ function buildFactoryArena() {
   // Outer partitions (between machinery and pillars)
   drawPartition(-30, -65, 'x', 10);
   drawPartition(30, 65, 'x', 10);
-  drawPartition(-90, 60, 'z', 8);
-  drawPartition(90, -60, 'z', 8);
+  // Inside each spawn pocket, screening the doorway (user 2026-08-09; was
+  // (-90, 60) / (90, -60) lying along Z, which the corner partitions then
+  // enclosed). Same 8u panel, turned to lie along X.
+  drawPartition(-93, 54, 'x', 8);
+  drawPartition(93, -54, 'x', 8);
   // Spawn-corner partitions (user 2026-08-09) — an L around each corner spawn,
   // long side along Z, short side along X. Two ways out: a 14.7u doorway
   // between the two panels, and a 13u gap past the long panel's far end.
