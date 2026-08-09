@@ -3055,6 +3055,19 @@ function surfaceImpactT(prevPos, nextPos) {
 // frame and its 1 s fade left a streak stabbing through cover).
 function clampTrailHead(trail, x, y, z) {
   if (!trail) return;
+  // A ribbon trail is 4 corners derived from userData.ends, NOT the 2-vertex
+  // tail/head pair a THREE.Line uses. Writing p[3..5] there would move a TAIL
+  // corner and leave the head at the overshot post-step position — which is how
+  // a PSG1 streak ended up drawn straight through Factory's crates: 40 u of
+  // overshoot per tick against a 6 u crate, then frozen for its 1 s fade. Move
+  // the stored endpoint and re-aim instead.
+  if (trail.userData?.trailRadius) {
+    const e = trail.userData.ends;
+    if (!e) return;
+    e.hx = x; e.hy = y; e.hz = z;
+    billboardBulletTrail(trail);
+    return;
+  }
   const pos = trail.geometry.attributes.position.array;
   pos[3] = x; pos[4] = y; pos[5] = z;
   trail.geometry.attributes.position.needsUpdate = true;
