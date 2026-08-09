@@ -2262,10 +2262,11 @@ const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
 // MG / Sniper round and fades out after the bullet expires. Shotgun pellets
 // opt out so 8 pellets per shot don't make a noisy mess. The trail is a
-// 2-vertex THREE.Line whose tail is computed analytically from the projectile's
-// velocity (projectiles fly straight — homing is 0 — so no sample buffer
-// needed). Despawned bullets hand their trail to state.dyingBulletTrails so it
-// fades in place instead of vanishing the instant the bullet stops.
+// 2-vertex THREE.Line — or, for the three guns listed under trail THICKNESS
+// below, a stretched cylinder — whose tail is computed analytically from the
+// projectile's velocity (projectiles fly straight — homing is 0 — so no sample
+// buffer needed). Despawned bullets hand their trail to state.dyingBulletTrails
+// so it fades in place instead of vanishing the instant the bullet stops.
 const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
 const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
 // Per-map bullet-trail color: dark slate on bright-ground maps (light grey
@@ -2276,6 +2277,37 @@ const BULLET_TRAIL_COLOR_DARK = 0x3a3f4a;
 const BULLET_TRAIL_DARK_MAPS = new Set(['lobby', 'airport', 'range']);
 const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLET_TRAIL_COLOR_DARK : BULLET_TRAIL_COLOR_LIGHT);
 const BULLET_TRAIL_OPACITY = 0.55;
+// Trail THICKNESS (user 2026-08-09). A THREE.Line is always 1 device pixel —
+// WebGL ignores LineBasicMaterial.linewidth — so a streak that reads thicker
+// has to be real geometry. Only the three slow, low-volume guns get it; the
+// other nine keep the cheap Line, which matters because the 100 ms MG fade
+// above exists precisely because trail COUNT once cost frames at MG fire-rate.
+// A cylinder (not a camera-facing ribbon) so the shape is orientation-free:
+// dying trails freeze their geometry and only fade opacity, and a ribbon would
+// visibly flatten if the camera moved during PSG1's 1 s fade.
+// Keyed by unit NAME for the same reason the fade lookup takes a whole unit:
+// offline hands in the client UNIT_DATA entry, online a wire-deserialised
+// shared one, and `name` is the only field both shapes carry.
+const BULLET_TRAIL_RADIUS_RIFLE = 0.06;   // M14 / SVD
+const BULLET_TRAIL_RADIUS_SNIPER = 0.12;  // PSG1 — deliberately the fatter one
+const BULLET_TRAIL_THICK_BY_NAME = new Map([
+  [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE],   // M14
+  [UNIT_DATA.unit18?.name, BULLET_TRAIL_RADIUS_RIFLE],   // SVD
+  [UNIT_DATA.unit3?.name, BULLET_TRAIL_RADIUS_SNIPER]    // PSG1
+].filter(([name]) => name));
+// 0 = keep the 1px line. Anything above 0 is a world-space radius, so the
+// streak thins with distance the way a real tracer does.
+const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// One unit cylinder (length 1, radius 1, open-ended) shared by every thick
+// trail — each instance only scales/orients it, so firing costs no geometry
+// allocation. Never disposed per-trail; see disposeBulletTrail.
+let _bulletTrailGeom = null;
+const bulletTrailGeometry = () => {
+  if (!_bulletTrailGeom) _bulletTrailGeom = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+  return _bulletTrailGeom;
+};
+const _trailDir = new THREE.Vector3();
+const _trailUp = new THREE.Vector3(0, 1, 0);
 
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
@@ -2285,7 +2317,24 @@ function bulletTrailFadeMsFor(unit) {
   return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
 }
 
-function buildBulletTrail() {
+function buildBulletTrail(radius = 0) {
+  if (radius > 0) {
+    const mesh = new THREE.Mesh(
+      bulletTrailGeometry(),
+      new THREE.MeshBasicMaterial({
+        color: bulletTrailColor(),
+        transparent: true,
+        opacity: BULLET_TRAIL_OPACITY,
+        fog: false,
+        depthWrite: false,       // streaks overlap; no z-fighting between them
+        side: THREE.DoubleSide   // open-ended cylinder, visible from inside too
+      })
+    );
+    mesh.userData.trailRadius = radius;   // also the flag that this is a mesh trail
+    mesh.frustumCulled = false;
+    mesh.visible = false;                 // until the first ends update gives it a length
+    return mesh;
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
   const material = new THREE.LineBasicMaterial({
@@ -2302,11 +2351,26 @@ function buildBulletTrail() {
 function disposeBulletTrail(trail) {
   if (!trail) return;
   if (trail.parent) trail.parent.remove(trail);
-  if (trail.geometry) trail.geometry.dispose();
+  // Mesh trails share one module-level cylinder — disposing it would blank
+  // every other live trail. Only the per-trail material is ours to free.
+  if (trail.geometry && !trail.userData?.trailRadius) trail.geometry.dispose();
   if (trail.material) trail.material.dispose();
 }
 
 function updateBulletTrailEnds(trail, tx, ty, tz, hx, hy, hz) {
+  const radius = trail.userData?.trailRadius;
+  if (radius) {
+    // Stretch the unit cylinder from tail to head: centre it on the midpoint,
+    // point local +Y down the streak, scale length on Y and width on X/Z.
+    _trailDir.set(hx - tx, hy - ty, hz - tz);
+    const len = _trailDir.length();
+    if (len < 1e-6) { trail.visible = false; return; }
+    trail.visible = true;
+    trail.position.set((tx + hx) / 2, (ty + hy) / 2, (tz + hz) / 2);
+    trail.quaternion.setFromUnitVectors(_trailUp, _trailDir.divideScalar(len));
+    trail.scale.set(radius, len, radius);
+    return;
+  }
   const pos = trail.geometry.attributes.position.array;
   pos[0] = tx; pos[1] = ty; pos[2] = tz;
   pos[3] = hx; pos[4] = hy; pos[5] = hz;
@@ -2529,7 +2593,7 @@ function spawnProjectiles(owner, target) {
     const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
     let trail = null;
     if (trailFadeMs > 0) {
-      trail = buildBulletTrail();
+      trail = buildBulletTrail(bulletTrailRadiusFor(owner.unit));
       scene.add(trail);
     }
 
@@ -7142,7 +7206,7 @@ function syncOnlineProjectiles(snap) {
       const trailFadeMs = bulletTrailFadeMsFor(ownerUnit);
       let trail = null;
       if (trailFadeMs > 0) {
-        trail = buildBulletTrail();
+        trail = buildBulletTrail(bulletTrailRadiusFor(ownerUnit));
         scene.add(trail);
       }
       entry = {
