@@ -2259,20 +2259,6 @@ const SNIPER_TRACER_LENGTH = 3.4;
 const SNIPER_TRACER_MID_RADIUS = 0.18;
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
-// Rifles / Sniper Rifles draw a THICKER (not longer) spindle so their slow,
-// low-volume rounds read clearly: PSG1 0.18 → 0.36, M14 / SVD 0.09 → 0.18.
-// Length, every other weapon, and the hit box are all untouched.
-// Matched by unit NAME because buildProjectileMesh is handed the CLIENT
-// UNIT_DATA entry offline but a wire-deserialised SHARED entry online (see the
-// snapshot path in applyOnlineProjectiles) — `name` is the only field both
-// shapes carry, since char/weapon/accent are client-visual only. The names are
-// read back out of UNIT_DATA rather than hardcoded so a rename can't silently
-// drop a weapon out of the set. Railgun is deliberately absent: it fires a beam,
-// never a projectile, and its beam radius IS its hit box.
-const TRACER_THICK_RADIUS_MULT = 2;
-const TRACER_THICK_NAMES = new Set(
-  ['unit3', 'unit10', 'unit18'].map((k) => UNIT_DATA[k]?.name).filter(Boolean)
-);
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
 // MG / Sniper round and fades out after the bullet expires. Shotgun pellets
 // opt out so 8 pellets per shot don't make a noisy mess. The trail is a
@@ -2396,8 +2382,7 @@ function buildProjectileMesh(unit, isRedLock) {
   // local +Y axis onto the velocity direction.
   const scale = isMG ? MG_TRACER_SCALE : 1;
   const half = (SNIPER_TRACER_LENGTH * scale) / 2;
-  const thick = TRACER_THICK_NAMES.has(unit?.name) ? TRACER_THICK_RADIUS_MULT : 1;
-  const midRadius = SNIPER_TRACER_MID_RADIUS * scale * thick;
+  const midRadius = SNIPER_TRACER_MID_RADIUS * scale;
   const profile = [
     new THREE.Vector2(0, -half),        // tail tip (sharp)
     new THREE.Vector2(midRadius, 0),    // mid (widest)
