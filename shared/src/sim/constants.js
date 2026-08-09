@@ -366,7 +366,7 @@ export const UNIT_DATA = {
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
-    reloadMs: 2000,
+    reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   },
@@ -661,7 +661,7 @@ export const UNIT_DATA = {
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
-    reloadMs: 2000,
+    reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   }
