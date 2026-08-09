@@ -212,7 +212,13 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
 
   // Continuous-fire while shoot is held: every single-projectile non-sniper
   // gun, plus multi-pellet guns flagged autoFire (AA12 — 2026-08-08).
-  if (input.shootHold && opp && (fighter.unit.spreadCount === 1 || fighter.unit.autoFire) && !fighter.unit.sniperCharge) {
+  // EXCEPT anything flagged semiAuto (M14 / SVD / Laser — user 2026-08-09).
+  // Those three are single-projectile non-snipers, so they used to land in
+  // here and auto-fire like an M4: a press outlasting the cooldown produced a
+  // second round, which read as "one press, two shots" and "the RPM sometimes
+  // runs fast". The shootTap branch above is the only way they fire now.
+  if (input.shootHold && opp && !fighter.unit.semiAuto
+      && (fighter.unit.spreadCount === 1 || fighter.unit.autoFire) && !fighter.unit.sniperCharge) {
     const before = fighter.lastFireAt;
     attemptFire(matchState, fighter, opp, now);
     if (fighter.lastFireAt !== before && action === 'idle') action = 'shoot';

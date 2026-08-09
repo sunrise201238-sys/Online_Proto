@@ -308,6 +308,7 @@ const UNIT_DATA = {
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 },
     // Flight kit REMOVED for the demo (2026-08-05 user order): no `flight`
     // flag, no airJumpBoostCost, standard 1500 ms jump cooldown — she plays
@@ -416,7 +417,7 @@ const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -426,6 +427,7 @@ const UNIT_DATA = {
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   },
   unit11: {
@@ -723,7 +725,7 @@ const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
     spreadCount: 1,
     spreadAngle: 0.04,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -733,6 +735,7 @@ const UNIT_DATA = {
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 2000,
     autoReload: false,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   }
 };
@@ -4282,7 +4285,10 @@ function updatePlayer(now) {
   // Player continuous fire while shoot is held — no burst cap (cooldown still
   // gates rate): every single-projectile non-sniper gun, plus multi-pellet
   // guns flagged autoFire (AA12 — 2026-08-08). Mirrored in shared tick.js.
-  if (input.shootHold && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
+  // semiAuto guns (M14 / SVD / Laser) opt out of hold-to-fire — mirrors the
+  // gate in shared tick.js; see the note there for what it was causing.
+  if (input.shootHold && !state.player.unit.semiAuto
+      && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, pTarget, now);
     if (state.player.state.lastFireAt !== firedAt) {

@@ -258,6 +258,7 @@ export const UNIT_DATA = {
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 },
     // Flight kit REMOVED for the demo (2026-08-05 user order): no `flight`
     // flag, no airJumpBoostCost, standard 1500 ms jump cooldown — she plays
@@ -357,7 +358,7 @@ export const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -367,6 +368,7 @@ export const UNIT_DATA = {
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   },
   unit11: {
@@ -652,7 +654,7 @@ export const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 120,        // = 500 ms cooldown (exactly 30 ticks)
     spreadCount: 1,
     spreadAngle: 0.04,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -662,6 +664,7 @@ export const UNIT_DATA = {
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 2000,
     autoReload: false,
+    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   }
 };
