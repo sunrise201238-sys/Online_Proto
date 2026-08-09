@@ -9538,7 +9538,7 @@ const ARENA_SPAWNS = {
   // Streets: diagonal corner spawns (user 2026-08-06; old values ±108, 0) —
   // 8u clear of the boundary walls (x ±126, z ±90) and the corner towers.
   arena2: { p1: { x: -118, y: GROUND_BASE_Y, z: -82 }, p2: { x: 118, y: GROUND_BASE_Y, z: 82 } },
-  factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
+  factory: { p1: { x: -120, y: GROUND_BASE_Y, z: 77 }, p2: { x: 120, y: GROUND_BASE_Y, z: -77 } },
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },

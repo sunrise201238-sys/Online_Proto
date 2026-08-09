@@ -6766,8 +6766,13 @@ function startMatch() {
     state.player.body.position.set(-30, 2.45, 50);
     state.enemy.body.position.set(30, 2.45, 50);
   } else if (state.mapKey === 'factory') {
-    state.player.body.position.set(-50, 2.45, 0);
-    state.enemy.body.position.set(50, 2.45, 0);
+    // Opposite corners (user 2026-08-09; was ±50 / z 0, facing off across the
+    // open centre lane). 8u off the side walls (inner face ±128) and 10u clear
+    // of the machine banks at z ±90, on the long diagonal — 285u apart, so
+    // first contact happens somewhere in the hall instead of on sight.
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-120, 2.45, 77);
+    state.enemy.body.position.set(120, 2.45, -77);
   } else if (state.mapKey === 'factory2') {
     // Diagonal spawn in opposite yards, clear of the corner tanks, belts,
     // workbenches, and the deck ramps.
@@ -6813,14 +6818,18 @@ function startMatch() {
   // (user, 2026-08-08): its spawns sit 6u off a ramp foot, and a Z offset
   // would put one teammate 12u further from the ramp (or on the slope
   // itself) — offsetting along X keeps BOTH at the ramp mouth, side by side,
-  // equidistant. Mirrored in shared state.js.
+  // equidistant. FACTORY joins Streets for the same reason (user 2026-08-09):
+  // its corner spawns sit at z ±77, and a flat +Z would drop one teammate on
+  // the z +90 machine bank while the other walked free — the two teams would
+  // not get the same opening. Toward-centre keeps the pair 180°-symmetric.
+  // Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
     if (state.mapKey === 'station' || state.mapKey === 'airport') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2') {
+    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {

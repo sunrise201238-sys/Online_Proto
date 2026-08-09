@@ -209,10 +209,13 @@ export function createMatchState({
     // uses Station's X form too (user, 2026-08-08): its spawns sit 6u off a
     // ramp foot, and a Z offset would put one teammate 12u further from the
     // ramp (or on the slope itself) — offsetting along X keeps BOTH at the
-    // ramp mouth, side by side, equidistant.
+    // ramp mouth, side by side, equidistant. FACTORY joins Streets for the
+    // same reason (user, 2026-08-09): its corner spawns sit at z ±77, and a
+    // flat +Z would drop one teammate on the z +90 machine bank while the
+    // other walked free — the two teams would not get the same opening.
     const xOffset = mapKey === 'station' || mapKey === 'airport';
-    const streets = mapKey === 'arena2';
-    const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;
+    const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
+    const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const p3Spawn = {
       x: xOffset ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
