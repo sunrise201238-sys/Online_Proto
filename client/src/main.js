@@ -10998,6 +10998,15 @@ function buildFactoryArena() {
   drawPartition(30, 65, 'x', 10);
   drawPartition(-90, 60, 'z', 8);
   drawPartition(90, -60, 'z', 8);
+  // Spawn-corner partitions (user 2026-08-09) — an L around each corner spawn,
+  // long side along Z, short side along X. Two ways out: a 14.7u doorway
+  // between the two panels, and a 13u gap past the long panel's far end.
+  // The short panel stops 2u off the side wall, i.e. sealed to a 1.15-radius
+  // body, so the doorway is the only opening on that face.
+  drawPartition(-110, 45, 'x', 32);
+  drawPartition(110, -45, 'x', 32);
+  drawPartition(-79, 66, 'z', 48);
+  drawPartition(79, -66, 'z', 48);
 
   // ===== Workbenches (10 spots — bigger map, more cover) =====
   const drawWorkbench = (x, z) => {
