@@ -404,6 +404,7 @@ export const UNIT_DATA = {
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
+    autoFire: true,            // full-auto: hold-to-fire like AA12 (shotguns are tap-fire by default)
     stun: { ms: 100, moveScale: 0.25 },
     // Horizontal-only pattern widening (see volleyPelletOffset): applied
     // after the per-shot random rotation, so blasts stay randomized while
