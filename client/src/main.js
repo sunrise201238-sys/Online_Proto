@@ -2317,10 +2317,17 @@ const trailHalfWidthWorld = (px, depth) => {
   const h = renderer?.domElement?.clientHeight || window.innerHeight || 900;
   return (px * depth * Math.tan((camera.fov * Math.PI) / 360)) / h;
 };
-// View-space depth of a world point, clamped off zero so a streak that passes
-// through the camera plane can't invert.
+// RAW view-space depth of a world point: positive in front of the camera,
+// negative behind. Deliberately unclamped — billboardBulletTrail needs the true
+// sign so it can clip the segment (clamping here is what produced the collapsed
+// tip: width was computed at the clamp while the vertex stayed 2000+ units
+// behind the eye).
 const trailViewDepth = (x, y, z) =>
-  Math.max(0.1, -_trailTmp.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z);
+  -_trailTmp.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z;
+// Where a ribbon gets cut off in front of the eye. Above camera.near (0.1) for
+// numerical headroom; at this depth the streak is effectively at the lens, so
+// clipping here is invisible.
+const BULLET_TRAIL_NEAR_CLIP = 0.5;
 const _trailDir = new THREE.Vector3();
 const _trailPerp = new THREE.Vector3();
 const _trailTmp = new THREE.Vector3();
@@ -2392,29 +2399,65 @@ function disposeBulletTrail(trail) {
 function billboardBulletTrail(trail) {
   const e = trail.userData.ends;
   if (!e) return;
-  _trailDir.set(e.hx - e.tx, e.hy - e.ty, e.hz - e.tz);
+  let tx = e.tx, ty = e.ty, tz = e.tz;
+  let hx = e.hx, hy = e.hy, hz = e.hz;
+  let dT = trailViewDepth(tx, ty, tz);
+  let dH = trailViewDepth(hx, hy, hz);
+  const N = BULLET_TRAIL_NEAR_CLIP;
+  // NEAR-PLANE CLIP. Either end can sit behind the eye: the tail trails the
+  // bullet by speed * fadeSec, which for PSG1 is 2500 units, so it routinely
+  // does. Slide that end up the segment until it reaches the near plane. The
+  // part behind the camera was never visible, and the end that IS visible now
+  // gets a width matching where it actually sits — before this, the vertex
+  // stayed thousands of units behind while its width was computed at a clamped
+  // depth, which pinched the streak down to a sharp point.
+  // Depth is affine along the segment, so this interpolation is exact.
+  if (dT < N && dH < N) { trail.visible = false; return; }
+  if (dT < N) {
+    const s = (N - dT) / (dH - dT);
+    tx += (hx - tx) * s; ty += (hy - ty) * s; tz += (hz - tz) * s; dT = N;
+  } else if (dH < N) {
+    const s = (N - dH) / (dT - dH);
+    hx += (tx - hx) * s; hy += (ty - hy) * s; hz += (tz - hz) * s; dH = N;
+  }
+  _trailDir.set(hx - tx, hy - ty, hz - tz);
   const len = _trailDir.length();
   if (len < 1e-6) { trail.visible = false; return; }
   _trailDir.divideScalar(len);
   // Sideways-on-screen = perpendicular to both the streak and the view ray.
   // Degenerates when firing straight at/away from the camera; fall back to the
   // camera's own right vector, which can never be parallel to the view ray.
-  _trailTmp.set(e.hx, e.hy, e.hz).sub(camera.position);
+  _trailTmp.set(hx, hy, hz).sub(camera.position);
   _trailPerp.crossVectors(_trailDir, _trailTmp);
   if (_trailPerp.lengthSq() < 1e-12) _trailPerp.setFromMatrixColumn(camera.matrixWorld, 0);
   _trailPerp.normalize();
-  // _trailTmp is free to reuse from here — the cross product above is done.
   const widthPx = trail.userData.trailWidthPx;
-  const wT = trailHalfWidthWorld(widthPx, trailViewDepth(e.tx, e.ty, e.tz));
-  const wH = trailHalfWidthWorld(widthPx, trailViewDepth(e.hx, e.hy, e.hz));
+  const wT = trailHalfWidthWorld(widthPx, dT);
+  const wH = trailHalfWidthWorld(widthPx, dH);
   const p = trail.geometry.attributes.position.array;
   const nx = _trailPerp.x, ny = _trailPerp.y, nz = _trailPerp.z;
-  p[0] = e.tx - nx * wT; p[1] = e.ty - ny * wT; p[2] = e.tz - nz * wT;
-  p[3] = e.tx + nx * wT; p[4] = e.ty + ny * wT; p[5] = e.tz + nz * wT;
-  p[6] = e.hx - nx * wH; p[7] = e.hy - ny * wH; p[8] = e.hz - nz * wH;
-  p[9] = e.hx + nx * wH; p[10] = e.hy + ny * wH; p[11] = e.hz + nz * wH;
+  p[0] = tx - nx * wT; p[1] = ty - ny * wT; p[2] = tz - nz * wT;
+  p[3] = tx + nx * wT; p[4] = ty + ny * wT; p[5] = tz + nz * wT;
+  p[6] = hx - nx * wH; p[7] = hy - ny * wH; p[8] = hz - nz * wH;
+  p[9] = hx + nx * wH; p[10] = hy + ny * wH; p[11] = hz + nz * wH;
   trail.geometry.attributes.position.needsUpdate = true;
   trail.visible = true;
+}
+
+// Re-aim every ribbon trail — live and fading, offline and online — using the
+// camera as it stands right now. Called from the render loop after
+// updateCamera(); see the note there. Plain Line trails have no orientation
+// and are skipped.
+function rebillboardBulletTrails() {
+  for (const p of state.projectiles) {
+    if (p.trail?.userData?.trailWidthPx) billboardBulletTrail(p.trail);
+  }
+  for (const entry of (state.online?.projectileMeshes?.values?.() ?? [])) {
+    if (entry.trail?.userData?.trailWidthPx) billboardBulletTrail(entry.trail);
+  }
+  for (const dt of (state.dyingBulletTrails || [])) {
+    if (dt.trail?.userData?.trailWidthPx) billboardBulletTrail(dt.trail);
+  }
 }
 
 function updateBulletTrailEnds(trail, tx, ty, tz, hx, hy, hz) {
@@ -8399,6 +8442,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   });
   updateVfx(dt);
   updateCamera();
+  rebillboardBulletTrails();   // after the camera is final — see the offline note
   updateMechXRayVisibility();
   updateWallFade();
   updateBeamVisuals(performance.now());
@@ -13486,6 +13530,13 @@ function animate() {
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
+      // AFTER updateCamera: ribbon trails size each end from its view-space
+      // depth, so aiming them with last frame's camera leaves a one-frame lag.
+      // Harmless at the far end, but an end clipped to the near plane sits at
+      // depth ~0.5, where half a unit of camera drift is a ~2x width error —
+      // it flickered thin exactly while the camera was still settling after a
+      // shot. Re-aim once the camera is final for this frame.
+      rebillboardBulletTrails();
       updateMechXRayVisibility();
       updateWallFade();
       updateHud();
