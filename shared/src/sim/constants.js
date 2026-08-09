@@ -402,7 +402,7 @@ export const UNIT_DATA = {
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; 4 -> 2.5 -> 3, 2026-08-08 user tune)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
-    reloadMs: 1200,
+    reloadMs: 1000,
     autoReload: true,
     autoFire: true,            // full-auto: hold-to-fire like AA12 (shotguns are tap-fire by default)
     stun: { ms: 100, moveScale: 0.25 },
