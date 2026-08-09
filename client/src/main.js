@@ -2297,8 +2297,11 @@ const BULLET_TRAIL_OPACITY = 0.55;
 // Keyed by unit NAME for the same reason the fade lookup takes a whole unit:
 // offline hands in the client UNIT_DATA entry, online a wire-deserialised
 // shared one, and `name` is the only field both shapes carry.
-const BULLET_TRAIL_PX_RIFLE = 3;    // M14 / SVD
-const BULLET_TRAIL_PX_SNIPER = 5;   // PSG1 — deliberately the fatter one
+// Halved from 3 / 5 (user 2026-08-09). Note these are CSS pixels, while the
+// 1 px Line the other nine weapons use is a FRAMEBUFFER pixel — so at a 1.5
+// pixel ratio these still land at ~2.25x and ~3.75x the untouched trails.
+const BULLET_TRAIL_PX_RIFLE = 1.5;    // M14 / SVD
+const BULLET_TRAIL_PX_SNIPER = 2.5;   // PSG1 — deliberately the fatter one
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
   [UNIT_DATA.unit10?.name, BULLET_TRAIL_PX_RIFLE],    // M14
   [UNIT_DATA.unit18?.name, BULLET_TRAIL_PX_RIFLE],    // SVD
