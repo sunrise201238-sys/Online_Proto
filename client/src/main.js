@@ -427,7 +427,6 @@ const UNIT_DATA = {
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
-    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   },
   unit11: {
@@ -735,7 +734,6 @@ const UNIT_DATA = {
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 2000,
     autoReload: false,
-    semiAuto: true,            // one round per press — see the shootHold gate in tick.js
     stun: { ms: 100, moveScale: 0.25 }
   }
 };
@@ -4285,8 +4283,9 @@ function updatePlayer(now) {
   // Player continuous fire while shoot is held — no burst cap (cooldown still
   // gates rate): every single-projectile non-sniper gun, plus multi-pellet
   // guns flagged autoFire (AA12 — 2026-08-08). Mirrored in shared tick.js.
-  // semiAuto guns (M14 / SVD / Laser) opt out of hold-to-fire — mirrors the
-  // gate in shared tick.js; see the note there for what it was causing.
+  // semiAuto guns (currently just the Laser) opt out of hold-to-fire — mirrors
+  // the gate in shared tick.js; see the note there for why M14 / SVD are not
+  // on the list despite hitting the same thing.
   if (input.shootHold && !state.player.unit.semiAuto
       && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
