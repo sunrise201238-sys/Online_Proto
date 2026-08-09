@@ -127,9 +127,9 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 ### AA12 & M1014 — the shotgun blast
 
-- A trigger pull fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 3 (all 8 point-blank = 24, both shotguns).
+- Each shot fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 3 (all 8 point-blank = 24, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **AA12's drum:** unlike M1014's per-shell regen, AA12 fires her 20-shell drum full-auto (~4.8 blasts/s) and reloads it in one 4 s stroke — the sustained-pressure half of the pair, walking at the MGs' 12 to pay for it.
+- **Both hold to fire** (2026-08-09 — M1014 was tap-only until then). They split on how the ammo comes back, not on the trigger: AA12 empties a **20-shell drum** at ~4.8 blasts/s and buys it back in one 4 s stroke, while M1014 runs a **7-shell magazine on per-shell regen** — never a famine, never a burst either. AA12 is the sustained-pressure half of the pair, walking at the MGs' 12 to pay for it.
 - **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as AA12's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis — the dodge-catcher to AA12's concentrated cluster.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
@@ -182,7 +182,7 @@ Three properties the table encodes: glint duration equals the release time on **
 
   Either way it's one dodge (0.3 s i-frames) plus a **0.52 s** committed sprint, both perpendicular to that sniper's line of fire; lock and return fire stay on the current target throughout. Mid-charge hits still cancel a pending dodge, and a cooldown- or boost-blocked defender still eats the shot. After the committed sprint expires the bot has no awareness of a still-live sweep — it can wander back into the channel.
 
-**Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Shots inside a burst pace at the weapon's own RPM-derived cooldown, so retuning a fire rate retunes the bot with it. Every auto's cap equals its **full magazine** — an auto bot fires until the mag runs dry and rolls straight into the reload; the shotguns are burst-gated at 4 blasts per pull; the snipers run their charge cycle instead of bursting.
+**Bot trigger discipline.** A bot fires in continuous bursts of a fixed per-unit length (`botFireCap` — the "fire cap"), resting ~0.8–1.5 s between bursts. Shots inside a burst pace at the weapon's own RPM-derived cooldown, so retuning a fire rate retunes the bot with it. Every cap but one equals that weapon's **full magazine** — the bot fires until the mag runs dry and rolls straight into the reload, and that includes AA12, whose cap is her whole 20-shell drum. The exception is **M1014**, burst-gated at 4 blasts against a 7-shell magazine so its per-shell regen never turns into an endless stream. The snipers run their charge cycle instead of bursting.
 
 | Weapon | Fire cap | Meaning |
 |---|---|---|
@@ -194,7 +194,7 @@ Three properties the table encodes: glint duration equals the release time on **
 | RPK | 100 | full mag |
 | NEGEV | 100 | full mag (~6.4 s of continuous fire) |
 | AA12 | 20 | full drum |
-| M1014 | 4 | 4 blasts per trigger pull |
+| M1014 | 4 | 4 blasts per burst (mag is 7) |
 | SVD | 10 | full mag |
 | PSG1 / Railgun | — | charge cycle, no bursts |
 
