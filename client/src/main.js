@@ -2345,8 +2345,12 @@ function buildBulletTrail(widthPx = 0) {
         transparent: true,
         opacity: BULLET_TRAIL_OPACITY,
         fog: false,
-        depthWrite: false,       // streaks overlap; no z-fighting between them
-        side: THREE.DoubleSide   // a flat quad — must show from either face
+        // depthWrite left at the default true, matching the LineBasicMaterial
+        // the other nine weapons still use — the depthWrite:false I had added
+        // was the only optional shading change here and it is reverted (user
+        // 2026-08-09). DoubleSide stays: a flat quad is invisible edge-on from
+        // its back face without it.
+        side: THREE.DoubleSide
       })
     );
     mesh.userData.trailWidthPx = widthPx;   // also the flag that this is a ribbon
