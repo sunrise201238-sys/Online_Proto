@@ -153,9 +153,7 @@ export const UNIT_DATA = {
 
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
-    reloadMs: 1000,         // 1500 -> 1000 (2026-08-10, user): at the 64 ms slot the 30-round
-                            // mag empties in 1.9 s, so reload was the biggest share of the
-                            // cycle of any auto. Shortest reload in the game buys that back.
+    reloadMs: 1500,
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
     // in projectiles.js (PROJECTILE_HIT_STUN_MS, 0.25) are just a safety net.

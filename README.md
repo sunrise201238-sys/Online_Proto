@@ -46,7 +46,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 |---|---|---|---|---|---|---|
 | M4 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
-| evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1 s |
+| evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s |
 | AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 300 | 40 / 50 | 1 s (auto, per round) |
@@ -64,7 +64,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~60.4 (20-drum + 4 s reload) |
 | M1014 | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
 | NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
-| evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 36.8 |
+| evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | FAMAS | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | M4 | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
 | RPK | 8.9/s (112 ms) | 5 | **44.6** | 31.1 |
@@ -95,11 +95,9 @@ Reading the DPS table: the shotgun rows are the most theoretical — all 8 pelle
 
 P90 is the FAMAS's cadence in an SMG chassis: the 80 ms tick slot (12.5 shots/s) at 3.5 damage on a 50-round mag behind a 1.5 s reload — 3.9 s of continuous fire (175 damage per mag), the longest of the four ARs and SMGs by some way (M4 2.8 s, FAMAS 1.9 s, evo3 1.9 s). She wears the AR spread profile (SA 0.02 + HA 0.04 — sure-hit ~53, the same accuracy family as the M4 and FAMAS) and, since 2026-08-10, the AR stun as well: a chip gun that gives up per-shot weight for staying on the trigger twice as long, but whose hits now actually hold a target in place while it does.
 
-**Reload and stun (2026-08-10, was 2 s / 50 ms @ 0.50).** The 50-round magazine is the point of the gun and the longest reload in its class was cancelling it out; 1.5 s brings sustained damage from 29.6 to 32.3. The stun move matters more. P90 and M4 are twins on everything a damage model can see — both 3,150 damage per minute, same spread cone, same projectile speed, same walk and sprint — and the *only* live difference between them was the stun profile, which is where the 5.7×28 round's real signature (penetration) has to live in a game with no armour system. Against bots, isolating the stun swap alone is worth +9.5 and the reload alone +4.9; shipped together with the evo3 change below, P90 lands at **42.9% (was 28.7%)** in 1v1 — out of last-but-one and level with the M4. Measured over 28,080 matches before and 14,256 after, all twelve units, all nine maps, both spawn orders (±1.4 / ±2.0).
+**Reload and stun (2026-08-10, was 2 s / 50 ms @ 0.50).** The 50-round magazine is the point of the gun and the longest reload in its class was cancelling it out; 1.5 s brings sustained damage from 29.6 to 32.3. The stun move matters more. P90 and M4 are twins on everything a damage model can see — both 3,150 damage per minute, same spread cone, same projectile speed, same walk and sprint — and the *only* live difference between them was the stun profile, which is where the 5.7×28 round's real signature (penetration) has to live in a game with no armour system. Against bots, isolating the stun swap alone is worth +9.5 and the reload alone +4.9; together P90 lands at **44.4% (was 28.4%)** in 1v1 — out of last-but-one and level with the M4. Measured over 28,080 matches before and 9,504 after, all twelve units, all nine maps, both spawn orders, fight-to-KO (±1.4 / ±2.4).
 
-**evo3 reload (2026-08-10, was 1.5 s).** At the 64 ms slot her 30-round magazine empties in 1.9 s, so reload was a larger share of her cycle than any other automatic's — she spent more of the fight not shooting than the P90 did. The 1 s reload is the shortest in the game and lifts sustained damage from 31.3 to **36.8, the highest of any non-shotgun**. Burst is untouched: this is uptime, not firepower. Bot 1v1 win rate went 42.0% → **50.8%**.
-
-Both edits are paid for by the rest of the mid-table rather than by the top of the ladder: M4 −4.7, FAMAS −4.3, M1014 −4.0, NEGEV −4.1, AA12 −2.7, while M14, SVD and RPK move less than the noise. The spread across the five mid-table autos closes from 19.8 points to 13.2. The cost worth watching is that **both assault rifles are now the weakest automatics** (M4 41.4%, FAMAS 37.6%) — if that reads wrong in play, they are the next thing to look at.
+The gain is paid for by the rest of the mid-table rather than by the top of the ladder: FAMAS −3.9 and M1014 −3.3 are the only other moves that clear their own error bars; evo3 −2.7, M4 −2.1, NEGEV −1.6 and the whole top three sit inside the noise. The effect is to close the mid-table rather than reshuffle the ladder — the spread across M4 / FAMAS / evo3 / P90 / M1014 falls from 19.8 points to **7.1**, while the gap from first to last is unchanged.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **This column was long described here as a minor stat. Measurement says otherwise** (2026-08-10): swapping P90's `50 ms @ 0.50` for the AR's `100 ms @ 0.25` — changing nothing else — moved it +9.5 points of 1v1 bot win rate on its own, the largest single-stat move found on any unit. The reason the old reading felt right is that a *sprinting* target does pay most of the way through the slow, and everyone sprints away from fire; but the shots that decide a fight are the ones landing on a target that has not started sprinting yet, and there the 4× difference in slow-integral between the two profiles is the difference between the follow-up shot connecting and missing. Treat stun as a real balance dial, not flavour — the measured evidence is for bot play, and the effect on human play is untested.
 
