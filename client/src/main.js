@@ -10546,8 +10546,13 @@ function buildStreetsArena() {
     // the ramp-side choke (slope gate x≈8.2 ⇄ planter 12→14, gap 3.8→5.8)
     // AND the plaza-side choke (planter 28→26 ⇄ plaza edge 32, gap 4→6) so
     // units navigate the bridge-end passes without hugging geometry.
-    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 12, sy: 6.5, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 12, 6.5, 2.4);
+    // Raised 6.5 -> 8.0 (user 2026-08-10). At 6.5 these cleared the 5.6 muzzle
+    // but not the 8.0 hit capsule, so a unit behind one had its top ~1.5 still
+    // exposed and the 6.4 sprite showed over the hedge — cover that reads as
+    // cover but is not. 8.0 is the true-cover threshold, and the same height
+    // the vending machines directly below already use.
+    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 12, sy: 8.0, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 12, 8.0, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });

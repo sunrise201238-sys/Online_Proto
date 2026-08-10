@@ -3699,7 +3699,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -39.2,
         "maxZ": -36.8,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
         "minX": 14,
@@ -3707,7 +3707,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": -39.2,
         "maxZ": -36.8,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
         "minX": -26,
@@ -3715,7 +3715,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 36.8,
         "maxZ": 39.2,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
         "minX": 14,
@@ -3723,7 +3723,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "minZ": 36.8,
         "maxZ": 39.2,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
         "minX": -30.5,
