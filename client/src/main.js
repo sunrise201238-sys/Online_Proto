@@ -6738,9 +6738,16 @@ function updateHud(now = performance.now()) {
       fill?.parentElement?.classList.toggle('spec-watched', slot === state.spectateSlot);
     }
   }
-  // Spectator: the boost bar and ammo readout below follow the WATCHED unit
-  // (cycling with TARGET), not the bot-driven player slot.
-  const shown = state.spectatorActive ? (cameraFocusMech() ?? state.player) : state.player;
+  // The boost bar and ammo readout below follow whatever unit the CAMERA is
+  // framing, so the HUD and the view can never disagree about whose gauges
+  // these are. cameraFocusMech() already returns the player while they live,
+  // so this covers all three cases with one rule: alive -> own slot; dead with
+  // an ally up -> the ally being watched; checkbox spectator -> the cycled
+  // unit. It used to consult cameraFocusMech ONLY under spectatorActive, which
+  // is set purely by the "BOT plays your unit" checkbox and never by dying —
+  // so a normal 2v2 death moved the camera to the ally while these two gauges
+  // stayed on the dead player's slot.
+  const shown = cameraFocusMech() ?? state.player;
   const shownBoostMax = shown.unit.boostCap ?? BOOST_CAP;
   hudRefs.boost.style.width = `${(shown.state.boost / shownBoostMax) * 100}%`;
   hudRefs.boost.style.background = shown.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
