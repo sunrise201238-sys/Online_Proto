@@ -9688,22 +9688,27 @@ function updateWallFade() {
       // sits between the camera and the FOCUSED unit (the player, or the
       // spectated ally) — walking past or fighting beside it keeps it fully
       // solid (no seeing through cover).
+      // `b.parts` (optional): test against these sub-boxes instead of `b`
+      // itself. Tilted meshes (Streets' bridge slopes and their slope-gate
+      // rails) have an AABB that also claims the open air above their low
+      // end, so the plain box reads "blocking" while you walk up the ramp;
+      // the stair-stepped parts hug the real slab.
+      const boxes = b.parts ?? [b];
+      const hidesFrom = (root) => {
+        const target = { x: root.position.x, y: root.position.y + 1.6, z: root.position.z };
+        for (const part of boxes) {
+          if (segmentHitsObstacle(camera.position, target, part)) return true;
+        }
+        return false;
+      };
       const pr = cameraFocusMech()?.root;
-      blocking = !!pr && segmentHitsObstacle(
-        camera.position,
-        { x: pr.position.x, y: pr.position.y + 1.6, z: pr.position.z },
-        b
-      );
+      blocking = !!pr && hidesFrom(pr);
       // occludeEnemy (Streets bridge deck/rails): ALSO fade while the box
       // hides a living enemy from the camera — you always see your target.
       if (!blocking && b.occludeEnemy) {
         for (const en of [state.enemy, state.enemy2]) {
           const er = en?.root;
-          if (er && en.state?.hp > 0 && segmentHitsObstacle(
-            camera.position,
-            { x: er.position.x, y: er.position.y + 1.6, z: er.position.z },
-            b
-          )) { blocking = true; break; }
+          if (er && en.state?.hp > 0 && hidesFrom(er)) { blocking = true; break; }
         }
       }
     } else {
@@ -9715,13 +9720,34 @@ function updateWallFade() {
       const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
       blocking = d < 14;
     }
-    // Fade leader (Airport gantry signs): a mesh linked to a leader also
-    // fades whenever the leader is blocking, so attachments never stay
-    // solid while their carrier goes ghost. Leaders are registered before
-    // their followers, so this frame's leader result is already stored.
     mesh.userData.fadeBlocking = blocking;
+  }
+  // FADE GROUPS (Streets bridge): every member shares the OR of the group's
+  // blocking tests, so the deck, both slopes, the railings, the slope gates
+  // and the support pillars go transparent as one structure. Without this each
+  // piece faded on its own and the bridge came apart visually — a ghost deck
+  // still fenced by solid rails, or a faded span meeting a solid slope.
+  // Computed after every member's own test above so ordering doesn't matter
+  // (unlike fadeLeader, which relies on leaders being registered first).
+  let groupBlocking = null;
+  for (const mesh of list) {
+    const g = mesh.userData.fadeGroup;
+    if (!g) continue;
+    if (!groupBlocking) groupBlocking = new Set();
+    if (mesh.userData.fadeBlocking) groupBlocking.add(g);
+  }
+  for (const mesh of list) {
+    if (!mesh.userData.fadeBox || !mesh.material) continue;
+    let blocking = mesh.userData.fadeBlocking;
+    // Fade leader (Airport gantry signs): a mesh linked to a leader also
+    // fades whenever the leader is blocking, so attachments never stay solid
+    // while their carrier goes ghost. One-directional — the leader does not
+    // follow its followers; use fadeGroup when the link should go both ways.
     if (!blocking && mesh.userData.fadeLeader) {
       blocking = !!mesh.userData.fadeLeader.userData.fadeBlocking;
+    }
+    if (!blocking && groupBlocking && mesh.userData.fadeGroup) {
+      blocking = groupBlocking.has(mesh.userData.fadeGroup);
     }
     const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
@@ -9737,9 +9763,16 @@ function updateWallFade() {
 // Register a mesh for the camera-proximity fade above. The mesh needs its
 // OWN material instance — clone shared materials before registering, or
 // every object using that material fades together.
+// `box.fadeGroup` (optional): a name shared by meshes that must fade as one
+// structure — any member blocking fades every member. Unlike fadeLeader this
+// is symmetric and order-independent.
+// `box.parts` (optional, occlude mode only): sub-boxes to run the occlusion
+// test against, for tilted meshes whose AABB is a poor fit. `box` itself
+// still needs to be the full AABB — proximity mode reads it directly.
 function registerWallFade(mesh, box) {
   mesh.material.transparent = true;
   mesh.userData.fadeBox = box;
+  if (box.fadeGroup) mesh.userData.fadeGroup = box.fadeGroup;
   if (!state.wallFadeMeshes) state.wallFadeMeshes = [];
   state.wallFadeMeshes.push(mesh);
 }
@@ -10360,12 +10393,19 @@ function buildStreetsArena() {
   // map edge.)
 
   // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
-  // Deck + railings fade ONLY while they actually sit between the camera
-  // and the player unit (occlusion mode, same as the storefront buildings) —
-  // e.g. fighting under the deck with the camera above it, or standing
-  // behind the railings. Otherwise they stay fully solid. Slopes are left
-  // alone. Materials are cloned — `railing` is shared with the support
-  // pillars, which stay solid.
+  // The bridge fades as ONE structure (user 2026-08-10): deck, both slopes,
+  // the deck railings, the angled slope gates and the support pillars all
+  // share BRIDGE_FADE, so whichever piece is caught between the camera and a
+  // unit takes the whole span with it. Previously only the deck and its two
+  // rails faded, and independently — which pulled the bridge apart on screen
+  // (a ghost deck still fenced by solid rails, a faded span running into a
+  // solid slope). Each part still fades ONLY in occlusion mode, i.e. while it
+  // genuinely sits between the camera and the focused unit or a live enemy.
+  // Every registered mesh gets its own material clone: `railing` is shared by
+  // the rails, the pillars and the slope gates, and registering the shared
+  // instance would run the opacity lerp several times per frame on one
+  // material.
+  const BRIDGE_FADE = 'streets-bridge';
   const deckMesh = addPlatform({
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
@@ -10375,7 +10415,7 @@ function buildStreetsArena() {
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minY: BRIDGE_TOP - 0.8, maxY: BRIDGE_TOP,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-    occlude: true, occludeEnemy: true
+    occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
   });
   // Railings along bridge sides
   const RAIL_H = 1.6;
@@ -10386,30 +10426,78 @@ function buildStreetsArena() {
       minX: railX - 0.2, maxX: railX + 0.2,
       minY: BRIDGE_TOP, maxY: BRIDGE_TOP + RAIL_H,
       minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-      occlude: true, occludeEnemy: true
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
     });
   }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
-  // Underside support pillars (set into the sidewalks, not the street)
-  addBlockingBox({ x: -BRIDGE_HALF_X + 0.6, y: BRIDGE_TOP / 2, z: -15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: BRIDGE_HALF_X - 0.6, y: BRIDGE_TOP / 2, z: -15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: -BRIDGE_HALF_X + 0.6, y: BRIDGE_TOP / 2, z: 15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: BRIDGE_HALF_X - 0.6, y: BRIDGE_TOP / 2, z: 15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
+  // Underside support pillars (set into the sidewalks, not the street).
+  // In the fade group too (user's call): they are structurally part of the
+  // bridge, so they ghost with it. Note this does mean street-level cover
+  // under the deck goes see-through whenever any bridge piece is blocking.
+  for (const [pillarX, pillarZ] of [
+    [-BRIDGE_HALF_X + 0.6, -15], [BRIDGE_HALF_X - 0.6, -15],
+    [-BRIDGE_HALF_X + 0.6, 15], [BRIDGE_HALF_X - 0.6, 15]
+  ]) {
+    const pillarMesh = addBlockingBox({
+      x: pillarX, y: BRIDGE_TOP / 2, z: pillarZ,
+      sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing.clone()
+    });
+    registerWallFade(pillarMesh, {
+      minX: pillarX - 0.7, maxX: pillarX + 0.7,
+      minY: 0, maxY: BRIDGE_TOP,
+      minZ: pillarZ - 0.7, maxZ: pillarZ + 0.7,
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
+  }
 
   // ===== Ramps (slopes — units walk straight up, no jump) =====
   // 16m horizontal × 7.55m rise → ~25° walkable; 8m wide
-  addRamp({
+  const rampS = addRamp({
     minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
     minZ: RAMP_S_MIN_Z, maxZ: RAMP_S_MAX_Z,
     axis: 'z', lowY: RAMP_LOW_Y, highY: BRIDGE_TOP,
-    material: ramp
+    material: ramp.clone()
   });
-  addRamp({
+  const rampN = addRamp({
     minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
     minZ: RAMP_N_MIN_Z, maxZ: RAMP_N_MAX_Z,
     axis: 'z', lowY: BRIDGE_TOP, highY: RAMP_LOW_Y,
-    material: ramp
+    material: ramp.clone()
   });
+  // Slopes join the group. A slope's AABB is a bad stand-in for the slab: it
+  // also covers the open air above the low end, so the ramp would read
+  // "blocking" the whole time you walk up it and hold the bridge at 25%.
+  // Stair-step it into slices instead (`parts`), each hugging the deck line
+  // over its own stretch of z, padded by the slab's half-thickness.
+  const RAMP_SLICES = 8;
+  const rampSliceBoxes = (rMinZ, rMaxZ, lowAtMinZ) => {
+    const parts = [];
+    const step = (rMaxZ - rMinZ) / RAMP_SLICES;
+    for (let i = 0; i < RAMP_SLICES; i += 1) {
+      const t0 = i / RAMP_SLICES;
+      const t1 = (i + 1) / RAMP_SLICES;
+      const yA = THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t0 : 1 - t0);
+      const yB = THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t1 : 1 - t1);
+      parts.push({
+        minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+        minY: Math.min(yA, yB) - 0.4, maxY: Math.max(yA, yB) + 0.4,
+        minZ: rMinZ + step * i, maxZ: rMinZ + step * (i + 1)
+      });
+    }
+    return parts;
+  };
+  for (const [rampMesh, rMinZ, rMaxZ, lowAtMinZ] of [
+    [rampS, RAMP_S_MIN_Z, RAMP_S_MAX_Z, true],
+    [rampN, RAMP_N_MIN_Z, RAMP_N_MAX_Z, false]
+  ]) {
+    registerWallFade(rampMesh, {
+      minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+      minY: RAMP_LOW_Y, maxY: BRIDGE_TOP,
+      minZ: rMinZ, maxZ: rMaxZ,
+      parts: rampSliceBoxes(rMinZ, rMaxZ, lowAtMinZ),
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
+  }
   // Long angled gate visuals that match slope angle, with matching collision samples.
   const RAMP_WALL_H = RAIL_H;
   const slopeSpan = (RAMP_S_MAX_Z - RAMP_S_MIN_Z);
@@ -10417,13 +10505,14 @@ function buildStreetsArena() {
   const slopeRise = BRIDGE_TOP - RAMP_LOW_Y;
   const slopeAngle = Math.atan2(slopeRise, slopeSpan);
   const addAngledSlopeGate = ({ x, zCenter, yCenter, rotationX, zStart, zEnd }) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, RAMP_WALL_H, slopeGateLen), railing);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, RAMP_WALL_H, slopeGateLen), railing.clone());
     mesh.position.set(x, yCenter, zCenter);
     mesh.rotation.x = rotationX;
     scene.add(mesh);
     arenaDecor.push(mesh);
 
     const samples = 5;
+    const fadeParts = [];
     for (let i = 0; i < samples; i += 1) {
       const t = (i + 0.5) / samples;
       const z = THREE.MathUtils.lerp(zStart, zEnd, t);
@@ -10433,6 +10522,14 @@ function buildStreetsArena() {
       const sy = RAMP_WALL_H;
       const sz = slopeGateLen / samples;
       arenaObstacles.push({
+        minX: x - sx / 2, maxX: x + sx / 2,
+        minZ: z - sz / 2, maxZ: z + sz / 2,
+        minY: y - sy / 2, maxY: y + sy / 2
+      });
+      // The collision samples already trace the tilted rail, so reuse their
+      // shape for the fade test (see `parts` in registerWallFade) — the gate's
+      // plain AABB would claim everything above the low end.
+      fadeParts.push({
         minX: x - sx / 2, maxX: x + sx / 2,
         minZ: z - sz / 2, maxZ: z + sz / 2,
         minY: y - sy / 2, maxY: y + sy / 2
@@ -10450,6 +10547,15 @@ function buildStreetsArena() {
         });
       }
     }
+    // zStart/zEnd arrive reversed on the north ramp (it descends), so normalise
+    // for the outer AABB.
+    registerWallFade(mesh, {
+      minX: x - 0.225, maxX: x + 0.225,
+      minY: RAMP_LOW_Y, maxY: BRIDGE_TOP + RAMP_WALL_H,
+      minZ: Math.min(zStart, zEnd), maxZ: Math.max(zStart, zEnd),
+      parts: fadeParts,
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
   };
   for (const sx of [-1, 1]) {
     addAngledSlopeGate({
