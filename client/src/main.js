@@ -192,7 +192,9 @@ const UNIT_DATA = {
 
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
-    reloadMs: 1500,
+    reloadMs: 1000,         // 1500 -> 1000 (2026-08-10, user): at the 64 ms slot the 30-round
+                            // mag empties in 1.9 s, so reload was the biggest share of the
+                            // cycle of any auto. Shortest reload in the game buys that back.
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
     // at the hit sites (100 ms, 0.25) are just a safety net. SMG = short +
@@ -583,10 +585,15 @@ const UNIT_DATA = {
 
     magCapacity: 50,
     botFireCap: 50,         // bot: shots per trigger pull = full mag (fire cap policy)
-    reloadMs: 2000,
+    reloadMs: 1500,         // 2000 -> 1500 (2026-08-10, user): the 50-round mag is the whole
+                            // point of the gun and the longest reload in its class was
+                            // cancelling it out.
     autoReload: false,
-    // Per-weapon hit-stun. SMG = short + light.
-    stun: { ms: 50, moveScale: 0.50 }
+    // Per-weapon hit-stun. AR profile, not the SMG one (2026-08-10, user): P90
+    // already wears the AR spread cone, and at 3.5 damage the light SMG stun left
+    // it with no way to hold a target still. 5.7x28 is an AP round and this game
+    // has no armour system, so the penetration reads here instead.
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit15: {
     name: 'Unit 15 / Shotgun',
