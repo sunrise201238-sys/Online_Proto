@@ -9751,14 +9751,12 @@ const ARENA_SPAWNS = {
   // the fenced deck). Green sits DEEP in the NW room (second pass — the first
   // attempt at (−67,−40) straddled the doorway, putting the 2v2 teammate
   // outside the z −32..−29 south wall), then (−88,−58) sat too deep in the
-  // corner (pair mid 100.5u vs red's 75.7u). Now red 10.0u clear / 81.0u from
-  // centre, green 7.5u / 89.4u — pair mids 75.7 vs 84.2. The residual ~8u gap
-  // is accepted and cannot be closed from red's side: the deck fills that
-  // corner, so red's deepest match is 81.7u.
-  // Flashpoint also uses the X teammate offset (see state.js): both pairs are
-  // wanted side by side, and the flat +Z rule put red's p4 inside a box.
+  // corner. FINAL: POINT-SYMMETRIC, p2 = −p1 exactly. The outward X teammate
+  // rule (see state.js) then makes p4 = −p3 for free, so all four slots
+  // mirror: p1 (−80,−40) / p2 (80,40) both 89.4u from centre and 7.5 / 7.0u
+  // clear; p3 (−92,−40) / p4 (92,40) both 100.3u and 7.0u clear.
   // Mirrored in client main.js.
-  flashpoint: { p1: { x: -80, y: GROUND_BASE_Y, z: -40 }, p2: { x: 72, y: GROUND_BASE_Y, z: 37 } },
+  flashpoint: { p1: { x: -80, y: GROUND_BASE_Y, z: -40 }, p2: { x: 80, y: GROUND_BASE_Y, z: 40 } },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so

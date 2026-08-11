@@ -6986,21 +6986,19 @@ function startMatch() {
     // coordinate mirror, because the two corners are not built the same: the
     // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
     // the +X/+Z corner carries the fenced deck.
-    //   red   (72, 37)  10.0u clearance, 81.0u from centre  (pair mid 75.7u)
-    //   green (−80, −40) 7.5u clearance, 89.4u from centre  (pair mid 84.2u)
-    // Both pairs sit SIDE BY SIDE via the X teammate offset below, which
-    // Flashpoint joins (user 2026-08-10): the red pair is wanted level at
-    // z 37, and the old +Z rule put p4 at (72, 49) — INSIDE geometry.
+    // POINT-SYMMETRIC (user 2026-08-10, final): p2 = −p1 exactly, and the
+    // outward X teammate rule below then makes p4 = −p3 for free.
+    //   green p1 (−80, −40)  7.5u clearance,  89.4u from centre
+    //   red   p2 ( 80,  40)  7.0u clearance,  89.4u from centre
+    //   green p3 (−92, −40)  7.0u clearance, 100.3u from centre
+    //   red   p4 ( 92,  40)  7.0u clearance, 100.3u from centre
     // Green is inside the NW room, whose south wall runs z −32..−29; both
-    // slots stay north of it. Arrived at over three passes: (−67, −40)
-    // straddled that wall with the +Z rule, (−88, −58) was too deep in the
-    // corner (pair mid 100.5u), this sits between them.
-    // RESIDUAL ASYMMETRY (accepted): green is still ~8u further from centre
-    // than red, and it CANNOT be closed from red's side — the fenced deck
-    // fills the +X/+Z corner, so red's deepest match is 81.7u.
+    // green slots stay north of it. Arrived at over four passes: (−67, −40)
+    // straddled that wall under the old +Z rule, (−88, −58) sat too deep in
+    // the corner, and the red side went (60,50) → (72,37) → here.
     // Mirrored in shared arena.js ARENA_SPAWNS.
     state.player.body.position.set(-80, 2.45, -40);
-    state.enemy.body.position.set(72, 2.45, 37);
+    state.enemy.body.position.set(80, 2.45, 40);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
