@@ -213,7 +213,11 @@ export function createMatchState({
     // same reason (user, 2026-08-09): its corner spawns sit at z ±77, and a
     // flat +Z would drop one teammate on the z +90 machine bank while the
     // other walked free — the two teams would not get the same opening.
-    const xOffset = mapKey === 'station' || mapKey === 'airport';
+    // FLASHPOINT joins the X form (user, 2026-08-10): the red pair is wanted
+    // side by side at z 37, and the flat +Z rule put p4 at (72, 49) — inside
+    // geometry. X-offset also levels the green pair at z −58 rather than
+    // leaving the teammate 12u shallower and nearer the room's doorway.
+    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
     const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
     const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const p3Spawn = {

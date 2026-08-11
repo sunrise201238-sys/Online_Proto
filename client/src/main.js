@@ -6986,20 +6986,24 @@ function startMatch() {
     // coordinate mirror, because the two corners are not built the same: the
     // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
     // the +X/+Z corner carries the fenced deck.
-    //   red   (60, 50)   10.5u clearance,  78.1u from centre
+    //   red   (72, 37)   10.0u clearance,  81.0u from centre
     //   green (−88, −58) 14.0u clearance, 105.4u from centre
     // Green sits DEEP inside the NW room (user 2026-08-10, second pass; the
     // first attempt at (−67, −40) straddled the room's doorway — the 2v2
     // teammate at (−67, −28) landed OUTSIDE the south wall that runs
     // z −32..−29, so the pair started split across it). Both slots are now
     // north of that wall.
-    // KNOWN, ACCEPTED ASYMMETRY: green is 27u further from centre than red,
+    // KNOWN, ACCEPTED ASYMMETRY: green is ~24u further from centre than red,
     // and that CANNOT be equalised by moving red — the fenced deck fills the
-    // +X/+Z corner, so the deepest matching red spot is 81.7u, still 23.7u
-    // short. Green defends a deeper room; red starts nearer the middle.
+    // +X/+Z corner, so the deepest matching red spot is 81.7u. Green defends
+    // a deeper room; red starts nearer the middle.
+    // Flashpoint also joins the X teammate offset below (user 2026-08-10,
+    // third pass): the red pair is wanted side by side at z 37, and the old
+    // +Z rule put p4 at (72, 49) which is INSIDE geometry. X-offset also
+    // levels the green pair at z −58 instead of leaving p3 12u shallower.
     // Mirrored in shared arena.js ARENA_SPAWNS.
     state.player.body.position.set(-88, 2.45, -58);
-    state.enemy.body.position.set(60, 2.45, 50);
+    state.enemy.body.position.set(72, 2.45, 37);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -7023,7 +7027,7 @@ function startMatch() {
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station' || state.mapKey === 'airport') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
     } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
