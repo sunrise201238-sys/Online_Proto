@@ -6986,23 +6986,20 @@ function startMatch() {
     // coordinate mirror, because the two corners are not built the same: the
     // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
     // the +X/+Z corner carries the fenced deck.
-    //   red   (72, 37)   10.0u clearance,  81.0u from centre
-    //   green (−88, −58) 14.0u clearance, 105.4u from centre
-    // Green sits DEEP inside the NW room (user 2026-08-10, second pass; the
-    // first attempt at (−67, −40) straddled the room's doorway — the 2v2
-    // teammate at (−67, −28) landed OUTSIDE the south wall that runs
-    // z −32..−29, so the pair started split across it). Both slots are now
-    // north of that wall.
-    // KNOWN, ACCEPTED ASYMMETRY: green is ~24u further from centre than red,
-    // and that CANNOT be equalised by moving red — the fenced deck fills the
-    // +X/+Z corner, so the deepest matching red spot is 81.7u. Green defends
-    // a deeper room; red starts nearer the middle.
-    // Flashpoint also joins the X teammate offset below (user 2026-08-10,
-    // third pass): the red pair is wanted side by side at z 37, and the old
-    // +Z rule put p4 at (72, 49) which is INSIDE geometry. X-offset also
-    // levels the green pair at z −58 instead of leaving p3 12u shallower.
+    //   red   (72, 37)  10.0u clearance, 81.0u from centre  (pair mid 75.7u)
+    //   green (−80, −40) 7.5u clearance, 89.4u from centre  (pair mid 84.2u)
+    // Both pairs sit SIDE BY SIDE via the X teammate offset below, which
+    // Flashpoint joins (user 2026-08-10): the red pair is wanted level at
+    // z 37, and the old +Z rule put p4 at (72, 49) — INSIDE geometry.
+    // Green is inside the NW room, whose south wall runs z −32..−29; both
+    // slots stay north of it. Arrived at over three passes: (−67, −40)
+    // straddled that wall with the +Z rule, (−88, −58) was too deep in the
+    // corner (pair mid 100.5u), this sits between them.
+    // RESIDUAL ASYMMETRY (accepted): green is still ~8u further from centre
+    // than red, and it CANNOT be closed from red's side — the fenced deck
+    // fills the +X/+Z corner, so red's deepest match is 81.7u.
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-88, 2.45, -58);
+    state.player.body.position.set(-80, 2.45, -40);
     state.enemy.body.position.set(72, 2.45, 37);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
