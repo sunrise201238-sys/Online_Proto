@@ -213,20 +213,24 @@ export function createMatchState({
     // same reason (user, 2026-08-09): its corner spawns sit at z ±77, and a
     // flat +Z would drop one teammate on the z +90 machine bank while the
     // other walked free — the two teams would not get the same opening.
-    // FLASHPOINT joins the X form (user, 2026-08-10): the red pair is wanted
-    // side by side at z 37, and the flat +Z rule put p4 at (72, 49) — inside
-    // geometry. X-offset also levels the green pair at z −58 rather than
-    // leaving the teammate 12u shallower and nearer the room's doorway.
-    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
+    // FLASHPOINT also offsets along X, but OUTWARD (user, 2026-08-10): the
+    // teammate steps AWAY from centre, not toward it like Station/Airport.
+    // Both pairs are wanted level (a flat +Z put red's p4 at (72,49), inside
+    // geometry), and the user placed each teammate on the far side of its
+    // leader — green (−80,−40) + (−92,−40), red (72,37) + (84,37).
+    const xInward = mapKey === 'station' || mapKey === 'airport';
+    const xOutward = mapKey === 'flashpoint';
+    const xOffset = xInward || xOutward;
     const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
     const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
+    const xOff = (s) => s.x + (xOutward ? 1 : -1) * Math.sign(s.x) * 12;
     const p3Spawn = {
-      x: xOffset ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
+      x: xOffset ? xOff(arena.spawns.p1) : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
       z: xOffset ? arena.spawns.p1.z : zOff(arena.spawns.p1)
     };
     const p4Spawn = {
-      x: xOffset ? arena.spawns.p2.x - Math.sign(arena.spawns.p2.x) * 12 : arena.spawns.p2.x,
+      x: xOffset ? xOff(arena.spawns.p2) : arena.spawns.p2.x,
       y: arena.spawns.p2.y ?? GROUND_BASE_Y,
       z: xOffset ? arena.spawns.p2.z : zOff(arena.spawns.p2)
     };
