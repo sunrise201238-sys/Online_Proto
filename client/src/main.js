@@ -7018,18 +7018,18 @@ function startMatch() {
   // its corner spawns sit at z ±77, and a flat +Z would drop one teammate on
   // the z +90 machine bank while the other walked free — the two teams would
   // not get the same opening. Toward-centre keeps the pair 180°-symmetric.
-  // FLASHPOINT also offsets along X but OUTWARD (user, 2026-08-10) — the
-  // teammate steps AWAY from centre rather than toward it, placing each pair
-  // on the far side of its leader: green (−80,−40) + (−92,−40), red (72,37) +
-  // (84,37). A flat +Z put red's teammate at (72,49), inside geometry.
+  // FLASHPOINT joins Streets/Factory on the Z form (user, 2026-08-10, final):
+  // the teammate stacks BEHIND the leader toward centre rather than beside it.
+  // p1 (−95, 47) → p3 (−95, 35); mirrored, p2 (95, −47) → p4 (95, −35). All
+  // four sit at 12u clearance and p4 = −p3 still holds exactly.
   // Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
+    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory' || state.mapKey === 'flashpoint') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {
