@@ -6997,8 +6997,8 @@ function startMatch() {
     // straddled that wall under the old +Z rule, (−88, −58) sat too deep in
     // the corner, and the red side went (60,50) → (72,37) → here.
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-83, 2.45, 47);
-    state.enemy.body.position.set(83, 2.45, -47);
+    state.player.body.position.set(-95, 2.45, 47);
+    state.enemy.body.position.set(95, 2.45, -47);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -7026,10 +7026,7 @@ function startMatch() {
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'flashpoint') {
-      state.ally.body.position.set(pp.x + Math.sign(pp.x) * 12, pp.y, pp.z);
-      state.enemy2.body.position.set(ep.x + Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'station' || state.mapKey === 'airport') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
     } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {

@@ -218,12 +218,14 @@ export function createMatchState({
     // Both pairs are wanted level (a flat +Z put red's p4 at (72,49), inside
     // geometry), and the user placed each teammate on the far side of its
     // leader — green (−80,−40) + (−92,−40), red (72,37) + (84,37).
-    const xInward = mapKey === 'station' || mapKey === 'airport';
-    const xOutward = mapKey === 'flashpoint';
-    const xOffset = xInward || xOutward;
+    // Flashpoint moved back to the INWARD form (user 2026-08-10): p1 and p3
+    // swapped places, so the leader now takes the OUTER slot and the teammate
+    // steps toward centre. Symmetry is unaffected — the rule applies to both
+    // teams, so p2 = −p1 and p4 = −p3 still hold.
+    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
     const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
     const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
-    const xOff = (s) => s.x + (xOutward ? 1 : -1) * Math.sign(s.x) * 12;
+    const xOff = (s) => s.x - Math.sign(s.x) * 12;
     const p3Spawn = {
       x: xOffset ? xOff(arena.spawns.p1) : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
