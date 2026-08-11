@@ -9756,7 +9756,7 @@ const ARENA_SPAWNS = {
   // mirror: p1 (−80,−40) / p2 (80,40) both 89.4u from centre and 7.5 / 7.0u
   // clear; p3 (−92,−40) / p4 (92,40) both 100.3u and 7.0u clear.
   // Mirrored in client main.js.
-  flashpoint: { p1: { x: -80, y: GROUND_BASE_Y, z: -40 }, p2: { x: 80, y: GROUND_BASE_Y, z: 40 } },
+  flashpoint: { p1: { x: -83, y: GROUND_BASE_Y, z: 47 }, p2: { x: 83, y: GROUND_BASE_Y, z: -47 } },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so

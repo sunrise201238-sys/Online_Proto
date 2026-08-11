@@ -6986,19 +6986,19 @@ function startMatch() {
     // coordinate mirror, because the two corners are not built the same: the
     // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
     // the +X/+Z corner carries the fenced deck.
-    // POINT-SYMMETRIC (user 2026-08-10, final): p2 = −p1 exactly, and the
-    // outward X teammate rule below then makes p4 = −p3 for free.
-    //   green p1 (−80, −40)  7.5u clearance,  89.4u from centre
-    //   red   p2 ( 80,  40)  7.0u clearance,  89.4u from centre
-    //   green p3 (−92, −40)  7.0u clearance, 100.3u from centre
-    //   red   p4 ( 92,  40)  7.0u clearance, 100.3u from centre
+    // POINT-SYMMETRIC (user 2026-08-10): p2 = −p1 exactly, and the outward X
+    // teammate rule below then makes p4 = −p3 for free. Green sits in the SW
+    // quadrant, red in the NE (swapped from the first symmetric pass, user).
+    //   green p1 (−83,  47) / p3 (−95,  47)   both 12.0u clear
+    //   red   p2 ( 83, −47) / p4 ( 95, −47)   16.0u / 12.0u clear
+    // 12u is the most generous all-four minimum available in these corners.
     // Green is inside the NW room, whose south wall runs z −32..−29; both
     // green slots stay north of it. Arrived at over four passes: (−67, −40)
     // straddled that wall under the old +Z rule, (−88, −58) sat too deep in
     // the corner, and the red side went (60,50) → (72,37) → here.
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-80, 2.45, -40);
-    state.enemy.body.position.set(80, 2.45, 40);
+    state.player.body.position.set(-83, 2.45, 47);
+    state.enemy.body.position.set(83, 2.45, -47);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
