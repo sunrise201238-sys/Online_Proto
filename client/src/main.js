@@ -6979,6 +6979,20 @@ function startMatch() {
     // Mirrored in shared arena.js ARENA_SPAWNS.
     state.player.body.position.set(-130, 2.45, -56);
     state.enemy.body.position.set(130, 2.45, 56);
+  } else if (state.mapKey === 'flashpoint') {
+    // Diagonal corner spawns (user 2026-08-10; was the shared ±24 / z 0
+    // default, 48u apart across the centre slab — the closest opening of any
+    // map). The user marked the +X/+Z corner; the green side could NOT be a
+    // coordinate mirror, because the two corners are not built the same: the
+    // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
+    // the +X/+Z corner carries the fenced deck. An exact mirror (−60, −50)
+    // lands INSIDE that bar. Matched on openness instead (user's call):
+    //   red   (60, 50)   10.5u clearance, 78.1u from centre
+    //   green (−67, −40)  9.0u clearance, 78.0u from centre
+    // — 0.1u of distance parity, and neither spawn sees the other.
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-67, 2.45, -40);
+    state.enemy.body.position.set(60, 2.45, 50);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);

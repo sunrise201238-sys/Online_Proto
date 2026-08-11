@@ -9744,7 +9744,14 @@ const ARENA_SPAWNS = {
   // (inner face ±132). 2026-08-07: briefly moved to the back-wall pockets
   // (±25/±125) — engagements started too fast; reverted same day (user).
   station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
-  flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
+  // Flashpoint: diagonal corner spawns (user 2026-08-10; was ±24 / z 0, 48u
+  // apart across the centre slab — the closest opening of any map). NOT a
+  // coordinate mirror: the two corners are built differently (the 8u bar sits
+  // at z ≈ +48 on one side and z ≈ −50 on the other, and only +X/+Z carries
+  // the fenced deck), so the exact mirror of (60,50) lands inside that bar.
+  // Matched on OPENNESS instead — 10.5u vs 9.0u clearance, 78.1u vs 78.0u
+  // from centre, no spawn-to-spawn sightline. Mirrored in client main.js.
+  flashpoint: { p1: { x: -67, y: GROUND_BASE_Y, z: -40 }, p2: { x: 60, y: GROUND_BASE_Y, z: 50 } },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so
