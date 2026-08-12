@@ -4387,6 +4387,15 @@ const BOT_CLIMB_MAX_RISE = 4.8;
 // Below this a jump overshoots it entirely; 6 sits in the gap between the
 // 4-wide conveyors and the next-narrowest real platform at 10.
 const BOT_PERCH_MIN_WIDTH = 6;
+// How close the Maze follower gets to a waypoint before starting the next
+// leg. 3 -> 1.5 (2026-08-12): at 3 on the 4-unit nav grid the early turn
+// rounded corners INTO obstacle end faces, where the radial-only avoidance
+// has no sideways component — the residual wall-grind. Measured A/B in the
+// shared sim (see the fuller note there); the final-arrival test stays 3.
+// Used at the follower AND its statue-escape replay: the two must stay
+// identical or the replay's waypoint comparison silently stops matching.
+// Mirrors shared ai.js BOT_WAYPOINT_ADVANCE_RADIUS.
+const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -5287,7 +5296,7 @@ function updateEnemy(now) {
       // The follower's own advance rule: the waypoint it would steer to.
       let fi = fresh.idx;
       while (fi < fresh.path.length - 1
-          && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < 3) fi += 1;
+          && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
       if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
         eState.botNav = null;
@@ -5566,12 +5575,14 @@ function updateEnemy(now) {
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
       // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
-      // exists. Head for the current waypoint, advance within 3 units, and
-      // refresh the route (rate-limited) when the target wanders off the
-      // planned goal. Avoidance stays blended in for dynamic wiggle room.
+      // exists. Head for the current waypoint, advance within
+      // BOT_WAYPOINT_ADVANCE_RADIUS (see its note — 1.5, tight on purpose so
+      // corners are not cut into obstacle end faces), and refresh the route
+      // (rate-limited) when the target wanders off the planned goal.
+      // Avoidance stays blended in for dynamic wiggle room.
       let wp = nav.path[nav.idx];
       while (nav.idx < nav.path.length - 1
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < 3) {
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
       }
