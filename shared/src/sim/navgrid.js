@@ -41,16 +41,23 @@ const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 // normal drift (avoidance blend, momentum, waypoint skip-ahead) then rubs
 // the body along it. That was the Airport ramp-corner grind.
 // Cells are graded by how much room they actually have and A* PENALISES the
-// tight ones, so routes prefer the middle of a corridor and swing wide
-// around convex corners. A penalty, not a ban: nothing becomes unroutable —
-// where every cell is tight (a real chokepoint) the penalty is uniform and
-// the chosen route is unchanged.
-// Only the TIGHT grade is charged, and at just over the price of stepping
-// around it (a 1-cell detour costs 2 moves, so 1.2 tips the choice). Mid
-// cells are free on purpose: charging them too accumulates over long routes
-// and starts flipping whole map crossings (it re-routed Streets' ground
-// traverse up over the overpass), which is a bigger behaviour change than
-// this fix is meant to make.
+// tight ones, so routes prefer the middle of a corridor and stand off wall
+// RUNS. A penalty, not a ban: nothing becomes unroutable — where every cell
+// is tight (a real chokepoint) the penalty is uniform and the chosen route
+// is unchanged.
+// Only the TIGHT grade is charged. At 1.2 per cell the charge tips a detour
+// only for runs of TWO or more tight cells (2.4 > the 2-move price of a
+// 1-cell detour) — an ISOLATED tight cell, e.g. a single convex corner or
+// door jamb, is cheaper to walk through than around (1.2 < 2.0) and A*
+// keeps it. That is the accepted trade: raising the cost above 2.0 to catch
+// single corners also re-routes long map crossings (measured: it sent
+// Streets' ground traverse up over the overpass). Mid cells are free for
+// the same reason — any charge on them accumulates over long routes.
+// SCOPE (2026-08-12 correction): only findPathOnGrid applies this cost.
+// findFiringPath — the FIRST-CHOICE planner for combat routes (see the
+// navPlan order in ai.js) — is a uniform-cost BFS that never reads
+// clearGrade, so most live bot routes are not steered by this penalty at
+// all. It shapes the fallback/cover paths that findPathOnGrid serves.
 const CLEAR_MID = 2.0;     // body + ~0.85 slack
 const CLEAR_WIDE = 3.2;    // body + ~2 slack: comfortably off the wall
 const TIGHT_COST = [1.2, 0, 0];   // by clearance grade 0 / 1 / 2
@@ -363,9 +370,11 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     const step = (nb, cost) => {
       if (closed[nb]) return;
       // WALL-CLEARANCE PENALTY: entering a cell whose body barely fits costs
-      // extra, so A* buys its way around convex corners and down the middle
-      // of corridors when the room exists. Never blocking — a uniformly
-      // tight chokepoint just costs more and still gets used.
+      // extra, so A* buys its way off wall RUNS (>= 2 tight cells) and down
+      // the middle of corridors when the room exists; an isolated tight cell
+      // is still cheaper through than around — see the header note. Never
+      // blocking — a uniformly tight chokepoint just costs more and still
+      // gets used.
       const ng = g[cur] + cost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
       if (ng < g[nb]) {
         g[nb] = ng;
