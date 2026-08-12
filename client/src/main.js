@@ -6991,25 +6991,17 @@ function startMatch() {
     state.player.body.position.set(-130, 2.45, -56);
     state.enemy.body.position.set(130, 2.45, 56);
   } else if (state.mapKey === 'flashpoint') {
-    // Diagonal corner spawns (user 2026-08-10; was the shared ±24 / z 0
-    // default, 48u apart across the centre slab — the closest opening of any
-    // map). The user marked the +X/+Z corner; the green side could NOT be a
-    // coordinate mirror, because the two corners are not built the same: the
-    // 8u bar sits at z ≈ +48 on one side and z ≈ −50 on the other, and only
-    // the +X/+Z corner carries the fenced deck.
-    // POINT-SYMMETRIC (user 2026-08-10): p2 = −p1 exactly, and the outward X
-    // teammate rule below then makes p4 = −p3 for free. Green sits in the SW
-    // quadrant, red in the NE (swapped from the first symmetric pass, user).
-    //   green p1 (−83,  47) / p3 (−95,  47)   both 12.0u clear
-    //   red   p2 ( 83, −47) / p4 ( 95, −47)   16.0u / 12.0u clear
-    // 12u is the most generous all-four minimum available in these corners.
-    // Green is inside the NW room, whose south wall runs z −32..−29; both
-    // green slots stay north of it. Arrived at over four passes: (−67, −40)
-    // straddled that wall under the old +Z rule, (−88, −58) sat too deep in
-    // the corner, and the red side went (60,50) → (72,37) → here.
+    // Spawns INSIDE the two walled corner rooms (user 2026-08-12, to
+    // exercise doorway navigation after the waypoint-advance fix): green
+    // deep in the NW room, red at the exact point mirror in the SE room.
+    // The rooms' walls mirror but their contents do not — the SE room's
+    // deep half holds the fenced deck, so both pairs sit on the open
+    // L-strip west of it. With the inward-X teammate rule below, all four
+    // slots land at exactly 10.0u clearance and p4 = −p3. Prior open-corner
+    // placements live in this block's git history.
     // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-95, 2.45, 47);
-    state.enemy.body.position.set(95, 2.45, -47);
+    state.player.body.position.set(-68, 2.45, -62);
+    state.enemy.body.position.set(68, 2.45, 62);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -7037,10 +7029,10 @@ function startMatch() {
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station' || state.mapKey === 'airport') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory' || state.mapKey === 'flashpoint') {
+    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {

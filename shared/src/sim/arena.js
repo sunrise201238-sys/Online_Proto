@@ -9747,16 +9747,16 @@ const ARENA_SPAWNS = {
   // Flashpoint: diagonal corner spawns (user 2026-08-10; was ±24 / z 0, 48u
   // apart across the centre slab — the closest opening of any map). NOT a
   // coordinate mirror: the two corners are built differently (the 8u bar sits
-  // at z ≈ +48 on one side and z ≈ −50 on the other, and only +X/+Z carries
-  // the fenced deck). Green sits DEEP in the NW room (second pass — the first
-  // attempt at (−67,−40) straddled the doorway, putting the 2v2 teammate
-  // outside the z −32..−29 south wall), then (−88,−58) sat too deep in the
-  // corner. FINAL: POINT-SYMMETRIC, p2 = −p1 exactly. The outward X teammate
-  // rule (see state.js) then makes p4 = −p3 for free, so all four slots
-  // mirror: p1 (−80,−40) / p2 (80,40) both 89.4u from centre and 7.5 / 7.0u
-  // clear; p3 (−92,−40) / p4 (92,40) both 100.3u and 7.0u clear.
-  // Mirrored in client main.js.
-  flashpoint: { p1: { x: -95, y: GROUND_BASE_Y, z: 47 }, p2: { x: 95, y: GROUND_BASE_Y, z: -47 } },
+  // Flashpoint: spawns INSIDE the two walled corner rooms (user 2026-08-12,
+  // to exercise doorway navigation after the waypoint-advance fix): p1 deep
+  // in the NW room, p2 = −p1 in its SE mirror. The rooms' WALLS are point-
+  // symmetric but their contents are not — the SE room's deep half holds the
+  // fenced deck (X 80..108, Z 57..73), so both pairs sit on the L-shaped
+  // open floor west of it. With the inward-X teammate rule (see state.js)
+  // all four slots land at exactly 10.0u clearance, p4 = −p3, and neither
+  // spawn sees the other. Earlier iterations (open-corner spawns ±95/∓47
+  // etc.) are in this line's git history. Mirrored in client main.js.
+  flashpoint: { p1: { x: -68, y: GROUND_BASE_Y, z: -62 }, p2: { x: 68, y: GROUND_BASE_Y, z: 62 } },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so

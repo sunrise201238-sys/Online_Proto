@@ -218,12 +218,13 @@ export function createMatchState({
     // Both pairs are wanted level (a flat +Z put red's p4 at (72,49), inside
     // geometry), and the user placed each teammate on the far side of its
     // leader — green (−80,−40) + (−92,−40), red (72,37) + (84,37).
-    // FLASHPOINT joins Streets/Factory on the Z form (user 2026-08-10, final):
-    // the teammate stacks BEHIND the leader toward centre rather than beside
-    // it. p1 (−95, 47) → p3 (−95, 35); mirrored, p2 (95, −47) → p4 (95, −35).
+    // FLASHPOINT uses the inward-X form (user 2026-08-12, room spawns): the
+    // pairs sit side by side on the corner rooms' open floor — a Z offset
+    // from z ±62 would push one slot into the room's back wall or the SE
+    // deck fence. p1 (−68,−62) → p3 (−56,−62); mirrored, p4 = (56, 62).
     // Symmetry holds because the rule is applied to both teams.
-    const xOffset = mapKey === 'station' || mapKey === 'airport';
-    const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory' || mapKey === 'flashpoint';
+    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
+    const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
     const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
     const xOff = (s) => s.x - Math.sign(s.x) * 12;
     const p3Spawn = {
