@@ -88,7 +88,19 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // Honour a one-tick target switch before resolving opp so the very next
   // shot already lands on the new target.
   if (input.targetSwitch) cycleTargetId(matchState, fighter);
-  const opp = matchState.fighters[fighter.targetId];
+  let opp = matchState.fighters[fighter.targetId];
+  // AUTO-RETARGET on target death (2026-08-12, user): when the locked enemy
+  // dies, switch to its living teammate instead of staying on the slot —
+  // which in Trio silently transfers the lock to the fresh spawn behind its
+  // immunity window, and in 2v2 Duel left shots aiming at the corpse until a
+  // manual TARGET press. Only fires when a living enemy exists: in 1v1 and
+  // Trio-1v1 the lock keeps the slot and picks up the respawn as before.
+  // (Bots never reach this — applyInput is skipped for them and they re-pick
+  // per tick via pickBotTargetId.) Mirrored in the client's respawn paths.
+  if (!opp || opp.hp <= 0) {
+    const live = Object.values(matchState.fighters).find((f) => f.team !== fighter.team && f.hp > 0);
+    if (live) { fighter.targetId = live.id; opp = live; }
+  }
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
   let sprintLocked = input.sprintLocked;
