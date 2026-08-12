@@ -217,8 +217,9 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // like an M4, so a press outlasting the cooldown produces a second round.
   // At the Laser's 250 rpm that reads as "one press, two shots" and "the RPM
   // sometimes runs fast", hence the opt-out. M14 / SVD hit the same thing but
-  // were fixed by dropping them to 120 rpm instead: a 500 ms cadence makes a
-  // normal tap reliably one round while still allowing deliberate hold-fire.
+  // were fixed by dropping their rate instead (settled at 180 rpm — a 336 ms
+  // tick slot): a press must outlast a third of a second before it doubles,
+  // so a normal tap is reliably one round while deliberate hold-fire still works.
   if (input.shootHold && opp && !fighter.unit.semiAuto
       && (fighter.unit.spreadCount === 1 || fighter.unit.autoFire) && !fighter.unit.sniperCharge) {
     const before = fighter.lastFireAt;
