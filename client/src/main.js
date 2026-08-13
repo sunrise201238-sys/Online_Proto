@@ -11349,13 +11349,15 @@ function buildFactory2Arena() {
         scene.add(goods); arenaDecor.push(goods);
       }
     } else {
-      // WORK DECK: sorting station — corrugated lean-to roof over the
-      // counter and a gas-bottle pair, no market dressing (work-deck pass
-      // 2026-08-13 — the deck must read different from the village below).
-      const lean = new THREE.Mesh(new THREE.BoxGeometry(h ? 9.6 : 3.8, 0.14, h ? 3.8 : 9.6), machine.clone());
-      if (h) { lean.position.set(x, b + 5.4, z - 1.1); lean.rotation.x = 0.24; }
-      else { lean.position.set(x - 1.1, b + 5.4, z); lean.rotation.z = -0.24; }
-      scene.add(lean); arenaDecor.push(lean);
+      // WORK DECK: sorting station — a corrugated rain hood SEATED ON the
+      // sign wall's top edge, drooping over the counter (the earlier free-
+      // tilted lean roof floated in mid-air; user screenshot 2026-08-13),
+      // plus a gas-bottle pair. No market dressing — the deck must read
+      // different from the village below.
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(h ? 9.6 : 2.6, 0.12, h ? 2.6 : 9.6), machine.clone());
+      if (h) { hood.position.set(x, b + 8.3, z + 1.4); hood.rotation.x = -0.18; }
+      else { hood.position.set(x + 1.5, b + 8.3, z); hood.rotation.z = 0.18; }
+      scene.add(hood); arenaDecor.push(hood);
       const bottles = h ? [[3.7, 1.5, machineTop], [3.7, 0.5, wallTrim]] : [[1.5, 3.7, machineTop], [0.5, 3.7, wallTrim]];
       for (const [ox2, oz2, tint] of bottles) {
         const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.0, 10), tint.clone());
