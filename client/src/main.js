@@ -11000,8 +11000,8 @@ function tickRange(now, dt) {
 // in shared arena.js is exported FROM this builder
 // (__exportArenaCollision('factory2')) — re-export after any geometry change.
 function buildFactory2Arena() {
-  const concrete = new THREE.MeshStandardMaterial({ color: 0x4a4238, roughness: 0.97 });            // packed dirt / stained slab
-  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x5a4c3a, roughness: 0.9 });           // worn footpath bands
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x6b5844, roughness: 1.0 });             // sun-dried earth
+  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x7a6448, roughness: 0.95 });          // dusty road bands
   const stripe = new THREE.MeshStandardMaterial({ color: 0xc98f2f, roughness: 0.75 });              // faded painted edging
   const wallTrim = new THREE.MeshStandardMaterial({ color: 0x7c4f2c, roughness: 0.7, metalness: 0.25 });
   const beltSurface = new THREE.MeshStandardMaterial({ color: 0x26221d, roughness: 0.95 });         // tar-paper roofing
@@ -11036,6 +11036,26 @@ function buildFactory2Arena() {
     const w = new THREE.Mesh(new THREE.PlaneGeometry(230, 5), floorPaint);
     w.rotation.x = -Math.PI / 2; w.position.set(0, 0.02, z);
     scene.add(w); arenaDecor.push(w);
+  }
+  // Outdoor ground dressing (pure decor): dry-grass and sand patches
+  // scattered over the open dirt, clear of the terrace footprint. Two
+  // greens + a sand tone; flat discs at barely-above-floor heights.
+  const grassA = new THREE.MeshStandardMaterial({ color: 0x5d7a3a, roughness: 1.0 });
+  const grassB = new THREE.MeshStandardMaterial({ color: 0x4c6631, roughness: 1.0 });
+  const sandMat = new THREE.MeshStandardMaterial({ color: 0x8a7452, roughness: 1.0 });
+  const patches = [
+    [-30, -70, 5, 0], [30, 70, 5, 0], [-70, -20, 4, 1], [70, 20, 4, 1],
+    [-44, 66, 3.4, 0], [44, -66, 3.4, 0], [-104, 12, 4.4, 1], [104, -12, 4.4, 1],
+    [-14, -66, 2.8, 1], [14, 66, 2.8, 1], [-88, -72, 3.6, 0], [88, 72, 3.6, 0],
+    [-64, 30, 5.4, 2], [64, -30, 5.4, 2], [-24, 62, 4.2, 2], [24, -62, 4.2, 2],
+    [-110, -62, 4.8, 2], [110, 62, 4.8, 2]
+  ];
+  for (const [px2, pz2, r, kind] of patches) {
+    const mat = kind === 2 ? sandMat : (kind === 1 ? grassB : grassA);
+    const p = new THREE.Mesh(new THREE.CircleGeometry(r, 10), mat);
+    p.rotation.x = -Math.PI / 2;
+    p.position.set(px2, kind === 2 ? 0.012 : 0.016, pz2);
+    scene.add(p); arenaDecor.push(p);
   }
   addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y);
   addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
@@ -11076,16 +11096,19 @@ function buildFactory2Arena() {
       fadeTall(fence, { minX: ex - 0.5, maxX: ex + 0.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: fz0, maxZ: fz1 });
     }
   }
-  // Four walk-up ramps, two per end — bots never need to jump onto the deck.
-  addRamp({ minX: 60, maxX: 82, minZ: -22, maxZ: -10, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
-  addRamp({ minX: 60, maxX: 82, minZ: 10, maxZ: 22, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
-  addRamp({ minX: -82, maxX: -60, minZ: -22, maxZ: -10, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
-  addRamp({ minX: -82, maxX: -60, minZ: 10, maxZ: 22, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
-  // Solid caution rails along every ramp edge (top 6, topBuffer 0): grounded
-  // units can only enter at the foot; anyone already on the ramp/deck passes.
+  // Four walk-up dirt banks (were steel ramps; identical geometry), two per
+  // end — bots never need to jump onto the terrace.
+  addRamp({ minX: 60, maxX: 82, minZ: -22, maxZ: -10, axis: 'x', lowY: DECK_Y, highY: 0, material: floorPaint });
+  addRamp({ minX: 60, maxX: 82, minZ: 10, maxZ: 22, axis: 'x', lowY: DECK_Y, highY: 0, material: floorPaint });
+  addRamp({ minX: -82, maxX: -60, minZ: -22, maxZ: -10, axis: 'x', lowY: 0, highY: DECK_Y, material: floorPaint });
+  addRamp({ minX: -82, maxX: -60, minZ: 10, maxZ: 22, axis: 'x', lowY: 0, highY: DECK_Y, material: floorPaint });
+  // Solid lane fences along every bank edge (were caution rails; top 6,
+  // topBuffer 0, identical boxes): rusted sheet, so the climb reads as a
+  // fenced village lane instead of a plant walkway. Grounded units can only
+  // enter at the foot; anyone already on the bank/terrace passes.
   for (const sx of [-1, 1]) {
     for (const rz of [-22.4, -9.6, 9.6, 22.4]) {
-      addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: cautionMat, topBuffer: 0 });
+      addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: machine, topBuffer: 0 });
     }
   }
   // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
@@ -11127,8 +11150,9 @@ function buildFactory2Arena() {
   // running north-south past the terrace ends. =====
   const drawBelt = (cx, len, beltZ) => {
     addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: machine, topBuffer: 2 });
-    addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
-    addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
+    // Edge rails read as timber roof parapets now, not belt frames.
+    addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
+    addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
     // Tar-paper roof skin over the walkable top.
     const tar = new THREE.Mesh(new THREE.PlaneGeometry(4.0, len), beltSurface.clone());
     tar.rotation.x = -Math.PI / 2;
@@ -11141,10 +11165,15 @@ function buildFactory2Arena() {
       d.rotation.y = doorSide > 0 ? Math.PI / 2 : -Math.PI / 2;
       scene.add(d); arenaDecor.push(d);
     }
-    let alt = false;
+    // The riding crates keep their collision but render as rooftop water
+    // drums — a pair of barrels filling each box footprint.
     for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
-      addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: alt ? crate : crateAlt, topBuffer: 2 });
-      alt = !alt;
+      addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: machine, topBuffer: 2, invisible: true });
+      for (const [ox, oz, tint] of [[-0.62, 0.35, wallTrim], [0.62, -0.35, machineTop]]) {
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 2.5, 12), tint.clone());
+        drum.position.set(cx + ox, 4.0, beltZ + lz + oz);
+        scene.add(drum); arenaDecor.push(drum);
+      }
     }
     arenaSurfaces.push({ minX: cx - 2, maxX: cx + 2, minZ: beltZ - len / 2, maxZ: beltZ + len / 2, maxTop: 2.6, type: 'flat', top: 2.6, heightAt: () => 2.6 });
   };
@@ -11224,7 +11253,8 @@ function buildFactory2Arena() {
     fadeTall(addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine }), box);
     fadeTall(addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam }), box);
     fadeTall(addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe }), box);
-    addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: cautionMat });
+    // Ground plate under the hut renders as its packed-dirt yard now.
+    addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: floorPaint });
     const roof = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.25, 7.6), machineTop.clone());
     roof.position.set(x, 9.55, z);
     roof.rotation.z = 0.12;
@@ -11360,8 +11390,21 @@ function buildFactory2Arena() {
   drawRack(-118, 28); drawRack(118, -28);
   drawRack(-64, -94); drawRack(64, 94);
 
-  // ===== Vaultable crate scatter (tops 2.4 — dodge/hop clutter) =====
-  const lowCrate = (x, z, b = 0) => addBlockingBox({ x, y: b + 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2 });
+  // ===== Vaultable junk scatter (tops 2.4 — dodge/hop clutter; were plain
+  // crates). Collision box unchanged and invisible; renders as a stack of
+  // worn tires — the box footprint is the stack's bounding volume. =====
+  const lowCrate = (x, z, b = 0) => {
+    addBlockingBox({ x, y: b + 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2, invisible: true });
+    const tireMat = beltSurface.clone();
+    for (let k = 0; k < 3; k += 1) {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.72, 14), tireMat);
+      tire.position.set(x + (k === 1 ? 0.18 : -0.1), b + 0.4 + k * 0.76, z + (k === 2 ? 0.16 : 0));
+      scene.add(tire); arenaDecor.push(tire);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.34, 10), crateAlt);
+    hub.position.set(x, b + 1.2, z);
+    scene.add(hub); arenaDecor.push(hub);
+  };
   lowCrate(-12, -88); lowCrate(12, 88);
   lowCrate(-58, 46);  lowCrate(58, -46);
   lowCrate(-96, -44); lowCrate(96, 44);
