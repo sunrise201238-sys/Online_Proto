@@ -11180,11 +11180,14 @@ function buildFactory2Arena() {
     // Edge rails read as timber roof parapets now, not belt frames.
     addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
     addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
-    // Tar-paper roof skin over the walkable top.
-    const tar = new THREE.Mesh(new THREE.PlaneGeometry(4.0, len), beltSurface.clone());
-    tar.rotation.x = -Math.PI / 2;
-    tar.position.set(cx, 2.61, beltZ);
-    scene.add(tar); arenaDecor.push(tar);
+    // Plank boardwalk over the walkable top (scale pass 3, 2026-08-13: the
+    // single dark skin still read as a belt — long timber planks explain
+    // both the shape and why units walk along it).
+    for (let pi = 0; pi < 5; pi += 1) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.06, len - 0.6), (pi % 2 ? crate : beam).clone());
+      plank.position.set(cx - 1.6 + pi * 0.8, 2.64, beltZ);
+      scene.add(plank); arenaDecor.push(plank);
+    }
     // (No doorways — human doors on a knee-height row shrank the world.)
     // Segmented faces so the row reads as ATTACHED SHACKS, not one long
     // machine: alternating sheet tints per ~9-unit bay on both sides
@@ -11200,24 +11203,23 @@ function buildFactory2Arena() {
         scene.add(p); arenaDecor.push(p);
       }
     }
-    // The riding crates keep their collision, invisible; rooftop objects
-    // ALTERNATE (drum pair / tarped bundle) so the roofline stops reading
-    // as evenly-spaced belt cargo.
+    // The riding crates keep their collision, invisible; each spot renders
+    // as a loose crate cluster (one straight, one skewed, a lid sheet) —
+    // angular junk, nothing evenly machined (scale pass 3, 2026-08-13).
     let objAlt = false;
     for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
       addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: machine, topBuffer: 2, invisible: true });
-      if (objAlt) {
-        const bundle = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 8), cautionMat.clone());
-        bundle.scale.set(1.05, 0.85, 1.05);
-        bundle.position.set(cx, 3.75, beltZ + lz);
-        scene.add(bundle); arenaDecor.push(bundle);
-      } else {
-        for (const [ox, oz, tint] of [[-0.62, 0.35, wallTrim], [0.62, -0.35, machineTop]]) {
-          const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 2.5, 12), tint.clone());
-          drum.position.set(cx + ox, 4.0, beltZ + lz + oz);
-          scene.add(drum); arenaDecor.push(drum);
-        }
-      }
+      const big = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 1.5), (objAlt ? crate : crateAlt).clone());
+      big.position.set(cx - 0.4, 3.4, beltZ + lz + 0.3);
+      scene.add(big); arenaDecor.push(big);
+      const small = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 1.1), (objAlt ? crateAlt : wallTrim).clone());
+      small.position.set(cx + 0.55, 3.2, beltZ + lz - 0.45);
+      small.rotation.y = 0.5;
+      scene.add(small); arenaDecor.push(small);
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 1.9), beltSurface.clone());
+      lid.position.set(cx - 0.2, 4.18, beltZ + lz);
+      lid.rotation.z = 0.12;
+      scene.add(lid); arenaDecor.push(lid);
       objAlt = !objAlt;
     }
     arenaSurfaces.push({ minX: cx - 2, maxX: cx + 2, minZ: beltZ - len / 2, maxZ: beltZ + len / 2, maxTop: 2.6, type: 'flat', top: 2.6, heightAt: () => 2.6 });
@@ -11304,12 +11306,12 @@ function buildFactory2Arena() {
       leg.position.set(lx, b + 1.9, lz2);
       scene.add(leg); arenaDecor.push(leg);
     }
-    // Goods on the counter.
-    const spots = h ? [[x - 1.6, z, crate], [x + 2.1, z + 0.5, machineTop]] : [[x, z - 1.6, crate], [x + 0.5, z + 2.1, machineTop]];
-    for (const [gx2, gz2, tint] of spots) {
-      const goods = new THREE.Mesh(new THREE.SphereGeometry(0.72, 9, 7), tint.clone());
-      goods.scale.set(1.05, 0.8, 1.0);
+    // Goods on the counter — small skewed boxes, not spheres.
+    const spots = h ? [[x - 1.6, z, crate, 0.4], [x + 2.1, z + 0.5, machineTop, -0.25]] : [[x, z - 1.6, crate, 0.4], [x + 0.5, z + 2.1, machineTop, -0.25]];
+    for (const [gx2, gz2, tint, rot] of spots) {
+      const goods = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.0), tint.clone());
       goods.position.set(gx2, b + 4.35, gz2);
+      goods.rotation.y = rot;
       scene.add(goods); arenaDecor.push(goods);
     }
     // (No doorway: the kiosk body is 3.4 tall — a human-sized door on a
@@ -11371,15 +11373,11 @@ function buildFactory2Arena() {
       scene.add(m); arenaDecor.push(m);
       fadeTall(m, box);
     };
-    // Mech-scale openings: one 5.2-tall gate and one high vent window per
-    // house — small human-proportioned doors made the unit read as a giant.
-    if (h) {
-      face(-2.6, 1.62, 2.6, 5.2, 2.65, 0);         // gate, south face
-      face(2.6, 1.62, 1.9, 1.6, 6.2, 0);           // high vent window
-    } else {
-      face(1.62, -2.6, 2.6, 5.2, 2.65, Math.PI / 2);
-      face(1.62, 2.6, 1.9, 1.6, 6.2, Math.PI / 2);
-    }
+    // One tall gate only (scale pass 3, 2026-08-13: a 3.2-deep slab is a
+    // compound WALL, not a house — the window pretended otherwise and made
+    // the scale lie visible; wall + gate reads right at any size).
+    if (h) face(-2.6, 1.62, 2.6, 5.2, 2.65, 0);
+    else face(1.62, -2.6, 2.6, 5.2, 2.65, Math.PI / 2);
   };
   drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
   drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
@@ -11404,14 +11402,10 @@ function buildFactory2Arena() {
     addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
     addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
     addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: machine, invisible: true });
-    // Upper storey in painted sheet, sitting proud of the rust body.
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(6.15, 3.4, 6.15), machineAlt.clone());
-    upper.position.set(x, b + 6.05, z);
-    scene.add(upper); arenaDecor.push(upper);
-    fadeTall(upper, box);
-    // (No mid-floor lip: a visible storey line ~3.5 up read as human scale
-    // and made the 6.4-tall unit look like a giant — scale pass 2026-08-13.
-    // The upper band stays as a patchwork WALL section, not a second floor.)
+    // (No upper-storey band, no window: a 6x6 footprint can never read as a
+    // multi-storey HOUSE next to a 6.4-tall unit — it became a dollhouse.
+    // Single-material tall SHED with one big gate and a heavy roof, like
+    // the accepted hut. Scale pass 3, 2026-08-13.)
     // Overhanging tar-paper roof, slightly tilted.
     const roof = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 7.3), beltSurface.clone());
     roof.position.set(x, b + 8.25, z);
@@ -11434,16 +11428,6 @@ function buildFactory2Arena() {
     lintel.rotation.x = 0.14;
     scene.add(lintel); arenaDecor.push(lintel);
     fadeTall(lintel, box);
-    const winFrame = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.9), beam.clone());
-    winFrame.position.set(x + 0.9, b + 6.5, z - 3.095);
-    winFrame.rotation.y = Math.PI;
-    scene.add(winFrame); arenaDecor.push(winFrame);
-    fadeTall(winFrame, box);
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.5), machineTop.clone());
-    win.position.set(x + 0.9, b + 6.5, z - 3.11);
-    win.rotation.y = Math.PI;
-    scene.add(win); arenaDecor.push(win);
-    fadeTall(win, box);
   };
   drawStack(-12, 52);  drawStack(12, -52);
   drawStack(-98, 84);  drawStack(98, -84);
@@ -11481,16 +11465,20 @@ function buildFactory2Arena() {
     addBlockingBox({ x: x + 2.5, y: 4.5, z, sx: 0.5, sy: 9.0, sz: 0.5, material: rackFrame });
     addBlockingBox({ x, y: 9.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
     addBlockingBox({ x, y: 3.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
-    // Shelf goods keep their collision but render as fat tarped bundles —
-    // 1.4 cube crates were the last person-sized furniture on the map
-    // (scale review 2026-08-13).
+    // Shelf goods keep their collision, invisible; render as a wide sack
+    // stack under a draped sheet — boxes, not spheres (blobby spheres read
+    // alien in a boxy world; scale pass 3, 2026-08-13).
     addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate, invisible: true });
     addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt, invisible: true });
-    for (const bx of [-1.5, 1.5]) {
-      const bundle = new THREE.Mesh(new THREE.SphereGeometry(1.05, 10, 8), cautionMat.clone());
-      bundle.scale.set(1.05, 0.75, 1.0);
-      bundle.position.set(x + bx, 4.0, z);
-      scene.add(bundle); arenaDecor.push(bundle);
+    for (const [bx, rot] of [[-1.5, 0.25], [1.5, -0.35]]) {
+      const sack = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 1.5), crateAlt.clone());
+      sack.position.set(x + bx, 3.85, z);
+      sack.rotation.y = rot;
+      scene.add(sack); arenaDecor.push(sack);
+      const sheet = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.07, 1.8), cautionMat.clone());
+      sheet.position.set(x + bx, 4.46, z);
+      sheet.rotation.set(0.1, rot, 0.08);
+      scene.add(sheet); arenaDecor.push(sheet);
     }
     // Tarp thrown over the top bar — market-stand silhouette.
     const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.15, 3.4), cautionMat.clone());
