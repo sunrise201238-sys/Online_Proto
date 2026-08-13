@@ -758,7 +758,7 @@ const MAP_DATA = {
   arena1: { name: 'Plain Field' },
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
-  factory2: { name: 'Factory 2' },
+  factory2: { name: 'Yard' },   // slum retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -10975,34 +10975,49 @@ function tickRange(now, dt) {
   }
 }
 
-// Factory 2 — industrial remake of Factory using Airport's design philosophy:
-// ONE central organizing anchor (a raised assembly deck, ramp-accessible by
-// everyone), real interaction points (4 ramps + 2 jump-in fence gaps), and
-// cover that passes the sizing rules (true cover >= 8 tall, walls >= 12,
-// vault clutter <= 2.5). Tall structures register occlude-fade (turn
-// transparent when they block the view); low objects rely on the unit's
-// X-ray rear-shadow, which needs no registration. Online since 0.4.6: the
-// baked collision in shared arena.js is exported FROM this builder
+// YARD (map key 'factory2') — the slum retheme of the Factory 2 layout
+// (user 2026-08-13): same crowded bones, shantytown skin. COLLISION IS
+// FROZEN — every addBlockingBox / addPlatform / addRamp / surface keeps the
+// exact Factory 2 numbers, so the baked entry in shared arena.js stays
+// byte-identical and the retheme deploys client-only. Material variables
+// keep their industrial names so the collision calls stay diff-clean; what
+// each now renders as:
+//   machine        -> corrugated rust sheeting (shanty hut walls)
+//   machineAlt     -> faded painted sheet metal (containers, fences, partitions)
+//   machineTop     -> red-ochre paint (doors, drums, roofs, stall counters)
+//   crate/crateAlt -> weathered scrap wood
+//   beam           -> dark timber
+//   rackFrame      -> bamboo / scrap lumber
+//   beltSurface    -> tar-paper roofing (the walkable shack-row tops)
+//   beltFrame      -> rusted angle iron
+//   deckSteel/Tile -> scrap-plank terrace over the shanty block
+//   tankMat        -> rusted water towers
+// Design intent unchanged from Factory 2: ONE central anchor (the raised
+// terrace, ramp-accessible by everyone), 4 ramps + 2 jump-in fence gaps,
+// cover that passes the sizing rules (true cover >= 8, walls >= 12, vault
+// clutter <= 2.5). Tall structures register occlude-fade; low objects rely
+// on the unit's X-ray rear-shadow. Online since 0.4.6: the baked collision
+// in shared arena.js is exported FROM this builder
 // (__exportArenaCollision('factory2')) — re-export after any geometry change.
 function buildFactory2Arena() {
-  const concrete = new THREE.MeshStandardMaterial({ color: 0x2d3540, roughness: 0.92 });
-  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x37424f, roughness: 0.85 });
-  const stripe = new THREE.MeshStandardMaterial({ color: 0xeae66f, roughness: 0.7 });
-  const wallTrim = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.5, metalness: 0.45 });
-  const beltSurface = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.95 });
-  const beltFrame = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.6 });
-  const roller = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.45, metalness: 0.7 });
-  const machine = new THREE.MeshStandardMaterial({ color: 0x2b3f5f, roughness: 0.55, metalness: 0.4 });
-  const machineAlt = new THREE.MeshStandardMaterial({ color: 0x37547a, roughness: 0.55, metalness: 0.4 });
-  const machineTop = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
-  const crate = new THREE.MeshStandardMaterial({ color: 0x7e5635, roughness: 0.85 });
-  const crateAlt = new THREE.MeshStandardMaterial({ color: 0x614126, roughness: 0.9 });
-  const beam = new THREE.MeshStandardMaterial({ color: 0x8b3a36, roughness: 0.5 });
-  const rackFrame = new THREE.MeshStandardMaterial({ color: 0xc09030, roughness: 0.6 });
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x6a7383, roughness: 0.5, metalness: 0.55 });
-  const cautionMat = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.7 });
-  const deckSteel = new THREE.MeshStandardMaterial({ color: 0x4a5566, roughness: 0.6, metalness: 0.5 });
-  const deckTile = new THREE.MeshStandardMaterial({ color: 0x515e72, roughness: 0.75 });
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x4a4238, roughness: 0.97 });            // packed dirt / stained slab
+  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x5a4c3a, roughness: 0.9 });           // worn footpath bands
+  const stripe = new THREE.MeshStandardMaterial({ color: 0xc98f2f, roughness: 0.75 });              // faded painted edging
+  const wallTrim = new THREE.MeshStandardMaterial({ color: 0x7c4f2c, roughness: 0.7, metalness: 0.25 });
+  const beltSurface = new THREE.MeshStandardMaterial({ color: 0x26221d, roughness: 0.95 });         // tar-paper roofing
+  const beltFrame = new THREE.MeshStandardMaterial({ color: 0x9a5a26, roughness: 0.65, metalness: 0.3 });
+  const roller = new THREE.MeshStandardMaterial({ color: 0x8d9297, roughness: 0.55, metalness: 0.55 });
+  const machine = new THREE.MeshStandardMaterial({ color: 0x8a4f2c, roughness: 0.8, metalness: 0.25 });
+  const machineAlt = new THREE.MeshStandardMaterial({ color: 0x5f7263, roughness: 0.75, metalness: 0.2 });
+  const machineTop = new THREE.MeshStandardMaterial({ color: 0xb0452c, roughness: 0.7 });
+  const crate = new THREE.MeshStandardMaterial({ color: 0x74512e, roughness: 0.9 });
+  const crateAlt = new THREE.MeshStandardMaterial({ color: 0x55391f, roughness: 0.95 });
+  const beam = new THREE.MeshStandardMaterial({ color: 0x453227, roughness: 0.85 });
+  const rackFrame = new THREE.MeshStandardMaterial({ color: 0xa9853f, roughness: 0.8 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.6, metalness: 0.35 });
+  const cautionMat = new THREE.MeshStandardMaterial({ color: 0xb08a2e, roughness: 0.8 });           // sun-bleached hazard paint
+  const deckSteel = new THREE.MeshStandardMaterial({ color: 0x63503a, roughness: 0.8, metalness: 0.15 });
+  const deckTile = new THREE.MeshStandardMaterial({ color: 0x76603f, roughness: 0.85 });
 
   const HALF_X = 130;
   const HALF_Z = 105;
@@ -11152,13 +11167,23 @@ function buildFactory2Arena() {
   drawWorkbench(-32, 14, DECK_Y, 'z'); drawWorkbench(32, -14, DECK_Y, 'z');   // deck stations (vertical)
   drawWorkbench(14, -27, DECK_Y, 'z'); drawWorkbench(-14, 27, DECK_Y, 'z');   // deck edge stations (vertical, clear of the jump-in gaps)
 
-  // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
+  // ===== Shanty huts (were CNC machines; 9 x 6, 8.5 tall — heavy solid
+  // cover, identical boxes). Decor-only slanted roof panel on top, fading
+  // with the body box like the deckCab caps — a solid roof floating over a
+  // faded hut reads broken. =====
   const drawMachine = (x, z) => {
     const box = { minX: x - 4.7, maxX: x + 4.7, minY: 0, maxY: 9.1, minZ: z - 3.4, maxZ: z + 3.4 };
     fadeTall(addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine }), box);
     fadeTall(addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam }), box);
     fadeTall(addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe }), box);
     addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: cautionMat });
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.25, 7.6), machineTop.clone());
+    roof.position.set(x, 9.55, z);
+    roof.rotation.z = 0.12;
+    scene.add(roof); arenaDecor.push(roof);
+    // Roof pokes above the hut's 9.1 fade box — register it with its own
+    // taller extent so a camera ray clipping ONLY the roof still fades it.
+    fadeTall(roof, { ...box, maxY: 10.3 });
   };
   drawMachine(-76, -34); drawMachine(76, 34);
   drawMachine(-20, -86); drawMachine(20, 86);
