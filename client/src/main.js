@@ -10071,23 +10071,11 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
-  } else if (mapKey === 'flashpoint') {
-    // Industrial CQB arena, well-lit for readability. Cool steel-blue base
-    // ambient with a warm sodium key light over the concrete; fog kept
-    // mid-range so the room dividers still read as silhouettes at the back
-    // of the hall without losing target visibility.
-    scene.background.setHex(0x2a3140);
-    scene.fog.color.setHex(0x2c3340);
-    scene.fog.near = 45;
-    scene.fog.far = 200;
-    ambient.color.setHex(0xc4d2e2);
-    ambient.intensity = 0.95;
-    key.color.setHex(0xfff0d0);
-    key.intensity = 1.3;
-  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2') {
+  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2' || mapKey === 'flashpoint') {
     // Bright daylight departure hall: white terminal light, pale sky seen
     // through the glass curtain walls, long fog range for the big sightlines.
     // Factory 2 and Streets share this daylight tone (user calls 2026-07-18);
+    // Flashpoint joined from its old steel-blue night tone (user 2026-08-13);
     // classic Factory keeps the night tone, Square keeps the overcast one.
     // Bullet-trail colors are deliberately untouched by these tone moves.
     scene.background.setHex(0x9db8cc);
