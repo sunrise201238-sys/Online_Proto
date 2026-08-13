@@ -11125,8 +11125,8 @@ function buildFactory2Arena() {
     roof.rotation.z = 0.1;
     scene.add(roof); arenaDecor.push(roof);
     fadeTall(roof, { ...box, maxY: DECK_Y + 9.7 });
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.8), beltSurface.clone());
-    door.position.set(1.4, DECK_Y + 1.55, z + 3.05);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 4.8), beltSurface.clone());
+    door.position.set(1.1, DECK_Y + 2.45, z + 3.05);
     scene.add(door); arenaDecor.push(door);
     fadeTall(door, box);
   };
@@ -11158,13 +11158,9 @@ function buildFactory2Arena() {
     tar.rotation.x = -Math.PI / 2;
     tar.position.set(cx, 2.61, beltZ);
     scene.add(tar); arenaDecor.push(tar);
-    // Doorways along both faces — each segment of the row is a home.
-    for (let lz = -len / 2 + 4.5, doorSide = 1; lz <= len / 2 - 4.5; lz += 9, doorSide = -doorSide) {
-      const d = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.2), beltSurface.clone());
-      d.position.set(cx + doorSide * 2.62, 1.15, beltZ + lz);
-      d.rotation.y = doorSide > 0 ? Math.PI / 2 : -Math.PI / 2;
-      scene.add(d); arenaDecor.push(d);
-    }
+    // (No doorways: the row is only 2.6 tall — knee-height to the unit —
+    // and human doors on it screamed "tiny homes", making the unit a giant.
+    // It reads as a long scrap-roofed storage row now. Scale pass 2026-08-13.)
     // The riding crates keep their collision but render as rooftop water
     // drums — a pair of barrels filling each box footprint.
     for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
@@ -11232,11 +11228,9 @@ function buildFactory2Arena() {
       aw.rotation.z = -0.5;
     }
     scene.add(aw); arenaDecor.push(aw);
-    // Doorway inset on the shop front.
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.7), beltSurface.clone());
-    if (h) door.position.set(x + 1.6, b + 1.55, z - 2.52);
-    else { door.position.set(x - 2.52, b + 1.55, z + 1.6); door.rotation.y = -Math.PI / 2; }
-    scene.add(door); arenaDecor.push(door);
+    // (No doorway: the kiosk body is 3.4 tall — a human-sized door on a
+    // waist-high stall made the unit read as a giant. Stalls are open-front
+    // market stands; the awning + sign carry the read. Scale pass 2026-08-13.)
   };
   drawWorkbench(-30, -52, 0, 'z'); drawWorkbench(30, 52, 0, 'z');
   drawWorkbench(-78, 82, 0, 'z');  drawWorkbench(78, -82, 0, 'z');
@@ -11270,7 +11264,8 @@ function buildFactory2Arena() {
 
   // ===== Row-houses (were shipping containers; 10 x 3.2, 8 tall — long
   // cover with depth, identical boxes): painted sheet body, rusted parapet
-  // lip, door + shuttered windows on the long face, all fading together. =====
+  // lip, one tall gate + high vent window on the long face, all fading
+  // together. =====
   const drawContainer = (x, z, axis) => {
     const sx = axis === 'x' ? 10 : 3.2;
     const sz = axis === 'x' ? 3.2 : 10;
@@ -11285,14 +11280,15 @@ function buildFactory2Arena() {
       scene.add(m); arenaDecor.push(m);
       fadeTall(m, box);
     };
+    // Mech-scale openings (scale pass 2026-08-13): one 5.2-tall gate and
+    // one high vent window per house — small human-proportioned doors made
+    // the unit read as a giant.
     if (h) {
-      face(-2.8, 1.62, 1.6, 2.8, 1.5, 0);          // door, south face
-      face(0.8, 1.62, 1.4, 1.2, 5.6, 0);           // upper window
-      face(3.2, 1.62, 1.4, 1.2, 5.6, 0);           // upper window
+      face(-2.6, 1.62, 2.6, 5.2, 2.65, 0);         // gate, south face
+      face(2.6, 1.62, 1.9, 1.6, 6.2, 0);           // high vent window
     } else {
-      face(1.62, -2.8, 1.6, 2.8, 1.5, Math.PI / 2);
-      face(1.62, 0.8, 1.4, 1.2, 5.6, Math.PI / 2);
-      face(1.62, 3.2, 1.4, 1.2, 5.6, Math.PI / 2);
+      face(1.62, -2.6, 2.6, 5.2, 2.65, Math.PI / 2);
+      face(1.62, 2.6, 1.9, 1.6, 6.2, Math.PI / 2);
     }
   };
   drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
@@ -11323,24 +11319,24 @@ function buildFactory2Arena() {
     upper.position.set(x, b + 6.05, z);
     scene.add(upper); arenaDecor.push(upper);
     fadeTall(upper, box);
-    // Timber floor lip between the storeys.
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.22, 6.5), beam.clone());
-    lip.position.set(x, b + 4.3, z);
-    scene.add(lip); arenaDecor.push(lip);
-    fadeTall(lip, box);
+    // (No mid-floor lip: a visible storey line ~3.5 up read as human scale
+    // and made the 6.4-tall unit look like a giant — scale pass 2026-08-13.
+    // The upper band stays as a patchwork WALL section, not a second floor.)
     // Overhanging tar-paper roof, slightly tilted.
     const roof = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 7.3), beltSurface.clone());
     roof.position.set(x, b + 8.25, z);
     roof.rotation.x = 0.08;
     scene.add(roof); arenaDecor.push(roof);
     fadeTall(roof, { ...box, maxY: b + 8.8 });
-    // Doorway on the south face, shuttered window upstairs on the north.
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.0), beltSurface.clone());
-    door.position.set(x - 1.2, b + 1.75, z + 3.09);
+    // Mech-scale gate on the south face + one high vent window. Openings
+    // are sized so ~1 storey = 7-8 units: a 5-tall gate keeps the 6.4-tall
+    // unit from reading as a giant (scale pass 2026-08-13).
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.0), beltSurface.clone());
+    door.position.set(x - 0.9, b + 2.55, z + 3.09);
     scene.add(door); arenaDecor.push(door);
     fadeTall(door, box);
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.2), machineTop.clone());
-    win.position.set(x + 0.9, b + 6.3, z - 3.11);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.5), machineTop.clone());
+    win.position.set(x + 0.9, b + 6.5, z - 3.11);
     win.rotation.y = Math.PI;
     scene.add(win); arenaDecor.push(win);
     fadeTall(win, box);
@@ -11359,8 +11355,10 @@ function buildFactory2Arena() {
     tank.position.set(x, 6, z);
     scene.add(tank); arenaDecor.push(tank);
     registerWallFade(tank, { minX: x - 2.2, maxX: x + 2.2, minY: 0, maxY: 12, minZ: z - 2.2, maxZ: z + 2.2, occlude: true });
+    // Band rides at mech chest height (4.5, was 2 — a stripe at human brush
+    // reach implied a human painter; scale review 2026-08-13).
     const band = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 2.25, 0.6, 18), cautionMat);
-    band.position.set(x, 2, z);
+    band.position.set(x, 4.5, z);
     scene.add(band); arenaDecor.push(band);
     // Conical cap sells "water tower"; fades with the drum.
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 2.45, 1.5, 18), beam.clone());
@@ -11379,8 +11377,17 @@ function buildFactory2Arena() {
     addBlockingBox({ x: x + 2.5, y: 4.5, z, sx: 0.5, sy: 9.0, sz: 0.5, material: rackFrame });
     addBlockingBox({ x, y: 9.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
     addBlockingBox({ x, y: 3.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
-    addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
-    addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
+    // Shelf goods keep their collision but render as fat tarped bundles —
+    // 1.4 cube crates were the last person-sized furniture on the map
+    // (scale review 2026-08-13).
+    addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate, invisible: true });
+    addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt, invisible: true });
+    for (const bx of [-1.5, 1.5]) {
+      const bundle = new THREE.Mesh(new THREE.SphereGeometry(1.05, 10, 8), cautionMat.clone());
+      bundle.scale.set(1.05, 0.75, 1.0);
+      bundle.position.set(x + bx, 4.0, z);
+      scene.add(bundle); arenaDecor.push(bundle);
+    }
     // Tarp thrown over the top bar — market-stand silhouette.
     const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.15, 3.4), cautionMat.clone());
     tarp.position.set(x, 9.5, z);
