@@ -11018,6 +11018,7 @@ function buildFactory2Arena() {
   const cautionMat = new THREE.MeshStandardMaterial({ color: 0xb08a2e, roughness: 0.8 });           // sun-bleached hazard paint
   const deckSteel = new THREE.MeshStandardMaterial({ color: 0x63503a, roughness: 0.8, metalness: 0.15 });
   const deckTile = new THREE.MeshStandardMaterial({ color: 0x76603f, roughness: 0.85 });
+  const deckPlate = new THREE.MeshStandardMaterial({ color: 0x584a3f, roughness: 0.7, metalness: 0.35 });  // oxidised steel work deck
 
   const HALF_X = 130;
   const HALF_Z = 105;
@@ -11066,11 +11067,27 @@ function buildFactory2Arena() {
   const DECK_Y = 4;
   const deckBody = addBlockingBox({ x: 0, y: (DECK_Y - 0.3) / 2, z: 0, sx: 119.6, sy: DECK_Y - 0.3, sz: 63.6, material: deckSteel.clone(), topBuffer: 0 });
   registerWallFade(deckBody, { minX: -60, maxX: 60, minY: 0, maxY: DECK_Y, minZ: -32, maxZ: 32 });
-  addPlatform({ minX: -60, maxX: 60, minZ: -32, maxZ: 32, top: DECK_Y, material: deckTile, thickness: 0.6 });
+  addPlatform({ minX: -60, maxX: 60, minZ: -32, maxZ: 32, top: DECK_Y, material: deckPlate, thickness: 0.6 });
+  // WORK-DECK dressing (2026-08-13): the terrace is the scrapyard's steel
+  // work platform — plate seams, oil stains, and dashed hazard edging make
+  // it read as a different WORLD from the dirt village below.
+  for (let sx2 = -48; sx2 <= 48; sx2 += 12) {
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 62.4), beltSurface.clone());
+    seam.position.set(sx2, DECK_Y + 0.03, 0);
+    scene.add(seam); arenaDecor.push(seam);
+  }
+  for (const [ox2, oz2, orad] of [[-30, -10, 3.0], [18, 22, 2.2], [6, -19, 2.6]]) {
+    const stain = new THREE.Mesh(new THREE.CircleGeometry(orad, 12), beltSurface.clone());
+    stain.rotation.x = -Math.PI / 2;
+    stain.position.set(ox2, DECK_Y + 0.045, oz2);
+    scene.add(stain); arenaDecor.push(stain);
+  }
   for (const ez of [-31.2, 31.2]) {
-    const es = new THREE.Mesh(new THREE.BoxGeometry(118, 0.15, 1.2), stripe);
-    es.position.set(0, DECK_Y + 0.08, ez);
-    scene.add(es); arenaDecor.push(es);
+    for (let dx2 = -56; dx2 <= 56; dx2 += 8) {
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.15, 1.2), (((dx2 / 8) % 2 === 0) ? cautionMat : beltSurface).clone());
+      dash.position.set(dx2, DECK_Y + 0.08, ez);
+      scene.add(dash); arenaDecor.push(dash);
+    }
   }
   // Long-edge safety fences (sheet metal, tops at 12 — unjumpable) with a
   // 16-wide jump-in gap at the middle of each side: two extra contest points
@@ -11081,7 +11098,9 @@ function buildFactory2Arena() {
   for (const side of [-1, 1]) {
     for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
       const fbox = { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8.5, minZ: side * 32 - 0.6, maxZ: side * 32 + 0.6 };
-      const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
+      // Rust, not the ground level's painted teal — the deck edge silhouette
+      // is part of what separates the work platform from the village.
+      const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: wallTrim });
       fadeTall(fence, fbox);
       const rail = new THREE.Mesh(new THREE.BoxGeometry(fx1 - fx0, 0.4, 1.2), beltFrame);
       rail.position.set((fx0 + fx1) / 2, DECK_Y + 8.2, side * 32);
@@ -11092,7 +11111,7 @@ function buildFactory2Arena() {
   // End-edge fences (x = ±60), leaving the ramp mouths (z -22..-10, 10..22) open.
   for (const [fz0, fz1] of [[-32, -24], [-8, 8], [24, 32]]) {
     for (const ex of [-60, 60]) {
-      const fence = addBlockingBox({ x: ex, y: DECK_Y + 4, z: (fz0 + fz1) / 2, sx: 1.0, sy: 8, sz: fz1 - fz0, material: machineAlt });
+      const fence = addBlockingBox({ x: ex, y: DECK_Y + 4, z: (fz0 + fz1) / 2, sx: 1.0, sy: 8, sz: fz1 - fz0, material: wallTrim });
       fadeTall(fence, { minX: ex - 0.5, maxX: ex + 0.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: fz0, maxZ: fz1 });
     }
   }
@@ -11156,6 +11175,11 @@ function buildFactory2Arena() {
     door.position.set(1.1, DECK_Y + 2.45, z + 3.05);
     scene.add(door); arenaDecor.push(door);
     fadeTall(door, box);
+    // Operator-cabin antenna — work-deck flavour (2026-08-13).
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.2, 6), wallTrim.clone());
+    mast.position.set(2.6, DECK_Y + 10.6, z - 2.4);
+    scene.add(mast); arenaDecor.push(mast);
+    fadeTall(mast, { minX: 2.3, maxX: 2.9, minY: DECK_Y + 8.6, maxY: DECK_Y + 12.2, minZ: z - 2.7, maxZ: z - 2.1 });
   };
   deckCab(-20); deckCab(20);
   const pressU1 = addBlockingBox({ x: -2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
@@ -11165,12 +11189,23 @@ function buildFactory2Arena() {
   fadeTall(pressU1, { minX: -2.7, maxX: -1.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressU2, { minX: 1.7, maxX: 2.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressBeam, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 8.6, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
-  // The press now reads as the terrace GATE: a painted signboard hangs
-  // under the lintel, fading with the beam.
+  // The press now reads as the deck's CRANE GANTRY (work-deck pass
+  // 2026-08-13): a painted signboard under the lintel, a pulley wheel
+  // riding the beam top, and a hook block at the beam's edge — off the
+  // walk line and above the 8-tall capsule, so nothing clips units.
   const gateSign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), machineTop.clone());
   gateSign.position.set(0, DECK_Y + 7.9, 2.28);
   scene.add(gateSign); arenaDecor.push(gateSign);
   fadeTall(gateSign, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 7.3, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.32, 12), beltSurface.clone());
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(0, DECK_Y + 10.75, 0);
+  scene.add(wheel); arenaDecor.push(wheel);
+  fadeTall(wheel, { minX: -0.8, maxX: 0.8, minY: DECK_Y + 10.0, maxY: DECK_Y + 11.5, minZ: -0.8, maxZ: 0.8 });
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.4), wallTrim.clone());
+  hook.position.set(0, DECK_Y + 8.6, 1.9);
+  scene.add(hook); arenaDecor.push(hook);
+  fadeTall(hook, { minX: -0.4, maxX: 0.4, minY: DECK_Y + 8.1, maxY: DECK_Y + 9.1, minZ: 1.6, maxZ: 2.2 });
 
   // ===== Shack rows (were conveyor belts; walkable tar-paper roofs at 2.6,
   // rooftop junk riding — identical boxes and surface) — one per yard,
@@ -11286,33 +11321,47 @@ function buildFactory2Arena() {
     fadeTall(splash, h
       ? { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 }
       : { minX: x + 2.3, maxX: x + 2.9, minY: b + 3.8, maxY: b + 8.4, minZ: z - 4.5, maxZ: z + 4.5 });
-    // Canvas stall canopy over the open front, standing on two timber legs
-    // (revamp 2026-08-13: the floating awning read as a broken part —
-    // grounded posts make it a market stall).
-    const aw = h
-      ? new THREE.Mesh(new THREE.BoxGeometry(9, 0.18, 3.4), cautionMat.clone())
-      : new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 9), cautionMat.clone());
-    if (h) {
-      aw.position.set(x, b + 4.35, z - 3.7);
-      aw.rotation.x = 0.42;
+    if (b === 0) {
+      // GROUND: market stall — canvas canopy on two timber legs, goods on
+      // the counter (revamp 2026-08-13).
+      const aw = h
+        ? new THREE.Mesh(new THREE.BoxGeometry(9, 0.18, 3.4), cautionMat.clone())
+        : new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 9), cautionMat.clone());
+      if (h) {
+        aw.position.set(x, b + 4.35, z - 3.7);
+        aw.rotation.x = 0.42;
+      } else {
+        aw.position.set(x - 3.7, b + 4.35, z);
+        aw.rotation.z = -0.42;
+      }
+      scene.add(aw); arenaDecor.push(aw);
+      const legs = h ? [[x - 4.2, z - 5.1], [x + 4.2, z - 5.1]] : [[x - 5.1, z - 4.2], [x - 5.1, z + 4.2]];
+      for (const [lx, lz2] of legs) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.8, 0.28), beam.clone());
+        leg.position.set(lx, b + 1.9, lz2);
+        scene.add(leg); arenaDecor.push(leg);
+      }
+      const spots = h ? [[x - 1.6, z, crate, 0.4], [x + 2.1, z + 0.5, machineTop, -0.25]] : [[x, z - 1.6, crate, 0.4], [x + 0.5, z + 2.1, machineTop, -0.25]];
+      for (const [gx2, gz2, tint, rot] of spots) {
+        const goods = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.0), tint.clone());
+        goods.position.set(gx2, b + 4.35, gz2);
+        goods.rotation.y = rot;
+        scene.add(goods); arenaDecor.push(goods);
+      }
     } else {
-      aw.position.set(x - 3.7, b + 4.35, z);
-      aw.rotation.z = -0.42;
-    }
-    scene.add(aw); arenaDecor.push(aw);
-    const legs = h ? [[x - 4.2, z - 5.1], [x + 4.2, z - 5.1]] : [[x - 5.1, z - 4.2], [x - 5.1, z + 4.2]];
-    for (const [lx, lz2] of legs) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.8, 0.28), beam.clone());
-      leg.position.set(lx, b + 1.9, lz2);
-      scene.add(leg); arenaDecor.push(leg);
-    }
-    // Goods on the counter — small skewed boxes, not spheres.
-    const spots = h ? [[x - 1.6, z, crate, 0.4], [x + 2.1, z + 0.5, machineTop, -0.25]] : [[x, z - 1.6, crate, 0.4], [x + 0.5, z + 2.1, machineTop, -0.25]];
-    for (const [gx2, gz2, tint, rot] of spots) {
-      const goods = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.0), tint.clone());
-      goods.position.set(gx2, b + 4.35, gz2);
-      goods.rotation.y = rot;
-      scene.add(goods); arenaDecor.push(goods);
+      // WORK DECK: sorting station — corrugated lean-to roof over the
+      // counter and a gas-bottle pair, no market dressing (work-deck pass
+      // 2026-08-13 — the deck must read different from the village below).
+      const lean = new THREE.Mesh(new THREE.BoxGeometry(h ? 9.6 : 3.8, 0.14, h ? 3.8 : 9.6), machine.clone());
+      if (h) { lean.position.set(x, b + 5.4, z - 1.1); lean.rotation.x = 0.24; }
+      else { lean.position.set(x - 1.1, b + 5.4, z); lean.rotation.z = -0.24; }
+      scene.add(lean); arenaDecor.push(lean);
+      const bottles = h ? [[3.7, 1.5, machineTop], [3.7, 0.5, wallTrim]] : [[1.5, 3.7, machineTop], [0.5, 3.7, wallTrim]];
+      for (const [ox2, oz2, tint] of bottles) {
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.0, 10), tint.clone());
+        cyl.position.set(x + ox2, b + 1.0, z + oz2);
+        scene.add(cyl); arenaDecor.push(cyl);
+      }
     }
     // (No doorway: the kiosk body is 3.4 tall — a human-sized door on a
     // waist-high stall made the unit read as a giant. Stalls are open-front
@@ -11394,14 +11443,30 @@ function buildFactory2Arena() {
   // the same volume, all fading with the body box. =====
   const drawStack = (x, z, b = 0) => {
     const box = { minX: x - 3.2, maxX: x + 3.2, minY: b, maxY: b + 8, minZ: z - 3.2, maxZ: z + 3.2 };
-    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: beam });                 // timber plinth
-    fadeTall(addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine }), box);   // ground-floor walls: rust sheet
+    // On the work deck (b > 0) the same box reads as a stack of compacted
+    // scrap BALES instead of a shed — the deck is where scrap gets crushed
+    // (work-deck pass 2026-08-13). Collision identical either way.
+    const bale = b > 0;
+    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: beam });                 // pallet / plinth
+    const bodyMesh = addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine, invisible: bale });
+    if (!bale) fadeTall(bodyMesh, box);
     for (const sxo of [-1.35, 0, 1.35]) {
       addBlockingBox({ x: x + sxo, y: b + 4.2, z, sx: 0.18, sy: 7.2, sz: 6.06, material: machine, invisible: true });
     }
     addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
     addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
     addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: machine, invisible: true });
+    if (bale) {
+      const baleTints = [crate, wallTrim, machineAlt];
+      for (let li = 0; li < 3; li += 1) {
+        const layer = new THREE.Mesh(new THREE.BoxGeometry(6.15, 2.35, 6.15), baleTints[li].clone());
+        layer.position.set(x + (li === 1 ? 0.14 : -0.08), b + 1.7 + li * 2.5, z + (li === 2 ? 0.12 : 0));
+        layer.rotation.y = (li - 1) * 0.05;
+        scene.add(layer); arenaDecor.push(layer);
+        fadeTall(layer, box);
+      }
+      return;   // bales get no roof or gate
+    }
     // (No upper-storey band, no window: a 6x6 footprint can never read as a
     // multi-storey HOUSE next to a 6.4-tall unit — it became a dollhouse.
     // Single-material tall SHED with one big gate and a heavy roof, like
