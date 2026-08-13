@@ -11096,6 +11096,16 @@ function buildFactory2Arena() {
     fadeTall(cab, box);
     // Cap fades WITH the body (a solid cap floating over a faded body reads broken).
     fadeTall(addBlockingBox({ x: 0, y: DECK_Y + 8.3, z, sx: 7.4, sy: 0.5, sz: 6.4, material: beam }), box);
+    // Rooftop-room dressing: slanted roof panel + doorway, fading together.
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.22, 7.2), machineTop.clone());
+    roof.position.set(0, DECK_Y + 9.0, z);
+    roof.rotation.z = 0.1;
+    scene.add(roof); arenaDecor.push(roof);
+    fadeTall(roof, { ...box, maxY: DECK_Y + 9.7 });
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.8), beltSurface.clone());
+    door.position.set(1.4, DECK_Y + 1.55, z + 3.05);
+    scene.add(door); arenaDecor.push(door);
+    fadeTall(door, box);
   };
   deckCab(-20); deckCab(20);
   const pressU1 = addBlockingBox({ x: -2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
@@ -11105,13 +11115,32 @@ function buildFactory2Arena() {
   fadeTall(pressU1, { minX: -2.7, maxX: -1.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressU2, { minX: 1.7, maxX: 2.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressBeam, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 8.6, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
+  // The press now reads as the terrace GATE: a painted signboard hangs
+  // under the lintel, fading with the beam.
+  const gateSign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), machineTop.clone());
+  gateSign.position.set(0, DECK_Y + 7.9, 2.28);
+  scene.add(gateSign); arenaDecor.push(gateSign);
+  fadeTall(gateSign, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 7.3, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
 
-  // ===== Conveyor belts (walkable tops at 2.6, crates riding) — one per
-  // yard, running north-south past the deck ends. =====
+  // ===== Shack rows (were conveyor belts; walkable tar-paper roofs at 2.6,
+  // rooftop junk riding — identical boxes and surface) — one per yard,
+  // running north-south past the terrace ends. =====
   const drawBelt = (cx, len, beltZ) => {
-    addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: beltSurface, topBuffer: 2 });
+    addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: machine, topBuffer: 2 });
     addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
     addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
+    // Tar-paper roof skin over the walkable top.
+    const tar = new THREE.Mesh(new THREE.PlaneGeometry(4.0, len), beltSurface.clone());
+    tar.rotation.x = -Math.PI / 2;
+    tar.position.set(cx, 2.61, beltZ);
+    scene.add(tar); arenaDecor.push(tar);
+    // Doorways along both faces — each segment of the row is a home.
+    for (let lz = -len / 2 + 4.5, doorSide = 1; lz <= len / 2 - 4.5; lz += 9, doorSide = -doorSide) {
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.2), beltSurface.clone());
+      d.position.set(cx + doorSide * 2.62, 1.15, beltZ + lz);
+      d.rotation.y = doorSide > 0 ? Math.PI / 2 : -Math.PI / 2;
+      scene.add(d); arenaDecor.push(d);
+    }
     let alt = false;
     for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
       addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: alt ? crate : crateAlt, topBuffer: 2 });
@@ -11145,21 +11174,40 @@ function buildFactory2Arena() {
   drawPartition(-72, -46, 'z', 10);
   drawPartition(72, 46, 'z', 10);
 
-  // ===== Workbenches — solid stations: full base cabinet, worktop, and a
-  // backsplash rising 8.4 above the floor they stand on (true cover with
-  // depth). `b` = base height (0 = ground, DECK_Y = on the deck). =====
+  // ===== Street kiosks (were workbenches; identical boxes): shop body,
+  // timber roof slab, and a tall corrugated sign wall on the long side.
+  // The old vise block keeps its collision but goes invisible; a canvas
+  // awning leans off the open front. `b` = base height (0 = ground,
+  // DECK_Y = on the deck). =====
   const drawWorkbench = (x, z, b = 0, axis = 'x') => {
     const h = axis === 'x';
     addBlockingBox({ x, y: b + 1.7, z, sx: h ? 9 : 5, sy: 3.4, sz: h ? 5 : 9, material: machine });
-    addBlockingBox({ x, y: b + 3.65, z, sx: h ? 9.4 : 5.4, sy: 0.5, sz: h ? 5.4 : 9.4, material: roller });
-    addBlockingBox({ x: h ? x - 2.8 : x, y: b + 4.6, z: h ? z : z - 2.8, sx: h ? 2.4 : 1.6, sy: 1.5, sz: h ? 1.6 : 2.4, material: machineTop });
-    // Backsplash on the long side; it tops out above unit height so it fades.
+    addBlockingBox({ x, y: b + 3.65, z, sx: h ? 9.4 : 5.4, sy: 0.5, sz: h ? 5.4 : 9.4, material: beam });
+    addBlockingBox({ x: h ? x - 2.8 : x, y: b + 4.6, z: h ? z : z - 2.8, sx: h ? 2.4 : 1.6, sy: 1.5, sz: h ? 1.6 : 2.4, material: machine, invisible: true });
+    // Sign wall on the long side; it tops out above unit height so it fades.
     const splash = h
       ? addBlockingBox({ x, y: b + 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop })
       : addBlockingBox({ x: x + 2.6, y: b + 6.1, z, sx: 0.5, sy: 4.6, sz: 9, material: machineTop });
     fadeTall(splash, h
       ? { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 }
       : { minX: x + 2.3, maxX: x + 2.9, minY: b + 3.8, maxY: b + 8.4, minZ: z - 4.5, maxZ: z + 4.5 });
+    // Canvas awning leaning over the open front (opposite the sign wall).
+    const aw = h
+      ? new THREE.Mesh(new THREE.BoxGeometry(9, 0.18, 3.2), cautionMat.clone())
+      : new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 9), cautionMat.clone());
+    if (h) {
+      aw.position.set(x, b + 4.4, z - 3.6);
+      aw.rotation.x = 0.5;
+    } else {
+      aw.position.set(x - 3.6, b + 4.4, z);
+      aw.rotation.z = -0.5;
+    }
+    scene.add(aw); arenaDecor.push(aw);
+    // Doorway inset on the shop front.
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.7), beltSurface.clone());
+    if (h) door.position.set(x + 1.6, b + 1.55, z - 2.52);
+    else { door.position.set(x - 2.52, b + 1.55, z + 1.6); door.rotation.y = -Math.PI / 2; }
+    scene.add(door); arenaDecor.push(door);
   };
   drawWorkbench(-30, -52, 0, 'z'); drawWorkbench(30, 52, 0, 'z');
   drawWorkbench(-78, 82, 0, 'z');  drawWorkbench(78, -82, 0, 'z');
@@ -11190,13 +11238,32 @@ function buildFactory2Arena() {
   drawMachine(-114, 0);  drawMachine(114, 0);   // side halls
   drawMachine(-48, 44);  drawMachine(48, -44);  // mid-band, off the deck corners
 
-  // ===== Shipping containers (10 x 3.2, 8 tall — long cover with depth) =====
+  // ===== Row-houses (were shipping containers; 10 x 3.2, 8 tall — long
+  // cover with depth, identical boxes): painted sheet body, rusted parapet
+  // lip, door + shuttered windows on the long face, all fading together. =====
   const drawContainer = (x, z, axis) => {
     const sx = axis === 'x' ? 10 : 3.2;
     const sz = axis === 'x' ? 3.2 : 10;
     const box = { minX: x - sx / 2 - 0.2, maxX: x + sx / 2 + 0.2, minY: 0, maxY: 8.4, minZ: z - sz / 2 - 0.2, maxZ: z + sz / 2 + 0.2 };
     fadeTall(addBlockingBox({ x, y: 4, z, sx, sy: 8, sz, material: machineAlt }), box);
     fadeTall(addBlockingBox({ x, y: 8.2, z, sx: sx + 0.3, sy: 0.4, sz: sz + 0.3, material: beltFrame }), box);
+    const h = axis === 'x';
+    const face = (ox, oz, w, hh, yy, rot) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), beltSurface.clone());
+      m.position.set(x + ox, yy, z + oz);
+      m.rotation.y = rot;
+      scene.add(m); arenaDecor.push(m);
+      fadeTall(m, box);
+    };
+    if (h) {
+      face(-2.8, 1.62, 1.6, 2.8, 1.5, 0);          // door, south face
+      face(0.8, 1.62, 1.4, 1.2, 5.6, 0);           // upper window
+      face(3.2, 1.62, 1.4, 1.2, 5.6, 0);           // upper window
+    } else {
+      face(1.62, -2.8, 1.6, 2.8, 1.5, Math.PI / 2);
+      face(1.62, 0.8, 1.4, 1.2, 5.6, Math.PI / 2);
+      face(1.62, 3.2, 1.4, 1.2, 5.6, Math.PI / 2);
+    }
   };
   drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
   drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
@@ -11205,21 +11272,48 @@ function buildFactory2Arena() {
   drawContainer(-24, 40, 'x'); drawContainer(24, -40, 'x');     // hugging the deck fences (approach cover)
   drawContainer(0, 90, 'z'); drawContainer(0, -90, 'z');        // central north/south corridors
 
-  // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
+  // ===== Two-storey shanty towers (were upright cargo stacks; 6 x 6, 8
+  // tall — corner-peek cover, collision identical). The old corrugation
+  // seams / corner posts / hazard band keep their collision boxes but go
+  // INVISIBLE (they poke a few cm past the body — removing them would
+  // change the shared export); the architecture is pure decor drawn around
+  // the same volume, all fading with the body box. =====
   const drawStack = (x, z, b = 0) => {
-    // Palletized cargo stack (same footprint/cover heights): pallet, big
-    // rimmed crate, two aligned mid crates, strapped top crate.
-    // Design B — upright cargo container: monolithic body, corrugation
-    // seams, steel corner posts, mid hazard band. Flat top at b+8.
     const box = { minX: x - 3.2, maxX: x + 3.2, minY: b, maxY: b + 8, minZ: z - 3.2, maxZ: z + 3.2 };
-    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: rackFrame });
-    fadeTall(addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine }), box);
+    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: beam });                 // timber plinth
+    fadeTall(addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine }), box);   // ground-floor walls: rust sheet
     for (const sxo of [-1.35, 0, 1.35]) {
-      fadeTall(addBlockingBox({ x: x + sxo, y: b + 4.2, z, sx: 0.18, sy: 7.2, sz: 6.06, material: beltSurface.clone() }), box);
+      addBlockingBox({ x: x + sxo, y: b + 4.2, z, sx: 0.18, sy: 7.2, sz: 6.06, material: machine, invisible: true });
     }
-    fadeTall(addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: roller }), box);
-    fadeTall(addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: roller }), box);
-    fadeTall(addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: cautionMat.clone() }), box);
+    addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
+    addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
+    addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: machine, invisible: true });
+    // Upper storey in painted sheet, sitting proud of the rust body.
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(6.15, 3.4, 6.15), machineAlt.clone());
+    upper.position.set(x, b + 6.05, z);
+    scene.add(upper); arenaDecor.push(upper);
+    fadeTall(upper, box);
+    // Timber floor lip between the storeys.
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.22, 6.5), beam.clone());
+    lip.position.set(x, b + 4.3, z);
+    scene.add(lip); arenaDecor.push(lip);
+    fadeTall(lip, box);
+    // Overhanging tar-paper roof, slightly tilted.
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 7.3), beltSurface.clone());
+    roof.position.set(x, b + 8.25, z);
+    roof.rotation.x = 0.08;
+    scene.add(roof); arenaDecor.push(roof);
+    fadeTall(roof, { ...box, maxY: b + 8.8 });
+    // Doorway on the south face, shuttered window upstairs on the north.
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.0), beltSurface.clone());
+    door.position.set(x - 1.2, b + 1.75, z + 3.09);
+    scene.add(door); arenaDecor.push(door);
+    fadeTall(door, box);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.2), machineTop.clone());
+    win.position.set(x + 0.9, b + 6.3, z - 3.11);
+    win.rotation.y = Math.PI;
+    scene.add(win); arenaDecor.push(win);
+    fadeTall(win, box);
   };
   drawStack(-12, 52);  drawStack(12, -52);
   drawStack(-98, 84);  drawStack(98, -84);
@@ -11238,6 +11332,11 @@ function buildFactory2Arena() {
     const band = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 2.25, 0.6, 18), cautionMat);
     band.position.set(x, 2, z);
     scene.add(band); arenaDecor.push(band);
+    // Conical cap sells "water tower"; fades with the drum.
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 2.45, 1.5, 18), beam.clone());
+    cap.position.set(x, 12.7, z);
+    scene.add(cap); arenaDecor.push(cap);
+    registerWallFade(cap, { minX: x - 2.45, maxX: x + 2.45, minY: 0, maxY: 13.5, minZ: z - 2.45, maxZ: z + 2.45, occlude: true });
     arenaObstacles.push({ minX: x - 2.2, maxX: x + 2.2, minZ: z - 2.2, maxZ: z + 2.2, minY: 0, maxY: 12 });
   };
   drawTank(-118, -88); drawTank(-112, -80);
@@ -11252,6 +11351,11 @@ function buildFactory2Arena() {
     addBlockingBox({ x, y: 3.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
     addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
     addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
+    // Tarp thrown over the top bar — market-stand silhouette.
+    const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.15, 3.4), cautionMat.clone());
+    tarp.position.set(x, 9.5, z);
+    tarp.rotation.x = 0.18;
+    scene.add(tarp); arenaDecor.push(tarp);
   };
   drawRack(-118, 28); drawRack(118, -28);
   drawRack(-64, -94); drawRack(64, 94);
