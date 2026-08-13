@@ -758,7 +758,7 @@ const MAP_DATA = {
   arena1: { name: 'Plain Field' },
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
-  factory2: { name: 'Yard' },   // slum retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
+  factory2: { name: 'Scrapyard' },   // scrapyard retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -10975,7 +10975,7 @@ function tickRange(now, dt) {
   }
 }
 
-// YARD (map key 'factory2') — the slum retheme of the Factory 2 layout
+// SCRAPYARD (map key 'factory2') — the scrapyard retheme of the Factory 2 layout
 // (user 2026-08-13): same crowded bones, shantytown skin. COLLISION IS
 // FROZEN — every addBlockingBox / addPlatform / addRamp / surface keeps the
 // exact Factory 2 numbers, so the baked entry in shared arena.js stays
