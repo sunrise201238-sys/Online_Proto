@@ -15,7 +15,7 @@ import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked } from './physics.js';
 import { getArena } from './arena.js';
-import { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
+import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
 import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS } from './constants.js';
 
@@ -934,7 +934,10 @@ export function tickBot(matchState, botId, now) {
           obstacles, surfaces
         )) {
           const cut = path.slice(0, i);
-          cut.push({ x: px, z: pz });
+          // Carry the sample's floor: smoothPath's same-floor gate reads
+          // (y ?? 0), so a y-less cut point on a deck froze the final leg
+          // out of smoothing (review 2026-08-13).
+          cut.push({ x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -961,6 +964,9 @@ export function tickBot(matchState, botId, now) {
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
+    // Diagonal legs where the swept corridor proves them safe (see
+    // smoothPath's header note). Mirrored in main.js navPlan.
+    if (path && path.length > 2) path = smoothPath(grid, path, obstacles);
     if (matchState._navPaths == null) matchState._navPaths = {};
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
@@ -1062,7 +1068,18 @@ export function tickBot(matchState, botId, now) {
       while (fi < fresh.path.length - 1
           && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
-      if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
+      // Match against EVERY remaining waypoint of the frozen route, not just
+      // the indexed steer-to: smoothPath's greedy anchors are start/goal-
+      // dependent, so a re-plan from the same frozen spot can re-issue the
+      // same line under a different first anchor — single-index matching
+      // dropped mid-leg statue detection ~20pp and a moving target could
+      // dodge it every re-commit (review 2026-08-13). Waypoints are unmoved
+      // cell centres in both paths, so the 0.5 equality stays exact; the
+      // trigger only fires on stuckFrozen bots, where backing out of ANY
+      // retraced line is the right call.
+      const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
+        Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
+      if (retraced) {
         delete matchState._navPaths[botId];
         planned = false;
         me.botMazeEscapeUntil = now + 800;

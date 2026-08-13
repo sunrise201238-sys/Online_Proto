@@ -11,6 +11,7 @@ import {
   buildNavGrid,
   findPathOnGrid,
   findFiringPath,
+  smoothPath,
   walkSegmentBlocked,
   volleyAxes,
   volleyPelletOffset,
@@ -5171,7 +5172,10 @@ function updateEnemy(now) {
           { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
         )) {
           const cut = path.slice(0, i);
-          cut.push({ x: px, z: pz });
+          // Carry the sample's floor: smoothPath's same-floor gate reads
+          // (y ?? 0), so a y-less cut point on a deck froze the final leg
+          // out of smoothing (review 2026-08-13). Mirrored in shared ai.js.
+          cut.push({ x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -5198,6 +5202,9 @@ function updateEnemy(now) {
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
+    // Diagonal legs where the swept corridor proves them safe (see
+    // smoothPath's header note). Mirrored in shared ai.js navPlan.
+    if (path && path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
       // #2 from an off-grid position can clip the corner between them.
@@ -5298,7 +5305,18 @@ function updateEnemy(now) {
       while (fi < fresh.path.length - 1
           && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
-      if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
+      // Match against EVERY remaining waypoint of the frozen route, not just
+      // the indexed steer-to: smoothPath's greedy anchors are start/goal-
+      // dependent, so a re-plan from the same frozen spot can re-issue the
+      // same line under a different first anchor — single-index matching
+      // dropped mid-leg statue detection ~20pp and a moving target could
+      // dodge it every re-commit (review 2026-08-13). Waypoints are unmoved
+      // cell centres in both paths, so the 0.5 equality stays exact; the
+      // trigger only fires on stuckFrozen bots, where backing out of ANY
+      // retraced line is the right call. Mirrored in shared ai.js.
+      const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
+        Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
+      if (retraced) {
         eState.botNav = null;
         planned = false;
         eState.botMazeEscapeUntil = now + 800;

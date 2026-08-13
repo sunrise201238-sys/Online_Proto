@@ -46,5 +46,5 @@ export {
   volleyAxes, volleyPelletOffset, volleySpreadFactor
 } from './projectiles.js';
 export { tickBot, pickBotTargetId } from './ai.js';
-export { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
+export { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';

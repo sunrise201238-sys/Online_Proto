@@ -434,6 +434,79 @@ function collapseWaypoints(pts) {
   return out;
 }
 
+// PATH SMOOTHING (2026-08-13, user: diagonals "when it's surely safe").
+// Post-plan string-pulling over the collapsed waypoints: greedily replace a
+// run of grid legs with one straight (usually diagonal) leg when a swept
+// corridor PROVES the walk safe. The grid stays 4-connected — every diagonal
+// a bot walks comes from this pass and is corridor-verified. A leg a->b is
+// accepted only if:
+//   - every waypoint from a to b sits on a's floor (±0.5): never smooth
+//     across ramps, jump-links, or belt/deck transitions (the same rule
+//     collapseWaypoints applies to straight runs);
+//   - samples every ~1u along a->b land on WALKABLE grid cells of that same
+//     floor — no cutting over belt sides, ledges, or gaps that the obstacle
+//     test alone cannot see;
+//   - every sample clears all obstacles by CLEAR_WIDE via
+//     unitOverlapsObstacle. NOT CLEAR_MID: a chord accepted at >= 2.0 lands
+//     exactly in the mid-graded lane, deleting the one-cell dogleg that is
+//     the 0.15 mid tax's entire route-level effect — i.e. it re-authorizes
+//     the measured wall-hug lane (review 2026-08-13; the taxed route bulges
+//     off the wall, smoothing collapsed the bulge right back). At 3.2 a
+//     chord only exists through space the tax already grades free, so every
+//     route-level tax decision survives smoothing. Doorways and clutter
+//     alleys fail on purpose: their grid legs stay.
+// Waypoints are only ever REMOVED, never moved — the follower's advance rule
+// still sees original cell centres (statue-escape compares against the WHOLE
+// remaining frozen route for this reason — see the ai.js re-commit block).
+// The scan stops extending at the first failing leg and is windowed to 12
+// waypoints per anchor: each accepted extension re-walks the full chord, so
+// an unbounded scan is O(N^2) samples on exactly the long open-field paths
+// smoothing exists for (review 2026-08-13); chained capped chords read the
+// same in play.
+export function smoothPath(grid, path, obstacles) {
+  if (!path || path.length < 3 || !obstacles) return path;
+  const { cols, rows, cell, minX, minZ, floor, walk } = grid;
+  const clearLeg = (a, b) => {
+    const ya = a.y ?? 0;
+    const dx = b.x - a.x, dz = b.z - a.z;
+    // Per-chord obstacle prefilter: only boxes near the chord's bounding
+    // box can fail a sample — spares the full-map scan per 1u sample.
+    const pad = CLEAR_WIDE + 1;
+    const bx0 = Math.min(a.x, b.x) - pad, bx1 = Math.max(a.x, b.x) + pad;
+    const bz0 = Math.min(a.z, b.z) - pad, bz1 = Math.max(a.z, b.z) + pad;
+    const nearObs = [];
+    for (const o of obstacles) {
+      if (o.maxX >= bx0 && o.minX <= bx1 && o.maxZ >= bz0 && o.minZ <= bz1) nearObs.push(o);
+    }
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz)));
+    for (let s = 1; s <= steps; s += 1) {
+      const x = a.x + (dx * s) / steps;
+      const z = a.z + (dz * s) / steps;
+      const c = Math.floor((x - minX) / cell);
+      const r = Math.floor((z - minZ) / cell);
+      if (c < 0 || r < 0 || c >= cols || r >= rows) return false;
+      const i = r * cols + c;
+      if (!walk[i] || Math.abs(floor[i] - ya) > 0.5) return false;
+      if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, nearObs, CLEAR_WIDE)) return false;
+    }
+    return true;
+  };
+  const out = [path[0]];
+  let a = 0;
+  while (a < path.length - 1) {
+    let best = a + 1;
+    const bMax = Math.min(path.length, a + 13);
+    for (let b = a + 2; b < bMax; b += 1) {
+      if (Math.abs((path[b].y ?? 0) - (path[a].y ?? 0)) > 0.5) break;
+      if (!clearLeg(path[a], path[b])) break;
+      best = b;
+    }
+    out.push(path[best]);
+    a = best;
+  }
+  return out;
+}
+
 // FIRING-POSITION SEARCH. Find the cheapest-by-walking cell that can FIGHT
 // the target: distance to (tx, tz) inside [minD, maxD] (the weapon's band)
 // AND a clear line of sight from that cell's eye height to the target's.
