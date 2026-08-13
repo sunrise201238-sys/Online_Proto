@@ -7040,6 +7040,18 @@ function startMatch() {
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
     }
   }
+  // The teleports above move only the physics BODIES. The visual roots sync
+  // from the bodies in the frame loop — AFTER updateEnemy has read
+  // root.position for that frame. On the first match tick that lag is not
+  // 16 ms of drift but the full origin→spawn distance: every bot planned
+  // from (0,0,0), the Maze entry navPlan failed, and the no-route fallback
+  // beelined into the spawn-room corner until the stall detectors fired
+  // (the Flashpoint room-spawn wall-run, 2026-08-13). Sync the roots NOW so
+  // tick 1 sees true positions. Mirrors respawnSlotMech's fresh-mech sync.
+  for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
+    const m = state[s];
+    if (m) m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
+  }
   // Trio bookkeeping: per-slot roster cursor + the spawn positions recorded
   // for mid-match respawns (next roster unit spawns where its team started).
   // The Shooting Range ignores Trio entirely (solo practice stays SD-style).
@@ -9496,6 +9508,12 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.state.team = old.state.team;
   const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
+  // Body teleport only — sync the visual root NOW. The bot AI reads
+  // root.position and the frame sync runs after it; without this the fresh
+  // bot's first tick plans from wherever the prebuilt mech's root was left
+  // (the origin), failing its Maze entry plan exactly like the match-start
+  // case in startMatch.
+  fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
   fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   if (slotName === 'enemy' || slotName === 'enemy2') fresh.state.nextFireAt = now + 650;
