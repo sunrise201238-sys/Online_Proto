@@ -51,16 +51,27 @@ const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 // door jamb, is cheaper to walk through than around (1.2 < 2.0) and A*
 // keeps it. That is the accepted trade: raising the cost above 2.0 to catch
 // single corners also re-routes long map crossings (measured: it sent
-// Streets' ground traverse up over the overpass). Mid cells are free for
-// the same reason — any charge on them accumulates over long routes.
-// SCOPE (2026-08-12 correction): only findPathOnGrid applies this cost.
-// findFiringPath — the FIRST-CHOICE planner for combat routes (see the
-// navPlan order in ai.js) — is a uniform-cost BFS that never reads
-// clearGrade, so most live bot routes are not steered by this penalty at
-// all. It shapes the fallback/cover paths that findPathOnGrid serves.
+// Streets' ground traverse up over the overpass).
+// MID cells carry a SMALL charge (0.15/cell, 2026-08-12): the wall-hugging
+// lane a walking body actually touches sits at clearance ≈ 2.0 — grade MID —
+// so with mid free, even the clearance-taxed Dijkstra kept choosing flush-
+// along-the-wall routes (measured on the Flashpoint room spawns: contact
+// share 12.7% with mid free, 6.0% at 0.15). At 0.15 a one-cell sidestep
+// away from a wall pays for itself after a short run, while a 40-cell map
+// crossing accumulates only +6 — measured NOT enough to flip Streets'
+// ground traverse onto the overpass (14/160 elevated routes, identical to
+// mid-free). The alternatives measured and rejected the same day: widening
+// the TIGHT band to 2.6 (nudged the overpass count and factory2 grind up)
+// and combining both (worse grind on flashpoint AND factory2).
+// SCOPE (2026-08-12): BOTH planners apply this cost. findPathOnGrid always
+// did; findFiringPath — the first-choice planner for combat routes (see the
+// navPlan order in ai.js) — was a uniform-cost BFS until the same day's
+// room-spawn report ("bots grind the wall right after spawn") showed its
+// fewest-cells routes hugging walls, and is now a Dijkstra over these same
+// costs. Every live bot route is steered by this penalty.
 const CLEAR_MID = 2.0;     // body + ~0.85 slack
 const CLEAR_WIDE = 3.2;    // body + ~2 slack: comfortably off the wall
-const TIGHT_COST = [1.2, 0, 0];   // by clearance grade 0 / 1 / 2
+const TIGHT_COST = [1.2, 0.15, 0];   // by clearance grade 0 / 1 / 2
 
 export function buildNavGrid(obstacles, surfaces) {
   // Grid bounds = obstacle bounding box. Boundary walls are obstacles in
@@ -423,16 +434,18 @@ function collapseWaypoints(pts) {
   return out;
 }
 
-// FIRING-POSITION SEARCH. Find the nearest-by-walking cell that can FIGHT
+// FIRING-POSITION SEARCH. Find the cheapest-by-walking cell that can FIGHT
 // the target: distance to (tx, tz) inside [minD, maxD] (the weapon's band)
 // AND a clear line of sight from that cell's eye height to the target's.
-// BFS from the start guarantees the shortest-walk such cell. This is what
+// Dijkstra over the same clearance-taxed costs as findPathOnGrid
+// guarantees the cheapest-walk such cell (2026-08-12; was a fewest-cells
+// BFS, whose routes hugged walls by construction). This is what
 // lets a sniper route to a sniping SPOT instead of to the enemy's feet —
 // sampling only along the direct path missed band positions that live off
 // to the side (e.g. clear lanes past the clutter). Returns waypoints like
 // findPathOnGrid, or null when no reachable firing cell exists.
 export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles, targetFloor = null) {
-  const { cols, rows, cell, minX, minZ, edgeE, edgeS, floor } = grid;
+  const { cols, rows, cell, minX, minZ, edgeE, edgeS, floor, clearGrade } = grid;
   const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   if (start < 0) return null;
   const n = cols * rows;
@@ -457,14 +470,57 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
   // that first meant its paths never contained a climb, and it ground the
   // wall forever instead of jumping up to fight properly.
   const run = (sameFloorOnly) => {
-    const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 BFS root
-    const queue = new Int32Array(n);
-    let qh = 0, qt = 0;
+    // Dijkstra, not BFS (2026-08-12): this planner answers ~98% of live bot
+    // routes, and as a fewest-cells BFS it hugged walls and clipped doorway
+    // posts BY CONSTRUCTION — the "bots grind the wall right after spawn"
+    // report from the Flashpoint room spawns. It now pays the same
+    // wall-clearance tax as findPathOnGrid (TIGHT_COST on the entered
+    // cell), so routes prefer the middle of a corridor when the room
+    // exists. The first qualifying cell POPPED is the cheapest-walk firing
+    // cell — the BFS's nearest-cell guarantee, upgraded to clearance-aware
+    // cost. No heuristic: the goal is discovered, not known in advance.
+    const parent = new Int32Array(n).fill(-2); // -2 unvisited, -1 root
+    const g = new Float64Array(n).fill(Infinity);
+    const closed = new Uint8Array(n);
+    const heap = [];
+    const push = (f, i) => {
+      heap.push([f, i]);
+      let k = heap.length - 1;
+      while (k > 0) {
+        const p = (k - 1) >> 1;
+        if (heap[p][0] <= heap[k][0]) break;
+        const t = heap[p]; heap[p] = heap[k]; heap[k] = t;
+        k = p;
+      }
+    };
+    const pop = () => {
+      const top = heap[0];
+      const last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        let k = 0;
+        for (;;) {
+          const l = 2 * k + 1, r = l + 1;
+          let s = k;
+          if (l < heap.length && heap[l][0] < heap[s][0]) s = l;
+          if (r < heap.length && heap[r][0] < heap[s][0]) s = r;
+          if (s === k) break;
+          const t = heap[s]; heap[s] = heap[k]; heap[k] = t;
+          k = s;
+        }
+      }
+      return top;
+    };
     parent[start] = -1;
-    queue[qt++] = start;
+    g[start] = 0;
+    push(0, start);
     let goal = -1;
-    while (qh < qt) {
-      const cur = queue[qh++];
+    let guard = 0;
+    while (heap.length) {
+      if (++guard > 30000) break;
+      const cur = pop()[1];
+      if (closed[cur]) continue;
+      closed[cur] = 1;
       const cx = minX + ((cur % cols) + 0.5) * cell;
       const cz = minZ + (((cur / cols) | 0) + 0.5) * cell;
       const d = Math.hypot(tx - cx, tz - cz);
@@ -476,13 +532,20 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
         || Math.abs(floor[cur] - targetFloor) <= 2;
       if (cur !== start && floorOk && d >= minD && d <= maxD && sees(cur)) { goal = cur; break; }
       const c = cur % cols, r = (cur / cols) | 0;
-      if (c + 1 < cols && edgeE[cur] && parent[cur + 1] === -2) { parent[cur + 1] = cur; queue[qt++] = cur + 1; }
-      if (c > 0 && edgeE[cur - 1] && parent[cur - 1] === -2) { parent[cur - 1] = cur; queue[qt++] = cur - 1; }
-      if (r + 1 < rows && edgeS[cur] && parent[cur + cols] === -2) { parent[cur + cols] = cur; queue[qt++] = cur + cols; }
-      if (r > 0 && edgeS[cur - cols] && parent[cur - cols] === -2) { parent[cur - cols] = cur; queue[qt++] = cur - cols; }
-      // Jump-links participate in the firing-position search too.
+      const step = (nb, cost) => {
+        if (closed[nb]) return;
+        const ng = g[cur] + cost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
+        if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; push(ng, nb); }
+      };
+      if (c + 1 < cols && edgeE[cur]) step(cur + 1, 1);
+      if (c > 0 && edgeE[cur - 1]) step(cur - 1, 1);
+      if (r + 1 < rows && edgeS[cur]) step(cur + cols, 1);
+      if (r > 0 && edgeS[cur - cols]) step(cur - cols, 1);
+      // Jump-links participate in the firing-position search too — same
+      // 2.5 premium as findPathOnGrid, so walking wins when a walk route of
+      // similar length exists.
       const jl = grid.jumpAdj ? grid.jumpAdj.get(cur) : null;
-      if (jl) for (const nb of jl) { if (parent[nb] === -2) { parent[nb] = cur; queue[qt++] = nb; } }
+      if (jl) for (const nb of jl) step(nb, 2.5);
     }
     if (goal < 0) return null;
     const pts = [];
