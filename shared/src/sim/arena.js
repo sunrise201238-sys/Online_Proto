@@ -8394,66 +8394,66 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 8.2
       },
       {
-        "minX": -2.5,
-        "maxX": 2.5,
-        "minZ": 24,
-        "maxZ": 39,
+        "minX": -72,
+        "maxX": -68,
+        "minZ": 35,
+        "maxZ": 53,
         "minY": 0,
         "maxY": 3
       },
       {
-        "minX": -2.7,
-        "maxX": 2.7,
-        "minZ": 23.8,
-        "maxZ": 39.2,
+        "minX": -72.2,
+        "maxX": -67.8,
+        "minZ": 34.8,
+        "maxZ": 53.2,
         "minY": 2.95,
         "maxY": 3.25
       },
       {
-        "minX": -0.3,
-        "maxX": 0.3,
-        "minZ": 24,
-        "maxZ": 39,
+        "minX": -70.3,
+        "maxX": -69.7,
+        "minZ": 35,
+        "maxZ": 53,
         "minY": 3.1,
         "maxY": 9.4
       },
       {
-        "minX": -0.35,
-        "maxX": 0.35,
-        "minZ": 24.5,
-        "maxZ": 38.5,
+        "minX": -70.35,
+        "maxX": -69.65,
+        "minZ": 35.5,
+        "maxZ": 52.5,
         "minY": 9.200000000000001,
         "maxY": 9.4
       },
       {
-        "minX": -2.5,
-        "maxX": 2.5,
-        "minZ": 45,
-        "maxZ": 72,
+        "minX": 68,
+        "maxX": 72,
+        "minZ": 35,
+        "maxZ": 53,
         "minY": 0,
         "maxY": 3
       },
       {
-        "minX": -2.7,
-        "maxX": 2.7,
-        "minZ": 44.8,
-        "maxZ": 72.2,
+        "minX": 67.8,
+        "maxX": 72.2,
+        "minZ": 34.8,
+        "maxZ": 53.2,
         "minY": 2.95,
         "maxY": 3.25
       },
       {
-        "minX": -0.3,
-        "maxX": 0.3,
-        "minZ": 45,
-        "maxZ": 72,
+        "minX": 69.7,
+        "maxX": 70.3,
+        "minZ": 35,
+        "maxZ": 53,
         "minY": 3.1,
         "maxY": 9.4
       },
       {
-        "minX": -0.35,
-        "maxX": 0.35,
-        "minZ": 45.5,
-        "maxZ": 71.5,
+        "minX": 69.65,
+        "maxX": 70.35,
+        "minZ": 35.5,
+        "maxZ": 52.5,
         "minY": 9.200000000000001,
         "maxY": 9.4
       },
@@ -9798,8 +9798,9 @@ const ARENA_SPAWNS = {
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
   // Lobby: edge spawns beside the side walls (user 2026-08-13; was ±30/50) —
-  // the central check-in counter blocks spawn-to-spawn sight. Mirrors main.js.
-  lobby: { p1: { x: -80, y: GROUND_BASE_Y, z: 40 }, p2: { x: 80, y: GROUND_BASE_Y, z: 40 } },
+  // each team's spawn-screen counter (x ±70) blocks spawn-to-spawn sight.
+  // Mirrors main.js.
+  lobby: { p1: { x: -83, y: GROUND_BASE_Y, z: 38 }, p2: { x: 83, y: GROUND_BASE_Y, z: 38 } },
   // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
   // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
   // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every

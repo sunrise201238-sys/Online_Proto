@@ -6968,12 +6968,12 @@ function startMatch() {
     state.enemy.body.position.set(118, 2.45, 82);
   } else if (state.mapKey === 'lobby') {
     // Lobby: edge spawns on the lower floor (user 2026-08-13; was ±30/50
-    // face-to-face at 60u) — each team starts by its own side wall with the
-    // central check-in counter blocking spawn-to-spawn sight. 2v2 teammates
-    // stack along +Z (default branch), pairs at 12.9u clearance.
-    // Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-80, 2.45, 40);
-    state.enemy.body.position.set(80, 2.45, 40);
+    // face-to-face at 60u) — each team starts by its own side wall behind
+    // its own spawn-screen counter (x ±70), which blocks every cross-map
+    // spawn sightline. 2v2 teammates stack along +Z (default branch),
+    // pairs at 10.8u clearance. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-83, 2.45, 38);
+    state.enemy.body.position.set(83, 2.45, 38);
   } else if (state.mapKey === 'factory') {
     // Opposite corners (user 2026-08-09; was ±50 / z 0, facing off across the
     // open centre lane). 8u off the side walls (inner face ±128) and 10u clear
@@ -12043,27 +12043,27 @@ function buildLobbyArena() {
   drawDesk(-60, 55);
   drawDesk(60, 55);
 
-  // ===== Central check-in counter (user 2026-08-13): a long north-south
-  // island splitting the lower floor, so the edge spawn areas (x ±80) have
-  // no line of sight on each other at spawn. Two segments flank the holo
-  // kiosk at (0, 42) — kiosk (top 9.5) plugs the z 39..45 gap itself, so the
-  // LOS blocker is continuous z 24..72 with nothing clipping through the
-  // kiosk art. Spine panel tops out at 9.4: true cover per the sizing rule
-  // (>= 8 covers the full capsule; the 5.6 muzzle and both LOS eye heights
-  // sit far below). Taller than the unit -> occlude-fade like the desks.
-  // Ends leave real routes: 12u north gap to the ramp foot, 26u south gap
-  // to the hall wall.
-  const drawCounterSegment = (cz, sz) => {
-    addBlockingBox({ x: 0, y: 1.5, z: cz, sx: 5, sy: 3.0, sz, material: desk });
-    addBlockingBox({ x: 0, y: 3.1, z: cz, sx: 5.4, sy: 0.3, sz: sz + 0.4, material: deskTop });
-    const panel = addBlockingBox({ x: 0, y: 6.25, z: cz, sx: 0.6, sy: 6.3, sz, material: deskTop.clone() });
-    const trim = addBlockingBox({ x: 0, y: 9.3, z: cz, sx: 0.7, sy: 0.2, sz: sz - 1, material: blueGlow.clone() });
-    const cbox = { minX: -0.35, maxX: 0.35, minY: 3.1, maxY: 9.4, minZ: cz - sz / 2, maxZ: cz + sz / 2, occlude: true };
+  // ===== Spawn-screen counters (user 2026-08-13, second pass: NOT one big
+  // central island — one counter AT EACH spawn area): a north-south island
+  // 13u east/west of its team's spawn pair, screening the pair from every
+  // cross-map sightline (all 4 spawn-to-spawn lines cross both spines).
+  // Spine tops out at 9.4: true cover per the sizing rule (>= 8 covers the
+  // full capsule; the 5.6 muzzle and both LOS eye heights sit far below).
+  // Taller than the unit -> occlude-fade like the desks. Routing gaps: 8u
+  // north to the (±78, 25) bench, and the south end sits 1u off the
+  // (±60, 55) reception desk's corner — that slit is unwalkable, so routes
+  // go around the desk's south side or the counter's north end.
+  const drawSpawnCounter = (cx) => {
+    addBlockingBox({ x: cx, y: 1.5, z: 44, sx: 4, sy: 3.0, sz: 18, material: desk });
+    addBlockingBox({ x: cx, y: 3.1, z: 44, sx: 4.4, sy: 0.3, sz: 18.4, material: deskTop });
+    const panel = addBlockingBox({ x: cx, y: 6.25, z: 44, sx: 0.6, sy: 6.3, sz: 18, material: deskTop.clone() });
+    const trim = addBlockingBox({ x: cx, y: 9.3, z: 44, sx: 0.7, sy: 0.2, sz: 17, material: blueGlow.clone() });
+    const cbox = { minX: cx - 0.35, maxX: cx + 0.35, minY: 3.1, maxY: 9.4, minZ: 35, maxZ: 53, occlude: true };
     registerWallFade(panel, cbox);
     registerWallFade(trim, cbox);
   };
-  drawCounterSegment(31.5, 15);   // z 24..39, up to the kiosk
-  drawCounterSegment(58.5, 27);   // z 45..72, kiosk to the south gap
+  drawSpawnCounter(-70);
+  drawSpawnCounter(70);
 
   // ===== Sleek benches — FULLY HARD: every visible piece is a real collision
   // box (no decor-only meshes, no hidden colliders). Chunky solid body so the
