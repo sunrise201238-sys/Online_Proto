@@ -8394,6 +8394,70 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 8.2
       },
       {
+        "minX": -2.5,
+        "maxX": 2.5,
+        "minZ": 24,
+        "maxZ": 39,
+        "minY": 0,
+        "maxY": 3
+      },
+      {
+        "minX": -2.7,
+        "maxX": 2.7,
+        "minZ": 23.8,
+        "maxZ": 39.2,
+        "minY": 2.95,
+        "maxY": 3.25
+      },
+      {
+        "minX": -0.3,
+        "maxX": 0.3,
+        "minZ": 24,
+        "maxZ": 39,
+        "minY": 3.1,
+        "maxY": 9.4
+      },
+      {
+        "minX": -0.35,
+        "maxX": 0.35,
+        "minZ": 24.5,
+        "maxZ": 38.5,
+        "minY": 9.200000000000001,
+        "maxY": 9.4
+      },
+      {
+        "minX": -2.5,
+        "maxX": 2.5,
+        "minZ": 45,
+        "maxZ": 72,
+        "minY": 0,
+        "maxY": 3
+      },
+      {
+        "minX": -2.7,
+        "maxX": 2.7,
+        "minZ": 44.8,
+        "maxZ": 72.2,
+        "minY": 2.95,
+        "maxY": 3.25
+      },
+      {
+        "minX": -0.3,
+        "maxX": 0.3,
+        "minZ": 45,
+        "maxZ": 72,
+        "minY": 3.1,
+        "maxY": 9.4
+      },
+      {
+        "minX": -0.35,
+        "maxX": 0.35,
+        "minZ": 45.5,
+        "maxZ": 71.5,
+        "minY": 9.200000000000001,
+        "maxY": 9.4
+      },
+      {
         "minX": -82.5,
         "maxX": -73.5,
         "minZ": 80,
@@ -9733,7 +9797,9 @@ const ARENA_SPAWNS = {
   factory: { p1: { x: -120, y: GROUND_BASE_Y, z: 77 }, p2: { x: 120, y: GROUND_BASE_Y, z: -77 } },
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
-  lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
+  // Lobby: edge spawns beside the side walls (user 2026-08-13; was ±30/50) —
+  // the central check-in counter blocks spawn-to-spawn sight. Mirrors main.js.
+  lobby: { p1: { x: -80, y: GROUND_BASE_Y, z: 40 }, p2: { x: 80, y: GROUND_BASE_Y, z: 40 } },
   // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
   // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
   // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
