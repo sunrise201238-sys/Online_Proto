@@ -6999,8 +6999,10 @@ function startMatch() {
     // Streets: diagonal CORNER spawns (user 2026-08-06, was ±108/0 road
     // ends) — NW/SE corners, 8u clear of the boundary walls (x ±126, z ±90)
     // and the corner towers. Mirrored in shared arena.js ARENA_SPAWNS.
-    state.player.body.position.set(-118, 2.45, -82);
-    state.enemy.body.position.set(118, 2.45, 82);
+    // ±126 after the 2026-08-14 map extension (was ±118): the corner spawns
+    // moved out with everything else, keeping their 10-unit boundary standoff.
+    state.player.body.position.set(-126, 2.45, -82);
+    state.enemy.body.position.set(126, 2.45, 82);
   } else if (state.mapKey === 'lobby') {
     // Lobby: edge spawns on the lower floor (user 2026-08-13; was ±30/50
     // face-to-face at 60u) — each team starts by its own side wall behind
@@ -10449,13 +10451,24 @@ function buildStreetsArena() {
   const RAMP_N_MIN_Z = 28;
   const RAMP_N_MAX_Z = 56;
 
+  // ===== MAP EXTENSION (user 2026-08-14) =====
+  // The bridge doubled in width (half-width 8 -> 16), so the MAP GROWS by the
+  // same 8 per side rather than the surroundings being shaved down to fit.
+  // Everything outboard of the bridge — plaza, buildings, planters, towers,
+  // lamps, vending, stalls, boundary, spawns — shifts out by OUTBOARD, which
+  // preserves every object's SIZE and every gap between them (the widening
+  // pass had cut the ramp-mouth planters 12 -> 5 to make room; they are back
+  // to 12 here, with their original 5.6 ramp-side and 9 building-side lanes).
+  const OUTBOARD = 8;
+  const out = (x) => x + Math.sign(x) * OUTBOARD;
+
   // Sidewalks lining the main avenue (street runs along X, narrow in Z)
-  addPlatform({ minX: -120, maxX: 120, minZ: -18, maxZ: -12, top: 0.45, material: sidewalk });
-  addPlatform({ minX: -120, maxX: 120, minZ: 12, maxZ: 18, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-120), maxX: out(120), minZ: -18, maxZ: -12, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-120), maxX: out(120), minZ: 12, maxZ: 18, top: 0.45, material: sidewalk });
 
   // Plaza decks on each side (extend out to support longer ramps)
-  addPlatform({ minX: -34, maxX: 34, minZ: -58, maxZ: -18, top: 0.45, material: sidewalk });
-  addPlatform({ minX: -34, maxX: 34, minZ: 18, maxZ: 58, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-34), maxX: out(34), minZ: -58, maxZ: -18, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-34), maxX: out(34), minZ: 18, maxZ: 58, top: 0.45, material: sidewalk });
 
   // ===== Storefront buildings =====
   // Pulled closer to sidewalks while preserving movement lanes.
@@ -10466,7 +10479,7 @@ function buildStreetsArena() {
     { x: 42, sx: 14, h: 16, mat: storefrontD },
     { x: 68, sx: 22, h: 12, mat: storefrontA },
     { x: 100, sx: 28, h: 15, mat: storefrontC }
-  ];
+  ].map((b) => ({ ...b, x: out(b.x) }));   // sizes untouched, positions moved out
   southBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
     // Upper floors are SOLID (blocks units, bullets, and bot sight — real high
@@ -10493,7 +10506,7 @@ function buildStreetsArena() {
     { x: 42, sx: 14, h: 14, mat: storefrontC },
     { x: 68, sx: 22, h: 17, mat: storefrontB },
     { x: 100, sx: 28, h: 12, mat: storefrontA }
-  ];
+  ].map((b) => ({ ...b, x: out(b.x) }));   // sizes untouched, positions moved out
   northBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
     // Solid upper floors + standable rooftop — see the south row note.
@@ -10755,7 +10768,7 @@ function buildStreetsArena() {
   // Each tower registers occlude-fade (2026-08-06): 24-28 tall at the map
   // corners, they block the camera when fights sit at the new corner spawns —
   // fade while between camera and player, same as the storefront buildings.
-  for (const [tx, tz, th] of [[-110, -94, 24], [110, 94, 24], [-110, 94, 28], [110, -94, 28]]) {
+  for (const [tx, tz, th] of [[out(-110), -94, 24], [out(110), 94, 24], [out(-110), 94, 28], [out(110), -94, 28]]) {
     fadeGroup = [addBlockingBox({ x: tx, y: th / 2, z: tz, sx: 5, sy: th, sz: 5, material: industrialBody })];
     dressTower(tx, tz, 5, th);
     applyBuildingFade(fadeGroup, { minX: tx - 4, maxX: tx + 4, minY: 0, maxY: th + 3, minZ: tz - 4, maxZ: tz + 4 });
@@ -10763,7 +10776,7 @@ function buildStreetsArena() {
   }
 
   // Lamp posts along sidewalks
-  const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110];
+  const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110].map(out);
   for (const lx of lampXs) {
     for (const lz of [-15, 15]) {
       addBlockingBox({ x: lx, y: 9.1, z: lz, sx: 0.35, sy: 18.2, sz: 0.35, material: lampMat });
@@ -10783,7 +10796,7 @@ function buildStreetsArena() {
     [-25, 15.2], [-23.5, 15.2],
     [50, 15.2], [51.5, 15.2],
     [95, 15.2], [93.5, 15.2]
-  ];
+  ].map(([x, z]) => [out(x), z]);
   vendingPos.forEach(([x, z]) => {
     // Full cover: sized to hide the WHOLE unit (~4.3 wide, head at y≈8), not just
     // the hittable body — wide + tall enough to fully duck behind one.
@@ -10792,7 +10805,7 @@ function buildStreetsArena() {
   });
 
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
-  const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
+  const stallSpots = [[out(-30), -15], [out(30), 15], [out(-58), 14.8], [out(60), -14.8]];
   stallSpots.forEach(([x, z]) => {
     // Long booth cover: extended along x into a market-stall length; awning on top.
     addBlockingBox({ x, y: 4.0, z, sx: 12.0, sy: 8.0, sz: 4.5, material: stallAwning });
@@ -10806,34 +10819,39 @@ function buildStreetsArena() {
   // Each pair runs from the plaza edge (x=±32) inward to x=±12, leaving a central
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
-  for (const [px, pz] of [[-23.5, -38], [23.5, -38], [-23.5, 38], [23.5, 38]]) {
-    // Shortened again for the doubled bridge (2026-08-13): spans x 21..26
-    // (was 14..26 centred ±20) — the widened ramp reaches x ±16.4, so the
-    // old inner ends sat INSIDE the slope. 5 long still hides a unit, and
-    // the ramp-side choke keeps ~4.6 of lane (slope gate 16.4 ⇄ planter 21);
-    // the plaza-side choke (26 ⇄ plaza edge 32, gap 6) is unchanged.
+  for (const [px, pz] of [[out(-20), -38], [out(20), -38], [out(-20), 38], [out(20), 38]]) {
+    // Shortened 20 -> 16 (outer end, older pass), then 16 -> 12 from BOTH
+    // ends (2026-08-01, centers unchanged at x ±20 → spans x 14..26): widens
+    // the ramp-side choke AND the plaza-side choke so units navigate the
+    // bridge-end passes without hugging geometry.
+    // RESTORED to 12 (user 2026-08-14): the bridge widening had cut these to
+    // 5 to clear the new ramp. With the map extended instead, the original
+    // size sits at spans x 22..34 and every gap is back to what it was —
+    // 5.6 to the slope gate, 9 to the storefront, 8 to the plaza edge.
     // Raised 6.5 -> 8.0 (user 2026-08-10). At 6.5 these cleared the 5.6 muzzle
     // but not the 8.0 hit capsule, so a unit behind one had its top ~1.5 still
     // exposed and the 6.4 sprite showed over the hedge — cover that reads as
     // cover but is not. 8.0 is the true-cover threshold, and the same height
     // the vending machines directly below already use.
-    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5, sy: 8.0, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 5, 8.0, 2.4);
+    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 12, sy: 8.0, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 12, 8.0, 2.4);
   }
-  for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
+  for (const [px, pz] of [[out(-28), -52], [out(-26), -52], [out(26), 52], [out(28), 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
     dressVending(px, pz, 5.0, 8.0, 3.0);
   }
 
-  // Power-line / overhead banner strung between corner towers
-  addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
-  addBlockingBox({ x: 0, y: 16, z: 94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
+  // Power-line / overhead banner strung between corner towers (spans the full
+  // width, so it grows with the map extension rather than shifting).
+  addBlockingBox({ x: 0, y: 16, z: -94, sx: 220 + 2 * OUTBOARD, sy: 0.25, sz: 0.25, material: lampMat });
+  addBlockingBox({ x: 0, y: 16, z: 94, sx: 220 + 2 * OUTBOARD, sy: 0.25, sz: 0.25, material: lampMat });
 
   // ===== Play-area edge: invisible perimeter wall + red floor stripe.
   // The HALF_Z is set just inside the storefront back walls (z=±97-103) so
   // those remain visible decor past the boundary. HALF_X bounds the avenue
-  // a few units past the corner sign towers (x=±110).
-  addBoundaryIndicator(128, 92, 28);
+  // a few units past the corner sign towers (now x=±118 after OUTBOARD).
+  // Keep in step with ARENA_BOUNDS.arena2 in shared/src/sim/arena.js.
+  addBoundaryIndicator(128 + OUTBOARD, 92, 28);
 }
 
 // ===========================================================================
