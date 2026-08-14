@@ -10512,6 +10512,36 @@ function buildStreetsArena() {
       occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
     });
   }
+  // ===== Bridge bastion hoardings (user 2026-08-13; chosen through sample
+  // rounds: end-bastion layout, blank faces) — full-height cover panels at
+  // the four deck approaches, z -28..-16 and 16..28 on BOTH rail lines.
+  // Each bridge end is a covered foothold; mid-span stays open and exposed.
+  // Panels rise deck+8: true cover per the sizing rules (anything lower
+  // hides the sprite but betrays the 8-tall hit capsule). Faces are blank
+  // print tones (light beige / brown, alternating) pointing OUTWARD; the
+  // dark frame backs face the deck. The low rails keep running through the
+  // panel volumes — nested collision boxes are harmless. FADE: every panel
+  // mesh joins BRIDGE_FADE with occlude + occludeEnemy — the user's
+  // explicit call: hoarding transparency stays in sync with the bridge.
+  const panelTones = [
+    new THREE.MeshStandardMaterial({ color: 0xcfc8b8, roughness: 0.85 }),  // light beige
+    new THREE.MeshStandardMaterial({ color: 0xbd9a7e, roughness: 0.85 })   // brown
+  ];
+  let panelIdx = 0;
+  for (const sideX of [-BRIDGE_HALF_X - 0.2, BRIDGE_HALF_X + 0.2]) {
+    for (const [z0, z1] of [[-28, -16], [16, 28]]) {
+      const pbox = { minX: sideX - 0.25, maxX: sideX + 0.25, minY: BRIDGE_TOP, maxY: BRIDGE_TOP + 8, minZ: z0, maxZ: z1 };
+      const frame = addBlockingBox({ x: sideX, y: BRIDGE_TOP + 4, z: (z0 + z1) / 2, sx: 0.5, sy: 8, sz: z1 - z0, material: billboardFrame.clone() });
+      registerWallFade(frame, { ...pbox, occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE });
+      const out = sideX < 0 ? -1 : 1;
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(z1 - z0 - 0.8, 6.4), panelTones[panelIdx % 2].clone());
+      face.position.set(sideX + out * 0.27, BRIDGE_TOP + 4.1, (z0 + z1) / 2);
+      face.rotation.y = sideX < 0 ? -Math.PI / 2 : Math.PI / 2;
+      scene.add(face); arenaDecor.push(face);
+      registerWallFade(face, { ...pbox, occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE });
+      panelIdx += 1;
+    }
+  }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
   // Underside support pillars (set into the sidewalks, not the street).
   // In the fade group too (user's call): they are structurally part of the
