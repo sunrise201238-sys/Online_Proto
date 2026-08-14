@@ -3021,6 +3021,258 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 8
       },
       {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -56,
+        "maxZ": -54,
+        "minY": 0,
+        "maxY": 0.4,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -54,
+        "maxZ": -52,
+        "minY": 0,
+        "maxY": 0.9392857142857143,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -52,
+        "maxZ": -50,
+        "minY": 0,
+        "maxY": 1.4785714285714284,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -50,
+        "maxZ": -48,
+        "minY": 0,
+        "maxY": 2.017857142857143,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -48,
+        "maxZ": -46,
+        "minY": 0,
+        "maxY": 2.5571428571428574,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -46,
+        "maxZ": -44,
+        "minY": 0,
+        "maxY": 3.0964285714285715,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -44,
+        "maxZ": -42,
+        "minY": 0,
+        "maxY": 3.6357142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -42,
+        "maxZ": -40,
+        "minY": 0,
+        "maxY": 4.175,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -40,
+        "maxZ": -38,
+        "minY": 0,
+        "maxY": 4.714285714285714,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -38,
+        "maxZ": -36,
+        "minY": 0,
+        "maxY": 5.253571428571429,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -36,
+        "maxZ": -34,
+        "minY": 0,
+        "maxY": 5.792857142857144,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -34,
+        "maxZ": -32,
+        "minY": 0,
+        "maxY": 6.332142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -32,
+        "maxZ": -30,
+        "minY": 0,
+        "maxY": 6.871428571428571,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -30,
+        "maxZ": -28,
+        "minY": 0,
+        "maxY": 7.4107142857142865,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 28,
+        "maxZ": 30,
+        "minY": 0,
+        "maxY": 7.4107142857142865,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 30,
+        "maxZ": 32,
+        "minY": 0,
+        "maxY": 6.871428571428572,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 32,
+        "maxZ": 34,
+        "minY": 0,
+        "maxY": 6.332142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 34,
+        "maxZ": 36,
+        "minY": 0,
+        "maxY": 5.792857142857144,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 36,
+        "maxZ": 38,
+        "minY": 0,
+        "maxY": 5.253571428571428,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 38,
+        "maxZ": 40,
+        "minY": 0,
+        "maxY": 4.714285714285714,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 40,
+        "maxZ": 42,
+        "minY": 0,
+        "maxY": 4.175,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 42,
+        "maxZ": 44,
+        "minY": 0,
+        "maxY": 3.635714285714286,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 44,
+        "maxZ": 46,
+        "minY": 0,
+        "maxY": 3.096428571428571,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 46,
+        "maxZ": 48,
+        "minY": 0,
+        "maxY": 2.5571428571428574,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 48,
+        "maxZ": 50,
+        "minY": 0,
+        "maxY": 2.0178571428571432,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 50,
+        "maxZ": 52,
+        "minY": 0,
+        "maxY": 1.4785714285714289,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 52,
+        "maxZ": 54,
+        "minY": 0,
+        "maxY": 0.9392857142857141,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 54,
+        "maxZ": 56,
+        "minY": 0,
+        "maxY": 0.4,
+        "topBuffer": 0
+      },
+      {
         "minX": -16.425,
         "maxX": -15.975,
         "minZ": -55,

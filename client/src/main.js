@@ -10664,6 +10664,45 @@ function buildStreetsArena() {
       occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
     });
   }
+  // ===== Under-slope fill (invisible, SOLID) — user 2026-08-14 =====
+  // A slope is a walkable SURFACE, and projectileHitsSurface only stops a shot
+  // that CROSSES a surface plane. Anything travelling under the slab without
+  // ever crossing it — sideways at constant z (the ramp height doesn't change,
+  // so the sign never flips), or the muzzle riding below the sight eye near
+  // the junction — flew straight through the solid wedge and out the far side.
+  // Bot sight already reads the ramp as solid fill (sightHitsSurface), so the
+  // two models disagreed exactly where the slope meets the deck: 127k stance
+  // pairs leaked a bullet through the slope, 12k of them with the bot holding
+  // a clear sight line into a shot that died in mid-air.
+  // Fill the wedge with invisible SOLID boxes — deliberately NOT noProjectile,
+  // unlike the side bars below — so walking, sight and bullets finally agree.
+  // Each slice tops out at the LOWER of its two walk-plane ends minus 0.05, so
+  // it never rises above the ramp you walk on, and the leftover sliver stays
+  // inside the slab's own 0.62 vertical thickness (nothing visible opens up).
+  // topBuffer 0 is required: the default 4 would capture a unit standing ON
+  // the ramp (pos.y = walk plane + GROUND_BASE_Y) and shove it off the slope.
+  const UNDER_SLICE = 2;
+  for (const [rMinZ, rMaxZ, lowAtMinZ] of [
+    [RAMP_S_MIN_Z, RAMP_S_MAX_Z, true],
+    [RAMP_N_MIN_Z, RAMP_N_MAX_Z, false]
+  ]) {
+    const walkYAt = (z) => {
+      const t = (z - rMinZ) / (rMaxZ - rMinZ);
+      return THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t : 1 - t);
+    };
+    for (let z0 = rMinZ; z0 < rMaxZ - 1e-6; z0 += UNDER_SLICE) {
+      const z1 = Math.min(z0 + UNDER_SLICE, rMaxZ);
+      const top = Math.min(walkYAt(z0), walkYAt(z1)) - 0.05;
+      if (top <= 0) continue;
+      arenaObstacles.push({
+        minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+        minZ: z0, maxZ: z1,
+        minY: 0, maxY: top,
+        topBuffer: 0
+      });
+    }
+  }
+
   // Long angled gate visuals that match slope angle, with matching collision samples.
   const RAMP_WALL_H = RAIL_H;
   const slopeSpan = (RAMP_S_MAX_Z - RAMP_S_MIN_Z);
