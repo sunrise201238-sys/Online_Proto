@@ -10394,8 +10394,12 @@ function buildStreetsArena() {
   base.rotation.x = -Math.PI / 2; base.position.y = 0.005; scene.add(base); arenaDecor.push(base);
 
   // ===== Bridge dimensions (referenced throughout) =====
+  // HALF_X 8 -> 16 (user 2026-08-13): the footbridge doubles in width to a
+  // 32-wide elevated boulevard. Every bridge piece (deck, rails, pillars,
+  // ramps, slope gates, under-slope movement bars) derives from these
+  // constants, so the widening propagates everywhere from here.
   const BRIDGE_TOP = 8;
-  const BRIDGE_HALF_X = 8;
+  const BRIDGE_HALF_X = 16;
   const BRIDGE_MIN_Z = -28;
   const BRIDGE_MAX_Z = 28;
   const RAMP_HALF_X = BRIDGE_HALF_X;
@@ -10471,7 +10475,7 @@ function buildStreetsArena() {
   // walls past the boundary just blocked the horizon view from near the
   // map edge.)
 
-  // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
+  // ===== Footbridge (deck at y=8, spans 32m × 56m) =====
   // The bridge fades as ONE structure (user 2026-08-10): deck, both slopes,
   // the deck railings, the angled slope gates and the support pillars all
   // share BRIDGE_FADE, so whichever piece is caught between the camera and a
@@ -10725,19 +10729,19 @@ function buildStreetsArena() {
   // Each pair runs from the plaza edge (x=±32) inward to x=±12, leaving a central
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
-  for (const [px, pz] of [[-20, -38], [20, -38], [-20, 38], [20, 38]]) {
-    // Shortened 20 -> 16 (outer end, older pass), then 16 -> 12 from BOTH
-    // ends (2026-08-01, centers unchanged at x ±20 → spans x 14..26): widens
-    // the ramp-side choke (slope gate x≈8.2 ⇄ planter 12→14, gap 3.8→5.8)
-    // AND the plaza-side choke (planter 28→26 ⇄ plaza edge 32, gap 4→6) so
-    // units navigate the bridge-end passes without hugging geometry.
+  for (const [px, pz] of [[-23.5, -38], [23.5, -38], [-23.5, 38], [23.5, 38]]) {
+    // Shortened again for the doubled bridge (2026-08-13): spans x 21..26
+    // (was 14..26 centred ±20) — the widened ramp reaches x ±16.4, so the
+    // old inner ends sat INSIDE the slope. 5 long still hides a unit, and
+    // the ramp-side choke keeps ~4.6 of lane (slope gate 16.4 ⇄ planter 21);
+    // the plaza-side choke (26 ⇄ plaza edge 32, gap 6) is unchanged.
     // Raised 6.5 -> 8.0 (user 2026-08-10). At 6.5 these cleared the 5.6 muzzle
     // but not the 8.0 hit capsule, so a unit behind one had its top ~1.5 still
     // exposed and the 6.4 sprite showed over the hedge — cover that reads as
     // cover but is not. 8.0 is the true-cover threshold, and the same height
     // the vending machines directly below already use.
-    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 12, sy: 8.0, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 12, 8.0, 2.4);
+    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5, sy: 8.0, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 5, 8.0, 2.4);
   }
   for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
