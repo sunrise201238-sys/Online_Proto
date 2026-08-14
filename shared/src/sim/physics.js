@@ -390,3 +390,43 @@ export function getGroundLevelY(fighter, surfaces) {
   const currentSurfaceY = fighter.pos.y - GROUND_BASE_Y;
   return groundHeightAt(fighter.pos.x, fighter.pos.z, surfaces, currentSurfaceY) + GROUND_BASE_Y;
 }
+
+// Does a sight ray hit this surface's mass? RAMPS block wherever the ray dips
+// below the ramp's local height inside the footprint (both the ray's y and the
+// ramp height are linear along the ray, so checking the clipped interval's
+// endpoints is exact). FLAT elevated decks stand on open pillars, so only
+// CROSSING the deck plane blocks — two units both under the bridge keep their
+// sight lines. 0.4 epsilon forgives grazes at lips.
+// Lives here (moved out of ai.js, 2026-08-14) so the BOT's sight test and the
+// PLANNER's firing-position search share one rule: findFiringPath used to
+// ignore surfaces entirely and certified firing cells whose line ran straight
+// through the Streets bridge deck.
+export function sightHitsSurface(p0, p1, s) {
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  let t0 = 0, t1 = 1;
+  // Liang-Barsky clip of the XZ segment to the surface rect.
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i++) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return false;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+  }
+  const dy = p1.y - p0.y;
+  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
+  const EPS = 0.4;
+  if (s.type === 'ramp') {
+    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+    return yA < hA - EPS || yB < hB - EPS;
+  }
+  const top = s.top ?? s.maxTop;
+  if (top == null) return false;
+  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
+}

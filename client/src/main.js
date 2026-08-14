@@ -4853,14 +4853,21 @@ function updateEnemy(now) {
   // flags with one botState whose transitions are recomputed every tick.
 
   // LoS + threats
+  // GROUNDED SIGHT (2026-08-14) — mirrors shared ai.js: every sight test the
+  // bot makes about itself uses the eye it has with its feet down, so a jump
+  // can never manufacture a firing line (or reset the no-sight clock). Takes
+  // the LOWER of the latched grounded height and the live one, so a drop off
+  // a ledge stays honest. The opponent endpoint stays live.
+  if (state.enemy.grounded && !eState.airborne) eState.botSightY = e.y;
+  const myEyeY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_LOS_EYE_HEIGHT;
   const playerHasLoS = botHasLineOfSight(
-    { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
+    { x: e.x, y: myEyeY, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
-    { x: px, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: px, y: myEyeY, z: pz },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
   // Are the next `len` units straight toward the player WALKABLE? Uses the
@@ -4954,7 +4961,7 @@ function updateEnemy(now) {
         eState.botCoverHoldAnchor = null;
       }
       const oppEye = { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z };
-      const myEye = { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z };
+      const myEye = { x: e.x, y: myEyeY, z: e.z };
       const coverHidden = !botHasLineOfSight(oppEye, myEye);
       if (!coverHidden) eState.botCoverHoldAnchor = null;
       if (coverHidden) {
@@ -5482,7 +5489,12 @@ function updateEnemy(now) {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
-    const tooClose = dist < lowerRange;
+    // VERTICAL STACK (2026-08-14) — mirrors shared ai.js: `dist` is
+    // horizontal, so an enemy a floor above reads as distance ~0 and range
+    // discipline walks the bot away and back forever. Backing off does
+    // nothing about a vertical gap; let the (multi-layer) router handle it.
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
     // crutch for the pre-pathfinder Maze). If the retreat costs sight, the
@@ -5502,7 +5514,11 @@ function updateEnemy(now) {
     wantSprint = !!eState.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && state.enemy.grounded && !eState.airborne) {
-      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+      // Climb aid: only for a step a jump can actually clear (above that the
+      // router owns it). Mirrors shared ai.js.
+      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
+          && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
+          && dist < 32 && Math.random() > 0.5) {
         if (botStartJump(now)) jumpThisTick = true;
       } else if (onHighGround) {
         // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
@@ -5589,8 +5605,24 @@ function updateEnemy(now) {
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
       if (Math.hypot(lastWp.x - e.x, lastWp.z - e.z) < 3) {
-        eState.botNav = null;
-        nav = null;
+        // Arrived — but if the trip did NOT buy sight, dropping to the
+        // pathless fallback beelines the bot back where it came from (the
+        // Streets under-bridge out-and-back loop). Ask for a fresh route
+        // first and take it when it aims somewhere NEW. Mirrors shared ai.js.
+        let replaced = false;
+        if (!playerHasLoS) {
+          navPlan();
+          const fresh = eState.botNav;
+          const freshLast = fresh && fresh.path[fresh.path.length - 1];
+          if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
+            nav = fresh;
+            replaced = true;
+          }
+        }
+        if (!replaced) {
+          eState.botNav = null;
+          nav = null;
+        }
       }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
@@ -5988,10 +6020,11 @@ function updateEnemy(now) {
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
-      { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
+      { x: e.x, y: myEyeY, z: e.z },
       { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
     )) {
-      // No clear shot — hold fire and check again shortly.
+      // No clear shot — hold fire and check again shortly. The eye is the
+      // GROUNDED one (see myEyeY): a jump must not manufacture a firing line.
       s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
@@ -7109,6 +7142,11 @@ function startMatch() {
     }
   }
   buildArenaForMap(state.mapKey);
+  // Build the nav grid HERE rather than lazily on the first bot Maze plan
+  // (2026-08-14): it is a single-digit-to-few-hundred-ms job depending on the
+  // map, and paying it mid-fight is a visible hitch. During the match-start
+  // transition it is invisible.
+  offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
   const now = performance.now();
   getAllFighters().forEach((m) => {
     m.state.lastFireAt = now;

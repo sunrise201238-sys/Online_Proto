@@ -13,7 +13,7 @@
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface } from './physics.js';
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
@@ -230,35 +230,8 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // clipped interval's endpoints is exact). FLAT elevated decks stand on open
 // pillars, so only CROSSING the deck plane blocks — two units both under
 // the bridge keep their sight lines. 0.4 epsilon forgives grazes at lips.
-function sightHitsSurface(p0, p1, s) {
-  const dx = p1.x - p0.x, dz = p1.z - p0.z;
-  let t0 = 0, t1 = 1;
-  // Liang-Barsky clip of the XZ segment to the surface rect.
-  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
-  for (let i = 0; i < 2; i++) {
-    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
-    if (Math.abs(d) < 1e-9) {
-      if (p < lo || p > hi) return false;
-    } else {
-      let a = (lo - p) / d, b = (hi - p) / d;
-      if (a > b) { const t = a; a = b; b = t; }
-      if (a > t0) t0 = a;
-      if (b < t1) t1 = b;
-      if (t0 > t1) return false;
-    }
-  }
-  const dy = p1.y - p0.y;
-  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
-  const EPS = 0.4;
-  if (s.type === 'ramp') {
-    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
-    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
-    return yA < hA - EPS || yB < hB - EPS;
-  }
-  const top = s.top ?? s.maxTop;
-  if (top == null) return false;
-  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
-}
+// (sightHitsSurface moved to physics.js, 2026-08-14 — the planner's
+// firing-position search needs the SAME surface sight rule the bot uses.)
 
 // Line-of-sight check using the same swept-AABB math projectiles use, so the
 // bot only "sees" through gaps a bullet would actually pass through.
@@ -613,16 +586,29 @@ export function tickBot(matchState, botId, now) {
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
   // flags with one botState whose transitions are recomputed every tick.
 
+  // GROUNDED SIGHT (2026-08-14, user: "bot exploits the jump to temporarily
+  // fire"). Every sight test the bot makes about ITSELF is taken from the
+  // eye it has with its feet down, never from the live body height. A jump
+  // lifts the eye 5.6 (apex) — past the 8-tall true-cover line and over the
+  // Streets deck — so mid-air the bot could see, and shoot, targets it has
+  // no business seeing; worse, that airborne blip also reset the no-sight
+  // clock that would otherwise have sent it around. Latch the last grounded
+  // height and take the LOWER of it and the live one, so a drop off a ledge
+  // stays honest too. The OPPONENT endpoint stays live: bots must still
+  // react to a jumping human.
+  if (me.grounded && !me.airborne) me.botSightY = me.pos.y;
+  const myEyeY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + BOT_LOS_EYE_HEIGHT;
+
   // LoS + threats
   const playerHasLoS = botHasLineOfSight(
-    { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
+    { x: me.pos.x, y: myEyeY, z: me.pos.z },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles, surfaces
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
-    { x: px, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: px, y: myEyeY, z: pz },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles, surfaces
   );
@@ -717,7 +703,7 @@ export function tickBot(matchState, botId, now) {
         me.botCoverHoldAnchor = null;
       }
       const oppEye = { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z };
-      const myEye = { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z };
+      const myEye = { x: me.pos.x, y: myEyeY, z: me.pos.z };
       const coverHidden = !botHasLineOfSight(oppEye, myEye, obstacles, surfaces);
       if (!coverHidden) me.botCoverHoldAnchor = null;
       if (coverHidden) {
@@ -1243,7 +1229,15 @@ export function tickBot(matchState, botId, now) {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
-    const tooClose = dist < lowerRange;
+    // VERTICAL STACK (2026-08-14, user: "bot lingers when the enemy is right
+    // below/above them"). `dist` is horizontal, so an enemy a floor above
+    // reads as distance ~0 and range discipline walks the bot AWAY — then
+    // back in once it re-enters the band, forever (measured: a direction
+    // reversal every ~0.4 s, no net progress). Backing off does nothing
+    // about a vertical gap, so suppress the retreat and let the router (now
+    // multi-layer) take the bot to the other level.
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
     // crutch for the pre-pathfinder Maze). If the retreat costs sight, the
@@ -1263,7 +1257,13 @@ export function tickBot(matchState, botId, now) {
     wantSprint = !!me.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && me.grounded && !me.airborne) {
-      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+      // Climb aid: only for a step a jump can actually clear. Above that the
+      // router owns it — and the aid was unreachable dead code until the
+      // vertical-stack fix above (it needs dist < 32 while tooClose held for
+      // every dist below lowerRange >= 33, i.e. 0 of 18 units could run it).
+      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
+          && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
+          && dist < 32 && Math.random() > 0.5) {
         if (botTryJump(me, now)) jumpThisTick = true;
       } else if (onHighGround) {
         // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
@@ -1348,8 +1348,26 @@ export function tickBot(matchState, botId, now) {
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
       if (Math.hypot(lastWp.x - me.pos.x, lastWp.z - me.pos.z) < 3) {
-        delete matchState._navPaths[botId];
-        nav = null;
+        // Arrived — but if the trip did NOT buy sight of the target, dropping
+        // to the pathless fallback sends the bot beelining back where it came
+        // from (the Streets under-bridge out-and-back loop). Ask for a fresh
+        // route first and take it when it aims somewhere NEW; only fall back
+        // when the planner has nothing better, which keeps the original
+        // "never stand on a consumed path" property.
+        let replaced = false;
+        if (!playerHasLoS) {
+          navPlan();
+          const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
+          const freshLast = fresh && fresh.path[fresh.path.length - 1];
+          if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
+            nav = fresh;
+            replaced = true;
+          }
+        }
+        if (!replaced) {
+          delete matchState._navPaths[botId];
+          nav = null;
+        }
       }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
@@ -1739,11 +1757,12 @@ export function tickBot(matchState, botId, now) {
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
     } else if (!botHasLineOfSight(
-      { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
+      { x: me.pos.x, y: myEyeY, z: me.pos.z },
       { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
       obstacles, surfaces
     )) {
-      // No clear shot — hold fire and check again shortly.
+      // No clear shot — hold fire and check again shortly. The eye is the
+      // GROUNDED one (see myEyeY): a jump must not manufacture a firing line.
       me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
