@@ -2977,21 +2977,45 @@ function segmentHitsObstacle(p0, p1, o) {
 // (delta +) and then UNDER the Streets bridge deck (delta -) "flipped" and
 // died in open air (2026-08-01 fix). A real slab crossing still flips
 // against the slab's own height. Mirrors shared/src/sim/physics.js.
-function projectileHitsSurface(prevPos, nextPos) {
-  const samples = 8;
-  for (const s of arenaSurfaces) {
-    let prevDelta = null;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) return true;
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-      prevDelta = delta;
+// EXACT segment-vs-surface crossing — see the long note on surfaceCrossT in
+// shared/src/sim/physics.js. Inside the footprint both the ray height and the
+// surface height are linear along the ray, so delta is linear and its extremes
+// are the clipped ENDPOINTS: comparing those two is exact and complete.
+// Replaces an 8-sample sign-flip walk (2026-08-15) that was blind to crossings
+// falling between samples — at 2000 u/s a round steps ~34 units per tick, so
+// fast shots flew through the Streets bridge slope and hit a unit standing on
+// it. Still judged per surface over its own clipped interval (2026-08-01 fix).
+const SURFACE_GRAZE_EPS = 0.04;
+function surfaceCrossT(p0, p1, s) {
+  const dx = p1.x - p0.x;
+  const dz = p1.z - p0.z;
+  let t0 = 0;
+  let t1 = 1;
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i += 1) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return -1;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return -1;
     }
+  }
+  const dy = p1.y - p0.y;
+  const dA = (p0.y + dy * t0) - s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+  const dB = (p0.y + dy * t1) - s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+  if (Math.abs(dA) < SURFACE_GRAZE_EPS) return t0;
+  if (Math.abs(dB) < SURFACE_GRAZE_EPS) return t1;
+  if ((dA > 0) === (dB > 0)) return -1;
+  return t0 + (t1 - t0) * (dA / (dA - dB));
+}
+
+function projectileHitsSurface(prevPos, nextPos) {
+  for (const s of arenaSurfaces) {
+    if (surfaceCrossT(prevPos, nextPos, s) >= 0) return true;
   }
   return false;
 }
@@ -3028,30 +3052,10 @@ function segmentObstacleImpactT(p0, p1, o) {
 // the T-returning twin of projectileHitsSurface (crossing lands at the
 // midpoint of the flip pair). Mirrors shared/src/sim/physics.js.
 function surfaceImpactT(prevPos, nextPos) {
-  const samples = 8;
   let best = -1;
   for (const s of arenaSurfaces) {
-    let prevDelta = null;
-    let prevT = 0;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) {
-        if (best < 0 || t < best) best = t;
-        break;
-      }
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
-        const tc = (prevT + t) / 2;
-        if (best < 0 || tc < best) best = tc;
-        break;
-      }
-      prevDelta = delta;
-      prevT = t;
-    }
+    const t = surfaceCrossT(prevPos, nextPos, s);
+    if (t >= 0 && (best < 0 || t < best)) best = t;
   }
   return best;
 }

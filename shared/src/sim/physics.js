@@ -320,66 +320,76 @@ export function segmentObstacleImpactT(p0, p1, o) {
   return tMin;
 }
 
+// EXACT segment-vs-surface crossing: the fraction t in [0,1] where the segment
+// crosses this surface's plane, or -1.
+//
+// Inside a surface's footprint both the ray's height and the surface's height
+// are LINEAR along the ray (flat: constant; ramp: heightAt is linear in its
+// axis and never clamps within its own extent), so delta = y - height is
+// linear too and cannot dip and recover in between. Clipping the segment to
+// the footprint and comparing delta at the two clipped ENDPOINTS is therefore
+// exact and complete — the same Liang-Barsky clip sightHitsSurface uses.
+//
+// Replaces an 8-sample sign-flip walk (2026-08-15). Sampling was blind to any
+// crossing that fell between two samples, and a projectile covers up to ~34
+// units in ONE tick at 2000 u/s: fast rounds flew straight through the Streets
+// bridge slope and hit a target standing on it, while the bot's fire gate —
+// which asks this same question — cleared the shot (user report). Leak rate
+// scaled with projectile speed: 100 / 588 / 931 pairs at 300 / 900 / 2000 u/s.
+// Samples landing outside the footprint also reset the comparison, so a short
+// traverse of a narrow surface could leave one usable sample and compare nothing.
+//
+// Still judged PER SURFACE over its own clipped interval, so a level shot that
+// passes OVER a sidewalk and UNDER the Streets deck cannot "flip" across two
+// different slabs (2026-08-01 fix, preserved).
+const SURFACE_GRAZE_EPS = 0.04;
+function surfaceCrossT(p0, p1, s) {
+  const dx = p1.x - p0.x;
+  const dz = p1.z - p0.z;
+  let t0 = 0;
+  let t1 = 1;
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i += 1) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return -1;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return -1;
+    }
+  }
+  const dy = p1.y - p0.y;
+  const dA = (p0.y + dy * t0) - s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+  const dB = (p0.y + dy * t1) - s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+  // delta is linear across [t0,t1], so its extremes ARE the endpoints: a graze
+  // anywhere on the interval shows up at one of them.
+  if (Math.abs(dA) < SURFACE_GRAZE_EPS) return t0;
+  if (Math.abs(dB) < SURFACE_GRAZE_EPS) return t1;
+  if ((dA > 0) === (dB > 0)) return -1;
+  return t0 + (t1 - t0) * (dA / (dA - dB));
+}
+
 // Earliest fraction (t in [0,1]) where the segment crosses a walkable
-// surface, or -1 if none — the T-returning twin of projectileHitsSurface
-// (same per-surface sign-flip walk; the crossing lands at the midpoint of
-// the flip pair). Used for precise death clamping only.
+// surface, or -1 if none. Used for precise death clamping.
 export function surfaceImpactT(prevPos, nextPos, surfaces) {
-  if (!surfaces.length) return -1;
-  const samples = 8;
+  if (!surfaces || !surfaces.length) return -1;
   let best = -1;
   for (let si = 0; si < surfaces.length; si += 1) {
-    const s = surfaces[si];
-    let prevDelta = null;
-    let prevT = 0;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = prevPos.x + (nextPos.x - prevPos.x) * t;
-      const z = prevPos.z + (nextPos.z - prevPos.z) * t;
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = prevPos.y + (nextPos.y - prevPos.y) * t;
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) {
-        if (best < 0 || t < best) best = t;
-        break;
-      }
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
-        const tc = (prevT + t) / 2;
-        if (best < 0 || tc < best) best = tc;
-        break;
-      }
-      prevDelta = delta;
-      prevT = t;
-    }
+    const t = surfaceCrossT(prevPos, nextPos, surfaces[si]);
+    if (t >= 0 && (best < 0 || t < best)) best = t;
   }
   return best;
 }
 
-// Walk a projectile's segment through a few sample points and return true
-// if it crosses a walkable surface. The sign-flip test runs PER SURFACE
-// (delta resets whenever the sample leaves that surface's footprint):
-// comparing against the max of the whole stack conflated different decks —
-// a level shot that passed OVER a sidewalk (delta +) and then UNDER the
-// Streets bridge deck (delta -) "flipped" and died in open air (2026-08-01
-// fix). A real slab crossing still flips against the slab's own height.
+// True if the projectile's segment crosses a walkable surface.
 // Mirrors projectileHitsSurface in main.js.
 export function projectileHitsSurface(prevPos, nextPos, surfaces) {
-  if (!surfaces.length) return false;
-  const samples = 8;
+  if (!surfaces || !surfaces.length) return false;
   for (let si = 0; si < surfaces.length; si += 1) {
-    const s = surfaces[si];
-    let prevDelta = null;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = prevPos.x + (nextPos.x - prevPos.x) * t;
-      const z = prevPos.z + (nextPos.z - prevPos.z) * t;
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = prevPos.y + (nextPos.y - prevPos.y) * t;
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) return true;
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-      prevDelta = delta;
-    }
+    if (surfaceCrossT(prevPos, nextPos, surfaces[si]) >= 0) return true;
   }
   return false;
 }
