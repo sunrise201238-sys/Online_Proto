@@ -267,7 +267,12 @@ function sightHitsSurface(p0, p1, s) {
 function botHasLineOfSight(p0, p1, obstacles, surfaces) {
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    // Invisible unit-fences normally don't block sight (bullets pass), but
+    // bars flagged blocksBotSight DO: a see-through wall the bot cannot walk
+    // through defeats every routing trigger — the bot paces in Engage
+    // against the invisible face instead of routing around (Streets
+    // under-slope bars, 2026-08-13). Mirrored in client main.js.
+    if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   if (surfaces) {

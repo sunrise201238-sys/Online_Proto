@@ -9,6 +9,11 @@ import { GROUND_BASE_Y } from './constants.js';
 //   topBuffer    — units above maxY+topBuffer are NOT colliding (for jumping
 //                  over short obstacles); default 4.
 //   noProjectile — projectiles pass through (for unit-only fences).
+//   blocksBotSight — bot LINE OF SIGHT treats this box as opaque even when
+//                  noProjectile lets bullets through. For invisible movement
+//                  bars (Streets' under-slope walls): a see-through wall the
+//                  bot cannot walk through defeats every Maze trigger and
+//                  the bot paces against it (2026-08-13).
 //
 // Surfaces describe walkable ground at non-zero heights (platforms, ramps).
 // heightAt(x, z) returns the surface Y for a point inside the surface bbox.
@@ -3030,7 +3035,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -49.8,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3047,7 +3053,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -44.6,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3064,7 +3071,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -39.4,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3081,7 +3089,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -34.199999999999996,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3098,7 +3107,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -29,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3115,7 +3125,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 55,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3132,7 +3143,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 49.800000000000004,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3149,7 +3161,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 44.6,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3166,7 +3179,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 39.4,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16.425,
@@ -3183,7 +3197,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 34.2,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3200,7 +3215,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -49.8,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3217,7 +3233,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -44.6,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3234,7 +3251,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -39.4,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3251,7 +3269,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -34.199999999999996,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3268,7 +3287,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -29,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3285,7 +3305,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 55,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3302,7 +3323,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 49.800000000000004,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3319,7 +3341,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 44.6,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3336,7 +3359,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 39.4,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": 15.975,
@@ -3353,7 +3377,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 34.2,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16,
@@ -3362,7 +3387,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": -27.775,
         "minY": 0,
         "maxY": 6,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -16,
@@ -3371,7 +3397,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxZ": 28.225,
         "minY": 0,
         "maxY": 6,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
         "minX": -112.5,

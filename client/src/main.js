@@ -4528,7 +4528,9 @@ function sightHitsSurface(p0, p1, s) {
 
 function botHasLineOfSight(p0, p1) {
   for (const o of arenaObstacles) {
-    if (o.noProjectile) continue;
+    // blocksBotSight bars stay opaque to BOT sight even though bullets pass
+    // — see the shared ai.js note (Streets under-slope bars, 2026-08-13).
+    if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   for (const s of arenaSurfaces) {
@@ -10650,13 +10652,17 @@ function buildStreetsArena() {
       // Invisible under-slope bar: blocks units from walking beneath the slope from the road.
       // Top sits at the slope underside (below the gate above), so it never exceeds the gate.
       // noProjectile: true so bullets pass through this invisible block (it's only meant
-      // to gate unit movement, not draw fire).
+      // to gate unit movement, not draw fire). blocksBotSight: bots must NOT
+      // see through a wall they can't walk through — an in-band bot with
+      // open sight through this bar paced against it forever because no
+      // Maze trigger fires while the target is visible (2026-08-13).
       if (slopeY > 0) {
         arenaObstacles.push({
           minX: x - sx / 2, maxX: x + sx / 2,
           minZ: z - sz / 2, maxZ: z + sz / 2,
           minY: 0, maxY: slopeY,
-          noProjectile: true
+          noProjectile: true,
+          blocksBotSight: true
         });
       }
     }
@@ -10692,6 +10698,8 @@ function buildStreetsArena() {
   // the main road). Top stays below the deck so bridge↔slope transit at y≈BRIDGE_TOP +
   // GROUND_BASE_Y clears the +4 collision Y buffer in resolveUnitObstacleCollisions.
   // noProjectile: true so bullets aren't blocked by these invisible caps.
+  // blocksBotSight: same rationale as the under-slope bars — bots must not
+  // see targets through a cap they cannot walk through (2026-08-13).
   const underSlopeCapMaxY = BRIDGE_TOP - 2;
   const underSlopeCapThickness = 0.45;
   for (const edgeZ of [RAMP_S_MAX_Z, RAMP_N_MIN_Z]) {
@@ -10699,7 +10707,8 @@ function buildStreetsArena() {
       minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
       minZ: edgeZ - underSlopeCapThickness / 2, maxZ: edgeZ + underSlopeCapThickness / 2,
       minY: 0, maxY: underSlopeCapMaxY,
-      noProjectile: true
+      noProjectile: true,
+      blocksBotSight: true
     });
   }
 
