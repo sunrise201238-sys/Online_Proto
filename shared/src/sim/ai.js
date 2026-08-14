@@ -13,11 +13,11 @@
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, projectileHitsSurface } from './physics.js';
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET } from './constants.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -254,6 +254,30 @@ function botHasLineOfSight(p0, p1, obstacles, surfaces) {
     }
   }
   return true;
+}
+
+// Can the SHOT actually land? The fire gate has to test the line the BULLET
+// takes, not the eye line. spawnProjectiles fires from pos.y +
+// PROJECTILE_MUZZLE_Y_OFFSET along (target.pos - owner.pos), i.e. the pos→pos
+// line raised by that offset at BOTH ends — 1.55 ABOVE the eye line online and
+// 0.8 BELOW it offline (root space). Anything inside that band — a slope's
+// guard rail, the bridge deck underside, the ramp plane itself — let the bot
+// hold a clear sight line into a shot that died on the geometry. Measured on
+// Streets: 3.1% of clear-sight pairs online, 7.4% offline, worst on
+// road→slope, i.e. a unit standing on the bridge slope (user 2026-08-15).
+//
+// Uses the PROJECTILE rules, not the sight rules, so the gate and the shot can
+// never disagree: noProjectile fences never stop a bullet (blocksBotSight is a
+// NAVIGATION rule — movement LoS still honours it, so the 2026-08-13 pacing fix
+// stands), and surfaces use the projectile's own crossing test.
+function botShotCanLand(originY, me, opp, obstacles, surfaces) {
+  const from = { x: me.pos.x, y: originY, z: me.pos.z };
+  const to = { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z };
+  for (let i = 0; i < obstacles.length; i++) {
+    if (obstacles[i].noProjectile) continue;
+    if (segmentHitsObstacle(from, to, obstacles[i])) return false;
+  }
+  return !(surfaces && projectileHitsSurface(from, to, surfaces));
 }
 
 // Burst size for continuous-fire weapons (spreadCount === 1). Units with a
@@ -598,6 +622,8 @@ export function tickBot(matchState, botId, now) {
   // react to a jumping human.
   if (me.grounded && !me.airborne) me.botSightY = me.pos.y;
   const myEyeY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + BOT_LOS_EYE_HEIGHT;
+  // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
+  const myShotY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + PROJECTILE_MUZZLE_Y_OFFSET;
 
   // LoS + threats
   const playerHasLoS = botHasLineOfSight(
@@ -1756,13 +1782,9 @@ export function tickBot(matchState, botId, now) {
       // regular 220 ms poll, whichever comes first (the target can change).
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
-    } else if (!botHasLineOfSight(
-      { x: me.pos.x, y: myEyeY, z: me.pos.z },
-      { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-      obstacles, surfaces
-    )) {
-      // No clear shot — hold fire and check again shortly. The eye is the
-      // GROUNDED one (see myEyeY): a jump must not manufacture a firing line.
+    } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
+      // No clear shot — hold fire and check again shortly. The origin is the
+      // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {

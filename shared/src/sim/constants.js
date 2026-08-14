@@ -790,6 +790,12 @@ export const KEI_BEAM_SWEEP_RATE = 0.175;     // rad/s the beam rotates toward t
 export const KEI_BEAM_AIM_DEADZONE = 0.3;     // move-input magnitude below this = hold direction
 export const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
 
+// Muzzle height above fighter.pos: 2.35 modelYOffset (feet→torso) + 0.8 to the
+// muzzle. Every projectile spawns here, so the BOT's fire gate has to test THIS
+// line and not its eye line (see botShotCanLand in ai.js). Offline main.js works
+// in root space, where the same point is root.y + 0.8.
+export const PROJECTILE_MUZZLE_Y_OFFSET = 3.15;
+
 // Projectile lifetime (seconds).
 export const PROJECTILE_TTL_S = 2.2;
 export const PROJECTILE_HIT_STUN_MS = 100;

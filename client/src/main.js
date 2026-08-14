@@ -4353,6 +4353,12 @@ const BOT_STUCK_MEMORY_MS = 3500;
 const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
+// Muzzle height above the ROOT (offline works in root space; root = body +
+// modelYOffset 2.35, so this is the same point as the sim's
+// PROJECTILE_MUZZLE_Y_OFFSET 3.15 above fighter.pos). Matches the projectile
+// spawn and the laser sight. The bot's FIRE gate tests this line, not the eye
+// line — see botShotCanLand. Mirrored in shared/src/sim/ai.js.
+const BOT_MUZZLE_ABOVE_ROOT = 0.8;
 // COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
 // least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
 // famine behind cover: SPRINT to the nearest reachable spot that breaks the
@@ -4537,6 +4543,26 @@ function botHasLineOfSight(p0, p1) {
     if (sightHitsSurface(p0, p1, s)) return false;
   }
   return true;
+}
+
+// Can the SHOT actually land? The fire gate has to test the line the BULLET
+// takes, not the eye line: bullets leave root.y + BOT_MUZZLE_ABOVE_ROOT and fly
+// to the target's matching point, which sits 0.8 BELOW the bot's eye line
+// offline (and 1.55 above it online). Anything in that band — a slope's guard
+// rail, the bridge deck underside, the ramp plane itself — let the bot hold a
+// clear sight line into a shot that died on the geometry: 7.4% of Streets'
+// clear-sight pairs offline, worst with a unit standing on the bridge slope
+// (user 2026-08-15).
+// Uses the PROJECTILE rules so the gate and the shot can never disagree:
+// noProjectile fences never stop a bullet (blocksBotSight is a NAVIGATION rule,
+// still honoured by botHasLineOfSight above), and surfaces use the projectile's
+// own crossing test. Mirrored in shared/src/sim/ai.js.
+function botShotCanLand(p0, p1) {
+  for (const o of arenaObstacles) {
+    if (o.noProjectile) continue;
+    if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  return !projectileHitsSurface(p0, p1);
 }
 
 // Burst size for continuous-fire weapons (spreadCount === 1). Units with a
@@ -4860,6 +4886,8 @@ function updateEnemy(now) {
   // a ledge stays honest. The opponent endpoint stays live.
   if (state.enemy.grounded && !eState.airborne) eState.botSightY = e.y;
   const myEyeY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_LOS_EYE_HEIGHT;
+  // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
+  const myShotY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_MUZZLE_ABOVE_ROOT;
   const playerHasLoS = botHasLineOfSight(
     { x: e.x, y: myEyeY, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
@@ -6019,12 +6047,12 @@ function updateEnemy(now) {
       // regular 220 ms poll, whichever comes first (the target can change).
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
-    } else if (!botHasLineOfSight(
-      { x: e.x, y: myEyeY, z: e.z },
-      { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+    } else if (!botShotCanLand(
+      { x: e.x, y: myShotY, z: e.z },
+      { x: p.x, y: p.y + BOT_MUZZLE_ABOVE_ROOT, z: p.z }
     )) {
-      // No clear shot — hold fire and check again shortly. The eye is the
-      // GROUNDED one (see myEyeY): a jump must not manufacture a firing line.
+      // No clear shot — hold fire and check again shortly. The origin is the
+      // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {

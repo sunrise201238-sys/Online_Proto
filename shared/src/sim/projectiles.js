@@ -8,6 +8,7 @@ import {
   HOMING_SOFTEN_DEG_PER_FRAME,
   HIT_RADIUS_NORMAL,
   HIT_HALF_HEIGHT,
+  PROJECTILE_MUZZLE_Y_OFFSET,
   PROJECTILE_TTL_S,
   PROJECTILE_HIT_STUN_MS,
   SHOTGUN_CLUSTER_SPREAD_DISTANCE,
@@ -57,7 +58,7 @@ export function spawnProjectiles(matchState, owner, target) {
 
   // Spawn at chest height: 2.35 modelYOffset (lifts feet→torso) + 0.8 (offset
   // to muzzle, matches offline main.js:674 which adds 0.8 to root.position).
-  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
+  const spawnOrigin = { x: owner.pos.x, y: owner.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: owner.pos.z };
   const spawned = [];
 
   if (isShotgun) {
@@ -524,7 +525,7 @@ let _beamSeq = 0;
 export function spawnBeam(matchState, owner, target, now, obstacles) {
   if (!matchState.beams) matchState.beams = []; // predicted states clone from a beam-less snapshot
   const u = owner.unit;
-  const origin = { x: owner.pos.x, y: owner.pos.y + 3.15, z: owner.pos.z };
+  const origin = { x: owner.pos.x, y: owner.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: owner.pos.z };
   // Level aim toward the target (feet→feet ⇒ dy = 0), same as the projectile.
   const dir = vec3Normalize(vec3Sub(target.pos, owner.pos));
   const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
@@ -711,7 +712,7 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       }
     }
     // --- Geometry ---
-    const origin = { x: f.pos.x, y: f.pos.y + 3.15, z: f.pos.z };
+    const origin = { x: f.pos.x, y: f.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: f.pos.z };
     const dir = { x: f.chargedBeamDirX, y: 0, z: f.chargedBeamDirZ };
     const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
     const radius = (u.beam?.radius ?? HIT_RADIUS_NORMAL) * KEI_CHARGED_RADIUS_MULT;
