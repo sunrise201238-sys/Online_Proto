@@ -7820,8 +7820,16 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
     if (attached && attached.parent === old.root) fresh.root.add(attached);
   }
   if (state.playerCurrentTarget === old) {
-    state.playerCurrentTarget = fresh;
-    state.reticleLastEnemyFireAt = fresh.state.lastFireAt;
+    // Prefer the dying unit's LIVING teammate over the fresh spawn (user,
+    // 2026-08-12) — matches the server's auto-retarget in tick.js applyInput,
+    // so the local mirror lands where the next snapshot's targetId will.
+    const mate = slotName === 'enemy' ? state.enemy2
+      : slotName === 'enemy2' ? state.enemy : null;
+    const next = (mate && mate.state.hp > 0) ? mate : fresh;
+    state.playerCurrentTarget = next;
+    if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+    if (state.reticle) next.root.add(state.reticle);
+    state.reticleLastEnemyFireAt = next.state.lastFireAt;
     state.reticleEnemyFiringUntil = 0;
   }
 }
@@ -8843,8 +8851,19 @@ function respawnSlotMech(slotName, unitKey) {
     if (attached && attached.parent === old.root) fresh.root.add(attached);
   }
   if (state.playerCurrentTarget === old) {
-    state.playerCurrentTarget = fresh;
-    state.reticleLastEnemyFireAt = fresh.state.lastFireAt;
+    // Lock was on the dying unit: prefer its LIVING teammate over following
+    // the slot to the fresh spawn (user, 2026-08-12) — the respawn sits
+    // behind its immunity window and is rarely the fight you were in.
+    // Trio-1v1 has no teammate, and a dead teammate leaves nothing else to
+    // aim at: both fall back to the old behaviour (lock keeps the slot).
+    // Mirrors the shared sim's auto-retarget in tick.js applyInput.
+    const mate = slotName === 'enemy' ? state.enemy2
+      : slotName === 'enemy2' ? state.enemy : null;
+    const next = (mate && mate.state.hp > 0) ? mate : fresh;
+    state.playerCurrentTarget = next;
+    if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+    if (state.reticle) next.root.add(state.reticle);
+    state.reticleLastEnemyFireAt = next.state.lastFireAt;
     state.reticleEnemyFiringUntil = 0;
   }
 }
