@@ -55,7 +55,7 @@ const UNIT_DATA = {
     spriteKey: 'saori', char: 'Saori', weapon: 'M4', accent: 0x3a4a78,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -91,7 +91,7 @@ const UNIT_DATA = {
     spriteKey: 'hoshino', char: 'Hoshino', weapon: 'Beretta 1301', accent: 0xff9ec7,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -126,7 +126,7 @@ const UNIT_DATA = {
     spriteKey: 'aru', char: 'Aru', weapon: 'PSG1', accent: 0xff7a8a,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -164,7 +164,7 @@ const UNIT_DATA = {
     spriteKey: 'atsuko', char: 'Atsuko', weapon: 'evo3', accent: 0xe8a13a,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -201,7 +201,7 @@ const UNIT_DATA = {
     spriteKey: 'hina', char: 'Hina', weapon: 'MG42', accent: 0x6fcf8f,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 8,
     sprintSpeed: 11.76,
@@ -234,7 +234,7 @@ const UNIT_DATA = {
     spriteKey: 'kei', char: 'Kei', weapon: 'Laser', accent: 0x9a7be0,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -272,7 +272,7 @@ const UNIT_DATA = {
     spriteKey: 'aris', char: 'Aris', weapon: 'Laser', accent: 0x6fd9e8,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -332,7 +332,7 @@ const UNIT_DATA = {
     hidden: true,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -364,7 +364,7 @@ const UNIT_DATA = {
     spriteKey: 'asuna', char: 'Asuna', weapon: 'FAMAS', accent: 0x3fbde8,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -399,7 +399,7 @@ const UNIT_DATA = {
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -434,7 +434,7 @@ const UNIT_DATA = {
     spriteKey: 'haruka', char: 'Haruka', weapon: 'SDASS', accent: 0x7a5f96,
 
     // Pilot stats
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -474,7 +474,7 @@ const UNIT_DATA = {
     spriteKey: 'koyuki', char: 'Koyuki', weapon: 'M60', accent: 0xff8ac8,
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 12,
     sprintSpeed: 11.76,
@@ -509,7 +509,7 @@ const UNIT_DATA = {
     spriteKey: 'marina', char: 'Marina', weapon: 'PPSh-41', accent: 0xe0384a,
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
-    hp: 150,
+    hp: 100,
     boostCap: 250,
     walkSpeed: 16,
     sprintSpeed: 11.76,
@@ -526,6 +526,7 @@ const UNIT_DATA = {
     // 1.5 s -> 2 s; HA 0 -> 0.04 taken from Atsuko — the WWII hose sprays
     // wide, sure-hit drops to ~32).
     lockRange: 50,
+    lockRange2v2: 55,   // SMG archetype value from the demo line (user, 2026-08-16)
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -857,7 +858,7 @@ createArenaWalls();
 
 const MOMENTUM_STANDARD = 100;
 // --- Pilot-stat defaults (used when a unit's UNIT_DATA entry omits a field) ---
-const MAX_HP = 150;                     // unit.hp default
+const MAX_HP = 100;                     // unit.hp default (150 -> 100, 2026-08-08 user tune)
 const BOOST_MOVE_SPEED = 11.76;         // unit.sprintSpeed default
 const WALK_SPEED = 16;                  // unit.walkSpeed default
 const BOOST_DASH_DRAIN_PER_TICK = 1.1;  // unit.boostDrain default
