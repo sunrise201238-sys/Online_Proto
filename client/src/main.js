@@ -11,6 +11,7 @@ import {
   buildNavGrid,
   findPathOnGrid,
   findFiringPath,
+  smoothPath,
   walkSegmentBlocked,
   volleyAxes,
   volleyPelletOffset,
@@ -67,6 +68,10 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    // 2v2 bot hold band (ported from the demo line 2026-08-15): compressed
+    // into 50-70 so long-lock units stop hanging back while a teammate dies
+    // alone. 1v1 keeps lockRange; the player-side lock UI ignores this field.
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
@@ -101,6 +106,7 @@ const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -133,6 +139,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2500,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -170,6 +177,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 50,
+    lockRange2v2: 55,
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
@@ -206,6 +214,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -238,6 +247,7 @@ const UNIT_DATA = {
 
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -282,6 +292,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -367,6 +378,7 @@ const UNIT_DATA = {
     // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
     // per-shot damage, smaller mag.
     lockRange: 56,
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
@@ -402,6 +414,7 @@ const UNIT_DATA = {
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -437,6 +450,7 @@ const UNIT_DATA = {
     // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
     // Hoshino's concentrated slug.
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -475,6 +489,7 @@ const UNIT_DATA = {
     // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
@@ -541,7 +556,7 @@ const MAP_DATA = {
   arena1: { name: 'Plain Field' },
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
-  factory2: { name: 'Factory 2' },
+  factory2: { name: 'Scrapyard' },   // scrapyard retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
   square: { name: 'Square' },
   lobby: { name: 'Lobby' },
   station: { name: 'Station' },
@@ -2408,21 +2423,45 @@ function segmentHitsObstacle(p0, p1, o) {
 // (delta +) and then UNDER the Streets bridge deck (delta -) "flipped" and
 // died in open air (2026-08-01 fix). A real slab crossing still flips
 // against the slab's own height. Mirrors shared/src/sim/physics.js.
-function projectileHitsSurface(prevPos, nextPos) {
-  const samples = 8;
-  for (const s of arenaSurfaces) {
-    let prevDelta = null;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) return true;
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) return true;
-      prevDelta = delta;
+// EXACT segment-vs-surface crossing — see the long note on surfaceCrossT in
+// shared/src/sim/physics.js. Inside the footprint both the ray height and the
+// surface height are linear along the ray, so delta is linear and its extremes
+// are the clipped ENDPOINTS: comparing those two is exact and complete.
+// Replaces an 8-sample sign-flip walk (2026-08-15) that was blind to crossings
+// falling between samples — at 2000 u/s a round steps ~34 units per tick, so
+// fast shots flew through the Streets bridge slope and hit a unit standing on
+// it. Still judged per surface over its own clipped interval (2026-08-01 fix).
+const SURFACE_GRAZE_EPS = 0.04;
+function surfaceCrossT(p0, p1, s) {
+  const dx = p1.x - p0.x;
+  const dz = p1.z - p0.z;
+  let t0 = 0;
+  let t1 = 1;
+  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
+  for (let i = 0; i < 2; i += 1) {
+    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return -1;
+    } else {
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return -1;
     }
+  }
+  const dy = p1.y - p0.y;
+  const dA = (p0.y + dy * t0) - s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
+  const dB = (p0.y + dy * t1) - s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+  if (Math.abs(dA) < SURFACE_GRAZE_EPS) return t0;
+  if (Math.abs(dB) < SURFACE_GRAZE_EPS) return t1;
+  if ((dA > 0) === (dB > 0)) return -1;
+  return t0 + (t1 - t0) * (dA / (dA - dB));
+}
+
+function projectileHitsSurface(prevPos, nextPos) {
+  for (const s of arenaSurfaces) {
+    if (surfaceCrossT(prevPos, nextPos, s) >= 0) return true;
   }
   return false;
 }
@@ -2459,30 +2498,10 @@ function segmentObstacleImpactT(p0, p1, o) {
 // the T-returning twin of projectileHitsSurface (crossing lands at the
 // midpoint of the flip pair). Mirrors shared/src/sim/physics.js.
 function surfaceImpactT(prevPos, nextPos) {
-  const samples = 8;
   let best = -1;
   for (const s of arenaSurfaces) {
-    let prevDelta = null;
-    let prevT = 0;
-    for (let i = 0; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = THREE.MathUtils.lerp(prevPos.x, nextPos.x, t);
-      const z = THREE.MathUtils.lerp(prevPos.z, nextPos.z, t);
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) { prevDelta = null; continue; }
-      const y = THREE.MathUtils.lerp(prevPos.y, nextPos.y, t);
-      const delta = y - s.heightAt(x, z);
-      if (Math.abs(delta) < 0.04) {
-        if (best < 0 || t < best) best = t;
-        break;
-      }
-      if (prevDelta !== null && ((prevDelta > 0 && delta < 0) || (prevDelta < 0 && delta > 0))) {
-        const tc = (prevT + t) / 2;
-        if (best < 0 || tc < best) best = tc;
-        break;
-      }
-      prevDelta = delta;
-      prevT = t;
-    }
+    const t = surfaceCrossT(prevPos, nextPos, s);
+    if (t >= 0 && (best < 0 || t < best)) best = t;
   }
   return best;
 }
@@ -3754,17 +3773,39 @@ function updatePlayer(now) {
 // vector is felt without overwhelming the player-tracking direction.
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
-const BOT_STUCK_MOVED_EPSILON = 0.4;
-const BOT_STUCK_TICKS_THRESHOLD = 8;
-const BOT_STUCK_PIVOT_MS = 1000;  // committed wall-follow window — long enough to run the length of a wall to its opening (was 600, too short to clear long walls)
 // After a stuck event, remember the pinned spot for this long and bias
 // movement away from it so the bot picks a different route around the wall
-// instead of grinding into the same corner once the perpendicular pivot
-// ends. Radius caps the influence so distant memories don't warp kiting.
+// instead of grinding into the same corner. Radius caps the influence so
+// distant memories don't warp kiting. (Briefly 6/1500 on 2026-08-08 while
+// chasing the Airport "bots avoid the middle" report — reverted by the user
+// once that turned out to be the 2v2 spawn asymmetry, since fixed.)
+// Mirrored in shared ai.js.
 const BOT_STUCK_MEMORY_MS = 3500;
 const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
+// Muzzle height above the ROOT (offline works in root space; root = body +
+// modelYOffset 2.35, so this is the same point as the sim's
+// PROJECTILE_MUZZLE_Y_OFFSET 3.15 above fighter.pos). Matches the projectile
+// spawn and the laser sight. The bot's FIRE gate tests this line, not the eye
+// line — see botShotCanLand. Mirrored in shared/src/sim/ai.js.
+const BOT_MUZZLE_ABOVE_ROOT = 0.8;
+// COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
+// least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
+// famine behind cover: SPRINT to the nearest reachable spot that breaks the
+// LOCKED target's line of sight (single-target by spec) and hold, re-emerging
+// with EXIT_MS left so the mag fills while stepping back into band.
+// Mirrored in shared ai.js tickBot.
+const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
+const BOT_COVER_RELOAD_EXIT_MS = 400;
+// The dash to cover funds at the survival-jump tier (raw jump 48 + sprint
+// floor 8), NOT the 250 travel reserve — a mid-fight bot can still afford it.
+const BOT_COVER_SPRINT_MIN_BOOST = 56;
+// The HOLD is not a statue (user, 2026-08-08): pace a NARROW arc at walk
+// speed behind the cover — direction flips every FLIP_MS, clamped to
+// SWAY_RADIUS around the hold anchor (~±2u ≈ a few degrees on the band ring).
+const BOT_COVER_SWAY_FLIP_MS = 350;
+const BOT_COVER_SWAY_RADIUS = 2.2;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -3780,9 +3821,27 @@ const BOT_TARGET_SWITCH_MARGIN = 6;
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
 const BOT_CLIMB_MIN_RISE = 1.7;
 const BOT_CLIMB_MAX_RISE = 4.8;
+// Narrowest surface still worth treating as a perch — mirrors shared ai.js.
+// Below this a jump overshoots it entirely; 6 sits in the gap between the
+// 4-wide conveyors and the next-narrowest real platform at 10.
+const BOT_PERCH_MIN_WIDTH = 6;
+// How close the Maze follower gets to a waypoint before starting the next
+// leg. 3 -> 1.5 (2026-08-12): at 3 on the 4-unit nav grid the early turn
+// rounded corners INTO obstacle end faces, where the radial-only avoidance
+// has no sideways component — the residual wall-grind. Measured A/B in the
+// shared sim (see the fuller note there); the final-arrival test stays 3.
+// Used at the follower AND its statue-escape replay: the two must stay
+// identical or the replay's waypoint comparison silently stops matching.
+// Mirrors shared ai.js BOT_WAYPOINT_ADVANCE_RADIUS.
+const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
+// STATION-SPECIFIC BOT RULES master switch (2026-08-05): HIDDEN, not
+// deleted — the deck-spawn experiment runs with these off. Flip to true to
+// re-enable the station perch pull, low-level discouragement dwell, mount
+// hold, and descent suppression in one move. Mirrored in shared ai.js.
+const STATION_BOT_RULES = false;
 const BOT_LEDGE_JUMP_REACH = 4.5;
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
@@ -3906,13 +3965,35 @@ function sightHitsSurface(p0, p1, s) {
 
 function botHasLineOfSight(p0, p1) {
   for (const o of arenaObstacles) {
-    if (o.noProjectile) continue;
+    // blocksBotSight bars stay opaque to BOT sight even though bullets pass
+    // — see the shared ai.js note (Streets under-slope bars, 2026-08-13).
+    if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   for (const s of arenaSurfaces) {
     if (sightHitsSurface(p0, p1, s)) return false;
   }
   return true;
+}
+
+// Can the SHOT actually land? The fire gate has to test the line the BULLET
+// takes, not the eye line: bullets leave root.y + BOT_MUZZLE_ABOVE_ROOT and fly
+// to the target's matching point, which sits 0.8 BELOW the bot's eye line
+// offline (and 1.55 above it online). Anything in that band — a slope's guard
+// rail, the bridge deck underside, the ramp plane itself — let the bot hold a
+// clear sight line into a shot that died on the geometry: 7.4% of Streets'
+// clear-sight pairs offline, worst with a unit standing on the bridge slope
+// (user 2026-08-15).
+// Uses the PROJECTILE rules so the gate and the shot can never disagree:
+// noProjectile fences never stop a bullet (blocksBotSight is a NAVIGATION rule,
+// still honoured by botHasLineOfSight above), and surfaces use the projectile's
+// own crossing test. Mirrored in shared/src/sim/ai.js.
+function botShotCanLand(p0, p1) {
+  for (const o of arenaObstacles) {
+    if (o.noProjectile) continue;
+    if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  return !projectileHitsSurface(p0, p1);
 }
 
 // Burst size for continuous-fire weapons (spreadCount === 1). Units with a
@@ -3967,11 +4048,17 @@ function botStartJump(now, survival = false) {
 // and ones level enough to just walk onto. Returns a unit vector toward the
 // nearest reachable point on that ledge plus the horizontal distance to it,
 // or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, searchRadius) {
+// minWidth defaults to the perch floor; MAZE passes 0 — mirrors shared ai.js,
+// see the note at its Maze call site for the measurements behind the split.
+function findHighGroundPerch(px, pz, myFloorY, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
   for (const s of arenaSurfaces) {
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
+    // TOO NARROW TO LAND ON (user 2026-08-09) — mirrors shared ai.js; see the
+    // note there. A jump carries 12-17 units, so a thinner strip gets sailed
+    // clean over rather than mounted, and the bot bounces back and forth.
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < minWidth) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
@@ -4206,10 +4293,14 @@ function updateEnemy(now) {
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
-  // universal rule for every weapon: the shotgun's lockRange is tuned to 27
-  // (pellet-cluster distance), which lands its band at 20–34 — the same
-  // numbers its old dedicated special case hard-coded.
-  const lockRange = state.enemy.unit.lockRange ?? 50;
+  // universal rule for every weapon.
+  // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
+  // compressed 50–70 team-synergy table (long locks let a teammate die
+  // alone at the front). Units without the field (hidden ones) and every
+  // other mode keep lockRange. Mirrored in shared ai.js tickBot.
+  const lockRange = (state.mode === '2v2' && state.enemy.unit.lockRange2v2)
+    ? state.enemy.unit.lockRange2v2
+    : (state.enemy.unit.lockRange ?? 50);
   const upperRange = lockRange + 7;
   const optimalRange = Math.max(10, lockRange);
   const lowerRange = Math.max(6, lockRange - 7);
@@ -4219,14 +4310,23 @@ function updateEnemy(now) {
   // flags with one botState whose transitions are recomputed every tick.
 
   // LoS + threats
+  // GROUNDED SIGHT (2026-08-14) — mirrors shared ai.js: every sight test the
+  // bot makes about itself uses the eye it has with its feet down, so a jump
+  // can never manufacture a firing line (or reset the no-sight clock). Takes
+  // the LOWER of the latched grounded height and the live one, so a drop off
+  // a ledge stays honest. The opponent endpoint stays live.
+  if (state.enemy.grounded && !eState.airborne) eState.botSightY = e.y;
+  const myEyeY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_LOS_EYE_HEIGHT;
+  // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
+  const myShotY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_MUZZLE_ABOVE_ROOT;
   const playerHasLoS = botHasLineOfSight(
-    { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
+    { x: e.x, y: myEyeY, z: e.z },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
-    { x: px, y: e.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: px, y: myEyeY, z: pz },
     { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
   );
   // Are the next `len` units straight toward the player WALKABLE? Uses the
@@ -4286,6 +4386,169 @@ function updateEnemy(now) {
   const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
+  // --- COVER RELOAD (2026-08-08, user-designed; see the constants note) ---
+  // Movement-only override, decided here so the stall clocks below can be
+  // pinned while it runs. Defense outranks it (the window closes under fire
+  // and while the defense state is live) and the anti-glint step is a
+  // separate reflex layer that still fires. One cover search per reload
+  // cycle; a run that stops progressing bails for the rest of the cycle
+  // instead of inheriting the generic wedge remedy (whose re-path goal is a
+  // SIGHTED cell — it would fight the hide). Mirrored in shared ai.js.
+  let coverMove = null;
+  {
+    const cu = state.enemy.unit ?? {};
+    const reloadRemaining = (eState.reloadingUntil || 0) - now;
+    const coverWindow = (cu.reloadMs ?? 0) >= BOT_COVER_RELOAD_MIN_RELOAD_MS
+      && !cu.autoReload
+      && reloadRemaining > BOT_COVER_RELOAD_EXIT_MS
+      && !underFire
+      && (eState.botState ?? 'pursue') !== 'defense';
+    if (!coverWindow) {
+      // Do NOT wash the plan away: the cycle identity is reloadingUntil
+      // itself, so a Defense interruption mid-rush RESUMES the same path
+      // when the window reopens (user, 2026-08-08 — was a key reset that
+      // forced a fresh search per resume). Only the anchors reset, giving
+      // the resumed run a fresh 700 ms bail window.
+      eState.botCoverMoveAnchor = null;
+      eState.botCoverHoldAnchor = null;
+    } else {
+      if (eState.botCoverKey !== eState.reloadingUntil) {
+        eState.botCoverKey = eState.reloadingUntil;
+        eState.botCoverFailed = false;
+        eState.botCoverPath = null;
+        eState.botCoverMoveAnchor = null;
+        eState.botCoverHoldAnchor = null;
+      }
+      const oppEye = { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z };
+      const myEye = { x: e.x, y: myEyeY, z: e.z };
+      const coverHidden = !botHasLineOfSight(oppEye, myEye);
+      if (!coverHidden) eState.botCoverHoldAnchor = null;
+      if (coverHidden) {
+        // Hidden — HOLD, but not as a statue (user): pace a narrow arc at
+        // walk speed, perpendicular to the target line so the cover stays
+        // between, clamped to SWAY_RADIUS around the hold anchor. KEEP the
+        // path — a hidden→visible flicker resumes it instead of burning a
+        // fresh search (adversarial finding); the sway is small enough that
+        // a poke-out self-corrects through the kept path next tick.
+        if (!eState.botCoverHoldAnchor) {
+          eState.botCoverHoldAnchor = { x: e.x, z: e.z };
+          eState.botCoverSwayDir = (Math.random() < 0.5 ? 1 : -1);
+          eState.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        if (now >= (eState.botCoverSwayFlipAt ?? 0)) {
+          eState.botCoverSwayDir = -(eState.botCoverSwayDir ?? 1);
+          eState.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        const tdx = p.x - e.x, tdz = p.z - e.z;
+        const tdl = Math.hypot(tdx, tdz) || 1;
+        let sx = (-tdz / tdl) * eState.botCoverSwayDir;
+        let sz = (tdx / tdl) * eState.botCoverSwayDir;
+        const adx = eState.botCoverHoldAnchor.x - e.x;
+        const adz = eState.botCoverHoldAnchor.z - e.z;
+        const adl = Math.hypot(adx, adz);
+        if (adl > BOT_COVER_SWAY_RADIUS) {
+          sx = sx * 0.3 + adx / adl;
+          sz = sz * 0.3 + adz / adl;
+        }
+        const sl = Math.hypot(sx, sz) || 1;
+        coverMove = { hold: true, mx: sx / sl, mz: sz / sl };
+        eState.botCoverMoveAnchor = null;
+      } else if (!eState.botCoverFailed) {
+        if (!eState.botCoverPath) {
+          // Ring candidates around the bot, hidden-from-target first, then
+          // A* the best few for real reachability. Jump-links are excluded —
+          // no vaulting mid-reload — and candidates are scored by walk
+          // distance plus a penalty for leaving the band, so the bot prefers
+          // cover it can fight from the moment the mag fills.
+          const cands = [];
+          for (const cr of [5, 8, 11, 14]) {
+            for (let ca = 0; ca < 12; ca += 1) {
+              const th = (ca + (cr % 2) * 0.5) * (Math.PI / 6);
+              const cx = e.x + Math.cos(th) * cr;
+              const cz = e.z + Math.sin(th) * cr;
+              const cf = groundHeightAt(cx, cz, e.y - GROUND_BASE_Y);
+              const cEye = { x: cx, y: cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: cz };
+              if (botHasLineOfSight(oppEye, cEye)) continue;
+              const cDist = Math.hypot(p.x - cx, p.z - cz);
+              const bandPen = Math.max(0, lowerRange - cDist, cDist - upperRange) * 0.5;
+              cands.push({ cx, cz, cf, score: Math.hypot(cx - e.x, cz - e.z) + bandPen });
+            }
+          }
+          cands.sort((a2, b2) => a2.score - b2.score);
+          if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+          let best = null;
+          for (let ci = 0; ci < Math.min(10, cands.length) && !best; ci += 1) {
+            const c = cands[ci];
+            // Obstacle-embedded candidates pass the hidden filter trivially
+            // (a segment INTO the box reads as blocked) — skip them before
+            // they eat the A* budget (adversarial finding, 2026-08-08).
+            const cEyeY = c.cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT;
+            let embedded = false;
+            for (const o of arenaObstacles) {
+              if (c.cx >= o.minX && c.cx <= o.maxX && c.cz >= o.minZ && c.cz <= o.maxZ
+                  && cEyeY >= o.minY && cEyeY <= o.maxY) { embedded = true; break; }
+            }
+            if (embedded) continue;
+            const cPath = findPathOnGrid(offlineNavGrid, e.x, e.z, c.cx, c.cz, myFloorY, c.cf, arenaObstacles);
+            if (!cPath || cPath.length < 2) continue;
+            let jumpy = false;
+            for (const wp of cPath) {
+              if ((wp.y ?? 0) - myFloorY > 1.7) { jumpy = true; break; }
+            }
+            if (jumpy) continue;
+            // GOAL-VERIFY: the A* goal-snap can relocate an off-grid or
+            // mis-floored candidate onto a cell the target SEES — walking
+            // there wastes the cycle's one search (adversarial finding,
+            // 2026-08-08). Commit only if the final waypoint is hidden too.
+            const gWp = cPath[cPath.length - 1];
+            const gf = gWp.y != null ? gWp.y : c.cf;
+            if (botHasLineOfSight(
+              oppEye,
+              { x: gWp.x, y: gf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: gWp.z }
+            )) continue;
+            best = { path: cPath, idx: 0 };
+          }
+          if (best) eState.botCoverPath = best;
+          else eState.botCoverFailed = true;
+        }
+        const cNav = eState.botCoverPath;
+        if (cNav) {
+          let wp = cNav.path[cNav.idx];
+          while (cNav.idx < cNav.path.length - 1
+              && Math.hypot(wp.x - e.x, wp.z - e.z) < 2) {
+            cNav.idx += 1;
+            wp = cNav.path[cNav.idx];
+          }
+          let tx = wp.x - e.x, tz = wp.z - e.z;
+          const wl = Math.hypot(tx, tz) || 1;
+          tx = tx / wl + avoid.rx * 0.6;
+          tz = tz / wl + avoid.rz * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          coverMove = { hold: false, mx: tx / tl, mz: tz / tl };
+          if (!eState.botCoverMoveAnchor
+              || Math.hypot(e.x - eState.botCoverMoveAnchor.x, e.z - eState.botCoverMoveAnchor.z) > 1) {
+            eState.botCoverMoveAnchor = { x: e.x, z: e.z, at: now };
+          } else if (now - eState.botCoverMoveAnchor.at > 700) {
+            eState.botCoverFailed = true;
+            eState.botCoverPath = null;
+            coverMove = null;
+          }
+        }
+      }
+    }
+  }
+  if (coverMove) {
+    // Pin the stall clocks: a deliberate hide must not read as wedged /
+    // stalled / sightless — those detectors' remedies all route toward
+    // SIGHTED cells and would fight the cover intent on exit.
+    eState.botLastProgressAt = now;
+    eState.botLastLoSAt = now;
+    eState.botStuckCheckX = e.x;
+    eState.botStuckCheckZ = e.z;
+    eState.botStuckCheckAt = now;
+    eState.botPathLen = 0;
+  }
+
   // --- Stuck cut-in detection over a rolling 1.5 s window, two flavors:
   //   WEDGED   — barely any net movement AND barely any path traveled.
   //   SPINNING — plenty of path traveled but almost no net displacement
@@ -4310,7 +4573,13 @@ function updateEnemy(now) {
     const net = Math.hypot(e.x - eState.botStuckCheckX, e.z - eState.botStuckCheckZ);
     // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
     // movement rates that count as wedged/spinning are unchanged.
-    const wedged = net < 1.7 && eState.botPathLen < 4;
+    // WEDGED's path cap was 4 until 2026-08-08: a bot SLIDING along a wall
+    // travelled 4–12 u/s while netting nothing, which was too fast for
+    // wedged and too slow for spinning — 47% of Airport's ramp-corner
+    // grinds fell in that gap with no detector to free them. Raising the
+    // cap to spinning's 12 makes the pair partition the space: net < 1.7
+    // is stuck no matter how much wall it rubbed. Mirrored in shared ai.js.
+    const wedged = net < 1.7 && eState.botPathLen < 12;
     const spinning = eState.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
@@ -4323,6 +4592,11 @@ function updateEnemy(now) {
       // Only this flavor is allowed the escape back-out in the maze
       // re-commit; anything that still moves resolves via normal re-plans.
       stuckFrozen = net < 0.8;
+      // STUCK MEMORY (revived 2026-08-08 with the Maze slim-down): remember
+      // the pinned spot so the maze fallback's retries bend away from it.
+      eState.botStuckMemX = e.x;
+      eState.botStuckMemZ = e.z;
+      eState.botStuckMemAt = now;
     }
     eState.botStuckCheckX = e.x;
     eState.botStuckCheckZ = e.z;
@@ -4330,184 +4604,18 @@ function updateEnemy(now) {
     eState.botPathLen = 0;
   }
 
-  // Commit (or re-commit) Maze's go-around heading: tangent to the nearest
-  // obstacle, biased toward the player so the detour closes distance.
-  // `escaping` = re-commit fired by the stuck alarm: when the probes can't
-  // pick a side, REVERSE the current heading instead of leaning toward the
-  // player — the player-lean is what walks the bot straight back into the
-  // corner it just jammed in.
-  const commitMazeDirection = (escaping = false, keepHand = false) => {
-    let mxe = avoid.rx, mze = avoid.rz;
-    const ml = Math.hypot(mxe, mze);
-    eState.botMazeHadWall = ml >= 0.1;
-    if (ml < 0.1) {
-      // OPEN GROUND: nothing to go around yet — head straight at the player.
-      // (The old commit here was side*orbitSign = PERPENDICULAR to the player,
-      // which combined with the toward-pull traced a stable ORBIT around the
-      // target — the endless circling below the Airport plateau.) The moment
-      // a wall interposes, the context check in the maze movement block
-      // re-commits into wall-follow.
-      mxe = dir.x;
-      mze = dir.z;
-      if (escaping) { mxe = -mxe; mze = -mze; }
-      eState.botMazeHand = null;
-    } else {
-      const ux = mxe / ml, uz = mze / ml;
-      let tx = -uz, tz = ux;
-      // MULTI-DISTANCE probes: from 20/40/60 units along each tangent, how
-      // soon would the player become visible? Picking the side that gains
-      // sight SOONEST approximates the shorter way around a finite wall —
-      // the old single-20 probe went blind past one cover-length, leaving
-      // the tie to a fixed-rotation default (the "always turns right" bias).
-      const probeDist = (px2, pz2) => {
-        for (const pd of [20, 40, 60]) {
-          if (losFromPoint(e.x + px2 * pd, e.z + pz2 * pd)) return pd;
-        }
-        return Infinity;
-      };
-      const dPlus = probeDist(tx, tz);
-      const dMinus = probeDist(-tx, -tz);
-      if (dPlus !== dMinus) {
-        if (dMinus < dPlus) { tx = -tx; tz = -tz; }
-      } else if (escaping) {
-        // Probes tied while escaping a jam: reverse the committed heading.
-        const proj = tx * (eState.botMazeDirX ?? tx) + tz * (eState.botMazeDirZ ?? tz);
-        if (proj > 0) { tx = -tx; tz = -tz; }
-      } else if (keepHand && eState.botMazeHand != null) {
-        // KEEP THE SAME WAY AROUND: preserve which hand the wall is on. Corner
-        // re-commits keep circling the object, and 7 s refreshes along a long
-        // wall hold their direction — instead of the toward-player tiebreak
-        // re-aiming every refresh and pendulum-ing the bot under the player
-        // (it never committed the full run to the Airport ramp gaps).
-        if ((tz * ux - tx * uz) * eState.botMazeHand < 0) { tx = -tx; tz = -tz; }
-      } else if (tx * dir.x + tz * dir.z < 0) {
-        tx = -tx; tz = -tz;
-      }
-      // Record the chosen going-around hand (side of the wall vs travel).
-      eState.botMazeHand = (tz * ux - tx * uz) >= 0 ? 1 : -1;
-      // WALL-FOLLOW: tangent-dominant with a slight standoff. The old blend
-      // (away + 1.3*tangent = 61% away after normalizing) detached the bot
-      // from the wall diagonally within a second, stranding it in open
-      // ground where the old open-ground commit turned the march into an
-      // orbit. Hugging the wall is the whole point of Maze.
-      mxe = tx + ux * 0.25;
-      mze = tz + uz * 0.25;
-    }
-    const ml2 = Math.hypot(mxe, mze) || 1;
-    eState.botMazeDirX = mxe / ml2;
-    eState.botMazeDirZ = mze / ml2;
-    // Record whether LoS was blocked at (re)commit. The LoS-restored exit only
-    // counts when it was — otherwise (stuck against a side pillar with LoS
-    // already clear) Maze would exit on the first tick and never get to act.
-    eState.botMazeLosBlockedAtEntry = !playerHasLoS;
-  };
-
-  // OPENING SCAN — Maze's loop breaker. Wall-following a CLOSED loop (a
-  // room's inside perimeter, a free-standing block) laps forever: corners
-  // hand off cleanly, the stuck alarm sees real movement, and a blind-entry
-  // Maze has no time cap. So every 7 s refresh scans rings of probe points
-  // (8 directions × 25/50/75 units) for one that can SEE the player — a
-  // doorway or opening — and commits straight at it. Ties on the same ring
-  // break toward the player (no fixed-rotation bias). False if nothing sees.
-  const mazeScanForOpening = () => {
-    for (const sd of [25, 50, 75]) {
-      let bx = 0, bz = 0, bestDot = -Infinity;
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8;
-        const sx2 = Math.cos(a), sz2 = Math.sin(a);
-        const px3 = e.x + sx2 * sd, pz3 = e.z + sz2 * sd;
-        // REACHABILITY at WALK height (+1.0, ALL obstacles): eye-height
-        // testing had two holes — it skipped jump-only edges, and it passed
-        // clean OVER the 3.7 plateau body, calling points on the far side
-        // "reachable" through a wall the bot can't walk through.
-        const r0 = { x: e.x, y: e.y + 1.0, z: e.z };
-        const r1 = { x: px3, y: e.y + 1.0, z: pz3 };
-        let reachable = true;
-        for (const o of arenaObstacles) {
-          if (segmentHitsObstacle(r0, r1, o)) { reachable = false; break; }
-        }
-        if (!reachable) continue;
-        if (!losFromPoint(px3, pz3)) continue;
-        const dt = sx2 * dir.x + sz2 * dir.z;
-        if (dt > bestDot) { bestDot = dt; bx = sx2; bz = sz2; }
-      }
-      if (bestDot > -Infinity) {
-        eState.botMazeDirX = bx;
-        eState.botMazeDirZ = bz;
-        // hadWall=true suppresses the open-ground context re-commit (the
-        // wall being left behind would instantly re-grab the heading);
-        // real wall contact en route is handled by the corner turn.
-        eState.botMazeHadWall = true;
-        eState.botMazeHand = null;
-        eState.botMazeLosBlockedAtEntry = !playerHasLoS;
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // ELEVATION ROUTE — Maze's ramp-seeker. When the opening scan sees nothing
-  // AND the target stands on a meaningfully different floor, same-floor
-  // wall-following can never help (Airport plateau: the 12-high rim glass
-  // blocks every between-floor sight line, and fence lips block the perch
-  // hop — ramps are the only route). Commit toward a point a third of the
-  // way INTO the nearest connecting ramp from MY end (foot when climbing,
-  // crest when descending); riding it to the other level is what finally
-  // opens sight, and the normal flow takes over from there.
-  const mazeSeekElevationRoute = (allowClimb = false) => {
-    const floorGap = oppFloorY - myFloorY;
-    // CLIMB MODE: same floor, but the flat route is dead (allowClimb is
-    // passed only then) — e.g. both on Airport ground with the full-width
-    // plateau between. Take any UP-ramp from my level: crossing over the
-    // top is the route, and once up there the normal cross-floor logic
-    // descends the far side.
-    const climbMode = Math.abs(floorGap) < 2.5;
-    if (climbMode && !allowClimb) return false;
-    const levelLow = Math.min(myFloorY, oppFloorY);
-    const levelHigh = Math.max(myFloorY, oppFloorY);
-    let bx = 0, bz = 0, bestD = Infinity;
-    for (const s of arenaSurfaces) {
-      if (s.type !== 'ramp') continue;
-      const lo = Math.min(s.lowY, s.highY);
-      const hi = Math.max(s.lowY, s.highY);
-      if (climbMode) {
-        // An up-ramp starting at my level.
-        if (Math.abs(lo - myFloorY) > 2 || hi < myFloorY + 2.5) continue;
-      } else if (Math.abs(lo - levelLow) > 2 || Math.abs(hi - levelHigh) > 2) {
-        // Cross-floor: must actually connect the two floors.
-        continue;
-      }
-      const wantY = (climbMode || floorGap > 0) ? lo : hi;   // the ramp end on MY level
-      let ex, ez;
-      if (s.axis === 'x') {
-        const e0 = s.lowY === wantY ? s.minX : s.maxX;
-        const e1 = s.lowY === wantY ? s.maxX : s.minX;
-        ex = e0 + (e1 - e0) * 0.35;
-        ez = (s.minZ + s.maxZ) / 2;
-      } else {
-        const e0 = s.lowY === wantY ? s.minZ : s.maxZ;
-        const e1 = s.lowY === wantY ? s.maxZ : s.minZ;
-        ez = e0 + (e1 - e0) * 0.35;
-        ex = (s.minX + s.maxX) / 2;
-      }
-      const d = Math.hypot(ex - e.x, ez - e.z);
-      if (d < bestD) { bestD = d; bx = ex; bz = ez; }
-    }
-    if (bestD === Infinity) return false;
-    const dl = bestD || 1;
-    eState.botMazeDirX = (bx - e.x) / dl;
-    eState.botMazeDirZ = (bz - e.z) / dl;
-    eState.botMazeHadWall = true;   // corner turn handles wall contact en route
-    eState.botMazeHand = null;
-    eState.botMazeLosBlockedAtEntry = !playerHasLoS;
-    return true;
-  };
+  // (Heuristic stack RETIRED 2026-08-08, user-ordered: the committed
+  // wall-follow, the opening scan, and the ramp-seeker are gone — the
+  // pathfinder owns Maze outright. No-route ticks run the minimal fallback
+  // in the maze movement leg, paced by the stall detectors and bent away
+  // from the last pinned spot by the revived stuck-memory repulsion.
+  // Mirrored in shared ai.js.)
 
   // NAV PLAN — the universal pathfinder (offline mirror of the shared one).
   // Ask the grid for a real walk route to the target; Maze follows it
   // waypoint by waypoint. Returns false when no walk route exists (target
-  // on a jump-only platform, degenerate snap) — the heuristic stack
-  // (scan / ramp-seek / wall-follow) remains the fallback.
+  // on a jump-only platform, degenerate snap) — the minimal fallback in the
+  // maze movement leg covers those ticks until the detectors re-fire.
   // FIRING-POSITION TRUNCATION — the raw path ends at the player's FEET.
   // Walk it (6-unit samples) and cut it at the first spot that already SEES
   // the player from inside the band's upper edge: the bot travels to a
@@ -4532,7 +4640,10 @@ function updateEnemy(now) {
           { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
         )) {
           const cut = path.slice(0, i);
-          cut.push({ x: px, z: pz });
+          // Carry the sample's floor: smoothPath's same-floor gate reads
+          // (y ?? 0), so a y-less cut point on a deck froze the final leg
+          // out of smoothing (review 2026-08-13). Mirrored in shared ai.js.
+          cut.push({ x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -4559,6 +4670,9 @@ function updateEnemy(now) {
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
+    // Diagonal legs where the swept corridor proves them safe (see
+    // smoothPath's header note). Mirrored in shared ai.js navPlan.
+    if (path && path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
       // #2 from an off-grid position can clip the corner between them.
@@ -4631,66 +4745,67 @@ function updateEnemy(now) {
     nextState = 'pursue';
   }
 
-  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, picks a
-  // fresh tangent instead of exiting — Maze doesn't give up, it tries a
-  // different way around.
+  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, re-plans
+  // the route from the CURRENT position — Maze doesn't give up, it retries
+  // the pathfinder (heuristic stack retired 2026-08-08; the stall detectors
+  // pace the retries, and the stuck-memory bias in the fallback leg keeps
+  // them from re-treading the pinned spot).
   const escapeDue = eState.botMazeEscapeUntil != null && now >= eState.botMazeEscapeUntil;
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || escapeDue || (now - (eState.botStateEnteredAt ?? now)) > 7000)) {
     if (escapeDue) eState.botMazeEscapeUntil = null;
     eState.botStateEnteredAt = now;
-    // STATUE ESCAPE: a FROZEN bot is body-pinched in a corner pocket the
-    // zero-width pin test can't see (the ramp-top notch against Airport's
-    // rim glass) — the planner then re-issues the identical line every
-    // 1.5 s forever. If the fresh plan below starts at the very waypoint
-    // it froze against, treat it as NO ROUTE: back out along the escape
-    // heading for a beat, then replan from the freed spot. Deliberately
-    // statue-only (zero net movement): bots that still move never take
-    // the back-out, so live routing gains no back-and-forth.
+    // STATUE ESCAPE (kept): a FROZEN bot is body-pinched in a corner pocket
+    // the zero-width pin test can't see (the ramp-top notch against
+    // Airport's rim glass) — the planner then re-issues the identical line
+    // every 1.5 s forever. If the fresh plan below starts at the very
+    // waypoint it froze against, treat it as NO ROUTE: back out along the
+    // stored escape heading for a beat, then replan from the freed spot.
+    // Deliberately statue-only (zero net movement): bots that still move
+    // never take the back-out, so live routing gains no back-and-forth.
     const navPrev = eState.botNav;
     const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
-    // Pathfinder first: a stuck signal or 7 s refresh re-plans the route
-    // from the CURRENT position. Only when no route exists does the
-    // heuristic stack take over.
     let planned = navPlan();
     if (planned && frozenWp) {
       const fresh = eState.botNav;
       // The follower's own advance rule: the waypoint it would steer to.
       let fi = fresh.idx;
       while (fi < fresh.path.length - 1
-          && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < 3) fi += 1;
+          && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
-      if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
+      // Match against EVERY remaining waypoint of the frozen route, not just
+      // the indexed steer-to: smoothPath's greedy anchors are start/goal-
+      // dependent, so a re-plan from the same frozen spot can re-issue the
+      // same line under a different first anchor — single-index matching
+      // dropped mid-leg statue detection ~20pp and a moving target could
+      // dodge it every re-commit (review 2026-08-13). Waypoints are unmoved
+      // cell centres in both paths, so the 0.5 equality stays exact; the
+      // trigger only fires on stuckFrozen bots, where backing out of ANY
+      // retraced line is the right call. Mirrored in shared ai.js.
+      const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
+        Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
+      if (retraced) {
         eState.botNav = null;
         planned = false;
         eState.botMazeEscapeUntil = now + 800;
+        const edx = e.x - frozenWp.x, edz = e.z - frozenWp.z;
+        const edl = Math.hypot(edx, edz);
+        eState.botMazeEscapeDirX = edl > 0.05 ? edx / edl : -dir.x;
+        eState.botMazeEscapeDirZ = edl > 0.05 ? edz / edl : -dir.z;
       }
     }
-    if (planned) {
-      // fresh path committed
-    } else if (stuckTriggered) {
-      // Stuck mid-Maze → escape re-commit (reverses when probes tie).
-      commitMazeDirection(true);
-    } else {
-      // ROUTE-CHANGE PRIORITY: the ramp goes first when the fight needs a
-      // different route — the target is on another floor, OR I can SEE the
-      // player but can't WALK at them (the full-width Airport plateau
-      // between two ground-floor fighters: sight passes over its 3.7 body,
-      // feet don't). A reachable peephole is a consolation prize — scan-
-      // first let it preempt the route every 7 s, shuttling the bot between
-      // the peephole and the wall. Plain blind same-floor keeps scan-first
-      // (Flashpoint rooms; Station falls through — no ramps there, the
-      // perch reflex climbs instead).
-      const needRoute = Math.abs(oppFloorY - myFloorY) > 2.5
-        || (playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
-      let committed = needRoute && mazeSeekElevationRoute(true);
-      if (!committed) committed = mazeScanForOpening();
-      if (!committed) {
-        // Nothing seen, no ramp applies — re-aim toward the player (hand
-        // dropped; keeping it lapped closed loops forever — the Flashpoint
-        // spawn-room trap). The hand still rules corner turns WITHIN a leg.
-        commitMazeDirection(false, false);
-      }
+    if (!planned && stuckTriggered && eState.botMazeEscapeUntil == null) {
+      // No route AND still stuck: back out for a beat before the next retry —
+      // the fallback's forward lean alone would press straight back into the
+      // same wall between detector firings. Heading: AWAY from the pinning
+      // wall (the avoidance vector points off the nearest obstacle face);
+      // reverse of the target line as the tiebreak. (The stuck-memory spot
+      // is stamped to the CURRENT position this same tick, so "away from
+      // memory" would always be degenerate here — audit finding 2026-08-08.)
+      eState.botMazeEscapeUntil = now + 500;
+      const mdl = Math.hypot(avoid.rx, avoid.rz);
+      eState.botMazeEscapeDirX = mdl > 0.05 ? avoid.rx / mdl : -dir.x;
+      eState.botMazeEscapeDirZ = mdl > 0.05 ? avoid.rz / mdl : -dir.z;
     }
   }
 
@@ -4700,10 +4815,11 @@ function updateEnemy(now) {
     eState.botStateEnteredAt = now;
 
     if (nextState === 'maze') {
-      eState.botMazeWallTicks = 0;
       eState.botMazeEscapeUntil = null;
-      // Pathfinder first; the heuristic commit is the no-route fallback.
-      if (!navPlan()) commitMazeDirection();
+      // Pathfinder only (heuristics retired): no route → the minimal
+      // fallback movement covers the ticks until the detectors re-fire.
+      // The LoS-at-entry record must still be stamped for the exit gate.
+      if (!navPlan()) eState.botMazeLosBlockedAtEntry = !playerHasLoS;
     }
 
     if (nextState === 'engage'
@@ -4818,11 +4934,26 @@ function updateEnemy(now) {
   // no-progress timer shoved it into maze (the 2 s statue at match start).
   const botS = eState.botState ?? 'pursue';
 
-  if (botS === 'pursue') {
+  if (coverMove) {
+    // COVER RELOAD owns movement for the tick — the state branches below
+    // (including their jump commands) don't run, so a maze path can't vault
+    // the bot mid-hide. Never active during Defense (window check above).
+    // SPRINT to cover (2026-08-08 user tune, was walk — reserve-gated by the
+    // dispatch as usual); a HOLD stays wantSprint=false so standing behind
+    // the wall never reads as 'dash' and burns boost at zero speed.
+    mx = coverMove.mx;
+    mz = coverMove.mz;
+    wantSprint = !coverMove.hold;
+  } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
-    const tooClose = dist < lowerRange;
+    // VERTICAL STACK (2026-08-14) — mirrors shared ai.js: `dist` is
+    // horizontal, so an enemy a floor above reads as distance ~0 and range
+    // discipline walks the bot away and back forever. Backing off does
+    // nothing about a vertical gap; let the (multi-layer) router handle it.
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
     // crutch for the pre-pathfinder Maze). If the retreat costs sight, the
@@ -4842,13 +4973,30 @@ function updateEnemy(now) {
     wantSprint = !!eState.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && state.enemy.grounded && !eState.airborne) {
-      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+      // Climb aid: only for a step a jump can actually clear (above that the
+      // router owns it). Mirrors shared ai.js.
+      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
+          && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
+          && dist < 32 && Math.random() > 0.5) {
         if (botStartJump(now)) jumpThisTick = true;
       } else if (onHighGround) {
-        const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
-        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
-          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
+        // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
+        // fresh mount, skip the descent aid so the bot doesn't yo-yo right
+        // back down — the 22-wide track corridor keeps the firing band
+        // valid from the deck edge, so hopping down to close a small gap
+        // is a needless descent. EXCEPTIONS that still descend: sight lost,
+        // or the target pulled well past the band (those need the chase).
+        // Mirrored in shared/src/sim/ai.js.
+        const holdUp = STATION_BOT_RULES && state.mapKey === 'station'
+          && now < (eState.botMountHoldUntil ?? 0)
+          && playerHasLoS
+          && dist < upperRange + 12;
+        if (!holdUp) {
+          const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
+          if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+            jumpDirX = exit.toX; jumpDirZ = exit.toZ;
+            if (botStartJump(now)) jumpThisTick = true;
+          }
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
@@ -4858,22 +5006,35 @@ function updateEnemy(now) {
         const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
+          if (botStartJump(now)) {
+            jumpThisTick = true;
+            // STATION MOUNT HOLD: see the onHighGround branch above.
+            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+          }
+        } else if (STATION_BOT_RULES && state.mapKey === 'station' && perch
+            && (perch.toX * dir.x + perch.toZ * dir.z > 0.2 || perch.dist < 12)) {
+          // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
+          // on this one map the decks are the strong positions but they're
+          // jump-only (no ramps, so paths never cross them) — steer the
+          // approach toward a scanned ledge that's roughly ON THE WAY
+          // (within ~78° of the target direction, or already close — 12 covers
+          // the track corridor half-width), and the jump above fires when it
+          // comes into reach. Weight 0.6
+          // keeps the target-pull dominant; every other map skips this
+          // branch entirely (behavior byte-identical elsewhere).
+          // Mirrored in shared/src/sim/ai.js.
+          const tx = mx + perch.toX * 0.6;
+          const tz = mz + perch.toZ * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          mx = tx / tl; mz = tz / tl;
         }
       }
     }
   } else if (botS === 'maze') {
-    // Committed tangent + a gentle pull toward the player (the Pursue-
-    // flavored heart). The pull FADES OUT near walls (scaled by avoidance
-    // strength) so it can't press the bot into concave corners; in the open —
-    // i.e. right after the wall ends — it kicks back in and curls the bot
-    // around the corner instead of letting it sprint on past the opening.
-    // Context change: committed in the open, and a wall just interposed —
-    // switch to wall-follow NOW instead of grinding into it.
     let nav = eState.botNav;
     // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
     // whose goal is meaningfully CLOSER to the player is an approach — done,
-    // drop it. A pathless (heuristic) maze has nothing sane to do here
+    // drop it. A pathless maze has nothing sane to do here
     // either — its stale committed direction charged straight through the
     // player during sighted-entry windows. Both cases: trip the sighted-
     // entry cap so the maze ENDS and Engage/Pursue own the fight. A
@@ -4898,23 +5059,41 @@ function updateEnemy(now) {
     // exited yet (e.g. sighted-entry cap still counting). Drop the path
     // rather than stand on it — a standing bot re-arms the no-progress
     // trigger every 2 s, which keeps re-selecting maze and STARVES the
-    // exit branch forever (the Plain Field never-orbits bug). The moving
-    // heuristic fallback covers the remaining ticks until the exit fires.
+    // exit branch forever (the Plain Field never-orbits bug). The minimal
+    // fallback covers the remaining ticks until the exit fires.
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
       if (Math.hypot(lastWp.x - e.x, lastWp.z - e.z) < 3) {
-        eState.botNav = null;
-        nav = null;
+        // Arrived — but if the trip did NOT buy sight, dropping to the
+        // pathless fallback beelines the bot back where it came from (the
+        // Streets under-bridge out-and-back loop). Ask for a fresh route
+        // first and take it when it aims somewhere NEW. Mirrors shared ai.js.
+        let replaced = false;
+        if (!playerHasLoS) {
+          navPlan();
+          const fresh = eState.botNav;
+          const freshLast = fresh && fresh.path[fresh.path.length - 1];
+          if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
+            nav = fresh;
+            replaced = true;
+          }
+        }
+        if (!replaced) {
+          eState.botNav = null;
+          nav = null;
+        }
       }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
       // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
-      // exists. Head for the current waypoint, advance within 3 units, and
-      // refresh the route (rate-limited) when the target wanders off the
-      // planned goal. Avoidance stays blended in for dynamic wiggle room.
+      // exists. Head for the current waypoint, advance within
+      // BOT_WAYPOINT_ADVANCE_RADIUS (see its note — 1.5, tight on purpose so
+      // corners are not cut into obstacle end faces), and refresh the route
+      // (rate-limited) when the target wanders off the planned goal.
+      // Avoidance stays blended in for dynamic wiggle room.
       let wp = nav.path[nav.idx];
       while (nav.idx < nav.path.length - 1
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < 3) {
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
       }
@@ -4958,35 +5137,38 @@ function updateEnemy(now) {
       // if the reserve is ever tuned below it.
       const jumpBank = Math.max(BOT_BOOST_RESERVE, (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
       wantSprint = !(jumpAhead && eState.boost < jumpBank);
+    } else if (eState.botMazeEscapeUntil != null && now < eState.botMazeEscapeUntil) {
+      // STATUE BACK-OUT (no route, escape armed): reverse along the stored
+      // escape heading to free the body, then the next re-commit replans
+      // from the freed spot.
+      let tx = (eState.botMazeEscapeDirX ?? -dir.x) + avoid.rx * 0.3;
+      let tz = (eState.botMazeEscapeDirZ ?? -dir.z) + avoid.rz * 0.3;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      wantSprint = false;
     } else {
-      // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
-      // pull toward the player, wall-follow corner turns — the pre-
-      // pathfinder Maze, kept for jump-only targets and degenerate spots.
-      if (eState.botMazeHadWall === false && obstacleNear) commitMazeDirection();
-      // CORNER TURN: the committed wall-follow ran into a NEW wall face
-      // (concave corner). Same 2-tick wall-press read Defense uses —
-      // re-commit HERE (~0.03 s) preserving the going-around hand.
-      const mazeIntoWall = avoidMag > 0.4
-        && ((eState.botMazeDirX ?? 0) * avoid.rx + (eState.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
-      if (mazeIntoWall) {
-        eState.botMazeWallTicks = (eState.botMazeWallTicks ?? 0) + 1;
-      } else {
-        eState.botMazeWallTicks = 0;
+      // MINIMAL FALLBACK (no route exists — rare with the full nav grid):
+      // pursue-style steering toward the player with avoidance, bent by the
+      // revived STUCK-MEMORY repulsion so each detector-paced retry leans
+      // away from the last pinned spot instead of re-treading it. The
+      // detectors keep polling; the next stuck/7 s signal replans.
+      let tx = dir.x + avoid.rx * 0.8;
+      let tz = dir.z + avoid.rz * 0.8;
+      if (eState.botStuckMemAt != null && now - eState.botStuckMemAt < BOT_STUCK_MEMORY_MS) {
+        const rep = computeStuckRepulsion(
+          e.x, e.z, eState.botStuckMemX, eState.botStuckMemZ, BOT_STUCK_MEMORY_RADIUS);
+        tx += rep.rx * BOT_STUCK_MEMORY_WEIGHT;
+        tz += rep.rz * BOT_STUCK_MEMORY_WEIGHT;
       }
-      if (eState.botMazeWallTicks >= 2) {
-        eState.botMazeWallTicks = 0;
-        commitMazeDirection(false, true);
-      }
-      const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
-      let tx = (eState.botMazeDirX ?? side.x) + dir.x * mazePull + avoid.rx * 0.3;
-      let tz = (eState.botMazeDirZ ?? side.z) + dir.z * mazePull + avoid.rz * 0.3;
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
       wantSprint = true;
     }
     // Vertical Maze: hop up onto a reachable platform (Station).
+    // minWidth 0 here ONLY — Maze walks a route, so a strip too thin to be a
+    // vantage point is still a legitimate step. Mirrors shared ai.js.
     if (state.enemy.grounded && !eState.airborne) {
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS, 0);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botStartJump(now)) jumpThisTick = true;
@@ -5015,6 +5197,57 @@ function updateEnemy(now) {
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
 
+    // WEDGE REVERSE (2026-08-08, user-ordered — Defense's first recovery
+    // stage, ported): two consecutive ticks of driving INTO a wall flips the
+    // orbit. The tangent is perpendicular to the aim line, so reversing it
+    // points away from the face just hit BY CONSTRUCTION — no need to know
+    // which wall it is. Without this the bot stuck to the wall at ~6% of
+    // walk speed until the 1 s wedge detector shipped it to Maze, which
+    // breaks off the fight entirely (10% of engage time was spent that way).
+    // Deliberately stage ONE only: measured on Defense, the reverse alone
+    // clears >70% of wedges, while its stage-2 wall-slide bails almost as
+    // often as it fires (92 slides, 91 bails). The LoS flip's 1 s cooldown
+    // is NOT consulted — a bot pressed into a wall can't wait a second —
+    // but firing here re-arms it so the two can't fight over the same tick.
+    // Mirrored in shared ai.js.
+    const engageIntoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4;
+    eState.botEngageWallTicks = engageIntoWall ? (eState.botEngageWallTicks ?? 0) + 1 : 0;
+    if (eState.botEngageWallTicks >= 2) {
+      eState.botEngageWallTicks = 0;
+      eState.botOrbitSign = -sign;
+      eState.botOrbitFlipAt = now + 1000;
+      let rx = side.x * eState.botOrbitSign + dir.x * pull + avoid.rx * 0.6;
+      let rz = side.z * eState.botOrbitSign + dir.z * pull + avoid.rz * 0.6;
+      const rl = Math.hypot(rx, rz) || 1;
+      mx = rx / rl; mz = rz / rl;
+    }
+
+    // STATION LOW-LEVEL DISCOURAGEMENT (map-keyed, 2026-08-05 user order):
+    // fighting on the track level is tolerated only briefly. After ~3 s of
+    // continuous Engage time down there, a ramping pull (0 → 0.6 over the
+    // next 3 s; the orbit/range discipline stays dominant) drifts the bot
+    // toward the nearest mountable deck edge, and the perch jump below
+    // completes the mount. Short exchanges and transit are untouched; the
+    // continuity check restarts the clock after any gap (state change,
+    // death, leaving the low floor). Other maps skip all of it.
+    // Mirrored in shared/src/sim/ai.js.
+    if (STATION_BOT_RULES && state.mapKey === 'station' && !onHighGround) {
+      const cont = now - (eState.botLowDwellTickAt ?? 0) < 250;
+      eState.botLowDwellTickAt = now;
+      if (!cont || eState.botLowDwellSince == null) eState.botLowDwellSince = now;
+      const dwell = now - eState.botLowDwellSince;
+      if (dwell > 3000) {
+        const deck = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
+        if (deck) {
+          const w = Math.min(0.6, ((dwell - 3000) / 3000) * 0.6);
+          const px2 = mx + deck.toX * w;
+          const pz2 = mz + deck.toZ * w;
+          const pl = Math.hypot(px2, pz2) || 1;
+          mx = px2 / pl; mz = pz2 / pl;
+        }
+      }
+    }
+
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
     // the orbit (just adds a jump when the chance is there); the jump cooldown
@@ -5023,7 +5256,13 @@ function updateEnemy(now) {
       const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botStartJump(now)) jumpThisTick = true;
+        if (botStartJump(now)) {
+          jumpThisTick = true;
+          // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
+          // aid for a beat (see onHighGround branch) so the bot doesn't
+          // yo-yo straight back down.
+          if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
+        }
       }
     }
 
@@ -5089,6 +5328,8 @@ function updateEnemy(now) {
           if (botStartJump(now, true)) {
             jumpThisTick = true;
             eState.botDefenseStuckTicks = 0;
+            // STATION MOUNT HOLD: an escape mount also holds the deck.
+            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -5121,6 +5362,8 @@ function updateEnemy(now) {
             if (botStartJump(now, true)) {
               jumpThisTick = true;
               vaulted = true;
+              // STATION MOUNT HOLD: an escape mount also holds the deck.
+              if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
               eState.botDefenseStuckTicks = 0;
             }
           }
@@ -5169,9 +5412,14 @@ function updateEnemy(now) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
-  // Defense (escaping live fire) may spend down to the hard floor; every
-  // other state stops at the strategic reserve.
-  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST : BOT_BOOST_RESERVE;
+  // Sprint funding tiers: Defense (escaping live fire) may spend down to the
+  // hard floor; the COVER-RELOAD dash funds at the survival-jump tier (56,
+  // 2026-08-08 user tune — hiding a reload is a survival move); every other
+  // state stops at the strategic reserve. A cover HOLD never sprints, so it
+  // takes no tier at all.
+  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
+    : (coverMove && !coverMove.hold) ? BOT_COVER_SPRINT_MIN_BOOST
+    : BOT_BOOST_RESERVE;
   const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
   if (jumpThisTick) {
@@ -5195,7 +5443,10 @@ function updateEnemy(now) {
   } else {
     state.enemy.body.velocity.x = mx * botWalkSpeed;
     state.enemy.body.velocity.z = mz * botWalkSpeed;
-    if (Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
+    // Anti-freeze nudge — skipped during a cover-reload HOLD (the hold paces
+    // its own narrow sway; the nudge must not override a flip instant).
+    if (!(coverMove && coverMove.hold)
+        && Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
       state.enemy.body.velocity.x = side.x * 4.5;
       state.enemy.body.velocity.z = side.z * 4.5;
     }
@@ -5227,11 +5478,12 @@ function updateEnemy(now) {
       // regular 220 ms poll, whichever comes first (the target can change).
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
-    } else if (!botHasLineOfSight(
-      { x: e.x, y: e.y + BOT_LOS_EYE_HEIGHT, z: e.z },
-      { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
+    } else if (!botShotCanLand(
+      { x: e.x, y: myShotY, z: e.z },
+      { x: p.x, y: p.y + BOT_MUZZLE_ABOVE_ROOT, z: p.z }
     )) {
-      // No clear shot — hold fire and check again shortly.
+      // No clear shot — hold fire and check again shortly. The origin is the
+      // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {
@@ -6176,29 +6428,42 @@ function startMatch() {
     state.enemy2.state.team = 'B';
   }
   if (state.mapKey === 'arena2') {
-    // Streets: diagonal CORNER spawns (ported from the demo line 2026-08-06,
-    // was ±108/0 road ends) — NW/SE corners, 8u clear of the boundary walls
-    // (x ±126, z ±90) and the corner towers. Mirrored in shared arena.js.
-    state.player.body.position.set(-118, 2.45, -82);
-    state.enemy.body.position.set(118, 2.45, 82);
+    // Streets: diagonal CORNER spawns (user 2026-08-06, was ±108/0 road
+    // ends) — NW/SE corners, 8u clear of the boundary walls (x ±126, z ±90)
+    // and the corner towers. Mirrored in shared arena.js ARENA_SPAWNS.
+    // ±126 after the 2026-08-14 map extension (was ±118): the corner spawns
+    // moved out with everything else, keeping their 10-unit boundary standoff.
+    state.player.body.position.set(-126, 2.45, -82);
+    state.enemy.body.position.set(126, 2.45, 82);
   } else if (state.mapKey === 'lobby') {
-    // Lobby: spawn on lower floor on opposite ends, mezzanine reachable via the central stairs.
-    state.player.body.position.set(-30, 2.45, 50);
-    state.enemy.body.position.set(30, 2.45, 50);
+    // Lobby: edge spawns on the lower floor (user 2026-08-13; was ±30/50
+    // face-to-face at 60u) — each team starts by its own side wall behind
+    // its own spawn-screen counter (x ±70), which blocks every cross-map
+    // spawn sightline. 2v2 teammates stack along +Z (default branch),
+    // pairs at 10.8u clearance. Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-83, 2.45, 38);
+    state.enemy.body.position.set(83, 2.45, 38);
   } else if (state.mapKey === 'factory') {
-    state.player.body.position.set(-50, 2.45, 0);
-    state.enemy.body.position.set(50, 2.45, 0);
+    // Opposite corners (user 2026-08-09; was ±50 / z 0, facing off across the
+    // open centre lane). 8u off the side walls (inner face ±128) and 10u clear
+    // of the machine banks at z ±90, on the long diagonal — 285u apart, so
+    // first contact happens somewhere in the hall instead of on sight.
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-120, 2.45, 77);
+    state.enemy.body.position.set(120, 2.45, -77);
   } else if (state.mapKey === 'factory2') {
     // Diagonal spawn in opposite yards, clear of the corner tanks, belts,
     // workbenches, and the deck ramps.
     state.player.body.position.set(-100, 2.45, -60);
     state.enemy.body.position.set(100, 2.45, 60);
   } else if (state.mapKey === 'station') {
-    // Station: deck FAR-corner spawns (ported from the demo line 2026-08-06,
-    // old track-corridor values ±128, 0): x ±128 leaves 7u to the end wall
-    // (±135); z ±112 sits just past the corner stair block (z 102.5–107.5)
-    // and 20u off the outer wall (inner face ±132). Deck floor 4 → spawn
-    // y = 4 + 2.45. Mirrored in shared arena.js ARENA_SPAWNS.
+    // Station deck spawns in the FAR corners (user 2026-08-06, older values
+    // ±100/±70 then ±128/±70): x ±128 leaves 7u to the end wall (±135);
+    // z ±112 sits just past the corner storage tank (z 102.5–107.5) and 20u
+    // off the outer wall (inner face ±132). Deck floor 4 → spawn y = 4+2.45.
+    // 2026-08-07: briefly the back-wall pockets (±25/±125) — engagements
+    // started too fast; reverted same day (user).
+    // Mirrored in shared arena.js ARENA_SPAWNS.
     state.player.body.position.set(-128, 6.45, -112);
     state.enemy.body.position.set(128, 6.45, 112);
   } else if (state.mapKey === 'square') {
@@ -6206,10 +6471,28 @@ function startMatch() {
     state.player.body.position.set(-95, 2.45, -45);
     state.enemy.body.position.set(95, 2.45, 45);
   } else if (state.mapKey === 'airport') {
-    // Diagonal spawn at opposite ends of the concourse, clear of the plateau
-    // end-ramps (z ±40..50) and the baggage carousels (|x| <= 102).
-    state.player.body.position.set(-118, 2.45, -72);
-    state.enemy.body.position.set(118, 2.45, 72);
+    // Ground level right at the mouth of a corner ramp (ramp x-span 88..130,
+    // feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u off the
+    // foot, with the 2v2 teammate offset stepping AWAY from centre so the
+    // pair lands 6u + 18u out on BOTH sides — mirrored distances are what
+    // matter (the original plain +Z offset gave one team 10u and the other
+    // 34u, so the near team always won the climb race and the far team spent
+    // the match fighting on the ground).
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-130, 2.45, -56);
+    state.enemy.body.position.set(130, 2.45, 56);
+  } else if (state.mapKey === 'flashpoint') {
+    // Spawns INSIDE the two walled corner rooms (user 2026-08-12, to
+    // exercise doorway navigation after the waypoint-advance fix): green
+    // deep in the NW room, red at the exact point mirror in the SE room.
+    // The rooms' walls mirror but their contents do not — the SE room's
+    // deep half holds the fenced deck, so both pairs sit on the open
+    // L-strip west of it. With the inward-X teammate rule below, all four
+    // slots land at exactly 10.0u clearance and p4 = −p3. Prior open-corner
+    // placements live in this block's git history.
+    // Mirrored in shared arena.js ARENA_SPAWNS.
+    state.player.body.position.set(-68, 2.45, -62);
+    state.enemy.body.position.set(68, 2.45, 62);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -6221,20 +6504,44 @@ function startMatch() {
   // Most maps offset 12 along +Z. Station spawns sit near the deck END walls,
   // so offset along the deck toward centre (X). Streets' corner spawns sit
   // 8u off the south/north walls, so +Z would bury the teammate in the wall —
-  // offset along Z toward centre instead. Mirrored in shared state.js.
+  // offset along Z toward centre instead. Airport uses Station's X form too
+  // (user, 2026-08-08): its spawns sit 6u off a ramp foot, and a Z offset
+  // would put one teammate 12u further from the ramp (or on the slope
+  // itself) — offsetting along X keeps BOTH at the ramp mouth, side by side,
+  // equidistant. FACTORY joins Streets for the same reason (user 2026-08-09):
+  // its corner spawns sit at z ±77, and a flat +Z would drop one teammate on
+  // the z +90 machine bank while the other walked free — the two teams would
+  // not get the same opening. Toward-centre keeps the pair 180°-symmetric.
+  // FLASHPOINT joins Streets/Factory on the Z form (user, 2026-08-10, final):
+  // the teammate stacks BEHIND the leader toward centre rather than beside it.
+  // p1 (−95, 47) → p3 (−95, 35); mirrored, p2 (95, −47) → p4 (95, −35). All
+  // four sit at 12u clearance and p4 = −p3 still holds exactly.
+  // Mirrored in shared state.js.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station') {
+    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
       state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
       state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2') {
+    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
       state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
     } else {
       state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
       state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
     }
+  }
+  // The teleports above move only the physics BODIES. The visual roots sync
+  // from the bodies in the frame loop — AFTER updateEnemy has read
+  // root.position for that frame. On the first match tick that lag is not
+  // 16 ms of drift but the full origin→spawn distance: every bot planned
+  // from (0,0,0), the Maze entry navPlan failed, and the no-route fallback
+  // beelined into the spawn-room corner until the stall detectors fired
+  // (the Flashpoint room-spawn wall-run, 2026-08-13). Sync the roots NOW so
+  // tick 1 sees true positions. Mirrors respawnSlotMech's fresh-mech sync.
+  for (const s of ['player', 'ally', 'enemy', 'enemy2']) {
+    const m = state[s];
+    if (m) m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
   }
   // Trio bookkeeping: per-slot roster cursor + the spawn positions recorded
   // for mid-match respawns (next roster unit spawns where its team started).
@@ -8804,9 +9111,16 @@ function updateWallFade() {
 // Register a mesh for the camera-proximity fade above. The mesh needs its
 // OWN material instance — clone shared materials before registering, or
 // every object using that material fades together.
+// `box.fadeGroup` (optional): a name shared by meshes that must fade as one
+// structure — any member blocking fades every member. Unlike fadeLeader this
+// is symmetric and order-independent.
+// `box.parts` (optional, occlude mode only): sub-boxes to run the occlusion
+// test against, for tilted meshes whose AABB is a poor fit. `box` itself
+// still needs to be the full AABB — proximity mode reads it directly.
 function registerWallFade(mesh, box) {
   mesh.material.transparent = true;
   mesh.userData.fadeBox = box;
+  if (box.fadeGroup) mesh.userData.fadeGroup = box.fadeGroup;
   if (!state.wallFadeMeshes) state.wallFadeMeshes = [];
   state.wallFadeMeshes.push(mesh);
 }
@@ -9014,23 +9328,11 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
-  } else if (mapKey === 'flashpoint') {
-    // Industrial CQB arena, well-lit for readability. Cool steel-blue base
-    // ambient with a warm sodium key light over the concrete; fog kept
-    // mid-range so the room dividers still read as silhouettes at the back
-    // of the hall without losing target visibility.
-    scene.background.setHex(0x2a3140);
-    scene.fog.color.setHex(0x2c3340);
-    scene.fog.near = 45;
-    scene.fog.far = 200;
-    ambient.color.setHex(0xc4d2e2);
-    ambient.intensity = 0.95;
-    key.color.setHex(0xfff0d0);
-    key.intensity = 1.3;
-  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2') {
+  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2' || mapKey === 'flashpoint') {
     // Bright daylight departure hall: white terminal light, pale sky seen
     // through the glass curtain walls, long fog range for the big sightlines.
     // Factory 2 and Streets share this daylight tone (user calls 2026-07-18);
+    // Flashpoint joined from its old steel-blue night tone (user 2026-08-13);
     // classic Factory keeps the night tone, Square keeps the overcast one.
     // Bullet-trail colors are deliberately untouched by these tone moves.
     scene.background.setHex(0x9db8cc);
@@ -9349,8 +9651,12 @@ function buildStreetsArena() {
   base.rotation.x = -Math.PI / 2; base.position.y = 0.005; scene.add(base); arenaDecor.push(base);
 
   // ===== Bridge dimensions (referenced throughout) =====
+  // HALF_X 8 -> 16 (user 2026-08-13): the footbridge doubles in width to a
+  // 32-wide elevated boulevard. Every bridge piece (deck, rails, pillars,
+  // ramps, slope gates, under-slope movement bars) derives from these
+  // constants, so the widening propagates everywhere from here.
   const BRIDGE_TOP = 8;
-  const BRIDGE_HALF_X = 8;
+  const BRIDGE_HALF_X = 16;
   const BRIDGE_MIN_Z = -28;
   const BRIDGE_MAX_Z = 28;
   const RAMP_HALF_X = BRIDGE_HALF_X;
@@ -9360,13 +9666,24 @@ function buildStreetsArena() {
   const RAMP_N_MIN_Z = 28;
   const RAMP_N_MAX_Z = 56;
 
+  // ===== MAP EXTENSION (user 2026-08-14) =====
+  // The bridge doubled in width (half-width 8 -> 16), so the MAP GROWS by the
+  // same 8 per side rather than the surroundings being shaved down to fit.
+  // Everything outboard of the bridge — plaza, buildings, planters, towers,
+  // lamps, vending, stalls, boundary, spawns — shifts out by OUTBOARD, which
+  // preserves every object's SIZE and every gap between them (the widening
+  // pass had cut the ramp-mouth planters 12 -> 5 to make room; they are back
+  // to 12 here, with their original 5.6 ramp-side and 9 building-side lanes).
+  const OUTBOARD = 8;
+  const out = (x) => x + Math.sign(x) * OUTBOARD;
+
   // Sidewalks lining the main avenue (street runs along X, narrow in Z)
-  addPlatform({ minX: -120, maxX: 120, minZ: -18, maxZ: -12, top: 0.45, material: sidewalk });
-  addPlatform({ minX: -120, maxX: 120, minZ: 12, maxZ: 18, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-120), maxX: out(120), minZ: -18, maxZ: -12, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-120), maxX: out(120), minZ: 12, maxZ: 18, top: 0.45, material: sidewalk });
 
   // Plaza decks on each side (extend out to support longer ramps)
-  addPlatform({ minX: -34, maxX: 34, minZ: -58, maxZ: -18, top: 0.45, material: sidewalk });
-  addPlatform({ minX: -34, maxX: 34, minZ: 18, maxZ: 58, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-34), maxX: out(34), minZ: -58, maxZ: -18, top: 0.45, material: sidewalk });
+  addPlatform({ minX: out(-34), maxX: out(34), minZ: 18, maxZ: 58, top: 0.45, material: sidewalk });
 
   // ===== Storefront buildings =====
   // Pulled closer to sidewalks while preserving movement lanes.
@@ -9377,7 +9694,7 @@ function buildStreetsArena() {
     { x: 42, sx: 14, h: 16, mat: storefrontD },
     { x: 68, sx: 22, h: 12, mat: storefrontA },
     { x: 100, sx: 28, h: 15, mat: storefrontC }
-  ];
+  ].map((b) => ({ ...b, x: out(b.x) }));   // sizes untouched, positions moved out
   southBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: -48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
     // Upper floors are SOLID (blocks units, bullets, and bot sight — real high
@@ -9404,7 +9721,7 @@ function buildStreetsArena() {
     { x: 42, sx: 14, h: 14, mat: storefrontC },
     { x: 68, sx: 22, h: 17, mat: storefrontB },
     { x: 100, sx: 28, h: 12, mat: storefrontA }
-  ];
+  ].map((b) => ({ ...b, x: out(b.x) }));   // sizes untouched, positions moved out
   northBuildings.forEach((b) => {
     const body = addBlockingBox({ x: b.x, y: b.h / 2, z: 48, sx: b.sx, sy: b.h, sz: 24, material: b.mat });
     // Solid upper floors + standable rooftop — see the south row note.
@@ -9426,13 +9743,20 @@ function buildStreetsArena() {
   // walls past the boundary just blocked the horizon view from near the
   // map edge.)
 
-  // ===== Footbridge (deck at y=8, spans 16m × 56m) =====
-  // Deck + railings fade ONLY while they actually sit between the camera
-  // and the player unit (occlusion mode, same as the storefront buildings) —
-  // e.g. fighting under the deck with the camera above it, or standing
-  // behind the railings. Otherwise they stay fully solid. Slopes are left
-  // alone. Materials are cloned — `railing` is shared with the support
-  // pillars, which stay solid.
+  // ===== Footbridge (deck at y=8, spans 32m × 56m) =====
+  // The bridge fades as ONE structure (user 2026-08-10): deck, both slopes,
+  // the deck railings, the angled slope gates and the support pillars all
+  // share BRIDGE_FADE, so whichever piece is caught between the camera and a
+  // unit takes the whole span with it. Previously only the deck and its two
+  // rails faded, and independently — which pulled the bridge apart on screen
+  // (a ghost deck still fenced by solid rails, a faded span running into a
+  // solid slope). Each part still fades ONLY in occlusion mode, i.e. while it
+  // genuinely sits between the camera and the focused unit or a live enemy.
+  // Every registered mesh gets its own material clone: `railing` is shared by
+  // the rails, the pillars and the slope gates, and registering the shared
+  // instance would run the opacity lerp several times per frame on one
+  // material.
+  const BRIDGE_FADE = 'streets-bridge';
   const deckMesh = addPlatform({
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
@@ -9442,7 +9766,7 @@ function buildStreetsArena() {
     minX: -BRIDGE_HALF_X, maxX: BRIDGE_HALF_X,
     minY: BRIDGE_TOP - 0.8, maxY: BRIDGE_TOP,
     minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-    occlude: true, occludeEnemy: true
+    occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
   });
   // Railings along bridge sides
   const RAIL_H = 1.6;
@@ -9453,30 +9777,147 @@ function buildStreetsArena() {
       minX: railX - 0.2, maxX: railX + 0.2,
       minY: BRIDGE_TOP, maxY: BRIDGE_TOP + RAIL_H,
       minZ: BRIDGE_MIN_Z, maxZ: BRIDGE_MAX_Z,
-      occlude: true, occludeEnemy: true
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
     });
   }
+  // ===== Bridge bastion hoardings (user 2026-08-13; chosen through sample
+  // rounds: end-bastion layout, blank faces) — full-height cover panels at
+  // the four deck approaches, z -28..-16 and 16..28 on BOTH rail lines.
+  // Each bridge end is a covered foothold; mid-span stays open and exposed.
+  // Panels rise deck+8: true cover per the sizing rules (anything lower
+  // hides the sprite but betrays the 8-tall hit capsule). Faces are blank
+  // print tones (light beige / brown, alternating) pointing OUTWARD; the
+  // dark frame backs face the deck. The low rails keep running through the
+  // panel volumes — nested collision boxes are harmless. FADE: every panel
+  // mesh joins BRIDGE_FADE with occlude + occludeEnemy — the user's
+  // explicit call: hoarding transparency stays in sync with the bridge.
+  const panelTones = [
+    new THREE.MeshStandardMaterial({ color: 0xcfc8b8, roughness: 0.85 }),  // light beige
+    new THREE.MeshStandardMaterial({ color: 0xbd9a7e, roughness: 0.85 })   // brown
+  ];
+  let panelIdx = 0;
+  for (const sideX of [-BRIDGE_HALF_X - 0.2, BRIDGE_HALF_X + 0.2]) {
+    for (const [z0, z1] of [[-28, -16], [16, 28]]) {
+      const pbox = { minX: sideX - 0.25, maxX: sideX + 0.25, minY: BRIDGE_TOP, maxY: BRIDGE_TOP + 8, minZ: z0, maxZ: z1 };
+      const frame = addBlockingBox({ x: sideX, y: BRIDGE_TOP + 4, z: (z0 + z1) / 2, sx: 0.5, sy: 8, sz: z1 - z0, material: billboardFrame.clone() });
+      registerWallFade(frame, { ...pbox, occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE });
+      const out = sideX < 0 ? -1 : 1;
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(z1 - z0 - 0.8, 6.4), panelTones[panelIdx % 2].clone());
+      face.position.set(sideX + out * 0.27, BRIDGE_TOP + 4.1, (z0 + z1) / 2);
+      face.rotation.y = sideX < 0 ? -Math.PI / 2 : Math.PI / 2;
+      scene.add(face); arenaDecor.push(face);
+      registerWallFade(face, { ...pbox, occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE });
+      panelIdx += 1;
+    }
+  }
   // No hanging end-caps across bridge entries; slope gates are provided along ramp edges.
-  // Underside support pillars (set into the sidewalks, not the street)
-  addBlockingBox({ x: -BRIDGE_HALF_X + 0.6, y: BRIDGE_TOP / 2, z: -15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: BRIDGE_HALF_X - 0.6, y: BRIDGE_TOP / 2, z: -15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: -BRIDGE_HALF_X + 0.6, y: BRIDGE_TOP / 2, z: 15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
-  addBlockingBox({ x: BRIDGE_HALF_X - 0.6, y: BRIDGE_TOP / 2, z: 15, sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing });
+  // Underside support pillars (set into the sidewalks, not the street).
+  // In the fade group too (user's call): they are structurally part of the
+  // bridge, so they ghost with it. Note this does mean street-level cover
+  // under the deck goes see-through whenever any bridge piece is blocking.
+  for (const [pillarX, pillarZ] of [
+    [-BRIDGE_HALF_X + 0.6, -15], [BRIDGE_HALF_X - 0.6, -15],
+    [-BRIDGE_HALF_X + 0.6, 15], [BRIDGE_HALF_X - 0.6, 15]
+  ]) {
+    const pillarMesh = addBlockingBox({
+      x: pillarX, y: BRIDGE_TOP / 2, z: pillarZ,
+      sx: 1.4, sy: BRIDGE_TOP, sz: 1.4, material: railing.clone()
+    });
+    registerWallFade(pillarMesh, {
+      minX: pillarX - 0.7, maxX: pillarX + 0.7,
+      minY: 0, maxY: BRIDGE_TOP,
+      minZ: pillarZ - 0.7, maxZ: pillarZ + 0.7,
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
+  }
 
   // ===== Ramps (slopes — units walk straight up, no jump) =====
   // 16m horizontal × 7.55m rise → ~25° walkable; 8m wide
-  addRamp({
+  const rampS = addRamp({
     minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
     minZ: RAMP_S_MIN_Z, maxZ: RAMP_S_MAX_Z,
     axis: 'z', lowY: RAMP_LOW_Y, highY: BRIDGE_TOP,
-    material: ramp
+    material: ramp.clone()
   });
-  addRamp({
+  const rampN = addRamp({
     minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
     minZ: RAMP_N_MIN_Z, maxZ: RAMP_N_MAX_Z,
     axis: 'z', lowY: BRIDGE_TOP, highY: RAMP_LOW_Y,
-    material: ramp
+    material: ramp.clone()
   });
+  // Slopes join the group. A slope's AABB is a bad stand-in for the slab: it
+  // also covers the open air above the low end, so the ramp would read
+  // "blocking" the whole time you walk up it and hold the bridge at 25%.
+  // Stair-step it into slices instead (`parts`), each hugging the deck line
+  // over its own stretch of z, padded by the slab's half-thickness.
+  const RAMP_SLICES = 8;
+  const rampSliceBoxes = (rMinZ, rMaxZ, lowAtMinZ) => {
+    const parts = [];
+    const step = (rMaxZ - rMinZ) / RAMP_SLICES;
+    for (let i = 0; i < RAMP_SLICES; i += 1) {
+      const t0 = i / RAMP_SLICES;
+      const t1 = (i + 1) / RAMP_SLICES;
+      const yA = THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t0 : 1 - t0);
+      const yB = THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t1 : 1 - t1);
+      parts.push({
+        minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+        minY: Math.min(yA, yB) - 0.4, maxY: Math.max(yA, yB) + 0.4,
+        minZ: rMinZ + step * i, maxZ: rMinZ + step * (i + 1)
+      });
+    }
+    return parts;
+  };
+  for (const [rampMesh, rMinZ, rMaxZ, lowAtMinZ] of [
+    [rampS, RAMP_S_MIN_Z, RAMP_S_MAX_Z, true],
+    [rampN, RAMP_N_MIN_Z, RAMP_N_MAX_Z, false]
+  ]) {
+    registerWallFade(rampMesh, {
+      minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+      minY: RAMP_LOW_Y, maxY: BRIDGE_TOP,
+      minZ: rMinZ, maxZ: rMaxZ,
+      parts: rampSliceBoxes(rMinZ, rMaxZ, lowAtMinZ),
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
+  }
+  // ===== Under-slope fill (invisible, SOLID) — user 2026-08-14 =====
+  // A slope is a walkable SURFACE, and projectileHitsSurface only stops a shot
+  // that CROSSES a surface plane. Anything travelling under the slab without
+  // ever crossing it — sideways at constant z (the ramp height doesn't change,
+  // so the sign never flips), or the muzzle riding below the sight eye near
+  // the junction — flew straight through the solid wedge and out the far side.
+  // Bot sight already reads the ramp as solid fill (sightHitsSurface), so the
+  // two models disagreed exactly where the slope meets the deck: 127k stance
+  // pairs leaked a bullet through the slope, 12k of them with the bot holding
+  // a clear sight line into a shot that died in mid-air.
+  // Fill the wedge with invisible SOLID boxes — deliberately NOT noProjectile,
+  // unlike the side bars below — so walking, sight and bullets finally agree.
+  // Each slice tops out at the LOWER of its two walk-plane ends minus 0.05, so
+  // it never rises above the ramp you walk on, and the leftover sliver stays
+  // inside the slab's own 0.62 vertical thickness (nothing visible opens up).
+  // topBuffer 0 is required: the default 4 would capture a unit standing ON
+  // the ramp (pos.y = walk plane + GROUND_BASE_Y) and shove it off the slope.
+  const UNDER_SLICE = 2;
+  for (const [rMinZ, rMaxZ, lowAtMinZ] of [
+    [RAMP_S_MIN_Z, RAMP_S_MAX_Z, true],
+    [RAMP_N_MIN_Z, RAMP_N_MAX_Z, false]
+  ]) {
+    const walkYAt = (z) => {
+      const t = (z - rMinZ) / (rMaxZ - rMinZ);
+      return THREE.MathUtils.lerp(RAMP_LOW_Y, BRIDGE_TOP, lowAtMinZ ? t : 1 - t);
+    };
+    for (let z0 = rMinZ; z0 < rMaxZ - 1e-6; z0 += UNDER_SLICE) {
+      const z1 = Math.min(z0 + UNDER_SLICE, rMaxZ);
+      const top = Math.min(walkYAt(z0), walkYAt(z1)) - 0.05;
+      if (top <= 0) continue;
+      arenaObstacles.push({
+        minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
+        minZ: z0, maxZ: z1,
+        minY: 0, maxY: top,
+        topBuffer: 0
+      });
+    }
+  }
+
   // Long angled gate visuals that match slope angle, with matching collision samples.
   const RAMP_WALL_H = RAIL_H;
   const slopeSpan = (RAMP_S_MAX_Z - RAMP_S_MIN_Z);
@@ -9484,13 +9925,14 @@ function buildStreetsArena() {
   const slopeRise = BRIDGE_TOP - RAMP_LOW_Y;
   const slopeAngle = Math.atan2(slopeRise, slopeSpan);
   const addAngledSlopeGate = ({ x, zCenter, yCenter, rotationX, zStart, zEnd }) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, RAMP_WALL_H, slopeGateLen), railing);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, RAMP_WALL_H, slopeGateLen), railing.clone());
     mesh.position.set(x, yCenter, zCenter);
     mesh.rotation.x = rotationX;
     scene.add(mesh);
     arenaDecor.push(mesh);
 
     const samples = 5;
+    const fadeParts = [];
     for (let i = 0; i < samples; i += 1) {
       const t = (i + 0.5) / samples;
       const z = THREE.MathUtils.lerp(zStart, zEnd, t);
@@ -9504,19 +9946,40 @@ function buildStreetsArena() {
         minZ: z - sz / 2, maxZ: z + sz / 2,
         minY: y - sy / 2, maxY: y + sy / 2
       });
+      // The collision samples already trace the tilted rail, so reuse their
+      // shape for the fade test (see `parts` in registerWallFade) — the gate's
+      // plain AABB would claim everything above the low end.
+      fadeParts.push({
+        minX: x - sx / 2, maxX: x + sx / 2,
+        minZ: z - sz / 2, maxZ: z + sz / 2,
+        minY: y - sy / 2, maxY: y + sy / 2
+      });
       // Invisible under-slope bar: blocks units from walking beneath the slope from the road.
       // Top sits at the slope underside (below the gate above), so it never exceeds the gate.
       // noProjectile: true so bullets pass through this invisible block (it's only meant
-      // to gate unit movement, not draw fire).
+      // to gate unit movement, not draw fire). blocksBotSight: bots must NOT
+      // see through a wall they can't walk through — an in-band bot with
+      // open sight through this bar paced against it forever because no
+      // Maze trigger fires while the target is visible (2026-08-13).
       if (slopeY > 0) {
         arenaObstacles.push({
           minX: x - sx / 2, maxX: x + sx / 2,
           minZ: z - sz / 2, maxZ: z + sz / 2,
           minY: 0, maxY: slopeY,
-          noProjectile: true
+          noProjectile: true,
+          blocksBotSight: true
         });
       }
     }
+    // zStart/zEnd arrive reversed on the north ramp (it descends), so normalise
+    // for the outer AABB.
+    registerWallFade(mesh, {
+      minX: x - 0.225, maxX: x + 0.225,
+      minY: RAMP_LOW_Y, maxY: BRIDGE_TOP + RAMP_WALL_H,
+      minZ: Math.min(zStart, zEnd), maxZ: Math.max(zStart, zEnd),
+      parts: fadeParts,
+      occlude: true, occludeEnemy: true, fadeGroup: BRIDGE_FADE
+    });
   };
   for (const sx of [-1, 1]) {
     addAngledSlopeGate({
@@ -9540,6 +10003,8 @@ function buildStreetsArena() {
   // the main road). Top stays below the deck so bridge↔slope transit at y≈BRIDGE_TOP +
   // GROUND_BASE_Y clears the +4 collision Y buffer in resolveUnitObstacleCollisions.
   // noProjectile: true so bullets aren't blocked by these invisible caps.
+  // blocksBotSight: same rationale as the under-slope bars — bots must not
+  // see targets through a cap they cannot walk through (2026-08-13).
   const underSlopeCapMaxY = BRIDGE_TOP - 2;
   const underSlopeCapThickness = 0.45;
   for (const edgeZ of [RAMP_S_MAX_Z, RAMP_N_MIN_Z]) {
@@ -9547,17 +10012,17 @@ function buildStreetsArena() {
       minX: -RAMP_HALF_X, maxX: RAMP_HALF_X,
       minZ: edgeZ - underSlopeCapThickness / 2, maxZ: edgeZ + underSlopeCapThickness / 2,
       minY: 0, maxY: underSlopeCapMaxY,
-      noProjectile: true
+      noProjectile: true,
+      blocksBotSight: true
     });
   }
 
   // ===== Akihabara dressing =====
   // Corner towers (industrial smokestacks), dressed with base/hazard/rings/cap.
-  // Each tower registers occlude-fade (ported from the demo line 2026-08-06):
-  // 24-28 tall at the map corners, they block the camera when fights sit at
-  // the corner spawns — fade while between camera and player, same as the
-  // storefront buildings.
-  for (const [tx, tz, th] of [[-110, -94, 24], [110, 94, 24], [-110, 94, 28], [110, -94, 28]]) {
+  // Each tower registers occlude-fade (2026-08-06): 24-28 tall at the map
+  // corners, they block the camera when fights sit at the new corner spawns —
+  // fade while between camera and player, same as the storefront buildings.
+  for (const [tx, tz, th] of [[out(-110), -94, 24], [out(110), 94, 24], [out(-110), 94, 28], [out(110), -94, 28]]) {
     fadeGroup = [addBlockingBox({ x: tx, y: th / 2, z: tz, sx: 5, sy: th, sz: 5, material: industrialBody })];
     dressTower(tx, tz, 5, th);
     applyBuildingFade(fadeGroup, { minX: tx - 4, maxX: tx + 4, minY: 0, maxY: th + 3, minZ: tz - 4, maxZ: tz + 4 });
@@ -9565,7 +10030,7 @@ function buildStreetsArena() {
   }
 
   // Lamp posts along sidewalks
-  const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110];
+  const lampXs = [-110, -88, -66, -44, 44, 66, 88, 110].map(out);
   for (const lx of lampXs) {
     for (const lz of [-15, 15]) {
       addBlockingBox({ x: lx, y: 9.1, z: lz, sx: 0.35, sy: 18.2, sz: 0.35, material: lampMat });
@@ -9585,7 +10050,7 @@ function buildStreetsArena() {
     [-25, 15.2], [-23.5, 15.2],
     [50, 15.2], [51.5, 15.2],
     [95, 15.2], [93.5, 15.2]
-  ];
+  ].map(([x, z]) => [out(x), z]);
   vendingPos.forEach(([x, z]) => {
     // Full cover: sized to hide the WHOLE unit (~4.3 wide, head at y≈8), not just
     // the hittable body — wide + tall enough to fully duck behind one.
@@ -9594,7 +10059,7 @@ function buildStreetsArena() {
   });
 
   // Street stalls with awnings (sidewalk side, opposite ends from vending)
-  const stallSpots = [[-30, -15], [30, 15], [-58, 14.8], [60, -14.8]];
+  const stallSpots = [[out(-30), -15], [out(30), 15], [out(-58), 14.8], [out(60), -14.8]];
   stallSpots.forEach(([x, z]) => {
     // Long booth cover: extended along x into a market-stall length; awning on top.
     addBlockingBox({ x, y: 4.0, z, sx: 12.0, sy: 8.0, sz: 4.5, material: stallAwning });
@@ -9608,29 +10073,39 @@ function buildStreetsArena() {
   // Each pair runs from the plaza edge (x=±32) inward to x=±12, leaving a central
   // opening (x -12..12, which also keeps the bridge ramp clear) for units to pass
   // through front-to-back. Tall enough to block bullets.
-  for (const [px, pz] of [[-20, -38], [20, -38], [-20, 38], [20, 38]]) {
+  for (const [px, pz] of [[out(-20), -38], [out(20), -38], [out(-20), 38], [out(20), 38]]) {
     // Shortened 20 -> 16 (outer end, older pass), then 16 -> 12 from BOTH
     // ends (2026-08-01, centers unchanged at x ±20 → spans x 14..26): widens
-    // the ramp-side choke (slope gate x≈8.2 ⇄ planter 12→14, gap 3.8→5.8)
-    // AND the plaza-side choke (planter 28→26 ⇄ plaza edge 32, gap 4→6) so
-    // units navigate the bridge-end passes without hugging geometry.
-    addBlockingBox({ x: px, y: 3.25, z: pz, sx: 12, sy: 6.5, sz: 2.4, material: sidewalk });
-    dressPlanter(px, pz, 12, 6.5, 2.4);
+    // the ramp-side choke AND the plaza-side choke so units navigate the
+    // bridge-end passes without hugging geometry.
+    // RESTORED to 12 (user 2026-08-14): the bridge widening had cut these to
+    // 5 to clear the new ramp. With the map extended instead, the original
+    // size sits at spans x 22..34 and every gap is back to what it was —
+    // 5.6 to the slope gate, 9 to the storefront, 8 to the plaza edge.
+    // Raised 6.5 -> 8.0 (user 2026-08-10). At 6.5 these cleared the 5.6 muzzle
+    // but not the 8.0 hit capsule, so a unit behind one had its top ~1.5 still
+    // exposed and the 6.4 sprite showed over the hedge — cover that reads as
+    // cover but is not. 8.0 is the true-cover threshold, and the same height
+    // the vending machines directly below already use.
+    addBlockingBox({ x: px, y: 4.0, z: pz, sx: 12, sy: 8.0, sz: 2.4, material: sidewalk });
+    dressPlanter(px, pz, 12, 8.0, 2.4);
   }
-  for (const [px, pz] of [[-28, -52], [-26, -52], [26, 52], [28, 52]]) {
+  for (const [px, pz] of [[out(-28), -52], [out(-26), -52], [out(26), 52], [out(28), 52]]) {
     addBlockingBox({ x: px, y: 4.0, z: pz, sx: 5.0, sy: 8.0, sz: 3.0, material: vendor });
     dressVending(px, pz, 5.0, 8.0, 3.0);
   }
 
-  // Power-line / overhead banner strung between corner towers
-  addBlockingBox({ x: 0, y: 16, z: -94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
-  addBlockingBox({ x: 0, y: 16, z: 94, sx: 220, sy: 0.25, sz: 0.25, material: lampMat });
+  // Power-line / overhead banner strung between corner towers (spans the full
+  // width, so it grows with the map extension rather than shifting).
+  addBlockingBox({ x: 0, y: 16, z: -94, sx: 220 + 2 * OUTBOARD, sy: 0.25, sz: 0.25, material: lampMat });
+  addBlockingBox({ x: 0, y: 16, z: 94, sx: 220 + 2 * OUTBOARD, sy: 0.25, sz: 0.25, material: lampMat });
 
   // ===== Play-area edge: invisible perimeter wall + red floor stripe.
   // The HALF_Z is set just inside the storefront back walls (z=±97-103) so
   // those remain visible decor past the boundary. HALF_X bounds the avenue
-  // a few units past the corner sign towers (x=±110).
-  addBoundaryIndicator(128, 92, 28);
+  // a few units past the corner sign towers (now x=±118 after OUTBOARD).
+  // Keep in step with ARENA_BOUNDS.arena2 in shared/src/sim/arena.js.
+  addBoundaryIndicator(128 + OUTBOARD, 92, 28);
 }
 
 // ===========================================================================
@@ -9841,34 +10316,50 @@ function tickRange(now, dt) {
   }
 }
 
-// Factory 2 — industrial remake of Factory using Airport's design philosophy:
-// ONE central organizing anchor (a raised assembly deck, ramp-accessible by
-// everyone), real interaction points (4 ramps + 2 jump-in fence gaps), and
-// cover that passes the sizing rules (true cover >= 8 tall, walls >= 12,
-// vault clutter <= 2.5). Tall structures register occlude-fade (turn
-// transparent when they block the view); low objects rely on the unit's
-// X-ray rear-shadow, which needs no registration. Online since 0.4.6: the
-// baked collision in shared arena.js is exported FROM this builder
+// SCRAPYARD (map key 'factory2') — the scrapyard retheme of the Factory 2 layout
+// (user 2026-08-13): same crowded bones, shantytown skin. COLLISION IS
+// FROZEN — every addBlockingBox / addPlatform / addRamp / surface keeps the
+// exact Factory 2 numbers, so the baked entry in shared arena.js stays
+// byte-identical and the retheme deploys client-only. Material variables
+// keep their industrial names so the collision calls stay diff-clean; what
+// each now renders as:
+//   machine        -> corrugated rust sheeting (shanty hut walls)
+//   machineAlt     -> faded painted sheet metal (containers, fences, partitions)
+//   machineTop     -> red-ochre paint (doors, drums, roofs, stall counters)
+//   crate/crateAlt -> weathered scrap wood
+//   beam           -> dark timber
+//   rackFrame      -> bamboo / scrap lumber
+//   beltSurface    -> tar-paper roofing (the walkable shack-row tops)
+//   beltFrame      -> rusted angle iron
+//   deckSteel/Tile -> scrap-plank terrace over the shanty block
+//   tankMat        -> rusted water towers
+// Design intent unchanged from Factory 2: ONE central anchor (the raised
+// terrace, ramp-accessible by everyone), 4 ramps + 2 jump-in fence gaps,
+// cover that passes the sizing rules (true cover >= 8, walls >= 12, vault
+// clutter <= 2.5). Tall structures register occlude-fade; low objects rely
+// on the unit's X-ray rear-shadow. Online since 0.4.6: the baked collision
+// in shared arena.js is exported FROM this builder
 // (__exportArenaCollision('factory2')) — re-export after any geometry change.
 function buildFactory2Arena() {
-  const concrete = new THREE.MeshStandardMaterial({ color: 0x2d3540, roughness: 0.92 });
-  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x37424f, roughness: 0.85 });
-  const stripe = new THREE.MeshStandardMaterial({ color: 0xeae66f, roughness: 0.7 });
-  const wallTrim = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.5, metalness: 0.45 });
-  const beltSurface = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.95 });
-  const beltFrame = new THREE.MeshStandardMaterial({ color: 0xd9a028, roughness: 0.6 });
-  const roller = new THREE.MeshStandardMaterial({ color: 0xa8aebd, roughness: 0.45, metalness: 0.7 });
-  const machine = new THREE.MeshStandardMaterial({ color: 0x2b3f5f, roughness: 0.55, metalness: 0.4 });
-  const machineAlt = new THREE.MeshStandardMaterial({ color: 0x37547a, roughness: 0.55, metalness: 0.4 });
-  const machineTop = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
-  const crate = new THREE.MeshStandardMaterial({ color: 0x7e5635, roughness: 0.85 });
-  const crateAlt = new THREE.MeshStandardMaterial({ color: 0x614126, roughness: 0.9 });
-  const beam = new THREE.MeshStandardMaterial({ color: 0x8b3a36, roughness: 0.5 });
-  const rackFrame = new THREE.MeshStandardMaterial({ color: 0xc09030, roughness: 0.6 });
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x6a7383, roughness: 0.5, metalness: 0.55 });
-  const cautionMat = new THREE.MeshStandardMaterial({ color: 0xe6a630, roughness: 0.7 });
-  const deckSteel = new THREE.MeshStandardMaterial({ color: 0x4a5566, roughness: 0.6, metalness: 0.5 });
-  const deckTile = new THREE.MeshStandardMaterial({ color: 0x515e72, roughness: 0.75 });
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x6b5844, roughness: 1.0 });             // sun-dried earth
+  const floorPaint = new THREE.MeshStandardMaterial({ color: 0x7a6448, roughness: 0.95 });          // dusty road bands
+  const stripe = new THREE.MeshStandardMaterial({ color: 0xc98f2f, roughness: 0.75 });              // faded painted edging
+  const wallTrim = new THREE.MeshStandardMaterial({ color: 0x7c4f2c, roughness: 0.7, metalness: 0.25 });
+  const beltSurface = new THREE.MeshStandardMaterial({ color: 0x26221d, roughness: 0.95 });         // tar-paper roofing
+  const beltFrame = new THREE.MeshStandardMaterial({ color: 0x9a5a26, roughness: 0.65, metalness: 0.3 });
+  const roller = new THREE.MeshStandardMaterial({ color: 0x8d9297, roughness: 0.55, metalness: 0.55 });
+  const machine = new THREE.MeshStandardMaterial({ color: 0x8a4f2c, roughness: 0.8, metalness: 0.25 });
+  const machineAlt = new THREE.MeshStandardMaterial({ color: 0x5f7263, roughness: 0.75, metalness: 0.2 });
+  const machineTop = new THREE.MeshStandardMaterial({ color: 0xb0452c, roughness: 0.7 });
+  const crate = new THREE.MeshStandardMaterial({ color: 0x74512e, roughness: 0.9 });
+  const crateAlt = new THREE.MeshStandardMaterial({ color: 0x55391f, roughness: 0.95 });
+  const beam = new THREE.MeshStandardMaterial({ color: 0x453227, roughness: 0.85 });
+  const rackFrame = new THREE.MeshStandardMaterial({ color: 0xa9853f, roughness: 0.8 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.6, metalness: 0.35 });
+  const cautionMat = new THREE.MeshStandardMaterial({ color: 0xb08a2e, roughness: 0.8 });           // sun-bleached hazard paint
+  const deckSteel = new THREE.MeshStandardMaterial({ color: 0x63503a, roughness: 0.8, metalness: 0.15 });
+  const deckTile = new THREE.MeshStandardMaterial({ color: 0x76603f, roughness: 0.85 });
+  const deckPlate = new THREE.MeshStandardMaterial({ color: 0x584a3f, roughness: 0.7, metalness: 0.35 });  // oxidised steel work deck
 
   const HALF_X = 130;
   const HALF_Z = 105;
@@ -9888,6 +10379,26 @@ function buildFactory2Arena() {
     w.rotation.x = -Math.PI / 2; w.position.set(0, 0.02, z);
     scene.add(w); arenaDecor.push(w);
   }
+  // Outdoor ground dressing (pure decor): dry-grass and sand patches
+  // scattered over the open dirt, clear of the terrace footprint. Two
+  // greens + a sand tone; flat discs at barely-above-floor heights.
+  const grassA = new THREE.MeshStandardMaterial({ color: 0x5d7a3a, roughness: 1.0 });
+  const grassB = new THREE.MeshStandardMaterial({ color: 0x4c6631, roughness: 1.0 });
+  const sandMat = new THREE.MeshStandardMaterial({ color: 0x8a7452, roughness: 1.0 });
+  const patches = [
+    [-30, -70, 5, 0], [30, 70, 5, 0], [-70, -20, 4, 1], [70, 20, 4, 1],
+    [-44, 66, 3.4, 0], [44, -66, 3.4, 0], [-104, 12, 4.4, 1], [104, -12, 4.4, 1],
+    [-14, -66, 2.8, 1], [14, 66, 2.8, 1], [-88, -72, 3.6, 0], [88, 72, 3.6, 0],
+    [-64, 30, 5.4, 2], [64, -30, 5.4, 2], [-24, 62, 4.2, 2], [24, -62, 4.2, 2],
+    [-110, -62, 4.8, 2], [110, 62, 4.8, 2]
+  ];
+  for (const [px2, pz2, r, kind] of patches) {
+    const mat = kind === 2 ? sandMat : (kind === 1 ? grassB : grassA);
+    const p = new THREE.Mesh(new THREE.CircleGeometry(r, 10), mat);
+    p.rotation.x = -Math.PI / 2;
+    p.position.set(px2, kind === 2 ? 0.012 : 0.016, pz2);
+    scene.add(p); arenaDecor.push(p);
+  }
   addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y);
   addBlockingBox({ x: 0, y: 0.4, z: -HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
   addBlockingBox({ x: 0, y: 0.4, z: HALF_Z, sx: 2 * HALF_X, sy: 0.8, sz: 0.6, material: wallTrim });
@@ -9897,11 +10408,27 @@ function buildFactory2Arena() {
   const DECK_Y = 4;
   const deckBody = addBlockingBox({ x: 0, y: (DECK_Y - 0.3) / 2, z: 0, sx: 119.6, sy: DECK_Y - 0.3, sz: 63.6, material: deckSteel.clone(), topBuffer: 0 });
   registerWallFade(deckBody, { minX: -60, maxX: 60, minY: 0, maxY: DECK_Y, minZ: -32, maxZ: 32 });
-  addPlatform({ minX: -60, maxX: 60, minZ: -32, maxZ: 32, top: DECK_Y, material: deckTile, thickness: 0.6 });
+  addPlatform({ minX: -60, maxX: 60, minZ: -32, maxZ: 32, top: DECK_Y, material: deckPlate, thickness: 0.6 });
+  // WORK-DECK dressing (2026-08-13): the terrace is the scrapyard's steel
+  // work platform — plate seams, oil stains, and dashed hazard edging make
+  // it read as a different WORLD from the dirt village below.
+  for (let sx2 = -48; sx2 <= 48; sx2 += 12) {
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 62.4), beltSurface.clone());
+    seam.position.set(sx2, DECK_Y + 0.03, 0);
+    scene.add(seam); arenaDecor.push(seam);
+  }
+  for (const [ox2, oz2, orad] of [[-30, -10, 3.0], [18, 22, 2.2], [6, -19, 2.6]]) {
+    const stain = new THREE.Mesh(new THREE.CircleGeometry(orad, 12), beltSurface.clone());
+    stain.rotation.x = -Math.PI / 2;
+    stain.position.set(ox2, DECK_Y + 0.045, oz2);
+    scene.add(stain); arenaDecor.push(stain);
+  }
   for (const ez of [-31.2, 31.2]) {
-    const es = new THREE.Mesh(new THREE.BoxGeometry(118, 0.15, 1.2), stripe);
-    es.position.set(0, DECK_Y + 0.08, ez);
-    scene.add(es); arenaDecor.push(es);
+    for (let dx2 = -56; dx2 <= 56; dx2 += 8) {
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.15, 1.2), (((dx2 / 8) % 2 === 0) ? cautionMat : beltSurface).clone());
+      dash.position.set(dx2, DECK_Y + 0.08, ez);
+      scene.add(dash); arenaDecor.push(dash);
+    }
   }
   // Long-edge safety fences (sheet metal, tops at 12 — unjumpable) with a
   // 16-wide jump-in gap at the middle of each side: two extra contest points
@@ -9912,7 +10439,9 @@ function buildFactory2Arena() {
   for (const side of [-1, 1]) {
     for (const [fx0, fx1] of [[-52, -8], [8, 52]]) {
       const fbox = { minX: fx0, maxX: fx1, minY: DECK_Y, maxY: DECK_Y + 8.5, minZ: side * 32 - 0.6, maxZ: side * 32 + 0.6 };
-      const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: machineAlt });
+      // Rust, not the ground level's painted teal — the deck edge silhouette
+      // is part of what separates the work platform from the village.
+      const fence = addBlockingBox({ x: (fx0 + fx1) / 2, y: DECK_Y + 4, z: side * 32, sx: fx1 - fx0, sy: 8, sz: 1.0, material: wallTrim });
       fadeTall(fence, fbox);
       const rail = new THREE.Mesh(new THREE.BoxGeometry(fx1 - fx0, 0.4, 1.2), beltFrame);
       rail.position.set((fx0 + fx1) / 2, DECK_Y + 8.2, side * 32);
@@ -9923,20 +10452,50 @@ function buildFactory2Arena() {
   // End-edge fences (x = ±60), leaving the ramp mouths (z -22..-10, 10..22) open.
   for (const [fz0, fz1] of [[-32, -24], [-8, 8], [24, 32]]) {
     for (const ex of [-60, 60]) {
-      const fence = addBlockingBox({ x: ex, y: DECK_Y + 4, z: (fz0 + fz1) / 2, sx: 1.0, sy: 8, sz: fz1 - fz0, material: machineAlt });
+      const fence = addBlockingBox({ x: ex, y: DECK_Y + 4, z: (fz0 + fz1) / 2, sx: 1.0, sy: 8, sz: fz1 - fz0, material: wallTrim });
       fadeTall(fence, { minX: ex - 0.5, maxX: ex + 0.5, minY: DECK_Y, maxY: DECK_Y + 8, minZ: fz0, maxZ: fz1 });
     }
   }
-  // Four walk-up ramps, two per end — bots never need to jump onto the deck.
-  addRamp({ minX: 60, maxX: 82, minZ: -22, maxZ: -10, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
-  addRamp({ minX: 60, maxX: 82, minZ: 10, maxZ: 22, axis: 'x', lowY: DECK_Y, highY: 0, material: deckSteel });
-  addRamp({ minX: -82, maxX: -60, minZ: -22, maxZ: -10, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
-  addRamp({ minX: -82, maxX: -60, minZ: 10, maxZ: 22, axis: 'x', lowY: 0, highY: DECK_Y, material: deckSteel });
-  // Solid caution rails along every ramp edge (top 6, topBuffer 0): grounded
-  // units can only enter at the foot; anyone already on the ramp/deck passes.
+  // Four walk-up dirt banks (were steel ramps; identical geometry), two per
+  // end — bots never need to jump onto the terrace.
+  addRamp({ minX: 60, maxX: 82, minZ: -22, maxZ: -10, axis: 'x', lowY: DECK_Y, highY: 0, material: floorPaint });
+  addRamp({ minX: 60, maxX: 82, minZ: 10, maxZ: 22, axis: 'x', lowY: DECK_Y, highY: 0, material: floorPaint });
+  addRamp({ minX: -82, maxX: -60, minZ: -22, maxZ: -10, axis: 'x', lowY: 0, highY: DECK_Y, material: floorPaint });
+  addRamp({ minX: -82, maxX: -60, minZ: 10, maxZ: 22, axis: 'x', lowY: 0, highY: DECK_Y, material: floorPaint });
+  // Plank treads laid over each dirt bank (decor — the bare wedge still
+  // read as a smooth factory ramp; revamp 2026-08-13).
+  const rampPlanks = (x0, x1, zc, y0, y1) => {
+    const ang = Math.atan2(y1 - y0, x1 - x0);
+    for (let i = 0; i < 7; i += 1) {
+      const t = (i + 0.5) / 7;
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 11.6), crate.clone());
+      plank.position.set(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t + 0.08, zc);
+      plank.rotation.z = ang;
+      scene.add(plank); arenaDecor.push(plank);
+    }
+  };
+  rampPlanks(60, 82, -16, 4, 0); rampPlanks(60, 82, 16, 4, 0);
+  rampPlanks(-82, -60, -16, 0, 4); rampPlanks(-82, -60, 16, 0, 4);
+  // Lane guards (were caution rails; top 6, topBuffer 0, identical boxes):
+  // the collision box goes invisible and a staggered sheet fence with posts
+  // covers the same volume — a solid 22-long slab read as a plant wall
+  // (revamp 2026-08-13). Sheets overlap, so the fence stays visually solid
+  // like the cover it is. Grounded units can only enter at the foot;
+  // anyone already on the bank/terrace passes.
   for (const sx of [-1, 1]) {
     for (const rz of [-22.4, -9.6, 9.6, 22.4]) {
-      addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: cautionMat, topBuffer: 0 });
+      addBlockingBox({ x: sx * 71, y: 3, z: rz, sx: 22, sy: 6, sz: 0.8, material: machine, topBuffer: 0, invisible: true });
+      const gTints = [machine, wallTrim, machineAlt];
+      for (let i = 0; i < 6; i += 1) {
+        const gx = sx * 71 - 11 + (i + 0.5) * (22 / 6);
+        const hgt = 5.5 + (i % 3) * 0.45;
+        const sheet = new THREE.Mesh(new THREE.BoxGeometry(22 / 6 + 0.4, hgt, 0.45), gTints[i % 3].clone());
+        sheet.position.set(gx, hgt / 2, rz + (i % 2 ? 0.12 : -0.1));
+        scene.add(sheet); arenaDecor.push(sheet);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6.4, 0.3), beam.clone());
+        post.position.set(gx + 22 / 12, 3.2, rz);
+        scene.add(post); arenaDecor.push(post);
+      }
     }
   }
   // Deck-top cover line at x=0 (the "checkpoint"): a press flanked by two
@@ -9947,6 +10506,21 @@ function buildFactory2Arena() {
     fadeTall(cab, box);
     // Cap fades WITH the body (a solid cap floating over a faded body reads broken).
     fadeTall(addBlockingBox({ x: 0, y: DECK_Y + 8.3, z, sx: 7.4, sy: 0.5, sz: 6.4, material: beam }), box);
+    // Rooftop-room dressing: slanted roof panel + doorway, fading together.
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.22, 7.2), machineTop.clone());
+    roof.position.set(0, DECK_Y + 9.0, z);
+    roof.rotation.z = 0.1;
+    scene.add(roof); arenaDecor.push(roof);
+    fadeTall(roof, { ...box, maxY: DECK_Y + 9.7 });
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 4.8), beltSurface.clone());
+    door.position.set(1.1, DECK_Y + 2.45, z + 3.05);
+    scene.add(door); arenaDecor.push(door);
+    fadeTall(door, box);
+    // Operator-cabin antenna — work-deck flavour (2026-08-13).
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.2, 6), wallTrim.clone());
+    mast.position.set(2.6, DECK_Y + 10.6, z - 2.4);
+    scene.add(mast); arenaDecor.push(mast);
+    fadeTall(mast, { minX: 2.3, maxX: 2.9, minY: DECK_Y + 8.6, maxY: DECK_Y + 12.2, minZ: z - 2.7, maxZ: z - 2.1 });
   };
   deckCab(-20); deckCab(20);
   const pressU1 = addBlockingBox({ x: -2.2, y: DECK_Y + 4.5, z: 0, sx: 0.9, sy: 9, sz: 4.5, material: machine });
@@ -9956,17 +10530,73 @@ function buildFactory2Arena() {
   fadeTall(pressU1, { minX: -2.7, maxX: -1.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressU2, { minX: 1.7, maxX: 2.7, minY: DECK_Y, maxY: DECK_Y + 10, minZ: -2.3, maxZ: 2.3 });
   fadeTall(pressBeam, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 8.6, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
+  // The press now reads as the deck's CRANE GANTRY (work-deck pass
+  // 2026-08-13): a painted signboard under the lintel, a pulley wheel
+  // riding the beam top, and a hook block at the beam's edge — off the
+  // walk line and above the 8-tall capsule, so nothing clips units.
+  const gateSign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), machineTop.clone());
+  gateSign.position.set(0, DECK_Y + 7.9, 2.28);
+  scene.add(gateSign); arenaDecor.push(gateSign);
+  fadeTall(gateSign, { minX: -2.8, maxX: 2.8, minY: DECK_Y + 7.3, maxY: DECK_Y + 10.1, minZ: -2.3, maxZ: 2.3 });
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.32, 12), beltSurface.clone());
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(0, DECK_Y + 10.75, 0);
+  scene.add(wheel); arenaDecor.push(wheel);
+  fadeTall(wheel, { minX: -0.8, maxX: 0.8, minY: DECK_Y + 10.0, maxY: DECK_Y + 11.5, minZ: -0.8, maxZ: 0.8 });
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.4), wallTrim.clone());
+  hook.position.set(0, DECK_Y + 8.6, 1.9);
+  scene.add(hook); arenaDecor.push(hook);
+  fadeTall(hook, { minX: -0.4, maxX: 0.4, minY: DECK_Y + 8.1, maxY: DECK_Y + 9.1, minZ: 1.6, maxZ: 2.2 });
 
-  // ===== Conveyor belts (walkable tops at 2.6, crates riding) — one per
-  // yard, running north-south past the deck ends. =====
+  // ===== Shack rows (were conveyor belts; walkable tar-paper roofs at 2.6,
+  // rooftop junk riding — identical boxes and surface) — one per yard,
+  // running north-south past the terrace ends. =====
   const drawBelt = (cx, len, beltZ) => {
-    addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: beltSurface, topBuffer: 2 });
-    addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
-    addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beltFrame, topBuffer: 2 });
-    let alt = false;
+    addBlockingBox({ x: cx, y: 1.4, z: beltZ, sx: 4.0, sy: 2.4, sz: len, material: machine, topBuffer: 2 });
+    // Edge rails read as timber roof parapets now, not belt frames.
+    addBlockingBox({ x: cx - 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
+    addBlockingBox({ x: cx + 2.3, y: 1.5, z: beltZ, sx: 0.5, sy: 2.8, sz: len, material: beam, topBuffer: 2 });
+    // Plank boardwalk over the walkable top (scale pass 3, 2026-08-13: the
+    // single dark skin still read as a belt — long timber planks explain
+    // both the shape and why units walk along it).
+    for (let pi = 0; pi < 5; pi += 1) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.06, len - 0.6), (pi % 2 ? crate : beam).clone());
+      plank.position.set(cx - 1.6 + pi * 0.8, 2.64, beltZ);
+      scene.add(plank); arenaDecor.push(plank);
+    }
+    // (No doorways — human doors on a knee-height row shrank the world.)
+    // Segmented faces so the row reads as ATTACHED SHACKS, not one long
+    // machine: alternating sheet tints per ~9-unit bay on both sides
+    // (revamp 2026-08-13 — the uniform body still read as a conveyor).
+    const segTints = [machine, wallTrim, machineAlt];
+    const nSeg = Math.max(2, Math.round(len / 9));
+    for (let i = 0; i < nSeg; i += 1) {
+      const t = -len / 2 + (i + 0.5) * (len / nSeg);
+      for (const side of [-1, 1]) {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(len / nSeg - 0.4, 2.2), segTints[(i + (side > 0 ? 1 : 0)) % 3].clone());
+        p.position.set(cx + side * 2.06, 1.3, beltZ + t);
+        p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+        scene.add(p); arenaDecor.push(p);
+      }
+    }
+    // The riding crates keep their collision, invisible; each spot renders
+    // as a loose crate cluster (one straight, one skewed, a lid sheet) —
+    // angular junk, nothing evenly machined (scale pass 3, 2026-08-13).
+    let objAlt = false;
     for (let lz = -len / 2 + 6; lz <= len / 2 - 6; lz += 9) {
-      addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: alt ? crate : crateAlt, topBuffer: 2 });
-      alt = !alt;
+      addBlockingBox({ x: cx, y: 4.0, z: beltZ + lz, sx: 2.6, sy: 2.6, sz: 2.6, material: machine, topBuffer: 2, invisible: true });
+      const big = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 1.5), (objAlt ? crate : crateAlt).clone());
+      big.position.set(cx - 0.4, 3.4, beltZ + lz + 0.3);
+      scene.add(big); arenaDecor.push(big);
+      const small = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 1.1), (objAlt ? crateAlt : wallTrim).clone());
+      small.position.set(cx + 0.55, 3.2, beltZ + lz - 0.45);
+      small.rotation.y = 0.5;
+      scene.add(small); arenaDecor.push(small);
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 1.9), beltSurface.clone());
+      lid.position.set(cx - 0.2, 4.18, beltZ + lz);
+      lid.rotation.z = 0.12;
+      scene.add(lid); arenaDecor.push(lid);
+      objAlt = !objAlt;
     }
     arenaSurfaces.push({ minX: cx - 2, maxX: cx + 2, minZ: beltZ - len / 2, maxZ: beltZ + len / 2, maxTop: 2.6, type: 'flat', top: 2.6, heightAt: () => 2.6 });
   };
@@ -9981,11 +10611,30 @@ function buildFactory2Arena() {
     const main = axis === 'x'
       ? addBlockingBox({ x, y: 4.0, z, sx: length, sy: 8.0, sz: 0.6, material: machineAlt })
       : addBlockingBox({ x, y: 4.0, z, sx: 0.6, sy: 8.0, sz: length, material: machineAlt });
-    const trim = addBlockingBox(axis === 'x'
-      ? { x, y: 8.15, z, sx: length + 0.2, sy: 0.3, sz: 0.8, material: beam }
-      : { x, y: 8.15, z, sx: 0.8, sy: 0.3, sz: length + 0.2, material: beam });
+    // Old top trim keeps its collision, invisible — a clean capped edge read
+    // as a factory partition (revamp 2026-08-13). The fence look comes from
+    // staggered overlapped sheets of varying height + timber posts.
+    addBlockingBox(axis === 'x'
+      ? { x, y: 8.15, z, sx: length + 0.2, sy: 0.3, sz: 0.8, material: beam, invisible: true }
+      : { x, y: 8.15, z, sx: 0.8, sy: 0.3, sz: length + 0.2, material: beam, invisible: true });
     fadeTall(main, box);
-    fadeTall(trim, box);   // top trim fades with the panel
+    const tints = [machine, wallTrim, machineAlt];
+    const nP = Math.max(3, Math.round(length / 4));
+    const seg = length / nP;
+    for (let i = 0; i < nP; i += 1) {
+      const t = -length / 2 + (i + 0.5) * seg;
+      const hgt = 6.8 + (i % 3) * 0.65;
+      const sheet = new THREE.Mesh(
+        new THREE.BoxGeometry(axis === 'x' ? seg + 0.35 : 0.12, hgt, axis === 'x' ? 0.12 : seg + 0.35),
+        tints[i % 3].clone());
+      sheet.position.set(axis === 'x' ? x + t : x + 0.4, hgt / 2, axis === 'x' ? z + 0.4 : z + t);
+      scene.add(sheet); arenaDecor.push(sheet);
+      fadeTall(sheet, box);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 8.6, 0.35), beam.clone());
+      post.position.set(axis === 'x' ? x + t + seg / 2 : x - 0.42, 4.3, axis === 'x' ? z - 0.42 : z + t + seg / 2);
+      scene.add(post); arenaDecor.push(post);
+      fadeTall(post, box);
+    }
   };
   drawPartition(0, -66, 'x', 14);
   drawPartition(0, 66, 'x', 14);
@@ -9996,21 +10645,70 @@ function buildFactory2Arena() {
   drawPartition(-72, -46, 'z', 10);
   drawPartition(72, 46, 'z', 10);
 
-  // ===== Workbenches — solid stations: full base cabinet, worktop, and a
-  // backsplash rising 8.4 above the floor they stand on (true cover with
-  // depth). `b` = base height (0 = ground, DECK_Y = on the deck). =====
+  // ===== Street kiosks (were workbenches; identical boxes): shop body,
+  // timber roof slab, and a tall corrugated sign wall on the long side.
+  // The old vise block keeps its collision but goes invisible; a canvas
+  // awning leans off the open front. `b` = base height (0 = ground,
+  // DECK_Y = on the deck). =====
   const drawWorkbench = (x, z, b = 0, axis = 'x') => {
     const h = axis === 'x';
     addBlockingBox({ x, y: b + 1.7, z, sx: h ? 9 : 5, sy: 3.4, sz: h ? 5 : 9, material: machine });
-    addBlockingBox({ x, y: b + 3.65, z, sx: h ? 9.4 : 5.4, sy: 0.5, sz: h ? 5.4 : 9.4, material: roller });
-    addBlockingBox({ x: h ? x - 2.8 : x, y: b + 4.6, z: h ? z : z - 2.8, sx: h ? 2.4 : 1.6, sy: 1.5, sz: h ? 1.6 : 2.4, material: machineTop });
-    // Backsplash on the long side; it tops out above unit height so it fades.
+    addBlockingBox({ x, y: b + 3.65, z, sx: h ? 9.4 : 5.4, sy: 0.5, sz: h ? 5.4 : 9.4, material: beam });
+    addBlockingBox({ x: h ? x - 2.8 : x, y: b + 4.6, z: h ? z : z - 2.8, sx: h ? 2.4 : 1.6, sy: 1.5, sz: h ? 1.6 : 2.4, material: machine, invisible: true });
+    // Sign wall on the long side; it tops out above unit height so it fades.
     const splash = h
       ? addBlockingBox({ x, y: b + 6.1, z: z + 2.6, sx: 9, sy: 4.6, sz: 0.5, material: machineTop })
       : addBlockingBox({ x: x + 2.6, y: b + 6.1, z, sx: 0.5, sy: 4.6, sz: 9, material: machineTop });
     fadeTall(splash, h
       ? { minX: x - 4.5, maxX: x + 4.5, minY: b + 3.8, maxY: b + 8.4, minZ: z + 2.3, maxZ: z + 2.9 }
       : { minX: x + 2.3, maxX: x + 2.9, minY: b + 3.8, maxY: b + 8.4, minZ: z - 4.5, maxZ: z + 4.5 });
+    if (b === 0) {
+      // GROUND: market stall — canvas canopy on two timber legs, goods on
+      // the counter (revamp 2026-08-13).
+      const aw = h
+        ? new THREE.Mesh(new THREE.BoxGeometry(9, 0.18, 3.4), cautionMat.clone())
+        : new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 9), cautionMat.clone());
+      if (h) {
+        aw.position.set(x, b + 4.35, z - 3.7);
+        aw.rotation.x = 0.42;
+      } else {
+        aw.position.set(x - 3.7, b + 4.35, z);
+        aw.rotation.z = -0.42;
+      }
+      scene.add(aw); arenaDecor.push(aw);
+      const legs = h ? [[x - 4.2, z - 5.1], [x + 4.2, z - 5.1]] : [[x - 5.1, z - 4.2], [x - 5.1, z + 4.2]];
+      for (const [lx, lz2] of legs) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.8, 0.28), beam.clone());
+        leg.position.set(lx, b + 1.9, lz2);
+        scene.add(leg); arenaDecor.push(leg);
+      }
+      const spots = h ? [[x - 1.6, z, crate, 0.4], [x + 2.1, z + 0.5, machineTop, -0.25]] : [[x, z - 1.6, crate, 0.4], [x + 0.5, z + 2.1, machineTop, -0.25]];
+      for (const [gx2, gz2, tint, rot] of spots) {
+        const goods = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.0), tint.clone());
+        goods.position.set(gx2, b + 4.35, gz2);
+        goods.rotation.y = rot;
+        scene.add(goods); arenaDecor.push(goods);
+      }
+    } else {
+      // WORK DECK: sorting station — a corrugated rain hood SEATED ON the
+      // sign wall's top edge, drooping over the counter (the earlier free-
+      // tilted lean roof floated in mid-air; user screenshot 2026-08-13),
+      // plus a gas-bottle pair. No market dressing — the deck must read
+      // different from the village below.
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(h ? 9.6 : 2.6, 0.12, h ? 2.6 : 9.6), machine.clone());
+      if (h) { hood.position.set(x, b + 8.3, z + 1.4); hood.rotation.x = -0.18; }
+      else { hood.position.set(x + 1.5, b + 8.3, z); hood.rotation.z = 0.18; }
+      scene.add(hood); arenaDecor.push(hood);
+      const bottles = h ? [[3.7, 1.5, machineTop], [3.7, 0.5, wallTrim]] : [[1.5, 3.7, machineTop], [0.5, 3.7, wallTrim]];
+      for (const [ox2, oz2, tint] of bottles) {
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.0, 10), tint.clone());
+        cyl.position.set(x + ox2, b + 1.0, z + oz2);
+        scene.add(cyl); arenaDecor.push(cyl);
+      }
+    }
+    // (No doorway: the kiosk body is 3.4 tall — a human-sized door on a
+    // waist-high stall made the unit read as a giant. Stalls are open-front
+    // market stands; the awning + sign carry the read. Scale pass 2026-08-13.)
   };
   drawWorkbench(-30, -52, 0, 'z'); drawWorkbench(30, 52, 0, 'z');
   drawWorkbench(-78, 82, 0, 'z');  drawWorkbench(78, -82, 0, 'z');
@@ -10018,26 +10716,60 @@ function buildFactory2Arena() {
   drawWorkbench(-32, 14, DECK_Y, 'z'); drawWorkbench(32, -14, DECK_Y, 'z');   // deck stations (vertical)
   drawWorkbench(14, -27, DECK_Y, 'z'); drawWorkbench(-14, 27, DECK_Y, 'z');   // deck edge stations (vertical, clear of the jump-in gaps)
 
-  // ===== Big CNC machines (9 x 6, 8.5 tall — heavy solid cover) =====
+  // ===== Shanty huts (were CNC machines; 9 x 6, 8.5 tall — heavy solid
+  // cover, identical boxes). Decor-only slanted roof panel on top, fading
+  // with the body box like the deckCab caps — a solid roof floating over a
+  // faded hut reads broken. =====
   const drawMachine = (x, z) => {
     const box = { minX: x - 4.7, maxX: x + 4.7, minY: 0, maxY: 9.1, minZ: z - 3.4, maxZ: z + 3.4 };
     fadeTall(addBlockingBox({ x, y: 4.25, z, sx: 9, sy: 8.5, sz: 6, material: machine }), box);
     fadeTall(addBlockingBox({ x, y: 8.8, z, sx: 9.4, sy: 0.6, sz: 6.4, material: beam }), box);
     fadeTall(addBlockingBox({ x: x + 2.6, y: 5.2, z: z + 3.2, sx: 3.2, sy: 3.4, sz: 0.5, material: stripe }), box);
-    addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: cautionMat });
+    // Ground plate under the hut renders as its packed-dirt yard now.
+    addBlockingBox({ x, y: 0.05, z, sx: 10.6, sy: 0.06, sz: 7.6, material: floorPaint });
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.25, 7.6), machineTop.clone());
+    roof.position.set(x, 9.55, z);
+    roof.rotation.z = 0.12;
+    scene.add(roof); arenaDecor.push(roof);
+    // Roof pokes above the hut's 9.1 fade box — register it with its own
+    // taller extent so a camera ray clipping ONLY the roof still fades it.
+    fadeTall(roof, { ...box, maxY: 10.3 });
   };
   drawMachine(-76, -34); drawMachine(76, 34);
   drawMachine(-20, -86); drawMachine(20, 86);
   drawMachine(-114, 0);  drawMachine(114, 0);   // side halls
   drawMachine(-48, 44);  drawMachine(48, -44);  // mid-band, off the deck corners
 
-  // ===== Shipping containers (10 x 3.2, 8 tall — long cover with depth) =====
+  // ===== Row-houses (were shipping containers; 10 x 3.2, 8 tall — long
+  // cover with depth, identical boxes): painted sheet body, rusted parapet
+  // lip, one tall gate + high vent window on the long face, all fading
+  // together. =====
   const drawContainer = (x, z, axis) => {
     const sx = axis === 'x' ? 10 : 3.2;
     const sz = axis === 'x' ? 3.2 : 10;
     const box = { minX: x - sx / 2 - 0.2, maxX: x + sx / 2 + 0.2, minY: 0, maxY: 8.4, minZ: z - sz / 2 - 0.2, maxZ: z + sz / 2 + 0.2 };
     fadeTall(addBlockingBox({ x, y: 4, z, sx, sy: 8, sz, material: machineAlt }), box);
     fadeTall(addBlockingBox({ x, y: 8.2, z, sx: sx + 0.3, sy: 0.4, sz: sz + 0.3, material: beltFrame }), box);
+    const h = axis === 'x';
+    // Framed openings (revamp 2026-08-13: bare planes read as decals): a
+    // timber frame plane sits just behind each dark inset.
+    const face = (ox, oz, w, hh, yy, rot) => {
+      const fr = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.5, hh + 0.4), beam.clone());
+      fr.position.set(x + ox * (h ? 1 : 0.988), yy, z + oz * (h ? 0.988 : 1));
+      fr.rotation.y = rot;
+      scene.add(fr); arenaDecor.push(fr);
+      fadeTall(fr, box);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), beltSurface.clone());
+      m.position.set(x + ox, yy, z + oz);
+      m.rotation.y = rot;
+      scene.add(m); arenaDecor.push(m);
+      fadeTall(m, box);
+    };
+    // One tall gate only (scale pass 3, 2026-08-13: a 3.2-deep slab is a
+    // compound WALL, not a house — the window pretended otherwise and made
+    // the scale lie visible; wall + gate reads right at any size).
+    if (h) face(-2.6, 1.62, 2.6, 5.2, 2.65, 0);
+    else face(1.62, -2.6, 2.6, 5.2, 2.65, Math.PI / 2);
   };
   drawContainer(-54, -70, 'x'); drawContainer(54, 70, 'x');
   drawContainer(108, -52, 'x'); drawContainer(-108, 52, 'x');
@@ -10046,21 +10778,64 @@ function buildFactory2Arena() {
   drawContainer(-24, 40, 'x'); drawContainer(24, -40, 'x');     // hugging the deck fences (approach cover)
   drawContainer(0, 90, 'z'); drawContainer(0, -90, 'z');        // central north/south corridors
 
-  // ===== Double-height crate stacks (6 x 6, 8 tall — corner-peek cover) =====
+  // ===== Two-storey shanty towers (were upright cargo stacks; 6 x 6, 8
+  // tall — corner-peek cover, collision identical). The old corrugation
+  // seams / corner posts / hazard band keep their collision boxes but go
+  // INVISIBLE (they poke a few cm past the body — removing them would
+  // change the shared export); the architecture is pure decor drawn around
+  // the same volume, all fading with the body box. =====
   const drawStack = (x, z, b = 0) => {
-    // Palletized cargo stack (same footprint/cover heights): pallet, big
-    // rimmed crate, two aligned mid crates, strapped top crate.
-    // Design B — upright cargo container: monolithic body, corrugation
-    // seams, steel corner posts, mid hazard band. Flat top at b+8.
     const box = { minX: x - 3.2, maxX: x + 3.2, minY: b, maxY: b + 8, minZ: z - 3.2, maxZ: z + 3.2 };
-    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: rackFrame });
-    fadeTall(addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine }), box);
+    // On the work deck (b > 0) the same box reads as a stack of compacted
+    // scrap BALES instead of a shed — the deck is where scrap gets crushed
+    // (work-deck pass 2026-08-13). Collision identical either way.
+    const bale = b > 0;
+    addBlockingBox({ x, y: b + 0.25, z, sx: 6.2, sy: 0.5, sz: 6.2, material: beam });                 // pallet / plinth
+    const bodyMesh = addBlockingBox({ x, y: b + 4.25, z, sx: 6, sy: 7.5, sz: 6, material: machine, invisible: bale });
+    if (!bale) fadeTall(bodyMesh, box);
     for (const sxo of [-1.35, 0, 1.35]) {
-      fadeTall(addBlockingBox({ x: x + sxo, y: b + 4.2, z, sx: 0.18, sy: 7.2, sz: 6.06, material: beltSurface.clone() }), box);
+      addBlockingBox({ x: x + sxo, y: b + 4.2, z, sx: 0.18, sy: 7.2, sz: 6.06, material: machine, invisible: true });
     }
-    fadeTall(addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: roller }), box);
-    fadeTall(addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: roller }), box);
-    fadeTall(addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: cautionMat.clone() }), box);
+    addBlockingBox({ x: x - 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
+    addBlockingBox({ x: x + 2.85, y: b + 4.25, z, sx: 0.45, sy: 7.5, sz: 6.05, material: machine, invisible: true });
+    addBlockingBox({ x, y: b + 3.4, z, sx: 6.08, sy: 0.6, sz: 6.08, material: machine, invisible: true });
+    if (bale) {
+      const baleTints = [crate, wallTrim, machineAlt];
+      for (let li = 0; li < 3; li += 1) {
+        const layer = new THREE.Mesh(new THREE.BoxGeometry(6.15, 2.35, 6.15), baleTints[li].clone());
+        layer.position.set(x + (li === 1 ? 0.14 : -0.08), b + 1.7 + li * 2.5, z + (li === 2 ? 0.12 : 0));
+        layer.rotation.y = (li - 1) * 0.05;
+        scene.add(layer); arenaDecor.push(layer);
+        fadeTall(layer, box);
+      }
+      return;   // bales get no roof or gate
+    }
+    // (No upper-storey band, no window: a 6x6 footprint can never read as a
+    // multi-storey HOUSE next to a 6.4-tall unit — it became a dollhouse.
+    // Single-material tall SHED with one big gate and a heavy roof, like
+    // the accepted hut. Scale pass 3, 2026-08-13.)
+    // Overhanging tar-paper roof, slightly tilted.
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 7.3), beltSurface.clone());
+    roof.position.set(x, b + 8.25, z);
+    roof.rotation.x = 0.08;
+    scene.add(roof); arenaDecor.push(roof);
+    fadeTall(roof, { ...box, maxY: b + 8.8 });
+    // Mech-scale gate + high vent window, FRAMED (revamp 2026-08-13: bare
+    // dark planes read as stickers on a box). Frame plane behind, dark
+    // inset in front, timber lintel overhang above the gate.
+    const gateFrame = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 5.35), beam.clone());
+    gateFrame.position.set(x - 0.9, b + 2.68, z + 3.07);
+    scene.add(gateFrame); arenaDecor.push(gateFrame);
+    fadeTall(gateFrame, box);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.0), beltSurface.clone());
+    door.position.set(x - 0.9, b + 2.55, z + 3.09);
+    scene.add(door); arenaDecor.push(door);
+    fadeTall(door, box);
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.14, 1.0), beltSurface.clone());
+    lintel.position.set(x - 0.9, b + 5.5, z + 3.45);
+    lintel.rotation.x = 0.14;
+    scene.add(lintel); arenaDecor.push(lintel);
+    fadeTall(lintel, box);
   };
   drawStack(-12, 52);  drawStack(12, -52);
   drawStack(-98, 84);  drawStack(98, -84);
@@ -10076,9 +10851,16 @@ function buildFactory2Arena() {
     tank.position.set(x, 6, z);
     scene.add(tank); arenaDecor.push(tank);
     registerWallFade(tank, { minX: x - 2.2, maxX: x + 2.2, minY: 0, maxY: 12, minZ: z - 2.2, maxZ: z + 2.2, occlude: true });
+    // Band rides at mech chest height (4.5, was 2 — a stripe at human brush
+    // reach implied a human painter; scale review 2026-08-13).
     const band = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 2.25, 0.6, 18), cautionMat);
-    band.position.set(x, 2, z);
+    band.position.set(x, 4.5, z);
     scene.add(band); arenaDecor.push(band);
+    // Conical cap sells "water tower"; fades with the drum.
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 2.45, 1.5, 18), beam.clone());
+    cap.position.set(x, 12.7, z);
+    scene.add(cap); arenaDecor.push(cap);
+    registerWallFade(cap, { minX: x - 2.45, maxX: x + 2.45, minY: 0, maxY: 13.5, minZ: z - 2.45, maxZ: z + 2.45, occlude: true });
     arenaObstacles.push({ minX: x - 2.2, maxX: x + 2.2, minZ: z - 2.2, maxZ: z + 2.2, minY: 0, maxY: 12 });
   };
   drawTank(-118, -88); drawTank(-112, -80);
@@ -10091,14 +10873,45 @@ function buildFactory2Arena() {
     addBlockingBox({ x: x + 2.5, y: 4.5, z, sx: 0.5, sy: 9.0, sz: 0.5, material: rackFrame });
     addBlockingBox({ x, y: 9.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
     addBlockingBox({ x, y: 3.0, z, sx: 5.4, sy: 0.4, sz: 1.8, material: rackFrame });
-    addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate });
-    addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt });
+    // Shelf goods keep their collision, invisible; render as a wide sack
+    // stack under a draped sheet — boxes, not spheres (blobby spheres read
+    // alien in a boxy world; scale pass 3, 2026-08-13).
+    addBlockingBox({ x: x - 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crate, invisible: true });
+    addBlockingBox({ x: x + 1.5, y: 3.9, z, sx: 1.4, sy: 1.4, sz: 1.4, material: crateAlt, invisible: true });
+    for (const [bx, rot] of [[-1.5, 0.25], [1.5, -0.35]]) {
+      const sack = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 1.5), crateAlt.clone());
+      sack.position.set(x + bx, 3.85, z);
+      sack.rotation.y = rot;
+      scene.add(sack); arenaDecor.push(sack);
+      const sheet = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.07, 1.8), cautionMat.clone());
+      sheet.position.set(x + bx, 4.46, z);
+      sheet.rotation.set(0.1, rot, 0.08);
+      scene.add(sheet); arenaDecor.push(sheet);
+    }
+    // Tarp thrown over the top bar — market-stand silhouette.
+    const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.15, 3.4), cautionMat.clone());
+    tarp.position.set(x, 9.5, z);
+    tarp.rotation.x = 0.18;
+    scene.add(tarp); arenaDecor.push(tarp);
   };
   drawRack(-118, 28); drawRack(118, -28);
   drawRack(-64, -94); drawRack(64, 94);
 
-  // ===== Vaultable crate scatter (tops 2.4 — dodge/hop clutter) =====
-  const lowCrate = (x, z, b = 0) => addBlockingBox({ x, y: b + 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2 });
+  // ===== Vaultable junk scatter (tops 2.4 — dodge/hop clutter; were plain
+  // crates). Collision box unchanged and invisible; renders as a stack of
+  // worn tires — the box footprint is the stack's bounding volume. =====
+  const lowCrate = (x, z, b = 0) => {
+    addBlockingBox({ x, y: b + 1.2, z, sx: 2.6, sy: 2.4, sz: 2.6, material: crate, topBuffer: 2, invisible: true });
+    const tireMat = beltSurface.clone();
+    for (let k = 0; k < 3; k += 1) {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.72, 14), tireMat);
+      tire.position.set(x + (k === 1 ? 0.18 : -0.1), b + 0.4 + k * 0.76, z + (k === 2 ? 0.16 : 0));
+      scene.add(tire); arenaDecor.push(tire);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.34, 10), crateAlt);
+    hub.position.set(x, b + 1.2, z);
+    scene.add(hub); arenaDecor.push(hub);
+  };
   lowCrate(-12, -88); lowCrate(12, 88);
   lowCrate(-58, 46);  lowCrate(58, -46);
   lowCrate(-96, -44); lowCrate(96, 44);
@@ -10236,8 +11049,20 @@ function buildFactoryArena() {
   // Outer partitions (between machinery and pillars)
   drawPartition(-30, -65, 'x', 10);
   drawPartition(30, 65, 'x', 10);
-  drawPartition(-90, 60, 'z', 8);
-  drawPartition(90, -60, 'z', 8);
+  // Inside each spawn pocket, screening the doorway (user 2026-08-09; was
+  // (-90, 60) / (90, -60) lying along Z, which the corner partitions then
+  // enclosed). Same 8u panel, turned to lie along X.
+  drawPartition(-93, 54, 'x', 8);
+  drawPartition(93, -54, 'x', 8);
+  // Spawn-corner partitions (user 2026-08-09) — an L around each corner spawn,
+  // long side along Z, short side along X. Two ways out: a 14.7u doorway
+  // between the two panels, and a 13u gap past the long panel's far end.
+  // The short panel stops 2u off the side wall, i.e. sealed to a 1.15-radius
+  // body, so the doorway is the only opening on that face.
+  drawPartition(-110, 45, 'x', 32);
+  drawPartition(110, -45, 'x', 32);
+  drawPartition(-79, 66, 'z', 48);
+  drawPartition(79, -66, 'z', 48);
 
   // ===== Workbenches (10 spots — bigger map, more cover) =====
   const drawWorkbench = (x, z) => {
@@ -10897,6 +11722,28 @@ function buildLobbyArena() {
   drawDesk(-60, 55);
   drawDesk(60, 55);
 
+  // ===== Spawn-screen counters (user 2026-08-13, second pass: NOT one big
+  // central island — one counter AT EACH spawn area): a north-south island
+  // 13u east/west of its team's spawn pair, screening the pair from every
+  // cross-map sightline (all 4 spawn-to-spawn lines cross both spines).
+  // Spine tops out at 9.4: true cover per the sizing rule (>= 8 covers the
+  // full capsule; the 5.6 muzzle and both LOS eye heights sit far below).
+  // Taller than the unit -> occlude-fade like the desks. Routing gaps: 8u
+  // north to the (±78, 25) bench, and the south end sits 1u off the
+  // (±60, 55) reception desk's corner — that slit is unwalkable, so routes
+  // go around the desk's south side or the counter's north end.
+  const drawSpawnCounter = (cx) => {
+    addBlockingBox({ x: cx, y: 1.5, z: 44, sx: 4, sy: 3.0, sz: 18, material: desk });
+    addBlockingBox({ x: cx, y: 3.1, z: 44, sx: 4.4, sy: 0.3, sz: 18.4, material: deskTop });
+    const panel = addBlockingBox({ x: cx, y: 6.25, z: 44, sx: 0.6, sy: 6.3, sz: 18, material: deskTop.clone() });
+    const trim = addBlockingBox({ x: cx, y: 9.3, z: 44, sx: 0.7, sy: 0.2, sz: 17, material: blueGlow.clone() });
+    const cbox = { minX: cx - 0.35, maxX: cx + 0.35, minY: 3.1, maxY: 9.4, minZ: 35, maxZ: 53, occlude: true };
+    registerWallFade(panel, cbox);
+    registerWallFade(trim, cbox);
+  };
+  drawSpawnCounter(-70);
+  drawSpawnCounter(70);
+
   // ===== Sleek benches — FULLY HARD: every visible piece is a real collision
   // box (no decor-only meshes, no hidden colliders). Chunky solid body so the
   // whole object is one solid bench and blocks the bullet line. =====
@@ -11448,9 +12295,10 @@ function buildStationArena() {
       minZ: cz - 1.7, maxZ: cz + 1.7
     });
   };
+  // Spawn-quadrant pair (70, 95) / (-70, -95) removed (user 2026-08-07):
+  // bots looped against it near the corner spawns (engage-orbit bump).
+  // Mirrored in shared arena.js station obstacles.
   drawHallWall(-70, 95);
-  drawHallWall(70, 95);
-  drawHallWall(-70, -95);
   drawHallWall(70, -95);
 
   // ===== Info kiosks on the platforms (8 — full-cover boxes) =====

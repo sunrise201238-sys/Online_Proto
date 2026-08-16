@@ -13,11 +13,11 @@
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, projectileHitsSurface } from './physics.js';
 import { getArena } from './arena.js';
-import { buildNavGrid, findPathOnGrid, findFiringPath } from './navgrid.js';
+import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET } from './constants.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -66,17 +66,31 @@ const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
 const BOT_DIRE_SEARCH_MS = 4000;
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
 const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
-const BOT_STUCK_MOVED_EPSILON = 0.4;
-const BOT_STUCK_TICKS_THRESHOLD = 8;
-const BOT_STUCK_PIVOT_MS = 1000;  // committed wall-follow window — long enough to run the length of a wall to its opening (was 600, too short to clear long walls)
 // After a stuck event, remember the pinned spot for this long and bias
 // movement away from it so the bot picks a different route around the wall
-// instead of grinding into the same corner once the perpendicular pivot
-// ends. Radius caps the influence so distant memories don't warp kiting.
+// instead of grinding into the same corner. Radius caps the influence so
+// distant memories don't warp kiting. (Briefly 6/1500 on 2026-08-08 while
+// chasing the Airport "bots avoid the middle" report — reverted by the user
+// once that turned out to be the 2v2 spawn asymmetry, since fixed.)
 const BOT_STUCK_MEMORY_MS = 3500;
 const BOT_STUCK_MEMORY_RADIUS = 12;
 const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
 const BOT_LOS_EYE_HEIGHT = 1.6;
+// COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
+// least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
+// famine behind cover: SPRINT to the nearest reachable spot that breaks the
+// LOCKED target's line of sight (single-target by spec) and hold, re-emerging
+// with EXIT_MS left so the mag fills while stepping back into band.
+const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
+const BOT_COVER_RELOAD_EXIT_MS = 400;
+// The dash to cover funds at the survival-jump tier (raw jump 48 + sprint
+// floor 8), NOT the 250 travel reserve — a mid-fight bot can still afford it.
+const BOT_COVER_SPRINT_MIN_BOOST = 56;
+// The HOLD is not a statue (user, 2026-08-08): pace a NARROW arc at walk
+// speed behind the cover — direction flips every FLIP_MS, clamped to
+// SWAY_RADIUS around the hold anchor (~±2u ≈ a few degrees on the band ring).
+const BOT_COVER_SWAY_FLIP_MS = 350;
+const BOT_COVER_SWAY_RADIUS = 2.2;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -105,9 +119,33 @@ function navGridFor(arena) {
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
 const BOT_CLIMB_MIN_RISE = 1.7;
 const BOT_CLIMB_MAX_RISE = 4.8;
+// Narrowest surface still worth treating as a perch. Below this a jump
+// overshoots it entirely (see findHighGroundPerch). 6 sits in the gap between
+// the 4-wide conveyors and the next-narrowest real platform at 10.
+const BOT_PERCH_MIN_WIDTH = 6;
+// How close the Maze follower gets to a waypoint before starting the next
+// leg. 3 -> 1.5 (2026-08-12): at 3 on a 4-unit nav grid — whose corner
+// waypoints stand only ~1.5-2.8u off the blocks — the early turn rounded
+// every corner INTO the obstacle's end face, where the radial-only avoidance
+// has no sideways component and the bot rubbed until a stuck detector fired
+// (the residual wall-grind the user kept seeing). Measured at 1.5, seeded
+// A/B: grind episodes -36% flashpoint / -89% factory2 / -66% airport, no
+// freeze regression on current spawns, clean at 20 fps timing and with a
+// 1-frame-stale self view; cost is ~1-2.5 s slower closing on flashpoint and
+// AA12 +3.1pp in the 1v1 ladder (only mover beyond its CI). The final-
+// arrival test stays at 3 — shrinking THAT re-arms the no-progress trigger
+// on a standing bot (the Plain Field never-orbits bug). Used at the follower
+// AND its statue-escape replay: the two must stay identical or the replay's
+// waypoint comparison silently stops matching. Mirrored in client main.js.
+const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
+// STATION-SPECIFIC BOT RULES master switch (2026-08-05): HIDDEN, not
+// deleted — the deck-spawn experiment runs with these off. Flip to true to
+// re-enable the station perch pull, low-level discouragement dwell, mount
+// hold, and descent suppression in one move. Mirrored in client main.js.
+const STATION_BOT_RULES = false;
 const BOT_LEDGE_JUMP_REACH = 4.5;
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
@@ -192,35 +230,8 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // clipped interval's endpoints is exact). FLAT elevated decks stand on open
 // pillars, so only CROSSING the deck plane blocks — two units both under
 // the bridge keep their sight lines. 0.4 epsilon forgives grazes at lips.
-function sightHitsSurface(p0, p1, s) {
-  const dx = p1.x - p0.x, dz = p1.z - p0.z;
-  let t0 = 0, t1 = 1;
-  // Liang-Barsky clip of the XZ segment to the surface rect.
-  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
-  for (let i = 0; i < 2; i++) {
-    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
-    if (Math.abs(d) < 1e-9) {
-      if (p < lo || p > hi) return false;
-    } else {
-      let a = (lo - p) / d, b = (hi - p) / d;
-      if (a > b) { const t = a; a = b; b = t; }
-      if (a > t0) t0 = a;
-      if (b < t1) t1 = b;
-      if (t0 > t1) return false;
-    }
-  }
-  const dy = p1.y - p0.y;
-  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
-  const EPS = 0.4;
-  if (s.type === 'ramp') {
-    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
-    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
-    return yA < hA - EPS || yB < hB - EPS;
-  }
-  const top = s.top ?? s.maxTop;
-  if (top == null) return false;
-  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
-}
+// (sightHitsSurface moved to physics.js, 2026-08-14 — the planner's
+// firing-position search needs the SAME surface sight rule the bot uses.)
 
 // Line-of-sight check using the same swept-AABB math projectiles use, so the
 // bot only "sees" through gaps a bullet would actually pass through.
@@ -229,7 +240,12 @@ function sightHitsSurface(p0, p1, s) {
 function botHasLineOfSight(p0, p1, obstacles, surfaces) {
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (o.noProjectile) continue;
+    // Invisible unit-fences normally don't block sight (bullets pass), but
+    // bars flagged blocksBotSight DO: a see-through wall the bot cannot walk
+    // through defeats every routing trigger — the bot paces in Engage
+    // against the invisible face instead of routing around (Streets
+    // under-slope bars, 2026-08-13). Mirrored in client main.js.
+    if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   if (surfaces) {
@@ -238,6 +254,30 @@ function botHasLineOfSight(p0, p1, obstacles, surfaces) {
     }
   }
   return true;
+}
+
+// Can the SHOT actually land? The fire gate has to test the line the BULLET
+// takes, not the eye line. spawnProjectiles fires from pos.y +
+// PROJECTILE_MUZZLE_Y_OFFSET along (target.pos - owner.pos), i.e. the pos→pos
+// line raised by that offset at BOTH ends — 1.55 ABOVE the eye line online and
+// 0.8 BELOW it offline (root space). Anything inside that band — a slope's
+// guard rail, the bridge deck underside, the ramp plane itself — let the bot
+// hold a clear sight line into a shot that died on the geometry. Measured on
+// Streets: 3.1% of clear-sight pairs online, 7.4% offline, worst on
+// road→slope, i.e. a unit standing on the bridge slope (user 2026-08-15).
+//
+// Uses the PROJECTILE rules, not the sight rules, so the gate and the shot can
+// never disagree: noProjectile fences never stop a bullet (blocksBotSight is a
+// NAVIGATION rule — movement LoS still honours it, so the 2026-08-13 pacing fix
+// stands), and surfaces use the projectile's own crossing test.
+function botShotCanLand(originY, me, opp, obstacles, surfaces) {
+  const from = { x: me.pos.x, y: originY, z: me.pos.z };
+  const to = { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z };
+  for (let i = 0; i < obstacles.length; i++) {
+    if (obstacles[i].noProjectile) continue;
+    if (segmentHitsObstacle(from, to, obstacles[i])) return false;
+  }
+  return !(surfaces && projectileHitsSurface(from, to, surfaces));
 }
 
 // Burst size for continuous-fire weapons (spreadCount === 1). Units with a
@@ -258,12 +298,23 @@ function botBurstSize(unit) {
 // and ones level enough to just walk onto. Returns a unit vector toward the
 // nearest reachable point on that ledge plus the horizontal distance to it,
 // or null if nothing suitable is in range.
-function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius) {
+// minWidth defaults to the perch floor. MAZE passes 0: it is following a route,
+// not shopping for a vantage point, so a narrow strip its path climbs is a
+// legitimate step — see the call site for the measurements behind that split.
+function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
   for (let i = 0; i < surfaces.length; i++) {
     const s = surfaces[i];
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
+    // TOO NARROW TO LAND ON (user 2026-08-09). A jump carries 12-17 units
+    // horizontally, so a strip thinner than this isn't a perch — the bot sails
+    // clean over it and lands on the far side, then finds the same strip 4 u
+    // behind and hops back. Factory's 4-wide conveyors did exactly that, and
+    // being airborne meant it couldn't dodge while it happened. Only those and
+    // Factory 2's belts are excluded game-wide; every other surface in the
+    // climb window is 10 u or wider and behaves exactly as before.
+    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < minWidth) continue;
     const nx = Math.max(s.minX, Math.min(px, s.maxX));
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
@@ -543,10 +594,14 @@ export function tickBot(matchState, botId, now) {
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
-  // universal rule for every weapon: the shotgun's lockRange is tuned to 27
-  // (pellet-cluster distance), which lands its band at 20–34 — the same
-  // numbers its old dedicated special case hard-coded.
-  const lockRange = me.unit?.lockRange ?? 50;
+  // universal rule for every weapon.
+  // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
+  // compressed 50–70 team-synergy table (long locks let a teammate die
+  // alone at the front). Units without the field (hidden ones) and every
+  // other mode keep lockRange. Mirrored in client updateEnemy.
+  const lockRange = (matchState.mode === '2v2' && me.unit?.lockRange2v2)
+    ? me.unit.lockRange2v2
+    : (me.unit?.lockRange ?? 50);
   const upperRange = lockRange + 7;
   const optimalRange = Math.max(10, lockRange);
   const lowerRange = Math.max(6, lockRange - 7);
@@ -555,16 +610,31 @@ export function tickBot(matchState, botId, now) {
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
   // flags with one botState whose transitions are recomputed every tick.
 
+  // GROUNDED SIGHT (2026-08-14, user: "bot exploits the jump to temporarily
+  // fire"). Every sight test the bot makes about ITSELF is taken from the
+  // eye it has with its feet down, never from the live body height. A jump
+  // lifts the eye 5.6 (apex) — past the 8-tall true-cover line and over the
+  // Streets deck — so mid-air the bot could see, and shoot, targets it has
+  // no business seeing; worse, that airborne blip also reset the no-sight
+  // clock that would otherwise have sent it around. Latch the last grounded
+  // height and take the LOWER of it and the live one, so a drop off a ledge
+  // stays honest too. The OPPONENT endpoint stays live: bots must still
+  // react to a jumping human.
+  if (me.grounded && !me.airborne) me.botSightY = me.pos.y;
+  const myEyeY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + BOT_LOS_EYE_HEIGHT;
+  // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
+  const myShotY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + PROJECTILE_MUZZLE_Y_OFFSET;
+
   // LoS + threats
   const playerHasLoS = botHasLineOfSight(
-    { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
+    { x: me.pos.x, y: myEyeY, z: me.pos.z },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles, surfaces
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
-    { x: px, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: pz },
+    { x: px, y: myEyeY, z: pz },
     { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
     obstacles, surfaces
   );
@@ -625,6 +695,170 @@ export function tickBot(matchState, botId, now) {
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
+  // --- COVER RELOAD (2026-08-08, user-designed; see the constants note) ---
+  // Movement-only override, decided here so the stall clocks below can be
+  // pinned while it runs. Defense outranks it (the window closes under fire
+  // and while the defense state is live) and the anti-glint step is a
+  // separate reflex layer that still fires. One cover search per reload
+  // cycle; a run that stops progressing bails for the rest of the cycle
+  // instead of inheriting the generic wedge remedy (whose re-path goal is a
+  // SIGHTED cell — it would fight the hide). Mirrored in client updateEnemy.
+  let coverMove = null;
+  {
+    const cu = me.unit ?? {};
+    const reloadRemaining = (me.reloadingUntil || 0) - now;
+    const coverWindow = (cu.reloadMs ?? 0) >= BOT_COVER_RELOAD_MIN_RELOAD_MS
+      && !cu.autoReload
+      && reloadRemaining > BOT_COVER_RELOAD_EXIT_MS
+      && !underFire
+      && (me.botState ?? 'pursue') !== 'defense';
+    if (!coverWindow) {
+      // Do NOT wash the plan away: the cycle identity is reloadingUntil
+      // itself, so a Defense interruption mid-rush RESUMES the same path
+      // when the window reopens (user, 2026-08-08 — was a key reset that
+      // forced a fresh search per resume). Only the anchors reset, giving
+      // the resumed run a fresh 700 ms bail window.
+      me.botCoverMoveAnchor = null;
+      me.botCoverHoldAnchor = null;
+    } else {
+      if (me.botCoverKey !== me.reloadingUntil) {
+        me.botCoverKey = me.reloadingUntil;
+        me.botCoverFailed = false;
+        me.botCoverPath = null;
+        me.botCoverMoveAnchor = null;
+        me.botCoverHoldAnchor = null;
+      }
+      const oppEye = { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z };
+      const myEye = { x: me.pos.x, y: myEyeY, z: me.pos.z };
+      const coverHidden = !botHasLineOfSight(oppEye, myEye, obstacles, surfaces);
+      if (!coverHidden) me.botCoverHoldAnchor = null;
+      if (coverHidden) {
+        // Hidden — HOLD, but not as a statue (user): pace a narrow arc at
+        // walk speed, perpendicular to the target line so the cover stays
+        // between, clamped to SWAY_RADIUS around the hold anchor. KEEP the
+        // path — a hidden→visible flicker resumes it instead of burning a
+        // fresh search (adversarial finding); the sway is small enough that
+        // a poke-out self-corrects through the kept path next tick.
+        if (!me.botCoverHoldAnchor) {
+          me.botCoverHoldAnchor = { x: me.pos.x, z: me.pos.z };
+          me.botCoverSwayDir = (Math.random() < 0.5 ? 1 : -1);
+          me.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        if (now >= (me.botCoverSwayFlipAt ?? 0)) {
+          me.botCoverSwayDir = -(me.botCoverSwayDir ?? 1);
+          me.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+        }
+        const tdx = opp.pos.x - me.pos.x, tdz = opp.pos.z - me.pos.z;
+        const tdl = Math.hypot(tdx, tdz) || 1;
+        let sx = (-tdz / tdl) * me.botCoverSwayDir;
+        let sz = (tdx / tdl) * me.botCoverSwayDir;
+        const adx = me.botCoverHoldAnchor.x - me.pos.x;
+        const adz = me.botCoverHoldAnchor.z - me.pos.z;
+        const adl = Math.hypot(adx, adz);
+        if (adl > BOT_COVER_SWAY_RADIUS) {
+          sx = sx * 0.3 + adx / adl;
+          sz = sz * 0.3 + adz / adl;
+        }
+        const sl = Math.hypot(sx, sz) || 1;
+        coverMove = { hold: true, mx: sx / sl, mz: sz / sl };
+        me.botCoverMoveAnchor = null;
+      } else if (!me.botCoverFailed) {
+        if (!me.botCoverPath) {
+          // Ring candidates around the bot, hidden-from-target first, then
+          // A* the best few for real reachability. Jump-links are excluded —
+          // no vaulting mid-reload — and candidates are scored by walk
+          // distance plus a penalty for leaving the band, so the bot prefers
+          // cover it can fight from the moment the mag fills.
+          const cands = [];
+          for (const cr of [5, 8, 11, 14]) {
+            for (let ca = 0; ca < 12; ca += 1) {
+              const th = (ca + (cr % 2) * 0.5) * (Math.PI / 6);
+              const cx = me.pos.x + Math.cos(th) * cr;
+              const cz = me.pos.z + Math.sin(th) * cr;
+              const cf = groundHeightAt(cx, cz, surfaces, me.pos.y - GROUND_BASE_Y);
+              const cEye = { x: cx, y: cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: cz };
+              if (botHasLineOfSight(oppEye, cEye, obstacles, surfaces)) continue;
+              const cDist = Math.hypot(opp.pos.x - cx, opp.pos.z - cz);
+              const bandPen = Math.max(0, lowerRange - cDist, cDist - upperRange) * 0.5;
+              cands.push({ cx, cz, cf, score: Math.hypot(cx - me.pos.x, cz - me.pos.z) + bandPen });
+            }
+          }
+          cands.sort((p, q) => p.score - q.score);
+          const cGrid = navGridFor(arena);
+          let best = null;
+          for (let ci = 0; ci < Math.min(10, cands.length) && !best; ci += 1) {
+            const c = cands[ci];
+            // Obstacle-embedded candidates pass the hidden filter trivially
+            // (a segment INTO the box reads as blocked) — skip them before
+            // they eat the A* budget (adversarial finding, 2026-08-08).
+            const cEyeY = c.cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT;
+            let embedded = false;
+            for (const o of obstacles) {
+              if (c.cx >= o.minX && c.cx <= o.maxX && c.cz >= o.minZ && c.cz <= o.maxZ
+                  && cEyeY >= o.minY && cEyeY <= o.maxY) { embedded = true; break; }
+            }
+            if (embedded) continue;
+            const cPath = findPathOnGrid(cGrid, me.pos.x, me.pos.z, c.cx, c.cz, myFloorY, c.cf, obstacles);
+            if (!cPath || cPath.length < 2) continue;
+            let jumpy = false;
+            for (const wp of cPath) {
+              if ((wp.y ?? 0) - myFloorY > 1.7) { jumpy = true; break; }
+            }
+            if (jumpy) continue;
+            // GOAL-VERIFY: the A* goal-snap can relocate an off-grid or
+            // mis-floored candidate onto a cell the target SEES — walking
+            // there wastes the cycle's one search (adversarial finding,
+            // 2026-08-08). Commit only if the final waypoint is hidden too.
+            const gWp = cPath[cPath.length - 1];
+            const gf = gWp.y != null ? gWp.y : c.cf;
+            if (botHasLineOfSight(
+              oppEye,
+              { x: gWp.x, y: gf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: gWp.z },
+              obstacles, surfaces
+            )) continue;
+            best = { path: cPath, idx: 0 };
+          }
+          if (best) me.botCoverPath = best;
+          else me.botCoverFailed = true;
+        }
+        const cNav = me.botCoverPath;
+        if (cNav) {
+          let wp = cNav.path[cNav.idx];
+          while (cNav.idx < cNav.path.length - 1
+              && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 2) {
+            cNav.idx += 1;
+            wp = cNav.path[cNav.idx];
+          }
+          let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
+          const wl = Math.hypot(tx, tz) || 1;
+          tx = tx / wl + avoid.rx * 0.6;
+          tz = tz / wl + avoid.rz * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          coverMove = { hold: false, mx: tx / tl, mz: tz / tl };
+          if (!me.botCoverMoveAnchor
+              || Math.hypot(me.pos.x - me.botCoverMoveAnchor.x, me.pos.z - me.botCoverMoveAnchor.z) > 1) {
+            me.botCoverMoveAnchor = { x: me.pos.x, z: me.pos.z, at: now };
+          } else if (now - me.botCoverMoveAnchor.at > 700) {
+            me.botCoverFailed = true;
+            me.botCoverPath = null;
+            coverMove = null;
+          }
+        }
+      }
+    }
+  }
+  if (coverMove) {
+    // Pin the stall clocks: a deliberate hide must not read as wedged /
+    // stalled / sightless — those detectors' remedies all route toward
+    // SIGHTED cells and would fight the cover intent on exit.
+    me.botLastProgressAt = now;
+    me.botLastLoSAt = now;
+    me.botStuckCheckX = me.pos.x;
+    me.botStuckCheckZ = me.pos.z;
+    me.botStuckCheckAt = now;
+    me.botPathLen = 0;
+  }
+
   // --- Stuck cut-in detection over a rolling 1.5 s window, two flavors:
   //   WEDGED   — barely any net movement AND barely any path traveled.
   //   SPINNING — plenty of path traveled but almost no net displacement
@@ -649,7 +883,13 @@ export function tickBot(matchState, botId, now) {
     const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
     // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
     // movement rates that count as wedged/spinning are unchanged.
-    const wedged = net < 1.7 && me.botPathLen < 4;
+    // WEDGED's path cap was 4 until 2026-08-08: a bot SLIDING along a wall
+    // travelled 4–12 u/s while netting nothing, which was too fast for
+    // wedged and too slow for spinning — 47% of Airport's ramp-corner
+    // grinds fell in that gap with no detector to free them. Raising the
+    // cap to spinning's 12 makes the pair partition the space: net < 1.7
+    // is stuck no matter how much wall it rubbed.
+    const wedged = net < 1.7 && me.botPathLen < 12;
     const spinning = me.botPathLen > 12 && net < 4;
     if (!windowStale
         && (wedged || spinning)
@@ -662,6 +902,11 @@ export function tickBot(matchState, botId, now) {
       // Only this flavor is allowed the escape back-out in the maze
       // re-commit; anything that still moves resolves via normal re-plans.
       stuckFrozen = net < 0.8;
+      // STUCK MEMORY (revived 2026-08-08 with the Maze slim-down): remember
+      // the pinned spot so the maze fallback's retries bend away from it.
+      me.botStuckMemX = me.pos.x;
+      me.botStuckMemZ = me.pos.z;
+      me.botStuckMemAt = now;
     }
     me.botStuckCheckX = me.pos.x;
     me.botStuckCheckZ = me.pos.z;
@@ -669,184 +914,17 @@ export function tickBot(matchState, botId, now) {
     me.botPathLen = 0;
   }
 
-  // Commit (or re-commit) Maze's go-around heading: tangent to the nearest
-  // obstacle, biased toward the player so the detour closes distance.
-  // `escaping` = re-commit fired by the stuck alarm: when the probes can't
-  // pick a side, REVERSE the current heading instead of leaning toward the
-  // player — the player-lean is what walks the bot straight back into the
-  // corner it just jammed in.
-  const commitMazeDirection = (escaping = false, keepHand = false) => {
-    let mxe = avoid.rx, mze = avoid.rz;
-    const ml = Math.hypot(mxe, mze);
-    me.botMazeHadWall = ml >= 0.1;
-    if (ml < 0.1) {
-      // OPEN GROUND: nothing to go around yet — head straight at the player.
-      // (The old commit here was side*orbitSign = PERPENDICULAR to the player,
-      // which combined with the toward-pull traced a stable ORBIT around the
-      // target — the endless circling below the Airport plateau.) The moment
-      // a wall interposes, the context check in the maze movement block
-      // re-commits into wall-follow.
-      mxe = dirX;
-      mze = dirZ;
-      if (escaping) { mxe = -mxe; mze = -mze; }
-      me.botMazeHand = null;
-    } else {
-      const ux = mxe / ml, uz = mze / ml;
-      let tx = -uz, tz = ux;
-      // MULTI-DISTANCE probes: from 20/40/60 units along each tangent, how
-      // soon would the player become visible? Picking the side that gains
-      // sight SOONEST approximates the shorter way around a finite wall —
-      // the old single-20 probe went blind past one cover-length, leaving
-      // the tie to a fixed-rotation default (the "always turns right" bias).
-      const probeDist = (px2, pz2) => {
-        for (const pd of [20, 40, 60]) {
-          if (losFromPoint(me.pos.x + px2 * pd, me.pos.z + pz2 * pd)) return pd;
-        }
-        return Infinity;
-      };
-      const dPlus = probeDist(tx, tz);
-      const dMinus = probeDist(-tx, -tz);
-      if (dPlus !== dMinus) {
-        if (dMinus < dPlus) { tx = -tx; tz = -tz; }
-      } else if (escaping) {
-        // Probes tied while escaping a jam: reverse the committed heading.
-        const proj = tx * (me.botMazeDirX ?? tx) + tz * (me.botMazeDirZ ?? tz);
-        if (proj > 0) { tx = -tx; tz = -tz; }
-      } else if (keepHand && me.botMazeHand != null) {
-        // KEEP THE SAME WAY AROUND: preserve which hand the wall is on. Corner
-        // re-commits keep circling the object, and 7 s refreshes along a long
-        // wall hold their direction — instead of the toward-player tiebreak
-        // re-aiming every refresh and pendulum-ing the bot under the player
-        // (it never committed the full run to the Airport ramp gaps).
-        if ((tz * ux - tx * uz) * me.botMazeHand < 0) { tx = -tx; tz = -tz; }
-      } else if (tx * dirX + tz * dirZ < 0) {
-        tx = -tx; tz = -tz;
-      }
-      // Record the chosen going-around hand (side of the wall vs travel).
-      me.botMazeHand = (tz * ux - tx * uz) >= 0 ? 1 : -1;
-      // WALL-FOLLOW: tangent-dominant with a slight standoff. The old blend
-      // (away + 1.3*tangent = 61% away after normalizing) detached the bot
-      // from the wall diagonally within a second, stranding it in open
-      // ground where the old open-ground commit turned the march into an
-      // orbit. Hugging the wall is the whole point of Maze.
-      mxe = tx + ux * 0.25;
-      mze = tz + uz * 0.25;
-    }
-    const ml2 = Math.hypot(mxe, mze) || 1;
-    me.botMazeDirX = mxe / ml2;
-    me.botMazeDirZ = mze / ml2;
-    // Record whether LoS was blocked at (re)commit. The LoS-restored exit only
-    // counts when it was — otherwise (stuck against a side pillar with LoS
-    // already clear) Maze would exit on the first tick and never get to act.
-    me.botMazeLosBlockedAtEntry = !playerHasLoS;
-  };
-
-  // OPENING SCAN — Maze's loop breaker. Wall-following a CLOSED loop (a
-  // room's inside perimeter, a free-standing block) laps forever: corners
-  // hand off cleanly, the stuck alarm sees real movement, and a blind-entry
-  // Maze has no time cap. So every 7 s refresh scans rings of probe points
-  // (8 directions × 25/50/75 units) for one that can SEE the player — a
-  // doorway or opening — and commits straight at it. Ties on the same ring
-  // break toward the player (no fixed-rotation bias). False if nothing sees.
-  const mazeScanForOpening = () => {
-    for (const sd of [25, 50, 75]) {
-      let bx = 0, bz = 0, bestDot = -Infinity;
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8;
-        const sx2 = Math.cos(a), sz2 = Math.sin(a);
-        const px3 = me.pos.x + sx2 * sd, pz3 = me.pos.z + sz2 * sd;
-        // REACHABILITY at WALK height (+1.0, ALL obstacles): eye-height
-        // testing had two holes — it skipped jump-only edges, and it passed
-        // clean OVER the 3.7 plateau body, calling points on the far side
-        // "reachable" through a wall the bot can't walk through.
-        const r0 = { x: me.pos.x, y: me.pos.y + 1.0, z: me.pos.z };
-        const r1 = { x: px3, y: me.pos.y + 1.0, z: pz3 };
-        let reachable = true;
-        for (const o of obstacles) {
-          if (segmentHitsObstacle(r0, r1, o)) { reachable = false; break; }
-        }
-        if (!reachable) continue;
-        if (!losFromPoint(px3, pz3)) continue;
-        const dt = sx2 * dirX + sz2 * dirZ;
-        if (dt > bestDot) { bestDot = dt; bx = sx2; bz = sz2; }
-      }
-      if (bestDot > -Infinity) {
-        me.botMazeDirX = bx;
-        me.botMazeDirZ = bz;
-        // hadWall=true suppresses the open-ground context re-commit (the
-        // wall being left behind would instantly re-grab the heading);
-        // real wall contact en route is handled by the corner turn.
-        me.botMazeHadWall = true;
-        me.botMazeHand = null;
-        me.botMazeLosBlockedAtEntry = !playerHasLoS;
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // ELEVATION ROUTE — Maze's ramp-seeker. When the opening scan sees nothing
-  // AND the target stands on a meaningfully different floor, same-floor
-  // wall-following can never help (Airport plateau: the 12-high rim glass
-  // blocks every between-floor sight line, and fence lips block the perch
-  // hop — ramps are the only route). Commit toward a point a third of the
-  // way INTO the nearest connecting ramp from MY end (foot when climbing,
-  // crest when descending); riding it to the other level is what finally
-  // opens sight, and the normal flow takes over from there.
-  const mazeSeekElevationRoute = (allowClimb = false) => {
-    const floorGap = oppFloorY - myFloorY;
-    // CLIMB MODE: same floor, but the flat route is dead (allowClimb is
-    // passed only then) — e.g. both on Airport ground with the full-width
-    // plateau between. Take any UP-ramp from my level: crossing over the
-    // top is the route, and once up there the normal cross-floor logic
-    // descends the far side.
-    const climbMode = Math.abs(floorGap) < 2.5;
-    if (climbMode && !allowClimb) return false;
-    const levelLow = Math.min(myFloorY, oppFloorY);
-    const levelHigh = Math.max(myFloorY, oppFloorY);
-    let bx = 0, bz = 0, bestD = Infinity;
-    for (const s of surfaces) {
-      if (s.type !== 'ramp') continue;
-      const lo = Math.min(s.lowY, s.highY);
-      const hi = Math.max(s.lowY, s.highY);
-      if (climbMode) {
-        // An up-ramp starting at my level.
-        if (Math.abs(lo - myFloorY) > 2 || hi < myFloorY + 2.5) continue;
-      } else if (Math.abs(lo - levelLow) > 2 || Math.abs(hi - levelHigh) > 2) {
-        // Cross-floor: must actually connect the two floors.
-        continue;
-      }
-      const wantY = (climbMode || floorGap > 0) ? lo : hi;   // the ramp end on MY level
-      let ex, ez;
-      if (s.axis === 'x') {
-        const e0 = s.lowY === wantY ? s.minX : s.maxX;
-        const e1 = s.lowY === wantY ? s.maxX : s.minX;
-        ex = e0 + (e1 - e0) * 0.35;
-        ez = (s.minZ + s.maxZ) / 2;
-      } else {
-        const e0 = s.lowY === wantY ? s.minZ : s.maxZ;
-        const e1 = s.lowY === wantY ? s.maxZ : s.minZ;
-        ez = e0 + (e1 - e0) * 0.35;
-        ex = (s.minX + s.maxX) / 2;
-      }
-      const d = Math.hypot(ex - me.pos.x, ez - me.pos.z);
-      if (d < bestD) { bestD = d; bx = ex; bz = ez; }
-    }
-    if (bestD === Infinity) return false;
-    const dl = bestD || 1;
-    me.botMazeDirX = (bx - me.pos.x) / dl;
-    me.botMazeDirZ = (bz - me.pos.z) / dl;
-    me.botMazeHadWall = true;   // corner turn handles wall contact en route
-    me.botMazeHand = null;
-    me.botMazeLosBlockedAtEntry = !playerHasLoS;
-    return true;
-  };
+  // (Heuristic stack RETIRED 2026-08-08, user-ordered: the committed
+  // wall-follow, the opening scan, and the ramp-seeker are gone — the
+  // pathfinder owns Maze outright. No-route ticks run the minimal fallback
+  // in the maze movement leg, paced by the stall detectors and bent away
+  // from the last pinned spot by the revived stuck-memory repulsion.)
 
   // NAV PLAN — the universal pathfinder. Ask the grid for a real walk route
   // to the target; Maze follows it waypoint by waypoint. Returns false when
   // no walk route exists (target on a jump-only platform, degenerate snap) —
-  // the heuristic stack (scan / ramp-seek / wall-follow) remains the
-  // fallback. Paths live on matchState._navPaths, NOT on the fighter: the
+  // the minimal fallback in the maze movement leg covers those ticks until
+  // the detectors re-fire. Paths live on matchState._navPaths, NOT on the fighter: the
   // fighter object is serialized into every snapshot.
   // FIRING-POSITION TRUNCATION — the raw path ends at the player's FEET.
   // Walk it (6-unit samples) and cut it at the first spot that already SEES
@@ -873,7 +951,10 @@ export function tickBot(matchState, botId, now) {
           obstacles, surfaces
         )) {
           const cut = path.slice(0, i);
-          cut.push({ x: px, z: pz });
+          // Carry the sample's floor: smoothPath's same-floor gate reads
+          // (y ?? 0), so a y-less cut point on a deck froze the final leg
+          // out of smoothing (review 2026-08-13).
+          cut.push({ x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -900,6 +981,9 @@ export function tickBot(matchState, botId, now) {
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
+    // Diagonal legs where the swept corridor proves them safe (see
+    // smoothPath's header note). Mirrored in main.js navPlan.
+    if (path && path.length > 2) path = smoothPath(grid, path, obstacles);
     if (matchState._navPaths == null) matchState._navPaths = {};
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
@@ -973,66 +1057,67 @@ export function tickBot(matchState, botId, now) {
     nextState = 'pursue';
   }
 
-  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, picks a
-  // fresh tangent instead of exiting — Maze doesn't give up, it tries a
-  // different way around.
+  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, re-plans
+  // the route from the CURRENT position — Maze doesn't give up, it retries
+  // the pathfinder (heuristic stack retired 2026-08-08; the stall detectors
+  // pace the retries, and the stuck-memory bias in the fallback leg keeps
+  // them from re-treading the pinned spot).
   const escapeDue = me.botMazeEscapeUntil != null && now >= me.botMazeEscapeUntil;
   if (nextState === 'maze' && prevState === 'maze'
       && (stuckTriggered || escapeDue || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
     if (escapeDue) me.botMazeEscapeUntil = null;
     me.botStateEnteredAt = now;
-    // STATUE ESCAPE: a FROZEN bot is body-pinched in a corner pocket the
-    // zero-width pin test can't see (the ramp-top notch against Airport's
-    // rim glass) — the planner then re-issues the identical line every
-    // 1.5 s forever. If the fresh plan below starts at the very waypoint
-    // it froze against, treat it as NO ROUTE: back out along the escape
-    // heading for a beat, then replan from the freed spot. Deliberately
-    // statue-only (zero net movement): bots that still move never take
-    // the back-out, so live routing gains no back-and-forth.
+    // STATUE ESCAPE (kept): a FROZEN bot is body-pinched in a corner pocket
+    // the zero-width pin test can't see (the ramp-top notch against
+    // Airport's rim glass) — the planner then re-issues the identical line
+    // every 1.5 s forever. If the fresh plan below starts at the very
+    // waypoint it froze against, treat it as NO ROUTE: back out along the
+    // stored escape heading for a beat, then replan from the freed spot.
+    // Deliberately statue-only (zero net movement): bots that still move
+    // never take the back-out, so live routing gains no back-and-forth.
     const navPrev = matchState._navPaths ? matchState._navPaths[botId] : null;
     const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
-    // Pathfinder first: a stuck signal or 7 s refresh re-plans the route
-    // from the CURRENT position. Only when no route exists does the
-    // heuristic stack take over.
     let planned = navPlan();
     if (planned && frozenWp) {
       const fresh = matchState._navPaths[botId];
       // The follower's own advance rule: the waypoint it would steer to.
       let fi = fresh.idx;
       while (fi < fresh.path.length - 1
-          && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < 3) fi += 1;
+          && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
-      if (Math.abs(firstWp.x - frozenWp.x) < 0.5 && Math.abs(firstWp.z - frozenWp.z) < 0.5) {
+      // Match against EVERY remaining waypoint of the frozen route, not just
+      // the indexed steer-to: smoothPath's greedy anchors are start/goal-
+      // dependent, so a re-plan from the same frozen spot can re-issue the
+      // same line under a different first anchor — single-index matching
+      // dropped mid-leg statue detection ~20pp and a moving target could
+      // dodge it every re-commit (review 2026-08-13). Waypoints are unmoved
+      // cell centres in both paths, so the 0.5 equality stays exact; the
+      // trigger only fires on stuckFrozen bots, where backing out of ANY
+      // retraced line is the right call.
+      const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
+        Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
+      if (retraced) {
         delete matchState._navPaths[botId];
         planned = false;
         me.botMazeEscapeUntil = now + 800;
+        const edx = me.pos.x - frozenWp.x, edz = me.pos.z - frozenWp.z;
+        const edl = Math.hypot(edx, edz);
+        me.botMazeEscapeDirX = edl > 0.05 ? edx / edl : -dirX;
+        me.botMazeEscapeDirZ = edl > 0.05 ? edz / edl : -dirZ;
       }
     }
-    if (planned) {
-      // fresh path committed
-    } else if (stuckTriggered) {
-      // Stuck mid-Maze → escape re-commit (reverses when probes tie).
-      commitMazeDirection(true);
-    } else {
-      // ROUTE-CHANGE PRIORITY: the ramp goes first when the fight needs a
-      // different route — the target is on another floor, OR I can SEE the
-      // player but can't WALK at them (the full-width Airport plateau
-      // between two ground-floor fighters: sight passes over its 3.7 body,
-      // feet don't). A reachable peephole is a consolation prize — scan-
-      // first let it preempt the route every 7 s, shuttling the bot between
-      // the peephole and the wall. Plain blind same-floor keeps scan-first
-      // (Flashpoint rooms; Station falls through — no ramps there, the
-      // perch reflex climbs instead).
-      const needRoute = Math.abs(oppFloorY - myFloorY) > 2.5
-        || (playerHasLoS && !inBandDist && !walkTowardClear(Math.min(dist, 50)));
-      let committed = needRoute && mazeSeekElevationRoute(true);
-      if (!committed) committed = mazeScanForOpening();
-      if (!committed) {
-        // Nothing seen, no ramp applies — re-aim toward the player (hand
-        // dropped; keeping it lapped closed loops forever — the Flashpoint
-        // spawn-room trap). The hand still rules corner turns WITHIN a leg.
-        commitMazeDirection(false, false);
-      }
+    if (!planned && stuckTriggered && me.botMazeEscapeUntil == null) {
+      // No route AND still stuck: back out for a beat before the next retry —
+      // the fallback's forward lean alone would press straight back into the
+      // same wall between detector firings. Heading: AWAY from the pinning
+      // wall (the avoidance vector points off the nearest obstacle face);
+      // reverse of the target line as the tiebreak. (The stuck-memory spot
+      // is stamped to the CURRENT position this same tick, so "away from
+      // memory" would always be degenerate here — audit finding 2026-08-08.)
+      me.botMazeEscapeUntil = now + 500;
+      const mdl = Math.hypot(avoid.rx, avoid.rz);
+      me.botMazeEscapeDirX = mdl > 0.05 ? avoid.rx / mdl : -dirX;
+      me.botMazeEscapeDirZ = mdl > 0.05 ? avoid.rz / mdl : -dirZ;
     }
   }
 
@@ -1042,10 +1127,11 @@ export function tickBot(matchState, botId, now) {
     me.botStateEnteredAt = now;
 
     if (nextState === 'maze') {
-      me.botMazeWallTicks = 0;
       me.botMazeEscapeUntil = null;
-      // Pathfinder first; the heuristic commit is the no-route fallback.
-      if (!navPlan()) commitMazeDirection();
+      // Pathfinder only (heuristics retired): no route → the minimal
+      // fallback movement covers the ticks until the detectors re-fire.
+      // The LoS-at-entry record must still be stamped for the exit gate.
+      if (!navPlan()) me.botMazeLosBlockedAtEntry = !playerHasLoS;
     }
 
     if (nextState === 'engage'
@@ -1155,11 +1241,29 @@ export function tickBot(matchState, botId, now) {
   // no-progress timer shoved it into maze (the 2 s statue at match start).
   const botS = me.botState ?? 'pursue';
 
-  if (botS === 'pursue') {
+  if (coverMove) {
+    // COVER RELOAD owns movement for the tick — the state branches below
+    // (including their jump commands) don't run, so a maze path can't vault
+    // the bot mid-hide. Never active during Defense (window check above).
+    // SPRINT to cover (2026-08-08 user tune, was walk — reserve-gated by the
+    // dispatch as usual); a HOLD stays wantSprint=false so standing behind
+    // the wall never reads as 'dash' and burns boost at zero speed.
+    mx = coverMove.mx;
+    mz = coverMove.mz;
+    wantSprint = !coverMove.hold;
+  } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
     // keeps closing through lowerRange and collides at zero distance.
-    const tooClose = dist < lowerRange;
+    // VERTICAL STACK (2026-08-14, user: "bot lingers when the enemy is right
+    // below/above them"). `dist` is horizontal, so an enemy a floor above
+    // reads as distance ~0 and range discipline walks the bot AWAY — then
+    // back in once it re-enters the band, forever (measured: a direction
+    // reversal every ~0.4 s, no net progress). Backing off does nothing
+    // about a vertical gap, so suppress the retreat and let the router (now
+    // multi-layer) take the bot to the other level.
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
     // crutch for the pre-pathfinder Maze). If the retreat costs sight, the
@@ -1179,13 +1283,31 @@ export function tickBot(matchState, botId, now) {
     wantSprint = !!me.botPursueSprinting;
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && me.grounded && !me.airborne) {
-      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF && dist < 32 && Math.random() > 0.5) {
+      // Climb aid: only for a step a jump can actually clear. Above that the
+      // router owns it — and the aid was unreachable dead code until the
+      // vertical-stack fix above (it needs dist < 32 while tooClose held for
+      // every dist below lowerRange >= 33, i.e. 0 of 18 units could run it).
+      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
+          && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
+          && dist < 32 && Math.random() > 0.5) {
         if (botTryJump(me, now)) jumpThisTick = true;
       } else if (onHighGround) {
-        const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
-        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
-          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botTryJump(me, now)) jumpThisTick = true;
+        // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
+        // fresh mount, skip the descent aid so the bot doesn't yo-yo right
+        // back down — the 22-wide track corridor keeps the firing band
+        // valid from the deck edge, so hopping down to close a small gap
+        // is a needless descent. EXCEPTIONS that still descend: sight lost,
+        // or the target pulled well past the band (those need the chase).
+        const holdUp = STATION_BOT_RULES && matchState.mapKey === 'station'
+          && now < (me.botMountHoldUntil ?? 0)
+          && playerHasLoS
+          && dist < upperRange + 12;
+        if (!holdUp) {
+          const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
+          if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+            jumpDirX = exit.toX; jumpDirZ = exit.toZ;
+            if (botTryJump(me, now)) jumpThisTick = true;
+          }
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
@@ -1195,7 +1317,26 @@ export function tickBot(matchState, botId, now) {
         const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botTryJump(me, now)) jumpThisTick = true;
+          if (botTryJump(me, now)) {
+            jumpThisTick = true;
+            // STATION MOUNT HOLD: see the onHighGround branch above.
+            if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+          }
+        } else if (STATION_BOT_RULES && matchState.mapKey === 'station' && perch
+            && (perch.toX * dirX + perch.toZ * dirZ > 0.2 || perch.dist < 12)) {
+          // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
+          // on this one map the decks are the strong positions but they're
+          // jump-only (no ramps, so paths never cross them) — steer the
+          // approach toward a scanned ledge that's roughly ON THE WAY
+          // (within ~78° of the target direction, or already close — 12 covers
+          // the track corridor half-width), and the jump above fires when it
+          // comes into reach. Weight 0.6
+          // keeps the target-pull dominant; every other map skips this
+          // branch entirely (behavior byte-identical elsewhere).
+          const tx = mx + perch.toX * 0.6;
+          const tz = mz + perch.toZ * 0.6;
+          const tl = Math.hypot(tx, tz) || 1;
+          mx = tx / tl; mz = tz / tl;
         }
       }
     }
@@ -1203,7 +1344,7 @@ export function tickBot(matchState, botId, now) {
     let nav = matchState._navPaths ? matchState._navPaths[botId] : null;
     // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
     // whose goal is meaningfully CLOSER to the player is an approach — done,
-    // drop it. A pathless (heuristic) maze has nothing sane to do here
+    // drop it. A pathless maze has nothing sane to do here
     // either — its stale committed direction charged straight through the
     // player during sighted-entry windows. Both cases: trip the sighted-
     // entry cap so the maze ENDS and Engage/Pursue own the fight. A
@@ -1228,23 +1369,43 @@ export function tickBot(matchState, botId, now) {
     // exited yet (e.g. sighted-entry cap still counting). Drop the path
     // rather than stand on it — a standing bot re-arms the no-progress
     // trigger every 2 s, which keeps re-selecting maze and STARVES the
-    // exit branch forever (the Plain Field never-orbits bug). The moving
-    // heuristic fallback covers the remaining ticks until the exit fires.
+    // exit branch forever (the Plain Field never-orbits bug). The minimal
+    // fallback covers the remaining ticks until the exit fires.
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
       if (Math.hypot(lastWp.x - me.pos.x, lastWp.z - me.pos.z) < 3) {
-        delete matchState._navPaths[botId];
-        nav = null;
+        // Arrived — but if the trip did NOT buy sight of the target, dropping
+        // to the pathless fallback sends the bot beelining back where it came
+        // from (the Streets under-bridge out-and-back loop). Ask for a fresh
+        // route first and take it when it aims somewhere NEW; only fall back
+        // when the planner has nothing better, which keeps the original
+        // "never stand on a consumed path" property.
+        let replaced = false;
+        if (!playerHasLoS) {
+          navPlan();
+          const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
+          const freshLast = fresh && fresh.path[fresh.path.length - 1];
+          if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
+            nav = fresh;
+            replaced = true;
+          }
+        }
+        if (!replaced) {
+          delete matchState._navPaths[botId];
+          nav = null;
+        }
       }
     }
     if (nav && nav.path && nav.idx < nav.path.length) {
       // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
-      // exists. Head for the current waypoint, advance within 3 units, and
-      // refresh the route (rate-limited) when the target wanders off the
-      // planned goal. Avoidance stays blended in for dynamic wiggle room.
+      // exists. Head for the current waypoint, advance within
+      // BOT_WAYPOINT_ADVANCE_RADIUS (see its note — 1.5, tight on purpose so
+      // corners are not cut into obstacle end faces), and refresh the route
+      // (rate-limited) when the target wanders off the planned goal.
+      // Avoidance stays blended in for dynamic wiggle room.
       let wp = nav.path[nav.idx];
       while (nav.idx < nav.path.length - 1
-          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 3) {
+          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
       }
@@ -1287,36 +1448,42 @@ export function tickBot(matchState, botId, now) {
       // if the reserve is ever tuned below it.
       const jumpBank = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + 10);
       wantSprint = !(jumpAhead && me.boost < jumpBank);
+    } else if (me.botMazeEscapeUntil != null && now < me.botMazeEscapeUntil) {
+      // STATUE BACK-OUT (no route, escape armed): reverse along the stored
+      // escape heading to free the body, then the next re-commit replans
+      // from the freed spot.
+      let tx = (me.botMazeEscapeDirX ?? -dirX) + avoid.rx * 0.3;
+      let tz = (me.botMazeEscapeDirZ ?? -dirZ) + avoid.rz * 0.3;
+      const l = Math.hypot(tx, tz) || 1;
+      mx = tx / l; mz = tz / l;
+      wantSprint = false;
     } else {
-      // HEURISTIC FALLBACK (no route exists): committed tangent + a gentle
-      // pull toward the player. The pull FADES OUT near walls so it can't
-      // press the bot into concave corners; in the open it curls the bot
-      // around wall ends. Context change: committed in the open, and a wall
-      // just interposed — switch to wall-follow NOW instead of grinding.
-      if (me.botMazeHadWall === false && obstacleNear) commitMazeDirection();
-      // CORNER TURN: the committed wall-follow ran into a NEW wall face
-      // (concave corner). Same 2-tick wall-press read Defense uses —
-      // re-commit HERE (~0.03 s) preserving the going-around hand.
-      const mazeIntoWall = avoidMag > 0.4
-        && ((me.botMazeDirX ?? 0) * avoid.rx + (me.botMazeDirZ ?? 0) * avoid.rz) < -0.4;
-      if (mazeIntoWall) {
-        me.botMazeWallTicks = (me.botMazeWallTicks ?? 0) + 1;
-      } else {
-        me.botMazeWallTicks = 0;
+      // MINIMAL FALLBACK (no route exists — rare with the full nav grid):
+      // pursue-style steering toward the player with avoidance, bent by the
+      // revived STUCK-MEMORY repulsion so each detector-paced retry leans
+      // away from the last pinned spot instead of re-treading it. The
+      // detectors keep polling; the next stuck/7 s signal replans.
+      let tx = dirX + avoid.rx * 0.8;
+      let tz = dirZ + avoid.rz * 0.8;
+      if (me.botStuckMemAt != null && now - me.botStuckMemAt < BOT_STUCK_MEMORY_MS) {
+        const rep = computeStuckRepulsion(
+          me.pos.x, me.pos.z, me.botStuckMemX, me.botStuckMemZ, BOT_STUCK_MEMORY_RADIUS);
+        tx += rep.rx * BOT_STUCK_MEMORY_WEIGHT;
+        tz += rep.rz * BOT_STUCK_MEMORY_WEIGHT;
       }
-      if (me.botMazeWallTicks >= 2) {
-        me.botMazeWallTicks = 0;
-        commitMazeDirection(false, true);
-      }
-      const mazePull = 0.4 * Math.max(0, 1 - avoidMag);
-      let tx = (me.botMazeDirX ?? sideX) + dirX * mazePull + avoid.rx * 0.3;
-      let tz = (me.botMazeDirZ ?? sideZ) + dirZ * mazePull + avoid.rz * 0.3;
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
       wantSprint = true;
     }
+    // minWidth 0 here ONLY (2026-08-10). Maze is walking a route, so a strip
+    // too thin to be a vantage point is still a legitimate thing to climb —
+    // the width floor added in 367a87b applied everywhere and doubled Factory
+    // belt crossings from 2.6 s to 5.3 s. Measured on the reversal breakdown:
+    // of 21 crossings-and-straight-back, 76% happened in Defense and only 10%
+    // in Maze, so the floor is worth keeping exactly where the bouncing is and
+    // dropping exactly where the routing is.
     if (me.grounded && !me.airborne) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS, 0);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botTryJump(me, now)) jumpThisTick = true;
@@ -1345,6 +1512,55 @@ export function tickBot(matchState, botId, now) {
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
 
+    // WEDGE REVERSE (2026-08-08, user-ordered — Defense's first recovery
+    // stage, ported): two consecutive ticks of driving INTO a wall flips the
+    // orbit. The tangent is perpendicular to the aim line, so reversing it
+    // points away from the face just hit BY CONSTRUCTION — no need to know
+    // which wall it is. Without this the bot stuck to the wall at ~6% of
+    // walk speed until the 1 s wedge detector shipped it to Maze, which
+    // breaks off the fight entirely (10% of engage time was spent that way).
+    // Deliberately stage ONE only: measured on Defense, the reverse alone
+    // clears >70% of wedges, while its stage-2 wall-slide bails almost as
+    // often as it fires (92 slides, 91 bails). The LoS flip's 1 s cooldown
+    // is NOT consulted — a bot pressed into a wall can't wait a second —
+    // but firing here re-arms it so the two can't fight over the same tick.
+    const engageIntoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4;
+    me.botEngageWallTicks = engageIntoWall ? (me.botEngageWallTicks ?? 0) + 1 : 0;
+    if (me.botEngageWallTicks >= 2) {
+      me.botEngageWallTicks = 0;
+      me.botOrbitSign = -sign;
+      me.botOrbitFlipAt = now + 1000;
+      let rx = sideX * me.botOrbitSign + dirX * pull + avoid.rx * 0.6;
+      let rz = sideZ * me.botOrbitSign + dirZ * pull + avoid.rz * 0.6;
+      const rl = Math.hypot(rx, rz) || 1;
+      mx = rx / rl; mz = rz / rl;
+    }
+
+    // STATION LOW-LEVEL DISCOURAGEMENT (map-keyed, 2026-08-05 user order):
+    // fighting on the track level is tolerated only briefly. After ~3 s of
+    // continuous Engage time down there, a ramping pull (0 → 0.6 over the
+    // next 3 s; the orbit/range discipline stays dominant) drifts the bot
+    // toward the nearest mountable deck edge, and the perch jump below
+    // completes the mount. Short exchanges and transit are untouched; the
+    // continuity check restarts the clock after any gap (state change,
+    // death, leaving the low floor). Other maps skip all of it.
+    if (STATION_BOT_RULES && matchState.mapKey === 'station' && !onHighGround) {
+      const cont = now - (me.botLowDwellTickAt ?? 0) < 250;
+      me.botLowDwellTickAt = now;
+      if (!cont || me.botLowDwellSince == null) me.botLowDwellSince = now;
+      const dwell = now - me.botLowDwellSince;
+      if (dwell > 3000) {
+        const deck = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+        if (deck) {
+          const w = Math.min(0.6, ((dwell - 3000) / 3000) * 0.6);
+          const px2 = mx + deck.toX * w;
+          const pz2 = mz + deck.toZ * w;
+          const pl = Math.hypot(px2, pz2) || 1;
+          mx = px2 / pl; mz = pz2 / pl;
+        }
+      }
+    }
+
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
     // the orbit (just adds a jump when the chance is there); the jump cooldown
@@ -1353,7 +1569,13 @@ export function tickBot(matchState, botId, now) {
       const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botTryJump(me, now)) jumpThisTick = true;
+        if (botTryJump(me, now)) {
+          jumpThisTick = true;
+          // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
+          // aid for a beat (see onHighGround branch) so the bot doesn't
+          // yo-yo straight back down.
+          if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
+        }
       }
     }
 
@@ -1410,6 +1632,8 @@ export function tickBot(matchState, botId, now) {
           if (botTryJumpSurvival(me, now)) {
             jumpThisTick = true;
             me.botDefenseStuckTicks = 0;
+            // STATION MOUNT HOLD: an escape mount also holds the deck.
+            if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -1438,6 +1662,8 @@ export function tickBot(matchState, botId, now) {
             if (botTryJumpSurvival(me, now)) {
               jumpThisTick = true;
               vaulted = true;
+              // STATION MOUNT HOLD: an escape mount also holds the deck.
+              if (STATION_BOT_RULES && matchState.mapKey === 'station') me.botMountHoldUntil = now + 7000;
               me.botDefenseStuckTicks = 0;
             }
           }
@@ -1486,9 +1712,14 @@ export function tickBot(matchState, botId, now) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
-  // Defense (escaping live fire) may spend down to the hard floor; every
-  // other state stops at the strategic reserve.
-  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST : BOT_BOOST_RESERVE;
+  // Sprint funding tiers: Defense (escaping live fire) may spend down to the
+  // hard floor; the COVER-RELOAD dash funds at the survival-jump tier (56,
+  // 2026-08-08 user tune — hiding a reload is a survival move); every other
+  // state stops at the strategic reserve. A cover HOLD never sprints, so it
+  // takes no tier at all.
+  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
+    : (coverMove && !coverMove.hold) ? BOT_COVER_SPRINT_MIN_BOOST
+    : BOT_BOOST_RESERVE;
   const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
   if (jumpThisTick) {
@@ -1512,7 +1743,10 @@ export function tickBot(matchState, botId, now) {
   } else {
     me.vel.x = mx * botWalkSpeed;
     me.vel.z = mz * botWalkSpeed;
-    if (Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
+    // Anti-freeze nudge — skipped during a cover-reload HOLD (the hold paces
+    // its own narrow sway; the nudge must not override a flip instant).
+    if (!(coverMove && coverMove.hold)
+        && Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
       me.vel.x = sideX * 4.5;
       me.vel.z = sideZ * 4.5;
     }
@@ -1548,12 +1782,9 @@ export function tickBot(matchState, botId, now) {
       // regular 220 ms poll, whichever comes first (the target can change).
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
-    } else if (!botHasLineOfSight(
-      { x: me.pos.x, y: me.pos.y + BOT_LOS_EYE_HEIGHT, z: me.pos.z },
-      { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
-      obstacles, surfaces
-    )) {
-      // No clear shot — hold fire and check again shortly.
+    } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
+      // No clear shot — hold fire and check again shortly. The origin is the
+      // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
     } else if (u.sniperCharge) {

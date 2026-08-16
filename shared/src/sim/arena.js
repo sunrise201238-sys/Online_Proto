@@ -9,6 +9,11 @@ import { GROUND_BASE_Y } from './constants.js';
 //   topBuffer    — units above maxY+topBuffer are NOT colliding (for jumping
 //                  over short obstacles); default 4.
 //   noProjectile — projectiles pass through (for unit-only fences).
+//   blocksBotSight — bot LINE OF SIGHT treats this box as opaque even when
+//                  noProjectile lets bullets through. For invisible movement
+//                  bars (Streets' under-slope walls): a see-through wall the
+//                  bot cannot walk through defeats every Maze trigger and
+//                  the bot paces against it (2026-08-13).
 //
 // Surfaces describe walkable ground at non-zero heights (platforms, ramps).
 // heightAt(x, z) returns the surface Y for a point inside the surface bbox.
@@ -22,7 +27,7 @@ import { GROUND_BASE_Y } from './constants.js';
 // global behaviour).
 const MAP_BOUNDARY = {
   arena1:     { halfX: 120, halfZ: 120 },  // Plain Field
-  arena2:     { halfX: 128, halfZ:  92 },  // Streets
+  arena2:     { halfX: 136, halfZ:  92 },  // Streets (halfX +8: map extended for the doubled bridge, 2026-08-14)
   factory:    { halfX: 130, halfZ: 105 },
   factory2:   { halfX: 130, halfZ: 105 },
   square:     { halfX: 116, halfZ: 106 },
@@ -2732,16 +2737,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
   "arena2": {
     "obstacles": [
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 14
       },
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": -60,
         "maxZ": -36,
         "minY": 14,
@@ -2749,16 +2754,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 11
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": -60,
         "maxZ": -36,
         "minY": 11,
@@ -2766,16 +2771,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 16
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": -60,
         "maxZ": -36,
         "minY": 16,
@@ -2783,16 +2788,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 16
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": -60,
         "maxZ": -36,
         "minY": 16,
@@ -2800,16 +2805,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 12
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": -60,
         "maxZ": -36,
         "minY": 12,
@@ -2817,16 +2822,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": -60,
         "maxZ": -36,
         "minY": 0,
         "maxY": 15
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": -60,
         "maxZ": -36,
         "minY": 15,
@@ -2834,16 +2839,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 13
       },
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": 36,
         "maxZ": 60,
         "minY": 13,
@@ -2851,16 +2856,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 16
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": 36,
         "maxZ": 60,
         "minY": 16,
@@ -2868,16 +2873,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 12
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": 36,
         "maxZ": 60,
         "minY": 12,
@@ -2885,16 +2890,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 14
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": 36,
         "maxZ": 60,
         "minY": 14,
@@ -2902,16 +2907,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 17
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": 36,
         "maxZ": 60,
         "minY": 17,
@@ -2919,16 +2924,16 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": 36,
         "maxZ": 60,
         "minY": 0,
         "maxY": 12
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": 36,
         "maxZ": 60,
         "minY": 12,
@@ -2936,870 +2941,1176 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "topBuffer": 2
       },
       {
-        "minX": -8.399999999999999,
-        "maxX": -7.999999999999999,
+        "minX": -16.4,
+        "maxX": -16,
         "minZ": -28,
         "maxZ": 28,
         "minY": 8,
         "maxY": 9.600000000000001
       },
       {
-        "minX": 7.999999999999999,
-        "maxX": 8.399999999999999,
+        "minX": 16,
+        "maxX": 16.4,
         "minZ": -28,
         "maxZ": 28,
         "minY": 8,
         "maxY": 9.600000000000001
       },
       {
-        "minX": -8.1,
-        "maxX": -6.7,
+        "minX": -16.45,
+        "maxX": -15.95,
+        "minZ": -28,
+        "maxZ": -16,
+        "minY": 8,
+        "maxY": 16
+      },
+      {
+        "minX": -16.45,
+        "maxX": -15.95,
+        "minZ": 16,
+        "maxZ": 28,
+        "minY": 8,
+        "maxY": 16
+      },
+      {
+        "minX": 15.95,
+        "maxX": 16.45,
+        "minZ": -28,
+        "maxZ": -16,
+        "minY": 8,
+        "maxY": 16
+      },
+      {
+        "minX": 15.95,
+        "maxX": 16.45,
+        "minZ": 16,
+        "maxZ": 28,
+        "minY": 8,
+        "maxY": 16
+      },
+      {
+        "minX": -16.1,
+        "maxX": -14.700000000000001,
         "minZ": -15.7,
         "maxZ": -14.3,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 6.7,
-        "maxX": 8.1,
+        "minX": 14.700000000000001,
+        "maxX": 16.1,
         "minZ": -15.7,
         "maxZ": -14.3,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -8.1,
-        "maxX": -6.7,
+        "minX": -16.1,
+        "maxX": -14.700000000000001,
         "minZ": 14.3,
         "maxZ": 15.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 6.7,
-        "maxX": 8.1,
+        "minX": 14.700000000000001,
+        "maxX": 16.1,
         "minZ": 14.3,
         "maxZ": 15.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -56,
+        "maxZ": -54,
+        "minY": 0,
+        "maxY": 0.4,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -54,
+        "maxZ": -52,
+        "minY": 0,
+        "maxY": 0.9392857142857143,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -52,
+        "maxZ": -50,
+        "minY": 0,
+        "maxY": 1.4785714285714284,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -50,
+        "maxZ": -48,
+        "minY": 0,
+        "maxY": 2.017857142857143,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -48,
+        "maxZ": -46,
+        "minY": 0,
+        "maxY": 2.5571428571428574,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -46,
+        "maxZ": -44,
+        "minY": 0,
+        "maxY": 3.0964285714285715,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -44,
+        "maxZ": -42,
+        "minY": 0,
+        "maxY": 3.6357142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -42,
+        "maxZ": -40,
+        "minY": 0,
+        "maxY": 4.175,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -40,
+        "maxZ": -38,
+        "minY": 0,
+        "maxY": 4.714285714285714,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -38,
+        "maxZ": -36,
+        "minY": 0,
+        "maxY": 5.253571428571429,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -36,
+        "maxZ": -34,
+        "minY": 0,
+        "maxY": 5.792857142857144,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -34,
+        "maxZ": -32,
+        "minY": 0,
+        "maxY": 6.332142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -32,
+        "maxZ": -30,
+        "minY": 0,
+        "maxY": 6.871428571428571,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": -30,
+        "maxZ": -28,
+        "minY": 0,
+        "maxY": 7.4107142857142865,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 28,
+        "maxZ": 30,
+        "minY": 0,
+        "maxY": 7.4107142857142865,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 30,
+        "maxZ": 32,
+        "minY": 0,
+        "maxY": 6.871428571428572,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 32,
+        "maxZ": 34,
+        "minY": 0,
+        "maxY": 6.332142857142857,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 34,
+        "maxZ": 36,
+        "minY": 0,
+        "maxY": 5.792857142857144,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 36,
+        "maxZ": 38,
+        "minY": 0,
+        "maxY": 5.253571428571428,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 38,
+        "maxZ": 40,
+        "minY": 0,
+        "maxY": 4.714285714285714,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 40,
+        "maxZ": 42,
+        "minY": 0,
+        "maxY": 4.175,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 42,
+        "maxZ": 44,
+        "minY": 0,
+        "maxY": 3.635714285714286,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 44,
+        "maxZ": 46,
+        "minY": 0,
+        "maxY": 3.096428571428571,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 46,
+        "maxZ": 48,
+        "minY": 0,
+        "maxY": 2.5571428571428574,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 48,
+        "maxZ": 50,
+        "minY": 0,
+        "maxY": 2.0178571428571432,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 50,
+        "maxZ": 52,
+        "minY": 0,
+        "maxY": 1.4785714285714289,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 52,
+        "maxZ": 54,
+        "minY": 0,
+        "maxY": 0.9392857142857141,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16,
+        "maxX": 16,
+        "minZ": 54,
+        "maxZ": 56,
+        "minY": 0,
+        "maxY": 0.4,
+        "topBuffer": 0
+      },
+      {
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -55,
         "maxZ": -49.8,
         "minY": 1.2049999999999998,
         "maxY": 2.8049999999999997
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -55,
         "maxZ": -49.8,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -49.800000000000004,
         "maxZ": -44.6,
         "minY": 2.715,
         "maxY": 4.3149999999999995
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -49.800000000000004,
         "maxZ": -44.6,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -44.6,
         "maxZ": -39.4,
         "minY": 4.225,
         "maxY": 5.824999999999999
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -44.6,
         "maxZ": -39.4,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -39.4,
         "maxZ": -34.199999999999996,
         "minY": 5.734999999999999,
         "maxY": 7.334999999999999
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -39.4,
         "maxZ": -34.199999999999996,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -34.2,
         "maxZ": -29,
         "minY": 7.245,
         "maxY": 8.845
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": -34.2,
         "maxZ": -29,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 49.8,
         "maxZ": 55,
         "minY": 1.2049999999999998,
         "maxY": 2.8049999999999997
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 49.8,
         "maxZ": 55,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 44.6,
         "maxZ": 49.800000000000004,
         "minY": 2.715,
         "maxY": 4.3149999999999995
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 44.6,
         "maxZ": 49.800000000000004,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 39.4,
         "maxZ": 44.6,
         "minY": 4.225,
         "maxY": 5.824999999999999
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 39.4,
         "maxZ": 44.6,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 34.199999999999996,
         "maxZ": 39.4,
         "minY": 5.734999999999999,
         "maxY": 7.334999999999999
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 34.199999999999996,
         "maxZ": 39.4,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 29,
         "maxZ": 34.2,
         "minY": 7.245,
         "maxY": 8.845
       },
       {
-        "minX": -8.424999999999999,
-        "maxX": -7.975,
+        "minX": -16.425,
+        "maxX": -15.975,
         "minZ": 29,
         "maxZ": 34.2,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -55,
         "maxZ": -49.8,
         "minY": 1.2049999999999998,
         "maxY": 2.8049999999999997
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -55,
         "maxZ": -49.8,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -49.800000000000004,
         "maxZ": -44.6,
         "minY": 2.715,
         "maxY": 4.3149999999999995
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -49.800000000000004,
         "maxZ": -44.6,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -44.6,
         "maxZ": -39.4,
         "minY": 4.225,
         "maxY": 5.824999999999999
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -44.6,
         "maxZ": -39.4,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -39.4,
         "maxZ": -34.199999999999996,
         "minY": 5.734999999999999,
         "maxY": 7.334999999999999
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -39.4,
         "maxZ": -34.199999999999996,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -34.2,
         "maxZ": -29,
         "minY": 7.245,
         "maxY": 8.845
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": -34.2,
         "maxZ": -29,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 49.8,
         "maxZ": 55,
         "minY": 1.2049999999999998,
         "maxY": 2.8049999999999997
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 49.8,
         "maxZ": 55,
         "minY": 0,
         "maxY": 1.205,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 44.6,
         "maxZ": 49.800000000000004,
         "minY": 2.715,
         "maxY": 4.3149999999999995
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 44.6,
         "maxZ": 49.800000000000004,
         "minY": 0,
         "maxY": 2.715,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 39.4,
         "maxZ": 44.6,
         "minY": 4.225,
         "maxY": 5.824999999999999
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 39.4,
         "maxZ": 44.6,
         "minY": 0,
         "maxY": 4.225,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 34.199999999999996,
         "maxZ": 39.4,
         "minY": 5.734999999999999,
         "maxY": 7.334999999999999
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 34.199999999999996,
         "maxZ": 39.4,
         "minY": 0,
         "maxY": 5.734999999999999,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 29,
         "maxZ": 34.2,
         "minY": 7.245,
         "maxY": 8.845
       },
       {
-        "minX": 7.975,
-        "maxX": 8.424999999999999,
+        "minX": 15.975,
+        "maxX": 16.425,
         "minZ": 29,
         "maxZ": 34.2,
         "minY": 0,
         "maxY": 7.245,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8,
-        "maxX": 8,
+        "minX": -16,
+        "maxX": 16,
         "minZ": -28.225,
         "maxZ": -27.775,
         "minY": 0,
         "maxY": 6,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -8,
-        "maxX": 8,
+        "minX": -16,
+        "maxX": 16,
         "minZ": 27.775,
         "maxZ": 28.225,
         "minY": 0,
         "maxY": 6,
-        "noProjectile": true
+        "noProjectile": true,
+        "blocksBotSight": true
       },
       {
-        "minX": -112.5,
-        "maxX": -107.5,
+        "minX": -120.5,
+        "maxX": -115.5,
         "minZ": -96.5,
         "maxZ": -91.5,
         "minY": 0,
         "maxY": 24
       },
       {
-        "minX": 107.5,
-        "maxX": 112.5,
+        "minX": 115.5,
+        "maxX": 120.5,
         "minZ": 91.5,
         "maxZ": 96.5,
         "minY": 0,
         "maxY": 24
       },
       {
-        "minX": -112.5,
-        "maxX": -107.5,
+        "minX": -120.5,
+        "maxX": -115.5,
         "minZ": 91.5,
         "maxZ": 96.5,
         "minY": 0,
         "maxY": 28
       },
       {
-        "minX": 107.5,
-        "maxX": 112.5,
+        "minX": 115.5,
+        "maxX": 120.5,
         "minZ": -96.5,
         "maxZ": -91.5,
         "minY": 0,
         "maxY": 28
       },
       {
-        "minX": -110.175,
-        "maxX": -109.825,
+        "minX": -118.175,
+        "maxX": -117.825,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -110.175,
-        "maxX": -109.825,
+        "minX": -118.175,
+        "maxX": -117.825,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -88.175,
-        "maxX": -87.825,
+        "minX": -96.175,
+        "maxX": -95.825,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -88.175,
-        "maxX": -87.825,
+        "minX": -96.175,
+        "maxX": -95.825,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -66.175,
-        "maxX": -65.825,
+        "minX": -74.175,
+        "maxX": -73.825,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -66.175,
-        "maxX": -65.825,
+        "minX": -74.175,
+        "maxX": -73.825,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -44.175,
-        "maxX": -43.825,
+        "minX": -52.175,
+        "maxX": -51.825,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -44.175,
-        "maxX": -43.825,
+        "minX": -52.175,
+        "maxX": -51.825,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 43.825,
-        "maxX": 44.175,
+        "minX": 51.825,
+        "maxX": 52.175,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 43.825,
-        "maxX": 44.175,
+        "minX": 51.825,
+        "maxX": 52.175,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 65.825,
-        "maxX": 66.175,
+        "minX": 73.825,
+        "maxX": 74.175,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 65.825,
-        "maxX": 66.175,
+        "minX": 73.825,
+        "maxX": 74.175,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 87.825,
-        "maxX": 88.175,
+        "minX": 95.825,
+        "maxX": 96.175,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 87.825,
-        "maxX": 88.175,
+        "minX": 95.825,
+        "maxX": 96.175,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 109.825,
-        "maxX": 110.175,
+        "minX": 117.825,
+        "maxX": 118.175,
         "minZ": -15.175,
         "maxZ": -14.825,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": 109.825,
-        "maxX": 110.175,
+        "minX": 117.825,
+        "maxX": 118.175,
         "minZ": 14.825,
         "maxZ": 15.175,
         "minY": 0,
         "maxY": 18.2
       },
       {
-        "minX": -97.5,
-        "maxX": -92.5,
+        "minX": -105.5,
+        "maxX": -100.5,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -96,
-        "maxX": -91,
+        "minX": -104,
+        "maxX": -99,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -52.5,
-        "maxX": -47.5,
+        "minX": -60.5,
+        "maxX": -55.5,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -51,
-        "maxX": -46,
+        "minX": -59,
+        "maxX": -54,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 22.5,
-        "maxX": 27.5,
+        "minX": 30.5,
+        "maxX": 35.5,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 24,
-        "maxX": 29,
+        "minX": 32,
+        "maxX": 37,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 77.5,
-        "maxX": 82.5,
+        "minX": 85.5,
+        "maxX": 90.5,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 76,
-        "maxX": 81,
+        "minX": 84,
+        "maxX": 89,
         "minZ": -16.7,
         "maxZ": -13.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -80.5,
-        "maxX": -75.5,
+        "minX": -88.5,
+        "maxX": -83.5,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -79,
-        "maxX": -74,
+        "minX": -87,
+        "maxX": -82,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -27.5,
-        "maxX": -22.5,
+        "minX": -35.5,
+        "maxX": -30.5,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -26,
-        "maxX": -21,
+        "minX": -34,
+        "maxX": -29,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 47.5,
-        "maxX": 52.5,
+        "minX": 55.5,
+        "maxX": 60.5,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 49,
-        "maxX": 54,
+        "minX": 57,
+        "maxX": 62,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 92.5,
-        "maxX": 97.5,
+        "minX": 100.5,
+        "maxX": 105.5,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 91,
-        "maxX": 96,
+        "minX": 99,
+        "maxX": 104,
         "minZ": 13.7,
         "maxZ": 16.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -36,
-        "maxX": -24,
+        "minX": -44,
+        "maxX": -32,
         "minZ": -17.25,
         "maxZ": -12.75,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -36.25,
-        "maxX": -23.75,
+        "minX": -44.25,
+        "maxX": -31.75,
         "minZ": -17.5,
         "maxZ": -12.5,
         "minY": 8.075,
         "maxY": 8.325
       },
       {
-        "minX": 24,
-        "maxX": 36,
+        "minX": 32,
+        "maxX": 44,
         "minZ": 12.75,
         "maxZ": 17.25,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 23.75,
-        "maxX": 36.25,
+        "minX": 31.75,
+        "maxX": 44.25,
         "minZ": 12.5,
         "maxZ": 17.5,
         "minY": 8.075,
         "maxY": 8.325
       },
       {
-        "minX": -64,
-        "maxX": -52,
+        "minX": -72,
+        "maxX": -60,
         "minZ": 12.55,
         "maxZ": 17.05,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -64.25,
-        "maxX": -51.75,
+        "minX": -72.25,
+        "maxX": -59.75,
         "minZ": 12.3,
         "maxZ": 17.3,
         "minY": 8.075,
         "maxY": 8.325
       },
       {
-        "minX": 54,
-        "maxX": 66,
+        "minX": 62,
+        "maxX": 74,
         "minZ": -17.05,
         "maxZ": -12.55,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 53.75,
-        "maxX": 66.25,
+        "minX": 61.75,
+        "maxX": 74.25,
         "minZ": -17.3,
         "maxZ": -12.3,
         "minY": 8.075,
         "maxY": 8.325
       },
       {
-        "minX": -26,
-        "maxX": -14,
+        "minX": -34,
+        "maxX": -22,
         "minZ": -39.2,
         "maxZ": -36.8,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": 14,
-        "maxX": 26,
+        "minX": 22,
+        "maxX": 34,
         "minZ": -39.2,
         "maxZ": -36.8,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": -26,
-        "maxX": -14,
+        "minX": -34,
+        "maxX": -22,
         "minZ": 36.8,
         "maxZ": 39.2,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": 14,
-        "maxX": 26,
+        "minX": 22,
+        "maxX": 34,
         "minZ": 36.8,
         "maxZ": 39.2,
         "minY": 0,
-        "maxY": 6.5
+        "maxY": 8
       },
       {
-        "minX": -30.5,
-        "maxX": -25.5,
+        "minX": -38.5,
+        "maxX": -33.5,
         "minZ": -53.5,
         "maxZ": -50.5,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -28.5,
-        "maxX": -23.5,
+        "minX": -36.5,
+        "maxX": -31.5,
         "minZ": -53.5,
         "maxZ": -50.5,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 23.5,
-        "maxX": 28.5,
+        "minX": 31.5,
+        "maxX": 36.5,
         "minZ": 50.5,
         "maxZ": 53.5,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 25.5,
-        "maxX": 30.5,
+        "minX": 33.5,
+        "maxX": 38.5,
         "minZ": 50.5,
         "maxZ": 53.5,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -110,
-        "maxX": 110,
+        "minX": -118,
+        "maxX": 118,
         "minZ": -94.125,
         "maxZ": -93.875,
         "minY": 15.875,
         "maxY": 16.125
       },
       {
-        "minX": -110,
-        "maxX": 110,
+        "minX": -118,
+        "maxX": 118,
         "minZ": 93.875,
         "maxZ": 94.125,
         "minY": 15.875,
         "maxY": 16.125
       },
       {
-        "minX": -130,
-        "maxX": 130,
+        "minX": -138,
+        "maxX": 138,
         "minZ": 92,
         "maxZ": 94,
         "minY": 0,
         "maxY": 28
       },
       {
-        "minX": -130,
-        "maxX": 130,
+        "minX": -138,
+        "maxX": 138,
         "minZ": -94,
         "maxZ": -92,
         "minY": 0,
         "maxY": 28
       },
       {
-        "minX": -130,
-        "maxX": -128,
+        "minX": -138,
+        "maxX": -136,
         "minZ": -94,
         "maxZ": 94,
         "minY": 0,
         "maxY": 28
       },
       {
-        "minX": 128,
-        "maxX": 130,
+        "minX": 136,
+        "maxX": 138,
         "minZ": -94,
         "maxZ": 94,
         "minY": 0,
@@ -3808,8 +4119,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
     ],
     "surfaces": [
       {
-        "minX": -120,
-        "maxX": 120,
+        "minX": -128,
+        "maxX": 128,
         "minZ": -18,
         "maxZ": -12,
         "maxTop": 0.45,
@@ -3817,8 +4128,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 0.45
       },
       {
-        "minX": -120,
-        "maxX": 120,
+        "minX": -128,
+        "maxX": 128,
         "minZ": 12,
         "maxZ": 18,
         "maxTop": 0.45,
@@ -3826,8 +4137,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 0.45
       },
       {
-        "minX": -34,
-        "maxX": 34,
+        "minX": -42,
+        "maxX": 42,
         "minZ": -58,
         "maxZ": -18,
         "maxTop": 0.45,
@@ -3835,8 +4146,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 0.45
       },
       {
-        "minX": -34,
-        "maxX": 34,
+        "minX": -42,
+        "maxX": 42,
         "minZ": 18,
         "maxZ": 58,
         "maxTop": 0.45,
@@ -3844,8 +4155,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 0.45
       },
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 36,
@@ -3853,8 +4164,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 36
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 33,
@@ -3862,8 +4173,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 33
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 38,
@@ -3871,8 +4182,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 38
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 38,
@@ -3880,8 +4191,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 38
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 34,
@@ -3889,8 +4200,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 34
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": -60,
         "maxZ": -36,
         "maxTop": 37,
@@ -3898,8 +4209,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 37
       },
       {
-        "minX": -114,
-        "maxX": -86,
+        "minX": -122,
+        "maxX": -94,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 35,
@@ -3907,8 +4218,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 35
       },
       {
-        "minX": -79,
-        "maxX": -57,
+        "minX": -87,
+        "maxX": -65,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 38,
@@ -3916,8 +4227,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 38
       },
       {
-        "minX": -49,
-        "maxX": -35,
+        "minX": -57,
+        "maxX": -43,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 34,
@@ -3925,8 +4236,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 34
       },
       {
-        "minX": 35,
-        "maxX": 49,
+        "minX": 43,
+        "maxX": 57,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 36,
@@ -3934,8 +4245,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 36
       },
       {
-        "minX": 57,
-        "maxX": 79,
+        "minX": 65,
+        "maxX": 87,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 39,
@@ -3943,8 +4254,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 39
       },
       {
-        "minX": 86,
-        "maxX": 114,
+        "minX": 94,
+        "maxX": 122,
         "minZ": 36,
         "maxZ": 60,
         "maxTop": 34,
@@ -3952,8 +4263,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 34
       },
       {
-        "minX": -8,
-        "maxX": 8,
+        "minX": -16,
+        "maxX": 16,
         "minZ": -28,
         "maxZ": 28,
         "maxTop": 8,
@@ -3961,8 +4272,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "top": 8
       },
       {
-        "minX": -8,
-        "maxX": 8,
+        "minX": -16,
+        "maxX": 16,
         "minZ": -56,
         "maxZ": -28,
         "maxTop": 8,
@@ -3972,8 +4283,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "highY": 8
       },
       {
-        "minX": -8,
-        "maxX": 8,
+        "minX": -16,
+        "maxX": 16,
         "minZ": 28,
         "maxZ": 56,
         "maxTop": 8,
@@ -4539,98 +4850,290 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 0.08
       },
       {
-        "minX": -90.3,
-        "maxX": -89.7,
-        "minZ": 56,
-        "maxZ": 64,
+        "minX": -97,
+        "maxX": -89,
+        "minZ": 53.7,
+        "maxZ": 54.3,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": -90.35,
-        "maxX": -89.65,
-        "minZ": 57.94,
-        "maxZ": 58.06,
+        "minX": -95.06,
+        "maxX": -94.94,
+        "minZ": 53.65,
+        "maxZ": 54.35,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": -90.35,
-        "maxX": -89.65,
-        "minZ": 59.94,
-        "maxZ": 60.06,
+        "minX": -93.06,
+        "maxX": -92.94,
+        "minZ": 53.65,
+        "maxZ": 54.35,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": -90.35,
-        "maxX": -89.65,
-        "minZ": 61.94,
-        "maxZ": 62.06,
+        "minX": -91.06,
+        "maxX": -90.94,
+        "minZ": 53.65,
+        "maxZ": 54.35,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": -90.4,
-        "maxX": -89.6,
-        "minZ": 55.9,
-        "maxZ": 64.1,
+        "minX": -97.1,
+        "maxX": -88.9,
+        "minZ": 53.6,
+        "maxZ": 54.4,
         "minY": 8,
         "maxY": 8.3
       },
       {
-        "minX": -90.5,
-        "maxX": -89.5,
-        "minZ": 56,
-        "maxZ": 64,
+        "minX": -97,
+        "maxX": -89,
+        "minZ": 53.5,
+        "maxZ": 54.5,
         "minY": 0.020000000000000004,
         "maxY": 0.08
       },
       {
-        "minX": 89.7,
-        "maxX": 90.3,
-        "minZ": -64,
-        "maxZ": -56,
+        "minX": 89,
+        "maxX": 97,
+        "minZ": -54.3,
+        "maxZ": -53.7,
         "minY": 0,
         "maxY": 8
       },
       {
-        "minX": 89.65,
-        "maxX": 90.35,
-        "minZ": -62.06,
-        "maxZ": -61.94,
+        "minX": 90.94,
+        "maxX": 91.06,
+        "minZ": -54.35,
+        "maxZ": -53.65,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": 89.65,
-        "maxX": 90.35,
-        "minZ": -60.06,
-        "maxZ": -59.94,
+        "minX": 92.94,
+        "maxX": 93.06,
+        "minZ": -54.35,
+        "maxZ": -53.65,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": 89.65,
-        "maxX": 90.35,
-        "minZ": -58.06,
-        "maxZ": -57.94,
+        "minX": 94.94,
+        "maxX": 95.06,
+        "minZ": -54.35,
+        "maxZ": -53.65,
         "minY": 0.10000000000000009,
         "maxY": 7.9
       },
       {
-        "minX": 89.6,
-        "maxX": 90.4,
-        "minZ": -64.1,
-        "maxZ": -55.9,
+        "minX": 88.9,
+        "maxX": 97.1,
+        "minZ": -54.4,
+        "maxZ": -53.6,
         "minY": 8,
         "maxY": 8.3
       },
       {
-        "minX": 89.5,
-        "maxX": 90.5,
-        "minZ": -64,
-        "maxZ": -56,
+        "minX": 89,
+        "maxX": 97,
+        "minZ": -54.5,
+        "maxZ": -53.5,
+        "minY": 0.020000000000000004,
+        "maxY": 0.08
+      },
+      {
+        "minX": -126,
+        "maxX": -94,
+        "minZ": 44.7,
+        "maxZ": 45.3,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -118.06,
+        "maxX": -117.94,
+        "minZ": 44.65,
+        "maxZ": 45.35,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -110.06,
+        "maxX": -109.94,
+        "minZ": 44.65,
+        "maxZ": 45.35,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -102.06,
+        "maxX": -101.94,
+        "minZ": 44.65,
+        "maxZ": 45.35,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -126.1,
+        "maxX": -93.9,
+        "minZ": 44.6,
+        "maxZ": 45.4,
+        "minY": 8,
+        "maxY": 8.3
+      },
+      {
+        "minX": -126,
+        "maxX": -94,
+        "minZ": 44.5,
+        "maxZ": 45.5,
+        "minY": 0.020000000000000004,
+        "maxY": 0.08
+      },
+      {
+        "minX": 94,
+        "maxX": 126,
+        "minZ": -45.3,
+        "maxZ": -44.7,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 101.94,
+        "maxX": 102.06,
+        "minZ": -45.35,
+        "maxZ": -44.65,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 109.94,
+        "maxX": 110.06,
+        "minZ": -45.35,
+        "maxZ": -44.65,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 117.94,
+        "maxX": 118.06,
+        "minZ": -45.35,
+        "maxZ": -44.65,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 93.9,
+        "maxX": 126.1,
+        "minZ": -45.4,
+        "maxZ": -44.6,
+        "minY": 8,
+        "maxY": 8.3
+      },
+      {
+        "minX": 94,
+        "maxX": 126,
+        "minZ": -45.5,
+        "maxZ": -44.5,
+        "minY": 0.020000000000000004,
+        "maxY": 0.08
+      },
+      {
+        "minX": -79.3,
+        "maxX": -78.7,
+        "minZ": 42,
+        "maxZ": 90,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": -79.35,
+        "maxX": -78.65,
+        "minZ": 53.94,
+        "maxZ": 54.06,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -79.35,
+        "maxX": -78.65,
+        "minZ": 65.94,
+        "maxZ": 66.06,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -79.35,
+        "maxX": -78.65,
+        "minZ": 77.94,
+        "maxZ": 78.06,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": -79.4,
+        "maxX": -78.6,
+        "minZ": 41.9,
+        "maxZ": 90.1,
+        "minY": 8,
+        "maxY": 8.3
+      },
+      {
+        "minX": -79.5,
+        "maxX": -78.5,
+        "minZ": 42,
+        "maxZ": 90,
+        "minY": 0.020000000000000004,
+        "maxY": 0.08
+      },
+      {
+        "minX": 78.7,
+        "maxX": 79.3,
+        "minZ": -90,
+        "maxZ": -42,
+        "minY": 0,
+        "maxY": 8
+      },
+      {
+        "minX": 78.65,
+        "maxX": 79.35,
+        "minZ": -78.06,
+        "maxZ": -77.94,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 78.65,
+        "maxX": 79.35,
+        "minZ": -66.06,
+        "maxZ": -65.94,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 78.65,
+        "maxX": 79.35,
+        "minZ": -54.06,
+        "maxZ": -53.94,
+        "minY": 0.10000000000000009,
+        "maxY": 7.9
+      },
+      {
+        "minX": 78.6,
+        "maxX": 79.4,
+        "minZ": -90.1,
+        "maxZ": -41.9,
+        "minY": 8,
+        "maxY": 8.3
+      },
+      {
+        "minX": 78.5,
+        "maxX": 79.5,
+        "minZ": -90,
+        "maxZ": -42,
         "minY": 0.020000000000000004,
         "maxY": 0.08
       },
@@ -8202,6 +8705,70 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "maxY": 8.2
       },
       {
+        "minX": -72,
+        "maxX": -68,
+        "minZ": 35,
+        "maxZ": 53,
+        "minY": 0,
+        "maxY": 3
+      },
+      {
+        "minX": -72.2,
+        "maxX": -67.8,
+        "minZ": 34.8,
+        "maxZ": 53.2,
+        "minY": 2.95,
+        "maxY": 3.25
+      },
+      {
+        "minX": -70.3,
+        "maxX": -69.7,
+        "minZ": 35,
+        "maxZ": 53,
+        "minY": 3.1,
+        "maxY": 9.4
+      },
+      {
+        "minX": -70.35,
+        "maxX": -69.65,
+        "minZ": 35.5,
+        "maxZ": 52.5,
+        "minY": 9.200000000000001,
+        "maxY": 9.4
+      },
+      {
+        "minX": 68,
+        "maxX": 72,
+        "minZ": 35,
+        "maxZ": 53,
+        "minY": 0,
+        "maxY": 3
+      },
+      {
+        "minX": 67.8,
+        "maxX": 72.2,
+        "minZ": 34.8,
+        "maxZ": 53.2,
+        "minY": 2.95,
+        "maxY": 3.25
+      },
+      {
+        "minX": 69.7,
+        "maxX": 70.3,
+        "minZ": 35,
+        "maxZ": 53,
+        "minY": 3.1,
+        "maxY": 9.4
+      },
+      {
+        "minX": 69.65,
+        "maxX": 70.35,
+        "minZ": 35.5,
+        "maxZ": 52.5,
+        "minY": 9.200000000000001,
+        "maxY": 9.4
+      },
+      {
         "minX": -82.5,
         "maxX": -73.5,
         "minZ": 80,
@@ -9269,9 +9836,10 @@ const GENERATED_ARENA_COLLISION_DATA = {
       { "minX": -77, "maxX": -53, "minZ": -81.5, "maxZ": -78.5, "minY": 0, "maxY": 15 },
       { "minX": 53, "maxX": 77, "minZ": -81.5, "maxZ": -78.5, "minY": 0, "maxY": 15 },
 
+      // Hall partition walls: the spawn-quadrant pair (54..86 @ z>0 and
+      // -86..-54 @ z<0) was removed (user 2026-08-07) — bots looped against
+      // it near the corner spawns (engage-orbit bump). Diagonal pair kept.
       { "minX": -86, "maxX": -54, "minZ": 93.75, "maxZ": 96.25, "minY": 0, "maxY": 15 },
-      { "minX": 54, "maxX": 86, "minZ": 93.75, "maxZ": 96.25, "minY": 0, "maxY": 15 },
-      { "minX": -86, "maxX": -54, "minZ": -96.25, "maxZ": -93.75, "minY": 0, "maxY": 15 },
       { "minX": 54, "maxX": 86, "minZ": -96.25, "maxZ": -93.75, "minY": 0, "maxY": 15 },
 
       { "minX": -111, "maxX": -99, "minZ": 25, "maxZ": 35, "minY": 0, "maxY": 12 },
@@ -9534,21 +10102,49 @@ const GENERATED_ARENA_COLLISION_DATA = {
 };
 
 const ARENA_SPAWNS = {
-  // Streets: diagonal corner spawns (ported from the demo line 2026-08-06;
-  // old values ±108, 0) — 8u clear of the boundary walls (x ±126, z ±90)
-  // and the corner towers.
-  arena2: { p1: { x: -118, y: GROUND_BASE_Y, z: -82 }, p2: { x: 118, y: GROUND_BASE_Y, z: 82 } },
-  factory: { p1: { x: -50, y: GROUND_BASE_Y, z: 0 }, p2: { x: 50, y: GROUND_BASE_Y, z: 0 } },
+  // Streets: diagonal corner spawns (user 2026-08-06; old values ±108, 0) —
+  // 8u clear of the boundary walls (x ±126, z ±90) and the corner towers.
+  // Streets: ±126 after the map extension (was ±118) — the corner spawns keep
+  // their original 10-unit standoff from the boundary. Mirrors main.js.
+  arena2: { p1: { x: -126, y: GROUND_BASE_Y, z: -82 }, p2: { x: 126, y: GROUND_BASE_Y, z: 82 } },
+  factory: { p1: { x: -120, y: GROUND_BASE_Y, z: 77 }, p2: { x: 120, y: GROUND_BASE_Y, z: -77 } },
   factory2: { p1: { x: -100, y: GROUND_BASE_Y, z: -60 }, p2: { x: 100, y: GROUND_BASE_Y, z: 60 } },
   square: { p1: { x: -95, y: GROUND_BASE_Y, z: -45 }, p2: { x: 95, y: GROUND_BASE_Y, z: 45 } },
-  lobby: { p1: { x: -30, y: GROUND_BASE_Y, z: 50 }, p2: { x: 30, y: GROUND_BASE_Y, z: 50 } },
-  // Station: deck FAR-corner spawns (ported from the demo line 2026-08-06;
-  // old track-corridor values ±128, 0) — x ±128 leaves 7u to the end wall
-  // (±135); z ±112 sits just past the corner stair block (z 102.5–107.5)
-  // and 20u off the outer wall (inner face ±132). Deck floor 4.
+  // Lobby: edge spawns beside the side walls (user 2026-08-13; was ±30/50) —
+  // each team's spawn-screen counter (x ±70) blocks spawn-to-spawn sight.
+  // Mirrors main.js.
+  lobby: { p1: { x: -83, y: GROUND_BASE_Y, z: 38 }, p2: { x: 83, y: GROUND_BASE_Y, z: 38 } },
+  // Station spawns moved ONTO the decks (2026-08-05 experiment): diagonal,
+  // opposite platforms, well inside the deck bodies (deck floor 4 → spawn
+  // y = GROUND_BASE_Y + 4). The old track-corridor spawns anchored every
+  // fight to the railway axis. Old values: p1 (-128, 0), p2 (128, 0).
+  // 2026-08-06 (user): deck spawns in the FAR corners (older values ±100/±70,
+  // ±128/±70) — x ±128 leaves 7u to the end wall (±135); z ±112 sits just
+  // past the corner storage tank (z 102.5–107.5) and 20u off the outer wall
+  // (inner face ±132). 2026-08-07: briefly moved to the back-wall pockets
+  // (±25/±125) — engagements started too fast; reverted same day (user).
   station: { p1: { x: -128, y: GROUND_BASE_Y + 4, z: -112 }, p2: { x: 128, y: GROUND_BASE_Y + 4, z: 112 } },
-  flashpoint: { p1: { x: -24, y: GROUND_BASE_Y, z: 0 }, p2: { x: 24, y: GROUND_BASE_Y, z: 0 } },
-  airport: { p1: { x: -118, y: GROUND_BASE_Y, z: -72 }, p2: { x: 118, y: GROUND_BASE_Y, z: 72 } }
+  // Flashpoint: diagonal corner spawns (user 2026-08-10; was ±24 / z 0, 48u
+  // apart across the centre slab — the closest opening of any map). NOT a
+  // coordinate mirror: the two corners are built differently (the 8u bar sits
+  // Flashpoint: spawns INSIDE the two walled corner rooms (user 2026-08-12,
+  // to exercise doorway navigation after the waypoint-advance fix): p1 deep
+  // in the NW room, p2 = −p1 in its SE mirror. The rooms' WALLS are point-
+  // symmetric but their contents are not — the SE room's deep half holds the
+  // fenced deck (X 80..108, Z 57..73), so both pairs sit on the L-shaped
+  // open floor west of it. With the inward-X teammate rule (see state.js)
+  // all four slots land at exactly 10.0u clearance, p4 = −p3, and neither
+  // spawn sees the other. Earlier iterations (open-corner spawns ±95/∓47
+  // etc.) are in this line's git history. Mirrored in client main.js.
+  flashpoint: { p1: { x: -68, y: GROUND_BASE_Y, z: -62 }, p2: { x: 68, y: GROUND_BASE_Y, z: 62 } },
+  // Airport: ground level right at the mouth of a corner ramp (ramp x-span
+  // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
+  // off the foot, with the 2v2 teammate offset stepping AWAY from centre so
+  // the pair lands 6u + 18u out on BOTH sides — mirrored distances are what
+  // matter (the original plain +Z offset gave one team 10u and the other
+  // 34u, so the near team always won the climb race and the far team spent
+  // the match fighting on the ground).
+  airport: { p1: { x: -130, y: GROUND_BASE_Y, z: -56 }, p2: { x: 130, y: GROUND_BASE_Y, z: 56 } }
 };
 
 function materializeSurface(surface) {
@@ -9558,8 +10154,8 @@ function materializeSurface(surface) {
     const highEnd = axis === 'x' ? maxX : maxZ;
     const span = (highEnd - lowEnd) || 1;
     const dy = highY - lowY;
-    // type/axis/lowY/highY are kept on the materialized surface so the bot
-    // AI can recognize ramps as elevation routes (mazeSeekElevationRoute).
+    // type/axis/lowY/highY are kept on the materialized surface so bot-side
+    // consumers (nav grid, surface-aware LoS) can reason about the slope.
     return { minX, maxX, minZ, maxZ, maxTop, type: 'ramp', axis, lowY, highY, heightAt(x, z) {
       const v = axis === 'x' ? x : z;
       const t = (v - lowEnd) / span;

@@ -34,6 +34,10 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    // 2v2 bot hold band (ported from the demo line 2026-08-15): compressed
+    // into 50-70 so long-lock units stop hanging back while a teammate dies
+    // alone. 1v1 keeps lockRange; the player-side lock UI ignores this field.
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
@@ -67,6 +71,7 @@ export const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -99,6 +104,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2500,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -135,6 +141,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 50,
+    lockRange2v2: 55,
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
@@ -170,6 +177,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -201,6 +209,7 @@ export const UNIT_DATA = {
 
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
     lockRange: 120,
+    lockRange2v2: 70,
     projectileSpeed: 2000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -243,6 +252,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -318,6 +328,7 @@ export const UNIT_DATA = {
     // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
     // per-shot damage, smaller mag.
     lockRange: 56,
+    lockRange2v2: 60,
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
@@ -352,6 +363,7 @@ export const UNIT_DATA = {
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
     lockRange: 56,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
@@ -386,6 +398,7 @@ export const UNIT_DATA = {
     // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
     // Hoshino's concentrated slug.
     lockRange: 40,
+    lockRange2v2: 50,
     projectileSpeed: 300,
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
@@ -424,6 +437,7 @@ export const UNIT_DATA = {
     // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
+    lockRange2v2: 65,
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
@@ -592,6 +606,12 @@ export const KEI_CHARGED_RADIUS_MULT = 1.5;   // charged beam is 1.5× the quick
 export const KEI_BEAM_SWEEP_RATE = 0.175;     // rad/s the beam rotates toward the aim (≈10°/s)
 export const KEI_BEAM_AIM_DEADZONE = 0.3;     // move-input magnitude below this = hold direction
 export const KEI_BEAM_MAX_PITCH = Math.atan(2); // vertical aim clamp (~63°; tan = 2, matches old tanY cap)
+
+// Muzzle height above fighter.pos: 2.35 modelYOffset (feet→torso) + 0.8 to the
+// muzzle. Every projectile spawns here, so the BOT's fire gate has to test THIS
+// line and not its eye line (see botShotCanLand in ai.js). Offline main.js works
+// in root space, where the same point is root.y + 0.8.
+export const PROJECTILE_MUZZLE_Y_OFFSET = 3.15;
 
 // Projectile lifetime (seconds).
 export const PROJECTILE_TTL_S = 2.2;

@@ -206,18 +206,19 @@ export function createMatchState({
     // END walls — offset along the deck toward centre (X) instead. Streets'
     // corner spawns sit 8u off the south/north walls, so +Z would bury the
     // teammate in the wall — offset along Z TOWARD CENTRE there.
-    const station = mapKey === 'station';
-    const streets = mapKey === 'arena2';
-    const zOff = (s) => streets ? s.z - Math.sign(s.z) * 12 : s.z + 12;
+    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
+    const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
+    const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
+    const xOff = (s) => s.x - Math.sign(s.x) * 12;
     const p3Spawn = {
-      x: station ? arena.spawns.p1.x - Math.sign(arena.spawns.p1.x) * 12 : arena.spawns.p1.x,
+      x: xOffset ? xOff(arena.spawns.p1) : arena.spawns.p1.x,
       y: arena.spawns.p1.y ?? GROUND_BASE_Y,
-      z: station ? arena.spawns.p1.z : zOff(arena.spawns.p1)
+      z: xOffset ? arena.spawns.p1.z : zOff(arena.spawns.p1)
     };
     const p4Spawn = {
-      x: station ? arena.spawns.p2.x - Math.sign(arena.spawns.p2.x) * 12 : arena.spawns.p2.x,
+      x: xOffset ? xOff(arena.spawns.p2) : arena.spawns.p2.x,
       y: arena.spawns.p2.y ?? GROUND_BASE_Y,
-      z: station ? arena.spawns.p2.z : zOff(arena.spawns.p2)
+      z: xOffset ? arena.spawns.p2.z : zOff(arena.spawns.p2)
     };
     fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
     fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
