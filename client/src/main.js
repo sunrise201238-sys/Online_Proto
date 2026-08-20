@@ -10908,7 +10908,12 @@ function updateDioramaHud() {
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   const W = window.innerWidth;
   const H = window.innerHeight;
-  const playerAlive = !!state.player && state.player.state.hp > 0;
+  // POV anchor: normally the player, but in spectator mode the WATCHED unit —
+  // LOS ghosting and team card edges follow whoever the camera rides
+  // (playtest: spectating team 2 must show team 2's sight lines).
+  const viewer = cameraFocusMech();
+  const viewerAlive = !!viewer && viewer.state.hp > 0;
+  const viewerTeam = viewer ? getTeamOf(viewer) : 'A';
   const boxes = [];    // every visible marker box — cards must never cover one
   const cards = [];
   for (const slot of DIO_SLOTS) {
@@ -10978,7 +10983,8 @@ function updateDioramaHud() {
     const locked = m === state.playerCurrentTarget && meta.selectable;
     // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
     // own rules — matches what a shot would actually do.
-    const blocked = meta.selectable && playerAlive && dioramaShotBlocked(state.player, m);
+    const blocked = viewerAlive && m !== viewer
+      && getTeamOf(m) !== viewerTeam && dioramaShotBlocked(viewer, m);
     // Ghosted (no bullet line) markers stay clearly findable — the dash +
     // NO SIGHT tag carry the signal, not heavy dimming (playtest round 2).
     els.g.style.opacity = blocked ? '0.65' : '1';
@@ -11065,7 +11071,8 @@ function updateDioramaHud() {
   // opposite edge; a 10%-of-width hysteresis stops midline flapping. A card
   // must never cover any marker square or another card (playtest #5) —
   // slide through vertical offsets until the slot is clear.
-  const own = cards.find((c) => c.slot === 'player') ?? cards.find((c) => c.slot === 'ally');
+  const own = cards.find((c) => c.m === viewer)
+    ?? cards.find((c) => getTeamOf(c.m) === viewerTeam);
   if (own) {
     const margin = W * 0.10;
     if (diorama.teamSide == null) diorama.teamSide = own.cx < W / 2 ? 'left' : 'right';
@@ -11075,8 +11082,7 @@ function updateDioramaHud() {
   const ownSide = diorama.teamSide ?? 'left';
   const placedRects = [];
   for (const c of cards) {
-    const isTeamA = c.slot === 'player' || c.slot === 'ally';
-    const side = isTeamA ? ownSide : (ownSide === 'left' ? 'right' : 'left');
+    const side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
     const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
     // Side-dependent floor: right edge hosts the button column, left edge the
     // joystick — cards stop above them instead of sliding underneath.
