@@ -10799,6 +10799,12 @@ function ensureDioramaSlotEls(slot) {
   const scopeCross = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'pointer-events': 'none' });
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
+  // Sniper damage tiers (rangeDamage): 0/1/2 extra concentric outlines on the
+  // locked marker — square markers nest squares, scopes nest circles.
+  const tierR1 = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1', opacity: '0.85', 'pointer-events': 'none' });
+  const tierR2 = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1', opacity: '0.85', 'pointer-events': 'none' });
+  const tierC1 = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
+  const tierC2 = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rect);
   g.appendChild(lineC);
@@ -10807,6 +10813,10 @@ function ensureDioramaSlotEls(slot) {
   g.appendChild(circleC);
   g.appendChild(scopeCircle);
   g.appendChild(scopeCross);
+  g.appendChild(tierR1);
+  g.appendChild(tierR2);
+  g.appendChild(tierC1);
+  g.appendChild(tierC2);
   g.appendChild(pointer);
   svg.appendChild(g);
   const card = document.createElement('div');
@@ -10816,7 +10826,8 @@ function ensureDioramaSlotEls(slot) {
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
-    g, rect, rectC, line, lineC, tris, circleC, scopeCircle, scopeCross, pointer, card,
+    g, rect, rectC, line, lineC, tris, circleC, scopeCircle, scopeCross, pointer,
+    tierR1, tierR2, tierC1, tierC2, card,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
@@ -11035,6 +11046,46 @@ function updateDioramaHud() {
       els.scopeCircle.style.display = 'none';
       els.scopeCross.style.display = 'none';
     }
+    // Sniper damage tiers on the LOCKED marker (mirrors the classic reticle's
+    // three range-tier textures): rangeDamage of the viewer or the target,
+    // XZ distance thresholds nearDist/midDist. Tier 1 = the base outline
+    // alone; tiers 2/3 add one/two inner outlines — more layers = farther
+    // zone = the sniper's bigger damage. Skipped on edge diamonds.
+    let tier = 0;
+    if (locked && !offFrame && viewer && viewerAlive) {
+      const rd = viewer.unit?.rangeDamage ?? m.unit?.rangeDamage;
+      if (rd) {
+        const distXZ = Math.hypot(
+          m.root.position.x - viewer.root.position.x,
+          m.root.position.z - viewer.root.position.z
+        );
+        tier = distXZ >= rd.midDist ? 3 : distXZ >= rd.nearDist ? 2 : 1;
+      }
+    }
+    const tierShapes = (isSniper && !offFrame)
+      ? [els.tierC1, els.tierC2] : [els.tierR1, els.tierR2];
+    const tierUnused = (isSniper && !offFrame)
+      ? [els.tierR1, els.tierR2] : [els.tierC1, els.tierC2];
+    tierUnused.forEach((n) => { n.style.display = 'none'; });
+    [0.62, 0.36].forEach((frac, i) => {
+      const n = tierShapes[i];
+      if (tier < i + 2) {
+        n.style.display = 'none';
+        return;
+      }
+      n.style.display = '';
+      if (isSniper && !offFrame) {
+        n.setAttribute('cx', cx.toFixed(1));
+        n.setAttribute('cy', cy.toFixed(1));
+        n.setAttribute('r', ((s / 2) * frac).toFixed(1));
+      } else {
+        const ss = s * frac;
+        n.setAttribute('x', (cx - ss / 2).toFixed(1));
+        n.setAttribute('y', (cy - ss / 2).toFixed(1));
+        n.setAttribute('width', ss.toFixed(1));
+        n.setAttribute('height', ss.toFixed(1));
+      }
+    });
     if (offFrame) {
       const px = cx + Math.cos(dirAngle) * (s / 2 + 10);
       const py = cy + Math.sin(dirAngle) * (s / 2 + 10);
