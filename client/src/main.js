@@ -6809,8 +6809,10 @@ function updateCamera() {
     // Spectator: exactly the watched unit wears the own-unit kit (X-ray
     // silhouette); everyone else shows the plain build — flipping live as TARGET cycles.
     // setMechSpriteView is a no-op on matching views, so this is per-frame safe.
-    getAllFighters().forEach((m) => setMechSpriteView(m, m === cam));
-  } else if (cam && cam !== state.player && !cam.isOwnSprite) {
+    // Diorama: NO unit ever wears the rear/own kit (owner call — the global
+    // view shows front art only), so the swap target is always `false` there.
+    getAllFighters().forEach((m) => setMechSpriteView(m, !dioramaActive() && m === cam));
+  } else if (!dioramaActive() && cam && cam !== state.player && !cam.isOwnSprite) {
     // Spectated unit gets the own-unit visual kit (X-ray silhouette) once —
     // but only when the player is out for GOOD (in Trio a dead player may be
     // one respawn tick away from returning; don't restyle the ally for that
@@ -6853,6 +6855,9 @@ function updateCamera() {
   // Diorama POC: the gameplay side effects above (spectate kit swaps, target
   // mirroring) still ran; only the transform is replaced by the fixed rig.
   if (dioramaActive()) {
+    // Front art only — the player's mech is created with the rear/own kit at
+    // match start; flip it (and anything else) back. No-op after frame 1.
+    getAllFighters().forEach((m) => setMechSpriteView(m, false));
     updateDioramaCamera(cam);
     return;
   }
@@ -10430,6 +10435,11 @@ function toggleDiorama(force) {
     removeDioramaDressing();
     hideDioramaLayer();
     if (hudRefs?.shootBtn) hudRefs.shootBtn.classList.remove('dio-no-target');
+    // Give the chase view its own-unit kit back (diorama forces front art).
+    // Spectator restores itself: updateCamera re-owns the watched unit.
+    if (!state.online && !state.spectatorActive && state.player) {
+      setMechSpriteView(state.player, true);
+    }
     // Restore the classic always-have-a-target invariant for the chase view.
     if (state.running && !state.online && !state.playerCurrentTarget && state.player) {
       const live = getEnemiesOf(state.player).find((f) => f.state.hp > 0);
@@ -10792,31 +10802,19 @@ function ensureDioramaSlotEls(slot) {
   const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
   const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
   const tris = svgNode('path', { fill: '#ffd257', stroke: 'none', 'pointer-events': 'none' });
-  // Sniper units swap the square for a scope reticle (circle + cross ticks);
-  // the rect stays as the invisible tap hit-area.
-  const circleC = svgNode('circle', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', opacity: '0.75', 'pointer-events': 'none' });
-  const scopeCircle = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'pointer-events': 'none' });
-  const scopeCross = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'pointer-events': 'none' });
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
-  // Sniper damage tiers (rangeDamage): 0/1/2 extra concentric outlines on the
-  // locked marker — square markers nest squares, scopes nest circles.
-  const tierR1 = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1', opacity: '0.85', 'pointer-events': 'none' });
-  const tierR2 = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1', opacity: '0.85', 'pointer-events': 'none' });
-  const tierC1 = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
-  const tierC2 = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
+  // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
+  // cross ticks (tier 2) and inner closing bars (tier 3) — as line paths.
+  const tierMid = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.6', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  const tierFar = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.6', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rect);
   g.appendChild(lineC);
   g.appendChild(line);
   g.appendChild(tris);
-  g.appendChild(circleC);
-  g.appendChild(scopeCircle);
-  g.appendChild(scopeCross);
-  g.appendChild(tierR1);
-  g.appendChild(tierR2);
-  g.appendChild(tierC1);
-  g.appendChild(tierC2);
+  g.appendChild(tierMid);
+  g.appendChild(tierFar);
   g.appendChild(pointer);
   svg.appendChild(g);
   const card = document.createElement('div');
@@ -10826,8 +10824,7 @@ function ensureDioramaSlotEls(slot) {
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
-    g, rect, rectC, line, lineC, tris, circleC, scopeCircle, scopeCross, pointer,
-    tierR1, tierR2, tierC1, tierC2, card,
+    g, rect, rectC, line, lineC, tris, pointer, tierMid, tierFar, card,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
@@ -10990,7 +10987,6 @@ function updateDioramaHud() {
     els.box = { x: bx, y: by, s };
     boxes.push(els.box);
     els.g.style.display = '';
-    const isSniper = !!m.unit.sniperCharge;
     const locked = m === state.playerCurrentTarget && meta.selectable;
     // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
     // own rules — matches what a shot would actually do.
@@ -10999,10 +10995,8 @@ function updateDioramaHud() {
     // Ghosted (no bullet line) markers stay clearly findable — the dash +
     // NO SIGHT tag carry the signal, not heavy dimming (playtest round 2).
     els.g.style.opacity = blocked ? '0.65' : '1';
-    // Marker body: square (diamond when off-frame); sniper units swap the
-    // in-frame square for a scope reticle (playtest #4) — the rect then goes
-    // strokeless but keeps serving as the tap hit-area.
-    const rectVisible = !isSniper || offFrame;
+    // Marker body: square for every unit, diamond when off-frame (owner
+    // call — no scope circles). The rect doubles as the tap hit-area.
     const rectXf = offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '';
     for (const r of [els.rectC, els.rect]) {
       r.setAttribute('transform', rectXf);
@@ -11012,47 +11006,17 @@ function updateDioramaHud() {
       r.setAttribute('height', s.toFixed(1));
       r.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
     }
-    els.rectC.setAttribute('stroke', rectVisible ? '#070b12' : 'none');
-    els.rect.setAttribute('stroke', rectVisible ? meta.color : 'none');
+    els.rectC.setAttribute('stroke', '#070b12');
+    els.rect.setAttribute('stroke', meta.color);
     els.rect.setAttribute('stroke-width', locked ? '1.8' : '1.2');
-    if (isSniper && !offFrame) {
-      const r = s / 2;
-      for (const cEl of [els.circleC, els.scopeCircle]) {
-        cEl.setAttribute('cx', cx.toFixed(1));
-        cEl.setAttribute('cy', cy.toFixed(1));
-        cEl.setAttribute('r', r.toFixed(1));
-        cEl.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
-        cEl.style.display = '';
-      }
-      els.scopeCircle.setAttribute('stroke-width', locked ? '1.8' : '1.2');
-      els.scopeCross.setAttribute('d', [
-        `M ${(cx - r - 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx - 5).toFixed(1)} ${cy.toFixed(1)}`,
-        `M ${(cx + 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx + r + 5).toFixed(1)} ${cy.toFixed(1)}`,
-        `M ${cx.toFixed(1)} ${(cy - r - 5).toFixed(1)} L ${cx.toFixed(1)} ${(cy - 5).toFixed(1)}`,
-        `M ${cx.toFixed(1)} ${(cy + 5).toFixed(1)} L ${cx.toFixed(1)} ${(cy + r + 5).toFixed(1)}`
-      ].join(' '));
-      els.scopeCross.style.display = '';
-    } else if (isSniper) {
-      // Off-frame sniper: diamond + small inner cross keeps the sniper read.
-      els.circleC.style.display = 'none';
-      els.scopeCircle.style.display = 'none';
-      els.scopeCross.setAttribute('d', [
-        `M ${(cx - s * 0.3).toFixed(1)} ${cy.toFixed(1)} L ${(cx + s * 0.3).toFixed(1)} ${cy.toFixed(1)}`,
-        `M ${cx.toFixed(1)} ${(cy - s * 0.3).toFixed(1)} L ${cx.toFixed(1)} ${(cy + s * 0.3).toFixed(1)}`
-      ].join(' '));
-      els.scopeCross.style.display = '';
-    } else {
-      els.circleC.style.display = 'none';
-      els.scopeCircle.style.display = 'none';
-      els.scopeCross.style.display = 'none';
-    }
-    // Sniper damage tiers on the LOCKED marker (mirrors the classic reticle's
-    // three range-tier textures): rangeDamage of the viewer or the target,
-    // XZ distance thresholds nearDist/midDist. Tier 1 = the base outline
-    // alone; tiers 2/3 add one/two inner outlines — more layers = farther
-    // zone = the sniper's bigger damage. Skipped on edge diamonds.
+    // Sniper damage tiers on the LOCKED marker — the classic reticle's two
+    // ADD-ON levels ported 1:1 (owner call: no scope circles, square for
+    // everyone): tier 2 adds cross ticks through the edge midpoints (mostly
+    // outside), tier 3 adds short bars closing an inner frame. Drawn in
+    // square space and sharing the rect transform, so the whole crosshair
+    // tilts along when the square becomes an edge diamond.
     let tier = 0;
-    if (locked && !offFrame && viewer && viewerAlive) {
+    if (locked && viewer && viewerAlive) {
       const rd = viewer.unit?.rangeDamage ?? m.unit?.rangeDamage;
       if (rd) {
         const distXZ = Math.hypot(
@@ -11062,30 +11026,34 @@ function updateDioramaHud() {
         tier = distXZ >= rd.midDist ? 3 : distXZ >= rd.nearDist ? 2 : 1;
       }
     }
-    const tierShapes = (isSniper && !offFrame)
-      ? [els.tierC1, els.tierC2] : [els.tierR1, els.tierR2];
-    const tierUnused = (isSniper && !offFrame)
-      ? [els.tierR1, els.tierR2] : [els.tierC1, els.tierC2];
-    tierUnused.forEach((n) => { n.style.display = 'none'; });
-    [0.62, 0.36].forEach((frac, i) => {
-      const n = tierShapes[i];
-      if (tier < i + 2) {
-        n.style.display = 'none';
-        return;
-      }
-      n.style.display = '';
-      if (isSniper && !offFrame) {
-        n.setAttribute('cx', cx.toFixed(1));
-        n.setAttribute('cy', cy.toFixed(1));
-        n.setAttribute('r', ((s / 2) * frac).toFixed(1));
-      } else {
-        const ss = s * frac;
-        n.setAttribute('x', (cx - ss / 2).toFixed(1));
-        n.setAttribute('y', (cy - ss / 2).toFixed(1));
-        n.setAttribute('width', ss.toFixed(1));
-        n.setAttribute('height', ss.toFixed(1));
-      }
-    });
+    if (tier >= 2) {
+      const tl = Math.min(14, Math.max(7, s * 0.26));   // tick length — mostly outside
+      const tin = tl * 0.18;                            // small inward overshoot
+      els.tierMid.setAttribute('d', [
+        `M ${cx.toFixed(1)} ${(by - (tl - tin)).toFixed(1)} L ${cx.toFixed(1)} ${(by + tin).toFixed(1)}`,
+        `M ${cx.toFixed(1)} ${(by + s - tin).toFixed(1)} L ${cx.toFixed(1)} ${(by + s + (tl - tin)).toFixed(1)}`,
+        `M ${(bx - (tl - tin)).toFixed(1)} ${cy.toFixed(1)} L ${(bx + tin).toFixed(1)} ${cy.toFixed(1)}`,
+        `M ${(bx + s - tin).toFixed(1)} ${cy.toFixed(1)} L ${(bx + s + (tl - tin)).toFixed(1)} ${cy.toFixed(1)}`
+      ].join(' '));
+      els.tierMid.setAttribute('transform', rectXf);
+      els.tierMid.style.display = '';
+    } else {
+      els.tierMid.style.display = 'none';
+    }
+    if (tier >= 3) {
+      const inset = s * 0.17;
+      const half = Math.min(9, Math.max(4, s * 0.14));
+      els.tierFar.setAttribute('d', [
+        `M ${(cx - half).toFixed(1)} ${(by + inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + inset).toFixed(1)}`,
+        `M ${(cx - half).toFixed(1)} ${(by + s - inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + s - inset).toFixed(1)}`,
+        `M ${(bx + inset).toFixed(1)} ${(cy - half).toFixed(1)} L ${(bx + inset).toFixed(1)} ${(cy + half).toFixed(1)}`,
+        `M ${(bx + s - inset).toFixed(1)} ${(cy - half).toFixed(1)} L ${(bx + s - inset).toFixed(1)} ${(cy + half).toFixed(1)}`
+      ].join(' '));
+      els.tierFar.setAttribute('transform', rectXf);
+      els.tierFar.style.display = '';
+    } else {
+      els.tierFar.style.display = 'none';
+    }
     if (offFrame) {
       const px = cx + Math.cos(dirAngle) * (s / 2 + 10);
       const py = cy + Math.sin(dirAngle) * (s / 2 + 10);
@@ -11097,18 +11065,28 @@ function updateDioramaHud() {
     } else {
       els.pointer.style.display = 'none';
     }
-    if (locked && !offFrame && !isSniper) {
-      // Mini triangle crosshair: four marks at the square's edge midpoints.
-      const t = 7;
-      const g = 3.5;
-      const mx = bx + s / 2;
-      const my = by + s / 2;
-      els.tris.setAttribute('d', [
-        `M ${mx - 4} ${by - g - t} L ${mx + 4} ${by - g - t} L ${mx} ${by - g} Z`,
-        `M ${mx - 4} ${by + s + g + t} L ${mx + 4} ${by + s + g + t} L ${mx} ${by + s + g} Z`,
-        `M ${bx - g - t} ${my - 4} L ${bx - g - t} ${my + 4} L ${bx - g} ${my} Z`,
-        `M ${bx + s + g + t} ${my - 4} L ${bx + s + g + t} ${my + 4} L ${bx + s + g} ${my} Z`
-      ].join(' '));
+    if (locked) {
+      // Mini triangle crosshair: four inward-pointing marks at the CORNERS
+      // (clear of the tier ticks on the edge midpoints); shares the rect
+      // transform so it tilts with the edge diamond.
+      const gap = 4;
+      const tri = 7.5;
+      const parts = [];
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const ux = sx * 0.7071;
+        const uy = sy * 0.7071;
+        const cxr = sx < 0 ? bx : bx + s;
+        const cyr = sy < 0 ? by : by + s;
+        const tipX = cxr + ux * gap;
+        const tipY = cyr + uy * gap;
+        const baseX = tipX + ux * tri;
+        const baseY = tipY + uy * tri;
+        const px2 = -uy * tri * 0.55;
+        const py2 = ux * tri * 0.55;
+        parts.push(`M ${tipX.toFixed(1)} ${tipY.toFixed(1)} L ${(baseX + px2).toFixed(1)} ${(baseY + py2).toFixed(1)} L ${(baseX - px2).toFixed(1)} ${(baseY - py2).toFixed(1)} Z`);
+      }
+      els.tris.setAttribute('d', parts.join(' '));
+      els.tris.setAttribute('transform', rectXf);
       els.tris.style.display = '';
     } else {
       els.tris.style.display = 'none';
