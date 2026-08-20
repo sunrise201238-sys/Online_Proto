@@ -10731,7 +10731,7 @@ const DIO_SLOT_META = {
   enemy2: { color: '#ff5a8a', label: 'ENEMY 2', selectable: true }
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
-const DIO_CARD_W = 150;
+const DIO_CARD_W = 180;
 const DIO_CARD_H = 56;
 
 function svgNode(tag, attrs) {
@@ -10774,25 +10774,35 @@ function ensureDioramaSlotEls(slot) {
   const svg = diorama.layer.querySelector('#dio-svg');
   const meta = DIO_SLOT_META[slot];
   const g = svgNode('g', {});
+  // Every colored stroke rides on a dark "casing" twin (drawn first, wider)
+  // so the thin lines stay findable over bright buildings — map-annotation
+  // style readability (playtest round 2).
+  const CASING = '#070b12';
+  const rectC = svgNode('rect', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', rx: '1', opacity: '0.75', 'pointer-events': 'none' });
   const rect = svgNode('rect', {
-    fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1',
+    fill: 'none', stroke: meta.color, 'stroke-width': '1.2', rx: '1',
     'pointer-events': meta.selectable ? 'all' : 'none'
   });
   if (meta.selectable) {
     rect.dataset.slot = slot;
     rect.style.cursor = 'crosshair';
   }
-  const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
+  const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
+  const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
   const tris = svgNode('path', { fill: '#ffd257', stroke: 'none', 'pointer-events': 'none' });
   // Sniper units swap the square for a scope reticle (circle + cross ticks);
   // the rect stays as the invisible tap hit-area.
-  const scopeCircle = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', 'pointer-events': 'none' });
-  const scopeCross = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1', 'pointer-events': 'none' });
+  const circleC = svgNode('circle', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', opacity: '0.75', 'pointer-events': 'none' });
+  const scopeCircle = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'pointer-events': 'none' });
+  const scopeCross = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'pointer-events': 'none' });
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
+  g.appendChild(rectC);
   g.appendChild(rect);
+  g.appendChild(lineC);
   g.appendChild(line);
   g.appendChild(tris);
+  g.appendChild(circleC);
   g.appendChild(scopeCircle);
   g.appendChild(scopeCross);
   g.appendChild(pointer);
@@ -10800,17 +10810,24 @@ function ensureDioramaSlotEls(slot) {
   const card = document.createElement('div');
   card.className = 'dio-card';
   card.style.borderColor = meta.color;
-  card.innerHTML = '<div class="dio-name"></div><div class="dio-hp"></div><div class="dio-bar"><i></i></div>';
+  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-hp"></div><div class="dio-bar"><i></i></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
-    g, rect, line, tris, scopeCircle, scopeCross, pointer, card,
-    nameEl: card.querySelector('.dio-name'),
+    g, rect, rectC, line, lineC, tris, circleC, scopeCircle, scopeCross, pointer, card,
+    roleEl: card.querySelector('.dio-role'),
+    weaponImg: card.querySelector('.dio-weapon'),
+    weaponKey: null,     // current weapon art (trio respawns swap weapons)
+    weaponFailed: false, // art 404 -> fall back to text in the role line
     hpEl: card.querySelector('.dio-hp'),
     barEl: card.querySelector('.dio-bar i'),
     box: null,        // last screen-space box {x, y, s} for tap hit-testing
     cardY: null       // smoothed card anchor
   };
+  els.weaponImg.addEventListener('error', () => {
+    els.weaponFailed = true;
+    els.weaponImg.style.display = 'none';
+  });
   diorama.els.set(slot, els);
   return els;
 }
@@ -10960,27 +10977,35 @@ function updateDioramaHud() {
     // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
     // own rules — matches what a shot would actually do.
     const blocked = meta.selectable && playerAlive && dioramaShotBlocked(state.player, m);
-    els.g.style.opacity = blocked ? '0.38' : '1';
+    // Ghosted (no bullet line) markers stay clearly findable — the dash +
+    // NO SIGHT tag carry the signal, not heavy dimming (playtest round 2).
+    els.g.style.opacity = blocked ? '0.65' : '1';
     // Marker body: square (diamond when off-frame); sniper units swap the
     // in-frame square for a scope reticle (playtest #4) — the rect then goes
     // strokeless but keeps serving as the tap hit-area.
     const rectVisible = !isSniper || offFrame;
-    els.rect.setAttribute('transform', offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '');
-    els.rect.setAttribute('x', bx.toFixed(1));
-    els.rect.setAttribute('y', by.toFixed(1));
-    els.rect.setAttribute('width', s.toFixed(1));
-    els.rect.setAttribute('height', s.toFixed(1));
+    const rectXf = offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '';
+    for (const r of [els.rectC, els.rect]) {
+      r.setAttribute('transform', rectXf);
+      r.setAttribute('x', bx.toFixed(1));
+      r.setAttribute('y', by.toFixed(1));
+      r.setAttribute('width', s.toFixed(1));
+      r.setAttribute('height', s.toFixed(1));
+      r.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
+    }
+    els.rectC.setAttribute('stroke', rectVisible ? '#070b12' : 'none');
     els.rect.setAttribute('stroke', rectVisible ? meta.color : 'none');
-    els.rect.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
-    els.rect.setAttribute('stroke-width', locked ? '1.6' : '1');
+    els.rect.setAttribute('stroke-width', locked ? '1.8' : '1.2');
     if (isSniper && !offFrame) {
       const r = s / 2;
-      els.scopeCircle.setAttribute('cx', cx.toFixed(1));
-      els.scopeCircle.setAttribute('cy', cy.toFixed(1));
-      els.scopeCircle.setAttribute('r', r.toFixed(1));
-      els.scopeCircle.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
-      els.scopeCircle.setAttribute('stroke-width', locked ? '1.6' : '1');
-      els.scopeCircle.style.display = '';
+      for (const cEl of [els.circleC, els.scopeCircle]) {
+        cEl.setAttribute('cx', cx.toFixed(1));
+        cEl.setAttribute('cy', cy.toFixed(1));
+        cEl.setAttribute('r', r.toFixed(1));
+        cEl.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
+        cEl.style.display = '';
+      }
+      els.scopeCircle.setAttribute('stroke-width', locked ? '1.8' : '1.2');
       els.scopeCross.setAttribute('d', [
         `M ${(cx - r - 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx - 5).toFixed(1)} ${cy.toFixed(1)}`,
         `M ${(cx + 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx + r + 5).toFixed(1)} ${cy.toFixed(1)}`,
@@ -10990,6 +11015,7 @@ function updateDioramaHud() {
       els.scopeCross.style.display = '';
     } else if (isSniper) {
       // Off-frame sniper: diamond + small inner cross keeps the sniper read.
+      els.circleC.style.display = 'none';
       els.scopeCircle.style.display = 'none';
       els.scopeCross.setAttribute('d', [
         `M ${(cx - s * 0.3).toFixed(1)} ${cy.toFixed(1)} L ${(cx + s * 0.3).toFixed(1)} ${cy.toFixed(1)}`,
@@ -10997,6 +11023,7 @@ function updateDioramaHud() {
       ].join(' '));
       els.scopeCross.style.display = '';
     } else {
+      els.circleC.style.display = 'none';
       els.scopeCircle.style.display = 'none';
       els.scopeCross.style.display = 'none';
     }
@@ -11027,13 +11054,9 @@ function updateDioramaHud() {
     } else {
       els.tris.style.display = 'none';
     }
-    // Full annotation (leader + card): the own unit and the locked target.
-    if (slot === 'player' || locked) {
-      cards.push({ slot, els, m, cx, cy, blocked });
-    } else {
-      els.line.style.display = 'none';
-      els.card.style.display = 'none';
-    }
+    // Full annotation (leader line + info card) for EVERY fielded unit —
+    // owner call, playtest round 2.
+    cards.push({ slot, els, m, cx, cy, blocked });
   }
   // Card layout: anchor at the nearest left/right screen edge at the unit's
   // height. A card must never cover any marker square or another card
@@ -11071,19 +11094,35 @@ function updateDioramaHud() {
     els.card.style.display = '';
     els.card.style.transform = `translate(${cardX.toFixed(1)}px, ${els.cardY.toFixed(1)}px)`;
     const m = c.m;
-    const label = `${DIO_SLOT_META[c.slot].label} · ${m.unit.weapon ?? m.unit.char ?? ''}`;
-    if (els.nameEl.textContent !== label) els.nameEl.textContent = label;
+    // Weapon reads as its silhouette image (owner call); art that 404s
+    // (no PNG for that gun yet) falls back to the weapon name as text.
+    const wkey = m.unit.weapon ?? '';
+    if (els.weaponKey !== wkey) {
+      els.weaponKey = wkey;
+      els.weaponFailed = false;
+      if (wkey) {
+        els.weaponImg.style.display = '';
+        els.weaponImg.src = weaponArtUrl(wkey);
+      } else {
+        els.weaponImg.style.display = 'none';
+      }
+    }
+    const role = DIO_SLOT_META[c.slot].label + (els.weaponFailed && wkey ? ` · ${wkey}` : '');
+    if (els.roleEl.textContent !== role) els.roleEl.textContent = role;
     const maxHp = m.unit.hp ?? MAX_HP;
-    const hpText = `HP ${Math.max(0, Math.round(m.state.hp))} / ${maxHp}${c.blocked ? ' · NO LINE' : ''}`;
+    const hpText = `HP ${Math.max(0, Math.round(m.state.hp))}/${maxHp}${c.blocked ? ' · NO SIGHT' : ''}`;
     if (els.hpEl.textContent !== hpText) els.hpEl.textContent = hpText;
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
-    els.line.style.display = '';
     const lineEndX = side === 'left' ? 10 + DIO_CARD_W : W - 10 - DIO_CARD_W;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
-    els.line.setAttribute('x1', boxEdgeX.toFixed(1));
-    els.line.setAttribute('y1', c.cy.toFixed(1));
-    els.line.setAttribute('x2', lineEndX.toFixed(1));
-    els.line.setAttribute('y2', (els.cardY + DIO_CARD_H / 2).toFixed(1));
+    const lineY2 = (els.cardY + DIO_CARD_H / 2).toFixed(1);
+    for (const ln of [els.lineC, els.line]) {
+      ln.style.display = '';
+      ln.setAttribute('x1', boxEdgeX.toFixed(1));
+      ln.setAttribute('y1', c.cy.toFixed(1));
+      ln.setAttribute('x2', lineEndX.toFixed(1));
+      ln.setAttribute('y2', lineY2);
+    }
   }
   // Manual-fire affordance: no target selected -> half-transparent fire button.
   if (hudRefs?.shootBtn) {

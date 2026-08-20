@@ -414,7 +414,7 @@ body.pseudo-fullscreen #app {
 .dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
 .dio-layer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dio-card {
-  position: absolute; left: 0; top: 0; width: 150px; height: 56px; box-sizing: border-box;
+  position: absolute; left: 0; top: 0; width: 180px; height: 56px; box-sizing: border-box;
   padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
   background: rgba(7, 11, 18, 0.72); backdrop-filter: blur(2px);
   color: #dfe7f5; pointer-events: none; will-change: transform;
@@ -432,3 +432,7 @@ body.pseudo-fullscreen #app {
 #dio-toast.show { opacity: 1; }
 /* Manual fire with no lock: the button reads disabled (tap shows the toast). */
 .buttons .btn-shoot.dio-no-target { opacity: 0.38; }
+/* Diorama round 2: role + weapon silhouette on one card line (invert flips
+   the dark weapon art to white on the dark card, same trick as trio tags). */
+.dio-card .dio-name { display: flex; align-items: center; gap: 6px; }
+.dio-card .dio-weapon { height: 13px; width: auto; max-width: 70px; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.92; }
