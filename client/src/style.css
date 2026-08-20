@@ -420,8 +420,8 @@ body.pseudo-fullscreen #app {
   color: #dfe7f5; pointer-events: none; will-change: transform;
 }
 .dio-card .dio-name { font-size: 10px; letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; }
-.dio-card .dio-hp { font-size: 12px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dio-card .dio-bar { height: 3px; margin-top: 5px; background: rgba(120, 140, 170, 0.25); }
+.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 4px; min-height: 11px; color: #ffcf6b; white-space: nowrap; }
+.dio-card .dio-bar { height: 9px; margin-top: 7px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
 .dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
 #dio-toast {
   position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);

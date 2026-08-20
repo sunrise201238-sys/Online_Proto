@@ -10810,7 +10810,7 @@ function ensureDioramaSlotEls(slot) {
   const card = document.createElement('div');
   card.className = 'dio-card';
   card.style.borderColor = meta.color;
-  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-hp"></div><div class="dio-bar"><i></i></div>';
+  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-status"></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
@@ -10819,7 +10819,7 @@ function ensureDioramaSlotEls(slot) {
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
     weaponFailed: false, // art 404 -> fall back to text in the role line
-    hpEl: card.querySelector('.dio-hp'),
+    statusEl: card.querySelector('.dio-status'),
     barEl: card.querySelector('.dio-bar i'),
     box: null,        // last screen-space box {x, y, s} for tap hit-testing
     cardY: null       // smoothed card anchor
@@ -11109,10 +11109,12 @@ function updateDioramaHud() {
     }
     const role = DIO_SLOT_META[c.slot].label + (els.weaponFailed && wkey ? ` · ${wkey}` : '');
     if (els.roleEl.textContent !== role) els.roleEl.textContent = role;
+    // HP reads as the bar alone (owner call — no numbers); NO SIGHT moves to
+    // its own status line under it.
     const maxHp = m.unit.hp ?? MAX_HP;
-    const hpText = `HP ${Math.max(0, Math.round(m.state.hp))}/${maxHp}${c.blocked ? ' · NO SIGHT' : ''}`;
-    if (els.hpEl.textContent !== hpText) els.hpEl.textContent = hpText;
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
+    const statusText = c.blocked ? 'NO SIGHT' : '';
+    if (els.statusEl.textContent !== statusText) els.statusEl.textContent = statusText;
     const lineEndX = side === 'left' ? 10 + DIO_CARD_W : W - 10 - DIO_CARD_W;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
     const lineY2 = (els.cardY + DIO_CARD_H / 2).toFixed(1);
