@@ -11,6 +11,17 @@ updateMechAnimations / the two arrow updaters (legacy overlays parked),
 buildArenaForMap (dressing), animate (tilt-shift render + annotation update).
 Everything gates on dioramaActive(); the classic chase view is unchanged
 when off, and online mode is untouched.
+Playtest round 1 (owner, 2026-08-20) applied: z-fight ground flicker fixed
+(diorama near plane 6 + base plate lowered/polygon-offset + anisotropy);
+camera is now PLAYER-CENTRED (look target rides the focus unit, clamped to
+`followBound` of the half-extents) instead of map-centred; off-frame units
+render as direction-true diamonds (ray-from-screen-centre placement + a
+direction triangle, like the old edge arrows); sniper units (unit.sniperCharge)
+draw a scope reticle instead of the square (diamond + inner cross off-frame);
+info cards slide vertically until they cover no marker square and no other
+card; the diorama toggle is reachable on touch via the pause menu
+("View: Diorama/Classic", offline only).
+
 Read this before continuing any diorama work — it records the owner's
 decisions from the design sessions. Branch policy: ALL edits go directly to
 `Demo_0.7.5_Test-Fields`; do not touch any other branch.

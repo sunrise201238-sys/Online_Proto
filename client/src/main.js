@@ -1073,16 +1073,19 @@ const diorama = {
   tapCycle: { key: '', idx: 0 },   // overlap-cycling state for stacked squares
   lastDeniedAt: 0,       // fire-without-target toast throttle
   _toastTimer: 0,
-  savedFar: null
+  savedFar: null,
+  savedNear: null
 };
 
 // Global framing/grade tunables — live-tweakable via window.__diorama.view.
 const DIORAMA_VIEW = {
   fov: 45,
-  followShift: 0.24,   // fraction of the focus unit's offset the frame follows
-  followCap: 18,       // world-unit cap on that follow shift
-  yawFollow: 0.055,    // radians of yaw lean per full-halfX of unit offset
-  lerp: 0.05,          // per-frame smoothing toward the follow targets
+  // Player-centred follow (playtest 2026-08-20: the map-centred frame lost
+  // the own unit) — the look target rides the focus unit, clamped to this
+  // fraction of the map half-extents so corner play keeps board in frame.
+  followBound: 0.62,
+  yawFollow: 0.04,     // radians of yaw lean per full-halfX of unit offset
+  lerp: 0.06,          // per-frame smoothing toward the follow targets
   lookY: 4,            // look-at height — keeps the board low in frame
   focusBand: 0.13,     // half-height of the sharp band (0..1 screen units)
   blurSpan: 0.32,      // distance from band edge to full blur
@@ -9893,13 +9896,21 @@ function showPauseMenu() {
   clearMenus();
   const menu = document.createElement('div');
   menu.className = 'menu';
-  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button><button data-action="new">New Game</button>`;
+  // Offline: the diorama view toggle lives here so touch devices can reach
+  // it too (V key remains the desktop shortcut).
+  const dioramaBtn = state.online ? '' : `<button data-action="diorama">View: ${diorama.enabled ? 'Diorama' : 'Classic'}</button>`;
+  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
     clearMenus();
     state.phase = 'match';
     state.running = true;
+  });
+  menu.querySelector('button[data-action="diorama"]')?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    toggleDiorama();
+    event.currentTarget.textContent = `View: ${diorama.enabled ? 'Diorama' : 'Classic'}`;
   });
   menu.querySelector('button[data-action="new"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -10411,7 +10422,9 @@ function toggleDiorama(force) {
   diorama.enabled = want;
   if (want) {
     diorama.cam.snapped = false;
-    if (state.running && !state.online) applyDioramaDressing();
+    // Apply while a match is live OR paused (the mobile toggle sits in the
+    // pause menu, where state.running is false but the arena is built).
+    if (!state.online && (state.running || state.phase === 'pause')) applyDioramaDressing();
   } else {
     removeDioramaDressing();
     hideDioramaLayer();
@@ -10461,11 +10474,19 @@ function applyDioramaDressing() {
   const plateTex = gridTex.clone();
   plateTex.needsUpdate = true;
   plateTex.repeat.set((w * 8) / 280, (d * 8) / 280);
+  plateTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const plate = new THREE.Mesh(
     new THREE.PlaneGeometry(w, d),
-    new THREE.MeshStandardMaterial({ map: plateTex, color: 0x8ea8de, metalness: 0.5, roughness: 0.58 })
+    // polygonOffset pushes the plate behind the map's own floors in the depth
+    // buffer — the 5 mm-scale floor layering z-fought hard at diorama depth
+    // ranges (playtest 2026-08-20: "ground flickering like crazy").
+    new THREE.MeshStandardMaterial({
+      map: plateTex, color: 0x8ea8de, metalness: 0.5, roughness: 0.58,
+      polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2
+    })
   );
   plate.rotation.x = -Math.PI / 2;
+  plate.position.y = -0.12;
   group.add(plate);
   // Plinth + trim: the miniature's display base. Reads as "model on a stand"
   // and gives the map a real visible edge (the diorama's whole point).
@@ -10498,7 +10519,12 @@ function applyDioramaDressing() {
   key.color.setHex(0xfff0d2);
   key.intensity = 1.45;
   if (diorama.savedFar == null) diorama.savedFar = camera.far;
+  if (diorama.savedNear == null) diorama.savedNear = camera.near;
   camera.far = 1600;
+  // Depth precision is set by the near plane: at 0.1 the raised far plane
+  // left nothing for the map's 5 mm floor layering (the flicker). Nothing is
+  // ever closer than ~100 units to the diorama camera, so 6 is safe.
+  camera.near = 6;
   camera.updateProjectionMatrix();
 }
 
@@ -10523,6 +10549,10 @@ function removeDioramaDressing() {
   if (diorama.savedFar != null) {
     camera.far = diorama.savedFar;
     diorama.savedFar = null;
+    if (diorama.savedNear != null) {
+      camera.near = diorama.savedNear;
+      diorama.savedNear = null;
+    }
     camera.updateProjectionMatrix();
   }
 }
@@ -10536,11 +10566,12 @@ function updateDioramaCamera(focusMech) {
   const c = diorama.cam;
   const fp = focusMech ? focusMech.root.position : _dioWork.set(0, 0, 0);
   const b = dioramaBoundsNow();
-  // Soft parallax: the frame follows a small fraction of the focus unit's
-  // offset and leans its compass yaw slightly with the unit's X. Heavily
-  // damped; on activation we snap so there's no flight from the chase pose.
-  const wantShiftX = THREE.MathUtils.clamp(fp.x * v.followShift, -v.followCap, v.followCap);
-  const wantShiftZ = THREE.MathUtils.clamp(fp.z * v.followShift, -v.followCap, v.followCap);
+  // Player-centred follow: the frame tracks the focus unit (damped), clamped
+  // inside followBound of the half-extents so a corner fight still frames
+  // mostly board; yaw leans slightly with X. On activation we snap so there
+  // is no flight from the chase pose.
+  const wantShiftX = THREE.MathUtils.clamp(fp.x, -b.halfX * v.followBound, b.halfX * v.followBound);
+  const wantShiftZ = THREE.MathUtils.clamp(fp.z, -b.halfZ * v.followBound, b.halfZ * v.followBound);
   const wantYawOff = THREE.MathUtils.clamp(fp.x / (b.halfX || 120), -1, 1) * v.yawFollow;
   const k = c.snapped ? v.lerp : 1;
   c.shiftX += (wantShiftX - c.shiftX) * k;
@@ -10753,9 +10784,18 @@ function ensureDioramaSlotEls(slot) {
   }
   const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
   const tris = svgNode('path', { fill: '#ffd257', stroke: 'none', 'pointer-events': 'none' });
+  // Sniper units swap the square for a scope reticle (circle + cross ticks);
+  // the rect stays as the invisible tap hit-area.
+  const scopeCircle = svgNode('circle', { fill: 'none', stroke: meta.color, 'stroke-width': '1', 'pointer-events': 'none' });
+  const scopeCross = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1', 'pointer-events': 'none' });
+  // Off-frame direction pointer: a small triangle on the diamond's outer side.
+  const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
   g.appendChild(rect);
   g.appendChild(line);
   g.appendChild(tris);
+  g.appendChild(scopeCircle);
+  g.appendChild(scopeCross);
+  g.appendChild(pointer);
   svg.appendChild(g);
   const card = document.createElement('div');
   card.className = 'dio-card';
@@ -10764,7 +10804,7 @@ function ensureDioramaSlotEls(slot) {
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
-    g, rect, line, tris, card,
+    g, rect, line, tris, scopeCircle, scopeCross, pointer, card,
     nameEl: card.querySelector('.dio-name'),
     hpEl: card.querySelector('.dio-hp'),
     barEl: card.querySelector('.dio-bar i'),
@@ -10850,6 +10890,7 @@ function updateDioramaHud() {
   const W = window.innerWidth;
   const H = window.innerHeight;
   const playerAlive = !!state.player && state.player.state.hp > 0;
+  const boxes = [];    // every visible marker box — cards must never cover one
   const cards = [];
   for (const slot of DIO_SLOTS) {
     const m = state[slot];
@@ -10864,50 +10905,113 @@ function updateDioramaHud() {
     const rp = m.root.position;
     _dioProj.set(rp.x, rp.y, rp.z).project(camera);
     const behind = _dioProj.z > 1;
-    let fx = (_dioProj.x + 1) / 2 * W;
-    let fy = (1 - _dioProj.y) / 2 * H;
+    let cx = (_dioProj.x + 1) / 2 * W;
+    let cy = (1 - _dioProj.y) / 2 * H;
     let s = 26;
-    let cx = fx;
-    let cy = fy;
     if (behind) {
-      // Behind the camera: mirror so the edge clamp lands on the correct side.
-      cx = W - fx;
-      cy = H - fy;
+      // Behind the camera: mirror so the edge placement lands on the correct side.
+      cx = W - cx;
+      cy = H - cy;
     } else {
+      const fy = cy;
       _dioProj.set(rp.x, rp.y + UNIT_SPRITE_HEIGHT, rp.z).project(camera);
       const hx = (_dioProj.x + 1) / 2 * W;
       const hy = (1 - _dioProj.y) / 2 * H;
       s = THREE.MathUtils.clamp(Math.abs(fy - hy) * 1.35, 24, 96);
-      cx = (fx + hx) / 2;
+      cx = (cx + hx) / 2;
       cy = (fy + hy) / 2;
     }
-    // The photo-crop framing can leave a fighter outside the frame — clamp
-    // its square to the screen edge (drawn as a diamond) so it stays visible
-    // AND tappable. Margins dodge the corner gauges (top), the boost bar
-    // (bottom), the joystick (bottom-left) and the button column (right) —
-    // those sit ABOVE this layer and would eat the tap.
-    const cxC = THREE.MathUtils.clamp(cx, 34 + s / 2, W - 210 - s / 2);
-    const cyC = THREE.MathUtils.clamp(cy, 74 + s / 2, H - 150 - s / 2);
-    const offFrame = behind || cxC !== cx || cyC !== cy;
-    cx = cxC;
-    cy = cyC;
+    // Frame margins dodge the corner gauges (top), boost bar (bottom),
+    // joystick (bottom-left) and button column (right) — those sit ABOVE
+    // this layer and would eat the tap. A fighter outside them renders as a
+    // diamond placed where the ray from screen centre to the fighter crosses
+    // the margin rect — so the diamond's position points at the fighter,
+    // like the old edge arrows (playtest #3) — plus a direction triangle.
+    const mL = 34 + s / 2;
+    const mR = W - 210 - s / 2;
+    const mT = 74 + s / 2;
+    const mB = H - 150 - s / 2;
+    const offFrame = behind || cx < mL || cx > mR || cy < mT || cy > mB;
+    let dirAngle = 0;
+    if (offFrame) {
+      const ox = W / 2;
+      const oy = H / 2;
+      let dx = cx - ox;
+      let dy = cy - oy;
+      if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
+      let t = Infinity;
+      if (dx > 0) t = Math.min(t, (mR - ox) / dx);
+      else if (dx < 0) t = Math.min(t, (mL - ox) / dx);
+      if (dy > 0) t = Math.min(t, (mB - oy) / dy);
+      else if (dy < 0) t = Math.min(t, (mT - oy) / dy);
+      if (!Number.isFinite(t) || t < 0) t = 0;
+      cx = ox + dx * t;
+      cy = oy + dy * t;
+      s = 26;
+      dirAngle = Math.atan2(dy, dx);
+    }
     const bx = cx - s / 2;
     const by = cy - s / 2;
     els.box = { x: bx, y: by, s };
+    boxes.push(els.box);
     els.g.style.display = '';
-    els.rect.setAttribute('transform', offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '');
-    els.rect.setAttribute('x', bx.toFixed(1));
-    els.rect.setAttribute('y', by.toFixed(1));
-    els.rect.setAttribute('width', s.toFixed(1));
-    els.rect.setAttribute('height', s.toFixed(1));
+    const isSniper = !!m.unit.sniperCharge;
     const locked = m === state.playerCurrentTarget && meta.selectable;
     // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
     // own rules — matches what a shot would actually do.
     const blocked = meta.selectable && playerAlive && dioramaShotBlocked(state.player, m);
     els.g.style.opacity = blocked ? '0.38' : '1';
+    // Marker body: square (diamond when off-frame); sniper units swap the
+    // in-frame square for a scope reticle (playtest #4) — the rect then goes
+    // strokeless but keeps serving as the tap hit-area.
+    const rectVisible = !isSniper || offFrame;
+    els.rect.setAttribute('transform', offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '');
+    els.rect.setAttribute('x', bx.toFixed(1));
+    els.rect.setAttribute('y', by.toFixed(1));
+    els.rect.setAttribute('width', s.toFixed(1));
+    els.rect.setAttribute('height', s.toFixed(1));
+    els.rect.setAttribute('stroke', rectVisible ? meta.color : 'none');
     els.rect.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
     els.rect.setAttribute('stroke-width', locked ? '1.6' : '1');
-    if (locked && !offFrame) {
+    if (isSniper && !offFrame) {
+      const r = s / 2;
+      els.scopeCircle.setAttribute('cx', cx.toFixed(1));
+      els.scopeCircle.setAttribute('cy', cy.toFixed(1));
+      els.scopeCircle.setAttribute('r', r.toFixed(1));
+      els.scopeCircle.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
+      els.scopeCircle.setAttribute('stroke-width', locked ? '1.6' : '1');
+      els.scopeCircle.style.display = '';
+      els.scopeCross.setAttribute('d', [
+        `M ${(cx - r - 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx - 5).toFixed(1)} ${cy.toFixed(1)}`,
+        `M ${(cx + 5).toFixed(1)} ${cy.toFixed(1)} L ${(cx + r + 5).toFixed(1)} ${cy.toFixed(1)}`,
+        `M ${cx.toFixed(1)} ${(cy - r - 5).toFixed(1)} L ${cx.toFixed(1)} ${(cy - 5).toFixed(1)}`,
+        `M ${cx.toFixed(1)} ${(cy + 5).toFixed(1)} L ${cx.toFixed(1)} ${(cy + r + 5).toFixed(1)}`
+      ].join(' '));
+      els.scopeCross.style.display = '';
+    } else if (isSniper) {
+      // Off-frame sniper: diamond + small inner cross keeps the sniper read.
+      els.scopeCircle.style.display = 'none';
+      els.scopeCross.setAttribute('d', [
+        `M ${(cx - s * 0.3).toFixed(1)} ${cy.toFixed(1)} L ${(cx + s * 0.3).toFixed(1)} ${cy.toFixed(1)}`,
+        `M ${cx.toFixed(1)} ${(cy - s * 0.3).toFixed(1)} L ${cx.toFixed(1)} ${(cy + s * 0.3).toFixed(1)}`
+      ].join(' '));
+      els.scopeCross.style.display = '';
+    } else {
+      els.scopeCircle.style.display = 'none';
+      els.scopeCross.style.display = 'none';
+    }
+    if (offFrame) {
+      const px = cx + Math.cos(dirAngle) * (s / 2 + 10);
+      const py = cy + Math.sin(dirAngle) * (s / 2 + 10);
+      const deg = dirAngle * 180 / Math.PI;
+      els.pointer.setAttribute('d',
+        `M ${(px + 6).toFixed(1)} ${py.toFixed(1)} L ${(px - 3).toFixed(1)} ${(py - 5).toFixed(1)} L ${(px - 3).toFixed(1)} ${(py + 5).toFixed(1)} Z`);
+      els.pointer.setAttribute('transform', `rotate(${deg.toFixed(1)} ${px.toFixed(1)} ${py.toFixed(1)})`);
+      els.pointer.style.display = '';
+    } else {
+      els.pointer.style.display = 'none';
+    }
+    if (locked && !offFrame && !isSniper) {
       // Mini triangle crosshair: four marks at the square's edge midpoints.
       const t = 7;
       const g = 3.5;
@@ -10932,23 +11036,38 @@ function updateDioramaHud() {
     }
   }
   // Card layout: anchor at the nearest left/right screen edge at the unit's
-  // height, stacked apart when two cards on the same side would collide.
-  const placed = [];
+  // height. A card must never cover any marker square or another card
+  // (playtest #5) — slide through vertical offsets until the slot is clear.
+  const placedRects = [];
   for (const c of cards) {
     const side = c.cx < W / 2 ? 'left' : 'right';
+    const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
     // Side-dependent floor: right edge hosts the button column, left edge the
     // joystick — cards stop above them instead of sliding underneath.
     const maxY = Math.max(80, (side === 'right' ? H - 340 : H - 210) - DIO_CARD_H);
-    let want = THREE.MathUtils.clamp(c.cy - DIO_CARD_H / 2, 64, maxY);
-    for (const p of placed) {
-      if (p.side === side && Math.abs(p.y - want) < DIO_CARD_H + 10) {
-        want = p.y + DIO_CARD_H + 10;
+    const desired = THREE.MathUtils.clamp(c.cy - DIO_CARD_H / 2, 64, maxY);
+    const overlapsSomething = (y) => {
+      const rx = cardX - 8;
+      const ry = y - 8;
+      const rw = DIO_CARD_W + 16;
+      const rh = DIO_CARD_H + 16;
+      for (const b of boxes) {
+        if (rx < b.x + b.s && rx + rw > b.x && ry < b.y + b.s && ry + rh > b.y) return true;
       }
+      for (const p of placedRects) {
+        if (cardX < p.x + DIO_CARD_W + 10 && cardX + DIO_CARD_W + 10 > p.x
+          && y < p.y + DIO_CARD_H + 10 && y + DIO_CARD_H + 10 > p.y) return true;
+      }
+      return false;
+    };
+    let want = desired;
+    for (const off of [0, -72, 72, -144, 144, -216, 216]) {
+      const y = THREE.MathUtils.clamp(desired + off, 64, maxY);
+      if (!overlapsSomething(y)) { want = y; break; }
     }
-    placed.push({ side, y: want });
+    placedRects.push({ x: cardX, y: want });
     const els = c.els;
     els.cardY = els.cardY == null ? want : els.cardY + (want - els.cardY) * 0.25;
-    const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
     els.card.style.display = '';
     els.card.style.transform = `translate(${cardX.toFixed(1)}px, ${els.cardY.toFixed(1)}px)`;
     const m = c.m;
