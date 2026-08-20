@@ -1,8 +1,18 @@
-# DIORAMA_PLAN.md — Diorama View (design record, pre-implementation)
+# DIORAMA_PLAN.md — Diorama View (design record)
 
-Status: brainstorm CONVERGED on 2026-08-20. No code written yet.
-Read this before starting any diorama work — it records the owner's decisions
-from the design sessions. Branch policy: ALL edits go directly to
+Status: POC phase 1 IMPLEMENTED 2026-08-20 (client-only, offline, behind a
+hidden toggle — V key in a match, or `window.__diorama.toggle()`; framing and
+grade tunables live-editable via `window.__diorama.view` / `.maps`). The code
+sits in client/src/main.js in the "DIORAMA VIEW (POC)" section (state block
+near the early globals, functions near the map builders) plus small gated
+hooks at: updateCamera (rig branch), updatePlayer (no-target fire guard),
+startMatch (no auto-lock in diorama), updateLocksAndReticle /
+updateMechAnimations / the two arrow updaters (legacy overlays parked),
+buildArenaForMap (dressing), animate (tilt-shift render + annotation update).
+Everything gates on dioramaActive(); the classic chase view is unchanged
+when off, and online mode is untouched.
+Read this before continuing any diorama work — it records the owner's
+decisions from the design sessions. Branch policy: ALL edits go directly to
 `Demo_0.7.5_Test-Fields`; do not touch any other branch.
 
 ## 1. Concept

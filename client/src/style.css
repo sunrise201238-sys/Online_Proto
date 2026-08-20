@@ -55,10 +55,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   bottom: max(16px, env(safe-area-inset-bottom));
   width: calc(var(--btn-size) * 2 + var(--btn-gap));
   height: calc(var(--btn-size) * 3 + var(--btn-gap) * 2);
-  pointer-events: auto;
+  /* Events live on the round buttons, not the container box — the grid's
+     empty cells must not eat taps (diorama tap-to-lock reaches under them). */
+  pointer-events: none;
 }
 .buttons button {
   position: absolute;
+  pointer-events: auto;
   width: var(--btn-size);
   height: var(--btn-size);
   border: 2px solid rgba(176, 231, 255, 0.78);
@@ -399,3 +402,33 @@ body.pseudo-fullscreen #app {
 .trio-count .trio-weapon-tag { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 13.5px; margin-right: 4px; padding: 0 4px; box-sizing: border-box; vertical-align: middle; background: rgba(11, 17, 25, 0.92); border-radius: 4px; }
 .trio-count .trio-weapon-tag img { display: block; max-width: 100%; max-height: 11px; width: auto; height: auto; object-fit: contain; filter: brightness(0) invert(1); }
 .trio-count-enemy .trio-weapon-tag { margin-right: 0; margin-left: 4px; }
+
+/* ---------------------------------------------------------------------------
+   DIORAMA VIEW (POC) — thin-line annotation layer (see DIORAMA_PLAN.md).
+   The layer itself never eats input; only the enemy squares (SVG rects with
+   pointer-events:all) are tappable, so the joystick/buttons keep working.
+   z-index 20 sits above the canvas; .touch-hud is lifted to 25 so gauges and
+   buttons stay on top of leader lines/cards. Edge arrows (35), menus (100+)
+   keep their existing layers. */
+.touch-hud { z-index: 25; }
+.dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.dio-layer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dio-card {
+  position: absolute; left: 0; top: 0; width: 150px; height: 56px; box-sizing: border-box;
+  padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
+  background: rgba(7, 11, 18, 0.72); backdrop-filter: blur(2px);
+  color: #dfe7f5; pointer-events: none; will-change: transform;
+}
+.dio-card .dio-name { font-size: 10px; letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; }
+.dio-card .dio-hp { font-size: 12px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dio-card .dio-bar { height: 3px; margin-top: 5px; background: rgba(120, 140, 170, 0.25); }
+.dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
+#dio-toast {
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  padding: 10px 22px; border: 1px solid rgba(223, 231, 245, 0.55); border-radius: 3px;
+  background: rgba(7, 11, 18, 0.78); color: #eef4ff; font-size: 13px; letter-spacing: 0.22em;
+  opacity: 0; transition: opacity 0.25s ease; pointer-events: none; z-index: 95;
+}
+#dio-toast.show { opacity: 1; }
+/* Manual fire with no lock: the button reads disabled (tap shows the toast). */
+.buttons .btn-shoot.dio-no-target { opacity: 0.38; }

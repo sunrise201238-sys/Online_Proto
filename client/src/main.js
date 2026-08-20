@@ -1057,6 +1057,56 @@ const arenaDecor = [];
 const arenaObstacles = [];
 createArenaWalls();
 
+// ---- Diorama view (POC) state — declared with the other early globals so
+// the boot calls further down (showSelectMenu -> cleanupMatch, the first
+// synchronous animate()) can read it; the diorama FUNCTIONS live in their own
+// section near the map builders (hoisted). See DIORAMA_PLAN.md.
+const diorama = {
+  enabled: false,
+  // Smoothed camera state; `snapped` false forces a hard cut to the diorama
+  // frame on activation (no fly-in from wherever the chase camera sat).
+  cam: { shiftX: 0, shiftZ: 0, yawOff: 0, focusY: 0.5, snapped: false },
+  base: null,            // cropped plate + plinth group (rebuilt per map)
+  post: null,            // tilt-shift render pipeline (lazy, rebuilt on resize)
+  layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
+  els: new Map(),        // slot -> annotation elements
+  tapCycle: { key: '', idx: 0 },   // overlap-cycling state for stacked squares
+  lastDeniedAt: 0,       // fire-without-target toast throttle
+  _toastTimer: 0,
+  savedFar: null
+};
+
+// Global framing/grade tunables — live-tweakable via window.__diorama.view.
+const DIORAMA_VIEW = {
+  fov: 45,
+  followShift: 0.24,   // fraction of the focus unit's offset the frame follows
+  followCap: 18,       // world-unit cap on that follow shift
+  yawFollow: 0.055,    // radians of yaw lean per full-halfX of unit offset
+  lerp: 0.05,          // per-frame smoothing toward the follow targets
+  lookY: 4,            // look-at height — keeps the board low in frame
+  focusBand: 0.13,     // half-height of the sharp band (0..1 screen units)
+  blurSpan: 0.32,      // distance from band edge to full blur
+  saturation: 1.14,    // miniature grade: toy-like color
+  contrast: 1.045
+};
+// Per-map camera anchor: yaw = compass angle around the map centre, dist =
+// horizontal distance, height = camera Y as a fraction of dist (~elevation).
+// The vibe refs frame a photographic CROP, not the whole board — dist is
+// deliberately closer than mapPhoto's 220.
+const DIORAMA_MAP_VIEW = {
+  arena1: { yaw: Math.PI * 0.25, dist: 168, height: 0.95 },
+  arena2: { yaw: Math.PI * 0.62, dist: 168, height: 0.74 },
+  default: { yaw: Math.PI * 0.25, dist: 175, height: 0.85 }
+};
+
+// Play-area half extents of the CURRENT map, recorded by addBoundaryIndicator
+// during the arena build (null for maps that bake their perimeter inline).
+let arenaBounds = null;
+
+if (typeof window !== 'undefined') {
+  window.__diorama = { toggle: toggleDiorama, view: DIORAMA_VIEW, maps: DIORAMA_MAP_VIEW, state: diorama };
+}
+
 const MOMENTUM_STANDARD = 100;
 // --- Pilot-stat defaults (used when a unit's UNIT_DATA entry omits a field) ---
 const MAX_HP = 100;                     // unit.hp default (150 -> 100, 2026-08-08 user tune)
@@ -1543,7 +1593,16 @@ function updateMechAnimations(dt, now) {
     if (tag) {
       // Tags show through cover (depthTest off on the material), so no
       // visibility gating here — just the distance sizing/anchoring.
+      // Diorama POC: the annotation layer carries identity/HP — the floating
+      // stack is hidden wholesale (restored per frame when the mode is off).
       const bar = m.healthBar;
+      if (dioramaActive()) {
+        tag.visible = false;
+        if (bar) bar.visible = false;
+        continue;
+      }
+      if (!tag.visible) tag.visible = true;
+      if (bar && !bar.visible) bar.visible = true;
       // Constant on-screen size for EVERYONE. The compensation must counter
       // perspective EXACTLY, and projection divides by view-axis DEPTH — not
       // straight-line distance, which over-sized edge-of-screen tags by up
@@ -4297,7 +4356,15 @@ function updatePlayer(now) {
       state.reticle && live.root.add(state.reticle);
     }
   }
-  if (input.shootTap) {
+  // Diorama POC: no target selected yet (matches started in diorama begin
+  // unlocked — the first deliberate act is tapping a target). Firing is
+  // blocked with feedback; the tap is consumed so it can't fire later.
+  const dioNoTarget = dioramaActive() && !state.playerCurrentTarget;
+  if (dioNoTarget) {
+    if (input.shootTap || input.shootHold) dioramaFireDenied(now);
+    input.shootTap = false;
+  }
+  if (!dioNoTarget && input.shootTap) {
     input.boost = false;
     attemptFire(state.player, pTarget, now);
     triggerEnemyEvasion(now);
@@ -4310,7 +4377,7 @@ function updatePlayer(now) {
   // semiAuto guns (currently just the Laser) opt out of hold-to-fire — mirrors
   // the gate in shared tick.js; see the note there for why M14 / SVD are not
   // on the list despite hitting the same thing.
-  if (input.shootHold && !state.player.unit.semiAuto
+  if (!dioNoTarget && input.shootHold && !state.player.unit.semiAuto
       && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, pTarget, now);
@@ -6191,7 +6258,9 @@ function updateLocksAndReticle() {
     if (state.reticle) state.reticle.visible = false;
     return;
   }
-  if (state.reticle) state.reticle.visible = true;
+  // Diorama POC: lock state below still updates (bots read redLock), but the
+  // world-space bracket is replaced by the annotation layer's square.
+  if (state.reticle) state.reticle.visible = !dioramaActive();
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -6361,6 +6430,13 @@ const OVERHEAD_TEAM_CHEVRONS = false;
 const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
+  // Diorama POC: the whole fight is in frame and the annotation layer carries
+  // identity — both arrow forms are parked.
+  if (dioramaActive()) {
+    if (state.allyArrow) state.allyArrow.visible = false;
+    hideAllyEdgeArrow();
+    return;
+  }
   const mate = state.mode === '2v2' ? teammateOfMech(cameraFocusMech()) : null;
   const active = !!mate && mate.state.hp > 0;
 
@@ -6474,6 +6550,12 @@ function getUnlockedEnemy(viewer = state.player) {
 const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
 function updateEnemyArrow() {
+  // Diorama POC: parked for the same reason as updateAllyArrow.
+  if (dioramaActive()) {
+    if (state.enemyArrow) state.enemyArrow.visible = false;
+    hideEnemyEdgeArrow();
+    return;
+  }
   const foe = getUnlockedEnemy(cameraFocusMech());
   const active = !!foe;
 
@@ -6764,6 +6846,12 @@ function updateCamera() {
     if (fallback) tgt = fallback;
   }
   if (!cam || !tgt) return;
+  // Diorama POC: the gameplay side effects above (spectate kit swaps, target
+  // mirroring) still ran; only the transform is replaced by the fixed rig.
+  if (dioramaActive()) {
+    updateDioramaCamera(cam);
+    return;
+  }
   const p = cam.root.position;
   const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
@@ -7001,6 +7089,7 @@ function cleanupMatch() {
   state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
   if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
+  hideDioramaLayer();
 }
 
 function startMatch() {
@@ -7192,7 +7281,12 @@ function startMatch() {
   input.shootTap = false;
   // Default the player's lock target to the first enemy. In 2v2 this can be
   // cycled to enemy2 via the target switch (U on PC, target button on mobile).
-  state.playerCurrentTarget = state.enemy;
+  // Diorama POC: matches started in diorama view begin with NO lock — the
+  // player's first deliberate act is tapping a target (DIORAMA_PLAN.md). The
+  // Range keeps its preset dummy lock and spectator has no human fire at all.
+  state.playerCurrentTarget = (diorama.enabled && !state.online
+    && state.mapKey !== 'range' && !state.spectatorActive)
+    ? null : state.enemy;
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
   // Fresh match — seed the firing tracker so the reticle starts green.
@@ -9448,6 +9542,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  disposeDioramaPost();   // render targets re-size lazily on the next frame
 });
 
 let lastSprintKeyAt = 0;
@@ -9469,6 +9564,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'l') input.stepTap = true;
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
   else if (k === 'u') cyclePlayerTarget();
+  else if (k === 'v') toggleDiorama();   // hidden diorama-view toggle (POC)
 });
 
 window.addEventListener('keyup', (e) => {
@@ -10034,6 +10130,8 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
 // against a solid mesh when the player backs into a corner. Mirrors the
 // pattern Station uses inline.
 function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
+  // Diorama POC: the play extent doubles as the base-plate footprint.
+  arenaBounds = { halfX: HALF_X, halfZ: HALF_Z, ceilY: CEIL_Y };
   arenaObstacles.push(
     { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
     { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
@@ -10166,6 +10264,7 @@ function applyMapAmbience(mapKey) {
 function buildArenaForMap(mapKey) {
   clearArenaDecor();
   applyMapAmbience(mapKey);
+  arenaBounds = null;   // re-recorded by addBoundaryIndicator (diorama plate)
   if (mapKey === 'arena1') buildPlainFieldArena();
   else if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
@@ -10176,6 +10275,10 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
   else if (mapKey === 'airport') buildAirportArena();
+  // Diorama POC: re-dress the fresh arena (cropped plate, plinth, daylight
+  // grade) — or clear leftovers if the mode was switched off / went online.
+  if (diorama.enabled && !state.online) applyDioramaDressing();
+  else if (diorama.base) removeDioramaDressing();
 }
 
 // ---------------------------------------------------------------------------
@@ -10268,6 +10371,609 @@ if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
 // debugging / automated preview checks (same family as __exportArenaCollision
 // and __mapPhoto). Offline client only — never used by game code.
 if (typeof window !== 'undefined') window.__gvgState = state;
+
+// Dev hook (automation twin of the menu flow): start an OFFLINE match
+// directly, skipping the pickers — used by headless preview checks.
+//   __startMatch({ mapKey: 'arena2', mode: '1v1', player: 'unit1', enemy: 'unit2' })
+if (typeof window !== 'undefined') {
+  window.__startMatch = (opts = {}) => {
+    if (state.online) return false;
+    if (opts.mapKey) state.mapKey = opts.mapKey;
+    if (opts.mode) state.mode = opts.mode;
+    if (opts.mainMode) state.mainMode = opts.mainMode;
+    if (opts.player) state.playerUnitKey = opts.player;
+    if (opts.enemy) state.enemyUnitKey = opts.enemy;
+    if (opts.ally) state.allyUnitKey = opts.ally;
+    if (opts.enemy2) state.enemy2UnitKey = opts.enemy2;
+    startMatch();
+    return true;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DIORAMA VIEW (POC) — hidden offline toggle: V key, or window.__diorama.
+// See DIORAMA_PLAN.md for the converged design. Presents the arena as a
+// tilt-shift miniature: fixed high vantage with soft parallax follow, a
+// cropped ground plate + plinth in place of the endless global ground,
+// daylight grading, a screen-Y tilt-shift blur pass, and a thin-line
+// annotation HUD (tap an enemy's square to lock). Everything gates on
+// dioramaActive() so the classic chase view stays byte-identical when off.
+// ---------------------------------------------------------------------------
+
+function dioramaActive() {
+  return diorama.enabled && !state.online && state.running;
+}
+
+function toggleDiorama(force) {
+  const want = force !== undefined ? !!force : !diorama.enabled;
+  if (want === diorama.enabled) return;
+  if (want && state.online) return;            // POC: offline only
+  diorama.enabled = want;
+  if (want) {
+    diorama.cam.snapped = false;
+    if (state.running && !state.online) applyDioramaDressing();
+  } else {
+    removeDioramaDressing();
+    hideDioramaLayer();
+    if (hudRefs?.shootBtn) hudRefs.shootBtn.classList.remove('dio-no-target');
+    // Restore the classic always-have-a-target invariant for the chase view.
+    if (state.running && !state.online && !state.playerCurrentTarget && state.player) {
+      const live = getEnemiesOf(state.player).find((f) => f.state.hp > 0);
+      if (live) setPlayerTargetMech(live);
+    }
+  }
+}
+
+// Tap-to-select: set the lock target directly. Mirrors cyclePlayerTarget's
+// bookkeeping (reticle reparent + firing-flash tracker reseed) so leaving
+// diorama mode hands the chase view a fully consistent lock.
+function setPlayerTargetMech(next) {
+  if (!next || next === state.playerCurrentTarget) return;
+  state.playerCurrentTarget = next;
+  if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+  if (state.reticle) next.root.add(state.reticle);
+  state.reticleLastEnemyFireAt = next.state.lastFireAt;
+  state.reticleEnemyFiringUntil = 0;
+}
+
+// ---- scene dressing: cropped plate, plinth, daylight grade ----------------
+
+function dioramaBoundsNow() {
+  if (arenaBounds) return arenaBounds;
+  // Maps that bake their perimeter inline (Station/Airport/Lobby): infer the
+  // extent from the collision boxes, capped at the outer cannon wall.
+  let hx = 0, hz = 0;
+  for (const o of arenaObstacles) {
+    hx = Math.max(hx, Math.abs(o.minX), Math.abs(o.maxX));
+    hz = Math.max(hz, Math.abs(o.minZ), Math.abs(o.maxZ));
+  }
+  return { halfX: Math.min(hx || 138, 140), halfZ: Math.min(hz || 138, 140), ceilY: 20 };
+}
+
+function applyDioramaDressing() {
+  removeDioramaBase();
+  const b = dioramaBoundsNow();
+  const w = (b.halfX + 2.5) * 2;
+  const d = (b.halfZ + 2.5) * 2;
+  const group = new THREE.Group();
+  // Cropped ground plate — the global 280x280 ground's material family with
+  // the texture repeat rescaled so the grid density matches exactly.
+  const plateTex = gridTex.clone();
+  plateTex.needsUpdate = true;
+  plateTex.repeat.set((w * 8) / 280, (d * 8) / 280);
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({ map: plateTex, color: 0x8ea8de, metalness: 0.5, roughness: 0.58 })
+  );
+  plate.rotation.x = -Math.PI / 2;
+  group.add(plate);
+  // Plinth + trim: the miniature's display base. Reads as "model on a stand"
+  // and gives the map a real visible edge (the diorama's whole point).
+  const plinthH = 7;
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 3, plinthH, d + 3),
+    new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.85, metalness: 0.1 })
+  );
+  plinth.position.y = -plinthH / 2 - 0.02;
+  group.add(plinth);
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 3.6, 0.7, d + 3.6),
+    new THREE.MeshStandardMaterial({ color: 0x39435a, roughness: 0.5, metalness: 0.45 })
+  );
+  trim.position.y = -0.37;
+  group.add(trim);
+  scene.add(group);
+  diorama.base = group;
+  ground.visible = false;
+  gridHelper.visible = false;
+  // Daylight studio grade (the vibe refs are all warm daylight). Fog is
+  // pushed out of range rather than nulled — applyMapAmbience assumes the
+  // Fog object exists, and it restores everything on exit/map change.
+  scene.background.setHex(0xb9c3d2);
+  scene.fog.color.setHex(0xb9c3d2);
+  scene.fog.near = 4000;
+  scene.fog.far = 8000;
+  ambient.color.setHex(0xf3ead9);
+  ambient.intensity = 0.92;
+  key.color.setHex(0xfff0d2);
+  key.intensity = 1.45;
+  if (diorama.savedFar == null) diorama.savedFar = camera.far;
+  camera.far = 1600;
+  camera.updateProjectionMatrix();
+}
+
+function removeDioramaBase() {
+  if (!diorama.base) return;
+  scene.remove(diorama.base);
+  diorama.base.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      o.material.map?.dispose?.();
+      o.material.dispose();
+    }
+  });
+  diorama.base = null;
+}
+
+function removeDioramaDressing() {
+  removeDioramaBase();
+  ground.visible = true;
+  gridHelper.visible = true;
+  if (state.mapKey) applyMapAmbience(state.mapKey);
+  if (diorama.savedFar != null) {
+    camera.far = diorama.savedFar;
+    diorama.savedFar = null;
+    camera.updateProjectionMatrix();
+  }
+}
+
+// ---- camera rig -----------------------------------------------------------
+
+const _dioWork = new THREE.Vector3();
+function updateDioramaCamera(focusMech) {
+  const v = DIORAMA_VIEW;
+  const m = DIORAMA_MAP_VIEW[state.mapKey] ?? DIORAMA_MAP_VIEW.default;
+  const c = diorama.cam;
+  const fp = focusMech ? focusMech.root.position : _dioWork.set(0, 0, 0);
+  const b = dioramaBoundsNow();
+  // Soft parallax: the frame follows a small fraction of the focus unit's
+  // offset and leans its compass yaw slightly with the unit's X. Heavily
+  // damped; on activation we snap so there's no flight from the chase pose.
+  const wantShiftX = THREE.MathUtils.clamp(fp.x * v.followShift, -v.followCap, v.followCap);
+  const wantShiftZ = THREE.MathUtils.clamp(fp.z * v.followShift, -v.followCap, v.followCap);
+  const wantYawOff = THREE.MathUtils.clamp(fp.x / (b.halfX || 120), -1, 1) * v.yawFollow;
+  const k = c.snapped ? v.lerp : 1;
+  c.shiftX += (wantShiftX - c.shiftX) * k;
+  c.shiftZ += (wantShiftZ - c.shiftZ) * k;
+  c.yawOff += (wantYawOff - c.yawOff) * k;
+  c.snapped = true;
+  const yaw = m.yaw + c.yawOff;
+  camera.position.set(
+    c.shiftX + Math.cos(yaw) * m.dist,
+    m.dist * m.height,
+    c.shiftZ + Math.sin(yaw) * m.dist
+  );
+  camera.lookAt(c.shiftX, v.lookY, c.shiftZ);
+  if (camera.fov !== v.fov) {
+    camera.fov = v.fov;
+    camera.updateProjectionMatrix();
+  }
+  // Tilt-shift focus band rides the focus unit's screen height.
+  const ndc = _dioWork.set(fp.x, (focusMech?.root.position.y ?? 0) + 2.5, fp.z).project(camera);
+  const wantFocusY = THREE.MathUtils.clamp((ndc.y + 1) / 2, 0.22, 0.78);
+  c.focusY += (wantFocusY - c.focusY) * 0.08;
+}
+
+// ---- tilt-shift post pass -------------------------------------------------
+// Minimal 3-target pipeline (no EffectComposer): scene -> full-res RT, two
+// separable half-res gaussian passes (run twice for width), then a composite
+// that mixes sharp/blurred by distance from the focus band and applies the
+// miniature grade + the linear->sRGB conversion the canvas normally gets.
+
+function ensureDioramaPost() {
+  if (diorama.post) return diorama.post;
+  const size = new THREE.Vector2();
+  renderer.getDrawingBufferSize(size);
+  const rtOpts = { depthBuffer: true, type: THREE.HalfFloatType };
+  const rtFlat = { depthBuffer: false, type: THREE.HalfFloatType };
+  const rtScene = new THREE.WebGLRenderTarget(size.x, size.y, rtOpts);
+  const hw = Math.max(2, size.x >> 1);
+  const hh = Math.max(2, size.y >> 1);
+  const rtA = new THREE.WebGLRenderTarget(hw, hh, rtFlat);
+  const rtB = new THREE.WebGLRenderTarget(hw, hh, rtFlat);
+  const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const quadGeo = new THREE.PlaneGeometry(2, 2);
+  const blurMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tSrc: { value: null },
+      uDir: { value: new THREE.Vector2(1, 0) },
+      uTexel: { value: new THREE.Vector2(1 / hw, 1 / hh) }
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: [
+      'varying vec2 vUv; uniform sampler2D tSrc; uniform vec2 uDir; uniform vec2 uTexel;',
+      'void main(){',
+      '  vec2 s = uDir * uTexel;',
+      '  vec4 c = texture2D(tSrc, vUv) * 0.2270270;',
+      '  c += (texture2D(tSrc, vUv + s * 1.3846154) + texture2D(tSrc, vUv - s * 1.3846154)) * 0.3162162;',
+      '  c += (texture2D(tSrc, vUv + s * 3.2307692) + texture2D(tSrc, vUv - s * 3.2307692)) * 0.0702703;',
+      '  gl_FragColor = c;',
+      '}'
+    ].join('\n'),
+    depthTest: false,
+    depthWrite: false
+  });
+  const compMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tSharp: { value: null },
+      tBlur: { value: null },
+      uFocusY: { value: 0.5 },
+      uBand: { value: 0.13 },
+      uSpan: { value: 0.32 },
+      uSat: { value: 1.14 },
+      uCon: { value: 1.045 }
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: [
+      'varying vec2 vUv;',
+      'uniform sampler2D tSharp; uniform sampler2D tBlur;',
+      'uniform float uFocusY; uniform float uBand; uniform float uSpan; uniform float uSat; uniform float uCon;',
+      'vec3 toSRGB(vec3 c){',
+      '  c = max(c, vec3(0.0));',
+      '  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));',
+      '}',
+      'void main(){',
+      '  vec3 sharp = texture2D(tSharp, vUv).rgb;',
+      '  vec3 blur = texture2D(tBlur, vUv).rgb;',
+      '  float t = smoothstep(uBand, uBand + uSpan, abs(vUv.y - uFocusY));',
+      '  vec3 c = toSRGB(mix(sharp, blur, t));',
+      '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+      '  c = mix(vec3(l), c, uSat);',
+      '  c = (c - 0.5) * uCon + 0.5;',
+      '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
+      '}'
+    ].join('\n'),
+    depthTest: false,
+    depthWrite: false
+  });
+  const quad = new THREE.Mesh(quadGeo, blurMat);
+  quad.frustumCulled = false;
+  const quadScene = new THREE.Scene();
+  quadScene.add(quad);
+  diorama.post = { rtScene, rtA, rtB, quad, quadScene, quadCam, quadGeo, blurMat, compMat };
+  return diorama.post;
+}
+
+function disposeDioramaPost() {
+  const p = diorama.post;
+  if (!p) return;
+  p.rtScene.dispose();
+  p.rtA.dispose();
+  p.rtB.dispose();
+  p.quadGeo.dispose();
+  p.blurMat.dispose();
+  p.compMat.dispose();
+  diorama.post = null;
+}
+
+function renderDiorama() {
+  const p = ensureDioramaPost();
+  const v = DIORAMA_VIEW;
+  renderer.setRenderTarget(p.rtScene);
+  renderer.render(scene, camera);
+  p.quad.material = p.blurMat;
+  const passes = [
+    [p.rtScene.texture, p.rtA, 1, 0],
+    [p.rtA.texture, p.rtB, 0, 1],
+    [p.rtB.texture, p.rtA, 1, 0],
+    [p.rtA.texture, p.rtB, 0, 1]
+  ];
+  for (const [src, dst, dx, dy] of passes) {
+    p.blurMat.uniforms.tSrc.value = src;
+    p.blurMat.uniforms.uDir.value.set(dx, dy);
+    renderer.setRenderTarget(dst);
+    renderer.render(p.quadScene, p.quadCam);
+  }
+  p.quad.material = p.compMat;
+  p.compMat.uniforms.tSharp.value = p.rtScene.texture;
+  p.compMat.uniforms.tBlur.value = p.rtB.texture;
+  p.compMat.uniforms.uFocusY.value = diorama.cam.focusY;
+  p.compMat.uniforms.uBand.value = v.focusBand;
+  p.compMat.uniforms.uSpan.value = v.blurSpan;
+  p.compMat.uniforms.uSat.value = v.saturation;
+  p.compMat.uniforms.uCon.value = v.contrast;
+  renderer.setRenderTarget(null);
+  renderer.render(p.quadScene, p.quadCam);
+}
+
+// ---- annotation HUD (museum-label style) ----------------------------------
+// Thin SVG squares around every fighter; the own unit and the locked target
+// get a leader line to the nearest screen edge with an info card. Enemy
+// squares are the TAP HIT-AREA for target selection (DIORAMA_PLAN.md);
+// LOS-blocked enemies render ghosted using the same bullet-line test the
+// bots' fire gate uses, so "looks unhittable" always equals "is unhittable".
+
+const DIO_SLOT_META = {
+  player: { color: '#62d7ff', label: 'YOU', selectable: false },
+  ally: { color: '#86f7c2', label: 'ALLY', selectable: false },
+  enemy: { color: '#ff7ad5', label: 'ENEMY 1', selectable: true },
+  enemy2: { color: '#ff5a8a', label: 'ENEMY 2', selectable: true }
+};
+const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
+const DIO_CARD_W = 150;
+const DIO_CARD_H = 56;
+
+function svgNode(tag, attrs) {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+
+function ensureDioramaLayer() {
+  if (diorama.layer && diorama.layer.isConnected) return diorama.layer;
+  const layer = document.createElement('div');
+  layer.id = 'dio-layer';
+  layer.className = 'dio-layer';
+  const svg = svgNode('svg', {});
+  svg.id = 'dio-svg';
+  svg.addEventListener('pointerdown', onDioramaTap);
+  layer.appendChild(svg);
+  const toast = document.createElement('div');
+  toast.id = 'dio-toast';
+  toast.textContent = 'SELECT A TARGET';
+  layer.appendChild(toast);
+  app.appendChild(layer);
+  diorama.layer = layer;
+  diorama.els.clear();
+  return layer;
+}
+
+function hideDioramaLayer() {
+  if (diorama.layer) {
+    diorama.layer.remove();
+    diorama.layer = null;
+  }
+  diorama.els.clear();
+  diorama.tapCycle.key = '';
+}
+
+function ensureDioramaSlotEls(slot) {
+  let els = diorama.els.get(slot);
+  if (els && els.g.isConnected) return els;
+  const svg = diorama.layer.querySelector('#dio-svg');
+  const meta = DIO_SLOT_META[slot];
+  const g = svgNode('g', {});
+  const rect = svgNode('rect', {
+    fill: 'none', stroke: meta.color, 'stroke-width': '1', rx: '1',
+    'pointer-events': meta.selectable ? 'all' : 'none'
+  });
+  if (meta.selectable) {
+    rect.dataset.slot = slot;
+    rect.style.cursor = 'crosshair';
+  }
+  const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1', opacity: '0.85', 'pointer-events': 'none' });
+  const tris = svgNode('path', { fill: '#ffd257', stroke: 'none', 'pointer-events': 'none' });
+  g.appendChild(rect);
+  g.appendChild(line);
+  g.appendChild(tris);
+  svg.appendChild(g);
+  const card = document.createElement('div');
+  card.className = 'dio-card';
+  card.style.borderColor = meta.color;
+  card.innerHTML = '<div class="dio-name"></div><div class="dio-hp"></div><div class="dio-bar"><i></i></div>';
+  card.querySelector('.dio-bar i').style.background = meta.color;
+  diorama.layer.appendChild(card);
+  els = {
+    g, rect, line, tris, card,
+    nameEl: card.querySelector('.dio-name'),
+    hpEl: card.querySelector('.dio-hp'),
+    barEl: card.querySelector('.dio-bar i'),
+    box: null,        // last screen-space box {x, y, s} for tap hit-testing
+    cardY: null       // smoothed card anchor
+  };
+  diorama.els.set(slot, els);
+  return els;
+}
+
+function onDioramaTap(e) {
+  if (!dioramaActive() || state.spectatorActive) return;
+  const x = e.clientX;
+  const y = e.clientY;
+  const pad = 6;
+  const cands = [];
+  for (const slot of DIO_SLOTS) {
+    if (!DIO_SLOT_META[slot].selectable) continue;
+    const m = state[slot];
+    const els = diorama.els.get(slot);
+    if (!m || m.state.hp <= 0 || !els || !els.box) continue;
+    const b = els.box;
+    if (x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad) {
+      cands.push({ slot, m });
+    }
+  }
+  if (!cands.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  let pick = cands[0];
+  if (cands.length > 1) {
+    // Overlapping squares: repeated taps on the same cluster cycle through it;
+    // the cycle resets as soon as the cluster composition changes.
+    const key = cands.map((c) => c.slot).join('|');
+    if (diorama.tapCycle.key === key) {
+      diorama.tapCycle.idx = (diorama.tapCycle.idx + 1) % cands.length;
+    } else {
+      diorama.tapCycle.key = key;
+      diorama.tapCycle.idx = 0;
+    }
+    pick = cands[diorama.tapCycle.idx];
+  } else {
+    diorama.tapCycle.key = '';
+  }
+  setPlayerTargetMech(pick.m);
+}
+
+// Fire pressed with no target selected: dim feedback + a brief centre toast.
+function dioramaFireDenied(now) {
+  if (now - diorama.lastDeniedAt < 900) return;
+  diorama.lastDeniedAt = now;
+  const t = document.getElementById('dio-toast');
+  if (!t) return;
+  t.classList.add('show');
+  clearTimeout(diorama._toastTimer);
+  diorama._toastTimer = setTimeout(() => t.classList.remove('show'), 950);
+}
+
+const _dioP0 = { x: 0, y: 0, z: 0 };
+const _dioP1 = { x: 0, y: 0, z: 0 };
+function dioramaShotBlocked(fromMech, toMech) {
+  _dioP0.x = fromMech.body.position.x;
+  _dioP0.y = fromMech.body.position.y + BOT_MUZZLE_ABOVE_ROOT;
+  _dioP0.z = fromMech.body.position.z;
+  _dioP1.x = toMech.body.position.x;
+  _dioP1.y = toMech.body.position.y + BOT_MUZZLE_ABOVE_ROOT;
+  _dioP1.z = toMech.body.position.z;
+  return !botShotCanLand(_dioP0, _dioP1);
+}
+
+const _dioProj = new THREE.Vector3();
+function updateDioramaHud() {
+  if (!dioramaActive()) {
+    if (diorama.layer) hideDioramaLayer();
+    if (hudRefs?.shootBtn) hudRefs.shootBtn.classList.remove('dio-no-target');
+    return;
+  }
+  ensureDioramaLayer();
+  // updateCamera() set position/quaternion this frame; compose the matrices
+  // before projecting (same refresh the edge arrows do).
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const playerAlive = !!state.player && state.player.state.hp > 0;
+  const cards = [];
+  for (const slot of DIO_SLOTS) {
+    const m = state[slot];
+    const els = ensureDioramaSlotEls(slot);
+    const meta = DIO_SLOT_META[slot];
+    if (!m || m.state.hp <= 0 || !m.root.visible) {
+      els.g.style.display = 'none';
+      els.card.style.display = 'none';
+      els.box = null;
+      continue;
+    }
+    const rp = m.root.position;
+    _dioProj.set(rp.x, rp.y, rp.z).project(camera);
+    const behind = _dioProj.z > 1;
+    let fx = (_dioProj.x + 1) / 2 * W;
+    let fy = (1 - _dioProj.y) / 2 * H;
+    let s = 26;
+    let cx = fx;
+    let cy = fy;
+    if (behind) {
+      // Behind the camera: mirror so the edge clamp lands on the correct side.
+      cx = W - fx;
+      cy = H - fy;
+    } else {
+      _dioProj.set(rp.x, rp.y + UNIT_SPRITE_HEIGHT, rp.z).project(camera);
+      const hx = (_dioProj.x + 1) / 2 * W;
+      const hy = (1 - _dioProj.y) / 2 * H;
+      s = THREE.MathUtils.clamp(Math.abs(fy - hy) * 1.35, 24, 96);
+      cx = (fx + hx) / 2;
+      cy = (fy + hy) / 2;
+    }
+    // The photo-crop framing can leave a fighter outside the frame — clamp
+    // its square to the screen edge (drawn as a diamond) so it stays visible
+    // AND tappable. Margins dodge the corner gauges (top), the boost bar
+    // (bottom), the joystick (bottom-left) and the button column (right) —
+    // those sit ABOVE this layer and would eat the tap.
+    const cxC = THREE.MathUtils.clamp(cx, 34 + s / 2, W - 210 - s / 2);
+    const cyC = THREE.MathUtils.clamp(cy, 74 + s / 2, H - 150 - s / 2);
+    const offFrame = behind || cxC !== cx || cyC !== cy;
+    cx = cxC;
+    cy = cyC;
+    const bx = cx - s / 2;
+    const by = cy - s / 2;
+    els.box = { x: bx, y: by, s };
+    els.g.style.display = '';
+    els.rect.setAttribute('transform', offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '');
+    els.rect.setAttribute('x', bx.toFixed(1));
+    els.rect.setAttribute('y', by.toFixed(1));
+    els.rect.setAttribute('width', s.toFixed(1));
+    els.rect.setAttribute('height', s.toFixed(1));
+    const locked = m === state.playerCurrentTarget && meta.selectable;
+    // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
+    // own rules — matches what a shot would actually do.
+    const blocked = meta.selectable && playerAlive && dioramaShotBlocked(state.player, m);
+    els.g.style.opacity = blocked ? '0.38' : '1';
+    els.rect.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
+    els.rect.setAttribute('stroke-width', locked ? '1.6' : '1');
+    if (locked && !offFrame) {
+      // Mini triangle crosshair: four marks at the square's edge midpoints.
+      const t = 7;
+      const g = 3.5;
+      const mx = bx + s / 2;
+      const my = by + s / 2;
+      els.tris.setAttribute('d', [
+        `M ${mx - 4} ${by - g - t} L ${mx + 4} ${by - g - t} L ${mx} ${by - g} Z`,
+        `M ${mx - 4} ${by + s + g + t} L ${mx + 4} ${by + s + g + t} L ${mx} ${by + s + g} Z`,
+        `M ${bx - g - t} ${my - 4} L ${bx - g - t} ${my + 4} L ${bx - g} ${my} Z`,
+        `M ${bx + s + g + t} ${my - 4} L ${bx + s + g + t} ${my + 4} L ${bx + s + g} ${my} Z`
+      ].join(' '));
+      els.tris.style.display = '';
+    } else {
+      els.tris.style.display = 'none';
+    }
+    // Full annotation (leader + card): the own unit and the locked target.
+    if (slot === 'player' || locked) {
+      cards.push({ slot, els, m, cx, cy, blocked });
+    } else {
+      els.line.style.display = 'none';
+      els.card.style.display = 'none';
+    }
+  }
+  // Card layout: anchor at the nearest left/right screen edge at the unit's
+  // height, stacked apart when two cards on the same side would collide.
+  const placed = [];
+  for (const c of cards) {
+    const side = c.cx < W / 2 ? 'left' : 'right';
+    // Side-dependent floor: right edge hosts the button column, left edge the
+    // joystick — cards stop above them instead of sliding underneath.
+    const maxY = Math.max(80, (side === 'right' ? H - 340 : H - 210) - DIO_CARD_H);
+    let want = THREE.MathUtils.clamp(c.cy - DIO_CARD_H / 2, 64, maxY);
+    for (const p of placed) {
+      if (p.side === side && Math.abs(p.y - want) < DIO_CARD_H + 10) {
+        want = p.y + DIO_CARD_H + 10;
+      }
+    }
+    placed.push({ side, y: want });
+    const els = c.els;
+    els.cardY = els.cardY == null ? want : els.cardY + (want - els.cardY) * 0.25;
+    const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
+    els.card.style.display = '';
+    els.card.style.transform = `translate(${cardX.toFixed(1)}px, ${els.cardY.toFixed(1)}px)`;
+    const m = c.m;
+    const label = `${DIO_SLOT_META[c.slot].label} · ${m.unit.weapon ?? m.unit.char ?? ''}`;
+    if (els.nameEl.textContent !== label) els.nameEl.textContent = label;
+    const maxHp = m.unit.hp ?? MAX_HP;
+    const hpText = `HP ${Math.max(0, Math.round(m.state.hp))} / ${maxHp}${c.blocked ? ' · NO LINE' : ''}`;
+    if (els.hpEl.textContent !== hpText) els.hpEl.textContent = hpText;
+    els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
+    els.line.style.display = '';
+    const lineEndX = side === 'left' ? 10 + DIO_CARD_W : W - 10 - DIO_CARD_W;
+    const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
+    els.line.setAttribute('x1', boxEdgeX.toFixed(1));
+    els.line.setAttribute('y1', c.cy.toFixed(1));
+    els.line.setAttribute('x2', lineEndX.toFixed(1));
+    els.line.setAttribute('y2', (els.cardY + DIO_CARD_H / 2).toFixed(1));
+  }
+  // Manual-fire affordance: no target selected -> half-transparent fire button.
+  if (hudRefs?.shootBtn) {
+    hudRefs.shootBtn.classList.toggle(
+      'dio-no-target',
+      !state.spectatorActive && !state.playerCurrentTarget
+    );
+  }
+}
 
 function buildPlainFieldArena() {
   // Plain Field is intentionally featureless — just the boundary so players
@@ -14284,6 +14990,7 @@ function animate() {
       updateMechXRayVisibility();
       updateWallFade();
       updateHud();
+      updateDioramaHud();
 
       // Win condition. Trio: dead units are replaced from their roster
       // first; a team is out only when every roster on it is spent.
@@ -14307,7 +15014,8 @@ function animate() {
     // Drive 3D character models (idle/walk/sprint/dodge/fire) + gun attach —
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMechAnimations(dt, now);
-    renderer.render(scene, camera);
+    if (dioramaActive()) renderDiorama();
+    else renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);
   }
