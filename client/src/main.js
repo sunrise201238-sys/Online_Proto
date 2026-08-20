@@ -1071,6 +1071,7 @@ const diorama = {
   layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
   els: new Map(),        // slot -> annotation elements
   tapCycle: { key: '', idx: 0 },   // overlap-cycling state for stacked squares
+  teamSide: null,        // card edge claimed by the player's team ('left'|'right')
   lastDeniedAt: 0,       // fire-without-target toast throttle
   _toastTimer: 0,
   savedFar: null,
@@ -10766,6 +10767,7 @@ function hideDioramaLayer() {
   }
   diorama.els.clear();
   diorama.tapCycle.key = '';
+  diorama.teamSide = null;
 }
 
 function ensureDioramaSlotEls(slot) {
@@ -11058,12 +11060,23 @@ function updateDioramaHud() {
     // owner call, playtest round 2.
     cards.push({ slot, els, m, cx, cy, blocked });
   }
-  // Card layout: anchor at the nearest left/right screen edge at the unit's
-  // height. A card must never cover any marker square or another card
-  // (playtest #5) — slide through vertical offsets until the slot is clear.
+  // Card layout: the two TEAMS never share an edge (owner call) — the
+  // player's team claims the half its focus unit is in, enemies get the
+  // opposite edge; a 10%-of-width hysteresis stops midline flapping. A card
+  // must never cover any marker square or another card (playtest #5) —
+  // slide through vertical offsets until the slot is clear.
+  const own = cards.find((c) => c.slot === 'player') ?? cards.find((c) => c.slot === 'ally');
+  if (own) {
+    const margin = W * 0.10;
+    if (diorama.teamSide == null) diorama.teamSide = own.cx < W / 2 ? 'left' : 'right';
+    else if (diorama.teamSide === 'left' && own.cx > W / 2 + margin) diorama.teamSide = 'right';
+    else if (diorama.teamSide === 'right' && own.cx < W / 2 - margin) diorama.teamSide = 'left';
+  }
+  const ownSide = diorama.teamSide ?? 'left';
   const placedRects = [];
   for (const c of cards) {
-    const side = c.cx < W / 2 ? 'left' : 'right';
+    const isTeamA = c.slot === 'player' || c.slot === 'ally';
+    const side = isTeamA ? ownSide : (ownSide === 'left' ? 'right' : 'left');
     const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
     // Side-dependent floor: right edge hosts the button column, left edge the
     // joystick — cards stop above them instead of sliding underneath.
