@@ -10823,6 +10823,20 @@ function ensureDioramaSlotEls(slot) {
   const card = document.createElement('div');
   card.className = 'dio-card';
   card.style.borderColor = meta.color;
+  if (meta.selectable) {
+    // Tapping the info card selects the lock target too (owner call) —
+    // a much bigger touch surface than the marker square.
+    card.style.pointerEvents = 'auto';
+    card.style.cursor = 'crosshair';
+    card.addEventListener('pointerdown', (e) => {
+      if (!dioramaActive() || state.spectatorActive) return;
+      const mech = state[slot];
+      if (!mech || mech.state.hp <= 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPlayerTargetMech(mech);
+    });
+  }
   card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-status"></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
@@ -10926,10 +10940,10 @@ function updateDioramaHud() {
   diorama.layer.classList.toggle('dio-compact', compact);
   const cardW = compact ? 132 : DIO_CARD_W;
   const cardH = compact ? 44 : DIO_CARD_H;
-  // Live control rects — on short landscape phones the button column climbs
-  // to mid-screen, so card anchors derive from the REAL layout, not fixed
-  // desktop margins. (Markers are exempt: they stick to their units.)
-  const btnsRect = state.hud?.querySelector('#buttons')?.getBoundingClientRect() ?? null;
+  // Joystick rect: left cards stop above it. (Cards do NOT dodge the button
+  // column — owner call: anchoring left of the buttons floated cards into
+  // the middle of the field on phones; docking at the true edge wins, and
+  // the translucent buttons read fine over a card.)
   const joyRect = state.hud?.querySelector('#joy')?.getBoundingClientRect() ?? null;
   // POV anchor: normally the player, but in spectator mode the WATCHED unit —
   // LOS ghosting and team card edges follow whoever the camera rides
@@ -11131,13 +11145,10 @@ function updateDioramaHud() {
   const cardStep = cardH + 10;
   for (const c of cards) {
     const side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
-    // Right cards anchor LEFT of the button column (on phones the buttons
-    // reach mid-screen); left cards stop above the joystick.
-    const cardX = side === 'left'
-      ? 10
-      : Math.max(10, (btnsRect ? btnsRect.left : W - 10) - 8 - cardW);
+    // Cards dock at the true screen edges — never float over the field.
+    const cardX = side === 'left' ? 10 : W - 10 - cardW;
     const maxY = Math.max(64, (side === 'left'
-      ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 150)
+      ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 64)
       : H - 64) - cardH);
     const desired = THREE.MathUtils.clamp(c.cy - cardH / 2, 56, maxY);
     const overlapsSomething = (y) => {
@@ -11161,10 +11172,17 @@ function updateDioramaHud() {
     }
     if (want == null) {
       // No clean slot (tiny screens): stack under the lowest same-side card —
-      // overflowing the floor beats hiding a card under another one.
+      // overflowing the floor beats hiding a card under another one — and
+      // still hop past any marker square sitting in the fallback spot.
       let low = desired;
       for (const p of placedRects) {
         if (Math.abs(p.x - cardX) < cardW) low = Math.max(low, p.y + cardStep);
+      }
+      for (let i = 0; i < 4; i += 1) {
+        const hit = boxes.find((b) => cardX - 8 < b.x + b.s && cardX + cardW + 8 > b.x
+          && low - 8 < b.y + b.s && low + cardH + 8 > b.y);
+        if (!hit) break;
+        low = hit.y + hit.s + 10;
       }
       want = low;
     }
@@ -11195,6 +11213,7 @@ function updateDioramaHud() {
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
     const statusText = c.blocked ? 'NO SIGHT' : '';
     if (els.statusEl.textContent !== statusText) els.statusEl.textContent = statusText;
+    els.card.classList.toggle('dio-blocked', !!c.blocked);
     const lineEndX = side === 'left' ? cardX + cardW : cardX;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
     const lineY2 = (els.cardY + cardH / 2).toFixed(1);

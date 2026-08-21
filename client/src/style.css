@@ -443,3 +443,5 @@ body.pseudo-fullscreen #app {
 .dio-layer.dio-compact .dio-card .dio-weapon { height: 10px; max-width: 54px; }
 .dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 5px; }
 .dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 3px; min-height: 9px; }
+/* NO SIGHT: the card border dashes along with its square and leader line. */
+.dio-card.dio-blocked { border-style: dashed; }
