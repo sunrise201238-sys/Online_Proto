@@ -595,3 +595,38 @@ Lobby/protocol layer:
   teammate visibility + spectator, order accept/deny/rate/toggle, input
   rejection, unit travels under orders with zero input frames, spectator
   boost view = team A). Classic-online browser e2e re-run green.
+
+### Phase 3 R4 — IMPLEMENTED (2026-08-21)
+
+Client wiring — command mode is playable ONLINE:
+- Queue room: per-player Classic|Command chip (sendConfigure viewMode);
+  teammates' picks render as a gold [CMD] tag (team-scoped server-side,
+  so it cannot leak); the staleness signature already covers config.
+- dioramaActive() is online-aware: state.online.commandMode (frozen from
+  the queue pick at match setup) gates the whole diorama stack — camera,
+  tilt-shift render fork, annotation layer, gestures — while classic
+  players and spectators keep the chase view untouched.
+- ensureOnlineMatchSetup: commanders get diorama dressing + the local
+  navgrid (client-side preview/deny prediction); prediction is skipped
+  entirely for them (own unit interpolates like remotes, no input frames
+  sent — server acks stay -1), hudNow falls back to snapshot serverTime.
+- Orders ride the protocol: tap-tap/drag flows call sendOrderMove /
+  sendOrderLock / sendOrderClear; the selection glow waits for the
+  server ack (ok = one-shot drop; unreachable = red deny note at the tap
+  and the glow stays; rate = silent keep). syncOnlineCommands mirrors
+  the team echo onto mech.cmdMove/cmdLock so every existing icon / ring
+  / triangle renders unmodified. Online only YOUR unit is commandable
+  (decision 1): ally taps neither select nor drag.
+- Classic-teammate share (decision 2): updateOnlineCommandShare draws a
+  world-space ground ring (radius CMD_RADIUS, ally green) at the
+  commander teammate's ordered destination and a billboarded corner-
+  triangle sprite on their pinned enemy; disposed on teardown.
+- Verified end-to-end vs the live server: browser commander (chip →
+  commandSlots, overview camera, joystick hidden, zero input acks, lock
+  one-shot + triangles, tap-tap order → ack → 'both' icons + ring,
+  dash-travel closes 154→113 in 2.2s, double-tap clear wipes both) and
+  browser classic teammate (chase view intact, [CMD] tag, ring at the
+  exact ordered point, lock sprite on the pinned enemy). Classic-vs-
+  classic online and the offline latch re-ran green. One test-design
+  finding worth keeping: an idle opponent DIES to a command unit (the
+  bot fights) — matches end by ko, which is the game working, not a bug.

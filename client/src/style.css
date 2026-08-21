@@ -481,3 +481,6 @@ body.pseudo-fullscreen #app {
   70% { opacity: 1; }
   100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
 }
+
+/* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
+.roster-viewtag { color: #ffd257; font-size: 0.85em; letter-spacing: 0.08em; }

@@ -7042,6 +7042,7 @@ function cleanupMatch() {
   state.artRoles = null;
   // If we were in an online match, close the socket + drop online-only meshes.
   if (state.online) {
+    disposeOnlineCommandShare(state.online);   // classic-teammate ring/lock sprite
     if (state.online.conn) state.online.conn.close();
     if (state.online.projectileMeshes) {
       for (const op of state.online.projectileMeshes.values()) {
@@ -8286,10 +8287,11 @@ function showOnlineWaitingOpp(onl, conn) {
     const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? unitMenuName(UNIT_DATA[slotCfg.unitKey]) : null);
     const sep = trio ? '<br>' : ' ';   // Trio rosters stack under the label, one unit per line
     let statusHtml;
+    const viewTag = slotCfg.viewMode === 'command' ? ' <span class="roster-viewtag">[CMD]</span>' : '';
     if (isMe) {
-      statusHtml = `<span class="roster-status">${unitName ? `You —${sep}${unitName}` : 'You'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `You —${sep}${unitName}` : 'You'}${viewTag}</span>`;
     } else if (isOccupied) {
-      statusHtml = `<span class="roster-status">${unitName ? `Player —${sep}${unitName}` : 'Player (picking…)'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `Player —${sep}${unitName}` : 'Player (picking…)'}${viewTag}</span>`;
     } else if (s === 'p1') {
       // Host slot is locked — no Join button. Reaches here only briefly,
       // during connect-time before p1 is assigned.
@@ -8330,6 +8332,17 @@ function showOnlineWaitingOpp(onl, conn) {
   // Display it here as read-only — no toggle.
   const modeChip = `<div class="menu-divider">Mode: ${trio ? 'Trio' : 'Duel'} ${mode}</div>`;
 
+  // Classic|Command pick (phase 3 R4): per-player, locked once the match
+  // starts; the server scopes each pick to its own team, so opponents
+  // never see the choice (owner decision 3).
+  const myView = myCfg.viewMode ?? 'classic';
+  const viewChip = ONLINE_SLOT_IDS.includes(myId)
+    ? `<div class="mode-chip view-mode-chip">
+        <button data-view="classic" class="${myView === 'command' ? '' : 'mode-active'}">Classic</button>
+        <button data-view="command" class="${myView === 'command' ? 'mode-active' : ''}">Command</button>
+      </div>`
+    : '';
+
   // Host's explicit Start button (both modes). Enabled once they've picked
   // unit(s) + map (server rejects otherwise). Starting with an empty opponent
   // slot fills it with a bot (1v1 → Saori); a human who joins first takes it.
@@ -8343,6 +8356,7 @@ function showOnlineWaitingOpp(onl, conn) {
   menu.innerHTML = `
     <h2>${waitingText}</h2>
     ${modeChip}
+    ${viewChip}
     <div class="online-roster">${rosterHtml}</div>
     <div class="online-status">
       <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
@@ -8355,6 +8369,14 @@ function showOnlineWaitingOpp(onl, conn) {
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       onl.conn.sendJoinSlot(btn.dataset.joinSlot);
+    });
+  });
+  menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      onl.conn.sendConfigure({ viewMode: btn.dataset.view });
+      menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((b) => b.classList.remove('mode-active'));
+      btn.classList.add('mode-active');
     });
   });
   // Host taps a bot slot to open the bot-unit picker (1v1 or 2v2).
@@ -8533,6 +8555,23 @@ function ensureOnlineMatchSetup(snap) {
   // Pause button is meaningless online (server runs the sim authoritatively).
   const pauseBtn = state.hud?.querySelector('#pause-btn');
   if (pauseBtn) pauseBtn.remove();
+
+  // COMMAND MODE online (phase 3 R4): freeze my queue-room pick for the
+  // match. Commanders get the diorama dressing (base plate, grade,
+  // airborne de-clutter), the whole-map opening camera, and a local
+  // navgrid so the order preview / deny prediction runs client-side (the
+  // server re-validates authoritatively).
+  onl.commandMode = ONLINE_SLOT_IDS.includes(myId)
+    && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
+  if (onl.commandMode) {
+    diorama.cam2.snapped = false;
+    applyDioramaDressing();
+    offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  }
+  onl.consumedOrderSeq = onl.conn?.getOrderResult()?.seq ?? 0;
+  // Classic-teammate share visuals (world ring + lock sprite) rebuild lazily.
+  disposeOnlineCommandShare(onl);
+
   onl.mechsCreatedFor = sig;
 }
 
@@ -8576,6 +8615,144 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   }
 }
 
+// ---- COMMAND MODE online glue (phase 3 R4) --------------------------------
+
+// Mirror the team-scoped snapshot `commands` block onto the mechs. The
+// diorama HUD reads mech.cmdMove / mech.cmdLock for its icons, destination
+// ring and lock triangles — the same fields the offline layer writes — so
+// the whole annotation stack renders unmodified. Enemy commands never
+// arrive (server-side filtering), so enemy mechs simply stay clean.
+function syncOnlineCommands(snap, onl) {
+  const sm = onl.slotMap;
+  if (!sm) return;
+  const byId = {
+    [sm.cameraId]: state.player,
+    [sm.allyId]: state.ally,
+    [sm.enemyId]: state.enemy,
+    [sm.enemy2Id]: state.enemy2
+  };
+  const cmds = snap.commands ?? {};
+  for (const id of Object.keys(byId)) {
+    const mech = byId[id];
+    if (!mech) continue;
+    const c = cmds[id];
+    mech.cmdMove = c?.move ? {
+      x: c.move.x, z: c.move.z, y: c.move.y,
+      path: c.move.path ?? [], idx: 0,
+      phase: c.move.phase, anchorUntil: c.move.anchorUntil, orbitSign: 1
+    } : null;
+    mech.cmdLock = c?.lockTargetId ? (byId[c.lockTargetId] ?? null) : null;
+  }
+}
+
+// Lock-share sprite for the classic chase view: four corner triangles (the
+// diorama X layout) in the commander's color, billboarded on the pinned
+// enemy.
+function makeCmdLockSprite(fillHex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.lineJoin = 'round';
+  const tri = (cx, cy, dx, dy) => {
+    x.beginPath();
+    x.moveTo(cx, cy);
+    x.lineTo(cx + dx * 26, cy);
+    x.lineTo(cx, cy + dy * 26);
+    x.closePath();
+    x.lineWidth = 8;
+    x.strokeStyle = '#0b1622';
+    x.stroke();
+    x.fillStyle = fillHex;
+    x.fill();
+  };
+  tri(14, 14, 1, 1);
+  tri(114, 14, -1, 1);
+  tri(14, 114, 1, -1);
+  tri(114, 114, -1, -1);
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, fog: false }));
+  s.scale.set(6.4, 6.4, 1);
+  s.center.set(0.5, 0.5);
+  s.position.set(0, 3.2, 0);
+  s.renderOrder = 9997;
+  return s;
+}
+
+// Classic-teammate share (owner decision 2): when MY view is classic and my
+// human teammate is commanding, show (a) a ground ring at their unit's
+// ordered destination and (b) their colored lock triangles on the pinned
+// enemy — no path line, no icons. Command viewers get the full annotation
+// through the diorama layer instead, so this renders only for classic.
+function updateOnlineCommandShare(onl) {
+  const share = onl.cmdShare ?? (onl.cmdShare = { ring: null, tris: null });
+  const ally = state.ally;
+  const showShare = !onl.commandMode && !!ally;
+  const mv = showShare ? ally.cmdMove : null;
+  if (mv) {
+    if (!share.ring) {
+      const geo = new THREE.RingGeometry(CMD_RADIUS - 0.4, CMD_RADIUS, 48);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x86f7c2, transparent: true, opacity: 0.55,
+        side: THREE.DoubleSide, depthWrite: false
+      });
+      share.ring = new THREE.Mesh(geo, mat);
+      share.ring.rotation.x = -Math.PI / 2;
+      share.ring.renderOrder = 2;
+      scene.add(share.ring);
+    }
+    share.ring.position.set(mv.x, (mv.y ?? 0) + 0.35, mv.z);
+    share.ring.visible = true;
+  } else if (share.ring) {
+    share.ring.visible = false;
+  }
+  const lockTarget = showShare && ally.cmdLock && ally.cmdLock.state.hp > 0 ? ally.cmdLock : null;
+  if (lockTarget) {
+    if (!share.tris) share.tris = makeCmdLockSprite('#86f7c2');
+    if (share.tris.parent !== lockTarget.root) {
+      share.tris.parent?.remove(share.tris);
+      lockTarget.root.add(share.tris);
+    }
+    share.tris.visible = true;
+  } else if (share.tris) {
+    share.tris.visible = false;
+  }
+}
+
+function disposeOnlineCommandShare(onl) {
+  const share = onl?.cmdShare;
+  if (!share) return;
+  if (share.ring) {
+    scene.remove(share.ring);
+    share.ring.geometry.dispose();
+    share.ring.material.dispose();
+  }
+  if (share.tris) {
+    share.tris.parent?.remove(share.tris);
+    share.tris.material.map?.dispose?.();
+    share.tris.material.dispose();
+  }
+  onl.cmdShare = null;
+}
+
+// Consume order acknowledgements: a denied move order shows the red "Area
+// is not available" note at the tap point and KEEPS the selection glow; an
+// accepted one drops the glow (one-shot, offline parity). Rate-limited
+// sends keep the glow silently — the player just re-taps.
+function processOrderResults(onl) {
+  const res = onl.conn?.getOrderResult?.();
+  if (!res || res.seq === onl.consumedOrderSeq) return;
+  onl.consumedOrderSeq = res.seq;
+  const d = res.data;
+  if (!d || d.kind !== 'move') return;
+  const pending = diorama.pendingOrder;
+  diorama.pendingOrder = null;
+  if (d.ok) {
+    diorama.sel = null;
+  } else if (d.reason === 'unreachable' && pending) {
+    dioramaDenyAt(pending.px, pending.py);
+  }
+}
+
 function runOnlineMatchFrame(dt, onl, conn) {
   const snap = conn.getLatestSnapshot();
   if (!snap) return;
@@ -8602,7 +8779,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   if (snap.tick !== onl.lastAppliedSnapshotTick) {
     onl.lastAppliedSnapshotTick = snap.tick;
     onl.snapshotsApplied += 1;
-    if (ONLINE_SLOT_IDS.includes(onl.myPlayerId)) {
+    if (ONLINE_SLOT_IDS.includes(onl.myPlayerId) && !onl.commandMode) {
       applySnapshotToPrediction(snap);
     }
     syncOnlineProjectiles(snap);
@@ -8610,14 +8787,18 @@ function runOnlineMatchFrame(dt, onl, conn) {
     processOnlineEvents(snap, onl.myPlayerId);
   }
 
-  // 2. Drive prediction at fixed 25 ms cadence.
+  // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
+  //    entirely: the unit is bot-driven server-side, input replay would
+  //    mispredict every frame, and no input frames should be sent at all
+  //    (the server ignores them anyway) — the own unit renders through the
+  //    same interpolation as remotes.
   const realNow = performance.now();
   onl.predAccumulator += realNow - onl.lastPredRealTime;
   onl.lastPredRealTime = realNow;
   if (onl.predAccumulator > 250) onl.predAccumulator = 250;
   while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
     onl.predAccumulator -= SIM_TICK_RATE_MS;
-    runPredictionTick();
+    if (!onl.commandMode) runPredictionTick();
   }
 
   // 3. Render. state.player = local (camera target); state.enemy = primary
@@ -8627,7 +8808,10 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // 1v1 fallback when slotMap hasn't been built yet: derive otherId directly.
   const otherId = onl.slotMap?.enemyId ?? (cameraId === 'p1' ? 'p2' : 'p1');
   let cameraFighter;
-  if (ONLINE_SLOT_IDS.includes(myId) && onl.predictedState) {
+  if (onl.commandMode) {
+    cameraFighter = interpolateRemoteFighter(cameraId, prevSnap, snap, lastSnapAt, realNow)
+      ?? snap.fighters[cameraId];
+  } else if (ONLINE_SLOT_IDS.includes(myId) && onl.predictedState) {
     cameraFighter = onl.predictedState.fighters[cameraId];
   } else {
     cameraFighter = snap.fighters[cameraId];
@@ -8719,7 +8903,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // invulnerableUntil) live in that clock, so plain Date.now() reads off by the
   // client↔server clock skew — most visible as the sniper's 1 s fire-cooldown
   // ring being wrong. Falls back to the snapshot time for non-slot spectators.
-  const hudNow = onl.lastPredSimTime || snap.serverTime;
+  const hudNow = (!onl.commandMode && onl.lastPredSimTime) || snap.serverTime;
   const immuneNow = hudNow;
   getAllFighters().forEach((m) => {
     applyImmunityGlow(m, immuneNow < m.state.invulnerableUntil);
@@ -8749,6 +8933,15 @@ function runOnlineMatchFrame(dt, onl, conn) {
   syncOnlineChargedBeams(hudNow);
   updateLaserSights();
   updateHud(hudNow);
+
+  // COMMAND MODE online (phase 3 R4): mirror the team-scoped command echo
+  // onto the mechs (icons/rings/lock triangles read mech.cmdMove/cmdLock),
+  // render the classic-viewer share, consume order acks, and drive the
+  // annotation layer (it self-gates on dioramaActive()).
+  syncOnlineCommands(snap, onl);
+  updateOnlineCommandShare(onl);
+  processOrderResults(onl);
+  updateDioramaHud();
 }
 
 function tickOnline(dt, _now) {
@@ -10463,7 +10656,12 @@ if (typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------
 
 function dioramaActive() {
-  return diorama.enabled && !state.online && state.running;
+  // ONLINE (phase 3 R4): the queue-room pick is frozen into
+  // state.online.commandMode at match setup — the whole diorama stack
+  // (camera, tilt-shift render, annotation layer, gestures) rides this
+  // gate; classic online players and spectators keep the chase view.
+  if (state.online) return !!(state.online.commandMode && state.online.slotMap && state.player);
+  return diorama.enabled && state.running;
 }
 
 function toggleDiorama(force) {
@@ -11359,7 +11557,8 @@ function onDioPointerDown(e) {
   // still cycles the vertical layer, releasing in place issues the order.
   // Moving past the slop drops the preview and the press becomes a pan.
   const selM = diorama.sel ? state[diorama.sel] : null;
-  if (hit.kind === 'empty' && selM && selM.state.hp > 0) {
+  if (hit.kind === 'empty' && selM && selM.state.hp > 0
+      && !(state.online && diorama.sel !== 'player')) {
     diorama.gesture.tapPreview = true;
     diorama.drag = {
       slot: diorama.sel, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
@@ -11406,7 +11605,9 @@ function onDioPointerMove(e) {
       // The tap-order preview dies once the finger travels: this is a pan.
       g.tapPreview = false;
       diorama.drag = null;
-    } else if (g.kind === 'own') {
+    } else if (g.kind === 'own' && !(state.online && g.slot !== 'player')) {
+      // ONLINE: only YOUR unit takes orders (owner decision 1) — a human
+      // teammate's marker never opens a drag.
       diorama.drag = {
         slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
         path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
@@ -11444,7 +11645,12 @@ function onDioPointerUp(e) {
   if (g.moved) {
     const drag = diorama.drag;
     if (g.kind === 'own' && drag && !drag.tapMode && drag.valid && drag.path) {
-      issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+      if (state.online) {
+        diorama.pendingOrder = { px: e.clientX, py: e.clientY };
+        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y);
+      } else {
+        issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+      }
     }
     diorama.drag = null;
     return;
@@ -11452,9 +11658,11 @@ function onDioPointerUp(e) {
   const nowT = performance.now();
   if (g.kind === 'own') {
     diorama.drag = null;
+    if (state.online && g.slot !== 'player') return;   // teammates aren't commandable online
     if (diorama.lastTapSlot === g.slot && nowT - diorama.lastTapAt < DIO_DOUBLE_MS) {
       // Double-tap (marker OR card): wipe the move order AND the force lock.
-      clearUnitCommands(state[g.slot]);
+      if (state.online) state.online.conn?.sendOrderClear();
+      else clearUnitCommands(state[g.slot]);
       diorama.sel = null;
       diorama.lastTapAt = 0;
     } else if (diorama.sel === g.slot) {
@@ -11472,6 +11680,15 @@ function onDioPointerUp(e) {
     const cmd = diorama.sel ? state[diorama.sel] : null;
     const foe = state[g.slot];
     if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
+      if (state.online) {
+        // Server-side toggle semantics; the echo drives the triangles.
+        const sm = state.online.slotMap;
+        const targetId = g.slot === 'enemy' ? sm?.enemyId : sm?.enemy2Id;
+        if (targetId) state.online.conn?.sendOrderLock(targetId);
+        diorama.sel = null;   // one-shot
+        diorama.lastTapAt = 0;
+        return;
+      }
       // Same enemy again = cancel the force lock; another enemy = re-lock.
       cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
       // Lock order decides who wears the X vs + crosshair when both
@@ -11485,8 +11702,15 @@ function onDioPointerUp(e) {
     diorama.drag = null;
     if (g.tapPreview && drag) {
       if (drag.valid && drag.path) {
-        issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
-        diorama.sel = null;   // one-shot: the glow drops once the command lands
+        if (state.online) {
+          // Glow stays until the server acks (processOrderResults): ok
+          // drops it (one-shot), a deny shows the red note and keeps it.
+          diorama.pendingOrder = { px: e.clientX, py: e.clientY };
+          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y);
+        } else {
+          issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+          diorama.sel = null;   // one-shot: the glow drops once the command lands
+        }
       } else {
         // Unreachable spot: red note + ring fade; the glow STAYS for a retry.
         dioramaDenyAt(e.clientX, e.clientY);
