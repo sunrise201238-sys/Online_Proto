@@ -411,8 +411,8 @@ body.pseudo-fullscreen #app {
    buttons stay on top of leader lines/cards. Edge arrows (35), menus (100+)
    keep their existing layers. */
 .touch-hud { z-index: 25; }
-.dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
-.dio-layer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: auto; touch-action: none; }
+.dio-layer > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dio-card {
   position: absolute; left: 0; top: 0; width: 180px; height: 56px; box-sizing: border-box;
   padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
@@ -445,3 +445,9 @@ body.pseudo-fullscreen #app {
 .dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 3px; min-height: 9px; }
 /* NO SIGHT: the card border dashes along with its square and leader line. */
 .dio-card.dio-blocked { border-style: dashed; }
+
+/* COMMAND MODE (phase 2): direct-control inputs are hidden — every unit is
+   bot-driven; the player selects and orders through the annotation layer. */
+.touch-hud.dio-cmd .joy, .touch-hud.dio-cmd .buttons { display: none; }
+.dio-goldglow { filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9)); }
+.dio-card .dio-status .dio-cmdicon { display: block; filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.85)); }

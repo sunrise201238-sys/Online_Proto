@@ -1066,14 +1066,20 @@ const diorama = {
   // Smoothed camera state; `snapped` false forces a hard cut to the diorama
   // frame on activation (no fly-in from wherever the chase camera sat).
   cam: { shiftX: 0, shiftZ: 0, yawOff: 0, focusY: 0.5, snapped: false },
+  // COMMAND MODE (phase 2): free-camera target + dolly distance.
+  cam2: { tx: 0, tz: 0, dist: 220, snapped: false },
+  sel: null,             // selected own slot ('player' | 'ally') or null
+  drag: null,            // live move-order drag state
+  gesture: null,         // active pointer gesture bookkeeping
+  pointers: new Map(),   // pointerId -> {x, y} for pinch detection
+  pinch: null,           // {startSpan, startDist}
+  lastTapSlot: null,     // double-tap detection
+  lastTapAt: 0,
   base: null,            // cropped plate + plinth group (rebuilt per map)
   post: null,            // tilt-shift render pipeline (lazy, rebuilt on resize)
   layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
   els: new Map(),        // slot -> annotation elements
-  tapCycle: { key: '', idx: 0 },   // overlap-cycling state for stacked squares
   teamSide: null,        // card edge claimed by the player's team ('left'|'right')
-  lastDeniedAt: 0,       // fire-without-target toast throttle
-  _toastTimer: 0,
   savedFar: null,
   savedNear: null
 };
@@ -1081,17 +1087,16 @@ const diorama = {
 // Global framing/grade tunables — live-tweakable via window.__diorama.view.
 const DIORAMA_VIEW = {
   fov: 45,
-  // Player-centred follow (playtest 2026-08-20: the map-centred frame lost
-  // the own unit) — the look target rides the focus unit, clamped to this
-  // fraction of the map half-extents so corner play keeps board in frame.
-  followBound: 0.62,
-  yawFollow: 0.04,     // radians of yaw lean per full-halfX of unit offset
-  lerp: 0.06,          // per-frame smoothing toward the follow targets
   lookY: 4,            // look-at height — keeps the board low in frame
-  focusBand: 0.13,     // half-height of the sharp band (0..1 screen units)
+  focusBand: 0.16,     // half-height of the sharp band (0..1 screen units)
   blurSpan: 0.32,      // distance from band edge to full blur
   saturation: 1.14,    // miniature grade: toy-like color
-  contrast: 1.045
+  contrast: 1.045,
+  // COMMAND MODE tunables:
+  minDist: 70,         // closest zoom (dolly distance along the fixed tilt)
+  cmdRadius: 12,       // deployment circle radius = arrival orbit radius
+  anchorMs: 5000,      // Engage-style hold on the circle after arrival
+  clearR: 0.11         // per-unit clear pocket radius in the blur (uv units)
 };
 // Per-map camera anchor: yaw = compass angle around the map centre, dist =
 // horizontal distance, height = camera Y as a fraction of dist (~elevation).
@@ -1108,7 +1113,20 @@ const DIORAMA_MAP_VIEW = {
 let arenaBounds = null;
 
 if (typeof window !== 'undefined') {
-  window.__diorama = { toggle: toggleDiorama, view: DIORAMA_VIEW, maps: DIORAMA_MAP_VIEW, state: diorama };
+  window.__diorama = {
+    toggle: toggleDiorama, view: DIORAMA_VIEW, maps: DIORAMA_MAP_VIEW, state: diorama,
+    // Dev/automation hooks (same family as __mapPhoto / __startMatch).
+    debug: {
+      layerStackAt: (x, z) => dioramaLayerStackAt(x, z),
+      groundPoint: (cx, cy, y) => dioramaGroundPoint(cx, cy, y),
+      order: (slot, x, z, y = 0) => {
+        const path = computeOrderPath(state[slot], x, z, y);
+        if (path) issueMoveOrder(slot, x, z, y, path);
+        return !!path;
+      },
+      clear: () => clearAllCommands()
+    }
+  };
 }
 
 const MOMENTUM_STANDARD = 100;
@@ -4360,15 +4378,7 @@ function updatePlayer(now) {
       state.reticle && live.root.add(state.reticle);
     }
   }
-  // Diorama POC: no target selected yet (matches started in diorama begin
-  // unlocked — the first deliberate act is tapping a target). Firing is
-  // blocked with feedback; the tap is consumed so it can't fire later.
-  const dioNoTarget = dioramaActive() && !state.playerCurrentTarget;
-  if (dioNoTarget) {
-    if (input.shootTap || input.shootHold) dioramaFireDenied(now);
-    input.shootTap = false;
-  }
-  if (!dioNoTarget && input.shootTap) {
+  if (input.shootTap) {
     input.boost = false;
     attemptFire(state.player, pTarget, now);
     triggerEnemyEvasion(now);
@@ -4381,7 +4391,7 @@ function updatePlayer(now) {
   // semiAuto guns (currently just the Laser) opt out of hold-to-fire — mirrors
   // the gate in shared tick.js; see the note there for why M14 / SVD are not
   // on the list despite hitting the same thing.
-  if (!dioNoTarget && input.shootHold && !state.player.unit.semiAuto
+  if (input.shootHold && !state.player.unit.semiAuto
       && (state.player.unit.spreadCount === 1 || state.player.unit.autoFire) && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
     attemptFire(state.player, pTarget, now);
@@ -6858,7 +6868,7 @@ function updateCamera() {
     // Front art only — the player's mech is created with the rear/own kit at
     // match start; flip it (and anything else) back. No-op after frame 1.
     getAllFighters().forEach((m) => setMechSpriteView(m, false));
-    updateDioramaCamera(cam);
+    updateDioramaCamera();
     return;
   }
   const p = cam.root.position;
@@ -7290,12 +7300,8 @@ function startMatch() {
   input.shootTap = false;
   // Default the player's lock target to the first enemy. In 2v2 this can be
   // cycled to enemy2 via the target switch (U on PC, target button on mobile).
-  // Diorama POC: matches started in diorama view begin with NO lock — the
-  // player's first deliberate act is tapping a target (DIORAMA_PLAN.md). The
-  // Range keeps its preset dummy lock and spectator has no human fire at all.
-  state.playerCurrentTarget = (diorama.enabled && !state.online
-    && state.mapKey !== 'range' && !state.spectatorActive)
-    ? null : state.enemy;
+  // (Command mode ignores this — every unit is bot-driven there.)
+  state.playerCurrentTarget = state.enemy;
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
   // Fresh match — seed the firing tracker so the reticle starts green.
@@ -9572,8 +9578,8 @@ window.addEventListener('keydown', (e) => {
   }
   else if (k === 'l') input.stepTap = true;
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
-  else if (k === 'u') cyclePlayerTarget();
-  else if (k === 'v') toggleDiorama();   // hidden diorama-view toggle (POC)
+  else if (k === 'u') { if (!dioramaActive()) cyclePlayerTarget(); }
+  else if (k === 'v') toggleDiorama();   // classic <-> command mode toggle
 });
 
 window.addEventListener('keyup', (e) => {
@@ -9904,7 +9910,7 @@ function showPauseMenu() {
   menu.className = 'menu';
   // Offline: the diorama view toggle lives here so touch devices can reach
   // it too (V key remains the desktop shortcut).
-  const dioramaBtn = state.online ? '' : `<button data-action="diorama">View: ${diorama.enabled ? 'Diorama' : 'Classic'}</button>`;
+  const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Classic'}</button>`;
   menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
@@ -9916,7 +9922,7 @@ function showPauseMenu() {
   menu.querySelector('button[data-action="diorama"]')?.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     toggleDiorama();
-    event.currentTarget.textContent = `View: ${diorama.enabled ? 'Diorama' : 'Classic'}`;
+    event.currentTarget.textContent = `Mode: ${diorama.enabled ? 'Command' : 'Classic'}`;
   });
   menu.querySelector('button[data-action="new"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -10294,8 +10300,10 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'airport') buildAirportArena();
   // Diorama POC: re-dress the fresh arena (cropped plate, plinth, daylight
   // grade) — or clear leftovers if the mode was switched off / went online.
-  if (diorama.enabled && !state.online) applyDioramaDressing();
-  else if (diorama.base) removeDioramaDressing();
+  if (diorama.enabled && !state.online) {
+    applyDioramaDressing();
+    diorama.cam2.snapped = false;   // fresh map -> whole-map overview
+  } else if (diorama.base) removeDioramaDressing();
 }
 
 // ---------------------------------------------------------------------------
@@ -10428,13 +10436,17 @@ function toggleDiorama(force) {
   diorama.enabled = want;
   if (want) {
     diorama.cam.snapped = false;
+    diorama.cam2.snapped = false;   // open on the whole-map overview
     // Apply while a match is live OR paused (the mobile toggle sits in the
     // pause menu, where state.running is false but the arena is built).
     if (!state.online && (state.running || state.phase === 'pause')) applyDioramaDressing();
   } else {
+    // Leaving command mode: the player REGAINS direct control of the blue
+    // unit and every standing order (ally included) is deleted (owner spec).
+    clearAllCommands();
     removeDioramaDressing();
     hideDioramaLayer();
-    if (hudRefs?.shootBtn) hudRefs.shootBtn.classList.remove('dio-no-target');
+    state.hud?.classList.remove('dio-cmd');
     // Give the chase view its own-unit kit back (diorama forces front art).
     // Spectator restores itself: updateCamera re-owns the watched unit.
     if (!state.online && !state.spectatorActive && state.player) {
@@ -10571,39 +10583,191 @@ function removeDioramaDressing() {
 // ---- camera rig -----------------------------------------------------------
 
 const _dioWork = new THREE.Vector3();
-function updateDioramaCamera(focusMech) {
-  const v = DIORAMA_VIEW;
-  const m = DIORAMA_MAP_VIEW[state.mapKey] ?? DIORAMA_MAP_VIEW.default;
-  const c = diorama.cam;
-  const fp = focusMech ? focusMech.root.position : _dioWork.set(0, 0, 0);
+// COMMAND MODE camera: free pan/zoom over the whole board. The tilt (height
+// ratio) and compass yaw stay fixed per map so the miniature look holds;
+// zoom is a dolly along that axis. Opens on a whole-map overview.
+function dioramaMaxDist() {
   const b = dioramaBoundsNow();
-  // Player-centred follow: the frame tracks the focus unit (damped), clamped
-  // inside followBound of the half-extents so a corner fight still frames
-  // mostly board; yaw leans slightly with X. On activation we snap so there
-  // is no flight from the chase pose.
-  const wantShiftX = THREE.MathUtils.clamp(fp.x, -b.halfX * v.followBound, b.halfX * v.followBound);
-  const wantShiftZ = THREE.MathUtils.clamp(fp.z, -b.halfZ * v.followBound, b.halfZ * v.followBound);
-  const wantYawOff = THREE.MathUtils.clamp(fp.x / (b.halfX || 120), -1, 1) * v.yawFollow;
-  const k = c.snapped ? v.lerp : 1;
-  c.shiftX += (wantShiftX - c.shiftX) * k;
-  c.shiftZ += (wantShiftZ - c.shiftZ) * k;
-  c.yawOff += (wantYawOff - c.yawOff) * k;
-  c.snapped = true;
-  const yaw = m.yaw + c.yawOff;
+  return Math.max(b.halfX, b.halfZ) * 2.7;
+}
+function updateDioramaCamera() {
+  const v = DIORAMA_VIEW;
+  const mv = DIORAMA_MAP_VIEW[state.mapKey] ?? DIORAMA_MAP_VIEW.default;
+  const b = dioramaBoundsNow();
+  const c = diorama.cam2;
+  const maxDist = dioramaMaxDist();
+  if (!c.snapped) {
+    c.tx = 0;
+    c.tz = 0;
+    c.dist = maxDist;
+    c.snapped = true;
+  }
+  c.dist = THREE.MathUtils.clamp(c.dist, v.minDist, maxDist);
+  c.tx = THREE.MathUtils.clamp(c.tx, -b.halfX, b.halfX);
+  c.tz = THREE.MathUtils.clamp(c.tz, -b.halfZ, b.halfZ);
   camera.position.set(
-    c.shiftX + Math.cos(yaw) * m.dist,
-    m.dist * m.height,
-    c.shiftZ + Math.sin(yaw) * m.dist
+    c.tx + Math.cos(mv.yaw) * c.dist,
+    c.dist * mv.height,
+    c.tz + Math.sin(mv.yaw) * c.dist
   );
-  camera.lookAt(c.shiftX, v.lookY, c.shiftZ);
+  camera.lookAt(c.tx, v.lookY, c.tz);
   if (camera.fov !== v.fov) {
     camera.fov = v.fov;
     camera.updateProjectionMatrix();
   }
-  // Tilt-shift focus band rides the focus unit's screen height.
-  const ndc = _dioWork.set(fp.x, (focusMech?.root.position.y ?? 0) + 2.5, fp.z).project(camera);
-  const wantFocusY = THREE.MathUtils.clamp((ndc.y + 1) / 2, 0.22, 0.78);
-  c.focusY += (wantFocusY - c.focusY) * 0.08;
+  diorama.cam.focusY = 0.5;   // blur band pinned to screen centre (owner call)
+}
+
+// Screen point -> world point on a horizontal plane (default the ground).
+function dioramaGroundPoint(clientX, clientY, planeY = 0) {
+  _dioWork.set(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
+    0.5
+  ).unproject(camera);
+  const dx = _dioWork.x - camera.position.x;
+  const dy = _dioWork.y - camera.position.y;
+  const dz = _dioWork.z - camera.position.z;
+  if (Math.abs(dy) < 1e-6) return null;
+  const t = (planeY - camera.position.y) / dy;
+  if (t <= 0) return null;
+  return { x: camera.position.x + dx * t, z: camera.position.z + dz * t };
+}
+
+// ---- COMMAND MODE: order layer --------------------------------------------
+// Every unit is bot-driven in the diorama; the player issues two kinds of
+// orders (DIORAMA_PLAN.md phase 2): a FORCE LOCK (tap own unit -> tap enemy)
+// overriding the bot's target pick until either party dies, and a MOVE ORDER
+// (drag from the own square) that pathfinds to a point, fights along the
+// way, then holds an Engage-style orbit on the circle for anchorMs before
+// autonomy resumes. Defense / anti-glint / cover-reload reflexes always win;
+// the route resumes after them. Command state lives ON the mech (cmdMove /
+// cmdLock), so trio respawns start clean ("eye").
+
+const DIO_OWN_SLOTS = ['player', 'ally'];
+
+function commandTargetOf(m) {
+  if (m?.cmdLock && m.cmdLock.state.hp > 0 && m.state.hp > 0) {
+    m.state.botTargetRef = m.cmdLock;   // keep the pick sticky downstream
+    return m.cmdLock;
+  }
+  return pickBotTargetOf(m);
+}
+
+// Reflex layers that outrank a move order for THIS frame (route resumes after).
+function botReflexActive(m, now) {
+  const st = m.state;
+  return st.botState === 'defense'
+    || !!st.botCoverPath
+    || st.action === 'step'
+    || now < (st.hitStunUntil ?? 0);
+}
+
+function clearUnitCommands(m) {
+  if (!m) return;
+  m.cmdMove = null;
+  m.cmdLock = null;
+}
+
+function clearAllCommands() {
+  for (const slot of DIO_OWN_SLOTS) clearUnitCommands(state[slot]);
+  diorama.sel = null;
+  diorama.drag = null;
+}
+
+// Per-frame housekeeping: drop locks on death, selection on death.
+function dioramaCommandTick() {
+  for (const slot of DIO_OWN_SLOTS) {
+    const m = state[slot];
+    if (!m) continue;
+    if (m.state.hp <= 0) { clearUnitCommands(m); continue; }
+    if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;
+  }
+  if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
+}
+
+// Vertical layer stack at a point: ground + every walkable surface top there,
+// ascending. Long-press during a drag cycles through these (bridge decks).
+function dioramaLayerStackAt(x, z) {
+  const layers = [0];
+  for (const s of arenaSurfaces) {
+    if (x >= s.minX && x <= s.maxX && z >= s.minZ && z <= s.maxZ) {
+      const top = s.heightAt(x, z);
+      if (layers.every((y) => Math.abs(y - top) > 1.5)) layers.push(top);
+    }
+  }
+  return layers.sort((a, b) => a - b);
+}
+
+function computeOrderPath(m, tx, tz, targetFloorY) {
+  if (!offlineNavGrid || !m || m.state.hp <= 0) return null;
+  const pos = m.body.position;
+  const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
+  let path = findPathOnGrid(offlineNavGrid, pos.x, pos.z, tx, tz, myFloorY, targetFloorY, arenaObstacles);
+  if (!path || path.length < 2) return null;
+  if (path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
+  return path;
+}
+
+function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
+  const m = state[slot];
+  if (!m || m.state.hp <= 0) return;
+  m.cmdMove = {
+    x: tx, z: tz, y: targetFloorY,
+    path, idx: 0,
+    phase: 'travel',
+    anchorUntil: 0,
+    orbitSign: ((m.cmdOrbitFlip = !m.cmdOrbitFlip)) ? 1 : -1
+  };
+}
+
+// Post-bot velocity override: updateEnemy ran first (aiming/firing/reflex
+// decisions stand — "fight along the way"), then the standing move order
+// re-steers the legs unless a reflex layer owns this frame.
+function applyMoveOrder(m, now) {
+  const mv = m?.cmdMove;
+  if (!mv) return;
+  if (m.state.hp <= 0) { m.cmdMove = null; return; }
+  if (botReflexActive(m, now)) return;
+  const pos = m.body.position;
+  const speed = m.unit.walkSpeed ?? WALK_SPEED;
+  if (mv.phase === 'travel') {
+    const distC = Math.hypot(mv.x - pos.x, mv.z - pos.z);
+    if (distC < 4) {
+      mv.phase = 'anchor';
+      mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
+      return;
+    }
+    let wp = mv.path[mv.idx];
+    while (wp && mv.idx < mv.path.length - 1
+      && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 3) {
+      mv.idx += 1;
+      wp = mv.path[mv.idx];
+    }
+    const gx = wp ? wp.x : mv.x;
+    const gz = wp ? wp.z : mv.z;
+    const dx = gx - pos.x;
+    const dz = gz - pos.z;
+    const l = Math.hypot(dx, dz) || 1;
+    m.body.velocity.x = (dx / l) * speed;
+    m.body.velocity.z = (dz / l) * speed;
+  } else {
+    if (now >= mv.anchorUntil) { m.cmdMove = null; return; }
+    // Engage-style orbit ANCHORED ON THE CIRCLE: tangent around the centre
+    // at cmdRadius with a spring back onto the ring (mirrors the engage
+    // tangent + radial-pull form). Facing/aim stays with the bot.
+    const R = DIORAMA_VIEW.cmdRadius;
+    let rx = pos.x - mv.x;
+    let rz = pos.z - mv.z;
+    const d = Math.hypot(rx, rz);
+    if (d < 0.1) { rx = 1; rz = 0; } else { rx /= d; rz /= d; }
+    const pull = Math.max(-1, Math.min(1, (R - d) * 0.25));
+    const tx2 = -rz * mv.orbitSign + rx * pull;
+    const tz2 = rx * mv.orbitSign + rz * pull;
+    const l = Math.hypot(tx2, tz2) || 1;
+    m.body.velocity.x = (tx2 / l) * speed * 0.85;
+    m.body.velocity.z = (tz2 / l) * speed * 0.85;
+  }
 }
 
 // ---- tilt-shift post pass -------------------------------------------------
@@ -10653,13 +10817,19 @@ function ensureDioramaPost() {
       uBand: { value: 0.13 },
       uSpan: { value: 0.32 },
       uSat: { value: 1.14 },
-      uCon: { value: 1.045 }
+      uCon: { value: 1.045 },
+      // Per-unit clear pockets: fighters never sit inside the bokeh.
+      uUnits: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
+      uUnitCount: { value: 0 },
+      uAspect: { value: 1 },
+      uClearR: { value: 0.11 }
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: [
       'varying vec2 vUv;',
       'uniform sampler2D tSharp; uniform sampler2D tBlur;',
       'uniform float uFocusY; uniform float uBand; uniform float uSpan; uniform float uSat; uniform float uCon;',
+      'uniform vec2 uUnits[4]; uniform int uUnitCount; uniform float uAspect; uniform float uClearR;',
       'vec3 toSRGB(vec3 c){',
       '  c = max(c, vec3(0.0));',
       '  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));',
@@ -10668,6 +10838,13 @@ function ensureDioramaPost() {
       '  vec3 sharp = texture2D(tSharp, vUv).rgb;',
       '  vec3 blur = texture2D(tBlur, vUv).rgb;',
       '  float t = smoothstep(uBand, uBand + uSpan, abs(vUv.y - uFocusY));',
+      '  float clearM = 0.0;',
+      '  for (int i = 0; i < 4; i++) {',
+      '    if (i >= uUnitCount) break;',
+      '    vec2 d = (vUv - uUnits[i]) * vec2(uAspect, 1.0);',
+      '    clearM = max(clearM, 1.0 - smoothstep(uClearR * 0.5, uClearR, length(d)));',
+      '  }',
+      '  t *= (1.0 - clearM);',
       '  vec3 c = toSRGB(mix(sharp, blur, t));',
       '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
       '  c = mix(vec3(l), c, uSat);',
@@ -10724,6 +10901,19 @@ function renderDiorama() {
   p.compMat.uniforms.uSpan.value = v.blurSpan;
   p.compMat.uniforms.uSat.value = v.saturation;
   p.compMat.uniforms.uCon.value = v.contrast;
+  // Clear pockets: each fighter's screen position punches a hole in the blur.
+  let unitCount = 0;
+  for (const m of getAllFighters()) {
+    if (unitCount >= 4) break;
+    if (!m || m.state.hp <= 0 || !m.root.visible) continue;
+    _dioWork.set(m.root.position.x, m.root.position.y + 2.5, m.root.position.z).project(camera);
+    if (_dioWork.z > 1) continue;
+    p.compMat.uniforms.uUnits.value[unitCount].set((_dioWork.x + 1) / 2, (_dioWork.y + 1) / 2);
+    unitCount += 1;
+  }
+  p.compMat.uniforms.uUnitCount.value = unitCount;
+  p.compMat.uniforms.uAspect.value = window.innerWidth / Math.max(1, window.innerHeight);
+  p.compMat.uniforms.uClearR.value = v.clearR;
   renderer.setRenderTarget(null);
   renderer.render(p.quadScene, p.quadCam);
 }
@@ -10760,13 +10950,26 @@ function ensureDioramaLayer() {
   layer.className = 'dio-layer';
   const svg = svgNode('svg', {});
   svg.id = 'dio-svg';
-  svg.addEventListener('pointerdown', onDioramaTap);
   layer.appendChild(svg);
-  const toast = document.createElement('div');
-  toast.id = 'dio-toast';
-  toast.textContent = 'SELECT A TARGET';
-  layer.appendChild(toast);
+  // Move-order drag visuals: deployment circle (+ dark casing), dashed path
+  // preview, and a drop line when the chosen layer is elevated.
+  const dragCasing = svgNode('path', { fill: 'none', stroke: '#070b12', 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
+  const dragCircle = svgNode('path', { fill: 'rgba(238, 244, 255, 0.07)', stroke: '#eef4ff', 'stroke-width': '1.6', 'pointer-events': 'none' });
+  const dragPath = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.4', 'stroke-dasharray': '5 4', 'pointer-events': 'none' });
+  const dragDrop = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.2', 'stroke-dasharray': '2 3', 'pointer-events': 'none' });
+  svg.appendChild(dragCasing);
+  svg.appendChild(dragCircle);
+  svg.appendChild(dragPath);
+  svg.appendChild(dragDrop);
+  diorama.dragEls = { casing: dragCasing, circle: dragCircle, path: dragPath, drop: dragDrop };
   app.appendChild(layer);
+  // COMMAND MODE: the layer owns every pointer (markers are hit-tested
+  // manually against els.box, so no per-element listeners are needed).
+  layer.addEventListener('pointerdown', onDioPointerDown);
+  layer.addEventListener('pointermove', onDioPointerMove);
+  layer.addEventListener('pointerup', onDioPointerUp);
+  layer.addEventListener('pointercancel', onDioPointerCancel);
+  layer.addEventListener('wheel', onDioWheel, { passive: false });
   diorama.layer = layer;
   diorama.els.clear();
   return layer;
@@ -10778,8 +10981,12 @@ function hideDioramaLayer() {
     diorama.layer = null;
   }
   diorama.els.clear();
-  diorama.tapCycle.key = '';
   diorama.teamSide = null;
+  diorama.dragEls = null;
+  diorama.gesture = null;
+  diorama.drag = null;
+  diorama.pinch = null;
+  diorama.pointers.clear();
 }
 
 function ensureDioramaSlotEls(slot) {
@@ -10795,15 +11002,20 @@ function ensureDioramaSlotEls(slot) {
   const rectC = svgNode('rect', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', rx: '1', opacity: '0.75', 'pointer-events': 'none' });
   const rect = svgNode('rect', {
     fill: 'none', stroke: meta.color, 'stroke-width': '1.2', rx: '1',
-    'pointer-events': meta.selectable ? 'all' : 'none'
+    'pointer-events': 'none'
   });
-  if (meta.selectable) {
-    rect.dataset.slot = slot;
-    rect.style.cursor = 'crosshair';
-  }
   const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
   const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
-  const tris = svgNode('path', { fill: '#ffd257', stroke: 'none', 'pointer-events': 'none' });
+  // Force-lock crosshair triangles, one path PER COMMANDING UNIT (blue lock
+  // = blue triangles, green = green; both locks stack on split corners).
+  const tris = svgNode('path', { fill: DIO_SLOT_META.player.color, stroke: 'none', 'pointer-events': 'none' });
+  const tris2 = svgNode('path', { fill: DIO_SLOT_META.ally.color, stroke: 'none', 'pointer-events': 'none' });
+  // Standing move-order destination ring (own slots only).
+  const destRing = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'stroke-dasharray': '3 3', opacity: '0.85', 'pointer-events': 'none' });
+  // Command state icon at the square's top corner: gold "!" = under a
+  // position order, gold eye = autonomous (own slots only).
+  const cmdIcon = svgNode('g', { 'pointer-events': 'none' });
+  cmdIcon.classList.add('dio-goldglow');
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
   // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
@@ -10817,39 +11029,30 @@ function ensureDioramaSlotEls(slot) {
   g.appendChild(rect);
   g.appendChild(lineC);
   g.appendChild(line);
+  g.appendChild(destRing);
   g.appendChild(tris);
+  g.appendChild(tris2);
   g.appendChild(tierMid);
   g.appendChild(tierFar);
   g.appendChild(pointer);
+  g.appendChild(cmdIcon);
   svg.appendChild(g);
   const card = document.createElement('div');
   card.className = 'dio-card';
   card.style.borderColor = meta.color;
-  if (meta.selectable) {
-    // Tapping the info card selects the lock target too (owner call) —
-    // a much bigger touch surface than the marker square.
-    card.style.pointerEvents = 'auto';
-    card.style.cursor = 'crosshair';
-    card.addEventListener('pointerdown', (e) => {
-      if (!dioramaActive() || state.spectatorActive) return;
-      const mech = state[slot];
-      if (!mech || mech.state.hp <= 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setPlayerTargetMech(mech);
-    });
-  }
   card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-status"></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
-    g, rect, rectC, line, lineC, tris, pointer, tierMid, tierFar, card,
+    g, rect, rectC, line, lineC, tris, tris2, destRing, cmdIcon, pointer,
+    tierMid, tierFar, card,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
     weaponFailed: false, // art 404 -> fall back to text in the role line
     statusEl: card.querySelector('.dio-status'),
     barEl: card.querySelector('.dio-bar i'),
+    iconState: null,     // 'order' | 'auto' | null — caches the icon markup
     box: null,        // last screen-space box {x, y, s} for tap hit-testing
     cardY: null       // smoothed card anchor
   };
@@ -10861,52 +11064,197 @@ function ensureDioramaSlotEls(slot) {
   return els;
 }
 
-function onDioramaTap(e) {
-  if (!dioramaActive() || state.spectatorActive) return;
-  const x = e.clientX;
-  const y = e.clientY;
-  const pad = 6;
-  const cands = [];
-  for (const slot of DIO_SLOTS) {
-    if (!DIO_SLOT_META[slot].selectable) continue;
-    const m = state[slot];
-    const els = diorama.els.get(slot);
-    if (!m || m.state.hp <= 0 || !els || !els.box) continue;
-    const b = els.box;
-    if (x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad) {
-      cands.push({ slot, m });
+// ---- COMMAND MODE gesture controller --------------------------------------
+// One surface (the layer div) owns every pointer. Tap own unit = select;
+// tap enemy while selected = toggle/assign force lock; tap empty = deselect;
+// double-tap own unit = full reset (move order AND force lock). DRAG from an
+// own marker = move order (long-press mid-drag cycles the vertical layer);
+// drag from anywhere else = camera pan; pinch / wheel = zoom.
+
+const DIO_TAP_SLOP = 9;
+const DIO_DOUBLE_MS = 320;
+const DIO_LONGPRESS_MS = 450;
+
+function dioramaHitTest(x, y) {
+  const pad = 8;
+  const groups = [
+    { kind: 'own', slots: DIO_OWN_SLOTS },
+    { kind: 'enemy', slots: ['enemy', 'enemy2'] }
+  ];
+  for (const g of groups) {
+    for (const slot of g.slots) {
+      const m = state[slot];
+      const els = diorama.els.get(slot);
+      if (!m || m.state.hp <= 0 || !els) continue;
+      const b = els.box;
+      if (b && x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad) {
+        return { kind: g.kind, slot };
+      }
+      if (els.card.style.display !== 'none') {
+        const r = els.card.getBoundingClientRect();
+        if (x >= r.x && x <= r.right && y >= r.y && y <= r.bottom) return { kind: g.kind, slot };
+      }
     }
   }
-  if (!cands.length) return;
-  e.preventDefault();
-  e.stopPropagation();
-  let pick = cands[0];
-  if (cands.length > 1) {
-    // Overlapping squares: repeated taps on the same cluster cycle through it;
-    // the cycle resets as soon as the cluster composition changes.
-    const key = cands.map((c) => c.slot).join('|');
-    if (diorama.tapCycle.key === key) {
-      diorama.tapCycle.idx = (diorama.tapCycle.idx + 1) % cands.length;
-    } else {
-      diorama.tapCycle.key = key;
-      diorama.tapCycle.idx = 0;
-    }
-    pick = cands[diorama.tapCycle.idx];
-  } else {
-    diorama.tapCycle.key = '';
-  }
-  setPlayerTargetMech(pick.m);
+  return { kind: 'empty' };
 }
 
-// Fire pressed with no target selected: dim feedback + a brief centre toast.
-function dioramaFireDenied(now) {
-  if (now - diorama.lastDeniedAt < 900) return;
-  diorama.lastDeniedAt = now;
-  const t = document.getElementById('dio-toast');
-  if (!t) return;
-  t.classList.add('show');
-  clearTimeout(diorama._toastTimer);
-  diorama._toastTimer = setTimeout(() => t.classList.remove('show'), 950);
+function dioramaUpdateDragTarget(x, y) {
+  const drag = diorama.drag;
+  if (!drag) return;
+  const probe = dioramaGroundPoint(x, y, drag.y ?? 0) ?? dioramaGroundPoint(x, y, 0);
+  if (!probe) return;
+  const stack = dioramaLayerStackAt(probe.x, probe.z);
+  const li = Math.min(drag.layerPref, stack.length - 1);
+  const yPick = stack[li];
+  const pt = dioramaGroundPoint(x, y, yPick) ?? probe;
+  drag.x = pt.x;
+  drag.z = pt.z;
+  drag.y = yPick;
+  drag.layers = stack.length;
+  drag.layerIdx = li;
+  const nowT = performance.now();
+  if (nowT - drag.pathAt > 120 || Math.hypot(drag.x - drag.pathX, drag.z - drag.pathZ) > 2) {
+    drag.path = computeOrderPath(state[drag.slot], drag.x, drag.z, drag.y);
+    drag.valid = !!drag.path;
+    drag.pathAt = nowT;
+    drag.pathX = drag.x;
+    drag.pathZ = drag.z;
+  }
+}
+
+function onDioPointerDown(e) {
+  if (!dioramaActive()) return;
+  diorama.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (diorama.pointers.size === 2) {
+    // Second finger: whatever was in progress becomes a pinch zoom.
+    const pts = [...diorama.pointers.values()];
+    diorama.pinch = {
+      span: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+      dist: diorama.cam2.dist
+    };
+    diorama.gesture = null;
+    diorama.drag = null;
+    return;
+  }
+  if (diorama.pointers.size > 2) return;
+  e.preventDefault();
+  const hit = dioramaHitTest(e.clientX, e.clientY);
+  const grab = dioramaGroundPoint(e.clientX, e.clientY, 0);
+  diorama.gesture = {
+    id: e.pointerId, kind: hit.kind, slot: hit.slot ?? null,
+    x0: e.clientX, y0: e.clientY, moved: false,
+    grabX: grab?.x ?? 0, grabZ: grab?.z ?? 0,
+    stillX: e.clientX, stillY: e.clientY, stillAt: performance.now()
+  };
+  diorama.layer.setPointerCapture?.(e.pointerId);
+}
+
+function onDioPointerMove(e) {
+  if (!dioramaActive()) return;
+  const p = diorama.pointers.get(e.pointerId);
+  if (p) { p.x = e.clientX; p.y = e.clientY; }
+  if (diorama.pinch && diorama.pointers.size >= 2) {
+    const pts = [...diorama.pointers.values()];
+    const span = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (span > 8) {
+      diorama.cam2.dist = THREE.MathUtils.clamp(
+        diorama.pinch.dist * (diorama.pinch.span / span),
+        DIORAMA_VIEW.minDist, dioramaMaxDist()
+      );
+    }
+    return;
+  }
+  const g = diorama.gesture;
+  if (!g || g.id !== e.pointerId) return;
+  if (!g.moved && Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > DIO_TAP_SLOP) {
+    g.moved = true;
+    if (g.kind === 'own') {
+      diorama.drag = {
+        slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
+        path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9
+      };
+    }
+  }
+  if (!g.moved) return;
+  if (g.kind === 'own' && diorama.drag) {
+    dioramaUpdateDragTarget(e.clientX, e.clientY);
+    // Long-press while holding still cycles the vertical layer (bridges).
+    if (Math.hypot(e.clientX - g.stillX, e.clientY - g.stillY) > 6) {
+      g.stillX = e.clientX;
+      g.stillY = e.clientY;
+      g.stillAt = performance.now();
+    } else if (performance.now() - g.stillAt > DIO_LONGPRESS_MS) {
+      if ((diorama.drag.layers ?? 1) > 1) {
+        diorama.drag.layerPref = (diorama.drag.layerIdx + 1) % diorama.drag.layers;
+        dioramaUpdateDragTarget(e.clientX, e.clientY);
+      }
+      g.stillAt = performance.now();   // re-arm for the next cycle
+    }
+  } else {
+    // Camera pan: keep the grabbed ground point under the finger.
+    const cur = dioramaGroundPoint(e.clientX, e.clientY, 0);
+    if (cur) {
+      diorama.cam2.tx += g.grabX - cur.x;
+      diorama.cam2.tz += g.grabZ - cur.z;
+    }
+  }
+}
+
+function onDioPointerUp(e) {
+  diorama.pointers.delete(e.pointerId);
+  if (diorama.pointers.size < 2) diorama.pinch = null;
+  const g = diorama.gesture;
+  if (!g || g.id !== e.pointerId) return;
+  diorama.gesture = null;
+  if (!dioramaActive()) { diorama.drag = null; return; }
+  if (g.moved) {
+    const drag = diorama.drag;
+    if (g.kind === 'own' && drag && drag.valid && drag.path) {
+      issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+    }
+    diorama.drag = null;
+    return;
+  }
+  const nowT = performance.now();
+  if (g.kind === 'own') {
+    if (diorama.lastTapSlot === g.slot && nowT - diorama.lastTapAt < DIO_DOUBLE_MS) {
+      // Double-tap: full reset — cancels the move order AND the force lock.
+      clearUnitCommands(state[g.slot]);
+      diorama.lastTapAt = 0;
+    } else {
+      diorama.sel = g.slot;
+      diorama.lastTapSlot = g.slot;
+      diorama.lastTapAt = nowT;
+    }
+  } else if (g.kind === 'enemy') {
+    diorama.lastTapSlot = null;
+    const cmd = diorama.sel ? state[diorama.sel] : null;
+    const foe = state[g.slot];
+    if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
+      // Same enemy again = cancel the force lock; another enemy = re-lock.
+      cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
+    }
+  } else {
+    diorama.lastTapSlot = null;
+    diorama.sel = null;
+  }
+}
+
+function onDioPointerCancel(e) {
+  diorama.pointers.delete(e.pointerId);
+  if (diorama.pointers.size < 2) diorama.pinch = null;
+  if (diorama.gesture?.id === e.pointerId) diorama.gesture = null;
+  diorama.drag = null;
+}
+
+function onDioWheel(e) {
+  if (!dioramaActive()) return;
+  e.preventDefault();
+  diorama.cam2.dist = THREE.MathUtils.clamp(
+    diorama.cam2.dist * (1 + e.deltaY * 0.0011),
+    DIORAMA_VIEW.minDist, dioramaMaxDist()
+  );
 }
 
 const _dioP0 = { x: 0, y: 0, z: 0 };
@@ -10922,13 +11270,78 @@ function dioramaShotBlocked(fromMech, toMech) {
 }
 
 const _dioProj = new THREE.Vector3();
+// Gold command-state icons: "!" = executing a position order, eye = fully
+// autonomous. Marker version draws in local coords (anchored above the
+// square's top-right corner); the card version is a tiny inline SVG.
+function dioCmdIconMarkup(kind) {
+  if (kind === 'order') {
+    return '<rect x="-1.3" y="0" width="2.6" height="7" rx="1.2" fill="#ffd257"/>'
+      + '<circle cx="0" cy="9.6" r="1.5" fill="#ffd257"/>';
+  }
+  return '<path d="M -6 5 Q 0 -0.5 6 5 Q 0 10.5 -6 5 Z" fill="none" stroke="#ffd257" stroke-width="1.4"/>'
+    + '<circle cx="0" cy="5" r="1.8" fill="#ffd257"/>';
+}
+function dioCmdIconCardMarkup(kind) {
+  const inner = kind === 'order'
+    ? '<rect x="5.7" y="0.5" width="2.6" height="7" rx="1.2" fill="#ffd257"/><circle cx="7" cy="10" r="1.5" fill="#ffd257"/>'
+    : '<path d="M 1 5.5 Q 7 0.5 13 5.5 Q 7 10.5 1 5.5 Z" fill="none" stroke="#ffd257" stroke-width="1.3"/><circle cx="7" cy="5.5" r="1.7" fill="#ffd257"/>';
+  return `<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">${inner}</svg>`;
+}
+
+// Force-lock corner triangles for a subset of corners (split when two
+// commanders lock the same enemy).
+function dioCornerTriPath(bx, by, s, corners, gap = 4, tri = 7.5) {
+  const parts = [];
+  for (const [sx, sy] of corners) {
+    const ux = sx * 0.7071;
+    const uy = sy * 0.7071;
+    const cxr = sx < 0 ? bx : bx + s;
+    const cyr = sy < 0 ? by : by + s;
+    const tipX = cxr + ux * gap;
+    const tipY = cyr + uy * gap;
+    const baseX = tipX + ux * tri;
+    const baseY = tipY + uy * tri;
+    const px2 = -uy * tri * 0.55;
+    const py2 = ux * tri * 0.55;
+    parts.push(`M ${tipX.toFixed(1)} ${tipY.toFixed(1)} L ${(baseX + px2).toFixed(1)} ${(baseY + py2).toFixed(1)} L ${(baseX - px2).toFixed(1)} ${(baseY - py2).toFixed(1)} Z`);
+  }
+  return parts.join(' ');
+}
+
+// Project a horizontal world circle / a nav path into an SVG path string.
+function dioCircleSvgPath(cx, cz, y, R, segs = 24) {
+  let d = '';
+  for (let i = 0; i <= segs; i += 1) {
+    const a = (i / segs) * Math.PI * 2;
+    _dioProj.set(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R).project(camera);
+    if (_dioProj.z > 1) return '';
+    const px = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const py = (1 - _dioProj.y) / 2 * window.innerHeight;
+    d += `${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  return d + 'Z';
+}
+function dioPolylineSvgPath(points) {
+  let d = '';
+  for (const p of points) {
+    _dioProj.set(p.x, (p.f ?? p.y ?? 0) + 0.4, p.z).project(camera);
+    if (_dioProj.z > 1) continue;
+    const px = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const py = (1 - _dioProj.y) / 2 * window.innerHeight;
+    d += `${d ? 'L' : 'M'} ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  return d;
+}
+
 function updateDioramaHud() {
   if (!dioramaActive()) {
     if (diorama.layer) hideDioramaLayer();
-    if (hudRefs?.shootBtn) hudRefs.shootBtn.classList.remove('dio-no-target');
+    state.hud?.classList.remove('dio-cmd');
     return;
   }
   ensureDioramaLayer();
+  // Command mode hides every direct-control input (buttons + joystick).
+  state.hud?.classList.add('dio-cmd');
   // updateCamera() set position/quaternion this frame; compose the matrices
   // before projecting (same refresh the edge arrows do).
   camera.updateMatrixWorld();
@@ -11018,17 +11431,15 @@ function updateDioramaHud() {
     els.box = { x: bx, y: by, s };
     boxes.push(els.box);
     els.g.style.display = '';
-    // "Locked" = whoever the VIEWER's lock rides (in spectator the mirror
-    // makes that a team-A slot when watching team B — the old selectable
-    // gate hid the crosshair/tier marks there, e.g. spectating a sniper).
-    const locked = m === state.playerCurrentTarget && m !== viewer;
-    // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
-    // own rules — matches what a shot would actually do.
-    const blocked = viewerAlive && m !== viewer
-      && getTeamOf(m) !== viewerTeam && dioramaShotBlocked(viewer, m);
-    // Ghosted (no bullet line) markers stay clearly findable — the dash +
-    // NO SIGHT tag carry the signal, not heavy dimming (playtest round 2).
-    els.g.style.opacity = blocked ? '0.65' : '1';
+    // COMMAND MODE: the FORCE LOCKS drive the crosshair, one commander per
+    // color. (The NO SIGHT ghosting/dash treatment is retired — owner call.)
+    const lockedByP = !!state.player && state.player.cmdLock === m;
+    const lockedByA = !!state.ally && state.ally.cmdLock === m;
+    const locked = lockedByP || lockedByA;
+    els.g.style.opacity = '1';
+    const selected = diorama.sel === slot;
+    els.g.style.filter = selected ? `drop-shadow(0 0 5px ${meta.color})` : '';
+    els.card.style.boxShadow = selected ? `0 0 10px 1px ${meta.color}` : '';
     // Marker body: square for every unit, diamond when off-frame (owner
     // call — no scope circles). The rect doubles as the tap hit-area.
     const rectXf = offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '';
@@ -11038,7 +11449,6 @@ function updateDioramaHud() {
       r.setAttribute('y', by.toFixed(1));
       r.setAttribute('width', s.toFixed(1));
       r.setAttribute('height', s.toFixed(1));
-      r.setAttribute('stroke-dasharray', blocked ? '4 3' : '');
     }
     els.rectC.setAttribute('stroke', '#070b12');
     els.rect.setAttribute('stroke', meta.color);
@@ -11050,12 +11460,13 @@ function updateDioramaHud() {
     // square space and sharing the rect transform, so the whole crosshair
     // tilts along when the square becomes an edge diamond.
     let tier = 0;
-    if (locked && viewer && viewerAlive) {
-      const rd = viewer.unit?.rangeDamage ?? m.unit?.rangeDamage;
+    const locker = lockedByP ? state.player : (lockedByA ? state.ally : null);
+    if (locker && locker.state.hp > 0) {
+      const rd = locker.unit?.rangeDamage ?? m.unit?.rangeDamage;
       if (rd) {
         const distXZ = Math.hypot(
-          m.root.position.x - viewer.root.position.x,
-          m.root.position.z - viewer.root.position.z
+          m.root.position.x - locker.root.position.x,
+          m.root.position.z - locker.root.position.z
         );
         tier = distXZ >= rd.midDist ? 3 : distXZ >= rd.nearDist ? 2 : 1;
       }
@@ -11099,35 +11510,53 @@ function updateDioramaHud() {
     } else {
       els.pointer.style.display = 'none';
     }
-    if (locked) {
-      // Mini triangle crosshair: four inward-pointing marks at the CORNERS
-      // (clear of the tier ticks on the edge midpoints); shares the rect
-      // transform so it tilts with the edge diamond.
-      const gap = 4;
-      const tri = 7.5;
-      const parts = [];
-      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const ux = sx * 0.7071;
-        const uy = sy * 0.7071;
-        const cxr = sx < 0 ? bx : bx + s;
-        const cyr = sy < 0 ? by : by + s;
-        const tipX = cxr + ux * gap;
-        const tipY = cyr + uy * gap;
-        const baseX = tipX + ux * tri;
-        const baseY = tipY + uy * tri;
-        const px2 = -uy * tri * 0.55;
-        const py2 = ux * tri * 0.55;
-        parts.push(`M ${tipX.toFixed(1)} ${tipY.toFixed(1)} L ${(baseX + px2).toFixed(1)} ${(baseY + py2).toFixed(1)} L ${(baseX - px2).toFixed(1)} ${(baseY - py2).toFixed(1)} Z`);
-      }
-      els.tris.setAttribute('d', parts.join(' '));
+    // Force-lock crosshair: triangles in the COMMANDING unit's color; two
+    // commanders on the same enemy split the corners (blue TL/BR, green
+    // TR/BL). Shares the rect transform so it tilts with the edge diamond.
+    if (lockedByP) {
+      els.tris.setAttribute('d', dioCornerTriPath(bx, by, s,
+        lockedByA ? [[-1, -1], [1, 1]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]]));
       els.tris.setAttribute('transform', rectXf);
       els.tris.style.display = '';
     } else {
       els.tris.style.display = 'none';
     }
+    if (lockedByA) {
+      els.tris2.setAttribute('d', dioCornerTriPath(bx, by, s,
+        lockedByP ? [[1, -1], [-1, 1]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]]));
+      els.tris2.setAttribute('transform', rectXf);
+      els.tris2.style.display = '';
+    } else {
+      els.tris2.style.display = 'none';
+    }
+    // Command-state icon + standing destination ring (own slots only).
+    if (DIO_OWN_SLOTS.includes(slot)) {
+      const iconState = m.cmdMove ? 'order' : 'auto';
+      if (els.iconState !== iconState) {
+        els.iconState = iconState;
+        els.cmdIcon.innerHTML = dioCmdIconMarkup(iconState);
+      }
+      els.cmdIcon.setAttribute('transform',
+        `translate(${(bx + s - 2).toFixed(1)} ${(by - 13).toFixed(1)})`);
+      els.cmdIcon.style.display = '';
+      if (m.cmdMove) {
+        const ringD = dioCircleSvgPath(m.cmdMove.x, m.cmdMove.z, m.cmdMove.y + 0.3, DIORAMA_VIEW.cmdRadius, 20);
+        if (ringD) {
+          els.destRing.setAttribute('d', ringD);
+          els.destRing.style.display = '';
+        } else {
+          els.destRing.style.display = 'none';
+        }
+      } else {
+        els.destRing.style.display = 'none';
+      }
+    } else {
+      els.cmdIcon.style.display = 'none';
+      els.destRing.style.display = 'none';
+    }
     // Full annotation (leader line + info card) for EVERY fielded unit —
     // owner call, playtest round 2.
-    cards.push({ slot, els, m, cx, cy, blocked });
+    cards.push({ slot, els, m, cx, cy });
   }
   // Card layout: the two TEAMS never share an edge (owner call) — the
   // player's team claims the half its focus unit is in, enemies get the
@@ -11205,9 +11634,13 @@ function updateDioramaHud() {
     // its own status line under it.
     const maxHp = m.unit.hp ?? MAX_HP;
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
-    const statusText = c.blocked ? 'NO SIGHT' : '';
-    if (els.statusEl.textContent !== statusText) els.statusEl.textContent = statusText;
-    els.card.classList.toggle('dio-blocked', !!c.blocked);
+    // The old NO SIGHT status line now hosts the command icon (own units).
+    const cardIconState = DIO_OWN_SLOTS.includes(c.slot)
+      ? (m.cmdMove ? 'order' : 'auto') : 'none';
+    if (els.cardIconState !== cardIconState) {
+      els.cardIconState = cardIconState;
+      els.statusEl.innerHTML = cardIconState === 'none' ? '' : dioCmdIconCardMarkup(cardIconState);
+    }
     const lineEndX = side === 'left' ? cardX + cardW : cardX;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
     const lineY2 = (els.cardY + cardH / 2).toFixed(1);
@@ -11217,16 +11650,52 @@ function updateDioramaHud() {
       ln.setAttribute('y1', c.cy.toFixed(1));
       ln.setAttribute('x2', lineEndX.toFixed(1));
       ln.setAttribute('y2', lineY2);
-      // NO SIGHT: the leader line goes dotted along with its unit's square.
-      ln.setAttribute('stroke-dasharray', c.blocked ? '4 3' : '');
     }
   }
-  // Manual-fire affordance: no target selected -> half-transparent fire button.
-  if (hudRefs?.shootBtn) {
-    hudRefs.shootBtn.classList.toggle(
-      'dio-no-target',
-      !state.spectatorActive && !state.playerCurrentTarget
-    );
+  updateDioramaDragVisuals();
+}
+
+// Live move-order drag feedback: the deployment circle on the chosen layer
+// (red when unreachable), the dashed path preview, and a dotted drop line
+// when the layer is elevated (bridge decks).
+function updateDioramaDragVisuals() {
+  const de = diorama.dragEls;
+  if (!de) return;
+  const drag = diorama.drag;
+  if (!drag || !diorama.gesture?.moved) {
+    de.casing.style.display = 'none';
+    de.circle.style.display = 'none';
+    de.path.style.display = 'none';
+    de.drop.style.display = 'none';
+    return;
+  }
+  const color = drag.valid ? '#eef4ff' : '#ff4d5e';
+  const circleD = dioCircleSvgPath(drag.x, drag.z, drag.y + 0.3, DIORAMA_VIEW.cmdRadius, 28);
+  if (!circleD) return;
+  de.casing.setAttribute('d', circleD);
+  de.circle.setAttribute('d', circleD);
+  de.circle.setAttribute('stroke', color);
+  de.circle.setAttribute('fill', drag.valid ? 'rgba(238, 244, 255, 0.07)' : 'rgba(255, 77, 94, 0.10)');
+  de.casing.style.display = '';
+  de.circle.style.display = '';
+  if (drag.valid && drag.path) {
+    de.path.setAttribute('d', dioPolylineSvgPath(drag.path));
+    de.path.setAttribute('stroke', color);
+    de.path.style.display = '';
+  } else {
+    de.path.style.display = 'none';
+  }
+  if (drag.y > 1) {
+    _dioProj.set(drag.x, drag.y + 0.3, drag.z).project(camera);
+    const x1 = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const y1 = (1 - _dioProj.y) / 2 * window.innerHeight;
+    _dioProj.set(drag.x, 0.2, drag.z).project(camera);
+    const x2 = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const y2 = (1 - _dioProj.y) / 2 * window.innerHeight;
+    de.drop.setAttribute('d', `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    de.drop.style.display = '';
+  } else {
+    de.drop.style.display = 'none';
   }
 }
 
@@ -15190,22 +15659,32 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickSniperCharge(m, now, (m === state.player && !state.spectatorActive) ? playerSprintHeld : false);
+        tickSniperCharge(m, now,
+          (m === state.player && !state.spectatorActive && !dioramaActive()) ? playerSprintHeld : false);
       });
-      if (state.spectatorActive) {
-        // Spectator: a BOT drives the player's slot with the same driver and
-        // LoS-aware target pick as every other bot. Combat inputs are inert —
-        // clear the one-shot taps so they can't leak into the next match.
+      // COMMAND MODE: the diorama is a strategic layer — a bot drives the
+      // player's slot exactly like spectator mode, with the force-lock and
+      // move-order overrides on team A. (The Range keeps direct control.)
+      const cmdMode = dioramaActive() && state.mapKey !== 'range';
+      if (cmdMode) dioramaCommandTick();
+      if (state.spectatorActive || cmdMode) {
+        // A BOT drives the player's slot with the same driver and LoS-aware
+        // target pick as every other bot. Combat inputs are inert — clear
+        // the one-shot taps so they can't leak into the next match.
         input.shootTap = false;
         input.stepTap = false;
         input.jump = false;
-        runBotAIForMech(state.player, pickBotTargetOf(state.player), now);
+        runBotAIForMech(state.player,
+          cmdMode ? commandTargetOf(state.player) : pickBotTargetOf(state.player), now);
+        if (cmdMode) applyMoveOrder(state.player, now);
       } else {
         updatePlayer(now);
       }
       if (state.mode === '2v2') {
         runBotAIForMech(state.enemy, pickBotTargetOf(state.enemy), now);
-        runBotAIForMech(state.ally, pickBotTargetOf(state.ally), now);
+        runBotAIForMech(state.ally,
+          cmdMode ? commandTargetOf(state.ally) : pickBotTargetOf(state.ally), now);
+        if (cmdMode) applyMoveOrder(state.ally, now);
         runBotAIForMech(state.enemy2, pickBotTargetOf(state.enemy2), now);
       } else if (state.mapKey !== 'range') {
         // Range dummies have no AI — tickRange moves the sliders instead.

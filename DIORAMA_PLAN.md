@@ -171,12 +171,28 @@ the 2026-08-20 read of `Demo_0.7.5_Test-Fields` — expect drift, re-grep first.
 
 ---
 
-## Phase 2 — COMMAND MODE (design converged 2026-08-21, pre-implementation)
+## Phase 2 — COMMAND MODE (IMPLEMENTED 2026-08-21)
 
 The diorama becomes a STRATEGIC PLANNING mode. The direct-control diorama
 variant is RETIRED: V / the pause-menu toggle switches classic chase <->
 command mode. Offline only for now; the command layer is client-side bot
 logic only — shared/src/sim/ai.js stays untouched until an online phase.
+
+Status: implemented and headless-verified 2026-08-21. Code map: command
+layer + free camera + gesture controller live in the DIORAMA section of
+client/src/main.js (commandTargetOf / applyMoveOrder / dioramaCommandTick,
+updateDioramaCamera + dioramaGroundPoint, onDioPointer* + onDioWheel);
+animate()'s offline branch drives team A bots with the overrides; exiting
+the mode clears every standing command and returns the blue unit to the
+player (owner reminder honored). Move orders steer via a post-bot velocity
+override (reflex layers checked via botState/botCoverPath/step/hit-stun),
+so updateEnemy keeps aiming/firing — no bot refactor, shared ai.js
+untouched. anchorMs runs on the wall clock. Debug hooks:
+__diorama.debug.{order, clear, layerStackAt, groundPoint}.
+Known notes: headless SwiftShader runs the sim in slow motion at big
+viewports (dt-capped low fps — an automation artifact, not a game bug);
+the Range map keeps direct control; pinch zoom and the long-press layer
+switch are implemented but still need a hands-on touch test.
 
 ### Core loop
 - Every unit is bot-driven (runBotAIForMech drives the player slot exactly
