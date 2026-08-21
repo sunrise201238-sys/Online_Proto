@@ -430,8 +430,15 @@ layer (commandSlots separate from botSlots, per-player viewMode),
 
 1. Bot-fill teammate commandable online? **NO** — online command drives
    the player's OWN unit only (DIO_OWN_SLOTS online = player).
-2. Human teammate sees your orders (rings/locks)? **PENDING** — owner
-   asked for a deeper explanation incl. classic-mode teammates.
+2. Human teammate sees your orders? **YES, both modes** (owner
+   2026-08-21). A COMMAND teammate gets the full annotation (destination
+   ring, path icons, lock triangles — the diorama layer already renders
+   ally command state per slot, near-zero new work). A CLASSIC teammate
+   gets ONLY the force-lock share: the command player's colored TRIANGLE
+   lock indicator rendered on the enemy in the classic view (info share;
+   no destination ring/path for classic viewers). Data rides the
+   team-scoped snapshot either way — this is purely a per-mode render
+   rule.
 3. Opponent's chosen mode (classic|command) hidden? **YES** — viewMode
    must be scoped team-only in lobby:config and never inferable from the
    match protocol (behavior will still hint it; accepted).
