@@ -9665,11 +9665,6 @@ function showGuidePopup() {
             <li>Double-tap your unit to cancel all its orders.</li>
             <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist or Q / E to rotate.</li>
           </ul>
-          <div class="guide-list-gap"></div>
-          <ul>
-            <li>Ordered travel runs on normal stamina: the unit dashes only from 125 boost down to a 50 reserve, walking in between.</li>
-            <li>Online, enemies never see your mode pick or your stamina — and teammates see your orders on their own screen.</li>
-          </ul>
         </div>
       </div>
     </div>`;
