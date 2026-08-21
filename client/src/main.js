@@ -10728,16 +10728,48 @@ function dioramaCommandTick() {
   if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
 }
 
-// Vertical layer stack at a point: ground + every walkable surface top there,
-// ascending. Long-press during a drag cycles through these (bridge decks).
+// True when the nav grid has a walkable node near this point whose floor
+// sits at the given layer height — i.e. a unit can actually STAND there on
+// that layer. Scans the 3x3 cell ring (~6u, matching computeOrderPath's
+// endpoint tolerance) so taps hugging a walkable edge still count.
+function dioramaLayerStandable(x, z, y) {
+  const g = offlineNavGrid;
+  if (!g) return true;   // no grid yet: keep the permissive old behavior
+  const c0 = Math.floor((x - g.minX) / g.cell);
+  const r0 = Math.floor((z - g.minZ) / g.cell);
+  for (let dr = -1; dr <= 1; dr += 1) {
+    for (let dc = -1; dc <= 1; dc += 1) {
+      const c = c0 + dc;
+      const r = r0 + dr;
+      if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) continue;
+      const i = r * g.cols + c;
+      for (let l = 0; l < g.layers; l += 1) {
+        const node = l * g.n + i;
+        if (g.walk[node] && Math.abs(g.floor[node] - y) <= 2) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Vertical layer stack at a point: every STANDABLE floor there, ascending
+// (owner 2.1e: layers nobody can stand on — platform undersides, slope
+// voids — used to clutter the stack as a bogus first pick and forced the
+// player to hold-cycle past them). Long-press during a drag still cycles.
 function dioramaLayerStackAt(x, z) {
-  const layers = [0];
+  const layers = [];
+  if (dioramaLayerStandable(x, z, 0)) layers.push(0);
   for (const s of arenaSurfaces) {
     if (x >= s.minX && x <= s.maxX && z >= s.minZ && z <= s.maxZ) {
       const top = s.heightAt(x, z);
-      if (layers.every((y) => Math.abs(y - top) > 1.5)) layers.push(top);
+      if (layers.every((y) => Math.abs(y - top) > 1.5) && dioramaLayerStandable(x, z, top)) {
+        layers.push(top);
+      }
     }
   }
+  // Nothing standable at all: keep ground so the preview/deny path still
+  // has a layer to work with (the order will be rejected downstream).
+  if (!layers.length) layers.push(0);
   return layers.sort((a, b) => a - b);
 }
 
@@ -11218,6 +11250,30 @@ function dioramaUpdateDragTarget(x, y) {
     drag.pathAt = nowT;
     drag.pathX = drag.x;
     drag.pathZ = drag.z;
+    // Auto-advance (owner 2.1e): when the DEFAULT layer pick can't be
+    // reached, silently jump to the first (lowest) layer that pathfinds
+    // instead of making the player hold-cycle to it. A layer the player
+    // picked BY HAND is respected — an explicit pick that fails keeps
+    // showing the red ring / deny as before.
+    if (!drag.valid && !drag.userLayer && stack.length > 1) {
+      for (let k = 0; k < stack.length; k += 1) {
+        if (k === li) continue;
+        const alt = dioramaGroundPoint(x, y, stack[k]) ?? probe;
+        const path = computeOrderPath(state[drag.slot], alt.x, alt.z, stack[k]);
+        if (path) {
+          drag.x = alt.x;
+          drag.z = alt.z;
+          drag.y = stack[k];
+          drag.layerIdx = k;
+          drag.layerPref = k;
+          drag.path = path;
+          drag.valid = true;
+          drag.pathX = alt.x;
+          drag.pathZ = alt.z;
+          break;
+        }
+      }
+    }
   }
 }
 
@@ -11263,7 +11319,8 @@ function onDioPointerDown(e) {
     diorama.gesture.tapPreview = true;
     diorama.drag = {
       slot: diorama.sel, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
-      path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: true
+      path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: true,
+      userLayer: false   // becomes true once the player hold-cycles a layer
     };
     dioramaUpdateDragTarget(e.clientX, e.clientY);
   }
@@ -11308,7 +11365,8 @@ function onDioPointerMove(e) {
     } else if (g.kind === 'own') {
       diorama.drag = {
         slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
-        path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false
+        path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
+        userLayer: false   // becomes true once the player hold-cycles a layer
       };
     }
   }
@@ -11428,6 +11486,7 @@ function dioramaGestureFrame() {
   } else if (performance.now() - g.stillAt > DIO_LONGPRESS_MS) {
     if ((drag.layers ?? 1) > 1) {
       drag.layerPref = (drag.layerIdx + 1) % drag.layers;
+      drag.userLayer = true;   // hand-picked: auto-advance backs off
       dioramaUpdateDragTarget(p.x, p.y);
     }
     g.stillAt = performance.now();   // re-arm for the next cycle

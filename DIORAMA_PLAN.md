@@ -351,6 +351,16 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1e layer picking (owner, 2026-08-21):** the vertical layer stack
+  lists only STANDABLE floors — `dioramaLayerStandable` checks the nav
+  grid (3x3 cell ring, floor within 2u) so platform undersides and slope
+  voids no longer clutter the stack as a bogus first pick (the Scrapyard
+  complaint: players had to hold-cycle past an unavailable ground
+  layer). Safety net on top: when the default pick still can't pathfind,
+  the preview AUTO-ADVANCES to the first (lowest) reachable layer —
+  unless the player hold-cycled a layer BY HAND (`drag.userLayer`),
+  which is respected and shows the red ring/deny as before. Bridges
+  keep [ground, deck] with ground default; hold-to-cycle unchanged.
 - **2.1d dual-lock crosshair (owner, 2026-08-21):** when BOTH commanders
   force-lock the same enemy, the corners no longer split — the FIRST
   locker keeps the full X (corner) triangle layout and the one who
