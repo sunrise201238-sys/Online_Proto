@@ -10569,6 +10569,22 @@ function applyDioramaDressing() {
   ambient.intensity = 0.92;
   key.color.setHex(0xfff0d2);
   key.intensity = 1.45;
+  // Per-map grade correction (owner 2.1g): the warm default cast made the
+  // pale Lobby/Airport floors read yellow — those maps keep their CLASSIC
+  // light colors (applyMapAmbience values) so the command-mode floor tone
+  // matches what the player knows; everything else about the diorama grade
+  // (background, fog push-out, camera planes) stays.
+  if (state.mapKey === 'lobby') {
+    ambient.color.setHex(0xd4e2ff);
+    ambient.intensity = 0.95;
+    key.color.setHex(0xeaf2ff);
+    key.intensity = 1.4;
+  } else if (state.mapKey === 'airport') {
+    ambient.color.setHex(0xe8f0fa);
+    ambient.intensity = 1.0;
+    key.color.setHex(0xffffff);
+    key.intensity = 1.35;
+  }
   if (diorama.savedFar == null) diorama.savedFar = camera.far;
   if (diorama.savedNear == null) diorama.savedNear = camera.near;
   camera.far = 1600;
@@ -15104,7 +15120,11 @@ function buildAirportArena() {
   // "invisible wall". With 0, only units below the top collide with the side.
   const plateauBody = addBlockingBox({ x: 0, y: (PLATEAU_Y - 0.3) / 2, z: 0, sx: 273.6, sy: PLATEAU_Y - 0.3, sz: 79.6, material: steelMat.clone(), topBuffer: 0 });
   registerWallFade(plateauBody, { minX: -136.8, maxX: 136.8, minY: 0, maxY: PLATEAU_Y, minZ: -39.8, maxZ: 39.8 });
-  addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: tileMat, thickness: 0.6 });
+  // The plateau deck wears its OWN slate-grey tile (owner 2.1g, universal —
+  // classic AND command): sharing the ground's near-white tileMat made the
+  // two height levels indistinguishable at a glance.
+  const plateauTile = new THREE.MeshStandardMaterial({ color: 0xc2ccd8, roughness: 0.4, metalness: 0.12 });
+  addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: plateauTile, thickness: 0.6 });
   // Yellow edge stripes so the height change reads at a glance.
   for (const ez of [-39.2, 39.2]) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(272, 0.15, 1.2), signYellow);

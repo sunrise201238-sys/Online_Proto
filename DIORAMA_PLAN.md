@@ -351,6 +351,15 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1g floor tones (owner, 2026-08-21):** the diorama's warm default
+  grade made the pale Lobby/Airport floors read YELLOW — those two maps
+  now keep their classic `applyMapAmbience` light colors inside
+  `applyDioramaDressing` (background/fog/camera handling unchanged), so
+  the command-mode floor tone matches classic. Separately (UNIVERSAL —
+  classic and command alike): the Airport plateau deck wears its own
+  slate-grey tile (`plateauTile` 0xc2ccd8) instead of sharing the
+  ground's near-white `tileMat`, so the two height levels read apart at
+  a glance.
 - **2.1f airborne de-clutter (owner, 2026-08-21):** on Factory, Lobby,
   Station, Airport and Flashpoint the tall/long airborne dressing is
   HIDDEN while command mode stands and returns in classic — both
