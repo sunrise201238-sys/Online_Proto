@@ -11143,52 +11143,44 @@ function updateDioramaHud() {
     else if (diorama.teamSide === 'right' && own.cx < W / 2 - margin) diorama.teamSide = 'left';
   }
   const ownSide = diorama.teamSide ?? 'left';
-  const placedRects = [];
-  const cardStep = cardH + 10;
+  // Same-side cards place TOP-TO-BOTTOM in their units' screen order, and
+  // conflicts only ever push DOWN — so the vertical card order always
+  // matches the units' order and leader lines on one side can never cross
+  // (owner call: swap the cards instead of drawing an X).
+  const bySide = { left: [], right: [] };
   for (const c of cards) {
-    const side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
+    c.side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
+    bySide[c.side].push(c);
+  }
+  const orderedCards = [];
+  for (const side of ['left', 'right']) {
+    const list = bySide[side].sort((a, b) => a.cy - b.cy);
     // Cards dock at the true screen edges — never float over the field.
     const cardX = side === 'left' ? 10 : W - 10 - cardW;
     const maxY = Math.max(64, (side === 'left'
       ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 64)
       : H - 64) - cardH);
-    const desired = THREE.MathUtils.clamp(c.cy - cardH / 2, 56, maxY);
-    const overlapsSomething = (y) => {
-      const rx = cardX - 8;
-      const ry = y - 8;
-      const rw = cardW + 16;
-      const rh = cardH + 16;
-      for (const b of boxes) {
-        if (rx < b.x + b.s && rx + rw > b.x && ry < b.y + b.s && ry + rh > b.y) return true;
-      }
-      for (const p of placedRects) {
-        if (cardX < p.x + cardW + 10 && cardX + cardW + 10 > p.x
-          && y < p.y + cardStep && y + cardStep > p.y) return true;
-      }
-      return false;
-    };
-    let want = null;
-    for (const off of [0, -cardStep, cardStep, -cardStep * 2, cardStep * 2, -cardStep * 3, cardStep * 3]) {
-      const y = THREE.MathUtils.clamp(desired + off, 56, maxY);
-      if (!overlapsSomething(y)) { want = y; break; }
-    }
-    if (want == null) {
-      // No clean slot (tiny screens): stack under the lowest same-side card —
-      // overflowing the floor beats hiding a card under another one — and
-      // still hop past any marker square sitting in the fallback spot.
-      let low = desired;
-      for (const p of placedRects) {
-        if (Math.abs(p.x - cardX) < cardW) low = Math.max(low, p.y + cardStep);
-      }
-      for (let i = 0; i < 4; i += 1) {
+    let prevBottom = -Infinity;
+    for (const c of list) {
+      let want = THREE.MathUtils.clamp(c.cy - cardH / 2, 56, maxY);
+      want = Math.max(want, prevBottom + 10);
+      // Hop past marker squares — downward only, preserving the order.
+      for (let i = 0; i < 6; i += 1) {
         const hit = boxes.find((b) => cardX - 8 < b.x + b.s && cardX + cardW + 8 > b.x
-          && low - 8 < b.y + b.s && low + cardH + 8 > b.y);
+          && want - 8 < b.y + b.s && want + cardH + 8 > b.y);
         if (!hit) break;
-        low = hit.y + hit.s + 10;
+        want = Math.max(hit.y + hit.s + 10, prevBottom + 10);
       }
-      want = low;
+      prevBottom = want + cardH;
+      c.want = want;
+      c.cardX = cardX;
+      orderedCards.push(c);
     }
-    placedRects.push({ x: cardX, y: want });
+  }
+  for (const c of orderedCards) {
+    const side = c.side;
+    const cardX = c.cardX;
+    const want = c.want;
     const els = c.els;
     els.cardY = els.cardY == null ? want : els.cardY + (want - els.cardY) * 0.25;
     els.card.style.display = '';
