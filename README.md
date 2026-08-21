@@ -12,6 +12,8 @@ Two main modes, each playable **1v1 or 2v2**, offline and online:
 - **Trio** — three-unit stock: every slot (human or bot) fields an **ordered roster of three units**, repeats allowed. When a unit dies, the slot's next unit respawns at its original spawn point with the standard 3 s spawn immunity; the killer keeps position / HP / boost — no kill reward. A team loses when every roster on its side is spent. Each fighter's remaining units show as a row of small weapon renders under their side's HP bars (one line per team member; Duel shows its single unit the same way), and each Trio line's currently fielded weapon renders its silhouette in gold.
 - **Spectating (2v2, both modes)**: if you're out for good while your ally fights on, the camera follows the ally with your own-unit visual kit (through-wall X-ray silhouette); the lock reticle stays up and mirrors the ally's actual target (the TARGET button goes inert).
 
+Orthogonal to all of the above, every player also picks a **view mode** — **Classic** (the chase camera you pilot directly) or **Command** (a commander's diorama view where your unit fights on its own bot brain and you give it orders). See the **Command mode** section below.
+
 ### Offline
 - **1v1**: you vs one enemy bot.
 - **2v2**: you + an ally bot vs two enemy bots. Friendly fire is off between teammates.
@@ -25,6 +27,7 @@ Two main modes, each playable **1v1 or 2v2**, offline and online:
 - **2v2**: the host presses **Start Match** when ready; empty player slots fill with bots. Up to four humans can play (any split between teams); bots fill any remaining slots.
 - **Bot unit selection**: in the lobby, the host can tap any bot slot to pick which unit that bot plays — in Trio, its three units in order (default: three copies of the slot's usual unit). Untouched slots fall back to a per-slot default (2v2 rooms open as M4 / M1014 / PSG1 / evo3). A human joining the slot always overrides the bot.
 - **Trio queue room**: every slot's roster is shown in three lines and updates live as picks land.
+- **View mode**: each player picks Classic or Command in the queue room; the pick is final once the match starts and is never shown to the other team (teammates see it as a gold **[CMD]** tag on the roster line). Details in the Command mode section.
 - **Host migration**: if the host leaves in the lobby or at the end menu, the longest-waiting player is promoted to host (their unit picks carry over; they re-choose mode and map).
 - Multi-lobby — when an existing lobby is full or running, new joiners spawn their own lobby and become host.
 - Team swap in 2v2: any non-host player can `Join` an empty slot to switch teams (e.g. two humans want to co-op on one side against two bots).
@@ -35,6 +38,32 @@ Both offline and online pickers carry them:
 
 - Every unit grid has a gray **Random** card (question-mark thumbnail): it rolls a unit the roster being built doesn't already contain (different players can still land on the same unit). The map grid's Random skips **Shooting Range** and **Plain Field**.
 - Unit grids in a multi-pick flow also carry a golden **All Random** card: one confirm fills every remaining unit slot of the current flow at once and advances it (offline Trio: the rest of your roster, then each bot's as its picks come up; online: the rest of your roster). The map picker deliberately has no All Random.
+
+## Command mode
+
+The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama overview** of the whole map where the units fight on the standard bot brain and you play the commander — observe, select, order. The picker is a Classic / Command chip in the menus; like Duel / 1v1 the choice is session-only — every site open starts Classic. Offline, `V` or the pause menu also toggles it mid-match, and solo 2v2 play commands **both** of team one's units; online the pick happens in the queue room, is final once the match starts, and commands **your own unit only**.
+
+**Orders** — two kinds, layered on top of the bot rather than replacing it:
+
+- **Move order** — tap your unit (selection glow), then tap anywhere on the map; or drag from the unit and release. Where floors stack (a bridge deck over ground), **hold** the tap to cycle the vertical layer — the stack lists only standable floors, and the preview auto-picks the lowest reachable one. The unit pathfinds to the spot, **fighting along the way but never abandoning the destination**; on arrival it holds the area in an Engage-style orbit anchored on a **radius-12 ring** for **20 s**, then returns to full autonomy. An unreachable spot draws a red **"Area is not available"** note at the tap and keeps your selection for an immediate retry.
+- **Force lock** — with your unit selected, tap an enemy: the unit locks that target until **either party dies**, then falls back to its own target-finding. The pinned enemy wears corner **triangles in the commanding unit's color** (the X layout; when two allied commanders pin the same enemy, the later lock wears the **+** edge-midpoint layout instead of splitting corners). Tapping the same enemy again cancels the lock.
+- One command per selection — the glow drops as soon as an order lands. **Double-tap** your unit to clear both orders at once; a slow re-tap just deselects.
+- **Reflexes always preempt orders**: Defense escapes, the anti-sniper dodge, cover reload, hit-stun and the rest interrupt exactly as in autonomous play, and the route replans from wherever the unit ends up.
+
+**Commanded travel dashes on the normal stamina economy** — no speed cheat. Dash segments are *latched*: a segment only starts once boost reaches **125** (or the unit's cap if lower), spends down to a **50-boost reserve floor**, then the unit walks until the gauge re-arms. Cap, drain and regen are the human values throughout; combat reflexes keep their own funding rules (Defense may still spend through the floor to survive).
+
+**Status icons** — gold, on both the unit's marker and its info card: **`!`** while a move order stands (en route plus the 20 s anchor), an **eye** while force-locking (pairing with the colored triangles on the enemy); both side by side when both are active, no icon when the unit is autonomous.
+
+**Camera & HUD** — free camera: drag empty ground to pan, pinch / wheel to zoom, `Q`/`E` / right-mouse drag / two-finger twist to rotate about the screen centre; the tilt-shift blur keeps the miniature look with a clear pocket around every unit. Info cards dock in fixed corners — your team bottom-left, enemies bottom-right — each carrying HP and a **stamina bar** (the enemy's stamina bar is hidden online). The joystick and action buttons are gone: fire / dodge / jump / sprint are bot decisions. On Factory, Lobby, Station, Airport and Flashpoint the tall airborne dressing (pipes, trusses, signage, ceiling grids) hides while command mode stands and returns in classic — visual only, nothing collidable.
+
+### Command mode online
+
+- **Queue-room pick, hidden from opponents.** The Classic / Command chip sits beside your slot in the waiting room; the pick locks when the match starts (no mid-match toggle online) and is never sent to the other team — only teammates see it, as the gold **[CMD]** roster tag. Behavior will still hint it; accepted.
+- **Your unit only.** A bot-filled teammate slot stays autonomous — online command never drives allies.
+- **Server-authoritative orders.** The commander's client sends dedicated order messages; the server re-validates each one against the same pathfind checks (with a 500 ms per-player rate limit) and answers with an ack the selection glow waits for. Commander clients skip movement prediction entirely — the unit is server-driven like any bot, and command timers run on the server clock.
+- **Teammate share (2v2).** A command teammate sees your full annotations (destination ring, icons, lock triangles) in their own diorama. A **classic** teammate gets an in-world render: a green ground ring standing at your unit's ordered destination, plus your lock triangles framing just outside their own crosshair when they face the pinned enemy. Both indicators die with the commander's unit.
+- **Information hiding.** Snapshots are filtered per team: the enemy's boost value, standing orders and bot-intent state never reach your client. Boost-inference tells (overheat, sprint-lock, thruster effects) deliberately stay visible. Spectators watch in classic view with no command overlays.
+- **Disconnects.** 1v1 keeps the instant forfeit; in 2v2 a disconnected commander's orders clear and the unit fights on as a plain bot.
 
 ## Units
 
@@ -235,6 +264,7 @@ One bot brain drives every bot — all maps, all modes, offline and online (the 
 |---|---|
 | **Mobile** | On-screen joystick + buttons |
 | **PC** | `WASD` move · `J` fire · `K` sprint · `L` dodge · `Space` jump · `U` switch target (2v2) |
+| **Command mode** | Tap unit → tap map = move order (hold to pick the floor) · drag from unit = move order · tap enemy = force lock · double-tap unit = clear · drag pan · pinch / wheel zoom · `Q`/`E` / right-drag / two-finger twist rotate · `V` toggle (offline) |
 
 Double-tap `K` (or the sprint button) to lock sprint. The lock releases only after the stick/keys stay **neutral for a sustained 0.18 s** — flipping direction through the joystick center (left→right) or swapping movement keys keeps the locked sprint alive; letting go still stops it almost instantly. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
 
@@ -260,6 +290,7 @@ Nine arenas: Plain Field, Streets, Factory, Scrapyard, Square, Lobby, Station, F
 - `shared/` — pure-JS game logic that the server (and the online prediction layer in the client) consumes. State, physics, AI, projectile system.
 - `render.yaml` — Render blueprint (free-tier deploy of both services).
 - `PLAN.md` — implementation history / phased roadmap.
+- `DIORAMA_PLAN.md` — design record for the diorama / command mode (offline phases and the online migration).
 
 ## Local development
 
@@ -301,6 +332,8 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 - **Universal pathfinder.** Maze is route-first: a nav grid is derived from each map's collision data (4-unit cells, A* plus a firing-position search), with jump-links bridging separated walk islands (e.g. Station's raised platforms) so bots climb instead of grinding walls. The old heuristic wall-following was retired once the grid covered every map; no-route ticks now run a minimal steer with a stuck-memory bias, re-planned on every stall signal. Cells are graded by how much room a body actually has, and A* pays extra to enter a tight one — a cell qualifies as walkable the moment the body just fits, so without that price routes would hug walls with zero margin and the follower's normal drift would rub along them. It's a price, never a ban: a genuinely narrow chokepoint costs more and still gets used. Planned routes are then **smoothed into diagonals** where it's provably safe: a run of grid legs collapses into one straight leg only when a swept corridor test passes — every ~1-unit sample on a walkable same-floor cell and clear of all obstacles by the wide-clearance margin. Doorways, ramps, belt climbs, jump-links and clutter alleys fail that test by design and keep their grid legs, so the clearance tax's route decisions survive smoothing; open-field staircases become the diagonal you'd expect. Bots hold a per-weapon range band centered on their lock range (sweet spot ±7) — one rule for every weapon; in 2v2 the band derives from the compressed 2v2 lock value instead (see Weapons).
 - **Stamina economy** is shared by humans and bots — same cap (250), drain (1.1/tick), regen (4.59/tick), and empty-recovery lockout. Bot decisions layer a **strategic reserve (250 boost — the full cap)** on top: travel spending (sprint dispatch, pursuit, route jumps) never voluntarily digs below it, so bots only start travel sprints from a topped-up tank. Two survival exemptions spend through the reserve — Defense escapes under live fire (down to the hard floor of 8) and the anti-glint dodge (gated only by the unit's raw step cost — 48 by default; step cost/duration/cooldown/distance are per-unit tunable like the jump family). The reserve is purely a decision threshold; the mechanics underneath stay human-identical.
 - **Friendly fire** in 2v2 is off — bullets pass through teammates.
+- **Per-team snapshot filtering (2026-08-21).** The server builds each snapshot in two team variants (plus a spectator view) and emits per socket: enemy fighters ship with the boost value redacted and every bot-intent field stripped, and each team's variant carries only its **own** commanders' standing orders for teammate rendering. Command state lives in a side-table off the fighter objects, so it cannot leak into a snapshot by construction.
+- **Command layer (shared).** The order validation, latched dash travel, anchor orbit and force-lock rules live once in `shared/src/sim/command.js` with their tunables in `shared/src/sim/constants.js` (`CMD_*`) — the offline client and the server authority read the same source, and the client uses the same pathfind checks for its instant order preview/deny. Orders travel on dedicated messages (`order:move` / `order:lock` / `order:clear`) that the server re-validates and acks, rate-limited to one per 500 ms per player.
 - **Map collision data** for the online server is auto-extracted from offline at build time. Visual mesh is always rendered by the offline arena-build code on the client.
 - **Pre-game loading.** Every unit visible in a pick (offline pickers) or in the lobby config (online queue room) starts its sprite-art downloads immediately — menu dead time absorbs the network wait — and GPU uploads are drip-fed one texture per frame. At match load, each Trio slot's 2nd/3rd roster units are additionally pre-built as complete (hidden) mechs, so a mid-match respawn is a pure swap-in: no construction, no decode, no upload during the fight.
 - **Bullets vs decks and ramps** (2026-08-15, humans and bots alike). A walkable surface stops any round that **crosses** it — a shot fired under a bridge deck stays under it, and one fired into a slope dies on the slope. This is now an exact test: the segment is clipped to the surface's footprint and its height compared against the surface's at the two clipped ends, which is complete because both vary linearly along the ray. It replaced an 8-sample sign-flip walk that was blind to any crossing falling between samples — and a round covers ~34 units in a single tick at 2000 u/s, so fast shots regularly passed straight through the Streets bridge slope and hit whoever stood on it (the bot's fire gate, asking the same question, cleared those shots too). Leak rate scaled with projectile speed — over one fixed set of shooter/target pairs, 100 leaks at 300 u/s, 588 at 900, 931 at 2000 — so the fastest rounds in the roster were the worst offenders. Surfaces are still judged one at a time over their own footprint, so a level shot passing OVER a sidewalk and UNDER the bridge deck cannot "flip" across two unrelated slabs.
@@ -308,4 +341,4 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 
 ## Status
 
-Prototype. Phases 0–4 from `PLAN.md` are landed (boot, sim extraction, naive networking, prediction & interpolation, robustness). 2v2 mode and the Duel / Trio main-mode split (Trio = three-unit stock rosters with in-place respawns) have been added on top of the original 1v1 scope, both offline and online.
+Prototype. Phases 0–4 from `PLAN.md` are landed (boot, sim extraction, naive networking, prediction & interpolation, robustness). 2v2 mode and the Duel / Trio main-mode split (Trio = three-unit stock rosters with in-place respawns) have been added on top of the original 1v1 scope, both offline and online. The Command view mode (see its section above) is playable offline and online per `DIORAMA_PLAN.md`.

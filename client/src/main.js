@@ -9655,6 +9655,21 @@ function showGuidePopup() {
             <li><strong>Character can't be hit during a dodge.</strong></li>
             <li>Sniper has a forced aim time. Sprint can cancel the aim and fire faster (costs stamina).</li>
           </ul>
+
+          <h4>Command Mode</h4>
+          <ul>
+            <li>Pick <strong>Classic</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
+            <li>In Command, your unit fights on its own — you give orders from a tabletop view.</li>
+            <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
+            <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
+            <li>Double-tap your unit to cancel all its orders.</li>
+            <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist or Q / E to rotate.</li>
+          </ul>
+          <div class="guide-list-gap"></div>
+          <ul>
+            <li>Ordered travel runs on normal stamina: the unit dashes only from 125 boost down to a 50 reserve, walking in between.</li>
+            <li>Online, enemies never see your mode pick or your stamina — and teammates see your orders on their own screen.</li>
+          </ul>
         </div>
       </div>
     </div>`;
