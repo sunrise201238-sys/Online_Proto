@@ -470,10 +470,14 @@ Hiding scope, made precise (implementation rule):
 - HIDDEN from opponents: boost VALUE, cmdMove (destination/path/phase/
   latch) and every cmd-layer field; bot intent fields (botXxx) stripped
   for everyone as hygiene. viewMode scoped team-only in lobby:config.
-- INHERENTLY VISIBLE (not hidden): targetId/redLock — a force lock lands
-  as normal targeting and the target's red-lock warning fires exactly as
-  for any attacker (gameplay, not a leak). The lock TRIANGLE UI renders
-  for the commander's TEAM only. Overheat/sprint tells stay (decision 7).
+- targetId stays in snapshots as today (CORRECTED 2026-08-21 — there is
+  NO victim-side "locked" warning in the game; redLock is the ATTACKER's
+  own homing state, and the only public targeting tell is the sniper
+  laser sight, which is deliberately visible to both sides). A force
+  lock is therefore indistinguishable from ordinary targeting on the
+  wire and in the opponent's UI — no new leak. The lock TRIANGLE UI
+  renders for the commander's TEAM only. Overheat/sprint tells stay
+  (decision 7).
 
 Implementation-level calls (mine, overridable):
 - Command state lives OFF the fighter: matchState.commands[slot]
