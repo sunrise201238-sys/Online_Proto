@@ -274,9 +274,11 @@ switch are implemented but still need a hands-on touch test.
 ### Phase 2.1 refinements (owner, 2026-08-21)
 
 - Commanded travel DASHES instead of walking: normal sprint/boost economy
-  and momentum rules apply, and issuing a move order grants +50 boost on
-  the spot (clamped to the unit's max) as the journey's fuel; when boost
-  runs dry the unit falls back to walking. A raw command-speed multiplier
+  and momentum rules apply. The stamina CAP is untouched and nothing is
+  granted; instead the journey keeps a RESERVE FLOOR of 50 boost that the
+  dash may not spend — the unit sprints while boost > 50 and falls back
+  to walking at the floor (the floor binds only commanded travel; combat
+  reflexes keep their own funding rules). A raw command-speed multiplier
   was considered and REJECTED (bypasses the stamina economy).
 - Map ROTATION: pivot = the current look target (screen centre); tilt
   unchanged. Touch: two-finger twist (same gesture set as pinch zoom —
