@@ -10922,6 +10922,13 @@ function updateDioramaHud() {
   const viewer = cameraFocusMech();
   const viewerAlive = !!viewer && viewer.state.hp > 0;
   const viewerTeam = viewer ? getTeamOf(viewer) : 'A';
+  // Live control rects: the touch layout varies wildly across screens (short
+  // landscape phones raise the button column to mid-screen and shrink the
+  // vertical room), so frame margins and card anchors derive from the REAL
+  // rects each frame instead of desktop-tuned constants.
+  const btnsRect = state.hud?.querySelector('#buttons')?.getBoundingClientRect() ?? null;
+  const joyRect = state.hud?.querySelector('#joy')?.getBoundingClientRect() ?? null;
+  const edgeR = Math.min(W - 34, btnsRect ? btnsRect.left - 10 : W - 210);
   const boxes = [];    // every visible marker box — cards must never cover one
   const cards = [];
   for (const slot of DIO_SLOTS) {
@@ -10960,9 +10967,9 @@ function updateDioramaHud() {
     // the margin rect — so the diamond's position points at the fighter,
     // like the old edge arrows (playtest #3) — plus a direction triangle.
     const mL = 34 + s / 2;
-    const mR = W - 210 - s / 2;
-    const mT = 74 + s / 2;
-    const mB = H - 150 - s / 2;
+    const mR = edgeR - s / 2;
+    const mT = Math.max(52, Math.min(74, H * 0.12)) + s / 2;
+    const mB = H - 60 - s / 2;
     const offFrame = behind || cx < mL || cx > mR || cy < mT || cy > mB;
     let dirAngle = 0;
     if (offFrame) {
@@ -11112,10 +11119,15 @@ function updateDioramaHud() {
   const placedRects = [];
   for (const c of cards) {
     const side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
-    const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
-    // Side-dependent floor: right edge hosts the button column, left edge the
-    // joystick — cards stop above them instead of sliding underneath.
-    const maxY = Math.max(80, (side === 'right' ? H - 340 : H - 210) - DIO_CARD_H);
+    // Right cards anchor LEFT of the button column (on phones the buttons
+    // reach mid-screen — the old fixed edge put cards under DODGE); left
+    // cards stop above the joystick.
+    const cardX = side === 'left'
+      ? 10
+      : Math.max(10, (btnsRect ? btnsRect.left : W - 10) - 8 - DIO_CARD_W);
+    const maxY = Math.max(72, (side === 'left'
+      ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 150)
+      : H - 64) - DIO_CARD_H);
     const desired = THREE.MathUtils.clamp(c.cy - DIO_CARD_H / 2, 64, maxY);
     const overlapsSomething = (y) => {
       const rx = cardX - 8;
@@ -11131,10 +11143,19 @@ function updateDioramaHud() {
       }
       return false;
     };
-    let want = desired;
+    let want = null;
     for (const off of [0, -72, 72, -144, 144, -216, 216]) {
       const y = THREE.MathUtils.clamp(desired + off, 64, maxY);
       if (!overlapsSomething(y)) { want = y; break; }
+    }
+    if (want == null) {
+      // No clean slot (tiny screens): stack under the lowest card on this
+      // side — overflowing the floor beats hiding a card under another one.
+      let low = desired;
+      for (const p of placedRects) {
+        if (Math.abs(p.x - cardX) < DIO_CARD_W) low = Math.max(low, p.y + DIO_CARD_H + 10);
+      }
+      want = low;
     }
     placedRects.push({ x: cardX, y: want });
     const els = c.els;
@@ -11163,7 +11184,7 @@ function updateDioramaHud() {
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
     const statusText = c.blocked ? 'NO SIGHT' : '';
     if (els.statusEl.textContent !== statusText) els.statusEl.textContent = statusText;
-    const lineEndX = side === 'left' ? 10 + DIO_CARD_W : W - 10 - DIO_CARD_W;
+    const lineEndX = side === 'left' ? cardX + DIO_CARD_W : cardX;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
     const lineY2 = (els.cardY + DIO_CARD_H / 2).toFixed(1);
     for (const ln of [els.lineC, els.line]) {
