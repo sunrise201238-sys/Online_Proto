@@ -409,3 +409,38 @@ switch are implemented but still need a hands-on touch test.
   floor clamping at exactly 50, tap-tap order one-shot, deny + glow-stay,
   lock one-shot, both-icons state, double-tap-card wipe, slow re-tap
   deselect — all green (scratchpad smoke/p21.js, p21deny.js).
+
+## Phase 3 — ONLINE command mode (assessment done, owner decisions)
+
+Full audit: five parallel line-level reads of shared/sim (ai, tick,
+movement, state, navgrid, arena), server/src/index.js and the client
+online layer (2026-08-21, assessment only — no code). Headline: the
+online bot already carries every offline reflex equivalent, the shared
+sim has the pathfinder/boost/momentum/timer primitives the command layer
+needs, so the port is "attach an override layer", not "rewrite the
+brain". The REAL first-priority work is the info-hiding pipeline: today
+one unfiltered snapshot (entire fighter objects — boost, ammo, cooldowns,
+targetId, bot intent fields) broadcasts to the whole room; per-team
+snapshot filtering must land BEFORE any cmd field touches the fighter.
+Suggested phases: 0) snapshot filter, 1) shared command layer, 2) lobby
+layer (commandSlots separate from botSlots, per-player viewMode),
+3) client wiring, 4) balance playtests. Rough size ~5-8 rounds.
+
+### Owner decisions (2026-08-21)
+
+1. Bot-fill teammate commandable online? **NO** — online command drives
+   the player's OWN unit only (DIO_OWN_SLOTS online = player).
+2. Human teammate sees your orders (rings/locks)? **PENDING** — owner
+   asked for a deeper explanation incl. classic-mode teammates.
+3. Opponent's chosen mode (classic|command) hidden? **YES** — viewMode
+   must be scoped team-only in lobby:config and never inferable from the
+   match protocol (behavior will still hint it; accepted).
+4. 1v1 command player disconnect: **instant forfeit (current rule)** —
+   no reconnect/grace layer in v1.
+5. Spectators: **classic view** — classic camera/HUD, no command
+   overlays; filtered like a classic viewer of the followed team.
+6. Trio × command in the first online cut: **YES** — respawn bookkeeping
+   required (command state keyed by slot, cleared on respawnFighterNext,
+   never held as fighter/mech references).
+7. Boost-inference fields (overheat, sprint-lock, thruster tells):
+   **NOT hidden** — only the boost VALUE itself is redacted to enemies.
