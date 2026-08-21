@@ -10739,7 +10739,9 @@ const DIO_SLOT_META = {
   player: { color: '#62d7ff', label: 'YOU', selectable: false },
   ally: { color: '#86f7c2', label: 'ALLY', selectable: false },
   enemy: { color: '#ff7ad5', label: 'ENEMY 1', selectable: true },
-  enemy2: { color: '#ff5a8a', label: 'ENEMY 2', selectable: true }
+  // Orange — matches enemy2's corner HP bar (#ff9d5a); the old rose pink
+  // was too close to enemy 1's pink to tell apart at diorama distance.
+  enemy2: { color: '#ff9d5a', label: 'ENEMY 2', selectable: true }
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
 const DIO_CARD_W = 180;
