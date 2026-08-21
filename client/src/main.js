@@ -1080,7 +1080,6 @@ const diorama = {
   post: null,            // tilt-shift render pipeline (lazy, rebuilt on resize)
   layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
   els: new Map(),        // slot -> annotation elements
-  teamSide: null,        // card edge claimed by the player's team ('left'|'right')
   savedFar: null,
   savedNear: null
 };
@@ -11025,7 +11024,7 @@ const DIO_SLOT_META = {
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
 const DIO_CARD_W = 180;
-const DIO_CARD_H = 56;
+const DIO_CARD_H = 68;   // grew for the stamina gauge (2.1c)
 
 function svgNode(tag, attrs) {
   const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -11073,7 +11072,6 @@ function hideDioramaLayer() {
     diorama.layer = null;
   }
   diorama.els.clear();
-  diorama.teamSide = null;
   diorama.dragEls = null;
   diorama.gesture = null;
   diorama.drag = null;
@@ -11132,7 +11130,7 @@ function ensureDioramaSlotEls(slot) {
   const card = document.createElement('div');
   card.className = 'dio-card';
   card.style.borderColor = meta.color;
-  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-status"></div>';
+  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-boost"><i></i></div><div class="dio-status"></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
   diorama.layer.appendChild(card);
   els = {
@@ -11144,6 +11142,7 @@ function ensureDioramaSlotEls(slot) {
     weaponFailed: false, // art 404 -> fall back to text in the role line
     statusEl: card.querySelector('.dio-status'),
     barEl: card.querySelector('.dio-bar i'),
+    boostEl: card.querySelector('.dio-boost i'),
     iconState: null,     // 'order' | 'auto' | null — caches the icon markup
     box: null,        // last screen-space box {x, y, s} for tap hit-testing
     cardY: null       // smoothed card anchor
@@ -11557,19 +11556,12 @@ function updateDioramaHud() {
   const compact = Math.min(W, H) < 500;
   diorama.layer.classList.toggle('dio-compact', compact);
   const cardW = compact ? 132 : DIO_CARD_W;
-  const cardH = compact ? 44 : DIO_CARD_H;
-  // Joystick rect: left cards stop above it. (Cards do NOT dodge the button
-  // column — owner call: anchoring left of the buttons floated cards into
-  // the middle of the field on phones; docking at the true edge wins, and
-  // the translucent buttons read fine over a card.)
-  const joyRect = state.hud?.querySelector('#joy')?.getBoundingClientRect() ?? null;
+  const cardH = compact ? 52 : DIO_CARD_H;
   // POV anchor: normally the player, but in spectator mode the WATCHED unit —
-  // LOS ghosting and team card edges follow whoever the camera rides
-  // (playtest: spectating team 2 must show team 2's sight lines).
+  // the corner split follows whoever the camera rides (viewer's team =
+  // bottom-left, the other team = bottom-right).
   const viewer = cameraFocusMech();
-  const viewerAlive = !!viewer && viewer.state.hp > 0;
   const viewerTeam = viewer ? getTeamOf(viewer) : 'A';
-  const boxes = [];    // every visible marker box — cards must never cover one
   const cards = [];
   for (const slot of DIO_SLOTS) {
     const m = state[slot];
@@ -11632,7 +11624,6 @@ function updateDioramaHud() {
     const bx = cx - s / 2;
     const by = cy - s / 2;
     els.box = { x: bx, y: by, s };
-    boxes.push(els.box);
     els.g.style.display = '';
     // COMMAND MODE: the FORCE LOCKS drive the crosshair, one commander per
     // color. (The NO SIGHT ghosting/dash treatment is retired — owner call.)
@@ -11766,54 +11757,29 @@ function updateDioramaHud() {
     // owner call, playtest round 2.
     cards.push({ slot, els, m, cx, cy });
   }
-  // Card layout: the two TEAMS never share an edge (owner call) — the
-  // player's team claims the half its focus unit is in, enemies get the
-  // opposite edge; a 10%-of-width hysteresis stops midline flapping. A card
-  // must never cover any marker square or another card (playtest #5) —
-  // slide through vertical offsets until the slot is clear.
-  const own = cards.find((c) => c.m === viewer)
-    ?? cards.find((c) => getTeamOf(c.m) === viewerTeam);
-  if (own) {
-    const margin = W * 0.10;
-    if (diorama.teamSide == null) diorama.teamSide = own.cx < W / 2 ? 'left' : 'right';
-    else if (diorama.teamSide === 'left' && own.cx > W / 2 + margin) diorama.teamSide = 'right';
-    else if (diorama.teamSide === 'right' && own.cx < W / 2 - margin) diorama.teamSide = 'left';
-  }
-  const ownSide = diorama.teamSide ?? 'left';
-  // Same-side cards place TOP-TO-BOTTOM in their units' screen order, and
-  // conflicts only ever push DOWN — so the vertical card order always
-  // matches the units' order and leader lines on one side can never cross
-  // (owner call: swap the cards instead of drawing an X).
-  const bySide = { left: [], right: [] };
-  for (const c of cards) {
-    c.side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
-    bySide[c.side].push(c);
-  }
+  // Card layout (owner, phase 2.1c): FIXED corner docks. The viewer's team
+  // stacks bottom-up in the BOTTOM-LEFT corner, the enemy team in the
+  // BOTTOM-RIGHT. Slot order is stable (the first fielded slot sits deepest
+  // in the corner) and dead units drop out, compacting the column. Cards no
+  // longer chase their units around the screen — the leader line alone
+  // carries the association.
   const orderedCards = [];
-  for (const side of ['left', 'right']) {
-    const list = bySide[side].sort((a, b) => a.cy - b.cy);
-    // Cards dock at the true screen edges — never float over the field.
+  const ownCol = [];
+  const foeCol = [];
+  for (const c of cards) (getTeamOf(c.m) === viewerTeam ? ownCol : foeCol).push(c);
+  const placeColumn = (list, side) => {
     const cardX = side === 'left' ? 10 : W - 10 - cardW;
-    const maxY = Math.max(64, (side === 'left'
-      ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 64)
-      : H - 64) - cardH);
-    let prevBottom = -Infinity;
+    let y = H - 12 - cardH;
     for (const c of list) {
-      let want = THREE.MathUtils.clamp(c.cy - cardH / 2, 56, maxY);
-      want = Math.max(want, prevBottom + 10);
-      // Hop past marker squares — downward only, preserving the order.
-      for (let i = 0; i < 6; i += 1) {
-        const hit = boxes.find((b) => cardX - 8 < b.x + b.s && cardX + cardW + 8 > b.x
-          && want - 8 < b.y + b.s && want + cardH + 8 > b.y);
-        if (!hit) break;
-        want = Math.max(hit.y + hit.s + 10, prevBottom + 10);
-      }
-      prevBottom = want + cardH;
-      c.want = want;
+      c.side = side;
       c.cardX = cardX;
+      c.want = y;
+      y -= cardH + 10;
       orderedCards.push(c);
     }
-  }
+  };
+  placeColumn(ownCol, 'left');
+  placeColumn(foeCol, 'right');
   for (const c of orderedCards) {
     const side = c.side;
     const cardX = c.cardX;
@@ -11842,6 +11808,10 @@ function updateDioramaHud() {
     // its own status line under it.
     const maxHp = m.unit.hp ?? MAX_HP;
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
+    // Stamina gauge under the HP bar — both teams for now (owner: the enemy
+    // boost readout may be hidden later).
+    const bCap = m.unit.boostCap ?? BOOST_CAP;
+    els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
     // The old NO SIGHT status line now hosts the command icon(s) (own units;
     // no command = no icon at all).
     const cardIconState = DIO_OWN_SLOTS.includes(c.slot)

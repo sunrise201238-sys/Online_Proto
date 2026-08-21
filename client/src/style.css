@@ -414,7 +414,7 @@ body.pseudo-fullscreen #app {
 .dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: auto; touch-action: none; }
 .dio-layer > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dio-card {
-  position: absolute; left: 0; top: 0; width: 180px; height: 56px; box-sizing: border-box;
+  position: absolute; left: 0; top: 0; width: 180px; height: 68px; box-sizing: border-box;
   padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
   background: rgba(7, 11, 18, 0.72); backdrop-filter: blur(2px);
   color: #dfe7f5; pointer-events: none; will-change: transform;
@@ -423,6 +423,9 @@ body.pseudo-fullscreen #app {
 .dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 4px; min-height: 11px; color: #ffcf6b; white-space: nowrap; }
 .dio-card .dio-bar { height: 9px; margin-top: 7px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
 .dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
+/* Stamina (boost) gauge — thinner amber twin under the HP bar (2.1c). */
+.dio-card .dio-boost { height: 5px; margin-top: 3px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.28); }
+.dio-card .dio-boost i { display: block; height: 100%; width: 100%; background: #ffc94d; transition: width 0.15s linear; }
 #dio-toast {
   position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
   padding: 10px 22px; border: 1px solid rgba(223, 231, 245, 0.55); border-radius: 3px;
@@ -438,10 +441,11 @@ body.pseudo-fullscreen #app {
 .dio-card .dio-weapon { height: 13px; width: auto; max-width: 70px; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.92; }
 /* Compact cards for small screens (phones) — JS mirrors these numbers
    (updateDioramaHud: cardW/cardH 132x44 when min(W,H) < 500). */
-.dio-layer.dio-compact .dio-card { width: 132px; height: 44px; padding: 4px 7px 5px; }
+.dio-layer.dio-compact .dio-card { width: 132px; height: 52px; padding: 4px 7px 5px; }
 .dio-layer.dio-compact .dio-card .dio-name { font-size: 8.5px; letter-spacing: 0.1em; gap: 4px; }
 .dio-layer.dio-compact .dio-card .dio-weapon { height: 10px; max-width: 54px; }
 .dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 5px; }
+.dio-layer.dio-compact .dio-card .dio-boost { height: 4px; margin-top: 2px; }
 .dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 3px; min-height: 9px; }
 /* NO SIGHT: the card border dashes along with its square and leader line. */
 .dio-card.dio-blocked { border-style: dashed; }

@@ -350,6 +350,15 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1c HUD tweaks (owner, 2026-08-21):** every info card carries a
+  STAMINA gauge (thin amber `.dio-boost` bar under the HP bar, fed from
+  `state.boost / boostCap`) — both teams for now, the enemy readout may
+  be hidden later. Cards are FIXED corner docks: the viewer's team
+  stacks bottom-up in the BOTTOM-LEFT corner, enemies in the
+  BOTTOM-RIGHT, stable slot order, dead units compact the column; the
+  old edge-chasing layout (team-side hysteresis, screen-order sorting,
+  marker dodging) is deleted and the leader line alone ties card to
+  unit. Card grows 56→68px (compact 44→52) for the gauge.
 - Headless verification (SwiftShader, 640×360): chip + persistence,
   Q/E / right-drag / twist rotation, dash speed ≈ 29 vs walk 16 with the
   floor clamping at exactly 50, tap-tap order one-shot, deny + glow-stay,
