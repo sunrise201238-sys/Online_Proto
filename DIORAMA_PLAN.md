@@ -457,3 +457,56 @@ layer (commandSlots separate from botSlots, per-player viewMode),
    never held as fighter/mech references).
 7. Boost-inference fields (overheat, sprint-lock, thruster tells):
    **NOT hidden** — only the boost VALUE itself is redacted to enemies.
+
+### Phase 3 — FINAL PRE-IMPLEMENTATION SPEC (2026-08-21)
+
+Frozen inputs: the 7 owner decisions above + the 2.1i tune (dash arm 125)
+— ALL offline command tunables port to the server at their current values
+(floor 50, arm 125, anchor 20000ms, radius 12, endpoint 6u, standable-
+floor checks). These constants MOVE to shared/src/sim/constants.js in
+phase 1 so client preview and server authority read one source.
+
+Hiding scope, made precise (implementation rule):
+- HIDDEN from opponents: boost VALUE, cmdMove (destination/path/phase/
+  latch) and every cmd-layer field; bot intent fields (botXxx) stripped
+  for everyone as hygiene. viewMode scoped team-only in lobby:config.
+- INHERENTLY VISIBLE (not hidden): targetId/redLock — a force lock lands
+  as normal targeting and the target's red-lock warning fires exactly as
+  for any attacker (gameplay, not a leak). The lock TRIANGLE UI renders
+  for the commander's TEAM only. Overheat/sprint tells stay (decision 7).
+
+Implementation-level calls (mine, overridable):
+- Command state lives OFF the fighter: matchState.commands[slot]
+  (the _navPaths precedent); snapshot filter is allowlist-based, built
+  per-TEAM (2 variants + spectator=team-A/classic variant), emitted
+  per-socket. Redacted enemy boost is sent as null; client mirror
+  guards with ?? so bars/logic never see NaN.
+- Order transport: dedicated messages order:move {x,z,floorY},
+  order:lock {slotId}, order:clear — server re-validates with
+  navGridFor + findPathOnGrid + 6u/floor checks, answers order:ack /
+  order:deny; ≤2 orders/sec per player, latest wins; navgrid warmed at
+  match start.
+- Command-driven human slots: new lobby.commandSlots set (NEVER reuse
+  botSlots — glint anti-cheat + input routing depend on it); server runs
+  pickBotTargetId(+cmdLock guard) + tickBot + command driver for them.
+- Client: command player skips prediction (interpolate own unit like
+  remotes); V/pause mode toggles disabled online (queue-room choice is
+  final); command timers read the server clock (hudNow), never
+  performance.now(); Trio respawn clears that slot's command state
+  server-side (offline parity: respawns start autonomous).
+- Classic-teammate share rendering: world-space ground ring at the
+  ordered destination + commander-colored corner triangles on the pinned
+  enemy, drawn in the chase view; no path line/icons.
+
+Round plan (small rounds, one push each):
+- R1: snapshot filter + per-socket emit + client mirror guards
+  (fixes today's boost/cooldown/intent broadcast leak on its own).
+- R2: shared command layer (constants move, commands side-table, lock
+  guard, move driver w/ reflex yield + clock pinning, dash latch,
+  anchor orbit, server validation).
+- R3: lobby/protocol (commandSlots, viewMode in config + swap/promote/
+  rematch paths, order messages + ack/deny + rate limit).
+- R4: client wiring (queue chip + staleness sig, diorama unlock online,
+  order sending/echo, classic-teammate ring + triangles, Trio hooks).
+- R5: end-to-end verification (local server + two headless clients),
+  balance notes for playtest.
