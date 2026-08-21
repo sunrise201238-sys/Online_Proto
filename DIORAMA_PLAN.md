@@ -569,3 +569,29 @@ Shared command layer (`shared/src/sim/command.js`):
   latched dash with floor min 50.9, arrival → anchor → 20 s expiry,
   ring-hug 0.0 error, re-arm at exactly 125, clears); R1 protocol tests
   and the offline latch tests re-run green on the new build.
+
+### Phase 3 R3 — IMPLEMENTED (2026-08-21)
+
+Lobby/protocol layer:
+- `lobby.config[slot].viewMode` ('classic'|'command', default classic),
+  set via match:configure — the existing `state==='active'` gate makes
+  the pick match-locked with an 'ended' re-pick window (frozen spec).
+  The field rides every config move path: slot swap copy, host-promotion
+  move, disconnect resets. lobby:config is now emitted PER SOCKET with
+  team-scoped viewMode (owner decision 3: opponents and spectators never
+  see the pick; teammates do).
+- `startMatchFor` populates `lobby.commandSlots` (occupied humans who
+  picked command); input:frame ignores them (their unit is bot-driven);
+  a disconnecting commander's orders are cleared and (2v2) the unit
+  continues as a plain bot; 1v1 keeps instant forfeit (decision 4).
+- Order protocol: `order:move {x,z,floorY}`, `order:lock {target}`
+  (toggle semantics), `order:clear` — commandSlots-only, server
+  re-validates via the shared layer, per-slot 500 ms rate limit
+  (`order:result` replies ok/reason to the sender only).
+- Snapshot `commands` block: each team's variant carries ITS commanders'
+  standing orders (destination/path/phase/anchorUntil + lockTargetId)
+  for teammate rendering (decision 2); enemies and spectators get {}.
+- Verified: 21 socket-level assertions green (secrecy both directions +
+  teammate visibility + spectator, order accept/deny/rate/toggle, input
+  rejection, unit travels under orders with zero input frames, spectator
+  boost view = team A). Classic-online browser e2e re-run green.

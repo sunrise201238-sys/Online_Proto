@@ -12,6 +12,9 @@ import {
   commandTargetIdOf,
   tickCommandDriver,
   clearCommands,
+  getCommands,
+  setMoveOrder,
+  setForceLock,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -24,6 +27,9 @@ import {
 // are active; in 2v2 p3/p4 join. p1+p3 = team A, p2+p4 = team B (matches
 // createMatchState's team assignment).
 const SLOT_IDS = ['p1', 'p2', 'p3', 'p4'];
+// Command orders share a per-slot rate limiter (≤2/s; latest wins) — every
+// move order runs a server-side pathfind, so spam is a CPU vector.
+const ORDER_MIN_INTERVAL_MS = 500;
 function activeSlots(mode) {
   return mode === '2v2' ? SLOT_IDS : SLOT_IDS.slice(0, 2);
 }
@@ -69,11 +75,12 @@ function createLobby() {
     },
     lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
     config: {
-      p1: { unitKey: null, unitKeys: null, mapKey: null },
-      p2: { unitKey: null, unitKeys: null, mapKey: null },
-      p3: { unitKey: null, unitKeys: null, mapKey: null },
-      p4: { unitKey: null, unitKeys: null, mapKey: null }
+      p1: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p2: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p3: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p4: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' }
     },
+    lastOrderAt: { p1: 0, p2: 0, p3: 0, p4: 0 },   // command-order rate limiter
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
     startedAt: 0,
     endedAt: 0,
@@ -171,6 +178,14 @@ function startMatchFor(lobby) {
   for (const s of slots) {
     if (!occupied.has(s)) lobby.botSlots.add(s);
   }
+  // Command-mode humans: bot-driven + order-driven for the whole match
+  // (owner: the queue-room choice is final; V-toggle stays offline-only).
+  lobby.commandSlots.clear();
+  for (const s of slots) {
+    if (occupied.has(s) && lobby.config[s].viewMode === 'command') {
+      lobby.commandSlots.add(s);
+    }
+  }
 
   // Resolve unit keys for every active slot (human or bot).
   const unitFor = (s) => {
@@ -244,17 +259,29 @@ function emitLobbyConfig(lobby) {
         : rosterForSlot(lobby, s, occupied);
     }
   }
-  io.to(lobby.id).emit('lobby:config', {
+  const base = {
     state: lobby.state,
     mode: lobby.mode,
     mainMode: lobby.mainMode,
-    config: lobby.config,
     botUnits,
     rosters,
     occupied: Array.from(occupied),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
-  });
+  };
+  // viewMode secrecy (owner decision 3): a slot's Classic|Command pick is
+  // visible to its OWN TEAM only — the opponent's config rows ship without
+  // the field (spectators see none). Everything else is shared as before.
+  for (const [sid, recipSlot] of lobby.players) {
+    const recipTeam = SLOT_IDS.includes(recipSlot) ? teamOf(recipSlot) : null;
+    const config = {};
+    for (const cs of SLOT_IDS) {
+      const row = { ...lobby.config[cs] };
+      if (recipTeam == null || teamOf(cs) !== recipTeam) delete row.viewMode;
+      config[cs] = row;
+    }
+    io.to(sid).emit('lobby:config', { ...base, config });
+  }
 }
 
 // Per-team snapshots (command-mode online, phase 3 R1): each side gets its
@@ -272,13 +299,36 @@ function emitSnapshotsFor(lobby) {
       p3: lobby.lastAcked.p3, p4: lobby.lastAcked.p4
     }
   };
-  const byTeam = {
-    A: { ...buildSnapshotFor(lobby.match, 'A'), ...extra },
-    B: { ...buildSnapshotFor(lobby.match, 'B'), ...extra }
+  // Command-state echo (owner decision 2): a team sees ITS OWN commanders'
+  // standing orders (destination/path/phase + force lock) so both command
+  // and classic teammates can render the share; the enemy team never
+  // receives them. Spectators get team A's fighter view with NO commands
+  // (owner decision 5: spectators watch the classic view).
+  const teamCommands = (team) => {
+    const out = {};
+    for (const cs of lobby.commandSlots) {
+      if (teamOf(cs) !== team) continue;
+      const cmd = getCommands(lobby.match, cs);
+      if (!cmd || (!cmd.move && !cmd.lockTargetId)) continue;
+      out[cs] = {
+        move: cmd.move ? {
+          x: cmd.move.x, z: cmd.move.z, y: cmd.move.y,
+          phase: cmd.move.phase, anchorUntil: cmd.move.anchorUntil,
+          path: cmd.move.path
+        } : null,
+        lockTargetId: cmd.lockTargetId
+      };
+    }
+    return out;
   };
+  const byTeam = {
+    A: { ...buildSnapshotFor(lobby.match, 'A'), ...extra, commands: teamCommands('A') },
+    B: { ...buildSnapshotFor(lobby.match, 'B'), ...extra, commands: teamCommands('B') }
+  };
+  const spectator = { ...byTeam.A, commands: {} };
   for (const [sid, slot] of lobby.players) {
-    const team = SLOT_IDS.includes(slot) ? teamOf(slot) : 'A';
-    io.to(sid).emit('match:snapshot', byTeam[team]);
+    const payload = SLOT_IDS.includes(slot) ? byTeam[teamOf(slot)] : spectator;
+    io.to(sid).emit('match:snapshot', payload);
   }
 }
 
@@ -432,6 +482,7 @@ io.on('connection', (socket) => {
     if (!SLOT_IDS.includes(slot)) return;
     if (lb.state !== 'active') return;
     if (lb.botSlots.has(slot)) return;
+    if (lb.commandSlots.has(slot)) return;   // command units are bot-driven
 
     if (typeof frame.seq === 'number' && frame.seq > lb.lastAcked[slot]) {
       lb.lastAcked[slot] = frame.seq;
@@ -459,6 +510,61 @@ io.on('connection', (socket) => {
     };
   });
 
+  // ---- COMMAND-MODE orders (phase 3 R3) ----------------------------------
+  // Only command-slot humans in an active match may order; the server
+  // re-validates everything (the client preview is advisory). Move/lock
+  // share a per-slot rate limiter — pathfinding is the expensive part, and
+  // "latest wins" is the intended semantic anyway. Results go to the sender
+  // only; the standing state itself reaches the whole team via the
+  // snapshot's `commands` block.
+  const orderGate = (kind) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match) return null;
+    const slot = lb.players.get(socket.id);
+    if (!lb.commandSlots.has(slot)) return null;
+    if (kind !== 'clear') {
+      const nowMs = Date.now();
+      if (nowMs - lb.lastOrderAt[slot] < ORDER_MIN_INTERVAL_MS) {
+        socket.emit('order:result', { kind, ok: false, reason: 'rate' });
+        return null;
+      }
+      lb.lastOrderAt[slot] = nowMs;
+    }
+    return { lb, slot };
+  };
+
+  socket.on('order:move', (data) => {
+    const ctx = orderGate('move');
+    if (!ctx) return;
+    const x = Number(data?.x);
+    const z = Number(data?.z);
+    const floorY = Number(data?.floorY ?? 0);
+    const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY);
+    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, reason: ok ? null : 'unreachable' });
+  });
+
+  socket.on('order:lock', (data) => {
+    const ctx = orderGate('lock');
+    if (!ctx) return;
+    const target = typeof data?.target === 'string' ? data.target : null;
+    const cmd = getCommands(ctx.lb.match, ctx.slot);
+    // Toggle semantics (offline parity): same enemy again = unlock.
+    const want = (cmd?.lockTargetId === target) ? null : target;
+    const ok = setForceLock(ctx.lb.match, ctx.slot, want);
+    socket.emit('order:result', {
+      kind: 'lock', ok,
+      target: ok ? (getCommands(ctx.lb.match, ctx.slot)?.lockTargetId ?? null) : null,
+      reason: ok ? null : 'invalid'
+    });
+  });
+
+  socket.on('order:clear', () => {
+    const ctx = orderGate('clear');
+    if (!ctx) return;
+    clearCommands(ctx.lb.match, ctx.slot);
+    socket.emit('order:result', { kind: 'clear', ok: true });
+  });
+
   socket.on('match:configure', (cfg) => {
     const lb = lobbyForSocket(socket);
     if (!lb) return;
@@ -477,6 +583,12 @@ io.on('connection', (socket) => {
     if (cfg && isValidRoster(cfg.unitKeys)) {
       lb.config[slot].unitKeys = cfg.unitKeys.slice();
       lb.config[slot].unitKey = cfg.unitKeys[0];
+      dirty = true;
+    }
+    // Classic|Command pick (phase 3): locked once the match is active (the
+    // state gate above); re-pickable in the 'ended' window before a rematch.
+    if (cfg && (cfg.viewMode === 'classic' || cfg.viewMode === 'command')) {
+      lb.config[slot].viewMode = cfg.viewMode;
       dirty = true;
     }
     if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
@@ -558,9 +670,10 @@ io.on('connection', (socket) => {
     lb.config[newSlot] = {
       unitKey: lb.config[slot].unitKey,
       unitKeys: lb.config[slot].unitKeys,
-      mapKey: null
+      mapKey: null,
+      viewMode: lb.config[slot].viewMode ?? 'classic'
     };
-    lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
+    lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
     lb.lastAcked[newSlot] = -1;
     lb.lastAcked[slot] = -1;
     lb.rematchRequested[newSlot] = false;
@@ -626,6 +739,12 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     lb.players.delete(socket.id);
     if (SLOT_IDS.includes(slot) && lb.state === 'active') {
+      // A leaving commander's standing orders die with them; the unit
+      // continues (2v2) as a plain bot.
+      if (lb.commandSlots.has(slot)) {
+        lb.commandSlots.delete(slot);
+        if (lb.match) clearCommands(lb.match, slot);
+      }
       if (lb.mode === '2v2') {
         lb.botSlots.add(slot);
       } else {
@@ -634,7 +753,7 @@ io.on('connection', (socket) => {
       }
     }
     if (SLOT_IDS.includes(slot)) {
-      lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
+      lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
       lb.rematchRequested[slot] = false;
     }
     // Host left outside an active match (waiting room / end menu): promote
@@ -648,7 +767,7 @@ io.on('connection', (socket) => {
         const [sid, oldSlot] = entry;
         lb.players.set(sid, 'p1');
         lb.config.p1 = lb.config[oldSlot];
-        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null };
+        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
         lb.lastAcked.p1 = -1;
         lb.rematchRequested.p1 = false;
         lb.rematchRequested[oldSlot] = false;
