@@ -10806,8 +10806,10 @@ function ensureDioramaSlotEls(slot) {
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
   // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
   // cross ticks (tier 2) and inner closing bars (tier 3) — as line paths.
-  const tierMid = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.6', 'stroke-linecap': 'round', 'pointer-events': 'none' });
-  const tierFar = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.6', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  // Amber like the lock triangles ("aim info" language) and bolder than the
+  // slot-colored frame — the owner wants the sniper tiers readable at a glance.
+  const tierMid = svgNode('path', { fill: 'none', stroke: '#ffd257', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  const tierFar = svgNode('path', { fill: 'none', stroke: '#ffd257', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rect);
   g.appendChild(lineC);
@@ -10916,6 +10918,18 @@ function updateDioramaHud() {
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   const W = window.innerWidth;
   const H = window.innerHeight;
+  // Compact cards on small screens (owner: full-size cards eat a phone
+  // display); the desktop size is unchanged. JS layout numbers must match
+  // the .dio-compact CSS block.
+  const compact = Math.min(W, H) < 500;
+  diorama.layer.classList.toggle('dio-compact', compact);
+  const cardW = compact ? 132 : DIO_CARD_W;
+  const cardH = compact ? 44 : DIO_CARD_H;
+  // Live control rects — on short landscape phones the button column climbs
+  // to mid-screen, so card anchors derive from the REAL layout, not fixed
+  // desktop margins. (Markers are exempt: they stick to their units.)
+  const btnsRect = state.hud?.querySelector('#buttons')?.getBoundingClientRect() ?? null;
+  const joyRect = state.hud?.querySelector('#joy')?.getBoundingClientRect() ?? null;
   // POV anchor: normally the player, but in spectator mode the WATCHED unit —
   // LOS ghosting and team card edges follow whoever the camera rides
   // (playtest: spectating team 2 must show team 2's sight lines).
@@ -10953,16 +10967,16 @@ function updateDioramaHud() {
       cx = (cx + hx) / 2;
       cy = (fy + hy) / 2;
     }
-    // Frame margins dodge the corner gauges (top), boost bar (bottom),
-    // joystick (bottom-left) and button column (right) — those sit ABOVE
-    // this layer and would eat the tap. A fighter outside them renders as a
-    // diamond placed where the ray from screen centre to the fighter crosses
-    // the margin rect — so the diamond's position points at the fighter,
-    // like the old edge arrows (playtest #3) — plus a direction triangle.
-    const mL = 34 + s / 2;
-    const mR = W - 210 - s / 2;
-    const mT = 74 + s / 2;
-    const mB = H - 150 - s / 2;
+    // Markers STICK to the unit anywhere inside the real viewport (owner
+    // call: the old wide desktop-tuned bands yanked markers off units that
+    // sat in the blur zone — the HUD layer itself is drawn above the post
+    // pass and never blurs). The diamond treatment applies only to units
+    // genuinely outside the view, placed where the ray from screen centre
+    // crosses the edge (so its position still points at the unit).
+    const mL = 14 + s / 2;
+    const mR = W - 14 - s / 2;
+    const mT = 14 + s / 2;
+    const mB = H - 14 - s / 2;
     const offFrame = behind || cx < mL || cx > mR || cy < mT || cy > mB;
     let dirAngle = 0;
     if (offFrame) {
@@ -10987,7 +11001,10 @@ function updateDioramaHud() {
     els.box = { x: bx, y: by, s };
     boxes.push(els.box);
     els.g.style.display = '';
-    const locked = m === state.playerCurrentTarget && meta.selectable;
+    // "Locked" = whoever the VIEWER's lock rides (in spectator the mirror
+    // makes that a team-A slot when watching team B — the old selectable
+    // gate hid the crosshair/tier marks there, e.g. spectating a sniper).
+    const locked = m === state.playerCurrentTarget && m !== viewer;
     // LOS ghosting: the unit-to-unit bullet line, tested with the projectile's
     // own rules — matches what a shot would actually do.
     const blocked = viewerAlive && m !== viewer
@@ -11027,7 +11044,7 @@ function updateDioramaHud() {
       }
     }
     if (tier >= 2) {
-      const tl = Math.min(14, Math.max(7, s * 0.26));   // tick length — mostly outside
+      const tl = Math.min(18, Math.max(9, s * 0.34));   // tick length — mostly outside
       const tin = tl * 0.18;                            // small inward overshoot
       els.tierMid.setAttribute('d', [
         `M ${cx.toFixed(1)} ${(by - (tl - tin)).toFixed(1)} L ${cx.toFixed(1)} ${(by + tin).toFixed(1)}`,
@@ -11042,7 +11059,7 @@ function updateDioramaHud() {
     }
     if (tier >= 3) {
       const inset = s * 0.17;
-      const half = Math.min(9, Math.max(4, s * 0.14));
+      const half = Math.min(11, Math.max(5, s * 0.17));
       els.tierFar.setAttribute('d', [
         `M ${(cx - half).toFixed(1)} ${(by + inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + inset).toFixed(1)}`,
         `M ${(cx - half).toFixed(1)} ${(by + s - inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + s - inset).toFixed(1)}`,
@@ -11110,31 +11127,45 @@ function updateDioramaHud() {
   }
   const ownSide = diorama.teamSide ?? 'left';
   const placedRects = [];
+  const cardStep = cardH + 10;
   for (const c of cards) {
     const side = getTeamOf(c.m) === viewerTeam ? ownSide : (ownSide === 'left' ? 'right' : 'left');
-    const cardX = side === 'left' ? 10 : W - 10 - DIO_CARD_W;
-    // Side-dependent floor: right edge hosts the button column, left edge the
-    // joystick — cards stop above them instead of sliding underneath.
-    const maxY = Math.max(80, (side === 'right' ? H - 340 : H - 210) - DIO_CARD_H);
-    const desired = THREE.MathUtils.clamp(c.cy - DIO_CARD_H / 2, 64, maxY);
+    // Right cards anchor LEFT of the button column (on phones the buttons
+    // reach mid-screen); left cards stop above the joystick.
+    const cardX = side === 'left'
+      ? 10
+      : Math.max(10, (btnsRect ? btnsRect.left : W - 10) - 8 - cardW);
+    const maxY = Math.max(64, (side === 'left'
+      ? Math.min(H - 64, joyRect ? joyRect.top - 8 : H - 150)
+      : H - 64) - cardH);
+    const desired = THREE.MathUtils.clamp(c.cy - cardH / 2, 56, maxY);
     const overlapsSomething = (y) => {
       const rx = cardX - 8;
       const ry = y - 8;
-      const rw = DIO_CARD_W + 16;
-      const rh = DIO_CARD_H + 16;
+      const rw = cardW + 16;
+      const rh = cardH + 16;
       for (const b of boxes) {
         if (rx < b.x + b.s && rx + rw > b.x && ry < b.y + b.s && ry + rh > b.y) return true;
       }
       for (const p of placedRects) {
-        if (cardX < p.x + DIO_CARD_W + 10 && cardX + DIO_CARD_W + 10 > p.x
-          && y < p.y + DIO_CARD_H + 10 && y + DIO_CARD_H + 10 > p.y) return true;
+        if (cardX < p.x + cardW + 10 && cardX + cardW + 10 > p.x
+          && y < p.y + cardStep && y + cardStep > p.y) return true;
       }
       return false;
     };
-    let want = desired;
-    for (const off of [0, -72, 72, -144, 144, -216, 216]) {
-      const y = THREE.MathUtils.clamp(desired + off, 64, maxY);
+    let want = null;
+    for (const off of [0, -cardStep, cardStep, -cardStep * 2, cardStep * 2, -cardStep * 3, cardStep * 3]) {
+      const y = THREE.MathUtils.clamp(desired + off, 56, maxY);
       if (!overlapsSomething(y)) { want = y; break; }
+    }
+    if (want == null) {
+      // No clean slot (tiny screens): stack under the lowest same-side card —
+      // overflowing the floor beats hiding a card under another one.
+      let low = desired;
+      for (const p of placedRects) {
+        if (Math.abs(p.x - cardX) < cardW) low = Math.max(low, p.y + cardStep);
+      }
+      want = low;
     }
     placedRects.push({ x: cardX, y: want });
     const els = c.els;
@@ -11163,9 +11194,9 @@ function updateDioramaHud() {
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
     const statusText = c.blocked ? 'NO SIGHT' : '';
     if (els.statusEl.textContent !== statusText) els.statusEl.textContent = statusText;
-    const lineEndX = side === 'left' ? 10 + DIO_CARD_W : W - 10 - DIO_CARD_W;
+    const lineEndX = side === 'left' ? cardX + cardW : cardX;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
-    const lineY2 = (els.cardY + DIO_CARD_H / 2).toFixed(1);
+    const lineY2 = (els.cardY + cardH / 2).toFixed(1);
     for (const ln of [els.lineC, els.line]) {
       ln.style.display = '';
       ln.setAttribute('x1', boxEdgeX.toFixed(1));
