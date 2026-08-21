@@ -281,11 +281,15 @@ switch are implemented but still need a hands-on touch test.
   to walking at the floor (the floor binds only commanded travel; combat
   reflexes keep their own funding rules). A raw command-speed multiplier
   was considered and REJECTED (bypasses the stamina economy).
-  **2.1b amendment (owner, 2026-08-21):** a dash may only START on a FULL
-  boost gauge — the segment runs full -> floor, then the unit walks until
-  the gauge refills completely before dashing again. Rationale: the plain
-  floor rule produced continuous one-tick boosts the moment regen peeked
-  over the reserve, which read as stutter. Everything else unchanged.
+  **2.1b amendment (owner, 2026-08-21):** dash segments are LATCHED — a
+  dash may only START once boost reaches the ARM threshold; the segment
+  runs down to the 50 floor, then the unit walks until the gauge climbs
+  back to the threshold. Rationale: the plain floor rule produced
+  continuous one-tick boosts the moment regen peeked over the reserve,
+  which read as stutter. Everything else unchanged.
+  **2.1i tune (owner, 2026-08-21):** ARM threshold lowered from full cap
+  (250) to 125 (`DIO_TRAVEL_DASH_ARM`, min'd with the unit cap) — dash
+  segments come roughly twice as often, still stutter-free.
 - Map ROTATION: pivot = the current look target (screen centre); tilt
   unchanged. Touch: two-finger twist (same gesture set as pinch zoom —
   span change zooms, angle change rotates, simultaneously). Desktop:

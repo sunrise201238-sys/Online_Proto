@@ -10710,12 +10710,14 @@ const DIO_OWN_SLOTS = ['player', 'ally'];
 // Commanded travel is a DASH, funded by the unit's normal boost gauge with a
 // RESERVE FLOOR: the march may not spend below 50 boost (cap untouched,
 // nothing granted — owner spec "行軍中保留底線 50 不得動用"). Dash segments
-// are LATCHED on a FULL gauge (owner, phase 2.1b): a dash may only START
-// when boost sits at the cap, runs down to the floor, then the unit walks
-// until the gauge refills completely — never the old stutter of re-sprinting
-// the instant regen peeks over the floor. Combat reflexes keep their own
-// funding rules and may still spend the reserve.
+// are LATCHED (owner, phase 2.1b): a dash may only START once boost reaches
+// the ARM threshold (owner tune 2026-08-21: full cap -> 125), runs down to
+// the floor, then the unit walks until the gauge climbs back to the
+// threshold — never the old stutter of re-sprinting the instant regen peeks
+// over the floor. Combat reflexes keep their own funding rules and may
+// still spend the reserve.
 const DIO_TRAVEL_BOOST_FLOOR = 50;
+const DIO_TRAVEL_DASH_ARM = 125;   // min() with the unit cap, so low-cap units could still dash
 
 function commandTargetOf(m) {
   if (m?.cmdLock && m.cmdLock.state.hp > 0 && m.state.hp > 0) {
@@ -10867,14 +10869,16 @@ function applyMoveOrder(m, now) {
     const l = Math.hypot(dx, dz) || 1;
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
-    // multiplier. The latch arms only on a FULL gauge, holds down to the
-    // reserve floor, then drops: the unit walks until regen refills the
-    // gauge completely before the next dash (owner 2.1b — no repeated
-    // one-tick boosts hovering at the floor).
+    // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
+    // (125, owner tune — was full cap), holds down to the reserve floor,
+    // then drops: the unit walks until regen lifts the gauge back to the
+    // threshold before the next dash (owner 2.1b — no repeated one-tick
+    // boosts hovering at the floor).
     const st = m.state;
+    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP);
     if (mv.dashArmed) {
       if (st.boost <= DIO_TRAVEL_BOOST_FLOOR || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
-    } else if (st.boost >= (m.unit.boostCap ?? BOOST_CAP) && now >= (st.emptyRecoverUntil ?? 0)) {
+    } else if (st.boost >= armAt && now >= (st.emptyRecoverUntil ?? 0)) {
       mv.dashArmed = true;
     }
     if (mv.dashArmed) {
