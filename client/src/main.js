@@ -11396,6 +11396,16 @@ function ensureDioramaSlotEls(slot) {
   });
   const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
   const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
+  // Selection halo twins (hidden until the slot is selected): wide
+  // translucent strokes under the main line — an explicit glow that stays
+  // visible over bright floors where a blur-filter halo disappears; the
+  // .dio-selglow class pulses them in step with the card ring.
+  const rectG = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '7', rx: '1', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  rectG.classList.add('dio-selglow');
+  rectG.style.display = 'none';
+  const lineG = svgNode('line', { stroke: meta.color, 'stroke-width': '7', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  lineG.classList.add('dio-selglow');
+  lineG.style.display = 'none';
   // Force-lock crosshair triangles, one path PER COMMANDING UNIT (blue lock
   // = blue triangles, green = green; both on the same enemy = the first
   // locker keeps the X corners, the later one rides the + edge midpoints).
@@ -11417,8 +11427,10 @@ function ensureDioramaSlotEls(slot) {
   const tierMid = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   const tierFar = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
+  g.appendChild(rectG);
   g.appendChild(rect);
   g.appendChild(lineC);
+  g.appendChild(lineG);
   g.appendChild(line);
   g.appendChild(destRing);
   g.appendChild(tris);
@@ -11433,9 +11445,10 @@ function ensureDioramaSlotEls(slot) {
   card.style.borderColor = meta.color;
   card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-boost"><i></i></div><div class="dio-status"></div>';
   card.querySelector('.dio-bar i').style.background = meta.color;
+  card.style.setProperty('--dio-sel', meta.color);
   diorama.layer.appendChild(card);
   els = {
-    g, rect, rectC, line, lineC, tris, tris2, destRing, cmdIcon, pointer,
+    g, rect, rectC, rectG, line, lineC, lineG, tris, tris2, destRing, cmdIcon, pointer,
     tierMid, tierFar, card,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
@@ -11993,13 +12006,17 @@ function updateDioramaHud() {
     const lockedByA = !!state.ally && state.ally.cmdLock === m;
     const locked = lockedByP || lockedByA;
     els.g.style.opacity = '1';
+    // Selection glow: a solid brightened stroke over a widened dark casing
+    // plus a pulsing halo twin — explicit geometry instead of the old lone
+    // drop-shadow, which washed out over bright floors. The leader line and
+    // the info card carry the same treatment below.
     const selected = diorama.sel === slot;
-    els.g.style.filter = selected ? `drop-shadow(0 0 5px ${meta.color})` : '';
-    els.card.style.boxShadow = selected ? `0 0 10px 1px ${meta.color}` : '';
+    els.rectG.style.display = selected ? '' : 'none';
+    els.card.classList.toggle('dio-sel', selected);
     // Marker body: square for every unit, diamond when off-frame (owner
     // call — no scope circles). The rect doubles as the tap hit-area.
     const rectXf = offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '';
-    for (const r of [els.rectC, els.rect]) {
+    for (const r of [els.rectC, els.rectG, els.rect]) {
       r.setAttribute('transform', rectXf);
       r.setAttribute('x', bx.toFixed(1));
       r.setAttribute('y', by.toFixed(1));
@@ -12007,8 +12024,9 @@ function updateDioramaHud() {
       r.setAttribute('height', s.toFixed(1));
     }
     els.rectC.setAttribute('stroke', '#070b12');
+    els.rectC.setAttribute('stroke-width', selected ? '5' : '3.2');
     els.rect.setAttribute('stroke', meta.color);
-    els.rect.setAttribute('stroke-width', locked ? '1.8' : '1.2');
+    els.rect.setAttribute('stroke-width', selected ? '2.2' : locked ? '1.8' : '1.2');
     // Sniper damage tiers on the LOCKED marker — the classic reticle's two
     // ADD-ON levels ported 1:1 (owner call: no scope circles, square for
     // everyone): tier 2 adds cross ticks through the edge midpoints (mostly
@@ -12196,13 +12214,18 @@ function updateDioramaHud() {
     const lineEndX = side === 'left' ? cardX + cardW : cardX;
     const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
     const lineY2 = (els.cardY + cardH / 2).toFixed(1);
-    for (const ln of [els.lineC, els.line]) {
-      ln.style.display = '';
+    const selLn = diorama.sel === c.slot;
+    for (const ln of [els.lineC, els.lineG, els.line]) {
       ln.setAttribute('x1', boxEdgeX.toFixed(1));
       ln.setAttribute('y1', c.cy.toFixed(1));
       ln.setAttribute('x2', lineEndX.toFixed(1));
       ln.setAttribute('y2', lineY2);
     }
+    els.lineC.style.display = '';
+    els.line.style.display = '';
+    els.lineG.style.display = selLn ? '' : 'none';
+    els.lineC.setAttribute('stroke-width', selLn ? '5.2' : '3.4');
+    els.line.setAttribute('stroke-width', selLn ? '2.4' : '1.4');
   }
   dioramaGestureFrame();
   updateDioramaDragVisuals();
