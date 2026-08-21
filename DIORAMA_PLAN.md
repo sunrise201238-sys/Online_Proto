@@ -280,6 +280,11 @@ switch are implemented but still need a hands-on touch test.
   to walking at the floor (the floor binds only commanded travel; combat
   reflexes keep their own funding rules). A raw command-speed multiplier
   was considered and REJECTED (bypasses the stamina economy).
+  **2.1b amendment (owner, 2026-08-21):** a dash may only START on a FULL
+  boost gauge — the segment runs full -> floor, then the unit walks until
+  the gauge refills completely before dashing again. Rationale: the plain
+  floor rule produced continuous one-tick boosts the moment regen peeked
+  over the reserve, which read as stutter. Everything else unchanged.
 - Map ROTATION: pivot = the current look target (screen centre); tilt
   unchanged. Touch: two-finger twist (same gesture set as pinch zoom —
   span change zooms, angle change rotates, simultaneously). Desktop:
@@ -306,12 +311,15 @@ switch are implemented but still need a hands-on touch test.
 **Status: IMPLEMENTED (2026-08-21).** Code map on top of the phase-2 layer:
 
 - Dash travel: `applyMoveOrder` travel branch — sprints (`sprintSpeed` +
-  `inheritMomentum ×1.5` + `applyMomentum`, the bot's own dash math) while
-  `boost > DIO_TRAVEL_BOOST_FLOOR (50)` and `emptyRecoverUntil` allows;
-  drains on the normal meter via a separate `cmdBoostClock` tick
+  `inheritMomentum ×1.5` + `applyMomentum`, the bot's own dash math) in
+  LATCHED segments (`cmdMove.dashArmed`, 2.1b): the latch arms only when
+  boost sits at the unit's cap, releases at
+  `DIO_TRAVEL_BOOST_FLOOR (50)` or on `emptyRecoverUntil`, and the unit
+  walks until the gauge is FULL again before the next segment. Drain
+  runs on the normal meter via a separate `cmdBoostClock` tick
   accumulator, clamped AT the floor, skipped when the bot's own action
-  already dashed that frame (no double billing); walks at the floor until
-  regen lifts the gauge back over it. Anchor orbit still walks.
+  already dashed that frame (no double billing). Anchor orbit still
+  walks.
 - Rotation: `cam2.rot` yaw offset added to the map view's base yaw; pivot
   is the look target `(tx, tz)` = screen centre. Q/E keys
   (`keyState.rotL/rotR`, ±0.028 rad/frame), right-mouse drag

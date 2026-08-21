@@ -10681,9 +10681,12 @@ function dioramaGroundPoint(clientX, clientY, planeY = 0) {
 const DIO_OWN_SLOTS = ['player', 'ally'];
 // Commanded travel is a DASH, funded by the unit's normal boost gauge with a
 // RESERVE FLOOR: the march may not spend below 50 boost (cap untouched,
-// nothing granted — owner spec "行軍中保留底線 50 不得動用"). While boost sits
-// at/under the floor the unit walks; combat reflexes keep their own funding
-// rules and may still spend the reserve.
+// nothing granted — owner spec "行軍中保留底線 50 不得動用"). Dash segments
+// are LATCHED on a FULL gauge (owner, phase 2.1b): a dash may only START
+// when boost sits at the cap, runs down to the floor, then the unit walks
+// until the gauge refills completely — never the old stutter of re-sprinting
+// the instant regen peeks over the floor. Combat reflexes keep their own
+// funding rules and may still spend the reserve.
 const DIO_TRAVEL_BOOST_FLOOR = 50;
 
 function commandTargetOf(m) {
@@ -10769,7 +10772,8 @@ function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
     path, idx: 0,
     phase: 'travel',
     anchorUntil: 0,
-    orbitSign: ((m.cmdOrbitFlip = !m.cmdOrbitFlip)) ? 1 : -1
+    orbitSign: ((m.cmdOrbitFlip = !m.cmdOrbitFlip)) ? 1 : -1,
+    dashArmed: false   // latches on a FULL gauge, releases at the floor
   };
 }
 
@@ -10801,13 +10805,19 @@ function applyMoveOrder(m, now) {
     const dx = gx - pos.x;
     const dz = gz - pos.z;
     const l = Math.hypot(dx, dz) || 1;
-    // DASH to the assigned area while boost stays above the reserve floor —
-    // same sprint math as the bot's own (base speed + inherited momentum),
-    // no fabricated multiplier. At the floor: plain walk until regen lifts
-    // the gauge back over it.
+    // DASH to the assigned area in LATCHED segments — same sprint math as
+    // the bot's own (base speed + inherited momentum), no fabricated
+    // multiplier. The latch arms only on a FULL gauge, holds down to the
+    // reserve floor, then drops: the unit walks until regen refills the
+    // gauge completely before the next dash (owner 2.1b — no repeated
+    // one-tick boosts hovering at the floor).
     const st = m.state;
-    const canSprint = st.boost > DIO_TRAVEL_BOOST_FLOOR && now >= (st.emptyRecoverUntil ?? 0);
-    if (canSprint) {
+    if (mv.dashArmed) {
+      if (st.boost <= DIO_TRAVEL_BOOST_FLOOR || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
+    } else if (st.boost >= (m.unit.boostCap ?? BOOST_CAP) && now >= (st.emptyRecoverUntil ?? 0)) {
+      mv.dashArmed = true;
+    }
+    if (mv.dashArmed) {
       const sprint = m.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
       m.body.velocity.x = (dx / l) * sprint;
       m.body.velocity.z = (dz / l) * sprint;
