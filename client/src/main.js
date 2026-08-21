@@ -11097,13 +11097,14 @@ function ensureDioramaSlotEls(slot) {
   const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
   const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
   // Force-lock crosshair triangles, one path PER COMMANDING UNIT (blue lock
-  // = blue triangles, green = green; both locks stack on split corners).
+  // = blue triangles, green = green; both on the same enemy = the first
+  // locker keeps the X corners, the later one rides the + edge midpoints).
   const tris = svgNode('path', { fill: DIO_SLOT_META.player.color, stroke: 'none', 'pointer-events': 'none' });
   const tris2 = svgNode('path', { fill: DIO_SLOT_META.ally.color, stroke: 'none', 'pointer-events': 'none' });
   // Standing move-order destination ring (own slots only).
   const destRing = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'stroke-dasharray': '3 3', opacity: '0.85', 'pointer-events': 'none' });
-  // Command state icon at the square's top corner: gold "!" = under a
-  // position order, gold eye = autonomous (own slots only).
+  // Command state icons at the square's top corner: gold "!" = area order,
+  // gold eye = force-locking an enemy, none = autonomous (own slots only).
   const cmdIcon = svgNode('g', { 'pointer-events': 'none' });
   cmdIcon.classList.add('dio-goldglow');
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
@@ -11371,6 +11372,9 @@ function onDioPointerUp(e) {
     if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
       // Same enemy again = cancel the force lock; another enemy = re-lock.
       cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
+      // Lock order decides who wears the X vs + crosshair when both
+      // commanders pin the same enemy (2.1d).
+      if (cmd.cmdLock) cmd.cmdLockAt = performance.now();
       diorama.sel = null;   // one-shot: the glow drops once the command lands
     }
   } else {
@@ -11490,15 +11494,20 @@ function dioCmdIconCardMarkup(kind) {
   return bang + eye;
 }
 
-// Force-lock corner triangles for a subset of corners (split when two
-// commanders lock the same enemy).
+// Force-lock triangles around the marker box. Anchors are direction pairs:
+// diagonals ([±1, ±1]) sit outside the CORNERS (the X layout), axis units
+// ([0, ±1] / [±1, 0]) outside the EDGE MIDPOINTS (the + layout, worn by the
+// second commander when both lock the same enemy — owner 2.1d).
+const DIO_TRI_X = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+const DIO_TRI_PLUS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 function dioCornerTriPath(bx, by, s, corners, gap = 4, tri = 7.5) {
   const parts = [];
   for (const [sx, sy] of corners) {
-    const ux = sx * 0.7071;
-    const uy = sy * 0.7071;
-    const cxr = sx < 0 ? bx : bx + s;
-    const cyr = sy < 0 ? by : by + s;
+    const l = Math.hypot(sx, sy) || 1;
+    const ux = sx / l;
+    const uy = sy / l;
+    const cxr = sx < 0 ? bx : sx > 0 ? bx + s : bx + s / 2;
+    const cyr = sy < 0 ? by : sy > 0 ? by + s : by + s / 2;
     const tipX = cxr + ux * gap;
     const tipY = cyr + uy * gap;
     const baseX = tipX + ux * tri;
@@ -11704,12 +11713,17 @@ function updateDioramaHud() {
     } else {
       els.pointer.style.display = 'none';
     }
-    // Force-lock crosshair: triangles in the COMMANDING unit's color; two
-    // commanders on the same enemy split the corners (blue TL/BR, green
-    // TR/BL). Shares the rect transform so it tilts with the edge diamond.
+    // Force-lock crosshair: triangles in the COMMANDING unit's color. One
+    // commander wears the X (corner) layout; when BOTH lock the same enemy
+    // the FIRST keeps the X and the one who joined later rides the + (edge
+    // midpoint) layout instead of corner-splitting (owner 2.1d; ties from
+    // debug-set locks count the player as first). Shares the rect transform
+    // so the whole crosshair tilts with the edge diamond.
+    const pLockAt = state.player?.cmdLockAt ?? 0;
+    const aLockAt = state.ally?.cmdLockAt ?? 0;
     if (lockedByP) {
       els.tris.setAttribute('d', dioCornerTriPath(bx, by, s,
-        lockedByA ? [[-1, -1], [1, 1]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]]));
+        lockedByA && pLockAt > aLockAt ? DIO_TRI_PLUS : DIO_TRI_X));
       els.tris.setAttribute('transform', rectXf);
       els.tris.style.display = '';
     } else {
@@ -11717,7 +11731,7 @@ function updateDioramaHud() {
     }
     if (lockedByA) {
       els.tris2.setAttribute('d', dioCornerTriPath(bx, by, s,
-        lockedByP ? [[1, -1], [-1, 1]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]]));
+        lockedByP && aLockAt >= pLockAt ? DIO_TRI_PLUS : DIO_TRI_X));
       els.tris2.setAttribute('transform', rectXf);
       els.tris2.style.display = '';
     } else {

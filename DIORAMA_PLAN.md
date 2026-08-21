@@ -351,6 +351,12 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1d dual-lock crosshair (owner, 2026-08-21):** when BOTH commanders
+  force-lock the same enemy, the corners no longer split — the FIRST
+  locker keeps the full X (corner) triangle layout and the one who
+  joined later wears the full + (edge-midpoint) layout, each in its own
+  color (`DIO_TRI_X` / `DIO_TRI_PLUS`, order via `cmdLockAt`; ties count
+  the player as first). A single lock still reads as the X.
 - **2.1c HUD tweaks (owner, 2026-08-21):** every info card carries a
   STAMINA gauge (thin amber `.dio-boost` bar under the HP bar, fed from
   `state.boost / boostCap`) — both teams for now, the enemy readout may
