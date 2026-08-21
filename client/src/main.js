@@ -8647,7 +8647,10 @@ function syncOnlineCommands(snap, onl) {
 
 // Lock-share sprite for the classic chase view: four corner triangles (the
 // diorama X layout) in the commander's color, billboarded on the pinned
-// enemy.
+// enemy. They frame OUTSIDE the classic lock crosshair (owner call): the
+// reticle sprite is 8.1 world units with its bracket square ≈ ±2.7 around
+// (0, 0.2, 0) — tight corner triangles on a 10.5-unit sprite at the same
+// anchor put this ring at roughly ±3.1..±4.9, clear of the brackets.
 function makeCmdLockSprite(fillHex) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -8656,24 +8659,24 @@ function makeCmdLockSprite(fillHex) {
   const tri = (cx, cy, dx, dy) => {
     x.beginPath();
     x.moveTo(cx, cy);
-    x.lineTo(cx + dx * 26, cy);
-    x.lineTo(cx, cy + dy * 26);
+    x.lineTo(cx + dx * 22, cy);
+    x.lineTo(cx, cy + dy * 22);
     x.closePath();
-    x.lineWidth = 8;
+    x.lineWidth = 7;
     x.strokeStyle = '#0b1622';
     x.stroke();
     x.fillStyle = fillHex;
     x.fill();
   };
-  tri(14, 14, 1, 1);
-  tri(114, 14, -1, 1);
-  tri(14, 114, 1, -1);
-  tri(114, 114, -1, -1);
+  tri(4, 4, 1, 1);
+  tri(124, 4, -1, 1);
+  tri(4, 124, 1, -1);
+  tri(124, 124, -1, -1);
   const t = new THREE.CanvasTexture(c);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, fog: false }));
-  s.scale.set(6.4, 6.4, 1);
+  s.scale.set(10.5, 10.5, 1);
   s.center.set(0.5, 0.5);
-  s.position.set(0, 3.2, 0);
+  s.position.set(0, 0.2, 0);   // concentric with the classic reticle
   s.renderOrder = 9997;
   return s;
 }
@@ -8712,6 +8715,12 @@ function updateOnlineCommandShare(onl) {
       share.tris.parent?.remove(share.tris);
       lockTarget.root.add(share.tris);
     }
+    // Track the classic reticle's distance scaling (9.15 × clamp) with a
+    // 1.45× base so the triangles stay OUTSIDE the lock crosshair brackets
+    // at every camera distance (owner call).
+    const camDist = camera.position.distanceTo(lockTarget.root.position);
+    const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
+    share.tris.scale.setScalar(9.15 * 1.45 * distScale);
     share.tris.visible = true;
   } else if (share.tris) {
     share.tris.visible = false;
