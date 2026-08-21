@@ -308,6 +308,7 @@ function emitSnapshotsFor(lobby) {
     const out = {};
     for (const cs of lobby.commandSlots) {
       if (teamOf(cs) !== team) continue;
+      if ((lobby.match.fighters[cs]?.hp ?? 0) <= 0) continue;   // dead commander
       const cmd = getCommands(lobby.match, cs);
       if (!cmd || (!cmd.move && !cmd.lockTargetId)) continue;
       out[cs] = {
@@ -345,7 +346,12 @@ function tickLobby(lobby) {
     : lobby.botSlots;
   for (const botId of driven) {
     const me = lobby.match.fighters[botId];
-    if (!me || me.hp <= 0) continue;
+    if (!me || me.hp <= 0) {
+      // A dead commander's standing orders die with the unit — otherwise
+      // the team echo keeps showing the ring/lock to teammates.
+      if (me && lobby.commandSlots.has(botId)) clearCommands(lobby.match, botId);
+      continue;
+    }
     me.targetId = commandTargetIdOf(lobby.match, botId)
       ?? pickBotTargetId(lobby.match, me) ?? me.targetId;
     tickBot(lobby.match, botId, now);

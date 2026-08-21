@@ -8645,51 +8645,58 @@ function syncOnlineCommands(snap, onl) {
   }
 }
 
-// Lock-share sprite for the classic chase view: four corner triangles (the
-// diorama X layout) in the commander's color, billboarded on the pinned
-// enemy. They frame OUTSIDE the classic lock crosshair (owner call): the
-// reticle sprite is 8.1 world units with its bracket square ≈ ±2.7 around
-// (0, 0.2, 0) — tight corner triangles on a 10.5-unit sprite at the same
-// anchor put this ring at roughly ±3.1..±4.9, clear of the brackets.
+// Lock-share sprite for the classic chase view: the DIORAMA lock crosshair,
+// ported 1:1 — four isoceles triangles on the diagonals, tips pointing IN
+// at the lock-reticle's bracket corners, in the commander's color. The
+// canvas mirrors the reticle texture's layout (128px, bracket square ≈ the
+// central 2/3, corners ≈ 21/107), so rendering it at the SAME scale as the
+// reticle sits the triangles just outside the brackets — small, like the
+// command player's own view (owner call: same visual style, not bigger).
 function makeCmdLockSprite(fillHex) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
   x.lineJoin = 'round';
-  const tri = (cx, cy, dx, dy) => {
+  const D = 0.7071;
+  const tri = (cx, cy, sx, sy) => {
+    const gap = 4;      // matches dioCornerTriPath's defaults, canvas px
+    const len = 15;
+    const halfW = 8;
+    const tipX = cx + sx * D * gap;
+    const tipY = cy + sy * D * gap;
+    const baseX = tipX + sx * D * len;
+    const baseY = tipY + sy * D * len;
+    const px2 = -sy * D * halfW;
+    const py2 = sx * D * halfW;
     x.beginPath();
-    x.moveTo(cx, cy);
-    x.lineTo(cx + dx * 22, cy);
-    x.lineTo(cx, cy + dy * 22);
+    x.moveTo(tipX, tipY);
+    x.lineTo(baseX + px2, baseY + py2);
+    x.lineTo(baseX - px2, baseY - py2);
     x.closePath();
-    x.lineWidth = 7;
+    x.lineWidth = 5;
     x.strokeStyle = '#0b1622';
     x.stroke();
     x.fillStyle = fillHex;
     x.fill();
   };
-  tri(4, 4, 1, 1);
-  tri(124, 4, -1, 1);
-  tri(4, 124, 1, -1);
-  tri(124, 124, -1, -1);
+  tri(21, 21, -1, -1);
+  tri(107, 21, 1, -1);
+  tri(21, 107, -1, 1);
+  tri(107, 107, 1, 1);
   const t = new THREE.CanvasTexture(c);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, fog: false }));
-  s.scale.set(10.5, 10.5, 1);
   s.center.set(0.5, 0.5);
   s.position.set(0, 0.2, 0);   // concentric with the classic reticle
   s.renderOrder = 9997;
   return s;
 }
 
-// Classic-teammate share (owner decision 2): when MY view is classic and my
-// human teammate is commanding, show (a) a ground ring at their unit's
-// ordered destination and (b) their colored lock triangles on the pinned
-// enemy — no path line, no icons. Command viewers get the full annotation
-// through the diorama layer instead, so this renders only for classic.
 function updateOnlineCommandShare(onl) {
   const share = onl.cmdShare ?? (onl.cmdShare = { ring: null, tris: null });
   const ally = state.ally;
-  const showShare = !onl.commandMode && !!ally;
+  // The commander must be ALIVE: the server clears a dead commander's
+  // orders, but this client-side gate covers the snapshot-lag window too.
+  const showShare = !onl.commandMode && !!ally && ally.state.hp > 0;
   const mv = showShare ? ally.cmdMove : null;
   if (mv) {
     if (!share.ring) {
@@ -8715,12 +8722,12 @@ function updateOnlineCommandShare(onl) {
       share.tris.parent?.remove(share.tris);
       lockTarget.root.add(share.tris);
     }
-    // Track the classic reticle's distance scaling (9.15 × clamp) with a
-    // 1.45× base so the triangles stay OUTSIDE the lock crosshair brackets
-    // at every camera distance (owner call).
+    // Track the classic reticle's distance scaling 1:1 — the canvas layout
+    // itself puts the triangles just outside the brackets, so the sprite
+    // renders at exactly the reticle's size at every camera distance.
     const camDist = camera.position.distanceTo(lockTarget.root.position);
     const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-    share.tris.scale.setScalar(9.15 * 1.45 * distScale);
+    share.tris.scale.setScalar(9.15 * distScale);
     share.tris.visible = true;
   } else if (share.tris) {
     share.tris.visible = false;
