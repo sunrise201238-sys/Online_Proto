@@ -291,9 +291,12 @@ switch are implemented but still need a hands-on touch test.
   span change zooms, angle change rotates, simultaneously). Desktop:
   right-mouse drag, or Q/E keys.
 - Mode separation: the select menu gains a Classic / Command mode chip
-  (alongside Duel/Trio); the choice persists in localStorage across
-  sessions; V / the pause menu still toggles mid-match. New players
-  default to Classic.
+  (alongside Duel/Trio); V / the pause menu still toggles mid-match.
+  **2.1h amendment (owner, 2026-08-21):** the choice is SESSION-ONLY,
+  exactly like Duel/1v1 — every site open starts Classic. The original
+  localStorage persistence is removed and the old `gvg-view-mode` key is
+  actively deleted at boot so no leftover storage remains on devices
+  that saved it during the short-lived persistence window.
 - TAP-TAP ordering (coexists with drag orders): tap an own unit's card
   OR marker -> selection glow -> tap anywhere on the map = area order
   (HOLD the tap to cycle the vertical layer, same as the drag

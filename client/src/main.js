@@ -1112,12 +1112,13 @@ const DIORAMA_MAP_VIEW = {
 // during the arena build (null for maps that bake their perimeter inline).
 let arenaBounds = null;
 
-// Mode preference persists across sessions (phase 2.1): the select menu's
-// Classic/Command chip and the in-match toggles all funnel through
-// toggleDiorama, which writes this key. New players default to Classic.
+// View mode does NOT persist (owner 2.1h): every site open starts CLASSIC,
+// exactly like Duel/1v1. The chip and the in-match toggles only change the
+// running session. The old persistence key is actively removed so devices
+// that stored it under the short-lived 2.1 persistence carry no leftovers.
 try {
-  diorama.enabled = localStorage.getItem('gvg-view-mode') === 'command';
-} catch { /* storage unavailable — session-local only */ }
+  localStorage.removeItem('gvg-view-mode');
+} catch { /* storage unavailable — nothing to clean */ }
 
 if (typeof window !== 'undefined') {
   window.__diorama = {
@@ -8856,8 +8857,8 @@ function showSelectMenu() {
       btn.classList.add('mode-active');
     });
   });
-  // View chip: Classic (direct control) vs Command (diorama). The choice
-  // persists in localStorage via toggleDiorama; new players default Classic.
+  // View chip: Classic (direct control) vs Command (diorama). Session-only
+  // like Duel/1v1 — every site open starts Classic (owner 2.1h).
   menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((btn) => {
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -10461,7 +10462,6 @@ function toggleDiorama(force) {
   if (want === diorama.enabled) return;
   if (want && state.online) return;            // POC: offline only
   diorama.enabled = want;
-  try { localStorage.setItem('gvg-view-mode', want ? 'command' : 'classic'); } catch { /* no-op */ }
   if (want) {
     diorama.cam.snapped = false;
     diorama.cam2.snapped = false;   // open on the whole-map overview
