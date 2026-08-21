@@ -10577,6 +10577,15 @@ function applyDioramaDressing() {
   // ever closer than ~100 units to the diorama camera, so 6 is safe.
   camera.near = 6;
   camera.updateProjectionMatrix();
+  // COMMAND MODE de-clutter (owner 2.1f): the tall airborne dressing tagged
+  // cmdHide at creation (Factory pipes/trusses/lights, Lobby & Station &
+  // Flashpoint ceiling bars + fixtures, Airport gantries/arch crossbars/
+  // hanging signs) reads as floating noise from the board view — hide it
+  // while the diorama stands. Visual only: none of it is collidable, so
+  // bots and classic players see identical gameplay.
+  for (const o of arenaDecor) {
+    if (o.userData?.cmdHide) o.visible = false;
+  }
 }
 
 function removeDioramaBase() {
@@ -10596,6 +10605,10 @@ function removeDioramaDressing() {
   removeDioramaBase();
   ground.visible = true;
   gridHelper.visible = true;
+  // Back to classic: the cmdHide airborne dressing returns.
+  for (const o of arenaDecor) {
+    if (o.userData?.cmdHide) o.visible = true;
+  }
   if (state.mapKey) applyMapAmbience(state.mapKey);
   if (diorama.savedFar != null) {
     camera.far = diorama.savedFar;
@@ -13718,15 +13731,22 @@ function buildFactoryArena() {
   cartSpots.forEach(([x, z]) => drawCart(x, z));
 
   // ===== Overhead pipework (visual only) =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f —
+  // it reads as floating clutter from the board view) and returns in classic.
   for (const z of [-65, -28, 28, 65]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 260, 12), pipe);
     p.rotation.z = Math.PI / 2;
     p.position.set(0, 16, z);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
+  // NOTE: these four have no rotation, so they stand VERTICALLY (y -89..121)
+  // — almost certainly a missing `p.rotation.x = Math.PI / 2` (pre-existing;
+  // left as-is in classic, but they are exactly the towers cmdHide removes).
   for (const x of [-80, -30, 30, 80]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 210, 12), pipe);
     p.position.set(x, 16, 0);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
 
@@ -13734,6 +13754,7 @@ function buildFactoryArena() {
   for (const x of [-110, -75, -40, -10, 20, 55, 90]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 210), beam);
     b.position.set(x, CEIL_Y - 3, 0);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
 
@@ -13742,6 +13763,7 @@ function buildFactoryArena() {
     for (const z of [-65, 0, 65]) {
       const l = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.4, 1.6), lightMat);
       l.position.set(x, CEIL_Y - 4.5, z);
+      l.userData.cmdHide = true;
       scene.add(l); arenaDecor.push(l);
     }
   }
@@ -14473,22 +14495,28 @@ function buildLobbyArena() {
   scene.add(sculpRing); arenaDecor.push(sculpRing);
 
   // ===== Ceiling lights and beams =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f)
+  // and returns in classic. Hide via mesh.visible only — the beam/strip
+  // materials (`wall`, `blueGlow`) are shared with other props.
   for (const x of [-80, -40, 0, 40, 80]) {
     for (const z of [-80, -40, 0, 40, 80]) {
       const light = new THREE.Mesh(new THREE.BoxGeometry(4, 0.18, 4), ceilingLight);
       light.position.set(x, 23.6, z);
+      light.userData.cmdHide = true;
       scene.add(light); arenaDecor.push(light);
     }
   }
   for (const z of [-80, -40, 0, 40, 80]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(220, 0.4, 1.2), wall);
     b.position.set(0, 23.8, z);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
   // Long blue accent strips along the ceiling
   for (const z of [-60, -20, 20, 60]) {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(220, 0.1, 0.3), blueGlow);
     strip.position.set(0, 23.5, z);
+    strip.userData.cmdHide = true;
     scene.add(strip); arenaDecor.push(strip);
   }
 }
@@ -14930,10 +14958,13 @@ function buildStationArena() {
   drawTotem(25, -70);
 
   // ===== Overhead pipework (decor only) =====
+  // cmdHide: the whole airborne layer (pipes, trusses, lamp banks, hanging
+  // clock) vanishes in COMMAND MODE (owner 2.1f) and returns in classic.
   for (const z of [-100, -55, -15, 15, 55, 100]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2 * HALF_X, 12), pipe);
     p.rotation.z = Math.PI / 2;
     p.position.set(0, 20, z);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
 
@@ -14941,6 +14972,7 @@ function buildStationArena() {
   for (const x of [-115, -75, -35, 0, 35, 75, 115]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 2 * HALF_Z), beam);
     b.position.set(x, CEIL_Y - 3.5, 0);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
 
@@ -14949,6 +14981,7 @@ function buildStationArena() {
     for (const z of [-110, -70, -35, 0, 35, 70, 110]) {
       const l = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.5, 2.2), lampMat);
       l.position.set(x, CEIL_Y - 5.5, z);
+      l.userData.cmdHide = true;
       scene.add(l); arenaDecor.push(l);
     }
   }
@@ -14957,13 +14990,16 @@ function buildStationArena() {
   const clockBack = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 24), beam);
   clockBack.rotation.x = Math.PI / 2;
   clockBack.position.set(0, 22, 0);
+  clockBack.userData.cmdHide = true;
   scene.add(clockBack); arenaDecor.push(clockBack);
   const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.3, 24), lampMat);
   clockFace.rotation.x = Math.PI / 2;
   clockFace.position.set(0, 22, 0.3);
+  clockFace.userData.cmdHide = true;
   scene.add(clockFace); arenaDecor.push(clockFace);
   const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
   clockHanger.position.set(0, 25.5, 0);
+  clockHanger.userData.cmdHide = true;
   scene.add(clockHanger); arenaDecor.push(clockHanger);
 }
 
@@ -15165,8 +15201,10 @@ function buildAirportArena() {
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     // Crossbar fades when the camera closes in (same rule as the edge walls)
-    // so overhead furniture never blanks the plateau fight.
+    // so overhead furniture never blanks the plateau fight. cmdHide: gone
+    // entirely in COMMAND MODE (owner 2.1f) — the collidable posts stay.
     const bar = addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue.clone(), decorOnly: true });
+    bar.userData.cmdHide = true;
     registerWallFade(bar, {
       minX: -2.5, maxX: 2.5,
       minY: PLATEAU_Y + 10, maxY: PLATEAU_Y + 11.6,
@@ -15246,9 +15284,11 @@ function buildAirportArena() {
       top.position.set(dx, PLATEAU_Y + 8.1, dz);
       scene.add(top); arenaDecor.push(top);
       // Hanging airline sign above + queue-barrier posts on the concourse side
-      // make the islands read as check-in counters.
+      // make the islands read as check-in counters. cmdHide: the hanging sign
+      // vanishes in COMMAND MODE (owner 2.1f); the desks stay.
       const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue.clone());
       hang.position.set(dx, PLATEAU_Y + 11.5, dz);
+      hang.userData.cmdHide = true;
       scene.add(hang); arenaDecor.push(hang);
       registerWallFade(hang, {
         minX: dx - 6, maxX: dx + 6,
@@ -15359,9 +15399,12 @@ function buildAirportArena() {
   // Occlusion-fade like the Streets bridge: the grey beam AND its blue sign
   // panels go translucent whenever they sit between the camera and the
   // focused unit or a living enemy — never just from camera proximity.
+  // cmdHide: gantry beams AND their sign panels vanish in COMMAND MODE
+  // (owner 2.1f) and return in classic.
   for (const gx of [-40, 40]) {
     const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 150), mullionMat.clone());
     beam.position.set(gx, 14.5, 0);
+    beam.userData.cmdHide = true;
     scene.add(beam); arenaDecor.push(beam);
     registerWallFade(beam, {
       minX: gx - 0.75, maxX: gx + 0.75,
@@ -15372,6 +15415,7 @@ function buildAirportArena() {
     for (const sz of [-55, 0, 55]) {
       const panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 11), signBlue.clone());
       panel.position.set(gx, 12, sz);
+      panel.userData.cmdHide = true;
       scene.add(panel); arenaDecor.push(panel);
       registerWallFade(panel, {
         minX: gx - 0.2, maxX: gx + 0.2,
@@ -15760,10 +15804,13 @@ function buildFlashpointArena() {
   // Pushed 3× their previous height (y ≈ 33-35) — well above any mech jump
   // apex (~8 m) and outside the player camera's normal field of view, so
   // the pipes/ducts/light bars no longer intrude on the player's sight. =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f)
+  // and returns in classic.
   // Long ceiling ducts spanning the hall.
   for (const dz of [-40, 0, 40]) {
     const duct = new THREE.Mesh(new THREE.BoxGeometry(200, 1.0, 1.6), ductMat);
     duct.position.set(0, 34.5, dz);
+    duct.userData.cmdHide = true;
     scene.add(duct); arenaDecor.push(duct);
   }
   // Copper exposed pipes along one ceiling axis.
@@ -15771,6 +15818,7 @@ function buildFlashpointArena() {
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 150, 10), pipeMat);
     pipe.rotation.x = Math.PI / 2;
     pipe.position.set(px, 33.9, 0);
+    pipe.userData.cmdHide = true;
     scene.add(pipe); arenaDecor.push(pipe);
   }
   // Fluorescent strip lights (warm-amber emissive bars).
@@ -15781,6 +15829,7 @@ function buildFlashpointArena() {
   lightSpots.forEach(([lx, lz]) => {
     const light = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.22, 0.9), lampGlow);
     light.position.set(lx, 35.25, lz);
+    light.userData.cmdHide = true;
     scene.add(light); arenaDecor.push(light);
   });
 

@@ -351,6 +351,22 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1f airborne de-clutter (owner, 2026-08-21):** on Factory, Lobby,
+  Station, Airport and Flashpoint the tall/long airborne dressing is
+  HIDDEN while command mode stands and returns in classic — both
+  directions, mid-match toggles included. Mechanism: the meshes carry
+  `userData.cmdHide = true` at creation; `applyDioramaDressing` sets
+  `visible = false` on tagged arenaDecor entries, `removeDioramaDressing`
+  restores them; map rebuilds while active re-apply automatically.
+  Visual only — none of it is collidable, gameplay identical. Hidden
+  sets: Factory pipes/trusses/shop lights (30, incl. the four
+  VERTICALLY-standing pipes — a pre-existing missing-rotation bug, left
+  as-is in classic); Lobby ceiling panels/beams/blue strips (34);
+  Station pipes/trusses/lamp banks/central clock (58); Airport signage
+  gantries+panels/arch crossbars/hanging check-in signs (15);
+  Flashpoint ducts/copper pipes/strip lights (14). Unmentioned maps
+  untouched (owner instruction). Menu defaults confirmed: Duel / 1v1 /
+  Classic for fresh profiles.
 - **2.1e layer picking (owner, 2026-08-21):** the vertical layer stack
   lists only STANDABLE floors — `dioramaLayerStandable` checks the nav
   grid (3x3 cell ring, floor within 2u) so platform undersides and slope
