@@ -10806,10 +10806,11 @@ function ensureDioramaSlotEls(slot) {
   const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
   // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
   // cross ticks (tier 2) and inner closing bars (tier 3) — as line paths.
-  // Amber like the lock triangles ("aim info" language) and bolder than the
-  // slot-colored frame — the owner wants the sniper tiers readable at a glance.
-  const tierMid = svgNode('path', { fill: 'none', stroke: '#ffd257', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'pointer-events': 'none' });
-  const tierFar = svgNode('path', { fill: 'none', stroke: '#ffd257', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  // Slot-colored like the rest of the unit's HUD (owner call — not amber),
+  // drawn bold and large so the tiers read at a glance. The classic POV
+  // reticle textures are untouched.
+  const tierMid = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  const tierFar = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rect);
   g.appendChild(lineC);
@@ -11044,7 +11045,7 @@ function updateDioramaHud() {
       }
     }
     if (tier >= 2) {
-      const tl = Math.min(18, Math.max(9, s * 0.34));   // tick length — mostly outside
+      const tl = Math.min(24, Math.max(12, s * 0.45));  // tick length — mostly outside
       const tin = tl * 0.18;                            // small inward overshoot
       els.tierMid.setAttribute('d', [
         `M ${cx.toFixed(1)} ${(by - (tl - tin)).toFixed(1)} L ${cx.toFixed(1)} ${(by + tin).toFixed(1)}`,
@@ -11059,7 +11060,7 @@ function updateDioramaHud() {
     }
     if (tier >= 3) {
       const inset = s * 0.17;
-      const half = Math.min(11, Math.max(5, s * 0.17));
+      const half = Math.min(14, Math.max(7, s * 0.22));
       els.tierFar.setAttribute('d', [
         `M ${(cx - half).toFixed(1)} ${(by + inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + inset).toFixed(1)}`,
         `M ${(cx - half).toFixed(1)} ${(by + s - inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + s - inset).toFixed(1)}`,
@@ -11203,6 +11204,8 @@ function updateDioramaHud() {
       ln.setAttribute('y1', c.cy.toFixed(1));
       ln.setAttribute('x2', lineEndX.toFixed(1));
       ln.setAttribute('y2', lineY2);
+      // NO SIGHT: the leader line goes dotted along with its unit's square.
+      ln.setAttribute('stroke-dasharray', c.blocked ? '4 3' : '');
     }
   }
   // Manual-fire affordance: no target selected -> half-transparent fire button.
