@@ -270,3 +270,33 @@ switch are implemented but still need a hands-on touch test.
   either party's death.
 - Player-slot death in SD: the remaining ally stays commandable; win/loss
   rules unchanged.
+
+### Phase 2.1 refinements (owner, 2026-08-21)
+
+- Commanded travel DASHES instead of walking: normal sprint/boost economy
+  and momentum rules apply, and issuing a move order grants +50 boost on
+  the spot (clamped to the unit's max) as the journey's fuel; when boost
+  runs dry the unit falls back to walking. A raw command-speed multiplier
+  was considered and REJECTED (bypasses the stamina economy).
+- Map ROTATION: pivot = the current look target (screen centre); tilt
+  unchanged. Touch: two-finger twist (same gesture set as pinch zoom —
+  span change zooms, angle change rotates, simultaneously). Desktop:
+  right-mouse drag, or Q/E keys.
+- Mode separation: the select menu gains a Classic / Command mode chip
+  (alongside Duel/Trio); the choice persists in localStorage across
+  sessions; V / the pause menu still toggles mid-match. New players
+  default to Classic.
+- TAP-TAP ordering (coexists with drag orders): tap an own unit's card
+  OR marker -> selection glow -> tap anywhere on the map = area order
+  (HOLD the tap to cycle the vertical layer, same as the drag
+  long-press) / tap an enemy card or marker = force lock -> the glow
+  turns OFF after a command lands (one command per selection).
+  Tapping the selected unit again = deselect without ordering.
+  Unreachable destination: a small red "Area is not available" note +
+  red ring fades at the tapped spot, and the selection glow STAYS so the
+  player can re-tap directly.
+- Status icons redefined: "!" = has an area order (travel + anchor);
+  "eye" = force-locking an enemy (pairs with the colored triangles on
+  that enemy); NO icon when a unit has no command; both icons render
+  side by side when both commands are active. Double-tap on an own
+  MARKER OR CARD clears all commands on that unit.
