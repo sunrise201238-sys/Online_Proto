@@ -5,7 +5,7 @@ import { Server } from 'socket.io';
 import {
   createMatchState,
   respawnFighterNext,
-  buildSnapshot,
+  buildSnapshotFor,
   tickMatch,
   tickBot,
   pickBotTargetId,
@@ -253,9 +253,14 @@ function emitLobbyConfig(lobby) {
   });
 }
 
-function snapshotWithAcks(lobby) {
-  return {
-    ...buildSnapshot(lobby.match),
+// Per-team snapshots (command-mode online, phase 3 R1): each side gets its
+// own filtered view — enemy boost nulled, enemy bot-intent fields stripped
+// (the old single broadcast shipped everyone's full fighter objects to the
+// whole room). Two variants are built once per tick and emitted per socket;
+// spectators get team A's view (the client renders spectators from p1's
+// perspective — owner: spectators see the classic view).
+function emitSnapshotsFor(lobby) {
+  const extra = {
     mode: lobby.mode,
     botSlots: Array.from(lobby.botSlots),
     acks: {
@@ -263,6 +268,14 @@ function snapshotWithAcks(lobby) {
       p3: lobby.lastAcked.p3, p4: lobby.lastAcked.p4
     }
   };
+  const byTeam = {
+    A: { ...buildSnapshotFor(lobby.match, 'A'), ...extra },
+    B: { ...buildSnapshotFor(lobby.match, 'B'), ...extra }
+  };
+  for (const [sid, slot] of lobby.players) {
+    const team = SLOT_IDS.includes(slot) ? teamOf(slot) : 'A';
+    io.to(sid).emit('match:snapshot', byTeam[team]);
+  }
 }
 
 function tickLobby(lobby) {
@@ -338,18 +351,18 @@ function tickLobby(lobby) {
     const teamAOut = slotOut('p1') && slotOut('p3');
     const teamBOut = slotOut('p2') && slotOut('p4');
     if (teamAOut || teamBOut) {
-      io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+      emitSnapshotsFor(lobby);
       endMatchFor(lobby, teamAOut ? 'B' : 'A', 'ko');
       return;
     }
   } else if (slotOut('p1') || slotOut('p2')) {
     const winner = slotOut('p1') ? 'p2' : 'p1';
-    io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+    emitSnapshotsFor(lobby);
     endMatchFor(lobby, winner, 'ko');
     return;
   }
 
-  io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+  emitSnapshotsFor(lobby);
 }
 
 function tickAllLobbies() {

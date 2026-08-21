@@ -7483,7 +7483,10 @@ function mirrorFighterToMech(fighter, mech) {
   const s = mech.state;
   s.action = fighter.action;
   s.hp = fighter.hp;
-  s.boost = fighter.boost;
+  // Enemy boost arrives REDACTED (null) from the per-team snapshot filter
+  // (phase 3 R1) — coalesce so no gauge math ever sees a non-number.
+  // Own-team fighters always carry the real value.
+  s.boost = fighter.boost ?? 0;
   s.ammo = fighter.ammo;
   s.lastFireAt = fighter.lastFireAt;
   s.reloadingUntil = fighter.reloadingUntil;

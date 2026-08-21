@@ -350,3 +350,46 @@ export function buildSnapshot(state) {
     events: state.events
   };
 }
+
+// Per-team snapshot (command-mode online, phase 3 R1). Same envelope as
+// buildSnapshot, but fighters on the OTHER team ship as REDACTED copies:
+//   - `boost` is nulled — owner rule: opponents must not read your gauge.
+//     null (not undefined / not deleted) on purpose: the client's
+//     prediction replay runs sim math over these fighters, and null
+//     coerces to 0 while undefined poisons positions with NaN.
+//   - every `botXxx` intent field tickBot writes onto the fighter
+//     (state machine, defense dirs, cover paths, glint schedules — ~40
+//     keys) is stripped as hygiene; the prefix rule keeps future bot
+//     fields covered automatically.
+// Own-team fighters pass through BY REFERENCE, complete — the local
+// player's prediction replay needs the full sim state, and teammates are
+// allowed to see each other's gauges (owner decision 2). Inference tells
+// (overheatedUntil, refill/empty timers, thruster action) deliberately
+// stay visible (owner decision 7). Command-layer fields (phase 3 R2)
+// will live OFF the fighter in a side-table precisely so this filter
+// never has to chase them.
+export function buildSnapshotFor(state, viewerTeam) {
+  const fighters = {};
+  for (const id in state.fighters) {
+    const f = state.fighters[id];
+    if (!viewerTeam || f.team === viewerTeam) {
+      fighters[id] = f;
+      continue;
+    }
+    const r = { ...f };
+    r.boost = null;
+    for (const k in r) {
+      if (k.startsWith('bot')) delete r[k];
+    }
+    fighters[id] = r;
+  }
+  return {
+    tick: state.tick,
+    serverTime: state.now,
+    mapKey: state.mapKey,
+    fighters,
+    projectiles: state.projectiles,
+    beams: state.beams,
+    events: state.events
+  };
+}

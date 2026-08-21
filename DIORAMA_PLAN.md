@@ -514,3 +514,26 @@ Round plan (small rounds, one push each):
   order sending/echo, classic-teammate ring + triangles, Trio hooks).
 - R5: end-to-end verification (local server + two headless clients),
   balance notes for playtest.
+
+### Phase 3 R1 — IMPLEMENTED (2026-08-21)
+
+Per-team snapshot filtering is live:
+- `buildSnapshotFor(state, viewerTeam)` (shared/src/sim/state.js): enemy
+  fighters ship as redacted copies — `boost: null` (null, not undefined:
+  the client prediction replay runs sim math over these and null coerces
+  to 0 while undefined breeds NaN) and every `botXxx` intent field
+  stripped by prefix. Own-team fighters pass by reference, complete.
+  Inference tells (overheat/refill/empty timers, action) stay visible
+  (decision 7); targetId stays (corrected spec — no victim-side lock UI
+  exists).
+- Server (`emitSnapshotsFor`): two team variants built once per tick,
+  emitted per socket; spectators get team A's view (client renders
+  spectators from p1's perspective). Replaced all three room-broadcast
+  sites. This alone closes the day-one leak of enemy boost / cooldowns /
+  bot intent to opponents.
+- Client: `mirrorFighterToMech` coalesces redacted boost (`?? 0`).
+Verified: protocol tests (human-vs-bot and human-vs-human — own boost
+numeric, enemy boost null, botXxx stripped while hp/pos/inference fields
+survive, own fighter keeps full sim state for prediction) and a browser
+e2e (real built client as p2 vs a socket puppet host: renders, HUD
+works, enemy visible, zero console errors, no NaN anywhere).
