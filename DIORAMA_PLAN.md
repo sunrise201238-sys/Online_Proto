@@ -168,3 +168,89 @@ the 2026-08-20 read of `Demo_0.7.5_Test-Fields` — expect drift, re-grep first.
   large compute volume in a single run) without asking the owner first.
 - The stable game (online/offline/bot behavior/current player experience)
   must not regress: diorama work is additive behind a toggle until proven.
+
+---
+
+## Phase 2 — COMMAND MODE (design converged 2026-08-21, pre-implementation)
+
+The diorama becomes a STRATEGIC PLANNING mode. The direct-control diorama
+variant is RETIRED: V / the pause-menu toggle switches classic chase <->
+command mode. Offline only for now; the command layer is client-side bot
+logic only — shared/src/sim/ai.js stays untouched until an online phase.
+
+### Core loop
+- Every unit is bot-driven (runBotAIForMech drives the player slot exactly
+  like spectator mode). The player is a commander: observe, select, order.
+- Solo play commands BOTH team-A units (blue + green).
+
+### Commands
+
+1. Force lock (target order)
+   - Tap an own unit's square/card -> selection glow on its square + card.
+   - Tap an enemy square/diamond/card -> that unit force-locks the enemy.
+     The triangle crosshair renders in the COMMANDING unit's color
+     (blue lock = blue triangles, green = green); two allies locking the
+     same enemy stack both colors side by side.
+   - Force lock persists until EITHER party dies -> the bot auto-switches
+     to a remaining enemy and returns to its own target-finding logic
+     until the next order.
+   - While selected: tapping the same locked enemy again cancels that
+     force lock (selection glow stays); tapping a different enemy re-locks
+     directly (no cancel needed); tapping empty ground clears the selection.
+   - Tapping enemy HUD with NO unit selected: no-op.
+
+2. Move order (position command)
+   - DRAG from an own unit's square (a movement threshold separates drag
+     from the tap-select).
+   - A deployment circle projects onto the terrain under the finger.
+     Radius: ONE global fixed value, taken from the Engage orbit setting.
+     LONG-PRESS during the drag cycles the vertical layer (bridge deck vs
+     the ground beneath).
+   - While dragging: a thin dashed path preview updates live (throttled
+     A*); an unreachable destination turns the circle red and releasing
+     issues nothing.
+   - Release = order: the unit pathfinds to the circle CENTER, fighting
+     along the way but never abandoning the destination. Defense /
+     anti-glint / cover-reload reflexes still preempt; afterwards the
+     route replans from the current position.
+   - Arrival: Engage-style orbit ANCHORED ON THE CIRCLE (its centre, at
+     the circle radius), facing the unit's lock target, for 5 s (tunable),
+     then the normal behavior loop takes over.
+   - A new drag replaces the standing order. DOUBLE-TAP on the own
+     square = full reset: cancels the move order AND clears the force
+     lock, returning the unit to full autonomy.
+
+3. Status icons — gold, glowing, shown BOTH at the square/diamond's top
+   corner AND inside the info card (replacing the NO SIGHT status line):
+   - "!" while a position command is active (en route + 5 s anchor);
+   - "eye" while autonomous.
+   The "!" reflects position commands ONLY; force lock is expressed solely
+   by the colored triangles. Blue and green both wear the icons; Trio
+   respawns default to the eye.
+
+### Removed / hidden in command mode
+- All direct-control inputs: action buttons + joystick hidden (PAUSE and
+  fullscreen stay). Fire/dodge/jump/sprint are bot decisions.
+- NO SIGHT text and the entire dashed-line LOS treatment (squares, leader
+  lines, card borders). The LOS plumbing stays in code but sits idle.
+- The no-target fire dimming + toast, U-cycle, and the old
+  tap-enemy-sets-player-lock semantics (superseded by the selection flow).
+
+### Camera
+- Free camera. Opening frame = whole-map overview. Dragging from empty
+  ground pans (clamped to map bounds); pinch / wheel zooms by dollying
+  along the fixed elevation axis — tilt unchanged, miniature look intact.
+- Tilt-shift: the focus band pins to the screen centre (slightly widened),
+  and every unit punches a LOCAL CLEAR POCKET in the blur (the composite
+  shader receives up to 4 unit screen positions) so fighters never sit
+  inside bokeh.
+
+### Implementation notes (for the build phase)
+- Command layer in the OFFLINE bot only (the main.js mirror);
+  shared/src/sim/ai.js untouched — no dual-implementation burden.
+- Move order = replace the bot's self-chosen Maze destination with the
+  ordered point; overlay layers preempt exactly as today.
+- Force lock = a target-pick override above pickBotTargetOf, cleared on
+  either party's death.
+- Player-slot death in SD: the remaining ally stays commandable; win/loss
+  rules unchanged.
