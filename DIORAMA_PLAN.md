@@ -302,3 +302,48 @@ switch are implemented but still need a hands-on touch test.
   that enemy); NO icon when a unit has no command; both icons render
   side by side when both commands are active. Double-tap on an own
   MARKER OR CARD clears all commands on that unit.
+
+**Status: IMPLEMENTED (2026-08-21).** Code map on top of the phase-2 layer:
+
+- Dash travel: `applyMoveOrder` travel branch — sprints (`sprintSpeed` +
+  `inheritMomentum ×1.5` + `applyMomentum`, the bot's own dash math) while
+  `boost > DIO_TRAVEL_BOOST_FLOOR (50)` and `emptyRecoverUntil` allows;
+  drains on the normal meter via a separate `cmdBoostClock` tick
+  accumulator, clamped AT the floor, skipped when the bot's own action
+  already dashed that frame (no double billing); walks at the floor until
+  regen lifts the gauge back over it. Anchor orbit still walks.
+- Rotation: `cam2.rot` yaw offset added to the map view's base yaw; pivot
+  is the look target `(tx, tz)` = screen centre. Q/E keys
+  (`keyState.rotL/rotR`, ±0.028 rad/frame), right-mouse drag
+  (`kind:'rotate'` gesture, 0.006 rad/px, layer `contextmenu` suppressed),
+  and two-finger twist (incremental angle delta folded into the pinch
+  handler, wrap-safe; zoom + rotate work simultaneously). Sign convention:
+  the scene follows the fingers / drag.
+- Mode separation: `.view-mode-chip` (Classic/Command) in the select menu
+  wired to `toggleDiorama`; the choice persists as
+  `localStorage['gvg-view-mode']` (written in `toggleDiorama`, read at
+  boot); V and the pause-menu button still toggle mid-match; fresh
+  profiles default Classic.
+- Tap-tap ordering: pointerdown on empty ground WITH a selection arms a
+  `tapMode` preview (circle + path visible immediately); moving past the
+  slop cancels it into a pan; releasing in place issues the order and
+  drops the glow (one-shot — enemy-tap force locks do the same);
+  releasing on an unreachable spot calls `dioramaDenyAt` (red ring +
+  "Area is not available", edge-clamped, self-removing) and KEEPS the
+  glow. Slow re-tap of the selected unit deselects; fast double-tap
+  (marker or card) wipes both commands. Hold-still layer cycling moved to
+  `dioramaGestureFrame()` (per-frame, from updateDioramaHud) because
+  pointermove stops firing on a truly still finger.
+- Deny actually fires now: `computeOrderPath` rejects targets beyond the
+  arena bounds and routes whose endpoint lands > 6u (or > 2u in floor)
+  from the tap — the shared pathfinder clamps + snaps any goal onto the
+  grid (right for bots, wrong for orders; unchecked it could also strand
+  a unit shoving a wall toward an unreachable raw target).
+- Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
+  marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
+  inline-block so the pair sits side by side); no command = no icon.
+- Headless verification (SwiftShader, 640×360): chip + persistence,
+  Q/E / right-drag / twist rotation, dash speed ≈ 29 vs walk 16 with the
+  floor clamping at exactly 50, tap-tap order one-shot, deny + glow-stay,
+  lock one-shot, both-icons state, double-tap-card wipe, slow re-tap
+  deselect — all green (scratchpad smoke/p21.js, p21deny.js).
