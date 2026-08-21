@@ -1095,7 +1095,7 @@ const DIORAMA_VIEW = {
   // COMMAND MODE tunables:
   minDist: 70,         // closest zoom (dolly distance along the fixed tilt)
   cmdRadius: 12,       // deployment circle radius = arrival orbit radius
-  anchorMs: 5000,      // Engage-style hold on the circle after arrival
+  anchorMs: 20000,     // Engage-style hold on the circle after arrival (owner: 5s -> 20s)
   clearR: 0.11         // per-unit clear pocket radius in the blur (uv units)
 };
 // Per-map camera anchor: yaw = compass angle around the map centre, dist =

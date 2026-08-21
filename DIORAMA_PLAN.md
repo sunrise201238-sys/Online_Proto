@@ -230,15 +230,16 @@ switch are implemented but still need a hands-on touch test.
      anti-glint / cover-reload reflexes still preempt; afterwards the
      route replans from the current position.
    - Arrival: Engage-style orbit ANCHORED ON THE CIRCLE (its centre, at
-     the circle radius), facing the unit's lock target, for 5 s (tunable),
-     then the normal behavior loop takes over.
+     the circle radius), facing the unit's lock target, for 20 s
+     (tunable; owner raised 5 s -> 20 s, 2026-08-21), then the normal
+     behavior loop takes over.
    - A new drag replaces the standing order. DOUBLE-TAP on the own
      square = full reset: cancels the move order AND clears the force
      lock, returning the unit to full autonomy.
 
 3. Status icons — gold, glowing, shown BOTH at the square/diamond's top
    corner AND inside the info card (replacing the NO SIGHT status line):
-   - "!" while a position command is active (en route + 5 s anchor);
+   - "!" while a position command is active (en route + the 20 s anchor);
    - "eye" while autonomous.
    The "!" reflects position commands ONLY; force lock is expressed solely
    by the colored triangles. Blue and green both wear the icons; Trio
