@@ -630,3 +630,18 @@ Client wiring — command mode is playable ONLINE:
   classic online and the offline latch re-ran green. One test-design
   finding worth keeping: an idle opponent DIES to a command unit (the
   bot fights) — matches end by ko, which is the game working, not a bug.
+
+### Phase 3 R5 — VERIFIED, MIGRATION COMPLETE (2026-08-21)
+
+Final gate: command-vs-command secrecy proven end-to-end with a real
+browser opponent (queue-room viewMode HIDDEN, snapshot commands {}, no
+mech mirror, no icons/ring on the enemy marker, enemy boost redacted) —
+plus one polish from it: ONLINE enemy cards hide the stamina bar
+entirely instead of rendering a forever-empty track (offline unchanged).
+Full regression gate re-run green: R1 filter protocol, R3 lobby/order
+protocol (20 asserts), R2 shared-layer sim (19 asserts), offline latch.
+
+Command mode is now PLAYABLE ONLINE per the frozen spec. Remaining for
+owner playtests (not code): mixed-mode balance meta, Trio-respawn
+command clearing in a live Trio match (code path is a reviewed
+one-liner), real-device touch feel for online order gestures.

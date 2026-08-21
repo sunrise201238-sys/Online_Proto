@@ -12149,10 +12149,15 @@ function updateDioramaHud() {
     // its own status line under it.
     const maxHp = m.unit.hp ?? MAX_HP;
     els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
-    // Stamina gauge under the HP bar — both teams for now (owner: the enemy
-    // boost readout may be hidden later).
-    const bCap = m.unit.boostCap ?? BOOST_CAP;
-    els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
+    // Stamina gauge under the HP bar. ONLINE the enemy value is redacted
+    // server-side (owner decision) — hide the bar rather than render a
+    // forever-empty track; offline both teams still show it.
+    const boostRedacted = !!state.online && getTeamOf(m) !== viewerTeam;
+    els.boostEl.parentElement.style.display = boostRedacted ? 'none' : '';
+    if (!boostRedacted) {
+      const bCap = m.unit.boostCap ?? BOOST_CAP;
+      els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
+    }
     // The old NO SIGHT status line now hosts the command icon(s) (own units;
     // no command = no icon at all).
     const cardIconState = DIO_OWN_SLOTS.includes(c.slot)
