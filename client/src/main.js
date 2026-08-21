@@ -13,6 +13,12 @@ import {
   findFiringPath,
   smoothPath,
   walkSegmentBlocked,
+  CMD_TRAVEL_BOOST_FLOOR,
+  CMD_TRAVEL_DASH_ARM,
+  CMD_ANCHOR_MS,
+  CMD_RADIUS,
+  CMD_ORDER_SNAP_TOLERANCE,
+  CMD_ARRIVE_DIST,
   volleyAxes,
   volleyPelletOffset,
   volleySpreadFactor,
@@ -1094,8 +1100,8 @@ const DIORAMA_VIEW = {
   contrast: 1.045,
   // COMMAND MODE tunables:
   minDist: 70,         // closest zoom (dolly distance along the fixed tilt)
-  cmdRadius: 12,       // deployment circle radius = arrival orbit radius
-  anchorMs: 20000,     // Engage-style hold on the circle after arrival (owner: 5s -> 20s)
+  cmdRadius: CMD_RADIUS,     // deployment circle radius = arrival orbit radius (shared const)
+  anchorMs: CMD_ANCHOR_MS,   // Engage-style hold after arrival (shared const; owner: 5s -> 20s)
   clearR: 0.11         // per-unit clear pocket radius in the blur (uv units)
 };
 // Per-map camera anchor: yaw = compass angle around the map centre, dist =
@@ -10719,8 +10725,10 @@ const DIO_OWN_SLOTS = ['player', 'ally'];
 // threshold — never the old stutter of re-sprinting the instant regen peeks
 // over the floor. Combat reflexes keep their own funding rules and may
 // still spend the reserve.
-const DIO_TRAVEL_BOOST_FLOOR = 50;
-const DIO_TRAVEL_DASH_ARM = 125;   // min() with the unit cap, so low-cap units could still dash
+// Values live in shared/src/sim/constants.js (phase 3: one source for the
+// offline layer, the client preview AND the server authority).
+const DIO_TRAVEL_BOOST_FLOOR = CMD_TRAVEL_BOOST_FLOOR;
+const DIO_TRAVEL_DASH_ARM = CMD_TRAVEL_DASH_ARM;   // min() with the unit cap downstream
 
 function commandTargetOf(m) {
   if (m?.cmdLock && m.cmdLock.state.hp > 0 && m.state.hp > 0) {
@@ -10823,7 +10831,7 @@ function computeOrderPath(m, tx, tz, targetFloorY) {
   let path = findPathOnGrid(offlineNavGrid, pos.x, pos.z, tx, tz, myFloorY, targetFloorY, arenaObstacles);
   if (!path || path.length < 2) return null;
   const end = path[path.length - 1];
-  if (Math.hypot(end.x - tx, end.z - tz) > 6) return null;
+  if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return null;
   if (Math.abs((end.y ?? 0) - targetFloorY) > 2) return null;
   if (path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
   return path;
@@ -10854,7 +10862,7 @@ function applyMoveOrder(m, now) {
   const speed = m.unit.walkSpeed ?? WALK_SPEED;
   if (mv.phase === 'travel') {
     const distC = Math.hypot(mv.x - pos.x, mv.z - pos.z);
-    if (distC < 4) {
+    if (distC < CMD_ARRIVE_DIST) {
       mv.phase = 'anchor';
       mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
       return;

@@ -103,7 +103,7 @@ const BOT_TARGET_SWITCH_MARGIN = 6;
 // singletons, so this is once per map per process) and shared by all bots
 // and lobbies on that map.
 const navGridCache = new WeakMap();
-function navGridFor(arena) {
+export function navGridFor(arena) {
   let grid = navGridCache.get(arena);
   if (!grid) {
     grid = buildNavGrid(arena.obstacles, arena.surfaces);

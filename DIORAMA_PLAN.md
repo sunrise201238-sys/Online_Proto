@@ -537,3 +537,35 @@ numeric, enemy boost null, botXxx stripped while hp/pos/inference fields
 survive, own fighter keeps full sim state for prediction) and a browser
 e2e (real built client as p2 vs a socket puppet host: renders, HUD
 works, enemy visible, zero console errors, no NaN anywhere).
+
+### Phase 3 R2 — IMPLEMENTED (2026-08-21)
+
+Shared command layer (`shared/src/sim/command.js`):
+- Command constants moved to shared/src/sim/constants.js (CMD_* — floor
+  50, arm 125, anchor 20000, radius 12, snap tolerance 6, arrive 4); the
+  client's offline layer now aliases them (one source everywhere).
+- `matchState.commands[slot]` side-table (never on the fighter — no
+  snapshot leak by construction; verified). setMoveOrder validates with
+  navGridFor + findPathOnGrid + endpoint-6u + floor-2u exactly like the
+  offline computeOrderPath; setForceLock rejects teammates/dead;
+  commandTargetIdOf overrides the bot pick and dissolves on death;
+  tickCommandDriver re-steers post-tickBot (reflex yield set: defense,
+  cover seek/hold, step, hitstun, charge/beam locks, glint schedule,
+  committed air-steer), dashes in latched segments via the bot's own
+  recipe (sprint base + inheritMomentum ×1.5; tickBoost bills the drain
+  through action='dash'; PREDICTIVE floor check so the 50 reserve is
+  never spent), walks otherwise, and orbits the CMD_RADIUS ring for
+  CMD_ANCHOR_MS on arrival.
+- KEY FIX found in testing: tickBot inherits a sprint impulse toward its
+  own target every tick; with the driver running before tickMatch's
+  applyMomentum, that stale momentum dragged the orbit ~4 u/s off the
+  ring (offline erased it implicitly by overwriting vel post-momentum).
+  The walk/orbit branches now zero momentumVX/VZ; the dash branch's
+  inheritMomentum overwrites it anyway. Orbit error after fix: 0.0.
+- Server loop wired (inert until R3): drives botSlots ∪ commandSlots
+  through pickBotTargetId(+lock override) → tickBot → tickCommandDriver,
+  passes the union as tickMatch botIds; Trio respawns clearCommands.
+- Verified: 19 sim-level assertions green (validation, lock semantics,
+  latched dash with floor min 50.9, arrival → anchor → 20 s expiry,
+  ring-hug 0.0 error, re-arm at exactly 125, clears); R1 protocol tests
+  and the offline latch tests re-run green on the new build.

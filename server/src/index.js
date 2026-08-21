@@ -9,6 +9,9 @@ import {
   tickMatch,
   tickBot,
   pickBotTargetId,
+  commandTargetIdOf,
+  tickCommandDriver,
+  clearCommands,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -58,6 +61,7 @@ function createLobby() {
     mode: '1v1',                      // '1v1' | '2v2' — host pushes via match:set-mode
     mainMode: 'sd',                   // 'sd' ("Duel") | 'trio' — host pushes via match:set-mode
     botSlots: new Set(),              // slots filled with bots while state==='active'
+    commandSlots: new Set(),          // HUMAN slots playing command mode (bot-driven + orders); populated in phase 3 R3
     botUnits: {},                     // slot -> host-chosen bot unit (Duel: key; Trio: [k,k,k])
     glintCharges: new Map(),          // slot -> "slot:chargeStartAt" of the last seen charge (floating-unlock bookkeeping)
     inputs: {
@@ -282,18 +286,25 @@ function tickLobby(lobby) {
   if (lobby.state !== 'active' || !lobby.match) return;
   const now = Date.now();
 
-  // 1. Drive bots — closest live enemy as targetId, then tickBot writes
-  //    velocity/action just like applyInput would for humans.
-  for (const botId of lobby.botSlots) {
+  // 1. Drive bots AND command-mode humans — both are tickBot-driven; a
+  //    force lock (commandTargetIdOf) overrides the bot target pick, and
+  //    the command driver re-steers the legs after tickBot while a move
+  //    order stands (reflexes yield per tick inside the driver).
+  const driven = lobby.commandSlots.size
+    ? new Set([...lobby.botSlots, ...lobby.commandSlots])
+    : lobby.botSlots;
+  for (const botId of driven) {
     const me = lobby.match.fighters[botId];
     if (!me || me.hp <= 0) continue;
-    me.targetId = pickBotTargetId(lobby.match, me) ?? me.targetId;
+    me.targetId = commandTargetIdOf(lobby.match, botId)
+      ?? pickBotTargetId(lobby.match, me) ?? me.targetId;
     tickBot(lobby.match, botId, now);
+    tickCommandDriver(lobby.match, botId, now);
   }
 
-  // 2. Shared sim tick. Humans drive via lobby.inputs; bot fighters are
-  //    listed in botSlots so tickMatch skips applyInput for them.
-  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, lobby.botSlots);
+  // 2. Shared sim tick. Humans drive via lobby.inputs; tickBot-driven
+  //    fighters are listed so tickMatch skips applyInput for them.
+  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, driven);
 
   // 3. Clear human tap flags so they fire once per press. `jump` resets to
   //    the last frame's raw HELD value (not false) — held-jump must survive
@@ -335,6 +346,9 @@ function tickLobby(lobby) {
       if (fighter && fighter.hp <= 0) {
         const fresh = respawnFighterNext(lobby.match, s);
         if (fresh && lobby.botSlots.has(s)) fresh.nextFireAt = lobby.match.now + 650;
+        // Trio + command: a respawned unit starts fully autonomous — its
+        // standing orders die with the previous unit (offline parity).
+        if (fresh) clearCommands(lobby.match, s);
       }
     }
   }

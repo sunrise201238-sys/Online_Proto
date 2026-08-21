@@ -48,3 +48,7 @@ export {
 export { tickBot, pickBotTargetId } from './ai.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
+export {
+  setMoveOrder, setForceLock, clearCommands, getCommands,
+  commandTargetIdOf, tickCommandDriver
+} from './command.js';
