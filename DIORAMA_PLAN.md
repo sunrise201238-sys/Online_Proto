@@ -719,3 +719,47 @@ Center-based order targeting stays as-is (owner call — no
   re-arrival). A reflex that ends still inside the leash just resumes
   the orbit, resetting the wall tracker so stationary reflex frames
   don't read as a wall press.
+
+## Phase 3.3 — COMMANDABLE BOT TEAMMATE + ABSOLUTE SLOT HUD (owner, 2026-08-22)
+
+REVERSES phase-3 decision 1 for bot-filled slots: an online commander now
+drives their BOT teammate too (human teammates stay un-commandable). The
+R2 architecture pre-paid this: commands are slot-generic and the server
+loop already ran tickCommandDriver for every bot slot — the change is a
+gate, not a layer.
+
+Owner decisions:
+- Commandable set FREEZES at match start (lobby.startBotSlots): a
+  mid-match disconnect turns the human's unit into a bot but it is NOT
+  adopted. 2v2 structure guarantees single command authority (a bot
+  teammate implies one human on the team).
+- Rate limit is PER TARGET UNIT (was per player): back-to-back orders to
+  the two units never eat each other.
+- The bot teammate's lock triangles wear ITS unit color.
+
+Wire: order:move/lock/clear gain an optional `slot` (default: sender's
+own); server re-authorizes (same team + startBotSlots). The snapshot
+commands echo now walks every ACTIVE team slot (commands only exist where
+set, so it stays exact); the driven loop clears commands for ANY dead
+driven unit. Client: onl.allyCommandable frozen at match setup from the
+first snapshot's botSlots; gesture guards route through
+onlineCommandable(); every sender carries the target's server id.
+
+ABSOLUTE SLOT HUD (owner, same round — narrowing of "self is always
+blue" feedback): ONLINE identity is the server-slot color everywhere the
+owner scoped —
+- Classic corner bars re-anchor by SLOT: left column team A (p1 top /
+  p3 bottom), right column team B (p2 top / p4 bottom), fills tinted the
+  slot palette (SLOT_HUD_COLORS: p1 #62d7ff / p2 #ff7ad5 / p3 #86f7c2 /
+  p4 #ff9d5a), IDENTICAL for every viewer (spectators included). Trio
+  weapon rows follow their bars. The viewer's own bar wears a thin white
+  rim (.self-bar — position no longer says "this one is you").
+- The command diorama layer colors every per-slot element (marker, card
+  border/HP fill, leader line, selection glow, destination ring, lock
+  triangles) with dioSlotColor(): online = slot color, offline = the
+  role palette (offline figures are role-colored, so offline already
+  matched and stays untouched).
+- The classic-teammate share ring + lock sprite follow the commander
+  unit's slot color (was hard-coded ally green).
+- Out of scope by owner call: overhead tag ink (white=team/orange=enemy)
+  stays viewer-relative; offline untouched everywhere.

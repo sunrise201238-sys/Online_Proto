@@ -2230,6 +2230,31 @@ function setupHUD() {
   `;
   app.appendChild(hud);
 
+  // ONLINE ABSOLUTE HUD (owner 2026-08-22): corner bars anchor by SERVER
+  // SLOT — left column team A (p1 top / p3 bottom), right column team B
+  // (p2 top / p4 bottom) — identical for every viewer, each fill tinted its
+  // slot color. The viewer's own bar wears a thin white rim, since position
+  // no longer says "this one is you". Offline keeps the role layout.
+  if (state.online?.slotMap) {
+    const sm = state.online.slotMap;
+    const ANCHOR_OF = { p1: 'health', p3: 'ally-health', p2: 'enemy-health', p4: 'enemy2-health' };
+    const roleBars = [
+      ['player', sm.cameraId, '#health-fill'],
+      ['enemy', sm.enemyId, '#enemy-health-fill'],
+      ['ally', sm.allyId, '#ally-health-fill'],
+      ['enemy2', sm.enemy2Id, '#enemy2-health-fill']
+    ];
+    for (const [role, sid, fillSel] of roleBars) {
+      const fill = hud.querySelector(fillSel);
+      if (!fill || !sid || !ANCHOR_OF[sid]) continue;
+      fill.parentElement.className = ANCHOR_OF[sid];
+      fill.style.background = SLOT_HUD_COLORS[sid];
+      if (role === 'player' && ONLINE_SLOT_IDS.includes(state.online.myPlayerId)) {
+        fill.parentElement.classList.add('self-bar');
+      }
+    }
+  }
+
   ['boost', 'shoot', 'step', 'jump'].forEach((action) => {
     const b = document.createElement('button');
     b.dataset.k = action;
@@ -6997,8 +7022,17 @@ function updateHud(now = performance.now()) {
       foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
       trioMode = !!(state.mainMode === 'trio' && state.trioRosters);
     } else if (state.online) {
-      own = [mechRemainingUnitKeys(state.player)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.ally)] : []);
-      foe = [mechRemainingUnitKeys(state.enemy)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.enemy2)] : []);
+      // ABSOLUTE columns (owner 2026-08-22): left = team A in slot order
+      // (p1, p3), right = team B (p2, p4) — matching the re-anchored bars,
+      // identical for every viewer.
+      const sm = state.online.slotMap;
+      const mechOfSlot = (id) => !sm ? null
+        : id === sm.cameraId ? state.player
+          : id === sm.allyId ? state.ally
+            : id === sm.enemyId ? state.enemy
+              : id === sm.enemy2Id ? state.enemy2 : null;
+      own = [mechRemainingUnitKeys(mechOfSlot('p1'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p3'))] : []);
+      foe = [mechRemainingUnitKeys(mechOfSlot('p2'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p4'))] : []);
       trioMode = !!state.player?.state.roster;
     }
     renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig', trioMode);
@@ -8567,6 +8601,10 @@ function ensureOnlineMatchSetup(snap) {
   // server re-validates authoritatively).
   onl.commandMode = ONLINE_SLOT_IDS.includes(myId)
     && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
+  // Commandable BOT teammate (owner 2026-08-22): frozen from the match-start
+  // bot set — a slot that turns bot mid-match (disconnect) is not adopted.
+  onl.allyCommandable = !!(onl.commandMode && allyId
+    && (snap.botSlots ?? []).includes(allyId));
   if (onl.commandMode) {
     diorama.cam2.snapped = false;
     applyDioramaDressing();
@@ -8706,7 +8744,9 @@ function updateOnlineCommandShare(onl) {
     if (!share.ring) {
       const geo = new THREE.RingGeometry(CMD_RADIUS - 0.4, CMD_RADIUS, 48);
       const mat = new THREE.MeshBasicMaterial({
-        color: 0x86f7c2, transparent: true, opacity: 0.55,
+        // The commander teammate's ACTUAL slot color (owner 2026-08-22).
+        color: parseInt(dioSlotColor('ally').slice(1), 16),
+        transparent: true, opacity: 0.55,
         side: THREE.DoubleSide, depthWrite: false
       });
       share.ring = new THREE.Mesh(geo, mat);
@@ -8721,7 +8761,7 @@ function updateOnlineCommandShare(onl) {
   }
   const lockTarget = showShare && ally.cmdLock && ally.cmdLock.state.hp > 0 ? ally.cmdLock : null;
   if (lockTarget) {
-    if (!share.tris) share.tris = makeCmdLockSprite('#86f7c2');
+    if (!share.tris) share.tris = makeCmdLockSprite(dioSlotColor('ally'));
     if (share.tris.parent !== lockTarget.root) {
       share.tris.parent?.remove(share.tris);
       lockTarget.root.add(share.tris);
@@ -11445,6 +11485,36 @@ const DIO_SLOT_META = {
   enemy2: { color: '#ff9d5a', label: 'ENEMY 2', selectable: true }
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
+// ONLINE identity colors (owner 2026-08-22): HUD surfaces follow the unit's
+// ACTUAL server-slot color — one absolute palette, identical for every
+// viewer — instead of the viewer-relative role palette. Offline keeps the
+// role palette (offline figures are role-colored too, so it already
+// matches there).
+const SLOT_HUD_COLORS = { p1: '#62d7ff', p2: '#ff7ad5', p3: '#86f7c2', p4: '#ff9d5a' };
+function onlineServerIdOf(slot) {
+  const sm = state.online?.slotMap;
+  if (!sm) return null;
+  return slot === 'player' ? sm.cameraId
+    : slot === 'ally' ? sm.allyId
+      : slot === 'enemy' ? sm.enemyId
+        : slot === 'enemy2' ? sm.enemy2Id : null;
+}
+// Diorama color of a role slot: online = the unit's slot color, offline =
+// the role palette.
+function dioSlotColor(slot) {
+  if (state.online?.slotMap) {
+    const c = SLOT_HUD_COLORS[onlineServerIdOf(slot)];
+    if (c) return c;
+  }
+  return DIO_SLOT_META[slot].color;
+}
+// Which units this ONLINE commander may order (owner 2026-08-22): always
+// their own unit; the teammate too when that slot was BOT-FILLED at match
+// start (frozen set — a disconnected human's leftover bot is not adopted).
+function onlineCommandable(slot) {
+  if (slot === 'player') return true;
+  return slot === 'ally' && !!state.online?.allyCommandable;
+}
 const DIO_CARD_W = 180;
 const DIO_CARD_H = 68;   // grew for the stamina gauge (2.1c)
 
@@ -11506,6 +11576,8 @@ function ensureDioramaSlotEls(slot) {
   if (els && els.g.isConnected) return els;
   const svg = diorama.layer.querySelector('#dio-svg');
   const meta = DIO_SLOT_META[slot];
+  // Online: absolute slot color (owner 2026-08-22); offline: role palette.
+  const color = dioSlotColor(slot);
   const g = svgNode('g', {});
   // Every colored stroke rides on a dark "casing" twin (drawn first, wider)
   // so the thin lines stay findable over bright buildings — map-annotation
@@ -11513,41 +11585,41 @@ function ensureDioramaSlotEls(slot) {
   const CASING = '#070b12';
   const rectC = svgNode('rect', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', rx: '1', opacity: '0.75', 'pointer-events': 'none' });
   const rect = svgNode('rect', {
-    fill: 'none', stroke: meta.color, 'stroke-width': '1.2', rx: '1',
+    fill: 'none', stroke: color, 'stroke-width': '1.2', rx: '1',
     'pointer-events': 'none'
   });
   const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
-  const line = svgNode('line', { stroke: meta.color, 'stroke-width': '1.4', 'pointer-events': 'none' });
+  const line = svgNode('line', { stroke: color, 'stroke-width': '1.4', 'pointer-events': 'none' });
   // Selection halo twins (hidden until the slot is selected): wide
   // translucent strokes under the main line — an explicit glow that stays
   // visible over bright floors where a blur-filter halo disappears; the
   // .dio-selglow class pulses them in step with the card ring.
-  const rectG = svgNode('rect', { fill: 'none', stroke: meta.color, 'stroke-width': '7', rx: '1', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  const rectG = svgNode('rect', { fill: 'none', stroke: color, 'stroke-width': '7', rx: '1', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
   rectG.classList.add('dio-selglow');
   rectG.style.display = 'none';
-  const lineG = svgNode('line', { stroke: meta.color, 'stroke-width': '7', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  const lineG = svgNode('line', { stroke: color, 'stroke-width': '7', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
   lineG.classList.add('dio-selglow');
   lineG.style.display = 'none';
   // Force-lock crosshair triangles, one path PER COMMANDING UNIT (blue lock
   // = blue triangles, green = green; both on the same enemy = the first
   // locker keeps the X corners, the later one rides the + edge midpoints).
-  const tris = svgNode('path', { fill: DIO_SLOT_META.player.color, stroke: 'none', 'pointer-events': 'none' });
-  const tris2 = svgNode('path', { fill: DIO_SLOT_META.ally.color, stroke: 'none', 'pointer-events': 'none' });
+  const tris = svgNode('path', { fill: dioSlotColor('player'), stroke: 'none', 'pointer-events': 'none' });
+  const tris2 = svgNode('path', { fill: dioSlotColor('ally'), stroke: 'none', 'pointer-events': 'none' });
   // Standing move-order destination ring (own slots only).
-  const destRing = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '1.2', 'stroke-dasharray': '3 3', opacity: '0.85', 'pointer-events': 'none' });
+  const destRing = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '1.2', 'stroke-dasharray': '3 3', opacity: '0.85', 'pointer-events': 'none' });
   // Command state icons at the square's top corner: gold "!" = area order,
   // gold eye = force-locking an enemy, none = autonomous (own slots only).
   const cmdIcon = svgNode('g', { 'pointer-events': 'none' });
   cmdIcon.classList.add('dio-goldglow');
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
-  const pointer = svgNode('path', { fill: meta.color, stroke: 'none', 'pointer-events': 'none' });
+  const pointer = svgNode('path', { fill: color, stroke: 'none', 'pointer-events': 'none' });
   // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
   // cross ticks (tier 2) and inner closing bars (tier 3) — as line paths.
   // Slot-colored like the rest of the unit's HUD (owner call — not amber),
   // drawn bold and large so the tiers read at a glance. The classic POV
   // reticle textures are untouched.
-  const tierMid = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
-  const tierFar = svgNode('path', { fill: 'none', stroke: meta.color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  const tierMid = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
+  const tierFar = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rectG);
   g.appendChild(rect);
@@ -11564,14 +11636,14 @@ function ensureDioramaSlotEls(slot) {
   svg.appendChild(g);
   const card = document.createElement('div');
   card.className = 'dio-card';
-  card.style.borderColor = meta.color;
+  card.style.borderColor = color;
   card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-boost"><i></i></div><div class="dio-status"></div>';
-  card.querySelector('.dio-bar i').style.background = meta.color;
-  card.style.setProperty('--dio-sel', meta.color);
+  card.querySelector('.dio-bar i').style.background = color;
+  card.style.setProperty('--dio-sel', color);
   diorama.layer.appendChild(card);
   els = {
     g, rect, rectC, rectG, line, lineC, lineG, tris, tris2, destRing, cmdIcon, pointer,
-    tierMid, tierFar, card,
+    tierMid, tierFar, card, color,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
@@ -11719,7 +11791,7 @@ function onDioPointerDown(e) {
   // Moving past the slop drops the preview and the press becomes a pan.
   const selM = diorama.sel ? state[diorama.sel] : null;
   if (hit.kind === 'empty' && selM && selM.state.hp > 0
-      && !(state.online && diorama.sel !== 'player')) {
+      && !(state.online && !onlineCommandable(diorama.sel))) {
     diorama.gesture.tapPreview = true;
     diorama.drag = {
       slot: diorama.sel, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
@@ -11766,9 +11838,11 @@ function onDioPointerMove(e) {
       // The tap-order preview dies once the finger travels: this is a pan.
       g.tapPreview = false;
       diorama.drag = null;
-    } else if (g.kind === 'own' && !(state.online && g.slot !== 'player')) {
-      // ONLINE: only YOUR unit takes orders (owner decision 1) — a human
-      // teammate's marker never opens a drag.
+    } else if (g.kind === 'own' && !(state.online && !onlineCommandable(g.slot))) {
+      // ONLINE: your own unit always takes orders; the teammate's marker
+      // does too when that slot is a commandable BOT (owner 2026-08-22 —
+      // reverses phase-3 decision 1 for bot-filled slots). A HUMAN
+      // teammate's marker still never opens a drag.
       diorama.drag = {
         slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
         path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
@@ -11808,7 +11882,7 @@ function onDioPointerUp(e) {
     if (g.kind === 'own' && drag && !drag.tapMode && drag.valid && drag.path) {
       if (state.online) {
         diorama.pendingOrder = { px: e.clientX, py: e.clientY };
-        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y);
+        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
       } else {
         issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
       }
@@ -11819,10 +11893,10 @@ function onDioPointerUp(e) {
   const nowT = performance.now();
   if (g.kind === 'own') {
     diorama.drag = null;
-    if (state.online && g.slot !== 'player') return;   // teammates aren't commandable online
+    if (state.online && !onlineCommandable(g.slot)) return;   // human teammates aren't commandable online
     if (diorama.lastTapSlot === g.slot && nowT - diorama.lastTapAt < DIO_DOUBLE_MS) {
       // Double-tap (marker OR card): wipe the move order AND the force lock.
-      if (state.online) state.online.conn?.sendOrderClear();
+      if (state.online) state.online.conn?.sendOrderClear(onlineServerIdOf(g.slot));
       else clearUnitCommands(state[g.slot]);
       diorama.sel = null;
       diorama.lastTapAt = 0;
@@ -11845,7 +11919,7 @@ function onDioPointerUp(e) {
         // Server-side toggle semantics; the echo drives the triangles.
         const sm = state.online.slotMap;
         const targetId = g.slot === 'enemy' ? sm?.enemyId : sm?.enemy2Id;
-        if (targetId) state.online.conn?.sendOrderLock(targetId);
+        if (targetId) state.online.conn?.sendOrderLock(targetId, onlineServerIdOf(diorama.sel));
         diorama.sel = null;   // one-shot
         diorama.lastTapAt = 0;
         return;
@@ -11867,7 +11941,7 @@ function onDioPointerUp(e) {
           // Glow stays until the server acks (processOrderResults): ok
           // drops it (one-shot), a deny shows the red note and keeps it.
           diorama.pendingOrder = { px: e.clientX, py: e.clientY };
-          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y);
+          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
         } else {
           issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
           diorama.sel = null;   // one-shot: the glow drops once the command lands
@@ -12147,7 +12221,7 @@ function updateDioramaHud() {
     }
     els.rectC.setAttribute('stroke', '#070b12');
     els.rectC.setAttribute('stroke-width', selected ? '5' : '3.2');
-    els.rect.setAttribute('stroke', meta.color);
+    els.rect.setAttribute('stroke', els.color);
     els.rect.setAttribute('stroke-width', selected ? '2.2' : locked ? '1.8' : '1.2');
     // Sniper damage tiers on the LOCKED marker — the classic reticle's two
     // ADD-ON levels ported 1:1 (owner call: no scope circles, square for
