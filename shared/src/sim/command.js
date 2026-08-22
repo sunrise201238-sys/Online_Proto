@@ -38,6 +38,7 @@ import {
   CMD_ORDER_SNAP_TOLERANCE,
   CMD_ARRIVE_DIST,
   CMD_REPLAN_MS,
+  CMD_ANCHOR_LEASH,
   MANDATED_JUMP_MIN_BOOST,
   BOOST_CAP,
   BOOST_DASH_DRAIN_PER_TICK,
@@ -184,7 +185,11 @@ export function tickCommandDriver(matchState, slot, now) {
     const distC = Math.hypot(mv.x - f.pos.x, mv.z - f.pos.z);
     if (distC < CMD_ARRIVE_DIST) {
       mv.phase = 'anchor';
-      mv.anchorUntil = now + CMD_ANCHOR_MS;
+      // First arrival starts the window; a leash-return re-arrival resumes
+      // the REMAINING window (anchor time is wall-clock total, not reset).
+      if (!mv.anchorUntil) mv.anchorUntil = now + CMD_ANCHOR_MS;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
       return;
     }
     const grounded = f.grounded && !f.airborne;
@@ -290,6 +295,54 @@ export function tickCommandDriver(matchState, slot, now) {
     let rx = f.pos.x - mv.x;
     let rz = f.pos.z - mv.z;
     const d = Math.hypot(rx, rz);
+    // LEASH RETURN (owner 2026-08-22): displaced beyond the leash (Defense
+    // escape and the like) -> go back as a fresh TRAVEL leg, pathfinder
+    // -guided like any trip, instead of letting the spring shove the unit
+    // into whatever wall lies between. Attempts pace on the replan cadence
+    // (immediately at reflex exit); a failed path keeps orbiting and
+    // retries. anchorUntil is preserved — arrival resumes the remainder.
+    if (d > CMD_ANCHOR_LEASH) {
+      if (mv.reflexHeld || now >= (mv.replanAt ?? 0)) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y);
+        if (fresh) {
+          mv.path = fresh;
+          mv.idx = 0;
+          mv.phase = 'travel';
+          mv.wallTicks = 0;
+          mv.lastAX = null;
+          return;
+        }
+      }
+    } else if (mv.reflexHeld) {
+      // Reflex ended still inside the leash: resume the orbit; reset the
+      // wall tracker so the reflex's stationary frames don't read as a
+      // wall press.
+      mv.reflexHeld = false;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
+    }
+    // WALL FLIP (owner 2026-08-22 — Engage's wedge reverse, ported to the
+    // anchor orbit): two consecutive driver ticks commanding the orbit yet
+    // moving almost nothing = pressed into a wall (the ring straddles a
+    // fence — the Airport rim glass case). Flip the orbit sign: the unit
+    // turns around and patrols the REACHABLE arc, bouncing off each wall
+    // contact instead of grinding it.
+    if (mv.lastAX != null) {
+      const moved = Math.hypot(f.pos.x - mv.lastAX, f.pos.z - mv.lastAZ);
+      if (moved < 0.07) {
+        mv.wallTicks = (mv.wallTicks ?? 0) + 1;
+        if (mv.wallTicks >= 2) {
+          mv.wallTicks = 0;
+          mv.orbitSign = -mv.orbitSign;
+        }
+      } else {
+        mv.wallTicks = 0;
+      }
+    }
+    mv.lastAX = f.pos.x;
+    mv.lastAZ = f.pos.z;
     if (d < 0.1) { rx = 1; rz = 0; } else { rx /= d; rz /= d; }
     const pull = Math.max(-1, Math.min(1, (R - d) * 0.25));
     const tx2 = -rz * mv.orbitSign + rx * pull;

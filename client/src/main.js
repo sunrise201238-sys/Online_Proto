@@ -21,6 +21,7 @@ import {
   CMD_ORDER_SNAP_TOLERANCE,
   CMD_ARRIVE_DIST,
   CMD_REPLAN_MS,
+  CMD_ANCHOR_LEASH,
   MANDATED_JUMP_MIN_BOOST,
   volleyAxes,
   volleyPelletOffset,
@@ -11119,7 +11120,11 @@ function applyMoveOrder(m, now) {
     const distC = Math.hypot(mv.x - pos.x, mv.z - pos.z);
     if (distC < CMD_ARRIVE_DIST) {
       mv.phase = 'anchor';
-      mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
+      // First arrival starts the window; a leash-return re-arrival resumes
+      // the REMAINING window (anchor time is wall-clock total, not reset).
+      if (!mv.anchorUntil) mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
       return;
     }
     const grounded = m.grounded && !m.state.airborne;
@@ -11221,6 +11226,51 @@ function applyMoveOrder(m, now) {
     let rx = pos.x - mv.x;
     let rz = pos.z - mv.z;
     const d = Math.hypot(rx, rz);
+    // LEASH RETURN (owner 2026-08-22): displaced beyond the leash (Defense
+    // escape and the like) -> go back as a fresh TRAVEL leg instead of the
+    // spring shoving the unit into whatever wall lies between. Mirrors
+    // shared tickCommandDriver; anchorUntil is preserved across the trip.
+    if (d > CMD_ANCHOR_LEASH) {
+      if (mv.reflexHeld || now >= (mv.replanAt ?? 0)) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        if (fresh) {
+          mv.path = fresh;
+          mv.idx = 0;
+          mv.phase = 'travel';
+          mv.wallTicks = 0;
+          mv.lastAX = null;
+          return;
+        }
+      }
+    } else if (mv.reflexHeld) {
+      // Reflex ended still inside the leash: resume the orbit; reset the
+      // wall tracker so the reflex's stationary frames don't read as a
+      // wall press.
+      mv.reflexHeld = false;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
+    }
+    // WALL FLIP (owner 2026-08-22 — Engage's wedge reverse, ported to the
+    // anchor orbit): two consecutive driver frames commanding the orbit yet
+    // moving almost nothing = pressed into a wall (the ring straddles a
+    // fence — the Airport rim glass case). Flip the orbit sign: the unit
+    // turns around and patrols the REACHABLE arc instead of grinding.
+    if (mv.lastAX != null) {
+      const moved = Math.hypot(pos.x - mv.lastAX, pos.z - mv.lastAZ);
+      if (moved < 0.07) {
+        mv.wallTicks = (mv.wallTicks ?? 0) + 1;
+        if (mv.wallTicks >= 2) {
+          mv.wallTicks = 0;
+          mv.orbitSign = -mv.orbitSign;
+        }
+      } else {
+        mv.wallTicks = 0;
+      }
+    }
+    mv.lastAX = pos.x;
+    mv.lastAZ = pos.z;
     if (d < 0.1) { rx = 1; rz = 0; } else { rx /= d; rz /= d; }
     const pull = Math.max(-1, Math.min(1, (R - d) * 0.25));
     const tx2 = -rz * mv.orbitSign + rx * pull;

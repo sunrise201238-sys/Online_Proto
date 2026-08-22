@@ -690,3 +690,32 @@ re-validate with the full order strictness (endpoint 6 u / floor 2 u) so a
 refresh can never accept a route the original order would have rejected.
 Constants in shared/src/sim/constants.js (CMD_REPLAN_MS,
 MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_JUMP_BANK).
+
+## Phase 3.2 — ANCHOR: WALL FLIP + LEASH RETURN (owner, 2026-08-22)
+
+Field report (screenshot): units anchored next to Airport's rim glass kept
+running into the pane — the anchor orbit is tangent + ring spring with NO
+wall awareness, so a ring straddling a fence grinds on it every lap; and
+after a Defense displacement the spring shoves the unit straight at
+whatever wall lies between (the anchor leg had no pathfinding at all).
+Center-based order targeting stays as-is (owner call — no
+"bigger portion" side-picking for now).
+
+- WALL FLIP: Engage's wedge reverse ported to the anchor orbit — two
+  consecutive driver ticks commanding the orbit while the body moves
+  < 0.07 u flips orbitSign (driver-local displacement test; the Engage
+  original reads the avoidance field, which the driver doesn't compute).
+  The unit turns around at each wall contact and patrols the REACHABLE
+  arc of the ring. Cornered (both directions blocked) it jitters in place
+  until the window expires — acceptable, no worse than before.
+- LEASH RETURN: anchored units displaced beyond CMD_ANCHOR_LEASH (20)
+  from the order point RETURN VIA TRAVEL — phase flips back to 'travel'
+  with a fresh computeCommandPath/computeOrderPath route, so the trip
+  home gets everything travel has (replan cadence, route jumps, dash
+  latch). Attempts pace on CMD_REPLAN_MS, fire immediately at reflex
+  exit, and a failed path keeps orbiting and retries. anchorUntil is
+  PRESERVED across the excursion — arrival resumes the REMAINING window
+  (the 20 s is wall-clock total; an expired window clears the order on
+  re-arrival). A reflex that ends still inside the leash just resumes
+  the orbit, resetting the wall tracker so stationary reflex frames
+  don't read as a wall press.

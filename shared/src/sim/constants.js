@@ -884,3 +884,9 @@ export const MANDATED_JUMP_MIN_BOOST = 60;
 // the mandated gate + a pad over one predictive drain check, so a dash
 // segment can never deliver the unit to the ledge unable to afford the hop.
 export const CMD_TRAVEL_JUMP_BANK = 70;
+// Anchored units displaced beyond this distance from the order point
+// (Defense escapes and the like) RETURN VIA TRAVEL — a fresh pathfinder
+// -guided leg back to the centre — instead of the orbit spring shoving
+// them into whatever wall lies between (owner 2026-08-22). The remaining
+// anchor window is preserved across the trip.
+export const CMD_ANCHOR_LEASH = 20;
