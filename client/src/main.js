@@ -15,10 +15,13 @@ import {
   walkSegmentBlocked,
   CMD_TRAVEL_BOOST_FLOOR,
   CMD_TRAVEL_DASH_ARM,
+  CMD_TRAVEL_JUMP_BANK,
   CMD_ANCHOR_MS,
   CMD_RADIUS,
   CMD_ORDER_SNAP_TOLERANCE,
   CMD_ARRIVE_DIST,
+  CMD_REPLAN_MS,
+  MANDATED_JUMP_MIN_BOOST,
   volleyAxes,
   volleyPelletOffset,
   volleySpreadFactor,
@@ -4689,14 +4692,14 @@ function botStartJump(now, survival = false) {
   if (now < eState.jumpCooldownUntil) return false;
   // Jump funding respects the strategic reserve (falls back to cost + floor
   // if the reserve is ever tuned below that). SURVIVAL jumps (the Defense
-  // hop/vault, 2026-08-05) pay only raw cost + the sprint floor — same
-  // doctrine as the other survival exemptions (Defense sprints to the hard
-  // floor, anti-glint dodge at raw step cost): Defense's own sprint drains
-  // below the reserve within ticks, so reserve-gated funding made the hop
-  // nearly unaffordable. Travel jumps keep the reserve gate.
+  // hop/vault, 2026-08-05) fire from the flat MANDATED tier (owner
+  // 2026-08-22: 60, shared with commanded-travel route jumps — was raw
+  // cost + sprint floor 56) — same doctrine as the other survival
+  // exemptions (Defense sprints to the hard floor, anti-glint dodge at raw
+  // step cost). Discretionary jumps keep the reserve gate.
   // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
   const funded = survival
-    ? jumpBoostCost + BOT_SPRINT_MIN_BOOST
+    ? MANDATED_JUMP_MIN_BOOST
     : Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
   if (eState.boost < funded) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
@@ -11070,8 +11073,31 @@ function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
     phase: 'travel',
     anchorUntil: 0,
     orbitSign: ((m.cmdOrbitFlip = !m.cmdOrbitFlip)) ? 1 : -1,
-    dashArmed: false   // latches on a FULL gauge, releases at the floor
+    dashArmed: false,   // latches at the ARM threshold, releases at the floor
+    replanAt: 0,        // set on the driver's first frame
+    reflexHeld: false   // reflex owned a frame -> replan at reflex exit
   };
+}
+
+// Travel route jump (owner 2026-08-22): commanded travel vaults the path's
+// jump-links, funded at the flat MANDATED tier (60 — shared with Defense's
+// survival hop; the 250 discretionary reserve is unreachable inside the
+// dash latch's 50<->125 gauge cycle). Mirrors botStartJump's bookkeeping
+// against an arbitrary mech — that helper is hard-aliased to state.enemy
+// and only runs inside the bot alias window.
+function cmdTryStartJump(m, now) {
+  const st = m.state;
+  if (!m.grounded || st.airborne) return false;
+  if (now < st.jumpCooldownUntil) return false;
+  if (st.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  st.boost = Math.max(0, st.boost - (m.unit.jumpBoostCost ?? JUMP_BOOST_COST));
+  st.refillPausedUntil = now + 500;
+  st.jumpVelocity = m.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+  st.airborne = true;
+  st.hoverUntil = now + (m.unit.jumpHoverMs ?? JUMP_HOVER_MS);
+  st.jumpCooldownUntil = now + Math.max(m.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS, 1500);
+  inheritMomentum(m, 70);
+  return true;
 }
 
 // Post-bot velocity override: updateEnemy ran first (aiming/firing/reflex
@@ -11081,7 +11107,12 @@ function applyMoveOrder(m, now) {
   const mv = m?.cmdMove;
   if (!mv) return;
   if (m.state.hp <= 0) { m.cmdMove = null; return; }
-  if (botReflexActive(m, now)) return;
+  if (botReflexActive(m, now)) {
+    // Remember the yield so travel replans the moment the reflex releases
+    // the frame — the reflex may have moved the unit far off the route.
+    mv.reflexHeld = true;
+    return;
+  }
   const pos = m.body.position;
   const speed = m.unit.walkSpeed ?? WALK_SPEED;
   if (mv.phase === 'travel') {
@@ -11090,6 +11121,21 @@ function applyMoveOrder(m, now) {
       mv.phase = 'anchor';
       mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
       return;
+    }
+    const grounded = m.grounded && !m.state.airborne;
+    // PATHFINDER-GUIDED TRAVEL (owner 2026-08-22): refresh the route from
+    // the current position at reflex exit and on the CMD_REPLAN_MS cadence
+    // (grounded only — a mid-jump replan would re-route from the wrong
+    // floor). A refresh that fails the order validation keeps the old path
+    // and retries next period. Mirrors shared tickCommandDriver.
+    if (grounded) {
+      if (mv.replanAt === 0 || mv.replanAt == null) mv.replanAt = now + CMD_REPLAN_MS;
+      if (mv.reflexHeld || now >= mv.replanAt) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        if (fresh) { mv.path = fresh; mv.idx = 0; }
+      }
     }
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
@@ -11102,6 +11148,32 @@ function applyMoveOrder(m, now) {
     const dx = gx - pos.x;
     const dz = gz - pos.z;
     const l = Math.hypot(dx, dz) || 1;
+    const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
+    // ROUTE JUMP (owner 2026-08-22): the upcoming waypoint sits on a ledge
+    // above the current floor — the path crossed a jump-link. Vault toward
+    // it once close enough, funded at the MANDATED tier (60).
+    const wpY = wp ? (wp.y ?? 0) : mv.y;
+    if (grounded && wpY - myFloorY > 1.7 && l < 7) {
+      cmdTryStartJump(m, now);
+    }
+    if (m.state.airborne || !m.grounded) {
+      // Mid-air (route jump or ledge walk-off): TRAVEL keeps the stick
+      // (owner 2026-08-22) — steer the arc toward the waypoint so the hop
+      // lands on the ledge instead of drifting with the bot's combat
+      // intent. Momentum (the jump's inherited carry) is left alone; no
+      // dash is billed in the air.
+      m.body.velocity.x = (dx / l) * speed;
+      m.body.velocity.z = (dz / l) * speed;
+      return;
+    }
+    // JUMP BANK: while a route jump lies ahead on the remaining path, the
+    // dash floor rises so a dash segment can never deliver the unit to the
+    // ledge unable to afford the hop.
+    let jumpAhead = false;
+    for (let k = mv.idx; k < mv.path.length; k += 1) {
+      if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+    }
+    const floor = jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR;
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
     // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
@@ -11112,7 +11184,7 @@ function applyMoveOrder(m, now) {
     const st = m.state;
     const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP);
     if (mv.dashArmed) {
-      if (st.boost <= DIO_TRAVEL_BOOST_FLOOR || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
+      if (st.boost <= floor || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
     } else if (st.boost >= armAt && now >= (st.emptyRecoverUntil ?? 0)) {
       mv.dashArmed = true;
     }
@@ -11129,7 +11201,7 @@ function applyMoveOrder(m, now) {
         const ticks = stepBoostTicks(st, 'cmdBoostClock', now);
         if (ticks) {
           const drain = m.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
-          st.boost = Math.max(DIO_TRAVEL_BOOST_FLOOR, st.boost - drain * ticks);
+          st.boost = Math.max(floor, st.boost - drain * ticks);
         }
         st.refillPausedUntil = now + 500;
         st.action = 'dash';

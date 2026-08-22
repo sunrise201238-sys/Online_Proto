@@ -645,3 +645,48 @@ Command mode is now PLAYABLE ONLINE per the frozen spec. Remaining for
 owner playtests (not code): mixed-mode balance meta, Trio-respawn
 command clearing in a live Trio match (code path is a reviewed
 one-liner), real-device touch feel for online order gestures.
+
+## Phase 3.1 — PATHFINDER-GUIDED TRAVEL + ROUTE JUMPS (owner, 2026-08-22)
+
+Field report: units under a move order sometimes got STUCK mid-map. Root
+causes (code-confirmed, both sims): the travel follower ran a path FROZEN
+at order time — no replan after reflex displacement (the "replans from the
+current position" line of the phase-2 design was never implemented), no
+stall detection, no timeout — and it could not execute JUMP-LINKS (it only
+writes horizontal velocity), so any route through one ground at the ledge.
+The bot's own perch reflex occasionally rescued it by coincidence, hence
+"sometimes".
+
+Owner decisions (assessment rounds, 2026-08-22):
+- REJECTED: no-progress/stall detection. The cure is conceptual, not
+  symptomatic — travel is ALWAYS guided by the pathfinder.
+- Route refresh: replan from the current position at REFLEX EXIT and on a
+  periodic cadence (CMD_REPLAN_MS = 1500, grounded only). A failed refresh
+  keeps the old path and retries next period — no cancel, no timeout.
+- Travel LEARNS TO JUMP, pathfinder untouched: the Maze follower's
+  jump-link trigger ported into the travel driver (upcoming waypoint
+  > 1.7 above the current floor, within 7 u, grounded -> vault toward it).
+- Jump funding tiers: Defense survival hop 60, Travel route jump 60
+  (MANDATED_JUMP_MIN_BOOST — jumps somebody ordered), Maze/Pursue
+  discretionary jumps UNTOUCHED at the 250 reserve. 60 sits inside the
+  dash latch's 50<->125 gauge cycle so route jumps are always reachable
+  mid-travel (250 never is — the exact reason the old rescue rarely
+  fired); cost stays the raw 48.
+- Jump bank: while a route jump lies ahead on the remaining path, the
+  dash floor rises 50 -> 70 (CMD_TRAVEL_JUMP_BANK) so a dash segment can
+  never deliver the unit to the ledge unfunded.
+- Airborne: TRAVEL KEEPS THE STICK during its own jumps (and ledge
+  walk-offs) — steers the arc toward the waypoint at walk speed until
+  landing, momentum untouched, no dash billed. Without this the generic
+  air rules drift the hop toward the bot's combat target and it falls
+  short. Reflex-initiated jumps keep their own air handling.
+
+Implementation (mirrored: shared/src/sim/command.js tickCommandDriver +
+computeCommandPath; offline applyMoveOrder + cmdTryStartJump in
+client/src/main.js; the Defense gate in shared ai.js botTryJumpSurvival +
+offline botStartJump's survival branch): cmdMove gains replanAt/reflexHeld;
+the reflex yield sets reflexHeld so the first free frame replans; replans
+re-validate with the full order strictness (endpoint 6 u / floor 2 u) so a
+refresh can never accept a route the original order would have rejected.
+Constants in shared/src/sim/constants.js (CMD_REPLAN_MS,
+MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_JUMP_BANK).

@@ -32,10 +32,13 @@
 import {
   CMD_TRAVEL_BOOST_FLOOR,
   CMD_TRAVEL_DASH_ARM,
+  CMD_TRAVEL_JUMP_BANK,
   CMD_ANCHOR_MS,
   CMD_RADIUS,
   CMD_ORDER_SNAP_TOLERANCE,
   CMD_ARRIVE_DIST,
+  CMD_REPLAN_MS,
+  MANDATED_JUMP_MIN_BOOST,
   BOOST_CAP,
   BOOST_DASH_DRAIN_PER_TICK,
   BOOST_MOVE_SPEED,
@@ -48,6 +51,7 @@ import { groundHeightAt } from './physics.js';
 import { findPathOnGrid, smoothPath } from './navgrid.js';
 import { navGridFor } from './ai.js';
 import { inheritMomentum } from './movement.js';
+import { tryStartJump } from './actions.js';
 
 function commandsFor(matchState, slot) {
   if (matchState.commands == null) matchState.commands = {};
@@ -77,16 +81,8 @@ export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
   if (!Number.isFinite(tx) || !Number.isFinite(tz) || !Number.isFinite(targetFloorY)) return false;
-  const arena = getArena(matchState.mapKey);
-  if (!arena) return false;
-  const grid = navGridFor(arena);
-  const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
-  let path = findPathOnGrid(grid, f.pos.x, f.pos.z, tx, tz, myFloorY, targetFloorY, arena.obstacles);
-  if (!path || path.length < 2) return false;
-  const end = path[path.length - 1];
-  if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return false;
-  if (Math.abs((end.y ?? 0) - targetFloorY) > 2) return false;
-  if (path.length > 2) path = smoothPath(grid, path, arena.obstacles);
+  const path = computeCommandPath(matchState, f, tx, tz, targetFloorY);
+  if (!path) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.move = {
     x: tx, z: tz, y: targetFloorY,
@@ -94,9 +90,28 @@ export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
     phase: 'travel',
     anchorUntil: 0,
     orbitSign: (cmd.orbitFlip = !cmd.orbitFlip) ? 1 : -1,
-    dashArmed: false
+    dashArmed: false,
+    replanAt: 0,        // set on the driver's first tick (no clock here)
+    reflexHeld: false   // reflex owned a frame -> replan at reflex exit
   };
   return true;
+}
+
+// Order-strict pathfind from the fighter's CURRENT position to the ordered
+// point — used by setMoveOrder and by every in-travel replan, so a refresh
+// can never accept a route the original order would have rejected.
+function computeCommandPath(matchState, f, tx, tz, targetFloorY) {
+  const arena = getArena(matchState.mapKey);
+  if (!arena) return null;
+  const grid = navGridFor(arena);
+  const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
+  let path = findPathOnGrid(grid, f.pos.x, f.pos.z, tx, tz, myFloorY, targetFloorY, arena.obstacles);
+  if (!path || path.length < 2) return null;
+  const end = path[path.length - 1];
+  if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return null;
+  if (Math.abs((end.y ?? 0) - targetFloorY) > 2) return null;
+  if (path.length > 2) path = smoothPath(grid, path, arena.obstacles);
+  return path;
 }
 
 // Set (targetSlot) or clear (null) a force lock. Rejects dead parties and
@@ -157,7 +172,13 @@ export function tickCommandDriver(matchState, slot, now) {
   if (!mv) return;
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; return; }
-  if (commandReflexActive(f, now)) return;
+  if (commandReflexActive(f, now)) {
+    // Remember the yield so travel replans the moment the reflex releases
+    // the frame — the reflex (Defense escape, cover reload) may have moved
+    // the unit far off the frozen route.
+    mv.reflexHeld = true;
+    return;
+  }
 
   if (mv.phase === 'travel') {
     const distC = Math.hypot(mv.x - f.pos.x, mv.z - f.pos.z);
@@ -165,6 +186,21 @@ export function tickCommandDriver(matchState, slot, now) {
       mv.phase = 'anchor';
       mv.anchorUntil = now + CMD_ANCHOR_MS;
       return;
+    }
+    const grounded = f.grounded && !f.airborne;
+    // PATHFINDER-GUIDED TRAVEL (owner 2026-08-22): the route is never
+    // followed stale — refresh it from the current position at reflex exit
+    // and on the CMD_REPLAN_MS cadence (grounded only; a mid-jump replan
+    // would re-route from the wrong floor). A refresh that fails the order
+    // validation keeps the old path and retries next period.
+    if (grounded) {
+      if (mv.replanAt === 0) mv.replanAt = now + CMD_REPLAN_MS;
+      if (mv.reflexHeld || now >= mv.replanAt) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y);
+        if (fresh) { mv.path = fresh; mv.idx = 0; }
+      }
     }
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
@@ -177,6 +213,40 @@ export function tickCommandDriver(matchState, slot, now) {
     const dx = gx - f.pos.x;
     const dz = gz - f.pos.z;
     const l = Math.hypot(dx, dz) || 1;
+    const arena = getArena(matchState.mapKey);
+    const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
+    // ROUTE JUMP (owner 2026-08-22): the upcoming waypoint sits on a ledge
+    // above the current floor — the path crossed a jump-link. Vault toward
+    // it once close enough, funded at the MANDATED tier (60; the player's
+    // order is a mandate, like Defense's survival hop — never the 250
+    // discretionary reserve, which the 50<->125 dash-latch cycle can't
+    // reach). tryStartJump paces retries via the bot 1.5 s cooldown floor.
+    const wpY = wp ? (wp.y ?? 0) : mv.y;
+    if (grounded && wpY - myFloorY > 1.7 && l < 7
+      && f.boost >= MANDATED_JUMP_MIN_BOOST) {
+      tryStartJump(f, now);
+    }
+    if (f.airborne || !f.grounded) {
+      // Mid-air (route jump or a ledge walk-off): TRAVEL keeps the stick
+      // (owner 2026-08-22) — steer the arc toward the waypoint so the hop
+      // lands on the ledge instead of drifting toward the combat target.
+      // Momentum is left alone (the jump's inherited carry is the arc), and
+      // no dash is billed in the air.
+      const speed = f.unit.walkSpeed ?? WALK_SPEED;
+      f.vel.x = (dx / l) * speed;
+      f.vel.z = (dz / l) * speed;
+      f.action = 'idle';
+      return;
+    }
+    // JUMP BANK: while a route jump lies ahead on the remaining path, the
+    // dash floor rises to CMD_TRAVEL_JUMP_BANK so a dash segment can never
+    // deliver the unit to the ledge unable to afford the hop (the maze
+    // walk-and-bank rule, sized for the command economy).
+    let jumpAhead = false;
+    for (let k = mv.idx; k < mv.path.length; k += 1) {
+      if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+    }
+    const floor = jumpAhead ? CMD_TRAVEL_JUMP_BANK : CMD_TRAVEL_BOOST_FLOOR;
     // Latched dash segments. The drop check is PREDICTIVE (boost must
     // survive this tick's drain without crossing the floor) because the
     // drain lands later in tickBoost — the reserve is never spent, matching
@@ -184,7 +254,7 @@ export function tickCommandDriver(matchState, slot, now) {
     const drain = f.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
     const armAt = Math.min(CMD_TRAVEL_DASH_ARM, f.unit.boostCap ?? BOOST_CAP);
     if (mv.dashArmed) {
-      if (f.boost < CMD_TRAVEL_BOOST_FLOOR + drain || now < (f.emptyRecoverUntil ?? 0)) {
+      if (f.boost < floor + drain || now < (f.emptyRecoverUntil ?? 0)) {
         mv.dashArmed = false;
       }
     } else if (f.boost >= armAt && now >= (f.emptyRecoverUntil ?? 0)) {

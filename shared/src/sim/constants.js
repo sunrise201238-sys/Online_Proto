@@ -867,3 +867,20 @@ export const CMD_ANCHOR_MS = 20000;
 export const CMD_RADIUS = 12;
 export const CMD_ORDER_SNAP_TOLERANCE = 6;
 export const CMD_ARRIVE_DIST = 4;
+// Pathfinder-guided travel (owner 2026-08-22): the frozen order path is
+// refreshed from the unit's current position on this cadence AND at every
+// reflex exit, so reflex displacement / corner catches never strand the
+// unit shoving a wall toward a stale waypoint. A failed refresh keeps the
+// old path and retries next period.
+export const CMD_REPLAN_MS = 1500;
+// MANDATED jump funding tier (owner 2026-08-22): jumps somebody ordered —
+// the Defense survival hop/vault AND commanded-travel route jumps (the
+// player's order) — fire from 60 boost. Discretionary bot jumps (Pursue
+// perch/climb/descend, Maze jump-links) keep the 250 reserve gate. 60 sits
+// under the travel dash latch's 50<->125 gauge cycle, so route jumps are
+// always reachable mid-travel; the cost itself stays the raw 48.
+export const MANDATED_JUMP_MIN_BOOST = 60;
+// Travel dash floor while a route jump lies ahead on the remaining path:
+// the mandated gate + a pad over one predictive drain check, so a dash
+// segment can never deliver the unit to the ledge unable to afford the hop.
+export const CMD_TRAVEL_JUMP_BANK = 70;

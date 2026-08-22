@@ -17,7 +17,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST } from './constants.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -437,11 +437,13 @@ function botTryJump(me, now) {
 // move, and Defense's own sprint drains below the 250 travel reserve within
 // a few ticks — reserve-gated funding made the hop nearly unaffordable in
 // practice. Same doctrine as the two existing survival exemptions (Defense
-// sprints to the hard floor, the anti-glint dodge pays raw step cost):
-// fund at the raw jump cost + the sprint floor. Travel jumps (pursue perch,
-// elevation aids) keep the reserve gate — bots still hoard for the road.
+// sprints to the hard floor, the anti-glint dodge pays raw step cost).
+// Owner 2026-08-22: the gate is the flat MANDATED tier (60 — shared with
+// commanded-travel route jumps, was cost+sprint-floor 56). Discretionary
+// jumps (pursue perch, elevation aids) keep the reserve gate — bots still
+// hoard for the road.
 function botTryJumpSurvival(me, now) {
-  if (me.boost < (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST) return false;
+  if (me.boost < MANDATED_JUMP_MIN_BOOST) return false;
   return tryStartJump(me, now);
 }
 
