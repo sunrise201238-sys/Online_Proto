@@ -9663,7 +9663,7 @@ function showGuidePopup() {
             <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
-            <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist or Q / E to rotate.</li>
+            <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
           </ul>
         </div>
       </div>
