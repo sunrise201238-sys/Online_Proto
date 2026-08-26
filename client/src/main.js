@@ -11613,13 +11613,6 @@ function ensureDioramaSlotEls(slot) {
   cmdIcon.classList.add('dio-goldglow');
   // Off-frame direction pointer: a small triangle on the diamond's outer side.
   const pointer = svgNode('path', { fill: color, stroke: 'none', 'pointer-events': 'none' });
-  // Sniper damage tiers: the classic reticle's two add-on levels — midpoint
-  // cross ticks (tier 2) and inner closing bars (tier 3) — as line paths.
-  // Slot-colored like the rest of the unit's HUD (owner call — not amber),
-  // drawn bold and large so the tiers read at a glance. The classic POV
-  // reticle textures are untouched.
-  const tierMid = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
-  const tierFar = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '2.4', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   g.appendChild(rectC);
   g.appendChild(rectG);
   g.appendChild(rect);
@@ -11629,8 +11622,6 @@ function ensureDioramaSlotEls(slot) {
   g.appendChild(destRing);
   g.appendChild(tris);
   g.appendChild(tris2);
-  g.appendChild(tierMid);
-  g.appendChild(tierFar);
   g.appendChild(pointer);
   g.appendChild(cmdIcon);
   svg.appendChild(g);
@@ -11643,7 +11634,7 @@ function ensureDioramaSlotEls(slot) {
   diorama.layer.appendChild(card);
   els = {
     g, rect, rectC, rectG, line, lineC, lineG, tris, tris2, destRing, cmdIcon, pointer,
-    tierMid, tierFar, card, color,
+    card, color,
     roleEl: card.querySelector('.dio-role'),
     weaponImg: card.querySelector('.dio-weapon'),
     weaponKey: null,     // current weapon art (trio respawns swap weapons)
@@ -12223,52 +12214,9 @@ function updateDioramaHud() {
     els.rectC.setAttribute('stroke-width', selected ? '5' : '3.2');
     els.rect.setAttribute('stroke', els.color);
     els.rect.setAttribute('stroke-width', selected ? '2.2' : locked ? '1.8' : '1.2');
-    // Sniper damage tiers on the LOCKED marker — the classic reticle's two
-    // ADD-ON levels ported 1:1 (owner call: no scope circles, square for
-    // everyone): tier 2 adds cross ticks through the edge midpoints (mostly
-    // outside), tier 3 adds short bars closing an inner frame. Drawn in
-    // square space and sharing the rect transform, so the whole crosshair
-    // tilts along when the square becomes an edge diamond.
-    let tier = 0;
-    const locker = lockedByP ? state.player : (lockedByA ? state.ally : null);
-    if (locker && locker.state.hp > 0) {
-      const rd = locker.unit?.rangeDamage ?? m.unit?.rangeDamage;
-      if (rd) {
-        const distXZ = Math.hypot(
-          m.root.position.x - locker.root.position.x,
-          m.root.position.z - locker.root.position.z
-        );
-        tier = distXZ >= rd.midDist ? 3 : distXZ >= rd.nearDist ? 2 : 1;
-      }
-    }
-    if (tier >= 2) {
-      const tl = Math.min(24, Math.max(12, s * 0.45));  // tick length — mostly outside
-      const tin = tl * 0.18;                            // small inward overshoot
-      els.tierMid.setAttribute('d', [
-        `M ${cx.toFixed(1)} ${(by - (tl - tin)).toFixed(1)} L ${cx.toFixed(1)} ${(by + tin).toFixed(1)}`,
-        `M ${cx.toFixed(1)} ${(by + s - tin).toFixed(1)} L ${cx.toFixed(1)} ${(by + s + (tl - tin)).toFixed(1)}`,
-        `M ${(bx - (tl - tin)).toFixed(1)} ${cy.toFixed(1)} L ${(bx + tin).toFixed(1)} ${cy.toFixed(1)}`,
-        `M ${(bx + s - tin).toFixed(1)} ${cy.toFixed(1)} L ${(bx + s + (tl - tin)).toFixed(1)} ${cy.toFixed(1)}`
-      ].join(' '));
-      els.tierMid.setAttribute('transform', rectXf);
-      els.tierMid.style.display = '';
-    } else {
-      els.tierMid.style.display = 'none';
-    }
-    if (tier >= 3) {
-      const inset = s * 0.17;
-      const half = Math.min(14, Math.max(7, s * 0.22));
-      els.tierFar.setAttribute('d', [
-        `M ${(cx - half).toFixed(1)} ${(by + inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + inset).toFixed(1)}`,
-        `M ${(cx - half).toFixed(1)} ${(by + s - inset).toFixed(1)} L ${(cx + half).toFixed(1)} ${(by + s - inset).toFixed(1)}`,
-        `M ${(bx + inset).toFixed(1)} ${(cy - half).toFixed(1)} L ${(bx + inset).toFixed(1)} ${(cy + half).toFixed(1)}`,
-        `M ${(bx + s - inset).toFixed(1)} ${(cy - half).toFixed(1)} L ${(bx + s - inset).toFixed(1)} ${(cy + half).toFixed(1)}`
-      ].join(' '));
-      els.tierFar.setAttribute('transform', rectXf);
-      els.tierFar.style.display = '';
-    } else {
-      els.tierFar.style.display = 'none';
-    }
+    // (The PSG1 range-tier ticks that rode the locked marker are retired —
+    // owner call 2026-08-26: the force-lock triangles are the marker's only
+    // lock dressing. The classic-view reticle tiers are untouched.)
     if (offFrame) {
       const px = cx + Math.cos(dirAngle) * (s / 2 + 10);
       const py = cy + Math.sin(dirAngle) * (s / 2 + 10);

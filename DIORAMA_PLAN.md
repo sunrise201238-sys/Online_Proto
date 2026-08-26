@@ -763,3 +763,17 @@ owner scoped —
   unit's slot color (was hard-coded ally green).
 - Out of scope by owner call: overhead tag ink (white=team/orange=enemy)
   stays viewer-relative; offline untouched everywhere.
+
+## Phase 3.4 — MARKER TRIM: PSG1 RANGE-TIER TICKS RETIRED (owner, 2026-08-26)
+
+Owner call: the sniper damage-tier crosshair add-ons that rode a
+force-locked marker (midpoint cross ticks at 15–50, inner closing bars
+at 50+ — ported from the classic reticle when either side of the lock
+pair was a PSG1) are removed. The force-lock triangles (X / + layouts in
+the commanding unit's color) are now the marker's ONLY lock dressing.
+Pure client visual: the tierMid/tierFar paths and their draw block in
+updateDioramaHud are deleted; one code path serves offline and online.
+The classic-view reticle tiers (updateLocksAndReticle textures) are
+untouched. Verified: build + browser smoke (offline Duel 1v1 PSG1,
+command mode — no tier paths in the marker groups, triangles still draw
+on force lock, no page errors).
