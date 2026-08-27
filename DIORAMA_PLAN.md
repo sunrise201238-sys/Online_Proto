@@ -805,3 +805,28 @@ the NO-SELECTION state so the select→order flow is untouched:
   before ally. The grabbed ring brightens/thickens in its unit color.
 - Hygiene: ring taps and unit taps run separate double-tap trackers; a
   second finger (pinch) or pointercancel drops the grab without issuing.
+
+### Phase 3.5 review fixes (same day)
+
+Adversarial review of the gesture round confirmed three defects, all fixed:
+- **Online stale selection on death**: dioramaCommandTick (the death-driven
+  `sel = null`) only ran offline, so online a dead selected unit silently
+  gated every no-selection gesture off (its glow hides with the marker) and
+  left the Trio respawn pre-selected. The online frame now drops a dead
+  selection each tick (parity one-liner before updateDioramaHud).
+- **Rate-denied ring drag was silent**: a ring release has no lingering
+  glow to hint "didn't land", so a 'rate' denial on a ring-tagged send now
+  draws the red note with its own label ("Too fast — try again");
+  dioramaDenyAt grew a label param. Tap orders keep the old silent
+  treatment — their retained glow already signals it.
+- **Move-ok ack could wipe a fresh selection**: the ack's one-shot
+  `sel = null` is for selection-issued orders; ring sends (selection-less
+  by construction) are tagged `ring` on pendingOrder and skip it, so a unit
+  selected during the round trip survives.
+
+E2E: offline 12/12; online rebuilt as two fresh matches (bot deaths were
+ending the match mid-suite) + ring taps aimed at the ring vertex farthest
+from both markers (units converge on the anchor and their markers eat ring
+taps by designed priority) + the rate case driven through the connection
+API (SwiftShader jank makes a scripted sub-500ms two-gesture window
+untimeable) — 12/12.

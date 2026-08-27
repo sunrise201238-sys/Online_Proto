@@ -8809,9 +8809,17 @@ function processOrderResults(onl) {
   const pending = diorama.pendingOrder;
   diorama.pendingOrder = null;
   if (d.ok) {
-    diorama.sel = null;
+    // One-shot glow drop — for selection-issued orders only. A ring drag
+    // sends with no selection, so its ack must not clear a selection the
+    // player made during the round trip.
+    if (!pending?.ring) diorama.sel = null;
   } else if (d.reason === 'unreachable' && pending) {
     dioramaDenyAt(pending.px, pending.py);
+  } else if (d.reason === 'rate' && pending?.ring) {
+    // Rate-limited ring re-issue: nothing landed and no glow lingers to
+    // hint at it, so say so where the finger let go. Tap orders keep the
+    // old silent treatment — their retained glow already signals it.
+    dioramaDenyAt(pending.px, pending.py, 'Too fast — try again');
   }
 }
 
@@ -9003,6 +9011,11 @@ function runOnlineMatchFrame(dt, onl, conn) {
   syncOnlineCommands(snap, onl);
   updateOnlineCommandShare(onl);
   processOrderResults(onl);
+  // Death housekeeping (parity with the offline dioramaCommandTick, which
+  // never runs online): a dead unit drops the selection, else the invisible
+  // stale sel — its marker/card hide on death — silently gates every
+  // no-selection gesture off and leaves the Trio respawn pre-selected.
+  if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
   updateDioramaHud();
 }
 
@@ -11924,7 +11937,11 @@ function onDioPointerUp(e) {
     const drag = diorama.drag;
     if ((g.kind === 'own' || g.kind === 'ring') && drag && !drag.tapMode && drag.valid && drag.path) {
       if (state.online) {
-        diorama.pendingOrder = { px: e.clientX, py: e.clientY };
+        // `ring` tags a selection-less send: its ack must not run the
+        // one-shot sel drop (it could wipe a selection made during the
+        // round trip), and a 'rate' denial gets its own red note — a ring
+        // release has no lingering glow to signal "didn't land".
+        diorama.pendingOrder = { px: e.clientX, py: e.clientY, ring: g.kind === 'ring' };
         state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
       } else {
         issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
@@ -12084,13 +12101,13 @@ function dioramaGestureFrame() {
 // Rejected order feedback: a red ring fading out at the tapped spot plus the
 // red "Area is not available" note. Pure DOM, self-removing — the HUD layer
 // redraws every frame and must not track one-shot effects.
-function dioramaDenyAt(px, py) {
+function dioramaDenyAt(px, py, label = 'Area is not available') {
   if (!diorama.layer) return;
   const el = document.createElement('div');
   el.className = 'dio-deny';
   el.style.left = `${px.toFixed(1)}px`;
   el.style.top = `${py.toFixed(1)}px`;
-  el.innerHTML = '<i class="dio-deny-ring"></i><span class="dio-deny-text">Area is not available</span>';
+  el.innerHTML = `<i class="dio-deny-ring"></i><span class="dio-deny-text">${label}</span>`;
   diorama.layer.appendChild(el);
   // Keep the note readable when the tap hugs a screen edge: shift the TEXT
   // back into view (the ring stays on the tapped spot).
