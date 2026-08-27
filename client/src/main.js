@@ -11684,14 +11684,15 @@ function ensureDioramaSlotEls(slot) {
 // NO-SELECTION gestures (owner 2026-08-27) — standing commands are edited by
 // touching their indicators directly, so the select→order flow stays intact:
 // tap a pinned ENEMY = drop every lock YOUR units hold on it; double-tap a
-// destination RING (its line band) = drop that move order (the lock
+// destination RING (anywhere on its disc) = drop that move order (the lock
 // survives); DRAG a ring = re-issue the order at the release point — any
 // drag counts (even back to the start) and restarts the 20 s window; a
 // plain tap on the ring does nothing (that's the double-tap's first beat).
 
 const DIO_TAP_SLOP = 9;
 const DIO_DOUBLE_MS = 320;
-const DIO_RING_BAND = 2;        // ring-grab tolerance around the LINE (world u)
+const DIO_RING_BAND = 2;        // ring-grab margin floor beyond the line (world u)
+const DIO_RING_GRAB_PX = 20;    // screen-px forgiveness converted per-tap to world u
 const DIO_LONGPRESS_MS = 450;
 const DIO_ROT_PER_PX = 0.006;   // right-drag rad/px ("grab and throw")
 
@@ -11719,12 +11720,19 @@ function dioramaHitTest(x, y) {
   return { kind: 'empty' };
 }
 
-// Destination-ring hit test (owner 2026-08-27): grabs target the ring's LINE
-// band (radius ± DIO_RING_BAND at the ring's own floor), never the disc —
-// taps INSIDE the area keep working as move orders for a selected unit.
-// Overlapping bands resolve to the nearer ring CENTER; a strict `<` keeps
-// the earlier slot (player before ally) on an exact tie, e.g. two rings
-// ordered onto the same spot. Only units the viewer commands qualify.
+// Destination-ring hit test (owner 2026-08-27): grabs target the WHOLE disc
+// plus a screen-adaptive outer margin (owner feedback, same day — the
+// original line-only band was ±2 world units ≈ ±9 px at the default dolly,
+// so most grab attempts fell through to a camera pan). With nothing
+// selected the disc has no other job, and the interior is exactly where a
+// finger aiming at "the circle" lands; taps INSIDE the area still order a
+// SELECTED unit there, because ring gestures never engage while a
+// selection stands. The margin converts DIO_RING_GRAB_PX to world units on
+// the ring's own plane per tap, so forgiveness stays finger-sized at every
+// zoom (floored at DIO_RING_BAND). Overlapping discs resolve to the nearer
+// ring CENTER; a strict `<` keeps the earlier slot (player before ally) on
+// an exact tie, e.g. two rings ordered onto the same spot. Only units the
+// viewer commands qualify.
 function dioramaRingHitAt(x, y) {
   let best = null;
   let bestDist = Infinity;
@@ -11735,8 +11743,10 @@ function dioramaRingHitAt(x, y) {
     if (state.online && !onlineCommandable(slot)) continue;
     const pt = dioramaGroundPoint(x, y, mv.y);
     if (!pt) continue;
+    const ref = dioramaGroundPoint(x + DIO_RING_GRAB_PX, y, mv.y);
+    const tol = Math.max(DIO_RING_BAND, ref ? Math.hypot(ref.x - pt.x, ref.z - pt.z) : DIO_RING_BAND);
     const dist = Math.hypot(pt.x - mv.x, pt.z - mv.z);
-    if (Math.abs(dist - DIORAMA_VIEW.cmdRadius) > DIO_RING_BAND) continue;
+    if (dist > DIORAMA_VIEW.cmdRadius + tol) continue;
     if (dist < bestDist) {
       bestDist = dist;
       best = { slot };

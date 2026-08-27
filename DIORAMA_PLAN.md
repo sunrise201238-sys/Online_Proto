@@ -830,3 +830,18 @@ from both markers (units converge on the anchor and their markers eat ring
 taps by designed priority) + the rate case driven through the connection
 API (SwiftShader jank makes a scripted sub-500ms two-gesture window
 untimeable) — 12/12.
+
+### Phase 3.5 grab tuning (owner feedback, 2026-08-27)
+
+"Most grab attempts end up scrolling the map": the line-only band (±2
+world units) was ±9 px at the default dolly and shrank further zoomed
+out — untargetable by finger. Ring grabs (drag AND double-tap) now
+accept the WHOLE disc plus a screen-adaptive outer margin
+(DIO_RING_GRAB_PX = 20 px converted to world units on the ring's plane
+per tap, floored at the old ±2 u). Nothing is lost: ring gestures only
+engage with no selection, where the disc's interior had no job — a tap
+inside the area still orders a SELECTED unit there. Camera pan remains
+everywhere outside the discs; a pan accidentally started inside a ring
+shows the brightened grab instantly and can be walked back by releasing
+near the ring's old spot (re-issues in place; owner's no-cancel rule
+stands). Overlap resolution (nearer center, player on ties) unchanged.
