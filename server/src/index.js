@@ -12,6 +12,7 @@ import {
   commandTargetIdOf,
   tickCommandDriver,
   clearCommands,
+  clearMoveOrder,
   getCommands,
   setMoveOrder,
   setForceLock,
@@ -591,7 +592,13 @@ io.on('connection', (socket) => {
   socket.on('order:clear', (data) => {
     const ctx = orderGate('clear', data?.slot);
     if (!ctx) return;
-    clearCommands(ctx.lb.match, ctx.slot);
+    // Granular clears (owner 2026-08-27): 'move' drops only the standing
+    // area order (ring double-tap), 'lock' only the force lock (unselected
+    // tap on the pinned enemy). Anything else keeps the wipe-both default
+    // (unit double-tap), so old clients stay correct.
+    if (data?.what === 'move') clearMoveOrder(ctx.lb.match, ctx.slot);
+    else if (data?.what === 'lock') setForceLock(ctx.lb.match, ctx.slot, null);
+    else clearCommands(ctx.lb.match, ctx.slot);
     socket.emit('order:result', { kind: 'clear', ok: true });
   });
 

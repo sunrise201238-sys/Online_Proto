@@ -777,3 +777,31 @@ The classic-view reticle tiers (updateLocksAndReticle textures) are
 untouched. Verified: build + browser smoke (offline Duel 1v1 PSG1,
 command mode — no tier paths in the marker groups, triangles still draw
 on force lock, no page errors).
+
+## Phase 3.5 — INDICATOR GESTURES: UNLOCK TAP, RING DOUBLE-TAP + DRAG (owner, 2026-08-27)
+
+Standing commands become directly editable through their indicators, all in
+the NO-SELECTION state so the select→order flow is untouched:
+
+- **Unselected tap on an enemy marker/card** releases every force lock the
+  viewer's commanded units hold on that enemy (own unit + bot teammate;
+  a human teammate's lock is not theirs to drop). Rides
+  `order:clear {what:'lock'}` online — rate-limit-exempt, no toggle races.
+- **Ring double-tap** withdraws ONLY the move order (`order:clear
+  {what:'move'}` / offline `cmdMove = null`); a force lock survives. New
+  shared `clearMoveOrder()`; `order:clear` grew an optional `what` field
+  ('move' | 'lock' | absent = both, so old clients stay correct).
+- **Ring drag** re-issues the move order at the release point, reusing the
+  whole drag-order pipeline (preview, validation, layer stack + auto-advance,
+  hold-still layer cycling). Owner call: NO in-place cancel — any drag
+  re-issues on release, even back at the start, restarting the 20 s window
+  (`setMoveOrder` builds a fresh anchor by construction). A plain tap never
+  re-issues (it is the double-tap's first beat). Unreachable release = red
+  note, nothing sent, old order + timer untouched. Rate-limited like any
+  move order (one send, on release).
+- Grab targeting: the ring's LINE band (radius ± 2 u at the ring's floor),
+  never the disc — taps inside the area still order a selected unit there.
+  Overlapping bands resolve to the nearer ring center; exact tie → player
+  before ally. The grabbed ring brightens/thickens in its unit color.
+- Hygiene: ring taps and unit taps run separate double-tap trackers; a
+  second finger (pinch) or pointercancel drops the grab without issuing.

@@ -203,9 +203,10 @@ export function createConnection() {
       if (!connected) return;
       socket.emit('order:lock', { target, slot });
     },
-    sendOrderClear: (slot) => {
+    sendOrderClear: (slot, what) => {
+      // what: 'move' | 'lock' | undefined (both) — server-side granular clear.
       if (!connected) return;
-      socket.emit('order:clear', { slot });
+      socket.emit('order:clear', { slot, what });
     },
     getOrderResult: () => ({ seq: orderResultSeq, data: lastOrderResult }),
 

@@ -72,6 +72,14 @@ export function clearCommands(matchState, slot) {
   cmd.lockTargetId = null;
 }
 
+// Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
+// move order — a standing force lock survives. The lock-only counterpart is
+// setForceLock(slot, null).
+export function clearMoveOrder(matchState, slot) {
+  const cmd = matchState.commands?.[slot];
+  if (cmd) cmd.move = null;
+}
+
 // Validate + store a move order. Mirrors the offline computeOrderPath
 // strictness: the shared pathfinder clamps ANY goal into the grid and snaps
 // up to 3 cells onto walkable — right for bot self-routing, wrong for

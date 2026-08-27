@@ -1086,6 +1086,8 @@ const diorama = {
   pinch: null,           // {startSpan, startDist}
   lastTapSlot: null,     // double-tap detection
   lastTapAt: 0,
+  lastRingSlot: null,    // destination-ring double-tap detection (own tracker,
+  lastRingAt: 0,         // so ring taps never chain with unit taps)
   base: null,            // cropped plate + plinth group (rebuilt per map)
   post: null,            // tilt-shift render pipeline (lazy, rebuilt on resize)
   layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
@@ -9707,6 +9709,7 @@ function showGuidePopup() {
             <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
+            <li>With nothing selected: drag the area ring to move that order (the 20 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
             <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
           </ul>
         </div>
@@ -11665,9 +11668,17 @@ function ensureDioramaSlotEls(slot) {
 // DRAG from an own marker still previews a move order (coexists with taps);
 // drag from anywhere else = camera pan; pinch / wheel = zoom; ROTATION =
 // two-finger twist, right-mouse drag, or Q/E (pivot: current look target).
+// NO-SELECTION gestures (owner 2026-08-27) — standing commands are edited by
+// touching their indicators directly, so the select→order flow stays intact:
+// tap a pinned ENEMY = drop every lock YOUR units hold on it; double-tap a
+// destination RING (its line band) = drop that move order (the lock
+// survives); DRAG a ring = re-issue the order at the release point — any
+// drag counts (even back to the start) and restarts the 20 s window; a
+// plain tap on the ring does nothing (that's the double-tap's first beat).
 
 const DIO_TAP_SLOP = 9;
 const DIO_DOUBLE_MS = 320;
+const DIO_RING_BAND = 2;        // ring-grab tolerance around the LINE (world u)
 const DIO_LONGPRESS_MS = 450;
 const DIO_ROT_PER_PX = 0.006;   // right-drag rad/px ("grab and throw")
 
@@ -11693,6 +11704,32 @@ function dioramaHitTest(x, y) {
     }
   }
   return { kind: 'empty' };
+}
+
+// Destination-ring hit test (owner 2026-08-27): grabs target the ring's LINE
+// band (radius ± DIO_RING_BAND at the ring's own floor), never the disc —
+// taps INSIDE the area keep working as move orders for a selected unit.
+// Overlapping bands resolve to the nearer ring CENTER; a strict `<` keeps
+// the earlier slot (player before ally) on an exact tie, e.g. two rings
+// ordered onto the same spot. Only units the viewer commands qualify.
+function dioramaRingHitAt(x, y) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const slot of DIO_OWN_SLOTS) {
+    const m = state[slot];
+    const mv = m?.cmdMove;
+    if (!m || m.state.hp <= 0 || !mv) continue;
+    if (state.online && !onlineCommandable(slot)) continue;
+    const pt = dioramaGroundPoint(x, y, mv.y);
+    if (!pt) continue;
+    const dist = Math.hypot(pt.x - mv.x, pt.z - mv.z);
+    if (Math.abs(dist - DIORAMA_VIEW.cmdRadius) > DIO_RING_BAND) continue;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { slot };
+    }
+  }
+  return best;
 }
 
 function dioramaUpdateDragTarget(x, y) {
@@ -11776,6 +11813,18 @@ function onDioPointerDown(e) {
     grabX: grab?.x ?? 0, grabZ: grab?.z ?? 0,
     stillX: e.clientX, stillY: e.clientY, stillAt: performance.now()
   };
+  // Destination-ring grab (owner 2026-08-27): only with NOTHING selected —
+  // while a unit is selected a ground press stays the tap-order preview, so
+  // ordering a unit into (or at the edge of) an existing area never changes.
+  // Markers and cards win first (hitTest above). The grabbed ring brightens
+  // via updateDioramaHud; a later drag re-issues, a clean tap double-taps.
+  if (hit.kind === 'empty' && !diorama.sel) {
+    const ring = dioramaRingHitAt(e.clientX, e.clientY);
+    if (ring) {
+      diorama.gesture.kind = 'ring';
+      diorama.gesture.slot = ring.slot;
+    }
+  }
   // TAP-TAP ordering: pressing empty ground with an own unit selected opens
   // the order preview at once (circle + path under the finger); holding
   // still cycles the vertical layer, releasing in place issues the order.
@@ -11829,11 +11878,14 @@ function onDioPointerMove(e) {
       // The tap-order preview dies once the finger travels: this is a pan.
       g.tapPreview = false;
       diorama.drag = null;
-    } else if (g.kind === 'own' && !(state.online && !onlineCommandable(g.slot))) {
+    } else if ((g.kind === 'own' || g.kind === 'ring')
+        && !(state.online && !onlineCommandable(g.slot))) {
       // ONLINE: your own unit always takes orders; the teammate's marker
       // does too when that slot is a commandable BOT (owner 2026-08-22 —
       // reverses phase-3 decision 1 for bot-filled slots). A HUMAN
-      // teammate's marker still never opens a drag.
+      // teammate's marker still never opens a drag. A RING grab past the
+      // slop becomes the same move-order drag for the ring's unit (owner
+      // 2026-08-27) — identical preview, validation and release path.
       diorama.drag = {
         slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
         path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
@@ -11846,7 +11898,7 @@ function onDioPointerMove(e) {
     if (g.tapPreview && diorama.drag) dioramaUpdateDragTarget(e.clientX, e.clientY);
     return;
   }
-  if (g.kind === 'own' && diorama.drag) {
+  if ((g.kind === 'own' || g.kind === 'ring') && diorama.drag) {
     dioramaUpdateDragTarget(e.clientX, e.clientY);
     // (Hold-still layer cycling lives in dioramaGestureFrame — pointermove
     // stops firing the moment the finger truly holds still.)
@@ -11870,13 +11922,21 @@ function onDioPointerUp(e) {
   if (g.kind === 'rotate') return;
   if (g.moved) {
     const drag = diorama.drag;
-    if (g.kind === 'own' && drag && !drag.tapMode && drag.valid && drag.path) {
+    if ((g.kind === 'own' || g.kind === 'ring') && drag && !drag.tapMode && drag.valid && drag.path) {
       if (state.online) {
         diorama.pendingOrder = { px: e.clientX, py: e.clientY };
         state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
       } else {
         issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
       }
+      // A ring drag re-issued the order (fresh 20 s window by construction —
+      // setMoveOrder starts a new anchor). Any drag counts, even one released
+      // back at the start (owner 2026-08-27: no in-place cancel).
+      if (g.kind === 'ring') diorama.lastRingAt = 0;
+    } else if (g.kind === 'ring' && drag && !drag.tapMode) {
+      // Ring dragged onto an unreachable spot: red note; nothing is sent, so
+      // the standing order — and its timer — survives untouched.
+      dioramaDenyAt(e.clientX, e.clientY);
     }
     diorama.drag = null;
     return;
@@ -11884,6 +11944,7 @@ function onDioPointerUp(e) {
   const nowT = performance.now();
   if (g.kind === 'own') {
     diorama.drag = null;
+    diorama.lastRingSlot = null;
     if (state.online && !onlineCommandable(g.slot)) return;   // human teammates aren't commandable online
     if (diorama.lastTapSlot === g.slot && nowT - diorama.lastTapAt < DIO_DOUBLE_MS) {
       // Double-tap (marker OR card): wipe the move order AND the force lock.
@@ -11901,8 +11962,24 @@ function onDioPointerUp(e) {
       diorama.lastTapSlot = g.slot;
       diorama.lastTapAt = nowT;
     }
+  } else if (g.kind === 'ring') {
+    // Plain tap on a destination ring: the double-tap's first beat does
+    // nothing on its own (owner 2026-08-27 — taps never re-issue or reset
+    // the timer; only a real drag does). The second beat drops the MOVE
+    // order alone — a standing force lock survives.
+    diorama.lastTapSlot = null;
+    if (diorama.lastRingSlot === g.slot && nowT - diorama.lastRingAt < DIO_DOUBLE_MS) {
+      if (state.online) state.online.conn?.sendOrderClear(onlineServerIdOf(g.slot), 'move');
+      else if (state[g.slot]) state[g.slot].cmdMove = null;
+      diorama.lastRingSlot = null;
+      diorama.lastRingAt = 0;
+    } else {
+      diorama.lastRingSlot = g.slot;
+      diorama.lastRingAt = nowT;
+    }
   } else if (g.kind === 'enemy') {
     diorama.lastTapSlot = null;
+    diorama.lastRingSlot = null;
     const cmd = diorama.sel ? state[diorama.sel] : null;
     const foe = state[g.slot];
     if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
@@ -11921,9 +11998,26 @@ function onDioPointerUp(e) {
       // commanders pin the same enemy (2.1d).
       if (cmd.cmdLock) cmd.cmdLockAt = performance.now();
       diorama.sel = null;   // one-shot: the glow drops once the command lands
+    } else if (!diorama.sel && foe) {
+      // Unselected tap on an enemy marker/card (owner 2026-08-27): release
+      // every force lock YOUR units hold on it — the quick "let it go"
+      // gesture, covering the bot teammate without selecting it first. A
+      // human teammate's lock is not yours to drop (and online the server
+      // would refuse anyway). No lock on it = harmless no-op. The clears
+      // ride order:clear {what:'lock'}, which is rate-limit-exempt.
+      for (const slot of DIO_OWN_SLOTS) {
+        const m = state[slot];
+        if (!m || m.cmdLock !== foe) continue;
+        if (state.online) {
+          if (onlineCommandable(slot)) state.online.conn?.sendOrderClear(onlineServerIdOf(slot), 'lock');
+        } else {
+          m.cmdLock = null;
+        }
+      }
     }
   } else {
     diorama.lastTapSlot = null;
+    diorama.lastRingSlot = null;
     const drag = diorama.drag;
     diorama.drag = null;
     if (g.tapPreview && drag) {
@@ -12271,6 +12365,12 @@ function updateDioramaHud() {
         const ringD = dioCircleSvgPath(m.cmdMove.x, m.cmdMove.z, m.cmdMove.y + 0.3, DIORAMA_VIEW.cmdRadius, 20);
         if (ringD) {
           els.destRing.setAttribute('d', ringD);
+          // Grabbed ring (owner 2026-08-27): brighten + thicken the instant
+          // a ring gesture holds this slot, so the player sees WHICH ring
+          // they picked up before deciding to drag or let go.
+          const grabbed = diorama.gesture?.kind === 'ring' && diorama.gesture.slot === slot;
+          els.destRing.setAttribute('stroke-width', grabbed ? '2.6' : '1.2');
+          els.destRing.setAttribute('opacity', grabbed ? '1' : '0.85');
           els.destRing.style.display = '';
         } else {
           els.destRing.style.display = 'none';
