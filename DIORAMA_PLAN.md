@@ -845,3 +845,17 @@ everywhere outside the discs; a pan accidentally started inside a ring
 shows the brightened grab instantly and can be walked back by releasing
 near the ring's old spot (re-issues in place; owner's no-cancel rule
 stands). Overlap resolution (nearer center, player on ties) unchanged.
+
+### Offline driver: sniper charge / sweep channel lock (owner report, 2026-08-28)
+
+"BOT moves while firing the Railgun beam" in command mode — OFFLINE only.
+The bot brain zeroes velocity for a sniper charge and for the sweep
+channel, but the offline frame runs it BEFORE applyMoveOrder, whose
+yield list (botReflexActive) lacked both locks, so the driver rewrote the
+travel/orbit velocity every frame and the beam (re-oriented from the
+muzzle) walked with the unit. Fix: botReflexActive now also yields on
+sniperChargeTarget, chargedBeamUntil and a scheduled anti-glint dodge
+(botGlintStepAt) — full parity with the shared commandReflexActive, which
+already covered them online. Reproduced then verified with a 40 ms
+position sampler (pre-fix max 1.47 u/sample during locked frames; post-fix
+0.000 across 38 locked pairs, travel intact); gesture e2e 12/12.

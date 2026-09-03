@@ -11028,7 +11028,15 @@ function botReflexActive(m, now) {
   return st.botState === 'defense'
     || !!st.botCoverPath
     || st.action === 'step'
-    || now < (st.hitStunUntil ?? 0);
+    || now < (st.hitStunUntil ?? 0)
+    // Sniper charge + sweep channel + a scheduled anti-glint dodge (owner
+    // 2026-08-28): parity with the shared commandReflexActive. The bot brain
+    // zeroes velocity for the charge/channel but runs BEFORE this driver,
+    // which overwrote it every frame — a commanded Railgun walked its own
+    // sweep beam across the map.
+    || !!st.sniperChargeTarget
+    || now < (st.chargedBeamUntil ?? 0)
+    || st.botGlintStepAt != null;
 }
 
 function clearUnitCommands(m) {
