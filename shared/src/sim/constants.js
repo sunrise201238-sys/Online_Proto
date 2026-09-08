@@ -672,3 +672,39 @@ export const ANTI_MELEE_WINDOW_MS = 260;
 
 // Dash-defense recovery window (player slowed for this long after dash).
 export const DASH_RECOVER_MS = 180;
+
+// --- COMMAND MODE (phase 3): one source for the client preview AND the
+// server authority — the offline diorama reads these too. Owner-tuned:
+// dash segments are latched (arm at 125, spend down to the 50 reserve
+// floor, walk until re-armed), 20 s Engage-style anchor on a radius-12
+// ring, orders rejected when the pathfinder's goal snap lands more than
+// 6 u from the tapped spot.
+export const CMD_TRAVEL_BOOST_FLOOR = 50;
+export const CMD_TRAVEL_DASH_ARM = 125;
+export const CMD_ANCHOR_MS = 20000;
+export const CMD_RADIUS = 12;
+export const CMD_ORDER_SNAP_TOLERANCE = 6;
+export const CMD_ARRIVE_DIST = 4;
+// Pathfinder-guided travel (owner 2026-08-22): the frozen order path is
+// refreshed from the unit's current position on this cadence AND at every
+// reflex exit, so reflex displacement / corner catches never strand the
+// unit shoving a wall toward a stale waypoint. A failed refresh keeps the
+// old path and retries next period.
+export const CMD_REPLAN_MS = 1500;
+// MANDATED jump funding tier (owner 2026-08-22): jumps somebody ordered —
+// the Defense survival hop/vault AND commanded-travel route jumps (the
+// player's order) — fire from 60 boost. Discretionary bot jumps (Pursue
+// perch/climb/descend, Maze jump-links) keep the 250 reserve gate. 60 sits
+// under the travel dash latch's 50<->125 gauge cycle, so route jumps are
+// always reachable mid-travel; the cost itself stays the raw 48.
+export const MANDATED_JUMP_MIN_BOOST = 60;
+// Travel dash floor while a route jump lies ahead on the remaining path:
+// the mandated gate + a pad over one predictive drain check, so a dash
+// segment can never deliver the unit to the ledge unable to afford the hop.
+export const CMD_TRAVEL_JUMP_BANK = 70;
+// Anchored units displaced beyond this distance from the order point
+// (Defense escapes and the like) RETURN VIA TRAVEL — a fresh pathfinder
+// -guided leg back to the centre — instead of the orbit spring shoving
+// them into whatever wall lies between (owner 2026-08-22). The remaining
+// anchor window is preserved across the trip.
+export const CMD_ANCHOR_LEASH = 20;

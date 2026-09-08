@@ -5,10 +5,17 @@ import { Server } from 'socket.io';
 import {
   createMatchState,
   respawnFighterNext,
-  buildSnapshot,
+  buildSnapshotFor,
   tickMatch,
   tickBot,
   pickBotTargetId,
+  commandTargetIdOf,
+  tickCommandDriver,
+  clearCommands,
+  clearMoveOrder,
+  getCommands,
+  setMoveOrder,
+  setForceLock,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -21,6 +28,9 @@ import {
 // are active; in 2v2 p3/p4 join. p1+p3 = team A, p2+p4 = team B (matches
 // createMatchState's team assignment).
 const SLOT_IDS = ['p1', 'p2', 'p3', 'p4'];
+// Command orders share a per-slot rate limiter (≤2/s; latest wins) — every
+// move order runs a server-side pathfind, so spam is a CPU vector.
+const ORDER_MIN_INTERVAL_MS = 500;
 function activeSlots(mode) {
   return mode === '2v2' ? SLOT_IDS : SLOT_IDS.slice(0, 2);
 }
@@ -58,6 +68,8 @@ function createLobby() {
     mode: '1v1',                      // '1v1' | '2v2' — host pushes via match:set-mode
     mainMode: 'sd',                   // 'sd' ("Duel") | 'trio' — host pushes via match:set-mode
     botSlots: new Set(),              // slots filled with bots while state==='active'
+    startBotSlots: new Set(),         // botSlots FROZEN at match start — the commandable set (owner 2026-08-22): a mid-match disconnect's leftover bot is never adopted
+    commandSlots: new Set(),          // HUMAN slots playing command mode (bot-driven + orders); populated in phase 3 R3
     botUnits: {},                     // slot -> host-chosen bot unit (Duel: key; Trio: [k,k,k])
     glintCharges: new Map(),          // slot -> "slot:chargeStartAt" of the last seen charge (floating-unlock bookkeeping)
     inputs: {
@@ -65,11 +77,12 @@ function createLobby() {
     },
     lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
     config: {
-      p1: { unitKey: null, unitKeys: null, mapKey: null },
-      p2: { unitKey: null, unitKeys: null, mapKey: null },
-      p3: { unitKey: null, unitKeys: null, mapKey: null },
-      p4: { unitKey: null, unitKeys: null, mapKey: null }
+      p1: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p2: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p3: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
+      p4: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' }
     },
+    lastOrderAt: { p1: 0, p2: 0, p3: 0, p4: 0 },   // command-order rate limiter
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
     startedAt: 0,
     endedAt: 0,
@@ -162,6 +175,19 @@ function startMatchFor(lobby) {
   for (const s of slots) {
     if (!occupied.has(s)) lobby.botSlots.add(s);
   }
+  // Freeze the match-start bot set: these are the slots a same-team
+  // commander may drive (owner 2026-08-22). Deliberately NOT live
+  // lobby.botSlots — a disconnected human's unit becomes a bot mid-match
+  // but is never adopted as commandable.
+  lobby.startBotSlots = new Set(lobby.botSlots);
+  // Command-mode humans: bot-driven + order-driven for the whole match
+  // (owner: the queue-room choice is final; V-toggle stays offline-only).
+  lobby.commandSlots.clear();
+  for (const s of slots) {
+    if (occupied.has(s) && lobby.config[s].viewMode === 'command') {
+      lobby.commandSlots.add(s);
+    }
+  }
 
   // Resolve unit keys for every active slot (human or bot).
   const unitFor = (s) => {
@@ -235,22 +261,39 @@ function emitLobbyConfig(lobby) {
         : rosterForSlot(lobby, s, occupied);
     }
   }
-  io.to(lobby.id).emit('lobby:config', {
+  const base = {
     state: lobby.state,
     mode: lobby.mode,
     mainMode: lobby.mainMode,
-    config: lobby.config,
     botUnits,
     rosters,
     occupied: Array.from(occupied),
     botSlots: Array.from(lobby.botSlots),
     rematchRequested: lobby.rematchRequested
-  });
+  };
+  // viewMode secrecy (owner decision 3): a slot's Classic|Command pick is
+  // visible to its OWN TEAM only — the opponent's config rows ship without
+  // the field (spectators see none). Everything else is shared as before.
+  for (const [sid, recipSlot] of lobby.players) {
+    const recipTeam = SLOT_IDS.includes(recipSlot) ? teamOf(recipSlot) : null;
+    const config = {};
+    for (const cs of SLOT_IDS) {
+      const row = { ...lobby.config[cs] };
+      if (recipTeam == null || teamOf(cs) !== recipTeam) delete row.viewMode;
+      config[cs] = row;
+    }
+    io.to(sid).emit('lobby:config', { ...base, config });
+  }
 }
 
-function snapshotWithAcks(lobby) {
-  return {
-    ...buildSnapshot(lobby.match),
+// Per-team snapshots (command-mode online, phase 3 R1): each side gets its
+// own filtered view — enemy boost nulled, enemy bot-intent fields stripped
+// (the old single broadcast shipped everyone's full fighter objects to the
+// whole room). Two variants are built once per tick and emitted per socket;
+// spectators get team A's view (the client renders spectators from p1's
+// perspective — owner: spectators see the classic view).
+function emitSnapshotsFor(lobby) {
+  const extra = {
     mode: lobby.mode,
     botSlots: Array.from(lobby.botSlots),
     acks: {
@@ -258,24 +301,72 @@ function snapshotWithAcks(lobby) {
       p3: lobby.lastAcked.p3, p4: lobby.lastAcked.p4
     }
   };
+  // Command-state echo (owner decision 2): a team sees ITS OWN commanders'
+  // standing orders (destination/path/phase + force lock) so both command
+  // and classic teammates can render the share; the enemy team never
+  // receives them. Spectators get team A's fighter view with NO commands
+  // (owner decision 5: spectators watch the classic view).
+  const teamCommands = (team) => {
+    const out = {};
+    // Every slot of the team, not just commandSlots — commanded BOT
+    // teammates (owner 2026-08-22) carry standing orders too. Commands
+    // only ever exist where a commander set them, so this stays exact.
+    for (const cs of activeSlots(lobby.mode)) {
+      if (teamOf(cs) !== team) continue;
+      if ((lobby.match.fighters[cs]?.hp ?? 0) <= 0) continue;   // dead unit
+      const cmd = getCommands(lobby.match, cs);
+      if (!cmd || (!cmd.move && !cmd.lockTargetId)) continue;
+      out[cs] = {
+        move: cmd.move ? {
+          x: cmd.move.x, z: cmd.move.z, y: cmd.move.y,
+          phase: cmd.move.phase, anchorUntil: cmd.move.anchorUntil,
+          path: cmd.move.path
+        } : null,
+        lockTargetId: cmd.lockTargetId
+      };
+    }
+    return out;
+  };
+  const byTeam = {
+    A: { ...buildSnapshotFor(lobby.match, 'A'), ...extra, commands: teamCommands('A') },
+    B: { ...buildSnapshotFor(lobby.match, 'B'), ...extra, commands: teamCommands('B') }
+  };
+  const spectator = { ...byTeam.A, commands: {} };
+  for (const [sid, slot] of lobby.players) {
+    const payload = SLOT_IDS.includes(slot) ? byTeam[teamOf(slot)] : spectator;
+    io.to(sid).emit('match:snapshot', payload);
+  }
 }
 
 function tickLobby(lobby) {
   if (lobby.state !== 'active' || !lobby.match) return;
   const now = Date.now();
 
-  // 1. Drive bots — closest live enemy as targetId, then tickBot writes
-  //    velocity/action just like applyInput would for humans.
-  for (const botId of lobby.botSlots) {
+  // 1. Drive bots AND command-mode humans — both are tickBot-driven; a
+  //    force lock (commandTargetIdOf) overrides the bot target pick, and
+  //    the command driver re-steers the legs after tickBot while a move
+  //    order stands (reflexes yield per tick inside the driver).
+  const driven = lobby.commandSlots.size
+    ? new Set([...lobby.botSlots, ...lobby.commandSlots])
+    : lobby.botSlots;
+  for (const botId of driven) {
     const me = lobby.match.fighters[botId];
-    if (!me || me.hp <= 0) continue;
-    me.targetId = pickBotTargetId(lobby.match, me) ?? me.targetId;
+    if (!me || me.hp <= 0) {
+      // A dead unit's standing orders die with it — commander or commanded
+      // bot teammate alike — otherwise the team echo keeps showing the
+      // ring/lock to teammates. clearCommands is a no-op with none set.
+      if (me) clearCommands(lobby.match, botId);
+      continue;
+    }
+    me.targetId = commandTargetIdOf(lobby.match, botId)
+      ?? pickBotTargetId(lobby.match, me) ?? me.targetId;
     tickBot(lobby.match, botId, now);
+    tickCommandDriver(lobby.match, botId, now);
   }
 
-  // 2. Shared sim tick. Humans drive via lobby.inputs; bot fighters are
-  //    listed in botSlots so tickMatch skips applyInput for them.
-  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, lobby.botSlots);
+  // 2. Shared sim tick. Humans drive via lobby.inputs; tickBot-driven
+  //    fighters are listed so tickMatch skips applyInput for them.
+  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, driven);
 
   // 3. Clear human tap flags so they fire once per press. `jump` resets to
   //    the last frame's raw HELD value (not false) — held-jump must survive
@@ -317,6 +408,9 @@ function tickLobby(lobby) {
       if (fighter && fighter.hp <= 0) {
         const fresh = respawnFighterNext(lobby.match, s);
         if (fresh && lobby.botSlots.has(s)) fresh.nextFireAt = lobby.match.now + 650;
+        // Trio + command: a respawned unit starts fully autonomous — its
+        // standing orders die with the previous unit (offline parity).
+        if (fresh) clearCommands(lobby.match, s);
       }
     }
   }
@@ -333,18 +427,18 @@ function tickLobby(lobby) {
     const teamAOut = slotOut('p1') && slotOut('p3');
     const teamBOut = slotOut('p2') && slotOut('p4');
     if (teamAOut || teamBOut) {
-      io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+      emitSnapshotsFor(lobby);
       endMatchFor(lobby, teamAOut ? 'B' : 'A', 'ko');
       return;
     }
   } else if (slotOut('p1') || slotOut('p2')) {
     const winner = slotOut('p1') ? 'p2' : 'p1';
-    io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+    emitSnapshotsFor(lobby);
     endMatchFor(lobby, winner, 'ko');
     return;
   }
 
-  io.to(lobby.id).emit('match:snapshot', snapshotWithAcks(lobby));
+  emitSnapshotsFor(lobby);
 }
 
 function tickAllLobbies() {
@@ -400,6 +494,7 @@ io.on('connection', (socket) => {
     if (!SLOT_IDS.includes(slot)) return;
     if (lb.state !== 'active') return;
     if (lb.botSlots.has(slot)) return;
+    if (lb.commandSlots.has(slot)) return;   // command units are bot-driven
 
     if (typeof frame.seq === 'number' && frame.seq > lb.lastAcked[slot]) {
       lb.lastAcked[slot] = frame.seq;
@@ -427,6 +522,81 @@ io.on('connection', (socket) => {
     };
   });
 
+  // ---- COMMAND-MODE orders (phase 3 R3) ----------------------------------
+  // Only command-slot humans in an active match may order; the server
+  // re-validates everything (the client preview is advisory). Move/lock
+  // share a per-slot rate limiter — pathfinding is the expensive part, and
+  // "latest wins" is the intended semantic anyway. Results go to the sender
+  // only; the standing state itself reaches the whole team via the
+  // snapshot's `commands` block.
+  const orderGate = (kind, reqSlot) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match) return null;
+    const sender = lb.players.get(socket.id);
+    if (!lb.commandSlots.has(sender)) return null;
+    // Target slot (owner 2026-08-22): the commander's own unit (default),
+    // or a SAME-TEAM slot that was a bot at match start (startBotSlots —
+    // frozen, so a disconnected human's leftover bot is never adopted).
+    // 2v2 structure guarantees no arbitration: a bot teammate implies a
+    // single human on that team.
+    const slot = typeof reqSlot === 'string' && SLOT_IDS.includes(reqSlot) ? reqSlot : sender;
+    if (slot !== sender) {
+      if (!lb.startBotSlots.has(slot)
+        || teamOf(slot) !== teamOf(sender)
+        || !activeSlots(lb.mode).includes(slot)) return null;
+    }
+    if (kind !== 'clear') {
+      const nowMs = Date.now();
+      // Rate limit is PER TARGET UNIT (owner 2026-08-22): one commander
+      // drives two units, and back-to-back orders to different units must
+      // not eat each other.
+      if (nowMs - lb.lastOrderAt[slot] < ORDER_MIN_INTERVAL_MS) {
+        socket.emit('order:result', { kind, ok: false, reason: 'rate' });
+        return null;
+      }
+      lb.lastOrderAt[slot] = nowMs;
+    }
+    return { lb, slot };
+  };
+
+  socket.on('order:move', (data) => {
+    const ctx = orderGate('move', data?.slot);
+    if (!ctx) return;
+    const x = Number(data?.x);
+    const z = Number(data?.z);
+    const floorY = Number(data?.floorY ?? 0);
+    const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY);
+    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, reason: ok ? null : 'unreachable' });
+  });
+
+  socket.on('order:lock', (data) => {
+    const ctx = orderGate('lock', data?.slot);
+    if (!ctx) return;
+    const target = typeof data?.target === 'string' ? data.target : null;
+    const cmd = getCommands(ctx.lb.match, ctx.slot);
+    // Toggle semantics (offline parity): same enemy again = unlock.
+    const want = (cmd?.lockTargetId === target) ? null : target;
+    const ok = setForceLock(ctx.lb.match, ctx.slot, want);
+    socket.emit('order:result', {
+      kind: 'lock', ok,
+      target: ok ? (getCommands(ctx.lb.match, ctx.slot)?.lockTargetId ?? null) : null,
+      reason: ok ? null : 'invalid'
+    });
+  });
+
+  socket.on('order:clear', (data) => {
+    const ctx = orderGate('clear', data?.slot);
+    if (!ctx) return;
+    // Granular clears (owner 2026-08-27): 'move' drops only the standing
+    // area order (ring double-tap), 'lock' only the force lock (unselected
+    // tap on the pinned enemy). Anything else keeps the wipe-both default
+    // (unit double-tap), so old clients stay correct.
+    if (data?.what === 'move') clearMoveOrder(ctx.lb.match, ctx.slot);
+    else if (data?.what === 'lock') setForceLock(ctx.lb.match, ctx.slot, null);
+    else clearCommands(ctx.lb.match, ctx.slot);
+    socket.emit('order:result', { kind: 'clear', ok: true });
+  });
+
   socket.on('match:configure', (cfg) => {
     const lb = lobbyForSocket(socket);
     if (!lb) return;
@@ -445,6 +615,12 @@ io.on('connection', (socket) => {
     if (cfg && isValidRoster(cfg.unitKeys)) {
       lb.config[slot].unitKeys = cfg.unitKeys.slice();
       lb.config[slot].unitKey = cfg.unitKeys[0];
+      dirty = true;
+    }
+    // Classic|Command pick (phase 3): locked once the match is active (the
+    // state gate above); re-pickable in the 'ended' window before a rematch.
+    if (cfg && (cfg.viewMode === 'classic' || cfg.viewMode === 'command')) {
+      lb.config[slot].viewMode = cfg.viewMode;
       dirty = true;
     }
     if (cfg && typeof cfg.mapKey === 'string' && slot === 'p1' && MAP_DATA[cfg.mapKey]) {
@@ -526,9 +702,10 @@ io.on('connection', (socket) => {
     lb.config[newSlot] = {
       unitKey: lb.config[slot].unitKey,
       unitKeys: lb.config[slot].unitKeys,
-      mapKey: null
+      mapKey: null,
+      viewMode: lb.config[slot].viewMode ?? 'classic'
     };
-    lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
+    lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
     lb.lastAcked[newSlot] = -1;
     lb.lastAcked[slot] = -1;
     lb.rematchRequested[newSlot] = false;
@@ -594,6 +771,12 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     lb.players.delete(socket.id);
     if (SLOT_IDS.includes(slot) && lb.state === 'active') {
+      // A leaving commander's standing orders die with them; the unit
+      // continues (2v2) as a plain bot.
+      if (lb.commandSlots.has(slot)) {
+        lb.commandSlots.delete(slot);
+        if (lb.match) clearCommands(lb.match, slot);
+      }
       if (lb.mode === '2v2') {
         lb.botSlots.add(slot);
       } else {
@@ -602,7 +785,7 @@ io.on('connection', (socket) => {
       }
     }
     if (SLOT_IDS.includes(slot)) {
-      lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null };
+      lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
       lb.rematchRequested[slot] = false;
     }
     // Host left outside an active match (waiting room / end menu): promote
@@ -616,7 +799,7 @@ io.on('connection', (socket) => {
         const [sid, oldSlot] = entry;
         lb.players.set(sid, 'p1');
         lb.config.p1 = lb.config[oldSlot];
-        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null };
+        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
         lb.lastAcked.p1 = -1;
         lb.rematchRequested.p1 = false;
         lb.rematchRequested[oldSlot] = false;

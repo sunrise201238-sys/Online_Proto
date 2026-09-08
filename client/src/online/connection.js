@@ -107,6 +107,16 @@ export function createConnection() {
     log('lobby:config', payload);
   });
 
+  // COMMAND MODE (phase 3): order acknowledgements. The render loop polls
+  // getOrderResult and compares seq to know when a fresh one landed.
+  let lastOrderResult = null;
+  let orderResultSeq = 0;
+  socket.on('order:result', (payload) => {
+    lastOrderResult = payload;
+    orderResultSeq += 1;
+    log('order:result', payload);
+  });
+
   return {
     serverUrl: SERVER_URL,
     socket,
@@ -179,6 +189,26 @@ export function createConnection() {
     },
 
     getLobbyConfig: () => lobbyConfig,
+
+    // COMMAND MODE (phase 3): order transport. The server validates and
+    // answers with order:result to this socket only; the standing command
+    // state itself arrives via the team-scoped snapshot `commands` block.
+    // `slot` (optional) targets a commandable BOT teammate instead of the
+    // sender's own unit (owner 2026-08-22); omitted = own unit.
+    sendOrderMove: (x, z, floorY, slot) => {
+      if (!connected) return;
+      socket.emit('order:move', { x, z, floorY, slot });
+    },
+    sendOrderLock: (target, slot) => {
+      if (!connected) return;
+      socket.emit('order:lock', { target, slot });
+    },
+    sendOrderClear: (slot, what) => {
+      // what: 'move' | 'lock' | undefined (both) — server-side granular clear.
+      if (!connected) return;
+      socket.emit('order:clear', { slot, what });
+    },
+    getOrderResult: () => ({ seq: orderResultSeq, data: lastOrderResult }),
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }
   };

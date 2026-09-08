@@ -24,6 +24,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 /* Spectator: WHITE glow rim on the corner bar of the WATCHED unit — a crisp
    1px white ring plus a wide soft halo (ported from the demo line). */
 .touch-hud .spec-watched { box-shadow: 0 0 0 1px #ffffff, 0 0 12px 4px rgba(255, 255, 255, 0.95); }
+/* ONLINE absolute HUD (2026-08-22): bars sit by SERVER SLOT in slot colors,
+   so position no longer says "this one is you" — the viewer's own bar wears
+   this thinner white rim instead (the spectate rim's quieter sibling). */
+.touch-hud .self-bar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85), 0 0 8px 2px rgba(255, 255, 255, 0.45); }
 .trio-count-own { left: 16px; }
 .trio-count-enemy { right: 16px; text-align: right; }
 .trio-count .trio-line { height: 13px; line-height: 13px; margin-bottom: 2px; }
@@ -49,10 +53,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   bottom: max(16px, env(safe-area-inset-bottom));
   width: calc(var(--btn-size) * 2 + var(--btn-gap));
   height: calc(var(--btn-size) * 3 + var(--btn-gap) * 2);
-  pointer-events: auto;
+  /* Events live on the round buttons, not the container box — the grid's
+     empty cells must not eat taps (diorama tap-to-lock reaches under them). */
+  pointer-events: none;
 }
 .buttons button {
   position: absolute;
+  pointer-events: auto;
   width: var(--btn-size);
   height: var(--btn-size);
   border: 2px solid rgba(176, 231, 255, 0.78);
@@ -352,3 +359,100 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .random-face-wide { width: 260px; max-width: 62vw; height: 160px; }
 .menu .unit-card .random-thumb.all-random { background: #ecdda6; color: #9a7f2e; }
 .unit-profile-popup .random-face.all-random { background: #ecdda6; color: #9a7f2e; }
+/* ---------------------------------------------------------------------------
+   DIORAMA VIEW (POC) — thin-line annotation layer (see DIORAMA_PLAN.md).
+   The layer itself never eats input; only the enemy squares (SVG rects with
+   pointer-events:all) are tappable, so the joystick/buttons keep working.
+   z-index 20 sits above the canvas; .touch-hud is lifted to 25 so gauges and
+   buttons stay on top of leader lines/cards. Edge arrows (35), menus (100+)
+   keep their existing layers. */
+.touch-hud { z-index: 25; }
+.dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: auto; touch-action: none; }
+.dio-layer > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dio-card {
+  position: absolute; left: 0; top: 0; width: 180px; height: 68px; box-sizing: border-box;
+  padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
+  background: rgba(7, 11, 18, 0.72); backdrop-filter: blur(2px);
+  color: #dfe7f5; pointer-events: none; will-change: transform;
+}
+.dio-card .dio-name { font-size: 10px; letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; }
+.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 4px; min-height: 11px; color: #ffcf6b; white-space: nowrap; }
+.dio-card .dio-bar { height: 9px; margin-top: 7px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
+.dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
+/* Stamina (boost) gauge — thinner amber twin under the HP bar (2.1c). */
+.dio-card .dio-boost { height: 5px; margin-top: 3px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.28); }
+.dio-card .dio-boost i { display: block; height: 100%; width: 100%; background: #ffc94d; transition: width 0.15s linear; }
+#dio-toast {
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  padding: 10px 22px; border: 1px solid rgba(223, 231, 245, 0.55); border-radius: 3px;
+  background: rgba(7, 11, 18, 0.78); color: #eef4ff; font-size: 13px; letter-spacing: 0.22em;
+  opacity: 0; transition: opacity 0.25s ease; pointer-events: none; z-index: 95;
+}
+#dio-toast.show { opacity: 1; }
+/* Manual fire with no lock: the button reads disabled (tap shows the toast). */
+.buttons .btn-shoot.dio-no-target { opacity: 0.38; }
+/* Diorama round 2: role + weapon silhouette on one card line (invert flips
+   the dark weapon art to white on the dark card, same trick as trio tags). */
+.dio-card .dio-name { display: flex; align-items: center; gap: 6px; }
+.dio-card .dio-weapon { height: 22px; width: 22px; object-fit: cover; border-radius: 4px; background: #0b1119; opacity: 1; }  /* BA: character portrait thumbnail (no silhouette filter) */
+/* Compact cards for small screens (phones) — JS mirrors these numbers
+   (updateDioramaHud: cardW/cardH 132x44 when min(W,H) < 500). */
+.dio-layer.dio-compact .dio-card { width: 132px; height: 52px; padding: 4px 7px 5px; }
+.dio-layer.dio-compact .dio-card .dio-name { font-size: 8.5px; letter-spacing: 0.1em; gap: 4px; }
+.dio-layer.dio-compact .dio-card .dio-weapon { height: 16px; width: 16px; }
+.dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 5px; }
+.dio-layer.dio-compact .dio-card .dio-boost { height: 4px; margin-top: 2px; }
+.dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 3px; min-height: 9px; }
+/* NO SIGHT: the card border dashes along with its square and leader line. */
+.dio-card.dio-blocked { border-style: dashed; }
+
+/* COMMAND MODE (phase 2): direct-control inputs are hidden — every unit is
+   bot-driven; the player selects and orders through the annotation layer. */
+.touch-hud.dio-cmd .joy, .touch-hud.dio-cmd .buttons { display: none; }
+.dio-goldglow { filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9)); }
+
+/* Command-mode selection glow (2026-08-21). The old lone drop-shadow washed
+   out over bright floors — the selected unit's card now reads as a solid
+   color ring, dark-separated from the background, with a pulsing bloom
+   (--dio-sel carries the slot color); the SVG marker + leader line wear
+   matching pulsing halo strokes (.dio-selglow). */
+.dio-card.dio-sel { animation: dio-sel-card 1.1s ease-in-out infinite alternate; }
+@keyframes dio-sel-card {
+  from { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(7, 11, 18, 0.85), 0 0 9px 2px var(--dio-sel); }
+  to   { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(7, 11, 18, 0.85), 0 0 18px 6px var(--dio-sel); }
+}
+.dio-selglow { animation: dio-sel-stroke 1.1s ease-in-out infinite alternate; }
+@keyframes dio-sel-stroke {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+/* inline-block: "!" and the eye sit SIDE BY SIDE when both commands stand. */
+.dio-card .dio-status .dio-cmdicon { display: inline-block; vertical-align: top; margin-right: 4px; filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.85)); }
+
+/* Rejected order feedback (phase 2.1): red ring fading at the tapped spot
+   plus the red "Area is not available" note; self-removing DOM one-shot. */
+.dio-deny { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 30; }
+.dio-deny .dio-deny-ring {
+  position: absolute; left: -26px; top: -26px; width: 52px; height: 52px;
+  border: 2px solid rgba(255, 77, 94, 0.95); border-radius: 50%;
+  animation: dio-deny-ring 0.85s ease-out forwards;
+}
+.dio-deny .dio-deny-text {
+  position: absolute; left: 0; top: -46px; transform: translateX(-50%);
+  color: #ff4d5e; font-size: 11px; letter-spacing: 0.18em; white-space: nowrap;
+  text-shadow: 0 0 6px rgba(7, 11, 18, 0.95), 0 1px 2px rgba(7, 11, 18, 0.95);
+  animation: dio-deny-text 0.85s ease-out forwards;
+}
+@keyframes dio-deny-ring {
+  from { transform: scale(0.55); opacity: 1; }
+  to { transform: scale(1.25); opacity: 0; }
+}
+@keyframes dio-deny-text {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+
+/* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
+.roster-viewtag { color: #ffd257; font-size: 0.85em; letter-spacing: 0.08em; }

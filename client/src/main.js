@@ -13,6 +13,16 @@ import {
   findFiringPath,
   smoothPath,
   walkSegmentBlocked,
+  CMD_TRAVEL_BOOST_FLOOR,
+  CMD_TRAVEL_DASH_ARM,
+  CMD_TRAVEL_JUMP_BANK,
+  CMD_ANCHOR_MS,
+  CMD_RADIUS,
+  CMD_ORDER_SNAP_TOLERANCE,
+  CMD_ARRIVE_DIST,
+  CMD_REPLAN_MS,
+  CMD_ANCHOR_LEASH,
+  MANDATED_JUMP_MIN_BOOST,
   volleyAxes,
   volleyPelletOffset,
   volleySpreadFactor,
@@ -856,6 +866,88 @@ const arenaDecor = [];
 const arenaObstacles = [];
 createArenaWalls();
 
+// ---- Diorama view (POC) state — declared with the other early globals so
+// the boot calls further down (showSelectMenu -> cleanupMatch, the first
+// synchronous animate()) can read it; the diorama FUNCTIONS live in their own
+// section near the map builders (hoisted). See DIORAMA_PLAN.md.
+const diorama = {
+  enabled: false,
+  // Smoothed camera state; `snapped` false forces a hard cut to the diorama
+  // frame on activation (no fly-in from wherever the chase camera sat).
+  cam: { shiftX: 0, shiftZ: 0, yawOff: 0, focusY: 0.5, snapped: false },
+  // COMMAND MODE (phase 2): free-camera target + dolly distance + rotation
+  // (rot is an offset on the map's base yaw; pivot = the look target).
+  cam2: { tx: 0, tz: 0, dist: 220, rot: 0, snapped: false },
+  sel: null,             // selected own slot ('player' | 'ally') or null
+  drag: null,            // live move-order drag state
+  gesture: null,         // active pointer gesture bookkeeping
+  pointers: new Map(),   // pointerId -> {x, y} for pinch detection
+  pinch: null,           // {startSpan, startDist}
+  lastTapSlot: null,     // double-tap detection
+  lastTapAt: 0,
+  lastRingSlot: null,    // destination-ring double-tap detection (own tracker,
+  lastRingAt: 0,         // so ring taps never chain with unit taps)
+  base: null,            // cropped plate + plinth group (rebuilt per map)
+  post: null,            // tilt-shift render pipeline (lazy, rebuilt on resize)
+  layer: null,           // annotation DOM/SVG layer (lazy, torn down per match)
+  els: new Map(),        // slot -> annotation elements
+  savedFar: null,
+  savedNear: null
+};
+
+// Global framing/grade tunables — live-tweakable via window.__diorama.view.
+const DIORAMA_VIEW = {
+  fov: 45,
+  lookY: 4,            // look-at height — keeps the board low in frame
+  focusBand: 0.16,     // half-height of the sharp band (0..1 screen units)
+  blurSpan: 0.32,      // distance from band edge to full blur
+  saturation: 1.14,    // miniature grade: toy-like color
+  contrast: 1.045,
+  // COMMAND MODE tunables:
+  minDist: 70,         // closest zoom (dolly distance along the fixed tilt)
+  cmdRadius: CMD_RADIUS,     // deployment circle radius = arrival orbit radius (shared const)
+  anchorMs: CMD_ANCHOR_MS,   // Engage-style hold after arrival (shared const; owner: 5s -> 20s)
+  clearR: 0.11         // per-unit clear pocket radius in the blur (uv units)
+};
+// Per-map camera anchor: yaw = compass angle around the map centre, dist =
+// horizontal distance, height = camera Y as a fraction of dist (~elevation).
+// The vibe refs frame a photographic CROP, not the whole board — dist is
+// deliberately closer than mapPhoto's 220.
+const DIORAMA_MAP_VIEW = {
+  arena1: { yaw: Math.PI * 0.25, dist: 168, height: 0.95 },
+  arena2: { yaw: Math.PI * 0.62, dist: 168, height: 0.74 },
+  default: { yaw: Math.PI * 0.25, dist: 175, height: 0.85 }
+};
+
+// Play-area half extents of the CURRENT map, recorded by addBoundaryIndicator
+// during the arena build (null for maps that bake their perimeter inline).
+let arenaBounds = null;
+
+// View mode does NOT persist (owner 2.1h): every site open starts CLASSIC,
+// exactly like Duel/1v1. The chip and the in-match toggles only change the
+// running session. The old persistence key is actively removed so devices
+// that stored it under the short-lived 2.1 persistence carry no leftovers.
+try {
+  localStorage.removeItem('gvg-view-mode');
+} catch { /* storage unavailable — nothing to clean */ }
+
+if (typeof window !== 'undefined') {
+  window.__diorama = {
+    toggle: toggleDiorama, view: DIORAMA_VIEW, maps: DIORAMA_MAP_VIEW, state: diorama,
+    // Dev/automation hooks (same family as __mapPhoto / __startMatch).
+    debug: {
+      layerStackAt: (x, z) => dioramaLayerStackAt(x, z),
+      groundPoint: (cx, cy, y) => dioramaGroundPoint(cx, cy, y),
+      order: (slot, x, z, y = 0) => {
+        const path = computeOrderPath(state[slot], x, z, y);
+        if (path) issueMoveOrder(slot, x, z, y, path);
+        return !!path;
+      },
+      clear: () => clearAllCommands()
+    }
+  };
+}
+
 const MOMENTUM_STANDARD = 100;
 // --- Pilot-stat defaults (used when a unit's UNIT_DATA entry omits a field) ---
 const MAX_HP = 100;                     // unit.hp default (150 -> 100, 2026-08-08 user tune)
@@ -959,7 +1051,9 @@ const keyState = {
   up: false,
   down: false,
   left: false,
-  right: false
+  right: false,
+  rotL: false,
+  rotR: false
 };
 
 // Shared "see-the-mech-through-walls" silhouette material. `depthFunc:
@@ -1390,6 +1484,10 @@ function updateMechAnimations(dt, now) {
     if (rig) updateUnitSpriteState(m, rig, dt, now);
     const bar = m.healthBar;
     if (bar) {
+      // Diorama / command mode: the annotation layer carries identity + HP,
+      // so the floating bar hides wholesale (restored per frame when off).
+      if (dioramaActive()) { bar.visible = false; continue; }
+      if (!bar.visible) bar.visible = true;
       const depth = Math.max(0.1,
         _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
       const k = depth / UNIT_BAR_REF_DIST;
@@ -1723,6 +1821,31 @@ function setupHUD() {
     <button id="pause-btn" class="pause-btn">PAUSE</button>
   `;
   app.appendChild(hud);
+
+  // ONLINE ABSOLUTE HUD (owner 2026-08-22): corner bars anchor by SERVER
+  // SLOT — left column team A (p1 top / p3 bottom), right column team B
+  // (p2 top / p4 bottom) — identical for every viewer, each fill tinted its
+  // slot color. The viewer's own bar wears a thin white rim, since position
+  // no longer says "this one is you". Offline keeps the role layout.
+  if (state.online?.slotMap) {
+    const sm = state.online.slotMap;
+    const ANCHOR_OF = { p1: 'health', p3: 'ally-health', p2: 'enemy-health', p4: 'enemy2-health' };
+    const roleBars = [
+      ['player', sm.cameraId, '#health-fill'],
+      ['enemy', sm.enemyId, '#enemy-health-fill'],
+      ['ally', sm.allyId, '#ally-health-fill'],
+      ['enemy2', sm.enemy2Id, '#enemy2-health-fill']
+    ];
+    for (const [role, sid, fillSel] of roleBars) {
+      const fill = hud.querySelector(fillSel);
+      if (!fill || !sid || !ANCHOR_OF[sid]) continue;
+      fill.parentElement.className = ANCHOR_OF[sid];
+      fill.style.background = SLOT_HUD_COLORS[sid];
+      if (role === 'player' && ONLINE_SLOT_IDS.includes(state.online.myPlayerId)) {
+        fill.parentElement.classList.add('self-bar');
+      }
+    }
+  }
 
   ['boost', 'shoot', 'step', 'jump'].forEach((action) => {
     const b = document.createElement('button');
@@ -4020,14 +4143,14 @@ function botStartJump(now, survival = false) {
   if (now < eState.jumpCooldownUntil) return false;
   // Jump funding respects the strategic reserve (falls back to cost + floor
   // if the reserve is ever tuned below that). SURVIVAL jumps (the Defense
-  // hop/vault, 2026-08-05) pay only raw cost + the sprint floor — same
-  // doctrine as the other survival exemptions (Defense sprints to the hard
-  // floor, anti-glint dodge at raw step cost): Defense's own sprint drains
-  // below the reserve within ticks, so reserve-gated funding made the hop
-  // nearly unaffordable. Travel jumps keep the reserve gate.
+  // hop/vault, 2026-08-05) fire from the flat MANDATED tier (owner
+  // 2026-08-22: 60, shared with commanded-travel route jumps — was raw
+  // cost + sprint floor 56) — same doctrine as the other survival
+  // exemptions (Defense sprints to the hard floor, anti-glint dodge at raw
+  // step cost). Discretionary jumps keep the reserve gate.
   // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
   const funded = survival
-    ? jumpBoostCost + BOT_SPRINT_MIN_BOOST
+    ? MANDATED_JUMP_MIN_BOOST
     : Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
   if (eState.boost < funded) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
@@ -5619,7 +5742,9 @@ function updateLocksAndReticle() {
     if (state.reticle) state.reticle.visible = false;
     return;
   }
-  if (state.reticle) state.reticle.visible = true;
+  // Diorama POC: lock state below still updates (bots read redLock), but the
+  // world-space bracket is replaced by the annotation layer's square.
+  if (state.reticle) state.reticle.visible = !dioramaActive();
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5780,6 +5905,13 @@ function teammateOfMech(mech) {
 const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
+  // Diorama POC: the whole fight is in frame and the annotation layer carries
+  // identity — both arrow forms are parked.
+  if (dioramaActive()) {
+    if (state.allyArrow) state.allyArrow.visible = false;
+    hideAllyEdgeArrow();
+    return;
+  }
   const mate = state.mode === '2v2' ? teammateOfMech(cameraFocusMech()) : null;
   const active = !!mate && mate.state.hp > 0;
 
@@ -5892,6 +6024,12 @@ function getUnlockedEnemy(viewer = state.player) {
 const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
 function updateEnemyArrow() {
+  // Diorama POC: parked for the same reason as updateAllyArrow.
+  if (dioramaActive()) {
+    if (state.enemyArrow) state.enemyArrow.visible = false;
+    hideEnemyEdgeArrow();
+    return;
+  }
   const foe = getUnlockedEnemy(cameraFocusMech());
   const active = !!foe;
 
@@ -6140,9 +6278,11 @@ function updateCamera() {
     // Spectator: exactly the watched unit wears the own-unit kit (rear art +
     // X-ray); everyone else shows front art — flipping live as TARGET cycles.
     // setMechSpriteView is a no-op on matching views, so this is per-frame safe.
-    getAllFighters().forEach((m) => setMechSpriteView(m, m === cam));
-  } else if (cam && cam !== state.player && !cam.isOwnSprite) {
-    // Spectated unit gets the own-unit visual kit (rear art + X-ray) once —
+    // Diorama: NO unit ever wears the rear/own kit (owner call — the global
+    // view shows front art only), so the swap target is always `false` there.
+    getAllFighters().forEach((m) => setMechSpriteView(m, !dioramaActive() && m === cam));
+  } else if (!dioramaActive() && cam && cam !== state.player && !cam.isOwnSprite) {
+    // Spectated unit gets the own-unit visual kit (X-ray silhouette) once —
     // but only when the player is out for GOOD (in Trio a dead player may be
     // one respawn tick away from returning; don't restyle the ally for that
     // one-frame window).
@@ -6181,6 +6321,15 @@ function updateCamera() {
     if (fallback) tgt = fallback;
   }
   if (!cam || !tgt) return;
+  // Diorama POC: the gameplay side effects above (spectate kit swaps, target
+  // mirroring) still ran; only the transform is replaced by the fixed rig.
+  if (dioramaActive()) {
+    // Front art only — the player's mech is created with the rear/own kit at
+    // match start; flip it (and anything else) back. No-op after frame 1.
+    getAllFighters().forEach((m) => setMechSpriteView(m, false));
+    updateDioramaCamera();
+    return;
+  }
   const p = cam.root.position;
   const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
@@ -6274,8 +6423,17 @@ function updateHud(now = performance.now()) {
       foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
       trioMode = !!(state.mainMode === 'trio' && state.trioRosters);
     } else if (state.online) {
-      own = [mechRemainingUnitKeys(state.player)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.ally)] : []);
-      foe = [mechRemainingUnitKeys(state.enemy)].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(state.enemy2)] : []);
+      // ABSOLUTE columns (owner 2026-08-22): left = team A in slot order
+      // (p1, p3), right = team B (p2, p4) — matching the re-anchored bars,
+      // identical for every viewer.
+      const sm = state.online.slotMap;
+      const mechOfSlot = (id) => !sm ? null
+        : id === sm.cameraId ? state.player
+          : id === sm.allyId ? state.ally
+            : id === sm.enemyId ? state.enemy
+              : id === sm.enemy2Id ? state.enemy2 : null;
+      own = [mechRemainingUnitKeys(mechOfSlot('p1'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p3'))] : []);
+      foe = [mechRemainingUnitKeys(mechOfSlot('p2'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p4'))] : []);
       trioMode = !!state.player?.state.roster;
     }
     renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig', trioMode);
@@ -6320,6 +6478,7 @@ function updateHud(now = performance.now()) {
 function cleanupMatch() {
   // If we were in an online match, close the socket + drop online-only meshes.
   if (state.online) {
+    disposeOnlineCommandShare(state.online);   // classic-teammate ring/lock sprite
     if (state.online.conn) state.online.conn.close();
     if (state.online.projectileMeshes) {
       for (const op of state.online.projectileMeshes.values()) {
@@ -6402,6 +6561,7 @@ function cleanupMatch() {
   state.enemyArrow = null;
   if (state.allyEdgeArrow) { state.allyEdgeArrow.remove(); state.allyEdgeArrow = null; }
   if (state.enemyEdgeArrow) { state.enemyEdgeArrow.remove(); state.enemyEdgeArrow = null; }
+  hideDioramaLayer();
 }
 
 function startMatch() {
@@ -6588,6 +6748,7 @@ function startMatch() {
   input.shootTap = false;
   // Default the player's lock target to the first enemy. In 2v2 this can be
   // cycled to enemy2 via the target switch (U on PC, target button on mobile).
+  // (Command mode ignores this — every unit is bot-driven there.)
   state.playerCurrentTarget = state.enemy;
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
@@ -6760,7 +6921,10 @@ function mirrorFighterToMech(fighter, mech) {
   const s = mech.state;
   s.action = fighter.action;
   s.hp = fighter.hp;
-  s.boost = fighter.boost;
+  // Enemy boost arrives REDACTED (null) from the per-team snapshot filter
+  // (phase 3 R1) — coalesce so no gauge math ever sees a non-number.
+  // Own-team fighters always carry the real value.
+  s.boost = fighter.boost ?? 0;
   s.ammo = fighter.ammo;
   s.lastFireAt = fighter.lastFireAt;
   s.reloadingUntil = fighter.reloadingUntil;
@@ -7553,10 +7717,11 @@ function showOnlineWaitingOpp(onl, conn) {
     const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null);
     const sep = trio ? '<br>' : ' ';   // Trio rosters stack under the label, one unit per line
     let statusHtml;
+    const viewTag = slotCfg.viewMode === 'command' ? ' <span class="roster-viewtag">[CMD]</span>' : '';
     if (isMe) {
-      statusHtml = `<span class="roster-status">${unitName ? `You —${sep}${unitName}` : 'You'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `You —${sep}${unitName}` : 'You'}${viewTag}</span>`;
     } else if (isOccupied) {
-      statusHtml = `<span class="roster-status">${unitName ? `Player —${sep}${unitName}` : 'Player (picking…)'}</span>`;
+      statusHtml = `<span class="roster-status">${unitName ? `Player —${sep}${unitName}` : 'Player (picking…)'}${viewTag}</span>`;
     } else if (s === 'p1') {
       // Host slot is locked — no Join button. Reaches here only briefly,
       // during connect-time before p1 is assigned.
@@ -7597,6 +7762,17 @@ function showOnlineWaitingOpp(onl, conn) {
   // Display it here as read-only — no toggle.
   const modeChip = `<div class="menu-divider">Mode: ${trio ? 'Trio' : 'Duel'} ${mode}</div>`;
 
+  // Classic|Command pick (phase 3 R4): per-player, locked once the match
+  // starts; the server scopes each pick to its own team, so opponents
+  // never see the choice (owner decision 3).
+  const myView = myCfg.viewMode ?? 'classic';
+  const viewChip = ONLINE_SLOT_IDS.includes(myId)
+    ? `<div class="mode-chip view-mode-chip">
+        <button data-view="classic" class="${myView === 'command' ? '' : 'mode-active'}">Classic</button>
+        <button data-view="command" class="${myView === 'command' ? 'mode-active' : ''}">Command</button>
+      </div>`
+    : '';
+
   // Host's explicit Start button (both modes). Enabled once they've picked
   // unit(s) + map (server rejects otherwise). Starting with an empty opponent
   // slot fills it with a bot (1v1 → Saori); a human who joins first takes it.
@@ -7610,6 +7786,7 @@ function showOnlineWaitingOpp(onl, conn) {
   menu.innerHTML = `
     <h2>${waitingText}</h2>
     ${modeChip}
+    ${viewChip}
     <div class="online-roster">${rosterHtml}</div>
     <div class="online-status">
       <div><span class="lbl">Map:</span> <span class="val">${mapName ?? '—'}</span></div>
@@ -7622,6 +7799,14 @@ function showOnlineWaitingOpp(onl, conn) {
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       onl.conn.sendJoinSlot(btn.dataset.joinSlot);
+    });
+  });
+  menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      onl.conn.sendConfigure({ viewMode: btn.dataset.view });
+      menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((b) => b.classList.remove('mode-active'));
+      btn.classList.add('mode-active');
     });
   });
   // Host taps a bot slot to open the bot-unit picker (1v1 or 2v2).
@@ -7792,6 +7977,27 @@ function ensureOnlineMatchSetup(snap) {
   // Pause button is meaningless online (server runs the sim authoritatively).
   const pauseBtn = state.hud?.querySelector('#pause-btn');
   if (pauseBtn) pauseBtn.remove();
+
+  // COMMAND MODE online (phase 3 R4): freeze my queue-room pick for the
+  // match. Commanders get the diorama dressing (base plate, grade,
+  // airborne de-clutter), the whole-map opening camera, and a local
+  // navgrid so the order preview / deny prediction runs client-side (the
+  // server re-validates authoritatively).
+  onl.commandMode = ONLINE_SLOT_IDS.includes(myId)
+    && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
+  // Commandable BOT teammate (owner 2026-08-22): frozen from the match-start
+  // bot set — a slot that turns bot mid-match (disconnect) is not adopted.
+  onl.allyCommandable = !!(onl.commandMode && allyId
+    && (snap.botSlots ?? []).includes(allyId));
+  if (onl.commandMode) {
+    diorama.cam2.snapped = false;
+    applyDioramaDressing();
+    offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  }
+  onl.consumedOrderSeq = onl.conn?.getOrderResult()?.seq ?? 0;
+  // Classic-teammate share visuals (world ring + lock sprite) rebuild lazily.
+  disposeOnlineCommandShare(onl);
+
   onl.mechsCreatedFor = sig;
 }
 
@@ -7835,6 +8041,170 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   }
 }
 
+// ---- COMMAND MODE online glue (phase 3 R4) --------------------------------
+
+// Mirror the team-scoped snapshot `commands` block onto the mechs. The
+// diorama HUD reads mech.cmdMove / mech.cmdLock for its icons, destination
+// ring and lock triangles — the same fields the offline layer writes — so
+// the whole annotation stack renders unmodified. Enemy commands never
+// arrive (server-side filtering), so enemy mechs simply stay clean.
+function syncOnlineCommands(snap, onl) {
+  const sm = onl.slotMap;
+  if (!sm) return;
+  const byId = {
+    [sm.cameraId]: state.player,
+    [sm.allyId]: state.ally,
+    [sm.enemyId]: state.enemy,
+    [sm.enemy2Id]: state.enemy2
+  };
+  const cmds = snap.commands ?? {};
+  for (const id of Object.keys(byId)) {
+    const mech = byId[id];
+    if (!mech) continue;
+    const c = cmds[id];
+    mech.cmdMove = c?.move ? {
+      x: c.move.x, z: c.move.z, y: c.move.y,
+      path: c.move.path ?? [], idx: 0,
+      phase: c.move.phase, anchorUntil: c.move.anchorUntil, orbitSign: 1
+    } : null;
+    mech.cmdLock = c?.lockTargetId ? (byId[c.lockTargetId] ?? null) : null;
+  }
+}
+
+// Lock-share sprite for the classic chase view: the DIORAMA lock crosshair,
+// ported 1:1 — four isoceles triangles on the diagonals, tips pointing IN
+// at the lock-reticle's bracket corners, in the commander's color. The
+// canvas mirrors the reticle texture's layout (128px, bracket square ≈ the
+// central 2/3, corners ≈ 21/107), so rendering it at the SAME scale as the
+// reticle sits the triangles just outside the brackets — small, like the
+// command player's own view (owner call: same visual style, not bigger).
+function makeCmdLockSprite(fillHex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.lineJoin = 'round';
+  const D = 0.7071;
+  const tri = (cx, cy, sx, sy) => {
+    const gap = 4;      // matches dioCornerTriPath's defaults, canvas px
+    const len = 15;
+    const halfW = 8;
+    const tipX = cx + sx * D * gap;
+    const tipY = cy + sy * D * gap;
+    const baseX = tipX + sx * D * len;
+    const baseY = tipY + sy * D * len;
+    const px2 = -sy * D * halfW;
+    const py2 = sx * D * halfW;
+    x.beginPath();
+    x.moveTo(tipX, tipY);
+    x.lineTo(baseX + px2, baseY + py2);
+    x.lineTo(baseX - px2, baseY - py2);
+    x.closePath();
+    x.lineWidth = 5;
+    x.strokeStyle = '#0b1622';
+    x.stroke();
+    x.fillStyle = fillHex;
+    x.fill();
+  };
+  tri(21, 21, -1, -1);
+  tri(107, 21, 1, -1);
+  tri(21, 107, -1, 1);
+  tri(107, 107, 1, 1);
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, fog: false }));
+  s.center.set(0.5, 0.5);
+  s.position.set(0, 0.2, 0);   // concentric with the classic reticle
+  s.renderOrder = 9997;
+  return s;
+}
+
+function updateOnlineCommandShare(onl) {
+  const share = onl.cmdShare ?? (onl.cmdShare = { ring: null, tris: null });
+  const ally = state.ally;
+  // The commander must be ALIVE: the server clears a dead commander's
+  // orders, but this client-side gate covers the snapshot-lag window too.
+  const showShare = !onl.commandMode && !!ally && ally.state.hp > 0;
+  const mv = showShare ? ally.cmdMove : null;
+  if (mv) {
+    if (!share.ring) {
+      const geo = new THREE.RingGeometry(CMD_RADIUS - 0.4, CMD_RADIUS, 48);
+      const mat = new THREE.MeshBasicMaterial({
+        // The commander teammate's ACTUAL slot color (owner 2026-08-22).
+        color: parseInt(dioSlotColor('ally').slice(1), 16),
+        transparent: true, opacity: 0.55,
+        side: THREE.DoubleSide, depthWrite: false
+      });
+      share.ring = new THREE.Mesh(geo, mat);
+      share.ring.rotation.x = -Math.PI / 2;
+      share.ring.renderOrder = 2;
+      scene.add(share.ring);
+    }
+    share.ring.position.set(mv.x, (mv.y ?? 0) + 0.35, mv.z);
+    share.ring.visible = true;
+  } else if (share.ring) {
+    share.ring.visible = false;
+  }
+  const lockTarget = showShare && ally.cmdLock && ally.cmdLock.state.hp > 0 ? ally.cmdLock : null;
+  if (lockTarget) {
+    if (!share.tris) share.tris = makeCmdLockSprite(dioSlotColor('ally'));
+    if (share.tris.parent !== lockTarget.root) {
+      share.tris.parent?.remove(share.tris);
+      lockTarget.root.add(share.tris);
+    }
+    // Track the classic reticle's distance scaling 1:1 — the canvas layout
+    // itself puts the triangles just outside the brackets, so the sprite
+    // renders at exactly the reticle's size at every camera distance.
+    const camDist = camera.position.distanceTo(lockTarget.root.position);
+    const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
+    share.tris.scale.setScalar(9.15 * distScale);
+    share.tris.visible = true;
+  } else if (share.tris) {
+    share.tris.visible = false;
+  }
+}
+
+function disposeOnlineCommandShare(onl) {
+  const share = onl?.cmdShare;
+  if (!share) return;
+  if (share.ring) {
+    scene.remove(share.ring);
+    share.ring.geometry.dispose();
+    share.ring.material.dispose();
+  }
+  if (share.tris) {
+    share.tris.parent?.remove(share.tris);
+    share.tris.material.map?.dispose?.();
+    share.tris.material.dispose();
+  }
+  onl.cmdShare = null;
+}
+
+// Consume order acknowledgements: a denied move order shows the red "Area
+// is not available" note at the tap point and KEEPS the selection glow; an
+// accepted one drops the glow (one-shot, offline parity). Rate-limited
+// sends keep the glow silently — the player just re-taps.
+function processOrderResults(onl) {
+  const res = onl.conn?.getOrderResult?.();
+  if (!res || res.seq === onl.consumedOrderSeq) return;
+  onl.consumedOrderSeq = res.seq;
+  const d = res.data;
+  if (!d || d.kind !== 'move') return;
+  const pending = diorama.pendingOrder;
+  diorama.pendingOrder = null;
+  if (d.ok) {
+    // One-shot glow drop — for selection-issued orders only. A ring drag
+    // sends with no selection, so its ack must not clear a selection the
+    // player made during the round trip.
+    if (!pending?.ring) diorama.sel = null;
+  } else if (d.reason === 'unreachable' && pending) {
+    dioramaDenyAt(pending.px, pending.py);
+  } else if (d.reason === 'rate' && pending?.ring) {
+    // Rate-limited ring re-issue: nothing landed and no glow lingers to
+    // hint at it, so say so where the finger let go. Tap orders keep the
+    // old silent treatment — their retained glow already signals it.
+    dioramaDenyAt(pending.px, pending.py, 'Too fast — try again');
+  }
+}
+
 function runOnlineMatchFrame(dt, onl, conn) {
   const snap = conn.getLatestSnapshot();
   if (!snap) return;
@@ -7861,7 +8231,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   if (snap.tick !== onl.lastAppliedSnapshotTick) {
     onl.lastAppliedSnapshotTick = snap.tick;
     onl.snapshotsApplied += 1;
-    if (ONLINE_SLOT_IDS.includes(onl.myPlayerId)) {
+    if (ONLINE_SLOT_IDS.includes(onl.myPlayerId) && !onl.commandMode) {
       applySnapshotToPrediction(snap);
     }
     syncOnlineProjectiles(snap);
@@ -7869,14 +8239,18 @@ function runOnlineMatchFrame(dt, onl, conn) {
     processOnlineEvents(snap, onl.myPlayerId);
   }
 
-  // 2. Drive prediction at fixed 25 ms cadence.
+  // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
+  //    entirely: the unit is bot-driven server-side, input replay would
+  //    mispredict every frame, and no input frames should be sent at all
+  //    (the server ignores them anyway) — the own unit renders through the
+  //    same interpolation as remotes.
   const realNow = performance.now();
   onl.predAccumulator += realNow - onl.lastPredRealTime;
   onl.lastPredRealTime = realNow;
   if (onl.predAccumulator > 250) onl.predAccumulator = 250;
   while (onl.predAccumulator >= SIM_TICK_RATE_MS) {
     onl.predAccumulator -= SIM_TICK_RATE_MS;
-    runPredictionTick();
+    if (!onl.commandMode) runPredictionTick();
   }
 
   // 3. Render. state.player = local (camera target); state.enemy = primary
@@ -7886,7 +8260,10 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // 1v1 fallback when slotMap hasn't been built yet: derive otherId directly.
   const otherId = onl.slotMap?.enemyId ?? (cameraId === 'p1' ? 'p2' : 'p1');
   let cameraFighter;
-  if (ONLINE_SLOT_IDS.includes(myId) && onl.predictedState) {
+  if (onl.commandMode) {
+    cameraFighter = interpolateRemoteFighter(cameraId, prevSnap, snap, lastSnapAt, realNow)
+      ?? snap.fighters[cameraId];
+  } else if (ONLINE_SLOT_IDS.includes(myId) && onl.predictedState) {
     cameraFighter = onl.predictedState.fighters[cameraId];
   } else {
     cameraFighter = snap.fighters[cameraId];
@@ -7978,7 +8355,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // invulnerableUntil) live in that clock, so plain Date.now() reads off by the
   // client↔server clock skew — most visible as the sniper's 1 s fire-cooldown
   // ring being wrong. Falls back to the snapshot time for non-slot spectators.
-  const hudNow = onl.lastPredSimTime || snap.serverTime;
+  const hudNow = (!onl.commandMode && onl.lastPredSimTime) || snap.serverTime;
   const immuneNow = hudNow;
   getAllFighters().forEach((m) => {
     applyImmunityGlow(m, immuneNow < m.state.invulnerableUntil);
@@ -8007,6 +8384,20 @@ function runOnlineMatchFrame(dt, onl, conn) {
   syncOnlineChargedBeams(hudNow);
   updateLaserSights();
   updateHud(hudNow);
+
+  // COMMAND MODE online (phase 3 R4): mirror the team-scoped command echo
+  // onto the mechs (icons/rings/lock triangles read mech.cmdMove/cmdLock),
+  // render the classic-viewer share, consume order acks, and drive the
+  // annotation layer (it self-gates on dioramaActive()).
+  syncOnlineCommands(snap, onl);
+  updateOnlineCommandShare(onl);
+  processOrderResults(onl);
+  // Death housekeeping (parity with the offline dioramaCommandTick, which
+  // never runs online): a dead unit drops the selection, else the invisible
+  // stale sel — its marker/card hide on death — silently gates every
+  // no-selection gesture off and leaves the Trio respawn pre-selected.
+  if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
+  updateDioramaHud();
 }
 
 function tickOnline(dt, _now) {
@@ -8097,6 +8488,10 @@ function showSelectMenu() {
       <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
       <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
     </div>
+    <div class="mode-chip view-mode-chip">
+      <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Classic</button>
+      <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
+    </div>
     ${unitGridHTML(unitEntries)}
     <div class="menu-divider">— Online —</div>
     <button data-online-play class="online-play-btn">Online (vs Player)</button>
@@ -8117,6 +8512,16 @@ function showSelectMenu() {
       e.preventDefault();
       state.mainMode = btn.dataset.mainMode;
       menu.querySelectorAll('.main-mode-chip button[data-main-mode]').forEach((b) => b.classList.remove('mode-active'));
+      btn.classList.add('mode-active');
+    });
+  });
+  // View chip: Classic (direct control) vs Command (diorama). Session-only
+  // like Duel/1v1 — every site open starts Classic (owner 2.1h).
+  menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      toggleDiorama(btn.dataset.view === 'command');
+      menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((b) => b.classList.remove('mode-active'));
       btn.classList.add('mode-active');
     });
   });
@@ -8550,6 +8955,17 @@ function showGuidePopup() {
             <li><strong>Character can't be hit during a dodge.</strong></li>
             <li>Sniper has a forced aim time. Sprint can cancel the aim and fire faster (costs stamina).</li>
           </ul>
+
+          <h4>Command Mode</h4>
+          <ul>
+            <li>Pick <strong>Classic</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
+            <li>In Command, your unit fights on its own — you give orders from a tabletop view.</li>
+            <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
+            <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
+            <li>Double-tap your unit to cancel all its orders.</li>
+            <li>With nothing selected: drag the area ring to move that order (the 20 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
+            <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
+          </ul>
         </div>
       </div>
     </div>`;
@@ -8694,6 +9110,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  disposeDioramaPost();   // render targets re-size lazily on the next frame
 });
 
 let lastSprintKeyAt = 0;
@@ -8714,7 +9131,10 @@ window.addEventListener('keydown', (e) => {
   }
   else if (k === 'l') input.stepTap = true;
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
-  else if (k === 'u') cyclePlayerTarget();
+  else if (k === 'u') { if (!dioramaActive()) cyclePlayerTarget(); }
+  else if (k === 'v') toggleDiorama();   // classic <-> command mode toggle
+  else if (k === 'q') keyState.rotL = true;
+  else if (k === 'e') keyState.rotR = true;
 });
 
 window.addEventListener('keyup', (e) => {
@@ -8726,6 +9146,8 @@ window.addEventListener('keyup', (e) => {
   else if (k === ' ') input.jump = false;
   else if (k === 'k') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
   else if (k === 'j') input.shootHold = false;
+  else if (k === 'q') keyState.rotL = false;
+  else if (k === 'e') keyState.rotR = false;
   // NOTE (2026-08-01): all-dir-keys-released no longer clears the sprint lock
   // here — the per-frame paths (updatePlayer / the online input builder) do
   // it via the SPRINT_LOCK_RELEASE_GRACE_MS rule, so an A→D swap with a
@@ -9026,13 +9448,21 @@ function showPauseMenu() {
   clearMenus();
   const menu = document.createElement('div');
   menu.className = 'menu';
-  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button><button data-action="new">New Game</button>`;
+  // Offline: the diorama view toggle lives here so touch devices can reach
+  // it too (V key remains the desktop shortcut).
+  const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Classic'}</button>`;
+  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
     clearMenus();
     state.phase = 'match';
     state.running = true;
+  });
+  menu.querySelector('button[data-action="diorama"]')?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    toggleDiorama();
+    event.currentTarget.textContent = `Mode: ${diorama.enabled ? 'Command' : 'Classic'}`;
   });
   menu.querySelector('button[data-action="new"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -9237,6 +9667,8 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
 // against a solid mesh when the player backs into a corner. Mirrors the
 // pattern Station uses inline.
 function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
+  // Diorama POC: the play extent doubles as the base-plate footprint.
+  arenaBounds = { halfX: HALF_X, halfZ: HALF_Z, ceilY: CEIL_Y };
   arenaObstacles.push(
     { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
     { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
@@ -9369,6 +9801,7 @@ function applyMapAmbience(mapKey) {
 function buildArenaForMap(mapKey) {
   clearArenaDecor();
   applyMapAmbience(mapKey);
+  arenaBounds = null;   // re-recorded by addBoundaryIndicator (diorama plate)
   if (mapKey === 'arena1') buildPlainFieldArena();
   else if (mapKey === 'arena2') buildStreetsArena();
   else if (mapKey === 'factory') buildFactoryArena();
@@ -9379,6 +9812,12 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
   else if (mapKey === 'airport') buildAirportArena();
+  // Diorama POC: re-dress the fresh arena (cropped plate, plinth, daylight
+  // grade) — or clear leftovers if the mode was switched off / went online.
+  if (diorama.enabled && !state.online) {
+    applyDioramaDressing();
+    diorama.cam2.snapped = false;   // fresh map -> whole-map overview
+  } else if (diorama.base) removeDioramaDressing();
 }
 
 // ---------------------------------------------------------------------------
@@ -9471,6 +9910,1850 @@ if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
 // debugging / automated preview checks (same family as __exportArenaCollision
 // and __mapPhoto). Offline client only — never used by game code.
 if (typeof window !== 'undefined') window.__gvgState = state;
+
+// Dev hook (automation twin of the menu flow): start an OFFLINE match
+// directly, skipping the pickers — used by headless preview checks.
+//   __startMatch({ mapKey: 'arena2', mode: '1v1', player: 'unit1', enemy: 'unit2' })
+if (typeof window !== 'undefined') {
+  window.__startMatch = (opts = {}) => {
+    if (state.online) return false;
+    if (opts.mapKey) state.mapKey = opts.mapKey;
+    if (opts.mode) state.mode = opts.mode;
+    if (opts.mainMode) state.mainMode = opts.mainMode;
+    if (opts.player) state.playerUnitKey = opts.player;
+    if (opts.enemy) state.enemyUnitKey = opts.enemy;
+    if (opts.ally) state.allyUnitKey = opts.ally;
+    if (opts.enemy2) state.enemy2UnitKey = opts.enemy2;
+    startMatch();
+    return true;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DIORAMA VIEW (POC) — hidden offline toggle: V key, or window.__diorama.
+// See DIORAMA_PLAN.md for the converged design. Presents the arena as a
+// tilt-shift miniature: fixed high vantage with soft parallax follow, a
+// cropped ground plate + plinth in place of the endless global ground,
+// daylight grading, a screen-Y tilt-shift blur pass, and a thin-line
+// annotation HUD (tap an enemy's square to lock). Everything gates on
+// dioramaActive() so the classic chase view stays byte-identical when off.
+// ---------------------------------------------------------------------------
+
+function dioramaActive() {
+  // ONLINE (phase 3 R4): the queue-room pick is frozen into
+  // state.online.commandMode at match setup — the whole diorama stack
+  // (camera, tilt-shift render, annotation layer, gestures) rides this
+  // gate; classic online players and spectators keep the chase view.
+  if (state.online) return !!(state.online.commandMode && state.online.slotMap && state.player);
+  return diorama.enabled && state.running;
+}
+
+function toggleDiorama(force) {
+  const want = force !== undefined ? !!force : !diorama.enabled;
+  if (want === diorama.enabled) return;
+  if (want && state.online) return;            // POC: offline only
+  diorama.enabled = want;
+  if (want) {
+    diorama.cam.snapped = false;
+    diorama.cam2.snapped = false;   // open on the whole-map overview
+    // Apply while a match is live OR paused (the mobile toggle sits in the
+    // pause menu, where state.running is false but the arena is built).
+    if (!state.online && (state.running || state.phase === 'pause')) applyDioramaDressing();
+  } else {
+    // Leaving command mode: the player REGAINS direct control of the blue
+    // unit and every standing order (ally included) is deleted (owner spec).
+    clearAllCommands();
+    removeDioramaDressing();
+    hideDioramaLayer();
+    state.hud?.classList.remove('dio-cmd');
+    // Give the chase view its own-unit kit back (diorama forces front art).
+    // Spectator restores itself: updateCamera re-owns the watched unit.
+    if (!state.online && !state.spectatorActive && state.player) {
+      setMechSpriteView(state.player, true);
+    }
+    // Restore the classic always-have-a-target invariant for the chase view.
+    if (state.running && !state.online && !state.playerCurrentTarget && state.player) {
+      const live = getEnemiesOf(state.player).find((f) => f.state.hp > 0);
+      if (live) setPlayerTargetMech(live);
+    }
+  }
+}
+
+// Tap-to-select: set the lock target directly. Mirrors cyclePlayerTarget's
+// bookkeeping (reticle reparent + firing-flash tracker reseed) so leaving
+// diorama mode hands the chase view a fully consistent lock.
+function setPlayerTargetMech(next) {
+  if (!next || next === state.playerCurrentTarget) return;
+  state.playerCurrentTarget = next;
+  if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
+  if (state.reticle) next.root.add(state.reticle);
+  state.reticleLastEnemyFireAt = next.state.lastFireAt;
+  state.reticleEnemyFiringUntil = 0;
+}
+
+// ---- scene dressing: cropped plate, plinth, daylight grade ----------------
+
+function dioramaBoundsNow() {
+  if (arenaBounds) return arenaBounds;
+  // Maps that bake their perimeter inline (Station/Airport/Lobby): infer the
+  // extent from the collision boxes, capped at the outer cannon wall.
+  let hx = 0, hz = 0;
+  for (const o of arenaObstacles) {
+    hx = Math.max(hx, Math.abs(o.minX), Math.abs(o.maxX));
+    hz = Math.max(hz, Math.abs(o.minZ), Math.abs(o.maxZ));
+  }
+  return { halfX: Math.min(hx || 138, 140), halfZ: Math.min(hz || 138, 140), ceilY: 20 };
+}
+
+function applyDioramaDressing() {
+  removeDioramaBase();
+  const b = dioramaBoundsNow();
+  const w = (b.halfX + 2.5) * 2;
+  const d = (b.halfZ + 2.5) * 2;
+  const group = new THREE.Group();
+  // Cropped ground plate — the global 280x280 ground's material family with
+  // the texture repeat rescaled so the grid density matches exactly.
+  const plateTex = gridTex.clone();
+  plateTex.needsUpdate = true;
+  plateTex.repeat.set((w * 8) / 280, (d * 8) / 280);
+  plateTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    // polygonOffset pushes the plate behind the map's own floors in the depth
+    // buffer — the 5 mm-scale floor layering z-fought hard at diorama depth
+    // ranges (playtest 2026-08-20: "ground flickering like crazy").
+    new THREE.MeshStandardMaterial({
+      map: plateTex, color: 0x8ea8de, metalness: 0.5, roughness: 0.58,
+      polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2
+    })
+  );
+  plate.rotation.x = -Math.PI / 2;
+  plate.position.y = -0.12;
+  group.add(plate);
+  // Plinth + trim: the miniature's display base. Reads as "model on a stand"
+  // and gives the map a real visible edge (the diorama's whole point).
+  const plinthH = 7;
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 3, plinthH, d + 3),
+    new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.85, metalness: 0.1 })
+  );
+  plinth.position.y = -plinthH / 2 - 0.02;
+  group.add(plinth);
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 3.6, 0.7, d + 3.6),
+    new THREE.MeshStandardMaterial({ color: 0x39435a, roughness: 0.5, metalness: 0.45 })
+  );
+  trim.position.y = -0.37;
+  group.add(trim);
+  scene.add(group);
+  diorama.base = group;
+  ground.visible = false;
+  gridHelper.visible = false;
+  // Daylight studio grade (the vibe refs are all warm daylight). Fog is
+  // pushed out of range rather than nulled — applyMapAmbience assumes the
+  // Fog object exists, and it restores everything on exit/map change.
+  scene.background.setHex(0xb9c3d2);
+  scene.fog.color.setHex(0xb9c3d2);
+  scene.fog.near = 4000;
+  scene.fog.far = 8000;
+  ambient.color.setHex(0xf3ead9);
+  ambient.intensity = 0.92;
+  key.color.setHex(0xfff0d2);
+  key.intensity = 1.45;
+  // Per-map grade correction (owner 2.1g): the warm default cast made the
+  // pale Lobby/Airport floors read yellow — those maps keep their CLASSIC
+  // light colors (applyMapAmbience values) so the command-mode floor tone
+  // matches what the player knows; everything else about the diorama grade
+  // (background, fog push-out, camera planes) stays.
+  if (state.mapKey === 'lobby') {
+    ambient.color.setHex(0xd4e2ff);
+    ambient.intensity = 0.95;
+    key.color.setHex(0xeaf2ff);
+    key.intensity = 1.4;
+  } else if (state.mapKey === 'airport') {
+    ambient.color.setHex(0xe8f0fa);
+    ambient.intensity = 1.0;
+    key.color.setHex(0xffffff);
+    key.intensity = 1.35;
+  }
+  if (diorama.savedFar == null) diorama.savedFar = camera.far;
+  if (diorama.savedNear == null) diorama.savedNear = camera.near;
+  camera.far = 1600;
+  // Depth precision is set by the near plane: at 0.1 the raised far plane
+  // left nothing for the map's 5 mm floor layering (the flicker). Nothing is
+  // ever closer than ~100 units to the diorama camera, so 6 is safe.
+  camera.near = 6;
+  camera.updateProjectionMatrix();
+  // COMMAND MODE de-clutter (owner 2.1f): the tall airborne dressing tagged
+  // cmdHide at creation (Factory pipes/trusses/lights, Lobby & Station &
+  // Flashpoint ceiling bars + fixtures, Airport gantries/arch crossbars/
+  // hanging signs) reads as floating noise from the board view — hide it
+  // while the diorama stands. Visual only: none of it is collidable, so
+  // bots and classic players see identical gameplay.
+  for (const o of arenaDecor) {
+    if (o.userData?.cmdHide) o.visible = false;
+  }
+}
+
+function removeDioramaBase() {
+  if (!diorama.base) return;
+  scene.remove(diorama.base);
+  diorama.base.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      o.material.map?.dispose?.();
+      o.material.dispose();
+    }
+  });
+  diorama.base = null;
+}
+
+function removeDioramaDressing() {
+  removeDioramaBase();
+  ground.visible = true;
+  gridHelper.visible = true;
+  // Back to classic: the cmdHide airborne dressing returns.
+  for (const o of arenaDecor) {
+    if (o.userData?.cmdHide) o.visible = true;
+  }
+  if (state.mapKey) applyMapAmbience(state.mapKey);
+  if (diorama.savedFar != null) {
+    camera.far = diorama.savedFar;
+    diorama.savedFar = null;
+    if (diorama.savedNear != null) {
+      camera.near = diorama.savedNear;
+      diorama.savedNear = null;
+    }
+    camera.updateProjectionMatrix();
+  }
+}
+
+// ---- camera rig -----------------------------------------------------------
+
+const _dioWork = new THREE.Vector3();
+// COMMAND MODE camera: free pan/zoom over the whole board. The tilt (height
+// ratio) and compass yaw stay fixed per map so the miniature look holds;
+// zoom is a dolly along that axis. Opens on a whole-map overview.
+function dioramaMaxDist() {
+  const b = dioramaBoundsNow();
+  return Math.max(b.halfX, b.halfZ) * 2.7;
+}
+function updateDioramaCamera() {
+  const v = DIORAMA_VIEW;
+  const mv = DIORAMA_MAP_VIEW[state.mapKey] ?? DIORAMA_MAP_VIEW.default;
+  const b = dioramaBoundsNow();
+  const c = diorama.cam2;
+  const maxDist = dioramaMaxDist();
+  if (!c.snapped) {
+    c.tx = 0;
+    c.tz = 0;
+    c.dist = maxDist;
+    c.rot = 0;
+    c.snapped = true;
+  }
+  // Q/E keyboard rotation (touch twist and right-drag feed c.rot directly).
+  if (keyState.rotL) c.rot += 0.028;
+  if (keyState.rotR) c.rot -= 0.028;
+  c.dist = THREE.MathUtils.clamp(c.dist, v.minDist, maxDist);
+  c.tx = THREE.MathUtils.clamp(c.tx, -b.halfX, b.halfX);
+  c.tz = THREE.MathUtils.clamp(c.tz, -b.halfZ, b.halfZ);
+  const yaw = mv.yaw + c.rot;
+  camera.position.set(
+    c.tx + Math.cos(yaw) * c.dist,
+    c.dist * mv.height,
+    c.tz + Math.sin(yaw) * c.dist
+  );
+  camera.lookAt(c.tx, v.lookY, c.tz);
+  if (camera.fov !== v.fov) {
+    camera.fov = v.fov;
+    camera.updateProjectionMatrix();
+  }
+  diorama.cam.focusY = 0.5;   // blur band pinned to screen centre (owner call)
+}
+
+// Screen point -> world point on a horizontal plane (default the ground).
+function dioramaGroundPoint(clientX, clientY, planeY = 0) {
+  _dioWork.set(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
+    0.5
+  ).unproject(camera);
+  const dx = _dioWork.x - camera.position.x;
+  const dy = _dioWork.y - camera.position.y;
+  const dz = _dioWork.z - camera.position.z;
+  if (Math.abs(dy) < 1e-6) return null;
+  const t = (planeY - camera.position.y) / dy;
+  if (t <= 0) return null;
+  return { x: camera.position.x + dx * t, z: camera.position.z + dz * t };
+}
+
+// ---- COMMAND MODE: order layer --------------------------------------------
+// Every unit is bot-driven in the diorama; the player issues two kinds of
+// orders (DIORAMA_PLAN.md phase 2): a FORCE LOCK (tap own unit -> tap enemy)
+// overriding the bot's target pick until either party dies, and a MOVE ORDER
+// (drag from the own square) that pathfinds to a point, fights along the
+// way, then holds an Engage-style orbit on the circle for anchorMs before
+// autonomy resumes. Defense / anti-glint / cover-reload reflexes always win;
+// the route resumes after them. Command state lives ON the mech (cmdMove /
+// cmdLock), so trio respawns start clean ("eye").
+
+const DIO_OWN_SLOTS = ['player', 'ally'];
+// Commanded travel is a DASH, funded by the unit's normal boost gauge with a
+// RESERVE FLOOR: the march may not spend below 50 boost (cap untouched,
+// nothing granted — owner spec "行軍中保留底線 50 不得動用"). Dash segments
+// are LATCHED (owner, phase 2.1b): a dash may only START once boost reaches
+// the ARM threshold (owner tune 2026-08-21: full cap -> 125), runs down to
+// the floor, then the unit walks until the gauge climbs back to the
+// threshold — never the old stutter of re-sprinting the instant regen peeks
+// over the floor. Combat reflexes keep their own funding rules and may
+// still spend the reserve.
+// Values live in shared/src/sim/constants.js (phase 3: one source for the
+// offline layer, the client preview AND the server authority).
+const DIO_TRAVEL_BOOST_FLOOR = CMD_TRAVEL_BOOST_FLOOR;
+const DIO_TRAVEL_DASH_ARM = CMD_TRAVEL_DASH_ARM;   // min() with the unit cap downstream
+
+function commandTargetOf(m) {
+  if (m?.cmdLock && m.cmdLock.state.hp > 0 && m.state.hp > 0) {
+    m.state.botTargetRef = m.cmdLock;   // keep the pick sticky downstream
+    return m.cmdLock;
+  }
+  return pickBotTargetOf(m);
+}
+
+// Reflex layers that outrank a move order for THIS frame (route resumes after).
+function botReflexActive(m, now) {
+  const st = m.state;
+  return st.botState === 'defense'
+    || !!st.botCoverPath
+    || st.action === 'step'
+    || now < (st.hitStunUntil ?? 0)
+    // Sniper charge + sweep channel + a scheduled anti-glint dodge (owner
+    // 2026-08-28): parity with the shared commandReflexActive. The bot brain
+    // zeroes velocity for the charge/channel but runs BEFORE this driver,
+    // which overwrote it every frame — a commanded Railgun walked its own
+    // sweep beam across the map.
+    || !!st.sniperChargeTarget
+    || now < (st.chargedBeamUntil ?? 0)
+    || st.botGlintStepAt != null;
+}
+
+function clearUnitCommands(m) {
+  if (!m) return;
+  m.cmdMove = null;
+  m.cmdLock = null;
+}
+
+function clearAllCommands() {
+  for (const slot of DIO_OWN_SLOTS) clearUnitCommands(state[slot]);
+  diorama.sel = null;
+  diorama.drag = null;
+}
+
+// Per-frame housekeeping: drop locks on death, selection on death.
+function dioramaCommandTick() {
+  for (const slot of DIO_OWN_SLOTS) {
+    const m = state[slot];
+    if (!m) continue;
+    if (m.state.hp <= 0) { clearUnitCommands(m); continue; }
+    if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;
+  }
+  if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
+}
+
+// True when the nav grid has a walkable node near this point whose floor
+// sits at the given layer height — i.e. a unit can actually STAND there on
+// that layer. Scans the 3x3 cell ring (~6u, matching computeOrderPath's
+// endpoint tolerance) so taps hugging a walkable edge still count.
+function dioramaLayerStandable(x, z, y) {
+  const g = offlineNavGrid;
+  if (!g) return true;   // no grid yet: keep the permissive old behavior
+  const c0 = Math.floor((x - g.minX) / g.cell);
+  const r0 = Math.floor((z - g.minZ) / g.cell);
+  for (let dr = -1; dr <= 1; dr += 1) {
+    for (let dc = -1; dc <= 1; dc += 1) {
+      const c = c0 + dc;
+      const r = r0 + dr;
+      if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) continue;
+      const i = r * g.cols + c;
+      for (let l = 0; l < g.layers; l += 1) {
+        const node = l * g.n + i;
+        if (g.walk[node] && Math.abs(g.floor[node] - y) <= 2) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Vertical layer stack at a point: every STANDABLE floor there, ascending
+// (owner 2.1e: layers nobody can stand on — platform undersides, slope
+// voids — used to clutter the stack as a bogus first pick and forced the
+// player to hold-cycle past them). Long-press during a drag still cycles.
+function dioramaLayerStackAt(x, z) {
+  const layers = [];
+  if (dioramaLayerStandable(x, z, 0)) layers.push(0);
+  for (const s of arenaSurfaces) {
+    if (x >= s.minX && x <= s.maxX && z >= s.minZ && z <= s.maxZ) {
+      const top = s.heightAt(x, z);
+      if (layers.every((y) => Math.abs(y - top) > 1.5) && dioramaLayerStandable(x, z, top)) {
+        layers.push(top);
+      }
+    }
+  }
+  // Nothing standable at all: keep ground so the preview/deny path still
+  // has a layer to work with (the order will be rejected downstream).
+  if (!layers.length) layers.push(0);
+  return layers.sort((a, b) => a - b);
+}
+
+function computeOrderPath(m, tx, tz, targetFloorY) {
+  if (!offlineNavGrid || !m || m.state.hp <= 0) return null;
+  // COMMAND-layer strictness: the shared pathfinder clamps ANY goal into the
+  // grid and snaps up to 3 cells onto walkable — right for bot self-routing,
+  // wrong for orders ("Area is not available" must actually fire, and an
+  // order must never strand the unit shoving a wall toward an unreachable
+  // raw target). Reject taps beyond the arena, and routes whose real
+  // endpoint isn't essentially the tapped spot (walkable taps snap well
+  // under a cell; 6u ≈ 1.5 cells separates them from building interiors).
+  const b = dioramaBoundsNow();
+  if (Math.abs(tx) > b.halfX + 2 || Math.abs(tz) > b.halfZ + 2) return null;
+  const pos = m.body.position;
+  const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
+  let path = findPathOnGrid(offlineNavGrid, pos.x, pos.z, tx, tz, myFloorY, targetFloorY, arenaObstacles);
+  if (!path || path.length < 2) return null;
+  const end = path[path.length - 1];
+  if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return null;
+  if (Math.abs((end.y ?? 0) - targetFloorY) > 2) return null;
+  if (path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
+  return path;
+}
+
+function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
+  const m = state[slot];
+  if (!m || m.state.hp <= 0) return;
+  m.cmdMove = {
+    x: tx, z: tz, y: targetFloorY,
+    path, idx: 0,
+    phase: 'travel',
+    anchorUntil: 0,
+    orbitSign: ((m.cmdOrbitFlip = !m.cmdOrbitFlip)) ? 1 : -1,
+    dashArmed: false,   // latches at the ARM threshold, releases at the floor
+    replanAt: 0,        // set on the driver's first frame
+    reflexHeld: false   // reflex owned a frame -> replan at reflex exit
+  };
+}
+
+// Travel route jump (owner 2026-08-22): commanded travel vaults the path's
+// jump-links, funded at the flat MANDATED tier (60 — shared with Defense's
+// survival hop; the 250 discretionary reserve is unreachable inside the
+// dash latch's 50<->125 gauge cycle). Mirrors botStartJump's bookkeeping
+// against an arbitrary mech — that helper is hard-aliased to state.enemy
+// and only runs inside the bot alias window.
+function cmdTryStartJump(m, now) {
+  const st = m.state;
+  if (!m.grounded || st.airborne) return false;
+  if (now < st.jumpCooldownUntil) return false;
+  if (st.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  st.boost = Math.max(0, st.boost - (m.unit.jumpBoostCost ?? JUMP_BOOST_COST));
+  st.refillPausedUntil = now + 500;
+  st.jumpVelocity = m.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
+  st.airborne = true;
+  st.hoverUntil = now + (m.unit.jumpHoverMs ?? JUMP_HOVER_MS);
+  st.jumpCooldownUntil = now + Math.max(m.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS, 1500);
+  inheritMomentum(m, 70);
+  return true;
+}
+
+// Post-bot velocity override: updateEnemy ran first (aiming/firing/reflex
+// decisions stand — "fight along the way"), then the standing move order
+// re-steers the legs unless a reflex layer owns this frame.
+function applyMoveOrder(m, now) {
+  const mv = m?.cmdMove;
+  if (!mv) return;
+  if (m.state.hp <= 0) { m.cmdMove = null; return; }
+  if (botReflexActive(m, now)) {
+    // Remember the yield so travel replans the moment the reflex releases
+    // the frame — the reflex may have moved the unit far off the route.
+    mv.reflexHeld = true;
+    return;
+  }
+  const pos = m.body.position;
+  const speed = m.unit.walkSpeed ?? WALK_SPEED;
+  if (mv.phase === 'travel') {
+    const distC = Math.hypot(mv.x - pos.x, mv.z - pos.z);
+    if (distC < CMD_ARRIVE_DIST) {
+      mv.phase = 'anchor';
+      // First arrival starts the window; a leash-return re-arrival resumes
+      // the REMAINING window (anchor time is wall-clock total, not reset).
+      if (!mv.anchorUntil) mv.anchorUntil = now + DIORAMA_VIEW.anchorMs;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
+      return;
+    }
+    const grounded = m.grounded && !m.state.airborne;
+    // PATHFINDER-GUIDED TRAVEL (owner 2026-08-22): refresh the route from
+    // the current position at reflex exit and on the CMD_REPLAN_MS cadence
+    // (grounded only — a mid-jump replan would re-route from the wrong
+    // floor). A refresh that fails the order validation keeps the old path
+    // and retries next period. Mirrors shared tickCommandDriver.
+    if (grounded) {
+      if (mv.replanAt === 0 || mv.replanAt == null) mv.replanAt = now + CMD_REPLAN_MS;
+      if (mv.reflexHeld || now >= mv.replanAt) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        if (fresh) { mv.path = fresh; mv.idx = 0; }
+      }
+    }
+    let wp = mv.path[mv.idx];
+    while (wp && mv.idx < mv.path.length - 1
+      && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 3) {
+      mv.idx += 1;
+      wp = mv.path[mv.idx];
+    }
+    const gx = wp ? wp.x : mv.x;
+    const gz = wp ? wp.z : mv.z;
+    const dx = gx - pos.x;
+    const dz = gz - pos.z;
+    const l = Math.hypot(dx, dz) || 1;
+    const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
+    // ROUTE JUMP (owner 2026-08-22): the upcoming waypoint sits on a ledge
+    // above the current floor — the path crossed a jump-link. Vault toward
+    // it once close enough, funded at the MANDATED tier (60).
+    const wpY = wp ? (wp.y ?? 0) : mv.y;
+    if (grounded && wpY - myFloorY > 1.7 && l < 7) {
+      cmdTryStartJump(m, now);
+    }
+    if (m.state.airborne || !m.grounded) {
+      // Mid-air (route jump or ledge walk-off): TRAVEL keeps the stick
+      // (owner 2026-08-22) — steer the arc toward the waypoint so the hop
+      // lands on the ledge instead of drifting with the bot's combat
+      // intent. Momentum (the jump's inherited carry) is left alone; no
+      // dash is billed in the air.
+      m.body.velocity.x = (dx / l) * speed;
+      m.body.velocity.z = (dz / l) * speed;
+      return;
+    }
+    // JUMP BANK: while a route jump lies ahead on the remaining path, the
+    // dash floor rises so a dash segment can never deliver the unit to the
+    // ledge unable to afford the hop.
+    let jumpAhead = false;
+    for (let k = mv.idx; k < mv.path.length; k += 1) {
+      if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+    }
+    const floor = jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR;
+    // DASH to the assigned area in LATCHED segments — same sprint math as
+    // the bot's own (base speed + inherited momentum), no fabricated
+    // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
+    // (125, owner tune — was full cap), holds down to the reserve floor,
+    // then drops: the unit walks until regen lifts the gauge back to the
+    // threshold before the next dash (owner 2.1b — no repeated one-tick
+    // boosts hovering at the floor).
+    const st = m.state;
+    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP);
+    if (mv.dashArmed) {
+      if (st.boost <= floor || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
+    } else if (st.boost >= armAt && now >= (st.emptyRecoverUntil ?? 0)) {
+      mv.dashArmed = true;
+    }
+    if (mv.dashArmed) {
+      const sprint = m.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
+      m.body.velocity.x = (dx / l) * sprint;
+      m.body.velocity.z = (dz / l) * sprint;
+      inheritMomentum(m, MOMENTUM_STANDARD * 1.5);
+      applyMomentum(m);
+      // Drain on the bot's normal meter UNLESS its own action already dashed
+      // (updateBoost billed that frame); clamp at the floor, never above the
+      // pre-drain value (we only enter here with boost > floor).
+      if (st.action !== 'dash') {
+        const ticks = stepBoostTicks(st, 'cmdBoostClock', now);
+        if (ticks) {
+          const drain = m.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
+          st.boost = Math.max(floor, st.boost - drain * ticks);
+        }
+        st.refillPausedUntil = now + 500;
+        st.action = 'dash';
+        m.thrusters.forEach((t) => { t.material.opacity = 0.9; t.scale.y = 1.6; });
+        m.plumeLight.intensity = 2.1;
+      }
+    } else {
+      m.body.velocity.x = (dx / l) * speed;
+      m.body.velocity.z = (dz / l) * speed;
+    }
+  } else {
+    if (now >= mv.anchorUntil) { m.cmdMove = null; return; }
+    // Engage-style orbit ANCHORED ON THE CIRCLE: tangent around the centre
+    // at cmdRadius with a spring back onto the ring (mirrors the engage
+    // tangent + radial-pull form). Facing/aim stays with the bot.
+    const R = DIORAMA_VIEW.cmdRadius;
+    let rx = pos.x - mv.x;
+    let rz = pos.z - mv.z;
+    const d = Math.hypot(rx, rz);
+    // LEASH RETURN (owner 2026-08-22): displaced beyond the leash (Defense
+    // escape and the like) -> go back as a fresh TRAVEL leg instead of the
+    // spring shoving the unit into whatever wall lies between. Mirrors
+    // shared tickCommandDriver; anchorUntil is preserved across the trip.
+    if (d > CMD_ANCHOR_LEASH) {
+      if (mv.reflexHeld || now >= (mv.replanAt ?? 0)) {
+        mv.reflexHeld = false;
+        mv.replanAt = now + CMD_REPLAN_MS;
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        if (fresh) {
+          mv.path = fresh;
+          mv.idx = 0;
+          mv.phase = 'travel';
+          mv.wallTicks = 0;
+          mv.lastAX = null;
+          return;
+        }
+      }
+    } else if (mv.reflexHeld) {
+      // Reflex ended still inside the leash: resume the orbit; reset the
+      // wall tracker so the reflex's stationary frames don't read as a
+      // wall press.
+      mv.reflexHeld = false;
+      mv.wallTicks = 0;
+      mv.lastAX = null;
+    }
+    // WALL FLIP (owner 2026-08-22 — Engage's wedge reverse, ported to the
+    // anchor orbit): two consecutive driver frames commanding the orbit yet
+    // moving almost nothing = pressed into a wall (the ring straddles a
+    // fence — the Airport rim glass case). Flip the orbit sign: the unit
+    // turns around and patrols the REACHABLE arc instead of grinding.
+    if (mv.lastAX != null) {
+      const moved = Math.hypot(pos.x - mv.lastAX, pos.z - mv.lastAZ);
+      if (moved < 0.07) {
+        mv.wallTicks = (mv.wallTicks ?? 0) + 1;
+        if (mv.wallTicks >= 2) {
+          mv.wallTicks = 0;
+          mv.orbitSign = -mv.orbitSign;
+        }
+      } else {
+        mv.wallTicks = 0;
+      }
+    }
+    mv.lastAX = pos.x;
+    mv.lastAZ = pos.z;
+    if (d < 0.1) { rx = 1; rz = 0; } else { rx /= d; rz /= d; }
+    const pull = Math.max(-1, Math.min(1, (R - d) * 0.25));
+    const tx2 = -rz * mv.orbitSign + rx * pull;
+    const tz2 = rx * mv.orbitSign + rz * pull;
+    const l = Math.hypot(tx2, tz2) || 1;
+    m.body.velocity.x = (tx2 / l) * speed * 0.85;
+    m.body.velocity.z = (tz2 / l) * speed * 0.85;
+  }
+}
+
+// ---- tilt-shift post pass -------------------------------------------------
+// Minimal 3-target pipeline (no EffectComposer): scene -> full-res RT, two
+// separable half-res gaussian passes (run twice for width), then a composite
+// that mixes sharp/blurred by distance from the focus band and applies the
+// miniature grade + the linear->sRGB conversion the canvas normally gets.
+
+function ensureDioramaPost() {
+  if (diorama.post) return diorama.post;
+  const size = new THREE.Vector2();
+  renderer.getDrawingBufferSize(size);
+  const rtOpts = { depthBuffer: true, type: THREE.HalfFloatType };
+  const rtFlat = { depthBuffer: false, type: THREE.HalfFloatType };
+  const rtScene = new THREE.WebGLRenderTarget(size.x, size.y, rtOpts);
+  const hw = Math.max(2, size.x >> 1);
+  const hh = Math.max(2, size.y >> 1);
+  const rtA = new THREE.WebGLRenderTarget(hw, hh, rtFlat);
+  const rtB = new THREE.WebGLRenderTarget(hw, hh, rtFlat);
+  const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const quadGeo = new THREE.PlaneGeometry(2, 2);
+  const blurMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tSrc: { value: null },
+      uDir: { value: new THREE.Vector2(1, 0) },
+      uTexel: { value: new THREE.Vector2(1 / hw, 1 / hh) }
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: [
+      'varying vec2 vUv; uniform sampler2D tSrc; uniform vec2 uDir; uniform vec2 uTexel;',
+      'void main(){',
+      '  vec2 s = uDir * uTexel;',
+      '  vec4 c = texture2D(tSrc, vUv) * 0.2270270;',
+      '  c += (texture2D(tSrc, vUv + s * 1.3846154) + texture2D(tSrc, vUv - s * 1.3846154)) * 0.3162162;',
+      '  c += (texture2D(tSrc, vUv + s * 3.2307692) + texture2D(tSrc, vUv - s * 3.2307692)) * 0.0702703;',
+      '  gl_FragColor = c;',
+      '}'
+    ].join('\n'),
+    depthTest: false,
+    depthWrite: false
+  });
+  const compMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tSharp: { value: null },
+      tBlur: { value: null },
+      uFocusY: { value: 0.5 },
+      uBand: { value: 0.13 },
+      uSpan: { value: 0.32 },
+      uSat: { value: 1.14 },
+      uCon: { value: 1.045 },
+      // Per-unit clear pockets: fighters never sit inside the bokeh.
+      uUnits: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
+      uUnitCount: { value: 0 },
+      uAspect: { value: 1 },
+      uClearR: { value: 0.11 }
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: [
+      'varying vec2 vUv;',
+      'uniform sampler2D tSharp; uniform sampler2D tBlur;',
+      'uniform float uFocusY; uniform float uBand; uniform float uSpan; uniform float uSat; uniform float uCon;',
+      'uniform vec2 uUnits[4]; uniform int uUnitCount; uniform float uAspect; uniform float uClearR;',
+      'vec3 toSRGB(vec3 c){',
+      '  c = max(c, vec3(0.0));',
+      '  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));',
+      '}',
+      'void main(){',
+      '  vec3 sharp = texture2D(tSharp, vUv).rgb;',
+      '  vec3 blur = texture2D(tBlur, vUv).rgb;',
+      '  float t = smoothstep(uBand, uBand + uSpan, abs(vUv.y - uFocusY));',
+      '  float clearM = 0.0;',
+      '  for (int i = 0; i < 4; i++) {',
+      '    if (i >= uUnitCount) break;',
+      '    vec2 d = (vUv - uUnits[i]) * vec2(uAspect, 1.0);',
+      '    clearM = max(clearM, 1.0 - smoothstep(uClearR * 0.5, uClearR, length(d)));',
+      '  }',
+      '  t *= (1.0 - clearM);',
+      '  vec3 c = toSRGB(mix(sharp, blur, t));',
+      '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+      '  c = mix(vec3(l), c, uSat);',
+      '  c = (c - 0.5) * uCon + 0.5;',
+      '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
+      '}'
+    ].join('\n'),
+    depthTest: false,
+    depthWrite: false
+  });
+  const quad = new THREE.Mesh(quadGeo, blurMat);
+  quad.frustumCulled = false;
+  const quadScene = new THREE.Scene();
+  quadScene.add(quad);
+  diorama.post = { rtScene, rtA, rtB, quad, quadScene, quadCam, quadGeo, blurMat, compMat };
+  return diorama.post;
+}
+
+function disposeDioramaPost() {
+  const p = diorama.post;
+  if (!p) return;
+  p.rtScene.dispose();
+  p.rtA.dispose();
+  p.rtB.dispose();
+  p.quadGeo.dispose();
+  p.blurMat.dispose();
+  p.compMat.dispose();
+  diorama.post = null;
+}
+
+function renderDiorama() {
+  const p = ensureDioramaPost();
+  const v = DIORAMA_VIEW;
+  renderer.setRenderTarget(p.rtScene);
+  renderer.render(scene, camera);
+  p.quad.material = p.blurMat;
+  const passes = [
+    [p.rtScene.texture, p.rtA, 1, 0],
+    [p.rtA.texture, p.rtB, 0, 1],
+    [p.rtB.texture, p.rtA, 1, 0],
+    [p.rtA.texture, p.rtB, 0, 1]
+  ];
+  for (const [src, dst, dx, dy] of passes) {
+    p.blurMat.uniforms.tSrc.value = src;
+    p.blurMat.uniforms.uDir.value.set(dx, dy);
+    renderer.setRenderTarget(dst);
+    renderer.render(p.quadScene, p.quadCam);
+  }
+  p.quad.material = p.compMat;
+  p.compMat.uniforms.tSharp.value = p.rtScene.texture;
+  p.compMat.uniforms.tBlur.value = p.rtB.texture;
+  p.compMat.uniforms.uFocusY.value = diorama.cam.focusY;
+  p.compMat.uniforms.uBand.value = v.focusBand;
+  p.compMat.uniforms.uSpan.value = v.blurSpan;
+  p.compMat.uniforms.uSat.value = v.saturation;
+  p.compMat.uniforms.uCon.value = v.contrast;
+  // Clear pockets: each fighter's screen position punches a hole in the blur.
+  let unitCount = 0;
+  for (const m of getAllFighters()) {
+    if (unitCount >= 4) break;
+    if (!m || m.state.hp <= 0 || !m.root.visible) continue;
+    _dioWork.set(m.root.position.x, m.root.position.y + 2.5, m.root.position.z).project(camera);
+    if (_dioWork.z > 1) continue;
+    p.compMat.uniforms.uUnits.value[unitCount].set((_dioWork.x + 1) / 2, (_dioWork.y + 1) / 2);
+    unitCount += 1;
+  }
+  p.compMat.uniforms.uUnitCount.value = unitCount;
+  p.compMat.uniforms.uAspect.value = window.innerWidth / Math.max(1, window.innerHeight);
+  p.compMat.uniforms.uClearR.value = v.clearR;
+  renderer.setRenderTarget(null);
+  renderer.render(p.quadScene, p.quadCam);
+}
+
+// ---- annotation HUD (museum-label style) ----------------------------------
+// Thin SVG squares around every fighter; the own unit and the locked target
+// get a leader line to the nearest screen edge with an info card. Enemy
+// squares are the TAP HIT-AREA for target selection (DIORAMA_PLAN.md);
+// LOS-blocked enemies render ghosted using the same bullet-line test the
+// bots' fire gate uses, so "looks unhittable" always equals "is unhittable".
+
+const DIO_SLOT_META = {
+  player: { color: '#62d7ff', label: 'YOU', selectable: false },
+  ally: { color: '#86f7c2', label: 'ALLY', selectable: false },
+  enemy: { color: '#ff7ad5', label: 'ENEMY 1', selectable: true },
+  // Orange — matches enemy2's corner HP bar (#ff9d5a); the old rose pink
+  // was too close to enemy 1's pink to tell apart at diorama distance.
+  enemy2: { color: '#ff9d5a', label: 'ENEMY 2', selectable: true }
+};
+const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
+// ONLINE identity colors (owner 2026-08-22): HUD surfaces follow the unit's
+// ACTUAL server-slot color — one absolute palette, identical for every
+// viewer — instead of the viewer-relative role palette. Offline keeps the
+// role palette (offline figures are role-colored too, so it already
+// matches there).
+const SLOT_HUD_COLORS = { p1: '#62d7ff', p2: '#ff7ad5', p3: '#86f7c2', p4: '#ff9d5a' };
+function onlineServerIdOf(slot) {
+  const sm = state.online?.slotMap;
+  if (!sm) return null;
+  return slot === 'player' ? sm.cameraId
+    : slot === 'ally' ? sm.allyId
+      : slot === 'enemy' ? sm.enemyId
+        : slot === 'enemy2' ? sm.enemy2Id : null;
+}
+// Diorama color of a role slot: online = the unit's slot color, offline =
+// the role palette.
+function dioSlotColor(slot) {
+  if (state.online?.slotMap) {
+    const c = SLOT_HUD_COLORS[onlineServerIdOf(slot)];
+    if (c) return c;
+  }
+  return DIO_SLOT_META[slot].color;
+}
+// Which units this ONLINE commander may order (owner 2026-08-22): always
+// their own unit; the teammate too when that slot was BOT-FILLED at match
+// start (frozen set — a disconnected human's leftover bot is not adopted).
+function onlineCommandable(slot) {
+  if (slot === 'player') return true;
+  return slot === 'ally' && !!state.online?.allyCommandable;
+}
+const DIO_CARD_W = 180;
+const DIO_CARD_H = 68;   // grew for the stamina gauge (2.1c)
+
+function svgNode(tag, attrs) {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+
+function ensureDioramaLayer() {
+  if (diorama.layer && diorama.layer.isConnected) return diorama.layer;
+  const layer = document.createElement('div');
+  layer.id = 'dio-layer';
+  layer.className = 'dio-layer';
+  const svg = svgNode('svg', {});
+  svg.id = 'dio-svg';
+  layer.appendChild(svg);
+  // Move-order drag visuals: deployment circle (+ dark casing), dashed path
+  // preview, and a drop line when the chosen layer is elevated.
+  const dragCasing = svgNode('path', { fill: 'none', stroke: '#070b12', 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
+  const dragCircle = svgNode('path', { fill: 'rgba(238, 244, 255, 0.07)', stroke: '#eef4ff', 'stroke-width': '1.6', 'pointer-events': 'none' });
+  const dragPath = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.4', 'stroke-dasharray': '5 4', 'pointer-events': 'none' });
+  const dragDrop = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.2', 'stroke-dasharray': '2 3', 'pointer-events': 'none' });
+  svg.appendChild(dragCasing);
+  svg.appendChild(dragCircle);
+  svg.appendChild(dragPath);
+  svg.appendChild(dragDrop);
+  diorama.dragEls = { casing: dragCasing, circle: dragCircle, path: dragPath, drop: dragDrop };
+  app.appendChild(layer);
+  // COMMAND MODE: the layer owns every pointer (markers are hit-tested
+  // manually against els.box, so no per-element listeners are needed).
+  layer.addEventListener('pointerdown', onDioPointerDown);
+  layer.addEventListener('pointermove', onDioPointerMove);
+  layer.addEventListener('pointerup', onDioPointerUp);
+  layer.addEventListener('pointercancel', onDioPointerCancel);
+  layer.addEventListener('wheel', onDioWheel, { passive: false });
+  // Right-mouse drag rotates the map — keep the browser menu off the layer.
+  layer.addEventListener('contextmenu', (e) => e.preventDefault());
+  diorama.layer = layer;
+  diorama.els.clear();
+  return layer;
+}
+
+function hideDioramaLayer() {
+  if (diorama.layer) {
+    diorama.layer.remove();
+    diorama.layer = null;
+  }
+  diorama.els.clear();
+  diorama.dragEls = null;
+  diorama.gesture = null;
+  diorama.drag = null;
+  diorama.pinch = null;
+  diorama.pointers.clear();
+}
+
+function ensureDioramaSlotEls(slot) {
+  let els = diorama.els.get(slot);
+  if (els && els.g.isConnected) return els;
+  const svg = diorama.layer.querySelector('#dio-svg');
+  const meta = DIO_SLOT_META[slot];
+  // Online: absolute slot color (owner 2026-08-22); offline: role palette.
+  const color = dioSlotColor(slot);
+  const g = svgNode('g', {});
+  // Every colored stroke rides on a dark "casing" twin (drawn first, wider)
+  // so the thin lines stay findable over bright buildings — map-annotation
+  // style readability (playtest round 2).
+  const CASING = '#070b12';
+  const rectC = svgNode('rect', { fill: 'none', stroke: CASING, 'stroke-width': '3.2', rx: '1', opacity: '0.75', 'pointer-events': 'none' });
+  const rect = svgNode('rect', {
+    fill: 'none', stroke: color, 'stroke-width': '1.2', rx: '1',
+    'pointer-events': 'none'
+  });
+  const lineC = svgNode('line', { stroke: CASING, 'stroke-width': '3.4', opacity: '0.7', 'pointer-events': 'none' });
+  const line = svgNode('line', { stroke: color, 'stroke-width': '1.4', 'pointer-events': 'none' });
+  // Selection halo twins (hidden until the slot is selected): wide
+  // translucent strokes under the main line — an explicit glow that stays
+  // visible over bright floors where a blur-filter halo disappears; the
+  // .dio-selglow class pulses them in step with the card ring.
+  const rectG = svgNode('rect', { fill: 'none', stroke: color, 'stroke-width': '7', rx: '1', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  rectG.classList.add('dio-selglow');
+  rectG.style.display = 'none';
+  const lineG = svgNode('line', { stroke: color, 'stroke-width': '7', 'stroke-opacity': '0.5', 'pointer-events': 'none' });
+  lineG.classList.add('dio-selglow');
+  lineG.style.display = 'none';
+  // Force-lock crosshair triangles, one path PER COMMANDING UNIT (blue lock
+  // = blue triangles, green = green; both on the same enemy = the first
+  // locker keeps the X corners, the later one rides the + edge midpoints).
+  const tris = svgNode('path', { fill: dioSlotColor('player'), stroke: 'none', 'pointer-events': 'none' });
+  const tris2 = svgNode('path', { fill: dioSlotColor('ally'), stroke: 'none', 'pointer-events': 'none' });
+  // Standing move-order destination ring (own slots only).
+  const destRing = svgNode('path', { fill: 'none', stroke: color, 'stroke-width': '1.2', 'stroke-dasharray': '3 3', opacity: '0.85', 'pointer-events': 'none' });
+  // Command state icons at the square's top corner: gold "!" = area order,
+  // gold eye = force-locking an enemy, none = autonomous (own slots only).
+  const cmdIcon = svgNode('g', { 'pointer-events': 'none' });
+  cmdIcon.classList.add('dio-goldglow');
+  // Off-frame direction pointer: a small triangle on the diamond's outer side.
+  const pointer = svgNode('path', { fill: color, stroke: 'none', 'pointer-events': 'none' });
+  g.appendChild(rectC);
+  g.appendChild(rectG);
+  g.appendChild(rect);
+  g.appendChild(lineC);
+  g.appendChild(lineG);
+  g.appendChild(line);
+  g.appendChild(destRing);
+  g.appendChild(tris);
+  g.appendChild(tris2);
+  g.appendChild(pointer);
+  g.appendChild(cmdIcon);
+  svg.appendChild(g);
+  const card = document.createElement('div');
+  card.className = 'dio-card';
+  card.style.borderColor = color;
+  card.innerHTML = '<div class="dio-name"><span class="dio-role"></span><img class="dio-weapon" alt="" draggable="false"></div><div class="dio-bar"><i></i></div><div class="dio-boost"><i></i></div><div class="dio-status"></div>';
+  card.querySelector('.dio-bar i').style.background = color;
+  card.style.setProperty('--dio-sel', color);
+  diorama.layer.appendChild(card);
+  els = {
+    g, rect, rectC, rectG, line, lineC, lineG, tris, tris2, destRing, cmdIcon, pointer,
+    card, color,
+    roleEl: card.querySelector('.dio-role'),
+    weaponImg: card.querySelector('.dio-weapon'),
+    weaponKey: null,     // current weapon art (trio respawns swap weapons)
+    weaponFailed: false, // art 404 -> fall back to text in the role line
+    statusEl: card.querySelector('.dio-status'),
+    barEl: card.querySelector('.dio-bar i'),
+    boostEl: card.querySelector('.dio-boost i'),
+    iconState: null,     // 'order' | 'auto' | null — caches the icon markup
+    box: null,        // last screen-space box {x, y, s} for tap hit-testing
+    cardY: null       // smoothed card anchor
+  };
+  els.weaponImg.addEventListener('error', () => {
+    els.weaponFailed = true;
+    els.weaponImg.style.display = 'none';
+  });
+  diorama.els.set(slot, els);
+  return els;
+}
+
+// ---- COMMAND MODE gesture controller --------------------------------------
+// One surface (the layer div) owns every pointer. TAP-TAP ordering (owner
+// spec, phase 2.1): tap own marker/card = select (glow); with a selection —
+// tap the map = area order at that spot (keep the finger down to cycle the
+// vertical layer; an unreachable spot shows the red "Area is not available"
+// note and KEEPS the glow), tap an enemy = force lock; the glow drops the
+// moment a command lands (one-shot). Slow re-tap of the selected unit =
+// deselect; fast double-tap of an own marker/card = wipe BOTH commands.
+// DRAG from an own marker still previews a move order (coexists with taps);
+// drag from anywhere else = camera pan; pinch / wheel = zoom; ROTATION =
+// two-finger twist, right-mouse drag, or Q/E (pivot: current look target).
+// NO-SELECTION gestures (owner 2026-08-27) — standing commands are edited by
+// touching their indicators directly, so the select→order flow stays intact:
+// tap a pinned ENEMY = drop every lock YOUR units hold on it; double-tap a
+// destination RING (anywhere on its disc) = drop that move order (the lock
+// survives); DRAG a ring = re-issue the order at the release point — any
+// drag counts (even back to the start) and restarts the 20 s window; a
+// plain tap on the ring does nothing (that's the double-tap's first beat).
+
+const DIO_TAP_SLOP = 9;
+const DIO_DOUBLE_MS = 320;
+const DIO_RING_BAND = 2;        // ring-grab margin floor beyond the line (world u)
+const DIO_RING_GRAB_PX = 20;    // screen-px forgiveness converted per-tap to world u
+const DIO_LONGPRESS_MS = 450;
+const DIO_ROT_PER_PX = 0.006;   // right-drag rad/px ("grab and throw")
+
+function dioramaHitTest(x, y) {
+  const pad = 8;
+  const groups = [
+    { kind: 'own', slots: DIO_OWN_SLOTS },
+    { kind: 'enemy', slots: ['enemy', 'enemy2'] }
+  ];
+  for (const g of groups) {
+    for (const slot of g.slots) {
+      const m = state[slot];
+      const els = diorama.els.get(slot);
+      if (!m || m.state.hp <= 0 || !els) continue;
+      const b = els.box;
+      if (b && x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad) {
+        return { kind: g.kind, slot };
+      }
+      if (els.card.style.display !== 'none') {
+        const r = els.card.getBoundingClientRect();
+        if (x >= r.x && x <= r.right && y >= r.y && y <= r.bottom) return { kind: g.kind, slot };
+      }
+    }
+  }
+  return { kind: 'empty' };
+}
+
+// Destination-ring hit test (owner 2026-08-27): grabs target the WHOLE disc
+// plus a screen-adaptive outer margin (owner feedback, same day — the
+// original line-only band was ±2 world units ≈ ±9 px at the default dolly,
+// so most grab attempts fell through to a camera pan). With nothing
+// selected the disc has no other job, and the interior is exactly where a
+// finger aiming at "the circle" lands; taps INSIDE the area still order a
+// SELECTED unit there, because ring gestures never engage while a
+// selection stands. The margin converts DIO_RING_GRAB_PX to world units on
+// the ring's own plane per tap, so forgiveness stays finger-sized at every
+// zoom (floored at DIO_RING_BAND). Overlapping discs resolve to the nearer
+// ring CENTER; a strict `<` keeps the earlier slot (player before ally) on
+// an exact tie, e.g. two rings ordered onto the same spot. Only units the
+// viewer commands qualify.
+function dioramaRingHitAt(x, y) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const slot of DIO_OWN_SLOTS) {
+    const m = state[slot];
+    const mv = m?.cmdMove;
+    if (!m || m.state.hp <= 0 || !mv) continue;
+    if (state.online && !onlineCommandable(slot)) continue;
+    const pt = dioramaGroundPoint(x, y, mv.y);
+    if (!pt) continue;
+    const ref = dioramaGroundPoint(x + DIO_RING_GRAB_PX, y, mv.y);
+    const tol = Math.max(DIO_RING_BAND, ref ? Math.hypot(ref.x - pt.x, ref.z - pt.z) : DIO_RING_BAND);
+    const dist = Math.hypot(pt.x - mv.x, pt.z - mv.z);
+    if (dist > DIORAMA_VIEW.cmdRadius + tol) continue;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { slot };
+    }
+  }
+  return best;
+}
+
+function dioramaUpdateDragTarget(x, y) {
+  const drag = diorama.drag;
+  if (!drag) return;
+  const probe = dioramaGroundPoint(x, y, drag.y ?? 0) ?? dioramaGroundPoint(x, y, 0);
+  if (!probe) return;
+  const stack = dioramaLayerStackAt(probe.x, probe.z);
+  const li = Math.min(drag.layerPref, stack.length - 1);
+  const yPick = stack[li];
+  const pt = dioramaGroundPoint(x, y, yPick) ?? probe;
+  drag.x = pt.x;
+  drag.z = pt.z;
+  drag.y = yPick;
+  drag.layers = stack.length;
+  drag.layerIdx = li;
+  const nowT = performance.now();
+  if (nowT - drag.pathAt > 120 || Math.hypot(drag.x - drag.pathX, drag.z - drag.pathZ) > 2) {
+    drag.path = computeOrderPath(state[drag.slot], drag.x, drag.z, drag.y);
+    drag.valid = !!drag.path;
+    drag.pathAt = nowT;
+    drag.pathX = drag.x;
+    drag.pathZ = drag.z;
+    // Auto-advance (owner 2.1e): when the DEFAULT layer pick can't be
+    // reached, silently jump to the first (lowest) layer that pathfinds
+    // instead of making the player hold-cycle to it. A layer the player
+    // picked BY HAND is respected — an explicit pick that fails keeps
+    // showing the red ring / deny as before.
+    if (!drag.valid && !drag.userLayer && stack.length > 1) {
+      for (let k = 0; k < stack.length; k += 1) {
+        if (k === li) continue;
+        const alt = dioramaGroundPoint(x, y, stack[k]) ?? probe;
+        const path = computeOrderPath(state[drag.slot], alt.x, alt.z, stack[k]);
+        if (path) {
+          drag.x = alt.x;
+          drag.z = alt.z;
+          drag.y = stack[k];
+          drag.layerIdx = k;
+          drag.layerPref = k;
+          drag.path = path;
+          drag.valid = true;
+          drag.pathX = alt.x;
+          drag.pathZ = alt.z;
+          break;
+        }
+      }
+    }
+  }
+}
+
+function onDioPointerDown(e) {
+  if (!dioramaActive()) return;
+  if (e.pointerType === 'mouse' && e.button === 2) {
+    // Right-mouse drag = rotate around the current look target.
+    e.preventDefault();
+    diorama.gesture = { id: e.pointerId, kind: 'rotate', x0: e.clientX, rot0: diorama.cam2.rot };
+    diorama.drag = null;
+    diorama.layer.setPointerCapture?.(e.pointerId);
+    return;
+  }
+  diorama.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (diorama.pointers.size === 2) {
+    // Second finger: whatever was in progress becomes a pinch (zoom + twist).
+    const pts = [...diorama.pointers.values()];
+    diorama.pinch = {
+      span: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+      dist: diorama.cam2.dist,
+      prevAngle: Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x)
+    };
+    diorama.gesture = null;
+    diorama.drag = null;
+    return;
+  }
+  if (diorama.pointers.size > 2) return;
+  e.preventDefault();
+  const hit = dioramaHitTest(e.clientX, e.clientY);
+  const grab = dioramaGroundPoint(e.clientX, e.clientY, 0);
+  diorama.gesture = {
+    id: e.pointerId, kind: hit.kind, slot: hit.slot ?? null,
+    x0: e.clientX, y0: e.clientY, moved: false, tapPreview: false,
+    grabX: grab?.x ?? 0, grabZ: grab?.z ?? 0,
+    stillX: e.clientX, stillY: e.clientY, stillAt: performance.now()
+  };
+  // Destination-ring grab (owner 2026-08-27): only with NOTHING selected —
+  // while a unit is selected a ground press stays the tap-order preview, so
+  // ordering a unit into (or at the edge of) an existing area never changes.
+  // Markers and cards win first (hitTest above). The grabbed ring brightens
+  // via updateDioramaHud; a later drag re-issues, a clean tap double-taps.
+  if (hit.kind === 'empty' && !diorama.sel) {
+    const ring = dioramaRingHitAt(e.clientX, e.clientY);
+    if (ring) {
+      diorama.gesture.kind = 'ring';
+      diorama.gesture.slot = ring.slot;
+    }
+  }
+  // TAP-TAP ordering: pressing empty ground with an own unit selected opens
+  // the order preview at once (circle + path under the finger); holding
+  // still cycles the vertical layer, releasing in place issues the order.
+  // Moving past the slop drops the preview and the press becomes a pan.
+  const selM = diorama.sel ? state[diorama.sel] : null;
+  if (hit.kind === 'empty' && selM && selM.state.hp > 0
+      && !(state.online && !onlineCommandable(diorama.sel))) {
+    diorama.gesture.tapPreview = true;
+    diorama.drag = {
+      slot: diorama.sel, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
+      path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: true,
+      userLayer: false   // becomes true once the player hold-cycles a layer
+    };
+    dioramaUpdateDragTarget(e.clientX, e.clientY);
+  }
+  diorama.layer.setPointerCapture?.(e.pointerId);
+}
+
+function onDioPointerMove(e) {
+  if (!dioramaActive()) return;
+  const p = diorama.pointers.get(e.pointerId);
+  if (p) { p.x = e.clientX; p.y = e.clientY; }
+  if (diorama.pinch && diorama.pointers.size >= 2) {
+    const pts = [...diorama.pointers.values()];
+    const span = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (span > 8) {
+      diorama.cam2.dist = THREE.MathUtils.clamp(
+        diorama.pinch.dist * (diorama.pinch.span / span),
+        DIORAMA_VIEW.minDist, dioramaMaxDist()
+      );
+    }
+    // Twist: the map follows the fingers (screen y-down flips chirality, so
+    // rot -= delta; incremental with wrap so ±π never jolts the view).
+    const angle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+    let dA = angle - diorama.pinch.prevAngle;
+    if (dA > Math.PI) dA -= Math.PI * 2;
+    else if (dA < -Math.PI) dA += Math.PI * 2;
+    diorama.cam2.rot -= dA;
+    diorama.pinch.prevAngle = angle;
+    return;
+  }
+  const g = diorama.gesture;
+  if (!g || g.id !== e.pointerId) return;
+  if (g.kind === 'rotate') {
+    diorama.cam2.rot = g.rot0 + (e.clientX - g.x0) * DIO_ROT_PER_PX;
+    return;
+  }
+  if (!g.moved && Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > DIO_TAP_SLOP) {
+    g.moved = true;
+    if (g.tapPreview) {
+      // The tap-order preview dies once the finger travels: this is a pan.
+      g.tapPreview = false;
+      diorama.drag = null;
+    } else if ((g.kind === 'own' || g.kind === 'ring')
+        && !(state.online && !onlineCommandable(g.slot))) {
+      // ONLINE: your own unit always takes orders; the teammate's marker
+      // does too when that slot is a commandable BOT (owner 2026-08-22 —
+      // reverses phase-3 decision 1 for bot-filled slots). A HUMAN
+      // teammate's marker still never opens a drag. A RING grab past the
+      // slop becomes the same move-order drag for the ring's unit (owner
+      // 2026-08-27) — identical preview, validation and release path.
+      diorama.drag = {
+        slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
+        path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
+        userLayer: false   // becomes true once the player hold-cycles a layer
+      };
+    }
+  }
+  if (!g.moved) {
+    // Micro-moves inside the slop still refine the tap-order preview point.
+    if (g.tapPreview && diorama.drag) dioramaUpdateDragTarget(e.clientX, e.clientY);
+    return;
+  }
+  if ((g.kind === 'own' || g.kind === 'ring') && diorama.drag) {
+    dioramaUpdateDragTarget(e.clientX, e.clientY);
+    // (Hold-still layer cycling lives in dioramaGestureFrame — pointermove
+    // stops firing the moment the finger truly holds still.)
+  } else {
+    // Camera pan: keep the grabbed ground point under the finger.
+    const cur = dioramaGroundPoint(e.clientX, e.clientY, 0);
+    if (cur) {
+      diorama.cam2.tx += g.grabX - cur.x;
+      diorama.cam2.tz += g.grabZ - cur.z;
+    }
+  }
+}
+
+function onDioPointerUp(e) {
+  diorama.pointers.delete(e.pointerId);
+  if (diorama.pointers.size < 2) diorama.pinch = null;
+  const g = diorama.gesture;
+  if (!g || g.id !== e.pointerId) return;
+  diorama.gesture = null;
+  if (!dioramaActive()) { diorama.drag = null; return; }
+  if (g.kind === 'rotate') return;
+  if (g.moved) {
+    const drag = diorama.drag;
+    if ((g.kind === 'own' || g.kind === 'ring') && drag && !drag.tapMode && drag.valid && drag.path) {
+      if (state.online) {
+        // `ring` tags a selection-less send: its ack must not run the
+        // one-shot sel drop (it could wipe a selection made during the
+        // round trip), and a 'rate' denial gets its own red note — a ring
+        // release has no lingering glow to signal "didn't land".
+        diorama.pendingOrder = { px: e.clientX, py: e.clientY, ring: g.kind === 'ring' };
+        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
+      } else {
+        issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+      }
+      // A ring drag re-issued the order (fresh 20 s window by construction —
+      // setMoveOrder starts a new anchor). Any drag counts, even one released
+      // back at the start (owner 2026-08-27: no in-place cancel).
+      if (g.kind === 'ring') diorama.lastRingAt = 0;
+    } else if (g.kind === 'ring' && drag && !drag.tapMode) {
+      // Ring dragged onto an unreachable spot: red note; nothing is sent, so
+      // the standing order — and its timer — survives untouched.
+      dioramaDenyAt(e.clientX, e.clientY);
+    }
+    diorama.drag = null;
+    return;
+  }
+  const nowT = performance.now();
+  if (g.kind === 'own') {
+    diorama.drag = null;
+    diorama.lastRingSlot = null;
+    if (state.online && !onlineCommandable(g.slot)) return;   // human teammates aren't commandable online
+    if (diorama.lastTapSlot === g.slot && nowT - diorama.lastTapAt < DIO_DOUBLE_MS) {
+      // Double-tap (marker OR card): wipe the move order AND the force lock.
+      if (state.online) state.online.conn?.sendOrderClear(onlineServerIdOf(g.slot));
+      else clearUnitCommands(state[g.slot]);
+      diorama.sel = null;
+      diorama.lastTapAt = 0;
+    } else if (diorama.sel === g.slot) {
+      // Slow re-tap of the selected unit = deselect.
+      diorama.sel = null;
+      diorama.lastTapSlot = g.slot;
+      diorama.lastTapAt = nowT;
+    } else {
+      diorama.sel = g.slot;
+      diorama.lastTapSlot = g.slot;
+      diorama.lastTapAt = nowT;
+    }
+  } else if (g.kind === 'ring') {
+    // Plain tap on a destination ring: the double-tap's first beat does
+    // nothing on its own (owner 2026-08-27 — taps never re-issue or reset
+    // the timer; only a real drag does). The second beat drops the MOVE
+    // order alone — a standing force lock survives.
+    diorama.lastTapSlot = null;
+    if (diorama.lastRingSlot === g.slot && nowT - diorama.lastRingAt < DIO_DOUBLE_MS) {
+      if (state.online) state.online.conn?.sendOrderClear(onlineServerIdOf(g.slot), 'move');
+      else if (state[g.slot]) state[g.slot].cmdMove = null;
+      diorama.lastRingSlot = null;
+      diorama.lastRingAt = 0;
+    } else {
+      diorama.lastRingSlot = g.slot;
+      diorama.lastRingAt = nowT;
+    }
+  } else if (g.kind === 'enemy') {
+    diorama.lastTapSlot = null;
+    diorama.lastRingSlot = null;
+    const cmd = diorama.sel ? state[diorama.sel] : null;
+    const foe = state[g.slot];
+    if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
+      if (state.online) {
+        // Server-side toggle semantics; the echo drives the triangles.
+        const sm = state.online.slotMap;
+        const targetId = g.slot === 'enemy' ? sm?.enemyId : sm?.enemy2Id;
+        if (targetId) state.online.conn?.sendOrderLock(targetId, onlineServerIdOf(diorama.sel));
+        diorama.sel = null;   // one-shot
+        diorama.lastTapAt = 0;
+        return;
+      }
+      // Same enemy again = cancel the force lock; another enemy = re-lock.
+      cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
+      // Lock order decides who wears the X vs + crosshair when both
+      // commanders pin the same enemy (2.1d).
+      if (cmd.cmdLock) cmd.cmdLockAt = performance.now();
+      diorama.sel = null;   // one-shot: the glow drops once the command lands
+    } else if (!diorama.sel && foe) {
+      // Unselected tap on an enemy marker/card (owner 2026-08-27): release
+      // every force lock YOUR units hold on it — the quick "let it go"
+      // gesture, covering the bot teammate without selecting it first. A
+      // human teammate's lock is not yours to drop (and online the server
+      // would refuse anyway). No lock on it = harmless no-op. The clears
+      // ride order:clear {what:'lock'}, which is rate-limit-exempt.
+      for (const slot of DIO_OWN_SLOTS) {
+        const m = state[slot];
+        if (!m || m.cmdLock !== foe) continue;
+        if (state.online) {
+          if (onlineCommandable(slot)) state.online.conn?.sendOrderClear(onlineServerIdOf(slot), 'lock');
+        } else {
+          m.cmdLock = null;
+        }
+      }
+    }
+  } else {
+    diorama.lastTapSlot = null;
+    diorama.lastRingSlot = null;
+    const drag = diorama.drag;
+    diorama.drag = null;
+    if (g.tapPreview && drag) {
+      if (drag.valid && drag.path) {
+        if (state.online) {
+          // Glow stays until the server acks (processOrderResults): ok
+          // drops it (one-shot), a deny shows the red note and keeps it.
+          diorama.pendingOrder = { px: e.clientX, py: e.clientY };
+          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
+        } else {
+          issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+          diorama.sel = null;   // one-shot: the glow drops once the command lands
+        }
+      } else {
+        // Unreachable spot: red note + ring fade; the glow STAYS for a retry.
+        dioramaDenyAt(e.clientX, e.clientY);
+      }
+    } else {
+      diorama.sel = null;
+    }
+  }
+}
+
+function onDioPointerCancel(e) {
+  diorama.pointers.delete(e.pointerId);
+  if (diorama.pointers.size < 2) diorama.pinch = null;
+  if (diorama.gesture?.id === e.pointerId) diorama.gesture = null;
+  diorama.drag = null;
+}
+
+function onDioWheel(e) {
+  if (!dioramaActive()) return;
+  e.preventDefault();
+  diorama.cam2.dist = THREE.MathUtils.clamp(
+    diorama.cam2.dist * (1 + e.deltaY * 0.0011),
+    DIORAMA_VIEW.minDist, dioramaMaxDist()
+  );
+}
+
+// Per-frame gesture upkeep: holding STILL over an order preview (tap-hold or
+// mid-drag) cycles the vertical layer. This cannot live in pointermove — the
+// browser stops firing it the moment the finger truly holds still.
+function dioramaGestureFrame() {
+  const g = diorama.gesture;
+  const drag = diorama.drag;
+  if (!g || !drag) return;
+  if (!g.tapPreview && !g.moved) return;   // marker press before the slop: no preview yet
+  const p = diorama.pointers.get(g.id);
+  if (!p) return;
+  if (Math.hypot(p.x - g.stillX, p.y - g.stillY) > 6) {
+    g.stillX = p.x;
+    g.stillY = p.y;
+    g.stillAt = performance.now();
+  } else if (performance.now() - g.stillAt > DIO_LONGPRESS_MS) {
+    if ((drag.layers ?? 1) > 1) {
+      drag.layerPref = (drag.layerIdx + 1) % drag.layers;
+      drag.userLayer = true;   // hand-picked: auto-advance backs off
+      dioramaUpdateDragTarget(p.x, p.y);
+    }
+    g.stillAt = performance.now();   // re-arm for the next cycle
+  }
+}
+
+// Rejected order feedback: a red ring fading out at the tapped spot plus the
+// red "Area is not available" note. Pure DOM, self-removing — the HUD layer
+// redraws every frame and must not track one-shot effects.
+function dioramaDenyAt(px, py, label = 'Area is not available') {
+  if (!diorama.layer) return;
+  const el = document.createElement('div');
+  el.className = 'dio-deny';
+  el.style.left = `${px.toFixed(1)}px`;
+  el.style.top = `${py.toFixed(1)}px`;
+  el.innerHTML = `<i class="dio-deny-ring"></i><span class="dio-deny-text">${label}</span>`;
+  diorama.layer.appendChild(el);
+  // Keep the note readable when the tap hugs a screen edge: shift the TEXT
+  // back into view (the ring stays on the tapped spot).
+  const txt = el.querySelector('.dio-deny-text');
+  const halfW = (txt.offsetWidth / 2) || 80;
+  let shift = 0;
+  if (px - halfW < 6) shift = 6 + halfW - px;
+  else if (px + halfW > window.innerWidth - 6) shift = window.innerWidth - 6 - halfW - px;
+  txt.style.left = `${shift.toFixed(1)}px`;
+  if (py < 56) txt.style.top = '34px';   // tap near the top: note below the ring
+  setTimeout(() => el.remove(), 1000);
+}
+
+const _dioP0 = { x: 0, y: 0, z: 0 };
+const _dioP1 = { x: 0, y: 0, z: 0 };
+function dioramaShotBlocked(fromMech, toMech) {
+  _dioP0.x = fromMech.body.position.x;
+  _dioP0.y = fromMech.body.position.y + BOT_MUZZLE_ABOVE_ROOT;
+  _dioP0.z = fromMech.body.position.z;
+  _dioP1.x = toMech.body.position.x;
+  _dioP1.y = toMech.body.position.y + BOT_MUZZLE_ABOVE_ROOT;
+  _dioP1.z = toMech.body.position.z;
+  return !botShotCanLand(_dioP0, _dioP1);
+}
+
+const _dioProj = new THREE.Vector3();
+// Gold command-state icons (owner spec, phase 2.1): "!" = holding an AREA
+// order, eye = FORCE-LOCKING an enemy, both side-by-side when both stand,
+// and NO icon at all for a fully autonomous unit. Marker version draws in
+// local coords (anchored above the square's top-right corner); the card
+// version is one or two tiny inline SVGs.
+function dioCmdIconMarkup(kind) {
+  const bang = '<rect x="-1.3" y="0" width="2.6" height="7" rx="1.2" fill="#ffd257"/>'
+    + '<circle cx="0" cy="9.6" r="1.5" fill="#ffd257"/>';
+  const eye = '<path d="M -6 5 Q 0 -0.5 6 5 Q 0 10.5 -6 5 Z" fill="none" stroke="#ffd257" stroke-width="1.4"/>'
+    + '<circle cx="0" cy="5" r="1.8" fill="#ffd257"/>';
+  if (kind === 'order') return bang;
+  if (kind === 'lock') return eye;
+  return `<g>${bang}</g><g transform="translate(12 0)">${eye}</g>`;
+}
+function dioCmdIconCardMarkup(kind) {
+  const bang = '<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">'
+    + '<rect x="5.7" y="0.5" width="2.6" height="7" rx="1.2" fill="#ffd257"/><circle cx="7" cy="10" r="1.5" fill="#ffd257"/></svg>';
+  const eye = '<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">'
+    + '<path d="M 1 5.5 Q 7 0.5 13 5.5 Q 7 10.5 1 5.5 Z" fill="none" stroke="#ffd257" stroke-width="1.3"/><circle cx="7" cy="5.5" r="1.7" fill="#ffd257"/></svg>';
+  if (kind === 'order') return bang;
+  if (kind === 'lock') return eye;
+  return bang + eye;
+}
+
+// Force-lock triangles around the marker box. Anchors are direction pairs:
+// diagonals ([±1, ±1]) sit outside the CORNERS (the X layout), axis units
+// ([0, ±1] / [±1, 0]) outside the EDGE MIDPOINTS (the + layout, worn by the
+// second commander when both lock the same enemy — owner 2.1d).
+const DIO_TRI_X = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+const DIO_TRI_PLUS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+function dioCornerTriPath(bx, by, s, corners, gap = 4, tri = 7.5) {
+  const parts = [];
+  for (const [sx, sy] of corners) {
+    const l = Math.hypot(sx, sy) || 1;
+    const ux = sx / l;
+    const uy = sy / l;
+    const cxr = sx < 0 ? bx : sx > 0 ? bx + s : bx + s / 2;
+    const cyr = sy < 0 ? by : sy > 0 ? by + s : by + s / 2;
+    const tipX = cxr + ux * gap;
+    const tipY = cyr + uy * gap;
+    const baseX = tipX + ux * tri;
+    const baseY = tipY + uy * tri;
+    const px2 = -uy * tri * 0.55;
+    const py2 = ux * tri * 0.55;
+    parts.push(`M ${tipX.toFixed(1)} ${tipY.toFixed(1)} L ${(baseX + px2).toFixed(1)} ${(baseY + py2).toFixed(1)} L ${(baseX - px2).toFixed(1)} ${(baseY - py2).toFixed(1)} Z`);
+  }
+  return parts.join(' ');
+}
+
+// Project a horizontal world circle / a nav path into an SVG path string.
+function dioCircleSvgPath(cx, cz, y, R, segs = 24) {
+  let d = '';
+  for (let i = 0; i <= segs; i += 1) {
+    const a = (i / segs) * Math.PI * 2;
+    _dioProj.set(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R).project(camera);
+    if (_dioProj.z > 1) return '';
+    const px = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const py = (1 - _dioProj.y) / 2 * window.innerHeight;
+    d += `${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  return d + 'Z';
+}
+function dioPolylineSvgPath(points) {
+  let d = '';
+  for (const p of points) {
+    _dioProj.set(p.x, (p.f ?? p.y ?? 0) + 0.4, p.z).project(camera);
+    if (_dioProj.z > 1) continue;
+    const px = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const py = (1 - _dioProj.y) / 2 * window.innerHeight;
+    d += `${d ? 'L' : 'M'} ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  return d;
+}
+
+function updateDioramaHud() {
+  if (!dioramaActive()) {
+    if (diorama.layer) hideDioramaLayer();
+    state.hud?.classList.remove('dio-cmd');
+    return;
+  }
+  ensureDioramaLayer();
+  // Command mode hides every direct-control input (buttons + joystick).
+  state.hud?.classList.add('dio-cmd');
+  // updateCamera() set position/quaternion this frame; compose the matrices
+  // before projecting (same refresh the edge arrows do).
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  // Compact cards on small screens (owner: full-size cards eat a phone
+  // display); the desktop size is unchanged. JS layout numbers must match
+  // the .dio-compact CSS block.
+  const compact = Math.min(W, H) < 500;
+  diorama.layer.classList.toggle('dio-compact', compact);
+  const cardW = compact ? 132 : DIO_CARD_W;
+  const cardH = compact ? 52 : DIO_CARD_H;
+  // POV anchor: normally the player, but in spectator mode the WATCHED unit —
+  // the corner split follows whoever the camera rides (viewer's team =
+  // bottom-left, the other team = bottom-right).
+  const viewer = cameraFocusMech();
+  const viewerTeam = viewer ? getTeamOf(viewer) : 'A';
+  const cards = [];
+  for (const slot of DIO_SLOTS) {
+    const m = state[slot];
+    const els = ensureDioramaSlotEls(slot);
+    const meta = DIO_SLOT_META[slot];
+    if (!m || m.state.hp <= 0 || !m.root.visible) {
+      els.g.style.display = 'none';
+      els.card.style.display = 'none';
+      els.box = null;
+      continue;
+    }
+    const rp = m.root.position;
+    _dioProj.set(rp.x, rp.y, rp.z).project(camera);
+    const behind = _dioProj.z > 1;
+    let cx = (_dioProj.x + 1) / 2 * W;
+    let cy = (1 - _dioProj.y) / 2 * H;
+    let s = 26;
+    if (behind) {
+      // Behind the camera: mirror so the edge placement lands on the correct side.
+      cx = W - cx;
+      cy = H - cy;
+    } else {
+      const fy = cy;
+      _dioProj.set(rp.x, rp.y + UNIT_SPRITE_HEIGHT, rp.z).project(camera);
+      const hx = (_dioProj.x + 1) / 2 * W;
+      const hy = (1 - _dioProj.y) / 2 * H;
+      s = THREE.MathUtils.clamp(Math.abs(fy - hy) * 1.35, 24, 96);
+      cx = (cx + hx) / 2;
+      cy = (fy + hy) / 2;
+    }
+    // Markers STICK to the unit anywhere inside the real viewport (owner
+    // call: the old wide desktop-tuned bands yanked markers off units that
+    // sat in the blur zone — the HUD layer itself is drawn above the post
+    // pass and never blurs). The diamond treatment applies only to units
+    // genuinely outside the view, placed where the ray from screen centre
+    // crosses the edge (so its position still points at the unit).
+    const mL = 14 + s / 2;
+    const mR = W - 14 - s / 2;
+    const mT = 14 + s / 2;
+    const mB = H - 14 - s / 2;
+    const offFrame = behind || cx < mL || cx > mR || cy < mT || cy > mB;
+    let dirAngle = 0;
+    if (offFrame) {
+      const ox = W / 2;
+      const oy = H / 2;
+      let dx = cx - ox;
+      let dy = cy - oy;
+      if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
+      let t = Infinity;
+      if (dx > 0) t = Math.min(t, (mR - ox) / dx);
+      else if (dx < 0) t = Math.min(t, (mL - ox) / dx);
+      if (dy > 0) t = Math.min(t, (mB - oy) / dy);
+      else if (dy < 0) t = Math.min(t, (mT - oy) / dy);
+      if (!Number.isFinite(t) || t < 0) t = 0;
+      cx = ox + dx * t;
+      cy = oy + dy * t;
+      s = 26;
+      dirAngle = Math.atan2(dy, dx);
+    }
+    const bx = cx - s / 2;
+    const by = cy - s / 2;
+    els.box = { x: bx, y: by, s };
+    els.g.style.display = '';
+    // COMMAND MODE: the FORCE LOCKS drive the crosshair, one commander per
+    // color. (The NO SIGHT ghosting/dash treatment is retired — owner call.)
+    const lockedByP = !!state.player && state.player.cmdLock === m;
+    const lockedByA = !!state.ally && state.ally.cmdLock === m;
+    const locked = lockedByP || lockedByA;
+    els.g.style.opacity = '1';
+    // Selection glow: a solid brightened stroke over a widened dark casing
+    // plus a pulsing halo twin — explicit geometry instead of the old lone
+    // drop-shadow, which washed out over bright floors. The leader line and
+    // the info card carry the same treatment below.
+    const selected = diorama.sel === slot;
+    els.rectG.style.display = selected ? '' : 'none';
+    els.card.classList.toggle('dio-sel', selected);
+    // Marker body: square for every unit, diamond when off-frame (owner
+    // call — no scope circles). The rect doubles as the tap hit-area.
+    const rectXf = offFrame ? `rotate(45 ${cx.toFixed(1)} ${cy.toFixed(1)})` : '';
+    for (const r of [els.rectC, els.rectG, els.rect]) {
+      r.setAttribute('transform', rectXf);
+      r.setAttribute('x', bx.toFixed(1));
+      r.setAttribute('y', by.toFixed(1));
+      r.setAttribute('width', s.toFixed(1));
+      r.setAttribute('height', s.toFixed(1));
+    }
+    els.rectC.setAttribute('stroke', '#070b12');
+    els.rectC.setAttribute('stroke-width', selected ? '5' : '3.2');
+    els.rect.setAttribute('stroke', els.color);
+    els.rect.setAttribute('stroke-width', selected ? '2.2' : locked ? '1.8' : '1.2');
+    // (The PSG1 range-tier ticks that rode the locked marker are retired —
+    // owner call 2026-08-26: the force-lock triangles are the marker's only
+    // lock dressing. The classic-view reticle tiers are untouched.)
+    if (offFrame) {
+      const px = cx + Math.cos(dirAngle) * (s / 2 + 10);
+      const py = cy + Math.sin(dirAngle) * (s / 2 + 10);
+      const deg = dirAngle * 180 / Math.PI;
+      els.pointer.setAttribute('d',
+        `M ${(px + 6).toFixed(1)} ${py.toFixed(1)} L ${(px - 3).toFixed(1)} ${(py - 5).toFixed(1)} L ${(px - 3).toFixed(1)} ${(py + 5).toFixed(1)} Z`);
+      els.pointer.setAttribute('transform', `rotate(${deg.toFixed(1)} ${px.toFixed(1)} ${py.toFixed(1)})`);
+      els.pointer.style.display = '';
+    } else {
+      els.pointer.style.display = 'none';
+    }
+    // Force-lock crosshair: triangles in the COMMANDING unit's color. One
+    // commander wears the X (corner) layout; when BOTH lock the same enemy
+    // the FIRST keeps the X and the one who joined later rides the + (edge
+    // midpoint) layout instead of corner-splitting (owner 2.1d; ties from
+    // debug-set locks count the player as first). Shares the rect transform
+    // so the whole crosshair tilts with the edge diamond.
+    const pLockAt = state.player?.cmdLockAt ?? 0;
+    const aLockAt = state.ally?.cmdLockAt ?? 0;
+    if (lockedByP) {
+      els.tris.setAttribute('d', dioCornerTriPath(bx, by, s,
+        lockedByA && pLockAt > aLockAt ? DIO_TRI_PLUS : DIO_TRI_X));
+      els.tris.setAttribute('transform', rectXf);
+      els.tris.style.display = '';
+    } else {
+      els.tris.style.display = 'none';
+    }
+    if (lockedByA) {
+      els.tris2.setAttribute('d', dioCornerTriPath(bx, by, s,
+        lockedByP && aLockAt >= pLockAt ? DIO_TRI_PLUS : DIO_TRI_X));
+      els.tris2.setAttribute('transform', rectXf);
+      els.tris2.style.display = '';
+    } else {
+      els.tris2.style.display = 'none';
+    }
+    // Command-state icon + standing destination ring (own slots only).
+    if (DIO_OWN_SLOTS.includes(slot)) {
+      const iconState = m.cmdMove && m.cmdLock ? 'both'
+        : m.cmdMove ? 'order' : m.cmdLock ? 'lock' : null;
+      if (els.iconState !== iconState) {
+        els.iconState = iconState;
+        els.cmdIcon.innerHTML = iconState ? dioCmdIconMarkup(iconState) : '';
+      }
+      if (iconState) {
+        els.cmdIcon.setAttribute('transform',
+          `translate(${(bx + s - 2).toFixed(1)} ${(by - 13).toFixed(1)})`);
+        els.cmdIcon.style.display = '';
+      } else {
+        els.cmdIcon.style.display = 'none';
+      }
+      if (m.cmdMove) {
+        const ringD = dioCircleSvgPath(m.cmdMove.x, m.cmdMove.z, m.cmdMove.y + 0.3, DIORAMA_VIEW.cmdRadius, 20);
+        if (ringD) {
+          els.destRing.setAttribute('d', ringD);
+          // Grabbed ring (owner 2026-08-27): brighten + thicken the instant
+          // a ring gesture holds this slot, so the player sees WHICH ring
+          // they picked up before deciding to drag or let go.
+          const grabbed = diorama.gesture?.kind === 'ring' && diorama.gesture.slot === slot;
+          els.destRing.setAttribute('stroke-width', grabbed ? '2.6' : '1.2');
+          els.destRing.setAttribute('opacity', grabbed ? '1' : '0.85');
+          els.destRing.style.display = '';
+        } else {
+          els.destRing.style.display = 'none';
+        }
+      } else {
+        els.destRing.style.display = 'none';
+      }
+    } else {
+      els.cmdIcon.style.display = 'none';
+      els.destRing.style.display = 'none';
+    }
+    // Full annotation (leader line + info card) for EVERY fielded unit —
+    // owner call, playtest round 2.
+    cards.push({ slot, els, m, cx, cy });
+  }
+  // Card layout (owner, phase 2.1c): FIXED corner docks. The viewer's team
+  // stacks bottom-up in the BOTTOM-LEFT corner, the enemy team in the
+  // BOTTOM-RIGHT. Slot order is stable (the first fielded slot sits deepest
+  // in the corner) and dead units drop out, compacting the column. Cards no
+  // longer chase their units around the screen — the leader line alone
+  // carries the association.
+  const orderedCards = [];
+  const ownCol = [];
+  const foeCol = [];
+  for (const c of cards) (getTeamOf(c.m) === viewerTeam ? ownCol : foeCol).push(c);
+  const placeColumn = (list, side) => {
+    const cardX = side === 'left' ? 10 : W - 10 - cardW;
+    let y = H - 12 - cardH;
+    for (const c of list) {
+      c.side = side;
+      c.cardX = cardX;
+      c.want = y;
+      y -= cardH + 10;
+      orderedCards.push(c);
+    }
+  };
+  placeColumn(ownCol, 'left');
+  placeColumn(foeCol, 'right');
+  for (const c of orderedCards) {
+    const side = c.side;
+    const cardX = c.cardX;
+    const want = c.want;
+    const els = c.els;
+    els.cardY = els.cardY == null ? want : els.cardY + (want - els.cardY) * 0.25;
+    els.card.style.display = '';
+    els.card.style.transform = `translate(${cardX.toFixed(1)}px, ${els.cardY.toFixed(1)}px)`;
+    const m = c.m;
+    // BA line: the card carries the character's portrait thumbnail (the
+    // menu's units/<spriteKey>_profile_thumbnail.png — owner call, replacing
+    // the demo line's weapon silhouette); art that 404s falls back to the
+    // character name as text. Keyed by spriteKey so Trio respawns re-skin.
+    const wkey = m.unit.spriteKey ?? '';
+    if (els.weaponKey !== wkey) {
+      els.weaponKey = wkey;
+      els.weaponFailed = false;
+      if (wkey) {
+        els.weaponImg.style.display = '';
+        els.weaponImg.src = `${import.meta.env.BASE_URL}units/${wkey}_profile_thumbnail.png`;
+      } else {
+        els.weaponImg.style.display = 'none';
+      }
+    }
+    const charName = m.unit.char ?? wkey;
+    const role = DIO_SLOT_META[c.slot].label + (els.weaponFailed && charName ? ` · ${charName}` : '');
+    if (els.roleEl.textContent !== role) els.roleEl.textContent = role;
+    // HP reads as the bar alone (owner call — no numbers); NO SIGHT moves to
+    // its own status line under it.
+    const maxHp = m.unit.hp ?? MAX_HP;
+    els.barEl.style.width = `${THREE.MathUtils.clamp(m.state.hp / maxHp, 0, 1) * 100}%`;
+    // Stamina gauge under the HP bar. ONLINE the enemy value is redacted
+    // server-side (owner decision) — hide the bar rather than render a
+    // forever-empty track; offline both teams still show it.
+    const boostRedacted = !!state.online && getTeamOf(m) !== viewerTeam;
+    els.boostEl.parentElement.style.display = boostRedacted ? 'none' : '';
+    if (!boostRedacted) {
+      const bCap = m.unit.boostCap ?? BOOST_CAP;
+      els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
+    }
+    // The old NO SIGHT status line now hosts the command icon(s) (own units;
+    // no command = no icon at all).
+    const cardIconState = DIO_OWN_SLOTS.includes(c.slot)
+      ? (m.cmdMove && m.cmdLock ? 'both' : m.cmdMove ? 'order' : m.cmdLock ? 'lock' : 'none')
+      : 'none';
+    if (els.cardIconState !== cardIconState) {
+      els.cardIconState = cardIconState;
+      els.statusEl.innerHTML = cardIconState === 'none' ? '' : dioCmdIconCardMarkup(cardIconState);
+    }
+    const lineEndX = side === 'left' ? cardX + cardW : cardX;
+    const boxEdgeX = side === 'left' ? c.els.box.x : c.els.box.x + c.els.box.s;
+    const lineY2 = (els.cardY + cardH / 2).toFixed(1);
+    const selLn = diorama.sel === c.slot;
+    for (const ln of [els.lineC, els.lineG, els.line]) {
+      ln.setAttribute('x1', boxEdgeX.toFixed(1));
+      ln.setAttribute('y1', c.cy.toFixed(1));
+      ln.setAttribute('x2', lineEndX.toFixed(1));
+      ln.setAttribute('y2', lineY2);
+    }
+    els.lineC.style.display = '';
+    els.line.style.display = '';
+    els.lineG.style.display = selLn ? '' : 'none';
+    els.lineC.setAttribute('stroke-width', selLn ? '5.2' : '3.4');
+    els.line.setAttribute('stroke-width', selLn ? '2.4' : '1.4');
+  }
+  dioramaGestureFrame();
+  updateDioramaDragVisuals();
+}
+
+// Live move-order drag feedback: the deployment circle on the chosen layer
+// (red when unreachable), the dashed path preview, and a dotted drop line
+// when the layer is elevated (bridge decks).
+function updateDioramaDragVisuals() {
+  const de = diorama.dragEls;
+  if (!de) return;
+  const drag = diorama.drag;
+  if (!drag || !(drag.tapMode || diorama.gesture?.moved)) {
+    de.casing.style.display = 'none';
+    de.circle.style.display = 'none';
+    de.path.style.display = 'none';
+    de.drop.style.display = 'none';
+    return;
+  }
+  const color = drag.valid ? '#eef4ff' : '#ff4d5e';
+  const circleD = dioCircleSvgPath(drag.x, drag.z, drag.y + 0.3, DIORAMA_VIEW.cmdRadius, 28);
+  if (!circleD) return;
+  de.casing.setAttribute('d', circleD);
+  de.circle.setAttribute('d', circleD);
+  de.circle.setAttribute('stroke', color);
+  de.circle.setAttribute('fill', drag.valid ? 'rgba(238, 244, 255, 0.07)' : 'rgba(255, 77, 94, 0.10)');
+  de.casing.style.display = '';
+  de.circle.style.display = '';
+  if (drag.valid && drag.path) {
+    de.path.setAttribute('d', dioPolylineSvgPath(drag.path));
+    de.path.setAttribute('stroke', color);
+    de.path.style.display = '';
+  } else {
+    de.path.style.display = 'none';
+  }
+  if (drag.y > 1) {
+    _dioProj.set(drag.x, drag.y + 0.3, drag.z).project(camera);
+    const x1 = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const y1 = (1 - _dioProj.y) / 2 * window.innerHeight;
+    _dioProj.set(drag.x, 0.2, drag.z).project(camera);
+    const x2 = (_dioProj.x + 1) / 2 * window.innerWidth;
+    const y2 = (1 - _dioProj.y) / 2 * window.innerHeight;
+    de.drop.setAttribute('d', `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    de.drop.style.display = '';
+  } else {
+    de.drop.style.display = 'none';
+  }
+}
 
 function buildPlainFieldArena() {
   // Plain Field is intentionally featureless — just the boundary so players
@@ -11237,15 +13520,22 @@ function buildFactoryArena() {
   cartSpots.forEach(([x, z]) => drawCart(x, z));
 
   // ===== Overhead pipework (visual only) =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f —
+  // it reads as floating clutter from the board view) and returns in classic.
   for (const z of [-65, -28, 28, 65]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 260, 12), pipe);
     p.rotation.z = Math.PI / 2;
     p.position.set(0, 16, z);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
+  // NOTE: these four have no rotation, so they stand VERTICALLY (y -89..121)
+  // — almost certainly a missing `p.rotation.x = Math.PI / 2` (pre-existing;
+  // left as-is in classic, but they are exactly the towers cmdHide removes).
   for (const x of [-80, -30, 30, 80]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 210, 12), pipe);
     p.position.set(x, 16, 0);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
 
@@ -11253,6 +13543,7 @@ function buildFactoryArena() {
   for (const x of [-110, -75, -40, -10, 20, 55, 90]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 210), beam);
     b.position.set(x, CEIL_Y - 3, 0);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
 
@@ -11261,6 +13552,7 @@ function buildFactoryArena() {
     for (const z of [-65, 0, 65]) {
       const l = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.4, 1.6), lightMat);
       l.position.set(x, CEIL_Y - 4.5, z);
+      l.userData.cmdHide = true;
       scene.add(l); arenaDecor.push(l);
     }
   }
@@ -11992,22 +14284,28 @@ function buildLobbyArena() {
   scene.add(sculpRing); arenaDecor.push(sculpRing);
 
   // ===== Ceiling lights and beams =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f)
+  // and returns in classic. Hide via mesh.visible only — the beam/strip
+  // materials (`wall`, `blueGlow`) are shared with other props.
   for (const x of [-80, -40, 0, 40, 80]) {
     for (const z of [-80, -40, 0, 40, 80]) {
       const light = new THREE.Mesh(new THREE.BoxGeometry(4, 0.18, 4), ceilingLight);
       light.position.set(x, 23.6, z);
+      light.userData.cmdHide = true;
       scene.add(light); arenaDecor.push(light);
     }
   }
   for (const z of [-80, -40, 0, 40, 80]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(220, 0.4, 1.2), wall);
     b.position.set(0, 23.8, z);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
   // Long blue accent strips along the ceiling
   for (const z of [-60, -20, 20, 60]) {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(220, 0.1, 0.3), blueGlow);
     strip.position.set(0, 23.5, z);
+    strip.userData.cmdHide = true;
     scene.add(strip); arenaDecor.push(strip);
   }
 }
@@ -12449,10 +14747,13 @@ function buildStationArena() {
   drawTotem(25, -70);
 
   // ===== Overhead pipework (decor only) =====
+  // cmdHide: the whole airborne layer (pipes, trusses, lamp banks, hanging
+  // clock) vanishes in COMMAND MODE (owner 2.1f) and returns in classic.
   for (const z of [-100, -55, -15, 15, 55, 100]) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2 * HALF_X, 12), pipe);
     p.rotation.z = Math.PI / 2;
     p.position.set(0, 20, z);
+    p.userData.cmdHide = true;
     scene.add(p); arenaDecor.push(p);
   }
 
@@ -12460,6 +14761,7 @@ function buildStationArena() {
   for (const x of [-115, -75, -35, 0, 35, 75, 115]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 2 * HALF_Z), beam);
     b.position.set(x, CEIL_Y - 3.5, 0);
+    b.userData.cmdHide = true;
     scene.add(b); arenaDecor.push(b);
   }
 
@@ -12468,6 +14770,7 @@ function buildStationArena() {
     for (const z of [-110, -70, -35, 0, 35, 70, 110]) {
       const l = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.5, 2.2), lampMat);
       l.position.set(x, CEIL_Y - 5.5, z);
+      l.userData.cmdHide = true;
       scene.add(l); arenaDecor.push(l);
     }
   }
@@ -12476,13 +14779,16 @@ function buildStationArena() {
   const clockBack = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 24), beam);
   clockBack.rotation.x = Math.PI / 2;
   clockBack.position.set(0, 22, 0);
+  clockBack.userData.cmdHide = true;
   scene.add(clockBack); arenaDecor.push(clockBack);
   const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.3, 24), lampMat);
   clockFace.rotation.x = Math.PI / 2;
   clockFace.position.set(0, 22, 0.3);
+  clockFace.userData.cmdHide = true;
   scene.add(clockFace); arenaDecor.push(clockFace);
   const clockHanger = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), beam);
   clockHanger.position.set(0, 25.5, 0);
+  clockHanger.userData.cmdHide = true;
   scene.add(clockHanger); arenaDecor.push(clockHanger);
 }
 
@@ -12587,7 +14893,11 @@ function buildAirportArena() {
   // "invisible wall". With 0, only units below the top collide with the side.
   const plateauBody = addBlockingBox({ x: 0, y: (PLATEAU_Y - 0.3) / 2, z: 0, sx: 273.6, sy: PLATEAU_Y - 0.3, sz: 79.6, material: steelMat.clone(), topBuffer: 0 });
   registerWallFade(plateauBody, { minX: -136.8, maxX: 136.8, minY: 0, maxY: PLATEAU_Y, minZ: -39.8, maxZ: 39.8 });
-  addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: tileMat, thickness: 0.6 });
+  // The plateau deck wears its OWN slate-grey tile (owner 2.1g, universal —
+  // classic AND command): sharing the ground's near-white tileMat made the
+  // two height levels indistinguishable at a glance.
+  const plateauTile = new THREE.MeshStandardMaterial({ color: 0xc2ccd8, roughness: 0.4, metalness: 0.12 });
+  addPlatform({ minX: -137, maxX: 137, minZ: -40, maxZ: 40, top: PLATEAU_Y, material: plateauTile, thickness: 0.6 });
   // Yellow edge stripes so the height change reads at a glance.
   for (const ez of [-39.2, 39.2]) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(272, 0.15, 1.2), signYellow);
@@ -12684,8 +14994,10 @@ function buildAirportArena() {
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz - 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     addBlockingBox({ x: 0, y: PLATEAU_Y + 5, z: gz + 6.5, sx: 5, sy: 10, sz: 5, material: gateMat });
     // Crossbar fades when the camera closes in (same rule as the edge walls)
-    // so overhead furniture never blanks the plateau fight.
+    // so overhead furniture never blanks the plateau fight. cmdHide: gone
+    // entirely in COMMAND MODE (owner 2.1f) — the collidable posts stay.
     const bar = addBlockingBox({ x: 0, y: PLATEAU_Y + 10.8, z: gz, sx: 5, sy: 1.6, sz: 18, material: signBlue.clone(), decorOnly: true });
+    bar.userData.cmdHide = true;
     registerWallFade(bar, {
       minX: -2.5, maxX: 2.5,
       minY: PLATEAU_Y + 10, maxY: PLATEAU_Y + 11.6,
@@ -12765,9 +15077,11 @@ function buildAirportArena() {
       top.position.set(dx, PLATEAU_Y + 8.1, dz);
       scene.add(top); arenaDecor.push(top);
       // Hanging airline sign above + queue-barrier posts on the concourse side
-      // make the islands read as check-in counters.
+      // make the islands read as check-in counters. cmdHide: the hanging sign
+      // vanishes in COMMAND MODE (owner 2.1f); the desks stay.
       const hang = new THREE.Mesh(new THREE.BoxGeometry(12, 2.4, 0.6), signBlue.clone());
       hang.position.set(dx, PLATEAU_Y + 11.5, dz);
+      hang.userData.cmdHide = true;
       scene.add(hang); arenaDecor.push(hang);
       registerWallFade(hang, {
         minX: dx - 6, maxX: dx + 6,
@@ -12878,9 +15192,12 @@ function buildAirportArena() {
   // Occlusion-fade like the Streets bridge: the grey beam AND its blue sign
   // panels go translucent whenever they sit between the camera and the
   // focused unit or a living enemy — never just from camera proximity.
+  // cmdHide: gantry beams AND their sign panels vanish in COMMAND MODE
+  // (owner 2.1f) and return in classic.
   for (const gx of [-40, 40]) {
     const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 150), mullionMat.clone());
     beam.position.set(gx, 14.5, 0);
+    beam.userData.cmdHide = true;
     scene.add(beam); arenaDecor.push(beam);
     registerWallFade(beam, {
       minX: gx - 0.75, maxX: gx + 0.75,
@@ -12891,6 +15208,7 @@ function buildAirportArena() {
     for (const sz of [-55, 0, 55]) {
       const panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 11), signBlue.clone());
       panel.position.set(gx, 12, sz);
+      panel.userData.cmdHide = true;
       scene.add(panel); arenaDecor.push(panel);
       registerWallFade(panel, {
         minX: gx - 0.2, maxX: gx + 0.2,
@@ -13279,10 +15597,13 @@ function buildFlashpointArena() {
   // Pushed 3× their previous height (y ≈ 33-35) — well above any mech jump
   // apex (~8 m) and outside the player camera's normal field of view, so
   // the pipes/ducts/light bars no longer intrude on the player's sight. =====
+  // cmdHide: the whole airborne layer vanishes in COMMAND MODE (owner 2.1f)
+  // and returns in classic.
   // Long ceiling ducts spanning the hall.
   for (const dz of [-40, 0, 40]) {
     const duct = new THREE.Mesh(new THREE.BoxGeometry(200, 1.0, 1.6), ductMat);
     duct.position.set(0, 34.5, dz);
+    duct.userData.cmdHide = true;
     scene.add(duct); arenaDecor.push(duct);
   }
   // Copper exposed pipes along one ceiling axis.
@@ -13290,6 +15611,7 @@ function buildFlashpointArena() {
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 150, 10), pipeMat);
     pipe.rotation.x = Math.PI / 2;
     pipe.position.set(px, 33.9, 0);
+    pipe.userData.cmdHide = true;
     scene.add(pipe); arenaDecor.push(pipe);
   }
   // Fluorescent strip lights (warm-amber emissive bars).
@@ -13300,6 +15622,7 @@ function buildFlashpointArena() {
   lightSpots.forEach(([lx, lz]) => {
     const light = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.22, 0.9), lampGlow);
     light.position.set(lx, 35.25, lz);
+    light.userData.cmdHide = true;
     scene.add(light); arenaDecor.push(light);
   });
 
@@ -13432,22 +15755,32 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickSniperCharge(m, now, (m === state.player && !state.spectatorActive) ? playerSprintHeld : false);
+        tickSniperCharge(m, now,
+          (m === state.player && !state.spectatorActive && !dioramaActive()) ? playerSprintHeld : false);
       });
-      if (state.spectatorActive) {
-        // Spectator: a BOT drives the player's slot with the same driver and
-        // LoS-aware target pick as every other bot. Combat inputs are inert —
-        // clear the one-shot taps so they can't leak into the next match.
+      // COMMAND MODE: the diorama is a strategic layer — a bot drives the
+      // player's slot exactly like spectator mode, with the force-lock and
+      // move-order overrides on team A. (The Range keeps direct control.)
+      const cmdMode = dioramaActive() && state.mapKey !== 'range';
+      if (cmdMode) dioramaCommandTick();
+      if (state.spectatorActive || cmdMode) {
+        // A BOT drives the player's slot with the same driver and LoS-aware
+        // target pick as every other bot. Combat inputs are inert — clear
+        // the one-shot taps so they can't leak into the next match.
         input.shootTap = false;
         input.stepTap = false;
         input.jump = false;
-        runBotAIForMech(state.player, pickBotTargetOf(state.player), now);
+        runBotAIForMech(state.player,
+          cmdMode ? commandTargetOf(state.player) : pickBotTargetOf(state.player), now);
+        if (cmdMode) applyMoveOrder(state.player, now);
       } else {
         updatePlayer(now);
       }
       if (state.mode === '2v2') {
         runBotAIForMech(state.enemy, pickBotTargetOf(state.enemy), now);
-        runBotAIForMech(state.ally, pickBotTargetOf(state.ally), now);
+        runBotAIForMech(state.ally,
+          cmdMode ? commandTargetOf(state.ally) : pickBotTargetOf(state.ally), now);
+        if (cmdMode) applyMoveOrder(state.ally, now);
         runBotAIForMech(state.enemy2, pickBotTargetOf(state.enemy2), now);
       } else if (state.mapKey !== 'range') {
         // Range dummies have no AI — tickRange moves the sliders instead.
@@ -13480,6 +15813,7 @@ function animate() {
       updateMechXRayVisibility();
       updateWallFade();
       updateHud();
+      updateDioramaHud();
 
       // Win condition. Trio: dead units are replaced from their roster
       // first; a team is out only when every roster on it is spent.
@@ -13503,7 +15837,8 @@ function animate() {
     // Drive 3D character models (idle/walk/sprint/dodge/fire) + gun attach —
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMechAnimations(dt, now);
-    renderer.render(scene, camera);
+    if (dioramaActive()) renderDiorama();
+    else renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);
   }
