@@ -3835,6 +3835,14 @@ function orientChargedBeamVisual(g, tanY, ox, oy, oz, dirX, dirZ, length) {
   g.position.set(ox + dirX * length / 2, oy + tanY * length / 2, oz + dirZ * length / 2);
 }
 
+// True while the PLAYER's slot is bot-driven — spectator takeover or command
+// mode (the Shooting Range never hands the slot to a bot). The same routing
+// rule the frame loop applies (runBotAIForMech instead of updatePlayer), so
+// every "is this the human?" branch downstream agrees with who is driving.
+function playerIsBotDriven() {
+  return state.spectatorActive || (dioramaActive() && state.mapKey !== 'range');
+}
+
 function updateChargedBeams(now, dt) {
   for (const m of getAllFighters()) {
     if (!m) continue;
@@ -3848,7 +3856,12 @@ function updateChargedBeams(now, dt) {
     // player drives a twin-axis turret: joystick x = horizontal sweep, y = pitch. ---
     const maxStep = KEI_BEAM_SWEEP_RATE * dt;
     const curAngle = Math.atan2(st.chargedBeamDirZ, st.chargedBeamDirX);
-    if (m === state.player) {
+    // Human turret only while a human actually drives the player; in command
+    // or spectator mode the player's Railgun is a bot and its channel must
+    // auto-aim like every other bot's (owner report 2026-09-10: the beam sat
+    // frozen for the whole channel). Mirrors shared tickChargedBeams, whose
+    // botSet carries command-mode slots too.
+    if (m === state.player && !playerIsBotDriven()) {
       if (input.boostHeld || input.sprintLocked) { endChargedBeam(m, now); continue; } // sprint cancels
       if (Math.abs(input.x) > KEI_BEAM_AIM_DEADZONE) {
         const newAngle = curAngle + input.x * maxStep;   // horizontal sweep
@@ -3860,7 +3873,12 @@ function updateChargedBeams(now, dt) {
       }
     } else {
       let targetAngle = curAngle;
-      const tgt = pickClosestEnemyOf(m) ?? state.player;
+      // Aligned with shared tickChargedBeams: steer toward the bot's CURRENT
+      // target — botTargetRef mirrors the server's per-tick targetId (force
+      // lock, then the LoS-aware pick) — falling back to the closest live
+      // enemy exactly as the server re-picks when the target is gone.
+      let tgt = m.state.botTargetRef;
+      if (!tgt || tgt.state.hp <= 0) tgt = pickClosestEnemyOf(m);
       if (tgt && tgt.state.hp > 0) {
         const ax = tgt.root.position.x - m.root.position.x;
         const az = tgt.root.position.z - m.root.position.z;
@@ -16562,7 +16580,7 @@ function animate() {
         // must not cancel its sniper charge.
         tickAmmo(m, now);
         tickSniperCharge(m, now,
-          (m === state.player && !state.spectatorActive && !dioramaActive()) ? playerSprintHeld : false);
+          (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);
       });
       // COMMAND MODE: the diorama is a strategic layer — a bot drives the
       // player's slot exactly like spectator mode, with the force-lock and

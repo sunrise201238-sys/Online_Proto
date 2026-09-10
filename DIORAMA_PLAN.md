@@ -859,3 +859,20 @@ sniperChargeTarget, chargedBeamUntil and a scheduled anti-glint dodge
 already covered them online. Reproduced then verified with a 40 ms
 position sampler (pre-fix max 1.47 u/sample during locked frames; post-fix
 0.000 across 38 locked pairs, travel intact); gesture e2e 12/12.
+
+### Offline parity: the bot-driven player's Railgun channel steers (owner report, 2026-09-10)
+
+In command (and spectator) mode the player's Railgun is a bot, but the
+offline sweep-channel steering branched on `m === state.player` and treated
+it as a human turret — no joystick input, so the channel sat frozen on its
+opening direction for the whole second while the classic-mode enemy bot's
+channel tracked its target. Online never had the gap: the server's `driven`
+set (bots + command slots) feeds `tickChargedBeams`' bot auto-aim branch.
+Fix: a single `playerIsBotDriven()` predicate (spectator or command mode,
+never on the Shooting Range) routes both the channel steering and the
+sniper-charge sprint-cancel; and the offline bot branch now aims at the
+bot's CURRENT target (`botTargetRef` — force lock, then the LoS-aware pick,
+falling back to the closest live enemy) exactly like the server's per-tick
+`targetId`. Verified with a channel-angle sampler: pre-fix 0.00° turn across
+three channels while the target drifted ~2°; post-fix the beam turns with
+the target (rate-capped ~10°/s), no page errors.
