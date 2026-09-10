@@ -3062,11 +3062,15 @@ function updateBeamDamage(now) {
     }
     // Real cylinder: the beam's drawn 3D line vs each enemy's capsule (1.6
     // vertical free band + 1.6 radius — same body model the projectiles use).
+    const rrN = b.radius + 1.6;
+    // Hit segment ends rrN short of the wall (mirrors shared tickBeams,
+    // 2026-09-10): the end cap no longer reaches a target behind cover; a
+    // target pressed against the wall's front is still within rrN of the end.
+    const hitLen = Math.max(0, b.length - rrN);
     const beamLine = new THREE.Line3(
       new THREE.Vector3(b.ox, b.oy, b.oz),
-      new THREE.Vector3(b.ox + b.dx * b.length, b.oy + b.dy * b.length, b.oz + b.dz * b.length)
+      new THREE.Vector3(b.ox + b.dx * hitLen, b.oy + b.dy * hitLen, b.oz + b.dz * hitLen)
     );
-    const rrN = b.radius + 1.6;
     for (const m of fighters) {
       if (!m || m === b.owner) continue;
       const st = m.state;
@@ -3310,11 +3314,14 @@ function updateChargedBeams(now, dt) {
     // Real cylinder: tilt the hit line to the steered pitch (same as the drawn
     // beam) and test each enemy's capsule against it.
     const tanY = Math.tan(st.chargedBeamPitch);
+    const rrC = radius + 1.6;
+    // Hit segment ends rrC short of the wall (mirrors shared tickChargedBeams,
+    // 2026-09-10) so the channel cannot register through cover.
+    const hitLen = Math.max(0, length - rrC);
     const cBeamLine = new THREE.Line3(
       new THREE.Vector3(ox, oy, oz),
-      new THREE.Vector3(ox + st.chargedBeamDirX * length, oy + tanY * length, oz + st.chargedBeamDirZ * length)
+      new THREE.Vector3(ox + st.chargedBeamDirX * hitLen, oy + tanY * hitLen, oz + st.chargedBeamDirZ * hitLen)
     );
-    const rrC = radius + 1.6;
     // --- One-hit damage ---
     if (!m.chargedBeamHitIds) m.chargedBeamHitIds = [];
     for (const t of getAllFighters()) {

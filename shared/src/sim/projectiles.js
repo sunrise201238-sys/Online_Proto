@@ -575,9 +575,17 @@ export function tickBeams(matchState, now, damageScaler = null) {
     // Real cylinder hit volume: the beam's drawn 3D line vs each enemy's capsule
     // (HIT_HALF_HEIGHT vertical free band + HIT_RADIUS_NORMAL radius — the same
     // body model projectiles use). Replaces the old height-agnostic XZ "wall".
-    const bA = { x: b.ox, y: b.oy, z: b.oz };
-    const bB = { x: b.ox + b.dx * b.length, y: b.oy + b.dy * b.length, z: b.oz + b.dz * b.length };
     const rrN = b.radius + HIT_RADIUS_NORMAL;
+    // The drawn line ends ON the wall, but the hit test is a capsule around the
+    // segment: an end cap that sits on the wall face reaches rrN past it and
+    // registered hits on a target standing behind cover (owner report
+    // 2026-09-10: up to 3.2 u through a wall). Pull the HIT segment back by
+    // rrN so the end cap stops flush with the face — a target pressed against
+    // the wall's front (center ≥ 1.6 in front of the face) is still within
+    // rrN of the shortened end, so nothing in front is lost. Visual unchanged.
+    const hitLen = Math.max(0, b.length - rrN);
+    const bA = { x: b.ox, y: b.oy, z: b.oz };
+    const bB = { x: b.ox + b.dx * hitLen, y: b.oy + b.dy * hitLen, z: b.oz + b.dz * hitLen };
     for (const f of fighters) {
       if (f.hp <= 0 || f.id === b.ownerId) continue;
       if (b.hitIds.includes(f.id)) continue;
@@ -720,9 +728,12 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
     // Real cylinder: tilt the hit line to the steered pitch (same as the drawn
     // beam) and test each enemy's capsule against it, not an XZ wall.
     const tanY = Math.tan(f.chargedBeamPitch);
-    const cA = { x: origin.x, y: origin.y, z: origin.z };
-    const cB = { x: origin.x + f.chargedBeamDirX * length, y: origin.y + tanY * length, z: origin.z + f.chargedBeamDirZ * length };
     const rrC = radius + HIT_RADIUS_NORMAL;
+    // Same end-cap rule as the quick beam (2026-09-10): the hit segment stops
+    // rrC short of the wall so the channel cannot register through it.
+    const hitLen = Math.max(0, length - rrC);
+    const cA = { x: origin.x, y: origin.y, z: origin.z };
+    const cB = { x: origin.x + f.chargedBeamDirX * hitLen, y: origin.y + tanY * hitLen, z: origin.z + f.chargedBeamDirZ * hitLen };
     // --- One hit per fighter ---
     if (!f.chargedBeamHitIds) f.chargedBeamHitIds = [];
     for (const t of fighters) {
