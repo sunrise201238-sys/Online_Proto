@@ -10329,9 +10329,12 @@ function updateWallFade() {
       const pr = cameraFocusMech()?.root;
       blocking = !!pr && hidesFrom(pr);
       // occludeEnemy (Streets bridge deck/rails): ALSO fade while the box
-      // hides a living enemy from the camera — you always see your target.
+      // hides ANY other living unit from the camera — you always see your
+      // target, and (owner report 2026-09-11) your ally too: in command mode
+      // the diorama looks down on the deck, and a teammate ordered under it
+      // vanished while the player's own unit and enemies faded it fine.
       if (!blocking && b.occludeEnemy) {
-        for (const en of [state.enemy, state.enemy2]) {
+        for (const en of [state.ally, state.enemy, state.enemy2]) {
           const er = en?.root;
           if (er && en.state?.hp > 0 && hidesFrom(er)) { blocking = true; break; }
         }
