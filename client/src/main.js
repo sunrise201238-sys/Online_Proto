@@ -9537,22 +9537,30 @@ function updateWallFade() {
       // sits between the camera and the FOCUSED unit (the player, or the
       // spectated ally) — walking past or fighting beside it keeps it fully
       // solid (no seeing through cover).
+      // `b.parts` (optional): test against these sub-boxes instead of `b`
+      // itself. Tilted meshes (Streets' bridge slopes and their slope-gate
+      // rails) have an AABB that also claims the open air above their low
+      // end, so the plain box reads "blocking" while you walk up the ramp;
+      // the stair-stepped parts hug the real slab.
+      const boxes = b.parts ?? [b];
+      const hidesFrom = (root) => {
+        const target = { x: root.position.x, y: root.position.y + 1.6, z: root.position.z };
+        for (const part of boxes) {
+          if (segmentHitsObstacle(camera.position, target, part)) return true;
+        }
+        return false;
+      };
       const pr = cameraFocusMech()?.root;
-      blocking = !!pr && segmentHitsObstacle(
-        camera.position,
-        { x: pr.position.x, y: pr.position.y + 1.6, z: pr.position.z },
-        b
-      );
+      blocking = !!pr && hidesFrom(pr);
       // occludeEnemy (Streets bridge deck/rails): ALSO fade while the box
-      // hides a living enemy from the camera — you always see your target.
+      // hides ANY other living unit from the camera — you always see your
+      // target, and (owner report 2026-09-11) your ally too: in command mode
+      // the diorama looks down on the deck, and a teammate ordered under it
+      // vanished while the player's own unit and enemies faded it fine.
       if (!blocking && b.occludeEnemy) {
-        for (const en of [state.enemy, state.enemy2]) {
+        for (const en of [state.ally, state.enemy, state.enemy2]) {
           const er = en?.root;
-          if (er && en.state?.hp > 0 && segmentHitsObstacle(
-            camera.position,
-            { x: er.position.x, y: er.position.y + 1.6, z: er.position.z },
-            b
-          )) { blocking = true; break; }
+          if (er && en.state?.hp > 0 && hidesFrom(er)) { blocking = true; break; }
         }
       }
     } else {
@@ -9564,13 +9572,34 @@ function updateWallFade() {
       const d = Math.hypot(camera.position.x - cx, camera.position.y - cy, camera.position.z - cz);
       blocking = d < 14;
     }
-    // Fade leader (Airport gantry signs): a mesh linked to a leader also
-    // fades whenever the leader is blocking, so attachments never stay
-    // solid while their carrier goes ghost. Leaders are registered before
-    // their followers, so this frame's leader result is already stored.
     mesh.userData.fadeBlocking = blocking;
+  }
+  // FADE GROUPS (Streets bridge): every member shares the OR of the group's
+  // blocking tests, so the deck, both slopes, the railings, the slope gates
+  // and the support pillars go transparent as one structure. Without this each
+  // piece faded on its own and the bridge came apart visually — a ghost deck
+  // still fenced by solid rails, or a faded span meeting a solid slope.
+  // Computed after every member's own test above so ordering doesn't matter
+  // (unlike fadeLeader, which relies on leaders being registered first).
+  let groupBlocking = null;
+  for (const mesh of list) {
+    const g = mesh.userData.fadeGroup;
+    if (!g) continue;
+    if (!groupBlocking) groupBlocking = new Set();
+    if (mesh.userData.fadeBlocking) groupBlocking.add(g);
+  }
+  for (const mesh of list) {
+    if (!mesh.userData.fadeBox || !mesh.material) continue;
+    let blocking = mesh.userData.fadeBlocking;
+    // Fade leader (Airport gantry signs): a mesh linked to a leader also
+    // fades whenever the leader is blocking, so attachments never stay solid
+    // while their carrier goes ghost. One-directional — the leader does not
+    // follow its followers; use fadeGroup when the link should go both ways.
     if (!blocking && mesh.userData.fadeLeader) {
       blocking = !!mesh.userData.fadeLeader.userData.fadeBlocking;
+    }
+    if (!blocking && groupBlocking && mesh.userData.fadeGroup) {
+      blocking = groupBlocking.has(mesh.userData.fadeGroup);
     }
     const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
