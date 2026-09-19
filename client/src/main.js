@@ -1398,9 +1398,9 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // Drive every live fighter's sprite pose once per render frame (both modes —
 // getAllFighters() mirrors online snapshots onto the same state.* mechs).
 // ===== Overhead HP bar (ported from the demo line 2026-08-06) =====
-// A floating hp bar above every unit's head — WHITE for the camera unit's
+// A floating hp bar above every unit's head — CYAN for the camera unit's
 // team, ORANGE for its opponents (team-relative: in spectator mode the
-// WATCHED unit's side reads white). Demo rule set:
+// WATCHED unit's side reads cyan). Demo rule set:
 // - CONSTANT ON-SCREEN size: world scale grows with the unit's view-axis
 //   DEPTH (not straight-line distance, which over-sizes edge-of-screen
 //   bars) — the bar reads the same at any range.
@@ -1415,7 +1415,7 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // so those stay readable where they overlap the bar.
 const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
 const UNIT_BAR_WORLD_W = 2.42;                      // world width at k = 1
-const UNIT_BAR_INK_ALLY = '#eaf6ff';
+const UNIT_BAR_INK_ALLY = '#92d5e6';   // soft cyan (owner 2026-09-19 — the near-white #eaf6ff read as plain white)
 const UNIT_BAR_INK_ENEMY = '#ff6a2c';
 const UNIT_BAR_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
 const UNIT_BAR_TEAM_GAP = 0.39;     // screen-fixed head clearance (scales by k)
@@ -1474,7 +1474,7 @@ const _barCamFwd = new THREE.Vector3();     // scratch: camera forward, for dept
 const _barWork = new THREE.Vector3();       // scratch: camera→unit vector
 
 function updateMechAnimations(dt, now) {
-  // Team-relative bar presentation: white/orange derive from the CAMERA
+  // Team-relative bar presentation: cyan/orange derive from the CAMERA
   // unit's team — the player normally, the WATCHED unit in spectator mode.
   const camTeam = getTeamOf(cameraFocusMech());
   camera.getWorldDirection(_barCamFwd);
@@ -6107,9 +6107,11 @@ function updateAllyArrow() {
   const allyGlintBeam = active && !!mate.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  // Hidden while OVERHEAD_TEAM_CHEVRONS is off (owner 2026-09-19) — it sat on
+  // the teammate's overhead HP bar; the edge arrow below still points off-frame.
   const arrow = state.allyArrow;
   if (arrow) {
-    if (!active) {
+    if (!active || !OVERHEAD_TEAM_CHEVRONS) {
       arrow.visible = false;
     } else {
       // The tracked teammate changes with the spectate slot — reparent to
@@ -6208,7 +6210,7 @@ function getUnlockedEnemy(viewer = state.player) {
 //   2. state.enemyEdgeArrow — a screen-edge arrow pointing at it when off-frame.
 const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
-const OVERHEAD_ENEMY_CHEVRON = false;   // the unlocked enemy's floating triangle (see updateEnemyArrow)
+const OVERHEAD_TEAM_CHEVRONS = false;   // the floating triangles over the teammate and the unlocked enemy (owner 2026-09-19: both sat on the overhead HP bars); the screen-edge arrows stay
 function updateEnemyArrow() {
   // Diorama POC: parked for the same reason as updateAllyArrow.
   if (dioramaActive()) {
@@ -6228,12 +6230,12 @@ function updateEnemyArrow() {
   const foeGlintBeam = active && !!foe.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
-  // Hidden while OVERHEAD_ENEMY_CHEVRON is off (owner 2026-09-19): in 2v2 it
+  // Hidden while OVERHEAD_TEAM_CHEVRONS is off (owner 2026-09-19): in 2v2 it
   // sat right on the unlocked enemy's overhead HP bar. The screen-edge arrow
-  // below (off-frame case) and the teammate's green chevron are unchanged.
+  // below (off-frame case) is unchanged.
   const arrow = state.enemyArrow;
   if (arrow) {
-    if (!active || !OVERHEAD_ENEMY_CHEVRON) {
+    if (!active || !OVERHEAD_TEAM_CHEVRONS) {
       arrow.visible = false;
     } else {
       // The lock can be switched mid-match, so ride whichever enemy is unlocked.
