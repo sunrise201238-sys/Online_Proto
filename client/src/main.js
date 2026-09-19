@@ -6928,6 +6928,11 @@ function startMatch() {
     }
   }
   buildArenaForMap(state.mapKey);
+  // Build the nav grid HERE rather than lazily on the first bot Maze plan
+  // (2026-08-14): it is a single-digit-to-few-hundred-ms job depending on the
+  // map, and paying it mid-fight is a visible hitch. During the match-start
+  // transition it is invisible.
+  offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
   const now = performance.now();
   getAllFighters().forEach((m) => {
     m.state.lastFireAt = now;
@@ -9453,6 +9458,12 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.state.team = old.state.team;
   const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
+  // Body teleport only — sync the visual root NOW. The bot AI reads
+  // root.position and the frame sync runs after it; without this the fresh
+  // bot's first tick plans from wherever the prebuilt mech's root was left
+  // (the origin), failing its Maze entry plan exactly like the match-start
+  // case in startMatch.
+  fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
   fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   if (slotName === 'enemy' || slotName === 'enemy2') fresh.state.nextFireAt = now + 650;
