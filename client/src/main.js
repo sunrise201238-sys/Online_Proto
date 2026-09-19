@@ -2002,6 +2002,56 @@ const BULLET_TRAIL_COLOR_DARK = 0x3a3f4a;
 const BULLET_TRAIL_DARK_MAPS = new Set(['lobby', 'airport', 'range']);
 const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLET_TRAIL_COLOR_DARK : BULLET_TRAIL_COLOR_LIGHT);
 const BULLET_TRAIL_OPACITY = 0.55;
+// Trail THICKNESS (user 2026-08-09). A THREE.Line is always 1 device pixel —
+// WebGL ignores LineBasicMaterial.linewidth — so a streak that reads thicker
+// has to be real geometry. Only a slow, low-volume gun gets it; the others
+// keep the cheap Line, which matters because the 100 ms MG fade
+// above exists precisely because trail COUNT once cost frames at MG fire-rate.
+// Width is specified in SCREEN PIXELS and held constant along the whole streak,
+// exactly like a real object: it thins with range. Width is a WORLD half-width,
+// held constant along the streak, so a distant shot reads thinner than a close
+// one (user 2026-08-09, choosing this over the constant-pixel version shipped in
+// cb8fd49, which never thinned no matter how far away the shooter was).
+//
+// The cost, accepted knowingly: a streak whose two ends sit at different depths
+// foreshortens, so it tapers. That is fine for M14 / SVD, whose streak is 60u
+// (1.5-2.5x depth ratio at normal range), and severe for PSG1, whose streak is
+// speed * fade = 2500u and therefore spans a 20-60x ratio. Shortening the
+// streak is what would fix that, and the user has explicitly kept the lengths
+// as they are.
+//
+// Still a camera-facing ribbon rather than a tube: a flat quad aimed at the eye
+// has no silhouette of its own to shade, and it re-aims every frame (dying
+// trails included) via rebillboardBulletTrails. Normal blending, not the Railgun
+// beam's additive glow, because the trail must be able to render DARK on
+// bright-ground maps and additive can only ever brighten.
+//
+// Keyed by unit NAME for the same reason the fade lookup takes a whole unit:
+// offline hands in the client UNIT_DATA entry, online a wire-deserialised
+// shared one, and `name` is the only field both shapes carry.
+// Doubled back from 0.03 / 0.05 once the collapsed-tip and taper bugs were out
+// of the way (user 2026-08-09). M14 / SVD now sit at the same visual thickness
+// as the very first cylinder attempt (0b50f25 used radius 0.06); PSG1 is a
+// little under its 0.12.
+// BA line (owner 2026-09-19): ported from the demo line, where the two
+// marksman rifles and PSG1 carry it. Here only Fubuki's Ruger Mini-14 — the BA
+// rifle — gets the ribbon; Aru keeps the plain Line unless asked otherwise.
+const BULLET_TRAIL_RADIUS_RIFLE = 0.06;    // Fubuki (demo line: M14 / SVD)
+const BULLET_TRAIL_THICK_BY_NAME = new Map([
+  [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE]     // Fubuki / Ruger Mini-14
+].filter(([name]) => name));
+// 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
+const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// RAW view-space depth of a world point: positive in front of the camera,
+// negative behind. Deliberately unclamped — billboardBulletTrail needs the true
+// sign so it can clip the segment (clamping here is what produced the collapsed
+// tip: width was computed at the clamp while the vertex stayed 2000+ units
+// behind the eye).
+const trailViewDepth = (x, y, z) =>
+  -_trailTmp.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z;
+const _trailDir = new THREE.Vector3();
+const _trailPerp = new THREE.Vector3();
+const _trailTmp = new THREE.Vector3();
 
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
@@ -2011,7 +2061,35 @@ function bulletTrailFadeMsFor(unit) {
   return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
 }
 
-function buildBulletTrail() {
+function buildBulletTrail(radius = 0) {
+  if (radius > 0) {
+    // Ribbon: 4 corners, 2 triangles, rewritten in place every frame. The
+    // corners are WORLD-space and the mesh keeps an identity transform, so
+    // there is nothing to position or rotate — billboardBulletTrail does it all.
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+    geometry.setIndex([0, 1, 2, 2, 1, 3]);
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: bulletTrailColor(),
+        transparent: true,
+        opacity: BULLET_TRAIL_OPACITY,
+        fog: false,
+        // depthWrite left at the default true, matching the LineBasicMaterial
+        // the other nine weapons still use — the depthWrite:false I had added
+        // was the only optional shading change here and it is reverted (user
+        // 2026-08-09). DoubleSide stays: a flat quad is invisible edge-on from
+        // its back face without it.
+        side: THREE.DoubleSide
+      })
+    );
+    mesh.userData.trailRadius = radius;     // also the flag that this is a ribbon
+    mesh.userData.ends = null;              // {tx..hz}, kept so it can re-aim while fading
+    mesh.frustumCulled = false;
+    mesh.visible = false;                   // until the first ends update gives it a length
+    return mesh;
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
   const material = new THREE.LineBasicMaterial({
@@ -2028,11 +2106,77 @@ function buildBulletTrail() {
 function disposeBulletTrail(trail) {
   if (!trail) return;
   if (trail.parent) trail.parent.remove(trail);
-  if (trail.geometry) trail.geometry.dispose();
+  if (trail.geometry) trail.geometry.dispose();   // every trail owns its geometry
   if (trail.material) trail.material.dispose();
 }
 
+// Rebuild a ribbon trail's four corners. One world half-width for the whole
+// streak, so it thins with range like a real object — and, unavoidably, tapers
+// on screen whenever its two ends sit at different depths. Runs every frame the
+// camera can move, which includes while the trail is fading: its endpoints are
+// frozen, but the view of them is not, and a flat quad left un-aimed would
+// turn edge-on and vanish.
+function billboardBulletTrail(trail) {
+  const e = trail.userData.ends;
+  if (!e) return;
+  const tx = e.tx, ty = e.ty, tz = e.tz;
+  const hx = e.hx, hy = e.hy, hz = e.hz;
+  // Deliberately NOT clipped to the near plane. With a constant world width the
+  // GPU's own homogeneous clipping handles an endpoint behind the eye correctly,
+  // and pulling that vertex forward to the near plane would be actively wrong:
+  // a fixed world width at depth 0.5 projects to ~220 px. (The constant-pixel
+  // version needed that clip for the opposite reason — there the width was
+  // derived from depth, so a behind-camera vertex collapsed to nothing.)
+  // Only bail when the whole streak is behind the camera.
+  if (trailViewDepth(tx, ty, tz) < 0 && trailViewDepth(hx, hy, hz) < 0) {
+    trail.visible = false;
+    return;
+  }
+  _trailDir.set(hx - tx, hy - ty, hz - tz);
+  const len = _trailDir.length();
+  if (len < 1e-6) { trail.visible = false; return; }
+  _trailDir.divideScalar(len);
+  // Sideways-on-screen = perpendicular to both the streak and the view ray.
+  // Degenerates when firing straight at/away from the camera; fall back to the
+  // camera's own right vector, which can never be parallel to the view ray.
+  _trailTmp.set(hx, hy, hz).sub(camera.position);
+  _trailPerp.crossVectors(_trailDir, _trailTmp);
+  if (_trailPerp.lengthSq() < 1e-12) _trailPerp.setFromMatrixColumn(camera.matrixWorld, 0);
+  _trailPerp.normalize();
+  const wT = trail.userData.trailRadius;   // one width for both ends
+  const wH = wT;
+  const p = trail.geometry.attributes.position.array;
+  const nx = _trailPerp.x, ny = _trailPerp.y, nz = _trailPerp.z;
+  p[0] = tx - nx * wT; p[1] = ty - ny * wT; p[2] = tz - nz * wT;
+  p[3] = tx + nx * wT; p[4] = ty + ny * wT; p[5] = tz + nz * wT;
+  p[6] = hx - nx * wH; p[7] = hy - ny * wH; p[8] = hz - nz * wH;
+  p[9] = hx + nx * wH; p[10] = hy + ny * wH; p[11] = hz + nz * wH;
+  trail.geometry.attributes.position.needsUpdate = true;
+  trail.visible = true;
+}
+
+// Re-aim every ribbon trail — live and fading, offline and online — using the
+// camera as it stands right now. Called from the render loop after
+// updateCamera(); see the note there. Plain Line trails have no orientation
+// and are skipped.
+function rebillboardBulletTrails() {
+  for (const p of state.projectiles) {
+    if (p.trail?.userData?.trailRadius) billboardBulletTrail(p.trail);
+  }
+  for (const entry of (state.online?.projectileMeshes?.values?.() ?? [])) {
+    if (entry.trail?.userData?.trailRadius) billboardBulletTrail(entry.trail);
+  }
+  for (const dt of (state.dyingBulletTrails || [])) {
+    if (dt.trail?.userData?.trailRadius) billboardBulletTrail(dt.trail);
+  }
+}
+
 function updateBulletTrailEnds(trail, tx, ty, tz, hx, hy, hz) {
+  if (trail.userData?.trailRadius) {
+    trail.userData.ends = { tx, ty, tz, hx, hy, hz };
+    billboardBulletTrail(trail);
+    return;
+  }
   const pos = trail.geometry.attributes.position.array;
   pos[0] = tx; pos[1] = ty; pos[2] = tz;
   pos[3] = hx; pos[4] = hy; pos[5] = hz;
@@ -2065,7 +2209,10 @@ function updateDyingBulletTrails(now) {
     }
     // Freeze the trail's geometry at its last position; just fade opacity.
     // (More faithful to how a real tracer reads — the streak dims in place,
-    // it doesn't retract.)
+    // it doesn't retract.) Ribbon trails still have to be re-aimed at the
+    // camera: the endpoints are frozen but the viewpoint is not, and a flat
+    // quad left alone would turn edge-on and disappear mid-fade.
+    if (dt.trail.userData?.trailRadius) billboardBulletTrail(dt.trail);
     dt.trail.material.opacity = dt.initialOpacity * (remaining / dt.fadeMs);
   }
 }
@@ -2255,7 +2402,7 @@ function spawnProjectiles(owner, target) {
     const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
     let trail = null;
     if (trailFadeMs > 0) {
-      trail = buildBulletTrail();
+      trail = buildBulletTrail(bulletTrailRadiusFor(owner.unit));
       scene.add(trail);
     }
 
@@ -2636,6 +2783,19 @@ function surfaceImpactT(prevPos, nextPos) {
 // frame and its 1 s fade left a streak stabbing through cover).
 function clampTrailHead(trail, x, y, z) {
   if (!trail) return;
+  // A ribbon trail is 4 corners derived from userData.ends, NOT the 2-vertex
+  // tail/head pair a THREE.Line uses. Writing p[3..5] there would move a TAIL
+  // corner and leave the head at the overshot post-step position — which is how
+  // a PSG1 streak ended up drawn straight through Factory's crates: 40 u of
+  // overshoot per tick against a 6 u crate, then frozen for its 1 s fade. Move
+  // the stored endpoint and re-aim instead.
+  if (trail.userData?.trailRadius) {
+    const e = trail.userData.ends;
+    if (!e) return;
+    e.hx = x; e.hy = y; e.hz = z;
+    billboardBulletTrail(trail);
+    return;
+  }
   const pos = trail.geometry.attributes.position.array;
   pos[3] = x; pos[4] = y; pos[5] = z;
   trail.geometry.attributes.position.needsUpdate = true;
@@ -6048,6 +6208,7 @@ function getUnlockedEnemy(viewer = state.player) {
 //   2. state.enemyEdgeArrow — a screen-edge arrow pointing at it when off-frame.
 const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
+const OVERHEAD_ENEMY_CHEVRON = false;   // the unlocked enemy's floating triangle (see updateEnemyArrow)
 function updateEnemyArrow() {
   // Diorama POC: parked for the same reason as updateAllyArrow.
   if (dioramaActive()) {
@@ -6067,9 +6228,12 @@ function updateEnemyArrow() {
   const foeGlintBeam = active && !!foe.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
+  // Hidden while OVERHEAD_ENEMY_CHEVRON is off (owner 2026-09-19): in 2v2 it
+  // sat right on the unlocked enemy's overhead HP bar. The screen-edge arrow
+  // below (off-frame case) and the teammate's green chevron are unchanged.
   const arrow = state.enemyArrow;
   if (arrow) {
-    if (!active) {
+    if (!active || !OVERHEAD_ENEMY_CHEVRON) {
       arrow.visible = false;
     } else {
       // The lock can be switched mid-match, so ride whichever enemy is unlocked.
@@ -7053,7 +7217,7 @@ function syncOnlineProjectiles(snap) {
       const trailFadeMs = bulletTrailFadeMsFor(ownerUnit);
       let trail = null;
       if (trailFadeMs > 0) {
-        trail = buildBulletTrail();
+        trail = buildBulletTrail(bulletTrailRadiusFor(ownerUnit));
         scene.add(trail);
       }
       entry = {
@@ -8403,6 +8567,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   });
   updateVfx(dt);
   updateCamera();
+  rebillboardBulletTrails();   // after the camera is final — see the offline note
   updateMechXRayVisibility();
   updateWallFade();
   updateBeamVisuals(performance.now());
@@ -15864,6 +16029,11 @@ function animate() {
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
+      // AFTER updateCamera: ribbon trails are re-aimed at the camera every
+      // frame; aiming them with last frame's camera leaves a one-frame lag
+      // that flickers while the camera settles after a shot. Re-aim once the
+      // camera is final for this frame.
+      rebillboardBulletTrails();
       updateMechXRayVisibility();
       updateWallFade();
       updateHud();

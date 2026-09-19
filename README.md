@@ -222,6 +222,10 @@ Three properties the table encodes: glint duration equals the release time on **
 
 A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
 
+### Fubuki (Unit 10) — ribbon tracer
+
+Fubuki's Ruger rounds draw a **camera-facing ribbon trail** (2026-09-19, the demo line's marksman-rifle treatment): a real quad of world half-width 0.06 that re-aims at the camera every frame — live and while fading — so it reads as a thicker, smoke-like streak that thins with range like a physical object. Every other gun keeps the 1-pixel line trail (MG / rifle rounds fade in 100 ms, sniper rounds in 1 s; shotgun pellets and Aris's bolts have none). Visual only — hit detection is untouched.
+
 ## Bot logic
 
 One bot brain drives every bot — all maps, all modes, offline and online (the offline client and the server run mirrored copies of the same rules; every bot slot in 1v1 / 2v2 / Trio / spectator uses the identical body).
@@ -256,6 +260,13 @@ One bot brain drives every bot — all maps, all modes, offline and online (the 
 | **Command mode** | Tap unit → tap map = move order (hold to pick the floor) · drag from unit = move order · tap enemy = force lock · double-tap unit = clear · nothing selected: tap pinned enemy = drop your locks on it · drag ring = move the order (20 s restarts) · double-tap ring = drop move order · drag pan · pinch / wheel zoom · `Q`/`E` / right-drag / two-finger twist rotate · `V` toggle (offline) |
 
 Double-tap `K` (or the sprint button) to lock sprint. The lock releases only after the stick/keys stay **neutral for a sustained 0.18 s** — flipping direction through the joystick center (left→right) or swapping movement keys keeps the locked sprint alive; letting go still stops it almost instantly. Dodge (step) grants 0.3 s of damage immunity (i-frames) — the full duration holds even when the dodge runs into a wall (the unit stops at the wall; the animation and i-frames don't cut short).
+
+## HUD & unit displays
+
+- **Overhead HP bar** above every unit (ported 2026-08-06): white for the camera unit's team, orange for its opponents — spectate-relative, so the watched unit's side always reads white. Constant on-screen size at any distance (compensated by true view depth) and visible through cover; teammates' bars ride the head at a fixed screen gap, the **locked** enemy's bar rides just above the crosshair brackets. Hidden while the command diorama runs (its info cards carry HP and stamina).
+- **Team indicators (2v2)**: the teammate wears a green floating chevron in frame and a green screen-edge arrow when off-frame; the **unlocked enemy** gets the orange edge arrow only — its floating chevron was removed on 2026-09-19 because it sat right on top of that unit's overhead HP bar. Both edge arrows carry a glint halo while that unit is a sniper mid-charge.
+- **Corner HUD**: HP bars per team member with the Trio weapon rows underneath (the fielded weapon marked in gold). Online the bars follow the server slot with a white rim on your own — see the Online section. In spectator mode the watched unit's corner bar wears a white glow rim.
+- **Command mode** hides the joystick, the action buttons and the bottom-center stamina bar; the diorama's info cards show each unit's HP and stamina instead.
 
 ## Maps
 
