@@ -456,7 +456,7 @@ body.pseudo-fullscreen #app {
 
 /* COMMAND MODE (phase 2): direct-control inputs are hidden — every unit is
    bot-driven; the player selects and orders through the annotation layer. */
-.touch-hud.dio-cmd .joy, .touch-hud.dio-cmd .buttons { display: none; }
+.touch-hud.dio-cmd .joy, .touch-hud.dio-cmd .buttons, .touch-hud.dio-cmd .boost { display: none; }  /* .boost: the bottom stamina bar is redundant in command mode — the info cards carry each unit's gauge (owner 2026-09-19) */
 .dio-goldglow { filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9)); }
 
 /* Command-mode selection glow (2026-08-21). The old lone drop-shadow washed
