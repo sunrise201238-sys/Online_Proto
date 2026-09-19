@@ -6000,8 +6000,8 @@ function updateLocksAndReticle() {
 
 // Lazily build the screen-edge direction arrow (a DOM overlay). Kept on
 // document.body rather than the HUD so it survives HUD rebuilds; pointer-events
-// off so it never eats touches. Mint chevron + dark outline to match the
-// in-world marker.
+// off so it never eats touches. Filled in the friendly HP-bar cyan (owner
+// 2026-09-19 — same ink as the teammate's overhead bar) + dark outline.
 function ensureAllyEdgeArrow() {
   if (state.allyEdgeArrow && state.allyEdgeArrow.isConnected) return state.allyEdgeArrow;
   const el = document.createElement('div');
@@ -6017,7 +6017,7 @@ function ensureAllyEdgeArrow() {
     + 'background-position:center; background-repeat:no-repeat; background-size:contain;'
     + 'display:none;"></div>'
     + '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
-    + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#86f7c2" stroke="#0b1622" '
+    + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="' + UNIT_BAR_INK_ALLY + '" stroke="#0b1622" '
     + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   document.body.appendChild(el);
   state.allyEdgeArrow = el;
