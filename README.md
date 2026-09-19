@@ -81,8 +81,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
-| Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~250 RPM | 600 | 56 / 65 | 2 s |
-| Unit 7 — Rifle (Aris) | 8 | 12 / bolt | ~250 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
+| Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
+| Unit 7 — Rifle (Aris) | 8 | 12 / bolt | ~180 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
 | Unit 6 — Laser Sniper (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
@@ -92,17 +92,17 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 |---|---|---|---|---|
 | Hoshino / Haruka | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
 | Hina | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
-| Aris | 4.17/s | 12 / bolt | **50.0** | ~10.0 (bolt-regen limited) |
 | Atsuko | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | Marina | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
 | Asuna | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
 | Saori | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
-| Fubuki | 4.17/s | 10 | **41.7** | 33.5 |
 | Koyuki | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
+| Aris | 2.98/s (336 ms) | 12 / bolt | **35.7** | ~10.0 (bolt-regen limited) |
 | Aru | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
+| Fubuki | 2.98/s (336 ms) | 10 | **29.8** | 25.5 |
 | Kei | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Aris's burst is real for his 8-bolt spike (96 damage in ~1.7 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across six mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS.
+Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets only land point-blank, and the 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run. Aris's burst is real for his 8-bolt spike (96 damage in ~2.4 s), then collapses to the worst sustained figure in the game. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 40–55 spread across five mid-table guns is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS. The two 180 RPM rifles (Aris, Fubuki) sit under that band on purpose: their 336 ms slot trades cadence for the heaviest per-shot chunks among the autos.
 
 **Handling (stun + spread):**
 

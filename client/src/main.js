@@ -304,7 +304,7 @@ const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
@@ -426,7 +426,7 @@ const UNIT_DATA = {
     lockRange: 56,
     lockRange2v2: 65,
     projectileSpeed: 600,
-    firePerMinute: 250,        // = 240 ms cooldown
+    firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,
     horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
