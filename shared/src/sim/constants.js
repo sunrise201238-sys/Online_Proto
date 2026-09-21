@@ -15,6 +15,13 @@
 // auto-derived from RPM by the normalization loop right after this block.
 // Setting fireCooldownMs directly still works as an escape hatch — the
 // normalizer only fills it in when it's absent.
+// 2026-09-21 — SPREAD BLOOM replaces horizontal spread (HA) on EVERY unit:
+// `horizontalAngle` / `horizontalTriggerRange` no longer exist. A gun's cone
+// is its base `spreadAngle` widened per shot by `bloomPerShot` up to
+// `bloomCap`, recovering at `bloomRecoverPerSec` once `bloomRecoverDelayMs`
+// has passed since the last shot (see shared/src/sim/bloom.js). Units without
+// bloom fields keep a fixed cone. Older design notes below that mention HA
+// describe the pre-bloom state.
 export const UNIT_DATA = {
   unit1: {
     id: 'unit1',
@@ -42,9 +49,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — M4: sure-hit 160 at base, 53 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.002,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 4.5,
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -78,8 +87,6 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; 4 -> 2.5 -> 3, 2026-08-08 user tune)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -110,8 +117,6 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 50,
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -146,9 +151,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.06,
-    horizontalAngle: 0,          // HA 0.04 -> 0 (2026-07-31, moved to Marina): modern EVO3 shoots tight; sure-hit ~53
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.04,         // base SA (rad, full cone) — evo3: sure-hit 80 at base, 36 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.09,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -183,8 +190,6 @@ export const UNIT_DATA = {
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 250,
     botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -215,8 +220,6 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
@@ -252,8 +255,6 @@ export const UNIT_DATA = {
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune)
     magCapacity: 8,
     reloadMs: 1200,
@@ -293,8 +294,6 @@ export const UNIT_DATA = {
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4,
     magCapacity: 50,
     botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -325,9 +324,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — FAMAS: sure-hit 160 at base, 53 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 4,
     magCapacity: 25,
     botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -360,9 +361,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // = 333.33 ms, quantised to the 336 ms tick slot
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — M14: sure-hit 160 at base, 16 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.1,        // SA added per shot
+    bloomCap: 0.2,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -397,8 +400,6 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; 4 -> 2.5 -> 3, 2026-08-08 user tune)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -436,8 +437,6 @@ export const UNIT_DATA = {
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -471,8 +470,6 @@ export const UNIT_DATA = {
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.06,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
@@ -508,9 +505,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.7 ms cooldown — 80 ms tick slot (12.5/s), FAMAS's rung
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — P90: sure-hit 160 at base, 40 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.08,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,
@@ -555,8 +554,6 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full drum (fire cap policy)
@@ -588,9 +585,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — RPK: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.004,        // SA added per shot
+    bloomCap: 0.12,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 5,                 // 7.62 chunk — 4.5 -> 5 (2026-08-08 user tune): clean 20-shot kill at 100 HP, the heaviest auto bullet
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -625,9 +624,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown — 64 ms tick slot (15.6/s), evo3's rung
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — NEGEV: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.12,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 4,
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -661,9 +662,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // = 333.33 ms, quantised to the 336 ms tick slot
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — SVD: sure-hit 160 at base, 8 at cap (bloom 2026-09-21)
+    bloomPerShot: 0.1,        // SA added per shot
+    bloomCap: 0.4,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -680,6 +683,12 @@ for (const unit of Object.values(UNIT_DATA)) {
   if (unit.firePerMinute != null && unit.fireCooldownMs == null) {
     unit.fireCooldownMs = 60000 / unit.firePerMinute;
   }
+  // Bloom defaults (2026-09-21): a unit without bloom fields fires a fixed
+  // cone forever — bloomCap == spreadAngle means "no bloom".
+  unit.bloomPerShot = unit.bloomPerShot ?? 0;
+  unit.bloomCap = unit.bloomCap ?? unit.spreadAngle;
+  unit.bloomRecoverPerSec = unit.bloomRecoverPerSec ?? 0;
+  unit.bloomRecoverDelayMs = unit.bloomRecoverDelayMs ?? 0;
 }
 
 export const MAP_DATA = {
@@ -731,6 +740,8 @@ export const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectile
 // 6.4-tall sprite (body center ± (1.6 + 1.6) = ±3.2).
 export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_HALF_HEIGHT = 1.6;
+// Standing-target sure-hit numerator (bloom.js): sure-hit distance = SURE_HIT_WIDTH / spread.
+export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.

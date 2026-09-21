@@ -80,6 +80,7 @@ export function createFighter(id, unitKey, spawn) {
 
     // Firing.
     lastFireAt: 0,
+    bloom: 0,                 // spread bloom carried above spreadAngle (bloom.js)
     nextFireAt: 0,
     machineBurstRemaining: 0,
     strafeSign: 1,

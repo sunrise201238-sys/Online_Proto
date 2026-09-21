@@ -17,7 +17,8 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS } from './constants.js';
+import { withinSureHit } from './bloom.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -1784,6 +1785,15 @@ export function tickBot(matchState, botId, now) {
       // regular 220 ms poll, whichever comes first (the target can change).
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
+    } else if (!withinSureHit(u, me.bloom, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
+      // BLOOM GATE (owner 2026-09-21): a bot pulls the trigger only while the
+      // target sits inside its CURRENT sure-hit distance (3.2 / SA-now, see
+      // bloom.js) — the real-time distance against the bloomed cone, closed
+      // form, one division. Checked BEFORE the obstacle scan so an out-of-range
+      // poll costs nothing. Polls every tick; the burst counter is left alone
+      // so the spray resumes where it stopped once the cone has recovered.
+      // Mirrors offline main.js updateEnemy.
+      me.nextFireAt = now + TICK_RATE_MS;
     } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
       // No clear shot — hold fire and check again shortly. The origin is the
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.

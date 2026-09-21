@@ -30,7 +30,7 @@ import {
   dampHorizontal,
   faceTowards
 } from './movement.js';
-import { tickAmmo, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
+import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
 import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
 
 // One input frame, sent client→server per tick. Defaults to no-op.
@@ -284,9 +284,10 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   const arena = getArena(matchState.mapKey);
   const fighters = Object.values(matchState.fighters);
 
-  // 1. Per-fighter pre-tick (ammo, sniper charge timer).
+  // 1. Per-fighter pre-tick (ammo, spread bloom recovery, sniper charge timer).
   for (const f of fighters) {
     tickAmmo(f, now);
+    tickBloom(f, now, dt);
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null, arena.obstacles);
   }
 
