@@ -13341,7 +13341,10 @@ function buildStreetsArena() {
 // ===========================================================================
 // Shooting Range (mapKey 'range') — OFFLINE-ONLY practice mode.
 // Four lockable sign dummies on the firing line: stationary, walk-speed
-// slider, sprint-speed slider, and a RESET sign. Screens above each sign
+// slider, sprint-speed slider, and a RESET sign. The sliders run at the
+// FASTEST movement tier (walk 16, sprint 16 + 11.76 = 27.76) — fixed
+// benchmarks, deliberately NOT tied to any unit's walk speed (M4 walks 14
+// since 2026-09-21; the README hit-rate table assumes 16 / 27.8). Screens above each sign
 // accumulate grouping dots (hits yellow / misses red, plotted where the
 // shot crosses the sign plane) and total damage — shooting RESET clears
 // them. Sliders receive stun like real units. Records are session-only
@@ -13350,6 +13353,8 @@ function buildStreetsArena() {
 const RANGE_HP = 1e9;
 const RANGE_TARGET_Z = -70;
 const RANGE_TRAVEL = 10;          // slider half-travel around its lane
+const RANGE_WALK_SPEED = 16;                                  // fastest walk tier (SMGs / M1014)
+const RANGE_SPRINT_SPEED = RANGE_WALK_SPEED + BOOST_MOVE_SPEED; // 16 + 11.76 = 27.76
 
 function buildRangeArena() {
   const floorMat = new THREE.MeshStandardMaterial({ color: 0xb9c2cf, roughness: 0.9 });
@@ -13468,12 +13473,11 @@ function recordRangeDot(target, wx, wy, hit) {
 function setupRangeTargets() {
   state.rangeTargets = [];
   state.range = { recs: [], screens: [], lastDraw: 0, dirty: true };
-  const wu = UNIT_DATA.unit1;
   const defs = [
     { x: -100, speed: 0 },
-    { x: -40, speed: wu.walkSpeed, travel: 25 },                    // walk-speed slider
-    { x: 70, speed: wu.walkSpeed + wu.sprintSpeed, travel: 57 },    // sprint-speed slider (114-unit run)
-    { x: 0, z: 78, speed: 0, reset: true }                          // RESET: back wall, behind the shooter
+    { x: -40, speed: RANGE_WALK_SPEED, travel: 25 },      // walk-speed slider (16 u/s, fastest tier)
+    { x: 70, speed: RANGE_SPRINT_SPEED, travel: 57 },     // sprint-speed slider (27.76 u/s, 114-unit run)
+    { x: 0, z: 78, speed: 0, reset: true }                // RESET: back wall, behind the shooter
   ];
   for (const d of defs) {
     const t = createMech(0xffffff, UNIT_DATA.unit1);
