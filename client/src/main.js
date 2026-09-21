@@ -1659,10 +1659,14 @@ function updateMechAnimations(dt, now) {
         if (bar) bar.visible = false;
         continue;
       }
-      // Shooting Range targets are boards, not fighters: no weapon tag over
-      // them (owner 2026-09-21). Their HP bar stays.
-      if (m.state.isRangeTarget) { if (tag.visible) tag.visible = false; }
-      else if (!tag.visible) tag.visible = true;
+      // Shooting Range targets are boards, not fighters: no weapon tag and no
+      // HP bar over them (owner 2026-09-21).
+      if (m.state.isRangeTarget) {
+        if (tag.visible) tag.visible = false;
+        if (bar && bar.visible) bar.visible = false;
+        continue;
+      }
+      if (!tag.visible) tag.visible = true;
       if (bar && !bar.visible) bar.visible = true;
       // Constant on-screen size for EVERYONE. The compensation must counter
       // perspective EXACTLY, and projection divides by view-axis DEPTH — not
