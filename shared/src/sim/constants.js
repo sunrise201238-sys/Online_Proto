@@ -54,7 +54,7 @@ export const UNIT_DATA = {
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
-    damage: 4.5,
+    damage: 4,                 // 4.5 -> 4 (owner 2026-09-21)
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
@@ -151,9 +151,9 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,         // base SA (rad, full cone) — evo3: sure-hit 80 at base, 36 at cap (bloom 2026-09-21)
+    spreadAngle: 0.04,         // base SA (rad, full cone) — evo3: sure-hit 80 at base, 40 at cap (bloom 2026-09-21)
     bloomPerShot: 0.003,        // SA added per shot
-    bloomCap: 0.09,            // SA ceiling while spraying
+    bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
@@ -589,7 +589,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — RPK: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
     bloomPerShot: 0.004,        // SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverPerSec: 0.03,  // SA recovered per second (0.05 -> 0.03, owner 2026-09-21)
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 5,                 // 7.62 chunk — 4.5 -> 5 (2026-08-08 user tune): clean 20-shot kill at 100 HP, the heaviest auto bullet
     magCapacity: 100,
@@ -628,7 +628,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — NEGEV: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverPerSec: 0.03,  // SA recovered per second (0.05 -> 0.03, owner 2026-09-21)
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
     damage: 4,
     magCapacity: 100,

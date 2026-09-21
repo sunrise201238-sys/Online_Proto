@@ -98,8 +98,8 @@ test('RPK bot at its 80-unit band: an opening burst at full rate, then a full re
   const firstPause = gaps.findIndex((g) => g >= 200);
   assert.ok(firstPause === 4 || firstPause === 5, 'first pause after shot ' + (firstPause + 1));   // stop line SA 0.040 at 80 u
   for (const g of gaps.slice(0, firstPause)) assert.equal(g, 112);
-  // full recovery: 200 ms delay + 0.024 / 0.05 = ~680 ms, then the burst restarts at the base cone
-  assert.ok(gaps[firstPause] >= 640 && gaps[firstPause] <= 760, 'recovery pause ' + gaps[firstPause]);
+  // full recovery: 200 ms delay + 0.024 / 0.03 = ~1000 ms, then the burst restarts at the base cone
+  assert.ok(gaps[firstPause] >= 960 && gaps[firstPause] <= 1088, 'recovery pause ' + gaps[firstPause]);
   assert.equal(coneAtFire[firstPause + 1], 0.02);
   for (const g of gaps.slice(firstPause + 1, firstPause + 5)) assert.equal(g, 112);
 });
