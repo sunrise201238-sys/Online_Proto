@@ -6377,6 +6377,11 @@ function applyImmunityGlow(mech, immune) {
 // Lock bracket at a gun's bloom cap = this many times its base size (the old
 // 0.045-cap visual; universal for every weapon — owner 2026-09-21).
 const BLOOM_BRACKET_MAX_SCALE = 2.25;
+// Base size of the lock brackets — halved 2026-09-21 (owner call, chosen from
+// in-game samples at ×1 / ×0.75 / ×0.5). Bloom scales on top of this base;
+// the commander lock-share triangles follow it so they keep sitting just
+// outside the bracket corners.
+const LOCK_BRACKET_SIZE = 0.5;
 
 function updateLocksAndReticle() {
   const nowMs = performance.now();
@@ -6462,7 +6467,7 @@ function updateLocksAndReticle() {
   // budget is spent", never the absolute cone. The commander lock triangles
   // and the diorama markers deliberately keep their size.
   const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * bloomFraction(viewer.unit, viewer.state.bloom);
-  state.reticle.scale.setScalar(9.15 * distScale * bloomScale);
+  state.reticle.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale * bloomScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
@@ -8850,7 +8855,7 @@ function updateOnlineCommandShare(onl) {
     // renders at exactly the reticle's size at every camera distance.
     const camDist = camera.position.distanceTo(lockTarget.root.position);
     const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-    share.tris.scale.setScalar(9.15 * distScale);
+    share.tris.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale);
     share.tris.visible = true;
   } else if (share.tris) {
     share.tris.visible = false;
