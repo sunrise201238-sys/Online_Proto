@@ -30,7 +30,6 @@ import {
   effectiveSpread,
   bloomAfterShot,
   bloomAfterTime,
-  bloomFraction,
   botMayFire,
   botNoteShot,
   botClearFireRule
@@ -6389,9 +6388,15 @@ function applyImmunityGlow(mech, immune) {
   else removeImmunityAuraFromMech(mech);
 }
 
-// Lock bracket at a gun's bloom cap = this many times its base size (the old
-// 0.045-cap visual; universal for every weapon — owner 2026-09-21).
+// Lock bracket bloom visual (owner 2026-09-21, revised the same day): ONE
+// universal ratio for every weapon — the bracket grows with the ABSOLUTE
+// amount of bloom, not with the fraction of the gun's own cap, so switching
+// weapons keeps the bracket honest about how much spread is on the gun right
+// now. ×BLOOM_BRACKET_MAX_SCALE is reached at BLOOM_BRACKET_FULL_BLOOM of
+// bloom = the SVD's full cap (0.40 minus its 0.02 base); an M4 at its 0.06
+// cap therefore shows only ~×1.13, an RPK at 0.12 ~×1.33, the M14 ~×1.59.
 const BLOOM_BRACKET_MAX_SCALE = 2.25;
+const BLOOM_BRACKET_FULL_BLOOM = 0.38;
 // Base size of the lock brackets — halved 2026-09-21 (owner call, chosen from
 // in-game samples at ×1 / ×0.75 / ×0.5). Bloom scales on top of this base;
 // the commander lock-share triangles follow it so they keep sitting just
@@ -6477,11 +6482,11 @@ function updateLocksAndReticle() {
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
   // 1.5× the old 6.1 — larger canvas, same on-screen bracket size.
   // BLOOM (owner 2026-09-21): the bracket grows with the VIEWER's current
-  // bloom on a UNIVERSAL scale — ×1 at base SA, ×BLOOM_BRACKET_MAX_SCALE at the
-  // gun's own cap — so every weapon's bracket reads "how much of my bloom
-  // budget is spent", never the absolute cone. The commander lock triangles
+  // bloom on ONE universal scale — ×1 with no bloom, ×BLOOM_BRACKET_MAX_SCALE
+  // at BLOOM_BRACKET_FULL_BLOOM (the SVD's full cap) — the same amount of
+  // spread reads the same size on every weapon. The commander lock triangles
   // and the diorama markers deliberately keep their size.
-  const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * bloomFraction(viewer.unit, viewer.state.bloom);
+  const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
   state.reticle.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale * bloomScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
