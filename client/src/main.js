@@ -31,7 +31,9 @@ import {
   bloomAfterShot,
   bloomAfterTime,
   bloomFraction,
-  withinSureHit
+  botMayFire,
+  botNoteShot,
+  botClearFireRule
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -441,6 +443,7 @@ const UNIT_DATA = {
     bloomCap: 0.2,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
+    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
     damage: 10,
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -754,6 +757,7 @@ const UNIT_DATA = {
     bloomCap: 0.4,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
+    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -2054,6 +2058,8 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
       lastFireAt: 0,
       bloom: 0,               // spread bloom above spreadAngle (shared bloom.js)
       bloomTickAt: 0,         // last offline recovery step (performance.now)
+      botSuppressRemaining: 0, // bot: rounds left in a committed out-of-sure-hit suppress burst
+      botHoldDist: 0,          // bot (autos): sure-hit line frozen when a recovery hold began
       ammo: unitData.magCapacity ?? Infinity,
       reloadingUntil: 0,
       reloadTickStartAt: 0,
@@ -6236,18 +6242,20 @@ function updateEnemy(now) {
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
       s.machineBurstRemaining = 0;
+      botClearFireRule(s);
     } else if (now < state.player.state.invulnerableUntil) {
       // Target is spawn-immune — no shot can hurt it, so hold fire instead
       // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
       // regular 220 ms poll, whichever comes first (the target can change).
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
-    } else if (!withinSureHit(u, s.bloom, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
-      // BLOOM GATE (owner 2026-09-21): fire only while the target sits inside
-      // the CURRENT sure-hit distance (3.2 / SA-now, shared bloom.js) — real-
-      // time distance vs. the bloomed cone, closed form. Checked before the
-      // obstacle scan; polls every frame; the burst counter is left alone so
-      // the spray resumes once the cone has recovered. Mirrors shared ai.js.
+      botClearFireRule(s);
+    } else if (!botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
+      // BLOOM GATE (owner 2026-09-21, shared bloom.js botMayFire): inside the
+      // CURRENT sure-hit distance the bot fires freely; outside it an auto
+      // waits for a full recovery and then fires a committed suppress burst,
+      // a marksman rifle re-fires as soon as the cone is back under the line.
+      // Checked before the obstacle scan; polls every frame. Mirrors shared ai.js.
       s.nextFireAt = now + 16;
     } else if (!botShotCanLand(
       { x: e.x, y: myShotY, z: e.z },
@@ -6257,6 +6265,7 @@ function updateEnemy(now) {
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
+      botClearFireRule(s);
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
@@ -6283,6 +6292,7 @@ function updateEnemy(now) {
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
+      if (fired) botNoteShot(s);
       if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
         // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune

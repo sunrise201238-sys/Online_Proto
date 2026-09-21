@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA,
-  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit
+  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botMayFire
 } from '../src/sim/index.js';
 
 const hold = () => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; return i; };
@@ -73,24 +73,84 @@ test('sure-hit closed form and the bot gate', () => {
   assert.equal(withinSureHit(UNIT_DATA.unit3, 0, 999), true);       // sniper: never gated
 });
 
-test('RPK bot at its 80-unit band: an opening burst at full rate, then it holds until the cone recovers', () => {
-  const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit16', startTime: 1000 });
+// Bot harness: p2 is the bot, p1 the pinned target at `dist` units.
+function botRun(botUnit, dist, ms) {
+  const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: botUnit, startTime: 1000 });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
-  p2.pos.x = p1.pos.x + 80; p2.pos.z = p1.pos.z; p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9;
+  p2.pos.x = p1.pos.x + dist; p2.pos.z = p1.pos.z; p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9;
   p2.botControlled = true;
-  let now = 1000, last = p2.lastFireAt; const fireTimes = [];
-  for (let i = 0; i < 3000 / TICK_RATE_MS; i += 1) {
-    p1.pos.x = p2.pos.x - 80; p1.pos.z = p2.pos.z;      // pin the target at exactly 80 units
-    p1.vel.x = 0; p1.vel.z = 0;
+  let now = 1000, last = p2.lastFireAt; const fireTimes = [], coneAtFire = [];
+  for (let i = 0; i < ms / TICK_RATE_MS; i += 1) {
+    p1.pos.x = p2.pos.x - dist; p1.pos.z = p2.pos.z; p1.vel.x = 0; p1.vel.z = 0;
+    const cone = effectiveSpread(p2.unit, p2.bloom);
     tickBot(m, 'p2', now);
     tickMatch(m, { p1: emptyInput() }, now, TICK_DT, ['p2']);
-    if (p2.lastFireAt !== last) { fireTimes.push(now); last = p2.lastFireAt; assert.ok(sureHitDistance(effectiveSpread(p2.unit, p2.bloom) - p2.unit.bloomPerShot) >= 80 - 1e-6, 'fired outside sure-hit'); }
+    if (p2.lastFireAt !== last) { fireTimes.push(now); coneAtFire.push(cone); last = p2.lastFireAt; }
+    p2.ammo = Math.max(p2.ammo, 2);   // measure the trigger rule, not the reload
     now += TICK_RATE_MS;
   }
   const gaps = fireTimes.slice(1).map((t, i) => t - fireTimes[i]);
-  assert.ok(fireTimes.length >= 8, 'shots ' + fireTimes.length);
+  return { fireTimes, gaps, coneAtFire };
+}
+
+test('RPK bot at its 80-unit band: an opening burst at full rate, then a full recovery, then the same burst again (no trickle)', () => {
+  const { gaps, coneAtFire } = botRun('unit16', 80, 4000);
   const firstPause = gaps.findIndex((g) => g >= 200);
-  assert.ok(firstPause === 4 || firstPause === 5, 'first bloom pause after shot ' + (firstPause + 1));   // stop line SA 0.040 at 80 u
-  for (const g of gaps.slice(0, firstPause)) assert.equal(g, 112);   // the opening burst runs at the mechanical slot
-  assert.ok(Math.max(...gaps.slice(firstPause)) < 600, 'trickle resumes');
+  assert.ok(firstPause === 4 || firstPause === 5, 'first pause after shot ' + (firstPause + 1));   // stop line SA 0.040 at 80 u
+  for (const g of gaps.slice(0, firstPause)) assert.equal(g, 112);
+  // full recovery: 200 ms delay + 0.024 / 0.05 = ~680 ms, then the burst restarts at the base cone
+  assert.ok(gaps[firstPause] >= 640 && gaps[firstPause] <= 760, 'recovery pause ' + gaps[firstPause]);
+  assert.equal(coneAtFire[firstPause + 1], 0.02);
+  for (const g of gaps.slice(firstPause + 1, firstPause + 5)) assert.equal(g, 112);
+});
+
+test('evo3 bot beyond its base sure-hit (100 u > 80): committed 5-round suppress bursts from a recovered cone', () => {
+  const { gaps, coneAtFire, fireTimes } = botRun('unit4', 100, 3000);
+  assert.ok(fireTimes.length >= 10, 'shots ' + fireTimes.length);
+  assert.deepEqual(gaps.slice(0, 4), [64, 64, 64, 64]);           // burst of 5 at the 64 ms slot
+  assert.ok(gaps[4] >= 480, 'pause between bursts ' + gaps[4]);   // 200 ms delay + 0.015 / 0.05 = 500 ms
+  assert.deepEqual(gaps.slice(5, 9), [64, 64, 64, 64]);           // next burst
+  assert.equal(coneAtFire[5], 0.04);                              // every burst opens on the base cone
+});
+
+test('M14 bot at its 56-unit band: re-fires as soon as the cone is back under the sure-hit line (no full-recovery wait)', () => {
+  const { gaps } = botRun('unit10', 56, 3000);
+  assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
+  // shot 1 from a fresh cone leaves 0.12; the line at 56 u is 0.057 -> (0.12 - 0.057) / 0.17 = 0.37 s for shot 2
+  assert.ok(gaps[0] >= 352 && gaps[0] <= 416, 'first gap ' + gaps[0]);
+  // from then on each shot lands on ~0.037 of residual bloom, so the steady gap is 0.1 / 0.17 = 0.59 s
+  for (const g of gaps.slice(1)) assert.ok(g >= 544 && g <= 624, 'steady gap ' + g);
+});
+
+test('auto on a recovery hold releases at once when the target closes in', () => {
+  const u = UNIT_DATA.unit16, bot = { bloom: 0.024, botSuppressRemaining: 0, botHoldDist: 0 };   // RPK, cone 0.044 -> line 72.7
+  assert.equal(botMayFire(u, bot, 80), false);            // outside: hold begins, line frozen at 72.7
+  assert.ok(bot.botHoldDist > 72 && bot.botHoldDist < 73);
+  bot.bloom = 0.019;                                      // line drifts out to 82 — a static target must NOT release the hold
+  assert.equal(botMayFire(u, bot, 80), false);
+  assert.equal(botMayFire(u, bot, 70), true);             // but a target that closed in past the frozen line does
+  assert.equal(bot.botHoldDist, 0);
+  const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman: no hold ever
+  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
+  assert.equal(m14.botHoldDist, 0);
+  m14.bloom = 0.03;                                       // cone 0.05 -> line 64 >= 56: fires without waiting for zero
+  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), true);
+});
+
+test('botMayFire state machine', () => {
+  const u = UNIT_DATA.unit1, bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(u, bot, 100), true);           // inside base sure-hit
+  bot.bloom = 0.04;                                       // cone 0.06 -> sure-hit 53
+  assert.equal(botMayFire(u, bot, 60), false);            // outside, bloom up: hold
+  bot.bloom = 0;
+  assert.equal(botMayFire(u, bot, 170), true);            // outside base sure-hit, recovered: burst starts
+  assert.equal(bot.botSuppressRemaining, 5);
+  bot.bloom = 0.01;
+  assert.equal(botMayFire(u, bot, 170), true);            // committed burst runs on
+  bot.botSuppressRemaining = 0;
+  assert.equal(botMayFire(u, bot, 170), false);           // burst spent, cone up: hold
+  const m14 = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);
+  assert.equal(m14.botSuppressRemaining, 1);
+  assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
 });

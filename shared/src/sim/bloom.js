@@ -12,7 +12,7 @@
 // Both sims (shared / server and the offline client mirror) use these helpers
 // so the numbers can never drift apart. Everything here is closed-form: no
 // sampling, no per-tick allocation.
-import { SURE_HIT_WIDTH } from './constants.js';
+import { SURE_HIT_WIDTH, BOT_SUPPRESS_BURST } from './constants.js';
 
 // How much bloom the unit can carry (bloomCap - base). 0 = the gun has no bloom.
 export function bloomMax(unit) {
@@ -58,4 +58,44 @@ export function sureHitDistance(spread) {
 export function withinSureHit(unit, bloom, dist) {
   if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
   return dist <= sureHitDistance(effectiveSpread(unit, bloom));
+}
+
+// Bot trigger rule (owner 2026-09-21), one call per fire poll. `bot` is the
+// fighter (or the offline mech state) carrying `bloom`,
+// `botSuppressRemaining` and `botHoldDist`; returns true when the bot may pull
+// the trigger now.
+//   - A committed suppress burst runs to its end.
+//   - Inside the current sure-hit distance: fire freely.
+//   - Outside it with the cone fully recovered: start a suppress burst
+//     (BOT_SUPPRESS_BURST rounds for autos, 1 for marksman rifles) and fire.
+//   - Outside it with bloom still up: hold. An AUTO then stays on hold until
+//     the cone has fully recovered — the line drifting back out past a
+//     static target does not release it (no one-round trickle) — unless the
+//     target closes in past where the line stood when the hold began, which
+//     releases it at once. A MARKSMAN rifle takes no hold: it re-fires the
+//     moment the cone is back under the line.
+export function botMayFire(unit, bot, dist) {
+  if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
+  if (bot.botSuppressRemaining > 0) return true;
+  if (bot.botHoldDist > 0) {
+    if (bot.bloom > 0 && dist > bot.botHoldDist) return false;
+    bot.botHoldDist = 0;                       // recovered, or the target closed in
+  }
+  const cone = effectiveSpread(unit, bot.bloom);
+  if (dist <= sureHitDistance(cone)) return true;
+  if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.marksman ? 1 : BOT_SUPPRESS_BURST; return true; }
+  if (!unit.marksman) bot.botHoldDist = sureHitDistance(cone);   // freeze where the line stood
+  return false;
+}
+
+// Call after a bot shot actually spawned: consumes one round of a running
+// suppress burst.
+export function botNoteShot(bot) {
+  if (bot.botSuppressRemaining > 0) bot.botSuppressRemaining -= 1;
+}
+
+// Abort any suppress burst / recovery hold (target lost, reload, immunity).
+export function botClearFireRule(bot) {
+  bot.botSuppressRemaining = 0;
+  bot.botHoldDist = 0;
 }

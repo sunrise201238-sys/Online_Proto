@@ -366,6 +366,7 @@ export const UNIT_DATA = {
     bloomCap: 0.2,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
+    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -667,6 +668,7 @@ export const UNIT_DATA = {
     bloomCap: 0.4,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
+    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -742,6 +744,11 @@ export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_HALF_HEIGHT = 1.6;
 // Standing-target sure-hit numerator (bloom.js): sure-hit distance = SURE_HIT_WIDTH / spread.
 export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
+// Bot suppressing fire (owner 2026-09-21): an auto weapon whose target sits
+// OUTSIDE its current sure-hit distance waits for the cone to fully recover,
+// then fires this many rounds as one committed burst. Marksman rifles
+// (`marksman: true`) fire the moment the cone is back under the line instead.
+export const BOT_SUPPRESS_BURST = 5;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
