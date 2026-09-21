@@ -63,17 +63,17 @@ export function withinSureHit(unit, bloom, dist) {
 // Bot trigger rule (owner 2026-09-21), one call per fire poll. `bot` is the
 // fighter (or the offline mech state) carrying `bloom`,
 // `botSuppressRemaining` and `botHoldDist`; returns true when the bot may pull
-// the trigger now.
+// the trigger now. One rule for every gun:
 //   - A committed suppress burst runs to its end.
 //   - Inside the current sure-hit distance: fire freely.
-//   - Outside it with the cone fully recovered: start a suppress burst
-//     (BOT_SUPPRESS_BURST rounds for autos, 1 for marksman rifles) and fire.
-//   - Outside it with bloom still up: hold. An AUTO then stays on hold until
-//     the cone has fully recovered — the line drifting back out past a
-//     static target does not release it (no one-round trickle) — unless the
-//     target closes in past where the line stood when the hold began, which
-//     releases it at once. A MARKSMAN rifle takes no hold: it re-fires the
-//     moment the cone is back under the line.
+//   - Outside it with the cone fully recovered: start a suppress burst of
+//     `botSuppressBurst` rounds (BOT_SUPPRESS_BURST for autos, 1 for the
+//     marksman rifles) and fire.
+//   - Outside it with bloom still up: hold until the cone has fully
+//     recovered — the line drifting back out past a static target does not
+//     release the hold (no one-round trickle) — unless the target closes in
+//     past where the line stood when the hold began, which releases it at
+//     once.
 export function botMayFire(unit, bot, dist) {
   if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
   if (bot.botSuppressRemaining > 0) return true;
@@ -83,8 +83,8 @@ export function botMayFire(unit, bot, dist) {
   }
   const cone = effectiveSpread(unit, bot.bloom);
   if (dist <= sureHitDistance(cone)) return true;
-  if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.marksman ? 1 : BOT_SUPPRESS_BURST; return true; }
-  if (!unit.marksman) bot.botHoldDist = sureHitDistance(cone);   // freeze where the line stood
+  if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.botSuppressBurst ?? BOT_SUPPRESS_BURST; return true; }
+  bot.botHoldDist = sureHitDistance(cone);     // freeze where the line stood
   return false;
 }
 

@@ -113,13 +113,11 @@ test('evo3 bot beyond its base sure-hit (100 u > 80): committed 5-round suppress
   assert.equal(coneAtFire[5], 0.04);                              // every burst opens on the base cone
 });
 
-test('M14 bot at its 56-unit band: re-fires as soon as the cone is back under the sure-hit line (no full-recovery wait)', () => {
-  const { gaps } = botRun('unit10', 56, 3000);
+test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so it fires once per full recovery', () => {
+  const { gaps, coneAtFire } = botRun('unit10', 56, 3000);
   assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
-  // shot 1 from a fresh cone leaves 0.12; the line at 56 u is 0.057 -> (0.12 - 0.057) / 0.17 = 0.37 s for shot 2
-  assert.ok(gaps[0] >= 352 && gaps[0] <= 416, 'first gap ' + gaps[0]);
-  // from then on each shot lands on ~0.037 of residual bloom, so the steady gap is 0.1 / 0.17 = 0.59 s
-  for (const g of gaps.slice(1)) assert.ok(g >= 544 && g <= 624, 'steady gap ' + g);
+  for (const g of gaps) assert.ok(g >= 576 && g <= 624, 'gap ' + g);   // 0.1 / 0.17 = 0.59 s
+  for (const c of coneAtFire) assert.equal(c, 0.02);                    // and always from the base cone
 });
 
 test('auto on a recovery hold releases at once when the target closes in', () => {
@@ -130,10 +128,12 @@ test('auto on a recovery hold releases at once when the target closes in', () =>
   assert.equal(botMayFire(u, bot, 80), false);
   assert.equal(botMayFire(u, bot, 70), true);             // but a target that closed in past the frozen line does
   assert.equal(bot.botHoldDist, 0);
-  const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman: no hold ever
+  const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
-  assert.equal(m14.botHoldDist, 0);
-  m14.bloom = 0.03;                                       // cone 0.05 -> line 64 >= 56: fires without waiting for zero
+  assert.ok(m14.botHoldDist > 0);
+  m14.bloom = 0.03;                                       // line back out past the target: still holding
+  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
+  m14.bloom = 0;
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), true);
 });
 

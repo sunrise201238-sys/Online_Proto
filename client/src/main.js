@@ -443,7 +443,7 @@ const UNIT_DATA = {
     bloomCap: 0.2,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
     damage: 10,
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -757,7 +757,7 @@ const UNIT_DATA = {
     bloomCap: 0.4,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    marksman: true,            // bot fire rule: shoot again as soon as the cone is back under the sure-hit line (no full-recovery wait, 1-round suppress)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
