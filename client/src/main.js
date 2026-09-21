@@ -9424,6 +9424,9 @@ function stunTier(u) {
 // README's measured standing hit rates (tight guns all-in = their 100s;
 // M60's horizontal spill ≈ its 73). Seeded → stable icon; cached per
 // weapon; drawn at 2x the 26px display size.
+// Profile-card Spread cell (the seeded scatter simulation below). Off since
+// 2026-09-21 — flip to true to show it again; nothing else changes.
+const PROFILE_SPREAD_CELL = false;
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 // Reference-distance overrides (user order 2026-08-06, 56 → 60): every
@@ -9516,7 +9519,10 @@ function showProfilePopup(card, unit, onConfirm) {
     ['Spd', bulletSpeedTier(unit)],   // shortest label — 'Instant' must fit the 21vw face
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
-    ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]
+    // Spread scatter simulation — HIDDEN since 2026-09-21 (owner call): with
+    // per-shot bloom the base-cone picture no longer tells the story. The
+    // spreadIconURL machinery stays intact behind PROFILE_SPREAD_CELL.
+    ...(PROFILE_SPREAD_CELL ? [['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]] : [])
   ].map(([l, v]) => {
     // Long plain-text values (PSG1's 50/35/20, 'Instant') step down a font
     // size so the row still fits the 21vw phone face on one line.
