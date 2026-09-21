@@ -67,24 +67,24 @@ The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama
 
 ## Units
 
-Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — AA12, RPK and NEGEV walk at 12):
+Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprint base); the walk speed is per unit since 2026-09-21 — 16 for the SMGs and the M1014, 14 for the rifles and snipers, 12 for the AA12 and the machine guns (see the Walk column):
 
 **Weapons:**
 
-| | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload |
-|---|---|---|---|---|---|---|
-| M4 — Assault Rifle | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
-| FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
-| evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
-| P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s |
-| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) |
-| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 300 | 40 / 50 | 1 s (auto, per round) |
-| RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
-| NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s |
-| M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s |
-| SVD — Rifle | 10 | 12 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s |
-| PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
-| Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
+| | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload | Walk (u/s) |
+|---|---|---|---|---|---|---|---|
+| M4 — Assault Rifle | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s | 14 |
+| FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s | 14 |
+| evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s | 16 |
+| P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s | 16 |
+| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) | 12 |
+| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 300 | 40 / 50 | 1 s (auto, per round) | 16 |
+| RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s | 12 |
+| NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s | 12 |
+| M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s | 14 |
+| SVD — Rifle | 10 | 12 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s | 14 |
+| PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge | 14 |
+| Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge | 14 |
 
 **Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
 

@@ -30,7 +30,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -101,7 +101,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -204,7 +204,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -308,7 +308,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -344,7 +344,7 @@ export const UNIT_DATA = {
     // standard jump cooldown/cost and NO flight/air-pop fields.
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -644,7 +644,7 @@ export const UNIT_DATA = {
     // Pilot stats — M14 template: same mobility block.
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 14,             // 16 -> 14 (owner 2026-09-21 walk-speed pass)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
