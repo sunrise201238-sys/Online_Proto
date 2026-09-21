@@ -73,7 +73,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 
 | | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload |
 |---|---|---|---|---|---|---|
-| M4 — Assault Rifle | 30 | 4.5 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
+| M4 — Assault Rifle | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s |
