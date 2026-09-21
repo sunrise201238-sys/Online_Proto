@@ -32,7 +32,9 @@ import {
   bloomAfterTime,
   botMayFire,
   botNoteShot,
-  botClearFireRule
+  botClearFireRule,
+  tickStillness,
+  isStill
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -2057,6 +2059,7 @@ function createMech(color, unitData, isOwnUnit = false, roleKey = isOwnUnit ? 'p
       lastFireAt: 0,
       bloom: 0,               // spread bloom above spreadAngle (shared bloom.js)
       bloomTickAt: 0,         // last offline recovery step (performance.now)
+      stillSince: 0,          // grounded standstill stamp (shared bloom.js isStill)
       botSuppressRemaining: 0, // bot: rounds left in a committed out-of-sure-hit suppress burst
       botHoldDist: 0,          // bot (autos): sure-hit line frozen when a recovery hold began
       ammo: unitData.magCapacity ?? Infinity,
@@ -2815,7 +2818,7 @@ function spawnProjectiles(owner, target) {
       hitStunMs: owner.unit.stun?.ms ?? 100,
       hitStunScale: owner.unit.stun?.moveScale ?? 0.25
     });
-    owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
+    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
     return;
   }
 
@@ -2868,7 +2871,7 @@ function spawnProjectiles(owner, target) {
       boltLen: owner.unit.beamBolt?.length ?? 0,
       boltRadius: owner.unit.beamBolt?.radius ?? 0
     });
-    owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
+    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
   }
 }
 
@@ -2883,7 +2886,8 @@ function tickBloomOffline(mech, now) {
   s.bloomTickAt = now;
   if (!(s.bloom > 0)) return;
   const dtSec = Math.min(0.25, Math.max(0, (now - prev) / 1000));
-  s.bloom = bloomAfterTime(mech.unit, s.bloom, now - s.lastFireAt, dtSec);
+  const since = isStill(s, now) ? Infinity : now - s.lastFireAt;   // standing still: no delay, even mid-burst
+  s.bloom = bloomAfterTime(mech.unit, s.bloom, since, dtSec);
 }
 
 
@@ -16678,6 +16682,7 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
+        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne);
         tickBloomOffline(m, now);
         tickSniperCharge(m, now,
           (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);

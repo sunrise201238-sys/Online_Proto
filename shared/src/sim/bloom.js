@@ -12,7 +12,7 @@
 // Both sims (shared / server and the offline client mirror) use these helpers
 // so the numbers can never drift apart. Everything here is closed-form: no
 // sampling, no per-tick allocation.
-import { SURE_HIT_WIDTH, BOT_SUPPRESS_BURST } from './constants.js';
+import { SURE_HIT_WIDTH, BOT_SUPPRESS_BURST, BLOOM_STILL_SPEED, BLOOM_STILL_DWELL_MS } from './constants.js';
 
 // How much bloom the unit can carry (bloomCap - base). 0 = the gun has no bloom.
 export function bloomMax(unit) {
@@ -98,4 +98,19 @@ export function botNoteShot(bot) {
 export function botClearFireRule(bot) {
   bot.botSuppressRemaining = 0;
   bot.botHoldDist = 0;
+}
+
+// Standing-still tracking (owner 2026-09-21). Call once per tick with the
+// fighter's horizontal speed and grounded flag BEFORE the bloom step:
+// `stillSince` stamps the moment a grounded fighter dropped under
+// BLOOM_STILL_SPEED and clears the instant it moves or leaves the ground.
+export function tickStillness(bot, now, speed, grounded) {
+  if (grounded && speed < BLOOM_STILL_SPEED) { if (!bot.stillSince) bot.stillSince = now; }
+  else bot.stillSince = 0;
+}
+
+// True once the fighter has been still for the dwell: its shots add no bloom
+// and its bloom recovers with no delay, even mid-burst.
+export function isStill(bot, now) {
+  return bot.stillSince > 0 && now - bot.stillSince >= BLOOM_STILL_DWELL_MS;
 }

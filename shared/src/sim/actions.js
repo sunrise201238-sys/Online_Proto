@@ -25,7 +25,7 @@ import {
 import { spawnProjectiles, spawnBeam, startChargedBeam } from './projectiles.js';
 import { unitOverlapsObstacle } from './physics.js';
 import { inheritMomentum } from './movement.js';
-import { bloomAfterTime } from './bloom.js';
+import { bloomAfterTime, isStill } from './bloom.js';
 
 // Reload ticking. Mirrors tickAmmo.
 export function tickAmmo(fighter, now) {
@@ -56,7 +56,9 @@ export function tickAmmo(fighter, now) {
 // the offline client's tickBloomOffline.
 export function tickBloom(fighter, now, dt) {
   if (!(fighter.bloom > 0)) return;
-  fighter.bloom = bloomAfterTime(fighter.unit, fighter.bloom, now - fighter.lastFireAt, dt);
+  // A fighter standing still recovers with no delay, even while firing.
+  const since = isStill(fighter, now) ? Infinity : now - fighter.lastFireAt;
+  fighter.bloom = bloomAfterTime(fighter.unit, fighter.bloom, since, dt);
 }
 
 // Mirrors attemptFire. Returns true if a shot was fired or charge initiated.

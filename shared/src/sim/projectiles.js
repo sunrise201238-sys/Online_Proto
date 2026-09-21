@@ -34,7 +34,7 @@ import {
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
-import { effectiveSpread, bloomAfterShot } from './bloom.js';
+import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
 
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
@@ -139,8 +139,9 @@ export function spawnProjectiles(matchState, owner, target) {
     }
   }
 
-  // This shot's bloom lands AFTER its direction was sampled. Mirrors offline.
-  owner.bloom = bloomAfterShot(u, owner.bloom);
+  // This shot's bloom lands AFTER its direction was sampled — unless the
+  // shooter has been standing still (bloom.js isStill). Mirrors offline.
+  if (!isStill(owner, matchState.now)) owner.bloom = bloomAfterShot(u, owner.bloom);
 
   matchState.events.push({
     type: 'fired',

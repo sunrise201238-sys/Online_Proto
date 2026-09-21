@@ -5,7 +5,7 @@ import {
   effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botMayFire
 } from '../src/sim/index.js';
 
-const hold = () => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; return i; };
+const hold = (walk = true) => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; if (walk) i.moveZ = 1; return i; };   // walking: bloom applies
 function duel(unitKey, dist) {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: unitKey, p2UnitKey: 'unit1', startTime: 1000 });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
@@ -62,6 +62,25 @@ test('M14: recovers between its 336 ms shots (no delay) — fire-time cone 0.02,
   }
   assert.deepEqual(cones.slice(0, 4), [0.02, 0.063, 0.106, 0.143]);
   for (const c of cones.slice(4)) assert.ok(c > 0.14 && c <= 0.2, 'steady ' + c);
+});
+
+test('standing still: no bloom per shot, and recovery runs even mid-burst', () => {
+  const { m, p1 } = duel('unit1', 30);
+  let now = 1000;
+  const run = (ms, input) => { for (let i = 0; i < ms / TICK_RATE_MS; i += 1) { tickMatch(m, { p1: input(), p2: emptyInput() }, now, TICK_DT, ['p2']); p1.ammo = Math.max(p1.ammo, 2); now += TICK_RATE_MS; } };
+  run(320, () => emptyInput());                          // stand for the 200 ms dwell
+  run(2000, () => hold(false));                          // hold fire without moving
+  assert.equal(p1.bloom, 0, 'no bloom while standing still');
+  run(1000, () => hold(true));                           // walk and fire: bloom builds
+  const walked = p1.bloom; assert.ok(walked >= 0.018, 'walking bloom ' + walked);
+  const atStop = now;
+  run(192, () => hold(false));                           // stop but keep firing: inside the dwell shots still bloom
+  assert.ok(p1.bloom >= walked, 'dwell keeps the old rule');
+  run(400, () => hold(false));                           // past the dwell: recovery runs mid-burst, shots add nothing
+  assert.ok(p1.bloom < walked, 'recovering while firing: ' + p1.bloom);
+  run(1200, () => hold(false));
+  assert.equal(p1.bloom, 0, 'fully recovered while still firing');
+  void atStop;
 });
 
 test('sure-hit closed form and the bot gate', () => {

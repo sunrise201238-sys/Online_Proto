@@ -81,6 +81,7 @@ export function createFighter(id, unitKey, spawn) {
     // Firing.
     lastFireAt: 0,
     bloom: 0,                 // spread bloom carried above spreadAngle (bloom.js)
+    stillSince: 0,            // when the fighter last came to a grounded stop (0 = moving); bloom.js isStill
     botSuppressRemaining: 0,  // bot: rounds left in a committed out-of-sure-hit suppress burst
     botHoldDist: 0,           // bot (autos): sure-hit line frozen when a recovery hold began, 0 = no hold
     nextFireAt: 0,

@@ -46,7 +46,7 @@ export {
   volleyAxes, volleyPelletOffset, volleySpreadFactor
 } from './projectiles.js';
 export { tickBot, pickBotTargetId } from './ai.js';
-export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
+export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botMayFire, botNoteShot, botClearFireRule, tickStillness, isStill } from './bloom.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
 export {

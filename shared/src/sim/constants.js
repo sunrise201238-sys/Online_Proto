@@ -749,6 +749,12 @@ export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
 // then fires this many rounds as one committed burst; a unit can override
 // the size with `botSuppressBurst` (the marksman rifles fire 1).
 export const BOT_SUPPRESS_BURST = 5;
+// Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
+// ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least
+// BLOOM_STILL_DWELL_MS fires without adding bloom, and its bloom recovers
+// even while it keeps firing (the recovery delay is skipped).
+export const BLOOM_STILL_SPEED = 1;
+export const BLOOM_STILL_DWELL_MS = 200;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
