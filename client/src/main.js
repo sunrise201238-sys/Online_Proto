@@ -6252,10 +6252,11 @@ function updateEnemy(now) {
       botClearFireRule(s);
     } else if (!botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
       // BLOOM GATE (owner 2026-09-21, shared bloom.js botMayFire): inside the
-      // CURRENT sure-hit distance the bot fires freely; outside it an auto
-      // waits for a full recovery and then fires a committed suppress burst,
-      // a marksman rifle re-fires as soon as the cone is back under the line.
-      // Checked before the obstacle scan; polls every frame. Mirrors shared ai.js.
+      // CURRENT sure-hit distance the bot fires freely; outside it the bot
+      // waits for a full recovery (released early only if the target closes
+      // in) and then fires a committed suppress burst (5 autos, 1 marksman
+      // rifles). Checked before the obstacle scan; polls every frame. Mirrors
+      // shared ai.js.
       s.nextFireAt = now + 16;
     } else if (!botShotCanLand(
       { x: e.x, y: myShotY, z: e.z },

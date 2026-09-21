@@ -1789,11 +1789,12 @@ export function tickBot(matchState, botId, now) {
       botClearFireRule(me);
     } else if (!botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
       // BLOOM GATE (owner 2026-09-21, bloom.js botMayFire): inside the CURRENT
-      // sure-hit distance (3.2 / SA-now) the bot fires freely; outside it an
-      // auto waits for the cone to fully recover and then fires a committed
-      // BOT_SUPPRESS_BURST-round burst, a marksman rifle re-fires as soon as
-      // the cone is back under the line. Closed form, checked BEFORE the
-      // obstacle scan; polls every tick. Mirrors offline main.js updateEnemy.
+      // sure-hit distance (3.2 / SA-now) the bot fires freely; outside it the
+      // bot waits for the cone to fully recover (released early only if the
+      // target closes in) and then fires a committed suppress burst of
+      // botSuppressBurst rounds (5 autos, 1 marksman rifles). Closed form,
+      // checked BEFORE the obstacle scan; polls every tick. Mirrors offline
+      // main.js updateEnemy.
       me.nextFireAt = now + TICK_RATE_MS;
     } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
       // No clear shot — hold fire and check again shortly. The origin is the
