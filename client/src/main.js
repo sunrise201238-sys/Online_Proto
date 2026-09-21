@@ -6394,8 +6394,9 @@ function applyImmunityGlow(mech, immune) {
 // weapons keeps the bracket honest about how much spread is on the gun right
 // now. ×BLOOM_BRACKET_MAX_SCALE is reached at BLOOM_BRACKET_FULL_BLOOM of
 // bloom = the SVD's full cap (0.40 minus its 0.02 base); an M4 at its 0.06
-// cap therefore shows only ~×1.13, an RPK at 0.12 ~×1.33, the M14 ~×1.59.
-const BLOOM_BRACKET_MAX_SCALE = 2.25;
+// cap therefore shows ~×1.37, an RPK at 0.12 ~×1.92, the M14 ~×2.66.
+// 2.25 -> 4.5 (owner 2026-09-21: "double the magnifier").
+const BLOOM_BRACKET_MAX_SCALE = 4.5;
 const BLOOM_BRACKET_FULL_BLOOM = 0.38;
 // Base size of the lock brackets — halved 2026-09-21 (owner call, chosen from
 // in-game samples at ×1 / ×0.75 / ×0.5). Bloom scales on top of this base;
