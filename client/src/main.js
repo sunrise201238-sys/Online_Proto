@@ -9440,6 +9440,20 @@ function stunTier(u) {
   if (st.ms >= 100) return 'Heavy';
   return st.moveScale >= 0.85 ? 'Light' : 'Normal';
 }
+// Spread tier word for the profile card (owner 2026-09-21): a rough read of
+// how wide the gun gets when sprayed, keyed on its bloom cap (the total cone
+// at full bloom). Fixed-pattern shotguns and beams get their own words;
+// a gun that never blooms (the snipers) reads "None".
+function spreadTier(u) {
+  if (u.beam) return 'None';
+  if ((u.spreadCount ?? 1) > 1) return 'Pattern';
+  const cap = u.bloomCap ?? u.spreadAngle;
+  if (!(cap > u.spreadAngle)) return 'None';
+  if (cap <= 0.06) return 'Low';
+  if (cap <= 0.12) return 'Medium';
+  if (cap <= 0.25) return 'High';
+  return 'Extreme';
+}
 // Per-weapon spread icon — a true mini-SIMULATION at the gun's OWN lock
 // range (user order 2026-08-06). The ring is a standing target's effective
 // half-width (1.8u ≈ FIGHTER_RADIUS + hit margin — the same "radius ~1.8"
@@ -9548,10 +9562,11 @@ function showProfilePopup(card, unit, onConfirm) {
     ['Spd', bulletSpeedTier(unit)],   // shortest label — 'Instant' must fit the 21vw face
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
+    ['Spread', spreadTier(unit)],     // bloom tier word: None / Low / Medium / High / Extreme, Pattern for shotguns
     // Spread scatter simulation — HIDDEN since 2026-09-21 (owner call): with
     // per-shot bloom the base-cone picture no longer tells the story. The
     // spreadIconURL machinery stays intact behind PROFILE_SPREAD_CELL.
-    ...(PROFILE_SPREAD_CELL ? [['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]] : [])
+    ...(PROFILE_SPREAD_CELL ? [['Scatter', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]] : [])
   ].map(([l, v]) => {
     // Long plain-text values (PSG1's 50/35/20, 'Instant') step down a font
     // size so the row still fits the 21vw phone face on one line.
