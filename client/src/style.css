@@ -359,6 +359,21 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .random-face-wide { width: 260px; max-width: 62vw; height: 160px; }
 .menu .unit-card .random-thumb.all-random { background: #ecdda6; color: #9a7f2e; }
 .unit-profile-popup .random-face.all-random { background: #ecdda6; color: #9a7f2e; }
+/* ---- profile popup weapon stats (2026-09-22, owner pick "C" from three
+   in-game samples): a 3x2 cell grid under the gun render inside the weapon
+   panel, split from it by the panel's own divider line — uppercase 8px
+   labels over white bold 11px tabular values, the 30px spread picture in
+   the last cell. Same sizes on phones (checked at 390px: nothing wraps). ---- */
+.unit-profile-popup .weapon-panel.weapon-panel-stats { justify-content: flex-start; }
+.unit-profile-popup .weapon-panel .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; border-top: 1px solid #274058; padding-top: 5px; }
+.unit-profile-popup .stats-grid .stat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.unit-profile-popup .stats-grid .stat-cell .stat-label { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; color: #a8c2d8; white-space: nowrap; }
+.unit-profile-popup .stats-grid .stat-cell .stat-value { font-size: 11px; line-height: 13px; font-weight: 700; color: #ffffff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.unit-profile-popup .stats-grid .stat-cell .stat-scatter { width: 30px; height: 30px; }
+.unit-profile-popup .stats-grid .stat-cell .stat-value.stat-tight { font-size: 9.5px; }   /* 50/35/20 */
+@media (max-width: 600px) {
+  .unit-profile-popup .weapon-panel .stats-grid { gap: 4px 4px; }   /* 360px phones: the panel's 90px inner width takes 36 + 50 + 4 */
+}
 /* ---------------------------------------------------------------------------
    DIORAMA VIEW (POC) — thin-line annotation layer (see DIORAMA_PLAN.md).
    The layer itself never eats input; only the enemy squares (SVG rects with

@@ -8967,14 +8967,127 @@ function spawnProfilePopup(card, innerHTML, onConfirm) {
   popup.querySelectorAll('img').forEach((img) => img.addEventListener('load', place));
 }
 
+// Movement tier word for the profile card (owner 2026-09-22 — "Movement",
+// not the demo line's "Weight"): keyed on the unit's walk speed. Fast = 16
+// (every unit but the machine guns), Medium = 12 (Koyuki / M60), Slow = 8
+// (Hina / MG42).
+function movementTier(u) {
+  const walk = u.walkSpeed ?? 16;
+  if (walk >= 16) return 'Fast';
+  if (walk >= 12) return 'Medium';
+  return 'Slow';
+}
+// Per-weapon spread picture (ported from the demo line 2026-09-22): a seeded
+// mini-SIMULATION of a WALKING SPRAY — up to 30 rounds, magazine limited —
+// each round on the cone the sim would give it (base + bloom, +bloomPerShot
+// per round up to the cap, and for the no-delay marksman rifles the recovery
+// that runs between two rounds at the real tick slot). The ring is a
+// standing target's effective half-width (1.8u) seen at the reference
+// distance: a COMMON 60 for every cone gun so the pictures compare directly,
+// the shotguns' own 40 lock range (their fixed pattern is the point — drawn
+// as the literal SHOTGUN_PATTERN volley at the cluster-growth factor, seeded
+// rotation, SDASS's post-rotation X stretch included). Dots fade with round
+// order (first round brightest); a round that leaves the frame is pinned to
+// the edge and drawn dim. Cached per unit (two units share the "Laser" name,
+// so the key is the sprite key); drawn at 72px for the 30px display cell.
+const _spreadIconCache = {};
+const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
+const SPREAD_ICON_ROUNDS = 30;        // spray length drawn (magazine-limited)
+const SPREAD_ICON_DOT = '#ffa040';    // round colour — orange, as on the demo line
+const SPREAD_ICON_COMMON_RANGE = 60;  // cone guns' shared reference distance
+function spreadIconURL(u) {
+  const key = u.spriteKey ?? u.weapon ?? '?';
+  if (_spreadIconCache[key]) return _spreadIconCache[key];
+  const S = 72, C = S / 2, k = S / 52, R = 12 * k;    // ring radius = the 1.8u half-width; the frame spans ±3.9u
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const x = cv.getContext('2d');
+  x.strokeStyle = '#4a6a86';
+  x.lineWidth = 3 * k;
+  x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = SPREAD_ICON_DOT;
+  const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
+  const dot = (px, py, r, alpha = 1) => {
+    const cx = Math.max(3 * k, Math.min(S - 3 * k, px));   // wild spill stays on the canvas, pinned to the edge …
+    const cy = Math.max(3 * k, Math.min(S - 3 * k, py));
+    x.globalAlpha = (cx !== px || cy !== py) ? Math.min(alpha, 0.35) : alpha;   // … and drawn dim
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = 1;
+  };
+  const shotgun = (u.spreadCount ?? 1) > 1;
+  const d = shotgun ? (u.lockRange ?? 40) : SPREAD_ICON_COMMON_RANGE;
+  let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  if (shotgun) {
+    const factor = Math.min(1, d / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+    const stretch = u.volleyStretchX ?? 1;
+    const rot = rnd() * Math.PI * 2;
+    for (const [ox, oy] of SHOTGUN_PATTERN) {
+      const rx = ox * Math.cos(rot) - oy * Math.sin(rot);
+      const ry = ox * Math.sin(rot) + oy * Math.cos(rot);
+      dot(C + toPx(rx * factor * stretch), C + toPx(ry * factor), 3.0 * k);
+    }
+  } else {
+    // Walking spray: round i leaves on the sim's cone for that round.
+    const rounds = Math.max(1, Math.min(SPREAD_ICON_ROUNDS, u.magCapacity ?? SPREAD_ICON_ROUNDS));
+    const slotMs = Math.ceil(60000 / (u.firePerMinute || 600) / SIM_TICK_RATE_MS) * SIM_TICK_RATE_MS;
+    let bloom = 0;
+    for (let i = 0; i < rounds; i++) {
+      const saR = (effectiveSpread(u, bloom) / 2) * Math.sqrt(rnd());
+      const saT = rnd() * Math.PI * 2;
+      const yaw = saR * Math.cos(saT);
+      const pitch = saR * Math.sin(saT);
+      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2 * k, 1 - 0.55 * (rounds > 1 ? i / (rounds - 1) : 0));
+      bloom = bloomAfterShot(u, bloom);
+      bloom = bloomAfterTime(u, bloom, slotMs, slotMs / 1000);   // in-burst recovery: only the no-delay guns
+    }
+  }
+  return (_spreadIconCache[key] = cv.toDataURL('image/png'));
+}
+// The six profile-card stats (2026-09-22, the demo line's card with Movement
+// in place of Weight), read live from the unit data: Mag / Dmg / RPM /
+// Movement / Reload / Spread. Tiered damages show every tier — PSG1's
+// far/mid/near 50/35/20, the Laser's quick/charged 30/20, shotguns per
+// pellet "5 ×8". Laid out as a 3x2 cell grid (label over value) under the
+// gun render — owner pick "C" from three in-game samples (a third plate
+// beside the weapon panel and a label/value row list were the others).
+function profileStatPairs(unit) {
+  const dmg = (unit.spreadCount ?? 1) > 1
+    ? `${unit.damage} ×${unit.spreadCount}`
+    : unit.rangeDamage
+      ? `${unit.damage}/${unit.rangeDamage.mid}/${unit.rangeDamage.near}`
+      : unit.beam?.chargedDamage != null
+        ? `${unit.damage}/${unit.beam.chargedDamage}`
+        : `${unit.damage}`;
+  return [
+    ['Mag', `${unit.magCapacity}`],
+    ['Dmg', dmg],
+    ['RPM', `${unit.firePerMinute}`],
+    ['Movement', movementTier(unit)],     // walk-speed tier word: Fast / Medium / Slow
+    ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
+    ['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]
+  ];
+}
+function profileStatGridHTML(unit) {
+  return profileStatPairs(unit).map(([l, v]) => {
+    // Long plain-text values (PSG1's 50/35/20) step down a font size so the
+    // cell still fits its column on a 360px phone.
+    const tight = !v.includes('<') && v.length >= 7 ? ' stat-tight' : '';
+    return `<div class="stat-cell"><span class="stat-label">${l}</span><span class="stat-value${tight}">${v}</span></div>`;
+  }).join('');
+}
+
 function showProfilePopup(card, unit, onConfirm) {
   const { spriteKey, char, weapon } = unit;
   // Side card: full profile art on the left; the unit's weapon render + its
-  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside.
+  // real-world name (weapons/<spriteKey>.png, unit.weapon) on a panel beside,
+  // with the six-stat grid (profileStatGridHTML) under the render.
   const weaponPanel = weapon
-    ? `<div class="weapon-panel">
+    ? `<div class="weapon-panel weapon-panel-stats">
         <div class="weapon-name">${weapon}</div>
         <img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="${weapon}" draggable="false" />
+        <div class="stats-grid">${profileStatGridHTML(unit)}</div>
       </div>`
     : '';
   spawnProfilePopup(card,

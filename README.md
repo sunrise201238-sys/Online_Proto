@@ -32,6 +32,17 @@ Orthogonal to all of the above, every player also picks a **view mode** — **Cl
 - Multi-lobby — when an existing lobby is full or running, new joiners spawn their own lobby and become host.
 - Team swap in 2v2: any non-host player can `Join` an empty slot to switch teams (e.g. two humans want to co-op on one side against two bots).
 
+### Unit profile card
+
+The first tap on a unit card opens its profile beside the grid (tap the same card again to confirm, anywhere else to cancel): the character art on the left and the **weapon panel** on the right — the gun's real-world name, its render, and since 2026-09-22 a **3×2 stat grid** under the render (owner pick "C" from three in-game samples: a third plate beside the panel and a label/value row list were the other two; the demo line carries the same stats as a row list). The six cells read live from the unit data:
+
+- **Mag**, **RPM** and **Reload** (seconds) as plain numbers.
+- **Dmg** shows every tier where a gun has them: Aru's PSG1 `50/35/20` (far / mid / near), Kei's Laser `30/20` (quick / charged), the shotguns per pellet `5 ×8`.
+- **Movement** is the walk-speed tier word: **Fast** (walk 16 — every unit but the machine guns), **Medium** (12 — Koyuki), **Slow** (8 — Hina).
+- The **Spread picture** is a seeded mini-simulation of a **walking spray at a common 60-unit reference** (the shotguns at their own 40): the ring is a standing target's half-width at that distance, the orange dots are up to 30 rounds — magazine-limited — each leaving on the cone the sim gives that round (base + bloom, per-round bloom up to the cap, and the between-round recovery of the no-delay marksman rifles), fading with round order so the first rounds read brightest; a round that leaves the frame is pinned to its edge and drawn dim. Saori's whole spray stays inside the ring, Koyuki's late rounds reach the frame's edge, Fubuki's quick follow-up shots walk off the picture; the shotguns show their 8-pellet pattern (SDASS with its 1.4× horizontal stretch).
+
+The grid keeps the same sizes on phones (checked at 390 px: nothing wraps or spills).
+
 ### Random & All Random cards
 
 Both offline and online pickers carry them:
