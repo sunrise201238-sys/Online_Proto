@@ -517,6 +517,11 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .stat-row .stat-label { color: #a8c2d8; }
 .unit-profile-popup .stat-row .stat-value { color: #ffffff; font-weight: 700; font-variant-numeric: tabular-nums; }
 .unit-profile-popup .stat-row .stat-value.stat-tight { font-size: 8.5px; }
+/* Spread picture 26 -> 30px (owner pick 2026-09-22, from samples at 26 / 30 / 34);
+   the gun name gives up 1px of its bottom margin so the stack still ends inside
+   the 140px face: 20 + 5 x 14 + 5 hairlines + 30 = 125 of 126. */
+.unit-profile-popup .stat-row .stat-scatter { width: 30px; height: 30px; }
+.unit-profile-popup .stat-name { margin-bottom: 3px; }
 @media (max-width: 600px) {
   /* 8.5px, not 9: on the 82px phone face "Weight Medium" (the widest row since
      the Weight row of 2026-09-22) ran 9px past the padding at 9px. */
