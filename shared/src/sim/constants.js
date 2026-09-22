@@ -166,7 +166,7 @@ export const UNIT_DATA = {
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
     // in projectiles.js (PROJECTILE_HIT_STUN_MS, 0.25) are just a safety net.
     // SMG = short + light.
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 100, moveScale: 0.25 }   // 50 @ 0.50 -> 100 @ 0.25 (owner 2026-09-22): the AR-grade stun, same as the P90 got on 2026-08-10
   },
   unit5: {
     id: 'unit5',
@@ -637,7 +637,7 @@ export const UNIT_DATA = {
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 5000,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+    stun: { ms: 100, moveScale: 0.25 }   // 50 @ 0.85 -> 100 @ 0.25 (owner 2026-09-22): the AR-grade stun; NEGEV was the last light-stun gun on the roster
   },
   unit18: {
     id: 'unit18',

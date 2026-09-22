@@ -224,7 +224,7 @@ const UNIT_DATA = {
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
     // at the hit sites (100 ms, 0.25) are just a safety net. SMG = short +
     // light so the victim barely slows when hit.
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 100, moveScale: 0.25 }   // 50 @ 0.50 -> 100 @ 0.25 (owner 2026-09-22): the AR-grade stun, same as the P90 got on 2026-08-10
   },
   unit5: {
     name: 'Unit 5 / Machine Gun',
@@ -726,7 +726,7 @@ const UNIT_DATA = {
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap policy)
     reloadMs: 5000,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+    stun: { ms: 100, moveScale: 0.25 }   // 50 @ 0.85 -> 100 @ 0.25 (owner 2026-09-22): the AR-grade stun; NEGEV was the last light-stun gun on the roster
   },
   unit18: {
     name: 'Unit 18 / Rifle',
@@ -9440,8 +9440,10 @@ function unitMenuName(u) {
 // player (user vocabularies, 2026-08-06). Cutoffs match the roster's actual
 // value clusters: projectile speeds are 300 (shotguns) / 600 (standard) /
 // 2500 (sniper rounds) + the Railgun's charged hitscan beam; stun has
-// exactly three settings (100ms@0.25 the strongest — 9 guns — then 50@0.50
-// and MG42's 50@0.85).
+// exactly three settings (100ms@0.25 the strongest, then 50@0.50 and
+// 50@0.85). Since 2026-09-22 (evo3 and NEGEV moved up) every pickable
+// unit carries 100@0.25, so the card's Stun row reads Heavy across the
+// roster; the lighter tiers survive only on the hidden units.
 function bulletSpeedTier(u) {
   if (u.beam) return 'Instant';
   if (u.projectileSpeed >= 1500) return 'Fast';
