@@ -1438,8 +1438,21 @@ function updateUnitSpriteState(m, rig, dt, now) {
 //   swaps live when a spectate switch flips who reads hostile.
 // renderOrder 9997: BELOW the team chevrons (9998) and the reticle (9999),
 // so those stay readable where they overlap the bar.
-const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
-const UNIT_BAR_WORLD_W = 2.42;                      // world width at k = 1
+// Bar edge (owner pick "E" from six in-game samples, 2026-09-22 — "an edge
+// like the edge arrows'"): a dark OUTLINE in the arrows' stroke colour rings
+// the track pill, ~2.9 px on the ~92 x 12 px on-screen bar (the arrow's
+// stroke is ~2.7 px), and the track is laid over a pill of the team ink so
+// its empty part carries a faint cast of the team colour and its rounded
+// corners keep a hairline of it — that tint is what set sample E apart from
+// the plain-outline sample A. The outline sits OUTSIDE the pill: the fill
+// and track keep their size (2.42 x 0.3025 world); the sprite carries a
+// texture margin for it. The old 2 px steel (#2c4356) hairline is gone.
+const UNIT_BAR_PILL_W = 160, UNIT_BAR_PILL_H = 20; // the bar itself, texture px (8:1)
+const UNIT_BAR_EDGE_W = 5;                          // dark outline outside the pill, texture px
+const UNIT_BAR_PAD = 8;                             // texture margin around the pill (>= outline)
+const UNIT_BAR_TEX_W = UNIT_BAR_PILL_W + 2 * UNIT_BAR_PAD, UNIT_BAR_TEX_H = UNIT_BAR_PILL_H + 2 * UNIT_BAR_PAD;
+const UNIT_BAR_WORLD_W = 2.42;                      // world width of the PILL at k = 1
+const UNIT_BAR_EDGE = '#0b1622';                    // outline ink — the edge arrows' stroke colour
 const UNIT_BAR_INK_ALLY = '#7fe9ff';   // bright cyan (owner pick 2026-09-22, the second of the day: #a5f1ff for an hour before it; #92d5e6 soft cyan since 2026-09-19, the near-white #eaf6ff before that read as plain white)
 const UNIT_BAR_INK_ENEMY = '#ff6a2c';
 const UNIT_BAR_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
@@ -1459,20 +1472,28 @@ function drawHealthBar(sprite, frac) {
     x.lineTo(px, py + r); x.arcTo(px, py, px + r, py, r);
     x.closePath();
   };
+  const P = UNIT_BAR_PAD, pw = W - 2 * P, ph = H - 2 * P;   // the pill inside the margin
+  const grown = (g) => pill(P - g, P - g, pw + 2 * g, ph + 2 * g, 5 + g);   // the pill grown outward by g (pill() begins a fresh path)
   x.clearRect(0, 0, W, H);
-  pill(0, 0, W, H, 5);
+  // Painter's order: 1. the dark outline — a solid pill grown by the outline
+  // width (its middle is covered next); 2. the team-ink pill the track is
+  // tinted by; 3. the 92% navy track over it; 4. the fill, inset 2 px.
+  grown(UNIT_BAR_EDGE_W);
+  x.fillStyle = UNIT_BAR_EDGE;
+  x.fill();
+  grown(0);
+  x.fillStyle = sprite.userData.barInk;
+  x.fill();
+  grown(0);
   x.fillStyle = 'rgba(11, 17, 25, 0.92)';
   x.fill();
-  x.strokeStyle = '#2c4356';
-  x.lineWidth = 2;
-  x.stroke();
-  const inW = Math.round((W - 4) * frac);
+  const inW = Math.round((pw - 4) * frac);
   if (inW > 0) {
-    pill(2, 2, W - 4, H - 4, 3);
+    pill(P + 2, P + 2, pw - 4, ph - 4, 3);
     x.save();
     x.clip();                               // keeps the fill's corners inside the rounded track
     x.fillStyle = sprite.userData.barInk;
-    x.fillRect(2, 2, inW, H - 4);
+    x.fillRect(P + 2, P + 2, inW, ph - 4);
     x.restore();
   }
   sprite.material.map.needsUpdate = true;
@@ -1516,7 +1537,8 @@ function updateMechAnimations(dt, now) {
       const depth = Math.max(0.1,
         _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
       const k = depth / UNIT_BAR_REF_DIST;
-      const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_TEX_W) * k;
+      const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_PILL_H / UNIT_BAR_PILL_W) * k;   // the pill's world height
+      const padY = UNIT_BAR_WORLD_W * (UNIT_BAR_PAD / UNIT_BAR_PILL_W) * k;      // texture margin above the pill
       const hostile = getTeamOf(m) !== camTeam;
       const lockedOn = !!(state.reticle && state.reticle.visible && state.reticle.parent === m.root);
       if (hostile && !m.isOwnSprite && lockedOn) {
@@ -1525,12 +1547,13 @@ function updateMechAnimations(dt, now) {
         const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = Math.max(0.2 + UNIT_BAR_RETICLE_CLEAR * rs, UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP);
-        bar.position.y = clearY + barH;
+        bar.position.y = clearY + barH + padY;
       } else {
         // Everyone else rides the head at the screen-fixed gap.
-        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + barH;
+        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + barH + padY;
       }
-      bar.scale.set(UNIT_BAR_WORLD_W * k, barH, 1);
+      // The sprite carries the texture margin: scale it so the PILL keeps its 2.42 x 0.3025 world size.
+      bar.scale.set(UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_W / UNIT_BAR_PILL_W) * k, UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_PILL_W) * k, 1);
       const wantInk = hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY;
       if (bar.userData.barInk !== wantInk) {
         bar.userData.barInk = wantInk;
