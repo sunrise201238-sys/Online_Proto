@@ -9479,20 +9479,26 @@ function weightTier(u) {
 // range (user order 2026-08-06). The ring is a standing target's effective
 // half-width (1.8u ≈ FIGHTER_RADIUS + hit margin — the same "radius ~1.8"
 // the SG cluster comment cites) seen at u.lockRange; the dots are the
-// engine's real fire math at that distance: SA disc (r = SA/2·√u) + HA
-// horizontal-only with its trigger-range gate (mirrors fireProjectile),
-// shotguns as the literal SHOTGUN_PATTERN volley at the cluster-growth
+// engine's real fire math at that distance. Redrawn for the spread bloom
+// (owner 2026-09-22, "bring back the spread sheet and update the
+// indicator"): the dots are now a WALKING SPRAY — up to 30 rounds, magazine
+// limited — each round on the cone the sim would give it (base + bloom,
+// +bloomPerShot per round up to the cap, and for the no-delay marksman
+// rifles the recovery that runs between two rounds at the real tick slot).
+// Dots fade with round order (first round brightest), so a gun whose early
+// rounds sit in the ring and whose late rounds wander reads exactly that
+// way; a round that leaves the frame is pinned to the edge and drawn dim.
+// Shotguns stay the literal SHOTGUN_PATTERN volley at the cluster-growth
 // factor min(1, lockRange/70), seeded rotation, M1014's post-rotation X
-// stretch included. Dots INSIDE the ring = hits on a standing target at
-// the gun's own fighting distance — the in-ring fraction tracks the
-// README's measured standing hit rates (tight guns all-in = their 100s;
-// M60's horizontal spill ≈ its 73). Seeded → stable icon; cached per
-// weapon; drawn at 2x the 26px display size.
-// Profile-card Spread cell (the seeded scatter simulation below). Off since
-// 2026-09-21 — flip to true to show it again; nothing else changes.
-const PROFILE_SPREAD_CELL = false;
+// stretch included. Seeded → stable icon; cached per weapon; drawn at 2x
+// the 26px display size. HA is gone from the game, so the old horizontal
+// scatter term is gone from here too.
+// Profile-card Spread cell: off 2026-09-21 (base-cone picture said nothing
+// about bloom), back on 2026-09-22 with the spray picture above.
+const PROFILE_SPREAD_CELL = true;
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
+const SPREAD_ICON_ROUNDS = 30;        // spray length drawn (magazine-limited)
 // Reference-distance overrides (user order 2026-08-06, 56 → 60): every
 // non-shotgun evaluates at a COMMON 60 so their icons compare directly;
 // the shotguns keep their own 40 lockRange (their pattern is the point).
@@ -9505,7 +9511,7 @@ const SPREAD_ICON_RANGE_OVERRIDE = {
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
-  const S = 52, C = S / 2, R = 14;    // ring radius = the 1.8u half-width
+  const S = 52, C = S / 2, R = 12;    // ring radius = the 1.8u half-width; the frame spans ±3.9u (14 -> 12, 2026-09-22: room for an RPK's 3.6u cap cone)
   const cv = document.createElement('canvas');
   cv.width = S;
   cv.height = S;
@@ -9515,10 +9521,12 @@ function spreadIconURL(u) {
   x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
   x.fillStyle = '#eaf6ff';
   const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
-  const dot = (px, py, r) => {
-    px = Math.max(3, Math.min(S - 3, px));   // wild spill stays on the canvas
-    py = Math.max(3, Math.min(S - 3, py));
-    x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+  const dot = (px, py, r, alpha = 1) => {
+    const cx = Math.max(3, Math.min(S - 3, px));   // wild spill stays on the canvas, pinned to the edge …
+    const cy = Math.max(3, Math.min(S - 3, py));
+    x.globalAlpha = (cx !== px || cy !== py) ? Math.min(alpha, 0.35) : alpha;   // … and drawn dim
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = 1;
   };
   const d = SPREAD_ICON_RANGE_OVERRIDE[u.weapon] ?? u.lockRange ?? 50;
   let s = 7;
@@ -9533,13 +9541,18 @@ function spreadIconURL(u) {
       dot(C + toPx(rx * factor * stretch), C + toPx(ry * factor), 3.0);
     }
   } else {
-    // Base cone only (the first shot of a burst); bloom widens it in play.
-    for (let i = 0; i < 20; i++) {
-      const saR = ((u.spreadAngle ?? 0) / 2) * Math.sqrt(rnd());
+    // Walking spray: round i leaves on the sim's cone for that round.
+    const rounds = Math.max(1, Math.min(SPREAD_ICON_ROUNDS, u.magCapacity ?? SPREAD_ICON_ROUNDS));
+    const slotMs = Math.ceil(60000 / (u.firePerMinute || 600) / SIM_TICK_RATE_MS) * SIM_TICK_RATE_MS;
+    let bloom = 0;
+    for (let i = 0; i < rounds; i++) {
+      const saR = (effectiveSpread(u, bloom) / 2) * Math.sqrt(rnd());
       const saT = rnd() * Math.PI * 2;
       const yaw = saR * Math.cos(saT);
       const pitch = saR * Math.sin(saT);
-      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2);
+      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2, 1 - 0.55 * (rounds > 1 ? i / (rounds - 1) : 0));
+      bloom = bloomAfterShot(u, bloom);
+      bloom = bloomAfterTime(u, bloom, slotMs, slotMs / 1000);   // in-burst recovery: only the no-delay guns
     }
   }
   return (_spreadIconCache[key] = cv.toDataURL('image/png'));
@@ -9586,11 +9599,10 @@ function showProfilePopup(card, unit, onConfirm) {
     ['Weight', weightTier(unit)],     // walk-speed tier word: Light / Medium / Heavy
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
-    ['Spread', spreadTier(unit)],     // bloom tier word: None / Low / Medium / High
-    // Spread scatter simulation — HIDDEN since 2026-09-21 (owner call): with
-    // per-shot bloom the base-cone picture no longer tells the story. The
-    // spreadIconURL machinery stays intact behind PROFILE_SPREAD_CELL.
-    ...(PROFILE_SPREAD_CELL ? [['Scatter', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]] : [])
+    // The Spread tier word (spreadTier: None / Low / Medium / High, 2026-09-21)
+    // was the seventh row for a day; removed 2026-09-22 (owner call) in favour
+    // of the spray picture below. The helper stays for the tooltips.
+    ...(PROFILE_SPREAD_CELL ? [['Spread', `<img class="stat-scatter" src="${spreadIconURL(unit)}" draggable="false">`]] : [])
   ].map(([l, v]) => {
     // Long plain-text values (PSG1's 50/35/20, 'Instant') step down a font
     // size so the row still fits the 21vw phone face on one line.
