@@ -9015,9 +9015,14 @@ function movementTier(u) {
 // the shotguns' own 40 lock range (their fixed pattern is the point — drawn
 // as the literal SHOTGUN_PATTERN volley at the cluster-growth factor, seeded
 // rotation, SDASS's post-rotation X stretch included). Dots fade with round
-// order (first round brightest); a round that leaves the frame is pinned to
-// the edge and drawn dim. Cached per unit (two units share the "Laser" name,
-// so the key is the sprite key); drawn at 72px for the 30px display cell.
+// order (first round brightest). The spray STOPS at the first round whose
+// cone no longer fits the frame (owner 2026-09-22, from samples: the old
+// "pin a spilled round to the edge and draw it dim" piled Fubuki's 27
+// out-of-frame rounds into a rectangle along the canvas border) — so a
+// marksman rifle's picture is its first three quick rounds, one on the
+// ring's centre and two at its edge, and nothing is ever drawn outside the
+// frame. Cached per unit (two units share the "Laser" name, so the key is
+// the sprite key); drawn at 72px for the 30px display cell.
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 const SPREAD_ICON_ROUNDS = 30;        // spray length drawn (magazine-limited)
@@ -9027,6 +9032,7 @@ function spreadIconURL(u) {
   const key = u.spriteKey ?? u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
   const S = 72, C = S / 2, k = S / 52, R = 12 * k;    // ring radius = the 1.8u half-width; the frame spans ±3.9u
+  const frameR = (C - 3 * k) / R * SPREAD_ICON_HIT_HALF_W;   // the largest cone radius (world units at d) that still fits the frame: ~3.45u
   const cv = document.createElement('canvas');
   cv.width = S;
   cv.height = S;
@@ -9037,10 +9043,9 @@ function spreadIconURL(u) {
   x.fillStyle = SPREAD_ICON_DOT;
   const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
   const dot = (px, py, r, alpha = 1) => {
-    const cx = Math.max(3 * k, Math.min(S - 3 * k, px));   // wild spill stays on the canvas, pinned to the edge …
-    const cy = Math.max(3 * k, Math.min(S - 3 * k, py));
-    x.globalAlpha = (cx !== px || cy !== py) ? Math.min(alpha, 0.35) : alpha;   // … and drawn dim
-    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    if (px < 3 * k || px > S - 3 * k || py < 3 * k || py > S - 3 * k) return;   // never draw outside the frame (defensive: the cone rule below keeps every drawn round inside)
+    x.globalAlpha = alpha;
+    x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
     x.globalAlpha = 1;
   };
   const shotgun = (u.spreadCount ?? 1) > 1;
@@ -9062,7 +9067,9 @@ function spreadIconURL(u) {
     const slotMs = Math.ceil(60000 / (u.firePerMinute || 600) / SIM_TICK_RATE_MS) * SIM_TICK_RATE_MS;
     let bloom = 0;
     for (let i = 0; i < rounds; i++) {
-      const saR = (effectiveSpread(u, bloom) / 2) * Math.sqrt(rnd());
+      const cone = effectiveSpread(u, bloom);
+      if ((cone / 2) * d > frameR) break;    // this round's cone no longer fits the frame: the picture ends here
+      const saR = (cone / 2) * Math.sqrt(rnd());
       const saT = rnd() * Math.PI * 2;
       const yaw = saR * Math.cos(saT);
       const pitch = saR * Math.sin(saT);
