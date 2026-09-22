@@ -9465,6 +9465,16 @@ function spreadTier(u) {
   if (cap <= 0.12) return 'Medium';
   return 'High';
 }
+// Weight tier word for the profile card (owner 2026-09-22, replaces the
+// projectile-speed row): keyed on the unit's walk speed — the per-unit walk
+// tiers of 2026-09-21. Light = 16 (SMGs, M1014), Medium = 14 (rifles,
+// marksman and sniper rifles, Railgun), Heavy = 12 (AA12, machine guns).
+function weightTier(u) {
+  const walk = u.walkSpeed ?? 16;
+  if (walk >= 16) return 'Light';
+  if (walk >= 14) return 'Medium';
+  return 'Heavy';
+}
 // Per-weapon spread icon — a true mini-SIMULATION at the gun's OWN lock
 // range (user order 2026-08-06). The ring is a standing target's effective
 // half-width (1.8u ≈ FIGHTER_RADIUS + hit margin — the same "radius ~1.8"
@@ -9570,7 +9580,10 @@ function showProfilePopup(card, unit, onConfirm) {
     ['Mag', `${unit.magCapacity}`],
     ['Dmg', dmg],
     ['RPM', `${unit.firePerMinute}`],
-    ['Spd', bulletSpeedTier(unit)],   // shortest label — 'Instant' must fit the 21vw face
+    // 'Spd' (projectile-speed tier, bulletSpeedTier) was the fourth row until
+    // 2026-09-22 — replaced by Weight (owner call); the helper stays for the
+    // tooltips / a future row.
+    ['Weight', weightTier(unit)],     // walk-speed tier word: Light / Medium / Heavy
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
     ['Stun', stunTier(unit)],
     ['Spread', spreadTier(unit)],     // bloom tier word: None / Low / Medium / High
