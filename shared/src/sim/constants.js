@@ -82,7 +82,7 @@ export const UNIT_DATA = {
     // lockRange, edges ±7) gives the shotgun a 33–47 band (43–57 in 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -398,7 +398,7 @@ export const UNIT_DATA = {
     // Hoshino's concentrated slug.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -552,7 +552,7 @@ export const UNIT_DATA = {
     // 33–47 band (43–57 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
     autoFire: true,            // full-auto: hold-to-fire like the MGs (shotguns are tap-fire by default)
     spreadCount: 8,
