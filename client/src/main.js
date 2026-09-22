@@ -9514,19 +9514,21 @@ const SPREAD_ICON_RANGE_OVERRIDE = {
 function spreadIconURL(u) {
   const key = u.weapon ?? '?';
   if (_spreadIconCache[key]) return _spreadIconCache[key];
-  const S = 52, C = S / 2, R = 12;    // ring radius = the 1.8u half-width; the frame spans ±3.9u (14 -> 12, 2026-09-22: room for an RPK's 3.6u cap cone)
+  // 72px canvas (was 52; 2026-09-22: the desktop card shows it at 36px). Every
+  // length below scales with k so the picture is identical at any S.
+  const S = 72, C = S / 2, k = S / 52, R = 12 * k;    // ring radius = the 1.8u half-width; the frame spans ±3.9u (14 -> 12, 2026-09-22: room for an RPK's 3.6u cap cone)
   const cv = document.createElement('canvas');
   cv.width = S;
   cv.height = S;
   const x = cv.getContext('2d');
   x.strokeStyle = '#4a6a86';
-  x.lineWidth = 3;
+  x.lineWidth = 3 * k;
   x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
   x.fillStyle = SPREAD_ICON_DOT;
   const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
   const dot = (px, py, r, alpha = 1) => {
-    const cx = Math.max(3, Math.min(S - 3, px));   // wild spill stays on the canvas, pinned to the edge …
-    const cy = Math.max(3, Math.min(S - 3, py));
+    const cx = Math.max(3 * k, Math.min(S - 3 * k, px));   // wild spill stays on the canvas, pinned to the edge …
+    const cy = Math.max(3 * k, Math.min(S - 3 * k, py));
     x.globalAlpha = (cx !== px || cy !== py) ? Math.min(alpha, 0.35) : alpha;   // … and drawn dim
     x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
     x.globalAlpha = 1;
@@ -9541,7 +9543,7 @@ function spreadIconURL(u) {
     for (const [ox, oy] of SHOTGUN_PATTERN) {
       const rx = ox * Math.cos(rot) - oy * Math.sin(rot);
       const ry = ox * Math.sin(rot) + oy * Math.cos(rot);
-      dot(C + toPx(rx * factor * stretch), C + toPx(ry * factor), 3.0);
+      dot(C + toPx(rx * factor * stretch), C + toPx(ry * factor), 3.0 * k);
     }
   } else {
     // Walking spray: round i leaves on the sim's cone for that round.
@@ -9553,7 +9555,7 @@ function spreadIconURL(u) {
       const saT = rnd() * Math.PI * 2;
       const yaw = saR * Math.cos(saT);
       const pitch = saR * Math.sin(saT);
-      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2, 1 - 0.55 * (rounds > 1 ? i / (rounds - 1) : 0));
+      dot(C + toPx(yaw * d), C + toPx(pitch * d), 2.2 * k, 1 - 0.55 * (rounds > 1 ? i / (rounds - 1) : 0));
       bloom = bloomAfterShot(u, bloom);
       bloom = bloomAfterTime(u, bloom, slotMs, slotMs / 1000);   // in-burst recovery: only the no-delay guns
     }

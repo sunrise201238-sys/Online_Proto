@@ -504,3 +504,28 @@ body.pseudo-fullscreen #app {
 
 /* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
 .roster-viewtag { color: #ffd257; font-size: 0.85em; letter-spacing: 0.08em; }
+
+/* ---- profile-card text readability (owner pick "A", 2026-09-22) ----
+   Same 110x140 face and layout; only the text changes: 9 -> 10px rows on a
+   14px line, tracking 0 (the face's 0.04em made "Weight Medium" collide at
+   10px), side padding 9 -> 7px, brighter labels, white bold tabular values
+   and a hairline between rows. Phones keep 9px / 13px — their face is
+   width-capped at 21vw and "Weight Light" already fills it. */
+.unit-profile-popup .demo-face.demo-face-stats { padding: 7px 7px; }
+.unit-profile-popup .stat-row { font-size: 10px; line-height: 14px; letter-spacing: 0; }
+.unit-profile-popup .stat-row + .stat-row { border-top: 1px solid rgba(126, 156, 180, 0.18); }
+.unit-profile-popup .stat-row .stat-label { color: #a8c2d8; }
+.unit-profile-popup .stat-row .stat-value { color: #ffffff; font-weight: 700; font-variant-numeric: tabular-nums; }
+.unit-profile-popup .stat-row .stat-value.stat-tight { font-size: 8.5px; }
+@media (max-width: 600px) {
+  /* 8.5px, not 9: on the 82px phone face "Weight Medium" (the widest row since
+     the Weight row of 2026-09-22) ran 9px past the padding at 9px. */
+  .unit-profile-popup .stat-row { font-size: 8.5px; line-height: 13px; }
+  .unit-profile-popup .stat-row .stat-value.stat-tight { font-size: 7.5px; }
+  .unit-profile-popup .demo-face.demo-face-stats { padding: 7px 5px; }   /* +4px of row width for "Weight Medium" */
+  /* The stats face may take 23vw on a phone (was the portrait's 21vw): at 21vw
+     "Weight Medium" still touched even at 8.5px. 23vw = 90px on a 390px phone;
+     the whole popup stays under 200px on a 360px one. */
+  .unit-profile-popup .profile-face.demo-face-stats { max-width: 23vw; }
+}
+/* ---- end profile-card text readability ---- */
