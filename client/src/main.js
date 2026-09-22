@@ -214,6 +214,7 @@ const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -598,6 +599,7 @@ const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,

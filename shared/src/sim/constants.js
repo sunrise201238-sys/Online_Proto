@@ -156,6 +156,7 @@ export const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -511,6 +512,7 @@ export const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,
@@ -747,7 +749,7 @@ export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
 // Bot suppressing fire (owner 2026-09-21): an auto weapon whose target sits
 // OUTSIDE its current sure-hit distance waits for the cone to fully recover,
 // then fires this many rounds as one committed burst; a unit can override
-// the size with `botSuppressBurst` (the marksman rifles fire 1).
+// the size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
 export const BOT_SUPPRESS_BURST = 5;
 // Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
 // ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least

@@ -123,13 +123,15 @@ test('RPK bot at its 80-unit band: an opening burst at full rate, then a full re
   for (const g of gaps.slice(firstPause + 1, firstPause + 5)) assert.equal(g, 112);
 });
 
-test('evo3 bot beyond its base sure-hit (100 u > 80): committed 5-round suppress bursts from a recovered cone', () => {
-  const { gaps, coneAtFire, fireTimes } = botRun('unit4', 100, 3000);
-  assert.ok(fireTimes.length >= 10, 'shots ' + fireTimes.length);
-  assert.deepEqual(gaps.slice(0, 4), [64, 64, 64, 64]);           // burst of 5 at the 64 ms slot
-  assert.ok(gaps[4] >= 480, 'pause between bursts ' + gaps[4]);   // 200 ms delay + 0.015 / 0.05 = 500 ms
-  assert.deepEqual(gaps.slice(5, 9), [64, 64, 64, 64]);           // next burst
-  assert.equal(coneAtFire[5], 0.04);                              // every burst opens on the base cone
+test('evo3 bot beyond its base sure-hit (100 u > 80): committed 10-round suppress bursts from a recovered cone', () => {
+  const { gaps, coneAtFire, fireTimes } = botRun('unit4', 100, 4000);
+  assert.ok(fireTimes.length >= 20, 'shots ' + fireTimes.length);
+  assert.deepEqual(gaps.slice(0, 9), Array(9).fill(64));                          // burst of 10 at the 64 ms slot (SMG override, 2026-09-22)
+  assert.ok(gaps[9] >= 784 && gaps[9] <= 900, 'pause between bursts ' + gaps[9]); // 200 ms delay + 0.030 / 0.05 = 800 ms
+  assert.deepEqual(gaps.slice(10, 19), Array(9).fill(64));                        // next burst
+  assert.equal(coneAtFire[10], 0.04);                                             // every burst opens on the base cone
+  assert.equal(UNIT_DATA.unit14.botSuppressBurst, 10);                            // P90 carries the same override
+  assert.equal(UNIT_DATA.unit1.botSuppressBurst, undefined);                      // the rifles stay on the 5-round default
 });
 
 test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so it fires once per full recovery', () => {

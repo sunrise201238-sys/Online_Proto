@@ -1792,7 +1792,7 @@ export function tickBot(matchState, botId, now) {
       // sure-hit distance (3.2 / SA-now) the bot fires freely; outside it the
       // bot waits for the cone to fully recover (released early only if the
       // target closes in) and then fires a committed suppress burst of
-      // botSuppressBurst rounds (5 autos, 1 marksman rifles). Closed form,
+      // botSuppressBurst rounds (5 autos, 10 SMGs, 1 marksman rifles). Closed form,
       // checked BEFORE the obstacle scan; polls every tick. Mirrors offline
       // main.js updateEnemy.
       me.nextFireAt = now + TICK_RATE_MS;

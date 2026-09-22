@@ -67,8 +67,8 @@ export function withinSureHit(unit, bloom, dist) {
 //   - A committed suppress burst runs to its end.
 //   - Inside the current sure-hit distance: fire freely.
 //   - Outside it with the cone fully recovered: start a suppress burst of
-//     `botSuppressBurst` rounds (BOT_SUPPRESS_BURST for autos, 1 for the
-//     marksman rifles) and fire.
+//     `botSuppressBurst` rounds (BOT_SUPPRESS_BURST = 5 for the autos, 10 for
+//     the SMGs, 1 for the marksman rifles) and fire.
 //   - Outside it with bloom still up: hold until the cone has fully
 //     recovered — the line drifting back out past a static target does not
 //     release the hold (no one-round trickle) — unless the target closes in
