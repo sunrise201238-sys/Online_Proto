@@ -77,12 +77,12 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s | 14 |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s | 16 |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s | 16 |
-| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 3 s (full drum) | 12 |
-| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 300 | 40 / 50 | 1 s (auto, per round) | 16 |
+| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 450 | 40 / 50 | 3 s (full drum) | 12 |
+| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 450 | 40 / 50 | 1 s (auto, per round) | 16 |
 | RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s | 12 |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s | 12 |
-| M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s | 14 |
-| SVD — Rifle | 10 | 12 / shot | 180 RPM | 600 | 56 / 65 | 1.5 s | 14 |
+| M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 2 s | 14 |
+| SVD — Rifle | 10 | 12 / shot | 180 RPM | 600 | 56 / 65 | 2 s | 14 |
 | PSG1 — Sniper Rifle | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge | 14 |
 | Railgun — Sniper Rifle | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge | 14 |
 
@@ -98,9 +98,9 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | RPK | 8.9/s (112 ms) | 5 | **44.6** | 31.1 |
 | P90 | 12.5/s (80 ms) | 3.5 | **43.8** | 32.3 |
 | M4 | 10.4/s (96 ms) | 4 | **41.7** | 28.0 |
-| SVD | 2.98/s (336 ms) | 12 | **35.7** | 26.5 |
+| SVD | 2.98/s (336 ms) | 12 | **35.7** | 23.9 |
 | PSG1 | 1 per ~1.5 s (snap cycle) | 50 / 35 / 20 by range | **~33.3** (full-damage snaps) | ~33.3 |
-| M14 | 2.98/s (336 ms) | 10 | **29.8** | 25.4 |
+| M14 | 2.98/s (336 ms) | 10 | **29.8** | 23.9 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
 Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 3 s reload (4 s until 2026-09-22). The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 42–55 spread across the five mid-table autos (evo3, FAMAS, M4, RPK, P90) is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS. The two marksman rifles sit below that band on burst but hold ~24 sustained, close to the autos: their damage arrives in fewer, larger pieces rather than more slowly.

@@ -82,7 +82,7 @@ export const UNIT_DATA = {
     // lockRange, edges ±7) gives the shotgun a 33–47 band (43–57 in 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -372,7 +372,7 @@ export const UNIT_DATA = {
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
-    reloadMs: 1500,
+    reloadMs: 2000,            // 1500 -> 2000 (owner 2026-09-22)
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   },
@@ -398,7 +398,7 @@ export const UNIT_DATA = {
     // Hoshino's concentrated slug.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -552,7 +552,7 @@ export const UNIT_DATA = {
     // 33–47 band (43–57 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 450,      // 300 -> 450 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
     autoFire: true,            // full-auto: hold-to-fire like the MGs (shotguns are tap-fire by default)
     spreadCount: 8,
@@ -676,7 +676,7 @@ export const UNIT_DATA = {
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
-    reloadMs: 1500,
+    reloadMs: 2000,            // 1500 -> 2000 (owner 2026-09-22)
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   }
