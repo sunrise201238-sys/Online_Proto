@@ -209,7 +209,7 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,         // base SA (rad, full cone) — evo3: sure-hit 80 at base, 40 at cap (bloom 2026-09-21)
+    spreadAngle: 0.03,         // base SA (rad, full cone) — evo3: sure-hit 107 at base, 40 at cap (0.04 -> 0.03, owner 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
@@ -594,7 +594,7 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.7 ms cooldown — 80 ms tick slot (12.5/s), FAMAS's rung
     spreadCount: 1,
-    spreadAngle: 0.02,         // base SA (rad, full cone) — P90: sure-hit 160 at base, 40 at cap (bloom 2026-09-21)
+    spreadAngle: 0.03,         // base SA (rad, full cone) — P90: sure-hit 107 at base, 40 at cap (0.02 -> 0.03, owner 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
@@ -9601,7 +9601,9 @@ function showProfilePopup(card, unit, onConfirm) {
     // tooltips / a future row.
     ['Weight', weightTier(unit)],     // walk-speed tier word: Light / Medium / Heavy
     ['Reload', `${(unit.reloadMs / 1000).toFixed(1)} s`],
-    ['Stun', stunTier(unit)],
+    // 'Stun' (stunTier: Heavy / Normal / Light) left the card 2026-09-22 (owner
+    // call) — every pickable unit carries 100 ms @ 0.25 now, so the row read
+    // Heavy across the roster. The helper stays.
     // The Spread tier word (spreadTier: None / Low / Medium / High, 2026-09-21)
     // was the seventh row for a day; removed 2026-09-22 (owner call) in favour
     // of the spray picture below. The helper stays for the tooltips.
