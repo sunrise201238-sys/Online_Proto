@@ -234,9 +234,9 @@ Three properties the table encodes: glint duration equals the release time on **
 
 A burst ends early if the mag runs dry (straight into the reload), if line of sight breaks (re-checked every 0.22 s; the burst then restarts from full), or if the target is **spawn-immune** — bots hold fire at immune targets and wake the moment immunity lapses. A bot's OWN spawn immunity does **not** hold its fire: a freshly spawned bot shoots from behind its protection window, same as a player would.
 
-### Fubuki (Unit 10) — ribbon tracer
+### Fubuki (Unit 10) & Aru (Unit 3) — ribbon tracers
 
-Fubuki's Ruger rounds draw a **camera-facing ribbon trail** (2026-09-19, the demo line's marksman-rifle treatment): a real quad of world half-width 0.06 that re-aims at the camera every frame — live and while fading — so it reads as a thicker, smoke-like streak that thins with range like a physical object. Every other gun keeps the 1-pixel line trail (MG / rifle rounds fade in 100 ms, sniper rounds in 1 s; shotgun pellets and Aris's bolts have none). Visual only — hit detection is untouched.
+Fubuki's Ruger rounds draw a **camera-facing ribbon trail** (2026-09-19, the demo line's marksman-rifle treatment): a real quad of world half-width 0.06 that re-aims at the camera every frame — live and while fading — so it reads as a thicker, smoke-like streak that thins with range like a physical object. Aru's PSG1 rounds carry the same ribbon at the demo line's deliberately fatter sniper width, half-width 0.10, fading over the sniper's 1 s (2026-09-22, owner: "use the 0.8.3 trails" — with that the BA line's trails match the demo line gun for gun: the six autos on the 1-pixel line, the rifle on the 0.06 ribbon, the sniper on the 0.10 ribbon). Every other gun keeps the 1-pixel line trail (MG / rifle rounds fade in 100 ms; shotgun pellets have none, Aris's bolt is its own trail and Kei's beam is hitscan). Visual only — hit detection is untouched.
 
 ## Bot logic
 

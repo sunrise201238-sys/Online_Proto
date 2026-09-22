@@ -2041,10 +2041,11 @@ const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
 // MG / Sniper round and fades out after the bullet expires. Shotgun pellets
 // opt out so 8 pellets per shot don't make a noisy mess. The trail is a
-// 2-vertex THREE.Line whose tail is computed analytically from the projectile's
-// velocity (projectiles fly straight — homing is 0 — so no sample buffer
-// needed). Despawned bullets hand their trail to state.dyingBulletTrails so it
-// fades in place instead of vanishing the instant the bullet stops.
+// 2-vertex THREE.Line — or, for the two guns listed under trail THICKNESS
+// below, a camera-facing ribbon — whose tail is computed analytically from the
+// projectile's velocity (projectiles fly straight — homing is 0 — so no sample
+// buffer needed). Despawned bullets hand their trail to state.dyingBulletTrails
+// so it fades in place instead of vanishing the instant the bullet stops.
 const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
 const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
 // Per-map bullet-trail color: dark slate on bright-ground maps (light grey
@@ -2057,7 +2058,7 @@ const bulletTrailColor = () => (BULLET_TRAIL_DARK_MAPS.has(state.mapKey) ? BULLE
 const BULLET_TRAIL_OPACITY = 0.55;
 // Trail THICKNESS (user 2026-08-09). A THREE.Line is always 1 device pixel —
 // WebGL ignores LineBasicMaterial.linewidth — so a streak that reads thicker
-// has to be real geometry. Only a slow, low-volume gun gets it; the others
+// has to be real geometry. Only the slow, low-volume guns get it; the others
 // keep the cheap Line, which matters because the 100 ms MG fade
 // above exists precisely because trail COUNT once cost frames at MG fire-rate.
 // Width is specified in SCREEN PIXELS and held constant along the whole streak,
@@ -2086,12 +2087,16 @@ const BULLET_TRAIL_OPACITY = 0.55;
 // of the way (user 2026-08-09). M14 / SVD now sit at the same visual thickness
 // as the very first cylinder attempt (0b50f25 used radius 0.06); PSG1 is a
 // little under its 0.12.
-// BA line (owner 2026-09-19): ported from the demo line, where the two
-// marksman rifles and PSG1 carry it. Here only Fubuki's Ruger Mini-14 — the BA
-// rifle — gets the ribbon; Aru keeps the plain Line unless asked otherwise.
+// BA line: ported from the demo line 2026-09-19 for Fubuki's Ruger Mini-14 (the
+// BA rifle, the demo line's M14 / SVD width); Aru's PSG1 joined 2026-09-22
+// (owner: "use the 0.8.3 trails") with the demo line's deliberately fatter
+// sniper ribbon. Aris's laser bolt is its own trail and Kei's beam is hitscan,
+// so neither has a demo-line trail to take.
 const BULLET_TRAIL_RADIUS_RIFLE = 0.06;    // Fubuki (demo line: M14 / SVD)
+const BULLET_TRAIL_RADIUS_SNIPER = 0.10;   // Aru / PSG1 — deliberately the fatter one (demo line: PSG1)
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
-  [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE]     // Fubuki / Ruger Mini-14
+  [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE],    // Fubuki / Ruger Mini-14
+  [UNIT_DATA.unit3?.name, BULLET_TRAIL_RADIUS_SNIPER]     // Aru / PSG1
 ].filter(([name]) => name));
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
 const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
