@@ -1440,7 +1440,7 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // so those stay readable where they overlap the bar.
 const UNIT_BAR_TEX_W = 160, UNIT_BAR_TEX_H = 20;   // texture px (8:1)
 const UNIT_BAR_WORLD_W = 2.42;                      // world width at k = 1
-const UNIT_BAR_INK_ALLY = '#92d5e6';   // soft cyan (owner 2026-09-19 — the near-white #eaf6ff read as plain white)
+const UNIT_BAR_INK_ALLY = '#a5f1ff';   // bright cyan (owner pick 2026-09-22 from in-game samples; #92d5e6 soft cyan since 2026-09-19, the near-white #eaf6ff before that read as plain white)
 const UNIT_BAR_INK_ENEMY = '#ff6a2c';
 const UNIT_BAR_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
 const UNIT_BAR_TEAM_GAP = 0.39;     // screen-fixed head clearance (scales by k)
