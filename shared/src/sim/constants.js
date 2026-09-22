@@ -41,9 +41,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.002,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4.5,
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -77,8 +79,6 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -109,8 +109,6 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 50,
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -145,9 +143,12 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.06,
-    horizontalAngle: 0,          // HA 0.04 -> 0 (2026-07-31, moved to Marina): modern EVO3 shoots tight; sure-hit ~53
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.03,         // base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.08,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -181,9 +182,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.14,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.03,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 250,
     botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -214,8 +217,6 @@ export const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
@@ -256,9 +257,13 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
+    bloomPerShot: 0.10,        // SA added per shot
+    bloomCap: 0.20,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
     magCapacity: 8,
     reloadMs: 1200,
@@ -299,9 +304,12 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.04,         // base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.09,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 4,
     magCapacity: 50,
     botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -332,9 +340,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 25,
     botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -367,9 +377,13 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
+    bloomPerShot: 0.10,        // SA added per shot
+    bloomCap: 0.30,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     damage: 10,
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -404,8 +418,6 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -441,9 +453,11 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.004,        // SA added per shot
+    bloomCap: 0.12,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.03,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -477,9 +491,12 @@ export const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.06,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.06,         // base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.11,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
@@ -498,6 +515,12 @@ for (const unit of Object.values(UNIT_DATA)) {
   if (unit.firePerMinute != null && unit.fireCooldownMs == null) {
     unit.fireCooldownMs = 60000 / unit.firePerMinute;
   }
+  // Bloom defaults (ported 2026-09-22): a unit without bloom fields fires a fixed
+  // cone forever — bloomCap == spreadAngle means "no bloom".
+  unit.bloomPerShot = unit.bloomPerShot ?? 0;
+  unit.bloomCap = unit.bloomCap ?? unit.spreadAngle;
+  unit.bloomRecoverPerSec = unit.bloomRecoverPerSec ?? 0;
+  unit.bloomRecoverDelayMs = unit.bloomRecoverDelayMs ?? 0;
 }
 
 export const MAP_DATA = {
@@ -549,6 +572,30 @@ export const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectile
 // 6.4-tall sprite (body center ± (1.6 + 1.6) = ±3.2).
 export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_HALF_HEIGHT = 1.6;
+// Standing-target sure-hit numerator (bloom.js): sure-hit distance = SURE_HIT_WIDTH / spread.
+export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
+// Bot fire-gate line (owner 2026-09-22: "33% for the auto weapons, 100% for
+// the semi rifles"; the old burst / rest rhythm stays underneath). An auto
+// weapon's bot keeps firing while the target sits inside the distance where
+// its CURRENT cone still lands one round in three on a STANDING target: the
+// 3.2 x 6.4 capsule is a third of the cone's disc at radius 4.42, so the line
+// is BOT_GATE_WIDTH_AUTO / cone = 2.76x the sure-hit line (Saori at her 0.06 cap:
+// 147; Atsuko at 0.08: 110; Koyuki at 0.12: 74). The marksman rifles gate
+// on the sure-hit line itself (per-unit `botGateWidth: 3.2`). Ported from the demo line 0.8.3 on 2026-09-22 (owner
+// questionnaire); the demo-line duel batches behind the numbers are in that
+// branch's README.
+export const BOT_GATE_WIDTH_AUTO = 8.84;
+// Bot suppressing fire (owner 2026-09-21): an auto weapon whose target sits
+// OUTSIDE its current gate line waits for the cone to fully recover, then
+// fires this many rounds as one committed burst; a unit can override the
+// size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
+export const BOT_SUPPRESS_BURST = 5;
+// Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
+// ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least
+// BLOOM_STILL_DWELL_MS fires without adding bloom, and its bloom recovers
+// even while it keeps firing (the recovery delay is skipped).
+export const BLOOM_STILL_SPEED = 1;
+export const BLOOM_STILL_DWELL_MS = 200;
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.

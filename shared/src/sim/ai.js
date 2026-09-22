@@ -17,7 +17,8 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, smoothPath } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS } from './constants.js';
+import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -1778,17 +1779,32 @@ export function tickBot(matchState, botId, now) {
         : Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);
       me.nextFireAt = now + wait;
       me.machineBurstRemaining = 0;
+      botClearFireRule(me);
     } else if (now < opp.invulnerableUntil) {
       // Target is spawn-immune — no shot can hurt it, so hold fire instead
       // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
       // regular 220 ms poll, whichever comes first (the target can change).
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
+      botClearFireRule(me);
+    } else if (!botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
+      // BLOOM GATE (owner 2026-09-21, bloom.js botMayFire; gate line
+      // 2026-09-22): inside the CURRENT gate line (8.84 / SA-now for the
+      // autos — the 33%-hit distance — and 3.2 / SA-now, sure-hit, for the
+      // marksman rifles) the bot fires freely on the old burst / rest rhythm;
+      // outside it the bot waits for the cone to fully recover (released
+      // early only if the target closes in) and then fires a committed
+      // suppress burst of botSuppressBurst rounds (5 autos, 10 SMGs, 1
+      // marksman rifles). Closed form,
+      // checked BEFORE the obstacle scan; polls every tick. Mirrors offline
+      // main.js updateEnemy.
+      me.nextFireAt = now + TICK_RATE_MS;
     } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
       // No clear shot — hold fire and check again shortly. The origin is the
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       me.nextFireAt = now + 220;
       me.machineBurstRemaining = 0;
+      botClearFireRule(me);
     } else if (u.sniperCharge) {
       const fired = attemptFire(matchState, me, opp, now);
       if (fired) {
@@ -1813,6 +1829,7 @@ export function tickBot(matchState, botId, now) {
       const firedAt = me.lastFireAt;
       attemptFire(matchState, me, opp, now);
       const fired = me.lastFireAt !== firedAt;
+      if (fired) botNoteShot(me);
       if (bursted) {
         if (fired) me.machineBurstRemaining -= 1;
         me.nextFireAt = me.machineBurstRemaining > 0

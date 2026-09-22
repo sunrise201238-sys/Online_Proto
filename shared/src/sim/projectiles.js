@@ -34,6 +34,7 @@ import {
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
+import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
 
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
@@ -71,7 +72,7 @@ export function spawnProjectiles(matchState, owner, target) {
     // serialized, transmitted, parsed, cloned, and rendered (the online
     // "one shotgun lags the match" report). Mirrors offline main.js.
     // Round jitter: sample a DISK (independent per-axis uniforms make a square).
-    const jR = (u.spreadAngle * 0.08 / 2) * Math.sqrt(Math.random());
+    const jR = (effectiveSpread(u, owner.bloom) * 0.08 / 2) * Math.sqrt(Math.random());
     const jT = Math.random() * Math.PI * 2;
     const yaw = jR * Math.cos(jT);
     const pitch = jR * Math.sin(jT);
@@ -97,19 +98,16 @@ export function spawnProjectiles(matchState, owner, target) {
     spawned.push(projectile);
     matchState.projectiles.push(projectile);
   } else {
-    // horizontalAngle: extra HORIZONTAL-only random scatter, active only when
-    // the target is beyond horizontalTriggerRange at fire time (same
-    // fire-time-distance convention as rangeDamage). Inside the trigger
-    // range the gun keeps its plain spreadAngle accuracy. Mirrors offline.
-    const haDist = Math.hypot(target.pos.x - owner.pos.x, target.pos.z - owner.pos.z);
-    const ha = (u.horizontalAngle && haDist > (u.horizontalTriggerRange ?? 0)) ? u.horizontalAngle : 0;
+    // The cone is the base spreadAngle plus the shooter's CURRENT bloom
+    // (bloom.js, 2026-09-21 — HA is gone). Sampled BEFORE the shot's own
+    // bloom lands (below), so the first shot of a burst is the base cone.
+    const saNow = effectiveSpread(u, owner.bloom);
     for (let i = 0; i < u.spreadCount; i += 1) {
       // SA is a truly ROUND cone: sample a disk (angle + sqrt-radius) —
-      // independent per-axis uniforms would fill a SQUARE. HA then adds its
-      // horizontal-only scatter on top.
-      const saR = (u.spreadAngle / 2) * Math.sqrt(Math.random());
+      // independent per-axis uniforms would fill a SQUARE.
+      const saR = (saNow / 2) * Math.sqrt(Math.random());
       const saT = Math.random() * Math.PI * 2;
-      const yaw = saR * Math.cos(saT) + (Math.random() - 0.5) * ha;
+      const yaw = saR * Math.cos(saT);
       const pitch = saR * Math.sin(saT);
       const dir = applyYawPitch(baseDir, yaw, pitch);
       const projectile = createProjectile({
@@ -140,6 +138,10 @@ export function spawnProjectiles(matchState, owner, target) {
       matchState.projectiles.push(projectile);
     }
   }
+
+  // This shot's bloom lands AFTER its direction was sampled — unless the
+  // shooter has been standing still (bloom.js isStill). Mirrors offline.
+  if (!isStill(owner, matchState.now)) owner.bloom = bloomAfterShot(u, owner.bloom);
 
   matchState.events.push({
     type: 'fired',

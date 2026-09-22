@@ -26,7 +26,15 @@ import {
   volleyAxes,
   volleyPelletOffset,
   volleySpreadFactor,
-  SHOTGUN_PATTERN
+  SHOTGUN_PATTERN,
+  effectiveSpread,
+  bloomAfterShot,
+  bloomAfterTime,
+  botMayFire,
+  botNoteShot,
+  botClearFireRule,
+  tickStillness,
+  isStill
 } from '@gvg/shared/src/sim/index.js';
 
 const app = document.getElementById('app');
@@ -85,9 +93,11 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.002,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4.5,
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -121,8 +131,6 @@ const UNIT_DATA = {
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -154,8 +162,6 @@ const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 50,
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -191,9 +197,12 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.06,
-    horizontalAngle: 0,          // HA 0.04 -> 0 (2026-07-31, moved to Marina): modern EVO3 shoots tight; sure-hit ~53
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.03,         // base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.08,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -228,9 +237,11 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.14,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.03,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 250,
     botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -262,8 +273,6 @@ const UNIT_DATA = {
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
@@ -306,9 +315,13 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
+    bloomPerShot: 0.10,        // SA added per shot
+    bloomCap: 0.20,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
     magCapacity: 8,
     reloadMs: 1200,
@@ -358,9 +371,12 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.04,         // base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.09,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 4,
     magCapacity: 50,
     botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -392,9 +408,11 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.06,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.035,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 25,
     botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
@@ -428,9 +446,13 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
-    spreadAngle: 0.02,
-    horizontalAngle: 0,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
+    bloomPerShot: 0.10,        // SA added per shot
+    bloomCap: 0.30,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     damage: 10,
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -465,8 +487,6 @@ const UNIT_DATA = {
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    horizontalAngle: 0,          // dead field on shotguns (volley ignores HA) — width lives in volleyStretchX
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
     damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -503,9 +523,11 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
-    spreadAngle: 0.04,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.02,         // base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.004,        // SA added per shot
+    bloomCap: 0.12,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.03,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -540,9 +562,12 @@ const UNIT_DATA = {
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.06,
-    horizontalAngle: 0.04,          // extra HORIZONTAL-only random spread (rad); active beyond horizontalTriggerRange
-    horizontalTriggerRange: 0,   // fire-time target distance beyond which horizontalAngle kicks in
+    spreadAngle: 0.06,         // base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
+    bloomPerShot: 0.003,        // SA added per shot
+    bloomCap: 0.11,            // SA ceiling while spraying
+    bloomRecoverPerSec: 0.05,  // SA recovered per second
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
@@ -1621,6 +1646,11 @@ function createMech(color, unitData, isOwnUnit = false) {
       airborne: false,
       jumpVelocity: 0,
       lastFireAt: 0,
+      bloom: 0,               // spread bloom above spreadAngle (shared bloom.js)
+      bloomTickAt: 0,         // last offline recovery step (performance.now)
+      stillSince: 0,          // grounded standstill stamp (shared bloom.js isStill)
+      botSuppressRemaining: 0, // bot: rounds left in a committed suppress burst outside its gate line
+      botHoldDist: 0,          // bot: gate line frozen when a recovery hold began
       ammo: unitData.magCapacity ?? Infinity,
       reloadingUntil: 0,
       reloadTickStartAt: 0,
@@ -2342,7 +2372,7 @@ function spawnProjectiles(owner, target) {
   // derive from volleyPelletOffset, per-pellet deaths flip pelletMask bits.
   if (isShotgun) {
     // Round jitter disk (mirrors shared projectiles.js).
-    const jR = (owner.unit.spreadAngle * 0.08 / 2) * Math.sqrt(Math.random());
+    const jR = (effectiveSpread(owner.unit, owner.state.bloom) * 0.08 / 2) * Math.sqrt(Math.random());
     const jT = Math.random() * Math.PI * 2;
     const yaw = jR * Math.cos(jT);
     const pitch = jR * Math.sin(jT);
@@ -2376,18 +2406,18 @@ function spawnProjectiles(owner, target) {
       hitStunMs: owner.unit.stun?.ms ?? 100,
       hitStunScale: owner.unit.stun?.moveScale ?? 0.25
     });
+    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
     return;
   }
 
   {
-    // horizontalAngle (mirrors shared projectiles.js): horizontal-only extra
-    // scatter beyond horizontalTriggerRange, measured at fire time.
-    const haDist = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
-    const ha = (owner.unit.horizontalAngle && haDist > (owner.unit.horizontalTriggerRange ?? 0)) ? owner.unit.horizontalAngle : 0;
-    // Round SA cone via disk sampling + HA horizontal-only (mirrors shared).
-    const saR = (owner.unit.spreadAngle / 2) * Math.sqrt(Math.random());
+    // Round SA cone via disk sampling (mirrors shared projectiles.js). The cone
+    // is the base spreadAngle plus the shooter's CURRENT bloom (bloom.js,
+    // ported 2026-09-22 — HA is gone), sampled before this shot's own bloom lands.
+    const saNow = effectiveSpread(owner.unit, owner.state.bloom);
+    const saR = (saNow / 2) * Math.sqrt(Math.random());
     const saT = Math.random() * Math.PI * 2;
-    const yaw = saR * Math.cos(saT) + (Math.random() - 0.5) * ha;
+    const yaw = saR * Math.cos(saT);
     const pitch = saR * Math.sin(saT);
     const dir = baseDir.clone()
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
@@ -2429,7 +2459,23 @@ function spawnProjectiles(owner, target) {
       boltLen: owner.unit.beamBolt?.length ?? 0,
       boltRadius: owner.unit.beamBolt?.radius ?? 0
     });
+    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
   }
+}
+
+// Spread bloom recovery, offline mirror of the shared tickBloom (actions.js).
+// Integrates over REAL elapsed time (performance.now, like the fire lattice
+// and the boost ticks), not the render dt — the render dt is clamped to
+// 1/30 s, which would slow recovery on a struggling frame rate while the
+// shots that caused the bloom kept landing on the real-time lattice.
+function tickBloomOffline(mech, now) {
+  const s = mech.state;
+  const prev = s.bloomTickAt ?? now;
+  s.bloomTickAt = now;
+  if (!(s.bloom > 0)) return;
+  const dtSec = Math.min(0.25, Math.max(0, (now - prev) / 1000));
+  const since = isStill(s, now) ? Infinity : now - s.lastFireAt;   // standing still: no delay, even mid-burst
+  s.bloom = bloomAfterTime(mech.unit, s.bloom, since, dtSec);
 }
 
 
@@ -5781,12 +5827,24 @@ function updateEnemy(now) {
         : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
       s.nextFireAt = now + wait;
       s.machineBurstRemaining = 0;
+      botClearFireRule(s);
     } else if (now < state.player.state.invulnerableUntil) {
       // Target is spawn-immune — no shot can hurt it, so hold fire instead
       // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
       // regular 220 ms poll, whichever comes first (the target can change).
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
+      botClearFireRule(s);
+    } else if (!botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
+      // BLOOM GATE (ported from the demo line 2026-09-22, shared bloom.js
+      // botMayFire): inside the CURRENT gate line — the 33%-hit distance for
+      // the autos, the sure-hit distance for the marksman rifles — the bot
+      // fires freely (the old burst / rest rhythm underneath); outside it the
+      // bot waits for a full recovery (released early only if the target
+      // closes in) and then fires a committed suppress burst (5 autos, 10
+      // SMGs, 1 marksman rifles). Checked before the obstacle scan; polls
+      // every frame. Mirrors shared ai.js.
+      s.nextFireAt = now + 16;
     } else if (!botShotCanLand(
       { x: e.x, y: myShotY, z: e.z },
       { x: p.x, y: p.y + BOT_MUZZLE_ABOVE_ROOT, z: p.z }
@@ -5795,6 +5853,7 @@ function updateEnemy(now) {
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       s.nextFireAt = now + 220;
       s.machineBurstRemaining = 0;
+      botClearFireRule(s);
     } else if (u.sniperCharge) {
       const fired = attemptFire(state.enemy, state.player, now);
       if (fired) {
@@ -5821,6 +5880,7 @@ function updateEnemy(now) {
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
+      if (fired) botNoteShot(s);
       if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
         // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
@@ -5916,6 +5976,20 @@ function applyImmunityGlow(mech, immune) {
   else removeImmunityAuraFromMech(mech);
 }
 
+// Lock bracket bloom visual (ported from the demo line, owner 2026-09-22):
+// ONE universal ratio for every weapon — the bracket grows with the ABSOLUTE
+// amount of bloom, not with the fraction of the gun's own cap, so switching
+// units keeps the bracket honest about how much spread is on the gun right
+// now. Growth = BLOOM_BRACKET_GAIN × bloom / BLOOM_BRACKET_FULL_BLOOM of the
+// way from ×1 to ×BLOOM_BRACKET_MAX_SCALE, clamped: the reference is 0.38 of
+// bloom (the demo SVD's full cap) and the ceiling ×4.5, reached at 0.19 of
+// bloom. Saori at her 0.06 cap shows ×1.74, Marina ×1.92, Koyuki at 0.12
+// ×2.84, Aris ×4.32, Fubuki pins at ×4.5 from her 4th quick shot on. The
+// bracket's base size is the BA line's own; only the bloom factor is new.
+const BLOOM_BRACKET_MAX_SCALE = 4.5;
+const BLOOM_BRACKET_FULL_BLOOM = 0.38;
+const BLOOM_BRACKET_GAIN = 2;
+
 function updateLocksAndReticle() {
   const nowMs = performance.now();
   // Reticle is evaluated from the mech the camera follows: the player, or —
@@ -5994,7 +6068,13 @@ function updateLocksAndReticle() {
   const camDist = camera.position.distanceTo(tgt.root.position);
   const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
   // 1.5× the old 6.1 — larger canvas, same on-screen bracket size.
-  state.reticle.scale.setScalar(9.15 * distScale);
+  // BLOOM (ported 2026-09-22): the bracket grows with the VIEWER's current
+  // bloom on ONE universal scale — ×1 with no bloom, ×BLOOM_BRACKET_MAX_SCALE
+  // once BLOOM_BRACKET_GAIN × bloom reaches BLOOM_BRACKET_FULL_BLOOM — the same
+  // amount of spread reads the same size on every unit. The commander lock
+  // triangles and the diorama markers deliberately keep their size.
+  const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, BLOOM_BRACKET_GAIN * (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
+  state.reticle.scale.setScalar(9.15 * distScale * bloomScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
@@ -7123,6 +7203,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.boost = fighter.boost ?? 0;
   s.ammo = fighter.ammo;
   s.lastFireAt = fighter.lastFireAt;
+  s.bloom = fighter.bloom ?? 0;
   s.reloadingUntil = fighter.reloadingUntil;
   s.reloadTickStartAt = fighter.reloadTickStartAt;
   s.redLock = fighter.redLock;
@@ -15987,6 +16068,8 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
+        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne);
+        tickBloomOffline(m, now);
         tickSniperCharge(m, now,
           (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);
       });
