@@ -560,7 +560,7 @@ export const UNIT_DATA = {
     damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank)
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full drum (fire cap policy)
-    reloadMs: 4000,
+    reloadMs: 3000,            // 4000 -> 3000 (owner 2026-09-22); still >= the 3 s cover-reload line
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   },

@@ -77,7 +77,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s | 14 |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s | 16 |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s | 16 |
-| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 4 s (full drum) | 12 |
+| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 300 | 40 / 50 | 3 s (full drum) | 12 |
 | M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 300 | 40 / 50 | 1 s (auto, per round) | 16 |
 | RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s | 12 |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s | 12 |
@@ -90,7 +90,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 
 | Weapon | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~60.4 (20-drum + 4 s reload) |
+| AA12 | 4.8 blasts/s (208 ms) | 24 (8×3, point-blank) | **115.4** | ~69.0 (20-drum + 3 s reload) |
 | M1014 | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
 | NEGEV | 15.6/s (64 ms) | 4 | **62.5** | ~35.3 |
 | evo3 | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
@@ -103,7 +103,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | M14 | 2.98/s (336 ms) | 10 | **29.8** | 25.4 |
 | Railgun | 1 per ~1.5 s | 30 quick beam | **~20.0** | ~20.0 |
 
-Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 4 s reload. The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 42–55 spread across the five mid-table autos (evo3, FAMAS, M4, RPK, P90) is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS. The two marksman rifles sit below that band on burst but hold ~24 sustained, close to the autos: their damage arrives in fewer, larger pieces rather than more slowly.
+Reading the DPS table: the shotgun rows are the most theoretical — all 8 pellets only land point-blank. M1014's 7-shell magazine burns in ~1.7 s before per-shell regen throttles the long run; AA12 empties her 20-drum in ~4 s of auto fire and then pays one full 3 s reload (4 s until 2026-09-22). The sniper rows use cycle math (cooldown + floor charge) at full range-tier damage. The tight 42–55 spread across the five mid-table autos (evo3, FAMAS, M4, RPK, P90) is deliberate — fights are decided by accuracy curves, uptime, and positioning rather than raw DPS. The two marksman rifles sit below that band on burst but hold ~24 sustained, close to the autos: their damage arrives in fewer, larger pieces rather than more slowly.
 
 **Handling (stun + spread bloom):**
 
@@ -162,7 +162,7 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 
 - Each shot fires **one flying pellet cluster** carrying a fixed 8-point pattern (randomly rotated each shot, so no two blasts look alike while the spacing geometry never clumps). Each pellet keeps its **own hitbox** and dies individually on walls or the target; damage = pellets landed × 3 (all 8 point-blank = 24, both shotguns).
 - The pattern leaves the muzzle bunched and grows toward full width (~5.8 across) over the first **70 units** of flight. At lock range (40) it is ~57% open (~3.3 across), so locked-fire blasts land as a concentrated cluster rather than a full spread.
-- **Both hold to fire** (2026-08-09 — M1014 was tap-only until then). They split on how the ammo comes back, not on the trigger: AA12 empties a **20-shell drum** at ~4.8 blasts/s and buys it back in one 4 s stroke, while M1014 runs a **7-shell magazine on per-shell regen** — never a famine, never a burst either. AA12 is the sustained-pressure half of the pair, walking at the MGs' 12 to pay for it.
+- **Both hold to fire** (2026-08-09 — M1014 was tap-only until then). They split on how the ammo comes back, not on the trigger: AA12 empties a **20-shell drum** at ~4.8 blasts/s and buys it back in one 3 s stroke (4 s until 2026-09-22), while M1014 runs a **7-shell magazine on per-shell regen** — never a famine, never a burst either. AA12 is the sustained-pressure half of the pair, walking at the MGs' 12 to pay for it.
 - **M1014's wide fan:** her pattern is stretched **1.4× horizontally** after the per-shot rotation — the cloud is 1.4× wider and exactly as tall as AA12's (at lock 40: ~4.6 × 3.3; fully open: ~8.1 × 5.8). More graze coverage along the dodge axis — the dodge-catcher to AA12's concentrated cluster.
 - One blast = one simulated/networked object instead of 8 — the wire-cost half of the old online "shotgun lag" fix; the projectile broadphase (see Implementation notes) removed the other half, the dense-map CPU cost.
 
