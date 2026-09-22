@@ -77,8 +77,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | FAMAS — Assault Rifle | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s | 14 |
 | evo3 — Submachine Gun | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s | 16 |
 | P90 — Submachine Gun | 50 | 3.5 / shot | ~900 RPM | 600 | 50 / 55 | 1.5 s | 16 |
-| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 400 | 40 / 50 | 3 s (full drum) | 12 |
-| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 400 | 40 / 50 | 1 s (auto, per round) | 16 |
+| AA12 — Shotgun | 20 | 3 × 8 pellets | ~300 RPM (auto) | 350 | 40 / 50 | 3 s (full drum) | 12 |
+| M1014 — Shotgun | 7 | 3 × 8 pellets | ~250 RPM (auto) | 350 | 40 / 50 | 1 s (auto, per round) | 16 |
 | RPK — Machine Gun | 100 | 5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s | 12 |
 | NEGEV — Machine Gun | 100 | 4 / shot | ~1100 RPM | 600 | 80 / 65 | 5 s | 12 |
 | M14 — Rifle | 20 | 10 / shot | 180 RPM | 600 | 56 / 65 | 2 s | 14 |

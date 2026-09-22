@@ -139,7 +139,7 @@ const UNIT_DATA = {
     // lockRange, edges ±7) gives the shotgun a 33–47 band (43–57 in 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 350,      // 300 -> 450 -> 400 -> 350 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -477,7 +477,7 @@ const UNIT_DATA = {
     // Hoshino's concentrated slug.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 350,      // 300 -> 450 -> 400 -> 350 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -640,7 +640,7 @@ const UNIT_DATA = {
     // 33–47 band (43–57 2v2).
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 400,      // 300 -> 450 -> 400 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 350,      // 300 -> 450 -> 400 -> 350 (owner 2026-09-22): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 300,        // = 200 ms cooldown — 208 ms tick slot (4.8 blasts/s)
     autoFire: true,            // full-auto: hold-to-fire like the MGs (shotguns are tap-fire by default)
     spreadCount: 8,
@@ -9442,7 +9442,7 @@ function unitMenuName(u) {
 
 // Tier words for the stats whose raw units would mean nothing to a new
 // player (user vocabularies, 2026-08-06). Cutoffs match the roster's actual
-// value clusters: projectile speeds are 400 (shotguns, 300 until 2026-09-22) / 600 (standard) /
+// value clusters: projectile speeds are 350 (shotguns, 300 until 2026-09-22) / 600 (standard) /
 // 2500 (sniper rounds) + the Railgun's charged hitscan beam; stun has
 // exactly three settings (100ms@0.25 the strongest, then 50@0.50 and
 // 50@0.85). Since 2026-09-22 (evo3 and NEGEV moved up) every pickable
