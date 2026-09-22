@@ -6396,12 +6396,19 @@ function applyImmunityGlow(mech, immune) {
 // universal ratio for every weapon — the bracket grows with the ABSOLUTE
 // amount of bloom, not with the fraction of the gun's own cap, so switching
 // weapons keeps the bracket honest about how much spread is on the gun right
-// now. ×BLOOM_BRACKET_MAX_SCALE is reached at BLOOM_BRACKET_FULL_BLOOM of
-// bloom = the SVD's full cap (0.40 minus its 0.02 base); an M4 at its 0.06
-// cap therefore shows ~×1.37, an RPK at 0.12 ~×1.92, the M14 ~×2.66.
+// now. The growth is BLOOM_BRACKET_GAIN × bloom / BLOOM_BRACKET_FULL_BLOOM
+// of the way from ×1 to ×BLOOM_BRACKET_MAX_SCALE, clamped at the max: the
+// full-bloom reference stays the SVD's full cap (0.40 minus its 0.02 base)
+// and the max size stays ×4.5, but the slope is doubled (owner 2026-09-22:
+// "visual multiply by 2 times, keep the visual cap at 0.38" — the autos'
+// 0.04–0.10 of bloom was too subtle at the halved bracket size). Ceiling is
+// therefore reached at 0.19 of bloom: an M4 at its 0.06 cap shows ×1.74, a
+// P90 ×2.11, an RPK at 0.12 ×2.84, the M14 ×4.32 (never quite the ceiling),
+// the SVD pins at ×4.5 from its 4th quick shot on.
 // 2.25 -> 4.5 (owner 2026-09-21: "double the magnifier").
 const BLOOM_BRACKET_MAX_SCALE = 4.5;
 const BLOOM_BRACKET_FULL_BLOOM = 0.38;
+const BLOOM_BRACKET_GAIN = 2;
 // Base size of the lock brackets — halved 2026-09-21 (owner call, chosen from
 // in-game samples at ×1 / ×0.75 / ×0.5). Bloom scales on top of this base;
 // the commander lock-share triangles follow it so they keep sitting just
@@ -6488,10 +6495,11 @@ function updateLocksAndReticle() {
   // 1.5× the old 6.1 — larger canvas, same on-screen bracket size.
   // BLOOM (owner 2026-09-21): the bracket grows with the VIEWER's current
   // bloom on ONE universal scale — ×1 with no bloom, ×BLOOM_BRACKET_MAX_SCALE
-  // at BLOOM_BRACKET_FULL_BLOOM (the SVD's full cap) — the same amount of
+  // once BLOOM_BRACKET_GAIN × bloom reaches BLOOM_BRACKET_FULL_BLOOM (the
+  // SVD's full cap; gain 2 => ceiling at 0.19 of bloom) — the same amount of
   // spread reads the same size on every weapon. The commander lock triangles
   // and the diorama markers deliberately keep their size.
-  const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
+  const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, BLOOM_BRACKET_GAIN * (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
   state.reticle.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale * bloomScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
