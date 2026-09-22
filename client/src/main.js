@@ -9499,6 +9499,7 @@ const PROFILE_SPREAD_CELL = true;
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 const SPREAD_ICON_ROUNDS = 30;        // spray length drawn (magazine-limited)
+const SPREAD_ICON_DOT = '#ffa040';    // round colour — orange (owner 2026-09-22; was the HUD's pale blue #eaf6ff)
 // Reference-distance overrides (user order 2026-08-06, 56 → 60): every
 // non-shotgun evaluates at a COMMON 60 so their icons compare directly;
 // the shotguns keep their own 40 lockRange (their pattern is the point).
@@ -9519,7 +9520,7 @@ function spreadIconURL(u) {
   x.strokeStyle = '#4a6a86';
   x.lineWidth = 3;
   x.beginPath(); x.arc(C, C, R, 0, Math.PI * 2); x.stroke();
-  x.fillStyle = '#eaf6ff';
+  x.fillStyle = SPREAD_ICON_DOT;
   const toPx = (w) => (w / SPREAD_ICON_HIT_HALF_W) * R;
   const dot = (px, py, r, alpha = 1) => {
     const cx = Math.max(3, Math.min(S - 3, px));   // wild spill stays on the canvas, pinned to the edge …
