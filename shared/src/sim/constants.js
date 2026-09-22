@@ -156,7 +156,7 @@ export const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
-    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside its gate line (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -367,7 +367,8 @@ export const UNIT_DATA = {
     bloomCap: 0.2,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -512,7 +513,7 @@ export const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
-    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside its gate line (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,
@@ -670,7 +671,8 @@ export const UNIT_DATA = {
     bloomCap: 0.4,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -746,10 +748,23 @@ export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_HALF_HEIGHT = 1.6;
 // Standing-target sure-hit numerator (bloom.js): sure-hit distance = SURE_HIT_WIDTH / spread.
 export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
+// Bot fire-gate line (owner 2026-09-22: "33% for the auto weapons, 100% for
+// the semi rifles"; the old burst / rest rhythm stays underneath). An auto
+// weapon's bot keeps firing while the target sits inside the distance where
+// its CURRENT cone still lands one round in three on a STANDING target: the
+// 3.2 x 6.4 capsule is a third of the cone's disc at radius 4.42, so the line
+// is BOT_GATE_WIDTH_AUTO / cone = 2.76x the sure-hit line (M4 at its 0.06 cap:
+// 147; SMGs at 0.08: 110; machine guns at 0.12: 74). The marksman rifles gate
+// on the sure-hit line itself (per-unit `botGateWidth: 3.2`). Measured over
+// 6,336 bot duels on four maps (96 per pairing) the move from the sure-hit
+// line took RPK / NEGEV from 45 / 53% to 72 / 75% and SVD / M14 from 85 / 84%
+// to 70 / 68%; the rifles' and SMGs' own bands never reach their line, so
+// they run on the old rhythm there.
+export const BOT_GATE_WIDTH_AUTO = 8.84;
 // Bot suppressing fire (owner 2026-09-21): an auto weapon whose target sits
-// OUTSIDE its current sure-hit distance waits for the cone to fully recover,
-// then fires this many rounds as one committed burst; a unit can override
-// the size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
+// OUTSIDE its current gate line waits for the cone to fully recover, then
+// fires this many rounds as one committed burst; a unit can override the
+// size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
 export const BOT_SUPPRESS_BURST = 5;
 // Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
 // ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least

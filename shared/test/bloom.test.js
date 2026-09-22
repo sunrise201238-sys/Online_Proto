@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA,
-  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botMayFire
+  createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA, BOT_GATE_WIDTH_AUTO,
+  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire
 } from '../src/sim/index.js';
 
 const hold = (walk = true) => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; if (walk) i.moveZ = 1; return i; };   // walking: bloom applies
@@ -112,26 +112,39 @@ function botRun(botUnit, dist, ms) {
   return { fireTimes, gaps, coneAtFire };
 }
 
-test('RPK bot at its 80-unit band: an opening burst at full rate, then a full recovery, then the same burst again (no trickle)', () => {
-  const { gaps, coneAtFire } = botRun('unit16', 80, 4000);
+test('RPK bot at its 80-unit band: a 23-round burst at full rate, then a full recovery, then the same burst again (no trickle)', () => {
+  const { gaps, coneAtFire } = botRun('unit16', 80, 8000);
   const firstPause = gaps.findIndex((g) => g >= 200);
-  assert.ok(firstPause === 4 || firstPause === 5, 'first pause after shot ' + (firstPause + 1));   // stop line SA 0.040 at 80 u
+  assert.equal(firstPause, 22, 'first pause after shot ' + (firstPause + 1));   // 33% line at 80 u = cone 0.1105: round 23 leaves at 0.108, round 24 would be 0.112
   for (const g of gaps.slice(0, firstPause)) assert.equal(g, 112);
-  // full recovery: 200 ms delay + 0.024 / 0.03 = ~1000 ms, then the burst restarts at the base cone
-  assert.ok(gaps[firstPause] >= 960 && gaps[firstPause] <= 1088, 'recovery pause ' + gaps[firstPause]);
+  // full recovery: 200 ms delay + 0.092 / 0.03 = ~3270 ms, then the burst restarts at the base cone
+  assert.ok(gaps[firstPause] >= 3264 && gaps[firstPause] <= 3400, 'recovery pause ' + gaps[firstPause]);
   assert.equal(coneAtFire[firstPause + 1], 0.02);
   for (const g of gaps.slice(firstPause + 1, firstPause + 5)) assert.equal(g, 112);
 });
 
-test('evo3 bot beyond its base sure-hit (110 u > 107): committed 10-round suppress bursts from a recovered cone', () => {
-  const { gaps, coneAtFire, fireTimes } = botRun('unit4', 110, 4000);   // base 0.03 -> sure-hit 106.7 (2026-09-22)
-  assert.ok(fireTimes.length >= 20, 'shots ' + fireTimes.length);
-  assert.deepEqual(gaps.slice(0, 9), Array(9).fill(64));                          // burst of 10 at the 64 ms slot (SMG override, 2026-09-22)
-  assert.ok(gaps[9] >= 784 && gaps[9] <= 900, 'pause between bursts ' + gaps[9]); // 200 ms delay + 0.030 / 0.05 = 800 ms
-  assert.deepEqual(gaps.slice(10, 19), Array(9).fill(64));                        // next burst
-  assert.equal(coneAtFire[10], 0.03);                                             // every burst opens on the base cone
-  assert.equal(UNIT_DATA.unit14.botSuppressBurst, 10);                            // P90 carries the same override
+test('evo3 bot at 100 u: the 33% line at its cap (110) is past the target, so the gate never trips and the old burst / rest rhythm runs', () => {
+  const { gaps, fireTimes } = botRun('unit4', 100, 5000);
+  assert.ok(fireTimes.length >= 40, 'shots ' + fireTimes.length);
+  assert.deepEqual(gaps.slice(0, 29), Array(29).fill(64));                         // the whole 30-round fire cap at the 64 ms slot
+  assert.ok(gaps[29] >= 780 && gaps[29] <= 1600, 'old-rhythm rest ' + gaps[29]);  // botFireCap reached: ~0.8-1.5 s rest (no gate hold)
+  assert.deepEqual(gaps.slice(30, 39), Array(9).fill(64));                         // and the next burst
+});
+
+test('gate lines: autos 8.84 / cone (one round in three on a standing target), marksman rifles 3.2 / cone (sure-hit)', () => {
+  assert.equal(BOT_GATE_WIDTH_AUTO, 8.84);
+  assert.equal(UNIT_DATA.unit1.botGateWidth, undefined);                          // autos ride the default
+  assert.equal(UNIT_DATA.unit10.botGateWidth, 3.2);
+  assert.equal(UNIT_DATA.unit18.botGateWidth, 3.2);
+  assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit1, 0.06) - 147.3) < 0.1);       // M4 at cap: 2.76x its 53 sure-hit
+  assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit16, 0.12) - 73.7) < 0.1);      // RPK at cap: the near edge of its 73-87 band
+  assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit10, 0.06) - 53.3) < 0.1);      // M14: sure-hit itself
+  assert.equal(UNIT_DATA.unit14.botSuppressBurst, 10);                            // P90 keeps the 10-round suppress override
   assert.equal(UNIT_DATA.unit1.botSuppressBurst, undefined);                      // the rifles stay on the 5-round default
+  // suppress bursts for an SMG start only past its base line (8.84 / 0.03 = 295 u)
+  const bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(UNIT_DATA.unit4, bot, 400), true);
+  assert.equal(bot.botSuppressRemaining, 10);
 });
 
 test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so it fires once per full recovery', () => {
@@ -142,12 +155,12 @@ test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so 
 });
 
 test('auto on a recovery hold releases at once when the target closes in', () => {
-  const u = UNIT_DATA.unit16, bot = { bloom: 0.024, botSuppressRemaining: 0, botHoldDist: 0 };   // RPK, cone 0.044 -> line 72.7
-  assert.equal(botMayFire(u, bot, 80), false);            // outside: hold begins, line frozen at 72.7
-  assert.ok(bot.botHoldDist > 72 && bot.botHoldDist < 73);
-  bot.bloom = 0.019;                                      // line drifts out to 82 — a static target must NOT release the hold
-  assert.equal(botMayFire(u, bot, 80), false);
-  assert.equal(botMayFire(u, bot, 70), true);             // but a target that closed in past the frozen line does
+  const u = UNIT_DATA.unit16, bot = { bloom: 0.09, botSuppressRemaining: 0, botHoldDist: 0 };   // RPK, cone 0.11 -> 33% line 80.4
+  assert.equal(botMayFire(u, bot, 85), false);            // outside: hold begins, line frozen at 80.4
+  assert.ok(bot.botHoldDist > 80 && bot.botHoldDist < 81);
+  bot.bloom = 0.08;                                       // line drifts out to 88 — a static target must NOT release the hold
+  assert.equal(botMayFire(u, bot, 85), false);
+  assert.equal(botMayFire(u, bot, 78), true);             // but a target that closed in past the frozen line does
   assert.equal(bot.botHoldDist, 0);
   const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
@@ -160,16 +173,16 @@ test('auto on a recovery hold releases at once when the target closes in', () =>
 
 test('botMayFire state machine', () => {
   const u = UNIT_DATA.unit1, bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(u, bot, 100), true);           // inside base sure-hit
-  bot.bloom = 0.04;                                       // cone 0.06 -> sure-hit 53
-  assert.equal(botMayFire(u, bot, 60), false);            // outside, bloom up: hold
+  assert.equal(botMayFire(u, bot, 100), true);           // inside the base line (8.84 / 0.02 = 442)
+  bot.bloom = 0.04;                                       // cone 0.06 -> 33% line 147
+  assert.equal(botMayFire(u, bot, 160), false);           // outside, bloom up: hold
   bot.bloom = 0;
-  assert.equal(botMayFire(u, bot, 170), true);            // outside base sure-hit, recovered: burst starts
+  assert.equal(botMayFire(u, bot, 500), true);            // outside the base line, recovered: burst starts
   assert.equal(bot.botSuppressRemaining, 5);
   bot.bloom = 0.01;
-  assert.equal(botMayFire(u, bot, 170), true);            // committed burst runs on
+  assert.equal(botMayFire(u, bot, 500), true);            // committed burst runs on
   bot.botSuppressRemaining = 0;
-  assert.equal(botMayFire(u, bot, 170), false);           // burst spent, cone up: hold
+  assert.equal(botMayFire(u, bot, 500), false);           // burst spent, cone up: hold
   const m14 = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);
   assert.equal(m14.botSuppressRemaining, 1);

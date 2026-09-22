@@ -12,7 +12,7 @@
 // Both sims (shared / server and the offline client mirror) use these helpers
 // so the numbers can never drift apart. Everything here is closed-form: no
 // sampling, no per-tick allocation.
-import { SURE_HIT_WIDTH, BOT_SUPPRESS_BURST, BLOOM_STILL_SPEED, BLOOM_STILL_DWELL_MS } from './constants.js';
+import { SURE_HIT_WIDTH, BOT_GATE_WIDTH_AUTO, BOT_SUPPRESS_BURST, BLOOM_STILL_SPEED, BLOOM_STILL_DWELL_MS } from './constants.js';
 
 // How much bloom the unit can carry (bloomCap - base). 0 = the gun has no bloom.
 export function bloomMax(unit) {
@@ -51,13 +51,24 @@ export function sureHitDistance(spread) {
   return spread > 0 ? SURE_HIT_WIDTH / spread : Infinity;
 }
 
-// Bot fire gate: single-projectile non-sniper guns only pull the trigger
-// while the target sits inside the CURRENT sure-hit distance. Shotguns fly a
-// fixed pattern (the cone formula does not describe them) and the snipers'
-// 0.02 cone out-reaches their lock range, so both always pass.
+// Standing-target sure-hit test for single-projectile non-sniper guns (the
+// HUD / README notion of "sure-hit"). Shotguns fly a fixed pattern (the cone
+// formula does not describe them) and the snipers' 0.02 cone out-reaches
+// their lock range, so both always pass. The BOT fire gate is botGateDistance
+// below, which sits farther out for the autos.
 export function withinSureHit(unit, bloom, dist) {
   if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
   return dist <= sureHitDistance(effectiveSpread(unit, bloom));
+}
+
+// Bot fire-gate line for a cone of full angle `spread` (owner 2026-09-22):
+// `botGateWidth` / spread. Autos default to BOT_GATE_WIDTH_AUTO (8.84 — the
+// distance where the cone still lands one round in three on a standing
+// target, 2.76x the sure-hit line); the marksman rifles carry 3.2, the
+// sure-hit line itself.
+export function botGateDistance(unit, spread) {
+  const width = unit.botGateWidth ?? BOT_GATE_WIDTH_AUTO;
+  return spread > 0 ? width / spread : Infinity;
 }
 
 // Bot trigger rule (owner 2026-09-21), one call per fire poll. `bot` is the
@@ -82,9 +93,10 @@ export function botMayFire(unit, bot, dist) {
     bot.botHoldDist = 0;                       // recovered, or the target closed in
   }
   const cone = effectiveSpread(unit, bot.bloom);
-  if (dist <= sureHitDistance(cone)) return true;
+  const line = botGateDistance(unit, cone);    // 33%-hit line (autos) / sure-hit line (marksman rifles)
+  if (dist <= line) return true;
   if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.botSuppressBurst ?? BOT_SUPPRESS_BURST; return true; }
-  bot.botHoldDist = sureHitDistance(cone);     // freeze where the line stood
+  bot.botHoldDist = line;                      // freeze where the line stood
   return false;
 }
 

@@ -214,7 +214,7 @@ const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying (0.09 -> 0.08, owner 2026-09-21)
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
-    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside its gate line (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
@@ -445,7 +445,8 @@ const UNIT_DATA = {
     bloomCap: 0.2,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
     damage: 10,
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -599,7 +600,7 @@ const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts 200 ms after the last shot
-    botSuppressBurst: 10,      // bot: 10-round suppress burst outside sure-hit (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
+    botSuppressBurst: 10,      // bot: 10-round suppress burst outside its gate line (owner 2026-09-22; other autos fire BOT_SUPPRESS_BURST = 5)
     damage: 3.5,               // 3 -> 3.5 (2026-08-05)
 
     magCapacity: 50,
@@ -760,7 +761,8 @@ const UNIT_DATA = {
     bloomCap: 0.4,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
-    botSuppressBurst: 1,       // bot: a single round when suppressing outside sure-hit (autos fire BOT_SUPPRESS_BURST)
+    botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -6256,10 +6258,12 @@ function updateEnemy(now) {
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
     } else if (!botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
-      // BLOOM GATE (owner 2026-09-21, shared bloom.js botMayFire): inside the
-      // CURRENT sure-hit distance the bot fires freely; outside it the bot
-      // waits for a full recovery (released early only if the target closes
-      // in) and then fires a committed suppress burst (5 autos, 1 marksman
+      // BLOOM GATE (owner 2026-09-21, shared bloom.js botMayFire; gate line
+      // 2026-09-22): inside the CURRENT gate line — the 33%-hit distance for
+      // the autos, the sure-hit distance for the marksman rifles — the bot
+      // fires freely (the old burst / rest rhythm underneath); outside it the
+      // bot waits for a full recovery (released early only if the target
+      // closes in) and then fires a committed suppress burst (5 autos, 1 marksman
       // rifles). Checked before the obstacle scan; polls every frame. Mirrors
       // shared ai.js.
       s.nextFireAt = now + 16;
