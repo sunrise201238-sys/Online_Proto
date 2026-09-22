@@ -127,7 +127,7 @@ const UNIT_DATA = {
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -483,7 +483,7 @@ const UNIT_DATA = {
     // Hoshino's concentrated slug.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
@@ -5989,6 +5989,11 @@ function applyImmunityGlow(mech, immune) {
 const BLOOM_BRACKET_MAX_SCALE = 4.5;
 const BLOOM_BRACKET_FULL_BLOOM = 0.38;
 const BLOOM_BRACKET_GAIN = 2;
+// Base size of the lock brackets — halved 2026-09-22 (owner: match the demo
+// line, which picked x0.5 from in-game samples on 2026-09-21). Bloom scales on
+// top of this base; the commander lock-share triangles follow it so they keep
+// sitting just outside the bracket corners.
+const LOCK_BRACKET_SIZE = 0.5;
 
 function updateLocksAndReticle() {
   const nowMs = performance.now();
@@ -6074,7 +6079,7 @@ function updateLocksAndReticle() {
   // amount of spread reads the same size on every unit. The commander lock
   // triangles and the diorama markers deliberately keep their size.
   const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, BLOOM_BRACKET_GAIN * (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
-  state.reticle.scale.setScalar(9.15 * distScale * bloomScale);
+  state.reticle.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale * bloomScale);
   state.reticle.quaternion.copy(camera.quaternion);
 }
 
@@ -8432,7 +8437,7 @@ function updateOnlineCommandShare(onl) {
     // renders at exactly the reticle's size at every camera distance.
     const camDist = camera.position.distanceTo(lockTarget.root.position);
     const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
-    share.tris.scale.setScalar(9.15 * distScale);
+    share.tris.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale);
     share.tris.visible = true;
   } else if (share.tris) {
     share.tris.visible = false;

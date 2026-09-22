@@ -74,7 +74,7 @@ export const UNIT_DATA = {
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.
@@ -413,7 +413,7 @@ export const UNIT_DATA = {
     // Hoshino's concentrated slug.
     lockRange: 40,
     lockRange2v2: 50,
-    projectileSpeed: 300,
+    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     // 16 degrees in radians, computed once.

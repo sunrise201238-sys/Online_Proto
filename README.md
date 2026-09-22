@@ -77,8 +77,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 300 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 10 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
@@ -268,7 +268,7 @@ Double-tap `K` (or the sprint button) while holding a movement direction to lock
 
 - **Overhead HP bar** above every unit (ported 2026-08-06): soft cyan for the camera unit's team (2026-09-19 — the earlier near-white read as plain white), orange for its opponents — spectate-relative, so the watched unit's side always reads cyan. Constant on-screen size at any distance (compensated by true view depth) and visible through cover; teammates' bars ride the head at a fixed screen gap, the **locked** enemy's bar rides just above the crosshair brackets. Hidden while the command diorama runs (its info cards carry HP and stamina).
 - **Team indicators (2v2)**: screen-edge arrows only — the friendly-bar cyan pointing at the teammate, orange at the **unlocked enemy** — whenever that unit is off-frame; the floating chevrons that used to hover over both units in frame were removed on 2026-09-19 because they sat right on top of the overhead HP bars. Both edge arrows carry a glint halo while that unit is a sniper mid-charge.
-- **Lock bracket bloom** (2026-09-22): the crosshair brackets around your target grow with your *own* current spread bloom on **one universal scale** — ×1 with no bloom, growing at the same rate on every unit up to a ceiling of ×4.5, reached at 0.19 of bloom (the reference is 0.38, the demo SVD's full cap, with the growth run at twice that rate). Saori at her 0.06 cap shows about ×1.74, Marina ×1.92, Koyuki at 0.12 ×2.84, Aris ×4.32, Fubuki pins at ×4.5 from her 4th quick shot on. The commander's lock-share triangles and the command-mode markers keep their size.
+- **Lock bracket bloom** (2026-09-22): the crosshair brackets around your target are drawn at half their former base size (owner call, matching the demo line) and grow with your *own* current spread bloom on **one universal scale** — ×1 with no bloom, growing at the same rate on every unit up to a ceiling of ×4.5, reached at 0.19 of bloom (the reference is 0.38, the demo SVD's full cap, with the growth run at twice that rate). Saori at her 0.06 cap shows about ×1.74, Marina ×1.92, Koyuki at 0.12 ×2.84, Aris ×4.32, Fubuki pins at ×4.5 from her 4th quick shot on. The commander's lock-share triangles and the command-mode markers keep their size.
 - **Corner HUD**: HP bars per team member with the Trio weapon rows underneath (the fielded weapon marked in gold). Online the bars follow the server slot with a white rim on your own — see the Online section. In spectator mode the watched unit's corner bar wears a white glow rim.
 - **Command mode** hides the joystick, the action buttons and the bottom-center stamina bar; the diorama's info cards show each unit's HP and stamina instead.
 
