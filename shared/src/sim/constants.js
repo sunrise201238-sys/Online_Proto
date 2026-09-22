@@ -384,7 +384,7 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
-    damage: 10,
+    damage: 13,               // owner 2026-09-22 (was 10): 8 rounds to a full-HP kill instead of 10
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
