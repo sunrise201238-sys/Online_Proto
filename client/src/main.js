@@ -2101,17 +2101,18 @@ const BULLET_TRAIL_THICK_BY_NAME = new Map([
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
 const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
 // Ribbon GLOW (owner pick "C" from four in-game samples, 2026-09-23 — "apply
-// option C to Fubuki and Aru only"): the two ribbons are drawn ADDITIVELY in
-// a warm amber — a bright core at the gun's own width plus a second, 3.2x
-// wider and much fainter quad underneath it as the halo — so the marksman
-// rounds read as glowing streaks. Cost: one extra quad (one draw call) per
-// ribbon trail and the same per-frame re-aim the ribbon already does; no
-// post-processing, nothing on the network. On EVERY map (owner call later
-// the same day, after seeing it beside four bright-map alternatives): on the
-// three bright-ground maps the additive streak reads near-white rather than
-// amber, and that was accepted for consistency. The autos keep their 1-pixel
-// line everywhere (map-tinted as before).
-const BULLET_TRAIL_GLOW_COLOR = 0xffd9a0;
+// option C to Fubuki and Aru only"): the two ribbons are drawn ADDITIVELY —
+// a bright core at the gun's own width plus a second, 3.2x wider and much
+// fainter quad underneath it as the halo — so the marksman rounds read as
+// glowing streaks. Cost: one extra quad (one draw call) per ribbon trail and
+// the same per-frame re-aim the ribbon already does; no post-processing,
+// nothing on the network. On EVERY map (owner call later the same day, after
+// seeing it beside four bright-map alternatives). Colour: the SAME per-map
+// ink as the autos' line (owner call, same day — the amber 0xffd9a0 of the
+// samples lasted a few hours): light grey on the dark maps, dark slate on the
+// three bright-ground maps — additively the slate adds only a little light,
+// so there the glow is a faint pale streak. The autos keep their 1-pixel line
+// everywhere.
 const BULLET_TRAIL_GLOW_OPACITY = 0.85;        // core quad
 const BULLET_TRAIL_GLOW_HALO_MULT = 3.2;       // halo width, in core half-widths
 const BULLET_TRAIL_GLOW_HALO_OPACITY = 0.22;   // halo quad
@@ -2173,8 +2174,9 @@ function buildBulletTrail(radius = 0) {
     // Glow: the core quad, with the halo quad as its child — the child keeps
     // the identity transform too, so its world-space corners are written the
     // same way (billboardBulletTrail does both) and it fades with the core.
-    const core = makeRibbonQuad(radius, BULLET_TRAIL_GLOW_COLOR, BULLET_TRAIL_GLOW_OPACITY, true);
-    const halo = makeRibbonQuad(radius * BULLET_TRAIL_GLOW_HALO_MULT, BULLET_TRAIL_GLOW_COLOR, BULLET_TRAIL_GLOW_HALO_OPACITY, true);
+    const ink = bulletTrailColor();   // the autos' per-map line colour
+    const core = makeRibbonQuad(radius, ink, BULLET_TRAIL_GLOW_OPACITY, true);
+    const halo = makeRibbonQuad(radius * BULLET_TRAIL_GLOW_HALO_MULT, ink, BULLET_TRAIL_GLOW_HALO_OPACITY, true);
     core.add(halo);
     core.userData.halo = halo;
     return core;
