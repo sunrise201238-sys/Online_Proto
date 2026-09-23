@@ -2100,6 +2100,21 @@ const BULLET_TRAIL_THICK_BY_NAME = new Map([
 ].filter(([name]) => name));
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
 const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// Ribbon GLOW (owner pick "C" from four in-game samples, 2026-09-23 — "apply
+// option C to Fubuki and Aru only"): on the dark maps the two ribbons are
+// drawn ADDITIVELY in a warm amber — a bright core at the gun's own width plus
+// a second, 3.2x wider and much fainter quad underneath it as the halo — so
+// the marksman rounds read as glowing streaks. Cost: one extra quad (one draw
+// call) per ribbon trail and the same per-frame re-aim the ribbon already
+// does; no post-processing, nothing on the network. The three bright-ground
+// maps (BULLET_TRAIL_DARK_MAPS) keep the plain slate ribbon: additive light
+// cannot darken, so a glow would vanish on them. The autos keep their 1-pixel
+// line everywhere.
+const BULLET_TRAIL_GLOW_COLOR = 0xffd9a0;
+const BULLET_TRAIL_GLOW_OPACITY = 0.85;        // core quad
+const BULLET_TRAIL_GLOW_HALO_MULT = 3.2;       // halo width, in core half-widths
+const BULLET_TRAIL_GLOW_HALO_OPACITY = 0.22;   // halo quad
+const bulletTrailGlows = () => !BULLET_TRAIL_DARK_MAPS.has(state.mapKey);
 // RAW view-space depth of a world point: positive in front of the camera,
 // negative behind. Deliberately unclamped — billboardBulletTrail needs the true
 // sign so it can clip the segment (clamping here is what produced the collapsed
@@ -2119,34 +2134,51 @@ function bulletTrailFadeMsFor(unit) {
   return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
 }
 
+// One ribbon quad: 4 corners, 2 triangles, rewritten in place every frame. The
+// corners are WORLD-space and the mesh keeps an identity transform, so there
+// is nothing to position or rotate — billboardBulletTrail does it all.
+function makeRibbonQuad(radius, color, opacity, additive) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+  geometry.setIndex([0, 1, 2, 2, 1, 3]);
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      fog: false,
+      // Plain ribbon: depthWrite left at the default true, matching the
+      // LineBasicMaterial the other guns use — the depthWrite:false I had
+      // added was the only optional shading change here and it is reverted
+      // (user 2026-08-09). The additive glow quads DO turn it off: two
+      // overlapping additive streaks must both add, not occlude each other.
+      // DoubleSide stays: a flat quad is invisible edge-on from its back face
+      // without it.
+      side: THREE.DoubleSide,
+      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      depthWrite: !additive
+    })
+  );
+  mesh.userData.trailRadius = radius;     // also the flag that this is a ribbon
+  mesh.userData.ends = null;              // {tx..hz}, kept so it can re-aim while fading
+  mesh.userData.baseOpacity = opacity;    // what the fade scales from
+  mesh.frustumCulled = false;
+  mesh.visible = false;                   // until the first ends update gives it a length
+  return mesh;
+}
+
 function buildBulletTrail(radius = 0) {
   if (radius > 0) {
-    // Ribbon: 4 corners, 2 triangles, rewritten in place every frame. The
-    // corners are WORLD-space and the mesh keeps an identity transform, so
-    // there is nothing to position or rotate — billboardBulletTrail does it all.
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
-    geometry.setIndex([0, 1, 2, 2, 1, 3]);
-    const mesh = new THREE.Mesh(
-      geometry,
-      new THREE.MeshBasicMaterial({
-        color: bulletTrailColor(),
-        transparent: true,
-        opacity: BULLET_TRAIL_OPACITY,
-        fog: false,
-        // depthWrite left at the default true, matching the LineBasicMaterial
-        // the other nine weapons still use — the depthWrite:false I had added
-        // was the only optional shading change here and it is reverted (user
-        // 2026-08-09). DoubleSide stays: a flat quad is invisible edge-on from
-        // its back face without it.
-        side: THREE.DoubleSide
-      })
-    );
-    mesh.userData.trailRadius = radius;     // also the flag that this is a ribbon
-    mesh.userData.ends = null;              // {tx..hz}, kept so it can re-aim while fading
-    mesh.frustumCulled = false;
-    mesh.visible = false;                   // until the first ends update gives it a length
-    return mesh;
+    if (!bulletTrailGlows()) return makeRibbonQuad(radius, bulletTrailColor(), BULLET_TRAIL_OPACITY, false);
+    // Glow: the core quad, with the halo quad as its child — the child keeps
+    // the identity transform too, so its world-space corners are written the
+    // same way (billboardBulletTrail does both) and it fades with the core.
+    const core = makeRibbonQuad(radius, BULLET_TRAIL_GLOW_COLOR, BULLET_TRAIL_GLOW_OPACITY, true);
+    const halo = makeRibbonQuad(radius * BULLET_TRAIL_GLOW_HALO_MULT, BULLET_TRAIL_GLOW_COLOR, BULLET_TRAIL_GLOW_HALO_OPACITY, true);
+    core.add(halo);
+    core.userData.halo = halo;
+    return core;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
@@ -2166,6 +2198,8 @@ function disposeBulletTrail(trail) {
   if (trail.parent) trail.parent.remove(trail);
   if (trail.geometry) trail.geometry.dispose();   // every trail owns its geometry
   if (trail.material) trail.material.dispose();
+  const halo = trail.userData?.halo;              // the glow's second quad
+  if (halo) { halo.geometry.dispose(); halo.material.dispose(); }
 }
 
 // Rebuild a ribbon trail's four corners. One world half-width for the whole
@@ -2201,16 +2235,20 @@ function billboardBulletTrail(trail) {
   _trailPerp.crossVectors(_trailDir, _trailTmp);
   if (_trailPerp.lengthSq() < 1e-12) _trailPerp.setFromMatrixColumn(camera.matrixWorld, 0);
   _trailPerp.normalize();
-  const wT = trail.userData.trailRadius;   // one width for both ends
-  const wH = wT;
-  const p = trail.geometry.attributes.position.array;
   const nx = _trailPerp.x, ny = _trailPerp.y, nz = _trailPerp.z;
-  p[0] = tx - nx * wT; p[1] = ty - ny * wT; p[2] = tz - nz * wT;
-  p[3] = tx + nx * wT; p[4] = ty + ny * wT; p[5] = tz + nz * wT;
-  p[6] = hx - nx * wH; p[7] = hy - ny * wH; p[8] = hz - nz * wH;
-  p[9] = hx + nx * wH; p[10] = hy + ny * wH; p[11] = hz + nz * wH;
-  trail.geometry.attributes.position.needsUpdate = true;
-  trail.visible = true;
+  const write = (m) => {
+    const wT = m.userData.trailRadius;   // one width for both ends
+    const wH = wT;
+    const p = m.geometry.attributes.position.array;
+    p[0] = tx - nx * wT; p[1] = ty - ny * wT; p[2] = tz - nz * wT;
+    p[3] = tx + nx * wT; p[4] = ty + ny * wT; p[5] = tz + nz * wT;
+    p[6] = hx - nx * wH; p[7] = hy - ny * wH; p[8] = hz - nz * wH;
+    p[9] = hx + nx * wH; p[10] = hy + ny * wH; p[11] = hz + nz * wH;
+    m.geometry.attributes.position.needsUpdate = true;
+    m.visible = true;
+  };
+  write(trail);
+  if (trail.userData.halo) write(trail.userData.halo);   // the glow's wider quad, same ends
 }
 
 // Re-aim every ribbon trail — live and fading, offline and online — using the
@@ -2249,7 +2287,7 @@ function despawnProjectileTrail(p, now) {
     trail: p.trail,
     diesAt: now + p.trailFadeMs,
     fadeMs: p.trailFadeMs,
-    initialOpacity: BULLET_TRAIL_OPACITY
+    initialOpacity: p.trail.userData?.baseOpacity ?? BULLET_TRAIL_OPACITY
   });
   p.trail = null;
 }
@@ -2272,6 +2310,8 @@ function updateDyingBulletTrails(now) {
     // quad left alone would turn edge-on and disappear mid-fade.
     if (dt.trail.userData?.trailRadius) billboardBulletTrail(dt.trail);
     dt.trail.material.opacity = dt.initialOpacity * (remaining / dt.fadeMs);
+    const halo = dt.trail.userData?.halo;
+    if (halo) halo.material.opacity = halo.userData.baseOpacity * (remaining / dt.fadeMs);
   }
 }
 
@@ -7404,7 +7444,7 @@ function syncOnlineProjectiles(snap) {
         trail: entry.trail,
         diesAt: now + entry.trailFadeMs,
         fadeMs: entry.trailFadeMs,
-        initialOpacity: BULLET_TRAIL_OPACITY
+        initialOpacity: entry.trail.userData?.baseOpacity ?? BULLET_TRAIL_OPACITY
       });
     }
     meshes.delete(id);
