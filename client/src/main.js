@@ -2101,20 +2101,20 @@ const BULLET_TRAIL_THICK_BY_NAME = new Map([
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
 const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
 // Ribbon GLOW (owner pick "C" from four in-game samples, 2026-09-23 — "apply
-// option C to Fubuki and Aru only"): on the dark maps the two ribbons are
-// drawn ADDITIVELY in a warm amber — a bright core at the gun's own width plus
-// a second, 3.2x wider and much fainter quad underneath it as the halo — so
-// the marksman rounds read as glowing streaks. Cost: one extra quad (one draw
-// call) per ribbon trail and the same per-frame re-aim the ribbon already
-// does; no post-processing, nothing on the network. The three bright-ground
-// maps (BULLET_TRAIL_DARK_MAPS) keep the plain slate ribbon: additive light
-// cannot darken, so a glow would vanish on them. The autos keep their 1-pixel
-// line everywhere.
+// option C to Fubuki and Aru only"): the two ribbons are drawn ADDITIVELY in
+// a warm amber — a bright core at the gun's own width plus a second, 3.2x
+// wider and much fainter quad underneath it as the halo — so the marksman
+// rounds read as glowing streaks. Cost: one extra quad (one draw call) per
+// ribbon trail and the same per-frame re-aim the ribbon already does; no
+// post-processing, nothing on the network. On EVERY map (owner call later
+// the same day, after seeing it beside four bright-map alternatives): on the
+// three bright-ground maps the additive streak reads near-white rather than
+// amber, and that was accepted for consistency. The autos keep their 1-pixel
+// line everywhere (map-tinted as before).
 const BULLET_TRAIL_GLOW_COLOR = 0xffd9a0;
 const BULLET_TRAIL_GLOW_OPACITY = 0.85;        // core quad
 const BULLET_TRAIL_GLOW_HALO_MULT = 3.2;       // halo width, in core half-widths
 const BULLET_TRAIL_GLOW_HALO_OPACITY = 0.22;   // halo quad
-const bulletTrailGlows = () => !BULLET_TRAIL_DARK_MAPS.has(state.mapKey);
 // RAW view-space depth of a world point: positive in front of the camera,
 // negative behind. Deliberately unclamped — billboardBulletTrail needs the true
 // sign so it can clip the segment (clamping here is what produced the collapsed
@@ -2170,7 +2170,6 @@ function makeRibbonQuad(radius, color, opacity, additive) {
 
 function buildBulletTrail(radius = 0) {
   if (radius > 0) {
-    if (!bulletTrailGlows()) return makeRibbonQuad(radius, bulletTrailColor(), BULLET_TRAIL_OPACITY, false);
     // Glow: the core quad, with the halo quad as its child — the child keeps
     // the identity transform too, so its world-space corners are written the
     // same way (billboardBulletTrail does both) and it fades with the core.
