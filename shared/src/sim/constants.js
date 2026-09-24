@@ -79,7 +79,7 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; owner 2026-09-24, was 5 / 40)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
@@ -418,7 +418,7 @@ export const UNIT_DATA = {
     spreadCount: 8,
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
-    damage: 5,               // per pellet (volley max 8 x 5 = 40 point-blank)
+    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; owner 2026-09-24, was 5 / 40)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,

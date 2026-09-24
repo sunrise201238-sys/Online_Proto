@@ -37,7 +37,7 @@ Orthogonal to all of the above, every player also picks a **view mode** — **Cl
 The first tap on a unit card opens its profile beside the grid (tap the same card again to confirm, anywhere else to cancel): the character art on the left and the **weapon panel** on the right — the gun's real-world name, its render, and since 2026-09-22 a **3×2 stat grid** under the render (owner pick "C" from three in-game samples: a third plate beside the panel and a label/value row list were the other two; the demo line carries the same stats as a row list). The six cells read live from the unit data:
 
 - **Mag**, **RPM** and **Reload** (seconds) as plain numbers.
-- **Dmg** shows every tier where a gun has them: Aru's PSG1 `50/35/20` (far / mid / near), Kei's Laser `30/20` (quick / charged), the shotguns per pellet `5 ×8`.
+- **Dmg** shows every tier where a gun has them: Aru's PSG1 `50/35/20` (far / mid / near), Kei's Laser `30/20` (quick / charged), the shotguns per pellet `3 ×8`.
 - **Movement** is the walk-speed tier word (walk speeds retuned 2026-09-24): **Fast** (walk 16 — Atsuko, Marina, Hoshino, Haruka), **Medium** (12 — Saori, Asuna, Fubuki, Aris, Aru, Kei), **Slow** (Koyuki at 10, Hina at 8).
 - The **Spread picture** is a seeded mini-simulation of a **walking spray at a common 60-unit reference** (the shotguns at their own 40): the ring is a standing target's half-width at that distance, the orange dots are up to 30 rounds — magazine-limited — each leaving on the cone the sim gives that round (base + bloom, per-round bloom up to the cap, and the between-round recovery of the no-delay marksman rifles), fading with round order so the first rounds read brightest. The spray stops at the first round whose cone no longer fits the frame (2026-09-22, owner pick from samples — pinning spilled rounds to the frame's edge had piled Fubuki's 27 out-of-frame rounds into a rectangle), so nothing is drawn outside the frame: Saori's whole 30-round spray stays inside the ring, Koyuki's and Hina's pictures end a few rounds short of the magazine with their late rounds at the frame's edge, and Fubuki's and Aris's show their first three quick rounds — one on the ring's centre, two at its edge — because the fourth already flies wider than the frame; the shotguns show their 8-pellet pattern (SDASS with its 1.4× horizontal stretch).
 
@@ -88,8 +88,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 5 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 5 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 2 — Shotgun (Hoshino) | 7 | 3 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun (Haruka) | 7 | 3 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
@@ -101,7 +101,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 
 | Unit | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| Hoshino / Haruka | 4.17 blasts/s | 40 (8×5, point-blank) | **166.7** | ~33.3 (shell-regen limited) |
+| Hoshino / Haruka | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
 | Hina | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
 | Atsuko | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | Marina | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
