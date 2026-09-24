@@ -2100,22 +2100,23 @@ const BULLET_TRAIL_THICK_BY_NAME = new Map([
 ].filter(([name]) => name));
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
 const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
-// Ribbon GLOW (owner pick "C" from four in-game samples, 2026-09-23 — "apply
-// option C to Fubuki and Aru only"): the two ribbons are drawn ADDITIVELY —
-// a bright core at the gun's own width plus a second, 3.2x wider and much
-// fainter quad underneath it as the halo — so the marksman rounds read as
-// glowing streaks. Cost: one extra quad (one draw call) per ribbon trail and
-// the same per-frame re-aim the ribbon already does; no post-processing,
-// nothing on the network. On EVERY map (owner call later the same day, after
-// seeing it beside four bright-map alternatives). Colour: the SAME per-map
-// ink as the autos' line (owner call, same day — the amber 0xffd9a0 of the
-// samples lasted a few hours): light grey on the dark maps, dark slate on the
-// three bright-ground maps — additively the slate adds only a little light,
-// so there the glow is a faint pale streak. The autos keep their 1-pixel line
-// everywhere.
-const BULLET_TRAIL_GLOW_OPACITY = 0.85;        // core quad
+// Ribbon HALO (owner pick "C" from four in-game samples, 2026-09-23 — "apply
+// option C to Fubuki and Aru only"): the two ribbons carry a second quad,
+// 3.2x wider and much fainter, underneath the core as a soft edge. Cost: one
+// extra quad (one draw call) per ribbon trail and the same per-frame re-aim
+// the ribbon already does; no post-processing, nothing on the network. On
+// EVERY map. The samples were ADDITIVE amber; the owner then asked for the
+// autos' per-map ink (2026-09-23) and, since additive light can never match
+// an alpha-blended line (it read white on the dark maps and as a pale
+// highlight on the bright ones, where the autos' line is a DARK stroke),
+// finally for the same VISUAL colour (2026-09-24): so both quads now blend
+// normally in the autos' ink, and the core's alpha is chosen so that core
+// over halo composites to exactly the line's 0.55 — the streak reads as the
+// same grey as the autos' line, just wider and soft-edged.
 const BULLET_TRAIL_GLOW_HALO_MULT = 3.2;       // halo width, in core half-widths
 const BULLET_TRAIL_GLOW_HALO_OPACITY = 0.22;   // halo quad
+// core alpha a such that a + (1 - a) * halo == BULLET_TRAIL_OPACITY (0.55) -> ~0.423
+const BULLET_TRAIL_GLOW_OPACITY = (BULLET_TRAIL_OPACITY - BULLET_TRAIL_GLOW_HALO_OPACITY) / (1 - BULLET_TRAIL_GLOW_HALO_OPACITY);
 // RAW view-space depth of a world point: positive in front of the camera,
 // negative behind. Deliberately unclamped — billboardBulletTrail needs the true
 // sign so it can clip the segment (clamping here is what produced the collapsed
@@ -2175,8 +2176,10 @@ function buildBulletTrail(radius = 0) {
     // the identity transform too, so its world-space corners are written the
     // same way (billboardBulletTrail does both) and it fades with the core.
     const ink = bulletTrailColor();   // the autos' per-map line colour
-    const core = makeRibbonQuad(radius, ink, BULLET_TRAIL_GLOW_OPACITY, true);
-    const halo = makeRibbonQuad(radius * BULLET_TRAIL_GLOW_HALO_MULT, ink, BULLET_TRAIL_GLOW_HALO_OPACITY, true);
+    const core = makeRibbonQuad(radius, ink, BULLET_TRAIL_GLOW_OPACITY, false);
+    const halo = makeRibbonQuad(radius * BULLET_TRAIL_GLOW_HALO_MULT, ink, BULLET_TRAIL_GLOW_HALO_OPACITY, false);
+    halo.renderOrder = -1;                 // drawn before the core, so the core composites over it …
+    halo.material.depthWrite = false;      // … and the two coplanar quads never z-fight (only the core writes depth)
     core.add(halo);
     core.userData.halo = halo;
     return core;
