@@ -38,7 +38,7 @@ The first tap on a unit card opens its profile beside the grid (tap the same car
 
 - **Mag**, **RPM** and **Reload** (seconds) as plain numbers.
 - **Dmg** shows every tier where a gun has them: Aru's PSG1 `50/35/20` (far / mid / near), Kei's Laser `30/20` (quick / charged), the shotguns per pellet `5 ×8`.
-- **Movement** is the walk-speed tier word: **Fast** (walk 16 — every unit but the machine guns), **Medium** (12 — Koyuki), **Slow** (8 — Hina).
+- **Movement** is the walk-speed tier word (walk speeds retuned 2026-09-24): **Fast** (walk 16 — Atsuko, Marina, Hoshino, Haruka), **Medium** (12 — Saori, Asuna, Fubuki, Aris, Aru, Kei), **Slow** (Koyuki at 10, Hina at 8).
 - The **Spread picture** is a seeded mini-simulation of a **walking spray at a common 60-unit reference** (the shotguns at their own 40): the ring is a standing target's half-width at that distance, the orange dots are up to 30 rounds — magazine-limited — each leaving on the cone the sim gives that round (base + bloom, per-round bloom up to the cap, and the between-round recovery of the no-delay marksman rifles), fading with round order so the first rounds read brightest. The spray stops at the first round whose cone no longer fits the frame (2026-09-22, owner pick from samples — pinning spilled rounds to the frame's edge had piled Fubuki's 27 out-of-frame rounds into a rectangle), so nothing is drawn outside the frame: Saori's whole 30-round spray stays inside the ring, Koyuki's and Hina's pictures end a few rounds short of the magazine with their late rounds at the frame's edge, and Fubuki's and Aris's show their first three quick rounds — one on the ring's centre, two at its edge — because the fourth already flies wider than the frame; the shotguns show their 8-pellet pattern (SDASS with its 1.4× horizontal stretch).
 
 The grid keeps the same sizes on phones (checked at 390 px: nothing wraps or spills).
@@ -78,13 +78,13 @@ The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama
 
 ## Units
 
-Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11.76 sprint base — Unit 5 walks at 8, Unit 12 at 12; Unit 7 flies):
+Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprint base; walk speeds since 2026-09-24: 16 for the SMGs and shotguns, 12 for the assault rifles, rifles and snipers, 10 for Unit 12, 8 for Unit 5; Unit 7 flies):
 
 **Weapons:**
 
 | | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload |
 |---|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4.5 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
+| Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
@@ -106,7 +106,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 16 walk, 11
 | Atsuko | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | Marina | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
 | Asuna | 12.5/s (80 ms) | 4 | **50.0** | 29.2 |
-| Saori | 10.4/s (96 ms) | 4.5 | **46.9** | 31.5 |
+| Saori | 10.4/s (96 ms) | 4 | **41.7** | 28.0 |
 | Koyuki | 8.9/s (112 ms) | 4.5 | **40.2** | 28.0 |
 | Fubuki | 2.98/s (336 ms) | 13 | **38.7** | 33.2 |
 | Aris | 2.98/s (336 ms) | 12 / bolt | **35.7** | ~10.0 (bolt-regen limited) |

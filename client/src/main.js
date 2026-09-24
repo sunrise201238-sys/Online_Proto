@@ -75,7 +75,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -98,7 +98,7 @@ const UNIT_DATA = {
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    damage: 4.5,
+    damage: 4,                // owner 2026-09-24 (was 4.5): 25 rounds to a full-HP kill instead of 23
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
@@ -146,7 +146,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -257,7 +257,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -293,7 +293,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -392,7 +392,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -429,7 +429,7 @@ const UNIT_DATA = {
     // standard jump cooldown/cost and NO flight/air-pop fields.
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -506,7 +506,7 @@ const UNIT_DATA = {
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 100,
     boostCap: 250,
-    walkSpeed: 12,
+    walkSpeed: 10,            // owner 2026-09-24 (was 12)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -9040,9 +9040,9 @@ function spawnProfilePopup(card, innerHTML, onConfirm) {
 }
 
 // Movement tier word for the profile card (owner 2026-09-22 — "Movement",
-// not the demo line's "Weight"): keyed on the unit's walk speed. Fast = 16
-// (every unit but the machine guns), Medium = 12 (Koyuki / M60), Slow = 8
-// (Hina / MG42).
+// not the demo line's "Weight"): keyed on the unit's walk speed. Since the
+// 2026-09-24 retune: Fast = 16 (the SMGs and shotguns), Medium = 12 (the
+// assault rifles, rifles and snipers), Slow = Koyuki's 10 and Hina's 8.
 function movementTier(u) {
   const walk = u.walkSpeed ?? 16;
   if (walk >= 16) return 'Fast';

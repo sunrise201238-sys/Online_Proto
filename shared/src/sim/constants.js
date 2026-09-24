@@ -23,7 +23,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -46,7 +46,7 @@ export const UNIT_DATA = {
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    damage: 4.5,
+    damage: 4,                // owner 2026-09-24 (was 4.5): 25 rounds to a full-HP kill instead of 23
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
@@ -93,7 +93,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -201,7 +201,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -236,7 +236,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -324,7 +324,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -360,7 +360,7 @@ export const UNIT_DATA = {
     // standard jump cooldown/cost and NO flight/air-pop fields.
     hp: 100,
     boostCap: 250,
-    walkSpeed: 16,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -436,7 +436,7 @@ export const UNIT_DATA = {
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 100,
     boostCap: 250,
-    walkSpeed: 12,
+    walkSpeed: 10,            // owner 2026-09-24 (was 12)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
