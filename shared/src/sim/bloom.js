@@ -66,8 +66,16 @@ export function withinSureHit(unit, bloom, dist) {
 // distance where the cone still lands one round in three on a standing
 // target, 2.76x the sure-hit line); the marksman rifles carry 3.2, the
 // sure-hit line itself.
-export function botGateDistance(unit, spread) {
-  const width = unit.botGateWidth ?? BOT_GATE_WIDTH_AUTO;
+// `mode` ('1v1' / '2v2') lets a unit carry a 1v1-only width: botGateWidth1v1
+// (owner 2026-09-25 — Koyuki and Hina carry 0 there, i.e. NO gate line in
+// 1v1: a 0% hit-rate threshold, the line sits at infinity). Any other mode,
+// or no override, uses botGateWidth (3.2 for the marksman rifles) or the
+// autos' 8.84.
+export function botGateDistance(unit, spread, mode) {
+  const width = (mode === '1v1' && unit.botGateWidth1v1 !== undefined)
+    ? unit.botGateWidth1v1
+    : (unit.botGateWidth ?? BOT_GATE_WIDTH_AUTO);
+  if (!(width > 0)) return Infinity;           // 0 = ungated
   return spread > 0 ? width / spread : Infinity;
 }
 
@@ -85,7 +93,7 @@ export function botGateDistance(unit, spread) {
 //     release the hold (no one-round trickle) — unless the target closes in
 //     past where the line stood when the hold began, which releases it at
 //     once.
-export function botMayFire(unit, bot, dist) {
+export function botMayFire(unit, bot, dist, mode) {
   if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
   if (bot.botSuppressRemaining > 0) return true;
   if (bot.botHoldDist > 0) {
@@ -93,7 +101,7 @@ export function botMayFire(unit, bot, dist) {
     bot.botHoldDist = 0;                       // recovered, or the target closed in
   }
   const cone = effectiveSpread(unit, bot.bloom);
-  const line = botGateDistance(unit, cone);    // 33%-hit line (autos) / sure-hit line (marksman rifles)
+  const line = botGateDistance(unit, cone, mode);   // 33%-hit line (autos) / sure-hit line (marksman rifles) / none (MGs in 1v1)
   if (dist <= line) return true;
   if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.botSuppressBurst ?? BOT_SUPPRESS_BURST; return true; }
   bot.botHoldDist = line;                      // freeze where the line stood

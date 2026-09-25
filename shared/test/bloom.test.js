@@ -93,8 +93,8 @@ test('sure-hit closed form and the bot gate', () => {
 });
 
 // Bot harness: p2 is the bot, p1 the pinned target at `dist` units.
-function botRun(botUnit, dist, ms) {
-  const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: botUnit, startTime: 1000 });
+function botRun(botUnit, dist, ms, mode = '1v1') {
+  const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: botUnit, startTime: 1000, mode });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
   p2.pos.x = p1.pos.x + dist; p2.pos.z = p1.pos.z; p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9;
   p2.botControlled = true;
@@ -112,8 +112,8 @@ function botRun(botUnit, dist, ms) {
   return { fireTimes, gaps, coneAtFire };
 }
 
-test('RPK bot at its 80-unit band: a 23-round burst at full rate, then a full recovery, then the same burst again (no trickle)', () => {
-  const { gaps, coneAtFire } = botRun('unit12', 80, 8000);
+test('Koyuki bot at 80 u in 2v2 (33% line): a 23-round burst at full rate, then a full recovery, then the same burst again (no trickle)', () => {
+  const { gaps, coneAtFire } = botRun('unit12', 80, 8000, '2v2');
   const firstPause = gaps.findIndex((g) => g >= 200);
   assert.equal(firstPause, 22, 'first pause after shot ' + (firstPause + 1));   // 33% line at 80 u = cone 0.1105: round 23 leaves at 0.108, round 24 would be 0.112
   for (const g of gaps.slice(0, firstPause)) assert.equal(g, 112);
@@ -121,6 +121,12 @@ test('RPK bot at its 80-unit band: a 23-round burst at full rate, then a full re
   assert.ok(gaps[firstPause] >= 3264 && gaps[firstPause] <= 3400, 'recovery pause ' + gaps[firstPause]);
   assert.equal(coneAtFire[firstPause + 1], 0.02);
   for (const g of gaps.slice(firstPause + 1, firstPause + 5)) assert.equal(g, 112);
+});
+
+test('Koyuki bot at 80 u in 1v1: no gate line (owner 2026-09-25), so the same run never pauses for the cone', () => {
+  const { gaps, fireTimes } = botRun('unit12', 80, 8000, '1v1');
+  assert.ok(fireTimes.length >= 40, 'shots ' + fireTimes.length);
+  assert.deepEqual(gaps.slice(0, 40), Array(40).fill(112));                       // straight through where the 2v2 run paused after round 23
 });
 
 test('evo3 bot at 100 u: the 33% line at its cap (110) is past the target, so the gate never trips and the old burst / rest rhythm runs', () => {
@@ -187,4 +193,23 @@ test('botMayFire state machine', () => {
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);
   assert.equal(m14.botSuppressRemaining, 1);
   assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
+});
+
+test('bot gate — Koyuki and Hina are ungated in 1v1, on the 33% line in 2v2 (owner 2026-09-25)', () => {
+  for (const k of ['unit12', 'unit5']) {
+    const u = UNIT_DATA[k];
+    assert.equal(u.botGateWidth1v1, 0);
+    assert.equal(botGateDistance(u, u.bloomCap, '1v1'), Infinity);                              // no line in 1v1 …
+    assert.ok(Math.abs(botGateDistance(u, u.bloomCap, '2v2') - 8.84 / u.bloomCap) < 1e-9);       // … the autos' 33% line in 2v2
+    assert.ok(Math.abs(botGateDistance(u, u.bloomCap) - 8.84 / u.bloomCap) < 1e-9);              // no mode given: the 2v2 / default width
+    const capped = { bloom: u.bloomCap - u.spreadAngle, botSuppressRemaining: 0, botHoldDist: 0 };
+    assert.equal(botMayFire(u, { ...capped }, 400, '1v1'), true);      // 1v1: keeps firing at any range with the cone at its cap
+    const b2 = { ...capped };
+    assert.equal(botMayFire(u, b2, 400, '2v2'), false);               // 2v2: outside the capped line, bloom up -> hold
+    assert.ok(b2.botHoldDist > 0);
+  }
+  // The other autos and the marksman rifles ignore the mode.
+  assert.equal(UNIT_DATA.unit1.botGateWidth1v1, undefined);
+  assert.equal(botGateDistance(UNIT_DATA.unit1, 0.06, '1v1'), botGateDistance(UNIT_DATA.unit1, 0.06, '2v2'));
+  assert.equal(botGateDistance(UNIT_DATA.unit10, 0.06, '1v1'), botGateDistance(UNIT_DATA.unit10, 0.06, '2v2'));
 });
