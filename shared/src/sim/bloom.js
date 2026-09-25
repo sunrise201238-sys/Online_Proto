@@ -66,11 +66,11 @@ export function withinSureHit(unit, bloom, dist) {
 // distance where the cone still lands one round in three on a standing
 // target, 2.76x the sure-hit line); the marksman rifles carry 3.2, the
 // sure-hit line itself.
-// `mode` ('1v1' / '2v2') lets a unit carry a 1v1-only width: botGateWidth1v1
-// (owner 2026-09-25 — Koyuki and Hina carry 0 there, i.e. NO gate line in
-// 1v1: a 0% hit-rate threshold, the line sits at infinity). Any other mode,
-// or no override, uses botGateWidth (3.2 for the marksman rifles) or the
-// autos' 8.84.
+// A width of 0 means NO gate line (a 0% hit-rate threshold — the line sits
+// at infinity): the machine guns carry botGateWidth: 0 (owner 2026-09-25).
+// `mode` ('1v1' / '2v2') lets a unit carry a 1v1-only width instead,
+// botGateWidth1v1 (no unit uses it today). Otherwise botGateWidth (3.2 for
+// the marksman rifles) or the autos' 8.84.
 export function botGateDistance(unit, spread, mode) {
   const width = (mode === '1v1' && unit.botGateWidth1v1 !== undefined)
     ? unit.botGateWidth1v1

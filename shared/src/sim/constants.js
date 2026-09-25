@@ -179,7 +179,7 @@ export const UNIT_DATA = {
     // Weapon spec
     lockRange: 80,
     lockRange2v2: 65,
-    botGateWidth1v1: 0,       // 1v1: no bloom gate line at all (0% hit-rate threshold; owner 2026-09-25) — 2v2 keeps the autos' 33% line (8.84)
+    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -451,7 +451,7 @@ export const UNIT_DATA = {
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
     lockRange2v2: 65,
-    botGateWidth1v1: 0,       // 1v1: no bloom gate line at all (0% hit-rate threshold; owner 2026-09-25) — 2v2 keeps the autos' 33% line (8.84)
+    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
