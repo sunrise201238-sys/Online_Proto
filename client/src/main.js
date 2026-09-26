@@ -12812,8 +12812,13 @@ function updateDioramaHud() {
         els.cmdIcon.innerHTML = iconState ? dioCmdIconMarkup(iconState) : '';
       }
       if (iconState) {
+        // The shield (Hide) sits centred above the marker — the middle of the
+        // square's top edge, or the diamond's top vertex (owner 2026-09-26);
+        // the '!' / eye pair keeps the top-right corner.
+        const iconX = iconState === 'hide' ? bx + s / 2 : bx + s - 2;
+        const iconTop = iconState === 'hide' && offFrame ? by + s / 2 - s * Math.SQRT1_2 : by;
         els.cmdIcon.setAttribute('transform',
-          `translate(${(bx + s - 2).toFixed(1)} ${(by - 13).toFixed(1)})`);
+          `translate(${iconX.toFixed(1)} ${(iconTop - 13).toFixed(1)})`);
         els.cmdIcon.style.display = '';
       } else {
         els.cmdIcon.style.display = 'none';
