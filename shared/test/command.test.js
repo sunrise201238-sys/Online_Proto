@@ -72,7 +72,7 @@ function streetsHideFixture() {
   return { m, arena, step, hiddenFromBoth, now: () => now };
 }
 
-test('setStance: hide wipes move+lock, refuses move/lock while hidden, clearCommands resets it, dead unit refused', () => {
+test('setStance: hide wipes move+lock, a landed move/lock releases it, clearCommands resets it, dead unit refused', () => {
   const m = createMatchState({ mapKey: 'arena1', mode: '2v2', startTime: 1000 });
   assert.equal(isHideOrdered(m, 'p1'), false);
   assert.equal(setMoveOrder(m, 'p1', 0, 0, 0), true, 'a plain move order is accepted on the open field');
@@ -85,9 +85,21 @@ test('setStance: hide wipes move+lock, refuses move/lock while hidden, clearComm
   assert.equal(getCommands(m, 'p1').move, null, 'hide clears the move order');
   assert.equal(getCommands(m, 'p1').lockTargetId, null, 'hide clears the force lock');
   assert.equal(commandTargetIdOf(m, 'p1'), null);
-  assert.equal(setMoveOrder(m, 'p1', 0, 0, 0), false, 'move order refused while hidden');
-  assert.equal(setForceLock(m, 'p1', 'p2'), false, 'force lock refused while hidden');
-  assert.equal(getCommands(m, 'p1').move, null);
+  // A landed move order releases the stance (owner 2026-09-26); an
+  // unreachable one leaves it standing.
+  assert.equal(setMoveOrder(m, 'p1', NaN, 0, 0), false, 'bad order still refused');
+  assert.equal(isHideOrdered(m, 'p1'), true, 'a refused order leaves the hide standing');
+  assert.equal(setMoveOrder(m, 'p1', 0, 0, 0), true, 'move order accepted while hidden');
+  assert.equal(isHideOrdered(m, 'p1'), false, 'the landed move order released the hide');
+  assert.ok(getCommands(m, 'p1').move);
+  assert.equal(setStance(m, 'p1', true), true);
+  assert.equal(getCommands(m, 'p1').move, null, 'hide wipes the move order again');
+  assert.equal(setForceLock(m, 'p1', null), true, 'clearing a lock is fine while hidden');
+  assert.equal(isHideOrdered(m, 'p1'), true, 'a lock clear leaves the hide standing');
+  assert.equal(setForceLock(m, 'p1', 'p2'), true, 'force lock accepted while hidden');
+  assert.equal(isHideOrdered(m, 'p1'), false, 'the landed lock released the hide');
+  assert.equal(getCommands(m, 'p1').lockTargetId, 'p2');
+  assert.equal(setStance(m, 'p1', true), true);
   assert.equal(getCommands(m, 'p1').lockTargetId, null);
 
   // A granular move clear never touches the stance; the full clear does.

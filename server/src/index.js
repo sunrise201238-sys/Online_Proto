@@ -570,14 +570,10 @@ io.on('connection', (socket) => {
     const x = Number(data?.x);
     const z = Number(data?.z);
     const floorY = Number(data?.floorY ?? 0);
-    // A hidden unit refuses move orders (owner 2026-09-26) — told apart from
-    // an unreachable spot so the client can say "unit is hiding".
-    const hidden = isHideOrdered(ctx.lb.match, ctx.slot);
+    // A landed move order releases a hide stance (owner 2026-09-26) — the
+    // setter clears the flag; the echo carries hide:false next tick.
     const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY);
-    socket.emit('order:result', {
-      kind: 'move', ok, x, z, floorY,
-      reason: ok ? null : (hidden ? 'hidden' : 'unreachable')
-    });
+    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, reason: ok ? null : 'unreachable' });
   });
 
   socket.on('order:lock', (data) => {
@@ -587,12 +583,11 @@ io.on('connection', (socket) => {
     const cmd = getCommands(ctx.lb.match, ctx.slot);
     // Toggle semantics (offline parity): same enemy again = unlock.
     const want = (cmd?.lockTargetId === target) ? null : target;
-    const hidden = isHideOrdered(ctx.lb.match, ctx.slot);   // refused while hiding (owner 2026-09-26)
-    const ok = setForceLock(ctx.lb.match, ctx.slot, want);
+    const ok = setForceLock(ctx.lb.match, ctx.slot, want);   // a landed lock releases a hide stance (owner 2026-09-26)
     socket.emit('order:result', {
       kind: 'lock', ok,
       target: ok ? (getCommands(ctx.lb.match, ctx.slot)?.lockTargetId ?? null) : null,
-      reason: ok ? null : (hidden ? 'hidden' : 'invalid')
+      reason: ok ? null : 'invalid'
     });
   });
 

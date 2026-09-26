@@ -12,12 +12,14 @@
 //                 CMD_TRAVEL_BOOST_FLOOR reserve, walk until re-armed),
 //                 then hold an Engage-style orbit on the CMD_RADIUS ring
 //                 for CMD_ANCHOR_MS before autonomy resumes.
-//   HIDE STANCE — (owner 2026-09-26) cmd.hide: the Fight/Hide toggle. While
-//                 it stands, tickBot's HIDE block owns the legs (break every
-//                 enemy's line of sight, then stand still; fire back only
-//                 from where it stands — see ai.js), a move order or force
-//                 lock is REFUSED (setStance(true) also wipes both), and
-//                 Fight (hide=false) is plain autonomy again. tickBot reads
+//   HIDE STANCE — (owner 2026-09-26) cmd.hide: the Hide stance. While it
+//                 stands, tickBot's HIDE block owns the legs (break every
+//                 enemy's line of sight, pace the cover, slip away from a
+//                 closing enemy; fire back only from where it stands — see
+//                 ai.js). setStance(true) wipes the move order and the lock;
+//                 a move order or force lock that LANDS releases the stance
+//                 again (owner 2026-09-26), as do clearCommands and
+//                 setStance(false). tickBot reads
 //                 the flag straight off matchState.commands[slot].hide: this
 //                 module imports ai.js (navGridFor), so ai.js importing
 //                 isHideOrdered back would close an import cycle.
@@ -101,14 +103,11 @@ export function clearMoveOrder(matchState, slot) {
 export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
-  // Hidden units take no move orders (owner 2026-09-26): the hide stance
-  // owns the legs until Fight clears it. Refused BEFORE the pathfind so a
-  // refusal costs nothing; the server tells the two apart via isHideOrdered.
-  if (isHideOrdered(matchState, slot)) return false;
   if (!Number.isFinite(tx) || !Number.isFinite(tz) || !Number.isFinite(targetFloorY)) return false;
   const path = computeCommandPath(matchState, f, tx, tz, targetFloorY);
   if (!path) return false;
   const cmd = commandsFor(matchState, slot);
+  cmd.hide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
   cmd.move = {
     x: tx, z: tz, y: targetFloorY,
     path, idx: 0,
@@ -141,13 +140,11 @@ function computeCommandPath(matchState, f, tx, tz, targetFloorY) {
 
 // Set (targetSlot) or clear (null) a force lock. Rejects dead parties and
 // teammates. Toggle semantics live at the message layer, not here.
-// Refused outright while the hide stance stands (owner 2026-09-26): a hidden
-// unit never moves for a shot, so a lock would only pull its fire off
-// whatever it can actually see (the lock is already null — hide wiped it).
+// A lock that lands releases the hide stance (owner 2026-09-26); clearing a
+// lock never touches it.
 export function setForceLock(matchState, slot, targetSlot) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
-  if (isHideOrdered(matchState, slot)) return false;
   const cmd = commandsFor(matchState, slot);
   if (targetSlot == null) {
     cmd.lockTargetId = null;
@@ -155,6 +152,7 @@ export function setForceLock(matchState, slot, targetSlot) {
   }
   const t = matchState.fighters[targetSlot];
   if (!t || t.hp <= 0 || t.team === f.team) return false;
+  cmd.hide = false;
   cmd.lockTargetId = targetSlot;
   return true;
 }

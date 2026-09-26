@@ -9005,13 +9005,6 @@ function processOrderResults(onl) {
     else if (d.reason === 'rate' && pending) dioramaDenyAt(pending.px, pending.py, 'Too fast — try again');
     return;
   }
-  if (!d.ok && d.reason === 'hidden') {
-    // The unit went hidden between the client gate and the server (the
-    // snapshot echo lagged the stance ack): same red note as the local
-    // gate, selection kept.
-    if (pending) dioramaDenyAt(pending.px, pending.py, DIO_HIDDEN_DENY);
-    return;
-  }
   if (d.kind !== 'move') return;
   if (d.ok) {
     // One-shot glow drop — for selection-issued orders only. A ring drag
@@ -9907,7 +9900,7 @@ function showGuidePopup() {
             <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
-            <li><strong>Hold</strong> your unit's info card → <strong>Fight</strong> / <strong>Hide</strong>. Hide: it slips out of every enemy's sight, keeps pacing its cover as they move and only fires back from there (no move / lock orders until released — double-tap the unit or Fight).</li>
+            <li><strong>Hold</strong> your unit's info card → a shield pops up; release on it = <strong>Hide</strong>: the unit slips out of every enemy's sight, keeps pacing its cover as they move and only fires back from there. Double-tap the unit, or give it any move / lock order, to release it.</li>
             <li>With nothing selected: drag the area ring to move that order (the 20 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
             <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
           </ul>
@@ -11224,12 +11217,11 @@ function clearUnitCommands(m) {
   m.cmdHide = false;   // the double-tap wipe also releases a Hide (owner 2026-09-26)
 }
 
-// Fight / Hide stance (owner 2026-09-26). Hide = "sight blocked first, fire
-// only when a line exists, never peek": the bot brain parks the unit out of
-// every enemy's eye line and holds there. A hidden unit takes NO move or
-// lock order (the gesture layer denies them with DIO_HIDDEN_DENY), so
-// taking cover wipes both standing orders; Fight (hide=false) is plain
-// autonomy again. Offline twin of the shared setStance(); online the flag
+// Hide stance (owner 2026-09-26). Hide = "sight blocked first, fire only
+// when a line exists, never peek": the bot brain keeps the unit out of every
+// enemy's eye line, pacing its cover. Taking cover wipes both standing
+// orders; any move or lock order that lands releases the stance again (so
+// does the double-tap clear); hide=false is plain autonomy. Offline twin of the shared setStance(); online the flag
 // is mirrored from the snapshot echo instead (syncOnlineCommands).
 function setUnitStance(m, hide) {
   if (!m || m.state.hp <= 0) return false;
@@ -11334,6 +11326,7 @@ function computeOrderPath(m, tx, tz, targetFloorY) {
 function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
   const m = state[slot];
   if (!m || m.state.hp <= 0) return;
+  m.cmdHide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
   m.cmdMove = {
     x: tx, z: tz, y: targetFloorY,
     path, idx: 0,
@@ -11899,9 +11892,9 @@ function ensureDioramaSlotEls(slot) {
 // survives); DRAG a ring = re-issue the order at the release point — any
 // drag counts (even back to the start) and restarts the 20 s window; a
 // plain tap on the ring does nothing (that's the double-tap's first beat).
-// STANCE (owner 2026-09-26): HOLD an own unit's info card still = Fight /
-// Hide menu (release on an icon applies it; the marker takes no hold); a hidden unit refuses move and lock
-// orders with the red DIO_HIDDEN_DENY note until Fight or a double-tap.
+// STANCE (owner 2026-09-26): HOLD an own unit's info card still = the
+// shield pops up (release on it = Hide; the marker takes no hold); a hidden
+// unit is released by the double-tap clear or by any move / lock order.
 
 const DIO_TAP_SLOP = 9;
 const DIO_DOUBLE_MS = 320;
@@ -11909,17 +11902,15 @@ const DIO_RING_BAND = 2;        // ring-grab margin floor beyond the line (world
 const DIO_RING_GRAB_PX = 20;    // screen-px forgiveness converted per-tap to world u
 const DIO_LONGPRESS_MS = 450;
 const DIO_ROT_PER_PX = 0.006;   // right-drag rad/px ("grab and throw")
-// Fight / Hide stance menu (owner 2026-09-26): hold an own unit's info card
-// still for DIO_STANCE_HOLD_MS (shorter than the 450 ms layer cycle, which
-// only runs over an order preview, so the two holds never meet) and the two
-// gold targets pop up; release ON one to apply, anywhere else = cancel.
+// Hide stance pop-up (owner 2026-09-26): hold an own unit's info card still
+// for DIO_STANCE_HOLD_MS (shorter than the 450 ms layer cycle, which only
+// runs over an order preview, so the two holds never meet) and the shield
+// target pops up; release ON it to hide, anywhere else = cancel.
 const DIO_STANCE_HOLD_MS = 400;
 const DIO_STANCE_LIFT = 25;     // icon centre above the card's top edge (17 radius + 8 gap, px)
-const DIO_STANCE_GAP = 44;      // FIGHT-to-HIDE centre distance (10 px between the 34 px targets)
 const DIO_STANCE_HOT_R = 24;    // release-pick radius around an icon centre (px)
 const DIO_STANCE_EDGE = 4;      // viewport edge clearance before an icon flips inward
 const DIO_STANCE_BTN_R = 17;    // half of the 34 px round target
-const DIO_HIDDEN_DENY = 'Hiding — double-tap to release';
 
 function dioramaHitTest(x, y) {
   const pad = 8;
@@ -12065,8 +12056,6 @@ function onDioPointerDown(e) {
     // Fight/Hide hold (owner 2026-09-26): dioramaGestureFrame polls this
     // stamp — pointermove never fires for a finger that holds still.
     pressAt: performance.now(), stance: false,
-    denied: false,      // drag from a HIDDEN unit's marker: note shown, gesture inert
-    hiddenDeny: false   // press on empty ground while the SELECTED unit hides
   };
   // Destination-ring grab (owner 2026-08-27): only with NOTHING selected —
   // while a unit is selected a ground press stays the tap-order preview, so
@@ -12085,11 +12074,7 @@ function onDioPointerDown(e) {
   // still cycles the vertical layer, releasing in place issues the order.
   // Moving past the slop drops the preview and the press becomes a pan.
   const selM = diorama.sel ? state[diorama.sel] : null;
-  if (hit.kind === 'empty' && selM && selM.state.hp > 0 && selM.cmdHide) {
-    // A HIDDEN unit takes no move order (owner 2026-09-26): no preview
-    // opens; a clean tap shows the red note on release and keeps the glow.
-    diorama.gesture.hiddenDeny = true;
-  } else if (hit.kind === 'empty' && selM && selM.state.hp > 0
+  if (hit.kind === 'empty' && selM && selM.state.hp > 0
       && !(state.online && !onlineCommandable(diorama.sel))) {
     diorama.gesture.tapPreview = true;
     diorama.drag = {
@@ -12135,21 +12120,12 @@ function onDioPointerMove(e) {
   // never into a move-order drag or a pan — the hot pick runs per frame in
   // dioramaGestureFrame off diorama.pointers (updated above).
   if (g.stance) return;
-  if (g.denied) return;   // drag from a hidden unit's marker: note shown, nothing else
   if (!g.moved && Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > DIO_TAP_SLOP) {
     g.moved = true;
     if (g.tapPreview) {
       // The tap-order preview dies once the finger travels: this is a pan.
       g.tapPreview = false;
       diorama.drag = null;
-    } else if (g.kind === 'own' && state[g.slot]?.cmdHide
-        && !(state.online && !onlineCommandable(g.slot))) {
-      // A HIDDEN unit takes no move order (owner 2026-09-26): the red note
-      // at the press point instead of a drag; the gesture goes inert (no
-      // pan either — a marker press never panned) and keeps the selection.
-      g.denied = true;
-      dioramaDenyAt(g.x0, g.y0, DIO_HIDDEN_DENY);
-      return;
     } else if ((g.kind === 'own' || g.kind === 'ring')
         && !(state.online && !onlineCommandable(g.slot))) {
       // ONLINE: your own unit always takes orders; the teammate's marker
@@ -12271,19 +12247,12 @@ function onDioPointerUp(e) {
     diorama.lastRingSlot = null;
     const cmd = diorama.sel ? state[diorama.sel] : null;
     const foe = state[g.slot];
-    if (cmd && cmd.state.hp > 0 && cmd.cmdHide) {
-      // A HIDDEN unit takes no force lock (owner 2026-09-26): red note at
-      // the tap, selection kept.
-      dioramaDenyAt(e.clientX, e.clientY, DIO_HIDDEN_DENY);
-    } else if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
+    if (cmd && cmd.state.hp > 0 && foe && foe.state.hp > 0) {
       if (state.online) {
         // Server-side toggle semantics; the echo drives the triangles.
         const sm = state.online.slotMap;
         const targetId = g.slot === 'enemy' ? sm?.enemyId : sm?.enemy2Id;
         if (targetId) {
-          // The point only serves a 'hidden' refusal (the unit went hidden
-          // during the round trip) — see processOrderResults.
-          diorama.pendingOrder = { kind: 'lock', px: e.clientX, py: e.clientY };
           state.online.conn?.sendOrderLock(targetId, onlineServerIdOf(diorama.sel));
         }
         diorama.sel = null;   // one-shot
@@ -12294,7 +12263,10 @@ function onDioPointerUp(e) {
       cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
       // Lock order decides who wears the X vs + crosshair when both
       // commanders pin the same enemy (2.1d).
-      if (cmd.cmdLock) cmd.cmdLockAt = performance.now();
+      if (cmd.cmdLock) {
+        cmd.cmdLockAt = performance.now();
+        cmd.cmdHide = false;   // a landed lock releases the hide stance (owner 2026-09-26)
+      }
       diorama.sel = null;   // one-shot: the glow drops once the command lands
     } else if (!diorama.sel && foe) {
       // Unselected tap on an enemy marker/card (owner 2026-08-27): release
@@ -12318,12 +12290,7 @@ function onDioPointerUp(e) {
     diorama.lastRingSlot = null;
     const drag = diorama.drag;
     diorama.drag = null;
-    if (g.hiddenDeny) {
-      // Ground tap with a HIDDEN unit selected (owner 2026-09-26): the red
-      // note where the finger landed; the glow stays (Fight / double-tap
-      // releases the unit).
-      dioramaDenyAt(e.clientX, e.clientY, DIO_HIDDEN_DENY);
-    } else if (g.tapPreview && drag) {
+    if (g.tapPreview && drag) {
       if (drag.valid && drag.path) {
         if (state.online) {
           // Glow stays until the server acks (processOrderResults): ok
@@ -12373,7 +12340,7 @@ function dioramaGestureFrame() {
   // same reason as the layer cycle); while it is open only the hot pick
   // runs — the finger is on its way to an icon, not cycling a layer.
   if (g.stance) { dioStanceFrame(g); return; }
-  if (g.kind === 'own' && g.via === 'card' && !g.moved && !g.denied && !diorama.drag
+  if (g.kind === 'own' && g.via === 'card' && !g.moved && !diorama.drag
       && g.pressAt != null && performance.now() - g.pressAt >= DIO_STANCE_HOLD_MS) {
     openStanceMenu(g);
     if (g.stance) { dioStanceFrame(g); return; }
@@ -12422,13 +12389,13 @@ function dioramaDenyAt(px, py, label = 'Area is not available') {
 
 // ---- Fight / Hide stance menu (owner 2026-09-26) ---------------------------
 // Hold an OWN commandable unit's info CARD still for DIO_STANCE_HOLD_MS:
-// two round gold targets pop up side by side just above it — FIGHT (gun,
-// left) = plain autonomy, HIDE (shield, right) = take cover out of every
-// enemy's sight. The marker (square / edge diamond) takes no hold (owner
-// 2026-09-26: card only; the marker keeps the double-tap clear). The stance
-// applies only when the finger lets go ON an icon; release anywhere else
-// cancels. The menu is anchored once, at open time; a pair that would clip
-// the viewport flips below the card (top edge) or slides inward (sides).
+// one round gold target — the shield — pops up centred just above it; let
+// go ON it = HIDE (take cover out of every enemy's sight), anywhere else
+// cancels. The marker (square / edge diamond) takes no hold (owner
+// 2026-09-26: card only; it keeps the double-tap clear). The pop-up is
+// anchored once, at open time; at the top edge it flips below the card, at
+// a side edge it slides inward. A hidden unit is released by the double-tap
+// clear or by any move / lock order (no Fight pick since 2026-09-26).
 
 // Anchor rect of the pressed thing, in layer (= viewport) px.
 function dioStanceAnchorRect(slot, via) {
@@ -12442,17 +12409,10 @@ function dioStanceAnchorRect(slot, via) {
   return b ? { x: b.x, y: b.y, w: b.s, h: b.s } : null;
 }
 
-// 18 px gold glyphs: a pistol for FIGHT, a plated shield (centre cross) for
-// HIDE. Inline SVG — no image assets exist for the command layer.
-function dioStanceGlyph(kind) {
-  if (kind === 'fight') {
-    return '<svg viewBox="0 0 18 18" width="18" height="18">'
-      + '<rect x="1" y="4.4" width="16" height="4.2" rx="0.8" fill="#ffd257"/>'
-      + '<path d="M 10.6 8.4 H 15.2 L 16.4 15.6 H 12 Z" fill="#ffd257"/>'
-      + '<path d="M 10.6 9.2 C 7.2 9.2 6.8 12.8 10 13.2 L 12.2 13" fill="none" stroke="#ffd257" stroke-width="1.1" stroke-linecap="round"/>'
-      + '<path d="M 9.4 9.6 V 11.4" fill="none" stroke="#ffd257" stroke-width="1.2" stroke-linecap="round"/>'
-      + '</svg>';
-  }
+// 18 px gold glyph: a plated shield (centre cross) for HIDE. Inline SVG — no
+// image assets exist for the command layer (the pistol FIGHT glyph went with
+// the Fight pick, 2026-09-26).
+function dioStanceGlyph() {
   return '<svg viewBox="0 0 18 18" width="18" height="18">'
     + '<path d="M 9 1.4 L 15.6 3.9 V 8.4 C 15.6 12.4 12.8 15.3 9 16.6 C 5.2 15.3 2.4 12.4 2.4 8.4 V 3.9 Z" fill="none" stroke="#ffd257" stroke-width="1.5" stroke-linejoin="round"/>'
     + '<path d="M 9 5.6 V 12.2 M 5.8 8.9 H 12.2" fill="none" stroke="#ffd257" stroke-width="1.4" stroke-linecap="round"/>'
@@ -12469,23 +12429,18 @@ function openStanceMenu(g) {
   const W = window.innerWidth;
   const R = DIO_STANCE_BTN_R;
   const E = DIO_STANCE_EDGE;
-  // Both targets sit side by side just above the card, centred on it and
-  // DIO_STANCE_GAP apart (FIGHT left, HIDE right) — close together, so one
-  // short slide reaches either (owner 2026-09-26). At the top edge the pair
+  // One target — the shield — centred just above the card (owner
+  // 2026-09-26: the Fight icon is gone; a hidden unit is released by the
+  // double-tap clear or by any move / lock order). At the top edge it
   // flips below the card; at a side edge it slides inward.
-  const cx = a.x + a.w / 2;
   let y = a.y - DIO_STANCE_LIFT;
   if (y - R < E) y = a.y + a.h + DIO_STANCE_LIFT;
-  let fx = cx - DIO_STANCE_GAP / 2;
-  let hx = cx + DIO_STANCE_GAP / 2;
-  if (fx - R < E) { hx += E + R - fx; fx = E + R; }
-  if (hx + R > W - E) { fx -= hx + R - (W - E); hx = W - E - R; }
-  const fight = { kind: 'fight', x: fx, y };
-  const hide = { kind: 'hide', x: hx, y };
+  const x = Math.min(W - E - R, Math.max(E + R, a.x + a.w / 2));
+  const hide = { kind: 'hide', x, y };
   const el = document.createElement('div');
   el.className = 'dio-stance';
   const btns = [];
-  for (const b of [fight, hide]) {
+  for (const b of [hide]) {
     const btn = document.createElement('div');
     btn.className = 'dio-stance-btn';
     btn.dataset.stance = b.kind;
