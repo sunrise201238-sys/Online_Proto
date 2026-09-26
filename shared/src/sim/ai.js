@@ -115,6 +115,40 @@ const BOT_HIDE_PREDICT_MIN_SPEED = 1;
 const BOT_HIDE_CLOSE_DIST = 26;
 const BOT_HIDE_APPROACH_SPEED = 2;
 const BOT_HIDE_SLIP_GAIN = 6;
+// COVER HIDE (owner 2026-09-26): a unit under a MOVE ORDER that takes a fresh
+// hit runs a short hide INSTEAD of Defense — cover inside the order's area
+// first (AREA_R around the ordered point; anchor phase only — a unit still
+// travelling has no area yet and skips that tier), then the nearest cover
+// anywhere. It lasts at least until the unit reaches its cover, then
+// Defense's tail (last hit + BOT_HIT_EVADE_MS, + SNIPER_EXTRA while a sniper
+// charges at it), capped at CAP_MS from the trigger; no cover anywhere ->
+// plain Defense, and no retry for BOT_HIDE_FAIL_RETRY_MS. Sprints like
+// Defense (down to the 8 floor, no arming). No badge; the move order stands
+// throughout and the driver resumes it after (commandReflexActive yields to
+// botCH). Never alongside the Hide stance (it wipes move orders anyway).
+const BOT_CH_AREA_R = 14;
+const BOT_CH_CAP_MS = 2000;
+const BOT_CH_SNIPER_EXTRA_MS = 250;
+// Every hide scratch field, nulled when a hide ends (stance cleared, cover
+// hide over) so the normal brain resumes from a clean slate. Offline twin:
+// client resetBotHideFields.
+function resetBotHideFields(f) {
+  f.botHidePath = null;
+  f.botHidePathIdx = null;
+  f.botHideGoal = null;
+  f.botHideSearchAt = null;
+  f.botHideSearchStage = null;
+  f.botHideFailedAt = null;
+  f.botHideHold = null;
+  f.botHideDashArmed = null;
+  f.botHideTier = null;
+  f.botHideMoveAnchor = null;
+  f.botHideAnchor = null;
+  f.botHideDriftX = null;
+  f.botHideDriftZ = null;
+  f.botHideDriftUntil = null;
+  f.botHideNoCover = null;
+}
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -755,6 +789,26 @@ export function tickBot(matchState, botId, now) {
     }
   }
   const hideOrdered = cmdEntry ? !!cmdEntry.hide : !!me.botReloadHide;
+  // COVER HIDE lifecycle (owner 2026-09-26 — see the constants note): only a
+  // unit with a standing move order and no Hide stance; a live Defense (the
+  // anti-glint dodge's follow-up, or the no-cover fallback itself) keeps
+  // its frames first, and a no-cover verdict holds the trigger off for a
+  // while (the search would only fail again).
+  const defenseLive = (me.botState ?? 'pursue') === 'defense' && now < (me.botDefenseUntil ?? 0);
+  const chOrder = (!hideOrdered && cmdEntry?.move) ? cmdEntry.move : null;
+  if (me.botCH && (!chOrder || defenseLive)) {
+    me.botCH = null;
+    resetBotHideFields(me);
+  }
+  if (!me.botCH && chOrder && underFire && !defenseLive && now >= (me.botCHNoCoverUntil ?? 0)) {
+    me.botCH = {
+      startedAt: now,
+      within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
+    };
+    resetBotHideFields(me);
+  }
+  // Which hide runs this tick: the stance (ordered / reload) or the cover hide.
+  const hideMode = hideOrdered ? 'stance' : (me.botCH ? 'cover' : null);
 
   // Movement override carried by the hide stance below (the 2026-08-08
   // cover reload's vehicle, kept: the dispatch and the stall-clock pinning
@@ -800,26 +854,13 @@ export function tickBot(matchState, botId, now) {
   // tick (the fallback tiers follow on the next ticks) and at most one per
   // tick per match (matchState.hideSearchTick). Mirrored in client
   // updateEnemy (fields eState.botHide*).
-  if (!hideOrdered) {
+  if (!hideMode) {
     if (me.botHideHold != null) {
-      // Order cleared (Fight = plain autonomy): null every hide field so the
-      // normal brain resumes from a clean slate.
-      me.botHidePath = null;
-      me.botHidePathIdx = null;
-      me.botHideGoal = null;
-      me.botHideSearchAt = null;
-      me.botHideSearchStage = null;
-      me.botHideFailedAt = null;
-      me.botHideHold = null;
-      me.botHideDashArmed = null;
-      me.botHideTier = null;
-      me.botHideMoveAnchor = null;
-      me.botHideAnchor = null;
-      me.botHideDriftX = null;
-      me.botHideDriftZ = null;
-      me.botHideDriftUntil = null;
+      // Stance cleared (or the cover hide ended): null every hide field so
+      // the normal brain resumes from a clean slate.
+      resetBotHideFields(me);
     }
-  } else if (!((me.botState ?? 'pursue') === 'defense' && now < (me.botDefenseUntil ?? 0))) {
+  } else if (!defenseLive) {
     // (A live Defense here can only be the anti-glint dodge's 520 ms
     // follow-up sprint — it keeps its frames; the hide resumes after.)
     const hideEnemies = [];
@@ -855,6 +896,7 @@ export function tickBot(matchState, botId, now) {
       if (seen) { hiddenAll = false; break; }
     }
     const hideTier = hiddenAll ? 'all' : hiddenNear ? 'nearest' : null;
+    if (hideTier) me.botHideNoCover = false;   // standing hidden = cover exists
     // Threat read: the nearest enemy, the unit's bearing away from it and
     // whether it is closing in.
     const threat = hideEnemies[0] ?? null;
@@ -914,7 +956,17 @@ export function tickBot(matchState, botId, now) {
       // re-issue the next nearest-hidden cell every cadence and the unit
       // would shuffle between neighbours instead of pacing its cover.
       if (!hiddenNear) hideAttempts.push({ eyes: hideEyes.slice(0, 1), tier: 'nearest', minDistFrom: null });
-    } else if (exposedSoon || closing) {
+    }
+    if (!hiddenAll && hideMode === 'cover' && me.botCH.within) {
+      // COVER HIDE first tier: cover inside the order's area, ahead of the
+      // unrestricted tiers.
+      const w = me.botCH.within;
+      const inArea = [];
+      if (hidePredEyes.length) inArea.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null, within: w });
+      inArea.push({ eyes: hideEyes, tier: 'all', minDistFrom: null, within: w });
+      hideAttempts.unshift(...inArea);
+    }
+    if (hiddenAll && (exposedSoon || closing)) {
       const eyes = hideEyes.concat(hidePredEyes);
       hideAttempts.push({
         eyes, tier: 'all',
@@ -931,9 +983,10 @@ export function tickBot(matchState, botId, now) {
       const attempt = hideAttempts[stage];
       const found = findHiddenSpot(
         navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes, obstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom }
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null }
       );
       if (found) {
+        me.botHideNoCover = false;
         me.botHidePath = found.path;
         me.botHidePathIdx = 0;
         me.botHideGoal = found.goal;
@@ -951,6 +1004,10 @@ export function tickBot(matchState, botId, now) {
           // move — the scan stays dynamic).
           me.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
         } else {
+          // Exposed and NOTHING anywhere within the budget: no cover. Until a
+          // later search finds one, a fresh hit runs the plain Defense escape
+          // (owner 2026-09-26; the transition below reads the flag).
+          me.botHideNoCover = true;
           me.botHideFailedAt = now;
           me.botHideSearchAt = now + BOT_HIDE_FAIL_RETRY_MS;
         }
@@ -981,7 +1038,8 @@ export function tickBot(matchState, botId, now) {
         me.botHideDashArmed = true;
       }
       me.botHideHold = false;
-      coverMove = { hold: false, hide: true, dash: !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
+      // The COVER HIDE sprints like Defense: no arming, the 8 floor only.
+      coverMove = { hold: false, hide: true, dash: hideMode === 'cover' ? true : !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
       if (!me.botHideMoveAnchor
           || Math.hypot(me.pos.x - me.botHideMoveAnchor.x, me.pos.z - me.botHideMoveAnchor.z) > 1) {
         me.botHideMoveAnchor = { x: me.pos.x, z: me.pos.z, at: now };
@@ -1056,6 +1114,25 @@ export function tickBot(matchState, botId, now) {
       me.botHideHold = false;
       me.botHideTier = null;
       me.botHideAnchor = null;
+    }
+    if (hideMode === 'cover') {
+      // COVER HIDE end. No cover anywhere -> abort into Defense (the
+      // transition sees the cleared maneuver + underFire; the flag holds
+      // the trigger off for the retry window). Otherwise: at the cover and
+      // Defense's tail has run out since the last hit, or the cap.
+      const tail = (me.botHitEvadeUntil ?? 0) + (sniperCharging ? BOT_CH_SNIPER_EXTRA_MS : 0);
+      const reached = !me.botHidePath && hideTier != null;
+      if (me.botHideNoCover) {
+        me.botCH = null;
+        me.botCHNoCoverUntil = now + BOT_HIDE_FAIL_RETRY_MS;
+        resetBotHideFields(me);
+        me.botHideNoCover = true;   // keeps this tick's transition on Defense
+        coverMove = null;
+      } else if ((reached && now >= tail) || now >= me.botCH.startedAt + BOT_CH_CAP_MS) {
+        me.botCH = null;
+        resetBotHideFields(me);
+        coverMove = null;
+      }
     }
   }
   if (coverMove) {
@@ -1231,14 +1308,17 @@ export function tickBot(matchState, botId, now) {
   const approachBlockedLong = sightedBlocked
     && now - me.botApproachBlockedSince >= 250;
 
-  if (hideOrdered && !inDefenseGrace) {
-    // HIDE ORDER (owner 2026-09-26): the brain is parked on 'pursue' — a
-    // fresh hit NEVER enters Defense (hit-stun physics still applies; the
-    // unit fires back from where it stands), and no Maze/Engage transition
-    // runs while the hide block owns the legs (a Maze entry would burn a
-    // firing-position plan the hide would never follow, and its exit would
-    // route the unit back into sight). A Defense already live — the
-    // anti-glint dodge's follow-up — runs its grace out first.
+  // HIDE (stance or cover hide, owner 2026-09-26): the brain is parked on
+  // 'pursue' — a fresh hit never enters Defense (hit-stun physics still
+  // applies; the unit fires back from where it stands), and no Maze/Engage
+  // transition runs while the hide block owns the legs (a Maze entry would
+  // burn a firing-position plan the hide would never follow, and its exit
+  // would route the unit back into sight). Two exceptions: a Defense already
+  // live (the anti-glint dodge's follow-up) runs its grace out first, and
+  // when NO cover exists anywhere (botHideNoCover) a fresh hit runs the
+  // plain Defense escape until a later search finds cover.
+  const hideParks = hideMode != null && !(me.botHideNoCover && underFire);
+  if (hideParks && !inDefenseGrace) {
     nextState = 'pursue';
   } else if (underFire || inDefenseGrace) {
     nextState = 'defense';
@@ -1396,7 +1476,7 @@ export function tickBot(matchState, botId, now) {
 
   // (Hide order: a hit never extends the glint dodge's Defense follow-up —
   // sustained fire must not keep the unit sprinting out of its hide.)
-  if (me.botState === 'defense' && underFire && !hideOrdered) {
+  if (me.botState === 'defense' && underFire && !hideParks) {
     // Hit during stuck-Defense → snap back to regular Defense: refresh the
     // strafe direction and clear cover/peek so it behaves as if this hit
     // had triggered Defense fresh.

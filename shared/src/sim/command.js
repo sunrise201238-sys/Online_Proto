@@ -218,6 +218,7 @@ export function commandTargetIdOf(matchState, slot) {
 // charge/beam locks which hard-zero velocity in the sim).
 function commandReflexActive(f, now) {
   return f.botState === 'defense'
+    || f.botCH != null                     // COVER HIDE (owner 2026-09-26): the hit reflex of an ordered unit
     || now <= (f.stepUntil ?? 0)
     || now < (f.hitStunUntil ?? 0)
     || f.sniperChargeTargetId != null
@@ -236,7 +237,7 @@ export function tickCommandDriver(matchState, slot, now) {
   if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; cmd.hideAuto = false; return; }
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
-    // the frame — the reflex (Defense escape, a hide) may have moved
+    // the frame — the reflex (Defense escape, cover hide) may have moved
     // the unit far off the frozen route.
     mv.reflexHeld = true;
     return;

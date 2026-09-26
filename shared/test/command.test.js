@@ -348,6 +348,126 @@ test('reload hide: a bot without a command entry (an enemy) runs the behaviour o
   assert.equal(p2.botHideHold, null, 'the hide scratch is nulled once the reload ends');
 });
 
+// Plain Field has only its four perimeter walls: no cell inside is ever
+// hidden from an enemy standing inside, so every hide search fails there.
+function plainNoCoverFixture(order) {
+  const m = createMatchState({ mapKey: 'arena1', mode: '2v2', startTime: 1000 });
+  const place = (f, x, z) => { f.pos.x = x; f.pos.z = z; f.pos.y = GROUND_BASE_Y; };
+  place(m.fighters.p1, -20, 0); place(m.fighters.p3, -40, 10); place(m.fighters.p2, 30, 0); place(m.fighters.p4, 30, 15);
+  for (const f of Object.values(m.fighters)) f.invulnerableUntil = 0;
+  const inputs = { p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput() };
+  let now = 1000;
+  const step = () => {
+    now += TICK_RATE_MS;
+    const me = m.fighters.p1;
+    me.targetId = commandTargetIdOf(m, 'p1') ?? pickBotTargetId(m, me) ?? me.targetId;
+    tickBot(m, 'p1', now); tickCommandDriver(m, 'p1', now);
+    tickMatch(m, inputs, now, TICK_DT, ['p1']);
+    return now;
+  };
+  const hit = () => { m.fighters.p1.hitStunUntil = now + 300; m.fighters.p1.hitStunScale = 0.25; };
+  return { m, step, hit, now: () => now };
+}
+
+test('no cover anywhere: a hidden-ordered unit falls back to Defense on a fresh hit (Plain Field)', () => {
+  const { m, step, hit } = plainNoCoverFixture();
+  setStance(m, 'p1', true);
+  for (let i = 0; i < 12; i += 1) step();   // the staged search runs out of tiers
+  assert.equal(m.fighters.p1.botHideNoCover, true, 'the search found no cover at any tier');
+  hit(); step();
+  assert.equal(m.fighters.p1.botState, 'defense', 'a fresh hit runs Defense while no cover exists');
+  assert.equal(isHideOrdered(m, 'p1'), true, 'the stance itself still stands');
+});
+
+test('cover hide: a unit under a move order runs a hide instead of Defense, then the order resumes (Streets)', () => {
+  const { m, step, hiddenFromBoth, arena, now: nowFn } = streetsHideFixture();
+  const p1 = m.fighters.p1;
+  // A short order (the next cell over): the unit arrives within a second and
+  // is anchored.
+  assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
+  for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
+  assert.equal(getCommands(m, 'p1').move.phase, 'anchor');
+  const anchor = { x: getCommands(m, 'p1').move.x, z: getCommands(m, 'p1').move.z };
+  let now = nowFn();
+  p1.hitStunUntil = now + 300; p1.hitStunScale = 0.25;   // a landing round
+  now = step();
+  assert.ok(p1.botCH, 'the hit started a cover hide');
+  assert.notEqual(p1.botState, 'defense', 'no Defense for an ordered unit');
+  assert.deepEqual(p1.botCH.within, { x: anchor.x, z: anchor.z, r: 14 }, 'anchored: cover inside the area first');
+  let hiddenAt = null, endedAt = null, sawDefense = false, goalSeen = null, yielded = false;
+  const t0 = now;
+  for (let i = 0; i < 4000 / TICK_RATE_MS; i += 1) {
+    now = step();
+    if (p1.botState === 'defense') sawDefense = true;
+    if (p1.botCH && getCommands(m, 'p1').move.reflexHeld) yielded = true;   // the driver yields while the maneuver runs (the flag is consumed by the replan after)
+    if (p1.botHideGoal && !goalSeen) goalSeen = { ...p1.botHideGoal };
+    if (hiddenAt == null && p1.botCH && hiddenFromBoth()) hiddenAt = now;
+    if (!p1.botCH) { endedAt = now; break; }
+  }
+  assert.equal(sawDefense, false, 'Defense never ran during the cover hide');
+  assert.ok(hiddenAt != null, 'the unit reached cover during the maneuver');
+  assert.ok(endedAt != null, 'the cover hide ended');
+  assert.ok(endedAt - hiddenAt >= 0 && endedAt - hiddenAt <= 700, `ended ${endedAt - hiddenAt} ms after reaching cover (Defense tail expected)`);
+  assert.ok(endedAt - t0 <= 2100, 'within the 2 s cap');
+  assert.ok(getCommands(m, 'p1').move, 'the move order stands through the maneuver');
+  assert.equal(yielded, true, 'the driver yielded to the maneuver');
+  assert.equal(p1.botHideHold, null, 'hide scratch nulled after');
+  if (goalSeen && Math.hypot(goalSeen.x - anchor.x, goalSeen.z - anchor.z) <= 14) {
+    assert.ok(true);   // the in-area tier found cover
+  }
+  // The driver resumes: the unit moves under the order again within 1 s.
+  let moved = false;
+  for (let i = 0; i < 1000 / TICK_RATE_MS; i += 1) { step(); if (Math.hypot(p1.vel.x, p1.vel.z) > 0.01) { moved = true; break; } }
+  assert.ok(moved, 'the order resumed after the maneuver');
+  void arena;
+});
+
+test('cover hide: a travelling unit skips the in-area tier; no cover anywhere aborts into Defense (Plain Field)', () => {
+  {
+    const { m, step, hiddenFromBoth, now: nowFn } = streetsHideFixture();
+    const p1 = m.fighters.p1;
+    let ordered = false;
+    for (const [x, z] of [[-60, -40], [-70, -30], [-50, -50]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
+    assert.ok(ordered, 'fixture: no reachable far order');
+    step();
+    assert.equal(getCommands(m, 'p1').move.phase, 'travel');
+    p1.hitStunUntil = nowFn() + 300; p1.hitStunScale = 0.25;
+    step();
+    assert.ok(p1.botCH, 'cover hide started while travelling');
+    assert.equal(p1.botCH.within, null, 'no area yet: the in-area tier is skipped');
+    void hiddenFromBoth;
+  }
+  {
+    const { m, step, hit, now: nowFn } = plainNoCoverFixture();
+    const p1 = m.fighters.p1;
+    assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
+    for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
+    hit(); step();
+    assert.ok(p1.botCH, 'cover hide started');
+    let defenseAt = null;
+    for (let i = 0; i < 20; i += 1) { step(); if (p1.botState === 'defense') { defenseAt = i; break; } }
+    assert.ok(defenseAt != null, 'no cover anywhere: the maneuver aborted into Defense');
+    assert.equal(p1.botCH, null);
+    assert.ok(p1.botCHNoCoverUntil > nowFn(), 'the trigger is held off for the retry window');
+    assert.ok(getCommands(m, 'p1').move, 'the move order still stands');
+  }
+});
+
+test('findHiddenSpot: opts.within keeps the goal inside the disc', () => {
+  const { m, arena } = streetsHideFixture();
+  const grid = buildNavGrid(arena.obstacles, arena.surfaces);
+  const eyes = [m.fighters.p2, m.fighters.p4].map((f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z }));
+  const p1 = m.fighters.p1;
+  const free = findHiddenSpot(grid, p1.pos.x, p1.pos.z, p1.pos.y, eyes, arena.obstacles, { maxPops: 600 });
+  assert.ok(free, 'an unrestricted hide exists');
+  const disc = { x: free.goal.x, z: free.goal.z, r: 14 };
+  const inside = findHiddenSpot(grid, p1.pos.x, p1.pos.z, p1.pos.y, eyes, arena.obstacles, { maxPops: 600, within: disc });
+  assert.ok(inside, 'a hide inside the disc around a known hide');
+  assert.ok(Math.hypot(inside.goal.x - disc.x, inside.goal.z - disc.z) <= 14, 'goal inside the disc');
+  const far = findHiddenSpot(grid, p1.pos.x, p1.pos.z, p1.pos.y, eyes, arena.obstacles, { maxPops: 600, within: { x: m.fighters.p2.pos.x, z: m.fighters.p2.pos.z, r: 3 } });
+  assert.ok(far == null || Math.hypot(far.goal.x - m.fighters.p2.pos.x, far.goal.z - m.fighters.p2.pos.z) <= 3, 'a tiny disc at the enemy: null or inside');
+});
+
 test('hide order: two hiding units never search in the same tick (matchState.hideSearchTick)', () => {
   const { m, step } = streetsHideFixture();
   // p3 exposed next to p1 (same open ground), both ordered to hide at once.
