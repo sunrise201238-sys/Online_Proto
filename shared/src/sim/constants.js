@@ -730,7 +730,7 @@ export const DASH_RECOVER_MS = 180;
 // 6 u from the tapped spot.
 export const CMD_TRAVEL_BOOST_FLOOR = 50;
 export const CMD_TRAVEL_DASH_ARM = 125;
-export const CMD_ANCHOR_MS = 20000;
+export const CMD_ANCHOR_MS = 40000;   // 20 s -> 40 s (owner 2026-09-26)
 export const CMD_RADIUS = 12;
 export const CMD_ORDER_SNAP_TOLERANCE = 6;
 export const CMD_ARRIVE_DIST = 4;
