@@ -925,13 +925,18 @@ function createMinHeap() {
 // eye that sees a node. Returns { path: [{x, z, y}], goal: {x, z, y} }
 // (collapsed + corridor-smoothed like every other route) or null when
 // nothing hidden lies within the budget.
-// The START node counts only when the actor stands more than 1 u off its
+// `opts.minDistFrom` ({x, z, d}) additionally requires the goal to lie at
+// least d from that point — the hide order's SLIP search (owner
+// 2026-09-26: an enemy closing in makes the unit move to a cell farther
+// from it while staying hidden). The START node counts only when the actor
+// stands more than 1 u off its
 // centre: a node the actor already occupies — exposed at its real eye yet
 // hidden at the centre test — would otherwise be re-issued forever as a
 // zero-length route, and the caller's no-progress bail would loop on it.
 export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts = {}) {
   const maxPops = opts.maxPops ?? 600;
   const eyeHeight = opts.eyeHeight ?? BOT_LOS_EYE_HEIGHT;
+  const minFrom = opts.minDistFrom ?? null;
   if (!eyes || eyes.length === 0) return null;
   const { n, layers, floor, clearGrade, surfaces } = grid;
   const size = n * layers;
@@ -964,7 +969,9 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
     closed[cur] = 1;
     const startHere = cur === start
       && Math.hypot(nodeCenterX(grid, cur) - sx, nodeCenterZ(grid, cur) - sz) <= 1;
-    if (!startHere && hiddenAt(cur)) { goal = cur; break; }
+    const farEnough = !minFrom
+      || Math.hypot(nodeCenterX(grid, cur) - minFrom.x, nodeCenterZ(grid, cur) - minFrom.z) >= minFrom.d;
+    if (!startHere && farEnough && hiddenAt(cur)) { goal = cur; break; }
     forEachWalkNeighbor(grid, cur, (nb) => {
       if (closed[nb]) return;
       const ng = g[cur] + 1 + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);

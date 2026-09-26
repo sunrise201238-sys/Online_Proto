@@ -105,6 +105,23 @@ const BOT_HIDE_FAIL_RETRY_MS = 1500;
 const BOT_HIDE_BAIL_MS = 700;
 const BOT_HIDE_BAIL_RETRY_MS = 700;
 const BOT_HIDE_MAX_POPS = 600;
+// Pacing and slipping while hidden (owner 2026-09-26: no statue): a pacing
+// leg is LEG units long and must be verified hidden before it is taken,
+// legs stay within LEASH of the hide anchor and a heading is re-picked
+// every DRIFT_MS (DRIFT_RETRY_MS when no hidden leg exists). Enemies are
+// projected PREDICT_S ahead on their live velocity (below PREDICT_MIN_SPEED
+// they are treated as standing); a nearest enemy inside CLOSE_DIST closing
+// faster than APPROACH_SPEED triggers a slip to a cell at least SLIP_GAIN
+// farther from it.
+const BOT_HIDE_LEG = 2.5;
+const BOT_HIDE_LEASH = 6;
+const BOT_HIDE_DRIFT_MS = 350;
+const BOT_HIDE_DRIFT_RETRY_MS = 150;
+const BOT_HIDE_PREDICT_S = 0.5;
+const BOT_HIDE_PREDICT_MIN_SPEED = 1;
+const BOT_HIDE_CLOSE_DIST = 26;
+const BOT_HIDE_APPROACH_SPEED = 2;
+const BOT_HIDE_SLIP_GAIN = 6;
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -875,16 +892,28 @@ export function tickBot(matchState, botId, now) {
   // --- HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance) ---
   // The cover reload above, generalised into a standing order. While it
   // stands on this unit:
-  //   hidden from EVERY live enemy  -> HOLD: stand still (vel 0, momentum
-  //                                    cleared, no sway, no peeking — the
-  //                                    bloom stillness rule then makes the
-  //                                    return fire pin-point);
-  //   exposed                       -> follow / search a findHiddenSpot route
-  //                                    to the nearest cell no enemy sees
-  //                                    (tier 'all'); none within the pop
-  //                                    budget -> a cell the NEAREST enemy
-  //                                    cannot see (tier 'nearest'); still
-  //                                    none -> hold position and retry.
+  //   hidden at its tier   -> PACE: keep moving at walk speed on short legs
+  //                           that are verified hidden BEFORE they are taken
+  //                           (a BOT_HIDE_LEG look-ahead eye test against
+  //                           every enemy eye plus the walk rule), on a
+  //                           BOT_HIDE_LEASH around the hide anchor, biased
+  //                           away from the nearest enemy (owner 2026-09-26:
+  //                           a statue "looks awful");
+  //   exposure ahead /     -> SLIP: the enemies are watched every tick — an
+  //   enemy closing in        eye that would see the unit BOT_HIDE_PREDICT_S
+  //                           ahead on its live velocity, or a nearest enemy
+  //                           inside BOT_HIDE_CLOSE_DIST closing faster than
+  //                           BOT_HIDE_APPROACH_SPEED, triggers a
+  //                           findHiddenSpot route to a cell hidden from the
+  //                           live AND the predicted eyes (when closing, one
+  //                           at least BOT_HIDE_SLIP_GAIN farther from that
+  //                           enemy than the unit stands now);
+  //   exposed              -> follow / search a findHiddenSpot route to the
+  //                           nearest cell no enemy sees, live and predicted
+  //                           eyes first (tier 'all'), then live only, then
+  //                           a cell the NEAREST enemy cannot see (tier
+  //                           'nearest'); still none -> the plain pursue
+  //                           legs move it while the search retries.
   // Firing is untouched: the fire block at the bottom still shoots whatever
   // it can see from where the unit stands — the unit never moves for a
   // shot. Defense never triggers on a hit (state transition below; hit-stun
@@ -892,11 +921,14 @@ export function tickBot(matchState, botId, now) {
   // channels stay as they are, and the dodge's Defense follow-up owns its
   // frames like any reflex. The cover-reload window is closed while the
   // order stands (coverWindow above), so coverMove is free to carry the
-  // hide override (hide: true; dash = the latched sprint). Search cadence:
-  // BOT_HIDE_SEARCH_MS per unit AND at most one search per tick per match
-  // (matchState.hideSearchTick) — two hiding units never search in the same
-  // tick. Per-tick LoS work <= 4 tests (position <= 2, goal re-verify
-  // <= 2). Mirrored in client updateEnemy (fields eState.botHide*).
+  // hide override (hide: true; dash = the latched sprint on a route).
+  // Online budget: per tick <= 2 (position) + 2 (predicted eyes) + 2 (route
+  // goal) + 2 (current leg) LoS tests and one walk-rule segment test; a leg
+  // re-pick every BOT_HIDE_DRIFT_MS costs 8 headings x (walk test + <= 4
+  // LoS); searches keep the BOT_HIDE_SEARCH_MS cadence, run ONE attempt per
+  // tick (the fallback tiers follow on the next ticks) and at most one per
+  // tick per match (matchState.hideSearchTick). Mirrored in client
+  // updateEnemy (fields eState.botHide*).
   if (!hideOrdered) {
     if (me.botHideHold != null) {
       // Order cleared (Fight = plain autonomy): null every hide field so the
@@ -905,11 +937,16 @@ export function tickBot(matchState, botId, now) {
       me.botHidePathIdx = null;
       me.botHideGoal = null;
       me.botHideSearchAt = null;
+      me.botHideSearchStage = null;
       me.botHideFailedAt = null;
       me.botHideHold = null;
       me.botHideDashArmed = null;
       me.botHideTier = null;
       me.botHideMoveAnchor = null;
+      me.botHideAnchor = null;
+      me.botHideDriftX = null;
+      me.botHideDriftZ = null;
+      me.botHideDriftUntil = null;
     }
   } else if (!((me.botState ?? 'pursue') === 'defense' && now < (me.botDefenseUntil ?? 0))) {
     // (A live Defense here can only be the anti-glint dodge's 520 ms
@@ -924,6 +961,18 @@ export function tickBot(matchState, botId, now) {
     // Enemy eyes stay LIVE (the existing convention — a jumping human must
     // still count); the unit's own eye is the grounded latch (myEyeY).
     const hideEyes = hideEnemies.map((f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z }));
+    // Predicted eyes: where each enemy will be BOT_HIDE_PREDICT_S ahead on
+    // its live velocity; a near-still enemy adds none (saves the tests).
+    const hidePredEyes = [];
+    for (let k = 0; k < hideEnemies.length; k += 1) {
+      const f = hideEnemies[k];
+      const vx = f.vel?.x ?? 0, vz = f.vel?.z ?? 0;
+      if (Math.hypot(vx, vz) > BOT_HIDE_PREDICT_MIN_SPEED) {
+        hidePredEyes.push({
+          x: f.pos.x + vx * BOT_HIDE_PREDICT_S, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z + vz * BOT_HIDE_PREDICT_S
+        });
+      }
+    }
     const hideMyEye = { x: me.pos.x, y: myEyeY, z: me.pos.z };
     // Position test (<= 2 LoS tests): nearest eye first, early exit on the
     // first eye that sees the unit.
@@ -934,7 +983,28 @@ export function tickBot(matchState, botId, now) {
       if (k === 0) hiddenNear = !seen;
       if (seen) { hiddenAll = false; break; }
     }
-    // Is a route goal still hidden at its tier? (<= 2 LoS tests)
+    const hideTier = hiddenAll ? 'all' : hiddenNear ? 'nearest' : null;
+    // Threat read: the nearest enemy, the unit's bearing away from it and
+    // whether it is closing in.
+    const threat = hideEnemies[0] ?? null;
+    let threatDist = Infinity, awayX = 0, awayZ = 0, closing = false;
+    if (threat) {
+      const dx = me.pos.x - threat.pos.x, dz = me.pos.z - threat.pos.z;
+      threatDist = Math.hypot(dx, dz) || 1;
+      awayX = dx / threatDist;
+      awayZ = dz / threatDist;
+      const closingSpeed = (threat.vel?.x ?? 0) * awayX + (threat.vel?.z ?? 0) * awayZ;
+      closing = threatDist < BOT_HIDE_CLOSE_DIST && closingSpeed > BOT_HIDE_APPROACH_SPEED;
+    }
+    // Exposure ahead (<= 2 LoS tests, only while hidden from all): would a
+    // predicted eye see the unit where it stands?
+    let exposedSoon = false;
+    if (hiddenAll) {
+      for (let k = 0; k < hidePredEyes.length; k += 1) {
+        if (botHasLineOfSight(hidePredEyes[k], hideMyEye, obstacles, surfaces)) { exposedSoon = true; break; }
+      }
+    }
+    // Is a route goal still hidden at its tier (live eyes)? (<= 2 LoS tests)
     const hideGoalStillHidden = (goal, tier) => {
       const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: goal.z };
       const count = tier === 'nearest' ? 1 : hideEyes.length;
@@ -949,88 +1019,172 @@ export function tickBot(matchState, botId, now) {
       me.botHideGoal = null;
       me.botHideMoveAnchor = null;
     };
-    const hideHold = (tier) => {
-      hideDropPath();
-      me.botHideHold = true;
-      me.botHideTier = tier;
-      me.momentumVX = 0;
-      me.momentumVZ = 0;
-      coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
-    };
-    if (hiddenAll) {
-      hideHold('all');
-    } else {
-      if (me.botHidePath && !hideGoalStillHidden(me.botHideGoal, me.botHideTier)) hideDropPath();
-      if (!me.botHidePath
-          && now >= (me.botHideSearchAt ?? 0)
-          && matchState.hideSearchTick !== matchState.tick) {
-        matchState.hideSearchTick = matchState.tick;
-        const hGrid = navGridFor(arena);
-        const hideSearch = (tier) => findHiddenSpot(
-          hGrid, me.pos.x, me.pos.z, myFloorY,
-          tier === 'nearest' ? hideEyes.slice(0, 1) : hideEyes,
-          obstacles, { maxPops: BOT_HIDE_MAX_POPS }
-        );
-        let found = hideSearch('all');
-        let foundTier = 'all';
-        // The 'nearest' tier only when the unit is NOT already hidden from
-        // the nearest enemy — from a nearest-tier hold that search would
-        // just re-issue the next nearest-hidden cell every cadence and the
-        // unit would shuffle between neighbours instead of holding.
-        if (!found && !hiddenNear) { found = hideSearch('nearest'); foundTier = 'nearest'; }
-        if (found) {
-          me.botHidePath = found.path;
-          me.botHidePathIdx = 0;
-          me.botHideGoal = found.goal;
-          me.botHideTier = foundTier;
-          me.botHideMoveAnchor = null;
-          me.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
-        } else if (hiddenNear) {
-          // Nearest-tier hold: keep probing for an 'all' spot on the cadence
-          // (the enemies move — the scan stays dynamic).
+    // 1. Route bookkeeping: arrived -> drop it and re-anchor the pacing
+    //    there; goal exposed by a moving enemy -> drop it (a fresh search
+    //    follows on the cadence).
+    if (me.botHidePath) {
+      const goal = me.botHideGoal;
+      if (Math.hypot(goal.x - me.pos.x, goal.z - me.pos.z) < 2) {
+        hideDropPath();
+        me.botHideAnchor = null;
+      } else if (!hideGoalStillHidden(goal, me.botHideTier)) {
+        hideDropPath();
+      }
+    }
+    // 2. Searches. The attempt list depends on the situation; exactly ONE
+    //    attempt runs per tick (the next tier follows next tick) so a
+    //    search never costs more than one Dijkstra in a tick.
+    const hideAttempts = [];
+    if (!hiddenAll) {
+      if (hidePredEyes.length) hideAttempts.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null });
+      hideAttempts.push({ eyes: hideEyes, tier: 'all', minDistFrom: null });
+      // The 'nearest' tier only when the unit is NOT already hidden from
+      // the nearest enemy — from a nearest-tier hide that search would just
+      // re-issue the next nearest-hidden cell every cadence and the unit
+      // would shuffle between neighbours instead of pacing its cover.
+      if (!hiddenNear) hideAttempts.push({ eyes: hideEyes.slice(0, 1), tier: 'nearest', minDistFrom: null });
+    } else if (exposedSoon || closing) {
+      const eyes = hideEyes.concat(hidePredEyes);
+      hideAttempts.push({
+        eyes, tier: 'all',
+        minDistFrom: closing ? { x: threat.pos.x, z: threat.pos.z, d: threatDist + BOT_HIDE_SLIP_GAIN } : null
+      });
+      if (closing && exposedSoon) hideAttempts.push({ eyes, tier: 'all', minDistFrom: null });
+    }
+    if (hideAttempts.length
+        && !me.botHidePath
+        && now >= (me.botHideSearchAt ?? 0)
+        && matchState.hideSearchTick !== matchState.tick) {
+      matchState.hideSearchTick = matchState.tick;
+      const stage = Math.min(me.botHideSearchStage ?? 0, hideAttempts.length - 1);
+      const attempt = hideAttempts[stage];
+      const found = findHiddenSpot(
+        navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes, obstacles,
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom }
+      );
+      if (found) {
+        me.botHidePath = found.path;
+        me.botHidePathIdx = 0;
+        me.botHideGoal = found.goal;
+        me.botHideTier = attempt.tier;
+        me.botHideMoveAnchor = null;
+        me.botHideSearchStage = 0;
+        me.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
+      } else if (stage < hideAttempts.length - 1) {
+        me.botHideSearchStage = stage + 1;   // next tier next tick
+        me.botHideSearchAt = now;
+      } else {
+        me.botHideSearchStage = 0;
+        if (hideTier) {
+          // Hidden at some tier: keep probing on the cadence (the enemies
+          // move — the scan stays dynamic).
           me.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
         } else {
           me.botHideFailedAt = now;
           me.botHideSearchAt = now + BOT_HIDE_FAIL_RETRY_MS;
         }
       }
-      if (me.botHidePath) {
-        // Path follow — the cover-reload follower's recipe: advance within
-        // 2 u, avoidance blend, 700 ms no-progress bail.
-        const hp = me.botHidePath;
-        let wp = hp[me.botHidePathIdx];
-        while (me.botHidePathIdx < hp.length - 1
-            && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 2) {
-          me.botHidePathIdx += 1;
-          wp = hp[me.botHidePathIdx];
-        }
-        let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
-        const wl = Math.hypot(tx, tz) || 1;
-        tx = tx / wl + avoid.rx * 0.6;
-        tz = tz / wl + avoid.rz * 0.6;
-        const tl = Math.hypot(tx, tz) || 1;
-        // Latched sprint (owner 2026-09-26): arm above CMD_TRAVEL_BOOST_FLOOR
-        // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
-        // The dispatch funds it at the 8 floor (its own tier below).
-        if (me.botHideDashArmed) {
-          if (me.boost <= BOT_SPRINT_MIN_BOOST) me.botHideDashArmed = false;
-        } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR) {
-          me.botHideDashArmed = true;
-        }
-        me.botHideHold = false;
-        coverMove = { hold: false, hide: true, dash: !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
-        if (!me.botHideMoveAnchor
-            || Math.hypot(me.pos.x - me.botHideMoveAnchor.x, me.pos.z - me.botHideMoveAnchor.z) > 1) {
-          me.botHideMoveAnchor = { x: me.pos.x, z: me.pos.z, at: now };
-        } else if (now - me.botHideMoveAnchor.at > BOT_HIDE_BAIL_MS) {
-          me.botHideFailedAt = now;
-          me.botHideSearchAt = now + BOT_HIDE_BAIL_RETRY_MS;
-          hideHold(hiddenNear ? 'nearest' : null);
-        }
-      } else {
-        // Nothing to walk (search not due / nothing found): hold position.
-        hideHold(hiddenNear ? 'nearest' : null);
+    }
+    // 3. Legs.
+    if (me.botHidePath) {
+      // Route follow — the cover-reload follower's recipe: advance within
+      // 2 u, avoidance blend, 700 ms no-progress bail.
+      const hp = me.botHidePath;
+      let wp = hp[me.botHidePathIdx];
+      while (me.botHidePathIdx < hp.length - 1
+          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 2) {
+        me.botHidePathIdx += 1;
+        wp = hp[me.botHidePathIdx];
       }
+      let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
+      const wl = Math.hypot(tx, tz) || 1;
+      tx = tx / wl + avoid.rx * 0.6;
+      tz = tz / wl + avoid.rz * 0.6;
+      const tl = Math.hypot(tx, tz) || 1;
+      // Latched sprint (owner 2026-09-26): arm above CMD_TRAVEL_BOOST_FLOOR
+      // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
+      // The dispatch funds it at the 8 floor (its own tier below).
+      if (me.botHideDashArmed) {
+        if (me.boost <= BOT_SPRINT_MIN_BOOST) me.botHideDashArmed = false;
+      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR) {
+        me.botHideDashArmed = true;
+      }
+      me.botHideHold = false;
+      coverMove = { hold: false, hide: true, dash: !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
+      if (!me.botHideMoveAnchor
+          || Math.hypot(me.pos.x - me.botHideMoveAnchor.x, me.pos.z - me.botHideMoveAnchor.z) > 1) {
+        me.botHideMoveAnchor = { x: me.pos.x, z: me.pos.z, at: now };
+      } else if (now - me.botHideMoveAnchor.at > BOT_HIDE_BAIL_MS) {
+        // No progress: drop the route, retry the search shortly; until then
+        // the plain legs below move the unit.
+        hideDropPath();
+        me.botHideFailedAt = now;
+        me.botHideSearchAt = now + BOT_HIDE_BAIL_RETRY_MS;
+        coverMove = null;
+      }
+    } else if (hideTier) {
+      // PACE the cover. A leg is a BOT_HIDE_LEG step that must (a) stay on
+      // the leash, (b) be walkable and (c) keep the unit's eye hidden from
+      // every eye of its tier — the predicted eyes too when possible (pass
+      // 0), live eyes only as the fallback (pass 1). The current leg is
+      // re-checked against the live eyes every tick and re-picked at
+      // BOT_HIDE_DRIFT_MS: 8 headings from a random phase, scored away from
+      // the nearest enemy with a little continuity and noise so the pacing
+      // reads as a person, not a metronome. No hidden leg at all (a tight
+      // nook) -> stand for BOT_HIDE_DRIFT_RETRY_MS, then try again.
+      const paceEyes = hideTier === 'all' ? hideEyes : hideEyes.slice(0, 1);
+      const pacePred = hideTier === 'all' ? hidePredEyes : [];
+      if (!me.botHideAnchor) me.botHideAnchor = { x: me.pos.x, z: me.pos.z };
+      const anchor = me.botHideAnchor;
+      const legOk = (hx, hz, strict) => {
+        const lx = me.pos.x + hx * BOT_HIDE_LEG, lz = me.pos.z + hz * BOT_HIDE_LEG;
+        if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
+        if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) return false;
+        const eye = { x: lx, y: myEyeY, z: lz };
+        for (let k = 0; k < paceEyes.length; k += 1) if (botHasLineOfSight(paceEyes[k], eye, obstacles, surfaces)) return false;
+        if (strict) for (let k = 0; k < pacePred.length; k += 1) if (botHasLineOfSight(pacePred[k], eye, obstacles, surfaces)) return false;
+        return true;
+      };
+      let hx = me.botHideDriftX ?? 0, hz = me.botHideDriftZ ?? 0;
+      const moving = hx !== 0 || hz !== 0;
+      if (!moving || now >= (me.botHideDriftUntil ?? 0) || !legOk(hx, hz, false)) {
+        let best = null, bestScore = -Infinity;
+        const phase = Math.random() * Math.PI * 2;
+        for (let pass = 0; pass < 2 && !best; pass += 1) {
+          for (let k = 0; k < 8; k += 1) {
+            const a = phase + k * Math.PI / 4;
+            const cx = Math.cos(a), cz = Math.sin(a);
+            if (!legOk(cx, cz, pass === 0)) continue;
+            const score = (cx * awayX + cz * awayZ) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
+            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
+          }
+        }
+        if (best) {
+          hx = best.x; hz = best.z;
+          me.botHideDriftUntil = now + BOT_HIDE_DRIFT_MS;
+        } else {
+          hx = 0; hz = 0;
+          me.botHideDriftUntil = now + BOT_HIDE_DRIFT_RETRY_MS;
+        }
+        me.botHideDriftX = hx;
+        me.botHideDriftZ = hz;
+      }
+      me.botHideHold = true;
+      me.botHideTier = hideTier;
+      if (hx === 0 && hz === 0) {
+        me.momentumVX = 0;
+        me.momentumVZ = 0;
+        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+      } else {
+        coverMove = { hold: false, hide: true, dash: false, mx: hx, mz: hz };
+      }
+    } else {
+      // Exposed with nothing to walk (search not due / nothing found): the
+      // plain pursue legs below keep the unit moving while the search
+      // retries — a statue in the open is the worst of both.
+      me.botHideHold = false;
+      me.botHideTier = null;
+      me.botHideAnchor = null;
     }
   }
   if (coverMove) {
@@ -1446,9 +1600,9 @@ export function tickBot(matchState, botId, now) {
     // SPRINT to cover (2026-08-08 user tune, was walk — reserve-gated by the
     // dispatch as usual); a HOLD stays wantSprint=false so standing behind
     // the wall never reads as 'dash' and burns boost at zero speed.
-    // HIDE ORDER (hide: true): a hold is mx = mz = 0 (a true statue — no
-    // sway, and the anti-freeze nudge below is skipped for holds), travel
-    // sprints only while the 50/8 latch is armed (dash), walks otherwise.
+    // HIDE ORDER (hide: true): pacing legs and routes walk (routes sprint
+    // only while the 50/8 latch is armed — dash); a hold (no hidden leg at
+    // all) is mx = mz = 0 and skips the anti-freeze nudge below.
     mx = coverMove.mx;
     mz = coverMove.mz;
     wantSprint = coverMove.hide ? !!coverMove.dash : !coverMove.hold;

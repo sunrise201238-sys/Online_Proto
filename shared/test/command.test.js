@@ -1,6 +1,7 @@
 // Fight/Hide stance order (owner 2026-09-26): the command side-table
-// semantics, the hide behaviour in tickBot (hidden from every enemy, then a
-// statue hold; Defense suppressed; clean resume on Fight) and the cost of
+// semantics, the hide behaviour in tickBot (hidden from every enemy, then
+// pacing the cover and slipping away from a closing enemy; Defense
+// suppressed; clean resume on Fight) and the cost of
 // the hidden-spot search.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -109,7 +110,7 @@ test('setStance: hide wipes move+lock, refuses move/lock while hidden, clearComm
   assert.equal(setStance(m, 'p9', true), false);
 });
 
-test('hide order (Streets 2v2): the bot ends hidden from BOTH enemy eyes within 10 s and then holds still for 1 s', () => {
+test('hide order (Streets 2v2): the bot ends hidden from BOTH enemy eyes within 10 s, then paces its cover without ever being seen', () => {
   const { m, step, hiddenFromBoth } = streetsHideFixture();
   assert.equal(setStance(m, 'p1', true), true);
   let hiddenAtMs = null;
@@ -120,21 +121,64 @@ test('hide order (Streets 2v2): the bot ends hidden from BOTH enemy eyes within 
   }
   assert.ok(hiddenAtMs != null, 'the hider never broke both lines of sight within 10 s');
   assert.equal(m.fighters.p1.botHideTier, 'all');
-  // Statue hold: no sway, no peeking, momentum cleared.
-  let maxVel = 0;
-  const holdPos = { x: m.fighters.p1.pos.x, z: m.fighters.p1.pos.z };
-  for (let i = 0; i < 1000 / TICK_RATE_MS; i += 1) {
+  // Pacing (owner 2026-09-26, no statue): keeps walking on verified-hidden
+  // legs, no route, never sprints, stays on the leash, never seen.
+  const anchor = { x: m.fighters.p1.pos.x, z: m.fighters.p1.pos.z };
+  let prev = { ...anchor };
+  let pathLen = 0, sprintTicks = 0, seenTicks = 0, maxLeash = 0;
+  const ticks = 4000 / TICK_RATE_MS;
+  for (let i = 0; i < ticks; i += 1) {
     step();
     const f = m.fighters.p1;
-    maxVel = Math.max(maxVel, Math.hypot(f.vel.x, f.vel.z));
-    assert.equal(f.botHideHold, true, 'hold flag stays up while hidden');
-    assert.equal(f.action, 'idle');
-    assert.ok(hiddenFromBoth(), 'stays hidden through the hold');
+    pathLen += Math.hypot(f.pos.x - prev.x, f.pos.z - prev.z);
+    prev = { x: f.pos.x, z: f.pos.z };
+    if (f.action === 'dash') sprintTicks += 1;
+    if (!hiddenFromBoth()) seenTicks += 1;
+    maxLeash = Math.max(maxLeash, Math.hypot(f.pos.x - anchor.x, f.pos.z - anchor.z));
+    assert.equal(f.botHidePath, null, 'no route while pacing');
+    assert.equal(f.botHideHold, true, 'hidden flag stays up while pacing');
   }
-  assert.ok(maxVel < 0.01, `|vel| during the hold: ${maxVel}`);
-  assert.ok(Math.hypot(m.fighters.p1.pos.x - holdPos.x, m.fighters.p1.pos.z - holdPos.z) < 0.05, 'did not drift');
-  assert.equal(m.fighters.p1.botHidePath, null, 'no route while holding');
-  assert.ok(m.fighters.p1.stillSince > 0, 'the bloom stillness clock is running (pin-point return fire)');
+  assert.ok(pathLen > 8, `paced only ${pathLen.toFixed(1)} u in 4 s`);
+  assert.equal(sprintTicks, 0, 'pacing walks, never sprints');
+  assert.equal(seenTicks, 0, `seen on ${seenTicks} of ${ticks} pacing ticks`);
+  assert.ok(maxLeash <= 6 + 2.5 + 1, `wandered ${maxLeash.toFixed(1)} u off the anchor`);
+});
+
+test('hide order: an enemy closing in makes the hider slip to a farther hidden cell before it is seen', () => {
+  const { m, step, hiddenFromBoth, arena } = streetsHideFixture();
+  setStance(m, 'p1', true);
+  for (let i = 0; i < 10000 / TICK_RATE_MS && !(hiddenFromBoth() && m.fighters.p1.botHideHold); i += 1) step();
+  assert.ok(hiddenFromBoth(), 'precondition: hidden first');
+  const p1 = m.fighters.p1, p2 = m.fighters.p2;
+  const spot0 = { x: p1.pos.x, z: p1.pos.z };
+  // p2 (the nearest enemy) walks straight at the hider at 6 u/s and stops
+  // 18 u short of the hider's first spot, still without a line of sight —
+  // it never actually sees the unit; the slip must come from the closing
+  // watch, not from exposure.
+  const speed = 6;
+  let routedWhileHidden = false, seenTicks = 0, stopDist = null;
+  for (let i = 0; i < 12000 / TICK_RATE_MS; i += 1) {
+    const dx = spot0.x - p2.pos.x, dz = spot0.z - p2.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 18) {
+      p2.vel.x = dx / d * speed; p2.vel.z = dz / d * speed;
+      p2.pos.x += p2.vel.x * TICK_DT; p2.pos.z += p2.vel.z * TICK_DT;
+    } else {
+      p2.vel.x = 0; p2.vel.z = 0;
+      if (stopDist == null) stopDist = Math.hypot(p1.pos.x - p2.pos.x, p1.pos.z - p2.pos.z);
+    }
+    step();
+    if (p1.botHidePath && hiddenFromBoth()) routedWhileHidden = true;
+    if (!hiddenFromBoth()) seenTicks += 1;
+  }
+  assert.ok(stopDist != null, 'fixture: p2 never reached its stop');
+  assert.ok(routedWhileHidden, 'no slip route was ever issued while still hidden');
+  const endDist = Math.hypot(p1.pos.x - p2.pos.x, p1.pos.z - p2.pos.z);
+  assert.ok(hiddenFromBoth(), 'hidden from both at the end');
+  assert.ok(Math.hypot(p1.pos.x - spot0.x, p1.pos.z - spot0.z) > 3, 'the unit left its first spot');
+  const stayDist = Math.hypot(spot0.x - p2.pos.x, spot0.z - p2.pos.z);   // what staying put would have left
+  assert.ok(endDist > stayDist + 4, `ended ${endDist.toFixed(1)} u from the closer; staying put would have been ${stayDist.toFixed(1)}`);
+  assert.ok(seenTicks < 12000 / TICK_RATE_MS * 0.05, `seen on ${seenTicks} ticks during the approach`);
 });
 
 test('hide order: an enemy walking round to expose the hider triggers a re-search and a new hide', () => {
@@ -191,10 +235,12 @@ test('hide order: clearing the order (Fight) resumes normal movement within 2 s 
   const { m, step, hiddenFromBoth } = streetsHideFixture();
   setStance(m, 'p1', true);
   for (let i = 0; i < 10000 / TICK_RATE_MS && !(hiddenFromBoth() && m.fighters.p1.botHideHold); i += 1) step();
-  assert.ok(hiddenFromBoth(), 'precondition: hidden and holding');
+  assert.ok(hiddenFromBoth(), 'precondition: hidden and pacing');
   for (let i = 0; i < 20; i += 1) step();
-  assert.equal(Math.hypot(m.fighters.p1.vel.x, m.fighters.p1.vel.z), 0);
+  assert.equal(m.fighters.p1.botHideHold, true);
   assert.equal(setStance(m, 'p1', false), true);
+  step();
+  assert.equal(m.fighters.p1.botHideHold, null, 'the hide scratch is nulled on the first tick after Fight');
   let movingAtMs = null;
   const t0 = m.now;
   for (let i = 0; i < 2000 / TICK_RATE_MS; i += 1) {
@@ -203,8 +249,8 @@ test('hide order: clearing the order (Fight) resumes normal movement within 2 s 
   }
   assert.ok(movingAtMs != null, 'the unit stayed frozen after Fight');
   const f = m.fighters.p1;
-  for (const k of ['botHidePath', 'botHidePathIdx', 'botHideGoal', 'botHideSearchAt', 'botHideFailedAt',
-    'botHideHold', 'botHideDashArmed', 'botHideTier', 'botHideMoveAnchor']) {
+  for (const k of ['botHidePath', 'botHidePathIdx', 'botHideGoal', 'botHideSearchAt', 'botHideSearchStage', 'botHideFailedAt',
+    'botHideHold', 'botHideDashArmed', 'botHideTier', 'botHideMoveAnchor', 'botHideAnchor', 'botHideDriftX', 'botHideDriftZ', 'botHideDriftUntil']) {
     assert.equal(f[k], null, `${k} nulled on clear`);
   }
 });
