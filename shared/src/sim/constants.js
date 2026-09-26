@@ -757,3 +757,8 @@ export const CMD_TRAVEL_JUMP_BANK = 70;
 // them into whatever wall lies between (owner 2026-08-22). The remaining
 // anchor window is preserved across the trip.
 export const CMD_ANCHOR_LEASH = 20;
+// Bot sight eye height above pos.y (owner 2026-09-26: lifted out of ai.js so
+// the Fight/Hide stance order's hidden-spot search in navgrid.js and the bot's
+// own line-of-sight tests share ONE eye rule; the client's updateEnemy
+// mirrors the value). findFiringPath's inline 1.6 is this same height.
+export const BOT_LOS_EYE_HEIGHT = 1.6;

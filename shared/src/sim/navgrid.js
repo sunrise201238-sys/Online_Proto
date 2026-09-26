@@ -29,7 +29,7 @@ import {
   surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
   groundHeightAt
 } from './physics.js';
-import { GROUND_BASE_Y } from './constants.js';
+import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT } from './constants.js';
 
 const CELL = 4;
 // Max floor rise between adjacent samples. SURFACE_STEP_HEIGHT is 1.6 and a
@@ -858,4 +858,127 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     return collapseWaypoints(pts);
   };
   return run(true) ?? run(false);
+}
+
+// The bot's sight rule (ai.js botHasLineOfSight, mirrored in client main.js):
+// invisible unit-fences pass unless flagged blocksBotSight, and surfaces
+// (deck/ramp masses) count. findFiringPath's inline seesAtEye is this same
+// rule; the hide-spot search below shares it through this helper.
+function sightClear(p0, p1, obstacles, surfaces) {
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const o = obstacles[i];
+    if (o.noProjectile && !o.blocksBotSight) continue;
+    if (segmentHitsObstacle(p0, p1, o)) return false;
+  }
+  if (surfaces) {
+    for (let i = 0; i < surfaces.length; i += 1) if (sightHitsSurface(p0, p1, surfaces[i])) return false;
+  }
+  return true;
+}
+
+// Minimal binary min-heap of [key, node] pairs — the same heap the two
+// planners above inline.
+function createMinHeap() {
+  const heap = [];
+  const push = (f, i) => {
+    heap.push([f, i]);
+    let k = heap.length - 1;
+    while (k > 0) {
+      const p = (k - 1) >> 1;
+      if (heap[p][0] <= heap[k][0]) break;
+      const t = heap[p]; heap[p] = heap[k]; heap[k] = t;
+      k = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let k = 0;
+      for (;;) {
+        const l = 2 * k + 1, r = l + 1;
+        let s = k;
+        if (l < heap.length && heap[l][0] < heap[s][0]) s = l;
+        if (r < heap.length && heap[r][0] < heap[s][0]) s = r;
+        if (s === k) break;
+        const t = heap[s]; heap[s] = heap[k]; heap[k] = t;
+        k = s;
+      }
+    }
+    return top;
+  };
+  return { push, pop, size: () => heap.length };
+}
+
+// HIDE-SPOT SEARCH (owner 2026-09-26 — the Fight/Hide stance order). The
+// cheapest-by-walking node whose EYE POINT (cell centre, floor + eyeHeight)
+// has NO line of sight from ANY of `eyes` ({x, y, z} enemy eye points).
+// Same Dijkstra + wall-clearance tax as findFiringPath, over WALK edges
+// ONLY: a hide never vaults (jump-links are excluded, like the cover-reload
+// ring search), so the follower needs no jump handling. The goal is
+// discovered in walk-distance order — the first hidden node popped is the
+// nearest reachable hide. Sight rule = the bot's own (sightClear above).
+// `opts.maxPops` (default 600) bounds the cost, deliberately with NO
+// distance cap (owner: the unit may walk as far as it takes); the LoS work
+// is at most maxPops x eyes.length segment tests, early-exiting on the first
+// eye that sees a node. Returns { path: [{x, z, y}], goal: {x, z, y} }
+// (collapsed + corridor-smoothed like every other route) or null when
+// nothing hidden lies within the budget.
+// The START node counts only when the actor stands more than 1 u off its
+// centre: a node the actor already occupies — exposed at its real eye yet
+// hidden at the centre test — would otherwise be re-issued forever as a
+// zero-length route, and the caller's no-progress bail would loop on it.
+export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts = {}) {
+  const maxPops = opts.maxPops ?? 600;
+  const eyeHeight = opts.eyeHeight ?? BOT_LOS_EYE_HEIGHT;
+  if (!eyes || eyes.length === 0) return null;
+  const { n, layers, floor, clearGrade, surfaces } = grid;
+  const size = n * layers;
+  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
+  if (start < 0) return null;
+  const hiddenAt = (node) => {
+    const p0 = {
+      x: nodeCenterX(grid, node),
+      y: floor[node] + GROUND_BASE_Y + eyeHeight,
+      z: nodeCenterZ(grid, node)
+    };
+    for (let e = 0; e < eyes.length; e += 1) {
+      if (sightClear(p0, eyes[e], obstacles, surfaces)) return false;
+    }
+    return true;
+  };
+  const parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
+  const g = new Float64Array(size).fill(Infinity);
+  const closed = new Uint8Array(size);
+  const heap = createMinHeap();
+  parent[start] = -1;
+  g[start] = 0;
+  heap.push(0, start);
+  let goal = -1;
+  let pops = 0;
+  while (heap.size()) {
+    const cur = heap.pop()[1];
+    if (closed[cur]) continue;
+    if (++pops > maxPops) break;
+    closed[cur] = 1;
+    const startHere = cur === start
+      && Math.hypot(nodeCenterX(grid, cur) - sx, nodeCenterZ(grid, cur) - sz) <= 1;
+    if (!startHere && hiddenAt(cur)) { goal = cur; break; }
+    forEachWalkNeighbor(grid, cur, (nb) => {
+      if (closed[nb]) return;
+      const ng = g[cur] + 1 + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
+      if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng, nb); }
+    });
+  }
+  if (goal < 0) return null;
+  const pts = [];
+  for (let i = goal; i !== -1; i = parent[i]) {
+    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i] });
+  }
+  pts.reverse();
+  let path = collapseWaypoints(pts);
+  if (path.length > 2) path = smoothPath(grid, path, obstacles);
+  const last = path[path.length - 1];
+  return { path, goal: { x: last.x, z: last.z, y: last.y } };
 }

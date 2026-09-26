@@ -2,7 +2,7 @@
 // the offline diorama command system (client/src/main.js "COMMAND MODE"
 // section; DIORAMA_PLAN.md phase 2/2.1 records the owner's rules).
 //
-// A command-driven fighter is bot-driven (tickBot) with two standing-order
+// A command-driven fighter is bot-driven (tickBot) with three standing-order
 // overrides layered on top:
 //   FORCE LOCK  — commandTargetIdOf() overrides the bot target pick until
 //                 either party dies.
@@ -12,6 +12,15 @@
 //                 CMD_TRAVEL_BOOST_FLOOR reserve, walk until re-armed),
 //                 then hold an Engage-style orbit on the CMD_RADIUS ring
 //                 for CMD_ANCHOR_MS before autonomy resumes.
+//   HIDE STANCE — (owner 2026-09-26) cmd.hide: the Fight/Hide toggle. While
+//                 it stands, tickBot's HIDE block owns the legs (break every
+//                 enemy's line of sight, then stand still; fire back only
+//                 from where it stands — see ai.js), a move order or force
+//                 lock is REFUSED (setStance(true) also wipes both), and
+//                 Fight (hide=false) is plain autonomy again. tickBot reads
+//                 the flag straight off matchState.commands[slot].hide: this
+//                 module imports ai.js (navGridFor), so ai.js importing
+//                 isHideOrdered back would close an import cycle.
 // Combat reflexes always win their frames (commandReflexActive) — the
 // route resumes after them, exactly like offline.
 //
@@ -57,7 +66,7 @@ import { tryStartJump } from './actions.js';
 function commandsFor(matchState, slot) {
   if (matchState.commands == null) matchState.commands = {};
   let cmd = matchState.commands[slot];
-  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false };
+  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false };
   return cmd;
 }
 
@@ -65,11 +74,14 @@ export function getCommands(matchState, slot) {
   return matchState.commands?.[slot] ?? null;
 }
 
+// Wipes every standing order INCLUDING the hide stance (owner 2026-09-26):
+// death, respawn, disconnect and the unit double-tap all mean "no orders".
 export function clearCommands(matchState, slot) {
   const cmd = matchState.commands?.[slot];
   if (!cmd) return;
   cmd.move = null;
   cmd.lockTargetId = null;
+  cmd.hide = false;
 }
 
 // Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
@@ -89,6 +101,10 @@ export function clearMoveOrder(matchState, slot) {
 export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
+  // Hidden units take no move orders (owner 2026-09-26): the hide stance
+  // owns the legs until Fight clears it. Refused BEFORE the pathfind so a
+  // refusal costs nothing; the server tells the two apart via isHideOrdered.
+  if (isHideOrdered(matchState, slot)) return false;
   if (!Number.isFinite(tx) || !Number.isFinite(tz) || !Number.isFinite(targetFloorY)) return false;
   const path = computeCommandPath(matchState, f, tx, tz, targetFloorY);
   if (!path) return false;
@@ -125,9 +141,13 @@ function computeCommandPath(matchState, f, tx, tz, targetFloorY) {
 
 // Set (targetSlot) or clear (null) a force lock. Rejects dead parties and
 // teammates. Toggle semantics live at the message layer, not here.
+// Refused outright while the hide stance stands (owner 2026-09-26): a hidden
+// unit never moves for a shot, so a lock would only pull its fire off
+// whatever it can actually see (the lock is already null — hide wiped it).
 export function setForceLock(matchState, slot, targetSlot) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
+  if (isHideOrdered(matchState, slot)) return false;
   const cmd = commandsFor(matchState, slot);
   if (targetSlot == null) {
     cmd.lockTargetId = null;
@@ -139,6 +159,27 @@ export function setForceLock(matchState, slot, targetSlot) {
   return true;
 }
 
+// HIDE STANCE (owner 2026-09-26): the Fight/Hide toggle. hide=true wipes the
+// move order and the force lock (the hide owns the legs, and a hidden unit
+// fires only at what it can already see); hide=false is Fight = plain
+// autonomy — tickBot nulls its botHide* scratch the tick it sees the flag
+// drop. Rejects a missing/dead unit.
+export function setStance(matchState, slot, hide) {
+  const f = matchState.fighters[slot];
+  if (!f || f.hp <= 0) return false;
+  const cmd = commandsFor(matchState, slot);
+  cmd.hide = !!hide;
+  if (cmd.hide) {
+    cmd.move = null;
+    cmd.lockTargetId = null;
+  }
+  return true;
+}
+
+export function isHideOrdered(matchState, slot) {
+  return !!matchState.commands?.[slot]?.hide;
+}
+
 // Target override above the bot picker. Locks dissolve when either party
 // dies (offline dioramaCommandTick parity).
 export function commandTargetIdOf(matchState, slot) {
@@ -148,6 +189,7 @@ export function commandTargetIdOf(matchState, slot) {
   if (!me || me.hp <= 0) {
     cmd.lockTargetId = null;
     cmd.move = null;
+    cmd.hide = false;
     return null;
   }
   const t = matchState.fighters[cmd.lockTargetId];
@@ -180,7 +222,7 @@ export function tickCommandDriver(matchState, slot, now) {
   const mv = cmd?.move;
   if (!mv) return;
   const f = matchState.fighters[slot];
-  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; return; }
+  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; return; }
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex (Defense escape, cover reload) may have moved

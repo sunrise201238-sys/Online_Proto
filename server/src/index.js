@@ -16,6 +16,8 @@ import {
   getCommands,
   setMoveOrder,
   setForceLock,
+  setStance,
+  isHideOrdered,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -302,10 +304,11 @@ function emitSnapshotsFor(lobby) {
     }
   };
   // Command-state echo (owner decision 2): a team sees ITS OWN commanders'
-  // standing orders (destination/path/phase + force lock) so both command
-  // and classic teammates can render the share; the enemy team never
-  // receives them. Spectators get team A's fighter view with NO commands
-  // (owner decision 5: spectators watch the classic view).
+  // standing orders (destination/path/phase + force lock + the Fight/Hide
+  // stance, owner 2026-09-26) so both command and classic teammates can
+  // render the share; the enemy team never receives them. Spectators get
+  // team A's fighter view with NO commands (owner decision 5: spectators
+  // watch the classic view).
   const teamCommands = (team) => {
     const out = {};
     // Every slot of the team, not just commandSlots — commanded BOT
@@ -315,14 +318,15 @@ function emitSnapshotsFor(lobby) {
       if (teamOf(cs) !== team) continue;
       if ((lobby.match.fighters[cs]?.hp ?? 0) <= 0) continue;   // dead unit
       const cmd = getCommands(lobby.match, cs);
-      if (!cmd || (!cmd.move && !cmd.lockTargetId)) continue;
+      if (!cmd || (!cmd.move && !cmd.lockTargetId && !cmd.hide)) continue;
       out[cs] = {
         move: cmd.move ? {
           x: cmd.move.x, z: cmd.move.z, y: cmd.move.y,
           phase: cmd.move.phase, anchorUntil: cmd.move.anchorUntil,
           path: cmd.move.path
         } : null,
-        lockTargetId: cmd.lockTargetId
+        lockTargetId: cmd.lockTargetId,
+        hide: !!cmd.hide
       };
     }
     return out;
@@ -524,12 +528,13 @@ io.on('connection', (socket) => {
 
   // ---- COMMAND-MODE orders (phase 3 R3) ----------------------------------
   // Only command-slot humans in an active match may order; the server
-  // re-validates everything (the client preview is advisory). Move/lock
-  // share a per-slot rate limiter — pathfinding is the expensive part, and
-  // "latest wins" is the intended semantic anyway. Results go to the sender
-  // only; the standing state itself reaches the whole team via the
-  // snapshot's `commands` block.
-  const orderGate = (kind, reqSlot) => {
+  // re-validates everything (the client preview is advisory). Move/lock/
+  // stance share a per-slot rate limiter — pathfinding is the expensive
+  // part, and "latest wins" is the intended semantic anyway. Results go to
+  // the sender only; the standing state itself reaches the whole team via
+  // the snapshot's `commands` block. `echo` rides along on a rate refusal so
+  // the reply keeps the order's own fields (the stance reply carries `hide`).
+  const orderGate = (kind, reqSlot, echo = null) => {
     const lb = lobbyForSocket(socket);
     if (!lb || lb.state !== 'active' || !lb.match) return null;
     const sender = lb.players.get(socket.id);
@@ -551,7 +556,7 @@ io.on('connection', (socket) => {
       // drives two units, and back-to-back orders to different units must
       // not eat each other.
       if (nowMs - lb.lastOrderAt[slot] < ORDER_MIN_INTERVAL_MS) {
-        socket.emit('order:result', { kind, ok: false, reason: 'rate' });
+        socket.emit('order:result', { kind, ok: false, ...(echo || {}), reason: 'rate' });
         return null;
       }
       lb.lastOrderAt[slot] = nowMs;
@@ -565,8 +570,14 @@ io.on('connection', (socket) => {
     const x = Number(data?.x);
     const z = Number(data?.z);
     const floorY = Number(data?.floorY ?? 0);
+    // A hidden unit refuses move orders (owner 2026-09-26) — told apart from
+    // an unreachable spot so the client can say "unit is hiding".
+    const hidden = isHideOrdered(ctx.lb.match, ctx.slot);
     const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY);
-    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, reason: ok ? null : 'unreachable' });
+    socket.emit('order:result', {
+      kind: 'move', ok, x, z, floorY,
+      reason: ok ? null : (hidden ? 'hidden' : 'unreachable')
+    });
   });
 
   socket.on('order:lock', (data) => {
@@ -576,12 +587,25 @@ io.on('connection', (socket) => {
     const cmd = getCommands(ctx.lb.match, ctx.slot);
     // Toggle semantics (offline parity): same enemy again = unlock.
     const want = (cmd?.lockTargetId === target) ? null : target;
+    const hidden = isHideOrdered(ctx.lb.match, ctx.slot);   // refused while hiding (owner 2026-09-26)
     const ok = setForceLock(ctx.lb.match, ctx.slot, want);
     socket.emit('order:result', {
       kind: 'lock', ok,
       target: ok ? (getCommands(ctx.lb.match, ctx.slot)?.lockTargetId ?? null) : null,
-      reason: ok ? null : 'invalid'
+      reason: ok ? null : (hidden ? 'hidden' : 'invalid')
     });
+  });
+
+  // Fight/Hide stance (owner 2026-09-26): hide=true parks the unit in the
+  // hide behaviour (tickBot) and wipes its move order + force lock;
+  // hide=false is Fight = plain autonomy. Same per-unit rate limiter as
+  // move/lock. The stance reaches the whole team via the snapshot echo.
+  socket.on('order:stance', (data) => {
+    const hide = !!data?.hide;
+    const ctx = orderGate('stance', data?.slot, { hide });
+    if (!ctx) return;
+    const ok = setStance(ctx.lb.match, ctx.slot, hide);
+    socket.emit('order:result', { kind: 'stance', ok, hide, reason: ok ? null : 'invalid' });
   });
 
   socket.on('order:clear', (data) => {
@@ -589,8 +613,9 @@ io.on('connection', (socket) => {
     if (!ctx) return;
     // Granular clears (owner 2026-08-27): 'move' drops only the standing
     // area order (ring double-tap), 'lock' only the force lock (unselected
-    // tap on the pinned enemy). Anything else keeps the wipe-both default
-    // (unit double-tap), so old clients stay correct.
+    // tap on the pinned enemy). Anything else keeps the wipe-all default
+    // (unit double-tap — move, lock AND the hide stance), so old clients
+    // stay correct.
     if (data?.what === 'move') clearMoveOrder(ctx.lb.match, ctx.slot);
     else if (data?.what === 'lock') setForceLock(ctx.lb.match, ctx.slot, null);
     else clearCommands(ctx.lb.match, ctx.slot);

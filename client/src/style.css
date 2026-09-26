@@ -391,11 +391,17 @@ body.pseudo-fullscreen #app {
   color: #dfe7f5; pointer-events: none; will-change: transform;
 }
 .dio-card .dio-name { font-size: 10px; letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; }
-.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 4px; min-height: 11px; color: #ffcf6b; white-space: nowrap; }
-.dio-card .dio-bar { height: 9px; margin-top: 7px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
+/* Vertical rhythm (owner 2026-09-26): the 22 px portrait grew the name row
+   and pushed the command icons ~6 px below the card's bottom border. The
+   margins tightened (bar 7->5, boost 3->2, status 4->2) and the icons
+   shrank to 14x12 (dioCmdIconCardMarkup) so the row sits fully inside:
+   22 + (5+9) + (2+5) + (2+12) = 57 of the 60 px between the top padding
+   edge and the bottom border (~3 px clearance). Card size unchanged. */
+.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 2px; min-height: 12px; color: #ffcf6b; white-space: nowrap; }
+.dio-card .dio-bar { height: 9px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
 .dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
 /* Stamina (boost) gauge — thinner amber twin under the HP bar (2.1c). */
-.dio-card .dio-boost { height: 5px; margin-top: 3px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.28); }
+.dio-card .dio-boost { height: 5px; margin-top: 2px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.28); }
 .dio-card .dio-boost i { display: block; height: 100%; width: 100%; background: #ffc94d; transition: width 0.15s linear; }
 #dio-toast {
   position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
@@ -415,9 +421,12 @@ body.pseudo-fullscreen #app {
 .dio-layer.dio-compact .dio-card { width: 132px; height: 52px; padding: 4px 7px 5px; }
 .dio-layer.dio-compact .dio-card .dio-name { font-size: 8.5px; letter-spacing: 0.1em; gap: 4px; }
 .dio-layer.dio-compact .dio-card .dio-weapon { height: 16px; width: 16px; }
-.dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 5px; }
-.dio-layer.dio-compact .dio-card .dio-boost { height: 4px; margin-top: 2px; }
-.dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 3px; min-height: 9px; }
+.dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 4px; }
+.dio-layer.dio-compact .dio-card .dio-boost { height: 4px; margin-top: 1px; }
+.dio-layer.dio-compact .dio-card .dio-status { font-size: 8px; letter-spacing: 0.16em; margin-top: 2px; min-height: 9px; }
+/* Compact rhythm (owner 2026-09-26): 16 + (4+6) + (1+4) + (2+9.5) = 42.5 of
+   the 46 px inside the compact card — the same ~3 px clearance. */
+.dio-layer.dio-compact .dio-cmdicon { width: 11px; height: 9.5px; }
 /* NO SIGHT: the card border dashes along with its square and leader line. */
 .dio-card.dio-blocked { border-style: dashed; }
 
@@ -467,6 +476,32 @@ body.pseudo-fullscreen #app {
   15% { opacity: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+
+/* Fight / Hide stance menu (owner 2026-09-26): hold an own marker or card
+   for DIO_STANCE_HOLD_MS and two round gold targets pop up on the pressed
+   thing's upper corners — FIGHT (gun, upper-left) and HIDE (shield,
+   upper-right). Absolute in the layer like .dio-deny; pointer-events none
+   because the layer owns the pointer (the hot pick is a distance test in
+   dioramaGestureFrame). `.hot` = the icon the finger would release on. */
+.dio-stance { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 30; }
+.dio-stance-btn {
+  position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 210, 87, 0.7); border-radius: 50%;
+  background: rgba(7, 11, 18, 0.8); color: #ffd257;
+  filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9));
+  transition: transform 0.08s ease, background-color 0.08s ease;
+  animation: dio-stance-in 0.14s ease-out;
+}
+.dio-stance-btn svg { display: block; width: 18px; height: 18px; }
+.dio-stance-btn.hot {
+  background: rgba(255, 210, 87, 0.28); border-color: #ffd257; transform: scale(1.15);
+  box-shadow: 0 0 10px 2px rgba(255, 210, 87, 0.55);
+}
+@keyframes dio-stance-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
