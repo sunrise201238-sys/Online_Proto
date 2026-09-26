@@ -1458,7 +1458,7 @@ const UNIT_BAR_PILL_W = 160, UNIT_BAR_PILL_H = 20; // the bar itself, texture px
 const UNIT_BAR_EDGE_W = 5;                          // dark outline outside the pill (and the portrait), texture px
 const UNIT_BAR_PAD = 8;                             // texture margin around the group (>= outline)
 const UNIT_BAR_THUMB = 44;                          // portrait side, texture px (~25 px on screen)
-const UNIT_BAR_THUMB_GAP = 6;                       // portrait -> pill, texture px
+const UNIT_BAR_THUMB_GAP = 18;                      // portrait -> pill, texture px: the two dark frames (5 each) leave an 8-texel (~4.6 px) clear gap (owner 2026-09-26, was 6 = frames touching)
 const UNIT_BAR_TEX_W = UNIT_BAR_PAD + UNIT_BAR_THUMB + UNIT_BAR_THUMB_GAP + UNIT_BAR_PILL_W + UNIT_BAR_PAD;   // 226
 const UNIT_BAR_TEX_H = UNIT_BAR_THUMB + 2 * UNIT_BAR_PAD;                                                   // 60
 const UNIT_BAR_PILL_X = UNIT_BAR_PAD + UNIT_BAR_THUMB + UNIT_BAR_THUMB_GAP;                                  // 58
@@ -1482,7 +1482,13 @@ const UNIT_BAR_INK_ENEMY = '#ff6a2c';
 const UNIT_BAR_HEAD_TOP = UNIT_SPRITE_FOOT_Y + UNIT_SPRITE_HEIGHT;
 const UNIT_BAR_TEAM_GAP = 0.39;     // screen-fixed head clearance (scales by k)
 const UNIT_BAR_REF_DIST = 14;       // ~third-person camera distance to own unit
-const UNIT_BAR_RETICLE_CLEAR = 3;   // above-crosshair clearance, in reticle rs units
+const UNIT_BAR_RETICLE_CLEAR = 0.3; // gap between the crosshair's top edge and the bar, in reticle rs units (screen-constant, ~5-10 px); was 3 rs above the reticle CENTRE (2026-09-26, owner: "too high")
+// Reticle texture geometry (buildReticleTexture, 192 px canvas): the bracket
+// square's edge sits 50 px from the centre, the tier marks (mid / far
+// textures) stick out to 68 px, the stroke is 9 px wide. Fractions of the
+// sprite's scale, so the bar can sit just above whatever the reticle shows.
+const RETICLE_TOP_FRACTION_BASE = (50 + 4.5) / 192;
+const RETICLE_TOP_FRACTION_TIERED = (68 + 4.5) / 192;
 
 function drawHealthBar(sprite, frac) {
   const cv = sprite.material.map.image;
@@ -1585,15 +1591,24 @@ function updateMechAnimations(dt, now) {
       const k = depth / UNIT_BAR_REF_DIST;
       const u = UNIT_BAR_WORLD_W / UNIT_BAR_PILL_W * k;                          // world units per texture px
       const pillLift = (UNIT_BAR_PILL_Y + UNIT_BAR_PILL_H) * u;                   // sprite top -> pill bottom
+      const groupLift = (UNIT_BAR_TEX_H - UNIT_BAR_PAD) * u;                      // sprite top -> the portrait's bottom edge (the group's lowest ink)
       const hostile = getTeamOf(m) !== camTeam;
       const lockedOn = !!(state.reticle && state.reticle.visible && state.reticle.parent === m.root);
       if (hostile && !m.isOwnSprite && lockedOn) {
-        // The locked hostile: a thin gap above the crosshair brackets,
-        // floored at the head anchor so it can't sink onto the body.
+        // The locked hostile: a thin gap above the crosshair's top edge as
+        // it is drawn RIGHT NOW — the bracket square, or the tier marks when
+        // the viewer's reticle shows them (Aru's mid / far tiers), at the
+        // bracket's current bloom-grown size — and above the sniper-charge
+        // glint while one is showing; floored at the head anchor so it can't
+        // sink onto the body.
         const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
-        const clearY = Math.max(0.2 + UNIT_BAR_RETICLE_CLEAR * rs, UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP);
-        bar.position.y = clearY + pillLift;
+        const tiered = state.reticle.material.map !== getReticleTierTextures().base;
+        let top = state.reticle.position.y + (tiered ? RETICLE_TOP_FRACTION_TIERED : RETICLE_TOP_FRACTION_BASE) * state.reticle.scale.y;
+        const g = m.glintMesh;
+        if (g && g.visible) top = Math.max(top, g.position.y + g.scale.y / 2);
+        const clearY = Math.max(top + UNIT_BAR_RETICLE_CLEAR * rs, UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP);
+        bar.position.y = clearY + groupLift;   // the PORTRAIT's bottom (12 texels under the pill) is what clears the crosshair
       } else {
         // Everyone else rides the head at the screen-fixed gap.
         bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
