@@ -495,6 +495,7 @@ body.pseudo-fullscreen #app {
   animation: dio-stance-in 0.14s ease-out;
 }
 .dio-stance-btn svg { display: block; width: 18px; height: 18px; }
+.dio-stance-btn.on { border-color: #ffd257; box-shadow: 0 0 0 2px rgba(255, 210, 87, 0.35) inset; }
 .dio-stance-btn.hot {
   background: rgba(255, 210, 87, 0.28); border-color: #ffd257; transform: scale(1.15);
   box-shadow: 0 0 10px 2px rgba(255, 210, 87, 0.55);
