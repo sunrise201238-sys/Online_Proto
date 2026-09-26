@@ -50,6 +50,6 @@ export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFractio
 export { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
 export {
-  setMoveOrder, setForceLock, setStance, isHideOrdered, clearCommands, clearMoveOrder, getCommands,
+  setMoveOrder, setForceLock, setStance, isHideOrdered, clearCommands, clearMoveOrder, getCommands, ensureCommands,
   commandTargetIdOf, tickCommandDriver
 } from './command.js';

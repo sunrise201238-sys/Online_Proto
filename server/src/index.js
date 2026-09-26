@@ -18,6 +18,7 @@ import {
   setForceLock,
   setStance,
   isHideOrdered,
+  ensureCommands,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -218,6 +219,10 @@ function startMatchFor(lobby) {
     rosters,
     startTime
   });
+  // Command side-table entries for every driven command-side slot up front
+  // (owner 2026-09-26): the automatic reload hide lands on the entry (badge
+  // + order wipe), so it must exist before any order was ever given.
+  for (const s of new Set([...lobby.botSlots, ...lobby.commandSlots])) ensureCommands(lobby.match, s);
   lobby.state = 'active';
   for (const s of SLOT_IDS) {
     lobby.inputs[s] = emptyInput();

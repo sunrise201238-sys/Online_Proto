@@ -19,6 +19,7 @@ import {
   clearCommands,
   clearMoveOrder,
   getCommands,
+  ensureCommands,
   findHiddenSpot,
   buildNavGrid,
   botHasLineOfSight,
@@ -37,10 +38,10 @@ const hiddenFrom = (arena, me, enemy) =>
 // Streets 2v2 fixture: the hider (p1, bot-driven) stands in the open south
 // of the west buildings; both enemies stand still east of it with a clear
 // line of sight. The nearest hide is the alley between the two buildings.
-function streetsHideFixture() {
+function streetsHideFixture(units = {}) {
   const m = createMatchState({
     mapKey: 'arena2', mode: '2v2',
-    p1UnitKey: 'unit1', p2UnitKey: 'unit1', p3UnitKey: 'unit1', p4UnitKey: 'unit1',
+    p1UnitKey: units.p1 ?? 'unit1', p2UnitKey: units.p2 ?? 'unit1', p3UnitKey: units.p3 ?? 'unit1', p4UnitKey: units.p4 ?? 'unit1',
     startTime: 1000
   });
   const place = (f, x, z) => { f.pos.x = x; f.pos.z = z; f.pos.y = GROUND_BASE_Y; };
@@ -265,6 +266,86 @@ test('hide order: clearing the order (Fight) resumes normal movement within 2 s 
     'botHideHold', 'botHideDashArmed', 'botHideTier', 'botHideMoveAnchor', 'botHideAnchor', 'botHideDriftX', 'botHideDriftZ', 'botHideDriftUntil']) {
     assert.equal(f[k], null, `${k} nulled on clear`);
   }
+});
+
+test('reload hide: a manual reload of 3 s+ enters the Hide stance (wiping orders) and leaves it when the reload completes', () => {
+  const { m, step, hiddenFromBoth } = streetsHideFixture({ p1: 'unit12' });   // Koyuki: 100-round mag, 5 s manual reload
+  const p1 = m.fighters.p1;
+  let ordered = false;
+  for (const [x, z] of [[-90, -75], [-95, -70], [-100, -65], [-105, -75]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
+  assert.ok(ordered, 'fixture: no reachable move order');
+  assert.ok(getCommands(m, 'p1').move, 'a move order stands');
+  p1.ammo = 0;   // the mag ran dry: tickAmmo starts the 5 s reload
+  step(); step();
+  assert.ok(p1.reloadingUntil > 0, 'the reload started');
+  assert.equal(p1.botReloadHide, true);
+  assert.equal(isHideOrdered(m, 'p1'), true, 'the reload entered the hide stance');
+  assert.equal(getCommands(m, 'p1').hideAuto, true, 'flagged as the automatic hide');
+  assert.equal(getCommands(m, 'p1').move, null, 'the standing move order was wiped');
+  let hidden = false;
+  for (let i = 0; i < 4000 / TICK_RATE_MS; i += 1) { step(); if (hiddenFromBoth() && p1.botHideHold) { hidden = true; break; } }
+  assert.ok(hidden, 'the reloading unit never hid');
+  let guard = 8000 / TICK_RATE_MS;
+  while (p1.reloadingUntil > 0 && guard-- > 0) step();
+  assert.ok(guard > 0, 'the reload never completed');
+  step();
+  assert.equal(p1.ammo, 100, 'mag refilled');
+  assert.equal(p1.botReloadHide, false);
+  assert.equal(isHideOrdered(m, 'p1'), false, 'the reload end released the automatic hide');
+  assert.equal(getCommands(m, 'p1').hideAuto, false);
+  step();
+  assert.equal(p1.botHideHold, null, 'hide scratch nulled after the release');
+});
+
+test('reload hide: a manual Hide survives the reload end; an order during the reload releases it for the rest of it', () => {
+  {
+    const { m, step } = streetsHideFixture({ p1: 'unit12' });
+    const p1 = m.fighters.p1;
+    assert.equal(setStance(m, 'p1', true), true);
+    p1.ammo = 0; step(); step();
+    assert.equal(p1.botReloadHide, true);
+    assert.equal(getCommands(m, 'p1').hideAuto, false, 'a manual hide is not the automatic one');
+    let guard = 8000 / TICK_RATE_MS;
+    while (p1.reloadingUntil > 0 && guard-- > 0) step();
+    step();
+    assert.equal(isHideOrdered(m, 'p1'), true, 'the manual hide outlives the reload');
+  }
+  {
+    const { m, step } = streetsHideFixture({ p1: 'unit12' });
+    const p1 = m.fighters.p1;
+    ensureCommands(m, 'p1');   // the server creates the entry for command-side slots at match start
+    p1.ammo = 0; step(); step();
+    assert.equal(isHideOrdered(m, 'p1'), true);
+    let ordered = false;
+    for (const [x, z] of [[-90, -75], [-95, -70], [-100, -65], [-105, -75]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
+    assert.ok(ordered, 'fixture: no reachable move order');
+    assert.equal(isHideOrdered(m, 'p1'), false, 'the landed order released the hide mid-reload');
+    for (let i = 0; i < 1500 / TICK_RATE_MS; i += 1) {
+      step();
+      assert.ok(p1.reloadingUntil > 0, 'still reloading');
+      assert.equal(isHideOrdered(m, 'p1'), false, 'no re-entry during the same reload');
+    }
+    assert.ok(getCommands(m, 'p1').move, 'the move order stands through the reload');
+  }
+});
+
+test('reload hide: a bot without a command entry (an enemy) runs the behaviour off botReloadHide alone', () => {
+  const { m, step, arena } = streetsHideFixture({ p2: 'unit12' });
+  const p2 = m.fighters.p2;
+  const hiddenFromItsEnemies = () => hiddenFrom(arena, p2, m.fighters.p1) && hiddenFrom(arena, p2, m.fighters.p3);
+  assert.equal(hiddenFromItsEnemies(), false, 'fixture: p2 stands in the open');
+  p2.ammo = 0;
+  step(['p1', 'p2']); step(['p1', 'p2']);
+  assert.equal(p2.botReloadHide, true);
+  assert.equal(m.commands?.p2, undefined, 'no side-table entry was created for it');
+  let hidden = false;
+  for (let i = 0; i < 5000 / TICK_RATE_MS; i += 1) { step(['p1', 'p2']); if (hiddenFromItsEnemies() && p2.botHideHold) { hidden = true; break; } }
+  assert.ok(hidden, 'the reloading enemy never hid');
+  let guard = 8000 / TICK_RATE_MS;
+  while (p2.reloadingUntil > 0 && guard-- > 0) step(['p1', 'p2']);
+  step(['p1', 'p2']); step(['p1', 'p2']);
+  assert.equal(p2.botReloadHide, false);
+  assert.equal(p2.botHideHold, null, 'the hide scratch is nulled once the reload ends');
 });
 
 test('hide order: two hiding units never search in the same tick (matchState.hideSearchTick)', () => {

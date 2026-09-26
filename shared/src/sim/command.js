@@ -19,7 +19,10 @@
 //                 ai.js). setStance(true) wipes the move order and the lock;
 //                 a move order or force lock that LANDS releases the stance
 //                 again (owner 2026-09-26), as do clearCommands and
-//                 setStance(false). tickBot reads
+//                 setStance(false). A manual reload of BOT_RELOAD_HIDE_MIN_MS
+//                 or more enters it automatically (hideAuto, ai.js tickBot)
+//                 and leaves it when the reload completes; a manual stance or
+//                 a landed order clears hideAuto. tickBot reads
 //                 the flag straight off matchState.commands[slot].hide: this
 //                 module imports ai.js (navGridFor), so ai.js importing
 //                 isHideOrdered back would close an import cycle.
@@ -68,8 +71,15 @@ import { tryStartJump } from './actions.js';
 function commandsFor(matchState, slot) {
   if (matchState.commands == null) matchState.commands = {};
   let cmd = matchState.commands[slot];
-  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false };
+  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false, hideAuto: false };
   return cmd;
+}
+
+// The server creates the entry for every driven command-side slot at match
+// start (owner 2026-09-26): the automatic RELOAD HIDE (ai.js tickBot) lands
+// on the entry — badge + order wipe — so it must exist before any order.
+export function ensureCommands(matchState, slot) {
+  return commandsFor(matchState, slot);
 }
 
 export function getCommands(matchState, slot) {
@@ -84,6 +94,7 @@ export function clearCommands(matchState, slot) {
   cmd.move = null;
   cmd.lockTargetId = null;
   cmd.hide = false;
+  cmd.hideAuto = false;
 }
 
 // Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
@@ -108,6 +119,7 @@ export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
   if (!path) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.hide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
+  cmd.hideAuto = false;
   cmd.move = {
     x: tx, z: tz, y: targetFloorY,
     path, idx: 0,
@@ -153,6 +165,7 @@ export function setForceLock(matchState, slot, targetSlot) {
   const t = matchState.fighters[targetSlot];
   if (!t || t.hp <= 0 || t.team === f.team) return false;
   cmd.hide = false;
+  cmd.hideAuto = false;
   cmd.lockTargetId = targetSlot;
   return true;
 }
@@ -167,6 +180,7 @@ export function setStance(matchState, slot, hide) {
   if (!f || f.hp <= 0) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.hide = !!hide;
+  cmd.hideAuto = false;   // a manual stance, either way, is never released by a reload ending
   if (cmd.hide) {
     cmd.move = null;
     cmd.lockTargetId = null;
@@ -188,6 +202,7 @@ export function commandTargetIdOf(matchState, slot) {
     cmd.lockTargetId = null;
     cmd.move = null;
     cmd.hide = false;
+    cmd.hideAuto = false;
     return null;
   }
   const t = matchState.fighters[cmd.lockTargetId];
@@ -203,8 +218,6 @@ export function commandTargetIdOf(matchState, slot) {
 // charge/beam locks which hard-zero velocity in the sim).
 function commandReflexActive(f, now) {
   return f.botState === 'defense'
-    || f.botCoverPath != null
-    || f.botCoverHoldAnchor != null
     || now <= (f.stepUntil ?? 0)
     || now < (f.hitStunUntil ?? 0)
     || f.sniperChargeTargetId != null
@@ -220,10 +233,10 @@ export function tickCommandDriver(matchState, slot, now) {
   const mv = cmd?.move;
   if (!mv) return;
   const f = matchState.fighters[slot];
-  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; return; }
+  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; cmd.hideAuto = false; return; }
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
-    // the frame — the reflex (Defense escape, cover reload) may have moved
+    // the frame — the reflex (Defense escape, a hide) may have moved
     // the unit far off the frozen route.
     mv.reflexHeld = true;
     return;
