@@ -271,17 +271,14 @@ test('hide order: clearing the order (Fight) resumes normal movement within 2 s 
 test('reload hide: a manual reload of 3 s+ enters the Hide stance (wiping orders) and leaves it when the reload completes', () => {
   const { m, step, hiddenFromBoth } = streetsHideFixture({ p1: 'unit12' });   // Koyuki: 100-round mag, 5 s manual reload
   const p1 = m.fighters.p1;
-  let ordered = false;
-  for (const [x, z] of [[-90, -75], [-95, -70], [-100, -65], [-105, -75]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
-  assert.ok(ordered, 'fixture: no reachable move order');
-  assert.ok(getCommands(m, 'p1').move, 'a move order stands');
+  assert.equal(setForceLock(m, 'p1', 'p2'), true, 'a force lock stands (a MOVE order would route the reload into a cover hide instead)');
   p1.ammo = 0;   // the mag ran dry: tickAmmo starts the 5 s reload
   step(); step();
   assert.ok(p1.reloadingUntil > 0, 'the reload started');
   assert.equal(p1.botReloadHide, true);
   assert.equal(isHideOrdered(m, 'p1'), true, 'the reload entered the hide stance');
   assert.equal(getCommands(m, 'p1').hideAuto, true, 'flagged as the automatic hide');
-  assert.equal(getCommands(m, 'p1').move, null, 'the standing move order was wiped');
+  assert.equal(getCommands(m, 'p1').lockTargetId, null, 'the standing lock was wiped');
   let hidden = false;
   for (let i = 0; i < 4000 / TICK_RATE_MS; i += 1) { step(); if (hiddenFromBoth() && p1.botHideHold) { hidden = true; break; } }
   assert.ok(hidden, 'the reloading unit never hid');
@@ -326,6 +323,59 @@ test('reload hide: a manual Hide survives the reload end; an order during the re
       assert.equal(isHideOrdered(m, 'p1'), false, 'no re-entry during the same reload');
     }
     assert.ok(getCommands(m, 'p1').move, 'the move order stands through the reload');
+  }
+});
+
+test('reload under a move order: a cover hide bound to the order — the order stays, the unit hides for the whole reload and resumes after; a new order takes over at once', () => {
+  {
+    const { m, step, hiddenFromBoth } = streetsHideFixture({ p1: 'unit12' });   // Koyuki, 5 s manual reload
+    const p1 = m.fighters.p1;
+    assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
+    for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
+    const order = getCommands(m, 'p1').move;
+    assert.equal(order.phase, 'anchor');
+    p1.ammo = 0; step(); step();
+    assert.ok(p1.reloadingUntil > 0, 'the reload started');
+    assert.ok(p1.botCH && p1.botCH.reload, 'a reload-bound cover hide started');
+    assert.equal(isHideOrdered(m, 'p1'), false, 'no stance (no badge)');
+    assert.equal(getCommands(m, 'p1').move, order, 'the move order stays');
+    let hidden = false;
+    for (let i = 0; i < 4000 / TICK_RATE_MS; i += 1) { step(); if (hiddenFromBoth() && p1.botHideHold) { hidden = true; break; } }
+    assert.ok(hidden, 'the reloading unit never hid');
+    let guard = 8000 / TICK_RATE_MS;
+    while (p1.reloadingUntil > 0 && guard-- > 0) {
+      step();
+      // The tick that completes the reload also ends the hide (tickBot runs
+      // before tickAmmo), so allow it on that one step.
+      assert.ok(p1.botCH || p1.reloadingUntil === 0, 'the cover hide holds through the reload');
+    }
+    assert.ok(guard > 0, 'the reload never completed');
+    step(); step();
+    assert.equal(p1.botCH, null, 'ended with the reload');
+    assert.equal(getCommands(m, 'p1').move, order, 'the order still stands after');
+    let moved = false;
+    for (let i = 0; i < 1500 / TICK_RATE_MS; i += 1) { step(); if (Math.hypot(p1.vel.x, p1.vel.z) > 0.01) { moved = true; break; } }
+    assert.ok(moved, 'the order resumed');
+  }
+  {
+    const { m, step } = streetsHideFixture({ p1: 'unit12' });
+    const p1 = m.fighters.p1;
+    assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
+    for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
+    p1.ammo = 0; step(); step();
+    assert.ok(p1.botCH && p1.botCH.reload, 'reload-bound cover hide running');
+    let ordered = false;
+    for (const [x, z] of [[-60, -40], [-70, -30], [-50, -50]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
+    assert.ok(ordered, 'fixture: no reachable new order');
+    step();
+    assert.equal(p1.botCH, null, 'the new order took over at once');
+    assert.equal(p1.botReloadCH, false, 'the rest of the reload is spent on the order');
+    for (let i = 0; i < 1000 / TICK_RATE_MS; i += 1) {
+      step();
+      assert.ok(p1.reloadingUntil > 0, 'still reloading');
+      assert.equal(p1.botCH, null, 'no re-entry during the same reload');
+    }
+    assert.equal(getCommands(m, 'p1').move.phase, 'travel', 'travelling on the new order');
   }
 });
 

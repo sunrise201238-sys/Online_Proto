@@ -4956,7 +4956,13 @@ function updateEnemy(now) {
     && (eState.reloadingUntil ?? 0) > now;
   if (reloadHide && !eState.botReloadHide) {
     eState.botReloadHide = true;
-    if (!rMech.cmdHide) {
+    if (rMech.cmdMove && !rMech.cmdHide) {
+      // Under a MOVE ORDER (owner 2026-09-26): the reload is spent in a
+      // COVER HIDE bound to the order — the order stays and resumes after;
+      // no stance, no badge (the lifecycle below starts it). A new order
+      // landing mid-reload takes over at once (botReloadCH drops).
+      eState.botReloadCH = true;
+    } else if (!rMech.cmdHide) {
       rMech.cmdHide = true;
       rMech.cmdHideAuto = true;
       rMech.cmdMove = null;
@@ -4964,6 +4970,7 @@ function updateEnemy(now) {
     }
   } else if (!reloadHide && eState.botReloadHide) {
     eState.botReloadHide = false;
+    eState.botReloadCH = false;
     if (rMech.cmdHide && rMech.cmdHideAuto) {
       rMech.cmdHide = false;
       rMech.cmdHideAuto = false;
@@ -4976,16 +4983,25 @@ function updateEnemy(now) {
   // holds the trigger off for the retry window.
   const defenseLive = (eState.botState ?? 'pursue') === 'defense' && now < (eState.botDefenseUntil ?? 0);
   const chOrder = (!hideOrdered && rMech.cmdMove) ? rMech.cmdMove : null;
-  if (eState.botCH && (!chOrder || defenseLive)) {
+  if (eState.botCH && (!chOrder || defenseLive || chOrder !== eState.botCH.order || (eState.botCH.reload && !reloadHide))) {
+    // The order ended or was REPLACED (the new order takes over at once —
+    // a reload-bound hide gives the rest of the reload up), Defense owns
+    // the frame, or a reload-bound hide's reload completed.
+    if (eState.botCH.order !== chOrder && chOrder) eState.botReloadCH = false;
     eState.botCH = null;
     resetBotHideFields(eState);
   }
-  if (!eState.botCH && chOrder && underFire && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0)) {
+  const reloadCH = !!(eState.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
+  if (!eState.botCH && chOrder && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0) && (underFire || reloadCH)) {
     eState.botCH = {
       startedAt: now,
+      order: chOrder,
+      reload: reloadCH,   // bound to the reload: lasts until it completes (no tail, no cap)
       within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
     };
     resetBotHideFields(eState);
+  } else if (eState.botCH && !eState.botCH.reload && reloadCH) {
+    eState.botCH.reload = true;   // a hit hide that a long reload catches up with: stay for the reload
   }
   // Which hide runs this frame: the stance (ordered / reload) or the cover hide.
   const hideMode = hideOrdered ? 'stance' : (eState.botCH ? 'cover' : null);
@@ -5314,7 +5330,8 @@ function updateEnemy(now) {
         resetBotHideFields(eState);
         eState.botHideNoCover = true;   // keeps this frame's transition on Defense
         coverMove = null;
-      } else if ((reached && now >= tail) || now >= eState.botCH.startedAt + BOT_CH_CAP_MS) {
+      } else if (!eState.botCH.reload && ((reached && now >= tail) || now >= eState.botCH.startedAt + BOT_CH_CAP_MS)) {
+        // (A reload-bound hide ends with its reload — lifecycle above.)
         eState.botCH = null;
         resetBotHideFields(eState);
         coverMove = null;

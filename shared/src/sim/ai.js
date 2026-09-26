@@ -775,7 +775,13 @@ export function tickBot(matchState, botId, now) {
     && (me.reloadingUntil ?? 0) > now;
   if (reloadHide && !me.botReloadHide) {
     me.botReloadHide = true;
-    if (cmdEntry && !cmdEntry.hide) {
+    if (cmdEntry && cmdEntry.move && !cmdEntry.hide) {
+      // Under a MOVE ORDER (owner 2026-09-26): the reload is spent in a
+      // COVER HIDE bound to the order — the order stays and resumes after;
+      // no stance, no badge (the lifecycle below starts it). A new order
+      // landing mid-reload takes over at once (botReloadCH drops).
+      me.botReloadCH = true;
+    } else if (cmdEntry && !cmdEntry.hide) {
       cmdEntry.hide = true;
       cmdEntry.hideAuto = true;
       cmdEntry.move = null;
@@ -783,6 +789,7 @@ export function tickBot(matchState, botId, now) {
     }
   } else if (!reloadHide && me.botReloadHide) {
     me.botReloadHide = false;
+    me.botReloadCH = false;
     if (cmdEntry && cmdEntry.hide && cmdEntry.hideAuto) {
       cmdEntry.hide = false;
       cmdEntry.hideAuto = false;
@@ -796,16 +803,25 @@ export function tickBot(matchState, botId, now) {
   // while (the search would only fail again).
   const defenseLive = (me.botState ?? 'pursue') === 'defense' && now < (me.botDefenseUntil ?? 0);
   const chOrder = (!hideOrdered && cmdEntry?.move) ? cmdEntry.move : null;
-  if (me.botCH && (!chOrder || defenseLive)) {
+  if (me.botCH && (!chOrder || defenseLive || chOrder !== me.botCH.order || (me.botCH.reload && !reloadHide))) {
+    // The order ended or was REPLACED (the new order takes over at once —
+    // a reload-bound hide gives the rest of the reload up), Defense owns
+    // the frame, or a reload-bound hide's reload completed.
+    if (me.botCH.order !== chOrder && chOrder) me.botReloadCH = false;
     me.botCH = null;
     resetBotHideFields(me);
   }
-  if (!me.botCH && chOrder && underFire && !defenseLive && now >= (me.botCHNoCoverUntil ?? 0)) {
+  const reloadCH = !!(me.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
+  if (!me.botCH && chOrder && !defenseLive && now >= (me.botCHNoCoverUntil ?? 0) && (underFire || reloadCH)) {
     me.botCH = {
       startedAt: now,
+      order: chOrder,
+      reload: reloadCH,   // bound to the reload: lasts until it completes (no tail, no cap)
       within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
     };
     resetBotHideFields(me);
+  } else if (me.botCH && !me.botCH.reload && reloadCH) {
+    me.botCH.reload = true;   // a hit hide that a long reload catches up with: stay for the reload
   }
   // Which hide runs this tick: the stance (ordered / reload) or the cover hide.
   const hideMode = hideOrdered ? 'stance' : (me.botCH ? 'cover' : null);
@@ -1128,7 +1144,8 @@ export function tickBot(matchState, botId, now) {
         resetBotHideFields(me);
         me.botHideNoCover = true;   // keeps this tick's transition on Defense
         coverMove = null;
-      } else if ((reached && now >= tail) || now >= me.botCH.startedAt + BOT_CH_CAP_MS) {
+      } else if (!me.botCH.reload && ((reached && now >= tail) || now >= me.botCH.startedAt + BOT_CH_CAP_MS)) {
+        // (A reload-bound hide ends with its reload — lifecycle above.)
         me.botCH = null;
         resetBotHideFields(me);
         coverMove = null;
