@@ -1449,11 +1449,33 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // the plain-outline sample A. The outline sits OUTSIDE the pill: the fill
 // and track keep their size (2.42 x 0.3025 world); the sprite carries a
 // texture margin for it. The old 2 px steel (#2c4356) hairline is gone.
+// Portrait (owner 2026-09-26): the unit's picker thumbnail sits LEFT of the
+// pill, in the same texture, framed by the same dark outline; the whole
+// "thumbnail + bar" group stays centred over the unit (the sprite's centre.x
+// is 0.5), and the pill keeps its old vertical placement — the portrait is
+// taller than the pill and overhangs it evenly above and below.
 const UNIT_BAR_PILL_W = 160, UNIT_BAR_PILL_H = 20; // the bar itself, texture px (8:1)
-const UNIT_BAR_EDGE_W = 5;                          // dark outline outside the pill, texture px
-const UNIT_BAR_PAD = 8;                             // texture margin around the pill (>= outline)
-const UNIT_BAR_TEX_W = UNIT_BAR_PILL_W + 2 * UNIT_BAR_PAD, UNIT_BAR_TEX_H = UNIT_BAR_PILL_H + 2 * UNIT_BAR_PAD;
-const UNIT_BAR_WORLD_W = 2.42;                      // world width of the PILL at k = 1
+const UNIT_BAR_EDGE_W = 5;                          // dark outline outside the pill (and the portrait), texture px
+const UNIT_BAR_PAD = 8;                             // texture margin around the group (>= outline)
+const UNIT_BAR_THUMB = 44;                          // portrait side, texture px (~25 px on screen)
+const UNIT_BAR_THUMB_GAP = 6;                       // portrait -> pill, texture px
+const UNIT_BAR_TEX_W = UNIT_BAR_PAD + UNIT_BAR_THUMB + UNIT_BAR_THUMB_GAP + UNIT_BAR_PILL_W + UNIT_BAR_PAD;   // 226
+const UNIT_BAR_TEX_H = UNIT_BAR_THUMB + 2 * UNIT_BAR_PAD;                                                   // 60
+const UNIT_BAR_PILL_X = UNIT_BAR_PAD + UNIT_BAR_THUMB + UNIT_BAR_THUMB_GAP;                                  // 58
+const UNIT_BAR_PILL_Y = UNIT_BAR_PAD + (UNIT_BAR_THUMB - UNIT_BAR_PILL_H) / 2;                                // 20: pill centred on the portrait
+const UNIT_BAR_WORLD_W = 2.42;                      // world width of the PILL at k = 1 (every other length scales off it: 2.42 / 160 world per texel)
+// Picker thumbnails (units/<spriteKey>_profile_thumbnail.png), one Image per
+// unit, shared by every bar of that unit; a bar repaints once its image lands.
+const _unitThumbImages = {};
+function unitThumbImage(spriteKey) {
+  if (!spriteKey) return null;
+  if (!_unitThumbImages[spriteKey]) {
+    const img = new Image();
+    img.src = `${import.meta.env.BASE_URL}units/${spriteKey}_profile_thumbnail.png`;
+    _unitThumbImages[spriteKey] = img;
+  }
+  return _unitThumbImages[spriteKey];
+}
 const UNIT_BAR_EDGE = '#0b1622';                    // outline ink — the edge arrows' stroke colour
 const UNIT_BAR_INK_ALLY = '#7fe9ff';   // bright cyan (owner pick 2026-09-22, the second of the day: #a5f1ff for an hour before it; #92d5e6 soft cyan since 2026-09-19, the near-white #eaf6ff before that read as plain white)
 const UNIT_BAR_INK_ENEMY = '#ff6a2c';
@@ -1474,9 +1496,29 @@ function drawHealthBar(sprite, frac) {
     x.lineTo(px, py + r); x.arcTo(px, py, px + r, py, r);
     x.closePath();
   };
-  const P = UNIT_BAR_PAD, pw = W - 2 * P, ph = H - 2 * P;   // the pill inside the margin
-  const grown = (g) => pill(P - g, P - g, pw + 2 * g, ph + 2 * g, 5 + g);   // the pill grown outward by g (pill() begins a fresh path)
+  const PX = UNIT_BAR_PILL_X, PY = UNIT_BAR_PILL_Y, pw = UNIT_BAR_PILL_W, ph = UNIT_BAR_PILL_H;   // the pill's box in the texture
+  const grown = (g) => pill(PX - g, PY - g, pw + 2 * g, ph + 2 * g, 5 + g);   // the pill grown outward by g (pill() begins a fresh path)
   x.clearRect(0, 0, W, H);
+  // Portrait, left of the pill: dark rounded frame (the bar's outline width),
+  // the thumbnail clipped to a rounded square inside it. Drawn once the image
+  // has loaded (the update loop repaints the bar then); until then the frame
+  // alone marks the slot.
+  const T = UNIT_BAR_THUMB, TP = UNIT_BAR_PAD, E = UNIT_BAR_EDGE_W;
+  pill(TP - E, TP - E, T + 2 * E, T + 2 * E, 8 + E);
+  x.fillStyle = UNIT_BAR_EDGE;
+  x.fill();
+  const img = sprite.userData.thumbImg;
+  if (img && img.complete && img.naturalWidth > 0) {
+    x.save();
+    pill(TP, TP, T, T, 8);
+    x.clip();
+    x.drawImage(img, TP, TP, T, T);
+    x.restore();
+  } else {
+    pill(TP, TP, T, T, 8);
+    x.fillStyle = 'rgba(11, 17, 25, 0.92)';
+    x.fill();
+  }
   // Painter's order: 1. the dark outline — a solid pill grown by the outline
   // width (its middle is covered next); 2. the team-ink pill the track is
   // tinted by; 3. the 92% navy track over it; 4. the fill, inset 2 px.
@@ -1491,17 +1533,17 @@ function drawHealthBar(sprite, frac) {
   x.fill();
   const inW = Math.round((pw - 4) * frac);
   if (inW > 0) {
-    pill(P + 2, P + 2, pw - 4, ph - 4, 3);
+    pill(PX + 2, PY + 2, pw - 4, ph - 4, 3);
     x.save();
     x.clip();                               // keeps the fill's corners inside the rounded track
     x.fillStyle = sprite.userData.barInk;
-    x.fillRect(P + 2, P + 2, inW, ph - 4);
+    x.fillRect(PX + 2, PY + 2, inW, ph - 4);
     x.restore();
   }
   sprite.material.map.needsUpdate = true;
 }
 
-function makeHealthBarSprite(ink) {
+function makeHealthBarSprite(ink, spriteKey) {
   const cv = document.createElement('canvas');
   cv.width = UNIT_BAR_TEX_W;
   cv.height = UNIT_BAR_TEX_H;
@@ -1515,6 +1557,8 @@ function makeHealthBarSprite(ink) {
   s.renderOrder = 9997;
   s.userData.barInk = ink;
   s.userData.barFrac = -1;                  // forces the first draw
+  s.userData.thumbImg = unitThumbImage(spriteKey);
+  s.userData.thumbDrawn = false;            // set once the portrait has been painted in
   return s;
 }
 
@@ -1539,8 +1583,8 @@ function updateMechAnimations(dt, now) {
       const depth = Math.max(0.1,
         _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
       const k = depth / UNIT_BAR_REF_DIST;
-      const barH = UNIT_BAR_WORLD_W * (UNIT_BAR_PILL_H / UNIT_BAR_PILL_W) * k;   // the pill's world height
-      const padY = UNIT_BAR_WORLD_W * (UNIT_BAR_PAD / UNIT_BAR_PILL_W) * k;      // texture margin above the pill
+      const u = UNIT_BAR_WORLD_W / UNIT_BAR_PILL_W * k;                          // world units per texture px
+      const pillLift = (UNIT_BAR_PILL_Y + UNIT_BAR_PILL_H) * u;                   // sprite top -> pill bottom
       const hostile = getTeamOf(m) !== camTeam;
       const lockedOn = !!(state.reticle && state.reticle.visible && state.reticle.parent === m.root);
       if (hostile && !m.isOwnSprite && lockedOn) {
@@ -1549,13 +1593,18 @@ function updateMechAnimations(dt, now) {
         const d = camera.position.distanceTo(m.root.position);
         const rs = Math.min(4.5, Math.max(0.7, d / 22));
         const clearY = Math.max(0.2 + UNIT_BAR_RETICLE_CLEAR * rs, UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP);
-        bar.position.y = clearY + barH + padY;
+        bar.position.y = clearY + pillLift;
       } else {
         // Everyone else rides the head at the screen-fixed gap.
-        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + barH + padY;
+        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
       }
-      // The sprite carries the texture margin: scale it so the PILL keeps its 2.42 x 0.3025 world size.
-      bar.scale.set(UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_W / UNIT_BAR_PILL_W) * k, UNIT_BAR_WORLD_W * (UNIT_BAR_TEX_H / UNIT_BAR_PILL_W) * k, 1);
+      // The sprite carries the portrait and the margins: scale it off the same world-per-texel so the PILL keeps its 2.42 x 0.3025 world size.
+      bar.scale.set(UNIT_BAR_TEX_W * u, UNIT_BAR_TEX_H * u, 1);
+      const ti = bar.userData.thumbImg;
+      if (ti && !bar.userData.thumbDrawn && ti.complete && ti.naturalWidth > 0) {
+        bar.userData.thumbDrawn = true;
+        bar.userData.barFrac = -1;          // portrait just landed: repaint
+      }
       const wantInk = hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY;
       if (bar.userData.barInk !== wantInk) {
         bar.userData.barInk = wantInk;
@@ -1586,7 +1635,7 @@ function createMech(color, unitData, isOwnUnit = false) {
   root.add(sprite);
   // Overhead HP bar — the per-frame updater corrects ink (team-relative),
   // size, and anchor; start white.
-  const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY);
+  const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY, unitData.spriteKey);
   root.add(healthBar);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
