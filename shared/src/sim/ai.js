@@ -115,20 +115,21 @@ const BOT_HIDE_PREDICT_MIN_SPEED = 1;
 const BOT_HIDE_CLOSE_DIST = 26;
 const BOT_HIDE_APPROACH_SPEED = 2;
 const BOT_HIDE_SLIP_GAIN = 6;
-// COVER HIDE (owner 2026-09-26): a unit under a MOVE ORDER that takes a fresh
-// hit runs a short hide INSTEAD of Defense — cover inside the order's area
-// first (AREA_R around the ordered point; anchor phase only — a unit still
-// travelling has no area yet and skips that tier), then the nearest cover
-// anywhere. It lasts at least until the unit reaches its cover, then
-// Defense's tail (last hit + BOT_HIT_EVADE_MS, + SNIPER_EXTRA while a sniper
-// charges at it), capped at CAP_MS from the trigger; no cover anywhere ->
-// plain Defense, and no retry for BOT_HIDE_FAIL_RETRY_MS. Sprints like
-// Defense (down to the 8 floor, no arming). No badge; the move order stands
-// throughout and the driver resumes it after (commandReflexActive yields to
-// botCH). Never alongside the Hide stance (it wipes move orders anyway).
+// COVER HIDE (owner 2026-09-26/27): a unit under a MOVE ORDER spends a long
+// manual reload (BOT_RELOAD_HIDE_MIN_MS+) in a hide bound to the order —
+// cover from BOTH enemies inside the order's area first (AREA_R around the
+// ordered point; anchor phase only — a unit still travelling has no area
+// yet and skips that tier), then the nearest such cover anywhere; no cover
+// -> the reload is spent on the order's legs (a hit then runs Defense as
+// usual) and no retry for BOT_HIDE_FAIL_RETRY_MS. Sprints like Defense to
+// the cover (down to the 8 floor, no arming), paces once hidden, and ends
+// with the reload. No badge; the move order stands throughout and the
+// driver resumes it after (commandReflexActive yields to botCH). A fresh
+// HIT under a move order runs plain Defense (2026-09-27: the hit-triggered
+// cover hide measured about half of Defense's survival in bot duels on
+// Factory / Streets / Airport and was retired). Never alongside the Hide
+// stance (it wipes move orders anyway).
 const BOT_CH_AREA_R = 14;
-const BOT_CH_CAP_MS = 2000;
-const BOT_CH_SNIPER_EXTRA_MS = 250;
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -796,32 +797,29 @@ export function tickBot(matchState, botId, now) {
     }
   }
   const hideOrdered = cmdEntry ? !!cmdEntry.hide : !!me.botReloadHide;
-  // COVER HIDE lifecycle (owner 2026-09-26 — see the constants note): only a
-  // unit with a standing move order and no Hide stance; a live Defense (the
-  // anti-glint dodge's follow-up, or the no-cover fallback itself) keeps
-  // its frames first, and a no-cover verdict holds the trigger off for a
-  // while (the search would only fail again).
+  // COVER HIDE lifecycle (owner 2026-09-26/27 — see the constants note): a
+  // long reload on a unit with a standing move order and no Hide stance; a
+  // live Defense keeps its frames first, and a no-cover verdict holds the
+  // trigger off for a while (the search would only fail again).
   const defenseLive = (me.botState ?? 'pursue') === 'defense' && now < (me.botDefenseUntil ?? 0);
   const chOrder = (!hideOrdered && cmdEntry?.move) ? cmdEntry.move : null;
-  if (me.botCH && (!chOrder || defenseLive || chOrder !== me.botCH.order || (me.botCH.reload && !reloadHide))) {
-    // The order ended or was REPLACED (the new order takes over at once —
-    // a reload-bound hide gives the rest of the reload up), Defense owns
-    // the frame, or a reload-bound hide's reload completed.
+  if (me.botCH && (!chOrder || defenseLive || chOrder !== me.botCH.order || !reloadHide)) {
+    // The order ended or was REPLACED (the new order takes over at once and
+    // the rest of the reload is spent on it), Defense owns the frame, or
+    // the reload completed.
     if (me.botCH.order !== chOrder && chOrder) me.botReloadCH = false;
     me.botCH = null;
     resetBotHideFields(me);
   }
   const reloadCH = !!(me.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
-  if (!me.botCH && chOrder && !defenseLive && now >= (me.botCHNoCoverUntil ?? 0) && (underFire || reloadCH)) {
+  if (!me.botCH && chOrder && !defenseLive && now >= (me.botCHNoCoverUntil ?? 0) && reloadCH) {
     me.botCH = {
       startedAt: now,
       order: chOrder,
-      reload: reloadCH,   // bound to the reload: lasts until it completes (no tail, no cap)
+      reload: true,   // bound to the reload: lasts until it completes
       within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
     };
     resetBotHideFields(me);
-  } else if (me.botCH && !me.botCH.reload && reloadCH) {
-    me.botCH.reload = true;   // a hit hide that a long reload catches up with: stay for the reload
   }
   // Which hide runs this tick: the stance (ordered / reload) or the cover hide.
   const hideMode = hideOrdered ? 'stance' : (me.botCH ? 'cover' : null);
@@ -1136,22 +1134,15 @@ export function tickBot(matchState, botId, now) {
       me.botHideAnchor = null;
     }
     if (hideMode === 'cover') {
-      // COVER HIDE end. No cover anywhere -> abort into Defense (the
-      // transition sees the cleared maneuver + underFire; the flag holds
-      // the trigger off for the retry window). Otherwise: at the cover and
-      // Defense's tail has run out since the last hit, or the cap.
-      const tail = (me.botHitEvadeUntil ?? 0) + (sniperCharging ? BOT_CH_SNIPER_EXTRA_MS : 0);
-      const reached = !me.botHidePath && hideTier != null;
+      // COVER HIDE end: no cover anywhere -> give the reload up (the order's
+      // legs resume; a fresh hit then runs Defense as usual) and hold the
+      // trigger off for the retry window. Otherwise the hide ends with its
+      // reload (lifecycle above).
       if (me.botHideNoCover) {
         me.botCH = null;
         me.botCHNoCoverUntil = now + BOT_HIDE_FAIL_RETRY_MS;
         resetBotHideFields(me);
         me.botHideNoCover = true;   // keeps this tick's transition on Defense
-        coverMove = null;
-      } else if (!me.botCH.reload && ((reached && now >= tail) || now >= me.botCH.startedAt + BOT_CH_CAP_MS)) {
-        // (A reload-bound hide ends with its reload — lifecycle above.)
-        me.botCH = null;
-        resetBotHideFields(me);
         coverMove = null;
       }
     }

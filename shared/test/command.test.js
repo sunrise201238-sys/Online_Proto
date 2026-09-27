@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  UNIT_DATA,
   createMatchState,
   tickMatch,
   tickBot,
@@ -31,6 +32,7 @@ import {
   GROUND_BASE_Y
 } from '../src/sim/index.js';
 
+const UNIT_DATA_KOYUKI = UNIT_DATA.unit12;
 const eyeOf = (f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z });
 const hiddenFrom = (arena, me, enemy) =>
   !botHasLineOfSight(eyeOf(enemy), eyeOf(me), arena.obstacles, arena.surfaces);
@@ -429,78 +431,50 @@ test('no cover anywhere: a hidden-ordered unit falls back to Defense on a fresh 
   assert.equal(isHideOrdered(m, 'p1'), true, 'the stance itself still stands');
 });
 
-test('cover hide: a unit under a move order runs a hide instead of Defense, then the order resumes (Streets)', () => {
-  const { m, step, hiddenFromBoth, arena, now: nowFn } = streetsHideFixture();
+test('a hit under a move order runs Defense (the hit-triggered cover hide was retired 2026-09-27); the order stands', () => {
+  const { m, step, now: nowFn } = streetsHideFixture();
   const p1 = m.fighters.p1;
-  // A short order (the next cell over): the unit arrives within a second and
-  // is anchored.
   assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
   for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
-  assert.equal(getCommands(m, 'p1').move.phase, 'anchor');
-  const anchor = { x: getCommands(m, 'p1').move.x, z: getCommands(m, 'p1').move.z };
-  let now = nowFn();
-  p1.hitStunUntil = now + 300; p1.hitStunScale = 0.25;   // a landing round
-  now = step();
-  assert.ok(p1.botCH, 'the hit started a cover hide');
-  assert.notEqual(p1.botState, 'defense', 'no Defense for an ordered unit');
-  assert.deepEqual(p1.botCH.within, { x: anchor.x, z: anchor.z, r: 14 }, 'anchored: cover inside the area first');
-  let hiddenAt = null, endedAt = null, sawDefense = false, goalSeen = null, yielded = false;
-  const t0 = now;
-  for (let i = 0; i < 4000 / TICK_RATE_MS; i += 1) {
-    now = step();
-    if (p1.botState === 'defense') sawDefense = true;
-    if (p1.botCH && getCommands(m, 'p1').move.reflexHeld) yielded = true;   // the driver yields while the maneuver runs (the flag is consumed by the replan after)
-    assert.notEqual(p1.botHideTier, 'nearest', 'the cover hide never settles for cover from one enemy only');
-    if (p1.botHideGoal && !goalSeen) goalSeen = { ...p1.botHideGoal };
-    if (hiddenAt == null && p1.botCH && hiddenFromBoth()) hiddenAt = now;
-    if (!p1.botCH) { endedAt = now; break; }
-  }
-  assert.equal(sawDefense, false, 'Defense never ran during the cover hide');
-  assert.ok(hiddenAt != null, 'the unit reached cover during the maneuver');
-  assert.ok(endedAt != null, 'the cover hide ended');
-  assert.ok(endedAt - hiddenAt >= 0 && endedAt - hiddenAt <= 700, `ended ${endedAt - hiddenAt} ms after reaching cover (Defense tail expected)`);
-  assert.ok(endedAt - t0 <= 2100, 'within the 2 s cap');
-  assert.ok(getCommands(m, 'p1').move, 'the move order stands through the maneuver');
-  assert.equal(yielded, true, 'the driver yielded to the maneuver');
-  assert.equal(p1.botHideHold, null, 'hide scratch nulled after');
-  if (goalSeen && Math.hypot(goalSeen.x - anchor.x, goalSeen.z - anchor.z) <= 14) {
-    assert.ok(true);   // the in-area tier found cover
-  }
-  // The driver resumes: the unit moves under the order again within 1 s.
-  let moved = false;
-  for (let i = 0; i < 1000 / TICK_RATE_MS; i += 1) { step(); if (Math.hypot(p1.vel.x, p1.vel.z) > 0.01) { moved = true; break; } }
-  assert.ok(moved, 'the order resumed after the maneuver');
-  void arena;
+  const order = getCommands(m, 'p1').move;
+  p1.hitStunUntil = nowFn() + 300; p1.hitStunScale = 0.25;   // a landing round
+  let defenseAt = null;
+  for (let i = 0; i < 10; i += 1) { step(); assert.ok(!p1.botCH, 'no cover hide on a hit'); if (p1.botState === 'defense') { defenseAt = i; break; } }
+  assert.ok(defenseAt != null, 'the hit runs Defense');
+  assert.equal(getCommands(m, 'p1').move, order, 'the move order stands');
 });
 
-test('cover hide: a travelling unit skips the in-area tier; no cover anywhere aborts into Defense (Plain Field)', () => {
+test('reload cover hide: a travelling unit skips the in-area tier; no cover anywhere gives the reload up (Plain Field)', () => {
   {
-    const { m, step, hiddenFromBoth, now: nowFn } = streetsHideFixture();
+    const { m, step } = streetsHideFixture({ p1: 'unit12' });
     const p1 = m.fighters.p1;
     let ordered = false;
     for (const [x, z] of [[-60, -40], [-70, -30], [-50, -50]]) { if (setMoveOrder(m, 'p1', x, z, 0)) { ordered = true; break; } }
     assert.ok(ordered, 'fixture: no reachable far order');
     step();
     assert.equal(getCommands(m, 'p1').move.phase, 'travel');
-    p1.hitStunUntil = nowFn() + 300; p1.hitStunScale = 0.25;
-    step();
-    assert.ok(p1.botCH, 'cover hide started while travelling');
+    p1.ammo = 0; step(); step();
+    assert.ok(p1.botCH && p1.botCH.reload, 'reload cover hide started while travelling');
     assert.equal(p1.botCH.within, null, 'no area yet: the in-area tier is skipped');
-    void hiddenFromBoth;
   }
   {
     const { m, step, hit, now: nowFn } = plainNoCoverFixture();
     const p1 = m.fighters.p1;
+    // Plain Field has no cover: swap p1 for a long-reload profile by hand.
+    p1.unit = UNIT_DATA_KOYUKI;
+    p1.ammo = p1.unit.magCapacity;
     assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
     for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
-    hit(); step();
-    assert.ok(p1.botCH, 'cover hide started');
-    let defenseAt = null;
-    for (let i = 0; i < 20; i += 1) { step(); if (p1.botState === 'defense') { defenseAt = i; break; } }
-    assert.ok(defenseAt != null, 'no cover anywhere: the maneuver aborted into Defense');
-    assert.equal(p1.botCH, null);
+    const order = getCommands(m, 'p1').move;
+    p1.ammo = 0; step(); step();
+    assert.ok(p1.botCH && p1.botCH.reload, 'reload cover hide started');
+    let gaveUp = null;
+    for (let i = 0; i < 20; i += 1) { step(); if (!p1.botCH) { gaveUp = i; break; } }
+    assert.ok(gaveUp != null, 'no cover anywhere: the reload hide gave up');
     assert.ok(p1.botCHNoCoverUntil > nowFn(), 'the trigger is held off for the retry window');
-    assert.ok(getCommands(m, 'p1').move, 'the move order still stands');
+    assert.equal(getCommands(m, 'p1').move, order, 'the move order still stands');
+    hit(); step();
+    assert.equal(p1.botState, 'defense', 'a hit in the open runs Defense');
   }
 });
 

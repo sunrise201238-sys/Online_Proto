@@ -4329,11 +4329,10 @@ const BOT_HIDE_PREDICT_MIN_SPEED = 1;
 const BOT_HIDE_CLOSE_DIST = 26;
 const BOT_HIDE_APPROACH_SPEED = 2;
 const BOT_HIDE_SLIP_GAIN = 6;
-// COVER HIDE (owner 2026-09-26): the hit reflex of a unit under a move
-// order — the shared ai.js constants, mirrored (see its note).
+// COVER HIDE (owner 2026-09-26/27): a long reload under a move order is spent
+// in a hide bound to the order — the shared ai.js constant, mirrored (see
+// its note; the hit-triggered variant was retired 2026-09-27).
 const BOT_CH_AREA_R = 14;
-const BOT_CH_CAP_MS = 2000;
-const BOT_CH_SNIPER_EXTRA_MS = 250;
 // Frame stamp of the last hidden-spot search — the offline twin of
 // matchState.hideSearchTick: every driven unit of a frame runs with the
 // same `now`, so two hiding units never search in the same frame.
@@ -4977,31 +4976,29 @@ function updateEnemy(now) {
     }
   }
   const hideOrdered = !!rMech.cmdHide;
-  // COVER HIDE lifecycle (owner 2026-09-26 — offline twin of shared tickBot):
-  // only a unit with a standing move order (the mech's cmdMove) and no Hide
-  // stance; a live Defense keeps its frames first, and a no-cover verdict
-  // holds the trigger off for the retry window.
+  // COVER HIDE lifecycle (owner 2026-09-26/27 — offline twin of shared
+  // tickBot): a long reload on a unit with a standing move order (the
+  // mech's cmdMove) and no Hide stance; a live Defense keeps its frames
+  // first, and a no-cover verdict holds the trigger off for the retry window.
   const defenseLive = (eState.botState ?? 'pursue') === 'defense' && now < (eState.botDefenseUntil ?? 0);
   const chOrder = (!hideOrdered && rMech.cmdMove) ? rMech.cmdMove : null;
-  if (eState.botCH && (!chOrder || defenseLive || chOrder !== eState.botCH.order || (eState.botCH.reload && !reloadHide))) {
-    // The order ended or was REPLACED (the new order takes over at once —
-    // a reload-bound hide gives the rest of the reload up), Defense owns
-    // the frame, or a reload-bound hide's reload completed.
+  if (eState.botCH && (!chOrder || defenseLive || chOrder !== eState.botCH.order || !reloadHide)) {
+    // The order ended or was REPLACED (the new order takes over at once and
+    // the rest of the reload is spent on it), Defense owns the frame, or
+    // the reload completed.
     if (eState.botCH.order !== chOrder && chOrder) eState.botReloadCH = false;
     eState.botCH = null;
     resetBotHideFields(eState);
   }
   const reloadCH = !!(eState.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
-  if (!eState.botCH && chOrder && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0) && (underFire || reloadCH)) {
+  if (!eState.botCH && chOrder && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0) && reloadCH) {
     eState.botCH = {
       startedAt: now,
       order: chOrder,
-      reload: reloadCH,   // bound to the reload: lasts until it completes (no tail, no cap)
+      reload: true,   // bound to the reload: lasts until it completes
       within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
     };
     resetBotHideFields(eState);
-  } else if (eState.botCH && !eState.botCH.reload && reloadCH) {
-    eState.botCH.reload = true;   // a hit hide that a long reload catches up with: stay for the reload
   }
   // Which hide runs this frame: the stance (ordered / reload) or the cover hide.
   const hideMode = hideOrdered ? 'stance' : (eState.botCH ? 'cover' : null);
@@ -5323,21 +5320,15 @@ function updateEnemy(now) {
       eState.botHideAnchor = null;
     }
     if (hideMode === 'cover') {
-      // COVER HIDE end (shared parity): no cover anywhere -> abort into
-      // Defense; otherwise at the cover and Defense's tail has run out since
-      // the last hit, or the cap.
-      const tail = (eState.botHitEvadeUntil ?? 0) + (sniperCharging ? BOT_CH_SNIPER_EXTRA_MS : 0);
-      const reached = !eState.botHidePath && hideTier != null;
+      // COVER HIDE end: no cover anywhere -> give the reload up (the order's
+      // legs resume; a fresh hit then runs Defense as usual) and hold the
+      // trigger off for the retry window. Otherwise the hide ends with its
+      // reload (lifecycle above).
       if (eState.botHideNoCover) {
         eState.botCH = null;
         eState.botCHNoCoverUntil = now + BOT_HIDE_FAIL_RETRY_MS;
         resetBotHideFields(eState);
-        eState.botHideNoCover = true;   // keeps this frame's transition on Defense
-        coverMove = null;
-      } else if (!eState.botCH.reload && ((reached && now >= tail) || now >= eState.botCH.startedAt + BOT_CH_CAP_MS)) {
-        // (A reload-bound hide ends with its reload — lifecycle above.)
-        eState.botCH = null;
-        resetBotHideFields(eState);
+        eState.botHideNoCover = true;   // keeps this tick's transition on Defense
         coverMove = null;
       }
     }
