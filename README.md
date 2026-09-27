@@ -90,8 +90,8 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
 | Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
 | Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 3 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 3 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 2 — Shotgun (Hoshino) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun (Haruka) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
@@ -103,7 +103,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 
 | Unit | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
-| Hoshino / Haruka | 4.17 blasts/s | 24 (8×3, point-blank) | **100.0** | ~20.0 (shell-regen limited) |
+| Hoshino / Haruka | 4.17 blasts/s | 32 (8×4, point-blank) | **133.3** | ~26.7 (shell-regen limited) |
 | Hina | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
 | Atsuko | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | Marina | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |

@@ -132,7 +132,7 @@ const UNIT_DATA = {
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; owner 2026-09-24, was 5 / 40)
+    damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
@@ -489,7 +489,7 @@ const UNIT_DATA = {
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     spreadAngle: THREE.MathUtils.degToRad(16),
-    damage: 3,               // per pellet (volley max 8 x 3 = 24 point-blank; owner 2026-09-24, was 5 / 40)
+    damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
