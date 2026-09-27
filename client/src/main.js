@@ -1132,7 +1132,7 @@ const DIORAMA_VIEW = {
   // COMMAND MODE tunables:
   minDist: 70,         // closest zoom (dolly distance along the fixed tilt)
   cmdRadius: CMD_RADIUS,     // deployment circle radius = arrival orbit radius (shared const)
-  anchorMs: CMD_ANCHOR_MS,   // Engage-style hold after arrival (shared const; owner: 5s -> 20s)
+  anchorMs: CMD_ANCHOR_MS,   // Engage-style hold after arrival (shared const; owner: 5s -> 20s -> 40s)
   clearR: 0.11         // per-unit clear pocket radius in the blur (uv units)
 };
 // Per-map camera anchor: yaw = compass angle around the map centre, dist =
@@ -10218,11 +10218,11 @@ function showGuidePopup() {
           <ul>
             <li>Pick <strong>Classic</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
             <li>In Command, your unit fights on its own — you give orders from a tabletop view.</li>
-            <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
+            <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 40 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
             <li>Select your unit (tap its marker or card) and a shield appears above its card — tap the shield = <strong>Hide</strong>: the unit slips out of every enemy's sight, keeps pacing its cover as they move and only fires back from there. Double-tap the unit, or give it any move / lock order, to release it.</li>
-            <li>With nothing selected: drag the area ring to move that order (the 20 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
+            <li>With nothing selected: drag the area ring to move that order (the 40 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
             <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
           </ul>
         </div>
@@ -12225,7 +12225,7 @@ function ensureDioramaSlotEls(slot) {
 // tap a pinned ENEMY = drop every lock YOUR units hold on it; double-tap a
 // destination RING (anywhere on its disc) = drop that move order (the lock
 // survives); DRAG a ring = re-issue the order at the release point — any
-// drag counts (even back to the start) and restarts the 20 s window; a
+// drag counts (even back to the start) and restarts the 40 s window; a
 // plain tap on the ring does nothing (that's the double-tap's first beat).
 // STANCE (owner 2026-09-26): selecting an own unit (a tap on its marker or
 // card) shows the shield above its card at once; a tap ON the shield =
@@ -12528,7 +12528,7 @@ function onDioPointerUp(e) {
       } else {
         issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
       }
-      // A ring drag re-issued the order (fresh 20 s window by construction —
+      // A ring drag re-issued the order (fresh 40 s window by construction —
       // setMoveOrder starts a new anchor). Any drag counts, even one released
       // back at the start (owner 2026-08-27: no in-place cancel).
       if (g.kind === 'ring') diorama.lastRingAt = 0;

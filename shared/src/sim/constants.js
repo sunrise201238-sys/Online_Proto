@@ -899,12 +899,12 @@ export const DASH_RECOVER_MS = 180;
 // --- COMMAND MODE (phase 3): one source for the client preview AND the
 // server authority — the offline diorama reads these too. Owner-tuned:
 // dash segments are latched (arm at 125, spend down to the 50 reserve
-// floor, walk until re-armed), 20 s Engage-style anchor on a radius-12
+// floor, walk until re-armed), 40 s Engage-style anchor on a radius-12
 // ring, orders rejected when the pathfinder's goal snap lands more than
 // 6 u from the tapped spot.
 export const CMD_TRAVEL_BOOST_FLOOR = 50;
 export const CMD_TRAVEL_DASH_ARM = 125;
-export const CMD_ANCHOR_MS = 20000;
+export const CMD_ANCHOR_MS = 40000;   // 20 s -> 40 s (owner 2026-09-27, as on the BA line)
 export const CMD_RADIUS = 12;
 export const CMD_ORDER_SNAP_TOLERANCE = 6;
 export const CMD_ARRIVE_DIST = 4;
