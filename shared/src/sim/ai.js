@@ -911,7 +911,11 @@ export function tickBot(matchState, botId, now) {
       if (k === 0) hiddenNear = !seen;
       if (seen) { hiddenAll = false; break; }
     }
-    const hideTier = hiddenAll ? 'all' : hiddenNear ? 'nearest' : null;
+    // The COVER HIDE counts only cover from BOTH enemies (owner 2026-09-27:
+    // its nearest-only tier is gone — hidden from one enemy while the other
+    // shoots a walking target was measured worse than Defense); the stance
+    // keeps the nearest-enemy fallback.
+    const hideTier = hiddenAll ? 'all' : (hiddenNear && hideMode !== 'cover') ? 'nearest' : null;
     if (hideTier) me.botHideNoCover = false;   // standing hidden = cover exists
     // Threat read: the nearest enemy, the unit's bearing away from it and
     // whether it is closing in.
@@ -971,7 +975,7 @@ export function tickBot(matchState, botId, now) {
       // the nearest enemy — from a nearest-tier hide that search would just
       // re-issue the next nearest-hidden cell every cadence and the unit
       // would shuffle between neighbours instead of pacing its cover.
-      if (!hiddenNear) hideAttempts.push({ eyes: hideEyes.slice(0, 1), tier: 'nearest', minDistFrom: null });
+      if (!hiddenNear && hideMode !== 'cover') hideAttempts.push({ eyes: hideEyes.slice(0, 1), tier: 'nearest', minDistFrom: null });
     }
     if (!hiddenAll && hideMode === 'cover' && me.botCH.within) {
       // COVER HIDE first tier: cover inside the order's area, ahead of the

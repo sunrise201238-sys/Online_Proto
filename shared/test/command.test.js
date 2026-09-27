@@ -450,6 +450,7 @@ test('cover hide: a unit under a move order runs a hide instead of Defense, then
     now = step();
     if (p1.botState === 'defense') sawDefense = true;
     if (p1.botCH && getCommands(m, 'p1').move.reflexHeld) yielded = true;   // the driver yields while the maneuver runs (the flag is consumed by the replan after)
+    assert.notEqual(p1.botHideTier, 'nearest', 'the cover hide never settles for cover from one enemy only');
     if (p1.botHideGoal && !goalSeen) goalSeen = { ...p1.botHideGoal };
     if (hiddenAt == null && p1.botCH && hiddenFromBoth()) hiddenAt = now;
     if (!p1.botCH) { endedAt = now; break; }
