@@ -502,6 +502,34 @@ body.pseudo-fullscreen #app {
   100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
 }
 
+/* Hide stance target (owner 2026-09-26, ported from the BA line 2026-09-27):
+   while an own commandable unit is selected, one round gold shield sits
+   centred just above its info card (below it at the top edge) — tap it to
+   hide. Absolute in the layer like .dio-deny; pointer-events none because
+   the layer owns the pointer (the hit is a distance test in the diorama
+   pointer handlers). `.hot` = the finger is over it; `.on` = the unit
+   already hides. */
+.dio-stance { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 30; }
+.dio-stance-btn {
+  position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 210, 87, 0.7); border-radius: 50%;
+  background: rgba(7, 11, 18, 0.8); color: #ffd257;
+  filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9));
+  transition: transform 0.08s ease, background-color 0.08s ease;
+  animation: dio-stance-in 0.14s ease-out;
+}
+.dio-stance-btn svg { display: block; width: 18px; height: 18px; }
+.dio-stance-btn.on { border-color: #ffd257; box-shadow: 0 0 0 2px rgba(255, 210, 87, 0.35) inset; }
+.dio-stance-btn.hot {
+  background: rgba(255, 210, 87, 0.28); border-color: #ffd257; transform: scale(1.15);
+  box-shadow: 0 0 10px 2px rgba(255, 210, 87, 0.55);
+}
+@keyframes dio-stance-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
 .roster-viewtag { color: #ffd257; font-size: 0.85em; letter-spacing: 0.08em; }
 

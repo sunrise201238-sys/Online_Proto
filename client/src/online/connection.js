@@ -208,6 +208,15 @@ export function createConnection() {
       if (!connected) return;
       socket.emit('order:clear', { slot, what });
     },
+    // Fight / Hide stance (owner 2026-09-26): hide=true parks the unit out
+    // of every enemy's sight (the server also wipes its move/lock orders),
+    // hide=false is plain autonomy. Answered with order:result
+    // { kind: 'stance', ok, hide, reason: null | 'rate' }; the standing
+    // flag itself arrives as commands[slot].hide in the team snapshot.
+    sendOrderStance: (hide, slot) => {
+      if (!connected) return;
+      socket.emit('order:stance', { slot, hide: !!hide });
+    },
     getOrderResult: () => ({ seq: orderResultSeq, data: lastOrderResult }),
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }

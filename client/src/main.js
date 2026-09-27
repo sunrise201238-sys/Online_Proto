@@ -11,6 +11,7 @@ import {
   buildNavGrid,
   findPathOnGrid,
   findFiringPath,
+  findHiddenSpot,
   smoothPath,
   walkSegmentBlocked,
   CMD_TRAVEL_BOOST_FLOOR,
@@ -1104,6 +1105,7 @@ const diorama = {
   cam2: { tx: 0, tz: 0, dist: 220, rot: 0, snapped: false },
   sel: null,             // selected own slot ('player' | 'ally') or null
   drag: null,            // live move-order drag state
+  stance: null,          // open Fight/Hide hold menu {slot, el, btns, hot} (owner 2026-09-26)
   gesture: null,         // active pointer gesture bookkeeping
   pointers: new Map(),   // pointerId -> {x, y} for pinch detection
   pinch: null,           // {startSpan, startDist}
@@ -1163,11 +1165,26 @@ if (typeof window !== 'undefined') {
       layerStackAt: (x, z) => dioramaLayerStackAt(x, z),
       groundPoint: (cx, cy, y) => dioramaGroundPoint(cx, cy, y),
       order: (slot, x, z, y = 0) => {
+        // A hidden unit takes no move order (owner 2026-09-26) — parity
+        // with the shared setMoveOrder, which refuses while cmd.hide stands.
+        if (state[slot]?.cmdHide) return false;
         const path = computeOrderPath(state[slot], x, z, y);
         if (path) issueMoveOrder(slot, x, z, y, path);
         return !!path;
       },
-      clear: () => clearAllCommands()
+      clear: () => clearAllCommands(),
+      sel: () => diorama.sel,   // dev: the current selection (headless checks)
+      // Fight / Hide stance (owner 2026-09-26): offline sets the mech flag
+      // directly; online sends order:stance for the slot (the snapshot echo
+      // mirrors it back onto mech.cmdHide).
+      stance: (slot, hide) => {
+        if (state.online) {
+          if (!onlineCommandable(slot) || !state.online.conn) return false;
+          state.online.conn.sendOrderStance(!!hide, onlineServerIdOf(slot));
+          return true;
+        }
+        return setUnitStance(state[slot], hide);
+      }
     }
   };
 }
@@ -4567,22 +4584,64 @@ const BOT_LOS_EYE_HEIGHT = 1.6;
 // spawn and the laser sight. The bot's FIRE gate tests this line, not the eye
 // line — see botShotCanLand. Mirrored in shared/src/sim/ai.js.
 const BOT_MUZZLE_ABOVE_ROOT = 0.8;
-// COVER RELOAD (2026-08-08, user-designed): units with a MANUAL reload at
-// least MIN_RELOAD_MS long (AA12 / RPK / NEGEV — the heavy drums) spend the
-// famine behind cover: SPRINT to the nearest reachable spot that breaks the
-// LOCKED target's line of sight (single-target by spec) and hold, re-emerging
-// with EXIT_MS left so the mag fills while stepping back into band.
-// Mirrored in shared ai.js tickBot.
-const BOT_COVER_RELOAD_MIN_RELOAD_MS = 3000;
-const BOT_COVER_RELOAD_EXIT_MS = 400;
-// The dash to cover funds at the survival-jump tier (raw jump 48 + sprint
-// floor 8), NOT the 250 travel reserve — a mid-fight bot can still afford it.
-const BOT_COVER_SPRINT_MIN_BOOST = 56;
-// The HOLD is not a statue (user, 2026-08-08): pace a NARROW arc at walk
-// speed behind the cover — direction flips every FLIP_MS, clamped to
-// SWAY_RADIUS around the hold anchor (~±2u ≈ a few degrees on the band ring).
-const BOT_COVER_SWAY_FLIP_MS = 350;
-const BOT_COVER_SWAY_RADIUS = 2.2;
+// RELOAD HIDE (the 2026-08-08 cover reload, re-based on the Hide stance by
+// the owner 2026-09-26): units with a MANUAL reload at least MIN_MS long
+// (the RPK's and NEGEV's 5 s, the AA12's 3 s drum) spend the famine in the Hide stance —
+// entered the frame the reload starts, left the frame it completes. Mirrors
+// shared ai.js.
+const BOT_RELOAD_HIDE_MIN_MS = 3000;
+// HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
+// updateEnemy): a hidden-spot search runs at most every SEARCH_MS per unit
+// (and once per frame across every driven unit), a search that found
+// nothing at all retries after FAIL_RETRY_MS, a route that stops making
+// progress bails after BAIL_MS and retries after BAIL_RETRY_MS, and MAX_POPS
+// bounds the Dijkstra (there is no distance cap — the unit walks as far as
+// it takes). Mirrored in shared ai.js.
+const BOT_HIDE_SEARCH_MS = 500;
+const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep looking for a double-block spot)
+const BOT_HIDE_BAIL_MS = 700;
+const BOT_HIDE_BAIL_RETRY_MS = 700;
+const BOT_HIDE_MAX_POPS = 600;
+// Pacing and slipping while hidden (owner 2026-09-26: no statue) — the
+// shared ai.js constants, mirrored.
+const BOT_HIDE_LEG = 2.5;
+const BOT_HIDE_LEASH = 6;
+const BOT_HIDE_DRIFT_MS = 350;
+const BOT_HIDE_DRIFT_RETRY_MS = 150;
+const BOT_HIDE_PREDICT_S = 0.5;
+const BOT_HIDE_PREDICT_MIN_SPEED = 1;
+const BOT_HIDE_CLOSE_DIST = 26;
+const BOT_HIDE_APPROACH_SPEED = 2;
+const BOT_HIDE_SLIP_GAIN = 6;
+// COVER HIDE (owner 2026-09-26/27): a long reload under a move order is spent
+// in a hide bound to the order — the shared ai.js constant, mirrored (see
+// its note; the hit-triggered variant was retired 2026-09-27).
+const BOT_CH_AREA_R = 14;
+// Frame stamp of the last hidden-spot search — the offline twin of
+// matchState.hideSearchTick: every driven unit of a frame runs with the
+// same `now`, so two hiding units never search in the same frame.
+let botHideSearchFrameAt = null;
+// Null every hide-order scratch field on a mech state (the shared brain
+// inlines the same nine writes): the brain calls it the first tick it sees
+// the order cleared, and dioramaCommandTick on death alongside the command
+// wipe, so a corpse never carries a stale route into anything that reads it.
+function resetBotHideFields(st) {
+  st.botHidePath = null;
+  st.botHidePathIdx = null;
+  st.botHideGoal = null;
+  st.botHideSearchAt = null;
+  st.botHideFailedAt = null;
+  st.botHideHold = null;
+  st.botHideDashArmed = null;
+  st.botHideTier = null;
+  st.botHideMoveAnchor = null;
+  st.botHideSearchStage = null;
+  st.botHideAnchor = null;
+  st.botHideDriftX = null;
+  st.botHideDriftZ = null;
+  st.botHideDriftUntil = null;
+  st.botHideNoCover = null;
+}
 const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
 // glass/walls) reads this many units FARTHER than it really is, so a visible
@@ -5163,161 +5222,404 @@ function updateEnemy(now) {
   const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
-  // --- COVER RELOAD (2026-08-08, user-designed; see the constants note) ---
-  // Movement-only override, decided here so the stall clocks below can be
-  // pinned while it runs. Defense outranks it (the window closes under fire
-  // and while the defense state is live) and the anti-glint step is a
-  // separate reflex layer that still fires. One cover search per reload
-  // cycle; a run that stops progressing bails for the rest of the cycle
-  // instead of inheriting the generic wedge remedy (whose re-path goal is a
-  // SIGHTED cell — it would fight the hide). Mirrored in shared ai.js.
+  // HIDE STANCE flag (owner 2026-09-26): the mech's command flag (set by
+  // setUnitStance / the card hold; online it mirrors the snapshot echo) OR
+  // the RELOAD HIDE — offline twin of the shared tickBot read: a manual
+  // reload of BOT_RELOAD_HIDE_MIN_MS or more enters the stance on the mech
+  // (cmdHide + cmdHideAuto, wiping its move / lock orders — the badge shows
+  // on own slots) the frame the reload starts and leaves it the frame it
+  // completes; a manual stance or a landed order clears cmdHideAuto and
+  // only an auto hide is released at the end (a unit released early stays
+  // out for the rest of that reload). state.enemy is the driven unit inside
+  // runBotAIForMech's alias window.
+  const rMech = state.enemy;
+  const rUnit = rMech.unit ?? {};
+  const reloadHide = rUnit.magCapacity != null && !rUnit.autoReload
+    && (rUnit.reloadMs ?? 0) >= BOT_RELOAD_HIDE_MIN_MS
+    && (eState.reloadingUntil ?? 0) > now;
+  if (reloadHide && !eState.botReloadHide) {
+    eState.botReloadHide = true;
+    if (rMech.cmdMove && !rMech.cmdHide) {
+      // Under a MOVE ORDER (owner 2026-09-26): the reload is spent in a
+      // COVER HIDE bound to the order — the order stays and resumes after;
+      // no stance, no badge (the lifecycle below starts it). A new order
+      // landing mid-reload takes over at once (botReloadCH drops).
+      eState.botReloadCH = true;
+    } else if (!rMech.cmdHide) {
+      rMech.cmdHide = true;
+      rMech.cmdHideAuto = true;
+      rMech.cmdMove = null;
+      rMech.cmdLock = null;
+    }
+  } else if (!reloadHide && eState.botReloadHide) {
+    eState.botReloadHide = false;
+    eState.botReloadCH = false;
+    if (rMech.cmdHide && rMech.cmdHideAuto) {
+      rMech.cmdHide = false;
+      rMech.cmdHideAuto = false;
+    }
+  }
+  const hideOrdered = !!rMech.cmdHide;
+  // COVER HIDE lifecycle (owner 2026-09-26/27 — offline twin of shared
+  // tickBot): a long reload on a unit with a standing move order (the
+  // mech's cmdMove) and no Hide stance; a live Defense keeps its frames
+  // first, and a no-cover verdict holds the trigger off for the retry window.
+  const defenseLive = (eState.botState ?? 'pursue') === 'defense' && now < (eState.botDefenseUntil ?? 0);
+  const chOrder = (!hideOrdered && rMech.cmdMove) ? rMech.cmdMove : null;
+  if (eState.botCH && (!chOrder || defenseLive || chOrder !== eState.botCH.order || !reloadHide)) {
+    // The order ended or was REPLACED (the new order takes over at once and
+    // the rest of the reload is spent on it), Defense owns the frame, or
+    // the reload completed.
+    if (eState.botCH.order !== chOrder && chOrder) eState.botReloadCH = false;
+    eState.botCH = null;
+    resetBotHideFields(eState);
+  }
+  const reloadCH = !!(eState.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
+  if (!eState.botCH && chOrder && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0) && reloadCH) {
+    eState.botCH = {
+      startedAt: now,
+      order: chOrder,
+      reload: true,   // bound to the reload: lasts until it completes
+      within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
+    };
+    resetBotHideFields(eState);
+  }
+  // Which hide runs this frame: the stance (ordered / reload) or the cover hide.
+  const hideMode = hideOrdered ? 'stance' : (eState.botCH ? 'cover' : null);
+
+  // Movement override carried by the hide stance below (the 2026-08-08
+  // cover reload's vehicle, kept: the dispatch and the stall-clock pinning
+  // key on it).
   let coverMove = null;
-  {
-    const cu = state.enemy.unit ?? {};
-    const reloadRemaining = (eState.reloadingUntil || 0) - now;
-    const coverWindow = (cu.reloadMs ?? 0) >= BOT_COVER_RELOAD_MIN_RELOAD_MS
-      && !cu.autoReload
-      && reloadRemaining > BOT_COVER_RELOAD_EXIT_MS
-      && !underFire
-      && (eState.botState ?? 'pursue') !== 'defense';
-    if (!coverWindow) {
-      // Do NOT wash the plan away: the cycle identity is reloadingUntil
-      // itself, so a Defense interruption mid-rush RESUMES the same path
-      // when the window reopens (user, 2026-08-08 — was a key reset that
-      // forced a fresh search per resume). Only the anchors reset, giving
-      // the resumed run a fresh 700 ms bail window.
-      eState.botCoverMoveAnchor = null;
-      eState.botCoverHoldAnchor = null;
-    } else {
-      if (eState.botCoverKey !== eState.reloadingUntil) {
-        eState.botCoverKey = eState.reloadingUntil;
-        eState.botCoverFailed = false;
-        eState.botCoverPath = null;
-        eState.botCoverMoveAnchor = null;
-        eState.botCoverHoldAnchor = null;
+  // --- HIDE STANCE (owner 2026-09-26) ---
+  // The 2026-08-08 cover reload generalised into a stance: ordered from the
+  // card, or entered automatically for a long manual reload (hideOrdered
+  // above). While it stands on this unit:
+  //   hidden at its tier   -> PACE: keep moving at walk speed on short legs
+  //                           that are verified hidden BEFORE they are taken
+  //                           (a BOT_HIDE_LEG look-ahead eye test against
+  //                           every enemy eye plus the walk rule), on a
+  //                           BOT_HIDE_LEASH around the hide anchor, biased
+  //                           away from the nearest enemy (owner 2026-09-26:
+  //                           a statue "looks awful");
+  //   exposure ahead /     -> SLIP: the enemies are watched every tick — an
+  //   enemy closing in        eye that would see the unit BOT_HIDE_PREDICT_S
+  //                           ahead on its live velocity, or a nearest enemy
+  //                           inside BOT_HIDE_CLOSE_DIST closing faster than
+  //                           BOT_HIDE_APPROACH_SPEED, triggers a
+  //                           findHiddenSpot route to a cell hidden from the
+  //                           live AND the predicted eyes (when closing, one
+  //                           at least BOT_HIDE_SLIP_GAIN farther from that
+  //                           enemy than the unit stands now);
+  //   exposed              -> follow / search a findHiddenSpot route to the
+  //                           nearest cell no enemy sees, live and predicted
+  //                           eyes first (tier 'all'), then live only, then
+  //                           a cell the NEAREST enemy cannot see (tier
+  //                           'nearest'); still none -> the plain pursue
+  //                           legs move it while the search retries.
+  // Firing is untouched: the fire block at the bottom still shoots whatever
+  // it can see from where the unit stands — the unit never moves for a
+  // shot. Defense never triggers on a hit (state transition below; hit-stun
+  // physics still applies); the anti-glint dodge, charge locks and beam
+  // channels stay as they are, and the dodge's Defense follow-up owns its
+  // frames like any reflex. coverMove carries the hide override (hide:
+  // true; dash = the latched sprint on a route).
+  // Online budget: per tick <= 2 (position) + 2 (predicted eyes) + 2 (route
+  // goal) + 2 (current leg) LoS tests and one walk-rule segment test; a leg
+  // re-pick every BOT_HIDE_DRIFT_MS costs 8 headings x (walk test + <= 4
+  // LoS); searches keep the BOT_HIDE_SEARCH_MS cadence, run ONE attempt per
+  // tick (the fallback tiers follow on the next ticks) and at most one per
+  // tick per match (botHideSearchFrameAt). Offline twin of the shared
+  // tickBot block (fields eState.botHide*).
+  if (!hideMode) {
+    if (eState.botHideHold != null) {
+      // Stance cleared (or the cover hide ended): null every hide field so
+      // the normal brain resumes from a clean slate.
+      resetBotHideFields(eState);
+    }
+  } else if (!defenseLive) {
+    // (A live Defense here can only be the anti-glint dodge's 520 ms
+    // follow-up sprint — it keeps its frames; the hide resumes after.)
+    const hideEnemies = [];
+    // Enemies come from the TRUE fighter list (the alias window scrambles
+    // getAllFighters — see runBotAIForMech), judged by team like shared.
+    const hideMyTeam = getTeamOf(state.enemy);
+    for (const f of (_botTrueFighters ?? getAllFighters())) {
+      if (f && f !== state.enemy && f.state.hp > 0 && getTeamOf(f) !== hideMyTeam) hideEnemies.push(f);
+    }
+    // Nearest first: eyes[0] is the threat the pacing steers away from.
+    hideEnemies.sort((a, b) =>
+      Math.hypot(a.root.position.x - e.x, a.root.position.z - e.z)
+      - Math.hypot(b.root.position.x - e.x, b.root.position.z - e.z));
+    // Enemy eyes stay LIVE (the existing convention — a jumping human must
+    // still count); the unit's own eye is the grounded latch (myEyeY).
+    const hideEyes = hideEnemies.map((f) => ({
+      x: f.root.position.x, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z
+    }));
+    // Predicted eyes: where each enemy will be BOT_HIDE_PREDICT_S ahead on
+    // its live velocity; a near-still enemy adds none (saves the tests).
+    const hidePredEyes = [];
+    for (let k = 0; k < hideEnemies.length; k += 1) {
+      const f = hideEnemies[k];
+      const vx = f.body?.velocity?.x ?? 0, vz = f.body?.velocity?.z ?? 0;
+      if (Math.hypot(vx, vz) > BOT_HIDE_PREDICT_MIN_SPEED) {
+        hidePredEyes.push({
+          x: f.root.position.x + vx * BOT_HIDE_PREDICT_S, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z + vz * BOT_HIDE_PREDICT_S
+        });
       }
-      const oppEye = { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z };
-      const myEye = { x: e.x, y: myEyeY, z: e.z };
-      const coverHidden = !botHasLineOfSight(oppEye, myEye);
-      if (!coverHidden) eState.botCoverHoldAnchor = null;
-      if (coverHidden) {
-        // Hidden — HOLD, but not as a statue (user): pace a narrow arc at
-        // walk speed, perpendicular to the target line so the cover stays
-        // between, clamped to SWAY_RADIUS around the hold anchor. KEEP the
-        // path — a hidden→visible flicker resumes it instead of burning a
-        // fresh search (adversarial finding); the sway is small enough that
-        // a poke-out self-corrects through the kept path next tick.
-        if (!eState.botCoverHoldAnchor) {
-          eState.botCoverHoldAnchor = { x: e.x, z: e.z };
-          eState.botCoverSwayDir = (Math.random() < 0.5 ? 1 : -1);
-          eState.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
+    }
+    const hideMyEye = { x: e.x, y: myEyeY, z: e.z };
+    // Position test (<= 2 LoS tests): nearest eye first, early exit on the
+    // first eye that sees the unit.
+    let hiddenAll = true;
+    for (let k = 0; k < hideEyes.length; k += 1) {
+      const seen = botHasLineOfSight(hideEyes[k], hideMyEye);
+      if (seen) { hiddenAll = false; break; }
+    }
+    // Only cover from BOTH enemies counts (owner 2026-09-27: the nearest-
+    // enemy-only tier is gone for the stance too — hidden from one enemy
+    // while the other shoots a walking target measured worse than Defense).
+    // Exposed to either with no such spot: the pursue legs and Defense on a
+    // hit, re-searching every BOT_HIDE_FAIL_RETRY_MS until one appears.
+    const hideTier = hiddenAll ? 'all' : null;
+    if (hideTier) eState.botHideNoCover = false;   // standing hidden = cover exists
+    // Threat read: the nearest enemy, the unit's bearing away from it and
+    // whether it is closing in.
+    const threat = hideEnemies[0] ?? null;
+    let threatDist = Infinity, awayX = 0, awayZ = 0, closing = false;
+    if (threat) {
+      const dx = e.x - threat.root.position.x, dz = e.z - threat.root.position.z;
+      threatDist = Math.hypot(dx, dz) || 1;
+      awayX = dx / threatDist;
+      awayZ = dz / threatDist;
+      const closingSpeed = (threat.body?.velocity?.x ?? 0) * awayX + (threat.body?.velocity?.z ?? 0) * awayZ;
+      closing = threatDist < BOT_HIDE_CLOSE_DIST && closingSpeed > BOT_HIDE_APPROACH_SPEED;
+    }
+    // Exposure ahead (<= 2 LoS tests, only while hidden from all): would a
+    // predicted eye see the unit where it stands?
+    let exposedSoon = false;
+    if (hiddenAll) {
+      for (let k = 0; k < hidePredEyes.length; k += 1) {
+        if (botHasLineOfSight(hidePredEyes[k], hideMyEye)) { exposedSoon = true; break; }
+      }
+    }
+    // Is a route goal still hidden at its tier (live eyes)? (<= 2 LoS tests)
+    const hideGoalStillHidden = (goal, tier) => {
+      const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: goal.z };
+      const count = tier === 'nearest' ? 1 : hideEyes.length;
+      for (let k = 0; k < count; k += 1) {
+        if (botHasLineOfSight(hideEyes[k], gEye)) return false;
+      }
+      return true;
+    };
+    const hideDropPath = () => {
+      eState.botHidePath = null;
+      eState.botHidePathIdx = null;
+      eState.botHideGoal = null;
+      eState.botHideMoveAnchor = null;
+    };
+    // 1. Route bookkeeping: arrived -> drop it and re-anchor the pacing
+    //    there; goal exposed by a moving enemy -> drop it (a fresh search
+    //    follows on the cadence).
+    if (eState.botHidePath) {
+      const goal = eState.botHideGoal;
+      if (Math.hypot(goal.x - e.x, goal.z - e.z) < 2) {
+        hideDropPath();
+        eState.botHideAnchor = null;
+      } else if (!hideGoalStillHidden(goal, eState.botHideTier)) {
+        hideDropPath();
+      }
+    }
+    // 2. Searches. The attempt list depends on the situation; exactly ONE
+    //    attempt runs per tick (the next tier follows next tick) so a
+    //    search never costs more than one Dijkstra in a tick.
+    const hideAttempts = [];
+    if (!hiddenAll) {
+      if (hidePredEyes.length) hideAttempts.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null });
+      hideAttempts.push({ eyes: hideEyes, tier: 'all', minDistFrom: null });
+      // The 'nearest' tier only when the unit is NOT already hidden from
+      // the nearest enemy — from a nearest-tier hide that search would just
+      // re-issue the next nearest-hidden cell every cadence and the unit
+      // would shuffle between neighbours instead of pacing its cover.
+    }
+    if (!hiddenAll && hideMode === 'cover' && eState.botCH.within) {
+      // COVER HIDE first tier: cover inside the order's area, ahead of the
+      // unrestricted tiers.
+      const w = eState.botCH.within;
+      const inArea = [];
+      if (hidePredEyes.length) inArea.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null, within: w });
+      inArea.push({ eyes: hideEyes, tier: 'all', minDistFrom: null, within: w });
+      hideAttempts.unshift(...inArea);
+    }
+    if (hiddenAll && (exposedSoon || closing)) {
+      const eyes = hideEyes.concat(hidePredEyes);
+      hideAttempts.push({
+        eyes, tier: 'all',
+        minDistFrom: closing ? { x: threat.root.position.x, z: threat.root.position.z, d: threatDist + BOT_HIDE_SLIP_GAIN } : null
+      });
+      if (closing && exposedSoon) hideAttempts.push({ eyes, tier: 'all', minDistFrom: null });
+    }
+    if (hideAttempts.length
+        && !eState.botHidePath
+        && now >= (eState.botHideSearchAt ?? 0)
+        && botHideSearchFrameAt !== now) {
+      botHideSearchFrameAt = now;
+      if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+      const stage = Math.min(eState.botHideSearchStage ?? 0, hideAttempts.length - 1);
+      const attempt = hideAttempts[stage];
+      const found = findHiddenSpot(
+        offlineNavGrid, e.x, e.z, myFloorY, attempt.eyes, arenaObstacles,
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null }
+      );
+      if (found) {
+        eState.botHideNoCover = false;
+        eState.botHidePath = found.path;
+        eState.botHidePathIdx = 0;
+        eState.botHideGoal = found.goal;
+        eState.botHideTier = attempt.tier;
+        eState.botHideMoveAnchor = null;
+        eState.botHideSearchStage = 0;
+        eState.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
+      } else if (stage < hideAttempts.length - 1) {
+        eState.botHideSearchStage = stage + 1;   // next tier next tick
+        eState.botHideSearchAt = now;
+      } else {
+        eState.botHideSearchStage = 0;
+        if (hideTier) {
+          // Hidden at some tier: keep probing on the cadence (the enemies
+          // move — the scan stays dynamic).
+          eState.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
+        } else {
+          // Exposed and NOTHING anywhere within the budget: no cover. Until a
+          // later search finds one, a fresh hit runs the plain Defense escape
+          // (owner 2026-09-26; the transition below reads the flag).
+          eState.botHideNoCover = true;
+          eState.botHideFailedAt = now;
+          eState.botHideSearchAt = now + BOT_HIDE_FAIL_RETRY_MS;
         }
-        if (now >= (eState.botCoverSwayFlipAt ?? 0)) {
-          eState.botCoverSwayDir = -(eState.botCoverSwayDir ?? 1);
-          eState.botCoverSwayFlipAt = now + BOT_COVER_SWAY_FLIP_MS;
-        }
-        const tdx = p.x - e.x, tdz = p.z - e.z;
-        const tdl = Math.hypot(tdx, tdz) || 1;
-        let sx = (-tdz / tdl) * eState.botCoverSwayDir;
-        let sz = (tdx / tdl) * eState.botCoverSwayDir;
-        const adx = eState.botCoverHoldAnchor.x - e.x;
-        const adz = eState.botCoverHoldAnchor.z - e.z;
-        const adl = Math.hypot(adx, adz);
-        if (adl > BOT_COVER_SWAY_RADIUS) {
-          sx = sx * 0.3 + adx / adl;
-          sz = sz * 0.3 + adz / adl;
-        }
-        const sl = Math.hypot(sx, sz) || 1;
-        coverMove = { hold: true, mx: sx / sl, mz: sz / sl };
-        eState.botCoverMoveAnchor = null;
-      } else if (!eState.botCoverFailed) {
-        if (!eState.botCoverPath) {
-          // Ring candidates around the bot, hidden-from-target first, then
-          // A* the best few for real reachability. Jump-links are excluded —
-          // no vaulting mid-reload — and candidates are scored by walk
-          // distance plus a penalty for leaving the band, so the bot prefers
-          // cover it can fight from the moment the mag fills.
-          const cands = [];
-          for (const cr of [5, 8, 11, 14]) {
-            for (let ca = 0; ca < 12; ca += 1) {
-              const th = (ca + (cr % 2) * 0.5) * (Math.PI / 6);
-              const cx = e.x + Math.cos(th) * cr;
-              const cz = e.z + Math.sin(th) * cr;
-              const cf = groundHeightAt(cx, cz, e.y - GROUND_BASE_Y);
-              const cEye = { x: cx, y: cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: cz };
-              if (botHasLineOfSight(oppEye, cEye)) continue;
-              const cDist = Math.hypot(p.x - cx, p.z - cz);
-              const bandPen = Math.max(0, lowerRange - cDist, cDist - upperRange) * 0.5;
-              cands.push({ cx, cz, cf, score: Math.hypot(cx - e.x, cz - e.z) + bandPen });
-            }
+      }
+    }
+    // 3. Legs.
+    if (eState.botHidePath) {
+      // Route follow — the cover-reload follower's recipe: advance within
+      // 2 u, avoidance blend, 700 ms no-progress bail.
+      const hp = eState.botHidePath;
+      let wp = hp[eState.botHidePathIdx];
+      while (eState.botHidePathIdx < hp.length - 1
+          && Math.hypot(wp.x - e.x, wp.z - e.z) < 2) {
+        eState.botHidePathIdx += 1;
+        wp = hp[eState.botHidePathIdx];
+      }
+      let tx = wp.x - e.x, tz = wp.z - e.z;
+      const wl = Math.hypot(tx, tz) || 1;
+      tx = tx / wl + avoid.rx * 0.6;
+      tz = tz / wl + avoid.rz * 0.6;
+      const tl = Math.hypot(tx, tz) || 1;
+      // Latched sprint (owner 2026-09-26): arm above CMD_TRAVEL_BOOST_FLOOR
+      // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
+      // The dispatch funds it at the 8 floor (its own tier below).
+      if (eState.botHideDashArmed) {
+        if (eState.boost <= BOT_SPRINT_MIN_BOOST) eState.botHideDashArmed = false;
+      } else if (eState.boost > CMD_TRAVEL_BOOST_FLOOR) {
+        eState.botHideDashArmed = true;
+      }
+      eState.botHideHold = false;
+      // The COVER HIDE sprints like Defense: no arming, the 8 floor only.
+      coverMove = { hold: false, hide: true, dash: hideMode === 'cover' ? true : !!eState.botHideDashArmed, mx: tx / tl, mz: tz / tl };
+      if (!eState.botHideMoveAnchor
+          || Math.hypot(e.x - eState.botHideMoveAnchor.x, e.z - eState.botHideMoveAnchor.z) > 1) {
+        eState.botHideMoveAnchor = { x: e.x, z: e.z, at: now };
+      } else if (now - eState.botHideMoveAnchor.at > BOT_HIDE_BAIL_MS) {
+        // No progress: drop the route, retry the search shortly; until then
+        // the plain legs below move the unit.
+        hideDropPath();
+        eState.botHideFailedAt = now;
+        eState.botHideSearchAt = now + BOT_HIDE_BAIL_RETRY_MS;
+        coverMove = null;
+      }
+    } else if (hideTier) {
+      // PACE the cover. A leg is a BOT_HIDE_LEG step that must (a) stay on
+      // the leash, (b) be walkable and (c) keep the unit's eye hidden from
+      // every eye of its tier — the predicted eyes too when possible (pass
+      // 0), live eyes only as the fallback (pass 1). The current leg is
+      // re-checked against the live eyes every tick and re-picked at
+      // BOT_HIDE_DRIFT_MS: 8 headings from a random phase, scored away from
+      // the nearest enemy with a little continuity and noise so the pacing
+      // reads as a person, not a metronome. No hidden leg at all (a tight
+      // nook) -> stand for BOT_HIDE_DRIFT_RETRY_MS, then try again.
+      const paceEyes = hideTier === 'all' ? hideEyes : hideEyes.slice(0, 1);
+      const pacePred = hideTier === 'all' ? hidePredEyes : [];
+      if (!eState.botHideAnchor) eState.botHideAnchor = { x: e.x, z: e.z };
+      const anchor = eState.botHideAnchor;
+      const legOk = (hx, hz, strict) => {
+        const lx = e.x + hx * BOT_HIDE_LEG, lz = e.z + hz * BOT_HIDE_LEG;
+        if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
+        if (walkSegmentBlocked(e.x, e.z, lx, lz, e.y, arenaObstacles)) return false;
+        const eye = { x: lx, y: myEyeY, z: lz };
+        for (let k = 0; k < paceEyes.length; k += 1) if (botHasLineOfSight(paceEyes[k], eye)) return false;
+        if (strict) for (let k = 0; k < pacePred.length; k += 1) if (botHasLineOfSight(pacePred[k], eye)) return false;
+        return true;
+      };
+      let hx = eState.botHideDriftX ?? 0, hz = eState.botHideDriftZ ?? 0;
+      const moving = hx !== 0 || hz !== 0;
+      if (!moving || now >= (eState.botHideDriftUntil ?? 0) || !legOk(hx, hz, false)) {
+        let best = null, bestScore = -Infinity;
+        const phase = Math.random() * Math.PI * 2;
+        for (let pass = 0; pass < 2 && !best; pass += 1) {
+          for (let k = 0; k < 8; k += 1) {
+            const a = phase + k * Math.PI / 4;
+            const cx = Math.cos(a), cz = Math.sin(a);
+            if (!legOk(cx, cz, pass === 0)) continue;
+            const score = (cx * awayX + cz * awayZ) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
+            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
           }
-          cands.sort((a2, b2) => a2.score - b2.score);
-          if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
-          let best = null;
-          for (let ci = 0; ci < Math.min(10, cands.length) && !best; ci += 1) {
-            const c = cands[ci];
-            // Obstacle-embedded candidates pass the hidden filter trivially
-            // (a segment INTO the box reads as blocked) — skip them before
-            // they eat the A* budget (adversarial finding, 2026-08-08).
-            const cEyeY = c.cf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT;
-            let embedded = false;
-            for (const o of arenaObstacles) {
-              if (c.cx >= o.minX && c.cx <= o.maxX && c.cz >= o.minZ && c.cz <= o.maxZ
-                  && cEyeY >= o.minY && cEyeY <= o.maxY) { embedded = true; break; }
-            }
-            if (embedded) continue;
-            const cPath = findPathOnGrid(offlineNavGrid, e.x, e.z, c.cx, c.cz, myFloorY, c.cf, arenaObstacles);
-            if (!cPath || cPath.length < 2) continue;
-            let jumpy = false;
-            for (const wp of cPath) {
-              if ((wp.y ?? 0) - myFloorY > 1.7) { jumpy = true; break; }
-            }
-            if (jumpy) continue;
-            // GOAL-VERIFY: the A* goal-snap can relocate an off-grid or
-            // mis-floored candidate onto a cell the target SEES — walking
-            // there wastes the cycle's one search (adversarial finding,
-            // 2026-08-08). Commit only if the final waypoint is hidden too.
-            const gWp = cPath[cPath.length - 1];
-            const gf = gWp.y != null ? gWp.y : c.cf;
-            if (botHasLineOfSight(
-              oppEye,
-              { x: gWp.x, y: gf + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: gWp.z }
-            )) continue;
-            best = { path: cPath, idx: 0 };
-          }
-          if (best) eState.botCoverPath = best;
-          else eState.botCoverFailed = true;
         }
-        const cNav = eState.botCoverPath;
-        if (cNav) {
-          let wp = cNav.path[cNav.idx];
-          while (cNav.idx < cNav.path.length - 1
-              && Math.hypot(wp.x - e.x, wp.z - e.z) < 2) {
-            cNav.idx += 1;
-            wp = cNav.path[cNav.idx];
-          }
-          let tx = wp.x - e.x, tz = wp.z - e.z;
-          const wl = Math.hypot(tx, tz) || 1;
-          tx = tx / wl + avoid.rx * 0.6;
-          tz = tz / wl + avoid.rz * 0.6;
-          const tl = Math.hypot(tx, tz) || 1;
-          coverMove = { hold: false, mx: tx / tl, mz: tz / tl };
-          if (!eState.botCoverMoveAnchor
-              || Math.hypot(e.x - eState.botCoverMoveAnchor.x, e.z - eState.botCoverMoveAnchor.z) > 1) {
-            eState.botCoverMoveAnchor = { x: e.x, z: e.z, at: now };
-          } else if (now - eState.botCoverMoveAnchor.at > 700) {
-            eState.botCoverFailed = true;
-            eState.botCoverPath = null;
-            coverMove = null;
-          }
+        if (best) {
+          hx = best.x; hz = best.z;
+          eState.botHideDriftUntil = now + BOT_HIDE_DRIFT_MS;
+        } else {
+          hx = 0; hz = 0;
+          eState.botHideDriftUntil = now + BOT_HIDE_DRIFT_RETRY_MS;
         }
+        eState.botHideDriftX = hx;
+        eState.botHideDriftZ = hz;
+      }
+      eState.botHideHold = true;
+      eState.botHideTier = hideTier;
+      if (hx === 0 && hz === 0) {
+        eState.momentumVX = 0;
+        eState.momentumVZ = 0;
+        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+      } else {
+        coverMove = { hold: false, hide: true, dash: false, mx: hx, mz: hz };
+      }
+    } else {
+      // Exposed with nothing to walk (search not due / nothing found): the
+      // plain pursue legs below keep the unit moving while the search
+      // retries — a statue in the open is the worst of both.
+      eState.botHideHold = false;
+      eState.botHideTier = null;
+      eState.botHideAnchor = null;
+    }
+    if (hideMode === 'cover') {
+      // COVER HIDE end: no cover anywhere -> give the reload up (the order's
+      // legs resume; a fresh hit then runs Defense as usual) and hold the
+      // trigger off for the retry window. Otherwise the hide ends with its
+      // reload (lifecycle above).
+      if (eState.botHideNoCover) {
+        eState.botCH = null;
+        eState.botCHNoCoverUntil = now + BOT_HIDE_FAIL_RETRY_MS;
+        resetBotHideFields(eState);
+        eState.botHideNoCover = true;   // keeps this tick's transition on Defense
+        coverMove = null;
       }
     }
   }
   if (coverMove) {
-    // Pin the stall clocks: a deliberate hide must not read as wedged /
-    // stalled / sightless — those detectors' remedies all route toward
-    // SIGHTED cells and would fight the cover intent on exit.
+    // Pin the stall clocks: a deliberate hide (cover reload OR the hide
+    // order) must not read as wedged / stalled / sightless — those
+    // detectors' remedies all route toward SIGHTED cells and would fight
+    // the cover intent on exit.
     eState.botLastProgressAt = now;
     eState.botLastLoSAt = now;
     eState.botStuckCheckX = e.x;
@@ -5484,7 +5786,16 @@ function updateEnemy(now) {
   const approachBlockedLong = sightedBlocked
     && now - eState.botApproachBlockedSince >= 250;
 
-  if (underFire || inDefenseGrace) {
+  // HIDE (stance or cover hide, owner 2026-09-26): parked on 'pursue' — a
+  // fresh hit never enters Defense and no Maze/Engage transition runs while
+  // the hide block owns the legs. Two exceptions: a Defense already live
+  // (the anti-glint dodge's follow-up) runs its grace out first, and when NO
+  // cover exists anywhere (botHideNoCover) a fresh hit runs the plain
+  // Defense escape until a later search finds cover. Shared parity.
+  const hideParks = hideMode != null && !(eState.botHideNoCover && underFire);
+  if (hideParks && !inDefenseGrace) {
+    nextState = 'pursue';
+  } else if (underFire || inDefenseGrace) {
     nextState = 'defense';
   } else if (stuckTriggered || noProgressTime > 1500 || noLoSTime > 2000
       || (!playerHasLoS && approachBlocked)
@@ -5643,7 +5954,9 @@ function updateEnemy(now) {
 
   // Extend Defense duration while fire continues (keeps the bot evading until
   // the threat actually lets up, rather than committing exactly 350 ms).
-  if (eState.botState === 'defense' && underFire) {
+  // (Hide order: a hit never extends the glint dodge's Defense follow-up —
+  // sustained fire must not keep the unit sprinting out of its hide.)
+  if (eState.botState === 'defense' && underFire && !hideParks) {
     // Hit during stuck-Defense → snap back to regular Defense: refresh the
     // strafe direction and clear cover/peek so it behaves as if this hit
     // had triggered Defense fresh.
@@ -5712,15 +6025,16 @@ function updateEnemy(now) {
   const botS = eState.botState ?? 'pursue';
 
   if (coverMove) {
-    // COVER RELOAD owns movement for the tick — the state branches below
+    // The HIDE stance owns movement for the tick — the state branches below
     // (including their jump commands) don't run, so a maze path can't vault
-    // the bot mid-hide. Never active during Defense (window check above).
-    // SPRINT to cover (2026-08-08 user tune, was walk — reserve-gated by the
-    // dispatch as usual); a HOLD stays wantSprint=false so standing behind
-    // the wall never reads as 'dash' and burns boost at zero speed.
+    // the bot mid-hide. Never active during a live Defense (the hide block
+    // yields those frames).
+    // HIDE ORDER (hide: true): pacing legs and routes walk (routes sprint
+    // only while the 50/8 latch is armed — dash); a hold (no hidden leg at
+    // all) is mx = mz = 0 and skips the anti-freeze nudge below.
     mx = coverMove.mx;
     mz = coverMove.mz;
-    wantSprint = !coverMove.hold;
+    wantSprint = coverMove.hide ? !!coverMove.dash : !coverMove.hold;
   } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
@@ -6190,12 +6504,11 @@ function updateEnemy(now) {
   const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
   // Sprint funding tiers: Defense (escaping live fire) may spend down to the
-  // hard floor; the COVER-RELOAD dash funds at the survival-jump tier (56,
-  // 2026-08-08 user tune — hiding a reload is a survival move); every other
-  // state stops at the strategic reserve. A cover HOLD never sprints, so it
-  // takes no tier at all.
+  // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
+  // funded down to the hard floor too — the latch itself (arm > 50, drop
+  // <= 8) paces it; every other state stops at the strategic reserve.
   const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
-    : (coverMove && !coverMove.hold) ? BOT_COVER_SPRINT_MIN_BOOST
+    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
     : BOT_BOOST_RESERVE;
   const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
@@ -8807,6 +9120,9 @@ function syncOnlineCommands(snap, onl) {
       phase: c.move.phase, anchorUntil: c.move.anchorUntil, orbitSign: 1
     } : null;
     mech.cmdLock = c?.lockTargetId ? (byId[c.lockTargetId] ?? null) : null;
+    // Fight / Hide stance flag (owner 2026-09-26): the shield badge and the
+    // order gates read mech.cmdHide exactly like the offline layer.
+    mech.cmdHide = !!c?.hide;
   }
 }
 
@@ -8921,14 +9237,26 @@ function disposeOnlineCommandShare(onl) {
 // is not available" note at the tap point and KEEPS the selection glow; an
 // accepted one drops the glow (one-shot, offline parity). Rate-limited
 // sends keep the glow silently — the player just re-taps.
+// diorama.pendingOrder = { kind, px, py, ring } remembers where the finger
+// let go for the order in flight; its point only serves a result of the
+// SAME kind (the server answers in order, but an order it drops silently —
+// a non-commandable slot — must not hand its point to the next reply).
 function processOrderResults(onl) {
   const res = onl.conn?.getOrderResult?.();
   if (!res || res.seq === onl.consumedOrderSeq) return;
   onl.consumedOrderSeq = res.seq;
   const d = res.data;
-  if (!d || d.kind !== 'move') return;
-  const pending = diorama.pendingOrder;
+  if (!d || (d.kind !== 'move' && d.kind !== 'lock' && d.kind !== 'stance')) return;
+  const pending = diorama.pendingOrder?.kind === d.kind ? diorama.pendingOrder : null;
   diorama.pendingOrder = null;
+  if (d.kind === 'stance') {
+    // Fight / Hide (owner 2026-09-26): the ack drops the selection glow like
+    // a move ack; a rate denial says so at the icon the finger released on.
+    if (d.ok) diorama.sel = null;
+    else if (d.reason === 'rate' && pending) dioramaDenyAt(pending.px, pending.py, 'Too fast — try again');
+    return;
+  }
+  if (d.kind !== 'move') return;
   if (d.ok) {
     // One-shot glow drop — for selection-issued orders only. A ring drag
     // sends with no selection, so its ack must not clear a selection the
@@ -9893,6 +10221,7 @@ function showGuidePopup() {
             <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 20 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
+            <li>Select your unit (tap its marker or card) and a shield appears above its card — tap the shield = <strong>Hide</strong>: the unit slips out of every enemy's sight, keeps pacing its cover as they move and only fires back from there. Double-tap the unit, or give it any move / lock order, to release it.</li>
             <li>With nothing selected: drag the area ring to move that order (the 20 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
             <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
           </ul>
@@ -11200,7 +11529,7 @@ function commandTargetOf(m) {
 function botReflexActive(m, now) {
   const st = m.state;
   return st.botState === 'defense'
-    || !!st.botCoverPath
+    || !!st.botCH                          // COVER HIDE (owner 2026-09-26): the hit reflex of an ordered unit
     || st.action === 'step'
     || now < (st.hitStunUntil ?? 0)
     // Sniper charge + sweep channel + a scheduled anti-glint dodge (owner
@@ -11217,6 +11546,25 @@ function clearUnitCommands(m) {
   if (!m) return;
   m.cmdMove = null;
   m.cmdLock = null;
+  m.cmdHide = false;   // the double-tap wipe also releases a Hide (owner 2026-09-26)
+  m.cmdHideAuto = false;
+}
+
+// Hide stance (owner 2026-09-26). Hide = "sight blocked first, fire only
+// when a line exists, never peek": the bot brain keeps the unit out of every
+// enemy's eye line, pacing its cover. Taking cover wipes both standing
+// orders; any move or lock order that lands releases the stance again (so
+// does the double-tap clear); hide=false is plain autonomy. Offline twin of the shared setStance(); online the flag
+// is mirrored from the snapshot echo instead (syncOnlineCommands).
+function setUnitStance(m, hide) {
+  if (!m || m.state.hp <= 0) return false;
+  m.cmdHide = !!hide;
+  m.cmdHideAuto = false;   // a manual stance, either way, is never released by a reload ending
+  if (m.cmdHide) {
+    m.cmdMove = null;
+    m.cmdLock = null;
+  }
+  return true;
 }
 
 function clearAllCommands() {
@@ -11225,12 +11573,18 @@ function clearAllCommands() {
   diorama.drag = null;
 }
 
-// Per-frame housekeeping: drop locks on death, selection on death.
+// Per-frame housekeeping: drop locks on death, selection on death. Death
+// also nulls the hide-order scratch (owner 2026-09-26): the brain never
+// runs for a corpse, so it could not do its own clear-on-Fight there.
 function dioramaCommandTick() {
   for (const slot of DIO_OWN_SLOTS) {
     const m = state[slot];
     if (!m) continue;
-    if (m.state.hp <= 0) { clearUnitCommands(m); continue; }
+    if (m.state.hp <= 0) {
+      clearUnitCommands(m);
+      if (m.state.botHideHold != null) resetBotHideFields(m.state);
+      continue;
+    }
     if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;
   }
   if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
@@ -11306,6 +11660,8 @@ function computeOrderPath(m, tx, tz, targetFloorY) {
 function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
   const m = state[slot];
   if (!m || m.state.hp <= 0) return;
+  m.cmdHide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
+  m.cmdHideAuto = false;
   m.cmdMove = {
     x: tx, z: tz, y: targetFloorY,
     path, idx: 0,
@@ -11765,6 +12121,7 @@ function hideDioramaLayer() {
   diorama.dragEls = null;
   diorama.gesture = null;
   diorama.drag = null;
+  diorama.stance = null;   // the menu DOM left with the layer
   diorama.pinch = null;
   diorama.pointers.clear();
 }
@@ -11840,7 +12197,7 @@ function ensureDioramaSlotEls(slot) {
     statusEl: card.querySelector('.dio-status'),
     barEl: card.querySelector('.dio-bar i'),
     boostEl: card.querySelector('.dio-boost i'),
-    iconState: null,     // 'order' | 'auto' | null — caches the icon markup
+    iconState: null,     // 'order' | 'lock' | 'both' | 'hide' | null — caches the icon markup
     box: null,        // last screen-space box {x, y, s} for tap hit-testing
     cardY: null       // smoothed card anchor
   };
@@ -11870,6 +12227,10 @@ function ensureDioramaSlotEls(slot) {
 // survives); DRAG a ring = re-issue the order at the release point — any
 // drag counts (even back to the start) and restarts the 20 s window; a
 // plain tap on the ring does nothing (that's the double-tap's first beat).
+// STANCE (owner 2026-09-26): selecting an own unit (a tap on its marker or
+// card) shows the shield above its card at once; a tap ON the shield =
+// Hide. A hidden unit is released by the double-tap clear or by any move /
+// lock order.
 
 const DIO_TAP_SLOP = 9;
 const DIO_DOUBLE_MS = 320;
@@ -11877,8 +12238,17 @@ const DIO_RING_BAND = 2;        // ring-grab margin floor beyond the line (world
 const DIO_RING_GRAB_PX = 20;    // screen-px forgiveness converted per-tap to world u
 const DIO_LONGPRESS_MS = 450;
 const DIO_ROT_PER_PX = 0.006;   // right-drag rad/px ("grab and throw")
+// Hide stance pop-up (owner 2026-09-26): the shield target sits above the
+// selected own unit's card for as long as the selection stands (no hold —
+// owner, same day); a tap on it hides the unit.
+const DIO_STANCE_LIFT = 25;     // icon centre above the card's top edge (17 radius + 8 gap, px)
+const DIO_STANCE_HOT_R = 24;    // release-pick radius around an icon centre (px)
+const DIO_STANCE_EDGE = 4;      // viewport edge clearance before an icon flips inward
+const DIO_STANCE_BTN_R = 17;    // half of the 34 px round target
 
 function dioramaHitTest(x, y) {
+  // The shield target (owner 2026-09-26) wins over everything under it.
+  if (diorama.stance && dioStanceIconAt(x, y)) return { kind: 'stance', slot: diorama.stance.slot, via: 'stance' };
   const pad = 8;
   const groups = [
     { kind: 'own', slots: DIO_OWN_SLOTS },
@@ -11890,12 +12260,13 @@ function dioramaHitTest(x, y) {
       const els = diorama.els.get(slot);
       if (!m || m.state.hp <= 0 || !els) continue;
       const b = els.box;
+      // `via` tells the stance menu which thing was pressed (its anchor).
       if (b && x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad) {
-        return { kind: g.kind, slot };
+        return { kind: g.kind, slot, via: 'box' };
       }
       if (els.card.style.display !== 'none') {
         const r = els.card.getBoundingClientRect();
-        if (x >= r.x && x <= r.right && y >= r.y && y <= r.bottom) return { kind: g.kind, slot };
+        if (x >= r.x && x <= r.right && y >= r.y && y <= r.bottom) return { kind: g.kind, slot, via: 'card' };
       }
     }
   }
@@ -11921,7 +12292,7 @@ function dioramaRingHitAt(x, y) {
   for (const slot of DIO_OWN_SLOTS) {
     const m = state[slot];
     const mv = m?.cmdMove;
-    if (!m || m.state.hp <= 0 || !mv) continue;
+    if (!m || m.state.hp <= 0 || !mv || m.cmdHide) continue;   // a hidden unit holds no ring
     if (state.online && !onlineCommandable(slot)) continue;
     const pt = dioramaGroundPoint(x, y, mv.y);
     if (!pt) continue;
@@ -12006,6 +12377,7 @@ function onDioPointerDown(e) {
     };
     diorama.gesture = null;
     diorama.drag = null;
+    dioStanceHot(false);   // a second finger drops a shield press (the target stays with the selection)
     return;
   }
   if (diorama.pointers.size > 2) return;
@@ -12013,11 +12385,14 @@ function onDioPointerDown(e) {
   const hit = dioramaHitTest(e.clientX, e.clientY);
   const grab = dioramaGroundPoint(e.clientX, e.clientY, 0);
   diorama.gesture = {
-    id: e.pointerId, kind: hit.kind, slot: hit.slot ?? null,
+    id: e.pointerId, kind: hit.kind, slot: hit.slot ?? null, via: hit.via ?? null,
     x0: e.clientX, y0: e.clientY, moved: false, tapPreview: false,
     grabX: grab?.x ?? 0, grabZ: grab?.z ?? 0,
     stillX: e.clientX, stillY: e.clientY, stillAt: performance.now()
   };
+  // A press on the shield target (owner 2026-09-26): lights it; the tap
+  // applies on release (onDioPointerUp).
+  if (hit.kind === 'stance') dioStanceHot(true);
   // Destination-ring grab (owner 2026-08-27): only with NOTHING selected —
   // while a unit is selected a ground press stays the tap-order preview, so
   // ordering a unit into (or at the edge of) an existing area never changes.
@@ -12077,6 +12452,9 @@ function onDioPointerMove(e) {
     diorama.cam2.rot = g.rot0 + (e.clientX - g.x0) * DIO_ROT_PER_PX;
     return;
   }
+  // A shield press (owner 2026-09-26) never becomes a drag or a pan: it
+  // just tracks whether the finger is still on the target.
+  if (g.kind === 'stance') { dioStanceHot(dioStanceIconAt(e.clientX, e.clientY) != null); return; }
   if (!g.moved && Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > DIO_TAP_SLOP) {
     g.moved = true;
     if (g.tapPreview) {
@@ -12123,8 +12501,20 @@ function onDioPointerUp(e) {
   const g = diorama.gesture;
   if (!g || g.id !== e.pointerId) return;
   diorama.gesture = null;
-  if (!dioramaActive()) { diorama.drag = null; return; }
+  if (!dioramaActive()) { diorama.drag = null; closeStanceMenu(); return; }
   if (g.kind === 'rotate') return;
+  if (g.kind === 'stance') {
+    // Shield tap (owner 2026-09-26): applies when the finger lets go ON the
+    // target; anywhere else cancels. Neither outcome is a unit tap — no
+    // select / deselect, and the double-tap tracker resets.
+    const pick = dioStanceIconAt(e.clientX, e.clientY);
+    dioStanceHot(false);
+    diorama.drag = null;
+    diorama.lastTapSlot = null;
+    diorama.lastTapAt = 0;
+    if (pick) applyStanceOrder(g.slot, true, e.clientX, e.clientY);
+    return;
+  }
   if (g.moved) {
     const drag = diorama.drag;
     if ((g.kind === 'own' || g.kind === 'ring') && drag && !drag.tapMode && drag.valid && drag.path) {
@@ -12133,7 +12523,7 @@ function onDioPointerUp(e) {
         // one-shot sel drop (it could wipe a selection made during the
         // round trip), and a 'rate' denial gets its own red note — a ring
         // release has no lingering glow to signal "didn't land".
-        diorama.pendingOrder = { px: e.clientX, py: e.clientY, ring: g.kind === 'ring' };
+        diorama.pendingOrder = { kind: 'move', px: e.clientX, py: e.clientY, ring: g.kind === 'ring' };
         state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
       } else {
         issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
@@ -12196,7 +12586,9 @@ function onDioPointerUp(e) {
         // Server-side toggle semantics; the echo drives the triangles.
         const sm = state.online.slotMap;
         const targetId = g.slot === 'enemy' ? sm?.enemyId : sm?.enemy2Id;
-        if (targetId) state.online.conn?.sendOrderLock(targetId, onlineServerIdOf(diorama.sel));
+        if (targetId) {
+          state.online.conn?.sendOrderLock(targetId, onlineServerIdOf(diorama.sel));
+        }
         diorama.sel = null;   // one-shot
         diorama.lastTapAt = 0;
         return;
@@ -12205,7 +12597,11 @@ function onDioPointerUp(e) {
       cmd.cmdLock = (cmd.cmdLock === foe) ? null : foe;
       // Lock order decides who wears the X vs + crosshair when both
       // commanders pin the same enemy (2.1d).
-      if (cmd.cmdLock) cmd.cmdLockAt = performance.now();
+      if (cmd.cmdLock) {
+        cmd.cmdLockAt = performance.now();
+        cmd.cmdHide = false;   // a landed lock releases the hide stance (owner 2026-09-26)
+        cmd.cmdHideAuto = false;
+      }
       diorama.sel = null;   // one-shot: the glow drops once the command lands
     } else if (!diorama.sel && foe) {
       // Unselected tap on an enemy marker/card (owner 2026-08-27): release
@@ -12234,7 +12630,7 @@ function onDioPointerUp(e) {
         if (state.online) {
           // Glow stays until the server acks (processOrderResults): ok
           // drops it (one-shot), a deny shows the red note and keeps it.
-          diorama.pendingOrder = { px: e.clientX, py: e.clientY };
+          diorama.pendingOrder = { kind: 'move', px: e.clientX, py: e.clientY };
           state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
         } else {
           issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
@@ -12255,6 +12651,7 @@ function onDioPointerCancel(e) {
   if (diorama.pointers.size < 2) diorama.pinch = null;
   if (diorama.gesture?.id === e.pointerId) diorama.gesture = null;
   diorama.drag = null;
+  dioStanceHot(false);
 }
 
 function onDioWheel(e) {
@@ -12271,8 +12668,9 @@ function onDioWheel(e) {
 // browser stops firing it the moment the finger truly holds still.
 function dioramaGestureFrame() {
   const g = diorama.gesture;
+  if (!g) return;
   const drag = diorama.drag;
-  if (!g || !drag) return;
+  if (!drag) return;
   if (!g.tapPreview && !g.moved) return;   // marker press before the slop: no preview yet
   const p = diorama.pointers.get(g.id);
   if (!p) return;
@@ -12313,6 +12711,131 @@ function dioramaDenyAt(px, py, label = 'Area is not available') {
   setTimeout(() => el.remove(), 1000);
 }
 
+// ---- Hide stance target (owner 2026-09-26) ----------------------------------
+// While an OWN commandable unit is selected (a tap on its marker or its
+// card lights the selection glow), one round gold target — the shield —
+// sits centred just above its card; a tap ON it = HIDE (take cover out of
+// every enemy's sight). It follows the card every frame (dioStanceSync from
+// updateDioramaHud), flips below the card at the top edge and slides inward
+// at a side edge, reads 'on' while the unit already hides, and goes with
+// the selection (a landed order, a deselect, the double-tap clear). No hold
+// anywhere (owner, same day). A hidden unit is released by the double-tap
+// clear or by any move / lock order (no Fight pick since 2026-09-26).
+
+// Anchor rect of the pressed thing, in layer (= viewport) px.
+function dioStanceAnchorRect(slot, via) {
+  const els = diorama.els.get(slot);
+  if (!els) return null;
+  if (via === 'card' && els.card.style.display !== 'none') {
+    const r = els.card.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  }
+  const b = els.box;
+  return b ? { x: b.x, y: b.y, w: b.s, h: b.s } : null;
+}
+
+// 18 px gold glyph: a plated shield (centre cross) for HIDE. Inline SVG — no
+// image assets exist for the command layer (the pistol FIGHT glyph went with
+// the Fight pick, 2026-09-26).
+function dioStanceGlyph() {
+  return '<svg viewBox="0 0 18 18" width="18" height="18">'
+    + '<path d="M 9 1.4 L 15.6 3.9 V 8.4 C 15.6 12.4 12.8 15.3 9 16.6 C 5.2 15.3 2.4 12.4 2.4 8.4 V 3.9 Z" fill="none" stroke="#ffd257" stroke-width="1.5" stroke-linejoin="round"/>'
+    + '<path d="M 9 5.6 V 12.2 M 5.8 8.9 H 12.2" fill="none" stroke="#ffd257" stroke-width="1.4" stroke-linecap="round"/>'
+    + '</svg>';
+}
+
+function openStanceMenu(slot) {
+  if (!diorama.layer || diorama.stance) return;
+  const el = document.createElement('div');
+  el.className = 'dio-stance';
+  const btn = document.createElement('div');
+  btn.className = 'dio-stance-btn';
+  btn.dataset.stance = 'hide';
+  btn.innerHTML = dioStanceGlyph();
+  el.appendChild(btn);
+  diorama.layer.appendChild(el);
+  diorama.stance = { slot, el, btns: [{ kind: 'hide', x: -999, y: -999, el: btn }], hot: null };
+}
+
+// Per frame (from updateDioramaHud): the target exists exactly while an own
+// commandable live unit is selected, sits above that unit's card, and
+// reads 'on' while the unit hides.
+function dioStanceSync() {
+  const slot = diorama.sel;
+  const m = slot ? state[slot] : null;
+  const show = !!(m && m.state.hp > 0 && DIO_OWN_SLOTS.includes(slot)
+    && !(state.online && !onlineCommandable(slot)));
+  if (!show) { closeStanceMenu(); return; }
+  if (diorama.stance && diorama.stance.slot !== slot) closeStanceMenu();
+  if (!diorama.stance) openStanceMenu(slot);
+  const st = diorama.stance;
+  if (!st) return;
+  const a = dioStanceAnchorRect(slot, 'card');
+  if (!a) { closeStanceMenu(); return; }
+  const W = window.innerWidth;
+  const R = DIO_STANCE_BTN_R;
+  const E = DIO_STANCE_EDGE;
+  let y = a.y - DIO_STANCE_LIFT;
+  if (y - R < E) y = a.y + a.h + DIO_STANCE_LIFT;
+  const x = Math.min(W - E - R, Math.max(E + R, a.x + a.w / 2));
+  const b = st.btns[0];
+  if (b.x !== x || b.y !== y) {
+    b.x = x; b.y = y;
+    b.el.style.left = `${x.toFixed(1)}px`;
+    b.el.style.top = `${y.toFixed(1)}px`;
+  }
+  b.el.classList.toggle('on', !!m.cmdHide);
+}
+
+function closeStanceMenu() {
+  const s = diorama.stance;
+  if (!s) return;
+  s.el.remove();
+  diorama.stance = null;
+}
+
+// The icon nearest (x, y) within DIO_STANCE_HOT_R, or null — the same test
+// drives the live .hot highlight and the release pick.
+function dioStanceIconAt(x, y) {
+  const s = diorama.stance;
+  if (!s) return null;
+  let best = null;
+  let bestD = DIO_STANCE_HOT_R;
+  for (const b of s.btns) {
+    const dist = Math.hypot(x - b.x, y - b.y);
+    if (dist <= bestD) { bestD = dist; best = b.kind; }
+  }
+  return best;
+}
+
+// The pressed-target highlight (pointer down on the shield, finger still on
+// it).
+function dioStanceHot(on) {
+  const st = diorama.stance;
+  if (!st) return;
+  const hot = on ? 'hide' : null;
+  if (hot === st.hot) return;
+  st.hot = hot;
+  for (const b of st.btns) b.el.classList.toggle('hot', b.kind === hot);
+}
+
+// Apply the picked stance. Offline the flag lands at once and the selection
+// glow drops like a landed order; online the server acks with
+// order:result {kind:'stance'} (processOrderResults drops the glow, a rate
+// refusal shows the red note at the icon) and the snapshot echo sets
+// mech.cmdHide.
+function applyStanceOrder(slot, hide, px, py) {
+  const m = state[slot];
+  if (!m || m.state.hp <= 0) return;
+  if (state.online) {
+    if (!onlineCommandable(slot)) return;
+    diorama.pendingOrder = { kind: 'stance', px, py };
+    state.online.conn?.sendOrderStance(hide, onlineServerIdOf(slot));
+    return;
+  }
+  if (setUnitStance(m, hide)) diorama.sel = null;
+}
+
 const _dioP0 = { x: 0, y: 0, z: 0 };
 const _dioP1 = { x: 0, y: 0, z: 0 };
 function dioramaShotBlocked(fromMech, toMech) {
@@ -12331,22 +12854,35 @@ const _dioProj = new THREE.Vector3();
 // and NO icon at all for a fully autonomous unit. Marker version draws in
 // local coords (anchored above the square's top-right corner); the card
 // version is one or two tiny inline SVGs.
+// The shield (owner 2026-09-26) = the HIDE stance: a rounded plate with a
+// small centre cross so it still reads as bullet-proof at 12 px. Hide wipes
+// both orders, so it never shares the slot with the "!" / eye; Fight is
+// plain autonomy and wears no badge.
 function dioCmdIconMarkup(kind) {
   const bang = '<rect x="-1.3" y="0" width="2.6" height="7" rx="1.2" fill="#ffd257"/>'
     + '<circle cx="0" cy="9.6" r="1.5" fill="#ffd257"/>';
   const eye = '<path d="M -6 5 Q 0 -0.5 6 5 Q 0 10.5 -6 5 Z" fill="none" stroke="#ffd257" stroke-width="1.4"/>'
     + '<circle cx="0" cy="5" r="1.8" fill="#ffd257"/>';
+  const shield = '<path d="M 0 0 L 5.2 2 V 5.3 C 5.2 8.3 3 10.3 0 11.3 C -3 10.3 -5.2 8.3 -5.2 5.3 V 2 Z" fill="none" stroke="#ffd257" stroke-width="1.3" stroke-linejoin="round"/>'
+    + '<path d="M 0 3.4 V 8.4 M -2.3 5.9 H 2.3" fill="none" stroke="#ffd257" stroke-width="1.2" stroke-linecap="round"/>';
   if (kind === 'order') return bang;
   if (kind === 'lock') return eye;
+  if (kind === 'hide') return shield;
   return `<g>${bang}</g><g transform="translate(12 0)">${eye}</g>`;
 }
+// Card icons stay 20x17 on this line (the BA line shrank them to 14x12 on
+// 2026-09-26 for its portrait card rhythm; the demo card keeps its layout).
 function dioCmdIconCardMarkup(kind) {
   const bang = '<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">'
     + '<rect x="5.7" y="0.5" width="2.6" height="7" rx="1.2" fill="#ffd257"/><circle cx="7" cy="10" r="1.5" fill="#ffd257"/></svg>';
   const eye = '<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">'
     + '<path d="M 1 5.5 Q 7 0.5 13 5.5 Q 7 10.5 1 5.5 Z" fill="none" stroke="#ffd257" stroke-width="1.3"/><circle cx="7" cy="5.5" r="1.7" fill="#ffd257"/></svg>';
+  const shield = '<svg class="dio-cmdicon" viewBox="0 0 14 12" width="20" height="17">'
+    + '<path d="M 7 0.7 L 12.4 2.7 V 5.7 C 12.4 8.6 10.2 10.5 7 11.4 C 3.8 10.5 1.6 8.6 1.6 5.7 V 2.7 Z" fill="none" stroke="#ffd257" stroke-width="1.2" stroke-linejoin="round"/>'
+    + '<path d="M 7 4 V 8.6 M 4.8 6.3 H 9.2" fill="none" stroke="#ffd257" stroke-width="1.1" stroke-linecap="round"/></svg>';
   if (kind === 'order') return bang;
   if (kind === 'lock') return eye;
+  if (kind === 'hide') return shield;
   return bang + eye;
 }
 
@@ -12557,15 +13093,20 @@ function updateDioramaHud() {
     }
     // Command-state icon + standing destination ring (own slots only).
     if (DIO_OWN_SLOTS.includes(slot)) {
-      const iconState = m.cmdMove && m.cmdLock ? 'both'
+      const iconState = m.cmdHide ? 'hide' : m.cmdMove && m.cmdLock ? 'both'
         : m.cmdMove ? 'order' : m.cmdLock ? 'lock' : null;
       if (els.iconState !== iconState) {
         els.iconState = iconState;
         els.cmdIcon.innerHTML = iconState ? dioCmdIconMarkup(iconState) : '';
       }
       if (iconState) {
+        // The shield (Hide) sits centred above the marker — the middle of the
+        // square's top edge, or the diamond's top vertex (owner 2026-09-26);
+        // the '!' / eye pair keeps the top-right corner.
+        const iconX = iconState === 'hide' ? bx + s / 2 : bx + s - 2;
+        const iconTop = iconState === 'hide' && offFrame ? by + s / 2 - s * Math.SQRT1_2 : by;
         els.cmdIcon.setAttribute('transform',
-          `translate(${(bx + s - 2).toFixed(1)} ${(by - 13).toFixed(1)})`);
+          `translate(${iconX.toFixed(1)} ${(iconTop - 13).toFixed(1)})`);
         els.cmdIcon.style.display = '';
       } else {
         els.cmdIcon.style.display = 'none';
@@ -12658,7 +13199,7 @@ function updateDioramaHud() {
     // The old NO SIGHT status line now hosts the command icon(s) (own units;
     // no command = no icon at all).
     const cardIconState = DIO_OWN_SLOTS.includes(c.slot)
-      ? (m.cmdMove && m.cmdLock ? 'both' : m.cmdMove ? 'order' : m.cmdLock ? 'lock' : 'none')
+      ? (m.cmdHide ? 'hide' : m.cmdMove && m.cmdLock ? 'both' : m.cmdMove ? 'order' : m.cmdLock ? 'lock' : 'none')
       : 'none';
     if (els.cardIconState !== cardIconState) {
       els.cardIconState = cardIconState;
@@ -12680,6 +13221,7 @@ function updateDioramaHud() {
     els.lineC.setAttribute('stroke-width', selLn ? '5.2' : '3.4');
     els.line.setAttribute('stroke-width', selLn ? '2.4' : '1.4');
   }
+  dioStanceSync();
   dioramaGestureFrame();
   updateDioramaDragVisuals();
 }
