@@ -94,7 +94,7 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 // (there is no distance cap — the unit walks as far as it takes). Mirrored
 // in client/src/main.js.
 const BOT_HIDE_SEARCH_MS = 500;
-const BOT_HIDE_FAIL_RETRY_MS = 1500;
+const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep looking for a double-block spot)
 const BOT_HIDE_BAIL_MS = 700;
 const BOT_HIDE_BAIL_RETRY_MS = 700;
 const BOT_HIDE_MAX_POPS = 600;
@@ -881,7 +881,7 @@ export function tickBot(matchState, botId, now) {
     for (const f of Object.values(matchState.fighters)) {
       if (f.team !== me.team && f.hp > 0) hideEnemies.push(f);
     }
-    // Nearest first, so the 'nearest' tier is simply eyes[0].
+    // Nearest first: eyes[0] is the threat the pacing steers away from.
     hideEnemies.sort((a, b) =>
       Math.hypot(a.pos.x - me.pos.x, a.pos.z - me.pos.z) - Math.hypot(b.pos.x - me.pos.x, b.pos.z - me.pos.z));
     // Enemy eyes stay LIVE (the existing convention — a jumping human must
@@ -902,18 +902,17 @@ export function tickBot(matchState, botId, now) {
     const hideMyEye = { x: me.pos.x, y: myEyeY, z: me.pos.z };
     // Position test (<= 2 LoS tests): nearest eye first, early exit on the
     // first eye that sees the unit.
-    let hiddenNear = false;
     let hiddenAll = true;
     for (let k = 0; k < hideEyes.length; k += 1) {
       const seen = botHasLineOfSight(hideEyes[k], hideMyEye, obstacles, surfaces);
-      if (k === 0) hiddenNear = !seen;
       if (seen) { hiddenAll = false; break; }
     }
-    // The COVER HIDE counts only cover from BOTH enemies (owner 2026-09-27:
-    // its nearest-only tier is gone — hidden from one enemy while the other
-    // shoots a walking target was measured worse than Defense); the stance
-    // keeps the nearest-enemy fallback.
-    const hideTier = hiddenAll ? 'all' : (hiddenNear && hideMode !== 'cover') ? 'nearest' : null;
+    // Only cover from BOTH enemies counts (owner 2026-09-27: the nearest-
+    // enemy-only tier is gone for the stance too — hidden from one enemy
+    // while the other shoots a walking target measured worse than Defense).
+    // Exposed to either with no such spot: the pursue legs and Defense on a
+    // hit, re-searching every BOT_HIDE_FAIL_RETRY_MS until one appears.
+    const hideTier = hiddenAll ? 'all' : null;
     if (hideTier) me.botHideNoCover = false;   // standing hidden = cover exists
     // Threat read: the nearest enemy, the unit's bearing away from it and
     // whether it is closing in.
@@ -973,7 +972,6 @@ export function tickBot(matchState, botId, now) {
       // the nearest enemy — from a nearest-tier hide that search would just
       // re-issue the next nearest-hidden cell every cadence and the unit
       // would shuffle between neighbours instead of pacing its cover.
-      if (!hiddenNear && hideMode !== 'cover') hideAttempts.push({ eyes: hideEyes.slice(0, 1), tier: 'nearest', minDistFrom: null });
     }
     if (!hiddenAll && hideMode === 'cover' && me.botCH.within) {
       // COVER HIDE first tier: cover inside the order's area, ahead of the
