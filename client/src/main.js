@@ -1457,6 +1457,8 @@ function updateUnitSpriteState(m, rig, dt, now) {
 //   swaps live when a spectate switch flips who reads hostile.
 // renderOrder 9997: BELOW the team chevrons (9998) and the reticle (9999),
 // so those stay readable where they overlap the bar.
+// - Hidden wholesale in the command diorama (its cards carry HP) and on the
+//   Shooting Range (owner 2026-09-28: no portrait, no bar on the lanes).
 // Bar edge (owner pick "E" from six in-game samples, 2026-09-22 — "an edge
 // like the edge arrows'"): a dark OUTLINE in the arrows' stroke colour rings
 // the track pill, ~2.9 px on the ~92 x 12 px on-screen bar (the arrow's
@@ -1602,6 +1604,10 @@ function updateMechAnimations(dt, now) {
       // Diorama / command mode: the annotation layer carries identity + HP,
       // so the floating bar hides wholesale (restored per frame when off).
       if (dioramaActive()) { bar.visible = false; continue; }
+      // Shooting Range (owner 2026-09-28): no portrait, no bar — neither on
+      // the practice lanes' targets nor on the player; the lanes carry their
+      // own hit read-outs and the bar group only cluttered the sight line.
+      if (state.mapKey === 'range') { bar.visible = false; continue; }
       if (!bar.visible) bar.visible = true;
       const depth = Math.max(0.1,
         _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
