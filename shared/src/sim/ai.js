@@ -29,7 +29,14 @@ const BOT_SPRINT_MIN_BOOST = 8;
 // This is purely a bot DECISION threshold — the stamina MECHANICS
 // (costs, drain, regen, caps, empty-recovery) stay identical to the
 // human player's.
-const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): reserve = full cap - travel sprints only from a topped-up tank
+const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg ARMS only from a topped-up tank
+const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
+// Pursue / Maze sprint latch: arm at the reserve, release at the floor.
+function botTravelSprint(me) {
+  if (me.boost >= BOT_BOOST_RESERVE) me.botPursueSprinting = true;
+  else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR) me.botPursueSprinting = false;
+  return !!me.botPursueSprinting;
+}
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -488,7 +495,7 @@ export function pickBotTargetId(matchState, fighter) {
 // closes an old offline/online gap — offline botStartJump always carried a
 // +BOT_SPRINT_MIN_BOOST margin that the online path lacked.
 function botTryJump(me, now) {
-  const funded = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
+  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
   if (me.boost < funded) return false;
   return tryStartJump(me, now);
 }
@@ -1588,13 +1595,13 @@ export function tickBot(matchState, botId, now) {
     let tz = dirZ * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    // Sprint down to the strategic reserve, no further. Both hysteresis
-    // bounds sit on the one knob (band collapsed by design) — the dispatch
-    // floor produces the same duty-cycle behavior either way, and the
-    // reserve keeps a full dodge + margin in the tank at all times.
-    if (me.boost >= BOT_BOOST_RESERVE) me.botPursueSprinting = true;
-    if (me.boost <= BOT_BOOST_RESERVE) me.botPursueSprinting = false;
-    wantSprint = !!me.botPursueSprinting;
+    // TRAVEL SPRINT LATCH (owner 2026-09-29): a leg arms only from a full tank
+    // (BOT_BOOST_RESERVE) and runs down to BOT_TRAVEL_SPRINT_FLOOR, then the
+    // bot walks until the tank is full again. Both bounds used to sit on the
+    // one 250 knob: in Pursue the release won at exactly 250 (no sprint at
+    // all), in Maze the dispatch floor let one dash tick through every half
+    // second — the flickering sprint pose. Shared with Maze below.
+    wantSprint = botTravelSprint(me);
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && me.grounded && !me.airborne) {
       // Climb aid: only for a step a jump can actually clear. Above that the
@@ -1760,8 +1767,8 @@ export function tickBot(matchState, botId, now) {
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee
       // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_BOOST_RESERVE, (me.unit?.jumpBoostCost ?? 48) + 10);
-      wantSprint = !(jumpAhead && me.boost < jumpBank);
+      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit?.jumpBoostCost ?? 48) + 10);
+      wantSprint = botTravelSprint(me) && !(jumpAhead && me.boost < jumpBank);
     } else if (me.botMazeEscapeUntil != null && now < me.botMazeEscapeUntil) {
       // STATUE BACK-OUT (no route, escape armed): reverse along the stored
       // escape heading to free the body, then the next re-commit replans
@@ -1787,7 +1794,7 @@ export function tickBot(matchState, botId, now) {
       }
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
-      wantSprint = true;
+      wantSprint = botTravelSprint(me);
     }
     // minWidth 0 here ONLY (2026-08-10). Maze is walking a route, so a strip
     // too thin to be a vantage point is still a legitimate thing to climb —
@@ -2029,10 +2036,11 @@ export function tickBot(matchState, botId, now) {
   // Sprint funding tiers: Defense (escaping live fire) may spend down to the
   // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
   // funded down to the hard floor too — the latch itself (arm > 50, drop
-  // <= 8) paces it; every other state stops at the strategic reserve.
+  // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
+  // travel floor — the latch above arms them only from a full tank.
   const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
     : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
-    : BOT_BOOST_RESERVE;
+    : BOT_TRAVEL_SPRINT_FLOOR;
   const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
   if (jumpThisTick) {

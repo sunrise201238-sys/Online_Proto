@@ -106,6 +106,7 @@ function botRun(botUnit, dist, ms, mode = '1v1') {
     tickMatch(m, { p1: emptyInput() }, now, TICK_DT, ['p2']);
     if (p2.lastFireAt !== last) { fireTimes.push(now); coneAtFire.push(cone); last = p2.lastFireAt; }
     p2.ammo = Math.max(p2.ammo, 2);   // measure the trigger rule, not the reload
+    p2.boost = 0;                     // ...nor the travel sprint: since the 2026-09-29 latch the bot would sprint the teleporting pair into the -x boundary wall by ~4.4 s and lose its shot line
     now += TICK_RATE_MS;
   }
   const gaps = fireTimes.slice(1).map((t, i) => t - fireTimes[i]);

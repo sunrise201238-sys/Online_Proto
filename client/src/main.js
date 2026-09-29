@@ -1043,7 +1043,14 @@ const BOT_SPRINT_MIN_BOOST = 8;
 // This is purely a bot DECISION threshold — the stamina MECHANICS
 // (costs, drain, regen, caps, empty-recovery) stay identical to the
 // human player's.
-const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): reserve = full cap - travel sprints only from a topped-up tank
+const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg ARMS only from a topped-up tank
+const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (mirrors shared/src/sim/ai.js)
+// Pursue / Maze sprint latch: arm at the reserve, release at the floor (mirrors ai.js botTravelSprint).
+function botTravelSprint(s) {
+  if (s.boost >= BOT_BOOST_RESERVE) s.botPursueSprinting = true;
+  else if (s.boost <= BOT_TRAVEL_SPRINT_FLOOR) s.botPursueSprinting = false;
+  return !!s.botPursueSprinting;
+}
 // Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
 // reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
 // as "shooting at me" for this long after their last shot, which covers the
@@ -4585,7 +4592,7 @@ function botStartJump(now, survival = false) {
   // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
   const funded = survival
     ? MANDATED_JUMP_MIN_BOOST
-    : Math.max(BOT_BOOST_RESERVE, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
+    : Math.max(BOT_TRAVEL_SPRINT_FLOOR, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
   if (eState.boost < funded) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
   eState.refillPausedUntil = now + 500;
@@ -5777,13 +5784,13 @@ function updateEnemy(now) {
     let tz = dir.z * dirSign + avoid.rz * 0.8;
     const l = Math.hypot(tx, tz) || 1;
     mx = tx / l; mz = tz / l;
-    // Sprint down to the strategic reserve, no further. Both hysteresis
-    // bounds sit on the one knob (band collapsed by design) — the dispatch
-    // floor produces the same duty-cycle behavior either way, and the
-    // reserve keeps a full dodge + margin in the tank at all times.
-    if (eState.boost >= BOT_BOOST_RESERVE) eState.botPursueSprinting = true;
-    if (eState.boost <= BOT_BOOST_RESERVE) eState.botPursueSprinting = false;
-    wantSprint = !!eState.botPursueSprinting;
+    // TRAVEL SPRINT LATCH (owner 2026-09-29): a leg arms only from a full tank
+    // (BOT_BOOST_RESERVE) and runs down to BOT_TRAVEL_SPRINT_FLOOR, then the
+    // bot walks until the tank is full again. Both bounds used to sit on the
+    // one 250 knob: in Pursue the release won at exactly 250 (no sprint at
+    // all), in Maze the dispatch floor let one dash tick through every half
+    // second — the flickering sprint pose. Shared with Maze below.
+    wantSprint = botTravelSprint(eState);
     // Elevation aids close the gap; skip them when we're trying to back off.
     if (!tooClose && state.enemy.grounded && !eState.airborne) {
       // Climb aid: only for a step a jump can actually clear (above that the
@@ -5948,8 +5955,8 @@ function updateEnemy(now) {
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee
       // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_BOOST_RESERVE, (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
-      wantSprint = !(jumpAhead && eState.boost < jumpBank);
+      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
+      wantSprint = botTravelSprint(eState) && !(jumpAhead && eState.boost < jumpBank);
     } else if (eState.botMazeEscapeUntil != null && now < eState.botMazeEscapeUntil) {
       // STATUE BACK-OUT (no route, escape armed): reverse along the stored
       // escape heading to free the body, then the next re-commit replans
@@ -5975,7 +5982,7 @@ function updateEnemy(now) {
       }
       const l = Math.hypot(tx, tz) || 1;
       mx = tx / l; mz = tz / l;
-      wantSprint = true;
+      wantSprint = botTravelSprint(eState);
     }
     // Vertical Maze: hop up onto a reachable platform (Station).
     // minWidth 0 here ONLY — Maze walks a route, so a strip too thin to be a
@@ -6228,10 +6235,11 @@ function updateEnemy(now) {
   // Sprint funding tiers: Defense (escaping live fire) may spend down to the
   // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
   // funded down to the hard floor too — the latch itself (arm > 50, drop
-  // <= 8) paces it; every other state stops at the strategic reserve.
+  // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
+  // travel floor — the latch above arms them only from a full tank.
   const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
     : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
-    : BOT_BOOST_RESERVE;
+    : BOT_TRAVEL_SPRINT_FLOOR;
   const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
   if (jumpThisTick) {
