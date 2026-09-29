@@ -7132,9 +7132,12 @@ function updateHud(now = performance.now()) {
       fill?.parentElement?.classList.toggle('spec-watched', slot === state.spectateSlot);
     }
   }
-  // Spectator: the boost bar and ammo readout below follow the WATCHED unit
-  // (cycling with TARGET), not the bot-driven player slot.
-  const shown = state.spectatorActive ? (cameraFocusMech() ?? state.player) : state.player;
+  // The boost bar and ammo readout below follow the unit the CAMERA frames:
+  // the player while alive, the WATCHED unit in Spectator mode (cycling with
+  // TARGET), and the ally once the player is out for good (owner 2026-09-29:
+  // that last case used to keep reading the dead player's frozen gauge and
+  // magazine while the camera sat on the ally).
+  const shown = cameraFocusMech() ?? state.player;
   const shownBoostMax = shown.unit.boostCap ?? BOOST_CAP;
   hudRefs.boost.style.width = `${(shown.state.boost / shownBoostMax) * 100}%`;
   hudRefs.boost.style.background = shown.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
