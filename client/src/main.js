@@ -10803,14 +10803,15 @@ function mapPhoto(opts = {}) {
     height = 0.85,      // camera height as a fraction of dist (~40 deg elevation)
     yaw = Math.PI / 4,  // compass angle of the camera around the center
     cx = 0, cz = 0,     // look-at point (map center)
-    fov = 45
+    fov = 45,
+    keepFighters = false   // dev: leave the units visible (scale reference in prop samples)
   } = opts;
   const cam = new THREE.PerspectiveCamera(fov, 1, 1, 4000);
   cam.position.set(cx + Math.cos(yaw) * dist, dist * height, cz + Math.sin(yaw) * dist);
   cam.lookAt(cx, 0, cz);
   const fighters = getAllFighters();
   const vis = fighters.map((m) => m.root.visible);
-  fighters.forEach((m) => { m.root.visible = false; });
+  if (!keepFighters) fighters.forEach((m) => { m.root.visible = false; });
   const fog = scene.fog;
   scene.fog = null;
   const prevSize = new THREE.Vector2();
@@ -13453,6 +13454,57 @@ function buildStreetsArena() {
       noProjectile: true,
       blocksBotSight: true
     });
+  }
+
+  // ===== Bridge roadblocks (owner 2026-10-02) =====
+  // A chicane at each ramp foot: one Jersey barrier at the plaza lip on one
+  // side of the mouth and a second one further out on the other side, the
+  // two overlapping by 2 u, so the way onto the ramp is an S with a 4 u lane
+  // between them. The north pair is the south pair rotated 180 degrees about
+  // the map centre (the map's own symmetry), not mirrored. Chosen from
+  // sample rounds (owner 2026-10-02): staggered over side-by-side, cover
+  // height over a low barrier, a plain scaled-up barrier over striped /
+  // railed / two-tier dressings.
+  // Each barrier is ONE extruded Jersey profile (flat base, short vertical
+  // lip, 55-degree lower slope, near-vertical upper face, narrow flat top),
+  // the real 810 mm barrier's proportions scaled so the top sits at the
+  // vending machines' absolute top (y 8): full cover per the sizing rule.
+  // Bare concrete, a grime line at the foot and two lifting holes per face.
+  // Collision: one invisible slab, full height, 4.4 deep (the body at knee
+  // height) so units press up to the slope's foot. Camera fade: every
+  // piece registers occlusion fade like the hoardings (an 8-tall barrier at
+  // the ramp foot sits between the camera and a unit coming down the ramp).
+  const RB_TOP = 8.0;
+  const rbConcrete = new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.96 });
+  const rbGrime = new THREE.MeshStandardMaterial({ color: 0x8e8b83, roughness: 0.98 });
+  const rbHole = new THREE.MeshStandardMaterial({ color: 0x3a3833, roughness: 1 });
+  const jerseyProfile = (h) => {
+    const k = h / 8.1;   // 1 unit = 10 real cm at an 8.1-tall barrier
+    return [[-3.05 * k, 0], [3.05 * k, 0], [3.05 * k, 0.75 * k], [1.27 * k, 3.3 * k], [0.75 * k, 8.1 * k], [-0.75 * k, 8.1 * k], [-1.27 * k, 3.3 * k], [-3.05 * k, 0.75 * k]];
+  };
+  const addRoadblock = (x, z, len, yBase) => {
+    const h = RB_TOP - yBase;
+    const pts = jerseyProfile(h);
+    const baseW = pts[1][0] * 2;
+    const fadeBox = { minX: x - len / 2, maxX: x + len / 2, minY: yBase, maxY: RB_TOP, minZ: z - baseW / 2, maxZ: z + baseW / 2, occlude: true, occludeEnemy: true };
+    const shape = new THREE.Shape(pts.map(([d, y]) => new THREE.Vector2(d, y)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false });
+    geo.translate(0, 0, -len / 2);
+    geo.rotateY(Math.PI / 2);          // extrusion runs along world x; the profile's d axis becomes z
+    const mesh = new THREE.Mesh(geo, rbConcrete.clone());
+    mesh.position.set(x, yBase, z);
+    scene.add(mesh); arenaDecor.push(mesh);
+    registerWallFade(mesh, fadeBox);
+    addBlockingBox({ x, y: yBase + h / 2, z, sx: len, sy: h, sz: 4.4, material: rbConcrete, invisible: true });
+    registerWallFade(addDecor({ x, y: yBase + 0.22, z, sx: len + 0.04, sy: 0.44, sz: baseW + 0.04, material: rbGrime.clone() }), fadeBox);
+    const slopeD = (pts[1][0] + pts[3][0]) / 2, slopeY = yBase + (pts[2][1] + pts[3][1]) / 2;
+    for (const e of [-1, 1]) for (const f of [-1, 1]) {
+      registerWallFade(addDecor({ x: x + e * (len / 2 - len * 0.22), y: slopeY, z: z + f * slopeD, sx: 0.55, sy: 0.55, sz: 0.5, material: rbHole.clone() }), fadeBox);
+    }
+  };
+  for (const sgn of [-1, 1]) {
+    addRoadblock(sgn * 9, sgn * 59, 14, RAMP_LOW_Y);     // south: x -16..-2, base z -62..-56 (ends at the ramp foot); north rotated
+    addRoadblock(sgn * -6, sgn * 69, 20, 0);             // south: x -4..16, base z -72..-66 on the street; a 4 u lane between the two
   }
 
   // ===== Akihabara dressing =====
