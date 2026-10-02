@@ -13457,14 +13457,16 @@ function buildStreetsArena() {
   }
 
   // ===== Bridge roadblocks (owner 2026-10-02) =====
-  // A chicane at each ramp foot: one Jersey barrier at the plaza lip on one
-  // side of the mouth and a second one further out on the other side, the
-  // two overlapping by 2 u, so the way onto the ramp is an S with a 4 u lane
-  // between them. The north pair is the south pair rotated 180 degrees about
-  // the map centre (the map's own symmetry), not mirrored. Chosen from
-  // sample rounds (owner 2026-10-02): staggered over side-by-side, cover
-  // height over a low barrier, a plain scaled-up barrier over striped /
-  // railed / two-tier dressings.
+  // One Jersey barrier per ramp foot, 10 u out from the mouth on the street:
+  // 20 long, covering 20 of the 32-wide approach with a 2 u overlap past the
+  // centre line and a 12 u lane left open on the other side, so a unit coming
+  // straight at the ramp steps round it. The north barrier is the south one
+  // rotated 180 degrees about the map centre (the map's own symmetry), not
+  // mirrored. Chosen from sample rounds (owner 2026-10-02): cover height over
+  // a low barrier, a plain scaled-up barrier over striped / railed / two-tier
+  // dressings. A second barrier at the plaza lip, making the pair a chicane,
+  // shipped first and was removed the same day (owner: it blocked part of
+  // the ramp mouth itself).
   // Each barrier is ONE extruded Jersey profile (flat base, short vertical
   // lip, 55-degree lower slope, near-vertical upper face, narrow flat top),
   // the real 810 mm barrier's proportions scaled so the top sits at the
@@ -13503,8 +13505,7 @@ function buildStreetsArena() {
     }
   };
   for (const sgn of [-1, 1]) {
-    addRoadblock(sgn * 9, sgn * 59, 14, RAMP_LOW_Y);     // south: x -16..-2, base z -62..-56 (ends at the ramp foot); north rotated
-    addRoadblock(sgn * -6, sgn * 69, 20, 0);             // south: x -4..16, base z -72..-66 on the street; a 4 u lane between the two
+    addRoadblock(sgn * -6, sgn * 69, 20, 0);   // south: x -4..16, base z -72..-66 on the street; north: x -16..4 at z 66..72
   }
 
   // ===== Akihabara dressing =====

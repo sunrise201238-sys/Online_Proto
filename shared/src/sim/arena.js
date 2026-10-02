@@ -3653,27 +3653,11 @@ const GENERATED_ARENA_COLLISION_DATA = {
         "blocksBotSight": true
       },
       {
-        "minX": -16,
-        "maxX": -2,
-        "minZ": -61.2,
-        "maxZ": -56.8,
-        "minY": 0.44999999999999973,
-        "maxY": 8
-      },
-      {
         "minX": -4,
         "maxX": 16,
         "minZ": -71.2,
         "maxZ": -66.8,
         "minY": 0,
-        "maxY": 8
-      },
-      {
-        "minX": 2,
-        "maxX": 16,
-        "minZ": 56.8,
-        "maxZ": 61.2,
-        "minY": 0.44999999999999973,
         "maxY": 8
       },
       {
