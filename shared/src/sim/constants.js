@@ -197,7 +197,7 @@ export const UNIT_DATA = {
   },
   unit6: {
     id: 'unit6',
-    name: 'Unit 6 / Railgun',     // weapon renamed Railgun (owner 2026-10-03; was 'Sniper Rifle' — the picker card reads the part after the slash)
+    name: 'Unit 6 / Sniper Rifle',
 
     // Pilot stats
     hp: 100,

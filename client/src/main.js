@@ -252,9 +252,9 @@ const UNIT_DATA = {
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   },
   unit6: {
-    name: 'Unit 6 / Railgun',     // weapon renamed Railgun (owner 2026-10-03; was 'Sniper Rifle' — the picker card reads the part after the slash)
+    name: 'Unit 6 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'kei', char: 'Kei', weapon: 'Railgun', accent: 0x9a7be0,   // profile-card weapon name (owner 2026-10-03; was 'Laser')
+    spriteKey: 'kei', char: 'Kei', weapon: 'Railgun', accent: 0x9a7be0,   // weapon name tag (owner 2026-10-03; was 'Laser') — the class in `name` stays Sniper Rifle
 
     // Pilot stats
     hp: 100,

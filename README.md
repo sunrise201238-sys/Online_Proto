@@ -97,7 +97,7 @@ Twelve pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprin
 | Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
 | Unit 7 — Rifle (Aris) | 8 | 12 / bolt | ~180 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
 | Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
-| Unit 6 — Railgun (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
+| Unit 6 — Sniper Rifle (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
 **Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
 
