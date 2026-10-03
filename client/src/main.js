@@ -252,9 +252,9 @@ const UNIT_DATA = {
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   },
   unit6: {
-    name: 'Unit 6 / Sniper Rifle',
+    name: 'Unit 6 / Railgun',     // weapon renamed Railgun (owner 2026-10-03; was 'Sniper Rifle' — the picker card reads the part after the slash)
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
-    spriteKey: 'kei', char: 'Kei', weapon: 'Laser', accent: 0x9a7be0,
+    spriteKey: 'kei', char: 'Kei', weapon: 'Railgun', accent: 0x9a7be0,   // profile-card weapon name (owner 2026-10-03; was 'Laser')
 
     // Pilot stats
     hp: 100,
@@ -9476,8 +9476,9 @@ function movementTier(u) {
 // out-of-frame rounds into a rectangle along the canvas border) — so a
 // marksman rifle's picture is its first three quick rounds, one on the
 // ring's centre and two at its edge, and nothing is ever drawn outside the
-// frame. Cached per unit (two units share the "Laser" name, so the key is
-// the sprite key); drawn at 72px for the 30px display cell.
+// frame. Cached per unit (keyed by the sprite key, not the weapon name —
+// Kei and Aris both read "Laser" until 2026-10-03); drawn at 72px for the
+// 30px display cell.
 const _spreadIconCache = {};
 const SPREAD_ICON_HIT_HALF_W = 1.8;   // world units; the ring's meaning
 const SPREAD_ICON_ROUNDS = 30;        // spray length drawn (magazine-limited)
@@ -9538,7 +9539,7 @@ function spreadIconURL(u) {
 // The six profile-card stats (2026-09-22, the demo line's card with Movement
 // in place of Weight), read live from the unit data: Mag / Dmg / RPM /
 // Movement / Reload / Spread. Tiered damages show every tier — PSG1's
-// far/mid/near 50/35/20, the Laser's quick/charged 30/20, shotguns per
+// far/mid/near 50/35/20, the Railgun's quick/charged 30/20, shotguns per
 // pellet "5 ×8". Laid out as a 3x2 cell grid (label over value) under the
 // gun render — owner pick "C" from three in-game samples (a third plate
 // beside the weapon panel and a label/value row list were the others).
