@@ -2866,13 +2866,14 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
 
 function getProjectileDamage(projectile) {
   // Dummy mode zeroes damage from EVERY bot — both enemies AND the player's
-  // ally bot; only the player's own bullets do damage. In SPECTATOR mode the
-  // player's slot is a bot too, so dummy zeroes EVERYONE (pure exhibition —
-  // nobody can land a hit). The owner is compared against the current player
-  // slot only: the old slot-identity list went stale across Trio respawns
-  // (in-flight bullets from a replaced mech matched no slot) and let bot
-  // damage leak through.
-  if (state.dummyMode && (state.spectatorActive || projectile.owner !== state.player)) return 0;
+  // ally bot; only the player slot's own bullets do damage. That holds in
+  // SPECTATOR mode too (owner 2026-10-03): the bot driving the player slot
+  // keeps dealing damage exactly as the human would, every other bot's shots
+  // are blanks — it used to zero everyone for a no-deaths exhibition. The
+  // owner is compared against the current player slot only: the old
+  // slot-identity list went stale across Trio respawns (in-flight bullets
+  // from a replaced mech matched no slot) and let bot damage leak through.
+  if (state.dummyMode && projectile.owner !== state.player) return 0;
   return projectile.damage;
 }
 
@@ -3459,7 +3460,7 @@ function updateBeamDamage(now) {
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       let dmg = b.damage;
-      if (state.dummyMode && (state.spectatorActive || b.owner !== state.player)) dmg = 0;  // dummy: only player damages (spectator: nobody)
+      if (state.dummyMode && b.owner !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       st.hp = Math.max(0, st.hp - dmg);
       if (now >= st.hitStunUntil || b.hitStunScale < st.hitStunScale) {
         st.hitStunScale = b.hitStunScale;
@@ -3729,7 +3730,7 @@ function updateChargedBeams(now, dt) {
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.
       let dmg = u.beam?.chargedDamage ?? u.damage;
-      if (state.dummyMode && (state.spectatorActive || m !== state.player)) dmg = 0;   // dummy: only player damages (spectator: nobody)
+      if (state.dummyMode && m !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       tst.hp = Math.max(0, tst.hp - dmg);
       if (now >= tst.hitStunUntil || (u.stun?.moveScale ?? 0.25) < tst.hitStunScale) {
         tst.hitStunScale = u.stun?.moveScale ?? 0.25;

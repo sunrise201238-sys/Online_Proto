@@ -17,7 +17,7 @@ Orthogonal to all of the above, every player also picks a **view mode** — **Cl
 - **2v2**: you + an ally bot vs two enemy bots. Friendly fire is off between teammates.
 - **Trio picks**: you select your three units in order, then each bot's three — same selection grid, titles count up (1/3 → 3/3).
 - Optional "Dummy" mode on the map-select screen — zeroes out damage from every bot (enemies and your ally), so you can practice movement and observe bot behaviour without dying.
-- Optional "Spectator" mode beside it — a bot takes over your unit and you watch the match: **TARGET** cycles the camera across every unit on the field (both teams), the HUD (HP / boost / ammo) follows whoever you're watching, the edge arrows stay viewer-relative, and the end banner reads **TEAM 1 WINS / TEAM 2 WINS**. Stacks with Dummy for an endless no-deaths bot exhibition.
+- Optional "Spectator" mode beside it — a bot takes over your unit and you watch the match: **TARGET** cycles the camera across every unit on the field (both teams), the HUD (HP / boost / ammo) follows whoever you're watching, the edge arrows stay viewer-relative, and the end banner reads **TEAM 1 WINS / TEAM 2 WINS**. Stacks with Dummy: the bot driving your slot still deals damage exactly as you would, and every other bot's shots are blanks (2026-10-03 — before that the combination zeroed everyone for a no-deaths exhibition).
 - The main menu also carries a **Guide** button (a popup summarising controls, mechanics and the command-mode gestures) and a **Server Boot-up** button that opens the online debug panel.
 
 ### Online
