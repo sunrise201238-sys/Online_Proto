@@ -27,7 +27,7 @@
 
 import {
   surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
-  groundHeightAt
+  groundHeightAt, obstaclesNearSegment
 } from './physics.js';
 import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT } from './constants.js';
 
@@ -865,8 +865,14 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
 // (deck/ramp masses) count. findFiringPath's inline seesAtEye is this same
 // rule; the hide-spot search below shares it through this helper.
 function sightClear(p0, p1, obstacles, surfaces) {
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const o = obstacles[i];
+  // SD proto (2026-10-05): the broadphase cuts a 400-obstacle map to the
+  // handful of boxes near the segment — the hidden-spot search tested every
+  // box for every eye of every node and a single search ran 100-370 ms.
+  const cand = obstaclesNearSegment(obstacles, p0, p1);
+  const P = globalThis.__sdProf;
+  if (P) { P.sightCalls += 1; P.sightCand += cand.length; }
+  for (let i = 0; i < cand.length; i += 1) {
+    const o = cand[i];
     if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
@@ -935,40 +941,170 @@ function createMinHeap() {
 // centre: a node the actor already occupies — exposed at its real eye yet
 // hidden at the centre test — would otherwise be re-issued forever as a
 // zero-length route, and the caller's no-progress bail would loop on it.
+// SD prototype: COVER PROXIMITY (play test 2026-10-05, "walks into open dead
+// space like taking a walk"). Per node, the horizontal distance to the nearest
+// obstacle tall enough to block a muzzle line from that node's floor (top at
+// least COVER_MIN_ABOVE_BASE above floor + GROUND_BASE_Y; bullets pass
+// noProjectile fences). Open ground is far from any such cover — never
+// "safe" whatever the enemy's current line, because the enemy can appear
+// from anywhere. Cached on the grid on first use (one pass over nodes x
+// obstacles, ~1.4 M box distances on Factory).
+const COVER_MIN_ABOVE_BASE = 3.0;   // muzzle line sits 3.15 above the standing base
+function coverDistFor(grid, obstacles) {
+  if (grid.coverDist) return grid.coverDist;
+  const { n, layers, floor, walk } = grid;
+  const size = n * layers;
+  const out = new Float32Array(size).fill(1e9);
+  for (let node = 0; node < size; node += 1) {
+    if (!walk[node]) continue;
+    const cx = nodeCenterX(grid, node), cz = nodeCenterZ(grid, node);
+    const base = floor[node] + GROUND_BASE_Y;
+    let best = 1e9;
+    for (let i = 0; i < obstacles.length; i += 1) {
+      const o = obstacles[i];
+      if (o.noProjectile) continue;
+      if (o.maxY - base < COVER_MIN_ABOVE_BASE) continue;
+      if (o.minY > base + COVER_MIN_ABOVE_BASE) continue;   // floating above the line
+      const dx = Math.max(o.minX - cx, 0, cx - o.maxX);
+      const dz = Math.max(o.minZ - cz, 0, cz - o.maxZ);
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < best) best = d;
+    }
+    out[node] = best;
+  }
+  grid.coverDist = out;
+  return out;
+}
+// Distance from (x, z) on floorY to the nearest muzzle-blocking cover (1e9
+// when the point snaps to no walkable node).
+export function coverDistanceAt(grid, x, z, floorY, obstacles) {
+  const node = nearestWalkable(grid, x, z, floorY, obstacles);
+  if (node < 0) return 1e9;
+  return coverDistFor(grid, obstacles)[node];
+}
+
 export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts = {}) {
   const maxPops = opts.maxPops ?? 600;
   const eyeHeight = opts.eyeHeight ?? BOT_LOS_EYE_HEIGHT;
   const minFrom = opts.minDistFrom ?? null;
   const within = opts.within ?? null;
-  if (!eyes || eyes.length === 0) return null;
+  // SD prototype: an extra goal predicate (x, z, floorY) and a walk-cost cap.
+  const accept = opts.accept ?? null;
+  const maxCost = opts.maxCost ?? Infinity;
+  // SD prototype: exposure-weighted routing — an EXPOSED node (some eye sees
+  // its eye point) costs exposurePenalty extra to step onto, so the route to
+  // the goal hugs cover and the goal itself is the hidden cell nearest by
+  // covered walking, not by raw distance. Hidden-ness is cached per node
+  // (popped nodes evaluate it anyway for the goal test).
+  const exposurePenalty = opts.exposurePenalty ?? 0;
+  // SD prototype: cover proximity — an OPEN node (no muzzle-blocking cover
+  // within openDist) costs openPenalty extra, goalCoverMax requires the goal
+  // itself to stand within that distance of cover, and anyGoal drops the
+  // hidden requirement (the goal is then the nearest cell passing the other
+  // filters — the "no hidden cell anywhere, at least reach cover" fallback;
+  // the exposure penalty still steers the route).
+  const openPenalty = opts.openPenalty ?? 0;
+  const openDist = opts.openDist ?? 6;
+  const goalCoverMax = opts.goalCoverMax ?? null;
+  const anyGoal = !!opts.anyGoal;
+  // SD prototype (play test 2026-10-05, "deadly openings when the moving
+  // angle is not perpendicular"): an exposed step costs more the more it
+  // runs ALONG the line to `threat` ({x, z}) — exposurePenalty x (1 +
+  // alongWeight x along^2). A gap crossed sideways is a quick, hard-to-hit
+  // flash; the same gap crossed toward the shooter is a straight shot, so
+  // the route prefers flanking lines whose crossings are lateral.
+  const threat = opts.threat ?? null;
+  const alongWeight = threat ? (opts.alongWeight ?? 0) : 0;
+  // SD prototype: BEST-OF search — opts.score(x, z, floorY) rates every node
+  // that passes the filters; the search keeps the highest (nearest on ties,
+  // since nodes pop in cost order) and stops early at opts.scoreStop. The
+  // watch-spot search uses it: "the hidden cell that covers most of the
+  // enemy's exits".
+  const score = opts.score ?? null;
+  const scoreStop = opts.scoreStop ?? Infinity;
+  let bestGoal = -1, bestScore = -Infinity;
+  // SD prototype (owner 2026-10-05, Station: "don't let that happen"):
+  // opts.allowJump lets the search cross the grid's jump-links (walk-island
+  // bridges, JUMP_LINK_COST each) — the route then carries a floor change
+  // at the link and the SD follower vaults it. Default off: a hide never
+  // vaults.
+  const allowJump = !!opts.allowJump;
+  // SD prototype: opts.avoid — circles [{x, z, r}] no route may pass through
+  // (the first exposed stretch of a hop rejected for risk, a corridor the
+  // unit refused to enter). The start node is never blocked.
+  const avoid = (opts.avoid && opts.avoid.length) ? opts.avoid : null;
+  const avoided = (node) => {
+    const x = nodeCenterX(grid, node), z = nodeCenterZ(grid, node);
+    for (let i = 0; i < avoid.length; i += 1) {
+      const a = avoid[i];
+      if (Math.hypot(x - a.x, z - a.z) <= a.r) return true;
+    }
+    return false;
+  };
+  if (!anyGoal && (!eyes || eyes.length === 0)) return null;
+  if (!eyes) eyes = [];
   const { n, layers, floor, clearGrade, surfaces } = grid;
   const size = n * layers;
   const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
   if (start < 0) return null;
-  const hiddenAt = (node) => {
-    const p0 = {
-      x: nodeCenterX(grid, node),
-      y: floor[node] + GROUND_BASE_Y + eyeHeight,
-      z: nodeCenterZ(grid, node)
-    };
-    for (let e = 0; e < eyes.length; e += 1) {
-      if (sightClear(p0, eyes[e], obstacles, surfaces)) return false;
-    }
-    return true;
-  };
+  const coverDist = (openPenalty > 0 || goalCoverMax != null) ? coverDistFor(grid, obstacles) : null;
   const parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
   const g = new Float64Array(size).fill(Infinity);
   const closed = new Uint8Array(size);
+  const hiddenCache = new Int8Array(size).fill(-1);
+  // (anyGoal keeps hiddenAt true for the GOAL test; the route penalty below
+  // still asks the real eyes through this helper.)
+  const hiddenCached = (node) => {
+    let v = hiddenCache[node];
+    if (v < 0) {
+      let h = true;
+      if (eyes.length) {
+        const p0 = { x: nodeCenterX(grid, node), y: floor[node] + GROUND_BASE_Y + eyeHeight, z: nodeCenterZ(grid, node) };
+        for (let e = 0; e < eyes.length; e += 1) {
+          if (sightClear(p0, eyes[e], obstacles, surfaces)) { h = false; break; }
+        }
+      }
+      v = h ? 1 : 0;
+      hiddenCache[node] = v;
+    }
+    return v === 1;
+  };
+  // SD prototype: opts.goalEyes — the GOAL must be hidden from these (the
+  // spread eyes: the spot holds for a sidestep) while the ROUTE is costed
+  // against `eyes` only (live + predicted). A narrow shadow behind a crate
+  // is then a legal approach lane — the "sprint behind a distant obstacle
+  // and walk up in its shadow" move — even though a sidestep would open it.
+  const goalEyes = opts.goalEyes ?? null;
+  const goalHiddenCache = goalEyes ? new Int8Array(size).fill(-1) : null;
+  const goalHidden = (node) => {
+    if (!goalEyes) return hiddenCached(node);
+    let v = goalHiddenCache[node];
+    if (v < 0) {
+      let h = true;
+      const p0 = { x: nodeCenterX(grid, node), y: floor[node] + GROUND_BASE_Y + eyeHeight, z: nodeCenterZ(grid, node) };
+      for (let e = 0; e < goalEyes.length; e += 1) {
+        if (sightClear(p0, goalEyes[e], obstacles, surfaces)) { h = false; break; }
+      }
+      v = h ? 1 : 0;
+      goalHiddenCache[node] = v;
+    }
+    return v === 1;
+  };
   const heap = createMinHeap();
   parent[start] = -1;
   g[start] = 0;
   heap.push(0, start);
   let goal = -1;
   let pops = 0;
+  // (profiling hooks: globalThis.__sdProf, set by the harness --prof)
+  const P = globalThis.__sdProf;
+  const tStart = P ? performance.now() : 0;
+  let cAccept = 0, cScore = 0, tAccept = 0, tScore = 0, sightBefore = P ? P.sightCalls : 0;
   while (heap.size()) {
     const cur = heap.pop()[1];
     if (closed[cur]) continue;
     if (++pops > maxPops) break;
+    if (g[cur] > maxCost) break;
     closed[cur] = 1;
     const startHere = cur === start
       && Math.hypot(nodeCenterX(grid, cur) - sx, nodeCenterZ(grid, cur) - sz) <= 1;
@@ -976,13 +1112,52 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
       || Math.hypot(nodeCenterX(grid, cur) - minFrom.x, nodeCenterZ(grid, cur) - minFrom.z) >= minFrom.d;
     const inside = !within
       || Math.hypot(nodeCenterX(grid, cur) - within.x, nodeCenterZ(grid, cur) - within.z) <= within.r;
-    if (!startHere && farEnough && inside && hiddenAt(cur)) { goal = cur; break; }
-    forEachWalkNeighbor(grid, cur, (nb) => {
+    // (the cheap filters and the cached hidden test go first; the caller's
+    // accept — a line-capability probe of a dozen segments — only runs on
+    // the nodes that pass them: it was 85% of a 116 ms search)
+    const covered = goalCoverMax == null || coverDist[cur] <= goalCoverMax;
+    let ok = !startHere && farEnough && inside && covered && (anyGoal || goalHidden(cur));
+    if (ok && accept) {
+      const ta = P ? performance.now() : 0;
+      ok = accept(nodeCenterX(grid, cur), nodeCenterZ(grid, cur), floor[cur]);
+      if (P) { cAccept += 1; tAccept += performance.now() - ta; }
+    }
+    if (ok) {
+      if (!score) { goal = cur; break; }
+      const ts = P ? performance.now() : 0;
+      const s = score(nodeCenterX(grid, cur), nodeCenterZ(grid, cur), floor[cur]);
+      if (P) { cScore += 1; tScore += performance.now() - ts; }
+      if (s > bestScore) { bestScore = s; bestGoal = cur; if (s >= scoreStop) break; }
+    }
+    const expand = (nb, stepCost) => {
       if (closed[nb]) return;
-      const ng = g[cur] + 1 + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
+      if (avoid && avoided(nb)) return;
+      let ng = g[cur] + stepCost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
+      if (exposurePenalty > 0 && eyes.length && !hiddenCached(nb)) {
+        let pen = exposurePenalty;
+        if (alongWeight > 0) {
+          const nx = nodeCenterX(grid, nb), nz = nodeCenterZ(grid, nb);
+          let sx2 = nx - nodeCenterX(grid, cur), sz2 = nz - nodeCenterZ(grid, cur);
+          const sl = Math.hypot(sx2, sz2) || 1;
+          let lx = threat.x - nx, lz = threat.z - nz;
+          const ll = Math.hypot(lx, lz) || 1;
+          const along = Math.abs((sx2 * lx + sz2 * lz) / (sl * ll));
+          pen *= 1 + alongWeight * along * along;
+        }
+        ng += pen;
+      }
+      if (openPenalty > 0 && coverDist[nb] > openDist) ng += openPenalty;
       if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng, nb); }
-    });
+    };
+    if (allowJump) forEachNeighbor(grid, cur, expand);
+    else forEachWalkNeighbor(grid, cur, (nb) => expand(nb, 1));
   }
+  if (P) {
+    const dt = performance.now() - tStart;
+    P.searches += 1; P.t += dt;
+    if (dt > P.max) { P.max = dt; P.maxInfo = { pops, sight: P.sightCalls - sightBefore, cAccept, tAccept: +tAccept.toFixed(1), cScore, tScore: +tScore.toFixed(1), eyes: eyes.length, goalEyes: goalEyes ? goalEyes.length : 0, maxPops, found: goal >= 0 || bestGoal >= 0 }; }
+  }
+  if (score) goal = bestGoal;
   if (goal < 0) return null;
   const pts = [];
   for (let i = goal; i !== -1; i = parent[i]) {
@@ -992,5 +1167,5 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   let path = collapseWaypoints(pts);
   if (path.length > 2) path = smoothPath(grid, path, obstacles);
   const last = path[path.length - 1];
-  return { path, goal: { x: last.x, z: last.z, y: last.y } };
+  return { path, goal: { x: last.x, z: last.z, y: last.y }, score: score ? bestScore : null };
 }

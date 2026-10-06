@@ -13,11 +13,11 @@
 
 import { between } from './math.js';
 import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, projectileHitsSurface } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, projectileHitsSurface, obstaclesNearSegment } from './physics.js';
 import { getArena } from './arena.js';
-import { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
+import { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, coverDistanceAt } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT, CMD_TRAVEL_BOOST_FLOOR } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
@@ -137,6 +137,286 @@ const BOT_HIDE_SLIP_GAIN = 6;
 // Factory / Streets / Airport and was retired). Never alongside the Hide
 // stance (it wipes move orders anyway).
 const BOT_CH_AREA_R = 14;
+// SUDDEN DEATH BRAIN (sim prototype, flag me.botSD). Every fighter has 1 HP,
+// so a hit is a death: Defense (a reaction to being hit) is pointless and a
+// sprint keyed to the enemy's trigger reads as cheating. The brain instead
+// plays the way a human plays SD — cover to cover, sprinting across the gaps
+// and firing on the way, standing exposed only for a short budgeted window:
+//   cover  : hidden from every live enemy eye; dwell a jittered beat (the
+//            'breath' a human takes behind a crate), then hop;
+//   dash   : sprint a findHiddenSpot route to the next cell hidden from every
+//            enemy, chosen by band — closer when far (gain scales with the
+//            distance), farther when too close, a lateral shift inside the
+//            band; a hop never waits for the enemy to shoot;
+//   fight  : found in the open (or the enemy walked around the cover): fire
+//            back for the exposure budget while strafing, then break off to
+//            the nearest hidden cell — the budget starts the tick the first
+//            enemy eye sees the unit, not the tick the enemy fires;
+//   peek   : hidden, in band, no hop available: step to a cell that sees the
+//            target, fire for the budget, fall back behind cover;
+//   open   : exposed past the budget with no cover anywhere within the
+//            search budget: strafe-sprint, re-search every SEARCH_MS.
+// An enemy out of rounds (empty mag with reload time left — what a human
+// reads off the reload animation) suspends the budget and the dwell. Own
+// long reloads are spent in cover. The anti-glint dodge stays as it is.
+// Tunables live in one mutable bag so the sim harness can A/B them.
+// Fraction of a uniform disc of radius c (a cone's footprint at the target's
+// range) that lies within R of a point s away from the disc's centre: the
+// chance ONE round aimed at where the target WAS still lands on a target
+// that moved s during the flight (R = the projectile hit radius).
+export function discHitFrac(c, R, s) {
+  if (c <= 1e-6) return s < R ? 1 : 0;
+  if (s >= c + R) return 0;
+  if (s + c <= R) return 1;
+  if (s + R <= c) return (R * R) / (c * c);
+  const a = (c * c - R * R + s * s) / (2 * s);
+  const b = s - a;
+  const area = c * c * Math.acos(Math.max(-1, Math.min(1, a / c))) - a * Math.sqrt(Math.max(0, c * c - a * a))
+    + R * R * Math.acos(Math.max(-1, Math.min(1, b / R))) - b * Math.sqrt(Math.max(0, R * R - b * b));
+  return Math.max(0, Math.min(1, area / (Math.PI * c * c)));
+}
+
+// Chance of dying while exposed to `threat` for T ms at distance d, moving
+// with lateral fraction `lat` (of riskSprint) across its line: a no-lead
+// shooter fires riskReactMs after the line opens and every shotMs after.
+// `elapsed` ms of the exposure already spent (a reaction already consumed).
+// `speed` is the exposed unit's own sprint (u/s): the SD block passes the
+// unit's sprint x riskSprintFactor; SD.riskSprint is the fallback.
+export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint) {
+  const u = threat.unit ?? {};
+  const cone = u.spreadAngle ?? 0.02, pv = u.projectileSpeed ?? 600;
+  const shotMs = Math.max(SD.riskShotMs, u.fireCooldownMs ?? 0);
+  const s = speed * lat * (d / pv);
+  const p = discHitFrac(d * Math.tan(cone / 2), HIT_RADIUS_NORMAL, s);
+  // The first round that can land arrives riskReactMs (the shooter's reaction)
+  // plus the flight time after the line opens — an exposure that ends before
+  // that is free (the round lands on an empty spot or a dodge's i-frames).
+  const react = SD.riskReactMs + (d / pv) * 1000;
+  const shots = (Math.max(0, elapsed + T - react) - Math.max(0, elapsed - react)) / shotMs;
+  return 1 - Math.pow(1 - p, shots);
+}
+
+// The nearest distance (5 u steps from `lower`) at which a lateral sprint
+// crossing of safeCrossMs stays under riskCap against `threat`'s gun.
+export function sdSafeDistance(threat, SD, lower, speed = SD.riskSprint) {
+  for (let d = Math.max(20, Math.floor(lower / 5) * 5); d <= SD.safeMaxDist; d += 5) {
+    if (sdExposureRisk(threat, SD, d, 1, SD.safeCrossMs, 0, speed) <= SD.riskCap) return d;
+  }
+  return SD.safeMaxDist;
+}
+
+// Estimated death chance of a hop: the route from (sx, sz) through `path`
+// (navgrid points, y = floor), sub-divided into ~4 u pieces; a piece is
+// exposed when `clear(eye, muzzle)` holds for any eye; each contiguous
+// exposed run shares one reaction. Returns { risk, first } with the first
+// exposed piece's midpoint (the avoid mark on rejection).
+export function sdRouteRisk(path, sx, sz, floorY, eyes, threat, SD, clear, speed = SD.riskSprint) {
+  let survive = 1, first = null, elapsed = 0, inRun = false;
+  let px = sx, pz = sz;
+  for (let i = 0; i < path.length; i += 1) {
+    const q = path[i];
+    const len = Math.hypot(q.x - px, q.z - pz);
+    if (len < 0.01) { px = q.x; pz = q.z; continue; }
+    const dx = (q.x - px) / len, dz = (q.z - pz) / len;
+    const nSub = Math.max(1, Math.ceil(len / 4));
+    const muzzleY = (q.y ?? floorY) + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET;
+    for (let k = 0; k < nSub; k += 1) {
+      const f = (k + 0.5) / nSub;
+      const mid = { x: px + (q.x - px) * f, y: muzzleY, z: pz + (q.z - pz) * f };
+      let exposed = false;
+      for (let e = 0; e < eyes.length && !exposed; e += 1) if (clear(eyes[e], mid)) exposed = true;
+      const T = (len / nSub) / speed * 1000;
+      if (!exposed) { inRun = false; elapsed = 0; continue; }
+      if (!first) first = { x: mid.x, z: mid.z };
+      if (!inRun) { inRun = true; elapsed = 0; }
+      let lx = threat.pos.x - mid.x, lz = threat.pos.z - mid.z;
+      const d = Math.hypot(lx, lz) || 1; lx /= d; lz /= d;
+      const lat = Math.abs(dx * lz - dz * lx);
+      survive *= 1 - sdExposureRisk(threat, SD, d, lat, T, elapsed, speed);
+      elapsed += T;
+    }
+    px = q.x; pz = q.z;
+  }
+  return { risk: 1 - survive, first };
+}
+
+export const BOT_SD = {
+  exposeMs: 0,            // exposure budget when CAUGHT (an enemy line opens on the unit): 0 = break off at once, firing on the way (measured best, 2026-10-05)
+  exposeJitterMs: 0,      //   + uniform jitter
+  peekMs: 250,            // exposure budget for a DELIBERATE peek: fire this long, then the dodge step back (manoeuvre 2)
+  peekJitterMs: 100,      //   + uniform jitter
+  dwellMinMs: 250,        // cover dwell before the next hop (near the band)
+  dwellMaxMs: 700,
+  farDwellMs: 120,        // dwell when far outside the band (nothing to breathe for)
+  dashFloor: 8,           // an exposed crossing, an open-ground run, a peek, an escape or a dodge sprints down to here (the normal bot's BOT_SPRINT_MIN_BOOST)
+  sprintBurstMs: 500,     // ANTI-FLICKER (owner 2026-10-05, "no 抖動步伐"): a sprint started for an exposure runs at least this long (or to dashFloor) — the exposed / open tests flip tick to tick along a slatted fence and the pose went dash-walk-dash
+  jumpBank: 110,          // JUMP LINK (owner 2026-10-05, Station): a route crossing onto a ledge needs the jump (48) + the dodge right after it (48) + a margin in the tank; while such a link lies ahead the covered legs walk and bank to this
+  jumpReach: 7,           //   the vault starts within this distance of the ledge waypoint (the maze follower's rule)
+  holdMaxMs: 6000,        // NEVER HOLD FOREVER (owner 2026-10-05, Station): a "good" position with no shot line for this long is not good — the hold ends, the search runs, and a search that still finds nothing hands the legs to the plain brain (stallMs) whose maze crosses anything
+  exposedRetryMs: 150,    // nothing found while exposed: retry this soon
+  hopGainMin: 10,         // advance / retreat gain per hop (u), scaled 0.3 x dist ...
+  hopGainMax: 45,         //   ... and capped
+  shiftMin: 8,            // lateral shift inside the band: at least this far from the current spot
+  searchMs: 250,          // search cadence while a hop is wanted
+  failRetryMs: 500,       // nothing found at any stage
+  nearPops: 800,          // (2026-10-05 idle-player test: 150 / 600 starved on Scrapyard and Square — the exposure-costed search spent its budget on the cheap hidden cells behind the unit and never reached the strip it had to cross, so no goal was ever found; 800 / 3000 kills there in 4-19 s and costs LESS per tick on average, since a found route ends the re-searching)          // first stage Dijkstra budget (~22 u walk radius)
+  farPops: 3000,
+  bailMs: 700,            // route no-progress bail
+  freeMinMs: 350,         // enemy reload time left that counts as a free window
+  reloadHoldMs: 800,      // own reload longer than this is spent in cover (no hop)
+  peekWaitMs: 400,        // hidden, in band, no shot line for this long -> engage hop, flank, or the stand peek (owner 2026-10-05: 800 -> 400, "go as I preferred")
+  // FLANK (owner 2026-10-05, "create the line without the risk"): a spot is
+  // LINE-CAPABLE when a lateral leg of peekLeg or 1.75 x peekLeg from it is
+  // walkable and ends with a muzzle line to the target — the peek's own
+  // precondition. Line-capable spots score peekableBonus, and an engage that
+  // finds no cover to cross and no leg from here moves (hidden, risk-gated)
+  // to the nearest line-capable spot in the band, then peek-fire-dodges.
+  peekableBonus: 2,
+  // The stand peek needs the dodge step back (STEP_BOOST_COST 48) plus the
+  // sprint of the fight window in the tank — one started on 26 boost stood
+  // in the open when the tank ran dry (SD-vs-SD trace seed 7).
+  peekBoostMin: 60,       //   (owner 2026-10-05: 80 -> 60 — the dodge's 48 plus a short sprint)
+  stuckAvoidMs: 6000,     // a waypoint a route could not reach (no-progress bail) is avoided this long, whatever the threat does
+  peekRange: 25,          // engage / peek allowed up to upperRange + peekRange (owner 2026-10-05: 10 -> 25; beyond bandSlack the closing list and the peek now overlap)
+  peekLeg: 4,             // peek leg length (u): out at a sprint, lateral to the threat's line
+  peekLegMax: 10,         //   the longest leg tried (4, 7, 10 u) past a wide cover; the dodge step back covers 9.2 u, the rest is sprinted (owner 2026-10-05)
+  stallMs: 2500,          // hidden with no hop found for this long -> plain brain legs
+  fightStill: false,      // fight window: stand still (true) or strafe-walk (false)
+  fightSlack: 0,          // fight window allowed up to upperRange + fightSlack; beyond -> break off at once
+  exposurePenalty: 8,     // hop routing: extra walk cost per exposed cell (0 = off; a cell is 1); 4 -> 8 (play test 2026-10-05: fewer gap crossings, longer covered detours)
+  eyeSpread: 6,           // hop goals / routes are also hidden from eyes this far to either side of each enemy (a sidestep must not uncover the spot)
+  lateralMin: 0.8,        // exposed crossing: keep at least this fraction of the heading perpendicular to the threat's line (0 = off)
+  lateralGoalMin: 0.5,    // breaking off: first try covers whose straight run is at least this lateral
+  // COVER PROXIMITY (play test 2026-10-05): open ground is never safe.
+  openDist: 6,            // a cell farther than this from muzzle-blocking cover is OPEN ground
+  openPenalty: 2,         // hop routing: extra walk cost per open cell (a cell is 1)
+  goalCoverMax: 4,        // hop goals must stand within this distance of cover (fallback stages)
+  hugDist: 2.5,           // HUG THE COVER (owner 2026-10-05, "they should get closer to cover"): the first-choice goals, a hold and a watch stand this close to cover — in the shadow but off the cover is not a position
+  stuckMoveMin: 3,        // STUCK WATCHDOG (owner 2026-10-05): standing within this radius ...
+  stuckMs: 3000,          //   ... for this long with no reason to (not hidden-hugging-and-inside holdMaxMs) -> the spot is marked, route and peek dropped, and ...
+  plainMs: 3000,          //   ... the plain brain takes the legs for this long (its wedge detectors run; the SD fire rules stay)
+  farDist: 40,            // beyond upperRange + farDist the unit is TRAVELLING (pursue / maze-like): covered legs run on the travel latch (travelArm / travelFloor); inside, covered legs WALK — the shadow walk ("在影子裡用走的往對方推進"), the sprint is for the exposed lateral move only
+  predictS: 0.6,          // hop goals are hidden from the enemies' positions this far ahead on their velocity too
+  // ALONG-LINE EXPOSURE (play test 2026-10-05): an exposed route step costs exposurePenalty x (1 + alongWeight x along^2),
+  // along = how much the step runs along the threat's line (a gap crossed toward the shooter is a straight shot).
+  alongWeight: 3,
+  engagePenalty: 1,       // engage hops keep a small exposure cost so their crossing is still a lateral one
+  aheadProbe: 8,          // dash leg: sprint when the heading is exposed this far ahead
+  // WATCH / AMBUSH (play test 2026-10-05, "no back and forth, no tactical
+  // positioning"): in band the unit alternates hops with WATCH phases — a
+  // hidden, cover-adjacent spot whose muzzle line covers most of the enemy's
+  // EXITS (a ring of exitR around the enemy); it stands there pre-aimed,
+  // fires the instant the enemy crosses, trades for watchFightMs, then
+  // relocates. A stand peek now returns to the cover it stepped out from.
+  pWatch: 0.6,            // chance a band decision becomes a watch instead of a shift hop
+  watchMinMs: 1500,       // watch window (+ random up to watchMaxMs)
+  watchMaxMs: 3500,
+  watchFightMs: 500,      // exposure budget when the enemy walks into a watched line (+ jitter): stand and trade, then pull back
+  watchFightJitterMs: 300,
+  exitR: 10,              // exit ring radius around the enemy
+  exitMin: 3,             // a watch spot must see at least this many of the 8 exit points
+  watchRecheckMs: 500,    // re-validate the spot this often
+  watchMoveTol: 10,       // enemy moved this far from where the spot was chosen -> decide again
+  firePollMs: 32,         // in band, re-test the firing line this often (the plain bot's 220 ms let a sprint through a gap go unshot)
+  // (No shot lead: every shot in this game — the player's lock-on, the plain
+  // bot's, this one's — is aimed at the target's CURRENT position. A lead
+  // was tried here on 2026-10-05 and removed the same day: not in the deal.)
+  readReload: true,       // read enemy empty mags as free windows
+  // COVER PACING (play test 2026-10-05, "don't make them stand deadly
+  // still"): behind cover (cover / watch states) the unit paces on a short
+  // leash — the base hide stance's recipe — instead of holding a statue.
+  // Every leg is hidden on the muzzle line from every live eye (re-checked
+  // each tick), from the predicted / spread eyes when such a leg exists,
+  // walkable, inside the leash, and during a watch keeps the watched exits
+  // covered. Exposure rules are untouched: a leg that would open a line is
+  // never taken.
+  paceSpeed: 0.4,         // walk-speed fraction while pacing (0 = the old dead-still hold)
+  paceLeg: 0.8,           // a leg's look-ahead step (u): must stay hidden and on the leash
+  paceLeash: 2.0,         // stay within this of the arrival point (u)
+  paceMs: 350,            // keep a heading this long, then re-pick (8 headings)
+  paceRetryMs: 300,       // no hidden leg at all: stand this long, then try again
+  pacePauseMs: 400,       // half the legs end in a stand of 0..this ms
+  // RISK-WEIGHTED CLOSING (owner 2026-10-05, "the bot can go for the range
+  // if the situation allows but don't go for a suicide route just because
+  // LR forces it to go in"). The band stays the preference; a PLANNED hop
+  // (band hop, watch hop, engage hop, stand peek) is taken only if its
+  // estimated death chance (sdRouteRisk: every exposed stretch crossed at
+  // riskSprint against a no-lead shooter — the lock-on player — who fires
+  // riskReactMs after the line opens and every riskShotMs after; a round
+  // lands with discHitFrac for the stretch's distance and lateral motion)
+  // stays under the cap. A rejected route marks its first exposed point
+  // avoid (avoidR, for avoidMs or until the threat moves watchMoveTol) and
+  // the next search goes around it; nothing under the cap -> hold the cover
+  // and wait for a window (the enemy's empty mag — sdFree skips the cap —
+  // their move, the mark expiring). The wait is not forever: after
+  // patienceMs the cap rises to patienceCap. Escapes (caught exposed) are
+  // never capped — the unit must move.
+  riskCap: 0.08,
+  engageRiskCap: 0.15,    // deliberate moves: engage hops and stand peeks
+  patienceMs: 8000,
+  patienceCap: 0.3,
+  riskReactMs: 250,       // a human's reaction to a line opening (the plain bot polls at 220, this one at 32 — the sim is harsher than play)
+  riskShotMs: 60,         // floor on the enemy's shot interval (their fireCooldownMs if longer): a held trigger fires at the cooldown — 150 read the 55 ms SMG as 2.7 x fewer rounds, and with the real sprint speed in the model the crossings it waved through died (mid batch: 0 -> 8-17% losses)
+  riskSprint: 16.8,       //   fallback speed when the unit has no sprintSpeed (see riskSprintFactor)
+  riskSprintFactor: 1.8,  //   exposure speed = unit sprintSpeed x this: the dash runs at ~2.26 x sprintSpeed (momentum on top, measured 24-32 u/s), x 0.8 margin       // effective sprint speed (sprintSpeed + momentum)
+  avoidR: 3.5,
+  avoidMs: 2500,
+  // SAFE ENGAGEMENT DISTANCE: the band is centred on the lock range only
+  // where a lateral sprint crossing of safeCrossMs is under riskCap against
+  // the threat's gun; otherwise on the nearest distance (5 u steps, up to
+  // safeMaxDist) that is. Saori's 0.02 / 600 u/s rifle: 56 -> 80 u. Hidden
+  // closing past it is still allowed (risk-gated); attacking is not sought
+  // nearer, and from inside it the band hop pulls back out.
+  safeCrossMs: 300,
+  safeMaxDist: 150,
+  // CROSSING (owner 2026-10-05): inside lateralFullDist the exposed crossing
+  // is fully perpendicular to the threat's line (lateral 1.0, no progress
+  // along it while exposed); a crossing that has no room to turn (a corridor
+  // running at the enemy) is not run straight any more: caught inside ->
+  // sprint back to the last hidden spot and mark the corridor; not yet
+  // exposed -> stop short, mark it, re-plan. The enemy's empty mag (sdFree)
+  // still lets the unit commit straight.
+  lateralFullDist: 70,
+  corridorLateral: 0.5,   // a heading with less lateral than this and no room to turn is a corridor run
+  backOffMax: 14,         // back off only to a hidden spot within this (else escape as before)
+  // POSITION HOLDING (owner 2026-10-05, "I would really not prefer to see
+  // BOT give up good position"): a hidden unit scores where it stands —
+  // hidden from the live eyes (1), from the predicted / spread eyes too
+  // (+1), cover within goalCoverMax (+1), the enemy's exits it covers (+0.5
+  // each, up to +2), inside the band +- bandSlack (+1) — and HOLDS while the
+  // score is at least holdScore, re-scored every holdRecheckMs. It leaves
+  // only when the spot goes bad, for a hidden cover-adjacent spot in the
+  // band scoring holdGain more (risk-gated), on a free window while far,
+  // or for a deliberate engage (manoeuvres 1 and 2). The old "farther when
+  // too close" retreat and the in-band 8 u shift are gone.
+  holdScore: 3,           // hidden + cover + band is a spot worth keeping; exits and strict hiding are bonuses
+  holdGain: 1.5,
+  holdRecheckMs: 500,
+  bandSlack: 10,
+  // MANOEUVRE 1 — the suppress sprint (owner 2026-10-05): the engage hop's
+  // cover must lie across the threat's line — its bearing at least
+  // bearingLateralNear (sin 75 deg) inside bearingFullDist, bearingLateralFar
+  // (sin 60 deg) beyond — and the run sees the target midway, so the unit
+  // sprints across firing and ends hidden again.
+  bearingFullDist: 90,
+  bearingLateralNear: 0.8,  // sin 53 deg: the crossing rule steers the exposed part to 90 deg anyway (measured: 0.966 found almost no cover)
+  bearingLateralFar: 0.6,
+  // MANOEUVRE 2 — peek, fire, dodge back: when no such cover exists, a
+  // lateral leg (peekLateralMin across the line) of peekLeg at a sprint to a
+  // spot that sees the target, the fight window (peekMs) strafing across the
+  // line, then the i-frame dodge step back toward the cover (the sprint back
+  // would run into rounds already in the air) and the rest at a sprint.
+  peekLateralMin: 0.7,
+  // PUSH (patience): held for patienceMs with no engage cover and no peek
+  // leg -> approach along cover ("go for the range if the situation
+  // allows"): any hidden cover-adjacent cell closer than now, gated at
+  // riskCap x pushCapScale — near-zero exposure only.
+  pushCapScale: 0.5,
+  pushAfterMs: 2500,      // held this long with nothing to do -> push (the caps only rise at patienceMs)
+  shadowMaxSpeed: 3,      // a narrow shadow is an approach lane only while the threat moves slower than this (u/s): a running enemy's shadow moves with it
+  travelArm: 250,         // TRAVEL LATCH (owner 2026-10-05, "全程只用一條閘門"): a covered TRAVEL leg (far from the target) sprints only from a full tank ...
+  travelFloor: 110,       //   ... down to here — the ENGAGEMENT RESERVE (owner 2026-10-06, "used the gauge until 8 just for Maze, then had no boost for true engage"): a peek (60) plus a dodge (48), or a jump plus the dodge after it — then walks until full again (a ~2 s sprint from full, a 1 s refill walk). Was 40 (one crossing), and open ground drained to 8 even unseen. Nobody shooting -> never below the reserve; exposed crossings, escapes, peeks and dodges still spend to dashFloor. One latch, no near / far thresholds; in contact covered legs walk (the shadow walk)
+};
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -829,7 +1109,7 @@ export function tickBot(matchState, botId, now) {
     resetBotHideFields(me);
   }
   // Which hide runs this tick: the stance (ordered / reload) or the cover hide.
-  const hideMode = hideOrdered ? 'stance' : (me.botCH ? 'cover' : null);
+  const hideMode = me.botSD ? null : (hideOrdered ? 'stance' : (me.botCH ? 'cover' : null));
 
   // Movement override carried by the hide stance below (the 2026-08-08
   // cover reload's vehicle, kept: the dispatch and the stall-clock pinning
@@ -1152,6 +1432,1129 @@ export function tickBot(matchState, botId, now) {
       }
     }
   }
+  // ===== SUDDEN DEATH BRAIN (sim prototype; see the BOT_SD note) =====
+  // Per-fighter overrides (me.botSDOpts) let the harness A/B two rule sets
+  // inside one match; the fire block below reads SDG too.
+  const SDG = me.botSD ? (me.botSDOpts ? { ...BOT_SD, ...me.botSDOpts } : BOT_SD) : null;
+  if (me.botSD && !defenseLive) {
+    const SD = SDG;
+    const sdEnemies = [];
+    for (const f of Object.values(matchState.fighters)) {
+      if (f.team !== me.team && f.hp > 0) sdEnemies.push(f);
+    }
+    sdEnemies.sort((a, b) =>
+      Math.hypot(a.pos.x - me.pos.x, a.pos.z - me.pos.z) - Math.hypot(b.pos.x - me.pos.x, b.pos.z - me.pos.z));
+    // "Exposed" is judged on the MUZZLE line with the projectile rules (the
+    // line botShotCanLand fires along, both ends at +PROJECTILE_MUZZLE_Y_OFFSET):
+    // on Factory the eye line (+1.6) is blocked by the 4-5 high belts and
+    // crates that a muzzle line (+3.15) clears, and a 1 HP unit "hidden" by
+    // eye was shot over them in the first smoke runs.
+    const sdClear = (p0, p1) => {
+      // (broadphase: only the boxes near the segment — see navgrid sightClear)
+      const cand = obstaclesNearSegment(obstacles, p0, p1);
+      for (let i = 0; i < cand.length; i += 1) {
+        const o = cand[i];
+        if (o.noProjectile) continue;
+        if (segmentHitsObstacle(p0, p1, o)) return false;
+      }
+      return !(surfaces && projectileHitsSurface(p0, p1, surfaces));
+    };
+    const sdEyes = sdEnemies.map((f) => ({ x: f.pos.x, y: f.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: f.pos.z }));
+    const sdMyEye = { x: me.pos.x, y: myShotY, z: me.pos.z };
+    let sdHidden = true;
+    let sdThreat = sdEnemies[0] ?? opp;   // the enemy whose line is open on the unit (else the nearest)
+    for (let k = 0; k < sdEyes.length; k += 1) {
+      if (sdClear(sdEyes[k], sdMyEye)) { sdHidden = false; sdThreat = sdEnemies[k]; break; }
+    }
+    // SD BAND (BOT_SD safeCrossMs): the lock-range band, lifted to the safe
+    // engagement distance against this threat's gun. SD_BAND_MARK
+    // RISK SPEED (owner 2026-10-05, "make it not underestimate it"): the
+    // exposure model moves the unit at its own sprint, measured 24-32 u/s
+    // (sprintSpeed 11.76 + the dash momentum), not the old 16.8 constant
+    // that read a 0.5 s crossing at 60 u as 38% dead. riskSprintFactor
+    // keeps a margin for the momentum build-up and a human's hand lead.
+    const sdSprint = (me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED) * SD.riskSprintFactor;
+    const sdSafe = sdSafeDistance(sdThreat, SD, lowerRange, sdSprint);
+    const sdOptimal = Math.max(optimalRange, sdSafe);
+    const sdUpper = sdOptimal + (upperRange - optimalRange);
+    const sdLower = Math.max(6, sdOptimal - (optimalRange - lowerRange));
+    me.botSDUpper = sdUpper;
+    // Lateral fraction of a heading (hx, hz) relative to the threat's line.
+    const sdLateral = (hx, hz) => {
+      let lx = sdThreat.pos.x - me.pos.x, lz = sdThreat.pos.z - me.pos.z;
+      const ll = Math.hypot(lx, lz) || 1;
+      return Math.abs(hx * lz - hz * lx) / ll;
+    };
+    // Can the unit's own shot reach the lock target from here? (The fire
+    // block's line; the peek clock runs on it.)
+    const sdOppClear = sdClear(sdMyEye, { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z });
+    if (sdOppClear || me.botSDLastClearAt == null) me.botSDLastClearAt = now;
+    const sdNoShotTime = now - me.botSDLastClearAt;
+    // COVER PROXIMITY (play test 2026-10-05, "walks into open dead space like
+    // taking a walk"): the muzzle-line test alone called half the map
+    // "hidden" whenever the enemy stood behind something far away, and the
+    // unit strolled across open floor at walk speed. Open ground (no
+    // muzzle-blocking cover within openDist) is never safe: hop goals stand
+    // next to cover, routes are charged for open cells, open ground is
+    // crossed at a sprint and never dwelt on.
+    const sdGrid = navGridFor(arena);
+    const sdCoverDist = coverDistanceAt(sdGrid, me.pos.x, me.pos.z, myFloorY, obstacles);
+    const sdOpen = sdCoverDist > SD.openDist;
+    const sdFar = dist > sdUpper + SD.farDist;
+    // Hop goals are chosen hidden from the enemies' PREDICTED positions too
+    // (predictS ahead on their live velocity) — a human reads where the
+    // enemy is heading, not only where it stands.
+    const sdPredEyes = [];
+    for (let k = 0; k < sdEnemies.length; k += 1) {
+      const f = sdEnemies[k];
+      const vx = f.vel?.x ?? 0, vz = f.vel?.z ?? 0;
+      if (Math.hypot(vx, vz) > 1) {
+        sdPredEyes.push({ x: f.pos.x + vx * SD.predictS, y: f.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: f.pos.z + vz * SD.predictS });
+      }
+    }
+    // The risk model judges a route against the live and PREDICTED eyes (not
+    // the spread ones: those are a sidestep that may never happen).
+    const sdRiskEyes = sdEyes.concat(sdPredEyes);
+    const sdThreatMoving = Math.hypot(sdThreat.vel?.x ?? 0, sdThreat.vel?.z ?? 0) > SD.shadowMaxSpeed;
+    // (The 2026-10-05 "sure shot" range gate — a hit-chance test that opened
+    // the peek, the fight window and a long-range FIRE hop on a slow target
+    // — is gone the same day, owner: "not even logically related". The
+    // engagement is the band; the far side of a map is reached by crossing
+    // it — the jump links and the shadow walk below.)
+    // EYE SPREAD (play test 2026-10-05): a human strafes constantly, and a
+    // cell hidden from the enemy's exact position opens the moment they
+    // step sideways. Hop goals and routes are judged against the enemy's
+    // position PLUS eyes eyeSpread to either side of the line, so the
+    // chosen cover holds for a sidestep.
+    if (SD.eyeSpread > 0) {
+      for (let k = 0; k < sdEnemies.length; k += 1) {
+        const f = sdEnemies[k];
+        let lx = f.pos.x - me.pos.x, lz = f.pos.z - me.pos.z;
+        const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+        const ey = f.pos.y + PROJECTILE_MUZZLE_Y_OFFSET;
+        sdPredEyes.push({ x: f.pos.x - lz * SD.eyeSpread, y: ey, z: f.pos.z + lx * SD.eyeSpread });
+        sdPredEyes.push({ x: f.pos.x + lz * SD.eyeSpread, y: ey, z: f.pos.z - lx * SD.eyeSpread });
+      }
+    }
+    const sdSearchEyes = sdEyes.concat(sdPredEyes);
+    // Avoid marks (rejected stretches, refused corridors) expire by time or
+    // once the threat has moved watchMoveTol (a different line now); the
+    // last hidden spot is the back-off target when caught in a corridor.
+    if (me.botSDAvoid && me.botSDAvoid.length) {
+      me.botSDAvoid = me.botSDAvoid.filter((a) => now < a.until
+        && (a.pinned || Math.hypot(sdThreat.pos.x - a.tx, sdThreat.pos.z - a.tz) <= SD.watchMoveTol));
+    }
+    if (sdHidden) me.botSDLastHidden = { x: me.pos.x, z: me.pos.z };
+    const sdAvoid = (me.botSDAvoid && me.botSDAvoid.length) ? me.botSDAvoid : null;
+    // (a pinned mark — a stuck waypoint — outlives the threat's movement)
+    const sdMark = (x, z, ms = SD.avoidMs, pinned = false) => {
+      if (!me.botSDAvoid) me.botSDAvoid = [];
+      for (const a of me.botSDAvoid) {
+        if (Math.hypot(a.x - x, a.z - z) <= a.r) { a.until = Math.max(a.until, now + ms); a.pinned = a.pinned || pinned; return; }
+      }
+      me.botSDAvoid.push({ x, z, r: SD.avoidR, until: now + ms, tx: sdThreat.pos.x, tz: sdThreat.pos.z, pinned });
+    };
+    // Enemy fire windows: every live enemy out of rounds with at least
+    // freeMinMs of reload left -> a free window (the budget and the dwell
+    // are suspended). Off when readReload is false.
+    let sdFree = SD.readReload && sdEnemies.length > 0;
+    if (sdFree) {
+      for (const f of sdEnemies) {
+        const fu = f.unit ?? {};
+        const out = fu.magCapacity != null && f.ammo <= 0 && (f.reloadingUntil ?? 0) > now + SD.freeMinMs;
+        if (!out) { sdFree = false; break; }
+      }
+    }
+    const sdU = me.unit ?? {};
+    const sdMyEmpty = sdU.magCapacity != null && me.ammo <= 0;
+    const sdMyReloadLeft = sdMyEmpty ? Math.max(0, (me.reloadingUntil || (now + (sdU.reloadMs ?? 0))) - now) : 0;
+    // Exposure clock: starts the tick the first enemy eye sees the unit.
+    if (!sdHidden) {
+      if (me.botSDExposedAt == null) {
+        me.botSDExposedAt = now;
+        // A deliberate peek buys its own window; being caught buys exposeMs.
+        const watching = now < (me.botSDWatchUntil ?? 0) && !me.botSDPath;
+        me.botSDExposeBudget = me.botSDPeekArmed
+          ? SD.peekMs + Math.random() * SD.peekJitterMs
+          : watching
+            ? SD.watchFightMs + Math.random() * SD.watchFightJitterMs   // the enemy walked into a watched line: stand, trade, then pull back
+            : SD.exposeMs + Math.random() * SD.exposeJitterMs;
+        me.botSDPeekArmed = false;
+        me.botSDWatchFight = watching;
+        if (watching) { me.botSDWatchUntil = 0; me.botSDExchanges = (me.botSDExchanges ?? 0) + 1; }
+        me.botSDExposures = (me.botSDExposures ?? 0) + 1;
+      }
+    } else {
+      me.botSDExposedAt = null;
+      me.botSDWatchFight = false;
+    }
+    const sdExposedFor = sdHidden ? 0 : now - me.botSDExposedAt;
+    // The fight window is only worth standing for inside the band (the unit's
+    // own shots land there); exposed beyond it — Factory's 190 u lanes — or
+    // out of rounds, break off at once (firing on the way).
+    const sdFightOk = dist <= sdUpper + SD.fightSlack;
+    const sdOverBudget = !sdHidden && !sdFree && (!sdFightOk || sdExposedFor >= (me.botSDExposeBudget ?? SD.exposeMs) || sdMyEmpty);
+    const sdGoalHidden = (goal) => {
+      const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z: goal.z };
+      for (let k = 0; k < sdEyes.length; k += 1) {
+        if (sdClear(sdEyes[k], gEye)) return false;
+      }
+      return true;
+    };
+    const sdDrop = () => {
+      me.botSDPath = null;
+      me.botSDPathIdx = null;
+      me.botSDGoal = null;
+      me.botSDMoveAnchor = null;
+      me.botSDGoalMayShow = false;
+    };
+    // STUCK WATCHDOG (owner 2026-10-05, "BOT still get stuck from time to
+    // time"): standing within stuckMoveMin for stuckMs with no reason to —
+    // a deliberate stand is hidden, hugging cover and inside holdMaxMs
+    // without a line — is stuck whatever the state: the spot is marked
+    // (pinned), route and peek dropped, and the plain brain takes the legs
+    // for plainMs (its own wedge detectors run in that window; the SD fire
+    // rules stay).
+    if (!me.botSDWd || Math.hypot(me.pos.x - me.botSDWd.x, me.pos.z - me.botSDWd.z) > SD.stuckMoveMin) me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now };
+    const sdDeliberate = sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs;
+    if (now - me.botSDWd.at > SD.stuckMs && !sdDeliberate && !me.airborne && now >= (me.botSDPlainUntil ?? 0)) {
+      sdMark(me.pos.x, me.pos.z, SD.stuckAvoidMs, true);
+      sdDrop();
+      me.botSDPeekTo = null; me.botSDPeekArmed = false; me.botSDBackOff = false; me.botSDPeekAnchor = null;
+      me.botSDWatchUntil = 0; me.botSDDwellUntil = 0;
+      me.botSDPlainUntil = now + SD.plainMs;
+      me.botSDSearchAt = now + SD.plainMs;
+      me.botSDStucks = (me.botSDStucks ?? 0) + 1;
+      me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now };
+    }
+    const sdDwell = () => (dist > sdUpper + 30 && !playerHasLoS)
+      ? SD.farDwellMs
+      : SD.dwellMinMs + Math.random() * (SD.dwellMaxMs - SD.dwellMinMs);
+    // Hop searches start from the cover's anchor point (where the unit
+    // arrived), not from wherever the cover pacing left it: a 2 u shift of
+    // the start node flipped the opening hop to a longer, deadlier route
+    // (measured: Saori's A-seat opening losses 0 -> 15 of 40).
+    const sdSearchX = me.botSDPaceAnchor ? me.botSDPaceAnchor.x : me.pos.x;
+    const sdSearchZ = me.botSDPaceAnchor ? me.botSDPaceAnchor.z : me.pos.z;
+    // RISK GATE for a planned hop (BOT_SD riskCap): the estimated death
+    // chance of the route must stay under the cap (engage cap for deliberate
+    // crossings; after patienceMs of holding, the patience cap). A rejected
+    // route marks its first exposed stretch avoid. Escapes and free windows
+    // (the enemy out of rounds) are not gated.
+    const sdRiskCap = (engage) => {
+      const since = me.botSDRiskHoldSince ?? me.botSDIdleSince;
+      const waited = since != null ? now - since : 0;
+      const cap = engage ? SD.engageRiskCap : SD.riskCap;
+      return waited > SD.patienceMs ? Math.max(cap, SD.patienceCap) : cap;
+    };
+    const sdRiskReject = () => {
+      me.botSDRiskRejects = (me.botSDRiskRejects ?? 0) + 1;
+      if (me.botSDRiskHoldSince == null) me.botSDRiskHoldSince = now;
+    };
+    // LATERAL CROSSING (owner 2026-10-05, "keep the unit in vertical moving
+    // angle"): a jump-link crossing the threat can see is made only ACROSS
+    // its line — the crossing direction's lateral fraction at least
+    // lateralMin, like every other exposed crossing. An along-line one is
+    // rejected and its ledge marked, so the next search takes a link farther
+    // along the trench or a hidden one. Returns the offending ledge or null.
+    const sdCrossingBad = (path) => {
+      let px = sdSearchX, pz = sdSearchZ, py = myFloorY;
+      for (let i = 0; i < path.length; i += 1) {
+        const q = path[i], qy = q.y ?? py;
+        if (Math.abs(qy - py) > 1.7) {
+          const mx = (px + q.x) / 2, mz = (pz + q.z) / 2;
+          const mid = { x: mx, y: Math.max(py, qy) + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z: mz };
+          let exposed = false;
+          for (let e = 0; e < sdRiskEyes.length && !exposed; e += 1) if (sdClear(sdRiskEyes[e], mid)) exposed = true;
+          if (exposed) {
+            const dx = q.x - px, dz = q.z - pz, dl = Math.hypot(dx, dz) || 1;
+            let lx = sdThreat.pos.x - mx, lz = sdThreat.pos.z - mz;
+            const ll = Math.hypot(lx, lz) || 1;
+            const lat = Math.abs((dx / dl) * (lz / ll) - (dz / dl) * (lx / ll));
+            if (lat < SD.lateralMin) return { x: q.x, z: q.z };
+          }
+        }
+        px = q.x; pz = q.z; py = qy;
+      }
+      return null;
+    };
+    const sdHopOk = (found, engage, capScale = 1) => {
+      const badLedge = sdCrossingBad(found.path);
+      if (badLedge) { sdMark(badLedge.x, badLedge.z, SD.stuckAvoidMs, true); sdRiskReject(); return false; }
+      // ENGAGE ROUTE (Airport idle trace 2026-10-05, seed 14): the straight
+      // run's midpoint saw the target but the ROUTE detoured round the
+      // hangar and never showed — five 60 u loops out and back in 20 s. An
+      // engage hop must open the line somewhere along its actual route (an
+      // exposed piece against the live / predicted eyes).
+      if (engage) {
+        const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint);
+        if (!rr.first) return false;
+        if (sdFree || sdOverBudget) return true;
+        me.botSDLastRisk = rr.risk;
+        if (rr.risk <= sdRiskCap(true) * capScale) return true;
+        sdMark(rr.first.x, rr.first.z);
+        sdRiskReject();
+        return false;
+      }
+      if (sdFree || sdOverBudget) return true;
+      const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint);
+      me.botSDLastRisk = rr.risk;
+      if (rr.risk <= sdRiskCap(engage) * capScale) return true;
+      if (rr.first) sdMark(rr.first.x, rr.first.z);
+      sdRiskReject();
+      return false;
+    };
+    // LINE-CAPABLE (BOT_SD peekableBonus): from (x, z) a lateral leg (the
+    // two perpendiculars and the two rotated 30 deg toward the target, at
+    // peekLeg and 1.75 x) is walkable and its end has a muzzle line to the
+    // target — the stand peek's precondition.
+    const sdOppMuzzle = { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z };
+    const sdPeekableAt = (x, z, fy) => {
+      const my = fy + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET;
+      let lx = opp.pos.x - x, lz = opp.pos.z - z;
+      const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      const heads = [[-lz, lx], [lz, -lx], [-lz * 0.866 + lx * 0.5, lx * 0.866 + lz * 0.5], [lz * 0.866 + lx * 0.5, -lx * 0.866 + lz * 0.5]];
+      for (let h = 0; h < heads.length; h += 1) {
+        const cx = heads[h][0], cz = heads[h][1];
+        for (const L of [SD.peekLeg, SD.peekLeg * 1.75, SD.peekLegMax]) {
+          const px = x + cx * L, pz = z + cz * L;
+          if (walkSegmentBlocked(x, z, px, pz, fy + GROUND_BASE_Y, obstacles)) break;
+          if (sdClear({ x: px, y: my, z: pz }, sdOppMuzzle)) return true;
+        }
+      }
+      return false;
+    };
+    // POSITION SCORE (BOT_SD holdScore): 0 when a live eye sees the muzzle
+    // there; else 1 + strict-hidden + cover + exits covered / 2 + band
+    // + peekableBonus when line-capable.
+    const sdPosScoreAt = (x, z, fy) => {
+      const eye = { x, y: fy + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z };
+      for (let k = 0; k < sdEyes.length; k += 1) if (sdClear(sdEyes[k], eye)) return 0;
+      let s = 1, strictHidden = true;
+      for (let k = 0; k < sdPredEyes.length; k += 1) if (sdClear(sdPredEyes[k], eye)) { strictHidden = false; break; }
+      if (strictHidden) s += 1;
+      if (coverDistanceAt(sdGrid, x, z, fy, obstacles) <= SD.hugDist) s += 1;   // hugging the cover, not standing in its shadow
+      s += Math.min(4, watchScore(x, z, fy)) * 0.5;
+      const d = Math.hypot(opp.pos.x - x, opp.pos.z - z);
+      if (d >= sdLower - SD.bandSlack && d <= sdUpper + SD.bandSlack) s += 1;
+      if (sdPeekableAt(x, z, fy)) s += SD.peekableBonus;
+      return s;
+    };
+    // 1. Route bookkeeping: arrived -> drop and dwell; goal uncovered by a
+    //    moving enemy -> drop (a fresh search follows).
+    if (me.botSDPath) {
+      const goal = me.botSDGoal;
+      if (Math.hypot(goal.x - me.pos.x, goal.z - me.pos.z) < 2) {
+        sdDrop();
+        if (me.botSDWatchPlanned && !sdOpen) {
+          // Arrived at a watch spot: hold it, pre-aimed, for the watch window.
+          me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
+          me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
+          me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+          me.botSDDwellUntil = me.botSDWatchUntil;
+          me.botSDWatches = (me.botSDWatches ?? 0) + 1;
+        } else {
+          me.botSDDwellUntil = now + (sdOpen ? 0 : sdDwell());   // never dwell on open ground
+        }
+        me.botSDWatchPlanned = false;
+      } else if (!me.botSDGoalMayShow && !sdGoalHidden(goal)) {
+        sdDrop();
+        me.botSDSearchAt = now;
+      }
+    }
+    // Peek leg bookkeeping: arrived or exposed (the fight window takes over).
+    // (A back-off leg is the same leg run the other way: it ends when the
+    // unit is hidden again or arrived, and a fresh dwell follows.)
+    if (me.botSDPeekTo) {
+      const left = Math.hypot(me.botSDPeekTo.x - me.pos.x, me.botSDPeekTo.z - me.pos.z);
+      const arrived = left < 1;
+      if (me.botSDBackOff ? (sdHidden || arrived) : (!sdHidden || arrived)) {
+        me.botSDPeekTo = null;
+        me.botSDPeekAnchor = null;
+        if (me.botSDBackOff) {
+          me.botSDBackOff = false;
+          me.botSDDwellUntil = now + sdDwell();
+        } else if (sdHidden) {
+          me.botSDPeekArmed = false;   // arrived without a line: the peek failed
+        }
+      } else if (!me.botSDPeekAnchor || left < me.botSDPeekAnchor.best - 0.5) {
+        me.botSDPeekAnchor = { best: left, at: now };
+      } else if (now - me.botSDPeekAnchor.at > SD.bailMs) {
+        // PEEK BAIL (playable Airport idle 2026-10-05: one run in five sat
+        // out its 70 s in the 'peek' state, the body wedged on the leg): a
+        // peek or back-off leg that stops closing on its point for bailMs is
+        // dropped — the point marked, the search re-opened — instead of
+        // running against the wall for the rest of the match. (A route has
+        // had this bail since the Factory wedge; the peek leg had none.)
+        sdMark(me.botSDPeekTo.x, me.botSDPeekTo.z, SD.stuckAvoidMs, true);
+        me.botSDPeekTo = null;
+        me.botSDPeekAnchor = null;
+        me.botSDBackOff = false;
+        me.botSDPeekArmed = false;
+        me.botSDSearchAt = now;
+        me.botSDPeekBails = (me.botSDPeekBails ?? 0) + 1;
+      }
+    } else {
+      me.botSDPeekAnchor = null;
+    }
+    // WATCH SCORE: how many of the 8 exit points on the ring exitR around
+    // the target a muzzle at (x, z, floor) could hit. The watch spot is the
+    // hidden cell maximising this — it covers where the enemy will step
+    // out, not where it stands.
+    const watchScore = (x, z, fy) => {
+      const from = { x, y: fy + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z };
+      let n = 0;
+      for (let k = 0; k < 8; k += 1) {
+        const a = k * Math.PI / 4;
+        const px = opp.pos.x + Math.cos(a) * SD.exitR, pz = opp.pos.z + Math.sin(a) * SD.exitR;
+        if (unitOverlapsObstacle(px, GROUND_BASE_Y + 1, pz, obstacles)) continue;
+        if (sdClear(from, { x: px, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: pz })) n += 1;
+      }
+      return n;
+    };
+    // WATCH maintenance: the spot must keep covering the enemy's exits —
+    // the enemy moving away from where it was chosen, or the lines closing,
+    // ends the watch and a fresh decision follows.
+    const sdWatching = sdHidden && !me.botSDPath && now < (me.botSDWatchUntil ?? 0);
+    if (sdWatching && now >= (me.botSDWatchRecheckAt ?? 0)) {
+      me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+      const wa = me.botSDWatchAnchor;
+      const moved = wa ? Math.hypot(opp.pos.x - wa.x, opp.pos.z - wa.z) : 0;
+      if (moved > SD.watchMoveTol || watchScore(me.pos.x, me.pos.z, myFloorY) < SD.exitMin) {
+        me.botSDWatchUntil = 0;
+        me.botSDDwellUntil = now;
+      }
+    }
+    // 2. Hop search — one Dijkstra per tick per match (shares the hide
+    //    search's slot). Wanted when exposed past the budget, or hidden with
+    //    the dwell over (a long own reload is spent in cover unless the
+    //    enemy is out of rounds too).
+    const sdDwellOver = now >= (me.botSDDwellUntil ?? 0);
+    const sdHoldReload = sdMyReloadLeft > SD.reloadHoldMs && !sdFree;
+    const sdWantHop = !me.botSDPath && !me.botSDPeekTo
+      && (sdOverBudget || (sdHidden && sdDwellOver && !sdHoldReload));
+    if (sdWantHop && now >= (me.botSDSearchAt ?? 0) && matchState.hideSearchTick !== matchState.tick) {
+      matchState.hideSearchTick = matchState.tick;
+      let decided = false;
+      // ENGAGE HOP (owner's description of human SD play — "sprint from a
+      // cover to another while firing during moving"): hidden in band with
+      // no shot line for peekWaitMs, the first choice is a band hop whose
+      // crossing OPENS a line to the target (the midpoint of the straight
+      // run sees it) and ends hidden again. The stand peek stays the fallback.
+      const oppMuzzle = { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z };
+      const sdEngageDue = sdHidden && dist <= sdUpper + SD.peekRange && sdNoShotTime >= SD.peekWaitMs;
+      // NEVER HOLD FOREVER: no shot line for holdMaxMs makes any position a
+      // bad one — the hold and the watch end, the search runs.
+      const sdHoldOk = sdNoShotTime < SD.holdMaxMs;
+      // (the run sees the target somewhere in its middle half)
+      const midSees = (gx, gz) => [0.35, 0.5, 0.65].some((f) => sdClear({ x: me.pos.x + (gx - me.pos.x) * f, y: myShotY, z: me.pos.z + (gz - me.pos.z) * f }, oppMuzzle));
+      // PEEK RETREAT: a stand peek's budget is up -> step straight back to
+      // the cover it came from (the corner dance), no search.
+      if (sdOverBudget && me.botSDPeekOrigin) {
+        const o = me.botSDPeekOrigin;
+        const ox = o.x - me.pos.x, oz = o.z - me.pos.z, ol = Math.hypot(ox, oz) || 1;
+        if (!me.botSDPeekStepped && ol > 1.5 && tryStartStep(matchState, me, ox / ol, oz / ol, now, obstacles)) {
+          // MANOEUVRE 2, the way back: the i-frame dodge step toward the
+          // cover (the AI sits out the step); the leftover at a sprint below.
+          me.botSDPeekStepped = true;
+          me.botSDDodges = (me.botSDDodges ?? 0) + 1;
+          me.botSDSearchAt = now + SD.searchMs;
+          decided = true;
+        } else {
+          me.botSDPeekOrigin = null;
+          me.botSDPeekStepped = false;
+          if (ol <= 12 && sdGoalHidden({ x: o.x, z: o.z, y: myFloorY })) {
+            me.botSDPath = [{ x: o.x, z: o.z, y: myFloorY }];
+            me.botSDPathIdx = 0;
+            me.botSDGoal = { x: o.x, z: o.z, y: myFloorY };
+            me.botSDMoveAnchor = null;
+            me.botSDSearchAt = now + SD.searchMs;
+            me.botSDRetreats = (me.botSDRetreats ?? 0) + 1;
+            decided = true;
+          }
+        }
+      }
+      // POSITION SCORE of the spot the unit stands on, re-scored every
+      // holdRecheckMs while hidden — the basis of HOLD below.
+      let sdPosScore = me.botSDPosScore ?? 0;
+      if (sdHidden && !sdOverBudget && (me.botSDPosAt == null || now - me.botSDPosAt >= SD.holdRecheckMs)) {
+        sdPosScore = sdPosScoreAt(me.pos.x, me.pos.z, myFloorY);
+        me.botSDPosScore = sdPosScore;
+        me.botSDPosAt = now;
+      }
+      // (a good position hugs its cover — "they should get closer to cover")
+      const sdPosGood = sdHidden && !sdOverBudget && sdPosScore >= SD.holdScore && sdCoverDist <= SD.hugDist;
+      const sdClosingDue = dist > sdUpper + SD.bandSlack;
+      // IDLE clock: hidden with nothing accepted. An accepted plan or an
+      // exposure resets it; past patienceMs the PUSH attempt opens and the
+      // caps rise to patienceCap.
+      if (!sdHidden) me.botSDIdleSince = null;
+      else if (me.botSDIdleSince == null) me.botSDIdleSince = now;
+      // (in or out of band: out of band the push IS the closing list below)
+      const sdPushDue = sdHidden && !sdOverBudget && me.botSDIdleSince != null && now - me.botSDIdleSince > SD.pushAfterMs;
+      // WATCH (in band, hidden, nothing due): a good spot that covers the
+      // enemy's exits is watched — the pre-aimed hold with the watch-fight
+      // budget when they walk into the line. (No watch hop any more: a
+      // better spot is the BETTER POSITION move below.)
+      const sdInBand = dist <= sdUpper + 20;
+      if (!decided && sdInBand && sdPosGood && !sdEngageDue && sdHoldOk
+          && now >= (me.botSDWatchCooldownUntil ?? 0) && Math.random() < SD.pWatch
+          && !sdOpen && sdCoverDist <= SD.hugDist && watchScore(me.pos.x, me.pos.z, myFloorY) >= SD.exitMin) {
+        me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
+        me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
+        me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+        me.botSDDwellUntil = me.botSDWatchUntil;
+        me.botSDWatches = (me.botSDWatches ?? 0) + 1;
+        me.botSDSearchAt = now + SD.searchMs;
+        decided = true;
+      }
+      // HOLD (owner 2026-10-05): a good position is kept — nothing to plan
+      // unless an engage is due, the push patience (pushAfterMs idle) is up
+      // or a free window opens while far. Out of band the patience ends the
+      // hold too: two hidden units out of band otherwise held for ever
+      // (SD-vs-SD trace seed 3: 104 u, both scoring 5-6, no attempt in
+      // 40 s), while closing at once threw the ambush away (mid batch: the
+      // unit ran out at contact, 46 hops/min, 1.6 s fights, 17% losses to
+      // the base bot that it had beaten 96%). Re-score shortly; a hold is
+      // never a stall.
+      if (!decided && sdPosGood && sdHoldOk && !sdEngageDue && !sdPushDue && !(sdFree && sdClosingDue)) {
+        me.botSDSearchAt = now + SD.holdRecheckMs;
+        me.botSDStallSince = null;
+        me.botSDHeld = (me.botSDHeld ?? 0) + 1;
+        decided = true;
+      }
+      // Closing goal (hidden, farther than the band): a hidden cell nearer
+      // the target by gain (10-45 u), next to cover. No "farther when too
+      // close" and no in-band shuffle any more.
+      const gain = Math.min(SD.hopGainMax, Math.max(SD.hopGainMin, dist * 0.3));
+      const within = sdClosingDue ? { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdOptimal, dist - gain) } : null;
+      // MANOEUVRE 1 (BOT_SD bearingLateralNear): the engage cover lies across
+      // the threat's line.
+      const bearingOk = (gx, gz) => {
+        const dx = gx - me.pos.x, dz = gz - me.pos.z;
+        const dl = Math.hypot(dx, dz) || 1;
+        return sdLateral(dx / dl, dz / dl) >= (dist <= SD.bearingFullDist ? SD.bearingLateralNear : SD.bearingLateralFar);
+      };
+      // Exposed: break the line first (nearest hidden cell, near then far
+      // budget). Hidden: the band hop (near then far), then any cell closer
+      // to the target than the current spot.
+      // Breaking off: prefer a cover whose straight run is LATERAL to the
+      // threat's line (the crossing rule below), then any cover.
+      const lateralGoal = (gx, gz) => {
+        const dx = gx - me.pos.x, dz = gz - me.pos.z;
+        const dl = Math.hypot(dx, dz) || 1;
+        return sdLateral(dx / dl, dz / dl) >= SD.lateralGoalMin;
+      };
+      // NO DOUBLING BACK (Hoshino opening trace 2026-10-05): a shotgun volley
+      // fired at the start of a crossing lands 0.46 s later where the unit
+      // WAS — a break-off that runs back to the cover it came from walks
+      // into it. Prefer covers that keep the last heading (dot >= -0.2).
+      const hdx = me.botSDHeadX ?? 0, hdz = me.botSDHeadZ ?? 0;
+      const forwardGoal = (gx, gz) => {
+        if (hdx === 0 && hdz === 0) return true;
+        const dx = gx - me.pos.x, dz = gz - me.pos.z;
+        const dl = Math.hypot(dx, dz) || 1;
+        return (dx * hdx + dz * hdz) / dl >= -0.2;
+      };
+      // Stage order. Hidden: band hop next to cover (near, far budget), band
+      // hop anywhere hidden, any hidden cell closer to the target, and last
+      // a cover-adjacent cell closer to the target even if not hidden
+      // (anyGoal — the enemy stands in a coverless pocket: approach along
+      // cover rather than stand still forever). Exposed: break the line to
+      // a cover-adjacent cell lateral and forward, forward, any hidden cell
+      // near then far, last a cover-adjacent cell forward even if not
+      // hidden (better than strafing in the open).
+      // (a closing hop gains at least hopGainMin toward the target and walks
+      // at least shiftMin — "2 u closer, 3 u away" let the unit chain 2-4 u
+      // hops five times a second at a platform edge, sprinting each, the
+      // tank 226 -> 6 in 20 s: the Station "back and forth" of 2026-10-05)
+      const closerWithin = { x: opp.pos.x, z: opp.pos.z, r: dist - SD.hopGainMin };
+      const closerMin = { x: me.pos.x, z: me.pos.z, d: SD.shiftMin };
+      // STANDOFF (owner: no suicide route for the range): no planned goal
+      // inside the band's lower edge, whatever its line — line-capable spots
+      // cluster along the target's own cover, and a flank that ran from 64 u
+      // to a hidden spot 30 u from the target died on the way (SD-vs-SD
+      // trace seed 7). Escapes stay unbounded.
+      const sdStandoffOk = (gx, gz) => Math.hypot(gx - opp.pos.x, gz - opp.pos.z) >= sdLower - SD.bandSlack;
+      const sdFlankOk = (gx, gz, fy) => sdStandoffOk(gx, gz) && sdPeekableAt(gx, gz, fy);
+      // FIRE SPOT: a cell (standoff kept) with a muzzle line to the target.
+      const sdFireSpot = (gx, gz, fy) => sdStandoffOk(gx, gz) && sdClear({ x: gx, y: fy + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z: gz }, sdOppMuzzle);
+      // SHADOW score: the cell nearest the target wins.
+      const sdNearer = (gx, gz) => -Math.hypot(gx - opp.pos.x, gz - opp.pos.z);
+      // SHADOW SHAPE (owner's maze): bend a shadow hop's route into the two
+      // legs — LATERAL (across the threat's line) onto the shadow's axis
+      // (threat -> goal, extended), then FORWARD along the axis to the goal
+      // — when both legs are walkable on this floor and the forward leg
+      // stays hidden; otherwise the exposure-costed route stands.
+      const sdShadowShape = (found) => {
+        const g = found.goal;
+        if (Math.abs((g.y ?? myFloorY) - myFloorY) > 0.5) return;
+        let ax = g.x - opp.pos.x, az = g.z - opp.pos.z;
+        const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
+        const t = (me.pos.x - opp.pos.x) * ax + (me.pos.z - opp.pos.z) * az;
+        if (t < al + 3) return;   // not behind the goal along its axis: no forward leg
+        const P = { x: opp.pos.x + ax * t, z: opp.pos.z + az * t, y: myFloorY };
+        if (Math.hypot(P.x - me.pos.x, P.z - me.pos.z) < 2) { found.path = [{ x: g.x, z: g.z, y: g.y ?? myFloorY }]; return; }
+        if (walkSegmentBlocked(me.pos.x, me.pos.z, P.x, P.z, me.pos.y, obstacles)) return;
+        if (walkSegmentBlocked(P.x, P.z, g.x, g.z, me.pos.y, obstacles)) return;
+        for (const f of [0.2, 0.5, 0.8]) {
+          if (!sdGoalHidden({ x: P.x + (g.x - P.x) * f, z: P.z + (g.z - P.z) * f, y: myFloorY })) return;
+        }
+        found.path = [P, { x: g.x, z: g.z, y: g.y ?? myFloorY }];
+      };
+      let attempts;
+      if (sdOverBudget) {
+        attempts = [{ maxPops: SD.nearPops, accept: (gx, gz) => lateralGoal(gx, gz) && forwardGoal(gx, gz), goalCoverMax: SD.goalCoverMax },
+          { maxPops: SD.nearPops, accept: forwardGoal, goalCoverMax: SD.goalCoverMax },
+          { maxPops: SD.nearPops, accept: forwardGoal },
+          { maxPops: SD.nearPops }, { maxPops: SD.farPops },
+          { maxPops: SD.nearPops, accept: forwardGoal, goalCoverMax: SD.goalCoverMax, anyGoal: true }];
+      } else if (sdClosingDue) {
+        // SHADOW WALK (owner's maze, 2026-10-05: "先橫移進影子，再在影子裡用走的
+        // 往對方推進"): the first choice is the cover-adjacent hidden cell
+        // NEAREST the target inside this hop's disc (gain 10-45 u closer —
+        // one cover at a time, a dwell and a re-read at each; an unbounded
+        // disc made 215 u charges at 31% exposure, SD vs SD dead in 1.7 s),
+        // best-of search stopping 15 u inside the disc, standoff kept — the
+        // shadow that brings the unit closest; sdShadowShape bends its route
+        // into the lateral-then-forward legs when they are walkable. Then
+        // the older list: a closer spot that can open a line, any closer
+        // cover, any closer hidden cell, cover even if not hidden.
+        attempts = [{ maxPops: SD.farPops, within, minDistFrom: closerMin, goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdNearer, scoreStop: -Math.max(sdOptimal, within.r - 15), shadow: true },
+          { maxPops: SD.farPops, within, goalCoverMax: SD.hugDist, accept: sdFlankOk, flank: true },
+          { maxPops: SD.nearPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
+          { maxPops: SD.farPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
+          { maxPops: SD.farPops, within, accept: sdStandoffOk },
+          { maxPops: SD.farPops, within: closerWithin, minDistFrom: closerMin, accept: sdStandoffOk },
+          { maxPops: SD.farPops, within: closerWithin, minDistFrom: closerMin, goalCoverMax: SD.goalCoverMax, anyGoal: true, accept: sdStandoffOk }];
+      } else if (sdEngageDue && sdPeekableAt(me.pos.x, me.pos.z, myFloorY)) {
+        // line-capable here: only the engage covers compete with the stand
+        // peek (the fail branch) — no relocation away from a usable spot
+        attempts = [];
+      } else {
+        attempts = [];
+        // FLANK: no line from here for peekWaitMs -> the nearest hidden
+        // cover-adjacent spot in the band that CAN open one (hidden route,
+        // risk-gated), then the peek-fire-dodge from there.
+        if (sdEngageDue) {
+          attempts.push({ maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: sdUpper + SD.bandSlack }, minDistFrom: { x: me.pos.x, z: me.pos.z, d: 4 },
+            goalCoverMax: SD.hugDist, accept: sdFlankOk, flank: true });
+        }
+        // BETTER POSITION (the spot here is not good): the hidden spot in
+        // the band, hugging cover, scoring holdGain above this one.
+        attempts.push({ maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: sdUpper + SD.bandSlack }, minDistFrom: { x: me.pos.x, z: me.pos.z, d: 2 },
+          goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdPosScoreAt, scoreStop: 8, better: true });
+        // PUSH (patience): approach along cover, near-zero exposure only —
+        // toward a line-capable spot first.
+        if (sdPushDue) {
+          const pushWithin = { x: opp.pos.x, z: opp.pos.z, r: dist - Math.max(SD.hopGainMin, dist * 0.3) };
+          attempts.push({ maxPops: SD.farPops, within: pushWithin, minDistFrom: closerMin, goalCoverMax: SD.goalCoverMax, accept: sdFlankOk, push: true });
+          attempts.push({ maxPops: SD.farPops, within: pushWithin, minDistFrom: closerMin, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk, push: true });
+          attempts.push({ maxPops: SD.farPops, within: closerWithin, minDistFrom: closerMin, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk, push: true });
+        }
+      }
+      if (sdEngageDue) {
+        const engageWithin = { x: opp.pos.x, z: opp.pos.z, r: sdClosingDue ? Math.max(sdOptimal, dist - gain) : sdUpper + SD.bandSlack };
+        const engageMin = { x: me.pos.x, z: me.pos.z, d: SD.shiftMin };
+        const engageOk = (gx, gz) => sdStandoffOk(gx, gz) && midSees(gx, gz) && bearingOk(gx, gz);
+        attempts.unshift(
+          { maxPops: SD.nearPops, within: engageWithin, minDistFrom: engageMin, accept: engageOk, goalCoverMax: SD.goalCoverMax, engage: true },
+          { maxPops: SD.farPops, within: engageWithin, minDistFrom: engageMin, accept: engageOk, goalCoverMax: SD.goalCoverMax, engage: true }
+        );
+        // FIRE HOP (manoeuvre 2 with a longer leg out — owner 2026-10-05,
+        // "want them in the game"): nothing to peek from here and no
+        // crossing that opens a line -> a cell inside the band with a muzzle
+        // line to the target (standoff kept, route risk-gated); the arrival
+        // opens the line, the fight window fires, the dodge steps back to
+        // the cell it left.
+        if (!sdPeekableAt(me.pos.x, me.pos.z, myFloorY)) {
+          attempts.push({ maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: sdUpper + SD.bandSlack }, minDistFrom: engageMin, anyGoal: true, accept: sdFireSpot, fire: true });
+        }
+      }
+      const stage = Math.min(me.botSDSearchStage ?? 0, attempts.length - 1);
+      const a = attempts[stage];
+      // Hidden (planned) hops: the ROUTE is costed against the live and
+      // predicted eyes, the GOAL must hold against the spread eyes too — so
+      // a distant crate's narrow shadow is an approach lane (owner 2026-10-05,
+      // "vertical sprint behind a distant obstacle and walk up safely").
+      // Escapes keep the strict set for both.
+      const found = decided ? null : findHiddenSpot(
+        sdGrid, sdSearchX, sdSearchZ, myFloorY, (sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes, obstacles,
+        { maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept ?? null, eyeHeight: PROJECTILE_MUZZLE_Y_OFFSET,
+          goalEyes: (sdOverBudget || sdThreatMoving) ? null : sdSearchEyes,
+          exposurePenalty: a.engage ? SD.engagePenalty : SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist, goalCoverMax: a.goalCoverMax ?? null, anyGoal: !!a.anyGoal,
+          threat: { x: sdThreat.pos.x, z: sdThreat.pos.z }, alongWeight: SD.alongWeight, avoid: sdOverBudget ? null : sdAvoid,
+          score: a.score ?? null, scoreStop: a.scoreStop ?? Infinity,
+          // (planned hops may cross jump links — Station's platforms; an
+          // escape under fire never vaults)
+          allowJump: !sdOverBudget }
+      );
+      if (found && a.shadow) sdShadowShape(found);
+      if (decided) {
+        // (watch / hold / retreat chosen above)
+      } else if (found && (!a.better || found.score >= sdPosScore + SD.holdGain) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1)) {
+        me.botSDRiskHoldSince = null;
+        me.botSDIdleSince = null;
+        if (a.engage) me.botSDEngages = (me.botSDEngages ?? 0) + 1;
+        // (harness bookkeeping: what the hop was for)
+        const hopKind = a.engage ? 'engage' : sdOverBudget ? 'escape' : a.flank ? 'flank' : a.better ? 'better' : a.push ? 'push' : a.fire ? 'fire' : 'close';
+        if (a.fire) {
+          // the arrival opens the line: the fight window (the peek budget)
+          // fires, then the dodge back toward the spot it left
+          me.botSDPeekArmed = true; me.botSDPeekStepped = false; me.botSDPeekOrigin = { x: me.pos.x, z: me.pos.z };
+          me.botSDFires = (me.botSDFires ?? 0) + 1;
+        }
+        // (a fire or anyGoal hop ends on a cell that may show: no "goal
+        // uncovered" drop for it)
+        me.botSDGoalMayShow = !!(a.fire || a.anyGoal);
+        if (!me.botSDHopKinds) me.botSDHopKinds = {};
+        me.botSDHopKinds[hopKind] = (me.botSDHopKinds[hopKind] ?? 0) + 1;
+        me.botSDPath = found.path;
+        me.botSDPathIdx = 0;
+        me.botSDGoal = found.goal;
+        me.botSDMoveAnchor = null;
+        me.botSDSearchStage = 0;
+        me.botSDSearchAt = now + SD.searchMs;
+        me.botSDHops = (me.botSDHops ?? 0) + 1;
+        me.botSDHopLenSum = (me.botSDHopLenSum ?? 0) + Math.hypot(found.goal.x - me.pos.x, found.goal.z - me.pos.z);
+        me.botSDStallSince = null;
+      } else if (stage < attempts.length - 1) {
+        me.botSDSearchStage = stage + 1;
+        me.botSDSearchAt = now;
+      } else {
+        me.botSDSearchStage = 0;
+        me.botSDSearchAt = now + (sdHidden ? SD.failRetryMs : SD.exposedRetryMs);
+        if (sdHidden) {
+          // A risk hold is a wait, not a stall; a near-good spot is held too.
+          // The plain-brain fallback only runs from a bad spot with no route.
+          // (a position with no line for holdMaxMs stalls whatever its score:
+          // the plain brain's maze then crosses what the hidden search cannot)
+          if (me.botSDStallSince == null && me.botSDRiskHoldSince == null && (sdPosScore < SD.holdScore - 1 || !sdHoldOk)) me.botSDStallSince = now;
+          // MANOEUVRE 2 — peek, fire, dodge back: no engage cover; a LATERAL
+          // leg (peekLateralMin across the threat's line) of peekLeg whose
+          // end sees the target, run at a sprint; the fight window fires
+          // strafing, the retreat above dodges back.
+          if (sdEngageDue && !sdOppClear && me.boost >= SD.peekBoostMin) {
+            let best = null, bestScore = -Infinity;
+            for (let k = 0; k < 8; k += 1) {
+              const ang = k * Math.PI / 4 + Math.random() * 0.3;
+              const cx = Math.cos(ang), cz = Math.sin(ang);
+              const lat = sdLateral(cx, cz);
+              if (lat < SD.peekLateralMin) continue;
+              // a short leg first, a longer one past a wide cover (the dodge
+              // step back covers 9.2 u either way)
+              for (const legLen of [SD.peekLeg, SD.peekLeg * 1.75, SD.peekLegMax]) {
+                const px = me.pos.x + cx * legLen, pz = me.pos.z + cz * legLen;
+                if (walkSegmentBlocked(me.pos.x, me.pos.z, px, pz, me.pos.y, obstacles)) break;
+                if (!sdClear({ x: px, y: myShotY, z: pz }, oppMuzzle)) continue;
+                const score = lat - (legLen - SD.peekLeg) * 0.03 + (Math.random() - 0.5) * 0.3;
+                if (score > bestScore) { bestScore = score; best = { x: px, z: pz }; }
+                break;
+              }
+            }
+            // The stand peek is a planned exposure (the leg at a sprint, then
+            // the fight window strafing across the line): gate it like a hop.
+            if (best && !sdFree) {
+              // Only the fire window counts: the leg out is hidden until the
+              // line opens and the dodge step back is invulnerable.
+              const T = SD.peekMs + SD.peekJitterMs / 2;
+              const pr = sdExposureRisk(sdThreat, SD, dist, 1, T, 0, sdSprint);
+              me.botSDLastRisk = pr;
+              if (pr > sdRiskCap(true)) { best = null; sdRiskReject(); }
+            }
+            // (the retreat check must be able to run the tick the budget ends)
+            if (best) { me.botSDSearchAt = now; me.botSDRiskHoldSince = null; me.botSDIdleSince = null; me.botSDPeekTo = best; me.botSDPeekArmed = true; me.botSDPeekStepped = false; me.botSDPeekOrigin = { x: me.pos.x, z: me.pos.z }; me.botSDPeeks = (me.botSDPeeks ?? 0) + 1; }
+          }
+        }
+      }
+    }
+    // Cover pacing is anchored at the arrival point: leaving the cover
+    // (a route, a peek, a line opening) drops the anchor and the leg.
+    if (me.botSDPath || me.botSDPeekTo || !sdHidden) {
+      me.botSDPaceAnchor = null;
+      me.botSDPaceX = 0;
+      me.botSDPaceZ = 0;
+    }
+    // 3. Legs.
+    if (now <= (me.stepUntil || 0)) {
+      // mid dodge step (manoeuvre 2's way back): the lerp owns the body
+      coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+      me.botSDState = 'dodge';
+    } else if (me.botSDPath) {
+      const sp = me.botSDPath;
+      let wp = sp[me.botSDPathIdx];
+      // CORNER-SAFE ADVANCE (playable wedge 2026-10-05): the 2 u skip-ahead
+      // cut a route's corner into the end of a 90 u low wall and the body
+      // wedged there for a minute. The next waypoint is taken early when the
+      // straight cut to it fits the body (sampled every ~0.6 u), or as soon
+      // as the unit is past the waypoint along the next edge (the cut then
+      // runs along the edge itself). Requiring the waypoint exactly made the
+      // unit overshoot it every tick and shake +-1 u for 14 s (shake trace).
+      const sdLegFits = (x0, z0, x1, z1) => {
+        const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.6));
+        for (let k = 1; k <= n; k += 1) {
+          const f = k / n;
+          // (body radius 1.15 + 0.15 margin)
+          if (unitOverlapsObstacle(x0 + (x1 - x0) * f, me.pos.y, z0 + (z1 - z0) * f, obstacles, 1.3)) return false;
+        }
+        return true;
+      };
+      let sdCreep = false;
+      while (me.botSDPathIdx < sp.length - 1) {
+        const dwp = Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z);
+        if (dwp >= 2.5) break;
+        const nxt = sp[me.botSDPathIdx + 1];
+        const ex = nxt.x - wp.x, ez = nxt.z - wp.z, el = Math.hypot(ex, ez) || 1;
+        const passed = ((me.pos.x - wp.x) * ex + (me.pos.z - wp.z) * ez) / el >= 0;
+        if (passed || (dwp < 2 && sdLegFits(me.pos.x, me.pos.z, nxt.x, nxt.z))) {
+          me.botSDPathIdx += 1;
+          wp = sp[me.botSDPathIdx];
+        } else {
+          // the cut would clip a corner: walk the last stretch onto the waypoint
+          sdCreep = dwp < 2;
+          break;
+        }
+      }
+      let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
+      const wl = Math.hypot(tx, tz) || 1;
+      tx = tx / wl + avoid.rx * 0.6;
+      tz = tz / wl + avoid.rz * 0.6;
+      const tl = Math.hypot(tx, tz) || 1;
+      // Sprint where it matters: across exposure (now, or 5 u ahead on the
+      // heading) and open ground down to dashFloor; a covered leg runs on
+      // one of the two latches below.
+      let aheadExposed = false, aheadPt = null;
+      if (sdHidden) {
+        const ahead = { x: me.pos.x + (tx / tl) * SD.aheadProbe, y: myShotY, z: me.pos.z + (tz / tl) * SD.aheadProbe };
+        aheadPt = ahead;
+        for (let k = 0; k < sdEyes.length; k += 1) {
+          if (sdClear(sdEyes[k], ahead)) { aheadExposed = true; break; }
+        }
+      }
+      // ONE LATCH (owner 2026-10-05, "全程只用一條閘門"): a covered leg FAR
+      // from the target (travel) sprints from a full tank (travelArm) down
+      // to travelFloor and walks until full again — the normal bot's gate
+      // shape with a deeper floor; a covered leg in contact WALKS (the
+      // shadow walk, "在影子裡用走的往對方推進"). The sprint is for the
+      // exposed lateral move, open ground, peeks and escapes.
+      const sdTravel = () => {
+        if (me.boost >= SD.travelArm) me.botSDTravel = true;
+        else if (me.boost <= SD.travelFloor) me.botSDTravel = false;
+        return !!me.botSDTravel;
+      };
+      // JUMP LINK (owner 2026-10-05, Station: "don't let that happen"): the
+      // route may cross a jump link (findHiddenSpot allowJump) — a waypoint
+      // on a ledge above the floor. Bank for it (the covered legs walk while
+      // it lies ahead and the tank is under jumpBank), vault within
+      // jumpReach of it, and dodge toward it right after take-off (the
+      // owner's crossing: jump, dodge, sprint) so the arc carries over the
+      // trench; the air steer holds the launch heading. The crossing is
+      // exposure in the route risk like any other stretch, with its lateral
+      // fraction against the threat's line.
+      let jumpAhead = false;
+      for (let k = me.botSDPathIdx; k < sp.length; k += 1) {
+        if ((sp[k].y ?? myFloorY) - myFloorY > 1.7) { jumpAhead = true; break; }
+      }
+      let sdJump = null, sdLegOverride = null;
+      const sdWpDist = Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z);
+      if ((wp.y ?? myFloorY) - myFloorY > 1.7 && me.grounded && !me.airborne && sdWpDist < SD.jumpReach) {
+        // At the ledge. LATERAL CROSSING re-check (the threat may have moved
+        // since the plan): seen here and the crossing along its line -> no
+        // jump into the line; the ledge is marked and the route re-planned.
+        const jl = sdWpDist || 1;
+        const jx = (wp.x - me.pos.x) / jl, jz = (wp.z - me.pos.z) / jl;
+        if (!sdHidden && sdLateral(jx, jz) < SD.lateralMin) {
+          sdMark(wp.x, wp.z, SD.stuckAvoidMs, true);
+          sdDrop();
+          me.botSDSearchAt = now;
+          sdLegOverride = 'hold';
+        } else if (me.boost >= SD.jumpBank && now >= (me.jumpCooldownUntil ?? 0)) {
+          if (tryStartJump(me, now)) {
+            sdJump = { x: jx, z: jz };
+            me.botSDJumpAt = now;
+            me.botSDJumpStepped = false;
+            me.botSDJumps = (me.botSDJumps ?? 0) + 1;
+          }
+        } else {
+          // BANK: stand at the ledge for the tank / the cooldown instead of
+          // pressing the wall (the no-progress bail waits with it).
+          sdLegOverride = 'bank';
+        }
+      } else if (me.airborne && me.botSDJumpAt != null && now - me.botSDJumpAt <= 250
+          && !me.botSDJumpStepped && sdWpDist > 3) {
+        if (tryStartStep(matchState, me, wp.x - me.pos.x, wp.z - me.pos.z, now, obstacles)) {
+          me.botSDJumpStepped = true;
+          me.botSDDodges = (me.botSDDodges ?? 0) + 1;
+        }
+      }
+      // ANTI-FLICKER (owner: "no 抖動步伐"): a sprint started for an exposure
+      // keeps running sprintBurstMs past the last exposed tick (or to the
+      // floor) — the exposed / open tests flip tick to tick along a slatted
+      // fence and the pose went dash-walk-dash.
+      // (open ground UNSEEN is travel: it runs on the latch above the
+      // reserve, not down to the floor — owner 2026-10-06, the tank was
+      // empty at contact after an open approach; seen or about to be seen
+      // still spends everything)
+      const sdExposedLeg = !sdHidden || aheadExposed;
+      if (sdExposedLeg && me.boost > SD.dashFloor) me.botSDBurstUntil = now + SD.sprintBurstMs;
+      const sdBurst = now <= (me.botSDBurstUntil ?? 0) && me.boost > SD.dashFloor;
+      const sdDash = !sdCreep && (sdExposedLeg
+        ? me.boost > SD.dashFloor
+        : (sdBurst || (sdFar && !(jumpAhead && me.boost < SD.jumpBank) && sdTravel())));
+      let hx = tx / tl, hz = tz / tl;
+      // Inside lateralFullDist the crossing is fully perpendicular (the
+      // table in the owner's notes: 0.8 lateral at 60 u is still a hit).
+      const latMin = dist <= SD.lateralFullDist ? 1 : SD.lateralMin;
+      let legMode = 'dash';
+      if ((!sdHidden || aheadExposed) && latMin > 0) {
+        // CROSSING RULE (micro-sim 2026-10-05): a no-lead shooter misses a
+        // target displaced more than cone radius + capsule radius during the
+        // round's flight — at 160 u a 20 u/s run PERPENDICULAR to the line
+        // is nearly unhittable, a 12 u/s one or any run along the line is a
+        // kill. Steer the exposed crossing so at least lateralMin of the
+        // heading is perpendicular to the threat's line, keeping the
+        // along-line sign so the hop still progresses; a heading right on
+        // the line picks the walkable side.
+        let lx = sdThreat.pos.x - me.pos.x, lz = sdThreat.pos.z - me.pos.z;
+        const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+        const along = hx * lx + hz * lz;
+        let px = hx - along * lx, pz = hz - along * lz;
+        let pl = Math.hypot(px, pz);
+        const headingLateral = pl;
+        if (pl < latMin) {
+          if (pl < 0.05) {
+            const sgn = me.botSDLatSign ?? (me.botSDLatSign = Math.random() < 0.5 ? 1 : -1);
+            px = -lz * sgn; pz = lx * sgn;
+            pl = 1;
+          }
+          const alongKeep = Math.sqrt(Math.max(0, 1 - latMin * latMin)) * (along < 0 ? -1 : 1);
+          // The rotated heading must have ROOM (play test 2026-10-05): in a
+          // narrow gap between two machines the sideways heading hits a
+          // wall, and the follower's re-aim turned the crossing into a
+          // jitter at the gap's edge — exposed every other tick. Try the
+          // rotation, then its mirror; neither walkable -> commit straight
+          // through the gap at a sprint (the shortest exposure there is).
+          let rx = (px / pl) * latMin + lx * alongKeep, rz = (pz / pl) * latMin + lz * alongKeep;
+          let rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+          let room = !walkSegmentBlocked(me.pos.x, me.pos.z, me.pos.x + rx * 4, me.pos.z + rz * 4, me.pos.y, obstacles);
+          if (!room) {
+            const mx2 = -(px / pl) * latMin + lx * alongKeep, mz2 = -(pz / pl) * latMin + lz * alongKeep;
+            const ml = Math.hypot(mx2, mz2) || 1;
+            if (!walkSegmentBlocked(me.pos.x, me.pos.z, me.pos.x + (mx2 / ml) * 4, me.pos.z + (mz2 / ml) * 4, me.pos.y, obstacles)) {
+              rx = mx2 / ml; rz = mz2 / ml; room = true;
+              me.botSDLatSign = -(me.botSDLatSign ?? 1);
+            }
+          }
+          if (room) {
+            hx = rx + avoid.rx * 0.6;
+            hz = rz + avoid.rz * 0.6;
+            const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
+            me.botSDLateralTicks = (me.botSDLateralTicks ?? 0) + 1;
+          } else if (headingLateral < SD.corridorLateral && !sdFree) {
+            // CORRIDOR (owner 2026-10-05): the heading runs along the line and
+            // nothing lets it turn — a run the enemy hits as if standing
+            // (100 u: 92-100% per round). Caught inside: sprint back to the
+            // last hidden spot and mark the corridor; not yet exposed: stop
+            // short of it, mark it, re-plan around the mark. A heading that
+            // is mostly lateral already, or the enemy's empty mag, commits.
+            if (!sdHidden) {
+              const lh = me.botSDLastHidden;
+              const back = lh ? Math.hypot(lh.x - me.pos.x, lh.z - me.pos.z) : Infinity;
+              sdMark(me.pos.x, me.pos.z);
+              if (back > 1 && back <= SD.backOffMax) {
+                sdDrop();
+                me.botSDPeekTo = { x: lh.x, z: lh.z };
+                me.botSDPeekArmed = false;
+                me.botSDBackOff = true;
+                me.botSDBackoffs = (me.botSDBackoffs ?? 0) + 1;
+                me.botSDSearchAt = now + SD.searchMs;
+                hx = (lh.x - me.pos.x) / back; hz = (lh.z - me.pos.z) / back;
+                legMode = 'back';
+              }
+            } else {
+              if (aheadPt) sdMark(aheadPt.x, aheadPt.z);
+              sdDrop();
+              me.botSDSearchAt = now + SD.searchMs;
+              me.botSDHolds = (me.botSDHolds ?? 0) + 1;
+              legMode = 'hold';
+            }
+          }
+        }
+      }
+      if (sdLegOverride) legMode = sdLegOverride;
+      if (legMode === 'hold' || legMode === 'bank') {
+        me.momentumVX = 0;
+        me.momentumVZ = 0;
+        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+        me.botSDState = legMode;
+      } else {
+        coverMove = { hold: false, hide: true, dash: legMode === 'back' ? me.boost > SD.dashFloor : sdDash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 };
+        me.botSDHeadX = hx;
+        me.botSDHeadZ = hz;
+        me.botSDState = legMode;
+      }
+      // NO-PROGRESS BAIL: the remaining route length (to the waypoint plus
+      // the edges after it) must shrink by 1 u within bailMs. A position
+      // anchor let a +-1 u shake around a waypoint reset itself for ever
+      // (shake trace 2026-10-05).
+      // (skipped when the corridor rule above already dropped the route:
+      // a null index read sp[null] and crashed the Airport batch)
+      let sdRemain = Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z);
+      for (let k = me.botSDPathIdx ?? sp.length; k < sp.length - 1; k += 1) sdRemain += Math.hypot(sp[k + 1].x - sp[k].x, sp[k + 1].z - sp[k].z);
+      if (!me.botSDPath) {
+        // (route dropped this tick — nothing to bail from)
+      } else if (legMode === 'bank' || !me.botSDMoveAnchor || sdRemain < me.botSDMoveAnchor.best - 1) {
+        me.botSDMoveAnchor = { best: sdRemain, at: now };
+      } else if (now - me.botSDMoveAnchor.at > SD.bailMs) {
+        // STUCK ROUTE (playable trace 2026-10-05: a unit wedged on a crate
+        // corner re-planned the same route 37 times in 60 s): the waypoint it
+        // could not reach is avoided for stuckAvoidMs (pinned: the wall does
+        // not move with the threat), so the next search routes around it or
+        // picks another goal.
+        const wpStuck = me.botSDPath[me.botSDPathIdx];
+        if (wpStuck) sdMark(wpStuck.x, wpStuck.z, SD.stuckAvoidMs, true);
+        sdDrop();
+        me.botSDSearchAt = now + SD.failRetryMs * 0.5;
+        coverMove = null;
+      }
+    } else if (me.botSDPeekTo) {
+      let tx = me.botSDPeekTo.x - me.pos.x, tz = me.botSDPeekTo.z - me.pos.z;
+      const tl = Math.hypot(tx, tz) || 1;
+      // A peek leg and a back-off leg are exposures (or about to be): sprint.
+      coverMove = { hold: false, hide: true, dash: me.boost > SD.dashFloor, mx: tx / tl, mz: tz / tl };
+      me.botSDState = me.botSDBackOff ? 'back' : 'peek';
+    } else if (sdHidden) {
+      // COVER / WATCH: the dwell, the reload or the watch running — pace the
+      // cover on a short leash (BOT_SD pace* knobs) instead of standing dead
+      // still. A leg (paceLeg ahead) must stay inside paceLeash of the
+      // arrival point, be walkable, keep the muzzle hidden from every live
+      // eye — and from the predicted / spread eyes when any such leg exists
+      // (pass 0; live eyes only as the fallback, pass 1) — and, while
+      // watching, keep the watched exits covered. The current leg is
+      // re-checked against the live eyes every tick and re-picked every
+      // paceMs from 8 headings scored along the threat's line (strafing the
+      // cover's face) with continuity and noise; half the legs end in a short
+      // stand. No hidden leg at all (a tight nook) -> stand paceRetryMs.
+      const watching = now < (me.botSDWatchUntil ?? 0);
+      if (!me.botSDPaceAnchor) me.botSDPaceAnchor = { x: me.pos.x, z: me.pos.z };
+      const anchor = me.botSDPaceAnchor;
+      // The sprint momentum is dropped in cover (the old hold did the same):
+      // a pacing leg moves at paceSpeed x walk, not walk + the arrival dash.
+      me.momentumVX = 0;
+      me.momentumVZ = 0;
+      let hx = 0, hz = 0;
+      if (SD.paceSpeed > 0) {
+        // A leg is hidden from the live eyes AND the predicted / spread eyes
+        // — the hop goals' own standard. (The base hide stance falls back to
+        // live eyes only; in SD that fallback parked units a step from a
+        // cover's edge and the enemy's next sidestep opened the line.)
+        const legOk = (cx, cz) => {
+          const lx = me.pos.x + cx * SD.paceLeg, lz = me.pos.z + cz * SD.paceLeg;
+          if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) return false;
+          if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) return false;
+          if (coverDistanceAt(sdGrid, lx, lz, myFloorY, obstacles) > SD.openDist) return false;   // never pace onto open ground
+          const eye = { x: lx, y: myShotY, z: lz };
+          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdClear(sdSearchEyes[k], eye)) return false;
+          if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;
+          return true;
+        };
+        hx = me.botSDPaceX ?? 0; hz = me.botSDPaceZ ?? 0;
+        const moving = hx !== 0 || hz !== 0;
+        if (now < (me.botSDPacePauseUntil ?? 0)) {
+          hx = 0; hz = 0;
+        } else if (moving && now >= (me.botSDPaceUntil ?? 0) && SD.pacePauseMs > 0 && Math.random() < 0.5) {
+          me.botSDPacePauseUntil = now + Math.random() * SD.pacePauseMs;
+          hx = 0; hz = 0;
+        } else if (!moving || now >= (me.botSDPaceUntil ?? 0) || !legOk(hx, hz)) {
+          let best = null, bestScore = -Infinity;
+          let lx = sdThreat.pos.x - me.pos.x, lz = sdThreat.pos.z - me.pos.z;
+          const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+          const phase = Math.random() * Math.PI * 2;
+          for (let k = 0; k < 8; k += 1) {
+            const a = phase + k * Math.PI / 4;
+            const cx = Math.cos(a), cz = Math.sin(a);
+            if (!legOk(cx, cz)) continue;
+            const score = Math.abs(cx * lz - cz * lx) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
+            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
+          }
+          if (best) {
+            hx = best.x; hz = best.z;
+            me.botSDPaceUntil = now + SD.paceMs;
+          } else {
+            hx = 0; hz = 0;
+            me.botSDPacePauseUntil = now + SD.paceRetryMs;
+          }
+        }
+        me.botSDPaceX = hx;
+        me.botSDPaceZ = hz;
+      }
+      if (hx === 0 && hz === 0) {
+        me.momentumVX = 0;
+        me.momentumVZ = 0;
+        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+      } else {
+        coverMove = { hold: false, hide: true, dash: false, mx: hx * SD.paceSpeed, mz: hz * SD.paceSpeed };
+      }
+      me.botSDState = watching ? 'watch' : 'cover';
+    } else if (!sdOverBudget) {
+      // FIGHT: the budget window — fire from here (the fire block), standing
+      // still (always when the enemy walked into a watched line) or
+      // strafe-walking across the target line (flip on a wall).
+      // Every exposed manoeuvre sprints (owner 2026-10-05) — the watch fight
+      // too: the first round is the base cone whether the unit stands or not.
+      if (SD.fightStill) {
+        me.momentumVX = 0;
+        me.momentumVZ = 0;
+        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+      } else {
+        const sg = me.botSDStrafeSign ?? (me.botSDStrafeSign = (Math.random() < 0.5 ? 1 : -1));
+        let tx = sideX * sg + avoid.rx * 0.8, tz = sideZ * sg + avoid.rz * 0.8;
+        if ((tx * avoid.rx + tz * avoid.rz) < -0.4 && avoidMag > 0.4) {
+          me.botSDStrafeSign = -sg;
+          tx = -sideX * sg + avoid.rx * 0.8; tz = -sideZ * sg + avoid.rz * 0.8;
+        }
+        const tl = Math.hypot(tx, tz) || 1;
+        coverMove = { hold: false, hide: true, dash: me.boost > SD.dashFloor, mx: tx / tl, mz: tz / tl };
+      }
+      me.botSDState = 'fight';
+    } else {
+      // OPEN: past the budget, nothing hidden found yet — strafe-sprint
+      // across the target line while the search retries (flip on a wall or
+      // every 600-900 ms).
+      if (now >= (me.botSDStrafeUntil ?? 0)) {
+        me.botSDStrafeSign = -(me.botSDStrafeSign ?? 1);
+        me.botSDStrafeUntil = now + 600 + Math.random() * 300;
+      }
+      const sg = me.botSDStrafeSign ?? 1;
+      let tx = sideX * sg + avoid.rx * 0.8, tz = sideZ * sg + avoid.rz * 0.8;
+      if ((tx * avoid.rx + tz * avoid.rz) < -0.4 && avoidMag > 0.4) {
+        me.botSDStrafeSign = -sg;
+        me.botSDStrafeUntil = now + 600 + Math.random() * 300;
+        tx = -sideX * sg + avoid.rx * 0.8; tz = -sideZ * sg + avoid.rz * 0.8;
+      }
+      const tl = Math.hypot(tx, tz) || 1;
+      coverMove = { hold: false, hide: true, dash: me.boost > SD.travelFloor, mx: tx / tl, mz: tz / tl };   // (unseen: above the reserve)
+      me.botSDState = 'open';
+    }
+    // STALL: hidden with no hop found for stallMs (the target stands in a
+    // coverless pocket) -> hand the legs to the plain brain until a hop
+    // appears; the exposure rules above still apply next tick.
+    if (sdHidden && !me.botSDPath && !me.botSDPeekTo && me.botSDStallSince != null
+        && now - me.botSDStallSince > SD.stallMs) {
+      coverMove = null;
+      me.botSDState = 'plain';
+    }
+    // STUCK WATCHDOG window: the plain brain has the legs (and its own wedge
+    // detectors, since no coverMove pins the stall clocks below).
+    if (now < (me.botSDPlainUntil ?? 0)) {
+      coverMove = null;
+      me.botSDState = 'plain';
+    }
+    if (!sdHidden) me.botSDStallSince = null;
+  } else if (me.botSD) {
+    me.botSDState = 'dodge';
+  }
+
   if (coverMove) {
     // Pin the stall clocks: a deliberate hide (cover reload OR the hide
     // order) must not read as wedged / stalled / sightless — those
@@ -1335,7 +2738,9 @@ export function tickBot(matchState, botId, now) {
   // when NO cover exists anywhere (botHideNoCover) a fresh hit runs the
   // plain Defense escape until a later search finds cover.
   const hideParks = hideMode != null && !(me.botHideNoCover && underFire);
-  if (hideParks && !inDefenseGrace) {
+  // SD brain owning the legs this tick: same parking as a hide.
+  const sdParks = !!(me.botSD && coverMove);
+  if ((hideParks || sdParks) && !inDefenseGrace) {
     nextState = 'pursue';
   } else if (underFire || inDefenseGrace) {
     nextState = 'defense';
@@ -1572,6 +2977,9 @@ export function tickBot(matchState, botId, now) {
     mx = coverMove.mx;
     mz = coverMove.mz;
     wantSprint = coverMove.hide ? !!coverMove.dash : !coverMove.hold;
+    // (SD jump-link vault: the jump was started in the SD block; the dispatch
+    // below sets the launch velocity and the air steer toward the ledge)
+    if (coverMove.jump) { jumpThisTick = true; jumpDirX = coverMove.jx; jumpDirZ = coverMove.jz; }
   } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
@@ -2120,7 +3528,9 @@ export function tickBot(matchState, botId, now) {
     } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
       // No clear shot — hold fire and check again shortly. The origin is the
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
-      me.nextFireAt = now + 220;
+      // SD in band: poll every firePollMs — a sprint through a one-cell gap
+      // lasts ~200 ms and the 220 ms poll let it go unshot.
+      me.nextFireAt = now + ((SDG && dist <= (me.botSDUpper ?? upperRange) + 20) ? SDG.firePollMs : 220);
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
     } else if (u.sniperCharge) {
