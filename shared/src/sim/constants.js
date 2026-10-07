@@ -602,6 +602,12 @@ export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
 export const SPAWN_IMMUNITY_MS = 3000;
+// SUDDEN DEATH start hold (owner 2026-10-07, "character already starts
+// moving when banner is still there"): nobody moves, fires or thinks while
+// the banner shows — the offline match already froze for its 2.3 s; the
+// server holds its SD matches the same length (inputs ignored, bots
+// skipped) and the spawn immunity counts from the release, as offline.
+export const SD_START_HOLD_MS = 2300;
 // Sprint-lock release grace: a joystick flip (left→right) crosses the center
 // deadzone for a few frames and used to read as the let-go-to-stop gesture,
 // killing the locked sprint mid-flip. Only a neutral stick SUSTAINED this

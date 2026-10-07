@@ -8948,7 +8948,9 @@ function startMatch() {
 // — pick one with window.__SD_BANNER_STYLE ('a' | 'b' | 'c' | 'd');
 // window.__SD_BANNER_HOLD = true freezes it fully visible (screenshots).
 const SD_BANNER_MS = 2300;
-function showSuddenDeathBanner() {
+// `durationMs`: how long the banner stays — the offline hold (SD_BANNER_MS),
+// or online the server hold's remaining time read off the snapshot.
+function showSuddenDeathBanner(durationMs = SD_BANNER_MS) {
   const style = (typeof window !== 'undefined' && window.__SD_BANNER_STYLE) || state.sdBannerStyle || 'c';
   const hold = typeof window !== 'undefined' && !!window.__SD_BANNER_HOLD;
   document.getElementById('sd-banner')?.remove();
@@ -8982,7 +8984,7 @@ function showSuddenDeathBanner() {
     state.matchStartAt = now;
     state.sdIntro = false;
     state.running = true;
-  }, SD_BANNER_MS);
+  }, Math.max(0, durationMs));
 }
 
 // ---- Online match runtime ----
@@ -9065,7 +9067,11 @@ function startOnlineMatch() {
   showOnlineOverlay('Connecting…');
 }
 
+// (an empty frame — sent and predicted during a Sudden Death start hold,
+// so the local unit stands exactly where the server keeps it)
+const ONLINE_HOLD_FRAME = Object.freeze({ moveX: 0, moveZ: 0, boost: false, sprintLocked: false, jump: false, stepTap: false, shootTap: false, shootHold: false, targetSwitch: false, aimX: 0, aimY: 0 });
 function buildOnlineInputFrame() {
+  if ((state.online?.holdLocalUntil ?? 0) > performance.now()) return ONLINE_HOLD_FRAME;
   // Convert joystick (screen-space) into world-space move using the camera's
   // forward — same conversion the offline updatePlayer uses.
   const forward = new THREE.Vector3();
@@ -10243,7 +10249,10 @@ function ensureOnlineMatchSetup(snap) {
   disposeOnlineCommandShare(onl);
 
   onl.mechsCreatedFor = sig;
-  if (state.suddenDeathActive) showSuddenDeathBanner();
+  // (the banner stays as long as the SERVER's start hold has left — the
+  // server froze the match at start; this client joined it a round-trip
+  // later. runOnlineMatchFrame keeps onl.holdLocalUntil from the snapshot.)
+  if (state.suddenDeathActive) showSuddenDeathBanner(Math.max(0, (snap.holdUntil ?? 0) - snap.serverTime));
 }
 
 // Online cousin of respawnSlotMech: swap one slot's mech to a new unit
@@ -10468,6 +10477,10 @@ function processOrderResults(onl) {
 function runOnlineMatchFrame(dt, onl, conn) {
   const snap = conn.getLatestSnapshot();
   if (!snap) return;
+  // SUDDEN DEATH start hold: the server freezes the match until holdUntil
+  // (its clock); the time left maps onto the local clock here, and
+  // buildOnlineInputFrame sends empty frames until it passes.
+  onl.holdLocalUntil = snap.holdUntil ? performance.now() + Math.max(0, snap.holdUntil - snap.serverTime) : 0;
   ensureOnlineMatchSetup(snap);
   if (!state.player || !state.enemy) return;
 

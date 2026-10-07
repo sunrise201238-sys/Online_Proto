@@ -26,6 +26,7 @@ import {
   MAP_DATA,
   GLINT_CONFIRM_CAP_MS
 } from '@gvg/shared/src/sim/index.js';
+import { SPAWN_IMMUNITY_MS, SD_START_HOLD_MS } from '@gvg/shared/src/sim/constants.js';
 
 // Slot ids match the shared-sim fighter ids one-to-one. In 1v1 only p1/p2
 // are active; in 2v2 p3/p4 join. p1+p3 = team A, p2+p4 = team B (matches
@@ -40,6 +41,8 @@ const ORDER_MIN_INTERVAL_MS = 500;
 // core — on the free instance that stalled the 16 ms tick. A search past
 // the deadline ends like one out of pops and is retried next cadence.
 const SEARCH_BUDGET_MS = 6;
+// The empty frames every slot reads during a Sudden Death start hold.
+const HOLD_INPUTS = { p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput() };
 function activeSlots(mode) {
   return mode === '2v2' ? SLOT_IDS : SLOT_IDS.slice(0, 2);
 }
@@ -242,12 +245,19 @@ function startMatchFor(lobby) {
   // brain (shared ai.js, flag fighter.botSD). Command-mode humans keep the
   // plain brain under their orders.
   lobby.match.suddenDeath = lobby.suddenDeath;
+  // START HOLD (owner 2026-10-07, "character already starts moving when
+  // banner is still there"): a Sudden Death match stands still for the
+  // banner — tickLobby ignores inputs and skips the bots until holdUntil,
+  // the clients mute their own frames (they read holdUntil off the
+  // snapshot) — and the spawn immunity runs from the release, as offline.
+  lobby.match.holdUntil = lobby.suddenDeath ? startTime + SD_START_HOLD_MS : 0;
   if (lobby.suddenDeath) {
     for (const s of slots) {
       const f = lobby.match.fighters[s];
       if (!f) continue;
       f.hp = 1;
-      if (lobby.botSlots.has(s)) f.botSD = true;
+      f.invulnerableUntil = lobby.match.holdUntil + SPAWN_IMMUNITY_MS;
+      if (lobby.botSlots.has(s)) { f.botSD = true; f.nextFireAt = lobby.match.holdUntil + 650; }   // (offline parity: the bot's first shot waits 650 ms past the banner)
     }
   }
   // Command side-table entries for every driven command-side slot up front
@@ -263,7 +273,7 @@ function startMatchFor(lobby) {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath });
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, holdUntil: lobby.match.holdUntil });
   emitLobbyConfig(lobby);
   console.log(`[${lobby.id}] ${lobby.mode}${lobby.suddenDeath ? ' SUDDEN DEATH' : ''} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
 }
@@ -335,6 +345,7 @@ function emitSnapshotsFor(lobby) {
   const extra = {
     mode: lobby.mode,
     suddenDeath: lobby.suddenDeath,   // (the client reads the rules off the first snapshot, like the map)
+    holdUntil: lobby.match.holdUntil ?? 0,   // (server clock; the client mutes its input frames until then)
     botSlots: Array.from(lobby.botSlots),
     acks: {
       p1: lobby.lastAcked.p1, p2: lobby.lastAcked.p2,
@@ -392,7 +403,10 @@ function tickLobby(lobby) {
     ? new Set([...lobby.botSlots, ...lobby.commandSlots])
     : lobby.botSlots;
   lobby.match.searchDeadline = performance.now() + SEARCH_BUDGET_MS;   // (shared by every search this tick)
-  for (const botId of driven) {
+  // START HOLD (Sudden Death): while the banner shows, no bot thinks and
+  // every human frame reads as empty — the fighters stand on their spawns.
+  const holding = (lobby.match.holdUntil ?? 0) > now;
+  for (const botId of holding ? [] : driven) {
     const me = lobby.match.fighters[botId];
     if (!me || me.hp <= 0) {
       // A dead unit's standing orders die with it — commander or commanded
@@ -409,7 +423,7 @@ function tickLobby(lobby) {
 
   // 2. Shared sim tick. Humans drive via lobby.inputs; tickBot-driven
   //    fighters are listed so tickMatch skips applyInput for them.
-  tickMatch(lobby.match, lobby.inputs, now, TICK_DT, driven);
+  tickMatch(lobby.match, holding ? HOLD_INPUTS : lobby.inputs, now, TICK_DT, driven);
 
   // 3. Clear human tap flags so they fire once per press. `jump` resets to
   //    the last frame's raw HELD value (not false) — held-jump must survive
