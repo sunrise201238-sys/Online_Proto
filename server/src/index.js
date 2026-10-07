@@ -27,6 +27,7 @@ import {
   GLINT_CONFIRM_CAP_MS
 } from '@gvg/shared/src/sim/index.js';
 import { SPAWN_IMMUNITY_MS, SD_START_HOLD_MS } from '@gvg/shared/src/sim/constants.js';
+import { warmSimulation, warmMap } from './warmup.js';
 
 // Slot ids match the shared-sim fighter ids one-to-one. In 1v1 only p1/p2
 // are active; in 2v2 p3/p4 join. p1+p3 = team A, p2+p4 = team B (matches
@@ -239,6 +240,9 @@ function startMatchFor(lobby) {
     rosters,
     startTime
   });
+  // The map's nav grid is built now (a no-op after the boot warm-up), not
+  // at the first bot search — in Sudden Death that was the hold's release.
+  warmMap(mapKey);
   // SUDDEN DEATH (owner 2026-10-07): every fighter starts at 1 HP (the HP
   // bars hide client-side; the shared sim's damage path is unchanged — the
   // first landed round ends the unit), and the bot-filled slots run the SD
@@ -931,4 +935,7 @@ function numericOrZero(v) {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`GVG server listening on ${PORT}`);
+  // Grids, caches and both bot brains compiled before the first match (see
+  // warmup.js) — chunked, so joining players are served meanwhile.
+  warmSimulation();
 });
