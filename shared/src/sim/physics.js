@@ -10,30 +10,43 @@ const SURFACE_STEP_HEIGHT = 1.6;
 // Slab method — does the segment p0→p1 (t in [0,1]) intersect the AABB o?
 // Used to catch fast/homing projectiles that would tunnel through obstacles
 // between frames.
+// (2026-10-07, "online SD is very lag": the three slabs are unrolled with no
+// per-call arrays — the Sudden Death brain's searches run this a million
+// times a minute per match, and the four small arrays each call allocated
+// were most of the sight test's cost and all of its garbage. Same maths,
+// same epsilon, same answer.)
 export function segmentHitsObstacle(p0, p1, o) {
   let tMin = 0;
   let tMax = 1;
-  const axes = [
-    [p0.x, p1.x - p0.x, o.minX, o.maxX],
-    [p0.y, p1.y - p0.y, o.minY, o.maxY],
-    [p0.z, p1.z - p0.z, o.minZ, o.maxZ]
-  ];
-  for (let i = 0; i < 3; i += 1) {
-    const start = axes[i][0];
-    const delta = axes[i][1];
-    const lo = axes[i][2];
-    const hi = axes[i][3];
-    if (Math.abs(delta) < 1e-9) {
-      if (start < lo || start > hi) return false;
-    } else {
-      const t1 = (lo - start) / delta;
-      const t2 = (hi - start) / delta;
-      const tNear = t1 < t2 ? t1 : t2;
-      const tFar = t1 < t2 ? t2 : t1;
-      if (tNear > tMin) tMin = tNear;
-      if (tFar < tMax) tMax = tFar;
-      if (tMin > tMax) return false;
-    }
+  let start = p0.x, delta = p1.x - p0.x, lo = o.minX, hi = o.maxX;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
+  }
+  start = p0.y; delta = p1.y - p0.y; lo = o.minY; hi = o.maxY;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
+  }
+  start = p0.z; delta = p1.z - p0.z; lo = o.minZ; hi = o.maxZ;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
   }
   return true;
 }
@@ -194,22 +207,28 @@ export function walkSegmentBlocked(x0, z0, x1, z1, y, obstacles) {
   for (let i = 0; i < cand.length; i += 1) {
     const o = cand[i];
     if (y < o.minY - 2 || y > o.maxY + (o.topBuffer ?? 4)) continue;
+    // (two slabs, unrolled with no per-call arrays — see segmentHitsObstacle)
     let tMin = 0, tMax = 1, miss = false;
-    const axes = [
-      [x0, x1 - x0, o.minX, o.maxX],
-      [z0, z1 - z0, o.minZ, o.maxZ]
-    ];
-    for (const [start, delta, lo, hi] of axes) {
+    let start = x0, delta = x1 - x0, lo = o.minX, hi = o.maxX;
+    if (Math.abs(delta) < 1e-9) {
+      if (start < lo || start > hi) miss = true;
+    } else {
+      const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+      const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+      if (tNear > tMin) tMin = tNear;
+      if (tFar < tMax) tMax = tFar;
+      if (tMin > tMax) miss = true;
+    }
+    if (!miss) {
+      start = z0; delta = z1 - z0; lo = o.minZ; hi = o.maxZ;
       if (Math.abs(delta) < 1e-9) {
-        if (start < lo || start > hi) { miss = true; break; }
+        if (start < lo || start > hi) miss = true;
       } else {
-        const t1 = (lo - start) / delta;
-        const t2 = (hi - start) / delta;
-        const tNear = t1 < t2 ? t1 : t2;
-        const tFar = t1 < t2 ? t2 : t1;
+        const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+        const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
         if (tNear > tMin) tMin = tNear;
         if (tFar < tMax) tMax = tFar;
-        if (tMin > tMax) { miss = true; break; }
+        if (tMin > tMax) miss = true;
       }
     }
     if (!miss) return true;

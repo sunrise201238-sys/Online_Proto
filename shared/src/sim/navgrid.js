@@ -1117,10 +1117,18 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   const P = globalThis.__sdProf;
   const tStart = P ? performance.now() : 0;
   let cAccept = 0, cScore = 0, tAccept = 0, tScore = 0, sightBefore = P ? P.sightCalls : 0;
+  // TIME BUDGET (owner 2026-10-07, "online SD is very lag"): `opts.deadline`
+  // (a performance.now() instant) ends the search like an exhausted pop
+  // budget — the server hands every search of a tick the same deadline, so
+  // one 50 ms Dijkstra on a slow instance can no longer stall the 16 ms
+  // tick; the caller retries at its own cadence. The sim harness sets none,
+  // so measured results stay reproducible. Checked every 32 pops.
+  const deadline = opts.deadline ?? 0;
   while (heap.size()) {
     const cur = heap.pop()[1];
     if (closed[cur]) continue;
     if (++pops > maxPops) break;
+    if (deadline && (pops & 31) === 0 && performance.now() > deadline) break;
     if (g[cur] > maxCost) break;
     closed[cur] = 1;
     const startHere = cur === start

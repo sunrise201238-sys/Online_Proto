@@ -34,6 +34,12 @@ const SLOT_IDS = ['p1', 'p2', 'p3', 'p4'];
 // Command orders share a per-slot rate limiter (≤2/s; latest wins) — every
 // move order runs a server-side pathfind, so spam is a CPU vector.
 const ORDER_MIN_INTERVAL_MS = 500;
+// Bot route searches (findHiddenSpot) of one tick share this CPU budget
+// (owner 2026-10-07, "online SD is very lag"): the Sudden Death brain runs a
+// Dijkstra every 150-250 ms per bot, 9-18 ms each and up to 70 ms on a fast
+// core — on the free instance that stalled the 16 ms tick. A search past
+// the deadline ends like one out of pops and is retried next cadence.
+const SEARCH_BUDGET_MS = 6;
 function activeSlots(mode) {
   return mode === '2v2' ? SLOT_IDS : SLOT_IDS.slice(0, 2);
 }
@@ -385,6 +391,7 @@ function tickLobby(lobby) {
   const driven = lobby.commandSlots.size
     ? new Set([...lobby.botSlots, ...lobby.commandSlots])
     : lobby.botSlots;
+  lobby.match.searchDeadline = performance.now() + SEARCH_BUDGET_MS;   // (shared by every search this tick)
   for (const botId of driven) {
     const me = lobby.match.fighters[botId];
     if (!me || me.hp <= 0) {

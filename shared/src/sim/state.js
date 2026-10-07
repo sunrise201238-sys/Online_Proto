@@ -360,7 +360,15 @@ export function buildSnapshotFor(state, viewerTeam) {
   for (const id in state.fighters) {
     const f = state.fighters[id];
     if (!viewerTeam || f.team === viewerTeam) {
-      fighters[id] = f;
+      // Own team keeps its bot-intent fields (the command UI reads them) —
+      // but not the Sudden Death brain's scratch (botSD*: ~50 fields with
+      // route and avoid-mark arrays, no reader on the client; owner
+      // 2026-10-07 "online SD is very lag": they added 1.8 KB to every
+      // snapshot of a team with a bot, 110 KB/s per client at 62.5 Hz).
+      if (!f.botSD) { fighters[id] = f; continue; }
+      const own = {};
+      for (const k in f) if (!k.startsWith('botSD')) own[k] = f[k];
+      fighters[id] = own;
       continue;
     }
     const r = { ...f };

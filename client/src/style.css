@@ -537,11 +537,18 @@ body.pseudo-fullscreen #app {
    no subtitle. The stripe tile is one horizontal period of the 45-degree
    pattern (24px bands -> 48px along the gradient -> 67.9px along x), so
    sliding background-position by that width loops seamlessly. */
-.sd-banner.style-c .sd-band { position: relative; padding: 18px 0; background: repeating-linear-gradient(135deg, #ffcc00 0 24px, #141414 24px 48px); background-size: 67.9px 100%; background-repeat: repeat; animation: sdFlash 2.3s ease-in-out forwards, sdStripes 0.7s linear infinite; }
-.sd-banner.hold.style-c .sd-band { animation: sdStripes 0.7s linear infinite; opacity: 1; }
+.sd-banner.style-c .sd-band { position: relative; padding: 18px 0; overflow: hidden; animation: sdFlash 2.3s ease-in-out forwards; }
+/* The stripes crawl on a pseudo-element by TRANSFORM, not by
+   background-position (owner 2026-10-07, "online SD is very lag ... when
+   the banner is still flashing"): a background-position animation on a
+   full-width repeating gradient repaints the band every frame for 2.3 s;
+   a translate is composited. The layer is one stripe period (67.9 px) wider
+   than the band and slides exactly that far, so the loop is seamless. */
+.sd-banner.style-c .sd-band::before { content: ''; position: absolute; top: 0; bottom: 0; left: -67.9px; right: 0; background: repeating-linear-gradient(135deg, #ffcc00 0 24px, #141414 24px 48px); background-size: 67.9px 100%; background-repeat: repeat; animation: sdStripes 0.7s linear infinite; will-change: transform; }
+.sd-banner.hold.style-c .sd-band { animation: none; opacity: 1; }
 .sd-banner.style-c .sd-sub { display: none; }
 .sd-banner.style-c .sd-title { position: relative; padding: 10px 36px; background: #0b0b0b; color: #ffcc00; box-shadow: 0 0 0 2px #ffcc00; }
-@keyframes sdStripes { from { background-position: 0 0; } to { background-position: 67.9px 0; } }
+@keyframes sdStripes { from { transform: translateX(0); } to { transform: translateX(67.9px); } }
 /* d — white flash, black type, letters spread as it fades */
 .sd-banner.style-d .sd-band { background: rgba(255,255,255,0.94); border-top: 3px solid #0b0b0b; border-bottom: 3px solid #0b0b0b; }
 .sd-banner.style-d .sd-title { color: #0b0b0b; animation: sdSpread 2.3s ease-out forwards; }

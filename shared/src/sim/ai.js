@@ -1394,7 +1394,7 @@ export function tickBot(matchState, botId, now) {
       const attempt = hideAttempts[stage];
       const found = findHiddenSpot(
         navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes, obstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null }
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, deadline: matchState.searchDeadline ?? 0 }
       );
       if (found) {
         me.botHideNoCover = false;
@@ -2604,7 +2604,9 @@ export function tickBot(matchState, botId, now) {
           // escape under fire never vaults)
           allowJump: !sdOverBudget,
           // (the goal must hide the unit's width, not its centre point)
-          goalShoulder: SD.shoulder }
+          goalShoulder: SD.shoulder,
+          // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
+          deadline: matchState.searchDeadline ?? 0 }
       );
       if (found && a.shadow) sdShadowShape(found);
       if (decided) {
