@@ -550,3 +550,11 @@ body.pseudo-fullscreen #app {
 @keyframes sdSpread { 0% { letter-spacing: 0.08em; } 100% { letter-spacing: 0.42em; } }
 /* SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the HP bars hide; the boost gauge and the remaining-units icons stay. */
 .touch-hud.sd-hud .health, .touch-hud.sd-hud .enemy-health, .touch-hud.sd-hud .ally-health, .touch-hud.sd-hud .enemy2-health { display: none; }
+/* (owner 2026-10-07, "since there is no HP bar in SD mode, move the weapons
+   indicator higher"): the weapon-icon rows take the bars' place at the top,
+   1v1 and 2v2 alike. */
+.touch-hud.sd-hud .trio-count, .touch-hud.sd-hud .trio-count.trio-count-2v2 { top: 14px; }
+/* SPECTATOR (owner 2026-10-07): the WATCHED unit's weapon icon glows white —
+   the corner-bar rim's sibling, and the only marker in Sudden Death where
+   the bars hide. */
+.touch-hud .trio-line.spec-watched-icon .trio-weapon-icon { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }

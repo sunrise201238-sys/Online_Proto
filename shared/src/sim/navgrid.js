@@ -1075,15 +1075,32 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   // is then a legal approach lane — the "sprint behind a distant obstacle
   // and walk up in its shadow" move — even though a sidestep would open it.
   const goalEyes = opts.goalEyes ?? null;
-  const goalHiddenCache = goalEyes ? new Int8Array(size).fill(-1) : null;
+  // opts.goalShoulder (SD, owner 2026-10-06): the GOAL hides the unit's
+  // width — its centre and the two points goalShoulder to either side
+  // across each eye's line — not the centre point alone; a cell at a
+  // cover's edge with a shoulder out is no goal. With no goalEyes the
+  // route eyes are the goal's eyes (escapes), still at the full width.
+  // The ROUTE cells stay centre-tested (the exposure estimate).
+  const goalShoulder = opts.goalShoulder ?? 0;
+  const goalTestEyes = goalEyes ?? (goalShoulder > 0 ? eyes : null);
+  const goalHiddenCache = goalTestEyes ? new Int8Array(size).fill(-1) : null;
+  const seenFrom = (p0, eye) => {
+    if (sightClear(p0, eye, obstacles, surfaces)) return true;
+    if (goalShoulder <= 0) return false;
+    let nx = eye.z - p0.z, nz = p0.x - eye.x;
+    const nl = Math.hypot(nx, nz) || 1;
+    nx = nx / nl * goalShoulder; nz = nz / nl * goalShoulder;
+    return sightClear({ x: p0.x + nx, y: p0.y, z: p0.z + nz }, eye, obstacles, surfaces)
+      || sightClear({ x: p0.x - nx, y: p0.y, z: p0.z - nz }, eye, obstacles, surfaces);
+  };
   const goalHidden = (node) => {
-    if (!goalEyes) return hiddenCached(node);
+    if (!goalTestEyes) return hiddenCached(node);
     let v = goalHiddenCache[node];
     if (v < 0) {
       let h = true;
       const p0 = { x: nodeCenterX(grid, node), y: floor[node] + GROUND_BASE_Y + eyeHeight, z: nodeCenterZ(grid, node) };
-      for (let e = 0; e < goalEyes.length; e += 1) {
-        if (sightClear(p0, goalEyes[e], obstacles, surfaces)) { h = false; break; }
+      for (let e = 0; e < goalTestEyes.length; e += 1) {
+        if (seenFrom(p0, goalTestEyes[e])) { h = false; break; }
       }
       v = h ? 1 : 0;
       goalHiddenCache[node] = v;
