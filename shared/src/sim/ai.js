@@ -329,9 +329,10 @@ export function sdRouteRisk(path, sx, sz, floorY, eyes, threat, SD, clear, speed
 }
 
 export const BOT_SD = {
-  exposeMs: 0,            // exposure budget when CAUGHT (an enemy line opens on the unit): 0 = break off at once, firing on the way (measured best, 2026-10-05)
-  exposeJitterMs: 0,      //   + uniform jitter
-  peekMs: 250,            // exposure budget for a DELIBERATE peek: fire this long, then the dodge step back (manoeuvre 2)
+  // (re-check 2026-10-08: no exposure TIME budget any more — a window ends on
+  // the tank reserve, the empty magazine, the strafe cap, the spent dodge or
+  // the leave-risk; exposeMs / watchFightMs were written to a field nobody read)
+  peekMs: 250,            // a DELIBERATE peek's planned fire time: sizes the risk window of a stand peek / fire hop, the "fought" threshold (half of it) and the tank the peek needs
   peekJitterMs: 100,      //   + uniform jitter
   dwellMinMs: 250,        // cover dwell before the next hop (near the band)
   dwellMaxMs: 700,
@@ -411,10 +412,9 @@ export const BOT_SD = {
   // fires the instant the enemy crosses, trades for watchFightMs, then
   // relocates. A stand peek now returns to the cover it stepped out from.
   pWatch: 0.6,            // chance a band decision becomes a watch instead of a shift hop
+  watchCooldownMs: 2000,  // after a watch ends (or is cut short) no new watch for this long — the search decides instead (re-check 2026-10-08: the cooldown field was read but never set)
   watchMinMs: 1500,       // watch window (+ random up to watchMaxMs)
   watchMaxMs: 3500,
-  watchFightMs: 500,      // exposure budget when the enemy walks into a watched line (+ jitter): stand and trade, then pull back
-  watchFightJitterMs: 300,
   exitR: 10,              // exit ring radius around the enemy
   exitMin: 3,             // a watch spot must see at least this many of the 8 exit points
   watchRecheckMs: 500,    // re-validate the spot this often
@@ -1727,11 +1727,10 @@ export function tickBot(matchState, botId, now) {
         // 176 ms opened nothing against the 250 ms reaction and the unit
         // shuttled 60 u out and back 29 times without a shot)
         me.botSDPlanned = !!(me.botSDPeekArmed || watching || me.botSDEngageRun);
-        me.botSDExposeBudget = me.botSDPeekArmed
-          ? SD.peekAimMs + SD.peekMs + Math.random() * SD.peekJitterMs
-          : watching
-            ? SD.watchFightMs + Math.random() * SD.watchFightJitterMs   // the enemy walked into a watched line: stand, trade, then pull back
-            : SD.exposeMs + Math.random() * SD.exposeJitterMs;
+        // (no time budget any more — re-check 2026-10-08: the window ends on
+        // the tank reserve, the empty magazine, the strafe cap, the spent
+        // dodge or the leave-risk, sdOverBudget; the old botSDExposeBudget
+        // was written here and read nowhere)
         // (a fire hop's pre-aimed window is for its cell: a shoulder glimpse
         // on the approach, with no line of its own, does not spend it — the
         // cell then opened with no window and the unit dodged back without a
@@ -1839,6 +1838,15 @@ export function tickBot(matchState, botId, now) {
       me.botSDSlideUntil = 0;
       me.botSDEngageRun = false;
       me.botSDFireGoal = false;
+      // (re-check 2026-10-08: the retreat flag used to outlive a dropped
+      // route — bail, wedge, corridor, ledge, watchdog, immunity — and the
+      // next arrival of ANY hop read as "back at the peek's cover": no
+      // peek-count reset, a stale "fought" arming the cycle)
+      me.botSDRetreatRoute = false;
+      // (a parked peek cycle dies with the route: it must not come back to
+      // life after some later, unrelated dodge — the window now counts from
+      // the dodge's cooldown end)
+      me.botSDCycleArm = null;
     };
     // STUCK WATCHDOG (owner 2026-10-05, "BOT still get stuck from time to
     // time"): standing within stuckMoveMin for stuckMs with no reason to —
@@ -1857,7 +1865,11 @@ export function tickBot(matchState, botId, now) {
       me.botSDPlainUntil = now + SD.plainMs;
       me.botSDSearchAt = now + SD.plainMs;
       me.botSDStucks = (me.botSDStucks ?? 0) + 1;
-      me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now };
+      // (re-check 2026-10-08: the stuck clock restarts when the SD brain
+      // gets the legs BACK, not now — with plainMs == stuckMs it re-fired on
+      // the first tick after the window, before the deferred search could
+      // run, every 3 s for as long as the plain legs did not move it 3 u)
+      me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now + SD.plainMs };
     }
     // SPAWN IMMUNITY (owner 2026-10-07, "無敵期間當 normal bot 走"): while the
     // unit cannot be hurt, cover buys nothing — the legs are the normal
@@ -2068,15 +2080,11 @@ export function tickBot(matchState, botId, now) {
       // itself unless its line is already open.
       const sdArriveR = (me.botSDFireGoal && !sdOppClear) ? 0.6 : 2;
       if (Math.hypot(goal.x - me.pos.x, goal.z - me.pos.z) < sdArriveR) {
+        const sdWasRetreat = !!me.botSDRetreatRoute;   // (sdDrop clears it)
         sdDrop();
-        if (me.botSDWatchPlanned && !sdOpen) {
-          // Arrived at a watch spot: hold it, pre-aimed, for the watch window.
-          me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
-          me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
-          me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
-          me.botSDDwellUntil = me.botSDWatchUntil;
-          me.botSDWatches = (me.botSDWatches ?? 0) + 1;
-        } else if (me.botSDRetreatRoute) {
+        // (no planned watch hop any more — a watch starts in place; the
+        // "arrived at a watch spot" branch was dead code, re-check 2026-10-08)
+        if (sdWasRetreat) {
           // back at the cover a peek left: a peek that got its window may
           // cycle at once (no dwell); one cut short (the line closed, the
           // band out of reach) waits the dwell like any arrival
@@ -2093,7 +2101,6 @@ export function tickBot(matchState, botId, now) {
           me.botSDPeekDry = 0;     //   ... and the dry-peek count
         }
         me.botSDRetreatRoute = false;
-        me.botSDWatchPlanned = false;
       } else if (!me.botSDGoalMayShow && !sdGoalHidden(goal)) {
         // UNCOVERED GOAL -> FIRE HOP (owner 2026-10-06): the enemy moved and
         // the goal now sees them. Inside the band with the standoff kept it
@@ -2107,6 +2114,11 @@ export function tickBot(matchState, botId, now) {
           me.botSDFires = (me.botSDFires ?? 0) + 1;
           me.botSDConverts = (me.botSDConverts ?? 0) + 1;
           me.botSDFireGoal = true;
+          // (re-check 2026-10-08: a fire hop is graded like a stand peek —
+          // fought / dry — only when these are fresh; they used to carry the
+          // last stand peek's verdict and the fire hop went ungraded)
+          me.botSDPeekFought = null;
+          me.botSDPeekShotsAt = me.lastFireAt;
         } else {
           sdDrop();
           me.botSDSearchAt = now;
@@ -2180,6 +2192,7 @@ export function tickBot(matchState, botId, now) {
       if (moved > SD.watchMoveTol || watchScore(me.pos.x, me.pos.z, myFloorY) < SD.exitMin) {
         me.botSDWatchUntil = 0;
         me.botSDDwellUntil = now;
+        me.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (a cut-short watch cools down from now)
       }
     }
     // 2. Hop search — one Dijkstra per tick per match (shares the hide
@@ -2210,7 +2223,11 @@ export function tickBot(matchState, botId, now) {
       me.botSDPeekOrigin = null;
       me.botSDPeekStepped = false;
     }
-    const sdCycleDue = sdHidden && sdFightOk && now - (me.botSDCycleArm ?? -1e9) <= SD.peekCycleMs;
+    // (re-check 2026-10-08: the window counts from the moment the dodge is
+    // ready again, not from the landing — the step cooldown (1175 ms)
+    // outlasted the 400 ms window and the cycle never fired after a dodge)
+    const sdCycleDue = sdHidden && sdFightOk && me.botSDCycleArm != null
+      && now - Math.max(me.botSDCycleArm, me.stepCooldownUntil ?? 0) <= SD.peekCycleMs;
     // STAND PEEK (MANOEUVRE 2 — peek, fire, dodge back): a LATERAL leg
     // (peekLateralMin across the threat's line) of peekLeg whose end sees
     // the target, run at a sprint; the fight window fires strafing, the
@@ -2352,6 +2369,7 @@ export function tickBot(matchState, botId, now) {
         me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
         me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
         me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+        me.botSDWatchCooldownUntil = me.botSDWatchUntil + SD.watchCooldownMs;   // (no back-to-back ambushes; re-check 2026-10-08)
         me.botSDDwellUntil = me.botSDWatchUntil;
         me.botSDWatches = (me.botSDWatches ?? 0) + 1;
         me.botSDSearchAt = now + SD.searchMs;
@@ -2564,6 +2582,15 @@ export function tickBot(matchState, botId, now) {
       }
       const stage = Math.min(me.botSDSearchStage ?? 0, attempts.length - 1);
       const a = attempts[stage];
+      // RESUMABLE SEARCH (owner 2026-10-08, "BOT sometimes freezes"): a
+      // search cut by the tick's budget parks in me.botSDSearchJob and goes
+      // on next tick on the same stage — "not done yet", not "nothing
+      // found" (a budget-cut stage used to fail, and on a slow host every
+      // far stage failed: the unit stood in cover with nothing to do). The
+      // job is dropped when the stage, the list or the start moves under it.
+      const sdJobKey = `${stage}|${attempts.length}|${sdOverBudget ? 1 : 0}|${Math.round(sdSearchX)},${Math.round(sdSearchZ)}`;
+      if (!me.botSDSearchJob || me.botSDSearchJob.key !== sdJobKey) me.botSDSearchJob = { key: sdJobKey, state: null };
+      let sdSearchPending = false;
       // Hidden (planned) hops: the ROUTE is costed against the live and
       // predicted eyes, the GOAL must hold against the spread eyes too — so
       // a distant crate's narrow shadow is an approach lane (owner 2026-10-05,
@@ -2606,12 +2633,17 @@ export function tickBot(matchState, botId, now) {
           // (the goal must hide the unit's width, not its centre point)
           goalShoulder: SD.shoulder,
           // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
-          deadline: matchState.searchDeadline ?? 0 }
+          deadline: matchState.searchDeadline ?? 0,
+          job: me.botSDSearchJob }
       );
+      if (found && found.pending) { found = null; sdSearchPending = true; }
       if (found && a.shadow) sdShadowShape(found);
-      if (decided) {
+      if (sdSearchPending) {
+        me.botSDSearchAt = now;   // (the same stage continues next tick)
+      } else if (decided) {
         // (watch / hold / retreat chosen above)
       } else if (found && (!a.better || found.score >= sdPosScore + SD.holdGain) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1, !!(a.engage || a.fire))) {
+        me.botSDSearchJob = null;
         me.botSDRiskHoldSince = null;
         me.botSDIdleSince = null;
         if (a.engage) me.botSDEngages = (me.botSDEngages ?? 0) + 1;
@@ -2624,6 +2656,8 @@ export function tickBot(matchState, botId, now) {
           me.botSDPeekArmed = true; me.botSDPeekStepped = false; me.botSDPeekOrigin = { x: me.pos.x, z: me.pos.z };
           me.botSDFires = (me.botSDFires ?? 0) + 1;
           me.botSDFireGoal = true;
+          me.botSDPeekFought = null;            // (graded at the window end, like a stand peek)
+          me.botSDPeekShotsAt = me.lastFireAt;
         }
         // (a fire or anyGoal hop ends on a cell that may show: no "goal
         // uncovered" drop for it)
@@ -2640,9 +2674,11 @@ export function tickBot(matchState, botId, now) {
         me.botSDHopLenSum = (me.botSDHopLenSum ?? 0) + Math.hypot(found.goal.x - me.pos.x, found.goal.z - me.pos.z);
         me.botSDStallSince = null;
       } else if (stage < attempts.length - 1) {
+        me.botSDSearchJob = null;
         me.botSDSearchStage = stage + 1;
         me.botSDSearchAt = now;
       } else {
+        me.botSDSearchJob = null;
         me.botSDSearchStage = 0;
         me.botSDSearchAt = now + (sdHidden ? SD.failRetryMs : SD.exposedRetryMs);
         if (sdHidden) {
@@ -2896,7 +2932,9 @@ export function tickBot(matchState, botId, now) {
         coverMove = { hold: false, hide: true, dash: legMode === 'back' ? me.boost > SD.dashFloor : sdDash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 };
         me.botSDHeadX = hx;
         me.botSDHeadZ = hz;
-        me.botSDState = legMode;
+        // (telemetry: a covered leg that walks — shadow walk, corner creep,
+        // bank, travel latch off — reads 'walk', not 'dash')
+        me.botSDState = (legMode === 'dash' && !coverMove.dash) ? 'walk' : legMode;
       }
       // WEDGE (owner 2026-10-07, jitter scan — Station 22.8 s: the leg's
       // straight cut clipped an obstacle corner, the body stuck on it and

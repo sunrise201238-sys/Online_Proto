@@ -1045,13 +1045,25 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   if (!eyes) eyes = [];
   const { n, layers, floor, clearGrade, surfaces } = grid;
   const size = n * layers;
-  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
+  // RESUMABLE SEARCH (owner 2026-10-08, "BOT sometimes freezes"): opts.job
+  // is an object the caller keeps between ticks. When this call runs out of
+  // its slice — opts.deadline (a performance.now() instant) or
+  // opts.popsPerCall — with a job given, the open set, costs and caches are
+  // parked in job.state and the call returns { pending: true }; the next
+  // call with the same job resumes where it stopped, so a 50 ms Dijkstra
+  // becomes a dozen 4 ms slices instead of a dropped frame (offline) or a
+  // search that never completes (a slow server). Without a job a deadline
+  // cut ends the search as before (null, like an exhausted pop budget).
+  const job = opts.job ?? null;
+  const resume = !!(job && job.state);
+  const st = resume ? job.state : null;
+  const start = resume ? st.start : nearestWalkable(grid, sx, sz, startFloor, obstacles);
   if (start < 0) return null;
   const coverDist = (openPenalty > 0 || goalCoverMax != null) ? coverDistFor(grid, obstacles) : null;
-  const parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
-  const g = new Float64Array(size).fill(Infinity);
-  const closed = new Uint8Array(size);
-  const hiddenCache = new Int8Array(size).fill(-1);
+  const parent = resume ? st.parent : new Int32Array(size).fill(-2); // -2 unvisited, -1 root
+  const g = resume ? st.g : new Float64Array(size).fill(Infinity);
+  const closed = resume ? st.closed : new Uint8Array(size);
+  const hiddenCache = resume ? st.hiddenCache : new Int8Array(size).fill(-1);
   // (anyGoal keeps hiddenAt true for the GOAL test; the route penalty below
   // still asks the real eyes through this helper.)
   const hiddenCached = (node) => {
@@ -1083,7 +1095,7 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   // The ROUTE cells stay centre-tested (the exposure estimate).
   const goalShoulder = opts.goalShoulder ?? 0;
   const goalTestEyes = goalEyes ?? (goalShoulder > 0 ? eyes : null);
-  const goalHiddenCache = goalTestEyes ? new Int8Array(size).fill(-1) : null;
+  const goalHiddenCache = resume ? st.goalHiddenCache : (goalTestEyes ? new Int8Array(size).fill(-1) : null);
   const seenFrom = (p0, eye) => {
     if (sightClear(p0, eye, obstacles, surfaces)) return true;
     if (goalShoulder <= 0) return false;
@@ -1107,12 +1119,24 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
     }
     return v === 1;
   };
-  const heap = createMinHeap();
-  parent[start] = -1;
-  g[start] = 0;
-  heap.push(0, start);
+  const heap = resume ? st.heap : createMinHeap();
+  if (!resume) {
+    parent[start] = -1;
+    g[start] = 0;
+    heap.push(0, start);
+  } else {
+    bestGoal = st.bestGoal;
+    bestScore = st.bestScore;
+  }
   let goal = -1;
-  let pops = 0;
+  let pops = resume ? st.pops : 0;
+  // (the slice: pops this call, against opts.popsPerCall)
+  const popsPerCall = opts.popsPerCall ?? Infinity;
+  let callPops = 0;
+  const park = () => {
+    job.state = { start, parent, g, closed, hiddenCache, goalHiddenCache, heap, pops, bestGoal, bestScore };
+    return { pending: true };
+  };
   // (profiling hooks: globalThis.__sdProf, set by the harness --prof)
   const P = globalThis.__sdProf;
   const tStart = P ? performance.now() : 0;
@@ -1128,7 +1152,12 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
     const cur = heap.pop()[1];
     if (closed[cur]) continue;
     if (++pops > maxPops) break;
-    if (deadline && (pops & 31) === 0 && performance.now() > deadline) break;
+    if (job && ++callPops > popsPerCall) { heap.push(g[cur], cur); pops -= 1; return park(); }   // (slice over: this node pops first next time)
+    if (deadline && (pops & 31) === 0 && performance.now() > deadline) {
+      if (P) P.cuts = (P.cuts ?? 0) + 1;
+      if (job) { heap.push(g[cur], cur); pops -= 1; return park(); }
+      break;
+    }
     if (g[cur] > maxCost) break;
     closed[cur] = 1;
     const startHere = cur === start
@@ -1182,6 +1211,7 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
     P.searches += 1; P.t += dt;
     if (dt > P.max) { P.max = dt; P.maxInfo = { pops, sight: P.sightCalls - sightBefore, cAccept, tAccept: +tAccept.toFixed(1), cScore, tScore: +tScore.toFixed(1), eyes: eyes.length, goalEyes: goalEyes ? goalEyes.length : 0, maxPops, found: goal >= 0 || bestGoal >= 0 }; }
   }
+  if (job) job.state = null;   // (finished, found or not: the next call starts afresh)
   if (score) goal = bestGoal;
   if (goal < 0) return null;
   const pts = [];

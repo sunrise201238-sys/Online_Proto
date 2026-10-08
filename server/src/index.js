@@ -39,8 +39,11 @@ const ORDER_MIN_INTERVAL_MS = 500;
 // Bot route searches (findHiddenSpot) of one tick share this CPU budget
 // (owner 2026-10-07, "online SD is very lag"): the Sudden Death brain runs a
 // Dijkstra every 150-250 ms per bot, 9-18 ms each and up to 70 ms on a fast
-// core — on the free instance that stalled the 16 ms tick. A search past
-// the deadline ends like one out of pops and is retried next cadence.
+// core — on the free instance that stalled the 16 ms tick. A Sudden Death
+// search past the deadline PARKS and continues next tick on the same stage
+// (resumable, 2026-10-08 — before, a cut search counted as "nothing found",
+// and on a slow host every far stage failed); the plain brain's hide search
+// still ends like one out of pops and retries at its cadence.
 const SEARCH_BUDGET_MS = 6;
 // The empty frames every slot reads during a Sudden Death start hold.
 const HOLD_INPUTS = { p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput() };

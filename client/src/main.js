@@ -4444,6 +4444,10 @@ const BOT_CH_AREA_R = 14;
 // matchState.hideSearchTick: every driven unit of a frame runs with the
 // same `now`, so two hiding units never search in the same frame.
 let botHideSearchFrameAt = null;
+// The slice of one frame a Sudden Death cover search may use before it parks
+// and continues next frame (owner 2026-10-08, "BOT sometimes freezes": an
+// unbudgeted search ran 50-70 ms on a desktop core, several frames on a phone).
+const SD_FRAME_SEARCH_MS = 4;
 // Null every hide-order scratch field on a mech state (the shared brain
 // inlines the same nine writes): the brain calls it the first tick it sees
 // the order cleared, and dioramaCommandTick on death alongside the command
@@ -5592,11 +5596,7 @@ function updateEnemy(now) {
         // (a peek's window carries the pre-aimed acquisition in front of the burst — mirrors shared)
         // (an engage hop's crossing was chosen for its line: pre-aimed too — mirrors shared)
         eState.botSDPlanned = !!(eState.botSDPeekArmed || watching || eState.botSDEngageRun);
-        eState.botSDExposeBudget = eState.botSDPeekArmed
-          ? SD.peekAimMs + SD.peekMs + Math.random() * SD.peekJitterMs
-          : watching
-            ? SD.watchFightMs + Math.random() * SD.watchFightJitterMs   // the enemy walked into a watched line: stand, trade, then pull back
-            : SD.exposeMs + Math.random() * SD.exposeJitterMs;
+        // (no time budget any more — mirrors shared, re-check 2026-10-08)
         // (a fire hop's pre-aimed window is for its cell: a shoulder glimpse on
         // the approach, with no line of its own, does not spend it — mirrors shared)
         if (!eState.botSDFireGoal || sdOppClear) eState.botSDPeekArmed = false;
@@ -5664,6 +5664,8 @@ function updateEnemy(now) {
       eState.botSDSlideUntil = 0;
       eState.botSDEngageRun = false;
       eState.botSDFireGoal = false;
+      eState.botSDRetreatRoute = false;   // (re-check 2026-10-08, mirrors shared: a dropped retreat route no longer flags the next arrival)
+      eState.botSDCycleArm = null;         // (a parked peek cycle dies with the route — mirrors shared)
     };
     // STUCK WATCHDOG (mirrors shared): standing within stuckMoveMin for
     // stuckMs with no reason to (not hidden, hugging cover and inside
@@ -5679,7 +5681,7 @@ function updateEnemy(now) {
       eState.botSDPlainUntil = now + SD.plainMs;
       eState.botSDSearchAt = now + SD.plainMs;
       eState.botSDStucks = (eState.botSDStucks ?? 0) + 1;
-      eState.botSDWd = { x: e.x, z: e.z, at: now };
+      eState.botSDWd = { x: e.x, z: e.z, at: now + SD.plainMs };   // (re-check 2026-10-08, mirrors shared: the stuck clock restarts when the SD brain gets the legs back)
     }
     // SPAWN IMMUNITY (mirrors shared): while the unit cannot be hurt the legs
     // are the normal bot's and the SD planning waits; the fire rules stay.
@@ -5842,15 +5844,10 @@ function updateEnemy(now) {
       // cell itself unless its line is already open.
       const sdArriveR = (eState.botSDFireGoal && !sdOppClear) ? 0.6 : 2;
       if (Math.hypot(goal.x - e.x, goal.z - e.z) < sdArriveR) {
+        const sdWasRetreat = !!eState.botSDRetreatRoute;   // (sdDrop clears it — mirrors shared)
         sdDrop();
-        if (eState.botSDWatchPlanned && !sdOpen) {
-          // Arrived at a watch spot: hold it, pre-aimed, for the watch window.
-          eState.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
-          eState.botSDWatchAnchor = { x: p.x, z: p.z };
-          eState.botSDWatchRecheckAt = now + SD.watchRecheckMs;
-          eState.botSDDwellUntil = eState.botSDWatchUntil;
-          eState.botSDWatches = (eState.botSDWatches ?? 0) + 1;
-        } else if (eState.botSDRetreatRoute) {
+        // (no planned watch hop any more — the dead "arrived at a watch spot" branch is gone, mirrors shared)
+        if (sdWasRetreat) {
           // back at the cover a peek left: a peek that got its window may
           // cycle at once (no dwell); one cut short waits the dwell (mirrors shared)
           const fought = eState.botSDPeekFought === true;
@@ -5865,7 +5862,6 @@ function updateEnemy(now) {
           eState.botSDPeekDry = 0;     //   ... and the dry-peek count (mirrors shared)
         }
         eState.botSDRetreatRoute = false;
-        eState.botSDWatchPlanned = false;
       } else if (!eState.botSDGoalMayShow && !sdGoalHidden(goal)) {
         // UNCOVERED GOAL -> FIRE HOP (mirrors shared): the enemy moved and the
         // goal now sees them; inside the band with the standoff kept it is a
@@ -5878,6 +5874,8 @@ function updateEnemy(now) {
           eState.botSDFires = (eState.botSDFires ?? 0) + 1;
           eState.botSDConverts = (eState.botSDConverts ?? 0) + 1;
           eState.botSDFireGoal = true;
+          eState.botSDPeekFought = null;            // (re-check 2026-10-08, mirrors shared: the fire hop is graded fought / dry on its own)
+          eState.botSDPeekShotsAt = eState.lastFireAt;
         } else {
           sdDrop();
           eState.botSDSearchAt = now;
@@ -5941,6 +5939,7 @@ function updateEnemy(now) {
       if (moved > SD.watchMoveTol || watchScore(e.x, e.z, myFloorY) < SD.exitMin) {
         eState.botSDWatchUntil = 0;
         eState.botSDDwellUntil = now;
+        eState.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (mirrors shared)
       }
     }
     const sdDwellOver = now >= (eState.botSDDwellUntil ?? 0);
@@ -5963,7 +5962,9 @@ function updateEnemy(now) {
       eState.botSDPeekOrigin = null;
       eState.botSDPeekStepped = false;
     }
-    const sdCycleDue = sdHidden && sdFightOk && now - (eState.botSDCycleArm ?? -1e9) <= SD.peekCycleMs;
+    // (mirrors shared, re-check 2026-10-08: the cycle window counts from the moment the dodge is ready again)
+    const sdCycleDue = sdHidden && sdFightOk && eState.botSDCycleArm != null
+      && now - Math.max(eState.botSDCycleArm, eState.stepCooldownUntil ?? 0) <= SD.peekCycleMs;
     // STAND PEEK (MANOEUVRE 2 — peek, fire, dodge back; mirrors shared): a
     // LATERAL leg whose end sees the target, run at a sprint. Returns true
     // when a peek was armed.
@@ -6089,6 +6090,7 @@ function updateEnemy(now) {
         eState.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
         eState.botSDWatchAnchor = { x: p.x, z: p.z };
         eState.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+        eState.botSDWatchCooldownUntil = eState.botSDWatchUntil + SD.watchCooldownMs;   // (mirrors shared)
         eState.botSDDwellUntil = eState.botSDWatchUntil;
         eState.botSDWatches = (eState.botSDWatches ?? 0) + 1;
         eState.botSDSearchAt = now + SD.searchMs;
@@ -6250,20 +6252,35 @@ function updateEnemy(now) {
         }
         if (best) found = { path: [{ x: best.x, z: best.z, y: myFloorY }], goal: { x: best.x, z: best.z, y: myFloorY }, score: null };
         if (best) eState.botSDCornerFires = (eState.botSDCornerFires ?? 0) + 1;
-      } else if (!decided) found = findHiddenSpot(
-        offlineNavGrid, sdSearchX, sdSearchZ, myFloorY, (sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes, arenaObstacles,
-        { maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept ?? null, eyeHeight: sdEyeH,
-          goalEyes: (sdOverBudget || sdThreatMoving) ? null : sdSearchEyes,
-          exposurePenalty: a.engage ? SD.engagePenalty : SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist, goalCoverMax: a.goalCoverMax ?? null, anyGoal: !!a.anyGoal,
-          threat: { x: sdThreatPos.x, z: sdThreatPos.z }, alongWeight: SD.alongWeight, avoid: sdOverBudget ? sdAvoidPinned : sdAvoid,
-          score: a.score ?? null, scoreStop: a.scoreStop ?? Infinity,
-          allowJump: !sdOverBudget,
-          goalShoulder: SD.shoulder }
-      );
+      } else if (!decided) {
+        // RESUMABLE SEARCH (owner 2026-10-08, "BOT sometimes freezes" —
+        // mirrors shared): the search gets SD_FRAME_SEARCH_MS of this frame;
+        // what is left parks in eState.botSDSearchJob and continues next
+        // frame on the same stage. One 50 ms Dijkstra no longer drops frames.
+        const sdJobKey = `${stage}|${attempts.length}|${sdOverBudget ? 1 : 0}|${Math.round(sdSearchX)},${Math.round(sdSearchZ)}`;
+        if (!eState.botSDSearchJob || eState.botSDSearchJob.key !== sdJobKey) eState.botSDSearchJob = { key: sdJobKey, state: null };
+        found = findHiddenSpot(
+          offlineNavGrid, sdSearchX, sdSearchZ, myFloorY, (sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes, arenaObstacles,
+          { maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept ?? null, eyeHeight: sdEyeH,
+            goalEyes: (sdOverBudget || sdThreatMoving) ? null : sdSearchEyes,
+            exposurePenalty: a.engage ? SD.engagePenalty : SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist, goalCoverMax: a.goalCoverMax ?? null, anyGoal: !!a.anyGoal,
+            threat: { x: sdThreatPos.x, z: sdThreatPos.z }, alongWeight: SD.alongWeight, avoid: sdOverBudget ? sdAvoidPinned : sdAvoid,
+            score: a.score ?? null, scoreStop: a.scoreStop ?? Infinity,
+            allowJump: !sdOverBudget,
+            goalShoulder: SD.shoulder,
+            deadline: performance.now() + SD_FRAME_SEARCH_MS,
+            job: eState.botSDSearchJob }
+        );
+      }
+      let sdSearchPending = false;
+      if (found && found.pending) { found = null; sdSearchPending = true; }
       if (found && a.shadow) sdShadowShape(found);
-      if (decided) {
+      if (sdSearchPending) {
+        eState.botSDSearchAt = now;   // (the same stage continues next frame)
+      } else if (decided) {
         // (watch / hold / retreat chosen above)
       } else if (found && (!a.better || found.score >= sdPosScore + SD.holdGain) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1, !!(a.engage || a.fire))) {
+        eState.botSDSearchJob = null;
         eState.botSDRiskHoldSince = null;
         eState.botSDIdleSince = null;
         if (a.engage) eState.botSDEngages = (eState.botSDEngages ?? 0) + 1;
@@ -6273,6 +6290,8 @@ function updateEnemy(now) {
           eState.botSDPeekArmed = true; eState.botSDPeekStepped = false; eState.botSDPeekOrigin = { x: e.x, z: e.z };
           eState.botSDFires = (eState.botSDFires ?? 0) + 1;
           eState.botSDFireGoal = true;
+          eState.botSDPeekFought = null;            // (graded at the window end, like a stand peek — mirrors shared)
+          eState.botSDPeekShotsAt = eState.lastFireAt;
         }
         eState.botSDGoalMayShow = !!(a.fire || a.anyGoal);
         eState.botSDPath = found.path;
@@ -6284,9 +6303,11 @@ function updateEnemy(now) {
         eState.botSDHops = (eState.botSDHops ?? 0) + 1;
         eState.botSDStallSince = null;
       } else if (stage < attempts.length - 1) {
+        eState.botSDSearchJob = null;
         eState.botSDSearchStage = stage + 1;
         eState.botSDSearchAt = now;
       } else {
+        eState.botSDSearchJob = null;
         eState.botSDSearchStage = 0;
         eState.botSDSearchAt = now + (sdHidden ? SD.failRetryMs : SD.exposedRetryMs);
         if (sdHidden) {
@@ -6491,7 +6512,7 @@ function updateEnemy(now) {
         coverMove = { hold: false, hide: true, dash: legMode === 'back' ? eState.boost > SD.dashFloor : sdDash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 };
         eState.botSDHeadX = hx;
         eState.botSDHeadZ = hz;
-        eState.botSDState = legMode;
+        eState.botSDState = (legMode === 'dash' && !coverMove.dash) ? 'walk' : legMode;   // (telemetry: a walking covered leg reads 'walk' — mirrors shared)
       }
       // WEDGE (mirrors shared): a leg that has not moved the body wedgeMoveMin
       // in wedgeMs while commanding a move is wedged on an obstacle — slide
