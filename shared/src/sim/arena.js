@@ -43,11 +43,16 @@ function makeBoundaryObstacles(mapKey) {
   const { halfX, halfZ } = MAP_BOUNDARY[mapKey] ?? { halfX: 138, halfZ: 138 };
   const T = BOUNDARY_WALL_THICKNESS;
   const H2 = BOUNDARY_WALL_HEIGHT * 2;
+  // The slabs start AT the play extent and reach outward (alignment check
+  // 2026-10-09): they used to straddle it, so online a 2 u strip inside every
+  // map edge was solid that the offline arena (whose own perimeter walls sit
+  // at HALF..HALF+2, outside the field, addBoundaryIndicator) leaves open —
+  // the bots planned and hid differently along the edges in the two modes.
   return [
-    { minX: halfX - T,    maxX: halfX + T,    minZ: -halfZ,        maxZ:  halfZ,        minY: 0, maxY: H2, topBuffer: H2 },
-    { minX: -halfX - T,   maxX: -halfX + T,   minZ: -halfZ,        maxZ:  halfZ,        minY: 0, maxY: H2, topBuffer: H2 },
-    { minX: -halfX,       maxX:  halfX,       minZ:  halfZ - T,    maxZ:  halfZ + T,    minY: 0, maxY: H2, topBuffer: H2 },
-    { minX: -halfX,       maxX:  halfX,       minZ: -halfZ - T,    maxZ: -halfZ + T,    minY: 0, maxY: H2, topBuffer: H2 }
+    { minX: halfX,          maxX: halfX + 2 * T,   minZ: -halfZ - 2 * T, maxZ:  halfZ + 2 * T, minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX - 2 * T, maxX: -halfX,          minZ: -halfZ - 2 * T, maxZ:  halfZ + 2 * T, minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX,         maxX:  halfX,          minZ:  halfZ,         maxZ:  halfZ + 2 * T, minY: 0, maxY: H2, topBuffer: H2 },
+    { minX: -halfX,         maxX:  halfX,          minZ: -halfZ - 2 * T, maxZ: -halfZ,         minY: 0, maxY: H2, topBuffer: H2 }
   ];
 }
 

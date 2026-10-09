@@ -4807,6 +4807,12 @@ function updateEnemy(now) {
   }
   const p = state.player.root.position;
   const e = state.enemy.root.position;
+  // The BODY centre height (alignment check 2026-10-09): the walk tests and
+  // the nav grid take the body centre (ground + GROUND_BASE_Y), the same
+  // window the collision code uses; `e` is the mech ROOT, 2.35 higher, and
+  // at that height a 3-high walkable-top block read as passable and an
+  // overhang as a wall — legs the physics then refused (offline wedges).
+  const eBodyY = state.enemy.body.position.y;
   const toPlayer = new THREE.Vector3().subVectors(p, e).setY(0);
   const dist = toPlayer.length();
   const dir = toPlayer.normalize();
@@ -5005,7 +5011,7 @@ function updateEnemy(now) {
   const walkTowardClear = (len) => !walkSegmentBlocked(
     e.x, e.z,
     e.x + dir.x * len, e.z + dir.z * len,
-    e.y, arenaObstacles
+    eBodyY, arenaObstacles
   );
   if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   eState.botPrevHitStun = eState.hitStunUntil;
@@ -5051,7 +5057,7 @@ function updateEnemy(now) {
   const avoidMag = Math.hypot(avoid.rx, avoid.rz);
   const obstacleNear = avoidMag > 0.3;
 
-  const myFloorY = groundHeightAt(e.x, e.z, e.y - GROUND_BASE_Y);
+  const myFloorY = groundHeightAt(e.x, e.z, eBodyY - GROUND_BASE_Y);   // (the current floor as the step hint — mirrors shared; the root height overstated it by 2.35)
   const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
@@ -5387,7 +5393,7 @@ function updateEnemy(now) {
       const legOk = (hx, hz, strict) => {
         const lx = e.x + hx * BOT_HIDE_LEG, lz = e.z + hz * BOT_HIDE_LEG;
         if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
-        if (walkSegmentBlocked(e.x, e.z, lx, lz, e.y, arenaObstacles)) return false;
+        if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
         const eye = { x: lx, y: myEyeY, z: lz };
         for (let k = 0; k < paceEyes.length; k += 1) if (botHasLineOfSight(paceEyes[k], eye)) return false;
         if (strict) for (let k = 0; k < pacePred.length; k += 1) if (botHasLineOfSight(pacePred[k], eye)) return false;
@@ -5809,7 +5815,7 @@ function updateEnemy(now) {
     // is walkable and its end has a muzzle line to the target.
     const sdPeekableAt = (x, z, fy) => {
       const my = fy + GROUND_BASE_Y + sdEyeH;
-      const wy = fy + GROUND_BASE_Y + (state.enemy.modelYOffset ?? 2.35);
+      const wy = fy + GROUND_BASE_Y;   // (body centre on that floor — mirrors shared)
       let lx = p.x - x, lz = p.z - z;
       const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
       const heads = [[-lz, lx], [lz, -lx], [-lz * 0.866 + lx * 0.5, lx * 0.866 + lz * 0.5], [lz * 0.866 + lx * 0.5, -lx * 0.866 + lz * 0.5]];
@@ -5981,7 +5987,7 @@ function updateEnemy(now) {
         // a short leg first, a longer one past a wide cover (mirrors shared)
         for (const legLen of [SD.peekLeg, SD.peekLeg * 1.75, SD.peekLegMax]) {
           const px = e.x + cx * legLen, pz = e.z + cz * legLen;
-          if (walkSegmentBlocked(e.x, e.z, px, pz, e.y, arenaObstacles)) break;
+          if (walkSegmentBlocked(e.x, e.z, px, pz, eBodyY, arenaObstacles)) break;
           if (!sdClear({ x: px, y: myShotY, z: pz }, oppMuzzle)) continue;
           let score = lat - (legLen - SD.peekLeg) * 0.03 + (Math.random() - 0.5) * 0.3;
           if (cycling && side === (eState.botSDLastPeekSide ?? 0)) score -= 0.4;   // show the other shoulder
@@ -6157,8 +6163,8 @@ function updateEnemy(now) {
         if (t < al + 3) return;
         const P = { x: p.x + ax * t, z: p.z + az * t, y: myFloorY };
         if (Math.hypot(P.x - e.x, P.z - e.z) < 2) { found.path = [{ x: g.x, z: g.z, y: g.y ?? myFloorY }]; return; }
-        if (walkSegmentBlocked(e.x, e.z, P.x, P.z, e.y, arenaObstacles)) return;
-        if (walkSegmentBlocked(P.x, P.z, g.x, g.z, e.y, arenaObstacles)) return;
+        if (walkSegmentBlocked(e.x, e.z, P.x, P.z, eBodyY, arenaObstacles)) return;
+        if (walkSegmentBlocked(P.x, P.z, g.x, g.z, eBodyY, arenaObstacles)) return;
         for (const f of [0.2, 0.5, 0.8]) {
           if (!sdGoalHidden({ x: P.x + (g.x - P.x) * f, z: P.z + (g.z - P.z) * f, y: myFloorY })) return;
         }
@@ -6227,6 +6233,9 @@ function updateEnemy(now) {
       }
       const stage = Math.min(eState.botSDSearchStage ?? 0, attempts.length - 1);
       const a = attempts[stage];
+      // (the job is re-keyed on EVERY search tick, decided or not — mirrors shared; a parked search must not outlive a stage change)
+      const sdJobKey = `${stage}|${attempts.length}|${sdOverBudget ? 1 : 0}|${Math.round(sdSearchX)},${Math.round(sdSearchZ)}`;
+      if (!eState.botSDSearchJob || eState.botSDSearchJob.key !== sdJobKey) eState.botSDSearchJob = { key: sdJobKey, state: null };
       // Route vs live + predicted eyes, goal vs the spread eyes too (mirrors shared).
       let found = null;
       if (!decided && a.cornerFire) {
@@ -6242,7 +6251,7 @@ function updateEnemy(now) {
           for (const R of [6, 10, 14]) {
             if (R >= bestR) break;
             const px = e.x + cx * R, pz = e.z + cz * R;
-            if (walkSegmentBlocked(e.x, e.z, px, pz, e.y, arenaObstacles)) break;
+            if (walkSegmentBlocked(e.x, e.z, px, pz, eBodyY, arenaObstacles)) break;
             if (Math.hypot(px - p.x, pz - p.z) > sdUpper + SD.fightSlack) continue;   // inside the fight band
             if (!sdFireSpot(px, pz, myFloorY)) continue;
             if (coverDistanceAt(offlineNavGrid, px, pz, myFloorY, arenaObstacles) > SD.goalCoverMax) continue;
@@ -6257,8 +6266,6 @@ function updateEnemy(now) {
         // mirrors shared): the search gets SD_FRAME_SEARCH_MS of this frame;
         // what is left parks in eState.botSDSearchJob and continues next
         // frame on the same stage. One 50 ms Dijkstra no longer drops frames.
-        const sdJobKey = `${stage}|${attempts.length}|${sdOverBudget ? 1 : 0}|${Math.round(sdSearchX)},${Math.round(sdSearchZ)}`;
-        if (!eState.botSDSearchJob || eState.botSDSearchJob.key !== sdJobKey) eState.botSDSearchJob = { key: sdJobKey, state: null };
         found = findHiddenSpot(
           offlineNavGrid, sdSearchX, sdSearchZ, myFloorY, (sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes, arenaObstacles,
           { maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept ?? null, eyeHeight: sdEyeH,
@@ -6537,8 +6544,8 @@ function updateEnemy(now) {
             let px = -coverMove.mz, pz = coverMove.mx;
             const nxt = sp[Math.min((eState.botSDPathIdx ?? 0) + 1, sp.length - 1)];
             if ((nxt.x - e.x) * px + (nxt.z - e.z) * pz < 0) { px = -px; pz = -pz; }
-            const okA = !walkSegmentBlocked(e.x, e.z, e.x + px * 3, e.z + pz * 3, e.y, arenaObstacles);
-            const okB = !walkSegmentBlocked(e.x, e.z, e.x - px * 3, e.z - pz * 3, e.y, arenaObstacles);
+            const okA = !walkSegmentBlocked(e.x, e.z, e.x + px * 3, e.z + pz * 3, eBodyY, arenaObstacles);
+            const okB = !walkSegmentBlocked(e.x, e.z, e.x - px * 3, e.z - pz * 3, eBodyY, arenaObstacles);
             if (!okA && okB) { px = -px; pz = -pz; }
             if (okA || okB) {
               eState.botSDSlideX = px; eState.botSDSlideZ = pz; eState.botSDSlideUntil = now + SD.slideMs;
@@ -6612,7 +6619,7 @@ function updateEnemy(now) {
         const legOk = (cx, cz) => {
           const lx = e.x + cx * SD.paceLeg, lz = e.z + cz * SD.paceLeg;
           if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) return false;
-          if (walkSegmentBlocked(e.x, e.z, lx, lz, e.y, arenaObstacles)) return false;
+          if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
           if (coverDistanceAt(offlineNavGrid, lx, lz, myFloorY, arenaObstacles) > SD.openDist) return false;   // never pace onto open ground
           for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) return false;
           if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;
@@ -8925,8 +8932,10 @@ function startMatch() {
     m.state.lastFireAt = now;
     m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   });
-  state.enemy.state.nextFireAt = now + 650;
-  if (state.enemy2) state.enemy2.state.nextFireAt = now + 650;
+  // (every BOT slot waits 650 ms before its first round — the ally and a
+  // spectated player slot too, as the server stamps every bot slot;
+  // alignment check 2026-10-09)
+  for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;
   input.shootHold = false;
   input.shootTap = false;
   // Default the player's lock target to the first enemy. In 2v2 this can be
@@ -9000,8 +9009,7 @@ function showSuddenDeathBanner(durationMs = SD_BANNER_MS) {
       m.state.lastFireAt = now;
       m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
     });
-    if (state.enemy) state.enemy.state.nextFireAt = now + 650;
-    if (state.enemy2) state.enemy2.state.nextFireAt = now + 650;
+    for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server)
     state.matchStartAt = now;
     state.sdIntro = false;
     state.running = true;
@@ -11711,7 +11719,7 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
   fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
-  if (slotName === 'enemy' || slotName === 'enemy2') fresh.state.nextFireAt = now + 650;
+  if (slotName === 'enemy' || slotName === 'enemy2' || slotName === 'ally' || (slotName === 'player' && state.spectatorActive)) fresh.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server's Trio respawn)
   state[slotName] = fresh;
 
   // Re-home anything that rode on the old mech's root, and repoint the
