@@ -5637,6 +5637,15 @@ function updateEnemy(now) {
     // against the threat's live bloom and the time already exposed, passes
     // the deliberate cap.
     const sdThreatDist = Math.hypot(sdThreatPos.x - e.x, sdThreatPos.z - e.z);
+    // ROUNDS IN THE AIR (mirrors shared, Factory opening trace 2026-10-09):
+    // a round the threat fired while the unit was in its line is still
+    // flying dist / projectile speed after the trigger; the crossing is
+    // kept that long after the line closes.
+    if (!sdHidden) eState.botSDSeenAt = now;
+    const sdFlightMs = SD.flightKeep * sdThreatDist / (sdThreat.unit?.projectileSpeed ?? 600) * 1000;
+    // (the mirror stamps lastFireAt at spawn for the cooldown clock — the sim's starts at 0: a shot is only "heard" after that stamp)
+    const sdThreatFired = (sdThreat.state?.lastFireAt ?? -1e9) > (sdThreat.state?.fireInitAt ?? -1e9);
+    const sdIncoming = sdHidden && sdThreatFired && (sdThreat.state?.lastFireAt ?? -1e9) > now - sdFlightMs && (eState.botSDSeenAt ?? -1e9) > now - sdFlightMs;
     const sdLeaveMs = eState.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (mirrors shared): a planned window ends once
     // its strafe has used up what the dodge back can bring back.
@@ -5696,6 +5705,7 @@ function updateEnemy(now) {
         sdDrop();
         eState.botSDPeekTo = null; eState.botSDPeekArmed = false; eState.botSDBackOff = false; eState.botSDPeekAnchor = null;
       }
+      // (the early 600 ms handover was measured and dropped — mirrors shared, 2026-10-09)
       eState.botSDPlainUntil = Math.max(eState.botSDPlainUntil ?? 0, eState.invulnerableUntil);
       eState.botSDSearchAt = Math.max(eState.botSDSearchAt ?? 0, eState.invulnerableUntil);
       eState.botSDWatchUntil = 0;
@@ -6428,7 +6438,8 @@ function updateEnemy(now) {
       // ANTI-FLICKER (mirrors shared): a sprint started for an exposure runs
       // sprintBurstMs past the last exposed tick.
       // (open ground unseen is travel on the latch, mirrors shared)
-      const sdExposedLeg = !sdHidden || aheadExposed;
+      // (rounds in the air after the line closed: still a crossing — sdIncoming, mirrors shared)
+      const sdExposedLeg = !sdHidden || aheadExposed || sdIncoming;
       if (sdExposedLeg && eState.boost > SD.dashFloor) eState.botSDBurstUntil = now + SD.sprintBurstMs;
       const sdBurst = now <= (eState.botSDBurstUntil ?? 0) && eState.boost > SD.dashFloor;
       // (the corner creep shapes COVERED legs only — an exposed leg always sprints; mirrors shared)
@@ -6445,7 +6456,7 @@ function updateEnemy(now) {
       // Inside lateralFullDist the crossing is fully perpendicular (mirrors shared).
       const latMin = dist <= SD.lateralFullDist ? 1 : SD.lateralMin;
       let legMode = 'dash';
-      if ((!sdHidden || aheadExposed) && latMin > 0) {
+      if (sdExposedLeg && latMin > 0) {
         // CROSSING RULE: keep at least lateralMin of the heading perpendicular
         // to the threat's line (a no-lead shooter misses a target displaced
         // more than cone + capsule radius during the flight).
@@ -6455,33 +6466,54 @@ function updateEnemy(now) {
         let px = hx - along * lx, pz = hz - along * lz;
         let pl = Math.hypot(px, pz);
         const headingLateral = pl;
+        // (behind a closed line with rounds in the air a rotated leg must itself stay hidden — mirrors shared, review 2026-10-09)
+        const sdBehindLine = sdHidden && !aheadExposed;
+        const sdLegSeen = (cx, cz) => {
+          const ex = e.x + cx * 4, ez = e.z + cz * 4;
+          for (let k = 0; k < sdEyes.length; k += 1) if (sdSeenFrom(sdEyes[k], ex, myShotY, ez)) return true;
+          return false;
+        };
         if (pl < latMin) {
-          if (pl < 0.05) {
+          // the natural side: the heading's own perpendicular component — or, on the line, the side kept last / a coin
+          let sx0, sz0;
+          if (pl >= 0.05) { sx0 = px / pl; sz0 = pz / pl; }
+          else {
             const sgn = eState.botSDLatSign ?? (eState.botSDLatSign = Math.random() < 0.5 ? 1 : -1);
-            px = -lz * sgn; pz = lx * sgn;
-            pl = 1;
+            sx0 = -lz * sgn; sz0 = lx * sgn;
           }
-          const alongKeep = Math.sqrt(Math.max(0, 1 - latMin * latMin)) * (along < 0 ? -1 : 1);
           // The rotated heading must have ROOM (a narrow gap turned the
-          // crossing into an edge jitter): try the rotation, then its
-          // mirror; neither walkable -> commit straight through at a sprint.
-          let rx = (px / pl) * latMin + lx * alongKeep, rz = (pz / pl) * latMin + lz * alongKeep;
-          const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
-          // (room for the BODY, not a thin segment — mirrors shared)
-          let room = sdLegFits(e.x, e.z, e.x + rx * 4, e.z + rz * 4);
-          if (!room) {
-            const mx2 = -(px / pl) * latMin + lx * alongKeep, mz2 = -(pz / pl) * latMin + lz * alongKeep;
-            const ml = Math.hypot(mx2, mz2) || 1;
-            if (sdLegFits(e.x, e.z, e.x + (mx2 / ml) * 4, e.z + (mz2 / ml) * 4)) {
-              rx = mx2 / ml; rz = mz2 / ml; room = true;
-              eState.botSDLatSign = -(eState.botSDLatSign ?? 1);
+          // crossing into an edge jitter). ONE SIDE, THEN THE SLIDE (mirrors
+          // shared, 2026-10-09): the side taken in the last ticks first, at
+          // latMin then at lateralSlide (the wall slide); only when it has
+          // no room at either does the other side get the legs. Neither ->
+          // commit straight through at a sprint. No slide inside
+          // lateralFullDist.
+          const pref = eState.botSDLatSide;
+          const firstSgn = (pref && now - pref.at <= SD.lateralKeepMs && pref.x * sx0 + pref.z * sz0 < 0) ? -1 : 1;
+          const alongSgn = along < 0 ? -1 : 1;
+          const lats = latMin < 1 && SD.lateralSlide < latMin ? [latMin, SD.lateralSlide] : [latMin];
+          let room = false, rx = 0, rz = 0;
+          for (let side = 0; side < 2 && !room; side += 1) {
+            const sgn = side === 0 ? firstSgn : -firstSgn;
+            for (let i = 0; i < lats.length && !room; i += 1) {
+              const ak = Math.sqrt(Math.max(0, 1 - lats[i] * lats[i])) * alongSgn;
+              let cx = sx0 * sgn * lats[i] + lx * ak, cz = sz0 * sgn * lats[i] + lz * ak;
+              const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl;
+              // (room for the BODY, not a thin segment — mirrors shared)
+              if (sdLegFits(e.x, e.z, e.x + cx * 4, e.z + cz * 4) && !(sdBehindLine && sdLegSeen(cx, cz))) {
+                rx = cx; rz = cz; room = true;
+                eState.botSDLatSide = { x: sx0 * sgn, z: sz0 * sgn, at: now };
+                eState.botSDLatSign = (sx0 * sgn) * -lz + (sz0 * sgn) * lx >= 0 ? 1 : -1;
+                if (lats[i] < latMin) eState.botSDLateralSlides = (eState.botSDLateralSlides ?? 0) + 1;
+              }
             }
           }
           if (room) {
             hx = rx + avoid.rx * 0.6;
             hz = rz + avoid.rz * 0.6;
             const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
-          } else if (headingLateral < SD.corridorLateral && !sdFree) {
+          } else if (headingLateral < SD.corridorLateral && !sdFree && (!sdHidden || aheadExposed)) {
+            // (rounds in the air behind a closed line: no corridor — mirrors shared)
             // CORRIDOR (mirrors shared): caught inside -> sprint back to the
             // last hidden spot and mark it; not yet exposed -> stop short,
             // mark it, re-plan around the mark.
@@ -6507,6 +6539,9 @@ function updateEnemy(now) {
               legMode = 'hold';
             }
           }
+        } else if (!sdHidden) {
+          // (a crossing that needs no rotation still records its side — mirrors shared)
+          eState.botSDLatSide = { x: px / pl, z: pz / pl, at: now };
         }
       }
       if (sdLegOverride) legMode = sdLegOverride;
@@ -6616,11 +6651,15 @@ function updateEnemy(now) {
       if (SD.paceSpeed > 0) {
         // A leg is hidden from the live eyes AND the predicted / spread eyes
         // (the hop goals' own standard) — mirrors shared ai.js.
-        const legOk = (cx, cz) => {
-          const lx = e.x + cx * SD.paceLeg, lz = e.z + cz * SD.paceLeg;
+        // ("never onto open ground" is relative to the spot — mirrors shared: a
+        // leg may be as open as where the unit stands, never more)
+        const hereCover = coverDistanceAt(offlineNavGrid, e.x, e.z, myFloorY, arenaObstacles);
+        const legCoverMax = Math.max(SD.openDist, hereCover + 0.5);
+        const legOk = (cx, cz, leg = SD.paceLeg) => {
+          const lx = e.x + cx * leg, lz = e.z + cz * leg;
           if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) return false;
           if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
-          if (coverDistanceAt(offlineNavGrid, lx, lz, myFloorY, arenaObstacles) > SD.openDist) return false;   // never pace onto open ground
+          if (coverDistanceAt(offlineNavGrid, lx, lz, myFloorY, arenaObstacles) > legCoverMax) return false;   // never MORE open than here
           for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) return false;
           if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;
           return true;
@@ -6629,24 +6668,36 @@ function updateEnemy(now) {
         const moving = hx !== 0 || hz !== 0;
         if (now < (eState.botSDPacePauseUntil ?? 0)) {
           hx = 0; hz = 0;
-        } else if (moving && now >= (eState.botSDPaceUntil ?? 0) && SD.pacePauseMs > 0 && Math.random() < 0.5) {
+        } else if (moving && now >= (eState.botSDPaceUntil ?? 0) && SD.pacePauseMs > 0 && Math.random() < SD.pacePauseChance) {
           eState.botSDPacePauseUntil = now + Math.random() * SD.pacePauseMs;
           hx = 0; hz = 0;
-        } else if (!moving || now >= (eState.botSDPaceUntil ?? 0) || !legOk(hx, hz)) {
-          let best = null, bestScore = -Infinity;
+        } else if (!moving || now >= (eState.botSDPaceUntil ?? 0) || !legOk(hx, hz, eState.botSDPaceLeg ?? SD.paceLeg)) {
+          // THE SHUFFLE (mirrors shared, owner 2026-10-09): 8 headings at paceLeg,
+          // then at paceLegMin; fore / aft legs score too; no reversal within
+          // paceReverseMinMs of the last pick unless nothing else is legal.
+          let best = null, bestScore = -Infinity, bestLeg = SD.paceLeg;
           let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
           const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
           const phase = Math.random() * Math.PI * 2;
-          for (let k = 0; k < 8; k += 1) {
-            const a = phase + k * Math.PI / 4;
-            const cx = Math.cos(a), cz = Math.sin(a);
-            if (!legOk(cx, cz)) continue;
-            const score = Math.abs(cx * lz - cz * lx) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
-            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
+          const recent = moving && now - (eState.botSDPacePickAt ?? -1e9) < SD.paceReverseMinMs;
+          for (const leg of [SD.paceLeg, SD.paceLegMin]) {
+            for (let pass = 0; pass < 2 && !best; pass += 1) {
+              for (let k = 0; k < 8; k += 1) {
+                const a = phase + k * Math.PI / 4;
+                const cx = Math.cos(a), cz = Math.sin(a);
+                if (pass === 0 && recent && (cx * hx + cz * hz) < -0.3) continue;   // (no reversal yet)
+                if (!legOk(cx, cz, leg)) continue;
+                const score = SD.paceLateralWeight * Math.abs(cx * lz - cz * lx) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
+                if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; bestLeg = leg; }
+              }
+            }
+            if (best) break;
           }
           if (best) {
             hx = best.x; hz = best.z;
             eState.botSDPaceUntil = now + SD.paceMs;
+            eState.botSDPacePickAt = now;
+            eState.botSDPaceLeg = bestLeg;
           } else {
             hx = 0; hz = 0;
             eState.botSDPacePauseUntil = now + SD.paceRetryMs;
@@ -8930,6 +8981,7 @@ function startMatch() {
   const now = performance.now();
   getAllFighters().forEach((m) => {
     m.state.lastFireAt = now;
+    m.state.fireInitAt = now;   // (not a shot: the SD brain's "heard a round" test ignores this stamp)
     m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   });
   // (every BOT slot waits 650 ms before its first round — the ally and a
@@ -9007,6 +9059,7 @@ function showSuddenDeathBanner(durationMs = SD_BANNER_MS) {
     const now = performance.now();
     getAllFighters().forEach((m) => {
       m.state.lastFireAt = now;
+      m.state.fireInitAt = now;
       m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
     });
     for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server)
@@ -11718,6 +11771,7 @@ function respawnSlotMech(slotName, unitKey) {
   // case in startMatch.
   fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
+  fresh.state.fireInitAt = now;
   fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   if (slotName === 'enemy' || slotName === 'enemy2' || slotName === 'ally' || (slotName === 'player' && state.spectatorActive)) fresh.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server's Trio respawn)
   state[slotName] = fresh;

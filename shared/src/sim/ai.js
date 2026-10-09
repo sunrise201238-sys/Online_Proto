@@ -437,7 +437,11 @@ export const BOT_SD = {
   paceLeash: 2.0,         // stay within this of the arrival point (u)
   paceMs: 350,            // keep a heading this long, then re-pick (8 headings)
   paceRetryMs: 300,       // no hidden leg at all: stand this long, then try again
-  pacePauseMs: 400,       // half the legs end in a stand of 0..this ms
+  pacePauseMs: 200,       // a leg may end in a stand of 0..this ms (was 400 — owner 2026-10-09, "very short range moving to prevent pure stand still")
+  pacePauseChance: 0.34,  //   ... this often (was every other leg)
+  paceLegMin: 0.4,        // no 0.8 u leg stays hidden? try this short a shuffle on the same 8 headings before standing (a tight nook still moves)
+  paceLateralWeight: 0.5, // the lateral preference in a leg's score (1 = the old strafe-only taste): fore / aft shuffles toward and away from the enemy appear too
+  paceReverseMinMs: 250,  // a heading is not reversed sooner than this after a pick unless nothing else is legal — a shuffle, never a twitch
   // RISK-WEIGHTED CLOSING (owner 2026-10-05, "the bot can go for the range
   // if the situation allows but don't go for a suicide route just because
   // LR forces it to go in"). The band stays the preference; a PLANNED hop
@@ -486,6 +490,9 @@ export const BOT_SD = {
   // still lets the unit commit straight.
   lateralFullDist: 70,
   corridorLateral: 0.5,   // a heading with less lateral than this and no room to turn is a corridor run
+  lateralSlide: 0.6,      // CROSSING ALONG A WALL (Factory opening trace 2026-10-09, "no jitter"): the rotated heading with no room is tried again on the SAME side at this lateral (the wall slide, still a crossing) before the other side gets the legs; the side taken is kept tick to tick. Along the top wall the full rotation had room two ticks in three and its mirror the third — east, east, south — and the "lateral" sprint netted a crawl along the enemy's line (0.3): the round fired at its last seen spot landed.
+  lateralKeepMs: 100,     //   the side taken within this long is tried first (0 = the heading's own side every tick, as before)
+  flightKeep: 1,          // ROUNDS IN THE AIR: after the line closes the crossing is kept for the threat's round flight time (dist / projectile speed) x this, if it fired inside the line (0 = off)
   backOffMax: 14,         // back off only to a hidden spot within this (else escape as before)
   // POSITION HOLDING (owner 2026-10-05, "I would really not prefer to see
   // BOT give up good position"): a hidden unit scores where it stands —
@@ -1798,6 +1805,17 @@ export function tickBot(matchState, botId, now) {
     // spraying one it is the free reaction time and no more. The enemy
     // without rounds (sdFree) still suspends everything.
     const sdThreatDist = Math.hypot(sdThreat.pos.x - me.pos.x, sdThreat.pos.z - me.pos.z);
+    // ROUNDS IN THE AIR (Factory opening trace 2026-10-09): a round the
+    // threat fired while the unit was in its line flies dist / projectile
+    // speed after the trigger (0.27 s at 160 u for a 600 u/s gun). The unit
+    // that passed behind a cover edge and turned straight onto its route's
+    // heading died to the round aimed at where it had just been: the
+    // crossing (lateral, at a sprint) is kept for the flight time after
+    // the line closes while the threat fired inside it. (The trigger is
+    // heard — the shot, not the magazine.)
+    if (!sdHidden) me.botSDSeenAt = now;
+    const sdFlightMs = SD.flightKeep * sdThreatDist / (sdThreat.unit?.projectileSpeed ?? 600) * 1000;
+    const sdIncoming = sdHidden && (sdThreat.lastFireAt ?? -1e9) > now - sdFlightMs && (me.botSDSeenAt ?? -1e9) > now - sdFlightMs;
     const sdLeaveMs = me.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (tank sc 81-83 after the rules above): the
     // window strafes away from the edge it stepped out of, and the dodge
@@ -1886,6 +1904,11 @@ export function tickBot(matchState, botId, now) {
         sdDrop();
         me.botSDPeekTo = null; me.botSDPeekArmed = false; me.botSDBackOff = false; me.botSDPeekAnchor = null;
       }
+      // (2026-10-09: an early SD handover — the brain taking the legs 600 ms
+      // before the immunity lapsed, to be in cover at the lapse — was
+      // measured and dropped: Factory opening, SD seat A, Atsuko 83% -> 42%,
+      // Hina seat B 100% -> 75%; the route planned from mid-run was worse
+      // than the plain run's end point plus a search there)
       me.botSDPlainUntil = Math.max(me.botSDPlainUntil ?? 0, me.invulnerableUntil);
       me.botSDSearchAt = Math.max(me.botSDSearchAt ?? 0, me.invulnerableUntil);
       me.botSDWatchUntil = 0;
@@ -2820,7 +2843,8 @@ export function tickBot(matchState, botId, now) {
       // reserve, not down to the floor — owner 2026-10-06, the tank was
       // empty at contact after an open approach; seen or about to be seen
       // still spends everything)
-      const sdExposedLeg = !sdHidden || aheadExposed;
+      // (rounds in the air after the line closed: still a crossing, see sdIncoming)
+      const sdExposedLeg = !sdHidden || aheadExposed || sdIncoming;
       if (sdExposedLeg && me.boost > SD.dashFloor) me.botSDBurstUntil = now + SD.sprintBurstMs;
       const sdBurst = now <= (me.botSDBurstUntil ?? 0) && me.boost > SD.dashFloor;
       // (the corner creep shapes COVERED legs only — an exposed leg always
@@ -2844,7 +2868,7 @@ export function tickBot(matchState, botId, now) {
       // table in the owner's notes: 0.8 lateral at 60 u is still a hit).
       const latMin = dist <= SD.lateralFullDist ? 1 : SD.lateralMin;
       let legMode = 'dash';
-      if ((!sdHidden || aheadExposed) && latMin > 0) {
+      if (sdExposedLeg && latMin > 0) {
         // CROSSING RULE (micro-sim 2026-10-05): a no-lead shooter misses a
         // target displaced more than cone radius + capsule radius during the
         // round's flight — at 160 u a 20 u/s run PERPENDICULAR to the line
@@ -2859,31 +2883,59 @@ export function tickBot(matchState, botId, now) {
         let px = hx - along * lx, pz = hz - along * lz;
         let pl = Math.hypot(px, pz);
         const headingLateral = pl;
+        // (review 2026-10-09: behind a closed line with rounds in the air —
+        // sdIncoming, not an exposure ahead — a rotated leg must itself
+        // stay hidden from the live eyes, else it would sprint back out of
+        // the cover toward the spot the round was aimed at; no such leg ->
+        // the route's heading stands)
+        const sdBehindLine = sdHidden && !aheadExposed;
+        const sdLegSeen = (cx, cz) => {
+          const ex = me.pos.x + cx * 4, ez = me.pos.z + cz * 4;
+          for (let k = 0; k < sdEyes.length; k += 1) if (sdSeenFrom(sdEyes[k], ex, myShotY, ez)) return true;
+          return false;
+        };
         if (pl < latMin) {
-          if (pl < 0.05) {
+          // the natural side: the heading's own perpendicular component —
+          // or, right on the line, the side kept last / a coin
+          let sx0, sz0;
+          if (pl >= 0.05) { sx0 = px / pl; sz0 = pz / pl; }
+          else {
             const sgn = me.botSDLatSign ?? (me.botSDLatSign = Math.random() < 0.5 ? 1 : -1);
-            px = -lz * sgn; pz = lx * sgn;
-            pl = 1;
+            sx0 = -lz * sgn; sz0 = lx * sgn;
           }
-          const alongKeep = Math.sqrt(Math.max(0, 1 - latMin * latMin)) * (along < 0 ? -1 : 1);
           // The rotated heading must have ROOM (play test 2026-10-05): in a
           // narrow gap between two machines the sideways heading hits a
           // wall, and the follower's re-aim turned the crossing into a
-          // jitter at the gap's edge — exposed every other tick. Try the
-          // rotation, then its mirror; neither walkable -> commit straight
-          // through the gap at a sprint (the shortest exposure there is).
-          let rx = (px / pl) * latMin + lx * alongKeep, rz = (pz / pl) * latMin + lz * alongKeep;
-          let rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
-          // (room for the BODY, not a thin segment: the thin test sent the
-          // rotated heading into cover edges and the wedge detector fired
-          // ten times a minute at close range, 2026-10-07)
-          let room = sdLegFits(me.pos.x, me.pos.z, me.pos.x + rx * 4, me.pos.z + rz * 4);
-          if (!room) {
-            const mx2 = -(px / pl) * latMin + lx * alongKeep, mz2 = -(pz / pl) * latMin + lz * alongKeep;
-            const ml = Math.hypot(mx2, mz2) || 1;
-            if (sdLegFits(me.pos.x, me.pos.z, me.pos.x + (mx2 / ml) * 4, me.pos.z + (mz2 / ml) * 4)) {
-              rx = mx2 / ml; rz = mz2 / ml; room = true;
-              me.botSDLatSign = -(me.botSDLatSign ?? 1);
+          // jitter at the gap's edge — exposed every other tick.
+          // ONE SIDE, THEN THE SLIDE (Factory opening trace 2026-10-09, "no
+          // jitter"): the side taken in the last ticks is tried first, at
+          // latMin and then at lateralSlide (the wall slide: along the wall
+          // with less of the heading perpendicular — still a crossing);
+          // only when that side has no room at either does the other side
+          // get the legs, and then it keeps them. Neither side walkable ->
+          // commit straight through the gap at a sprint (the shortest
+          // exposure there is). Inside lateralFullDist (latMin 1) there is
+          // no slide: the other side at full lateral, or the commit.
+          const pref = me.botSDLatSide;
+          const firstSgn = (pref && now - pref.at <= SD.lateralKeepMs && pref.x * sx0 + pref.z * sz0 < 0) ? -1 : 1;
+          const alongSgn = along < 0 ? -1 : 1;
+          const lats = latMin < 1 && SD.lateralSlide < latMin ? [latMin, SD.lateralSlide] : [latMin];
+          let room = false, rx = 0, rz = 0;
+          for (let side = 0; side < 2 && !room; side += 1) {
+            const sgn = side === 0 ? firstSgn : -firstSgn;
+            for (let i = 0; i < lats.length && !room; i += 1) {
+              const ak = Math.sqrt(Math.max(0, 1 - lats[i] * lats[i])) * alongSgn;
+              let cx = sx0 * sgn * lats[i] + lx * ak, cz = sz0 * sgn * lats[i] + lz * ak;
+              const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl;
+              // (room for the BODY, not a thin segment: the thin test sent the
+              // rotated heading into cover edges and the wedge detector fired
+              // ten times a minute at close range, 2026-10-07)
+              if (sdLegFits(me.pos.x, me.pos.z, me.pos.x + cx * 4, me.pos.z + cz * 4) && !(sdBehindLine && sdLegSeen(cx, cz))) {
+                rx = cx; rz = cz; room = true;
+                me.botSDLatSide = { x: sx0 * sgn, z: sz0 * sgn, at: now };
+                me.botSDLatSign = (sx0 * sgn) * -lz + (sz0 * sgn) * lx >= 0 ? 1 : -1;
+                if (lats[i] < latMin) me.botSDLateralSlides = (me.botSDLateralSlides ?? 0) + 1;
+              }
             }
           }
           if (room) {
@@ -2891,7 +2943,8 @@ export function tickBot(matchState, botId, now) {
             hz = rz + avoid.rz * 0.6;
             const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
             me.botSDLateralTicks = (me.botSDLateralTicks ?? 0) + 1;
-          } else if (headingLateral < SD.corridorLateral && !sdFree) {
+          } else if (headingLateral < SD.corridorLateral && !sdFree && (!sdHidden || aheadExposed)) {
+            // (rounds in the air behind a closed line: no corridor — the route's heading stands)
             // CORRIDOR (owner 2026-10-05): the heading runs along the line and
             // nothing lets it turn — a run the enemy hits as if standing
             // (100 u: 92-100% per round). Caught inside: sprint back to the
@@ -2920,6 +2973,11 @@ export function tickBot(matchState, botId, now) {
               legMode = 'hold';
             }
           }
+        } else if (!sdHidden) {
+          // (a crossing that needs no rotation still records its side, so
+          // the ticks behind the next cover edge keep THAT side — not a
+          // stale coin — while the rounds are in the air)
+          me.botSDLatSide = { x: px / pl, z: pz / pl, at: now };
         }
       }
       if (sdLegOverride) legMode = sdLegOverride;
@@ -3053,37 +3111,63 @@ export function tickBot(matchState, botId, now) {
         // — the hop goals' own standard. (The base hide stance falls back to
         // live eyes only; in SD that fallback parked units a step from a
         // cover's edge and the enemy's next sidestep opened the line.)
-        const legOk = (cx, cz) => {
-          const lx = me.pos.x + cx * SD.paceLeg, lz = me.pos.z + cz * SD.paceLeg;
-          if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) return false;
-          if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) return false;
-          if (coverDistanceAt(sdGrid, lx, lz, myFloorY, obstacles) > SD.openDist) return false;   // never pace onto open ground
-          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) return false;
-          if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;
+        const PP = globalThis.__sdProf ? (globalThis.__sdProf.pace ??= {}) : null;   // (harness profiling: why legs fail)
+        // "Never onto open ground" is relative to where the unit stands
+        // (owner 2026-10-09, the shuffle): a spot hidden by a surface or a
+        // far box reads as open (cover > openDist) and every leg from it
+        // failed — the unit stood dead still in 78% of its cover time. A leg
+        // may now be as open as the spot itself, never more.
+        const hereCover = coverDistanceAt(sdGrid, me.pos.x, me.pos.z, myFloorY, obstacles);
+        const legCoverMax = Math.max(SD.openDist, hereCover + 0.5);
+        const legOk = (cx, cz, leg = SD.paceLeg) => {
+          const lx = me.pos.x + cx * leg, lz = me.pos.z + cz * leg;
+          if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) { if (PP) PP.leash = (PP.leash ?? 0) + 1; return false; }
+          if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) { if (PP) PP.walk = (PP.walk ?? 0) + 1; return false; }
+          if (coverDistanceAt(sdGrid, lx, lz, myFloorY, obstacles) > legCoverMax) { if (PP) PP.open = (PP.open ?? 0) + 1; return false; }   // never MORE open than here
+          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) { if (PP) PP.seen = (PP.seen ?? 0) + 1; return false; }
+          if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) { if (PP) PP.watch = (PP.watch ?? 0) + 1; return false; }
+          if (PP) PP.ok = (PP.ok ?? 0) + 1;
           return true;
         };
         hx = me.botSDPaceX ?? 0; hz = me.botSDPaceZ ?? 0;
         const moving = hx !== 0 || hz !== 0;
         if (now < (me.botSDPacePauseUntil ?? 0)) {
           hx = 0; hz = 0;
-        } else if (moving && now >= (me.botSDPaceUntil ?? 0) && SD.pacePauseMs > 0 && Math.random() < 0.5) {
+        } else if (moving && now >= (me.botSDPaceUntil ?? 0) && SD.pacePauseMs > 0 && Math.random() < SD.pacePauseChance) {
           me.botSDPacePauseUntil = now + Math.random() * SD.pacePauseMs;
           hx = 0; hz = 0;
-        } else if (!moving || now >= (me.botSDPaceUntil ?? 0) || !legOk(hx, hz)) {
-          let best = null, bestScore = -Infinity;
+        } else if (!moving || now >= (me.botSDPaceUntil ?? 0) || !legOk(hx, hz, me.botSDPaceLeg ?? SD.paceLeg)) {
+          // THE SHUFFLE (owner 2026-10-09, "very short range moving to prevent
+          // pure stand still"): the 8 headings at paceLeg first, then at
+          // paceLegMin — a tight nook that hides no 0.8 u leg still gets a
+          // 0.4 u shuffle; every leg passes the same hidden / cover / walk
+          // tests, so the move never costs survival. Fore / aft legs score
+          // alongside lateral ones (paceLateralWeight), and a heading is not
+          // reversed within paceReverseMinMs of the last pick unless nothing
+          // else is legal: a human shifting weight in cover, not a twitch.
+          let best = null, bestScore = -Infinity, bestLeg = SD.paceLeg;
           let lx = sdThreat.pos.x - me.pos.x, lz = sdThreat.pos.z - me.pos.z;
           const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
           const phase = Math.random() * Math.PI * 2;
-          for (let k = 0; k < 8; k += 1) {
-            const a = phase + k * Math.PI / 4;
-            const cx = Math.cos(a), cz = Math.sin(a);
-            if (!legOk(cx, cz)) continue;
-            const score = Math.abs(cx * lz - cz * lx) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
-            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
+          const recent = moving && now - (me.botSDPacePickAt ?? -1e9) < SD.paceReverseMinMs;
+          for (const leg of [SD.paceLeg, SD.paceLegMin]) {
+            for (let pass = 0; pass < 2 && !best; pass += 1) {
+              for (let k = 0; k < 8; k += 1) {
+                const a = phase + k * Math.PI / 4;
+                const cx = Math.cos(a), cz = Math.sin(a);
+                if (pass === 0 && recent && (cx * hx + cz * hz) < -0.3) continue;   // (no reversal yet)
+                if (!legOk(cx, cz, leg)) continue;
+                const score = SD.paceLateralWeight * Math.abs(cx * lz - cz * lx) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
+                if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; bestLeg = leg; }
+              }
+            }
+            if (best) break;
           }
           if (best) {
             hx = best.x; hz = best.z;
             me.botSDPaceUntil = now + SD.paceMs;
+            me.botSDPacePickAt = now;
+            me.botSDPaceLeg = bestLeg;
           } else {
             hx = 0; hz = 0;
             me.botSDPacePauseUntil = now + SD.paceRetryMs;
