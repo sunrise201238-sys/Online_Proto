@@ -9955,7 +9955,11 @@ function showOnlineBotUnitPicker(onl, conn) {
   const trio = conn?.getLobbyConfig?.()?.mainMode === 'trio';
   // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
   // hidden units (Mika) are out of every picker, online and offline.
-  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
+  // SUDDEN DEATH (2026-10-10, the one rule everywhere): the bot picker shows
+  // no sniper cards either, and its Random / All Random roll from this list
+  // — the server's unit1 stand-in (sdUnitKey) stays as the backstop.
+  const sdRoom = !!(state.suddenDeath || conn?.getLobbyConfig?.()?.suddenDeath);
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden && !(sdRoom && u.sniperCharge));
   // Trio picks live on onl so each confirm can fully re-render the menu
   // (clear per-pick feedback — see showOnlineUnitPicker).
   const picks = onl.botUnitPicks ?? (onl.botUnitPicks = []);
