@@ -9918,13 +9918,14 @@ function showOnlineUnitPicker(onl, conn) {
   const mode = cfg?.mode ?? '1v1';
   const trio = (onl.pickedMainMode ?? cfg?.mainMode) === 'trio';
   // SUDDEN DEATH online: the room's rules reach every picker through
-  // lobby:config — a joiner's chip mirrors the room (the host set it), and
-  // in Sudden Death the sniper rifles leave the grid (the server refuses
-  // them too).
+  // lobby:config — a joiner's chip mirrors the room (the host set it). The
+  // sniper cards stay on the grid (owner 2026-10-10, "if the human chooses
+  // it manually, it should appear"); only the Random / All Random rolls skip
+  // them in Sudden Death.
   if (typeof cfg?.suddenDeath === 'boolean' && onl.myPlayerId !== 'p1') state.suddenDeath = cfg.suddenDeath;
   const sdRoom = onl.myPlayerId === 'p1' ? !!state.suddenDeath : !!cfg?.suddenDeath;
   // hidden units (Mika) are out of every picker, online and offline.
-  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden && !(sdRoom && u.sniperCharge));
+  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
   // Trio: three ordered picks (repeats allowed), held on onl so the menu can
   // fully RE-RENDER after each confirm — same unmistakable per-pick feedback
   // as the offline flow (title swap alone read as "the popup just closed").
@@ -9943,7 +9944,8 @@ function showOnlineUnitPicker(onl, conn) {
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
-  const onlinePool = unitEntries.map(([id]) => id);
+  // (All Random rolls from the grid minus the sniper rifles in Sudden Death — the Random card does the same in wireUnitGrid)
+  const onlinePool = unitEntries.map(([id]) => id).filter((k) => !(sdRoom && UNIT_DATA[k].sniperCharge));
   wireUnitGrid(menu, (key) => {
     if (!trio) {
       onl.conn.sendConfigure({ unitKey: key });
@@ -9987,6 +9989,11 @@ function showOnlineBotUnitPicker(onl, conn) {
   const trio = conn?.getLobbyConfig?.()?.mainMode === 'trio';
   // offlineOnly units (Aris) are hidden online — see showOnlineUnitPicker.
   // hidden units (Mika) are out of every picker, online and offline.
+  // SUDDEN DEATH (owner 2026-10-10, "if the human chooses it manually, it
+  // should appear"): the sniper cards stay on the bot picker too and a
+  // host's pick stands as picked; only the Random / All Random rolls skip
+  // them (and the server's default for a bot nobody picked for).
+  const sdRoom = !!(state.suddenDeath || conn?.getLobbyConfig?.()?.suddenDeath);
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
   // Trio picks live on onl so each confirm can fully re-render the menu
   // (clear per-pick feedback — see showOnlineUnitPicker).
@@ -10002,7 +10009,7 @@ function showOnlineBotUnitPicker(onl, conn) {
     <button data-back class="online-leave-btn">Back</button>
   `;
   app.appendChild(menu);
-  const botPool = unitEntries.map(([id]) => id);
+  const botPool = unitEntries.map(([id]) => id).filter((k) => !(sdRoom && UNIT_DATA[k].sniperCharge));   // (All Random: no sniper rifles in Sudden Death)
   wireUnitGrid(menu, (key) => {
     if (!trio) {
       onl.conn.sendConfigure({ botSlot: slot, botUnitKey: key });

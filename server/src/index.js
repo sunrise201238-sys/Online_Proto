@@ -151,15 +151,17 @@ function occupiedSlotsOf(lobby) {
 // Duel semantics.
 function botUnitKeyFor(lobby, s) {
   const stored = lobby.botUnits[s];
-  if (stored) return sdUnitKey(lobby, Array.isArray(stored) ? stored[0] : stored);
+  if (stored) return Array.isArray(stored) ? stored[0] : stored;
   if (lobby.mode === '1v1') return 'unit1';
   const idx = activeSlots(lobby.mode).indexOf(s);
   return sdUnitKey(lobby, ['unit1', 'unit2', 'unit3', 'unit4', 'unit5', 'unit6'][(idx >= 0 ? idx : 0) % 6]);
 }
 
-// SUDDEN DEATH has no sniper rifles (the charge stands the unit still — a
-// 1 HP death sentence; the offline pickers hide them too): a sniper key in
-// an SD lobby stands in as unit1 wherever a bot or roster default needs one.
+// SUDDEN DEATH and the sniper rifles (owner 2026-10-10, "if the human chooses
+// it manually, it should appear"): only the picks nobody made skip them — the
+// per-slot DEFAULT a bot gets when the host picked nothing (and the Random /
+// All Random cards, client side). A pick made by hand — a player's own unit
+// or roster, the host's unit for a bot — stands as picked, sniper or not.
 function isSniperKey(k) {
   return !!UNIT_DATA[k]?.sniperCharge;
 }
@@ -181,11 +183,11 @@ function botRosterFor(lobby, s) {
 function rosterForSlot(lobby, s, occupied) {
   if (occupied.has(s)) {
     const cfg = lobby.config[s];
-    if (Array.isArray(cfg.unitKeys) && cfg.unitKeys.length === 3) return cfg.unitKeys.map((k) => sdUnitKey(lobby, k));
-    const k = sdUnitKey(lobby, cfg.unitKey || 'unit1');
+    if (Array.isArray(cfg.unitKeys) && cfg.unitKeys.length === 3) return cfg.unitKeys.slice();
+    const k = cfg.unitKey || 'unit1';
     return [k, k, k];
   }
-  return botRosterFor(lobby, s).map((k) => sdUnitKey(lobby, k));
+  return botRosterFor(lobby, s);
 }
 
 function isValidRoster(v) {
@@ -220,7 +222,7 @@ function startMatchFor(lobby) {
   const unitFor = (s) => {
     const human = occupied.has(s);
     const cfg = lobby.config[s].unitKey;
-    if (human && cfg) return sdUnitKey(lobby, cfg);
+    if (human && cfg) return cfg;
     // Bot: host-chosen per-slot unit if set, else the per-mode default.
     return botUnitKeyFor(lobby, s);
   };
@@ -687,16 +689,15 @@ io.on('connection', (socket) => {
     if (lb.state === 'active') return;
 
     let dirty = false;
-    // (Sudden Death: a sniper pick is refused — the pickers hide them, this
-    // is the server's word on it)
-    if (cfg && typeof cfg.unitKey === 'string' && UNIT_DATA[cfg.unitKey] && !(lb.suddenDeath && isSniperKey(cfg.unitKey))) {
+    // (Sudden Death: a sniper picked by hand stands — see sdUnitKey)
+    if (cfg && typeof cfg.unitKey === 'string' && UNIT_DATA[cfg.unitKey]) {
       lb.config[slot].unitKey = cfg.unitKey;
       dirty = true;
     }
     // Trio: the player's ordered 3-unit roster (repeats allowed). The lead
     // unit doubles as the Duel unitKey so mainMode flips never leave a slot
     // with no pick at all.
-    if (cfg && isValidRoster(cfg.unitKeys) && !(lb.suddenDeath && cfg.unitKeys.some(isSniperKey))) {
+    if (cfg && isValidRoster(cfg.unitKeys)) {
       lb.config[slot].unitKeys = cfg.unitKeys.slice();
       lb.config[slot].unitKey = cfg.unitKeys[0];
       dirty = true;
@@ -751,17 +752,11 @@ io.on('connection', (socket) => {
       changed = true;
     }
     // SUDDEN DEATH rules (owner 2026-10-07): the host's Normal | Sudden
-    // Death chip rides along too (alone or with the picks). Turning it on
-    // drops any sniper picks already made — those players pick again.
+    // Death chip rides along too (alone or with the picks). Picks already
+    // made stand, sniper or not (owner 2026-10-10: a pick made by hand is
+    // the player's own call).
     if (typeof data?.suddenDeath === 'boolean' && data.suddenDeath !== lb.suddenDeath) {
       lb.suddenDeath = data.suddenDeath;
-      if (lb.suddenDeath) {
-        for (const s of SLOT_IDS) {
-          const c = lb.config[s];
-          if (c.unitKey && isSniperKey(c.unitKey)) c.unitKey = null;
-          if (Array.isArray(c.unitKeys) && c.unitKeys.some(isSniperKey)) c.unitKeys = null;
-        }
-      }
       changed = true;
     }
     if (data?.mode !== '1v1' && data?.mode !== '2v2') {
@@ -831,9 +826,7 @@ io.on('connection', (socket) => {
     if (!lb.config.p1.unitKey || !lb.config.p1.mapKey) return;
     // Trio: the host must have a complete 3-pick before starting.
     if (lb.mainMode === 'trio' && !isValidRoster(lb.config.p1.unitKeys)) return;
-    // Sudden Death: no sniper rifles (the configure gate refuses them; this
-    // covers a pick made before the rule was switched on).
-    if (lb.suddenDeath && (isSniperKey(lb.config.p1.unitKey) || (lb.config.p1.unitKeys ?? []).some(isSniperKey))) return;
+    // (Sudden Death: a sniper picked by hand starts like any other unit — see sdUnitKey)
     startMatchFor(lb);   // 1v1 or 2v2: empty opponent slots fill with bots
   });
 
