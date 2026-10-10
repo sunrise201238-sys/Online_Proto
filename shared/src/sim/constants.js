@@ -69,7 +69,10 @@ export const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec
+    // Weapon spec — the WIDE shotgun (owner 2026-10-10: the two shotguns'
+    // patterns swapped; the 1.4x fan was Haruka's since 2026-07-14). Her
+    // volley is stretched 1.4x horizontally (volleyStretchX below; vertical
+    // unchanged) — a dodge-catching fan vs Haruka's concentrated slug.
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
     lockRange: 40,
@@ -84,7 +87,11 @@ export const UNIT_DATA = {
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 100, moveScale: 0.25 },
+    // Horizontal-only pattern widening (see volleyPelletOffset): applied
+    // after the per-shot random rotation, so blasts stay randomized while
+    // the cloud is 1.4x wider and exactly as tall as Haruka's.
+    volleyStretchX: 1.4
   },
   unit3: {
     id: 'unit3',
@@ -408,10 +415,10 @@ export const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec — Hoshino-derived, tuned 2026-07-14: WIDE shotgun. Her
-    // volley pattern is stretched 1.4x horizontally (volleyStretchX below;
-    // vertical unchanged) and pellets hit lighter — a dodge-catching fan vs
-    // Hoshino's concentrated slug.
+    // Weapon spec — Hoshino-derived: the CONCENTRATED shotgun (owner
+    // 2026-10-10: the two shotguns' patterns swapped — the 1.4x horizontal
+    // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
+    // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
     lockRange: 40,
     lockRange2v2: 50,
     projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
@@ -424,11 +431,7 @@ export const UNIT_DATA = {
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 },
-    // Horizontal-only pattern widening (see volleyPelletOffset): applied
-    // after the per-shot random rotation, so blasts stay randomized while
-    // the cloud is 1.4x wider and exactly as tall as Hoshino's.
-    volleyStretchX: 1.4
+    stun: { ms: 100, moveScale: 0.25 }
   },
   unit12: {
     id: 'unit12',

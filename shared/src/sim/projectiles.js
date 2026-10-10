@@ -366,8 +366,9 @@ export function volleyAxes(vel) {
 // stretchX (unit.volleyStretchX, default 1) widens the pattern along the
 // HORIZONTAL axis only, applied AFTER the random rotation — the rotated
 // cloud is direction-neutral, so the horizontal spread widens by exactly
-// that factor while the vertical distribution stays untouched (Haruka's
-// 1.4x fan). Stretching only ever GROWS pellet separations, so the
+// that factor while the vertical distribution stays untouched (Hoshino's
+// 1.4x fan; Haruka's until the owner swapped the two shotguns' patterns on
+// 2026-10-10). Stretching only ever GROWS pellet separations, so the
 // pattern's min-spacing guarantee survives.
 export function volleyPelletOffset(k, axes, rot, factor, stretchX = 1) {
   const px = SHOTGUN_PATTERN[k][0];
