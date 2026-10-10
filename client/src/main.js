@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
 import {
@@ -76,6 +78,7 @@ const UNIT_DATA = {
     name: 'Unit 1 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'saori', char: 'Saori', weapon: 'M4', accent: 0x3a4a78,
+    model: 'saori',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -114,6 +117,7 @@ const UNIT_DATA = {
     name: 'Unit 2 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'hoshino', char: 'Hoshino', weapon: 'Beretta 1301', accent: 0xff9ec7,
+    model: 'hoshino',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -147,6 +151,7 @@ const UNIT_DATA = {
     name: 'Unit 3 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'aru', char: 'Aru', weapon: 'PSG1', accent: 0xff7a8a,
+    model: 'aru',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -183,6 +188,7 @@ const UNIT_DATA = {
     name: 'Unit 4 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'atsuko', char: 'Atsuko', weapon: 'evo3', accent: 0xe8a13a,
+    model: 'atsuko',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -223,6 +229,7 @@ const UNIT_DATA = {
     name: 'Unit 5 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'hina', char: 'Hina', weapon: 'MG42', accent: 0x6fcf8f,
+    model: 'hina',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -259,6 +266,7 @@ const UNIT_DATA = {
     name: 'Unit 6 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'kei', char: 'Kei', weapon: 'Railgun', accent: 0x9a7be0,   // weapon name tag (owner 2026-10-03; was 'Laser') — the class in `name` stays Sniper Rifle
+    model: 'kei',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -295,6 +303,7 @@ const UNIT_DATA = {
     name: 'Unit 7 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'aris', char: 'Aris', weapon: 'Laser', accent: 0x6fd9e8,
+    model: 'aris',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -394,6 +403,7 @@ const UNIT_DATA = {
     name: 'Unit 9 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'asuna', char: 'Asuna', weapon: 'FAMAS', accent: 0x3fbde8,
+    model: 'asuna',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -430,6 +440,7 @@ const UNIT_DATA = {
     name: 'Unit 10 / Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'fubuki', char: 'Fubuki', weapon: 'Ruger Mini-14', accent: 0x6f86b8,
+    model: 'fubuki',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats — NORMAL maneuver kit by design: unlike Aris she gets the
     // standard jump cooldown/cost and NO flight/air-pop fields.
@@ -470,6 +481,7 @@ const UNIT_DATA = {
     name: 'Unit 11 / Shotgun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'haruka', char: 'Haruka', weapon: 'SDASS', accent: 0x7a5f96,
+    model: 'haruka',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
     hp: 100,
@@ -508,6 +520,7 @@ const UNIT_DATA = {
     name: 'Unit 12 / Machine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'koyuki', char: 'Koyuki', weapon: 'M60', accent: 0xff8ac8,
+    model: 'koyuki',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats — lighter mobility tax than Hina (walk 12 vs her 8).
     hp: 100,
@@ -546,6 +559,7 @@ const UNIT_DATA = {
     name: 'Unit 13 / Submachine Gun',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'marina', char: 'Marina', weapon: 'PPSh-41', accent: 0xe0384a,
+    model: 'marina',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats — Atsuko template (0.5.9): same mobility block.
     hp: 100,
@@ -1349,6 +1363,14 @@ function drainTexWarmQueue() {
 // the extra 'fly' pose for flight units.
 function warmUnitArt(unitData, own = false) {
   if (!unitData?.spriteKey) return;
+  // A unit with a 3D character: its model downloads and parses here too, in
+  // the pickers' dead time, and its textures join the one-per-frame upload
+  // queue — the match then starts on the model, not on the billboard.
+  if (unitData.model && UNIT_MODELS[unitData.model]) {
+    loadUnitModel(unitData.model, (gltf) => {
+      gltf.scene.traverse((o) => { if (o.isMesh && o.material?.map) queueTexWarm(o.material.map); });
+    });
+  }
   const bodySuffix = own ? '_rear' : '';
   const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
   for (const s of states) {
@@ -1460,6 +1482,385 @@ function updateUnitSpriteState(m, rig, dt, now) {
       rig.shadowShown = rig.shown;
     }
   }
+}
+
+// ============================================================================
+// 3D CHARACTER MODELS (owner 2026-10-10: "use the glb to replace the character
+// images"): a unit whose UNIT_DATA entry names a `model` is drawn as
+// an animated glTF (GLTFLoader + AnimationMixer) in place of the billboard.
+// The billboard stays up until the model has loaded and remains the body of
+// every unit without a model. Clip names and speeds come from the owner's
+// motion map; `fit` ties a clip's length to the game's own duration (the dodge
+// step, the unit's reload) and `speed` multiplies on top (1 = exactly fitted).
+// Facing (the billboard had none): toward the enemy ONLY while firing, else
+// along the unit's own movement, else the last heading (owner 2026-10-10). The
+// own unit's through-wall silhouette is a second skin on the same skeleton,
+// drawn only where closer geometry hides it (GreaterDepth, like the sprite's).
+// Client visual only: the sim, the server and the online protocol see nothing.
+// ============================================================================
+// The owner's motion map (Saori's form, 2026-10-10); every character whose
+// clips carry the same names uses it as is.
+const MODEL_CLIPS_DEFAULT = {
+  stand: { name: 'Normal_Idle', speed: 1 },
+  walk: { name: 'Move_Ing', speed: 0.5 },
+  sprint: { name: 'Move_Ing', speed: 1 },
+  shoot: { name: 'Normal_Attack_Ing', speed: 1 },
+  sprintShoot: { name: 'Move_Ing', speed: 1 },
+  dodge: { name: 'Move_Jump', speed: 1, fit: 'step', once: true },
+  jump: { name: 'Move_Jump', speed: 1, once: true },
+  reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
+  hit: null,
+  death: { name: 'Vital_Death', speed: 1, once: true },
+};
+const UNIT_MODELS = {
+  // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
+  saori: { file: 'models/saori', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (Asuna's form, 2026-10-10: standing is Formation_Idle; the rest as the default map)
+  asuna: { file: 'models/asuna', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 } } },
+  // (Atsuko's form, 2026-10-10: the default map as is)
+  atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
+  marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 } } },
+  // (Haruka's form, 2026-10-10: nothing changed from the default map)
+  haruka: { file: 'models/haruka', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (Fubuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Kneel_Attack_Start)
+  fubuki: { file: 'models/fubuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Kneel_Attack_Start', speed: 1, once: true } } },
+  // (Hina's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Move_End_Normal)
+  hina: { file: 'models/hina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
+  // (Koyuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Normal_Attack_Start)
+  koyuki: { file: 'models/koyuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Normal_Attack_Start', speed: 1, once: true } } },
+  // (Hoshino's form, 2026-10-10: the battle model's first form, "01_"; no Move_Jump in this file.
+  // fade 0: her backpack sits on a different bone pose in the formation idle than in the run, and a
+  // crossfade slid it across her back — the clips cut instead; owner 2026-10-10)
+  hoshino: {
+    file: 'models/hoshino', height: UNIT_SPRITE_HEIGHT, fade: 0,
+    clips: {
+      stand: { name: '01_Formation_Idle', speed: 1 },
+      walk: { name: '01_Move_Ing', speed: 0.5 },
+      sprint: { name: '01_Move_Ing', speed: 1 },
+      shoot: { name: '01_Normal_Attack_Ing_02', speed: 1 },
+      sprintShoot: { name: '01_Move_Ing', speed: 1 },
+      dodge: { name: '01_Move_End_Normal', speed: 1, fit: 'step', once: true },
+      jump: { name: '01_Move_End_Normal', speed: 1, once: true },
+      reload: { name: '01_Normal_Attack_Delay', speed: 1, fit: 'reload', once: true },
+      hit: null,
+      death: { name: '01_Vital_Death', speed: 1, once: true },
+    },
+  },
+  // (Aris's form, 2026-10-10: a flight unit. Standing is Formation_Idle; walking on the
+  // ground holds Normal_Idle at half speed (she hovers, no walk); the ground sprint and
+  // level flight — airborne and sprinting — are Move_Ing; firing on the run keeps
+  // Normal_Attack_Ing; no Move_Jump in her file — the dodge and the jump are Move_end_Normal)
+  aris: {
+    file: 'models/aris', height: UNIT_SPRITE_HEIGHT,
+    clips: {
+      stand: { name: 'Formation_Idle', speed: 1 },
+      walk: { name: 'Normal_Idle', speed: 0.5 },
+      sprint: { name: 'Move_Ing', speed: 1 },
+      shoot: { name: 'Normal_Attack_Ing', speed: 1 },
+      sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
+      fly: { name: 'Move_Ing', speed: 1 },
+      dodge: { name: 'Move_end_Normal', speed: 1, fit: 'step', once: true },
+      jump: { name: 'Move_end_Normal', speed: 1, once: true },
+      reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
+      hit: null,
+      death: { name: 'Vital_Death', speed: 1, once: true },
+    },
+  },
+  // (Kei's form, 2026-10-10: the default map; no Move_Jump in her file — the dodge and the
+  // jump are Move_End_Normal. Her firing clip follows the sniper rule in makeUnitModel.)
+  kei: { file: 'models/kei', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
+  // (Aru's form, 2026-10-10: standing is Formation_Idle; no Move_Jump in her file — the dodge and
+  // the jump are Move_End_Normal; the rest as the default map. Sniper: firing clip per makeUnitModel.)
+  aru: { file: 'models/aru', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    stand: { name: 'Formation_Idle', speed: 1 },
+    dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
+};
+const MODEL_FADE_S = 0.12;          // crossfade between clips
+const MODEL_TURN_RATE = 14;         // rad/s toward the wanted heading
+const MODEL_MOVE_MIN = 1.5;         // u/s: slower than this reads as standing
+const MODEL_SNAP_U = 8;             // u in ONE frame: past this the root teleported (a rematch re-spawn, a snap), not walked
+const MODEL_SILHOUETTE_COLOR = 0x8fd4ff;
+// The model files' extension. The repository ships them as .glb; the playtest
+// host serves no .glb name, so its copy of this file ships the same binaries
+// as .wasm (the loader reads bytes, not the type) — the only line that differs.
+const MODEL_FILE_EXT = '.glb';
+const _gltfLoader = new GLTFLoader();
+const _modelCache = {};             // model key -> gltf
+const _modelPending = {};           // model key -> [callbacks]
+
+function loadUnitModel(key, onReady) {
+  const cfg = UNIT_MODELS[key];
+  if (!cfg) return;
+  if (_modelCache[key]) { onReady(_modelCache[key]); return; }
+  if (_modelPending[key]) { _modelPending[key].push(onReady); return; }
+  _modelPending[key] = [onReady];
+  _gltfLoader.load(`${import.meta.env.BASE_URL}${cfg.file}${MODEL_FILE_EXT}`, (gltf) => {
+    // Unlit, like the billboards: the toon textures carry their own shading.
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.material;
+      if (src && src.map) src.map.colorSpace = THREE.SRGBColorSpace;
+      o.material = new THREE.MeshBasicMaterial({
+        map: src?.map ?? null,
+        color: src?.color ? src.color.clone() : new THREE.Color(0xffffff),
+        transparent: !!src?.transparent,
+        alphaTest: src?.alphaTest || (src?.transparent ? 0.5 : 0),
+        side: THREE.DoubleSide,
+        fog: false,
+      });
+      o.frustumCulled = false;   // skinned bounds are the bind pose's: never cull a posed unit
+      o.renderOrder = 2;         // after the own unit's silhouette (see makeUnitModel)
+    });
+    _modelCache[key] = gltf;
+    const cbs = _modelPending[key] || [];
+    delete _modelPending[key];
+    for (const cb of cbs) cb(gltf);
+  }, undefined, (err) => { console.warn('unit model failed to load', key, err); delete _modelPending[key]; });
+}
+
+// World-space box of an instance's meshes in the bind pose (skinned meshes
+// are posed through their skeleton, so the geometry box alone would be the
+// un-rigged, differently oriented one).
+function modelBounds(obj) {
+  const box = new THREE.Box3();
+  obj.updateMatrixWorld(true);
+  obj.traverse((o) => {
+    // The body only: the gun lies off to one side (and can stand taller than
+    // the head) in the bind pose, and would shift and shrink the character.
+    if (!o.isMesh || /weapon/i.test(o.name)) return;
+    if (o.isSkinnedMesh) {
+      o.computeBoundingBox();
+      box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    } else {
+      o.geometry.computeBoundingBox();
+      box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    }
+  });
+  return box;
+}
+
+function makeUnitModel(unitData, isOwnUnit) {
+  const holder = new THREE.Group();
+  const rig = {
+    ready: false, own: !!isOwnUnit, cfg: UNIT_MODELS[unitData.model],
+    mixer: null, actions: {}, current: null, currentAction: null,
+    yaw: null, lastX: null, lastZ: null, silhouettes: [],
+    lastFireSeen: 0, fireUntil: 0, motionPose: null, motionHoldUntil: 0, chargingSeen: false,
+  };
+  holder.userData.modelRig = rig;
+  loadUnitModel(unitData.model, (gltf) => {
+    const inst = SkeletonUtils.clone(gltf.scene);
+    // SkeletonUtils.clone hands every SkinnedMesh its own Skeleton — one bone
+    // pass and one bone-texture upload per MESH per frame (Aris: 23 for her 4
+    // armatures). Share one clone per source skeleton, as the loader does, so
+    // each armature updates and uploads once per frame (the clone's traversal
+    // order is the source's, which SkeletonUtils itself relies on).
+    {
+      const srcSkins = [], dstSkins = [];
+      gltf.scene.traverse((o) => { if (o.isSkinnedMesh) srcSkins.push(o); });
+      inst.traverse((o) => { if (o.isSkinnedMesh) dstSkins.push(o); });
+      const shared = new Map();   // source Skeleton -> the one cloned Skeleton standing for it
+      for (let i = 0; i < srcSkins.length && i < dstSkins.length; i += 1) {
+        const sk = srcSkins[i].skeleton;
+        if (!shared.has(sk)) shared.set(sk, dstSkins[i].skeleton);
+        else dstSkins[i].bind(shared.get(sk), dstSkins[i].bindMatrix);
+      }
+    }
+    // The bind-pose box is the model's, not the instance's (it CPU-skins every vertex): once per key.
+    const box = gltf.userData.bounds ?? (gltf.userData.bounds = modelBounds(inst));
+    const h = Math.max(0.01, box.max.y - box.min.y);
+    const s = rig.cfg.height / h;
+    inst.scale.setScalar(s);
+    inst.position.y = UNIT_SPRITE_FOOT_Y - box.min.y * s;   // feet on the billboard's foot line
+    inst.position.x = -(box.min.x + box.max.x) / 2 * s;
+    inst.position.z = -(box.min.z + box.max.z) / 2 * s;
+    holder.add(inst);
+    // The own unit's X-ray: a second skin per body mesh on the SAME skeleton
+    // (the Mouth_* meshes are left out by name). It must be tested
+    // against the WALLS' depth only: drawn in the opaque pass after the scene
+    // (renderOrder 1) and before the body itself (renderOrder 2), GreaterDepth
+    // then passes exactly where closer geometry hides the unit. Drawn as a
+    // transparent object it would come after the body and its own far side
+    // would pass against the body's near side — a solid cyan unit.
+    const skins = [];
+    inst.traverse((o) => { if (o.isSkinnedMesh && !/^Mouth_/i.test(o.name)) skins.push(o); });
+    for (const o of skins) {
+      const ghost = new THREE.SkinnedMesh(o.geometry, new THREE.MeshBasicMaterial({
+        color: MODEL_SILHOUETTE_COLOR,
+        depthFunc: THREE.GreaterDepth, depthWrite: false, side: THREE.DoubleSide, fog: false,
+      }));
+      ghost.renderOrder = 1;
+      ghost.position.copy(o.position); ghost.quaternion.copy(o.quaternion); ghost.scale.copy(o.scale);
+      ghost.bind(o.skeleton, o.bindMatrix);
+      // (a body carrying a morph the clips drive — Aris's torso and arms — the ghost follows it by sharing the array)
+      if (o.morphTargetInfluences) { ghost.morphTargetInfluences = o.morphTargetInfluences; ghost.morphTargetDictionary = o.morphTargetDictionary; }
+      ghost.frustumCulled = false;
+      ghost.visible = rig.own;
+      o.parent.add(ghost);
+      rig.silhouettes.push(ghost);
+    }
+    rig.mixer = new THREE.AnimationMixer(inst);
+    for (const [key, c] of Object.entries(rig.cfg.clips)) {
+      if (!c) continue;
+      const clip = THREE.AnimationClip.findByName(gltf.animations, c.name);
+      if (!clip) { console.warn('unit model: clip not found', unitData.model, c.name); continue; }
+      const action = rig.mixer.clipAction(clip);
+      // Sniper category (sniperCharge): the firing clip is ONE cycle per charge
+      // (owner 2026-10-10: "exactly one cycle in 1 s in game") — fitted to the
+      // unit's charge time (1 s) so it ends on the shot, played once and held
+      // on its last frame through the shot; a new charge restarts it.
+      const cfg = (key === 'shoot' && unitData.sniperCharge) ? { ...c, fit: 'charge', once: true } : c;
+      // (a shell-by-shell gun — autoReload — loops its reload clip, one pass per round; a magazine gun plays it once)
+      const once = cfg.once && !(key === 'reload' && unitData.autoReload);
+      if (once) { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
+      rig.actions[key] = { action, cfg, dur: clip.duration };
+    }
+    rig.ready = true;
+  });
+  return holder;
+}
+
+function nearestHostileOf(m) {
+  let best = null, bd = Infinity;
+  for (const f of getEnemiesOf(m)) {
+    if (!f.root || f.state.hp <= 0) continue;
+    const d = f.root.position.distanceToSquared(m.root.position);
+    if (d < bd) { bd = d; best = f; }
+  }
+  return best;
+}
+
+// Resolve and apply one fighter's model pose and heading for this frame.
+// Returns false while the model has not loaded (the billboard then stands in).
+function updateUnitModelState(m, rig, dt, now) {
+  if (!rig.ready) return false;
+  const st = m.state;
+  const lf = st.lastFireAt || 0;
+  if (lf !== rig.lastFireSeen) {
+    rig.lastFireSeen = lf;
+    if (lf > 0) rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS;
+  }
+  const charging = !!st.sniperChargeTarget;
+  // A sniper's charge began this frame: its firing clip restarts from the first
+  // frame (one cycle per charge, see makeUnitModel), even when the previous
+  // shot's hold or beam left the model in the firing state already.
+  const chargeStart = charging && !rig.chargingSeen;
+  rig.chargingSeen = charging;
+  const firing = now < rig.fireUntil || charging || st.chargedBeamUntil > now;
+  const stepping = st.action === 'step' || now < (st.stepUntil || 0);
+  const sprinting = st.action === 'dash';
+  // Reloading: a magazine gun while its reload runs; a shell-by-shell gun
+  // (autoReload — the shotguns) whenever its tube is not full (owner
+  // 2026-10-10: "standing / walking without firing, let the reload motion
+  // kick in"). It never outranks a sprint, a dodge, a jump or the shot
+  // itself below, so any of those cancels it at once; it resumes after.
+  const reloading = m.unit?.magCapacity != null
+    && (m.unit.autoReload ? (st.ammo ?? m.unit.magCapacity) < m.unit.magCapacity : (st.reloadingUntil || 0) > now);
+  // Speed from the root's own motion: the same source offline and on the online mirror.
+  const px = m.root.position.x, pz = m.root.position.z;
+  let vx = 0, vz = 0;
+  if (rig.lastX != null && dt > 0) {
+    const dx = px - rig.lastX, dz = pz - rig.lastZ;
+    // A jump past MODEL_SNAP_U in one frame is a teleport (an online rematch
+    // re-spawning a kept mech, a reconciliation snap), not a walk: no motion.
+    if (Math.hypot(dx, dz) <= MODEL_SNAP_U) { vx = dx / dt; vz = dz / dt; }
+  }
+  rig.lastX = px; rig.lastZ = pz;
+  const moving = Math.hypot(vx, vz) > MODEL_MOVE_MIN;
+
+  let want = 'stand';
+  if (st.hp <= 0) want = 'death';
+  // A flight unit (Aris) in level flight — airborne and sprinting — shows its
+  // flying clip (the billboard's 'fly' rule); any other air time is the jump.
+  else if (st.airborne && sprinting && m.unit?.flight && rig.actions.fly) want = 'fly';
+  else if (stepping) want = 'dodge';
+  else if (st.airborne) want = 'jump';
+  else if (sprinting) want = (firing && rig.actions.sprintShoot) ? 'sprintShoot' : 'sprint';
+  else if (firing && !(reloading && !m.unit?.autoReload)) want = 'shoot';   // (a magazine gun mid-reload cannot be firing; a shotgun's shot shows before its next shell)
+  else if (reloading && rig.actions.reload) want = 'reload';
+  else if (moving) want = 'walk';
+  // The billboard's anti-flicker hold on the motion poses (a bot's intent can blink for a frame).
+  if (want === 'sprint' || want === 'sprintShoot' || want === 'walk' || want === 'fly') {
+    rig.motionPose = want;
+    rig.motionHoldUntil = now + SPRITE_MOTION_HOLD_MS;
+  } else if (want === 'stand' && rig.motionPose && now < rig.motionHoldUntil) {
+    want = rig.motionPose;
+  } else if (want === 'stand') {
+    rig.motionPose = null;
+  }
+  if (!rig.actions[want]) want = 'stand';
+  const entry = rig.actions[want];
+  if (entry && (want !== rig.current || (chargeStart && want === 'shoot'))) {
+    let rate = entry.cfg.speed ?? 1;
+    if (entry.cfg.fit === 'step') rate *= entry.dur / (Math.max(50, m.unit?.stepDurationMs ?? STEP_DURATION_MS) / 1000);
+    else if (entry.cfg.fit === 'reload') rate *= entry.dur / (Math.max(100, m.unit?.reloadMs ?? 1500) / 1000);
+    else if (entry.cfg.fit === 'charge') rate *= entry.dur / (Math.max(100, m.unit?.chargeMs ?? 1000) / 1000);
+    const prev = rig.currentAction;
+    const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
+    if (prev === entry.action && entry.action.loop !== THREE.LoopOnce && !(chargeStart && want === 'shoot')) {
+      // The same looping clip under another key (walk / sprint / sprintShoot
+      // share Move_Ing): keep its phase, only retime it — no rewind to frame 0.
+      entry.action.setEffectiveTimeScale(rate).setEffectiveWeight(1);
+    } else if (fade > 0 && prev && prev !== entry.action) {
+      prev.fadeOut(fade);
+      entry.action.reset().setEffectiveTimeScale(rate).setEffectiveWeight(1).fadeIn(fade).play();
+    } else {
+      // (no blend: the rig's FIRST clip starts at full weight instead of out of
+      // the rest pose; the same clip restarted — a sniper's next charge, a dodge
+      // into a jump — cuts to its first frame; a fade-0 model always cuts)
+      if (prev && prev !== entry.action) prev.stop();
+      entry.action.reset().setEffectiveTimeScale(rate).setEffectiveWeight(1).play();
+    }
+    rig.current = want;
+    rig.currentAction = entry.action;
+  }
+  rig.mixer.update(dt);
+
+  // Heading (world yaw): the nearest live hostile while firing or locked, else
+  // the way the unit moves, else the last heading; the first frame takes the
+  // root's own facing (the frame loop turns the root toward the opponent).
+  // The root carries that yaw already, so the holder is set RELATIVE to it.
+  const rootYaw = m.root.rotation.y;
+  if (rig.yaw == null) rig.yaw = rootYaw;
+  let hx = 0, hz = 0, have = false;
+  // The enemy's direction is forced ONLY while firing (owner 2026-10-10): the
+  // player's unit then faces the unit it is aiming at (on the Shooting Range
+  // the paper being shot, not the nearest one); every other unit the unit it
+  // is locked on — online the server's targetId (laserTargetOf), offline a
+  // bot's own pick (botTargetRef): where its tracers and laser sight already
+  // go — else the nearest live hostile. Not firing, a unit faces the way it
+  // moves, else holds.
+  let tgt = null;
+  if (firing) {
+    if (m === state.player && state.playerCurrentTarget && state.playerCurrentTarget !== m
+      && state.playerCurrentTarget.root && (state.playerCurrentTarget.state?.hp ?? 0) > 0) tgt = state.playerCurrentTarget;
+    if (!tgt) {
+      const locked = state.online ? laserTargetOf(m) : (m.state.botTargetRef ?? null);
+      if (locked && locked !== m && locked.root && (locked.state?.hp ?? 0) > 0) tgt = locked;
+    }
+    if (!tgt) tgt = nearestHostileOf(m);
+  }
+  if (tgt) { hx = tgt.root.position.x - px; hz = tgt.root.position.z - pz; have = Math.hypot(hx, hz) > 0.5; }
+  if (!have && moving) { hx = vx; hz = vz; have = true; }
+  if (have) {
+    const target = Math.atan2(hx, hz);
+    let d = target - rig.yaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    const step = MODEL_TURN_RATE * dt;
+    rig.yaw += Math.abs(d) <= step ? d : Math.sign(d) * step;
+  }
+  m.modelHolder.rotation.y = rig.yaw - rootYaw;
+  return true;
 }
 
 // Drive every live fighter's sprite pose once per render frame (both modes —
@@ -1631,7 +2032,16 @@ function updateMechAnimations(dt, now) {
   for (const m of getAllFighters()) {
     if (!m.root.visible) continue;
     const rig = m.sprite && m.sprite.userData.stateRig;
-    if (rig) updateUnitSpriteState(m, rig, dt, now);
+    const mrig = m.modelHolder && m.modelHolder.userData.modelRig;
+    if (mrig) {
+      const t0 = performance.now();
+      const up = updateUnitModelState(m, mrig, dt, now);
+      if (window.__modelProf) { window.__modelProf.ms += performance.now() - t0; window.__modelProf.frames += 1; }
+      if (up) { if (m.sprite && m.sprite.visible) m.sprite.visible = false; }   // the model is up: the billboard steps aside
+      else if (rig) updateUnitSpriteState(m, rig, dt, now);
+    } else if (rig) {
+      updateUnitSpriteState(m, rig, dt, now);
+    }
     const bar = m.healthBar;
     if (bar) {
       // Diorama / command mode: the annotation layer carries identity + HP,
@@ -1745,6 +2155,12 @@ function createMech(color, unitData, isOwnUnit = false) {
   // from the reticle / floating triangle / HP indicators, not body color.
   const sprite = makeUnitSprite(unitData, isOwnUnit);
   root.add(sprite);
+  // 3D character in place of the billboard, for units that have one (UNIT_MODELS).
+  let modelHolder = null;
+  if (unitData.model && UNIT_MODELS[unitData.model]) {
+    modelHolder = makeUnitModel(unitData, isOwnUnit);
+    root.add(modelHolder);
+  }
   // Overhead HP bar — the per-frame updater corrects ink (team-relative),
   // size, and anchor; start white.
   const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY, unitData.spriteKey);
@@ -1781,6 +2197,7 @@ function createMech(color, unitData, isOwnUnit = false) {
     trail: [],
     torso: sprite,
     sprite,
+    modelHolder,              // the 3D character's group (null for billboard units)
     isOwnSprite: isOwnUnit,   // rear art + X-ray silhouette (rebuilt for spectated allies)
     modelYOffset: 2.35,
     legLength: 2.35,
@@ -8518,6 +8935,9 @@ function setMechSpriteView(mech, own) {
   mech.sprite = sprite;
   mech.torso = sprite;
   mech.isOwnSprite = own;
+  // (the 3D character keeps its body either way; only its X-ray silhouette follows the own-unit view)
+  const mr = mech.modelHolder && mech.modelHolder.userData.modelRig;
+  if (mr) { mr.own = own; for (const g of mr.silhouettes) g.visible = own; }
 }
 
 function rebuildMechSpriteAsOwn(mech) {
@@ -12560,6 +12980,11 @@ if (typeof window !== 'undefined') {
   window.__BOT_SD = BOT_SD;
   // Dev hook: the All Random roll (headless checks of the SD sniper exclusion).
   window.__rollRandomUnit = (excluded = []) => rollRandomUnit(excluded);
+  // Dev hooks: the renderer's draw stats, the 3D characters' per-frame cost, the art warm-up and its model cache.
+  window.__gvgRenderer = renderer;
+  window.__modelProf = { ms: 0, frames: 0 };
+  window.__warmUnit = (key, own = false) => warmUnitArt(UNIT_DATA[key], own);
+  window.__modelCacheKeys = () => Object.keys(_modelCache);
 }
 
 // ---------------------------------------------------------------------------
