@@ -1518,8 +1518,11 @@ const MODEL_CLIPS_DEFAULT = {
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
   saori: { file: 'models/saori', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
-  // (Asuna's form, 2026-10-10: standing is Formation_Idle; the rest as the default map)
-  asuna: { file: 'models/asuna', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 } } },
+  // (Asuna's form, 2026-10-10, updated the same evening: standing is Formation_Idle, the dodge is her
+  // EX clip, Exs, fitted to the step like any dodge clip; the rest as the default map)
+  asuna: { file: 'models/asuna', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    stand: { name: 'Formation_Idle', speed: 1 },
+    dodge: { name: 'Exs', speed: 1, fit: 'step', once: true } } },
   // (Atsuko's form, 2026-10-10: the default map as is)
   atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
   // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
