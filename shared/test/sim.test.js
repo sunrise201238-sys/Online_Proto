@@ -55,8 +55,10 @@ test('createMatchState produces valid initial state', () => {
   assert.equal(m.mapKey, 'arena1');
   assert.equal(m.fighters.p1.id, 'p1');
   assert.equal(m.fighters.p2.id, 'p2');
-  assert.equal(m.fighters.p1.hp, 150);
-  assert.equal(m.fighters.p2.hp, 150);
+  // (each fighter starts at its unit's HP — 150 until 2026-08-17, 100 since)
+  assert.ok(m.fighters.p1.unit.hp > 0);
+  assert.equal(m.fighters.p1.hp, m.fighters.p1.unit.hp);
+  assert.equal(m.fighters.p2.hp, m.fighters.p2.unit.hp);
   assert.equal(m.projectiles.length, 0);
   assertFinite(m);
 });
@@ -142,12 +144,16 @@ test('sniper charge — initiates charge on shootTap', () => {
   assert.ok(m.fighters.p1.sniperChargeTargetId === 'p2', 'expected sniper charge to lock target');
   // Ammo only decrements when shot fires (not on charge start).
   assert.equal(m.fighters.p1.ammo, beforeAmmo);
-  // Run forward 600ms — charge time is 500ms, so the shot should have fired.
-  for (let i = 0; i < 24; i += 1) {
+  // Run forward until the charge resolves (chargeMs, 1000 for unit3): the
+  // shot fires on that tick. (Checked on that tick — the round crosses the
+  // 48 u to p2 within a few ticks and is gone from the list.)
+  const chargeMs = m.fighters.p1.unit.chargeMs ?? 1000;
+  for (let i = 0; i < Math.ceil((chargeMs + 100) / TICK_RATE_MS) && m.fighters.p1.sniperChargeTargetId; i += 1) {
     now += TICK_RATE_MS;
     tickMatch(m, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT);
   }
   assert.equal(m.fighters.p1.sniperChargeTargetId, null);
+  assert.ok(now - 1000 >= chargeMs, `the charge resolved early: ${now - 1000} ms`);
   assert.equal(m.fighters.p1.ammo, beforeAmmo - 1);
   assert.ok(m.projectiles.length > 0, 'expected sniper projectile to spawn after charge');
 });

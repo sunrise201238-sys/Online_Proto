@@ -4425,6 +4425,7 @@ const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep loo
 const BOT_HIDE_BAIL_MS = 700;
 const BOT_HIDE_BAIL_RETRY_MS = 700;
 const BOT_HIDE_MAX_POPS = 600;
+const BOT_HIDE_SHOULDER = 1.6;   // (HIT_RADIUS_NORMAL — the hide goal hides the unit's width, mirrors shared 2026-10-10)
 // Pacing and slipping while hidden (owner 2026-09-26: no statue) — the
 // shared ai.js constants, mirrored.
 const BOT_HIDE_LEG = 2.5;
@@ -5308,7 +5309,7 @@ function updateEnemy(now) {
       const attempt = hideAttempts[stage];
       const found = findHiddenSpot(
         offlineNavGrid, e.x, e.z, myFloorY, attempt.eyes, arenaObstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null }
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER }
       );
       if (found) {
         eState.botHideNoCover = false;
@@ -11750,6 +11751,11 @@ document.addEventListener('click', (e) => {
 setupRootTouchAction();
 setupFullscreenToggle();
 showSelectMenu();
+// (the frame clock is declared here, ahead of the first frame — it used to
+// sit next to animate() far below, so the first call threw on the
+// uninitialised const and the loop's catch logged a render error on every
+// page load; the frame was skipped and the next one ran normally)
+const clock = new THREE.Clock();
 animate();
 
 // ---------------------------------------------------------------------------
@@ -18587,7 +18593,6 @@ function updateVfx(dt) {
   });
 }
 
-const clock = new THREE.Clock();
 function animate() {
   try {
     const dt = Math.min(clock.getDelta(), 1 / 30);

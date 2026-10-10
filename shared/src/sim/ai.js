@@ -105,6 +105,14 @@ const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep loo
 const BOT_HIDE_BAIL_MS = 700;
 const BOT_HIDE_BAIL_RETRY_MS = 700;
 const BOT_HIDE_MAX_POPS = 600;
+// SHOULDERS (2026-10-10, the Streets reload-hide test turned flaky once the
+// map-edge slabs moved and the nav cells shifted): the hide goal must hide
+// the unit's WIDTH — its centre and both shoulders across each eye's line —
+// like the Sudden Death search (SD.shoulder). A cell hidden by a hair at an
+// alley mouth used to pass the centre test; the unit stopped within its
+// 2 u arrival tolerance in view, re-searched, got the same cell, and
+// shuffled there for the whole reload.
+const BOT_HIDE_SHOULDER = HIT_RADIUS_NORMAL;
 // Pacing and slipping while hidden (owner 2026-09-26: no statue): a pacing
 // leg is LEG units long and must be verified hidden before it is taken,
 // legs stay within LEASH of the hide anchor and a heading is re-picked
@@ -1402,7 +1410,7 @@ export function tickBot(matchState, botId, now) {
       const attempt = hideAttempts[stage];
       const found = findHiddenSpot(
         navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes, obstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, deadline: matchState.searchDeadline ?? 0 }
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER, deadline: matchState.searchDeadline ?? 0 }
       );
       if (found) {
         me.botHideNoCover = false;
