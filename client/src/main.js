@@ -10275,7 +10275,7 @@ function showOnlineModePicker(onl) {
   // size (joiners inherit it through lobby:config).
   const rulesChip = () => `
         <div class="mode-chip rules-chip">
-          <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Normal</button>
+          <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Health Point</button>
           <button data-rules="sd" class="${state.suddenDeath ? 'mode-active sd-active' : ''}">Sudden Death</button>
         </div>`;
   const renderStage = (mainMode) => {
@@ -10604,7 +10604,7 @@ function showOnlineWaitingOpp(onl, conn) {
   const myView = myCfg.viewMode ?? 'classic';
   const viewChip = ONLINE_SLOT_IDS.includes(myId)
     ? `<div class="mode-chip view-mode-chip">
-        <button data-view="classic" class="${myView === 'command' ? '' : 'mode-active'}">Classic</button>
+        <button data-view="classic" class="${myView === 'command' ? '' : 'mode-active'}">Shooter</button>
         <button data-view="command" class="${myView === 'command' ? 'mode-active' : ''}">Command</button>
       </div>`
     : '';
@@ -11353,11 +11353,11 @@ function showSelectMenu() {
       <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
     </div>
     <div class="mode-chip view-mode-chip">
-      <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Classic</button>
+      <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Shooter</button>
       <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
     </div>
     <div class="mode-chip rules-chip">
-      <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Normal</button>
+      <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Health Point</button>
       <button data-rules="sd" class="${state.suddenDeath ? 'mode-active sd-active' : ''}">Sudden Death</button>
     </div>
     ${unitGridHTML(unitEntries)}
@@ -11383,7 +11383,7 @@ function showSelectMenu() {
       btn.classList.add('mode-active');
     });
   });
-  // Rules chip: Normal | Sudden Death (everyone at 1 HP, SD bot brain). A
+  // Rules chip: Normal (shown as "Health Point", owner 2026-10-10) | Sudden Death (everyone at 1 HP, SD bot brain). A
   // rule, not a map property, so it lives beside Duel/Trio and 1v1/2v2 —
   // and it is the same flag an online room would carry.
   menu.querySelectorAll('.rules-chip button[data-rules]').forEach((btn) => {
@@ -11395,7 +11395,7 @@ function showSelectMenu() {
       if (state.suddenDeath) btn.classList.add('sd-active');
     });
   });
-  // View chip: Classic (direct control) vs Command (diorama). Session-only
+  // View chip: Classic (shown as "Shooter", owner 2026-10-10; direct control) vs Command (diorama). Session-only
   // like Duel/1v1 — every site open starts Classic (owner 2.1h).
   menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((btn) => {
     btn.addEventListener('pointerdown', (e) => {
@@ -11967,7 +11967,7 @@ function showGuidePopup() {
 
           <h4>Command Mode</h4>
           <ul>
-            <li>Pick <strong>Classic</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
+            <li>Pick <strong>Shooter</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
             <li>In Command, your unit fights on its own — you give orders from a tabletop view.</li>
             <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 40 s. Hold the tap to pick upper / lower floors.</li>
             <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
@@ -12473,7 +12473,7 @@ function showPauseMenu() {
   menu.className = 'menu';
   // Offline: the diorama view toggle lives here so touch devices can reach
   // it too (V key remains the desktop shortcut).
-  const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Classic'}</button>`;
+  const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Shooter'}</button>`;
   menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
@@ -12485,7 +12485,7 @@ function showPauseMenu() {
   menu.querySelector('button[data-action="diorama"]')?.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     toggleDiorama();
-    event.currentTarget.textContent = `Mode: ${diorama.enabled ? 'Command' : 'Classic'}`;
+    event.currentTarget.textContent = `Mode: ${diorama.enabled ? 'Command' : 'Shooter'}`;
   });
   menu.querySelector('button[data-action="new"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
