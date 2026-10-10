@@ -562,3 +562,63 @@ body.pseudo-fullscreen #app {
   .unit-profile-popup .profile-face.demo-face-stats { max-width: 23vw; }
 }
 /* ---- end profile-card text readability ---- */
+/* ===== Sudden Death (prototype) ===== */
+.menu .rules-chip button { width: 120px; }
+.menu .rules-chip button.sd-active { background: #4a1420; border-color: #ff4d6d; color: #ffd7de; }
+.menu .sd-rules-tag { color: #ff6b85; font-weight: 700; letter-spacing: 2px; }
+
+/* Start banner: a full-width band across the middle of the screen. Three
+   flashes in and out over 2.3 s, then gone. z-index 150: above the HUD
+   (40) and the pause button, below the fullscreen button (200). */
+.sd-banner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 150; pointer-events: none; }
+.sd-banner .sd-band { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 26px 16px; animation: sdFlash 2.3s ease-in-out forwards; }
+.sd-banner.hold .sd-band { animation: none; opacity: 1; }
+.sd-banner .sd-title { font-weight: 900; font-size: clamp(34px, 7vw, 76px); line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; }
+.sd-banner .sd-sub { font-weight: 600; font-size: clamp(12px, 1.6vw, 18px); letter-spacing: 0.32em; text-transform: uppercase; white-space: nowrap; }
+@keyframes sdFlash {
+  0% { opacity: 0; } 12% { opacity: 1; } 26% { opacity: 0.12; } 40% { opacity: 1; }
+  54% { opacity: 0.12; } 68% { opacity: 1; } 84% { opacity: 1; } 100% { opacity: 0; }
+}
+/* a — red band, white type, hairlines top and bottom */
+.sd-banner.style-a .sd-band { background: linear-gradient(90deg, rgba(190,16,44,0) 0%, rgba(190,16,44,0.94) 12%, rgba(190,16,44,0.94) 88%, rgba(190,16,44,0) 100%); border-top: 1px solid rgba(255,255,255,0.55); border-bottom: 1px solid rgba(255,255,255,0.55); }
+.sd-banner.style-a .sd-title { color: #ffffff; text-shadow: 0 2px 18px rgba(0,0,0,0.45); }
+.sd-banner.style-a .sd-sub { color: #ffd7de; }
+/* b — dark glass band, red neon type */
+.sd-banner.style-b .sd-band { background: rgba(4, 7, 12, 0.86); border-top: 2px solid #ff2d55; border-bottom: 2px solid #ff2d55; box-shadow: 0 0 40px rgba(255,45,85,0.35); }
+.sd-banner.style-b .sd-title { color: #ff2d55; text-shadow: 0 0 10px rgba(255,45,85,0.9), 0 0 32px rgba(255,45,85,0.55); }
+.sd-banner.style-b .sd-sub { color: #ffd27a; }
+/* c — hazard stripes crawling under the flash, black core, amber type;
+   no subtitle. The stripe tile is one horizontal period of the 45-degree
+   pattern (24px bands -> 48px along the gradient -> 67.9px along x), so
+   sliding background-position by that width loops seamlessly. */
+.sd-banner.style-c .sd-band { position: relative; padding: 18px 0; overflow: hidden; animation: sdFlash 2.3s ease-in-out forwards; }
+/* The stripes crawl on a pseudo-element by TRANSFORM, not by
+   background-position (owner 2026-10-07, "online SD is very lag ... when
+   the banner is still flashing"): a background-position animation on a
+   full-width repeating gradient repaints the band every frame for 2.3 s;
+   a translate is composited. The layer is one stripe period (67.9 px) wider
+   than the band and slides exactly that far, so the loop is seamless. */
+.sd-banner.style-c .sd-band::before { content: ''; position: absolute; top: 0; bottom: 0; left: -67.9px; right: 0; background: repeating-linear-gradient(135deg, #ffcc00 0 24px, #141414 24px 48px); background-size: 67.9px 100%; background-repeat: repeat; animation: sdStripes 0.7s linear infinite; will-change: transform; }
+.sd-banner.hold.style-c .sd-band { animation: none; opacity: 1; }
+.sd-banner.style-c .sd-sub { display: none; }
+.sd-banner.style-c .sd-title { position: relative; padding: 10px 36px; background: #0b0b0b; color: #ffcc00; box-shadow: 0 0 0 2px #ffcc00; }
+@keyframes sdStripes { from { transform: translateX(0); } to { transform: translateX(67.9px); } }
+/* d — white flash, black type, letters spread as it fades */
+.sd-banner.style-d .sd-band { background: rgba(255,255,255,0.94); border-top: 3px solid #0b0b0b; border-bottom: 3px solid #0b0b0b; }
+.sd-banner.style-d .sd-title { color: #0b0b0b; animation: sdSpread 2.3s ease-out forwards; }
+.sd-banner.style-d .sd-sub { color: #b4001e; }
+.sd-banner.hold.style-d .sd-title { animation: none; letter-spacing: 0.3em; }
+@keyframes sdSpread { 0% { letter-spacing: 0.08em; } 100% { letter-spacing: 0.42em; } }
+/* SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the HP bars hide; the boost gauge and the remaining-units icons stay. */
+.touch-hud.sd-hud .health, .touch-hud.sd-hud .enemy-health, .touch-hud.sd-hud .ally-health, .touch-hud.sd-hud .enemy2-health { display: none; }
+/* (owner 2026-10-07, "since there is no HP bar in SD mode, move the weapons
+   indicator higher"): the weapon-icon rows take the bars' place at the top,
+   1v1 and 2v2 alike. */
+.touch-hud.sd-hud .trio-count, .touch-hud.sd-hud .trio-count.trio-count-2v2 { top: 14px; }
+/* SPECTATOR (owner 2026-10-07): the WATCHED unit's weapon icon glows white —
+   the corner-bar rim's sibling, and the only marker in Sudden Death where
+   the bars hide. */
+/* (this build's rows carry .trio-weapon-tag boxes with an inverted img, not
+   bare .trio-weapon-icon images: the glow sits on the box so the img's own
+   white / golden filters stay) */
+.touch-hud .trio-line.spec-watched-icon .trio-weapon-tag { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }

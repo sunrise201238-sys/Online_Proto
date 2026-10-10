@@ -168,10 +168,19 @@ export function createConnection() {
     },
 
     // Host-only: set lobby mode ('1v1' | '2v2') and optionally the main
-    // mode ('sd' = Duel | 'trio'). Server rejects if not p1 or mid-match.
-    sendSetMode: (mode, mainMode) => {
+    // mode ('sd' = Duel | 'trio') and the Sudden Death rules flag (owner
+    // 2026-10-07: everyone at 1 HP — the main menu's Normal | Sudden Death
+    // chip). Server rejects if not p1 or mid-match.
+    sendSetMode: (mode, mainMode, suddenDeath) => {
       if (!connected) return;
-      socket.emit('match:set-mode', mainMode ? { mode, mainMode } : { mode });
+      const msg = mainMode ? { mode, mainMode } : { mode };
+      if (typeof suddenDeath === 'boolean') msg.suddenDeath = suddenDeath;
+      socket.emit('match:set-mode', msg);
+    },
+    // Host-only: flip the Sudden Death rules alone (the room's rules chip).
+    sendSetRules: (suddenDeath) => {
+      if (!connected) return;
+      socket.emit('match:set-mode', { suddenDeath: !!suddenDeath });
     },
 
     // Host-only (2v2): start the match now with bot-fill for empty slots.

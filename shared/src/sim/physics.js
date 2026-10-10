@@ -10,30 +10,43 @@ const SURFACE_STEP_HEIGHT = 1.6;
 // Slab method — does the segment p0→p1 (t in [0,1]) intersect the AABB o?
 // Used to catch fast/homing projectiles that would tunnel through obstacles
 // between frames.
+// (2026-10-07, "online SD is very lag": the three slabs are unrolled with no
+// per-call arrays — the Sudden Death brain's searches run this a million
+// times a minute per match, and the four small arrays each call allocated
+// were most of the sight test's cost and all of its garbage. Same maths,
+// same epsilon, same answer.)
 export function segmentHitsObstacle(p0, p1, o) {
   let tMin = 0;
   let tMax = 1;
-  const axes = [
-    [p0.x, p1.x - p0.x, o.minX, o.maxX],
-    [p0.y, p1.y - p0.y, o.minY, o.maxY],
-    [p0.z, p1.z - p0.z, o.minZ, o.maxZ]
-  ];
-  for (let i = 0; i < 3; i += 1) {
-    const start = axes[i][0];
-    const delta = axes[i][1];
-    const lo = axes[i][2];
-    const hi = axes[i][3];
-    if (Math.abs(delta) < 1e-9) {
-      if (start < lo || start > hi) return false;
-    } else {
-      const t1 = (lo - start) / delta;
-      const t2 = (hi - start) / delta;
-      const tNear = t1 < t2 ? t1 : t2;
-      const tFar = t1 < t2 ? t2 : t1;
-      if (tNear > tMin) tMin = tNear;
-      if (tFar < tMax) tMax = tFar;
-      if (tMin > tMax) return false;
-    }
+  let start = p0.x, delta = p1.x - p0.x, lo = o.minX, hi = o.maxX;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
+  }
+  start = p0.y; delta = p1.y - p0.y; lo = o.minY; hi = o.maxY;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
+  }
+  start = p0.z; delta = p1.z - p0.z; lo = o.minZ; hi = o.maxZ;
+  if (Math.abs(delta) < 1e-9) {
+    if (start < lo || start > hi) return false;
+  } else {
+    const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+    const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+    if (tNear > tMin) tMin = tNear;
+    if (tFar < tMax) tMax = tFar;
+    if (tMin > tMax) return false;
   }
   return true;
 }
@@ -135,35 +148,48 @@ function buildObstacleGrid(obstacles) {
 
 export function obstaclesNearSegment(obstacles, p0, p1) {
   let grid = _gridCache.get(obstacles);
-  if (grid === undefined) {
+  // (SD proto: the offline client refills ONE obstacles array per map, so an
+  // identity-keyed cache must also check that the contents are the ones it
+  // was built from — length and the first / last entries)
+  if (grid === undefined || (grid !== null && (grid.len !== obstacles.length || grid.first !== obstacles[0] || grid.last !== obstacles[obstacles.length - 1]))) {
     grid = obstacles.length >= BROADPHASE_MIN_OBSTACLES ? buildObstacleGrid(obstacles) : null;
+    if (grid) { grid.len = obstacles.length; grid.first = obstacles[0]; grid.last = obstacles[obstacles.length - 1]; }
     _gridCache.set(obstacles, grid);
   }
   if (grid === null) return obstacles;
   // Same `/ BROADPHASE_CELL` floor math as the build pass — build and query
   // must bucket identically or an on-boundary obstacle could be missed.
-  const sMinX = p0.x < p1.x ? p0.x : p1.x;
-  const sMaxX = p0.x < p1.x ? p1.x : p0.x;
-  const sMinZ = p0.z < p1.z ? p0.z : p1.z;
-  const sMaxZ = p0.z < p1.z ? p1.z : p0.z;
-  const c0 = Math.min(grid.cols - 1, Math.max(0, Math.floor((sMinX - grid.minX) / BROADPHASE_CELL)));
-  const c1 = Math.min(grid.cols - 1, Math.max(0, Math.floor((sMaxX - grid.minX) / BROADPHASE_CELL)));
-  const r0 = Math.min(grid.rows - 1, Math.max(0, Math.floor((sMinZ - grid.minZ) / BROADPHASE_CELL)));
-  const r1 = Math.min(grid.rows - 1, Math.max(0, Math.floor((sMaxZ - grid.minZ) / BROADPHASE_CELL)));
+  // SD proto (2026-10-05): the cells are walked ALONG the segment (grid
+  // traversal) instead of over its bounding box — a 150 u diagonal sight
+  // line touched 36 cells and 120 of a map's 400 boxes; it crosses ~13.
   grid.stamp += 1;
   const stamp = grid.stamp;
   _bpScratch.length = 0;
-  for (let r = r0; r <= r1; r += 1) {
-    for (let c = c0; c <= c1; c += 1) {
-      const cell = grid.cells[r * grid.cols + c];
-      if (cell === null) continue;
-      for (let k = 0; k < cell.length; k += 1) {
-        const idx = cell[k];
-        if (grid.seen[idx] === stamp) continue;
-        grid.seen[idx] = stamp;
-        _bpScratch.push(obstacles[idx]);
-      }
+  const cs = BROADPHASE_CELL;
+  const visit = (c, r) => {
+    if (c < 0 || r < 0 || c >= grid.cols || r >= grid.rows) return;
+    const cell = grid.cells[r * grid.cols + c];
+    if (cell === null) return;
+    for (let k = 0; k < cell.length; k += 1) {
+      const idx = cell[k];
+      if (grid.seen[idx] === stamp) continue;
+      grid.seen[idx] = stamp;
+      _bpScratch.push(obstacles[idx]);
     }
+  };
+  let cx = Math.floor((p0.x - grid.minX) / cs), cz = Math.floor((p0.z - grid.minZ) / cs);
+  const ex = Math.floor((p1.x - grid.minX) / cs), ez = Math.floor((p1.z - grid.minZ) / cs);
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  const stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0), stepZ = dz > 0 ? 1 : (dz < 0 ? -1 : 0);
+  let tMaxX = stepX !== 0 ? ((grid.minX + (cx + (stepX > 0 ? 1 : 0)) * cs) - p0.x) / dx : Infinity;
+  let tMaxZ = stepZ !== 0 ? ((grid.minZ + (cz + (stepZ > 0 ? 1 : 0)) * cs) - p0.z) / dz : Infinity;
+  const tDeltaX = stepX !== 0 ? Math.abs(cs / dx) : Infinity;
+  const tDeltaZ = stepZ !== 0 ? Math.abs(cs / dz) : Infinity;
+  let t = 0;
+  for (let guard = 0; guard < 8192; guard += 1) {
+    visit(cx, cz);
+    if ((cx === ex && cz === ez) || t > 1) break;
+    if (tMaxX < tMaxZ) { t = tMaxX; cx += stepX; tMaxX += tDeltaX; } else { t = tMaxZ; cz += stepZ; tMaxZ += tDeltaZ; }
   }
   return _bpScratch;
 }
@@ -176,25 +202,33 @@ export function obstaclesNearSegment(obstacles, p0, p1) {
 // unit standing on it. This is the test for "could the bot walk this line",
 // as opposed to segmentHitsObstacle which answers "would a bullet hit".
 export function walkSegmentBlocked(x0, z0, x1, z1, y, obstacles) {
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const o = obstacles[i];
+  // (SD proto: broadphase — the legs tested are a few units long)
+  const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });
+  for (let i = 0; i < cand.length; i += 1) {
+    const o = cand[i];
     if (y < o.minY - 2 || y > o.maxY + (o.topBuffer ?? 4)) continue;
+    // (two slabs, unrolled with no per-call arrays — see segmentHitsObstacle)
     let tMin = 0, tMax = 1, miss = false;
-    const axes = [
-      [x0, x1 - x0, o.minX, o.maxX],
-      [z0, z1 - z0, o.minZ, o.maxZ]
-    ];
-    for (const [start, delta, lo, hi] of axes) {
+    let start = x0, delta = x1 - x0, lo = o.minX, hi = o.maxX;
+    if (Math.abs(delta) < 1e-9) {
+      if (start < lo || start > hi) miss = true;
+    } else {
+      const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+      const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
+      if (tNear > tMin) tMin = tNear;
+      if (tFar < tMax) tMax = tFar;
+      if (tMin > tMax) miss = true;
+    }
+    if (!miss) {
+      start = z0; delta = z1 - z0; lo = o.minZ; hi = o.maxZ;
       if (Math.abs(delta) < 1e-9) {
-        if (start < lo || start > hi) { miss = true; break; }
+        if (start < lo || start > hi) miss = true;
       } else {
-        const t1 = (lo - start) / delta;
-        const t2 = (hi - start) / delta;
-        const tNear = t1 < t2 ? t1 : t2;
-        const tFar = t1 < t2 ? t2 : t1;
+        const t1 = (lo - start) / delta, t2 = (hi - start) / delta;
+        const tNear = t1 < t2 ? t1 : t2, tFar = t1 < t2 ? t2 : t1;
         if (tNear > tMin) tMin = tNear;
         if (tFar < tMax) tMax = tFar;
-        if (tMin > tMax) { miss = true; break; }
+        if (tMin > tMax) miss = true;
       }
     }
     if (!miss) return true;
