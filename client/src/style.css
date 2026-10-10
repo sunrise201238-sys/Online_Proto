@@ -39,8 +39,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .trio-count .trio-inplay-bar { display: inline-block; width: 2px; height: 11px; margin-right: 2px; vertical-align: middle; background: #ffd76a; border-radius: 1px; box-shadow: 0 0 4px 1px rgba(255, 215, 106, 0.85); }
 .trio-count-enemy .trio-inplay-bar + .trio-weapon-icon { margin-left: 2px; }
 .trio-count-enemy .trio-inplay-bar { margin-right: 0; }
-.boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 8px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
-#boost-fill { height: 100%; width: 100%; background: #90ff63; }
+/* Boost gauge, framed like the overhead HP bar (owner 2026-10-10, sample 5):
+   10px tall (the corner HP bars' height), a 3px dark outline in the bar
+   ink, the track a 92% navy veil over the gauge green, the fill inset 2px
+   with rounded ends. The fill stays green when overheated (owner: no orange). */
+.boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 10px; background: linear-gradient(rgba(11, 17, 25, 0.92), rgba(11, 17, 25, 0.92)), #90ff63; border-radius: 999px; box-shadow: 0 0 0 3px #0b1622; overflow: hidden; }
+#boost-fill { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(100% - 4px); background: #90ff63; border-radius: 999px; }
 
 .joy { position: absolute; left: 28px; bottom: 28px; width: 140px; height: 140px; border-radius: 50%; background: rgba(160, 200, 220, 0.15); pointer-events: auto; }
 .stick { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin-left: -28px; margin-top: -28px; border-radius: 50%; background: rgba(240, 252, 255, 0.35); }

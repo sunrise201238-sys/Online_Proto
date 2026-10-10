@@ -9110,8 +9110,8 @@ function updateHud(now = performance.now()) {
   // magazine while the camera sat on the ally).
   const shown = cameraFocusMech() ?? state.player;
   const shownBoostMax = shown.unit.boostCap ?? BOOST_CAP;
-  hudRefs.boost.style.width = `${(shown.state.boost / shownBoostMax) * 100}%`;
-  hudRefs.boost.style.background = shown.state.overheatedUntil > now ? '#ff8c45' : '#90ff63';
+  // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
+  hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
   // Remaining-units row under each side's HP bar — one small weapon render
   // per unit left (current fielded unit first), one line per team member.
   // Trio shows the whole living roster; Duel shows the single unit while it
