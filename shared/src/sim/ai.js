@@ -368,7 +368,8 @@ export const BOT_SD = {
   // fast": the SD block prices the whole manoeuvre, sdPeekNeed, about 100)
   peekCycleMs: 400,       // PEEK CYCLE (owner 2026-10-06): back on the cover after a peek's dodge, the next peek may start within this window with no dwell and no peekWait
   peeksPerCover: 99,      // PEEK CAP (owner 2026-10-07: the tank ends a stand, not a count — 2 -> 99; kept as a loop stopper): stand peeks from one cover before the hop search gets the first word (after them the peek is the fallback at the search cadence, as before)
-  dryPeeksMax: 2,         // DRY PEEKS (owner 2026-10-07, "BOTs stuck into endless peek loop in same place"): a peek that ends without a round fired is dry (a slit that shows a shoulder but never the gun, a window the model closes first); this many in a row from one cover and the cover peeks no more — the search relocates (Scrapyard idle smoke: 67 peeks from one spot in 60 s, the target never hit). A new cover starts the count over.
+  peekMirrorMin: 3,       // THE MIRROR (owner 2026-10-09, "the previous human-like move around feature seems to be gone"): a fought peek that landed nothing counts as failed only when the enemy had stepped out of its own spot by this much when the window ran — it was peeking too, the duo dance; against an enemy that sat still (a camper, a human holding a corner) the peek is the bot's own call and the corner dance goes on as before. A peek that found no line counts regardless.
+  failedPeeksMax: 2,      // FAILED PEEKS (owner 2026-10-09, "BOTs stuck themselves in duo stand peek"; replaces the 2026-10-07 dry-peek count, which read a fired round as success): a peek is graded by what it did, not by the trigger — no damage landed, or no line found, is a FAILED peek. This many in a row from one cover against an enemy that has not moved (watchMoveTol) and the cover's peeks are spent: the unit WAITS first (a watch from this spot, pre-aimed, for the enemy to show again — the mirror peeker shows every cycle), then the hop search relocates. An enemy that moved is a new situation and the count starts over; a new cover starts it over too. (Two SD bots peeking the same corner at 70 u fired every cycle and nothing ever landed: 35 peeks in 27 s, the dry count never tripped.)
   fireReactMs: 0,         // FIRE REACTION (owner 2026-10-06: 250 "like a human"; 2026-10-07 "change both side reactions to 0ms, let's see how it goes"): the first shot at a line that just opened waits this long; the risk model keeps assuming riskReactMs of the enemy
   fireReactBreakMs: 200,  //   a line lost for less than this is the same appearance (slats, a sidestep); longer and the next shot reacts again
   plainReactMs: 0,        //   HARNESS ONLY (default off): the same reaction for the plain bot and the camper, so SD-vs-base duels measure the brain and not who fires first (--opts '{"plainReactMs":250}')
@@ -1866,6 +1867,37 @@ export function tickBot(matchState, botId, now) {
       // the dodge's cooldown end)
       me.botSDCycleArm = null;
     };
+    // FAILED PEEK grading (owner 2026-10-09, failedPeeksMax): once per peek,
+    // at the window's end or at a lineless arrival. Nothing landed on the
+    // threat = failed; counted per cover while the threat stays where it
+    // was (watchMoveTol), else the count starts over.
+    const sdGradePeek = (windowed) => {
+      if (me.botSDPeekGraded) return;
+      me.botSDPeekGraded = true;
+      // (the TARGET the peek was made against, where it stood when the peek
+      // was armed — its cover, both hidden at that moment; the grade is read
+      // while it may be out on its own peek, and the spent test follows THAT
+      // unit: in 2v2 the nearest enemy, the one whose line it was and the
+      // target differ)
+      const pt = me.botSDPeekThreat;
+      const tf = pt ? matchState.fighters[pt.id] : null;
+      // (a fought window: failed only against a MIRROR peeker — the target
+      // out of its own spot by peekMirrorMin; a lineless arrival: failed)
+      const mirror = !!tf && Math.hypot(tf.pos.x - pt.x, tf.pos.z - pt.z) >= SD.peekMirrorMin;
+      const failed = !!tf && tf.hp >= (me.botSDPeekTargetHp ?? -Infinity) && (!windowed || mirror);
+      const ft = me.botSDPeekFailThreat;
+      const moved = !ft || ft.id !== pt.id || Math.hypot(pt.x - ft.x, pt.z - ft.z) > SD.watchMoveTol;
+      me.botSDPeekFails = failed ? (moved ? 1 : (me.botSDPeekFails ?? 0) + 1) : 0;
+      me.botSDPeekFailThreat = failed ? { id: pt.id, x: pt.x, z: pt.z } : null;
+      if (failed) me.botSDFailedPeeks = (me.botSDFailedPeeks ?? 0) + 1;
+    };
+    // (a peek leg dropped before its window — the anchor bail, the wedge,
+    // the watchdog, spawn immunity — is VOID: not graded later, at the next
+    // exposure or at another cover, against the snapshot it was armed on)
+    const sdDropPeek = () => {
+      me.botSDPeekTo = null; me.botSDPeekAnchor = null; me.botSDBackOff = false; me.botSDPeekArmed = false;
+      me.botSDPeekGraded = true;
+    };
     // STUCK WATCHDOG (owner 2026-10-05, "BOT still get stuck from time to
     // time"): standing within stuckMoveMin for stuckMs with no reason to —
     // a deliberate stand is hidden, hugging cover and inside holdMaxMs
@@ -1878,7 +1910,7 @@ export function tickBot(matchState, botId, now) {
     if (now - me.botSDWd.at > SD.stuckMs && !sdDeliberate && !me.airborne && now >= (me.botSDPlainUntil ?? 0)) {
       sdMark(me.pos.x, me.pos.z, SD.stuckAvoidMs, true);
       sdDrop();
-      me.botSDPeekTo = null; me.botSDPeekArmed = false; me.botSDBackOff = false; me.botSDPeekAnchor = null;
+      sdDropPeek();
       me.botSDWatchUntil = 0; me.botSDDwellUntil = 0;
       me.botSDPlainUntil = now + SD.plainMs;
       me.botSDSearchAt = now + SD.plainMs;
@@ -1902,7 +1934,7 @@ export function tickBot(matchState, botId, now) {
     if (now < (me.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
       if (me.botSDPath || me.botSDPeekTo) {
         sdDrop();
-        me.botSDPeekTo = null; me.botSDPeekArmed = false; me.botSDBackOff = false; me.botSDPeekAnchor = null;
+        sdDropPeek();
       }
       // (2026-10-09: an early SD handover — the brain taking the legs 600 ms
       // before the immunity lapsed, to be in cover at the lapse — was
@@ -2121,7 +2153,8 @@ export function tickBot(matchState, botId, now) {
           const peekHere = sdFightOk && sdPeekableAt(me.pos.x, me.pos.z, myFloorY);
           me.botSDDwellUntil = now + ((sdOpen || peekHere) ? 0 : sdDwell());
           me.botSDPeeksHere = 0;   // a new cover: the peek cap starts over
-          me.botSDPeekDry = 0;     //   ... and the dry-peek count
+          me.botSDPeekFails = 0;   //   ... and the failed-peek count
+          me.botSDPeekFailThreat = null;
         }
         me.botSDRetreatRoute = false;
       } else if (!me.botSDGoalMayShow && !sdGoalHidden(goal)) {
@@ -2138,10 +2171,10 @@ export function tickBot(matchState, botId, now) {
           me.botSDConverts = (me.botSDConverts ?? 0) + 1;
           me.botSDFireGoal = true;
           // (re-check 2026-10-08: a fire hop is graded like a stand peek —
-          // fought / dry — only when these are fresh; they used to carry the
-          // last stand peek's verdict and the fire hop went ungraded)
+          // fought / failed — only when these are fresh; they used to carry
+          // the last stand peek's verdict and the fire hop went ungraded)
           me.botSDPeekFought = null;
-          me.botSDPeekShotsAt = me.lastFireAt;
+          me.botSDPeekTargetHp = opp.hp; me.botSDPeekGraded = false; me.botSDPeekThreat = { id: opp.id, x: opp.pos.x, z: opp.pos.z };   // (the unit the peek is made against)
         } else {
           sdDrop();
           me.botSDSearchAt = now;
@@ -2168,6 +2201,7 @@ export function tickBot(matchState, botId, now) {
           me.botSDDwellUntil = now + sdDwell();
         } else if (!sdOppClear) {
           me.botSDPeekArmed = false;   // arrived without a line: the peek failed
+          sdGradePeek(false);
         }
       } else if (!me.botSDPeekAnchor || left < me.botSDPeekAnchor.best - 0.5) {
         me.botSDPeekAnchor = { best: left, at: now };
@@ -2179,10 +2213,7 @@ export function tickBot(matchState, botId, now) {
         // running against the wall for the rest of the match. (A route has
         // had this bail since the Factory wedge; the peek leg had none.)
         sdMark(me.botSDPeekTo.x, me.botSDPeekTo.z, SD.stuckAvoidMs, true);
-        me.botSDPeekTo = null;
-        me.botSDPeekAnchor = null;
-        me.botSDBackOff = false;
-        me.botSDPeekArmed = false;
+        sdDropPeek();   // (a bailed peek is void)
         me.botSDSearchAt = now;
         me.botSDPeekBails = (me.botSDPeekBails ?? 0) + 1;
       }
@@ -2212,7 +2243,7 @@ export function tickBot(matchState, botId, now) {
       me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
       const wa = me.botSDWatchAnchor;
       const moved = wa ? Math.hypot(opp.pos.x - wa.x, opp.pos.z - wa.z) : 0;
-      if (moved > SD.watchMoveTol || watchScore(me.pos.x, me.pos.z, myFloorY) < SD.exitMin) {
+      if (moved > SD.watchMoveTol || (!me.botSDWatchSpent && watchScore(me.pos.x, me.pos.z, myFloorY) < SD.exitMin)) {
         me.botSDWatchUntil = 0;
         me.botSDDwellUntil = now;
         me.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (a cut-short watch cools down from now)
@@ -2297,7 +2328,7 @@ export function tickBot(matchState, botId, now) {
       me.botSDLastPeekSide = bestSide;
       me.botSDPeekAt = now;
       me.botSDPeekFought = null;
-      me.botSDPeekShotsAt = me.lastFireAt;   // (a peek that ends with this unchanged fired nothing: dryPeeksMax)
+      me.botSDPeekTargetHp = opp.hp; me.botSDPeekGraded = false; me.botSDPeekThreat = { id: opp.id, x: opp.pos.x, z: opp.pos.z };   // (the unit the peek is made against; graded by what it did: failedPeeksMax)
       me.botSDPeeksHere = (me.botSDPeeksHere ?? 0) + 1;
       me.botSDPeeks = (me.botSDPeeks ?? 0) + 1;
       if (cycling) me.botSDPeekCycles = (me.botSDPeekCycles ?? 0) + 1;
@@ -2310,9 +2341,15 @@ export function tickBot(matchState, botId, now) {
     // and not waiting for the dwell or the search cadence. peeksPerCover
     // peeks from one cover, then the hop search has the first word (the
     // crossing, the fire hop, a relocation) and the peek is its fallback.
-    const sdPeekDryOut = (me.botSDPeekDry ?? 0) >= SD.dryPeeksMax;   // this cover's peeks fire nothing: relocate instead
+    // (this cover's peeks are spent against this enemy: wait, then relocate — failedPeeksMax)
+    const sdPeekSpent = (() => {
+      const ft = me.botSDPeekFailThreat;
+      if ((me.botSDPeekFails ?? 0) < SD.failedPeeksMax || !ft) return false;
+      const tf = matchState.fighters[ft.id];
+      return !!tf && tf.hp > 0 && Math.hypot(tf.pos.x - ft.x, tf.pos.z - ft.z) <= SD.watchMoveTol;
+    })();
     if (!me.botSDPath && !me.botSDPeekTo && !sdOverBudget && (sdPeekDue || sdCycleDue) && !sdOppClear
-        && (me.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekDryOut
+        && (me.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekSpent
         && me.boost >= sdPeekNeed && sdDodgeReady && !(now <= (me.stepUntil || 0)) && now >= (me.botSDPlainUntil ?? 0)) {
       sdTryStandPeek(sdCycleDue && !sdPeekDue);
     }
@@ -2336,8 +2373,7 @@ export function tickBot(matchState, botId, now) {
         // (did the peek get its window? only such a peek cycles on return)
         if (me.botSDPeekFought == null) {
           me.botSDPeekFought = sdExposedFor >= SD.peekAimMs + SD.peekMs * 0.5;
-          // DRY PEEK: not one round left the gun — count it against this cover
-          me.botSDPeekDry = me.lastFireAt === me.botSDPeekShotsAt ? (me.botSDPeekDry ?? 0) + 1 : 0;
+          sdGradePeek(true);
         }
         if (!me.botSDPeekStepped && ol > 1.5 && tryStartStep(matchState, me, ox / ol, oz / ol, now, obstacles)) {
           // MANOEUVRE 2, the way back: the i-frame dodge step toward the
@@ -2384,6 +2420,25 @@ export function tickBot(matchState, botId, now) {
       // budget when they walk into the line. (No watch hop any more: a
       // better spot is the BETTER POSITION move below.)
       const sdInBand = dist <= sdUpper + 20;
+      // SPENT COVER (owner 2026-10-09, "stuck in duo stand peek"): this
+      // cover's peeks are spent (failedPeeksMax, the enemy still where it
+      // was). Before the position is given up: WAIT — a watch from this
+      // spot, pre-aimed, for the enemy to show again (the mirror peeker
+      // shows every cycle). The watch's own window and cooldown apply; a
+      // watch that ends with nothing leaves the relocation to the hop
+      // search below. A good position still goes last.
+      if (!decided && sdHidden && sdInBand && sdPeekSpent && sdHoldOk && !sdOpen && sdCoverDist <= SD.hugDist && now >= (me.botSDWatchCooldownUntil ?? 0)) {
+        me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
+        me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
+        me.botSDWatchSpent = true;   // (the exit is known — where the enemy showed; no exit-score test)
+        me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+        me.botSDWatchCooldownUntil = me.botSDWatchUntil + SD.watchCooldownMs;
+        me.botSDDwellUntil = me.botSDWatchUntil;
+        me.botSDWatches = (me.botSDWatches ?? 0) + 1;
+        me.botSDSpentWaits = (me.botSDSpentWaits ?? 0) + 1;
+        me.botSDSearchAt = now + SD.searchMs;
+        decided = true;
+      }
       // (a line-capable spot never watches — it peeks; owner 2026-10-06)
       if (!decided && sdInBand && sdPosGood && !sdEngageDue && sdHoldOk
           && !sdPeekableAt(me.pos.x, me.pos.z, myFloorY)
@@ -2391,6 +2446,7 @@ export function tickBot(matchState, botId, now) {
           && !sdOpen && sdCoverDist <= SD.hugDist && watchScore(me.pos.x, me.pos.z, myFloorY) >= SD.exitMin) {
         me.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
         me.botSDWatchAnchor = { x: opp.pos.x, z: opp.pos.z };
+        me.botSDWatchSpent = false;
         me.botSDWatchRecheckAt = now + SD.watchRecheckMs;
         me.botSDWatchCooldownUntil = me.botSDWatchUntil + SD.watchCooldownMs;   // (no back-to-back ambushes; re-check 2026-10-08)
         me.botSDDwellUntil = me.botSDWatchUntil;
@@ -2680,7 +2736,7 @@ export function tickBot(matchState, botId, now) {
           me.botSDFires = (me.botSDFires ?? 0) + 1;
           me.botSDFireGoal = true;
           me.botSDPeekFought = null;            // (graded at the window end, like a stand peek)
-          me.botSDPeekShotsAt = me.lastFireAt;
+          me.botSDPeekTargetHp = opp.hp; me.botSDPeekGraded = false; me.botSDPeekThreat = { id: opp.id, x: opp.pos.x, z: opp.pos.z };   // (the unit the peek is made against)
         }
         // (a fire or anyGoal hop ends on a cell that may show: no "goal
         // uncovered" drop for it)
@@ -2712,7 +2768,7 @@ export function tickBot(matchState, botId, now) {
           if (me.botSDStallSince == null && me.botSDRiskHoldSince == null && (sdPosScore < SD.holdScore - 1 || !sdHoldOk)) me.botSDStallSince = now;
           // STAND PEEK FALLBACK: past the peek cap from this cover the peek
           // runs only here — the whole list failed — at the search cadence.
-          if (sdPeekDue && !sdOppClear && !sdPeekDryOut && me.boost >= sdPeekNeed && sdDodgeReady && !(now <= (me.stepUntil || 0))) sdTryStandPeek(false);
+          if (sdPeekDue && !sdOppClear && !sdPeekSpent && me.boost >= sdPeekNeed && sdDodgeReady && !(now <= (me.stepUntil || 0))) sdTryStandPeek(false);
         }
       }
     }
@@ -3080,7 +3136,7 @@ export function tickBot(matchState, botId, now) {
         } else if (now - wa.at >= SD.wedgeMs) {
           me.botSDWedges = (me.botSDWedges ?? 0) + 1;
           sdMark(me.botSDPeekTo.x, me.botSDPeekTo.z, SD.stuckAvoidMs, true);
-          me.botSDPeekTo = null; me.botSDPeekAnchor = null; me.botSDBackOff = false; me.botSDPeekArmed = false;
+          sdDropPeek();   // (a wedged peek is void, like a bailed one)
           me.botSDSearchAt = now;
           me.botSDPeekBails = (me.botSDPeekBails ?? 0) + 1;
           coverMove = null;
@@ -3125,7 +3181,7 @@ export function tickBot(matchState, botId, now) {
           if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) { if (PP) PP.walk = (PP.walk ?? 0) + 1; return false; }
           if (coverDistanceAt(sdGrid, lx, lz, myFloorY, obstacles) > legCoverMax) { if (PP) PP.open = (PP.open ?? 0) + 1; return false; }   // never MORE open than here
           for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) { if (PP) PP.seen = (PP.seen ?? 0) + 1; return false; }
-          if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) { if (PP) PP.watch = (PP.watch ?? 0) + 1; return false; }
+          if (watching && !me.botSDWatchSpent && watchScore(lx, lz, myFloorY) < SD.exitMin) { if (PP) PP.watch = (PP.watch ?? 0) + 1; return false; }
           if (PP) PP.ok = (PP.ok ?? 0) + 1;
           return true;
         };

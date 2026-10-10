@@ -5682,6 +5682,27 @@ function updateEnemy(now) {
       eState.botSDRetreatRoute = false;   // (re-check 2026-10-08, mirrors shared: a dropped retreat route no longer flags the next arrival)
       eState.botSDCycleArm = null;         // (a parked peek cycle dies with the route — mirrors shared)
     };
+    // FAILED PEEK grading (mirrors shared, failedPeeksMax): once per peek — nothing landed on the threat = failed, counted per cover while the threat stays put (watchMoveTol).
+    const sdGradePeek = (windowed) => {
+      if (eState.botSDPeekGraded) return;
+      eState.botSDPeekGraded = true;
+      // (the threat the peek was armed against, where it stood then — mirrors shared)
+      const pt = eState.botSDPeekThreat;
+      const tf = pt ? pt.ref : null;
+      // (a fought window: failed only against a MIRROR peeker — mirrors shared, peekMirrorMin)
+      const mirror = !!tf && Math.hypot(tf.root.position.x - pt.x, tf.root.position.z - pt.z) >= SD.peekMirrorMin;
+      const failed = !!tf && tf.state.hp >= (eState.botSDPeekTargetHp ?? -Infinity) && (!windowed || mirror);
+      const ft = eState.botSDPeekFailThreat;
+      const moved = !ft || ft.ref !== pt.ref || Math.hypot(pt.x - ft.x, pt.z - ft.z) > SD.watchMoveTol;
+      eState.botSDPeekFails = failed ? (moved ? 1 : (eState.botSDPeekFails ?? 0) + 1) : 0;
+      eState.botSDPeekFailThreat = failed ? { ref: pt.ref, x: pt.x, z: pt.z } : null;
+      if (failed) eState.botSDFailedPeeks = (eState.botSDFailedPeeks ?? 0) + 1;
+    };
+    // (a peek leg dropped before its window — bail, wedge, watchdog, spawn immunity — is VOID: not graded later; mirrors shared)
+    const sdDropPeek = () => {
+      eState.botSDPeekTo = null; eState.botSDPeekAnchor = null; eState.botSDBackOff = false; eState.botSDPeekArmed = false;
+      eState.botSDPeekGraded = true;
+    };
     // STUCK WATCHDOG (mirrors shared): standing within stuckMoveMin for
     // stuckMs with no reason to (not hidden, hugging cover and inside
     // holdMaxMs) -> mark the spot, drop route and peek, plain brain legs
@@ -5691,7 +5712,7 @@ function updateEnemy(now) {
     if (now - eState.botSDWd.at > SD.stuckMs && !sdDeliberate && !eState.airborne && now >= (eState.botSDPlainUntil ?? 0)) {
       sdMark(e.x, e.z, SD.stuckAvoidMs, true);
       sdDrop();
-      eState.botSDPeekTo = null; eState.botSDPeekArmed = false; eState.botSDBackOff = false; eState.botSDPeekAnchor = null;
+      sdDropPeek();
       eState.botSDWatchUntil = 0; eState.botSDDwellUntil = 0;
       eState.botSDPlainUntil = now + SD.plainMs;
       eState.botSDSearchAt = now + SD.plainMs;
@@ -5703,7 +5724,7 @@ function updateEnemy(now) {
     if (now < (eState.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
       if (eState.botSDPath || eState.botSDPeekTo) {
         sdDrop();
-        eState.botSDPeekTo = null; eState.botSDPeekArmed = false; eState.botSDBackOff = false; eState.botSDPeekAnchor = null;
+        sdDropPeek();
       }
       // (the early 600 ms handover was measured and dropped — mirrors shared, 2026-10-09)
       eState.botSDPlainUntil = Math.max(eState.botSDPlainUntil ?? 0, eState.invulnerableUntil);
@@ -5875,7 +5896,8 @@ function updateEnemy(now) {
           const peekHere = sdFightOk && sdPeekableAt(e.x, e.z, myFloorY);
           eState.botSDDwellUntil = now + ((sdOpen || peekHere) ? 0 : sdDwell());
           eState.botSDPeeksHere = 0;   // a new cover: the peek cap starts over
-          eState.botSDPeekDry = 0;     //   ... and the dry-peek count (mirrors shared)
+          eState.botSDPeekFails = 0;   //   ... and the failed-peek count (mirrors shared)
+          eState.botSDPeekFailThreat = null;
         }
         eState.botSDRetreatRoute = false;
       } else if (!eState.botSDGoalMayShow && !sdGoalHidden(goal)) {
@@ -5890,8 +5912,8 @@ function updateEnemy(now) {
           eState.botSDFires = (eState.botSDFires ?? 0) + 1;
           eState.botSDConverts = (eState.botSDConverts ?? 0) + 1;
           eState.botSDFireGoal = true;
-          eState.botSDPeekFought = null;            // (re-check 2026-10-08, mirrors shared: the fire hop is graded fought / dry on its own)
-          eState.botSDPeekShotsAt = eState.lastFireAt;
+          eState.botSDPeekFought = null;            // (re-check 2026-10-08, mirrors shared: the fire hop is graded on its own)
+          eState.botSDPeekTargetHp = state.player.state.hp; eState.botSDPeekGraded = false; eState.botSDPeekThreat = { ref: state.player, x: p.x, z: p.z };   // (the unit the peek is made against — mirrors shared)
         } else {
           sdDrop();
           eState.botSDSearchAt = now;
@@ -5913,6 +5935,7 @@ function updateEnemy(now) {
           eState.botSDDwellUntil = now + sdDwell();
         } else if (!sdOppClear) {
           eState.botSDPeekArmed = false;   // arrived without a line: the peek failed
+          sdGradePeek(false);
         }
       } else if (!eState.botSDPeekAnchor || left < eState.botSDPeekAnchor.best - 0.5) {
         eState.botSDPeekAnchor = { best: left, at: now };
@@ -5920,10 +5943,7 @@ function updateEnemy(now) {
         // PEEK BAIL (mirrors shared): a peek or back-off leg that stops
         // closing on its point for bailMs is dropped and re-planned.
         sdMark(eState.botSDPeekTo.x, eState.botSDPeekTo.z, SD.stuckAvoidMs, true);
-        eState.botSDPeekTo = null;
-        eState.botSDPeekAnchor = null;
-        eState.botSDBackOff = false;
-        eState.botSDPeekArmed = false;
+        sdDropPeek();   // (a bailed peek is void — mirrors shared)
         eState.botSDSearchAt = now;
         eState.botSDPeekBails = (eState.botSDPeekBails ?? 0) + 1;
       }
@@ -5952,7 +5972,7 @@ function updateEnemy(now) {
       eState.botSDWatchRecheckAt = now + SD.watchRecheckMs;
       const wa = eState.botSDWatchAnchor;
       const moved = wa ? Math.hypot(p.x - wa.x, p.z - wa.z) : 0;
-      if (moved > SD.watchMoveTol || watchScore(e.x, e.z, myFloorY) < SD.exitMin) {
+      if (moved > SD.watchMoveTol || (!eState.botSDWatchSpent && watchScore(e.x, e.z, myFloorY) < SD.exitMin)) {
         eState.botSDWatchUntil = 0;
         eState.botSDDwellUntil = now;
         eState.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (mirrors shared)
@@ -6021,7 +6041,7 @@ function updateEnemy(now) {
       eState.botSDLastPeekSide = bestSide;
       eState.botSDPeekAt = now;
       eState.botSDPeekFought = null;
-      eState.botSDPeekShotsAt = eState.lastFireAt;   // (dry-peek count, mirrors shared)
+      eState.botSDPeekTargetHp = state.player.state.hp; eState.botSDPeekGraded = false; eState.botSDPeekThreat = { ref: state.player, x: p.x, z: p.z };   // (the unit the peek is made against; graded by what it did — mirrors shared)
       eState.botSDPeeksHere = (eState.botSDPeeksHere ?? 0) + 1;
       eState.botSDPeeks = (eState.botSDPeeks ?? 0) + 1;
       if (cycling) eState.botSDPeekCycles = (eState.botSDPeekCycles ?? 0) + 1;
@@ -6034,9 +6054,15 @@ function updateEnemy(now) {
     // and not waiting for the dwell or the search cadence. peeksPerCover
     // peeks from one cover, then the hop search has the first word and the
     // peek is its fallback.
-    const sdPeekDryOut = (eState.botSDPeekDry ?? 0) >= SD.dryPeeksMax;   // this cover's peeks fire nothing: relocate instead (mirrors shared)
+    // (this cover's peeks are spent against this enemy: wait, then relocate — failedPeeksMax, mirrors shared)
+    const sdPeekSpent = (() => {
+      const ft = eState.botSDPeekFailThreat;
+      if ((eState.botSDPeekFails ?? 0) < SD.failedPeeksMax || !ft) return false;
+      const tf = ft.ref;
+      return !!tf && tf.state.hp > 0 && Math.hypot(tf.root.position.x - ft.x, tf.root.position.z - ft.z) <= SD.watchMoveTol;
+    })();
     if (!eState.botSDPath && !eState.botSDPeekTo && !sdOverBudget && (sdPeekDue || sdCycleDue) && !sdOppClear
-        && (eState.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekDryOut
+        && (eState.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekSpent
         && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0)) && now >= (eState.botSDPlainUntil ?? 0)) {
       sdTryStandPeek(sdCycleDue && !sdPeekDue);
     }
@@ -6055,8 +6081,8 @@ function updateEnemy(now) {
         // (did the peek get its window? only such a peek cycles on return)
         if (eState.botSDPeekFought == null) {
           eState.botSDPeekFought = sdExposedFor >= SD.peekAimMs + SD.peekMs * 0.5;
-          // DRY PEEK (mirrors shared): not one round left the gun — count it against this cover
-          eState.botSDPeekDry = eState.lastFireAt === eState.botSDPeekShotsAt ? (eState.botSDPeekDry ?? 0) + 1 : 0;
+          // (graded by what it did — failedPeeksMax, mirrors shared)
+          sdGradePeek(true);
         }
         if (!eState.botSDPeekStepped && ol > 1.5 && sdBotStartStep(state.enemy, ox / ol, oz / ol, now)) {
           // MANOEUVRE 2, the way back: the i-frame dodge step toward the
@@ -6098,6 +6124,19 @@ function updateEnemy(now) {
       // WATCH (in band, hidden, nothing due): a good spot that covers the
       // enemy's exits is watched. (No watch hop any more.)
       const sdInBand = dist <= sdUpper + 20;
+      // SPENT COVER (mirrors shared, owner 2026-10-09): peeks spent against an enemy that has not moved -> WAIT (a watch from this spot) before the relocation.
+      if (!decided && sdHidden && sdInBand && sdPeekSpent && sdHoldOk && !sdOpen && sdCoverDist <= SD.hugDist && now >= (eState.botSDWatchCooldownUntil ?? 0)) {
+        eState.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
+        eState.botSDWatchAnchor = { x: p.x, z: p.z };
+        eState.botSDWatchSpent = true;
+        eState.botSDWatchRecheckAt = now + SD.watchRecheckMs;
+        eState.botSDWatchCooldownUntil = eState.botSDWatchUntil + SD.watchCooldownMs;
+        eState.botSDDwellUntil = eState.botSDWatchUntil;
+        eState.botSDWatches = (eState.botSDWatches ?? 0) + 1;
+        eState.botSDSpentWaits = (eState.botSDSpentWaits ?? 0) + 1;
+        eState.botSDSearchAt = now + SD.searchMs;
+        decided = true;
+      }
       // (a line-capable spot never watches — it peeks; mirrors shared)
       if (!decided && sdInBand && sdPosGood && !sdEngageDue && sdHoldOk
           && !sdPeekableAt(e.x, e.z, myFloorY)
@@ -6105,6 +6144,7 @@ function updateEnemy(now) {
           && !sdOpen && sdCoverDist <= SD.hugDist && watchScore(e.x, e.z, myFloorY) >= SD.exitMin) {
         eState.botSDWatchUntil = now + SD.watchMinMs + Math.random() * (SD.watchMaxMs - SD.watchMinMs);
         eState.botSDWatchAnchor = { x: p.x, z: p.z };
+        eState.botSDWatchSpent = false;
         eState.botSDWatchRecheckAt = now + SD.watchRecheckMs;
         eState.botSDWatchCooldownUntil = eState.botSDWatchUntil + SD.watchCooldownMs;   // (mirrors shared)
         eState.botSDDwellUntil = eState.botSDWatchUntil;
@@ -6308,7 +6348,7 @@ function updateEnemy(now) {
           eState.botSDFires = (eState.botSDFires ?? 0) + 1;
           eState.botSDFireGoal = true;
           eState.botSDPeekFought = null;            // (graded at the window end, like a stand peek — mirrors shared)
-          eState.botSDPeekShotsAt = eState.lastFireAt;
+          eState.botSDPeekTargetHp = state.player.state.hp; eState.botSDPeekGraded = false; eState.botSDPeekThreat = { ref: state.player, x: p.x, z: p.z };   // (the unit the peek is made against — mirrors shared)
         }
         eState.botSDGoalMayShow = !!(a.fire || a.anyGoal);
         eState.botSDPath = found.path;
@@ -6332,7 +6372,7 @@ function updateEnemy(now) {
           if (eState.botSDStallSince == null && eState.botSDRiskHoldSince == null && (sdPosScore < SD.holdScore - 1 || !sdHoldOk)) eState.botSDStallSince = now;
           // STAND PEEK FALLBACK (mirrors shared): past the peek cap from this
           // cover the peek runs only here — the whole list failed.
-          if (sdPeekDue && !sdOppClear && !sdPeekDryOut && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0))) sdTryStandPeek(false);
+          if (sdPeekDue && !sdOppClear && !sdPeekSpent && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0))) sdTryStandPeek(false);
         }
       }
     }
@@ -6628,7 +6668,7 @@ function updateEnemy(now) {
         } else if (now - wa.at >= SD.wedgeMs) {
           eState.botSDWedges = (eState.botSDWedges ?? 0) + 1;
           sdMark(eState.botSDPeekTo.x, eState.botSDPeekTo.z, SD.stuckAvoidMs, true);
-          eState.botSDPeekTo = null; eState.botSDPeekAnchor = null; eState.botSDBackOff = false; eState.botSDPeekArmed = false;
+          sdDropPeek();   // (a wedged peek is void — mirrors shared)
           eState.botSDSearchAt = now;
           eState.botSDPeekBails = (eState.botSDPeekBails ?? 0) + 1;
           coverMove = null;
@@ -6661,7 +6701,7 @@ function updateEnemy(now) {
           if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
           if (coverDistanceAt(offlineNavGrid, lx, lz, myFloorY, arenaObstacles) > legCoverMax) return false;   // never MORE open than here
           for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) return false;
-          if (watching && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;
+          if (watching && !eState.botSDWatchSpent && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;   // (a spent wait still shuffles — mirrors shared)
           return true;
         };
         hx = eState.botSDPaceX ?? 0; hz = eState.botSDPaceZ ?? 0;
