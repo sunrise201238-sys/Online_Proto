@@ -5878,6 +5878,14 @@ function updateEnemy(now) {
     // (the mirror stamps lastFireAt at spawn for the cooldown clock — the sim's starts at 0: a shot is only "heard" after that stamp)
     const sdThreatFired = (sdThreat.state?.lastFireAt ?? -1e9) > (sdThreat.state?.fireInitAt ?? -1e9);
     const sdIncoming = sdHidden && sdThreatFired && (sdThreat.state?.lastFireAt ?? -1e9) > now - sdFlightMs && (eState.botSDSeenAt ?? -1e9) > now - sdFlightMs;
+    // HOT TRIGGER (mirrors shared, BOT_SD hotMs): some live enemy fired within
+    // hotMs — any gun, 2v2 included (a shot is heard only after the spawn stamp).
+    let sdAnyHot = false;
+    for (let k = 0; k < sdEnemies.length && !sdAnyHot; k += 1) {
+      const st = sdEnemies[k].state;
+      if ((st?.lastFireAt ?? -1e9) > (st?.fireInitAt ?? -1e9) && st.lastFireAt > now - SD.hotMs) sdAnyHot = true;
+    }
+    const sdHotVuln = sdAnyHot && now >= (eState.invulnerableUntil ?? 0);
     const sdLeaveMs = eState.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (mirrors shared): a planned window ends once
     // its strafe has used up what the dodge back can bring back.
@@ -5934,13 +5942,20 @@ function updateEnemy(now) {
     const sdDropPeek = () => {
       eState.botSDPeekTo = null; eState.botSDPeekAnchor = null; eState.botSDBackOff = false; eState.botSDPeekArmed = false;
       eState.botSDPeekGraded = true;
+      // (and its origin: a void peek has no spot to dodge back to; mirrors shared)
+      eState.botSDPeekOrigin = null; eState.botSDPeekStepped = false;
     };
     // STUCK WATCHDOG (mirrors shared): standing within stuckMoveMin for
     // stuckMs with no reason to (not hidden, hugging cover and inside
     // holdMaxMs) -> mark the spot, drop route and peek, plain brain legs
     // for plainMs.
     if (!eState.botSDWd || Math.hypot(e.x - eState.botSDWd.x, e.z - eState.botSDWd.z) > SD.stuckMoveMin) eState.botSDWd = { x: e.x, z: e.z, at: now };
-    const sdDeliberate = sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs;
+    // (the hot-trigger wait is a deliberate stand too, wherever the unit is hidden; mirrors shared)
+    const sdDeliberate = (sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs)
+      || (sdHidden && now < (eState.botSDHotWaitUntil ?? 0));
+    // (a deliberate stand's ticks do not count: the clock used to run on through
+    // a hold and fire the first tick the stand was no longer deliberate; mirrors shared)
+    if (sdDeliberate) eState.botSDWd = { x: e.x, z: e.z, at: now };
     if (now - eState.botSDWd.at > SD.stuckMs && !sdDeliberate && !eState.airborne && now >= (eState.botSDPlainUntil ?? 0)) {
       sdMark(e.x, e.z, SD.stuckAvoidMs, true);
       sdDrop();
@@ -6210,6 +6225,22 @@ function updateEnemy(now) {
         eState.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (mirrors shared)
       }
     }
+    // ENEMY FIRING -> STAY BACK IN COVER (mirrors shared, BOT_SD hotWait):
+    // hidden, a gun hot, not immune — a peek leg still hidden is dropped and
+    // the unit stays: the dwell runs on until the guns have been quiet
+    // hotQuietMs (after the watch maintenance, whose dwell reset must not
+    // open a search tick inside the wait); the stall clock starts over.
+    const sdHotWaiting = SD.hotWait && sdHidden && sdHotVuln;
+    if (sdHotWaiting && eState.botSDPeekTo && !eState.botSDBackOff) {
+      sdDropPeek();
+      eState.botSDHotPeekDrops = (eState.botSDHotPeekDrops ?? 0) + 1;
+    }
+    if (sdHotWaiting && !eState.botSDPath && !eState.botSDPeekTo) {
+      if (!(now < (eState.botSDHotWaitUntil ?? 0))) eState.botSDHotWaits = (eState.botSDHotWaits ?? 0) + 1;
+      eState.botSDHotWaitUntil = now + SD.hotQuietMs;
+      eState.botSDDwellUntil = Math.max(eState.botSDDwellUntil ?? 0, eState.botSDHotWaitUntil);
+      eState.botSDStallSince = null;
+    }
     const sdDwellOver = now >= (eState.botSDDwellUntil ?? 0);
     const sdHoldReload = sdMyReloadLeft > SD.reloadHoldMs && !sdFree;
     const sdEngageDue = sdHidden && dist <= sdUpper + SD.peekRange && sdNoShotTime >= SD.peekWaitMs;
@@ -6295,6 +6326,7 @@ function updateEnemy(now) {
     })();
     if (!eState.botSDPath && !eState.botSDPeekTo && !sdOverBudget && (sdPeekDue || sdCycleDue) && !sdOppClear
         && (eState.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekSpent
+        && !sdHotWaiting   // (ENEMY FIRING: no peek into the stream; mirrors shared)
         && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0)) && now >= (eState.botSDPlainUntil ?? 0)) {
       sdTryStandPeek(sdCycleDue && !sdPeekDue);
     }

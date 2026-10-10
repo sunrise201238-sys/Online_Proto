@@ -471,6 +471,19 @@ export const BOT_SD = {
   patienceMs: 8000,
   patienceCap: 0.3,
   riskReactMs: 250,       // a human's reaction to a line opening (the plain bot polls at 220, this one at 32 — the sim is harsher than play)
+  // ENEMY FIRING -> STAY BACK IN COVER (owner 2026-10-10, "when enemy firing,
+  // stay back in the cover"): a live enemy's round left within hotMs — the
+  // shot is heard, never the magazine, and no gun's cycle is read (a slow
+  // gun's cycle is the time it cannot fire). Hidden and not immune, the
+  // unit stays put: no peek, no hop, the dwell runs on until every gun has
+  // been quiet hotQuietMs. A route already under way goes on (hidden by
+  // construction; a crossing finishes its leg — measured: dropping it was
+  // no better). Not
+  // while immune: the stream cannot hurt it and the immunity is its time
+  // to move. The watchdog counts none of the wait (sdDeliberate).
+  hotMs: 200,
+  hotQuietMs: 400,
+  hotWait: true,
   riskShotMs: 60,         // floor on the enemy's shot interval (their fireCooldownMs if longer): a held trigger fires at the cooldown — 150 read the 55 ms SMG as 2.7 x fewer rounds, and with the real sprint speed in the model the crossings it waved through died (mid batch: 0 -> 8-17% losses)
   riskSprint: 16.8,       //   fallback speed when the unit has no sprintSpeed (see riskSprintFactor)
   riskSprintFactor: 2.5,  //   exposure speed = unit sprintSpeed x this: the dash runs at 2.5 x sprintSpeed from its first tick (sprint + 1.5 x momentum: 29.4 u/s for 11.76, traced 2026-10-07, no ramp). The old 1.8 kept a "hand lead" margin the no-lead rule makes moot; it read every band exposure a third slower than it is.       // effective sprint speed (sprintSpeed + momentum)
@@ -1825,6 +1838,11 @@ export function tickBot(matchState, botId, now) {
     if (!sdHidden) me.botSDSeenAt = now;
     const sdFlightMs = SD.flightKeep * sdThreatDist / (sdThreat.unit?.projectileSpeed ?? 600) * 1000;
     const sdIncoming = sdHidden && (sdThreat.lastFireAt ?? -1e9) > now - sdFlightMs && (me.botSDSeenAt ?? -1e9) > now - sdFlightMs;
+    // HOT TRIGGER (BOT_SD hotMs): some live enemy fired within hotMs — any
+    // gun, 2v2 included (the nearest enemy is not always the one firing).
+    let sdAnyHot = false;
+    for (let k = 0; k < sdEnemies.length && !sdAnyHot; k += 1) if ((sdEnemies[k].lastFireAt ?? -1e9) > now - SD.hotMs) sdAnyHot = true;
+    const sdHotVuln = sdAnyHot && now >= (me.invulnerableUntil ?? 0);
     const sdLeaveMs = me.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (tank sc 81-83 after the rules above): the
     // window strafes away from the edge it stepped out of, and the dodge
@@ -1905,6 +1923,9 @@ export function tickBot(matchState, botId, now) {
     const sdDropPeek = () => {
       me.botSDPeekTo = null; me.botSDPeekAnchor = null; me.botSDBackOff = false; me.botSDPeekArmed = false;
       me.botSDPeekGraded = true;
+      // (and its origin: a void peek has no spot to dodge back to — the
+      // retreat read a stale origin at the next unplanned exposure)
+      me.botSDPeekOrigin = null; me.botSDPeekStepped = false;
     };
     // STUCK WATCHDOG (owner 2026-10-05, "BOT still get stuck from time to
     // time"): standing within stuckMoveMin for stuckMs with no reason to —
@@ -1914,7 +1935,16 @@ export function tickBot(matchState, botId, now) {
     // for plainMs (its own wedge detectors run in that window; the SD fire
     // rules stay).
     if (!me.botSDWd || Math.hypot(me.pos.x - me.botSDWd.x, me.pos.z - me.botSDWd.z) > SD.stuckMoveMin) me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now };
-    const sdDeliberate = sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs;
+    // (the hot-trigger wait is a deliberate stand too, wherever the unit is
+    // hidden: the watchdog must not walk it out into the stream)
+    const sdDeliberate = (sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs)
+      || (sdHidden && now < (me.botSDHotWaitUntil ?? 0));
+    // (a deliberate stand is a reason to stand: its ticks do not count — the
+    // clock used to run on through a hold, and the first tick the stand was
+    // no longer deliberate, the line opened by the enemy's sidestep, the
+    // watchdog fired at once and the plain legs walked the unit into the
+    // stream: spam probe 2026-10-10, every plain-legs death in the wait)
+    if (sdDeliberate) me.botSDWd = { x: me.pos.x, z: me.pos.z, at: now };
     if (now - me.botSDWd.at > SD.stuckMs && !sdDeliberate && !me.airborne && now >= (me.botSDPlainUntil ?? 0)) {
       sdMark(me.pos.x, me.pos.z, SD.stuckAvoidMs, true);
       sdDrop();
@@ -2257,6 +2287,24 @@ export function tickBot(matchState, botId, now) {
         me.botSDWatchCooldownUntil = now + SD.watchCooldownMs;   // (a cut-short watch cools down from now)
       }
     }
+    // ENEMY FIRING -> STAY BACK IN COVER (BOT_SD hotWait): hidden, a gun
+    // hot, not immune — a peek leg still hidden is dropped (the stream is
+    // already on the corner); the unit stays: the dwell runs on until the
+    // guns have been quiet hotQuietMs (after the watch maintenance above,
+    // whose dwell reset must not open a search tick inside the wait); the
+    // shuffle keeps it hidden; the stall clock starts over when it ends.
+    // (The idle / patience clocks run on: a long wait earns the push.)
+    const sdHotWaiting = SD.hotWait && sdHidden && sdHotVuln;
+    if (sdHotWaiting && me.botSDPeekTo && !me.botSDBackOff) {
+      sdDropPeek();
+      me.botSDHotPeekDrops = (me.botSDHotPeekDrops ?? 0) + 1;
+    }
+    if (sdHotWaiting && !me.botSDPath && !me.botSDPeekTo) {
+      if (!(now < (me.botSDHotWaitUntil ?? 0))) me.botSDHotWaits = (me.botSDHotWaits ?? 0) + 1;
+      me.botSDHotWaitUntil = now + SD.hotQuietMs;
+      me.botSDDwellUntil = Math.max(me.botSDDwellUntil ?? 0, me.botSDHotWaitUntil);
+      me.botSDStallSince = null;
+    }
     // 2. Hop search — one Dijkstra per tick per match (shares the hide
     //    search's slot). Wanted when exposed past the budget, or hidden with
     //    the dwell over (a long own reload is spent in cover unless the
@@ -2358,6 +2406,7 @@ export function tickBot(matchState, botId, now) {
     })();
     if (!me.botSDPath && !me.botSDPeekTo && !sdOverBudget && (sdPeekDue || sdCycleDue) && !sdOppClear
         && (me.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekSpent
+        && !sdHotWaiting   // (ENEMY FIRING: no peek into the stream — BOT_SD hotWait)
         && me.boost >= sdPeekNeed && sdDodgeReady && !(now <= (me.stepUntil || 0)) && now >= (me.botSDPlainUntil ?? 0)) {
       sdTryStandPeek(sdCycleDue && !sdPeekDue);
     }
