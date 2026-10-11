@@ -17,7 +17,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { getArena } from './arena.js';
 import { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, coverDistanceAt } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
-import { MAX_HP, STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK } from './constants.js';
+import { MAX_HP, STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 
 // --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
@@ -204,9 +204,49 @@ export function capsuleHitFrac(c, R, H, s) {
 // unit's sprint x riskSprintFactor; SD.riskSprint is the fallback.
 // `bloom` is the shooter's current bloom (spread carried above its base
 // spreadAngle, bloom.js); it defaults to the threat's live value.
+// VOLLEY (the shotguns, spreadCount > 1): a blast is not a cone that thins
+// with distance — a fixed 8-slot pattern (SHOTGUN_PATTERN, stretched by the
+// gun's volleyStretchX) that opens over SHOTGUN_CLUSTER_SPREAD_DISTANCE and
+// then keeps its size, every pellet lethal at 1 HP. A blast lands when ANY
+// slot falls on the capsule after the no-lead drift `s`: the share of the
+// per-shot rotations that do. (Owner 2026-10-11: the cone read Hoshino at
+// 100 u as 6% a second; the pattern lands on a walker every time out to
+// 140 u, and on a sprinter only inside ~70 u.) Cached on a 5 u / 0.25 u grid.
+const sdVolleyCache = new Map();
+// The pattern's reach from its centre (its widest slot): the cloud's half-width once fully open, before the gun's stretch.
+export const SD_PATTERN_RADIUS = Math.max(...SHOTGUN_PATTERN.map((p) => Math.hypot(p[0], p[1])));
+// The cloud's horizontal half-width of `unit`'s volley at distance d (0 for every other gun).
+export function sdCloudHalf(unit, d, SD) {
+  if (!SD.volleyModel || !unit || (unit.spreadCount ?? 1) <= 1) return 0;
+  return SD_PATTERN_RADIUS * (unit.volleyStretchX ?? 1) * Math.min(1, d / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+}
+function sdVolleyHitFrac(u, d, s) {
+  const stretch = u.volleyStretchX ?? 1;
+  const dq = Math.min(SHOTGUN_CLUSTER_SPREAD_DISTANCE, Math.round(d / 5) * 5), sq = Math.round(s * 4) / 4;
+  const key = `${stretch}|${dq}|${sq}`;
+  const hit = sdVolleyCache.get(key);
+  if (hit != null) return hit;
+  const f = Math.min(1, dq / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
+  const N = 36;
+  let lands = 0;
+  for (let i = 0; i < N; i += 1) {
+    const rot = (i / N) * Math.PI * 2, c = Math.cos(rot), sn = Math.sin(rot);
+    for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
+      const px = SHOTGUN_PATTERN[k][0], py = SHOTGUN_PATTERN[k][1];
+      const x = (px * c - py * sn) * stretch * f, y = (px * sn + py * c) * f;
+      if (Math.abs(x - sq) < HIT_RADIUS_NORMAL && Math.abs(y) < HIT_HALF_HEIGHT + HIT_RADIUS_NORMAL) { lands += 1; break; }
+    }
+  }
+  const frac = lands / N;
+  if (sdVolleyCache.size > 4096) sdVolleyCache.clear();
+  sdVolleyCache.set(key, frac);
+  return frac;
+}
+
 export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint, bloom = (threat.bloom ?? threat.state?.bloom ?? 0)) {
   const u = threat.unit ?? {};
   const base = u.spreadAngle ?? 0.02, pv = u.projectileSpeed ?? 600;
+  const volley = SD.volleyModel && (u.spreadCount ?? 1) > 1;
   // BLOOM (owner 2026-10-06, "散佈只算基礎值不算 bloom"): the cone is the
   // shooter's CURRENT spread — the base plus the bloom it carries — and
   // every round it fires at the unit widens it by bloomPerShot up to
@@ -226,7 +266,8 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
   let survive = 1;
   for (let k = 0, left = shots; left > 0; k += 1, left -= 1) {
     const sa = Math.min(cap, sa0 + (Math.floor(before) + k) * perShot);
-    const p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, s);
+    let p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, s);
+    if (volley) p = Math.max(p, sdVolleyHitFrac(u, d, s));   // (the larger of the two reads — never bolder than the cone)
     survive *= 1 - p * Math.min(1, left);
   }
   return 1 - survive;
@@ -253,7 +294,12 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
 const sdFloorCache = new Map();
 export function sdEngageFloor(unit, SD, speed = SD.riskSprint) {
   const u = unit ?? {};
-  const key = `${u.id ?? u.name ?? '?'}|${speed.toFixed(2)}|${SD.engageWindowMs}|${SD.engageFloorRisk}|${SD.engageMaxDist}|${SD.riskReactMs}|${SD.riskShotMs}`;
+  // A gun's own measured floor (UNIT_DATA sdEngageFloor) stands in for the
+  // formula: the marksman rifles' wide bloom cap read as "nowhere safe" while
+  // one crossing under them measured the least deadly of any gun (owner
+  // 2026-10-11: Fubuki 75, Aris 95).
+  if (u.sdEngageFloor != null) return u.sdEngageFloor;
+  const key =`${u.id ?? u.name ?? '?'}|${speed.toFixed(2)}|${SD.engageWindowMs}|${SD.engageFloorRisk}|${SD.engageMaxDist}|${SD.riskReactMs}|${SD.riskShotMs}`;
   const hit = sdFloorCache.get(key);
   if (hit != null) return hit;
   const threat = { unit: u, pos: { x: 0, z: 0 } };
@@ -484,6 +530,9 @@ export const BOT_SD = {
   hotMs: 200,
   hotQuietMs: 400,
   hotWait: true,
+  hotFlight: true,        // the trigger also stays hot for the round's flight time to the unit (a blast fired at 140 u lands 0.4 s later)
+  volleyModel: true,      // the shotguns' exposure risk from their real pellet pattern (sdVolleyHitFrac), not the cone
+  cloudWidth: false,      // the hidden tests add a volley gun's cloud half-width to the shoulders (measured 2026-10-11: hidden spots got scarce, the watchdog and the plain legs took over — bot deaths rose; off)
   riskShotMs: 60,         // floor on the enemy's shot interval (their fireCooldownMs if longer): a held trigger fires at the cooldown — 150 read the 55 ms SMG as 2.7 x fewer rounds, and with the real sprint speed in the model the crossings it waved through died (mid batch: 0 -> 8-17% losses)
   riskSprint: 16.8,       //   fallback speed when the unit has no sprintSpeed (see riskSprintFactor)
   riskSprintFactor: 2.5,  //   exposure speed = unit sprintSpeed x this: the dash runs at 2.5 x sprintSpeed from its first tick (sprint + 1.5 x momentum: 29.4 u/s for 11.76, traced 2026-10-07, no ramp). The old 1.8 kept a "hand lead" margin the no-lead rule makes moot; it read every band exposure a third slower than it is.       // effective sprint speed (sprintSpeed + momentum)
@@ -1605,17 +1654,30 @@ export function tickBot(matchState, botId, now) {
     // edge (the "killed behind cover" deaths: the brain's centre point was
     // hidden, the hitbox was not). The unit's OWN firing lines stay the
     // centre (the gun is there).
-    const sdSeenFrom = (eye, x, y, z) => {
+    // THE CLOUD'S WIDTH (owner 2026-10-11): a volley gun's pellets clear a cover
+    // edge the muzzle line does not — dodged back to the edge and hidden by
+    // the centre line, the unit died to a blast's outer pellets 0.4 s later.
+    // Against such an eye the unit's width is its shoulders PLUS the cloud's
+    // half-width at that distance (sdCloudHalf); a wide width is sampled at
+    // the half way too, so a line through the middle is not missed.
+    const sdShoulderFor = (k, atX, atZ) => {
+      const f = sdEnemies[k];
+      if (!SD.cloudWidth) return SD.shoulder;
+      return SD.shoulder + (f ? sdCloudHalf(f.unit, Math.hypot(f.pos.x - atX, f.pos.z - atZ), SD) : 0);
+    };
+    const sdSeenFrom = (eye, x, y, z, shoulder = SD.shoulder) => {
       if (sdClear(eye, { x, y, z })) return true;
       let nx = eye.z - z, nz = x - eye.x;
       const nl = Math.hypot(nx, nz) || 1;
-      nx = nx / nl * SD.shoulder; nz = nz / nl * SD.shoulder;
-      return sdClear(eye, { x: x + nx, y, z: z + nz }) || sdClear(eye, { x: x - nx, y, z: z - nz });
+      nx = nx / nl * shoulder; nz = nz / nl * shoulder;
+      if (sdClear(eye, { x: x + nx, y, z: z + nz }) || sdClear(eye, { x: x - nx, y, z: z - nz })) return true;
+      if (shoulder <= SD.shoulder * 1.5) return false;
+      return sdClear(eye, { x: x + nx / 2, y, z: z + nz / 2 }) || sdClear(eye, { x: x - nx / 2, y, z: z - nz / 2 });
     };
     let sdHidden = true;
     let sdThreat = sdEnemies[0] ?? opp;   // the enemy whose line is open on the unit (else the nearest)
     for (let k = 0; k < sdEyes.length; k += 1) {
-      if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z)) { sdHidden = false; sdThreat = sdEnemies[k]; break; }
+      if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdShoulderFor(k, me.pos.x, me.pos.z))) { sdHidden = false; sdThreat = sdEnemies[k]; break; }
     }
     // SD BAND — THE ENGAGE RANGE (owner 2026-10-07, "in SD the BOT don't use
     // Lockrange, they use the engage range to keep themselves from instant
@@ -1840,8 +1902,15 @@ export function tickBot(matchState, botId, now) {
     const sdIncoming = sdHidden && (sdThreat.lastFireAt ?? -1e9) > now - sdFlightMs && (me.botSDSeenAt ?? -1e9) > now - sdFlightMs;
     // HOT TRIGGER (BOT_SD hotMs): some live enemy fired within hotMs — any
     // gun, 2v2 included (the nearest enemy is not always the one firing).
+    // ROUNDS STILL IN THE AIR (hotFlight, owner 2026-10-11): the trigger stays
+    // hot for the round's flight time to the unit as well — a 350 u/s blast
+    // fired at 140 u lands 0.4 s later, after a dodge back and a fresh peek.
     let sdAnyHot = false;
-    for (let k = 0; k < sdEnemies.length && !sdAnyHot; k += 1) if ((sdEnemies[k].lastFireAt ?? -1e9) > now - SD.hotMs) sdAnyHot = true;
+    for (let k = 0; k < sdEnemies.length && !sdAnyHot; k += 1) {
+      const f = sdEnemies[k];
+      const flight = SD.hotFlight ? Math.hypot(f.pos.x - me.pos.x, f.pos.z - me.pos.z) / (f.unit?.projectileSpeed ?? 600) * 1000 : 0;
+      if ((f.lastFireAt ?? -1e9) > now - Math.max(SD.hotMs, flight)) sdAnyHot = true;
+    }
     const sdHotVuln = sdAnyHot && now >= (me.invulnerableUntil ?? 0);
     const sdLeaveMs = me.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (tank sc 81-83 after the rules above): the
@@ -1857,8 +1926,18 @@ export function tickBot(matchState, botId, now) {
     // (a planned exposure still in the line after its dodge — the step ran
     // into a wall, tank sc 88 — does not resume the window: it leaves)
     const sdDodgeSpent = me.botSDPlanned && me.botSDPeekStepped && now >= (me.stepUntil ?? 0);
+    // THE BODY, NOT THE PLAN (owner 2026-10-11): a window whose strafe a wall
+    // stopped stands still, and a standing unit under a volley gun is dead at
+    // any range — past the first 150 ms (the sprint's build-up) the leave test
+    // reads the unit's actual lateral speed across the threat's line.
+    const sdLatNow = (() => {
+      if (sdHidden || sdExposedFor < 150) return 1;
+      const vx = me.vel?.x ?? 0, vz = me.vel?.z ?? 0;
+      const tx = sdThreat.pos.x - me.pos.x, tz = sdThreat.pos.z - me.pos.z, tl = Math.hypot(tx, tz) || 1;
+      return Math.min(1, Math.abs(vx * tz - vz * tx) / tl / Math.max(1, sdSprint));
+    })();
     const sdMustLeave = !sdHidden && (sdStrafed >= sdStrafeMax || sdDodgeSpent
-      || sdExposureRisk(sdThreat, SD, sdThreatDist, 1, sdLeaveMs, sdExposedFor, sdSprint) > SD.engageRiskCap);
+      || sdExposureRisk(sdThreat, SD, sdThreatDist, sdLatNow, sdLeaveMs, sdExposedFor, sdSprint) > SD.engageRiskCap);
     // NO PEEK WITHOUT THE DODGE IN HAND (tank sc 84, 87): the step's cooldown
     // (1175 ms) outlasts a peek cycle, and a window that ended with the step
     // on cooldown had only a sprint back — which reversed into the rounds
@@ -1870,7 +1949,7 @@ export function tickBot(matchState, botId, now) {
     const sdGoalHidden = (goal) => {
       const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z: goal.z };
       for (let k = 0; k < sdEyes.length; k += 1) {
-        if (sdSeenFrom(sdEyes[k], gEye.x, gEye.y, gEye.z)) return false;
+        if (sdSeenFrom(sdEyes[k], gEye.x, gEye.y, gEye.z, sdShoulderFor(k, goal.x, goal.z))) return false;
       }
       return true;
     };
@@ -2767,7 +2846,7 @@ export function tickBot(matchState, botId, now) {
           // escape under fire never vaults)
           allowJump: !sdOverBudget,
           // (the goal must hide the unit's width, not its centre point)
-          goalShoulder: SD.shoulder,
+          goalShoulder: SD.shoulder + (SD.cloudWidth ? Math.max(0, ...sdEnemies.map((f) => sdCloudHalf(f.unit, SHOTGUN_CLUSTER_SPREAD_DISTANCE, SD))) : 0),   // (cloudWidth: a volley gun's cloud — the goal keeps its width behind the edge)
           // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
           deadline: matchState.searchDeadline ?? 0,
           job: me.botSDSearchJob }

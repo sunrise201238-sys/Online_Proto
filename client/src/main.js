@@ -340,6 +340,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
     bloomPerShot: 0.10,        // SA added per shot
     bloomCap: 0.20,            // SA ceiling while spraying
+    sdEngageFloor: 95,         // SD engage floor, measured (owner 2026-10-11): the laser bolt's long body lands on a sprinter like Hina's stream (13% a crossing at 40 u) — Hina's 95, not the formula's "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
@@ -473,6 +474,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
     bloomPerShot: 0.10,        // SA added per shot
     bloomCap: 0.30,            // SA ceiling while spraying
+    sdEngageFloor: 75,         // SD engage floor, measured (owner 2026-10-11): one 0.5 s sprint crossing under this gun is the least deadly of any — the formula read its 0.30 bloom cap as "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
