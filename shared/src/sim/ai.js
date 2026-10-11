@@ -313,8 +313,9 @@ export function sdEngageFloor(unit, SD, speed = SD.riskSprint) {
 }
 // OWN REACH: the distance to which every round of the unit's base cone lands
 // on a target that stands still (the cone's footprint fits the hit radius)
-// — the band's far edge: beyond it the unit's own fire thins out too. A
-// volley gun's pattern is not a cone: its lock range stands in.
+// — the band's far edge: beyond it the unit's own fire thins out too, and
+// the cap on every enemy's floor (the gun wins, 2026-10-11). A volley gun's
+// pattern is not a cone: its lock range stands in.
 // (Saori / Asuna / Koyuki / the rifles 160, Atsuko 107, Mika / Hina 80,
 // Marina 53, the shotguns 40.)
 export function sdOwnReach(unit) {
@@ -549,10 +550,14 @@ export const BOT_SD = {
   // reach. Every PLANNED position keeps every live enemy's floor ("if there
   // are two enemies, they should position themselves in a position that
   // fits the range from both"); the fight band itself is the target's.
+  // THE GUN WINS (owner 2026-10-11, "讓槍贏"): a floor beyond the own reach
+  // is capped at the reach — the band and every standoff sit at the reach
+  // then (a shotgun's 40 against a shotgun's 180), and the risk gates judge
+  // the exposures taken there. See sdStandoff in the SD block.
   engageWindowMs: 1000,   //   the exposure the floor is read for: the first second a line is open on the unit
   engageFloorRisk: 0.01,  //   ... may kill it at most this often (owner 2026-10-07, "5% is not safe enough, try 1%": 0.05 -> 0.01)
   engageMaxDist: 200,     //   the floor search stops here (a sniper's gun: nowhere is safe, and snipers are out of SD)
-  bandHalf: 7,            //   the plain band's +-7: optimal = floor + bandHalf, upper = optimal + bandHalf (both no farther than the own reach, never nearer than the floor)
+  bandHalf: 7,            //   the plain band's +-7: optimal = standoff + bandHalf, upper = optimal + bandHalf (both no farther than the own reach, never nearer than the standoff — the enemy's floor capped at the reach, the gun wins 2026-10-11; a reach at or under the floor makes the band that one distance)
   // CROSSING (owner 2026-10-05): inside lateralFullDist the exposed crossing
   // is fully perpendicular to the threat's line (lateral 1.0, no progress
   // along it while exposed); a crossing that has no room to turn (a corridor
@@ -1690,22 +1695,44 @@ export function tickBot(matchState, botId, now) {
     // that read a 0.5 s crossing at 60 u as 38% dead. riskSprintFactor
     // keeps a margin for the momentum build-up and a human's hand lead.
     const sdSprint = (me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED) * SD.riskSprintFactor;
-    // Each live enemy's floor: the distance its gun needs to kill a lateral
-    // sprinter in the first second (sdEngageFloor) — parallel to sdEnemies.
-    const sdFloors = sdEnemies.map((f) => sdEngageFloor(f.unit, SD, sdSprint));
-    // The fight band is the TARGET's: floor = its gun's engage floor, far
-    // edge = the unit's own reach (sdOwnReach), bandHalf steps between.
-    // (Marina's 0.06 cone reaches 53 u but her floor against most guns is
-    // 120: the band collapses onto the floor — safety first, as asked.)
-    const sdLower = sdEngageFloor(opp.unit, SD, sdSprint);
+    // THE GUN WINS (owner 2026-10-11, "讓槍贏"): the brain has two distances —
+    // the enemy's engage floor ("seen here, a 1 s sprint is at most 1% dead")
+    // and the own reach ("my gun lands from here", sdOwnReach). When the reach
+    // is shorter than the floor no distance is both safe and useful, and the
+    // floor used to win: the band collapsed onto the floor and every planned
+    // goal had to keep it, so a shotgun "engaged" a shotgun from 180 u, where
+    // nothing it could plan was able to fire (its reach is 40), and stood at
+    // the spawn through holdMaxMs + stallMs (8.5 s) until the stall handed
+    // the legs to the plain brain — Flashpoint, 184 u apart, traced
+    // 2026-10-11. (Marina's 53 u cone against every floor but Saori's — 60 to
+    // 180 u — was the same picture, "safety first" at the time.) Now the
+    // reach wins: the standoff
+    // against every enemy is its floor or the own reach, whichever is NEARER,
+    // and the band sits at the reach. The guards that act there are the ones
+    // that act anywhere: a planned crossing or fire hop is priced by its route
+    // (sdHopOk, riskCap / engageRiskCap — at 40 u under a shotgun a fire hop's
+    // window reads 0.3-0.6 and is refused), and an open window is ended by
+    // the leave rule against the live bloom (sdMustLeave). The stand peek's
+    // own gate is no guard at these distances: its 300 ms window closes
+    // before the enemy's first round can arrive (250 ms reaction + flight),
+    // so it reads 0 past ~30 u — review 2026-10-11.
     const sdReach = sdOwnReach(me.unit);
+    const sdStandoff = (floor) => Math.min(floor, sdReach);
+    // Each live enemy's standoff: its gun's floor (the distance it needs to
+    // kill a lateral sprinter in the first second, sdEngageFloor) capped at
+    // the own reach — parallel to sdEnemies.
+    const sdFloors = sdEnemies.map((f) => sdStandoff(sdEngageFloor(f.unit, SD, sdSprint)));
+    // The fight band is the TARGET's: lower edge = its standoff, far edge =
+    // the own reach, bandHalf steps between (a reach at or under the floor
+    // makes the band the single distance of the reach).
+    const sdLower = sdStandoff(sdEngageFloor(opp.unit, SD, sdSprint));
     const sdOptimal = Math.max(sdLower, Math.min(sdReach, sdLower + SD.bandHalf));
     const sdUpper = Math.max(sdLower, Math.min(sdReach, sdOptimal + SD.bandHalf));
     me.botSDUpper = sdUpper;
     me.botSDLower = sdLower;
     // TWO ENEMIES (owner: "position themselves in a position that fits the
     // range from both enemies"): a planned position keeps EVERY live
-    // enemy's floor (less `slack`), not only the target's.
+    // enemy's standoff (less `slack`), not only the target's.
     const sdOutsideFloors = (gx, gz, slack = 0) => {
       for (let k = 0; k < sdEnemies.length; k += 1) {
         const f = sdEnemies[k];
@@ -2242,7 +2269,7 @@ export function tickBot(matchState, botId, now) {
       if (coverDistanceAt(sdGrid, x, z, fy, obstacles) <= SD.hugDist) s += 1;   // hugging the cover, not standing in its shadow
       s += Math.min(4, watchScore(x, z, fy)) * 0.5;
       const d = Math.hypot(opp.pos.x - x, opp.pos.z - z);
-      if (sdOutsideFloors(x, z) && d <= sdUpper + SD.bandSlack) s += 1;   // (the engage floor of every enemy: a cell inside one is not "in band")
+      if (sdOutsideFloors(x, z) && d <= sdUpper + SD.bandSlack) s += 1;   // (every enemy's standoff — its engage floor capped at the own reach: a cell inside one is not "in band")
       if (sdPeekableAt(x, z, fy)) s += SD.peekableBonus;
       return s;
     };
@@ -2614,7 +2641,15 @@ export function tickBot(matchState, botId, now) {
       // the target by gain (10-45 u), next to cover. No "farther when too
       // close" and no in-band shuffle any more.
       const gain = Math.min(SD.hopGainMax, Math.max(SD.hopGainMin, dist * 0.3));
-      const within = sdClosingDue ? { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdOptimal, dist - gain) } : null;
+      // (the closing disc's inner edge: bandHalf of ring over the standoff.
+      // A band collapsed onto one distance — the reach at or under the floor,
+      // the gun wins — made the disc's edge and the standoff the same number,
+      // and no grid cell satisfied both: the shadow walk, the flank, the
+      // standoff stages and the engage crossing were dead from the distances
+      // just outside such a band, review 2026-10-11. Unchanged where the
+      // band has its width: optimal is lower + bandHalf there.)
+      const sdRing = sdLower + SD.bandHalf;
+      const within = sdClosingDue ? { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdRing, dist - gain) } : null;
       // MANOEUVRE 1 (BOT_SD bearingLateralNear): the engage cover lies across
       // the threat's line.
       const bearingOk = (gx, gz) => {
@@ -2671,6 +2706,9 @@ export function tickBot(matchState, botId, now) {
       // ENGAGE FLOOR (owner 2026-10-07, later the same day): the floor is
       // now each enemy's gun's (sdEngageFloor), and a planned goal keeps
       // every live enemy's — sdOutsideFloors.
+      // THE GUN WINS (owner 2026-10-11): a floor beyond the own reach is
+      // capped at the reach (sdStandoff, where the band is read) — a goal
+      // the gun cannot fire from is no goal.
       const sdStandoffOk = (gx, gz) => sdOutsideFloors(gx, gz);
       const sdFlankOk = (gx, gz, fy) => sdStandoffOk(gx, gz) && sdPeekableAt(gx, gz, fy);
       // FIRE SPOT: a cell (standoff kept) with a WIDE muzzle line to the target.
@@ -2678,7 +2716,7 @@ export function tickBot(matchState, botId, now) {
       // LAST RESORT (Lobby camper pockets 2026-10-07: the only cells with a
       // line sat inside the lock floor, and with the floor alone the unit
       // held, stalled, walked in with the plain brain and hopped back out
-      // for 90 s): a firing cell bandSlack inside the floor, tried only
+      // for 90 s): a firing cell bandSlack inside the standoff, tried only
       // after every standoff option and relocation has failed — going near
       // TO FIRE is a reason; going near and backing off was the bug.
       // (a centre line is enough here: in Sudden Death one landed round
@@ -2741,7 +2779,7 @@ export function tickBot(matchState, botId, now) {
         // ground apron; scoring the goal along the plain bot's route made
         // 100 u lane hops (Hina seat A 69% -> 39%) or, bounded to one hop's
         // reach, the same wall route.)
-        attempts = [{ maxPops: SD.farPops, within, minDistFrom: closerMin, goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdNearer, scoreStop: -Math.max(sdOptimal, within.r - 15), shadow: true },
+        attempts = [{ maxPops: SD.farPops, within, minDistFrom: closerMin, goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdNearer, scoreStop: -Math.max(sdRing, within.r - 15), shadow: true },
           { maxPops: SD.farPops, within, goalCoverMax: SD.hugDist, accept: sdFlankOk, flank: true },
           { maxPops: SD.nearPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
           { maxPops: SD.farPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
@@ -2779,7 +2817,7 @@ export function tickBot(matchState, botId, now) {
       // own gate: the Airport human-like smoke hopped at 6-30 boost, the
       // exposed legs at a walk, 6 wedges and 15 hops in 12 s at one corner)
       if (sdEngageDue && me.boost >= sdPeekNeed && sdDodgeReady) {
-        const engageWithin = { x: opp.pos.x, z: opp.pos.z, r: sdClosingDue ? Math.max(sdOptimal, dist - gain) : sdUpper + SD.bandSlack };
+        const engageWithin = { x: opp.pos.x, z: opp.pos.z, r: sdClosingDue ? Math.max(sdRing, dist - gain) : sdUpper + SD.bandSlack };
         const engageMin = { x: me.pos.x, z: me.pos.z, d: SD.shiftMin };
         const engageOk = (gx, gz) => sdStandoffOk(gx, gz) && midSees(gx, gz) && bearingOk(gx, gz);
         // ORDER (owner 2026-10-06, "re-order the triggered effect"): the
