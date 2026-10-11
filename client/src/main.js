@@ -5926,17 +5926,24 @@ function updateEnemy(now) {
     // RISK SPEED (mirrors shared): the exposure model moves the unit at its
     // own measured sprint (sprintSpeed x riskSprintFactor), not 16.8.
     const sdSprint = (state.enemy.unit?.sprintSpeed ?? BOOST_MOVE_SPEED) * SD.riskSprintFactor;
-    // Each live enemy's engage floor (parallel to sdEnemies); the fight band
-    // is the target's: floor = its gun's, far edge = the own reach.
-    const sdFloors = sdEnemies.map((f) => sdEngageFloor(f.unit, SD, sdSprint));
-    const sdLower = sdEngageFloor(state.player.unit, SD, sdSprint);
+    // THE GUN WINS (mirrors shared, owner 2026-10-11 "讓槍贏"): an enemy's
+    // engage floor beyond the own reach is capped at the reach — the
+    // standoff and the band sit where the gun lands, never where it cannot
+    // (a shotgun's 40 against a shotgun's 180: the floor-first band parked
+    // both at the Flashpoint spawn, 184 u apart, for 8.5 s).
     const sdReach = sdOwnReach(state.enemy.unit);
+    const sdStandoff = (floor) => Math.min(floor, sdReach);
+    // Each live enemy's standoff (its floor capped at the reach, parallel to
+    // sdEnemies); the fight band is the target's: lower edge = its standoff,
+    // far edge = the own reach.
+    const sdFloors = sdEnemies.map((f) => sdStandoff(sdEngageFloor(f.unit, SD, sdSprint)));
+    const sdLower = sdStandoff(sdEngageFloor(state.player.unit, SD, sdSprint));
     const sdOptimal = Math.max(sdLower, Math.min(sdReach, sdLower + SD.bandHalf));
     const sdUpper = Math.max(sdLower, Math.min(sdReach, sdOptimal + SD.bandHalf));
     eState.botSDUpper = sdUpper;
     eState.botSDLower = sdLower;
     // TWO ENEMIES (mirrors shared): a planned position keeps EVERY live
-    // enemy's floor (less `slack`), not only the target's.
+    // enemy's standoff (less `slack`), not only the target's.
     const sdOutsideFloors = (gx, gz, slack = 0) => {
       for (let k = 0; k < sdEnemies.length; k += 1) {
         const fp = sdEnemies[k].root.position;
@@ -6314,7 +6321,7 @@ function updateEnemy(now) {
       if (coverDistanceAt(offlineNavGrid, x, z, fy, arenaObstacles) <= SD.hugDist) s += 1;
       s += Math.min(4, watchScore(x, z, fy)) * 0.5;
       const d = Math.hypot(p.x - x, p.z - z);
-      if (sdOutsideFloors(x, z) && d <= sdUpper + SD.bandSlack) s += 1;   // (the engage floor of every enemy: a cell inside one is not "in band")
+      if (sdOutsideFloors(x, z) && d <= sdUpper + SD.bandSlack) s += 1;   // (every enemy's standoff — its engage floor capped at the own reach, mirrors shared: a cell inside one is not "in band")
       if (sdPeekableAt(x, z, fy)) s += SD.peekableBonus;
       return s;
     };
@@ -6625,7 +6632,10 @@ function updateEnemy(now) {
       // Closing goal (hidden, farther than the band): a hidden cell nearer
       // the target by gain, next to cover. No retreat, no in-band shuffle.
       const gain = Math.min(SD.hopGainMax, Math.max(SD.hopGainMin, dist * 0.3));
-      const within = sdClosingDue ? { x: p.x, z: p.z, r: Math.max(sdOptimal, dist - gain) } : null;
+      // (the closing disc's inner edge: bandHalf of ring over the standoff, so
+      // a band collapsed onto one distance still has cells — mirrors shared)
+      const sdRing = sdLower + SD.bandHalf;
+      const within = sdClosingDue ? { x: p.x, z: p.z, r: Math.max(sdRing, dist - gain) } : null;
       // MANOEUVRE 1: the engage cover lies across the threat's line.
       const bearingOk = (gx, gz) => {
         const dx = gx - e.x, dz = gz - e.z;
@@ -6650,13 +6660,14 @@ function updateEnemy(now) {
       // STANDOFF (mirrors shared): no planned goal inside the band's lower
       // edge, whatever its line. Escapes stay unbounded.
       // (ENGAGE FLOOR, mirrors shared: a planned goal keeps every live
-      // enemy's gun's floor — sdOutsideFloors — not bandSlack inside it)
+      // enemy's gun's floor — sdOutsideFloors — not bandSlack inside it;
+      // THE GUN WINS: a floor beyond the own reach is capped at the reach)
       const sdStandoffOk = (gx, gz) => sdOutsideFloors(gx, gz);
       const sdFlankOk = (gx, gz, fy) => sdStandoffOk(gx, gz) && sdPeekableAt(gx, gz, fy);
       // FIRE SPOT (mirrors shared): a cell (standoff kept) with a WIDE muzzle line to the target.
       const sdFireSpot = (gx, gz, fy) => sdStandoffOk(gx, gz) && sdWideLine(gx, fy + GROUND_BASE_Y + sdEyeH, gz);
       // LAST RESORT (mirrors shared): a firing cell bandSlack inside the
-      // floor, tried only after every standoff option and relocation failed.
+      // standoff, tried only after every standoff option and relocation failed.
       // (a centre line is enough here: in Sudden Death one landed round wins — mirrors shared)
       const sdFireSpotNear = (gx, gz, fy) => sdOutsideFloors(gx, gz, SD.bandSlack)
         && sdClear({ x: gx, y: fy + GROUND_BASE_Y + sdEyeH, z: gz }, oppMuzzle);
@@ -6694,7 +6705,7 @@ function updateEnemy(now) {
         // (mirrors shared: a line-capable shadow cell first was tried and
         // dropped — it lengthened the opening hops and cost the opening)
         // (Airport's side walkways: see shared — every hop ends at cover; the alternatives were measured and dropped)
-        attempts = [{ maxPops: SD.farPops, within, minDistFrom: closerMin, goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdNearer, scoreStop: -Math.max(sdOptimal, within.r - 15), shadow: true },
+        attempts = [{ maxPops: SD.farPops, within, minDistFrom: closerMin, goalCoverMax: SD.hugDist, accept: sdStandoffOk, score: sdNearer, scoreStop: -Math.max(sdRing, within.r - 15), shadow: true },
           { maxPops: SD.farPops, within, goalCoverMax: SD.hugDist, accept: sdFlankOk, flank: true },
           { maxPops: SD.nearPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
           { maxPops: SD.farPops, within, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk },
@@ -6724,7 +6735,7 @@ function updateEnemy(now) {
       // (a deliberate exposure is planned only with the boost to sprint it
       // and dodge back — the stand peek's own gate; mirrors shared)
       if (sdEngageDue && eState.boost >= sdPeekNeed && sdDodgeReady) {
-        const engageWithin = { x: p.x, z: p.z, r: sdClosingDue ? Math.max(sdOptimal, dist - gain) : sdUpper + SD.bandSlack };
+        const engageWithin = { x: p.x, z: p.z, r: sdClosingDue ? Math.max(sdRing, dist - gain) : sdUpper + SD.bandSlack };
         const engageMin = { x: e.x, z: e.z, d: SD.shiftMin };
         const engageOk = (gx, gz) => sdStandoffOk(gx, gz) && midSees(gx, gz) && bearingOk(gx, gz);
         // ORDER (mirrors shared): the stand peek already ran first (above,
