@@ -671,6 +671,7 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — SVD: sure-hit 160 at base, 8 at cap (bloom 2026-09-21)
     bloomPerShot: 0.1,        // SA added per shot
     bloomCap: 0.4,            // SA ceiling while spraying
+    sdEngageFloor: 75,         // SD engage floor, measured on the M14 (owner 2026-10-11, "Fubuki means both M14 and SVD"): the formula read the wide bloom cap as "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
