@@ -50,6 +50,31 @@ Both offline and online pickers carry them:
 - Every unit grid has a gray **Random** card (question-mark thumbnail): it rolls a unit the roster being built doesn't already contain (different players can still land on the same unit). The map grid's Random skips **Shooting Range** and **Plain Field**.
 - Every unit grid also carries a golden **All Random** card: one confirm fills every remaining unit slot of the current flow at once and advances it (offline: the rest of your roster, then every bot picker that follows — Duel included; online: the rest of your roster). The map picker deliberately has no All Random.
 
+## Sudden Death
+
+Picked as the **rules mode** beside the view mode (**Health Point** is the normal game; the two were named Normal / Classic until 2026-10-10). Everyone fights at **1 HP** — one landed round decides — and Trio respawns arrive at 1 HP too. The two snipers (Aru, Kei) are out of the pickers and the Random cards. The match opens on a full-width **SUDDEN DEATH** banner with the simulation frozen behind it; the 3 s spawn immunity and every bot slot's 650 ms first-shot delay count from the banner's end (the server holds the same way online).
+
+**The Sudden Death bot brain.** Every bot slot — offline, online, 1v1, 2v2, Trio, the spectated player slot — swaps the plain brain's Pursue / Engage for a cover brain (`BOT_SD` in shared `ai.js`; the offline client runs a line-for-line mirror in `main.js`). It moves between **hidden spots** (cells no live enemy's muzzle line reaches, judged with the unit's shoulders and against where the enemy is heading), hugs cover, and exposes itself only on purpose: a **stand peek** (a short lateral leg that opens a line, fire, an i-frame dodge back), an **engage crossing** (a sprint between two covers whose middle sees the target) or a **fire hop** to a cell with a line. Every planned exposure is priced by an **exposure-risk model** — a no-lead shooter who reacts in 250 ms and then fires at the gun's cadence, its cone plus live bloom, the shotguns' real 8-pellet cloud instead of a cone — and refused over a cap (8% for relocations, 15% for deliberate engages, 30% after 8 s of patience). The enemy's magazine is never read; its shots are heard: while a gun is **hot** (a round left within 200 ms, or is still in the air toward the unit) a hidden unit stays put — no peek, no hop. Spawn immunity does not change the brain (since 2026-10-11 the SD brain keeps the legs through it). A good position with no shot line is held at most **6 s**; then the search runs, and a search that finds nothing hands the legs to the plain brain, whose maze crosses anything.
+
+**Engage floor, reach and the band** — the Sudden Death counterpart of the plain brain's lock range ± 7:
+
+- **Engage floor** — a property of each *gun*: the distance from which a lateral sprint under it, seen for one second, is at most 1% dead (`sdEngageFloor`, read off the gun data by the exposure model; the shotguns by their real cloud). Two guns carry a measured value in the unit data instead — Fubuki 75, Aris 95 (the formula read their wide bloom caps as "nowhere safe").
+- **Reach** — a property of each *unit*: how far its own gun lands every round on a standing target (the base cone's footprint fits the hit radius; a shotgun's lock range stands in). Three units carry a set value: Saori, Asuna and Koyuki fight from **80** in Sudden Death (`sdReach`, owner 2026-10-11), not their cone's 160.
+- **The band** against a target: lower edge = the target's floor **or the unit's own reach, whichever is nearer** ("the gun wins", 2026-10-11 — the floor used to win, so a shotgun "engaged" a shotgun from 180 u, where nothing it could plan was able to fire, and stood 8.5 s at the spawn), then 14 u out, no farther than the reach. Every *planned* position keeps that standoff from **every** live enemy. In practice 10 u past the band still reads as in band, the fight window runs to 10 u past it and the peek / engage search to 25 u past it.
+
+| Unit | Floor (others keep this from it) | Reach |
+|---|---|---|
+| Saori | 50 | 80 (set) |
+| Asuna, Koyuki | 60 | 80 (set) |
+| Atsuko | 75 | 107 |
+| Fubuki | 75 (measured) | 160 |
+| Hina | 95 | 80 |
+| Aris | 95 (measured) | 160 |
+| Marina | 155 | 53 |
+| Hoshino, Haruka | 180 | 40 |
+
+The bands that follow: a shotgun stands at **40** against everyone; Marina at **53** against everyone but Saori (50–53); Saori, Asuna, Koyuki and Hina at 50–64 / 60–74 / 75–80 against the 50 / 60 / 75 floors and at **80** against the rest; Atsuko the same up to 95–107, and 107 against Marina and the shotguns; Fubuki and Aris at floor to floor + 14 against everyone but Marina (155–160) and the shotguns (160).
+
 ## Command mode
 
 The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama overview** of the whole map where the units fight on the standard bot brain and you play the commander — observe, select, order. The picker is a Shooter / Command chip in the menus; like Duel / 1v1 the choice is session-only — every site open starts Shooter. Offline, `V` or the pause menu also toggles it mid-match, and solo 2v2 play commands **both** of team one's units; online the pick happens in the queue room, is final once the match starts, and commands your own unit **plus a bot-filled teammate slot** (2026-08-22 — human teammates are never commandable; details in Command mode online below).
@@ -245,7 +270,7 @@ Fubuki's Ruger rounds draw a **camera-facing ribbon trail** (2026-09-19, the dem
 
 ## Bot logic
 
-One bot brain drives every bot — all maps, all modes, offline and online (the offline client and the server run mirrored copies of the same rules; every bot slot in 1v1 / 2v2 / Trio / spectator uses the identical body).
+One bot brain drives every bot — all maps, all modes, offline and online (the offline client and the server run mirrored copies of the same rules; every bot slot in 1v1 / 2v2 / Trio / spectator uses the identical body). In **Sudden Death** the cover brain described in that section replaces Pursue / Engage; everything below is the Health Point brain.
 
 **State machine** — `Defense > Maze > Engage > Pursue`, re-evaluated every tick:
 
