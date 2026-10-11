@@ -6164,7 +6164,8 @@ function updateEnemy(now) {
     }
     // SPAWN IMMUNITY (mirrors shared): while the unit cannot be hurt the legs
     // are the normal bot's and the SD planning waits; the fire rules stay.
-    if (now < (eState.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
+    // (immunePlain, owner 2026-10-11: off — the SD brain keeps the legs through the immunity; mirrors shared ai.js)
+    if (SD.immunePlain && now < (eState.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
       if (eState.botSDPath || eState.botSDPeekTo) {
         sdDrop();
         sdDropPeek();

@@ -531,6 +531,7 @@ export const BOT_SD = {
   hotQuietMs: 400,
   hotWait: true,
   hotFlight: true,        // the trigger also stays hot for the round's flight time to the unit (a blast fired at 140 u lands 0.4 s later)
+  immunePlain: false,     // an immune spawn far outside the band hands its legs to the plain brain until the lapse (the 2026-10-09 rule); false = the SD brain keeps the legs, immune or not (owner 2026-10-11)
   volleyModel: true,      // the shotguns' exposure risk from their real pellet pattern (sdVolleyHitFrac), not the cone
   cloudWidth: false,      // the hidden tests add a volley gun's cloud half-width to the shoulders (measured 2026-10-11: hidden spots got scarce, the watchdog and the plain legs took over — bot deaths rose; off)
   riskShotMs: 60,         // floor on the enemy's shot interval (their fireCooldownMs if longer): a held trigger fires at the cooldown — 150 read the 55 ms SMG as 2.7 x fewer rounds, and with the real sprint speed in the model the crossings it waved through died (mid batch: 0 -> 8-17% losses)
@@ -2048,7 +2049,11 @@ export function tickBot(matchState, botId, now) {
     // an immune spawn within the band walked into the enemy's view and
     // stood there at the first vulnerable tick (mid-map spawns, SD 92% ->
     // 81%); in contact the SD brain keeps the legs, immune or not.
-    if (now < (me.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
+    // immunePlain (owner 2026-10-11, "use SD logic even in the invincible state"): OFF — the SD brain
+    // keeps the legs through the immunity too. Measured against a human spraying at 90-160 u: bot deaths
+    // 26% -> 24% over nine cells (a standing sprayer 22% -> 6%), no cell of the fire-on-sight set rose;
+    // bot vs bot the opening slows (Factory 9.4 -> 11.2 s a match) and the sprint-rushers' edge goes.
+    if (SD.immunePlain && now < (me.invulnerableUntil ?? 0) && dist > sdUpper + SD.farDist) {
       if (me.botSDPath || me.botSDPeekTo) {
         sdDrop();
         sdDropPeek();
