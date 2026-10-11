@@ -39,6 +39,33 @@ Both offline and online pickers carry them:
 - Every unit grid has a gray **Random** card (question-mark thumbnail): it rolls a unit the roster being built doesn't already contain (different players can still land on the same unit). The map grid's Random skips **Shooting Range** and **Plain Field**.
 - Unit grids in a multi-pick flow also carry a golden **All Random** card: one confirm fills every remaining unit slot of the current flow at once and advances it (offline Trio: the rest of your roster, then each bot's as its picks come up; online: the rest of your roster). The map picker deliberately has no All Random.
 
+## Sudden Death
+
+Picked as the **rules mode** beside the view mode. Everyone fights at **1 HP** — one landed round decides — and Trio respawns arrive at 1 HP too. The two snipers (PSG1, Railgun) are out of the pickers and the Random cards. The match opens on a full-width **SUDDEN DEATH** banner with the simulation frozen behind it; the 3 s spawn immunity and every bot slot's 650 ms first-shot delay count from the banner's end (the server holds the same way online).
+
+**The Sudden Death bot brain.** Every bot slot — offline, online, 1v1, 2v2, Trio, the spectated player slot — swaps the plain brain's Pursue / Engage for a cover brain (`BOT_SD` in shared `ai.js`; the offline client runs a line-for-line mirror in `main.js`). It moves between **hidden spots** (cells no live enemy's muzzle line reaches, judged with the unit's shoulders and against where the enemy is heading), hugs cover, and exposes itself only on purpose: a **stand peek** (a short lateral leg that opens a line, fire, an i-frame dodge back), an **engage crossing** (a sprint between two covers whose middle sees the target) or a **fire hop** to a cell with a line. Every planned exposure is priced by an **exposure-risk model** — a no-lead shooter who reacts in 250 ms and then fires at the gun's cadence, its cone plus live bloom, the shotguns' real 8-pellet cloud instead of a cone — and refused over a cap (8% for relocations, 15% for deliberate engages, 30% after 8 s of patience). The enemy's magazine is never read; its shots are heard: while a gun is **hot** (a round left within 200 ms, or is still in the air toward the unit) a hidden unit stays put — no peek, no hop. Spawn immunity does not change the brain (since 2026-10-11 the SD brain keeps the legs through it). A good position with no shot line is held at most **6 s**; then the search runs, and a search that finds nothing hands the legs to the plain brain, whose maze crosses anything.
+
+**Engage floor, reach and the band** — the Sudden Death counterpart of the plain brain's lock range ± 7:
+
+- **Engage floor** — a property of each *gun*: the distance from which a lateral sprint under it, seen for one second, is at most 1% dead (`sdEngageFloor`, read off the gun data by the exposure model; the shotguns by their real cloud). Three guns carry a measured value in the unit data instead — M14 75, SVD 75, Laser 95 (the formula read their wide bloom caps as "nowhere safe").
+- **Reach** — a property of each *unit*: how far its own gun lands every round on a standing target (the base cone's footprint fits the hit radius; a shotgun's lock range stands in). Four guns carry a set value: the M4, FAMAS, RPK and NEGEV fight from **80** in Sudden Death (`sdReach`, owner 2026-10-11), not their cone's 160.
+- **The band** against a target: lower edge = the target's floor **or the unit's own reach, whichever is nearer** ("the gun wins", 2026-10-11 — the floor used to win, so a shotgun "engaged" a shotgun from 180 u, where nothing it could plan was able to fire, and stood 8.5 s at the spawn), then 14 u out, no farther than the reach. Every *planned* position keeps that standoff from **every** live enemy. In practice 10 u past the band still reads as in band, the fight window runs to 10 u past it and the peek / engage search to 25 u past it.
+
+| Weapon | Floor (others keep this from it) | Reach |
+|---|---|---|
+| M4 | 50 | 80 (set) |
+| MG42, M60 | 55 | 80 |
+| FAMAS, RPK | 60 | 80 (set) |
+| NEGEV | 65 | 80 (set) |
+| evo3, P90 | 75 | 107 |
+| M14, SVD | 75 (measured) | 160 |
+| PPSh | 85 | 53 |
+| Laser | 95 (measured) | 160 |
+| Beretta 1301, M1014 | 180 | 40 |
+| AA12 | 185 | 40 |
+
+The bands that follow: a shotgun stands at **40** against everyone; the PPSh at **53** against everyone but the M4 (50–53); the reach-80 guns (M4, FAMAS, RPK, NEGEV, MG42, M60) at floor to floor + 14 against the 50 / 55 / 60 / 65 floors, 75–80 against the 75 floors and **80** against the rest; the evo3 and P90 at floor to floor + 14 up to 95–107, and 107 against the shotguns; the M14, SVD and Laser at floor to floor + 14 against everyone but the shotguns (160).
+
 ## Command mode
 
 The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama overview** of the whole map where the units fight on the standard bot brain and you play the commander — observe, select, order. The picker is a Classic / Command chip in the menus; like Duel / 1v1 the choice is session-only — every site open starts Classic. Offline, `V` or the pause menu also toggles it mid-match, and solo 2v2 play commands **both** of team one's units; online the pick happens in the queue room, is final once the match starts, and commands your own unit **plus a bot-filled teammate slot** (2026-08-22 — human teammates are never commandable; details in Command mode online below).

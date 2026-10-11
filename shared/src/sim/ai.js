@@ -316,10 +316,14 @@ export function sdEngageFloor(unit, SD, speed = SD.riskSprint) {
 // — the band's far edge: beyond it the unit's own fire thins out too, and
 // the cap on every enemy's floor (the gun wins, 2026-10-11). A volley gun's
 // pattern is not a cone: its lock range stands in.
-// (Saori / Asuna / Koyuki / the rifles 160, Atsuko 107, Mika / Hina 80,
-// Marina 53, the shotguns 40.)
+// (The 0.02 guns 160, the evo3 / P90 107, the MG42 / M60 80, the PPSh 53,
+// the shotguns 40.)
+// A unit's own set reach (UNIT_DATA sdReach) stands in for the cone's: the
+// owner wants four of the 0.02 guns engaging from 80 in Sudden Death
+// (2026-10-11: M4, FAMAS, RPK, NEGEV).
 export function sdOwnReach(unit) {
   const u = unit ?? {};
+  if (u.sdReach != null) return u.sdReach;
   if ((u.spreadCount ?? 1) > 1) return u.lockRange ?? 50;
   const sa = u.spreadAngle ?? 0.02;
   return sa > 1e-6 ? HIT_RADIUS_NORMAL / Math.tan(sa / 2) : 200;

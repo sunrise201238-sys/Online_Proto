@@ -50,6 +50,7 @@ export const UNIT_DATA = {
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — M4: sure-hit 160 at base, 53 at cap (bloom 2026-09-21)
+    sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.002,        // SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
@@ -327,6 +328,7 @@ export const UNIT_DATA = {
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — FAMAS: sure-hit 160 at base, 53 at cap (bloom 2026-09-21)
+    sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
@@ -592,6 +594,7 @@ export const UNIT_DATA = {
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — RPK: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
+    sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.004,        // SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.03,  // SA recovered per second (0.05 -> 0.03, owner 2026-09-21)
@@ -631,6 +634,7 @@ export const UNIT_DATA = {
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown — 64 ms tick slot (15.6/s), evo3's rung
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — NEGEV: sure-hit 160 at base, 27 at cap (bloom 2026-09-21)
+    sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.03,  // SA recovered per second (0.05 -> 0.03, owner 2026-09-21)
