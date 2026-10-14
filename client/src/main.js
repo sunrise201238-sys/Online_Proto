@@ -346,6 +346,7 @@ const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
+    semiAuto: true,            // a semi-automatic rifle: keeps the bullet trail (owner 2026-10-14: the autos lose theirs)
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
     magCapacity: 8,
     reloadMs: 1200,
@@ -481,6 +482,7 @@ const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
+    semiAuto: true,            // a semi-automatic rifle: keeps the bullet trail (owner 2026-10-14: the autos lose theirs)
     damage: 13,               // owner 2026-09-22 (was 10): 8 rounds to a full-HP kill instead of 10
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -2627,8 +2629,8 @@ let hudRefs = null;
 // unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
 // the projectile's logical position vs the target's hit radius and never the
 // mesh geometry, so the visual length/orientation has no gameplay effect.
-const SNIPER_TRACER_LENGTH = 3.4;
-const SNIPER_TRACER_MID_RADIUS = 0.18;
+const SNIPER_TRACER_LENGTH = 6.8;   // (owner 2026-10-14: twice the old 3.4; every single-round gun flies this spindle now)
+const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
@@ -2726,7 +2728,10 @@ function bulletTrailFadeMsFor(unit) {
   if (unit.beamBolt) return 0;  // the laser bolt IS its own trail
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
   if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out (8 pellets/shot = visual noise)
-  return BULLET_TRAIL_FADE_MS_MG;  // short 100 ms pop — keeps the MG feel without the lag
+  // NO TRAIL ON THE AUTOS (owner 2026-10-14): the smoky streak stays on the
+  // semi-automatic rifles (semiAuto) and the snipers only.
+  if (unit.semiAuto) return BULLET_TRAIL_FADE_MS_MG;
+  return 0;
 }
 
 // One ribbon quad: 4 corners, 2 triangles, rewritten in place every frame. The
@@ -2948,7 +2953,11 @@ function buildProjectileMesh(unit, isRedLock) {
   // at the mesh origin — i.e. the leading tip coincides with the projectile's
   // logical position and the body trails behind once orientTracer rotates the
   // local +Y axis onto the velocity direction.
-  const scale = isMG ? MG_TRACER_SCALE : 1;
+  // ONE SPINDLE FOR EVERY ROUND (owner 2026-10-14): the autos and the
+  // marksman rifles fly the sniper's full-size spindle too (MG_TRACER_SCALE
+  // no longer halves it); the shotgun pellets and the laser bolt keep theirs.
+  const scale = 1;
+  void isMG;
   const half = (SNIPER_TRACER_LENGTH * scale) / 2;
   const midRadius = SNIPER_TRACER_MID_RADIUS * scale;
   const profile = [
