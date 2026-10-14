@@ -243,7 +243,7 @@ function sdVolleyHitFrac(u, d, s) {
   return frac;
 }
 
-export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint, bloom = (threat.bloom ?? threat.state?.bloom ?? 0)) {
+export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint, bloom = (threat.bloom ?? threat.state?.bloom ?? 0), hot = false) {
   const u = threat.unit ?? {};
   const base = u.spreadAngle ?? 0.02, pv = u.projectileSpeed ?? 600;
   const volley = SD.volleyModel && (u.spreadCount ?? 1) > 1;
@@ -260,7 +260,11 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
   // The first round that can land arrives riskReactMs (the shooter's reaction)
   // plus the flight time after the line opens — an exposure that ends before
   // that is free (the round lands on an empty spot or a dodge's i-frames).
-  const react = SD.riskReactMs + (d / pv) * 1000;
+  // HOT GUN (owner 2026-10-14, "too easy to kill the SD BOT by spamming from
+  // distance"): a gun that is firing has rounds already in the air at the
+  // corner — nothing to react to and no flight to wait for; the stream is on
+  // the unit from the first ms of the window (hotNoReact).
+  const react = (hot && SD.hotNoReact) ? 0 : SD.riskReactMs + (d / pv) * 1000;
   const before = Math.max(0, elapsed - react) / shotMs;   // rounds already fired in this exposure: their bloom is on the cone
   const shots = Math.max(0, elapsed + T - react) / shotMs - before;
   let survive = 1;
@@ -268,6 +272,40 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
     const sa = Math.min(cap, sa0 + (Math.floor(before) + k) * perShot);
     let p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, s);
     if (volley) p = Math.max(p, sdVolleyHitFrac(u, d, s));   // (the larger of the two reads — never bolder than the cone)
+    survive *= 1 - p * Math.min(1, left);
+  }
+  return 1 - survive;
+}
+
+// THE UNIT'S OWN SIDE OF THE TRADE (owner 2026-10-14): the chance that at
+// least one of `me`'s own rounds lands on `threat` inside a window of T ms
+// at distance d — the same capsule arithmetic as sdExposureRisk, from the
+// other side: the unit's cone plus its live bloom, its cadence, its round's
+// flight (a planned window fires from its first tick, peekAimMs), and the
+// threat's drift across the line during that flight (its live velocity — a
+// standing sprayer drifts nothing). A volley gun lands by its pattern.
+export function sdOwnHitChance(me, threat, d, T, SD) {
+  const u = me.unit ?? {};
+  const pv = u.projectileSpeed ?? 600;
+  const base = u.spreadAngle ?? 0.02, cap = Math.max(base, u.bloomCap ?? base), perShot = u.bloomPerShot ?? 0;
+  const sa0 = Math.min(cap, base + Math.max(0, me.bloom ?? me.state?.bloom ?? 0));
+  const shotMs = Math.max(SD.riskShotMs, u.fireCooldownMs ?? 0);
+  const tv = threat.vel ?? threat.state?.vel ?? null;
+  const vx = tv?.x ?? 0, vz = tv?.z ?? 0;
+  const lx = threat.pos.x - me.pos.x, lz = threat.pos.z - me.pos.z, ll = Math.hypot(lx, lz) || 1;
+  // (the target is taken to be WALKING across the line at the least — a
+  // sprayer standing still this instant will not stand still for the shot;
+  // owner 2026-10-14, "一律假設對方在走動")
+  const latSpeed = Math.max(threat.unit?.walkSpeed ?? 12, Math.abs(vx * lz - vz * lx) / ll);
+  const s = latSpeed * (d / pv);
+  const first = (SD.peekAimMs ?? 0) + (d / pv) * 1000;
+  const shots = T >= first ? 1 + (T - first) / shotMs : 0;
+  const volley = SD.volleyModel && (u.spreadCount ?? 1) > 1;
+  let survive = 1;
+  for (let k = 0, left = shots; left > 0; k += 1, left -= 1) {
+    const sa = Math.min(cap, sa0 + k * perShot);
+    let p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, s);
+    if (volley) p = Math.max(p, sdVolleyHitFrac(u, d, s));
     survive *= 1 - p * Math.min(1, left);
   }
   return 1 - survive;
@@ -354,7 +392,7 @@ export function sdFireLineLost(me, now, SD) {
 // exposed when `clear(eye, muzzle)` holds for any eye; each contiguous
 // exposed run shares one reaction. Returns { risk, first } with the first
 // exposed piece's midpoint (the avoid mark on rejection).
-export function sdRouteRisk(path, sx, sz, floorY, eyes, threat, SD, clear, speed = SD.riskSprint) {
+export function sdRouteRisk(path, sx, sz, floorY, eyes, threat, SD, clear, speed = SD.riskSprint, hot = false) {
   let survive = 1, first = null, elapsed = 0, inRun = false, exposedLen = 0;
   let px = sx, pz = sz;
   for (let i = 0; i < path.length; i += 1) {
@@ -377,7 +415,7 @@ export function sdRouteRisk(path, sx, sz, floorY, eyes, threat, SD, clear, speed
       let lx = threat.pos.x - mid.x, lz = threat.pos.z - mid.z;
       const d = Math.hypot(lx, lz) || 1; lx /= d; lz /= d;
       const lat = Math.abs(dx * lz - dz * lx);
-      survive *= 1 - sdExposureRisk(threat, SD, d, lat, T, elapsed, speed);
+      survive *= 1 - sdExposureRisk(threat, SD, d, lat, T, elapsed, speed, undefined, hot);
       elapsed += T;
     }
     px = q.x; pz = q.z;
@@ -536,6 +574,20 @@ export const BOT_SD = {
   hotQuietMs: 400,
   hotWait: true,
   hotFlight: true,        // the trigger also stays hot for the round's flight time to the unit (a blast fired at 140 u lands 0.4 s later)
+  // SPAM FROM DISTANCE (owner 2026-10-14, "too easy for a human to kill the SD
+  // BOT by spamming any weapon from distance; keep the aggressiveness"):
+  hotCycles: 2,           // a gun is hot for this many of its own fire intervals after a shot too (a tapped rifle never reads quiet between taps)
+  hotHeardMs: 2000,       // rounds heard from a gun in this window ...
+  hotQuietPerRound: 40,   //   ... each add this much to the quiet the unit needs (hotQuietMs) before it shows itself again: a spray needs a longer silence
+  hotNoReact: true,       // against a hot gun the exposure model assumes rounds already in the air: no reaction, no flight (sdExposureRisk)
+  tradeFloor: 0.02,       // THE TRADE: a deliberate exposure is taken only when the exposures it will take to land one hit (1 / the unit's own chance in the window, sdOwnHitChance, the enemy walking) add up to no more death than the engage cap; an enemy chance under this is "nobody is really shooting" and the test is off. A bad trade closes the distance instead of waiting
+  hotNoOpenGoal: true,    // while a gun is hot no planned hop ends on a cell that may show (the anyGoal stages) — that walk is the crossing of the stream; escapes keep theirs
+  coneWidth: true,        // DEEPER COVER (proposal 1): against a hot gun the position tests (the pacing legs, the hop goals, the position score, the GRAZED read of the spot) add the gun's cone radius at that distance to the shoulders — a spray's rounds clear an edge the muzzle line does not ...
+  coneShoulderMax: 4,     //   ... up to this much (u), so the spots never run out; the unit's own exposed / hidden read (fight, escape) keeps the plain shoulders
+  peekNeedsRoom: true,    // NO STAND-AND-FIRE (proposal 3): against a hot gun a stand peek needs peekLeg of walkable room past its leg point for the window's strafe, or it is not taken
+  coneUpMax: 2.4,         // THE CONE'S HEIGHT (proposal 5): the position tests also look at the capsule's TOP — up to this much above the muzzle line (hit half height + radius above the capsule's centre, less the muzzle's 0.8 above it) — against a hot gun's cone radius: rounds pitched up clear a cover top the muzzle line does not
+  tradeMinHit: 0.3,       // NO LONG ODDS INTO A STREAM (proposal 6): against a hot gun a deliberate exposure needs the unit's own chance to land in its window to reach this, whatever the model reads of the enemy's — the model's zero at range is the sprinting read, not the standing moments; a bad trade closes instead
+  recentFireMs: 3000,     // a hidden unit whose enemy fired within this long is never handed to the plain brain (stall, watchdog): it keeps moving through cover
   immunePlain: false,     // an immune spawn far outside the band hands its legs to the plain brain until the lapse (the 2026-10-09 rule); false = the SD brain keeps the legs, immune or not (owner 2026-10-11)
   volleyModel: true,      // the shotguns' exposure risk from their real pellet pattern (sdVolleyHitFrac), not the cone
   cloudWidth: false,      // the hidden tests add a volley gun's cloud half-width to the shoulders (measured 2026-10-11: hidden spots got scarce, the watchdog and the plain legs took over — bot deaths rose; off)
@@ -1670,17 +1722,45 @@ export function tickBot(matchState, botId, now) {
     // Against such an eye the unit's width is its shoulders PLUS the cloud's
     // half-width at that distance (sdCloudHalf); a wide width is sampled at
     // the half way too, so a line through the middle is not missed.
-    const sdShoulderFor = (k, atX, atZ) => {
+    // (a gun hot right now — its own cycle, the round's flight; the quiet tail is not needed here)
+    const sdHotNowOf = (k) => {
       const f = sdEnemies[k];
-      if (!SD.cloudWidth) return SD.shoulder;
-      return SD.shoulder + (f ? sdCloudHalf(f.unit, Math.hypot(f.pos.x - atX, f.pos.z - atZ), SD) : 0);
+      if (!f) return false;
+      const fu = f.unit ?? {};
+      const flight = SD.hotFlight ? Math.hypot(f.pos.x - me.pos.x, f.pos.z - me.pos.z) / (fu.projectileSpeed ?? 600) * 1000 : 0;
+      return (f.lastFireAt ?? -1e9) > now - Math.max(SD.hotMs, flight, (fu.fireCooldownMs ?? 0) * SD.hotCycles);
     };
-    const sdSeenFrom = (eye, x, y, z, shoulder = SD.shoulder) => {
+    // THE CONE'S WIDTH (owner 2026-10-14, proposal 1): a hot gun's cone
+    // radius at distance d (its base plus live bloom), capped at
+    // coneShoulderMax — a spray's rounds clear an edge the muzzle line does not.
+    const sdConeHalf = (k, d) => {
+      const f = sdEnemies[k];
+      if (!SD.coneWidth || !f || !sdHotNowOf(k)) return 0;
+      const u = f.unit ?? {};
+      const base = u.spreadAngle ?? 0.02;
+      const sa = Math.min(Math.max(base, u.bloomCap ?? base), base + Math.max(0, f.bloom ?? 0));
+      return Math.min(SD.coneShoulderMax, d * Math.tan(sa / 2));
+    };
+    // `wide`: the position tests (goals, legs, the grazed read) keep the
+    // cone's width too; the unit's own exposed read does not.
+    const sdShoulderFor = (k, atX, atZ, wide = false) => {
+      const f = sdEnemies[k];
+      const d = f ? Math.hypot(f.pos.x - atX, f.pos.z - atZ) : 0;
+      let s = SD.shoulder;
+      if (SD.cloudWidth && f) s += sdCloudHalf(f.unit, d, SD);
+      if (wide) s += sdConeHalf(k, d);
+      return s;
+    };
+    const sdSeenFrom = (eye, x, y, z, shoulder = SD.shoulder, up = 0) => {
       if (sdClear(eye, { x, y, z })) return true;
       let nx = eye.z - z, nz = x - eye.x;
       const nl = Math.hypot(nx, nz) || 1;
       nx = nx / nl * shoulder; nz = nz / nl * shoulder;
       if (sdClear(eye, { x: x + nx, y, z: z + nz }) || sdClear(eye, { x: x - nx, y, z: z - nz })) return true;
+      // THE CONE'S HEIGHT (owner 2026-10-14, proposal 5): a hot gun's rounds
+      // pitched up clear a cover top the muzzle line does not — the
+      // capsule's top is in the test too (`up` above the muzzle line).
+      if (up > 0 && sdClear(eye, { x, y: y + up, z })) return true;
       if (shoulder <= SD.shoulder * 1.5) return false;
       return sdClear(eye, { x: x + nx / 2, y, z: z + nz / 2 }) || sdClear(eye, { x: x - nx / 2, y, z: z - nz / 2 });
     };
@@ -1689,6 +1769,18 @@ export function tickBot(matchState, botId, now) {
     for (let k = 0; k < sdEyes.length; k += 1) {
       if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdShoulderFor(k, me.pos.x, me.pos.z))) { sdHidden = false; sdThreat = sdEnemies[k]; break; }
     }
+    // GRAZED (owner 2026-10-14, proposal 1): hidden by the muzzle line but
+    // inside a hot gun's cone at this distance — the spray clears the edge.
+    // Not an exposure (no fight, no escape): a BAD POSITION — the hold ends
+    // and the search runs for a deeper one; the pacing legs shuffle deeper.
+    let sdGrazed = false;
+    if (sdHidden && SD.coneWidth) {
+      for (let k = 0; k < sdEyes.length; k += 1) {
+        const gd = Math.hypot(sdEnemies[k].pos.x - me.pos.x, sdEnemies[k].pos.z - me.pos.z);
+        if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdShoulderFor(k, me.pos.x, me.pos.z, true), Math.min(SD.coneUpMax, sdConeHalf(k, gd)))) { sdGrazed = true; break; }
+      }
+    }
+    if (sdGrazed) me.botSDGrazedTicks = (me.botSDGrazedTicks ?? 0) + 1;
     // SD BAND — THE ENGAGE RANGE (owner 2026-10-07, "in SD the BOT don't use
     // Lockrange, they use the engage range to keep themselves from instant
     // killed according to the opponent enemy"): the band is read off the
@@ -1937,13 +2029,42 @@ export function tickBot(matchState, botId, now) {
     // ROUNDS STILL IN THE AIR (hotFlight, owner 2026-10-11): the trigger stays
     // hot for the round's flight time to the unit as well — a 350 u/s blast
     // fired at 140 u lands 0.4 s later, after a dodge back and a fresh peek.
-    let sdAnyHot = false;
-    for (let k = 0; k < sdEnemies.length && !sdAnyHot; k += 1) {
+    // THE GUN'S OWN CYCLE (owner 2026-10-14, "spamming any kind of weapon
+    // from distance"): a gun stays hot for hotCycles of its own fire interval
+    // as well — a tapped rifle at two rounds a second never reads quiet
+    // between taps, a shotgun's slow cycle is still a hot gun — and the quiet
+    // the unit needs before it shows itself again grows with the rounds it
+    // heard in the last hotHeardMs (hotQuietPerRound): a spray needs a longer
+    // silence than one shot.
+    let sdAnyHot = false, sdHeard = 0, sdRecentFire = false;
+    for (let k = 0; k < sdEnemies.length; k += 1) {
       const f = sdEnemies[k];
-      const flight = SD.hotFlight ? Math.hypot(f.pos.x - me.pos.x, f.pos.z - me.pos.z) / (f.unit?.projectileSpeed ?? 600) * 1000 : 0;
-      if ((f.lastFireAt ?? -1e9) > now - Math.max(SD.hotMs, flight)) sdAnyHot = true;
+      const fu = f.unit ?? {};
+      const flight = SD.hotFlight ? Math.hypot(f.pos.x - me.pos.x, f.pos.z - me.pos.z) / (fu.projectileSpeed ?? 600) * 1000 : 0;
+      const last = f.lastFireAt ?? -1e9;
+      // (the shot log lives on the shooter: one shot per change of its last-shot stamp, a volley is one)
+      if (f.sdShotLog == null) { f.sdShotLog = []; f.sdShotLogLast = last; }
+      else if (last > f.sdShotLogLast) { f.sdShotLog.push(last); f.sdShotLogLast = last; }
+      while (f.sdShotLog.length && f.sdShotLog[0] < now - SD.hotHeardMs) f.sdShotLog.shift();
+      sdHeard += f.sdShotLog.length;
+      if (last > now - Math.max(SD.hotMs, flight, (fu.fireCooldownMs ?? 0) * SD.hotCycles)) sdAnyHot = true;
+      if (last > now - SD.recentFireMs) sdRecentFire = true;
     }
-    const sdHotVuln = sdAnyHot && now >= (me.invulnerableUntil ?? 0);
+    if (sdAnyHot) me.botSDHotAt = now;
+    // (hot, or not yet quiet for long enough after the last hot tick)
+    const sdQuietNeed = SD.hotQuietMs + SD.hotQuietPerRound * sdHeard;
+    const sdHot = sdAnyHot || now < (me.botSDHotAt ?? -1e9) + sdQuietNeed;
+    const sdHotVuln = sdHot && now >= (me.invulnerableUntil ?? 0);
+    // THE QUIET CLOCK (owner 2026-10-14): the no-shot clock that opens an
+    // engage (peekWaitMs), ends a hold (holdMaxMs) and keeps the watchdog
+    // off counts QUIET time only — while a gun is hot it is held at zero, so
+    // no deliberate exposure opens into the stream and no hold expires into
+    // the plain brain's walk. The hidden moves (closing, push, a better
+    // spot) run on under fire as before: only the exposures wait.
+    if (sdHotVuln) me.botSDLastClearAt = now;
+    // (the shoulders every position test uses against the eyes of the moment: the plain ones plus the widest hot cone — proposal 1)
+    const sdWideShoulder = SD.shoulder + Math.max(0, ...sdEnemies.map((f, k) => sdConeHalf(k, Math.hypot(f.pos.x - me.pos.x, f.pos.z - me.pos.z))));
+    const sdWideUp = Math.min(SD.coneUpMax, sdWideShoulder - SD.shoulder);   // (the cone's height for the same tests — proposal 5)
     const sdLeaveMs = me.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (tank sc 81-83 after the rules above): the
     // window strafes away from the edge it stepped out of, and the dodge
@@ -1969,7 +2090,7 @@ export function tickBot(matchState, botId, now) {
       return Math.min(1, Math.abs(vx * tz - vz * tx) / tl / Math.max(1, sdSprint));
     })();
     const sdMustLeave = !sdHidden && (sdStrafed >= sdStrafeMax || sdDodgeSpent
-      || sdExposureRisk(sdThreat, SD, sdThreatDist, sdLatNow, sdLeaveMs, sdExposedFor, sdSprint) > SD.engageRiskCap);
+      || sdExposureRisk(sdThreat, SD, sdThreatDist, sdLatNow, sdLeaveMs, sdExposedFor, sdSprint, undefined, sdHot) > SD.engageRiskCap);
     // NO PEEK WITHOUT THE DODGE IN HAND (tank sc 84, 87): the step's cooldown
     // (1175 ms) outlasts a peek cycle, and a window that ended with the step
     // on cooldown had only a sprint back — which reversed into the rounds
@@ -2049,7 +2170,8 @@ export function tickBot(matchState, botId, now) {
     // (the hot-trigger wait is a deliberate stand too, wherever the unit is
     // hidden: the watchdog must not walk it out into the stream)
     const sdDeliberate = (sdHidden && sdCoverDist <= SD.hugDist && sdNoShotTime < SD.holdMaxMs)
-      || (sdHidden && now < (me.botSDHotWaitUntil ?? 0));
+      || (sdHidden && now < (me.botSDHotWaitUntil ?? 0))
+      || (sdHidden && sdRecentFire);   // (UNDER FIRE: a hidden stand is never "stuck" — owner 2026-10-14, recentFireMs)
     // (a deliberate stand is a reason to stand: its ticks do not count — the
     // clock used to run on through a hold, and the first tick the stand was
     // no longer deliberate, the line opened by the enemy's sidestep, the
@@ -2127,6 +2249,33 @@ export function tickBot(matchState, botId, now) {
       me.botSDRiskRejects = (me.botSDRiskRejects ?? 0) + 1;
       if (me.botSDRiskHoldSince == null) me.botSDRiskHoldSince = now;
     };
+    // THE TRADE (owner 2026-10-14, "too easy to kill the SD BOT by spamming
+    // from distance"): a deliberate exposure is worth taking only when the
+    // unit's own rounds in that window land about as often as the enemy's
+    // land on it — the same capsule arithmetic from the unit's side
+    // (sdOwnHitChance: its cone and bloom, its cadence, its round's flight,
+    // the enemy's drift). Against a gun that is not firing the enemy's side
+    // reads near zero and nothing changes. A bad trade is no reason to wait:
+    // the closing list runs instead (sdTradeClose) until the distance pays.
+    // Patience (patienceMs) lifts the test the way it lifts the caps.
+    const sdPeekT = SD.peekAimMs + SD.peekMs + SD.peekJitterMs / 2;
+    const sdTradeOk = (d, T = sdPeekT) => {
+      const pm = Math.max(0.02, sdOwnHitChance(me, sdThreat, d, T, SD));
+      // NO LONG ODDS INTO A STREAM (owner 2026-10-14, proposal 6): against a
+      // hot gun the unit's own chance must reach tradeMinHit whatever the
+      // model reads of the enemy's — its zero at range is the sprinting
+      // read, not the standing moments nor the cone over the cover's top.
+      if (sdHot && pm < SD.tradeMinHit) { me.botSDLastTrade = 1; return false; }
+      const pe = sdExposureRisk(sdThreat, SD, d, 1, T, 0, sdSprint, undefined, sdHot);
+      if (pe <= SD.tradeFloor) return true;
+      // (the exposures it will take to land one hit, each pe dead — their
+      // death adds up; owner 2026-10-14, "算我大概要探幾次頭才打中他")
+      const death = 1 - Math.pow(1 - pe, 1 / pm);
+      me.botSDLastTrade = death;
+      return death <= sdRiskCap(true);   // (patience lifts this cap as it lifts every exposure's)
+    };
+    const sdTradeReject = () => { sdRiskReject(); me.botSDTradeRejects = (me.botSDTradeRejects ?? 0) + 1; };
+    const sdTradeNow = sdHidden ? sdTradeOk(sdThreatDist) : true;
     // LATERAL CROSSING (owner 2026-10-05, "keep the unit in vertical moving
     // angle"): a jump-link crossing the threat can see is made only ACROSS
     // its line — the crossing direction's lateral fraction at least
@@ -2195,9 +2344,10 @@ export function tickBot(matchState, botId, now) {
       // engage hop must open the line somewhere along its actual route (an
       // exposed piece against the live / predicted eyes).
       if (engage) {
-        const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint);
+        const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint, sdHot);
         if (!rr.first) return false;
         if (sdFree || sdOverBudget) return true;
+        if (!sdTradeOk(dist)) { sdTradeReject(); return false; }   // (THE TRADE: the crossing fires midway, at about this distance)
         if (sdSprintCost(rr.exposedLen) > me.boost - SD.dashFloor) { sdRiskReject(); return false; }   // (the tank: see below)
         me.botSDLastRisk = rr.risk;
         if (rr.risk <= sdRiskCap(true) * capScale) return true;
@@ -2206,7 +2356,7 @@ export function tickBot(matchState, botId, now) {
         return false;
       }
       if (sdFree || sdOverBudget) return true;
-      const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint);
+      const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreat, SD, sdClear, sdSprint, sdHot);
       // THE TANK (owner 2026-10-07, "BOT still dies fast"): the route risk
       // prices the exposed stretches at a sprint; a hop started without
       // the boost to sprint them walks them instead (tank sc 83: a
@@ -2221,8 +2371,9 @@ export function tickBot(matchState, botId, now) {
         // for; the route risk alone read the lunge as free (human-like
         // smoke: 15 a minute at 25-45 u, each 30-60% dead).
         const gd = Math.hypot(found.goal.x - opp.pos.x, found.goal.z - opp.pos.z);
-        const win = sdExposureRisk(sdThreat, SD, gd, 1, SD.peekAimMs + SD.peekMs + SD.peekJitterMs / 2, SD.fireHopSeenMs, sdSprint);
+        const win = sdExposureRisk(sdThreat, SD, gd, 1, SD.peekAimMs + SD.peekMs + SD.peekJitterMs / 2, SD.fireHopSeenMs, sdSprint, undefined, sdHot);
         risk = 1 - (1 - risk) * (1 - win);
+        if (!sdTradeOk(gd)) { sdTradeReject(); return false; }   // (THE TRADE: the cell's window must pay for itself)
       }
       me.botSDLastRisk = risk;
       if (risk <= sdRiskCap(deliberate) * capScale) return true;
@@ -2268,7 +2419,7 @@ export function tickBot(matchState, botId, now) {
       const eye = { x, y: fy + GROUND_BASE_Y + PROJECTILE_MUZZLE_Y_OFFSET, z };
       for (let k = 0; k < sdEyes.length; k += 1) if (sdClear(sdEyes[k], eye)) return 0;
       let s = 1, strictHidden = true;
-      for (let k = 0; k < sdPredEyes.length; k += 1) if (sdSeenFrom(sdPredEyes[k], eye.x, eye.y, eye.z)) { strictHidden = false; break; }
+      for (let k = 0; k < sdPredEyes.length; k += 1) if (sdSeenFrom(sdPredEyes[k], eye.x, eye.y, eye.z, sdWideShoulder, sdWideUp)) { strictHidden = false; break; }
       if (strictHidden) s += 1;
       if (coverDistanceAt(sdGrid, x, z, fy, obstacles) <= SD.hugDist) s += 1;   // hugging the cover, not standing in its shadow
       s += Math.min(4, watchScore(x, z, fy)) * 0.5;
@@ -2416,8 +2567,9 @@ export function tickBot(matchState, botId, now) {
     }
     if (sdHotWaiting && !me.botSDPath && !me.botSDPeekTo) {
       if (!(now < (me.botSDHotWaitUntil ?? 0))) me.botSDHotWaits = (me.botSDHotWaits ?? 0) + 1;
-      me.botSDHotWaitUntil = now + SD.hotQuietMs;
-      me.botSDDwellUntil = Math.max(me.botSDDwellUntil ?? 0, me.botSDHotWaitUntil);
+      me.botSDHotWaitUntil = now + sdQuietNeed;
+      // (the dwell is no longer extended — owner 2026-10-14: the hidden moves
+      // go on under fire, only the exposures wait on the quiet clock above)
       me.botSDStallSince = null;
     }
     // 2. Hop search — one Dijkstra per tick per match (shares the hide
@@ -2473,6 +2625,10 @@ export function tickBot(matchState, botId, now) {
           const px = me.pos.x + cx * legLen, pz = me.pos.z + cz * legLen;
           if (walkSegmentBlocked(me.pos.x, me.pos.z, px, pz, me.pos.y, obstacles)) break;
           if (!sdClear({ x: px, y: myShotY, z: pz }, oppMuzzle)) continue;
+          // NO STAND-AND-FIRE (owner 2026-10-14, proposal 3): against a hot
+          // gun the window must be able to strafe on past the leg point —
+          // a walled leg point is a standing target in the stream.
+          if (SD.peekNeedsRoom && sdHot && walkSegmentBlocked(px, pz, px + cx * SD.peekLeg, pz + cz * SD.peekLeg, me.pos.y, obstacles)) { me.botSDPeekNoRoom = (me.botSDPeekNoRoom ?? 0) + 1; continue; }
           let score = lat - (legLen - SD.peekLeg) * 0.03 + (Math.random() - 0.5) * 0.3;
           if (cycling && side === (me.botSDLastPeekSide ?? 0)) score -= 0.4;   // show the other shoulder
           if (score > bestScore) { bestScore = score; best = { x: px, z: pz }; bestSide = side; }
@@ -2487,9 +2643,10 @@ export function tickBot(matchState, botId, now) {
         // (the window is the pre-aimed acquisition plus the burst: the
         // enemy's rounds arrive inside it, the bloom of each on the cone)
         const T = SD.peekAimMs + SD.peekMs + SD.peekJitterMs / 2;
-        const pr = sdExposureRisk(sdThreat, SD, dist, 1, T, 0, sdSprint);
+        const pr = sdExposureRisk(sdThreat, SD, dist, 1, T, 0, sdSprint, undefined, sdHot);
         me.botSDLastRisk = pr;
         if (pr > sdRiskCap(true)) { best = null; sdRiskReject(); }
+        else if (!sdTradeOk(dist, T)) { best = null; sdTradeReject(); }   // (THE TRADE: a peek that cannot pay for itself)
       }
       if (!best) return false;
       // (the retreat check must be able to run the tick the budget ends)
@@ -2578,8 +2735,14 @@ export function tickBot(matchState, botId, now) {
         me.botSDPosAt = now;
       }
       // (a good position hugs its cover — "they should get closer to cover")
-      const sdPosGood = sdHidden && !sdOverBudget && sdPosScore >= SD.holdScore && sdCoverDist <= SD.hugDist;
-      const sdClosingDue = dist > sdUpper + SD.bandSlack;
+      const sdPosGood = sdHidden && !sdOverBudget && sdPosScore >= SD.holdScore && sdCoverDist <= SD.hugDist && !sdGrazed;   // (GRAZED: inside a hot cone's width behind the edge is no position — proposal 1)
+      // A BAD TRADE CLOSES (owner 2026-10-14, "I don't want the BOT to lose
+      // aggressiveness"): hidden where its own gun cannot pay for an
+      // exposure, with room left above the band's lower edge, the unit runs
+      // the closing list — through cover, risk-gated as ever — instead of a
+      // hold. At the lower edge already, it waits for the quiet.
+      const sdTradeClose = sdHidden && !sdTradeNow && dist > sdLower + SD.bandHalf + 2;
+      const sdClosingDue = dist > sdUpper + SD.bandSlack || sdTradeClose;
       // IDLE clock: hidden with nothing accepted. An accepted plan or an
       // exposure resets it; past patienceMs the PUSH attempt opens and the
       // caps rise to patienceCap.
@@ -2635,7 +2798,7 @@ export function tickBot(matchState, botId, now) {
       // unit ran out at contact, 46 hops/min, 1.6 s fights, 17% losses to
       // the base bot that it had beaten 96%). Re-score shortly; a hold is
       // never a stall.
-      if (!decided && sdPosGood && sdHoldOk && !sdEngageDue && !sdPushDue && !(sdFree && sdClosingDue)) {
+      if (!decided && sdPosGood && sdHoldOk && !sdEngageDue && !sdPushDue && !(sdFree && sdClosingDue) && !sdTradeClose) {
         me.botSDSearchAt = now + SD.holdRecheckMs;
         me.botSDStallSince = null;
         me.botSDHeld = (me.botSDHeld ?? 0) + 1;
@@ -2842,6 +3005,12 @@ export function tickBot(matchState, botId, now) {
         // (the last resort, after every relocation: a firing cell inside the floor)
         attempts.push({ maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: sdUpper + SD.fightSlack }, minDistFrom: engageMin, anyGoal: true, accept: sdFireSpotNear, fire: true, near: true });
       }
+      // NO OPEN GOAL UNDER FIRE (owner 2026-10-14): while a gun is hot a
+      // planned hop never ends on a cell that may show (the anyGoal stages)
+      // — that walk is the crossing of the stream; escapes keep theirs.
+      if (SD.hotNoOpenGoal && sdHot && !sdOverBudget) {
+        for (let i = attempts.length - 1; i >= 0 && attempts.length > 1; i -= 1) if (attempts[i].anyGoal) attempts.splice(i, 1);
+      }
       const stage = Math.min(me.botSDSearchStage ?? 0, attempts.length - 1);
       const a = attempts[stage];
       // RESUMABLE SEARCH (owner 2026-10-08, "BOT sometimes freezes"): a
@@ -2893,7 +3062,7 @@ export function tickBot(matchState, botId, now) {
           // escape under fire never vaults)
           allowJump: !sdOverBudget,
           // (the goal must hide the unit's width, not its centre point)
-          goalShoulder: SD.shoulder + (SD.cloudWidth ? Math.max(0, ...sdEnemies.map((f) => sdCloudHalf(f.unit, SHOTGUN_CLUSTER_SPREAD_DISTANCE, SD))) : 0),   // (cloudWidth: a volley gun's cloud — the goal keeps its width behind the edge)
+          goalShoulder: sdWideShoulder + (SD.cloudWidth ? Math.max(0, ...sdEnemies.map((f) => sdCloudHalf(f.unit, SHOTGUN_CLUSTER_SPREAD_DISTANCE, SD))) : 0),   // (the hot cone's width, proposal 1; cloudWidth: a volley gun's cloud — the goal keeps its width behind the edge)
           // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
           deadline: matchState.searchDeadline ?? 0,
           job: me.botSDSearchJob }
@@ -2904,7 +3073,7 @@ export function tickBot(matchState, botId, now) {
         me.botSDSearchAt = now;   // (the same stage continues next tick)
       } else if (decided) {
         // (watch / hold / retreat chosen above)
-      } else if (found && (!a.better || found.score >= sdPosScore + SD.holdGain) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1, !!(a.engage || a.fire))) {
+      } else if (found && (!a.better || found.score >= sdPosScore + (sdGrazed ? 0.5 : SD.holdGain)) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1, !!(a.engage || a.fire))) {   // (a grazed spot takes any deeper one — proposal 1)
         me.botSDSearchJob = null;
         me.botSDRiskHoldSince = null;
         me.botSDIdleSince = null;
@@ -3363,7 +3532,7 @@ export function tickBot(matchState, botId, now) {
           if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) { if (PP) PP.leash = (PP.leash ?? 0) + 1; return false; }
           if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) { if (PP) PP.walk = (PP.walk ?? 0) + 1; return false; }
           if (coverDistanceAt(sdGrid, lx, lz, myFloorY, obstacles) > legCoverMax) { if (PP) PP.open = (PP.open ?? 0) + 1; return false; }   // never MORE open than here
-          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz)) { if (PP) PP.seen = (PP.seen ?? 0) + 1; return false; }
+          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz, sdWideShoulder, sdWideUp)) { if (PP) PP.seen = (PP.seen ?? 0) + 1; return false; }   // (a hot cone's width and height too — proposals 1 and 5: the shuffle goes deeper)
           if (watching && !me.botSDWatchSpent && watchScore(lx, lz, myFloorY) < SD.exitMin) { if (PP) PP.watch = (PP.watch ?? 0) + 1; return false; }
           if (PP) PP.ok = (PP.ok ?? 0) + 1;
           return true;
@@ -3499,7 +3668,10 @@ export function tickBot(matchState, botId, now) {
     // STALL: hidden with no hop found for stallMs (the target stands in a
     // coverless pocket) -> hand the legs to the plain brain until a hop
     // appears; the exposure rules above still apply next tick.
-    if (sdHidden && !me.botSDPath && !me.botSDPeekTo && me.botSDStallSince != null
+    // (UNDER FIRE, owner 2026-10-14: no handover while an enemy fired within
+    // recentFireMs — the plain brain's walk is the death from distance; the
+    // hidden moves above keep the unit coming through cover)
+    if (sdHidden && !sdRecentFire && !me.botSDPath && !me.botSDPeekTo && me.botSDStallSince != null
         && now - me.botSDStallSince > SD.stallMs) {
       // (a spot that stalled is no "better position" for a while: the
       // better hop walked the unit back to the same lineless spot it had
