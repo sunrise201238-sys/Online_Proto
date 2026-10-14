@@ -2480,7 +2480,7 @@ let hudRefs = null;
 // unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
 // the projectile's logical position vs the target's hit radius and never the
 // mesh geometry, so the visual length/orientation has no gameplay effect.
-const SNIPER_TRACER_LENGTH = 6.8;   // (owner 2026-10-14: twice the old 3.4; every single-round gun flies this spindle now)
+const SNIPER_TRACER_LENGTH = 20.4;   // (owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
 const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
@@ -3518,6 +3518,14 @@ function updateProjectileSystem(dt) {
     // Re-orient tracer projectiles (sniper / MG) so the streak follows
     // velocity. No-op for sphere projectiles (shotgun).
     orientTracer(p.mesh, p.vel.x, p.vel.y, p.vel.z);
+    // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, "make sure the
+    // spindle doesn't appear behind the character who fires it"): its body
+    // trails the head by SNIPER_TRACER_LENGTH, so for the first stretch of
+    // flight it is clipped to the distance flown — like the laser bolt's
+    // body — and never reaches back past the spawn point. Visual only.
+    if (p.mesh.userData.isTracer && !p.boltLen && p.trailSpawnPos) {
+      p.mesh.scale.y = Math.max(0.05, Math.min(1, p.mesh.position.distanceTo(p.trailSpawnPos) / SNIPER_TRACER_LENGTH));
+    }
     // Shooting Range: print MISS dots where the shot crosses the sign's
     // plane (points inside the capsule are recorded by the hit block below,
     // so only geometric misses plot here — no double dots).
@@ -9802,6 +9810,14 @@ function syncOnlineProjectiles(snap) {
     // Re-orient sniper tracers along their snapshot velocity so the streak
     // visibly follows the projectile's path. No-op for sphere projectiles.
     orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);
+    // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline):
+    // the body is clipped to the distance flown from the spawn point.
+    if (entry.mesh.userData?.isTracer && !entry.boltLen && entry.trailSpawnX != null) {
+      const gdx = sp.pos.x - (sp.spawnX ?? entry.trailSpawnX);
+      const gdy = sp.pos.y - (sp.spawnY ?? entry.trailSpawnY);
+      const gdz = sp.pos.z - (sp.spawnZ ?? entry.trailSpawnZ);
+      entry.mesh.scale.y = Math.max(0.05, Math.min(1, Math.sqrt(gdx * gdx + gdy * gdy + gdz * gdz) / SNIPER_TRACER_LENGTH));
+    }
     // Update the bullet trail (same analytic tail as offline).
     if (entry.trail) {
       const elapsedMs = now - entry.trailSpawnAt;
