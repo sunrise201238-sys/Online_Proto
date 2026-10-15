@@ -9827,10 +9827,14 @@ function advanceOnlineProjectiles(now) {
 // sets it back by the jitter and a held trigger's round, fired by the
 // forward ticks moments ago, is fired AGAIN a few ticks later (the replay,
 // running behind, had not re-fired it, so the cooldown looked open) — a
-// second local round a spread angle to the side, with its own trail. The
-// gun cannot fire twice inside its cooldown, so a predicted round whose
-// fire time lies within half the cooldown of a local round already made is
-// not drawn (spawnOwnShotVisuals keeps the recent fire times). The mirror
+// second local round a spread angle to the side, with its own trail. Every
+// prediction of one shot starts from the same server state, so it leaves
+// the same MAGAZINE COUNT behind: a predicted round whose count after the
+// shot equals that of a local round made within the last second is the
+// same shot and is not drawn (spawnOwnShotVisuals keeps the recent counts;
+// a gun without a magazine falls back to half its cooldown as the window —
+// a time window alone let re-fires more than half a cooldown apart through,
+// which a protocol model of the prediction showed to be common). The mirror
 // case — the clock re-based forward, the replay firing a round the forward
 // ticks never did — is covered by also drawing rounds the replay fires,
 // back-dated by the ticks they have already flown.
@@ -9838,7 +9842,8 @@ const OWN_SHOT_LEAD_DECAY_MS = 100;
 const OWN_SHOT_ACK_SLACK = 4;
 const OWN_SHOT_MAX_UNMATCHED_MS = 1000;   // a local round no server round has claimed by then is dropped regardless of the acks
 const OWN_SHOT_MAX_PENDING = 4;           // more unclaimed local rounds than this: the handover is not keeping up, leave new rounds to the server path
-const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round's fire time stays in the duplicate guard
+const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round stays in the duplicate guard
+const OWN_SHOT_SAME_SHOT_MS = 1000;       // two predicted rounds with the same magazine count this close together are the same shot
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9856,12 +9861,18 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo) {
     const unit = me?.unit ?? SIM_UNIT_DATA[me?.unitKey] ?? {};
     const firedAt = now - SIM_TICK_RATE_MS * ticksAgo;
     const fires = onl.ownShotFires;
-    while (fires.length && fires[0] < now - OWN_SHOT_FIRE_MEMORY_MS) fires.shift();
+    while (fires.length && fires[0].at < now - OWN_SHOT_FIRE_MEMORY_MS) fires.shift();
+    // The same shot predicted twice (see above): same magazine count after
+    // the shot within a second; no magazine, half the cooldown as the window.
+    const ammoAfter = Number.isFinite(me?.ammo) ? me.ammo : null;
     const half = (unit.fireCooldownMs ?? 100) / 2;
-    if (fires.some((t) => Math.abs(t - firedAt) < half)) continue;   // the same shot predicted twice
+    const sameShot = ammoAfter != null
+      ? fires.some((f) => f.ammo === ammoAfter && Math.abs(f.at - firedAt) < OWN_SHOT_SAME_SHOT_MS)
+      : fires.some((f) => Math.abs(f.at - firedAt) < half);
+    if (sameShot) continue;
     if (onl.ownShots.length >= OWN_SHOT_MAX_PENDING) continue;
-    fires.push(firedAt);
-    fires.sort((a, b) => a - b);
+    fires.push({ at: firedAt, ammo: ammoAfter });
+    fires.sort((a, b) => a.at - b.at);
     const mesh = buildProjectileMesh(unit, !!me?.redLock);
     scene.add(mesh);
     const trailFadeMs = bulletTrailFadeMsFor(unit);
