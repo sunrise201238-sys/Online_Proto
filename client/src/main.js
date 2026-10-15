@@ -9725,6 +9725,52 @@ function mirrorFighterToMech(fighter, mech) {
   } else if (!isCharging && wasCharging) removeGlintFromMech(mech);
 }
 
+// Place an online bullet's mesh (and its trail) at (x, y, z): the laser
+// bolt's body and the spindle grow from the spawn point, the tracer is
+// oriented along the snapshot velocity. Shared by the snapshot sync and the
+// per-frame dead reckoning below.
+function placeOnlineBullet(entry, x, y, z, now) {
+  entry.mesh.position.set(x, y, z);
+  const fdx = x - entry.spawnX, fdy = y - entry.spawnY, fdz = z - entry.spawnZ;
+  const flown = Math.sqrt(fdx * fdx + fdy * fdy + fdz * fdz);
+  if (entry.boltLen) {
+    // Laser bolt: scale the body to the distance flown from the spawn point
+    // (the sim clips its hitbox the same way — see shared projectiles.js).
+    entry.mesh.scale.y = Math.max(Math.min(entry.boltLen, flown), 0.6) / entry.boltLen;
+  } else if (entry.mesh.userData?.isTracer) {
+    // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline).
+    entry.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
+  }
+  // Re-orient tracers along the velocity so the streak follows the path (no-op for spheres).
+  orientTracer(entry.mesh, entry.velX, entry.velY, entry.velZ);
+  // The bullet trail (same analytic tail as offline).
+  if (entry.trail) {
+    const elapsedMs = now - entry.trailSpawnAt;
+    const fadeSec = entry.trailFadeMs / 1000;
+    let tailX, tailY, tailZ;
+    if (elapsedMs < entry.trailFadeMs) {
+      tailX = entry.trailSpawnX; tailY = entry.trailSpawnY; tailZ = entry.trailSpawnZ;
+    } else {
+      tailX = x - entry.velX * fadeSec; tailY = y - entry.velY * fadeSec; tailZ = z - entry.velZ * fadeSec;
+    }
+    updateBulletTrailEnds(entry.trail, tailX, tailY, tailZ, x, y, z);
+  }
+}
+// Every frame between snapshots each bullet flies on along its last snapshot
+// velocity (owner 2026-10-15). Capped: a stalled connection parks the
+// bullets instead of flying them off the map. Client-side arithmetic only —
+// nothing on the network, hits are the server's.
+const ONLINE_RECKON_MAX_MS = 300;
+function advanceOnlineProjectiles(now) {
+  const meshes = state.online?.projectileMeshes;
+  if (!meshes) return;
+  for (const entry of meshes.values()) {
+    if (!entry.mesh || entry.snapAt == null) continue;
+    const t = Math.min(ONLINE_RECKON_MAX_MS, Math.max(0, now - entry.snapAt)) / 1000;
+    placeOnlineBullet(entry, entry.snapX + entry.velX * t, entry.snapY + entry.velY * t, entry.snapZ + entry.velZ * t, now);
+  }
+}
+
 function syncOnlineProjectiles(snap) {
   const meshes = state.online.projectileMeshes;
   const liveIds = new Set();
@@ -9797,43 +9843,19 @@ function syncOnlineProjectiles(snap) {
       };
       meshes.set(sp.id, entry);
     }
-    entry.mesh.position.set(sp.pos.x, sp.pos.y, sp.pos.z);
-    // Laser bolt: scale the body to the distance flown from the spawn point
-    // (the sim clips its hitbox the same way — see shared projectiles.js).
-    if (entry.boltLen) {
-      const bdx = sp.pos.x - (sp.spawnX ?? entry.trailSpawnX);
-      const bdy = sp.pos.y - (sp.spawnY ?? entry.trailSpawnY);
-      const bdz = sp.pos.z - (sp.spawnZ ?? entry.trailSpawnZ);
-      const body = Math.min(entry.boltLen, Math.sqrt(bdx * bdx + bdy * bdy + bdz * bdz));
-      entry.mesh.scale.y = Math.max(body, 0.6) / entry.boltLen;
-    }
-    // Re-orient sniper tracers along their snapshot velocity so the streak
-    // visibly follows the projectile's path. No-op for sphere projectiles.
-    orientTracer(entry.mesh, sp.vel.x, sp.vel.y, sp.vel.z);
-    // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline):
-    // the body is clipped to the distance flown from the spawn point.
-    if (entry.mesh.userData?.isTracer && !entry.boltLen && entry.trailSpawnX != null) {
-      const gdx = sp.pos.x - (sp.spawnX ?? entry.trailSpawnX);
-      const gdy = sp.pos.y - (sp.spawnY ?? entry.trailSpawnY);
-      const gdz = sp.pos.z - (sp.spawnZ ?? entry.trailSpawnZ);
-      entry.mesh.scale.y = Math.max(0.05, Math.min(1, Math.sqrt(gdx * gdx + gdy * gdy + gdz * gdz) / SNIPER_TRACER_LENGTH));
-    }
-    // Update the bullet trail (same analytic tail as offline).
-    if (entry.trail) {
-      const elapsedMs = now - entry.trailSpawnAt;
-      const fadeSec = entry.trailFadeMs / 1000;
-      let tailX, tailY, tailZ;
-      if (elapsedMs < entry.trailFadeMs) {
-        tailX = entry.trailSpawnX;
-        tailY = entry.trailSpawnY;
-        tailZ = entry.trailSpawnZ;
-      } else {
-        tailX = sp.pos.x - sp.vel.x * fadeSec;
-        tailY = sp.pos.y - sp.vel.y * fadeSec;
-        tailZ = sp.pos.z - sp.vel.z * fadeSec;
-      }
-      updateBulletTrailEnds(entry.trail, tailX, tailY, tailZ, sp.pos.x, sp.pos.y, sp.pos.z);
-    }
+    // The body grows from the SERVER's spawn point, which every projectile
+    // snapshot carries — not from the first position seen (owner 2026-10-15).
+    entry.spawnX = sp.spawnX ?? entry.trailSpawnX; entry.spawnY = sp.spawnY ?? entry.trailSpawnY; entry.spawnZ = sp.spawnZ ?? entry.trailSpawnZ;
+    // DEAD RECKONING BETWEEN SNAPSHOTS (owner 2026-10-15, "a circle-like
+    // bullet visual near the firing character"): the snapshot's position and
+    // velocity are kept, and advanceOnlineProjectiles moves the mesh along
+    // them every frame until the next snapshot — a fresh round no longer
+    // sits at the muzzle as a 1 u stub (a dot seen from behind) for a whole
+    // snapshot interval, and every bullet flies smoothly instead of jumping.
+    entry.snapX = sp.pos.x; entry.snapY = sp.pos.y; entry.snapZ = sp.pos.z;
+    entry.velX = sp.vel.x; entry.velY = sp.vel.y; entry.velZ = sp.vel.z;
+    entry.snapAt = now;
+    placeOnlineBullet(entry, sp.pos.x, sp.pos.y, sp.pos.z, now);
   }
   // Despawn anything no longer in the snapshot — hand any trail off to the
   // dying list so it fades in place instead of vanishing instantly. Wall/deck
@@ -11235,6 +11257,8 @@ function tickOnline(dt, _now) {
   const onl = state.online;
   if (!onl) return;
   const conn = onl.conn;
+  // Bullets fly on between snapshots (dead reckoning, owner 2026-10-15).
+  advanceOnlineProjectiles(performance.now());
 
   // Sync to the connection's playerId — it can change when the player swaps
   // slots in the lobby (server sends a fresh player:assigned event).
