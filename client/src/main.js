@@ -9849,10 +9849,10 @@ const OWN_SHOT_MAX_UNMATCHED_MS = 1000;   // a local round no server round has c
 const OWN_SHOT_MAX_PENDING = 4;           // more unclaimed local rounds than this: the handover is not keeping up, leave new rounds to the server path
 const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round stays in the duplicate guard
 const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot counter: same magazine count this close together = the same shot
-// Build tag, shown in the tab title and in the own-shot console tally so a
-// stale deploy or cache can be told from a live one at a glance.
-const CLIENT_BUILD_TAG = 'b1015h';
-document.title = `GunVS ${CLIENT_BUILD_TAG}`;
+// Build tag, printed in the own-shot console tally so a stale deploy or
+// cache can be told from a live one (it was shown in the tab title for a
+// day; the owner had it taken off the tab, 2026-10-15).
+const CLIENT_BUILD_TAG = 'b1015i';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
