@@ -2641,8 +2641,8 @@ const MG_TRACER_SCALE = 0.5;
 // projectile's velocity (projectiles fly straight — homing is 0 — so no sample
 // buffer needed). Despawned bullets hand their trail to state.dyingBulletTrails
 // so it fades in place instead of vanishing the instant the bullet stops.
-const BULLET_TRAIL_FADE_MS_MG = 100;  // short pop — long fades caused lag at MG fire-rate
-const BULLET_TRAIL_FADE_MS_SNIPER = 1000;
+const BULLET_TRAIL_FADE_MS_MG = 1000;  // the rifle's trail (owner 2026-10-15, was 100): the tail stays at the muzzle for 1 s — the whole flight, at 600 u/s — and the streak fades over 1 s. Only the semi-automatic rifles carry this trail now, so the old MG fire-rate lag no longer applies
+const BULLET_TRAIL_FADE_MS_SNIPER = 1500;   // the snipers' trail (owner 2026-10-15, was 1000): 1.5 s fade
 // Per-map bullet-trail color: dark slate on bright-ground maps (light grey
 // washed out there), light grey on dark maps (slate vanished there). Color
 // only — shape/opacity/fade identical everywhere.
