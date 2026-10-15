@@ -10,6 +10,7 @@ import {
   TICK_RATE_MS as SIM_TICK_RATE_MS,
   TICK_DT as SIM_TICK_DT,
   UNIT_DATA as SIM_UNIT_DATA,
+  PROJECTILE_MUZZLE_Y_OFFSET as SIM_MUZZLE_Y_OFFSET,
   buildNavGrid,
   findPathOnGrid,
   findFiringPath,
@@ -2630,13 +2631,6 @@ let hudRefs = null;
 // mesh geometry, so the visual length/orientation has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 20.4;   // (owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
 const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
-// The spindle stays hidden until the round has flown this far (owner
-// 2026-10-15): a spindle shorter than this is a dot sitting at the muzzle —
-// seen end-on by the shooter it reads as a circle — so it is not drawn at
-// all until the body has some length. ONLINE ONLY (owner 2026-10-15: "apply
-// to online mode"); offline the spindle keeps growing from the muzzle as it
-// did. Visual only.
-const SPINDLE_SHOW_AFTER_U = 3;
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
@@ -9904,9 +9898,10 @@ function mirrorFighterToMech(fighter, mech) {
 }
 
 // Place an online bullet's mesh (and its trail) at (x, y, z): the laser
-// bolt's body and the spindle grow from the spawn point, the tracer is
-// oriented along the snapshot velocity. Shared by the snapshot sync and the
-// per-frame dead reckoning below.
+// bolt's body and the spindle grow from the shooter's muzzle (entry.spawn*,
+// set once on first sight in syncOnlineProjectiles), the tracer is oriented
+// along the snapshot velocity. Shared by the snapshot sync and the per-frame
+// dead reckoning below.
 function placeOnlineBullet(entry, x, y, z, now) {
   entry.mesh.position.set(x, y, z);
   const fdx = x - entry.spawnX, fdy = y - entry.spawnY, fdz = z - entry.spawnZ;
@@ -9918,7 +9913,6 @@ function placeOnlineBullet(entry, x, y, z, now) {
   } else if (entry.mesh.userData?.isTracer) {
     // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline).
     entry.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
-    entry.mesh.visible = flown >= SPINDLE_SHOW_AFTER_U;   // no dot at the muzzle
   }
   // Re-orient tracers along the velocity so the streak follows the path (no-op for spheres).
   orientTracer(entry.mesh, entry.velX, entry.velY, entry.velZ);
@@ -10017,14 +10011,28 @@ function syncOnlineProjectiles(snap) {
         // Aris laser bolt body length (0 for point projectiles) — used to
         // grow the visual out of the muzzle exactly like the sim's hitbox.
         boltLen: ownerUnit.beamBolt?.length ?? 0,
-        trailSpawnX: sp.pos.x, trailSpawnY: sp.pos.y, trailSpawnZ: sp.pos.z,
         trailSpawnAt: now
       };
+      // THE ROUND LEFT THE SHOOTER'S MUZZLE, SO THAT IS WHERE ITS BODY AND
+      // TRAIL START (owner 2026-10-15, "a circle-like bullet visual near the
+      // firing character"): measured from where the client first SAW the
+      // round, the spindle began as a 1 u stub — a 0.3 u disc seen from
+      // behind — for a frame on every shot. A normal round's snapshot carries
+      // no spawn point (only the shotgun volley and the Aris bolt do), so the
+      // muzzle is the shooter's position in this same snapshot plus the sim's
+      // muzzle height — the shot left there at most a tick or two ago, well
+      // under 1 u of movement. The first frame then draws the full distance
+      // already flown (one server tick = ~10 u at 600 u/s), exactly like the
+      // offline first frame. No shooter in the snapshot: fall back to the
+      // first position seen.
+      if (owner?.pos) {
+        entry.spawnX = owner.pos.x; entry.spawnY = owner.pos.y + SIM_MUZZLE_Y_OFFSET; entry.spawnZ = owner.pos.z;
+      } else {
+        entry.spawnX = sp.pos.x; entry.spawnY = sp.pos.y; entry.spawnZ = sp.pos.z;
+      }
+      entry.trailSpawnX = entry.spawnX; entry.trailSpawnY = entry.spawnY; entry.trailSpawnZ = entry.spawnZ;
       meshes.set(sp.id, entry);
     }
-    // The body grows from the SERVER's spawn point, which every projectile
-    // snapshot carries — not from the first position seen (owner 2026-10-15).
-    entry.spawnX = sp.spawnX ?? entry.trailSpawnX; entry.spawnY = sp.spawnY ?? entry.trailSpawnY; entry.spawnZ = sp.spawnZ ?? entry.trailSpawnZ;
     // DEAD RECKONING BETWEEN SNAPSHOTS (owner 2026-10-15, "a circle-like
     // bullet visual near the firing character"): the snapshot's position and
     // velocity are kept, and advanceOnlineProjectiles moves the mesh along
