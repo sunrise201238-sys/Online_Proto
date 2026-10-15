@@ -373,6 +373,7 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
+    bulletTrail: true,         // client visual only: keeps the smoky bullet trail (the autos have none since 2026-10-14). Here because the online renderer reads this copy of the unit data; the sim ignores it
     damage: 10,
     magCapacity: 20,        // mag 30 -> 20 (2026-08-05)
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -680,6 +681,7 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
+    bulletTrail: true,         // client visual only: keeps the smoky bullet trail (the autos have none since 2026-10-14). Here because the online renderer reads this copy of the unit data; the sim ignores it
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)

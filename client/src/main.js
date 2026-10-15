@@ -455,8 +455,8 @@ const UNIT_DATA = {
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
-    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
-    semiAuto: true,            // a semi-automatic rifle: keeps the bullet trail (owner 2026-10-14: the autos lose theirs) (owner 2026-09-22)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
+    bulletTrail: true,         // keeps the smoky bullet trail (owner 2026-10-14: the autos lose theirs). NOT semiAuto — that is the Laser's hold-to-fire opt-out. Also set in shared constants.js — the online renderer reads the shared unit data (2026-10-15)
     damage: 10,
     magCapacity: 20,
     botFireCap: 20,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
@@ -775,8 +775,8 @@ const UNIT_DATA = {
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
-    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
-    semiAuto: true,            // a semi-automatic rifle: keeps the bullet trail (owner 2026-10-14: the autos lose theirs) (owner 2026-09-22)
+    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line (owner 2026-09-22)
+    bulletTrail: true,         // keeps the smoky bullet trail (owner 2026-10-14: the autos lose theirs). NOT semiAuto — that is the Laser's hold-to-fire opt-out. Also set in shared constants.js — the online renderer reads the shared unit data (2026-10-15)
     damage: 12,
     magCapacity: 10,
     botFireCap: 10,         // bot: shots per trigger pull = full mag (fire cap policy)
@@ -2485,7 +2485,9 @@ const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
 // The spindle stays hidden until the round has flown this far (owner
 // 2026-10-15): a spindle shorter than this is a dot sitting at the muzzle —
 // seen end-on by the shooter it reads as a circle — so it is not drawn at
-// all until the body has some length. Offline and online alike. Visual only.
+// all until the body has some length. ONLINE ONLY (owner 2026-10-15: "apply
+// to online mode"); offline the spindle keeps growing from the muzzle as it
+// did. Visual only.
 const SPINDLE_SHOW_AFTER_U = 3;
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
@@ -2564,8 +2566,11 @@ function bulletTrailFadeMsFor(unit) {
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
   if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out (8 pellets/shot = visual noise)
   // NO TRAIL ON THE AUTOS (owner 2026-10-14): the smoky streak stays on the
-  // semi-automatic rifles (semiAuto) and the snipers only.
-  if (unit.semiAuto) return BULLET_TRAIL_FADE_MS_MG;
+  // snipers and the guns flagged bulletTrail (M14, SVD). Not the semiAuto
+  // flag — that is the Laser's hold-to-fire opt-out (tick.js), a gameplay rule.
+  // The flag lives in BOTH unit-data copies: online rounds are built from the
+  // shared sim data (syncOnlineProjectiles), offline ones from this file's.
+  if (unit.bulletTrail) return BULLET_TRAIL_FADE_MS_MG;
   return 0;
 }
 
@@ -2920,9 +2925,6 @@ function spawnProjectiles(owner, target) {
 
     const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
     orientTracer(mesh, projVel.x, projVel.y, projVel.z);
-    // The spindle starts hidden; updateProjectileSystem shows it once the
-    // round has flown SPINDLE_SHOW_AFTER_U (laser bolt and pellets untouched).
-    if (mesh.userData.isTracer && !(owner.unit.beamBolt?.length)) mesh.visible = false;
     state.projectiles.push({
       owner,
       target,
@@ -3532,9 +3534,7 @@ function updateProjectileSystem(dt) {
     // flight it is clipped to the distance flown — like the laser bolt's
     // body — and never reaches back past the spawn point. Visual only.
     if (p.mesh.userData.isTracer && !p.boltLen && p.trailSpawnPos) {
-      const flown = p.mesh.position.distanceTo(p.trailSpawnPos);
-      p.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
-      p.mesh.visible = flown >= SPINDLE_SHOW_AFTER_U;   // no dot at the muzzle
+      p.mesh.scale.y = Math.max(0.05, Math.min(1, p.mesh.position.distanceTo(p.trailSpawnPos) / SNIPER_TRACER_LENGTH));
     }
     // Shooting Range: print MISS dots where the shot crosses the sign's
     // plane (points inside the capsule are recorded by the hit block below,
