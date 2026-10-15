@@ -79,11 +79,13 @@ export function createConnection() {
     log('match:hello', payload);
   });
 
+  let matchStart = null;      // the match:start payload — carries the match's spread seed (shotSeed)
   socket.on('match:start', (payload) => {
     matchState = 'active';
     latestSnapshot = null;
     prevSnapshot = null;
     lastMatchEnd = null;
+    matchStart = payload ?? null;
     log('match:start', payload);
   });
 
@@ -127,6 +129,7 @@ export function createConnection() {
     isConnected: () => connected,
     getPlayerId: () => playerId,
     getMatchState: () => matchState,
+    getMatchStart: () => matchStart,
     getLastMatchEnd: () => lastMatchEnd,
     getLastError: () => lastError,
 

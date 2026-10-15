@@ -36,6 +36,32 @@ import { createProjectile, nextProjectileId } from './state.js';
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
 
+// SHARED SPREAD SEED (owner 2026-10-15, "implement seed"): the direction a
+// round takes inside its cone is no longer Math.random() but a stream keyed
+// by the match's seed (matchState.shotSeed, drawn by the server once per
+// match and sent in match:start), the fighter and the shot number. Server
+// and client prediction hold the same three numbers, so they sample the SAME
+// direction, and the shooter's locally drawn round flies the line the
+// server's round flies. The distribution is unchanged: the stream is as flat
+// as Math.random() and a fresh seed every match keeps any two matches apart.
+// No seed (older server, or offline): Math.random() as before.
+function hashId(id) {
+  let h = 2166136261;
+  for (let i = 0; i < String(id).length; i += 1) h = Math.imul(h ^ String(id).charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function shotRandom(seed, ownerId, shotNo) {
+  let s = (seed ^ Math.imul(hashId(ownerId), 0x9E3779B1) ^ Math.imul(shotNo, 0x85EBCA77)) >>> 0;
+  return () => {
+    s = (s + 0x9E3779B9) >>> 0;
+    let z = s;
+    z = Math.imul(z ^ (z >>> 16), 0x21F0AAAD);
+    z = Math.imul(z ^ (z >>> 15), 0x735A2D97);
+    z = (z ^ (z >>> 15)) >>> 0;
+    return z / 4294967296;
+  };
+}
+
 // Spawn one or more projectiles for an attacker firing at a target. Pushes
 // the new projectiles into matchState.projectiles and emits a 'fired' event.
 //
@@ -43,6 +69,8 @@ import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
 // reference the center pellet (sniper / shotgun).
 export function spawnProjectiles(matchState, owner, target) {
   const u = owner.unit;
+  const shotNo = (owner.shotsFired ?? 0) + 1;   // this trigger pull's number (see the shot counter below)
+  const rnd = matchState.shotSeed == null ? Math.random : shotRandom(matchState.shotSeed, owner.id, shotNo);
   // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
   // what the shooter's laser sight showed — a target crossing a boundary while
   // the bullet flies doesn't change the number. Units without rangeDamage keep
@@ -72,8 +100,8 @@ export function spawnProjectiles(matchState, owner, target) {
     // serialized, transmitted, parsed, cloned, and rendered (the online
     // "one shotgun lags the match" report). Mirrors offline main.js.
     // Round jitter: sample a DISK (independent per-axis uniforms make a square).
-    const jR = (effectiveSpread(u, owner.bloom) * 0.08 / 2) * Math.sqrt(Math.random());
-    const jT = Math.random() * Math.PI * 2;
+    const jR = (effectiveSpread(u, owner.bloom) * 0.08 / 2) * Math.sqrt(rnd());
+    const jT = rnd() * Math.PI * 2;
     const yaw = jR * Math.cos(jT);
     const pitch = jR * Math.sin(jT);
     const dir = applyYawPitch(baseDir, yaw, pitch);
@@ -91,7 +119,7 @@ export function spawnProjectiles(matchState, owner, target) {
       hitStunScale: u.stun?.moveScale ?? 0.25
     });
     projectile.pelletMask = (1 << SHOTGUN_PATTERN.length) - 1;
-    projectile.volleyRot = Math.random() * Math.PI * 2;
+    projectile.volleyRot = rnd() * Math.PI * 2;
     projectile.spawnX = spawnOrigin.x;
     projectile.spawnY = spawnOrigin.y;
     projectile.spawnZ = spawnOrigin.z;
@@ -105,8 +133,8 @@ export function spawnProjectiles(matchState, owner, target) {
     for (let i = 0; i < u.spreadCount; i += 1) {
       // SA is a truly ROUND cone: sample a disk (angle + sqrt-radius) —
       // independent per-axis uniforms would fill a SQUARE.
-      const saR = (saNow / 2) * Math.sqrt(Math.random());
-      const saT = Math.random() * Math.PI * 2;
+      const saR = (saNow / 2) * Math.sqrt(rnd());
+      const saT = rnd() * Math.PI * 2;
       const yaw = saR * Math.cos(saT);
       const pitch = saR * Math.sin(saT);
       const dir = applyYawPitch(baseDir, yaw, pitch);
@@ -149,8 +177,8 @@ export function spawnProjectiles(matchState, owner, target) {
   // copy of a local round. Neither the magazine count (autoReload refills
   // between shots) nor a time window (the prediction's clock is re-based on
   // every snapshot) can do that. No gameplay effect; a few bytes per snapshot.
-  owner.shotsFired = (owner.shotsFired ?? 0) + 1;
-  for (const p of spawned) p.shot = owner.shotsFired;
+  owner.shotsFired = shotNo;
+  for (const p of spawned) p.shot = shotNo;
 
   matchState.events.push({
     type: 'fired',
