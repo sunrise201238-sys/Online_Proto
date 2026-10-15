@@ -9744,6 +9744,7 @@ function startOnlineMatch() {
     // are fired, until the server's copy takes them over (spawnOwnShotVisuals).
     ownShots: [],
     ownShotFires: [],   // client-clock fire times of recent local rounds — the duplicate guard in spawnOwnShotVisuals
+    ownShotStats: { local: 0, replay: 0, dedup: 0, matched: 0, fresh: 0, dropped: 0, loggedAt: 0 },   // console tally, see advanceOwnShots
     snapshotsApplied: 0,
 
     // Phase 3 — prediction.
@@ -10011,14 +10012,18 @@ const OWN_SHOT_ACK_SLACK = 4;
 const OWN_SHOT_MAX_UNMATCHED_MS = 1000;   // a local round no server round has claimed by then is dropped regardless of the acks
 const OWN_SHOT_MAX_PENDING = 4;           // more unclaimed local rounds than this: the handover is not keeping up, leave new rounds to the server path
 const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round stays in the duplicate guard
-const OWN_SHOT_SAME_SHOT_MS = 1000;       // two predicted rounds with the same magazine count this close together are the same shot
+const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot counter: same magazine count this close together = the same shot
+// Build tag, shown in the tab title and in the own-shot console tally so a
+// stale deploy or cache can be told from a live one at a glance.
+const CLIENT_BUILD_TAG = 'b1015e';
+document.title = `GunVS ${CLIENT_BUILD_TAG}`;
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
 // round the tick spawned (not in projBefore) gets its visual, unless it is
 // the same shot predicted twice (see above). `sim` is the predicted state
 // the tick ran on, `ticksAgo` how many ticks the round has flown in it.
-function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo) {
+function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo, fromReplay = false) {
   const onl = state.online;
   const ps = sim?.projectiles;
   if (!ps || !onl?.ownShots) return;
@@ -10030,17 +10035,24 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo) {
     const firedAt = now - SIM_TICK_RATE_MS * ticksAgo;
     const fires = onl.ownShotFires;
     while (fires.length && fires[0].at < now - OWN_SHOT_FIRE_MEMORY_MS) fires.shift();
-    // The same shot predicted twice (see above): same magazine count after
-    // the shot within a second; no magazine, half the cooldown as the window.
+    // The same shot predicted twice (see above): the sim's shot counter
+    // (fighter.shotsFired, stamped on the round as `shot`) names the trigger
+    // pull. An older server without it leaves the magazine count within a
+    // second, or half the cooldown as a time window for a gun without one.
+    const shot = Number.isFinite(me?.shotsFired) ? me.shotsFired : null;
     const ammoAfter = Number.isFinite(me?.ammo) ? me.ammo : null;
     const half = (unit.fireCooldownMs ?? 100) / 2;
-    const sameShot = ammoAfter != null
-      ? fires.some((f) => f.ammo === ammoAfter && Math.abs(f.at - firedAt) < OWN_SHOT_SAME_SHOT_MS)
-      : fires.some((f) => Math.abs(f.at - firedAt) < half);
-    if (sameShot) continue;
+    const sameShot = shot != null
+      ? fires.some((f) => f.shot === shot)
+      : ammoAfter != null
+        ? fires.some((f) => f.ammo === ammoAfter && Math.abs(f.at - firedAt) < OWN_SHOT_SAME_SHOT_MS)
+        : fires.some((f) => Math.abs(f.at - firedAt) < half);
+    if (sameShot) { onl.ownShotStats.dedup += 1; continue; }
     if (onl.ownShots.length >= OWN_SHOT_MAX_PENDING) continue;
-    fires.push({ at: firedAt, ammo: ammoAfter });
+    fires.push({ at: firedAt, shot, ammo: ammoAfter });
     fires.sort((a, b) => a.at - b.at);
+    onl.ownShotStats.local += 1;
+    if (fromReplay) onl.ownShotStats.replay += 1;
     const mesh = buildProjectileMesh(unit, !!me?.redLock);
     scene.add(mesh);
     const trailFadeMs = bulletTrailFadeMsFor(unit);
@@ -10063,7 +10075,7 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo) {
       velX: p.vel.x, velY: p.vel.y, velZ: p.vel.z,
       firedAt,
       ttlMs: (p.ttl ?? 0) * 1000 + SIM_TICK_RATE_MS,
-      seq,
+      seq, shot,
       lastX: p.pos.x, lastY: p.pos.y, lastZ: p.pos.z
     };
     placeOnlineBullet(entry, p.pos.x, p.pos.y, p.pos.z, now);
@@ -10077,6 +10089,13 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo) {
 function advanceOwnShots(now) {
   const onl = state.online;
   const shots = onl?.ownShots;
+  // Console tally every 5 s while rounds have been fired — the first thing to
+  // read when a duplicate or a far-appearing round is reported.
+  const st = onl?.ownShotStats;
+  if (st && now - st.loggedAt > 5000) {
+    st.loggedAt = now;
+    if (st.local || st.fresh) console.log(`[own-shots ${CLIENT_BUILD_TAG}] local ${st.local} (via replay ${st.replay}, same-shot skipped ${st.dedup}) | server copies: claimed ${st.matched}, drawn fresh ${st.fresh} | dropped unclaimed ${st.dropped}`);
+  }
   if (!shots || !shots.length) return;
   for (let i = shots.length - 1; i >= 0; i -= 1) {
     const s = shots[i];
@@ -10129,8 +10148,14 @@ function endOwnShot(s, impact, now) {
 // The oldest local round the server can have fired by now (its input
 // acknowledged, with a little slack for a hold-to-fire round the server
 // lets off a tick later than the prediction did), taken off the list.
-function takeOwnShot(onl, ack) {
+function takeOwnShot(onl, sp, ack) {
   const shots = onl.ownShots;
+  if (sp.shot != null) {
+    // The round names its trigger pull: claim exactly that local round.
+    const i = shots.findIndex((s) => s.shot === sp.shot);
+    return i >= 0 ? shots.splice(i, 1)[0] : null;
+  }
+  // Older server without the counter: the oldest, once its input is acknowledged.
   if (!shots.length || shots[0].seq > ack + OWN_SHOT_ACK_SLACK) return null;
   return shots.shift();
 }
@@ -10139,13 +10164,20 @@ function takeOwnShot(onl, ack) {
 // OWN_SHOT_ACK_SLACK inputs past the one that fired a round and no server
 // round has claimed it — or OWN_SHOT_MAX_UNMATCHED_MS have passed — it is
 // dropped.
-function dropStaleOwnShots(onl, ack, now) {
+function dropStaleOwnShots(onl, ack, shotsFired, now) {
   const shots = onl.ownShots;
   for (let i = shots.length - 1; i >= 0; i -= 1) {
     const s = shots[i];
-    if (s.seq + OWN_SHOT_ACK_SLACK > ack && now - s.firedAt < OWN_SHOT_MAX_UNMATCHED_MS) continue;
+    // The server has fired past this round's number and its copy never showed
+    // (dead within its first tick, or never fired); without the counter, the
+    // server has run OWN_SHOT_ACK_SLACK inputs past the one that fired it.
+    const past = (s.shot != null && Number.isFinite(shotsFired))
+      ? s.shot <= shotsFired
+      : s.seq + OWN_SHOT_ACK_SLACK <= ack;
+    if (!past && now - s.firedAt < OWN_SHOT_MAX_UNMATCHED_MS) continue;
     endOwnShot(s, null, now);
     shots.splice(i, 1);
+    onl.ownShotStats.dropped += 1;
   }
 }
 
@@ -10213,13 +10245,14 @@ function syncOnlineProjectiles(snap) {
       // mesh and trail, its lead over the server's position carried as a
       // decaying offset. No local round to take (the prediction never fired
       // one, command mode, spectator): built fresh below like any other.
-      const own = takeOwnShot(onl, snap.acks?.[onl.myPlayerId] ?? -1);
+      const own = takeOwnShot(onl, sp, snap.acks?.[onl.myPlayerId] ?? -1);
       if (own) {
         entry = own;
         entry.leadX = own.lastX - sp.pos.x; entry.leadY = own.lastY - sp.pos.y; entry.leadZ = own.lastZ - sp.pos.z;
         entry.leadAt = now;
         meshes.set(sp.id, entry);
-      }
+        onl.ownShotStats.matched += 1;
+      } else onl.ownShotStats.fresh += 1;
     }
     if (!entry) {
       const owner = snap.fighters[sp.ownerId];
@@ -10303,7 +10336,7 @@ function syncOnlineProjectiles(snap) {
     }
     meshes.delete(id);
   }
-  dropStaleOwnShots(onl, snap.acks?.[onl.myPlayerId] ?? -1, now);
+  dropStaleOwnShots(onl, snap.acks?.[onl.myPlayerId] ?? -1, snap.fighters?.[onl.myPlayerId]?.shotsFired, now);
 }
 
 function processOnlineEvents(snap, myPlayerId) {
@@ -10444,7 +10477,7 @@ function applySnapshotToPrediction(snap) {
     // A round the replay fires that the forward ticks never did gets its
     // visual here, back-dated by the ticks it has already flown; re-fires
     // of rounds already drawn are dropped by the duplicate guard.
-    spawnOwnShotVisuals(fresh, projBefore, p.seq, nowReal, onl.pendingInputs.length - i);
+    spawnOwnShotVisuals(fresh, projBefore, p.seq, nowReal, onl.pendingInputs.length - i, true);
   }
 
   onl.predictedState = fresh;

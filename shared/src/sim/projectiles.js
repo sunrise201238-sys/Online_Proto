@@ -143,6 +143,15 @@ export function spawnProjectiles(matchState, owner, target) {
   // shooter has been standing still (bloom.js isStill). Mirrors offline.
   if (!isStill(owner, matchState.now)) owner.bloom = bloomAfterShot(u, owner.bloom);
 
+  // SHOT COUNTER (2026-10-15): one per trigger pull, carried by the round(s)
+  // it spawned as `shot`. The client's own-shot visuals use it to tell "the
+  // same shot predicted twice" from the next shot, and to claim the server's
+  // copy of a local round. Neither the magazine count (autoReload refills
+  // between shots) nor a time window (the prediction's clock is re-based on
+  // every snapshot) can do that. No gameplay effect; a few bytes per snapshot.
+  owner.shotsFired = (owner.shotsFired ?? 0) + 1;
+  for (const p of spawned) p.shot = owner.shotsFired;
+
   matchState.events.push({
     type: 'fired',
     ownerId: owner.id,
