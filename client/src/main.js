@@ -2673,6 +2673,9 @@ function rebillboardBulletTrails() {
   for (const entry of (state.online?.projectileMeshes?.values?.() ?? [])) {
     if (entry.trail?.userData?.trailRadius) billboardBulletTrail(entry.trail);
   }
+  for (const s of (state.online?.ownShots ?? [])) {
+    if (s.trail?.userData?.trailRadius) billboardBulletTrail(s.trail);
+  }
   for (const dt of (state.dyingBulletTrails || [])) {
     if (dt.trail?.userData?.trailRadius) billboardBulletTrail(dt.trail);
   }
@@ -9171,6 +9174,7 @@ function cleanupMatch() {
       }
       state.online.projectileMeshes.clear();
     }
+    disposeOwnShots(state.online);
     state.online = null;
     hideOnlineOverlay();
   }
@@ -9568,6 +9572,9 @@ function startOnlineMatch() {
     conn: createConnection(),
     myPlayerId: null,
     projectileMeshes: new Map(),
+    // The local player's rounds drawn from the prediction the moment they
+    // are fired, until the server's copy takes them over (spawnOwnShotVisuals).
+    ownShots: [],
     snapshotsApplied: 0,
 
     // Phase 3 — prediction.
@@ -9772,12 +9779,177 @@ function advanceOnlineProjectiles(now) {
   for (const entry of meshes.values()) {
     if (!entry.mesh || entry.snapAt == null) continue;
     const t = Math.min(ONLINE_RECKON_MAX_MS, Math.max(0, now - entry.snapAt)) / 1000;
-    placeOnlineBullet(entry, entry.snapX + entry.velX * t, entry.snapY + entry.velY * t, entry.snapZ + entry.velZ * t, now);
+    // A round taken over from the local own-shot visual still carries that
+    // visual's lead over the server's position; it decays away here (see
+    // spawnOwnShotVisuals), sliding the round onto the server's line.
+    if (entry.leadAt != null) {
+      const k = Math.exp(-(now - entry.leadAt) / OWN_SHOT_LEAD_DECAY_MS);
+      entry.leadX *= k; entry.leadY *= k; entry.leadZ *= k;
+      entry.leadAt = now;
+      if (Math.abs(entry.leadX) + Math.abs(entry.leadY) + Math.abs(entry.leadZ) < 0.01) entry.leadAt = null;
+    }
+    const lx = entry.leadAt != null ? entry.leadX : 0;
+    const ly = entry.leadAt != null ? entry.leadY : 0;
+    const lz = entry.leadAt != null ? entry.leadZ : 0;
+    placeOnlineBullet(entry, entry.snapX + entry.velX * t + lx, entry.snapY + entry.velY * t + ly, entry.snapZ + entry.velZ * t + lz, now);
   }
 }
 
+// OWN SHOTS DRAWN FROM THE PREDICTION (owner 2026-10-15, "the bullet visual
+// spawns away from the firing character, it gives a laggy feel"): a round
+// the server fires reaches the shooter's screen only after the full round
+// trip — key press, server tick, snapshot back — by which time it has flown
+// RTT × speed (60 u per 100 ms at 600 u/s). The local prediction already
+// fires the round at the muzzle the moment the key goes down (the shared sim
+// spawns it into predictedState.projectiles); it was just never drawn. Now
+// it is: when a prediction tick spawns a round for the local player, its
+// spindle (or bolt) and trail are built at once and fly a straight line from
+// the predicted muzzle, dying on walls and decks with the same sweep the
+// offline round uses. When the server's copy of that round turns up in a
+// snapshot it takes over the SAME mesh and trail (oldest local round first,
+// once the server has acknowledged the input that fired it) and from then on
+// is an ordinary server round: dead reckoning, despawn on the server's hit
+// or wall, hit ring from the server's event. The local round is ahead of the
+// server's by half the round trip and may point a spread angle to the side
+// (each side samples the cone on its own, no shared seed — owner's call);
+// that difference is carried over as a lead that decays over
+// OWN_SHOT_LEAD_DECAY_MS, so the visual slides onto the real line instead of
+// jumping. A local round the server never produced (shot refused, or dead
+// within its first tick) is dropped once the server has acknowledged
+// OWN_SHOT_ACK_SLACK inputs past its own. Shotgun volleys stay on the server
+// path (their pellet pattern is the server's random rotation). Nothing on
+// the network; hits and damage are the server's exactly as before.
+const OWN_SHOT_LEAD_DECAY_MS = 100;
+const OWN_SHOT_ACK_SLACK = 4;
+
+// Called right after a prediction tick: every own single round the tick
+// spawned (not in projBefore) gets its visual.
+function spawnOwnShotVisuals(projBefore, seq, now) {
+  const onl = state.online;
+  const ps = onl?.predictedState?.projectiles;
+  if (!ps || !onl.ownShots) return;
+  const myId = onl.myPlayerId;
+  for (const p of ps) {
+    if (projBefore.has(p) || p.ownerId !== myId || p.pelletMask !== undefined) continue;
+    const me = onl.predictedState.fighters?.[myId];
+    const unit = me?.unit ?? SIM_UNIT_DATA[me?.unitKey] ?? {};
+    const mesh = buildProjectileMesh(unit, !!me?.redLock);
+    scene.add(mesh);
+    const trailFadeMs = bulletTrailFadeMsFor(unit);
+    let trail = null;
+    if (trailFadeMs > 0) {
+      trail = buildBulletTrail(bulletTrailRadiusFor(unit));
+      scene.add(trail);
+    }
+    // The sim has already flown this round one tick past the muzzle.
+    const spawnX = p.pos.x - p.vel.x * SIM_TICK_DT;
+    const spawnY = p.pos.y - p.vel.y * SIM_TICK_DT;
+    const spawnZ = p.pos.z - p.vel.z * SIM_TICK_DT;
+    const firedAt = now - SIM_TICK_RATE_MS;
+    const entry = {
+      mesh, trail, trailFadeMs,
+      boltLen: p.boltLen ?? 0,
+      spawnX, spawnY, spawnZ,
+      trailSpawnX: spawnX, trailSpawnY: spawnY, trailSpawnZ: spawnZ,
+      trailSpawnAt: firedAt,
+      velX: p.vel.x, velY: p.vel.y, velZ: p.vel.z,
+      firedAt,
+      ttlMs: (p.ttl ?? 0) * 1000 + SIM_TICK_RATE_MS,
+      seq,
+      lastX: p.pos.x, lastY: p.pos.y, lastZ: p.pos.z
+    };
+    placeOnlineBullet(entry, p.pos.x, p.pos.y, p.pos.z, now);
+    onl.ownShots.push(entry);
+  }
+}
+
+// Every frame: fly each local round on, kill it on a wall or deck (the
+// offline round's own sweep, see updateProjectileSystem) or at its time limit.
+function advanceOwnShots(now) {
+  const onl = state.online;
+  const shots = onl?.ownShots;
+  if (!shots || !shots.length) return;
+  for (let i = shots.length - 1; i >= 0; i -= 1) {
+    const s = shots[i];
+    if (now - s.firedAt > s.ttlMs) {
+      endOwnShot(s, null, now);
+      shots.splice(i, 1);
+      continue;
+    }
+    const t = (now - s.firedAt) / 1000;
+    const next = { x: s.spawnX + s.velX * t, y: s.spawnY + s.velY * t, z: s.spawnZ + s.velZ * t };
+    const prev = { x: s.lastX, y: s.lastY, z: s.lastZ };
+    let deathT = -1;
+    for (const o of arenaObstacles) {
+      if (o.noProjectile) continue;
+      const ot = segmentObstacleImpactT(prev, next, o);
+      if (ot >= 0 && (deathT < 0 || ot < deathT)) deathT = ot;
+    }
+    if (deathT < 0 && projectileHitsSurface(prev, next)) {
+      const st = surfaceImpactT(prev, next);
+      deathT = st >= 0 ? st : 1;
+    }
+    if (deathT >= 0) {
+      endOwnShot(s, {
+        x: prev.x + (next.x - prev.x) * deathT,
+        y: prev.y + (next.y - prev.y) * deathT,
+        z: prev.z + (next.z - prev.z) * deathT
+      }, now);
+      shots.splice(i, 1);
+      continue;
+    }
+    placeOnlineBullet(s, next.x, next.y, next.z, now);
+    s.lastX = next.x; s.lastY = next.y; s.lastZ = next.z;
+  }
+}
+
+// End a local round: drop the mesh, hand the trail to the dying list (head
+// clamped to the impact point on a wall or deck death).
+function endOwnShot(s, impact, now) {
+  disposeProjectileMesh(s.mesh);
+  if (!s.trail) return;
+  if (impact) clampTrailHead(s.trail, impact.x, impact.y, impact.z);
+  state.dyingBulletTrails.push({
+    trail: s.trail,
+    diesAt: now + s.trailFadeMs,
+    fadeMs: s.trailFadeMs,
+    initialOpacity: s.trail.userData?.baseOpacity ?? BULLET_TRAIL_OPACITY
+  });
+}
+
+// The oldest local round the server can have fired by now (its input
+// acknowledged, with a little slack for a hold-to-fire round the server
+// lets off a tick later than the prediction did), taken off the list.
+function takeOwnShot(onl, ack) {
+  const shots = onl.ownShots;
+  if (!shots.length || shots[0].seq > ack + OWN_SHOT_ACK_SLACK) return null;
+  return shots.shift();
+}
+
+// Local rounds the server never produced: once it has acknowledged
+// OWN_SHOT_ACK_SLACK inputs past the one that fired a round and no server
+// round has claimed it, it is dropped.
+function dropStaleOwnShots(onl, ack, now) {
+  const shots = onl.ownShots;
+  for (let i = shots.length - 1; i >= 0; i -= 1) {
+    if (shots[i].seq + OWN_SHOT_ACK_SLACK > ack) continue;
+    endOwnShot(shots[i], null, now);
+    shots.splice(i, 1);
+  }
+}
+
+function disposeOwnShots(onl) {
+  if (!onl?.ownShots) return;
+  for (const s of onl.ownShots) {
+    disposeProjectileMesh(s.mesh);
+    if (s.trail) disposeBulletTrail(s.trail);
+  }
+  onl.ownShots.length = 0;
+}
+
 function syncOnlineProjectiles(snap) {
-  const meshes = state.online.projectileMeshes;
+  const onl = state.online;
+  const meshes = onl.projectileMeshes;
   const liveIds = new Set();
   const now = performance.now();
   for (const sp of snap.projectiles) {
@@ -9823,6 +9995,20 @@ function syncOnlineProjectiles(snap) {
       continue;
     }
     let entry = meshes.get(sp.id);
+    if (!entry && sp.ownerId === onl.myPlayerId) {
+      // THE LOCAL PLAYER'S OWN ROUND: the visual the prediction fired at the
+      // muzzle takes over as this server round (spawnOwnShotVisuals) — same
+      // mesh and trail, its lead over the server's position carried as a
+      // decaying offset. No local round to take (the prediction never fired
+      // one, command mode, spectator): built fresh below like any other.
+      const own = takeOwnShot(onl, snap.acks?.[onl.myPlayerId] ?? -1);
+      if (own) {
+        entry = own;
+        entry.leadX = own.lastX - sp.pos.x; entry.leadY = own.lastY - sp.pos.y; entry.leadZ = own.lastZ - sp.pos.z;
+        entry.leadAt = now;
+        meshes.set(sp.id, entry);
+      }
+    }
     if (!entry) {
       const owner = snap.fighters[sp.ownerId];
       const isOwnerRedLock = owner?.redLock ?? false;
@@ -9874,7 +10060,10 @@ function syncOnlineProjectiles(snap) {
     entry.snapX = sp.pos.x; entry.snapY = sp.pos.y; entry.snapZ = sp.pos.z;
     entry.velX = sp.vel.x; entry.velY = sp.vel.y; entry.velZ = sp.vel.z;
     entry.snapAt = now;
-    placeOnlineBullet(entry, sp.pos.x, sp.pos.y, sp.pos.z, now);
+    const lx = entry.leadAt != null ? entry.leadX : 0;
+    const ly = entry.leadAt != null ? entry.leadY : 0;
+    const lz = entry.leadAt != null ? entry.leadZ : 0;
+    placeOnlineBullet(entry, sp.pos.x + lx, sp.pos.y + ly, sp.pos.z + lz, now);
   }
   // Despawn anything no longer in the snapshot — hand any trail off to the
   // dying list so it fades in place instead of vanishing instantly. Wall/deck
@@ -9902,6 +10091,7 @@ function syncOnlineProjectiles(snap) {
     }
     meshes.delete(id);
   }
+  dropStaleOwnShots(onl, snap.acks?.[onl.myPlayerId] ?? -1, now);
 }
 
 function processOnlineEvents(snap, myPlayerId) {
@@ -9970,8 +10160,10 @@ function cloneFighterForPrediction(f) {
 }
 
 // Build a workable MatchState from the latest snapshot. Projectiles are
-// always reset to []  — we don't predict them (server-authoritative; client
-// just renders snapshot projectiles).
+// always reset to [] — the replay re-fires the un-acked inputs' rounds, and
+// the server's are authoritative. The local player's own rounds ARE drawn
+// from the prediction the moment a prediction tick fires them
+// (spawnOwnShotVisuals); replayed copies are never drawn.
 function cloneSnapshotForPrediction(snap) {
   // Include every fighter the server actually has — p1+p2 in 1v1, p1..p4 in
   // 2v2. Missing p3/p4 in the cloned state was the cause of the "submerged
@@ -10096,7 +10288,10 @@ function runPredictionTick() {
     p3: simEmptyInput(), p4: simEmptyInput()
   };
   inputs[myId] = inputFrame;
+  const projBefore = new Set(onl.predictedState.projectiles);
   simTickMatch(onl.predictedState, inputs, onl.lastPredSimTime, SIM_TICK_DT);
+  // Any round this tick fired for the local player is drawn right now.
+  spawnOwnShotVisuals(projBefore, seq, performance.now());
 
   // Reset taps so they fire exactly once per press.
   input.stepTap = false;
@@ -10726,6 +10921,7 @@ function ensureOnlineMatchSetup(snap) {
     if (op.trail) disposeBulletTrail(op.trail);
   }
   onl.projectileMeshes.clear();
+  disposeOwnShots(onl);
 
   // Tell the HUD layout which mode it is BEFORE setupHUD reads state.mode.
   state.mode = mode;
@@ -11276,8 +11472,11 @@ function tickOnline(dt, _now) {
   const onl = state.online;
   if (!onl) return;
   const conn = onl.conn;
-  // Bullets fly on between snapshots (dead reckoning, owner 2026-10-15).
+  // Bullets fly on between snapshots (dead reckoning, owner 2026-10-15), and
+  // the local player's own rounds fly from the muzzle until the server's
+  // copy takes them over.
   advanceOnlineProjectiles(performance.now());
+  advanceOwnShots(performance.now());
 
   // Sync to the connection's playerId — it can change when the player swaps
   // slots in the lobby (server sends a fresh player:assigned event).
