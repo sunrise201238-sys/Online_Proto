@@ -9744,7 +9744,9 @@ function startOnlineMatch() {
     // are fired, until the server's copy takes them over (spawnOwnShotVisuals).
     ownShots: [],
     ownShotFires: [],   // client-clock fire times of recent local rounds — the duplicate guard in spawnOwnShotVisuals
-    ownShotStats: { local: 0, replay: 0, dedup: 0, matched: 0, fresh: 0, dropped: 0, loggedAt: 0 },   // console tally, see advanceOwnShots
+    ownShotDead: [],          // local rounds that died on a wall or ran out before the server's copy showed — its copy is then not drawn (takeOwnShot)
+    ownDeadServerIds: new Set(),   // server rounds settled that way, skipped while they stay in the snapshots
+    ownShotStats: { local: 0, replay: 0, dedup: 0, matched: 0, claimedDead: 0, fresh: 0, dropped: 0, loggedAt: 0, freshLogged: 0 },   // console tally, see advanceOwnShots
     snapshotsApplied: 0,
 
     // Phase 3 — prediction.
@@ -10007,6 +10009,18 @@ function advanceOnlineProjectiles(now) {
 // case — the clock re-based forward, the replay firing a round the forward
 // ticks never did — is covered by also drawing rounds the replay fires,
 // back-dated by the ticks they have already flown.
+//
+// THE LOCAL ROUND DIES BEFORE THE SERVER'S COPY SHOWS (owner 2026-10-15, the
+// console tally: 97 server copies, 9 claimed, 88 drawn fresh): at 600 u/s a
+// round reaches a wall 60 u away in 100 ms, inside the round trip, so the
+// local round had already flown the whole shot and died on the wall when
+// the server's copy turned up with no local round left to claim — and was
+// drawn again from mid-air to the wall, a second bullet per shot. A local
+// round that dies unclaimed leaves a record (ownShotDead); the server copy
+// bearing its number claims the record instead and is never drawn (its
+// despawn event still places the hit ring and the trail stays as it fell).
+// Shooting across open ground the local round is still flying and takes
+// over as before.
 const OWN_SHOT_LEAD_DECAY_MS = 100;
 const OWN_SHOT_ACK_SLACK = 4;
 const OWN_SHOT_MAX_UNMATCHED_MS = 1000;   // a local round no server round has claimed by then is dropped regardless of the acks
@@ -10015,7 +10029,7 @@ const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round stays in the
 const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot counter: same magazine count this close together = the same shot
 // Build tag, shown in the tab title and in the own-shot console tally so a
 // stale deploy or cache can be told from a live one at a glance.
-const CLIENT_BUILD_TAG = 'b1015e';
+const CLIENT_BUILD_TAG = 'b1015f';
 document.title = `GunVS ${CLIENT_BUILD_TAG}`;
 
 // Called after every prediction tick — the forward tick in runPredictionTick
@@ -10094,8 +10108,10 @@ function advanceOwnShots(now) {
   const st = onl?.ownShotStats;
   if (st && now - st.loggedAt > 5000) {
     st.loggedAt = now;
-    if (st.local || st.fresh) console.log(`[own-shots ${CLIENT_BUILD_TAG}] local ${st.local} (via replay ${st.replay}, same-shot skipped ${st.dedup}) | server copies: claimed ${st.matched}, drawn fresh ${st.fresh} | dropped unclaimed ${st.dropped}`);
+    if (st.local || st.fresh) console.log(`[own-shots ${CLIENT_BUILD_TAG}] local ${st.local} (via replay ${st.replay}, same-shot skipped ${st.dedup}) | server copies: claimed ${st.matched} alive + ${st.claimedDead} already dead, drawn fresh ${st.fresh} | dropped unclaimed ${st.dropped}`);
   }
+  const dead = onl?.ownShotDead;
+  if (dead) while (dead.length && dead[0].diedAt < now - OWN_SHOT_FIRE_MEMORY_MS) dead.shift();
   if (!shots || !shots.length) return;
   for (let i = shots.length - 1; i >= 0; i -= 1) {
     const s = shots[i];
@@ -10133,8 +10149,12 @@ function advanceOwnShots(now) {
 
 // End a local round: drop the mesh, hand the trail to the dying list (head
 // clamped to the impact point on a wall or deck death).
-function endOwnShot(s, impact, now) {
+function endOwnShot(s, impact, now, unclaimed = true) {
   disposeProjectileMesh(s.mesh);
+  // Died before the server's copy showed: remember it so that copy is not
+  // drawn as a second bullet (see the note above).
+  const dead = state.online?.ownShotDead;
+  if (unclaimed && dead) dead.push({ shot: s.shot, seq: s.seq, firedAt: s.firedAt, diedAt: now });
   if (!s.trail) return;
   if (impact) clampTrailHead(s.trail, impact.x, impact.y, impact.z);
   state.dyingBulletTrails.push({
@@ -10145,19 +10165,32 @@ function endOwnShot(s, impact, now) {
   });
 }
 
+// takeOwnShot's answer when the local round already flew this shot and died.
+const OWN_SHOT_DEAD = { dead: true };
+
 // The oldest local round the server can have fired by now (its input
 // acknowledged, with a little slack for a hold-to-fire round the server
 // lets off a tick later than the prediction did), taken off the list.
 function takeOwnShot(onl, sp, ack) {
   const shots = onl.ownShots;
+  const dead = onl.ownShotDead;
   if (sp.shot != null) {
-    // The round names its trigger pull: claim exactly that local round.
+    // The round names its trigger pull: claim exactly that local round —
+    // still flying, or already dead on a wall.
     const i = shots.findIndex((s) => s.shot === sp.shot);
-    return i >= 0 ? shots.splice(i, 1)[0] : null;
+    if (i >= 0) return shots.splice(i, 1)[0];
+    const j = dead.findIndex((d) => d.shot === sp.shot);
+    if (j >= 0) { dead.splice(j, 1); return OWN_SHOT_DEAD; }
+    return null;
   }
-  // Older server without the counter: the oldest, once its input is acknowledged.
-  if (!shots.length || shots[0].seq > ack + OWN_SHOT_ACK_SLACK) return null;
-  return shots.shift();
+  // Older server without the counter: the oldest local round, flying or
+  // dead, once its input is acknowledged.
+  const a = shots[0], d = dead[0];
+  const pick = a && d ? (a.firedAt <= d.firedAt ? a : d) : (a ?? d);
+  if (!pick || pick.seq > ack + OWN_SHOT_ACK_SLACK) return null;
+  if (pick === a) return shots.shift();
+  dead.shift();
+  return OWN_SHOT_DEAD;
 }
 
 // Local rounds the server never produced: once it has acknowledged
@@ -10175,7 +10208,7 @@ function dropStaleOwnShots(onl, ack, shotsFired, now) {
       ? s.shot <= shotsFired
       : s.seq + OWN_SHOT_ACK_SLACK <= ack;
     if (!past && now - s.firedAt < OWN_SHOT_MAX_UNMATCHED_MS) continue;
-    endOwnShot(s, null, now);
+    endOwnShot(s, null, now, false);
     shots.splice(i, 1);
     onl.ownShotStats.dropped += 1;
   }
@@ -10189,6 +10222,8 @@ function disposeOwnShots(onl) {
   }
   onl.ownShots.length = 0;
   if (onl.ownShotFires) onl.ownShotFires.length = 0;
+  if (onl.ownShotDead) onl.ownShotDead.length = 0;
+  if (onl.ownDeadServerIds) onl.ownDeadServerIds.clear();
 }
 
 function syncOnlineProjectiles(snap) {
@@ -10245,14 +10280,34 @@ function syncOnlineProjectiles(snap) {
       // mesh and trail, its lead over the server's position carried as a
       // decaying offset. No local round to take (the prediction never fired
       // one, command mode, spectator): built fresh below like any other.
-      const own = takeOwnShot(onl, sp, snap.acks?.[onl.myPlayerId] ?? -1);
+      if (onl.ownDeadServerIds.has(sp.id)) continue;   // settled below on an earlier snapshot: never drawn
+      const ack = snap.acks?.[onl.myPlayerId] ?? -1;
+      const own = takeOwnShot(onl, sp, ack);
+      if (own === OWN_SHOT_DEAD) {
+        // The local round already flew this shot and died (wall, deck, time)
+        // before this copy showed: the copy is not drawn — it would be the
+        // same bullet a second time, from mid-air to the same wall.
+        onl.ownDeadServerIds.add(sp.id);
+        onl.ownShotStats.claimedDead += 1;
+        continue;
+      }
       if (own) {
         entry = own;
         entry.leadX = own.lastX - sp.pos.x; entry.leadY = own.lastY - sp.pos.y; entry.leadZ = own.lastZ - sp.pos.z;
         entry.leadAt = now;
         meshes.set(sp.id, entry);
         onl.ownShotStats.matched += 1;
-      } else onl.ownShotStats.fresh += 1;
+      } else {
+        onl.ownShotStats.fresh += 1;
+        // The first few unclaimed copies, in detail — what to read when the
+        // tally shows copies drawn fresh.
+        const st = onl.ownShotStats;
+        if (st.freshLogged < 10) {
+          st.freshLogged += 1;
+          const K = snap.fighters?.[onl.myPlayerId]?.shotsFired;
+          console.log(`[own-shots ${CLIENT_BUILD_TAG}] fresh copy id=${sp.id} shot=${sp.shot} server shots=${K} ack=${ack} | local flying: [${onl.ownShots.map((s) => `#${s.shot} seq ${s.seq} ${Math.round(now - s.firedAt)} ms`).join(', ')}] dead: [${onl.ownShotDead.map((d) => `#${d.shot} seq ${d.seq} ${Math.round(now - d.firedAt)} ms`).join(', ')}]`);
+        }
+      }
     }
     if (!entry) {
       const owner = snap.fighters[sp.ownerId];
@@ -10336,6 +10391,7 @@ function syncOnlineProjectiles(snap) {
     }
     meshes.delete(id);
   }
+  for (const id of onl.ownDeadServerIds) if (!liveIds.has(id)) onl.ownDeadServerIds.delete(id);
   dropStaleOwnShots(onl, snap.acks?.[onl.myPlayerId] ?? -1, snap.fighters?.[onl.myPlayerId]?.shotsFired, now);
 }
 
