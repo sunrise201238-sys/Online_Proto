@@ -9973,14 +9973,15 @@ function advanceOnlineProjectiles(now) {
 // flying its own line to its own end, and the copy's going ends it if
 // nothing else has. (The first cut handed the mesh over to the server's
 // copy and slid it onto the server's line — a spread angle to the side,
-// since each side samples the cone on its own, no shared seed, the owner's
-// call — which read as the bullet swerving mid-flight; owner 2026-10-15.)
-// A local round the server never produced (shot refused, or dead within its
-// first tick) is dropped once the server has fired past its number, or
-// after OWN_SHOT_MAX_UNMATCHED_MS. Shotgun volleys stay on the server path
-// (their pellet pattern is the server's random rotation). Nothing on the
-// network; hits and damage are the server's exactly as before — the shooter
-// sees their own round a spread angle off the real one at most.
+// each side then sampling the cone on its own — which read as the bullet
+// swerving mid-flight; owner 2026-10-15.) Since the shared spread seed
+// (same day, shared spawnProjectiles) both sides sample the same direction,
+// so the local round flies the server round's own line; what is left is
+// the enemy's movement over one round trip in the aim. A local round the
+// server never produced (shot refused, or dead within its first tick) is
+// dropped once the server has fired past its number, or after
+// OWN_SHOT_MAX_UNMATCHED_MS. Shotgun volleys stay on the server path.
+// Nothing on the network; hits and damage are the server's exactly as before.
 //
 // THE SAME SHOT PREDICTED TWICE (owner 2026-10-15, "two parallel trails"):
 // the prediction's clock is re-based on every snapshot, so a late snapshot
@@ -10018,7 +10019,7 @@ const OWN_SHOT_FIRE_MEMORY_MS = 3000;     // how long a local round stays in the
 const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot counter: same magazine count this close together = the same shot
 // Build tag, shown in the tab title and in the own-shot console tally so a
 // stale deploy or cache can be told from a live one at a glance.
-const CLIENT_BUILD_TAG = 'b1015g';
+const CLIENT_BUILD_TAG = 'b1015h';
 document.title = `GunVS ${CLIENT_BUILD_TAG}`;
 
 // Called after every prediction tick — the forward tick in runPredictionTick
@@ -10539,7 +10540,10 @@ function cloneSnapshotForPrediction(snap) {
     mode: snap.mode || '1v1',
     fighters,
     projectiles: [],
-    events: []
+    events: [],
+    // The match's spread seed (match:start): the prediction samples each
+    // round's direction exactly as the server does (shared spawnProjectiles).
+    shotSeed: state.online?.conn?.getMatchStart?.()?.shotSeed ?? null
   };
 }
 

@@ -245,6 +245,10 @@ function startMatchFor(lobby) {
     rosters,
     startTime
   });
+  // Spread seed (2026-10-15): one random number per match, sent once in
+  // match:start; server and client sample every round's direction from it
+  // (see the shared spawnProjectiles). Never in a snapshot.
+  lobby.match.shotSeed = (Math.random() * 4294967296) >>> 0;
   // The map's nav grid is built now (a no-op after the boot warm-up), not
   // at the first bot search — in Sudden Death that was the hold's release.
   warmMap(mapKey);
@@ -282,7 +286,7 @@ function startMatchFor(lobby) {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, holdUntil: lobby.match.holdUntil });
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, holdUntil: lobby.match.holdUntil, shotSeed: lobby.match.shotSeed });
   emitLobbyConfig(lobby);
   console.log(`[${lobby.id}] ${lobby.mode}${lobby.suddenDeath ? ' SUDDEN DEATH' : ''} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
 }
