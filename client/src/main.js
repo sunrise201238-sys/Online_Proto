@@ -2631,6 +2631,11 @@ let hudRefs = null;
 // mesh geometry, so the visual length/orientation has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 20.4;   // (owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
 const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
+// The spindle stays hidden until the round has flown this far (owner
+// 2026-10-15): a spindle shorter than this is a dot sitting at the muzzle —
+// seen end-on by the shooter it reads as a circle — so it is not drawn at
+// all until the body has some length. Offline and online alike. Visual only.
+const SPINDLE_SHOW_AFTER_U = 3;
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
@@ -3112,6 +3117,9 @@ function spawnProjectiles(owner, target) {
 
     const projVel = dir.multiplyScalar(owner.unit.projectileSpeed);
     orientTracer(mesh, projVel.x, projVel.y, projVel.z);
+    // The spindle starts hidden; updateProjectileSystem shows it once the
+    // round has flown SPINDLE_SHOW_AFTER_U (laser bolt and pellets untouched).
+    if (mesh.userData.isTracer && !(owner.unit.beamBolt?.length)) mesh.visible = false;
     state.projectiles.push({
       owner,
       target,
@@ -3722,7 +3730,9 @@ function updateProjectileSystem(dt) {
     // flight it is clipped to the distance flown — like the laser bolt's
     // body — and never reaches back past the spawn point. Visual only.
     if (p.mesh.userData.isTracer && !p.boltLen && p.trailSpawnPos) {
-      p.mesh.scale.y = Math.max(0.05, Math.min(1, p.mesh.position.distanceTo(p.trailSpawnPos) / SNIPER_TRACER_LENGTH));
+      const flown = p.mesh.position.distanceTo(p.trailSpawnPos);
+      p.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
+      p.mesh.visible = flown >= SPINDLE_SHOW_AFTER_U;   // no dot at the muzzle
     }
     // Shooting Range: print MISS dots where the shot crosses the sign's
     // plane (points inside the capsule are recorded by the hit block below,
@@ -9910,6 +9920,7 @@ function placeOnlineBullet(entry, x, y, z, now) {
   } else if (entry.mesh.userData?.isTracer) {
     // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline).
     entry.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
+    entry.mesh.visible = flown >= SPINDLE_SHOW_AFTER_U;   // no dot at the muzzle
   }
   // Re-orient tracers along the velocity so the streak follows the path (no-op for spheres).
   orientTracer(entry.mesh, entry.velX, entry.velY, entry.velZ);
