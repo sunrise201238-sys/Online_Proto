@@ -90,6 +90,7 @@ export function createFighter(id, unitKey, spawn) {
 
     // Ammo / reload.
     ammo: unit.magCapacity ?? Infinity,
+    shotsFired: 0,          // trigger pulls so far (spawnProjectiles); the rounds carry it as `shot` — see the note there
     reloadingUntil: 0,
     reloadTickStartAt: 0,
 
