@@ -148,8 +148,8 @@ const BOT_CH_AREA_R = 14;
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // fire block below and for the client's imports.
-import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017c_ref.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017c_ref.js';
+import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017e_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017e_ref.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -667,11 +667,15 @@ export function tickBot(matchState, botId, now) {
   // the bot's own step must be advanced here: while mid-step the lerp owns
   // position/velocity/action and the rest of the AI sits out the tick; the
   // first tick after it ends pays out the queued momentum.
+  // THE SUDDEN DEATH BRAIN WATCHES THE DODGE: the step's lerp owns the body,
+  // but the brain still sees (the eyes, the rounds in the air, the clock)
+  // and the gun still fires — the velocity dispatch below stands down for
+  // the step's duration. The plain bot sits the step out as before.
+  const sdStepping = !!me.botSD && now <= me.stepUntil;
   if (now <= me.stepUntil) {
     tickStep(me, now, obstacles);
-    return;
-  }
-  if (me.stepUntil > 0) tickStep(me, now, obstacles);
+    if (!sdStepping) return;
+  } else if (me.stepUntil > 0) tickStep(me, now, obstacles);
 
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
@@ -2090,7 +2094,9 @@ export function tickBot(matchState, botId, now) {
     : BOT_TRAVEL_SPRINT_FLOOR;
   const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
-  if (jumpThisTick) {
+  if (sdStepping) {
+    // (the dodge's lerp owns the body this tick: no velocity, no action from the brain)
+  } else if (jumpThisTick) {
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;

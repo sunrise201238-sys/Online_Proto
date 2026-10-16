@@ -5516,6 +5516,10 @@ function updateEnemy(now) {
   // Step lifecycle (mirrors the player's step block in updatePlayer): while
   // mid-step the lerp owns position/velocity/action and the rest of the AI
   // sits out the tick; the first tick after it ends pays out queued momentum.
+  // THE SUDDEN DEATH BRAIN WATCHES THE DODGE (mirrors shared ai.js): the
+  // step's lerp owns the body, the brain still sees and the gun still fires;
+  // the velocity dispatch and the boost update below stand down for the step.
+  let sdStepping = false;
   if (now <= (eState.stepUntil || 0)) {
     const span = Math.max(1, eState.stepUntil - eState.stepStartAt);
     const progress = THREE.MathUtils.clamp((now - eState.stepStartAt) / span, 0, 1);
@@ -5536,7 +5540,8 @@ function updateEnemy(now) {
     state.enemy.body.velocity.z = 0;
     eState.action = 'step';
     updateBoost(state.enemy, now, 'step');
-    return;
+    if (!state.suddenDeathActive) return;
+    sdStepping = true;
   } else if ((eState.stepUntil || 0) > 0) {
     eState.stepUntil = 0;
     eState.momentumVX += eState.queuedMomentumVX || 0;
@@ -6981,7 +6986,9 @@ function updateEnemy(now) {
     : BOT_TRAVEL_SPRINT_FLOOR;
   const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
 
-  if (jumpThisTick) {
+  if (sdStepping) {
+    // (the dodge's lerp owns the body this frame: no velocity, no action from the brain)
+  } else if (jumpThisTick) {
     eState.botAirSteerX = jumpDirX;
     eState.botAirSteerZ = jumpDirZ;
     eState.botAirSteerUntil = now + BOT_AIR_STEER_MS;
@@ -7129,7 +7136,7 @@ function updateEnemy(now) {
     state.enemy.body.velocity.x *= eState.hitStunScale;
     state.enemy.body.velocity.z *= eState.hitStunScale;
   }
-  updateBoost(state.enemy, now, state.enemy.state.action);
+  if (!sdStepping) updateBoost(state.enemy, now, state.enemy.state.action);   // (the step's own update ran above)
 }
 
 // How long the reticle stays red after each enemy shot. Re-armed on every
@@ -8687,7 +8694,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1017c';
+const CLIENT_BUILD_TAG = 'b1017e';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
