@@ -285,6 +285,10 @@ export function createMatchState({
     // state-driven (each beam's mesh spawned once, by id) — robust to the
     // snapshot drops that used to eat the one-shot 'beam-fired' event.
     beams: [],
+    // The wall each body was pushed out of this tick (its outward normal, or
+    // null), by fighter id: physics' note for the bots' brains (tick.js
+    // stage 5). Per-tick state like events, and never part of a snapshot.
+    walls: {},
     // Per-tick events the client uses to spawn one-shot VFX (hits, fires,
     // expirations). Cleared at the top of every tick.
     events: []

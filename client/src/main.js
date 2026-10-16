@@ -40,7 +40,7 @@ import {
   obstaclesNearSegment
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
-import { BOT_SD, sdFireReactHold, sdFireLineLost } from '@gvg/shared/src/sim/ai.js';
+import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
 import { sdBrainTick } from '@gvg/shared/src/sim/sdbrain.js';
 import { coverDistanceAt } from '@gvg/shared/src/sim/navgrid.js';
 
@@ -5131,19 +5131,16 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
   const end = tape[tape.length - 1].t;
   const lines = [];
   lines.push(`[sd-report ${CLIENT_BUILD_TAG}] ${mech.unit?.name ?? '?'} ${why} on ${state.mapKey ?? '?'} | hp ${st.hp} | last ${((end - tape[0].t) / 1000).toFixed(1)} s`
-    + ` | hops ${JSON.stringify(st.botSDHopKinds ?? {})} peeks ${st.botSDPeeks ?? 0} (close peeks ${st.botSDClosePeeks ?? 0}) engageRuns ${st.botSDEngages ?? 0} (dodge-opened ${st.botSDEngageDodges ?? 0}) dodges ${st.botSDDodges ?? 0} jumps ${st.botSDJumps ?? 0}`
-    + ` | rejects: risk ${st.botSDRiskRejects ?? 0} trade ${st.botSDTradeRejects ?? 0} | hotWaits ${st.botSDHotWaits ?? 0}`
-    + ` | body: wedges ${st.botSDWedges ?? 0} slides ${st.botSDLateralSlides ?? 0} backoffs ${st.botSDBackoffs ?? 0} holds ${st.botSDHolds ?? 0} crossStalls ${st.botSDCrossStalls ?? 0} shortRooms ${st.botSDShortRooms ?? 0} runOns ${st.botSDRunOns ?? 0} hotRouteDrops ${st.botSDHotRouteDrops ?? 0} cornered ${st.botSDCorneredTicks ?? 0} reactions ${st.botSDReacts ?? 0} (dodges ${st.botSDReactDodges ?? 0} flips ${st.botSDReactFlips ?? 0} corridor ticks ${st.botSDReactCorridorTicks ?? 0} react ticks ${st.botSDReactTicks ?? 0}) stucks ${st.botSDStucks ?? 0} (band re-search ${st.botSDBandStucks ?? 0})`
+    + ` | plans ${JSON.stringify(st.botSDPlans ?? {})} peeks ${st.botSDPeeks ?? 0} (dodge legs ${st.botSDClosePeeks ?? 0}) engageRuns ${st.botSDEngages ?? 0} windows ${st.botSDWindows ?? 0} (${Math.round(st.botSDWindowMs ?? 0)} ms) dodges ${st.botSDDodges ?? 0} jumps ${st.botSDJumps ?? 0}`
+    + ` | refused ${st.botSDRejects ?? 0} of ${st.botSDSearches ?? 0} pricings | hold ticks ${st.botSDHoldTicks ?? 0}`
     + ` | own fire: ${st.botSDExposedShots ?? 0} rounds over ${st.botSDExposures ?? 0} exposures`
-    + ` | stream: runOns ${st.botSDStreamHolds ?? 0} steps ${st.botSDStreamSteps ?? 0} turnsStood ${st.botSDStreamTurns ?? 0} runOnsAfterHiding ${st.botSDStreamRunOns ?? 0} (trail ${st.botSDTrailRunOns ?? 0} of ${st.botSDTrailSeenTicks ?? 0} trail-seen ticks)`
-    + ` | reactions: short escapes ${st.botSDNearEscapes ?? 0} of ${st.botSDHopKinds?.escape ?? 0} escapes, rotation legs strict ${st.botSDPaceStrictLegs ?? 0} loose ${st.botSDPaceLooseLegs ?? 0}`
-    + ` | close range: peekNoLanding ${st.botSDPeekNoLanding ?? 0} | deep hold ticks ${st.botSDDeepTicks ?? 0} (deep ${st.botSDDeepHereTicks ?? 0}) | R9 fee peeks ${st.botSDFeePeeks ?? 0} | skin ticks ${st.botSDSkinTicks ?? 0} | quiet lift ticks ${st.botSDQuietLiftTicks ?? 0} | R7: hot routes refused ${st.botSDHotRouteRejects ?? 0} long crossings refused ${st.botSDLongCrossRejects ?? 0} | near band ticks ${st.botSDNearHotTicks ?? 0} (exposed routes refused ${st.botSDNearHotRejects ?? 0})`);
+    + ` | reactions ${st.botSDReacts ?? 0} (flips ${st.botSDReactFlips ?? 0} corridor ticks ${st.botSDReactCorridorTicks ?? 0} crossing ticks ${st.botSDReactTicks ?? 0}) wallTicks ${st.botSDWallTicks ?? 0}`);
   let open = -1;
   for (let i = tape.length - 1; i > 0; i -= 1) if (tape[i].hid === 0 && tape[i - 1].hid === 1) { open = i; break; }
   if (open < 0 && tape[tape.length - 1].hid === 0) open = 0;
   if (open >= 0) {
     const s = tape[open];
-    lines.push(`  last line opened ${((end - s.t) / 1000).toFixed(1)} s before the end at ${Math.round(s.d)} u: hot ${s.hot}, far ${s.far}, heard ${s.heard}, doing ${s.kind} (${s.st}), planned ${s.plan}, risk ${f3(s.risk).trim()}, trade ${f3(s.trade).trim()}, idle ${s.idle == null ? '-' : Math.round(s.idle) + ' ms'}, enemy bloom ${s.bloom.toFixed(2)}`);
+    lines.push(`  last line opened ${((end - s.t) / 1000).toFixed(1)} s before the end at ${Math.round(s.d)} u: stream ${s.hot}, aimed ${s.far}, doing ${s.kind} (${s.st}), planned ${s.plan}, risk ${f3(s.risk).trim()}, trade ${f3(s.trade).trim()}, idle ${s.idle == null ? '-' : Math.round(s.idle) + ' ms'}, enemy bloom ${s.bloom.toFixed(2)}`);
   } else lines.push('  hidden at the end (no open line in the tape)');
   if (st.botSDKill) {
     const k = st.botSDKill;
@@ -5157,7 +5154,7 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
   }
   // (cmd / cmdlat / sg: what the legs ordered that frame — dash, walk, hold, or the plain brain — how lateral the ORDERED heading was and which side of the line it leaned to; W: a wall 1.6 u along the order; cmdv / act: the speed the body was told last frame and its action; spd / lat: what the body did)
   // (rc / ev / eo: THE REACTION running (R5); the enemy's speed (u/s) and whether it is on open ground — the crossing R9 answers)
-  lines.push('      t   fr hid   d hot far heard rc  ev eo kind        st     cmd  cmdlat sg W cmdv act    exp   spd  lat  risk trade boost hp      x     z');
+  lines.push('      t   fr hid   d str aim heard rc  ev eo kind        st     cmd  cmdlat sg W cmdv act    exp   spd  lat  risk trade boost hp      x     z');
   for (let i = 0; i < tape.length; i += 1) {
     const s = tape[i], p = tape[i - 1];
     let spd = '  -', lat = '  - ';
@@ -5871,6 +5868,7 @@ function updateEnemy(now) {
     coverMove = sdBrainTick({
       now, SD: SDG, me: eState, pos: { x: e.x, y: eBodyY, z: e.z }, unit: state.enemy.unit ?? {}, vel: state.enemy.body.velocity, grounded: state.enemy.grounded,
       opp: { id: state.player, pos: p, hp: state.player.state.hp, unit: state.player.unit, invulnerableUntil: state.player.state.invulnerableUntil },
+      wall: state.enemy.wallTouch ?? null,   // (physics' note from the last frame: the face the body was pushed out of — resolveUnitObstacleCollisions)
       enemies: sdEnemies,
       obstacles: arenaObstacles, grid: offlineNavGrid, clear: botShotCanLand,
       eyeUp: BOT_MUZZLE_ABOVE_ROOT, muzzleH: sdEyeH,
@@ -6849,8 +6847,8 @@ function updateEnemy(now) {
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
-    } else if (!(SDG && s.botSDExposedAt != null) && !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
-      // (SUDDEN DEATH, EXPOSED: no bloom-gate hold while a line is open on the unit — mirrors shared)
+    } else if (!(SDG && s.botSDFire) && !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z))) {
+      // (SUDDEN DEATH: the brain's trigger is open (botSDFire) — no bloom-gate hold; mirrors shared)
       // BLOOM GATE (owner 2026-09-21, shared bloom.js botMayFire; gate line
       // 2026-09-22): inside the CURRENT gate line — the 33%-hit distance for
       // the autos, the sure-hit distance for the marksman rifles — the bot
@@ -6868,14 +6866,7 @@ function updateEnemy(now) {
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       // SD in band: poll every firePollMs — a sprint through a one-cell gap
       // lasts ~200 ms and the 220 ms poll let it go unshot.
-      s.nextFireAt = now + ((SDG && (dist <= (s.botSDUpper ?? upperRange) + 20 || s.botSDExposedAt != null)) ? SDG.firePollMs : 220);   // (exposed at any range: the fast poll too — exposedDump, mirrors shared)
-      s.machineBurstRemaining = 0;
-      botClearFireRule(s);
-      if (SDG) sdFireLineLost(s, now, SDG);
-    } else if (SDG && sdFireReactHold(s, now, SDG)) {
-      // FIRE REACTION (mirrors shared): the line opened less than
-      // fireReactMs ago — still acquiring; polls every frame.
-      s.nextFireAt = now + 16;
+      s.nextFireAt = now + (SDG ? SDG.firePollMs : 220);   // (the Sudden Death brain: the fast poll, mirrors shared)
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
     } else if (u.sniperCharge) {
@@ -6902,7 +6893,7 @@ function updateEnemy(now) {
       // is open on the unit there is no burst rest and no cadence jitter —
       // rounds at the gun's own cooldown until the line closes or the
       // magazine empties. SD only.
-      const sdDump = !!(SDG && s.botSDExposedAt != null);
+      const sdDump = !!(SDG && s.botSDFire);
       if (bursted && s.machineBurstRemaining <= 0) {
         s.machineBurstRemaining = botBurstSize(u);
       }
@@ -6911,7 +6902,7 @@ function updateEnemy(now) {
       const fired = s.lastFireAt !== firedAt;
       if (fired) {
         botNoteShot(s);
-        if (s.botSDExposedAt != null) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
+        if (s.botSDFire) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
       }
       if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
@@ -8526,7 +8517,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1016n';
+const CLIENT_BUILD_TAG = 'b1017b';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -18160,9 +18151,14 @@ function unitOverlapsObstacle(x, y, z, radius = 1.15) {
   return false;
 }
 
+// Returns the outward normal {x, z} of the face(s) the body was pushed out of
+// (unit length, the faces summed), or null when it touched none — the mirror
+// of shared/src/sim/physics.js; the frame loop keeps it on the mech
+// (mech.wallTouch) for the Sudden Death brain (host.wall).
 function resolveUnitObstacleCollisions(mech, prevPos) {
   const radius = 1.15;
   const pos = mech.body.position;
+  let nx = 0, nz = 0, touched = false;
   for (const o of arenaObstacles) {
     const topBuffer = o.topBuffer ?? 4;
     if (pos.y < o.minY - 2 || pos.y > o.maxY + topBuffer) continue;
@@ -18178,6 +18174,7 @@ function resolveUnitObstacleCollisions(mech, prevPos) {
       const push = radius - d;
       pos.x += (dx / d) * push;
       pos.z += (dz / d) * push;
+      nx += dx / d; nz += dz / d;
     } else {
       // Unit ended up fully inside the AABB (tunneling, spawn, etc.). Picking the
       // axis-nearest edge can teleport them to the wrong side, which feels like
@@ -18190,20 +18187,28 @@ function resolveUnitObstacleCollisions(mech, prevPos) {
       if (prevOutside) {
         pos.x = prevPos.x;
         pos.z = prevPos.z;
+        // (the face: from the box's nearest point out to the restored body)
+        const ex = pos.x - Math.max(o.minX, Math.min(pos.x, o.maxX)), ez = pos.z - Math.max(o.minZ, Math.min(pos.z, o.maxZ));
+        const el = Math.hypot(ex, ez) || 1;
+        nx += ex / el; nz += ez / el;
       } else {
         const dMinX = pos.x - o.minX;
         const dMaxX = o.maxX - pos.x;
         const dMinZ = pos.z - o.minZ;
         const dMaxZ = o.maxZ - pos.z;
         const minD = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-        if (minD === dMinX) pos.x = o.minX - radius;
-        else if (minD === dMaxX) pos.x = o.maxX + radius;
-        else if (minD === dMinZ) pos.z = o.minZ - radius;
-        else pos.z = o.maxZ + radius;
+        if (minD === dMinX) { pos.x = o.minX - radius; nx -= 1; }
+        else if (minD === dMaxX) { pos.x = o.maxX + radius; nx += 1; }
+        else if (minD === dMinZ) { pos.z = o.minZ - radius; nz -= 1; }
+        else { pos.z = o.maxZ + radius; nz += 1; }
       }
     }
+    touched = true;
     mech.body.velocity.x = 0; mech.body.velocity.z = 0;
   }
+  if (!touched) return null;
+  const nl = Math.hypot(nx, nz);
+  return nl > 1e-6 ? { x: nx / nl, z: nz / nl } : null;
 }
 
 function updateVfx(dt) {
@@ -18283,7 +18288,7 @@ function animate() {
         m, x: m.body.position.x, z: m.body.position.z
       }));
       world.step(1 / 60, dt, 3);
-      prevPositions.forEach(({ m, x, z }) => resolveUnitObstacleCollisions(m, { x, z }));
+      prevPositions.forEach(({ m, x, z }) => { m.wallTouch = resolveUnitObstacleCollisions(m, { x, z }); });   // (the wall note for the Sudden Death brain: host.wall next frame)
 
       updateTransforms(dt);
       updateLocksAndReticle();
