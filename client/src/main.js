@@ -7046,8 +7046,8 @@ function updateEnemy(now) {
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
-    } else if (!(SDG && s.botSDFire) && !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z), state.mode)) {
-      // (SUDDEN DEATH: the brain's trigger is open (botSDFire) — no bloom-gate hold; mirrors shared)
+    } else if (SDG ? !s.botSDFire : !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z), state.mode)) {
+      // (SUDDEN DEATH: the brain's trigger (botSDFire) is the unit's only trigger — open, no bloom-gate hold; closed, no shot, polled every frame; mirrors shared)
       // BLOOM GATE (ported from the demo line 2026-09-22, shared bloom.js
       // botMayFire): inside the CURRENT gate line — the 33%-hit distance for
       // the autos, the sure-hit distance for the marksman rifles — the bot
@@ -8694,7 +8694,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1017e';
+const CLIENT_BUILD_TAG = 'b1017g';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
