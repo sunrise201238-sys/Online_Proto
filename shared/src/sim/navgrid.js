@@ -1094,10 +1094,15 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   // route eyes are the goal's eyes (escapes), still at the full width.
   // The ROUTE cells stay centre-tested (the exposure estimate).
   const goalShoulder = opts.goalShoulder ?? 0;
-  const goalTestEyes = goalEyes ?? (goalShoulder > 0 ? eyes : null);
+  // opts.goalUp (SD, owner 2026-10-15, "腰高的牆不是掩體"): the GOAL hides the
+  // capsule's TOP too — the point goalUp above the eye-height point; a hip-
+  // high wall hides the muzzle line and leaves the head out.
+  const goalUp = opts.goalUp ?? 0;
+  const goalTestEyes = goalEyes ?? ((goalShoulder > 0 || goalUp > 0) ? eyes : null);
   const goalHiddenCache = resume ? st.goalHiddenCache : (goalTestEyes ? new Int8Array(size).fill(-1) : null);
   const seenFrom = (p0, eye) => {
     if (sightClear(p0, eye, obstacles, surfaces)) return true;
+    if (goalUp > 0 && sightClear({ x: p0.x, y: p0.y + goalUp, z: p0.z }, eye, obstacles, surfaces)) return true;
     if (goalShoulder <= 0) return false;
     let nx = eye.z - p0.z, nz = p0.x - eye.x;
     const nl = Math.hypot(nx, nz) || 1;

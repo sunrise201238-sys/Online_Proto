@@ -3678,6 +3678,7 @@ function updateProjectileSystem(dt) {
       if (pelletsHit > 0) {
         const finalDamage = getProjectileDamage(p) * pelletsHit;
         tgtState.hp = Math.max(0, tgtState.hp - finalDamage);
+        if (tgtState.hp <= 0) sdRecordKill(p.target, p.owner, hitCenter, hitCenter);   // (death report: a volley — the pellet's path is not kept)
         if (now >= tgtState.hitStunUntil || p.hitStunScale < tgtState.hitStunScale) {
           tgtState.hitStunScale = p.hitStunScale;
           tgtState.hitStunUntil = now + p.hitStunMs;
@@ -3831,6 +3832,7 @@ function updateProjectileSystem(dt) {
     if (botHit) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
+      if (p.target.state.hp <= 0) sdRecordKill(p.target, p.owner, prevPos, nearest, p.trailSpawnPos ?? null);   // (death report: the killing round, its spawn for the lead question)
       // Per-weapon stun, lowest-move-scale-wins: a fresh hit applies its stun
       // when the target is free OR when its stun is strictly heavier (lower
       // move-scale) than the active one — taking its own duration even if shorter.
@@ -5239,6 +5241,132 @@ function findDescentDirection(px, pz, myFloorY, awayX, awayZ) {
   return best;
 }
 
+// DEATH REPORT (owner 2026-10-15): the Sudden Death brain's tape (see the
+// SD block's end) printed as text the frame a bot dies, for the owner to
+// paste. One line per 100 ms: hidden / exposed, distance to the threat,
+// the hot and far-hot flags, rounds heard in the last 2 s, the move it was
+// on, its speed and how lateral that move was across the threat's line
+// (1 = straight across, 0 = along it), the exposure's age, the last risk
+// and trade the brain read (accepted or not), boost, hp.
+// KILL DIAGNOSTIC (owner 2026-10-15, "died hidden" on station): the round
+// that took the last HP — where it hit on the capsule (above the centre, across
+// the shooter's line) and what the brain's hidden test (the muzzle line and the
+// plain shoulders, the top of the capsule) said of that spot at that moment,
+// plus the top height of the cover on the muzzle line, if any.
+function sdRecordKill(target, owner, from, hit, spawn = null) {
+  const st = target?.state;
+  if (!st || !st.botSDTape || st.hp > 0 || st.botSDKill) return;
+  const c = target.root.position;
+  const tNow = performance.now();
+  // THE LEAD QUESTION (owner 2026-10-15): the round's line (its spawn through
+  // the hit) against where the unit WAS when it was fired (the tape, the
+  // flight time back) and where it IS: a line through the old spot is a shot
+  // aimed at the position of the moment (no lead); one through the new spot
+  // was led or homed.
+  let offFire = null, offNow = null, flightMs = null, wasPt = null;
+  if (spawn) {
+    const ux = hit.x - spawn.x, uz = hit.z - spawn.z, ul = Math.hypot(ux, uz) || 1;
+    const pv = owner?.unit?.projectileSpeed ?? 600;
+    flightMs = ul / pv * 1000;
+    const off = (px, pz) => Math.abs((px - spawn.x) * (uz / ul) - (pz - spawn.z) * (ux / ul));
+    offNow = off(c.x, c.z);
+    const tape = st.botSDTape, tFire = tNow - flightMs;
+    let s0 = null, s1 = null;
+    for (let i = 0; i < tape.length; i += 1) { if (tape[i].t <= tFire) s0 = tape[i]; else { s1 = tape[i]; break; } }
+    if (s0 && s1) { const f = (tFire - s0.t) / Math.max(1, s1.t - s0.t); wasPt = { x: s0.x + (s1.x - s0.x) * f, z: s0.z + (s1.z - s0.z) * f }; }
+    else if (s0 || s1) { const s = s0 ?? s1; wasPt = { x: s.x, z: s.z }; }
+    if (wasPt) offFire = off(wasPt.x, wasPt.z);
+  }
+  const lastSeenMs = st.botSDSeenAt != null ? tNow - st.botSDSeenAt : null;
+  const eye = owner?.root ? { x: owner.root.position.x, y: owner.root.position.y + BOT_MUZZLE_ABOVE_ROOT, z: owner.root.position.z } : null;
+  const muz = { x: c.x, y: c.y + BOT_MUZZLE_ABOVE_ROOT, z: c.z };
+  let centre = null, shoulderL = null, shoulderR = null, top = null, coverTop = null, lat = null;
+  if (eye) {
+    let nx = eye.z - c.z, nz = c.x - eye.x;
+    const nl = Math.hypot(nx, nz) || 1; nx = nx / nl * 1.6; nz = nz / nl * 1.6;
+    centre = botShotCanLand(eye, muz);
+    shoulderL = botShotCanLand(eye, { x: muz.x + nx, y: muz.y, z: muz.z + nz });
+    shoulderR = botShotCanLand(eye, { x: muz.x - nx, y: muz.y, z: muz.z - nz });
+    top = botShotCanLand(eye, { x: muz.x, y: c.y + 3.2, z: muz.z });
+    const cand = obstaclesNearSegment(arenaObstacles, eye, muz);
+    for (const o of cand) { if (o.noProjectile) continue; if (segmentHitsObstacle(eye, muz, o)) { coverTop = o.maxY; break; } }
+    const lx = c.x - eye.x, lz = c.z - eye.z, ll = Math.hypot(lx, lz) || 1;
+    lat = ((hit.x - c.x) * lz - (hit.z - c.z) * lx) / ll;
+  }
+  // THE ROUND'S OWN LINE (owner 2026-10-15, five "hidden" deaths in b1015k):
+  // the brain's clear test on the line the round actually flew (its spawn
+  // to the hit) — "blocked" means the physics and the brain disagree; and
+  // from the FIRING eye (the spawn, flightMs ago), the centre and shoulders
+  // of where the unit IS, whether where it WAS at the fire was open at all,
+  // and how far the shooter moved during the flight.
+  let ownLine = null, fireCentre = null, fireShL = null, fireShR = null, wasOpen = null, eyeMoved = null, fireTop = null;
+  if (spawn) {
+    const fe = { x: spawn.x, y: spawn.y, z: spawn.z };
+    ownLine = botShotCanLand(fe, { x: hit.x, y: hit.y, z: hit.z });
+    let nx = fe.z - c.z, nz = c.x - fe.x;
+    const nl = Math.hypot(nx, nz) || 1; nx = nx / nl * 1.6; nz = nz / nl * 1.6;
+    fireCentre = botShotCanLand(fe, muz);
+    fireShL = botShotCanLand(fe, { x: muz.x + nx, y: muz.y, z: muz.z + nz });
+    fireShR = botShotCanLand(fe, { x: muz.x - nx, y: muz.y, z: muz.z - nz });
+    if (wasPt) wasOpen = botShotCanLand(fe, { x: wasPt.x, y: muz.y, z: wasPt.z }) || botShotCanLand(fe, { x: wasPt.x + nx, y: muz.y, z: wasPt.z + nz }) || botShotCanLand(fe, { x: wasPt.x - nx, y: muz.y, z: wasPt.z - nz });
+    fireTop = botShotCanLand(fe, { x: muz.x, y: c.y + 3.2, z: muz.z });
+    if (eye) eyeMoved = Math.hypot(eye.x - spawn.x, eye.z - spawn.z);
+  }
+  st.botSDKill = { up: hit.y - c.y, lat, centre, shoulderL, shoulderR, top, coverTop: coverTop == null ? null : coverTop - c.y, dist: eye ? Math.hypot(eye.x - c.x, eye.z - c.z) : null, fromDist: Math.hypot(from.x - c.x, from.z - c.z), offFire, offNow, flightMs, lastSeenMs, ownLine, fireCentre, fireShL, fireShR, wasOpen, eyeMoved, fireTop };
+}
+
+function sdDeathReport(mech, why = 'died', secs = 5) {
+  const st = mech?.state, full = st?.botSDTape;
+  if (!full || !full.length) { console.log(`[sd-report ${CLIENT_BUILD_TAG}] no tape (${why})`); return; }
+  // (the last `secs` seconds — the console cuts long logs and the end is what matters; __SD_REPORT(8) for the whole tape)
+  const tape = full.filter((s) => s.t >= full[full.length - 1].t - secs * 1000);
+  const f3 = (v) => (v == null ? '  -  ' : Number(v).toFixed(3).slice(0, 5).padStart(5));
+  const end = tape[tape.length - 1].t;
+  const lines = [];
+  lines.push(`[sd-report ${CLIENT_BUILD_TAG}] ${mech.unit?.name ?? '?'} ${why} on ${state.mapKey ?? '?'} | hp ${st.hp} | last ${((end - tape[0].t) / 1000).toFixed(1)} s`
+    + ` | hops ${JSON.stringify(st.botSDHopKinds ?? {})} peeks ${st.botSDPeeks ?? 0} cornerFires ${st.botSDCornerFires ?? 0} dodges ${st.botSDDodges ?? 0} jumps ${st.botSDJumps ?? 0}`
+    + ` | rejects: risk ${st.botSDRiskRejects ?? 0} trade ${st.botSDTradeRejects ?? 0} | hotWaits ${st.botSDHotWaits ?? 0} farHotFireDrops ${st.botSDFarHotFireDrops ?? 0}`
+    + ` | body: wedges ${st.botSDWedges ?? 0} slides ${st.botSDLateralSlides ?? 0} backoffs ${st.botSDBackoffs ?? 0} holds ${st.botSDHolds ?? 0} crossStalls ${st.botSDCrossStalls ?? 0} shortRooms ${st.botSDShortRooms ?? 0} runOns ${st.botSDRunOns ?? 0} hotRouteDrops ${st.botSDHotRouteDrops ?? 0} cornered ${st.botSDCorneredTicks ?? 0} noRoomSteps ${st.botSDNoRoomSteps ?? 0} flinches ${st.botSDFlinches ?? 0} (hidden landings ${st.botSDFlinchHidden ?? 0}) stucks ${st.botSDStucks ?? 0} (band re-search ${st.botSDBandStucks ?? 0})`
+    + ` | own fire: ${st.botSDExposedShots ?? 0} rounds over ${st.botSDExposures ?? 0} exposures`
+    + ` | stream: runOns ${st.botSDStreamHolds ?? 0} steps ${st.botSDStreamSteps ?? 0} turnsStood ${st.botSDStreamTurns ?? 0} escapesRefused ${st.botSDStreamRejects ?? 0} runOnsAfterHiding ${st.botSDStreamRunOns ?? 0} (trail ${st.botSDTrailRunOns ?? 0} of ${st.botSDTrailSeenTicks ?? 0} trail-seen ticks) flinchRuns ${st.botSDFlinchRuns ?? 0}`
+    + ` | close range: fireSteps ${st.botSDFireSteps ?? 0} (rounds inside ${st.botSDFireStepShots ?? 0}) peekNoLanding ${st.botSDPeekNoLanding ?? 0} | deep hold ticks ${st.botSDDeepTicks ?? 0} (deep enough ${st.botSDDeepHereTicks ?? 0}) | skin ticks ${st.botSDSkinTicks ?? 0} | quiet lift ticks ${st.botSDQuietLiftTicks ?? 0} | R7: hot routes refused ${st.botSDHotRouteRejects ?? 0} long crossings refused ${st.botSDLongCrossRejects ?? 0} | near band ticks ${st.botSDNearHotTicks ?? 0} (exposed routes refused ${st.botSDNearHotRejects ?? 0})`);
+  let open = -1;
+  for (let i = tape.length - 1; i > 0; i -= 1) if (tape[i].hid === 0 && tape[i - 1].hid === 1) { open = i; break; }
+  if (open < 0 && tape[tape.length - 1].hid === 0) open = 0;
+  if (open >= 0) {
+    const s = tape[open];
+    lines.push(`  last line opened ${((end - s.t) / 1000).toFixed(1)} s before the end at ${Math.round(s.d)} u: hot ${s.hot}, far ${s.far}, heard ${s.heard}, doing ${s.kind} (${s.st}), planned ${s.plan}, risk ${f3(s.risk).trim()}, trade ${f3(s.trade).trim()}, idle ${s.idle == null ? '-' : Math.round(s.idle) + ' ms'}, enemy bloom ${s.bloom.toFixed(2)}`);
+  } else lines.push('  hidden at the end (no open line in the tape)');
+  if (st.botSDKill) {
+    const k = st.botSDKill;
+    const yn = (v) => (v == null ? '?' : v ? 'OPEN' : 'hidden');
+    lines.push(`  killing round: shooter at ${k.dist == null ? '?' : Math.round(k.dist)} u, hit ${k.up >= 0 ? '+' : ''}${k.up.toFixed(1)} u from the capsule centre (up), ${k.lat == null ? '?' : k.lat.toFixed(1)} u across the shooter's line`
+      + ` | the brain's read of this spot: centre ${yn(k.centre)}, shoulders ${yn(k.shoulderL)} / ${yn(k.shoulderR)}, top ${yn(k.top)}`
+      + (k.coverTop != null ? ` | the cover on the muzzle line tops out ${k.coverTop >= 0 ? '+' : ''}${k.coverTop.toFixed(1)} u above the capsule centre` : ' | no cover on the muzzle line'));
+    lines.push(`  killing round, the lead question: last exposed ${k.lastSeenMs == null ? '?' : Math.round(k.lastSeenMs) + ' ms'} before the hit; flight ${k.flightMs == null ? '?' : Math.round(k.flightMs) + ' ms'}`
+      + (k.offFire == null ? ' (no spawn point kept: a volley)' : `; the round's line passes ${k.offFire.toFixed(1)} u from where the unit WAS when it was fired and ${k.offNow.toFixed(1)} u from where it IS (a shot aimed at the position of the moment passes near the first; a led or homed one near the second)`));
+    if (k.ownLine != null) lines.push(`  killing round, the firing eye: the round's own line (spawn to hit) reads ${k.ownLine ? 'CLEAR' : 'BLOCKED'} to the brain; from where the shooter fired, this spot's centre ${yn(k.fireCentre)}, shoulders ${yn(k.fireShL)} / ${yn(k.fireShR)}, top ${yn(k.fireTop)}; where the unit WAS at the fire was ${k.wasOpen == null ? '?' : k.wasOpen ? 'OPEN' : 'hidden'}; the shooter moved ${k.eyeMoved == null ? '?' : k.eyeMoved.toFixed(1)} u during the flight`);
+  }
+  // (cmd / cmdlat / sg: what the legs ordered that frame — dash, walk, hold, or the plain brain — how lateral the ORDERED heading was and which side of the line it leaned to; W: a wall 1.6 u along the order; cmdv / act: the speed the body was told last frame and its action; spd / lat: what the body did)
+  lines.push('      t hid   d hot far heard kind        st     cmd  cmdlat sg W cmdv act    exp   spd  lat  risk trade boost hp      x     z');
+  for (let i = 0; i < tape.length; i += 1) {
+    const s = tape[i], p = tape[i - 1];
+    let spd = '  -', lat = '  - ';
+    if (p) {
+      const mx = s.x - p.x, mz = s.z - p.z, ml = Math.hypot(mx, mz);
+      spd = String(Math.round(ml / Math.max(1, s.t - p.t) * 1000)).padStart(3);
+      if (ml >= 0.3) { const lx = s.tx - s.x, lz = s.tz - s.z, ll = Math.hypot(lx, lz) || 1; lat = (Math.abs(mx * lz - mz * lx) / ml / ll).toFixed(2); }
+      else lat = 'still';
+    }
+    const sgC = s.sg == null ? '-' : s.sg > 0 ? '+' : s.sg < 0 ? '-' : '0';
+    const wC = s.wall == null ? '-' : s.wall ? 'W' : '.';
+    const cv = s.cmdv == null ? '  -' : String(Math.round(s.cmdv)).padStart(3);
+    const aC = String(s.act ?? '-').slice(0, 4).padEnd(4);
+    lines.push(`  ${((s.t - end) / 1000).toFixed(1).padStart(5)}  ${s.hid}  ${String(Math.round(s.d)).padStart(3)}   ${s.hot}   ${s.far}    ${String(s.heard).padStart(2)}  ${String(s.kind).padEnd(10)} ${String(s.st).padEnd(6)} ${String(s.cmd ?? '-').padEnd(5)} ${s.hl == null ? '   - ' : s.hl.toFixed(2).padStart(5)}  ${sgC} ${wC}  ${cv} ${aC} ${String(Math.round(s.exp)).padStart(5)}  ${spd} ${String(lat).padStart(5)} ${f3(s.risk)} ${f3(s.trade)}   ${String(Math.round(s.boost)).padStart(3)} ${s.hp}  ${s.x.toFixed(0).padStart(5)} ${s.z.toFixed(0).padStart(5)}`);
+  }
+  console.log(lines.join('\n'));
+}
+
 function updateEnemy(now) {
   if (state.enemy.state.sniperChargeTarget) {
     state.enemy.body.velocity.x = 0;
@@ -5958,6 +6086,17 @@ function updateEnemy(now) {
       const sa = Math.min(Math.max(base, u.bloomCap ?? base), base + Math.max(0, f.state?.bloom ?? 0));
       return Math.min(SD.coneShoulderMax, d * Math.tan(sa / 2));
     };
+    // THE HEAD (BOT_SD headUp, mirrors shared): the gun's cone at distance d, hot or not — the hidden read looks that far above the muzzle line (capped at coneUpMax).
+    const sdConeHalfAny = (k, d) => {
+      const f = sdEnemies[k];
+      if (!f) return 0;
+      const u = f.unit ?? {};
+      const base = u.spreadAngle ?? 0.02;
+      const sa = Math.min(Math.max(base, u.bloomCap ?? base), base + Math.max(0, f.state?.bloom ?? 0));
+      return d * Math.tan(sa / 2);
+    };
+    let sdHeadUp = 0;
+    if (SD.headUp) for (let k = 0; k < sdEnemies.length; k += 1) sdHeadUp = Math.max(sdHeadUp, Math.min(SD.coneUpMax, sdConeHalfAny(k, Math.hypot(sdEnemies[k].root.position.x - e.x, sdEnemies[k].root.position.z - e.z))));
     const sdShoulderFor = (k, atX, atZ, wide = false) => {
       const f = sdEnemies[k];
       return SD.shoulder + ((wide && f) ? sdConeHalf(k, Math.hypot(f.root.position.x - atX, f.root.position.z - atZ)) : 0);
@@ -5965,7 +6104,7 @@ function updateEnemy(now) {
     let sdHidden = true;
     let sdThreat = sdEnemies[0] ?? state.player;
     for (let k = 0; k < sdEyes.length; k += 1) {
-      if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z)) { sdHidden = false; sdThreat = sdEnemies[k]; break; }
+      if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, SD.shoulder, sdHeadUp)) { sdHidden = false; sdThreat = sdEnemies[k]; break; }   // (the head too — BOT_SD headUp, mirrors shared)
     }
     // GRAZED (mirrors shared, proposal 1): hidden by the muzzle line but inside a hot gun's cone — a bad position, not an exposure.
     let sdGrazed = false;
@@ -5975,6 +6114,19 @@ function updateEnemy(now) {
         if (sdSeenFrom(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdShoulderFor(k, e.x, e.z, true), Math.min(SD.coneUpMax, sdConeHalf(k, gd)))) { sdGrazed = true; break; }
       }
     }
+    // THE SKIN (BOT_SD skinMargin, mirrors shared): hidden at the centre but the
+    // cover inside the hit radius along the eye line — a round aimed at the
+    // centre lands before the face. Grazed: a bad position.
+    const sdSkinSeen = (eye, x, y, z) => {
+      if (!(SD.skinMargin > 0)) return false;
+      let ux = eye.x - x, uz = eye.z - z;
+      const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
+      const r = SD.shoulder + SD.skinMargin;
+      return sdClear(eye, { x: x + ux * r, y, z: z + uz * r });
+    };
+    let sdSkin = false;
+    if (sdHidden) for (let k = 0; k < sdEyes.length; k += 1) if (sdSkinSeen(sdEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z)) { sdSkin = true; break; }
+    if (sdSkin) { sdGrazed = true; eState.botSDSkinTicks = (eState.botSDSkinTicks ?? 0) + 1; }
     if (sdGrazed) eState.botSDGrazedTicks = (eState.botSDGrazedTicks ?? 0) + 1;
     const sdThreatPos = sdThreat.root.position;
     // (the threat's live bloom goes into the risk model — mirrors shared)
@@ -6058,6 +6210,42 @@ function updateEnemy(now) {
       }
     }
     const sdSearchEyes = sdEyes.concat(sdPredEyes);
+    // THE CLOSE RANGE (BOT_SD peekReachMoving, mirrors shared): the own reach against an enemy that stands, the close range against one that moves.
+    // (the slip that matters is ACROSS the line — mirrors shared)
+    const sdThreatSpeed = (() => {
+      const vx = sdThreat.body?.velocity?.x ?? 0, vz = sdThreat.body?.velocity?.z ?? 0;
+      let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+      const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      return Math.abs(vx * lz - vz * lx);
+    })();
+    const sdPeekReach = Math.min(sdReach, SD.peekSlip * (state.enemy.unit?.projectileSpeed ?? 600) / Math.max(1, sdThreatSpeed));
+    // THE DEEP HOLD's eyes (BOT_SD deepHold, mirrors shared): the live and predicted eyes plus eyes deepShift u to either side of each enemy.
+    const sdDeepEyes = [];
+    if (SD.deepHold) {
+      for (let k = 0; k < sdEnemies.length; k += 1) {
+        const f = sdEnemies[k];
+        let dx = e.x - f.root.position.x, dz = e.z - f.root.position.z;
+        const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+        for (const s of [1, -1]) for (const m of [1 / 3, 2 / 3, 1]) sdDeepEyes.push({ x: f.root.position.x - dz * s * SD.deepShift * m, y: f.root.position.y + BOT_MUZZLE_ABOVE_ROOT, z: f.root.position.z + dx * s * SD.deepShift * m });   // (swept — mirrors shared)
+      }
+    }
+    const sdDeepGoalEyes = sdSearchEyes.concat(sdDeepEyes);
+    // TRAIL EYES (BOT_SD trailMs, mirrors shared): where each enemy was trailMs ago — the rounds now in the air left from there.
+    const sdTrailEyes = [];
+    if (SD.trailMs > 0) {
+      const trails = (eState.botSDTrail ??= []);
+      for (let k = 0; k < sdEnemies.length; k += 1) {
+        const f = sdEnemies[k];
+        const tr = (trails[k] ??= []);
+        if (!tr.length || now - tr[tr.length - 1].at >= 50) tr.push({ x: f.root.position.x, y: f.root.position.y, z: f.root.position.z, at: now });
+        // (R1: the trail is as long as the round's flight to the unit — mirrors shared)
+        const tms = Math.max(SD.trailMs, Math.hypot(f.root.position.x - e.x, f.root.position.z - e.z) / (f.unit?.projectileSpeed ?? 600) * 1000);
+        while (tr.length > 1 && now - tr[1].at >= tms) tr.shift();
+        const old = tr[0];
+        if (now - old.at >= tms * 0.5 && Math.hypot(old.x - f.root.position.x, old.z - f.root.position.z) > 2) sdTrailEyes.push({ x: old.x, y: old.y + BOT_MUZZLE_ABOVE_ROOT, z: old.z });
+      }
+    }
+    const sdStepEyes = sdSearchEyes.concat(sdTrailEyes);
     // Avoid marks (rejected stretches, refused corridors) expire by time or
     // once the threat has moved watchMoveTol; the last hidden spot is the
     // back-off target when caught in a corridor (mirrors shared).
@@ -6090,23 +6278,29 @@ function updateEnemy(now) {
     const sdU = state.enemy.unit ?? {};
     const sdMyEmpty = sdU.magCapacity != null && eState.ammo <= 0;
     const sdMyReloadLeft = sdMyEmpty ? Math.max(0, (eState.reloadingUntil || (now + (sdU.reloadMs ?? 0))) - now) : 0;
+    // (a fire step is over at its landing — BOT_SD fireStep, mirrors shared)
+    if (eState.botSDFireStep && now > (eState.stepUntil || 0)) eState.botSDFireStep = false;
     // Exposure clock: starts the tick the first enemy line opens on the unit.
     if (!sdHidden) {
       if (eState.botSDExposedAt == null) {
         eState.botSDExposedAt = now;
+        // EXPOSED DUMP (BOT_SD exposedDump): the fire block runs this tick — mirrors shared
+        if (SD.exposedDump && !sdU.sniperCharge) eState.nextFireAt = Math.min(eState.nextFireAt ?? now, now);
         const watching = now < (eState.botSDWatchUntil ?? 0) && !eState.botSDPath;
         // (a peek's window carries the pre-aimed acquisition in front of the burst — mirrors shared)
         // (an engage hop's crossing was chosen for its line: pre-aimed too — mirrors shared)
-        eState.botSDPlanned = !!(eState.botSDPeekArmed || watching || eState.botSDEngageRun);
+        eState.botSDPlanned = !!(eState.botSDPeekArmed || watching || eState.botSDEngageRun || eState.botSDFireStep);   // (a fire step's line opens mid-step: planned — mirrors shared)
         // (no time budget any more — mirrors shared, re-check 2026-10-08)
         // (a fire hop's pre-aimed window is for its cell: a shoulder glimpse on
         // the approach, with no line of its own, does not spend it — mirrors shared)
         if (!eState.botSDFireGoal || sdOppClear) eState.botSDPeekArmed = false;
         eState.botSDWatchFight = watching;
         if (watching) { eState.botSDWatchUntil = 0; eState.botSDExchanges = (eState.botSDExchanges ?? 0) + 1; }
+        eState.botSDExposures = (eState.botSDExposures ?? 0) + 1;   // (the report: was never counted on the client — "0 exposures" in b1015j)
         eState.botSDWindowStart = { x: e.x, z: e.z };   // (where this window's strafe begins — the dodge-back cap, mirrors shared)
       }
     } else {
+      if (eState.botSDExposedAt != null) eState.botSDHiddenSince = now;   // (hidden again — the fire step's own clock, mirrors shared)
       eState.botSDExposedAt = null;
       eState.botSDWatchFight = false;
       eState.botSDPlanned = false;
@@ -6139,6 +6333,7 @@ function updateEnemy(now) {
     // kept that long after the line closes.
     if (!sdHidden) eState.botSDSeenAt = now;
     const sdFlightMs = SD.flightKeep * sdThreatDist / (sdThreat.unit?.projectileSpeed ?? 600) * 1000;
+    const sdStreamMs = Math.max(SD.streamMs, sdFlightMs);   // (R5/R7: the kept heading and the run on last a full flight time — mirrors shared)
     // (the mirror stamps lastFireAt at spawn for the cooldown clock — the sim's starts at 0: a shot is only "heard" after that stamp)
     const sdThreatFired = (sdThreat.state?.lastFireAt ?? -1e9) > (sdThreat.state?.fireInitAt ?? -1e9);
     const sdIncoming = sdHidden && sdThreatFired && (sdThreat.state?.lastFireAt ?? -1e9) > now - sdFlightMs && (eState.botSDSeenAt ?? -1e9) > now - sdFlightMs;
@@ -6164,12 +6359,52 @@ function updateEnemy(now) {
     if (sdAnyHot) eState.botSDHotAt = now;
     const sdQuietNeed = SD.hotQuietMs + SD.hotQuietPerRound * sdHeard;
     const sdHot = sdAnyHot || now < (eState.botSDHotAt ?? -1e9) + sdQuietNeed;
+    const sdHotRise = sdHot && !eState.botSDWasHot;   // (the tick the gun turned hot — mirrors shared)
+    eState.botSDWasHot = sdHot;
+    // (no "pre-aimed" read off the facing — a mech always faces its lock; mirrors shared)
     const sdHotVuln = sdHot && now >= (eState.invulnerableUntil ?? 0);
+    // R7c "FAR AND HOT" AT EVERY DISTANCE (mirrors shared): a hot gun the unit is vulnerable to
+    const sdFarHot = sdHotVuln;
+    if (sdFarHot) eState.botSDFarHotAt = now;
     // THE QUIET CLOCK (mirrors shared): the no-shot clock counts quiet time only.
     if (sdHotVuln) eState.botSDLastClearAt = now;
     // (the shoulders every position test uses: the plain ones plus the widest hot cone — mirrors shared)
     const sdWideShoulder = SD.shoulder + Math.max(0, ...sdEnemies.map((f, k) => sdConeHalf(k, Math.hypot(f.root.position.x - e.x, f.root.position.z - e.z))));
-    const sdWideUp = Math.min(SD.coneUpMax, sdWideShoulder - SD.shoulder);   // (the cone's height — proposal 5, mirrors shared)
+    const sdWideUp = Math.max(sdHeadUp, Math.min(SD.coneUpMax, sdWideShoulder - SD.shoulder));   // (the cone's height — proposal 5; never less than the head, mirrors shared)
+    // THIN COVER (BOT_SD farShoulder, mirrors shared): beyond farShoulderDist a spot must survive a sidestep.
+    const sdSafeShoulder = Math.max(sdWideShoulder, SD.shoulder + (sdThreatDist >= SD.farShoulderDist ? SD.farShoulder : 0));
+    // R1 FOR A LANDING (the one test, mirrors shared): width and head out of the live, predicted and trail eyes
+    const sdLandsHiddenFrom = (eyes, x, z) => {
+      for (let k = 0; k < eyes.length; k += 1) if (sdSeenFrom(eyes[k], x, myShotY, z, sdSafeShoulder, sdWideUp)) return false;
+      return true;
+    };
+    const sdLandsHidden = (x, z) => sdLandsHiddenFrom(sdStepEyes, x, z);
+    // R1 ON THE SPOT (mirrors shared): hidden from the eye of the moment but not from where the rounds in the air left — the body runs on, it does not stop here
+    const sdTrailSeen = sdHidden && sdTrailEyes.length > 0 && !sdLandsHiddenFrom(sdTrailEyes, e.x, e.z);
+    if (sdTrailSeen) eState.botSDTrailSeenTicks = (eState.botSDTrailSeenTicks ?? 0) + 1;
+    // FRAGILE SPOT (mirrors shared): hidden by less than the safe margin — the enemy's sidestep opens it.
+    let sdFragileSpot = false;
+    if (sdHidden && sdSafeShoulder > SD.shoulder + 0.01) {
+      for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdSafeShoulder, sdWideUp)) { sdFragileSpot = true; break; }   // (the predicted eyes too — R1, mirrors shared)
+    }
+    // THE DEEP HOLD (BOT_SD deepHold, mirrors shared): a gun hot and the enemy beyond the close range — no closing; a deep spot is held or reached by a hidden route.
+    const sdDeepHold = SD.deepHold && sdHidden && sdHotVuln && dist > sdPeekReach * SD.deepCloseFrac;
+    // THE NEAR BAND (BOT_SD deepCloseFrac, mirrors shared): hot, just outside the close range — the unit closes into it by routes with no exposed piece (sdHopOk)
+    const sdNearHot = SD.deepHold && sdHidden && sdHotVuln && dist > sdPeekReach && dist <= sdPeekReach * SD.deepCloseFrac;
+    if (sdNearHot) eState.botSDNearHotTicks = (eState.botSDNearHotTicks ?? 0) + 1;
+    let sdDeepHere = false;
+    if (sdDeepHold) {
+      sdDeepHere = true;
+      for (let k = 0; k < sdDeepGoalEyes.length; k += 1) if (sdSeenFrom(sdDeepGoalEyes[k], sdMyEye.x, sdMyEye.y, sdMyEye.z, sdSafeShoulder, sdWideUp)) { sdDeepHere = false; break; }
+      eState.botSDDeepTicks = (eState.botSDDeepTicks ?? 0) + 1;
+      if (sdDeepHere) eState.botSDDeepHereTicks = (eState.botSDDeepHereTicks ?? 0) + 1;
+    }
+    // EDGE DANCE (mirrors shared): hidden / exposed flipping danceFlips times within danceMs.
+    if (eState.botSDWasHidden != null && sdHidden !== eState.botSDWasHidden) (eState.botSDFlipLog ??= []).push(now);
+    eState.botSDWasHidden = sdHidden;
+    const sdFlips = eState.botSDFlipLog;
+    if (sdFlips) while (sdFlips.length && sdFlips[0] < now - SD.danceMs) sdFlips.shift();
+    const sdDancing = !!sdFlips && sdFlips.length >= SD.danceFlips;
     const sdLeaveMs = eState.botSDPlanned ? (sdU.stepDurationMs ?? STEP_DURATION_MS) : sdBackDist / sdSprint * 1000;
     // THE DODGE MUST LAND HIDDEN (mirrors shared): a planned window ends once
     // its strafe has used up what the dodge back can bring back.
@@ -6179,18 +6414,23 @@ function updateEnemy(now) {
     // (a planned exposure still in the line after its dodge does not resume the window: it leaves — mirrors shared)
     const sdDodgeSpent = eState.botSDPlanned && eState.botSDPeekStepped && now >= (eState.stepUntil ?? 0);
     const sdMustLeave = !sdHidden && (sdStrafed >= sdStrafeMax || sdDodgeSpent
+      // THE WINDOW'S END (BOT_SD peekStill, mirrors shared): a stand peek fires for its window and then the step back
+      || (SD.peekStill && eState.botSDPlanned && eState.botSDPeekOrigin && !eState.botSDEngageRun && sdExposedFor >= (eState.botSDPeekWindowMs ?? (SD.peekAimMs + SD.peekMs + SD.peekJitterMs)))
       || sdExposureRisk(sdThreatRef, SD, sdThreatDist, 1, sdLeaveMs, sdExposedFor, sdSprint, undefined, sdHot) > SD.engageRiskCap);
     // NO PEEK WITHOUT THE DODGE IN HAND (mirrors shared): a planned exposure starts only with the step off cooldown.
     const sdDodgeReady = now >= (eState.stepCooldownUntil ?? 0);
-    const sdOverBudget = !sdHidden && !sdFree && ((sdFightOk && (!sdCanFight || sdMyEmpty)) || sdMustLeave);
+    const sdOverBudget = !sdHidden && !sdFree && ((sdFightOk && (!sdCanFight || sdMyEmpty)) || sdMustLeave
+      || (sdFarHot && !eState.botSDPlanned));   // (R7c: caught unplanned under a hot gun — no fight window, the escape from the first tick; mirrors shared)
     const sdSeenFar = !sdHidden && !sdFightOk;
+    // R7 (mirrors shared): while a gun is hot every planned goal and route (not an escape) hides from the side-shifted eyes too
+    const sdHotDeep = sdHot && !sdOverBudget;
     // Node eye height for the hidden-spot search = the muzzle above the
     // floor (root offset + muzzle above root) minus GROUND_BASE_Y.
     const sdEyeH = (state.enemy.modelYOffset ?? 2.35) + BOT_MUZZLE_ABOVE_ROOT;
     const sdGoalHidden = (goal) => {
       const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + sdEyeH, z: goal.z };
       for (let k = 0; k < sdEyes.length; k += 1) {
-        if (sdSeenFrom(sdEyes[k], gEye.x, gEye.y, gEye.z)) return false;
+        if (sdSeenFrom(sdEyes[k], gEye.x, gEye.y, gEye.z, SD.shoulder, sdHeadUp)) return false;   // (the head too — mirrors shared)
       }
       return true;
     };
@@ -6246,10 +6486,18 @@ function updateEnemy(now) {
       sdDrop();
       sdDropPeek();
       eState.botSDWatchUntil = 0; eState.botSDDwellUntil = 0;
-      eState.botSDPlainUntil = now + SD.plainMs;
-      eState.botSDSearchAt = now + SD.plainMs;
       eState.botSDStucks = (eState.botSDStucks ?? 0) + 1;
-      eState.botSDWd = { x: e.x, z: e.z, at: now + SD.plainMs };   // (re-check 2026-10-08, mirrors shared: the stuck clock restarts when the SD brain gets the legs back)
+      if (!sdHidden || dist > sdUpper + SD.farDist) {
+        eState.botSDPlainUntil = now + SD.plainMs;
+        eState.botSDSearchAt = now + SD.plainMs;
+        eState.botSDWd = { x: e.x, z: e.z, at: now + SD.plainMs };   // (re-check 2026-10-08, mirrors shared: the stuck clock restarts when the SD brain gets the legs back)
+      } else {
+        // IN THE BAND, HIDDEN (stuckPlainInBand off, mirrors shared): the spot is
+        // marked and the search runs again at once — never the plain legs' open walk.
+        eState.botSDSearchAt = now;
+        eState.botSDWd = { x: e.x, z: e.z, at: now };
+        eState.botSDBandStucks = (eState.botSDBandStucks ?? 0) + 1;
+      }
     }
     // SPAWN IMMUNITY (mirrors shared): while the unit cannot be hurt the legs
     // are the normal bot's and the SD planning waits; the fire rules stay.
@@ -6274,10 +6522,20 @@ function updateEnemy(now) {
     const sdSearchX = eState.botSDPaceAnchor ? eState.botSDPaceAnchor.x : e.x;
     const sdSearchZ = eState.botSDPaceAnchor ? eState.botSDPaceAnchor.z : e.z;
     // RISK GATE for a planned hop (BOT_SD riskCap) — mirrors shared.
+    // CORNERED (BOT_SD corneredCap, mirrors shared): hidden under a hot gun at a grazed spot, or with no legal pacing leg for corneredMs, a movement hop may run up to corneredCap.
+    const sdCornered = sdHotVuln && sdHidden && (sdGrazed || sdFragileSpot || sdDancing
+      || now - (eState.botSDFragileAt ?? -1e9) < SD.fragileHoldMs
+      || (eState.botSDNoLegSince != null && now - eState.botSDNoLegSince >= SD.corneredMs));
+    if (sdCornered) eState.botSDCorneredTicks = (eState.botSDCorneredTicks ?? 0) + 1;
+    // THE QUIET LIFT (BOT_SD quietLiftMs, mirrors shared): the gun silent this long — the caps rise to patienceCap now (every exposed piece still under crossMaxMs — R7)
+    const sdQuietLift = SD.quietLiftMs > 0 && !sdHotVuln && now - (sdThreat.state?.lastFireAt ?? -1e9) >= SD.quietLiftMs;
     const sdRiskCap = (engage) => {
+      const cap = engage ? SD.engageRiskCap : SD.riskCap;
+      if (sdCornered && !engage) return Math.max(cap, SD.corneredCap);
+      if (sdQuietLift) { eState.botSDQuietLiftTicks = (eState.botSDQuietLiftTicks ?? 0) + 1; return Math.max(cap, SD.patienceCap); }
+      if (sdFarHot) return cap;   // (FAR AND HOT, mirrors shared: patience never buys an exposure into the stream)
       const since = eState.botSDRiskHoldSince ?? eState.botSDIdleSince;
       const waited = since != null ? now - since : 0;
-      const cap = engage ? SD.engageRiskCap : SD.riskCap;
       return waited > SD.patienceMs ? Math.max(cap, SD.patienceCap) : cap;
     };
     const sdRiskReject = () => {
@@ -6327,9 +6585,28 @@ function updateEnemy(now) {
     };
     // `deliberate`: a planned exposure (engage hop, FIRE hop) is read against
     // engageRiskCap like the stand peek (mirrors shared).
+    // R7a THE ONE TEST every planned move passes (mirrors shared)
+    const sdPlanOk = (exposedLen, window) => {
+      if (sdHot && (exposedLen > 0 || window)) { eState.botSDHotRouteRejects = (eState.botSDHotRouteRejects ?? 0) + 1; sdRiskReject(); return false; }
+      if (exposedLen / sdSprint * 1000 > SD.crossMaxMs) { eState.botSDLongCrossRejects = (eState.botSDLongCrossRejects ?? 0) + 1; sdRiskReject(); return false; }
+      return true;
+    };
     const sdHopOk = (found, engage, capScale = 1, deliberate = engage) => {
       const badLedge = sdCrossingBad(found.path);
       if (badLedge) { sdMark(badLedge.x, badLedge.z, SD.stuckAvoidMs, true); sdRiskReject(); return false; }
+      // THE STREAM RULE (BOT_SD streamLock, mirrors shared): an escape whose first
+      // leg turns back through the stream is not taken without the step in hand.
+      if (SD.streamLock && sdOverBudget && sdHot && eState.botSDStream && now - (eState.botSDStreamAt ?? -1e9) <= sdStreamMs && found.path && found.path.length) {
+        let q = null;
+        for (let i = 0; i < found.path.length; i += 1) { const p = found.path[i]; if (Math.hypot(p.x - e.x, p.z - e.z) >= 1) { q = p; break; } }
+        if (q) {
+          const dx = q.x - e.x, dz = q.z - e.z, dl = Math.hypot(dx, dz) || 1;
+          if ((dx * eState.botSDStream.x + dz * eState.botSDStream.z) / dl < -SD.streamTurn && !(sdDodgeReady && eState.boost >= sdStepCost)) {
+            eState.botSDStreamRejects = (eState.botSDStreamRejects ?? 0) + 1;
+            return false;
+          }
+        }
+      }
       // NO OVERSHOOT (mirrors shared): a planned hop never passes nearer the
       // target than where it ends (bandSlack of slack). Escapes are unbounded.
       // (not the engage hop: its crossing runs in front of the target's
@@ -6357,19 +6634,20 @@ function updateEnemy(now) {
       // ENGAGE ROUTE (mirrors shared): an engage hop must open the line
       // somewhere along its actual route, not only on the straight run.
       if (engage) {
-        const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreatRef, SD, sdClear, sdSprint, sdHot);
+        const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreatRef, SD, sdClear, sdSprint, sdHot, sdSafeShoulder);
         if (!rr.first) return false;
         if (sdFree || sdOverBudget) return true;
         if (!sdTradeOk(dist)) { sdTradeReject(); return false; }   // (THE TRADE, mirrors shared)
         if (sdSprintCost(rr.exposedLen) > eState.boost - SD.dashFloor) { sdRiskReject(); return false; }   // (the tank, mirrors shared)
         eState.botSDLastRisk = rr.risk;
+        if (!sdPlanOk(rr.exposedLen, true)) return false;   // (R7a, mirrors shared)
         if (rr.risk <= sdRiskCap(true) * capScale) return true;
         sdMark(rr.first.x, rr.first.z);
         sdRiskReject();
         return false;
       }
       if (sdFree || sdOverBudget) return true;
-      const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreatRef, SD, sdClear, sdSprint, sdHot);
+      const rr = sdRouteRisk(found.path, sdSearchX, sdSearchZ, myFloorY, sdRiskEyes, sdThreatRef, SD, sdClear, sdSprint, sdHot, sdSafeShoulder);
       // THE TANK (mirrors shared): no planned hop starts whose exposed stretches the tank cannot sprint.
       if (sdSprintCost(rr.exposedLen) > eState.boost - SD.dashFloor) { sdRiskReject(); return false; }
       let risk = rr.risk;
@@ -6381,6 +6659,9 @@ function updateEnemy(now) {
         if (!sdTradeOk(gd)) { sdTradeReject(); return false; }   // (THE TRADE, mirrors shared)
       }
       eState.botSDLastRisk = risk;
+      if (!sdPlanOk(rr.exposedLen, !!(deliberate && found.goal))) return false;   // (R7a, mirrors shared)
+      // THE NEAR BAND (BOT_SD deepCloseFrac, mirrors shared): hot, just outside the close range — only a route with no exposed piece closes in
+      if (sdNearHot && !deliberate && rr.exposedLen > 0) { eState.botSDNearHotRejects = (eState.botSDNearHotRejects ?? 0) + 1; sdRiskReject(); return false; }
       if (risk <= sdRiskCap(deliberate) * capScale) return true;
       if (rr.first) sdMark(rr.first.x, rr.first.z);
       sdRiskReject();
@@ -6435,6 +6716,11 @@ function updateEnemy(now) {
       const sdArriveR = (eState.botSDFireGoal && !sdOppClear) ? 0.6 : 2;
       if (Math.hypot(goal.x - e.x, goal.z - e.z) < sdArriveR) {
         const sdWasRetreat = !!eState.botSDRetreatRoute;   // (sdDrop clears it — mirrors shared)
+        // ROUNDS IN THE AIR AT THE ROUTE'S END (BOT_SD flightRunOn, mirrors shared): the arrival keeps running across the line instead of stopping at the edge
+        if (SD.flightRunOn && sdIncoming) {
+          eState.botSDRunOnUntil = now + sdFlightMs;
+          eState.botSDRunOnSide = eState.botSDCrossSide ?? eState.botSDLatSide ?? null;
+        }
         sdDrop();
         // (no planned watch hop any more — the dead "arrived at a watch spot" branch is gone, mirrors shared)
         if (sdWasRetreat) {
@@ -6574,9 +6860,11 @@ function updateEnemy(now) {
     // LATERAL leg whose end sees the target, run at a sprint. Returns true
     // when a peek was armed.
     const sdTryStandPeek = (cycling) => {
+      // (no close-range gate here — mirrors shared: a hot gun forbids the stand peek already; against a quiet gun the risk and trade models decide)
       let best = null, bestScore = -Infinity, bestSide = 0;
       let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
       const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      const stepD = sdU.stepDistance ?? STEP_DISTANCE;
       for (let k = 0; k < 8; k += 1) {
         const ang = k * Math.PI / 4 + Math.random() * 0.3;
         const cx = Math.cos(ang), cz = Math.sin(ang);
@@ -6588,6 +6876,11 @@ function updateEnemy(now) {
           const px = e.x + cx * legLen, pz = e.z + cz * legLen;
           if (walkSegmentBlocked(e.x, e.z, px, pz, eBodyY, arenaObstacles)) break;
           if (!sdClear({ x: px, y: myShotY, z: pz }, oppMuzzle)) continue;
+          // THE STEP BACK LANDS HIDDEN (BOT_SD peekStill, mirrors shared): the dodge back's landing — the step's distance back along this leg — must be walkable and hidden from the live and predicted eyes.
+          if (SD.peekStill) {
+            const bx = px - cx * stepD, bz = pz - cz * stepD;
+            if (walkSegmentBlocked(px, pz, bx, bz, eBodyY, arenaObstacles) || !sdLandsHidden(bx, bz)) { eState.botSDPeekNoLanding = (eState.botSDPeekNoLanding ?? 0) + 1; continue; }
+          }
           // NO STAND-AND-FIRE (mirrors shared, proposal 3): against a hot gun the window must be able to strafe on past the leg point.
           if (SD.peekNeedsRoom && sdHot && walkSegmentBlocked(px, pz, px + cx * SD.peekLeg, pz + cz * SD.peekLeg, eBodyY, arenaObstacles)) { eState.botSDPeekNoRoom = (eState.botSDPeekNoRoom ?? 0) + 1; continue; }
           let score = lat - (legLen - SD.peekLeg) * 0.03 + (Math.random() - 0.5) * 0.3;
@@ -6610,6 +6903,7 @@ function updateEnemy(now) {
       eState.botSDSearchAt = now; eState.botSDRiskHoldSince = null; eState.botSDIdleSince = null;
       eState.botSDPeekTo = best; eState.botSDPeekArmed = true; eState.botSDPeekStepped = false;
       eState.botSDPeekOrigin = { x: e.x, z: e.z };
+      eState.botSDPeekWindowMs = SD.peekAimMs + SD.peekMs + Math.random() * SD.peekJitterMs;   // (the window's end — peekStill, mirrors shared)
       eState.botSDLastPeekSide = bestSide;
       eState.botSDPeekAt = now;
       eState.botSDPeekFought = null;
@@ -6633,14 +6927,53 @@ function updateEnemy(now) {
       const tf = ft.ref;
       return !!tf && tf.state.hp > 0 && Math.hypot(tf.root.position.x - ft.x, tf.root.position.z - ft.z) <= SD.watchMoveTol;
     })();
+    // THE FIRE STEP (BOT_SD fireStep, mirrors shared): hidden in the close range
+    // with no line for peekWaitMs, the i-frame step itself is the peek — the
+    // middle of the step opens the line, the landing hides the unit's width
+    // from the live and predicted eyes; the exposed dump fires through the
+    // invulnerability and the unit lands hidden, never coming back.
+    const sdTryFireStep = () => {
+      const stepD = sdU.stepDistance ?? STEP_DISTANCE;
+      let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+      const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      let best = null, bestScore = -Infinity;
+      for (let k = 0; k < 16; k += 1) {
+        const ang = k * Math.PI / 8 + Math.random() * 0.2;
+        const cx = Math.cos(ang), cz = Math.sin(ang);
+        const ex = e.x + cx * stepD, ez = e.z + cz * stepD;
+        if (walkSegmentBlocked(e.x, e.z, ex, ez, eBodyY, arenaObstacles)) continue;
+        // (no standoff on the landing — R3, mirrors shared)
+        if (Math.hypot(ex - sdThreatPos.x, ez - sdThreatPos.z) > sdPeekReach) continue;   // (the landing must be inside the close range — mirrors shared)
+        if (![0.35, 0.5, 0.65].some((f) => sdClear({ x: e.x + cx * stepD * f, y: myShotY, z: e.z + cz * stepD * f }, oppMuzzle))) continue;
+        if (!sdLandsHidden(ex, ez)) continue;   // (R1)
+        const score = Math.abs(cx * lz - cz * lx) + (Math.random() - 0.5) * 0.3;
+        if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
+      }
+      if (!best || !sdBotStartStep(state.enemy, best.x, best.z, now)) return false;
+      eState.botSDFireStep = true;
+      eState.botSDDodges = (eState.botSDDodges ?? 0) + 1;
+      eState.botSDFireSteps = (eState.botSDFireSteps ?? 0) + 1;
+      eState.botSDStream = { x: best.x, z: best.z }; eState.botSDStreamAt = now;
+      eState.botSDSearchAt = now + SD.searchMs; eState.botSDRiskHoldSince = null; eState.botSDIdleSince = null;
+      return true;
+    };
+    // (not sdEngageDue — its clock is held at zero while a gun is hot; the fire step's own gate, mirrors shared)
+    if (SD.fireStep && !eState.botSDPath && !eState.botSDPeekTo && sdHidden && !sdOppClear
+        && dist <= sdPeekReach + (sdU.stepDistance ?? STEP_DISTANCE) * 0.7
+        && now - (eState.botSDHiddenSince ?? -1e9) >= SD.fireStepHiddenMs
+        && now >= (state.player.state.invulnerableUntil ?? 0) && !sdMyEmpty && sdDodgeReady && !(now <= (eState.stepUntil || 0))
+        && eState.boost >= sdStepCost + SD.flinchReserve && now >= (eState.botSDPlainUntil ?? 0)) {
+      sdTryFireStep();
+    }
     if (!eState.botSDPath && !eState.botSDPeekTo && !sdOverBudget && (sdPeekDue || sdCycleDue) && !sdOppClear
         && (eState.botSDPeeksHere ?? 0) < SD.peeksPerCover && !sdPeekSpent
         && !sdHotWaiting   // (ENEMY FIRING: no peek into the stream; mirrors shared)
-        && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0)) && now >= (eState.botSDPlainUntil ?? 0)) {
+        && !(now <= (eState.stepUntil || 0))   // (a fire step just started: no peek on top)
+        && eState.boost >= sdPeekNeed && sdDodgeReady && now >= (eState.botSDPlainUntil ?? 0)) {
       sdTryStandPeek(sdCycleDue && !sdPeekDue);
     }
-    const sdWantHop = !eState.botSDPath && !eState.botSDPeekTo
-      && (sdOverBudget || sdSeenFar || (sdHidden && sdDwellOver && !sdHoldReload));
+    const sdWantHop = !eState.botSDPath && !eState.botSDPeekTo && !sdDeepHere   // (THE DEEP HOLD: deep enough — no hop while the gun is hot; mirrors shared)
+      && (sdOverBudget || sdSeenFar || (sdHidden && sdDwellOver && !sdHoldReload) || (sdDeepHold && !sdDeepHere));
     if (sdWantHop && now >= (eState.botSDSearchAt ?? 0) && botHideSearchFrameAt !== now) {
       botHideSearchFrameAt = now;
       if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
@@ -6673,6 +7006,7 @@ function updateEnemy(now) {
             eState.botSDGoal = { x: o.x, z: o.z, y: myFloorY };
             eState.botSDMoveAnchor = null;
             eState.botSDRetreatRoute = true;   // (its arrival arms the peek cycle, no dwell)
+            eState.botSDHopKind = 'retreat';
             eState.botSDSearchAt = now + SD.searchMs;
             eState.botSDRetreats = (eState.botSDRetreats ?? 0) + 1;
             decided = true;
@@ -6800,7 +7134,13 @@ function updateEnemy(now) {
         found.path = [P, { x: g.x, z: g.z, y: g.y ?? myFloorY }];
       };
       let attempts;
-      if (sdOverBudget) {
+      if (sdDeepHold && !sdDeepHere) {
+        // THE DEEP HOLD (BOT_SD deepHold, mirrors shared): a deep spot nearby, hugging cover first, by a route with no exposed piece (capScale 0 below).
+        attempts = [{ maxPops: SD.nearPops, within: { x: e.x, z: e.z, r: SD.fallBackMax }, minDistFrom: { x: e.x, z: e.z, d: 2 }, goalCoverMax: SD.hugDist, accept: sdStandoffOk, deep: true },
+          { maxPops: SD.farPops, within: { x: e.x, z: e.z, r: SD.fallBackMax * 2 }, minDistFrom: { x: e.x, z: e.z, d: 2 }, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk, deep: true },
+          // (the last stage: a deep spot by a route priced at the cap — mirrors shared)
+          { maxPops: SD.farPops, within: { x: e.x, z: e.z, r: SD.fallBackMax * 2 }, minDistFrom: { x: e.x, z: e.z, d: 2 }, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk, deep: true, deepCap: true }];
+      } else if (sdOverBudget) {
         attempts = [{ maxPops: SD.nearPops, accept: (gx, gz) => lateralGoal(gx, gz) && forwardGoal(gx, gz), goalCoverMax: SD.goalCoverMax },
           { maxPops: SD.nearPops, accept: forwardGoal, goalCoverMax: SD.goalCoverMax },
           { maxPops: SD.nearPops, accept: forwardGoal },
@@ -6841,7 +7181,7 @@ function updateEnemy(now) {
       }
       // (a deliberate exposure is planned only with the boost to sprint it
       // and dodge back — the stand peek's own gate; mirrors shared)
-      if (sdEngageDue && eState.boost >= sdPeekNeed && sdDodgeReady) {
+      if (sdEngageDue && !sdDeepHold && eState.boost >= sdPeekNeed && sdDodgeReady) {   // (THE DEEP HOLD: no engage crossing, no fire hop while the gun is hot beyond the close range)
         const engageWithin = { x: p.x, z: p.z, r: sdClosingDue ? Math.max(sdRing, dist - gain) : sdUpper + SD.bandSlack };
         const engageMin = { x: e.x, z: e.z, d: SD.shiftMin };
         const engageOk = (gx, gz) => sdStandoffOk(gx, gz) && midSees(gx, gz) && bearingOk(gx, gz);
@@ -6860,9 +7200,17 @@ function updateEnemy(now) {
         // (the last resort, after every relocation: a firing cell inside the floor)
         attempts.push({ maxPops: SD.farPops, within: { x: p.x, z: p.z, r: sdUpper + SD.fightSlack }, minDistFrom: engageMin, anyGoal: true, accept: sdFireSpotNear, fire: true, near: true });
       }
+      // FALL BACK (BOT_SD fallBackMax, mirrors shared): cornered, the last stage is a hidden spot farther from the enemy at the cornered cap.
+      if (sdCornered && SD.fallBackMax > 0) {
+        attempts.push({ maxPops: SD.farPops, within: { x: e.x, z: e.z, r: SD.fallBackMax }, minDistFrom: { x: p.x, z: p.z, d: dist + SD.fallBackGain }, goalCoverMax: SD.goalCoverMax, accept: sdStandoffOk, fallback: true });
+      }
       // NO OPEN GOAL UNDER FIRE (mirrors shared): while a gun is hot no planned hop ends on a cell that may show; escapes keep theirs.
       if (SD.hotNoOpenGoal && sdHot && !sdOverBudget) {
         for (let i = attempts.length - 1; i >= 0 && attempts.length > 1; i -= 1) if (attempts[i].anyGoal) attempts.splice(i, 1);
+      }
+      // FAR AND HOT (mirrors shared): no fire hop either — the engage crossing and the hidden moves stay.
+      if (sdFarHot && !sdOverBudget) {
+        for (let i = attempts.length - 1; i >= 0 && attempts.length > 1; i -= 1) if (attempts[i].fire) { attempts.splice(i, 1); eState.botSDFarHotFireDrops = (eState.botSDFarHotFireDrops ?? 0) + 1; }
       }
       const stage = Math.min(eState.botSDSearchStage ?? 0, attempts.length - 1);
       const a = attempts[stage];
@@ -6900,14 +7248,15 @@ function updateEnemy(now) {
         // what is left parks in eState.botSDSearchJob and continues next
         // frame on the same stage. One 50 ms Dijkstra no longer drops frames.
         found = findHiddenSpot(
-          offlineNavGrid, sdSearchX, sdSearchZ, myFloorY, (sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes, arenaObstacles,
+          offlineNavGrid, sdSearchX, sdSearchZ, myFloorY, (a.deep || sdHotDeep) ? sdDeepGoalEyes : ((sdOverBudget || sdThreatMoving) ? sdSearchEyes : sdRiskEyes), arenaObstacles,   // (a deep route, or any route under a hot gun — R7, mirrors shared)
           { maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept ?? null, eyeHeight: sdEyeH,
-            goalEyes: (sdOverBudget || sdThreatMoving) ? null : sdSearchEyes,
-            exposurePenalty: a.engage ? SD.engagePenalty : SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist, goalCoverMax: a.goalCoverMax ?? null, anyGoal: !!a.anyGoal,
+            goalEyes: sdOverBudget ? sdStepEyes : sdDeepGoalEyes,   // (R7: every planned goal hides from the side-shifted eyes, an escape from the trail eyes too — mirrors shared)
+            exposurePenalty: a.engage ? SD.engagePenalty : SD.exposurePenalty, openPenalty: (sdHot || sdRecentFire) ? SD.openPenalty * SD.hotOpenPenaltyMul : SD.openPenalty, openDist: SD.openDist, goalCoverMax: a.goalCoverMax ?? null, anyGoal: !!a.anyGoal,   // (OPEN LAND — mirrors shared)
             threat: { x: sdThreatPos.x, z: sdThreatPos.z }, alongWeight: SD.alongWeight, avoid: sdOverBudget ? sdAvoidPinned : sdAvoid,
             score: a.score ?? null, scoreStop: a.scoreStop ?? Infinity,
             allowJump: !sdOverBudget,
-            goalShoulder: sdWideShoulder,   // (the hot cone's width too — proposal 1, mirrors shared)
+            goalShoulder: sdSafeShoulder,   // (the hot cone's width and the far sidestep margin — mirrors shared)
+            goalUp: sdWideUp,   // (R1: the goal hides the head too — mirrors shared)
             deadline: performance.now() + SD_FRAME_SEARCH_MS,
             job: eState.botSDSearchJob }
         );
@@ -6919,12 +7268,16 @@ function updateEnemy(now) {
         eState.botSDSearchAt = now;   // (the same stage continues next frame)
       } else if (decided) {
         // (watch / hold / retreat chosen above)
-      } else if (found && (!a.better || found.score >= sdPosScore + (sdGrazed ? 0.5 : SD.holdGain)) && sdHopOk(found, !!a.engage, a.push ? SD.pushCapScale : 1, !!(a.engage || a.fire))) {   // (a grazed spot takes any deeper one — mirrors shared)
+      } else if (found && (!a.better || found.score >= sdPosScore + (sdGrazed ? 0.5 : SD.holdGain)) && sdHopOk(found, !!a.engage, (a.deep && !a.deepCap) ? 0 : (a.push ? SD.pushCapScale : 1), !!(a.engage || a.fire))) {   // (a grazed spot takes any deeper one; a deep hop takes no exposed piece at all, its last stage the cap — mirrors shared)
         eState.botSDSearchJob = null;
         eState.botSDRiskHoldSince = null;
         eState.botSDIdleSince = null;
         if (a.engage) eState.botSDEngages = (eState.botSDEngages ?? 0) + 1;
         eState.botSDEngageRun = !!a.engage;   // (its crossing fires with the pre-aimed reaction)
+        // (death-report bookkeeping: what this hop is for)
+        eState.botSDHopKind = a.engage ? 'engage' : sdOverBudget ? 'escape' : a.deep ? 'deep' : a.fallback ? 'fallback' : a.flank ? 'flank' : a.better ? 'better' : a.push ? 'push' : a.cornerFire ? 'cornerfire' : a.fire ? 'fire' : 'close';
+        if (!eState.botSDHopKinds) eState.botSDHopKinds = {};
+        eState.botSDHopKinds[eState.botSDHopKind] = (eState.botSDHopKinds[eState.botSDHopKind] ?? 0) + 1;
         if (a.fire) {
           // (mirrors shared: the arrival opens the line, the fight window fires, then the dodge back)
           eState.botSDPeekArmed = true; eState.botSDPeekStepped = false; eState.botSDPeekOrigin = { x: e.x, z: e.z };
@@ -6955,7 +7308,8 @@ function updateEnemy(now) {
           if (eState.botSDStallSince == null && eState.botSDRiskHoldSince == null && (sdPosScore < SD.holdScore - 1 || !sdHoldOk)) eState.botSDStallSince = now;
           // STAND PEEK FALLBACK (mirrors shared): past the peek cap from this
           // cover the peek runs only here — the whole list failed.
-          if (sdPeekDue && !sdOppClear && !sdPeekSpent && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0))) sdTryStandPeek(false);
+          // (FAR AND HOT: not into the stream — mirrors shared)
+          if (sdPeekDue && !sdOppClear && !sdPeekSpent && !sdFarHot && eState.boost >= sdPeekNeed && sdDodgeReady && !(now <= (eState.stepUntil || 0))) sdTryStandPeek(false);
         }
       }
     }
@@ -6965,6 +7319,85 @@ function updateEnemy(now) {
       eState.botSDPaceAnchor = null;
       eState.botSDPaceX = 0;
       eState.botSDPaceZ = 0;
+      eState.botSDNoLegSince = null;
+    }
+    // ROOM FOR A STRAFE (mirrors shared, owner 2026-10-15): the body (radius 1.3) along the heading for len u.
+    const sdRoomFits = (cx, cz, len) => {
+      const n = Math.max(1, Math.ceil(len / 0.6));
+      for (let k = 1; k <= n; k += 1) {
+        const f = k / n;
+        if (unitOverlapsObstacle(e.x + cx * len * f, eBodyY, e.z + cz * len * f, 1.3)) return false;
+      }
+      return true;
+    };
+    // (the strafe sign with room — crossRoom, then 4 u — and no stalled side: sg, else -sg, else 0; mirrors shared)
+    const sdStrafeSide = (sx, sz, sg) => {
+      const deadS = now < (eState.botSDStallSide?.until ?? 0) ? eState.botSDStallSide : null;
+      const ok = (s) => !(deadS && (sx * s) * deadS.x + (sz * s) * deadS.z > 0)
+        && (sdRoomFits(sx * s, sz * s, SD.crossRoom) || sdRoomFits(sx * s, sz * s, 4));
+      if (ok(sg)) return sg;
+      if (ok(-sg)) return -sg;
+      return 0;
+    };
+    // RUN ON (BOT_SD flightRunOn, mirrors shared): the route ended with rounds
+    // in the air — keep running across the line on the crossing's side while a
+    // hidden leg with room exists; the cover pacing starts once they have landed.
+    const sdRunOnLeg = () => {
+      let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+      const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      const sd = eState.botSDRunOnSide;
+      let cx = -lz, cz = lx;   // (the perpendicular, on the kept side)
+      if (cx * sd.x + cz * sd.z < 0) { cx = -cx; cz = -cz; }
+      const ex = e.x + cx * 4, ez = e.z + cz * 4;
+      for (let k = 0; k < sdEyes.length; k += 1) if (sdSeenFrom(sdEyes[k], ex, myShotY, ez)) return false;
+      if (walkSegmentBlocked(e.x, e.z, ex, ez, eBodyY, arenaObstacles)) return false;
+      coverMove = { hold: false, hide: true, dash: true, mx: cx, mz: cz };
+      eState.botSDHeadX = cx; eState.botSDHeadZ = cz;
+      eState.botSDState = 'runon';
+      eState.botSDRunOns = (eState.botSDRunOns ?? 0) + 1;
+      return true;
+    };
+    // FLINCH STEP (BOT_SD flinchStep, mirrors shared): an unplanned line opening
+    // at any distance is answered the same tick with the i-frame dodge step
+    // toward a landing hidden at the safe shoulder, else the most lateral walkable one.
+    // THE STEP SCAN (mirrors shared): the 8 headings at the step's distance —
+    // walkable, a hidden landing preferred, then the most lateral; headings
+    // with less than minLat across the enemy's line are skipped.
+    const sdStepScan = (minLat) => {
+      const stepD = sdU.stepDistance ?? STEP_DISTANCE;
+      let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+      const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+      let best = null, bestScore = -Infinity;
+      for (let k = 0; k < 8; k += 1) {
+        const ang = k * Math.PI / 4;
+        const cx = Math.cos(ang), cz = Math.sin(ang);
+        const lat = Math.abs(cx * lz - cz * lx), away = -(cx * lx + cz * lz);
+        if (lat < minLat) continue;
+        const ex = e.x + cx * stepD, ez = e.z + cz * stepD;
+        if (walkSegmentBlocked(e.x, e.z, ex, ez, eBodyY, arenaObstacles)) continue;
+        const hidden = sdLandsHidden(ex, ez);   // (R1)
+        const score = (hidden ? 10 : 0) + lat + 0.3 * away;
+        if (score > bestScore) { bestScore = score; best = { x: cx, z: cz, hidden }; }
+      }
+      return best;
+    };
+    if (SD.flinchStep && !sdHidden && sdExposedFor === 0 && !eState.botSDPlanned && !eState.botSDPeekTo
+        && now >= (eState.stepCooldownUntil ?? 0) && now > (eState.stepUntil ?? 0) && eState.boost >= (sdU.stepBoostCost ?? STEP_BOOST_COST) + SD.flinchReserve) {
+      const best = sdStepScan(0);
+      // (R7c, mirrors shared: the step lands hidden, or it is taken only inside the close range)
+      if (best && (best.hidden || sdThreatDist <= sdPeekReach) && sdBotStartStep(state.enemy, best.x, best.z, now)) {
+        eState.botSDDodges = (eState.botSDDodges ?? 0) + 1;
+        eState.botSDFlinches = (eState.botSDFlinches ?? 0) + 1;
+        eState.botSDStream = { x: best.x, z: best.z }; eState.botSDStreamAt = now;   // (THE STREAM RULE: the legs run on with the step's heading — mirrors shared)
+        eState.botSDSearchAt = now;   // (the search runs the first tick after the landing — mirrors shared)
+        if (best.hidden) eState.botSDFlinchHidden = (eState.botSDFlinchHidden ?? 0) + 1;
+      } else if (best) {
+        // R7c THE RUN (mirrors shared): no hidden landing beyond the close range — the body sprints along the most lateral walkable heading this tick and keeps it until the escape route is found
+        eState.botSDStream = { x: best.x, z: best.z }; eState.botSDStreamAt = now;
+        eState.botSDFlinchRunUntil = now + 400;
+        eState.botSDFlinchRuns = (eState.botSDFlinchRuns ?? 0) + 1;
+        eState.botSDSearchAt = now;
+      }
     }
     // 3. Legs.
     if (now <= (eState.stepUntil || 0)) {
@@ -7030,6 +7463,24 @@ function updateEnemy(now) {
         if ((sp[k].y ?? myFloorY) - myFloorY > 1.7) { jumpAhead = true; break; }
       }
       let sdJump = null, sdLegOverride = null;
+      // A ROUTE PLANNED UNDER A QUIET GUN (mirrors shared, owner 2026-10-15): with
+      // the gun hot and an exposed stretch ahead the rest of the route is priced
+      // again, hot (every 200 ms), and dropped over the cap; escapes keep going.
+      // (never an escape; and once the tick the gun turns hot, probe or no probe — mirrors shared)
+      if (sdHidden && sdHot && !sdOverBudget && eState.botSDHopKind !== 'escape'
+          && (sdHotRise || (aheadExposed && now - (eState.botSDRouteHotCheckAt ?? -1e9) >= 200))) {
+        eState.botSDRouteHotCheckAt = now;
+        const rr = sdRouteRisk(sp.slice(eState.botSDPathIdx), e.x, e.z, myFloorY, sdDeepGoalEyes, sdThreatRef, SD, sdClear, sdSprint, true, sdSafeShoulder);   // (R7b: the side-shifted eyes too — mirrors shared)
+        if (rr.exposedLen > 0) {   // (R7a: an exposed piece ahead under a hot gun is dropped, whatever the number)
+          if (rr.first) sdMark(rr.first.x, rr.first.z);
+          sdDrop();
+          eState.botSDSearchAt = now;          // (the search runs this tick — mirrors shared)
+          eState.botSDFragileAt = now;         // (CORNERED at once, fragileHoldMs)
+          eState.botSDHotRouteDrops = (eState.botSDHotRouteDrops ?? 0) + 1;
+          eState.botSDLastRisk = rr.risk;
+          sdLegOverride = 'hold';
+        }
+      }
       const sdWpDist = Math.hypot(wp.x - e.x, wp.z - e.z);
       if ((wp.y ?? myFloorY) - myFloorY > 1.7 && state.enemy.grounded && !eState.airborne && sdWpDist < SD.jumpReach) {
         // At the ledge (mirrors shared): no jump into the threat's line; bank
@@ -7072,14 +7523,51 @@ function updateEnemy(now) {
         const ap = { x: e.x + (tx / tl) * SD.shadowWalkProbe, y: myShotY, z: e.z + (tz / tl) * SD.shadowWalkProbe };
         for (let k = 0; k < sdPredEyes.length && !aheadPredicted; k += 1) if (sdSeenFrom(sdPredEyes[k], ap.x, ap.y, ap.z)) aheadPredicted = true;
       }
-      const sdDash = sdExposedLeg
+      // NO WALK INTO A HOT LINE (BOT_SD hotNoShadowWalk, mirrors shared): with a gun hot a covered leg about to enter the predicted line sprints like an exposure.
+      const sdHotAhead = SD.hotNoShadowWalk && sdHot && aheadPredicted;
+      // (THE TANK, mirrors shared: a live line spends to dashFloor; a hidden leg for a hot predicted line, or with rounds in the air, only to hotAheadFloor)
+      // (under a hot gun every hidden leg keeps the reserve; only the open body spends to the floor — mirrors shared)
+      const sdDash = !sdHidden
         ? eState.boost > SD.dashFloor
-        : (!sdCreep && (sdBurst || (!aheadPredicted && !(jumpAhead && eState.boost < SD.jumpBank) && sdTravel())));
+        : (aheadExposed || sdHotAhead || sdIncoming)
+          ? eState.boost > (sdHot ? SD.hotAheadFloor : SD.dashFloor)
+          : (!sdCreep && (sdBurst || (!aheadPredicted && !(jumpAhead && eState.boost < SD.jumpBank) && sdTravel())));
+      // THE BODY MUST RUN (BOT_SD crossStallMs, mirrors shared): an exposed leg
+      // ordered to dash that moved less than crossStallMove in crossStallMs is
+      // stalled — that lateral side is dead for crossStallDeadMs, the kept side dropped.
+      // (hidden legs only here — the exposed ones, every branch, run the detector after the legs; mirrors shared)
+      const sdCrossing = sdHidden && (sdExposedLeg || sdHotAhead) && eState.boost > SD.dashFloor && !eState.airborne;
+      if (!sdCrossing) eState.botSDCrossAnchor = null;
+      else if (!eState.botSDCrossAnchor) eState.botSDCrossAnchor = { x: e.x, z: e.z, at: now };
+      else if (now - eState.botSDCrossAnchor.at >= SD.crossStallMs) {
+        const an = eState.botSDCrossAnchor;
+        if (Math.hypot(e.x - an.x, e.z - an.z) < SD.crossStallMove) {
+          // (the side the last heading leaned to, across the threat's line; a heading on the line kills no side)
+          let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+          const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+          const hxp = eState.botSDHeadX ?? 0, hzp = eState.botSDHeadZ ?? 0;
+          const al = hxp * lx + hzp * lz;
+          const sx = hxp - al * lx, sz = hzp - al * lz, sl = Math.hypot(sx, sz);
+          if (sl > 0.2) eState.botSDStallSide = { x: sx / sl, z: sz / sl, until: now + SD.crossStallDeadMs };
+          eState.botSDCrossSide = null;
+          eState.botSDLatSide = null;
+          eState.botSDCrossStalls = (eState.botSDCrossStalls ?? 0) + 1;
+        }
+        eState.botSDCrossAnchor = { x: e.x, z: e.z, at: now };
+      }
+      // (ONE SIDE PER EXPOSURE: the kept side outlives the flicker of the ahead / incoming reads by 300 ms, then clears — mirrors shared)
+      if (!(sdExposedLeg || sdHotAhead) && now - (eState.botSDCrossSide?.at ?? -1e9) > 300) eState.botSDCrossSide = null;
       let hx = tx / tl, hz = tz / tl;
       // Inside lateralFullDist the crossing is fully perpendicular (mirrors shared).
-      const latMin = dist <= SD.lateralFullDist ? 1 : SD.lateralMin;
+      // FAR AND HOT: fully perpendicular at any distance (mirrors shared).
+      // HIDDEN WITH THE EXPOSURE AHEAD (BOT_SD aheadLateral, mirrors shared): the
+      // pre-rotation keeps aheadLateral so the leg ENTERS the exposure; rounds
+      // in the air behind a closed line keep the full crossing.
+      const latMin = !sdHidden
+        ? ((dist <= SD.lateralFullDist || sdFarHot) ? 1 : SD.lateralMin)
+        : (sdIncoming ? 1 : Math.min(1, SD.aheadLateral));
       let legMode = 'dash';
-      if (sdExposedLeg && latMin > 0) {
+      if ((sdExposedLeg || sdHotAhead) && latMin > 0) {
         // CROSSING RULE: keep at least lateralMin of the heading perpendicular
         // to the threat's line (a no-lead shooter misses a target displaced
         // more than cone + capsule radius during the flight).
@@ -7111,23 +7599,43 @@ function updateEnemy(now) {
           // no room at either does the other side get the legs. Neither ->
           // commit straight through at a sprint. No slide inside
           // lateralFullDist.
-          const pref = eState.botSDLatSide;
-          const firstSgn = (pref && now - pref.at <= SD.lateralKeepMs && pref.x * sx0 + pref.z * sz0 < 0) ? -1 : 1;
+          // ONE SIDE PER EXPOSURE (BOT_SD crossKeepSide, mirrors shared): the
+          // side taken on this exposure first; a stalled side is dead for
+          // crossStallDeadMs; both dead -> the route's heading. A fresh choice
+          // prefers the side with crossRoom of room over 4 u.
+          const kept = SD.crossKeepSide ? eState.botSDCrossSide : null;
+          const pref = kept ?? eState.botSDLatSide;
+          const prefOk = !!pref && (!!kept || now - pref.at <= SD.lateralKeepMs);
+          const firstSgn = (prefOk && pref.x * sx0 + pref.z * sz0 < 0) ? -1 : 1;
+          const dead = now < (eState.botSDStallSide?.until ?? 0) ? eState.botSDStallSide : null;
+          const sideDead = (sgn) => !!dead && (sx0 * sgn) * dead.x + (sz0 * sgn) * dead.z > 0;
           const alongSgn = along < 0 ? -1 : 1;
           const lats = latMin < 1 && SD.lateralSlide < latMin ? [latMin, SD.lateralSlide] : [latMin];
+          const rooms = SD.crossRoom > 4 ? [SD.crossRoom, 4] : [4];
+          const order = [];
+          if (prefOk) { for (const r of rooms) order.push([firstSgn, r]); for (const r of rooms) order.push([-firstSgn, r]); }
+          else { for (const r of rooms) { order.push([firstSgn, r]); order.push([-firstSgn, r]); } }
+          const fits4 = new Map();
           let room = false, rx = 0, rz = 0;
-          for (let side = 0; side < 2 && !room; side += 1) {
-            const sgn = side === 0 ? firstSgn : -firstSgn;
+          for (let o = 0; o < order.length && !room; o += 1) {
+            const sgn = order[o][0], roomLen = order[o][1];
+            if (sideDead(sgn)) continue;
             for (let i = 0; i < lats.length && !room; i += 1) {
               const ak = Math.sqrt(Math.max(0, 1 - lats[i] * lats[i])) * alongSgn;
               let cx = sx0 * sgn * lats[i] + lx * ak, cz = sz0 * sgn * lats[i] + lz * ak;
               const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl;
               // (room for the BODY, not a thin segment — mirrors shared)
-              if (sdLegFits(e.x, e.z, e.x + cx * 4, e.z + cz * 4) && !(sdBehindLine && sdLegSeen(cx, cz))) {
+              const key = `${sgn}|${i}`;
+              let fits = fits4.get(key);
+              if (fits == null) { fits = sdLegFits(e.x, e.z, e.x + cx * 4, e.z + cz * 4) && !(sdBehindLine && sdLegSeen(cx, cz)); fits4.set(key, fits); }
+              if (fits && roomLen > 4) fits = sdLegFits(e.x + cx * 4, e.z + cz * 4, e.x + cx * roomLen, e.z + cz * roomLen);
+              if (fits) {
                 rx = cx; rz = cz; room = true;
                 eState.botSDLatSide = { x: sx0 * sgn, z: sz0 * sgn, at: now };
+                if (SD.crossKeepSide) eState.botSDCrossSide = eState.botSDLatSide;
                 eState.botSDLatSign = (sx0 * sgn) * -lz + (sz0 * sgn) * lx >= 0 ? 1 : -1;
                 if (lats[i] < latMin) eState.botSDLateralSlides = (eState.botSDLateralSlides ?? 0) + 1;
+                if (roomLen < SD.crossRoom) eState.botSDShortRooms = (eState.botSDShortRooms ?? 0) + 1;
               }
             }
           }
@@ -7165,6 +7673,7 @@ function updateEnemy(now) {
         } else if (!sdHidden) {
           // (a crossing that needs no rotation still records its side — mirrors shared)
           eState.botSDLatSide = { x: px / pl, z: pz / pl, at: now };
+          if (SD.crossKeepSide) eState.botSDCrossSide = eState.botSDLatSide;
         }
       }
       if (sdLegOverride) legMode = sdLegOverride;
@@ -7257,6 +7766,12 @@ function updateEnemy(now) {
           coverMove = null;
         }
       }
+    } else if (!sdHidden && eState.botSDStream && now < (eState.botSDFlinchRunUntil ?? 0)) {
+      // (R7 THE RUN, mirrors shared: caught beyond the close range with no hidden landing — the kept heading until the escape route takes over)
+      coverMove = { hold: false, hide: true, dash: true, mx: eState.botSDStream.x, mz: eState.botSDStream.z };
+      eState.botSDState = 'stream';
+    } else if (sdHidden && SD.flightRunOn && now < (eState.botSDRunOnUntil ?? 0) && eState.botSDRunOnSide && eState.boost > SD.dashFloor && sdRunOnLeg()) {
+      // (RUN ON: coverMove set by sdRunOnLeg — the rounds in the air land first; mirrors shared)
     } else if (sdHidden) {
       // COVER / WATCH: pace the cover on a short leash (BOT_SD pace* knobs)
       // instead of standing dead still. Mirrors shared ai.js: a leg must stay
@@ -7283,7 +7798,8 @@ function updateEnemy(now) {
           if (Math.hypot(lx - anchor.x, lz - anchor.z) > SD.paceLeash) return false;
           if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
           if (coverDistanceAt(offlineNavGrid, lx, lz, myFloorY, arenaObstacles) > legCoverMax) return false;   // never MORE open than here
-          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz, sdWideShoulder, sdWideUp)) return false;   // (a hot cone's width and height too — proposals 1 and 5)
+          for (let k = 0; k < sdSearchEyes.length; k += 1) if (sdSeenFrom(sdSearchEyes[k], lx, myShotY, lz, sdSafeShoulder, sdWideUp)) return false;   // (a hot cone's width and height, the far sidestep margin — mirrors shared)
+          for (let k = 0; k < sdEyes.length; k += 1) if (sdSkinSeen(sdEyes[k], lx, myShotY, lz)) return false;   // (THE SKIN: not against a face a round reaches through — mirrors shared)
           if (watching && !eState.botSDWatchSpent && watchScore(lx, lz, myFloorY) < SD.exitMin) return false;   // (a spent wait still shuffles — mirrors shared)
           return true;
         };
@@ -7321,9 +7837,11 @@ function updateEnemy(now) {
             eState.botSDPaceUntil = now + SD.paceMs;
             eState.botSDPacePickAt = now;
             eState.botSDPaceLeg = bestLeg;
+            eState.botSDNoLegSince = null;
           } else {
             hx = 0; hz = 0;
             eState.botSDPacePauseUntil = now + SD.paceRetryMs;
+            if (eState.botSDNoLegSince == null) eState.botSDNoLegSince = now;   // (CORNERED reads this — mirrors shared)
           }
         }
         eState.botSDPaceX = hx;
@@ -7339,7 +7857,8 @@ function updateEnemy(now) {
       eState.botSDState = watching ? 'watch' : 'cover';
     } else if (!sdOverBudget) {
       // Every exposed manoeuvre sprints (mirrors shared) — the watch fight too.
-      if (SD.fightStill) {
+      if (SD.fightStill || (SD.peekStill && eState.botSDPlanned && eState.botSDPeekOrigin && !eState.botSDEngageRun && sdThreatDist <= sdPeekReach)) {
+        // (THE CLOSE PEEK STANDS: fires from its leg point, the step carries it back — mirrors shared)
         eState.momentumVX = 0;
         eState.momentumVZ = 0;
         coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
@@ -7354,8 +7873,33 @@ function updateEnemy(now) {
           const away = side.x * (e.x - o.x) + side.z * (e.z - o.z);
           if (Math.abs(away) > 0.3) { sg = away > 0 ? 1 : -1; peekAway = true; }
         }
+        // THE BODY MUST RUN, the fight strafe (mirrors shared): the side needs room and no stall; neither side: stand and fire.
+        let strafeNone = false;
+        if (!peekAway) {
+          const s2 = sdStrafeSide(side.x, side.z, sg);
+          if (s2 === 0) strafeNone = true;
+          else if (s2 !== sg) { sg = s2; eState.botSDStrafeSign = sg; }
+        }
+        // NO ROOM TO STRAFE -> THE DODGE STEP (BOT_SD noRoomStep, mirrors shared): the i-frame step toward the last hidden spot, or straight back from the threat.
+        if (strafeNone && SD.noRoomStep && !eState.botSDPlanned && now >= (eState.stepCooldownUntil ?? 0)) {
+          // (the last hidden spot when a real distance away; where the unit stands, straight back from the threat — mirrors shared)
+          const lh = eState.botSDLastHidden;
+          let bx = lh ? lh.x - e.x : 0, bz = lh ? lh.z - e.z : 0;
+          let bl = Math.hypot(bx, bz);
+          if (bl < 2) {
+            // (THE STREAM RULE, mirrors shared: never straight back along the enemy's
+            // line; the step scan across the line instead, nothing across: stand and fire)
+            const sc = sdStepScan(0.5);
+            if (sc) { bx = sc.x; bz = sc.z; bl = 1; } else bl = 0;
+          }
+          if (bl > 0 && sdBotStartStep(state.enemy, bx / bl, bz / bl, now)) {
+            eState.botSDDodges = (eState.botSDDodges ?? 0) + 1;
+            eState.botSDNoRoomSteps = (eState.botSDNoRoomSteps ?? 0) + 1;
+            eState.botSDStream = { x: bx / bl, z: bz / bl }; eState.botSDStreamAt = now;   // (THE STREAM RULE: the legs run on with the step's heading)
+          }
+        }
         // (the window strafes from its first tick — mirrors shared)
-        let tx = side.x * sg + avoid.rx * 0.8, tz = side.z * sg + avoid.rz * 0.8;
+        let tx = strafeNone ? 0 : side.x * sg + avoid.rx * 0.8, tz = strafeNone ? 0 : side.z * sg + avoid.rz * 0.8;
         if ((tx * avoid.rx + tz * avoid.rz) < -0.4 && avoidMag > 0.4) {
           if (peekAway) {
             tx = 0; tz = 0;
@@ -7381,7 +7925,10 @@ function updateEnemy(now) {
         eState.botSDStrafeSign = -(eState.botSDStrafeSign ?? 1);
         eState.botSDStrafeUntil = now + 600 + Math.random() * 300;
       }
-      const sg = eState.botSDStrafeSign ?? 1;
+      let sg = eState.botSDStrafeSign ?? 1;
+      // (THE BODY MUST RUN, the open strafe: room and no stalled side, else the other side — mirrors shared)
+      const sgRoom = sdStrafeSide(side.x, side.z, sg);
+      if (sgRoom !== 0 && sgRoom !== sg) { sg = sgRoom; eState.botSDStrafeSign = sg; eState.botSDStrafeUntil = now + 600 + Math.random() * 300; }
       let tx = side.x * sg + avoid.rx * 0.8, tz = side.z * sg + avoid.rz * 0.8;
       if ((tx * avoid.rx + tz * avoid.rz) < -0.4 && avoidMag > 0.4) {
         eState.botSDStrafeSign = -sg;
@@ -7393,6 +7940,88 @@ function updateEnemy(now) {
       coverMove = { hold: false, hide: true, dash: eState.boost > SD.dashFloor, mx: tx / tl, mz: tz / tl };
       eState.botSDState = 'open';
     }
+    // THE STREAM RULE (BOT_SD streamLock, mirrors shared): exposed with a gun hot
+    // the heading is kept (a running average over streamMs) and an order that
+    // turns back is refused — the i-frame step through the stream when a route
+    // needs it and the step is in hand, else the run on along the kept heading
+    // when 4 u of it is walkable, else the order stands.
+    // AFTER HIDING (mirrors shared): the heading stays bound for streamMs after
+    // the last exposed tick — a hold or a turn back in that window becomes the
+    // run on along the kept heading while 4 u of it is hidden and walkable.
+    const sdStreamWin = SD.streamLock && sdHot && !!eState.botSDStream && now - (eState.botSDStreamAt ?? -1e9) <= sdStreamMs;
+    if (SD.streamLock && sdHot && (!sdHidden || sdStreamWin) && now <= (eState.stepUntil || 0)) {
+      if (eState.botSDStream) eState.botSDStreamAt = now;   // (the step's own heading binds at the landing)
+    } else if (SD.streamLock && !sdHidden && sdHot && coverMove && !coverMove.hold && !coverMove.jump
+        && !eState.botSDPeekTo && !(eState.botSDPlanned && eState.botSDPeekOrigin)) {   // (a stand peek's or fire hop's legs are its own — mirrors shared)
+      const st = (eState.botSDStream && now - (eState.botSDStreamAt ?? -1e9) <= sdStreamMs) ? eState.botSDStream : null;
+      let mx = coverMove.mx, mz = coverMove.mz;
+      const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml;
+      if (st && mx * st.x + mz * st.z < -SD.streamTurn) {
+        const deadS = now < (eState.botSDStallSide?.until ?? 0) ? eState.botSDStallSide : null;
+        const onOk = !(deadS && st.x * deadS.x + st.z * deadS.z > 0)
+          && !walkSegmentBlocked(e.x, e.z, e.x + st.x * 4, e.z + st.z * 4, eBodyY, arenaObstacles);
+        if (eState.botSDPath && sdDodgeReady && eState.boost >= sdStepCost && sdBotStartStep(state.enemy, mx, mz, now)) {
+          eState.botSDDodges = (eState.botSDDodges ?? 0) + 1;
+          eState.botSDStreamSteps = (eState.botSDStreamSteps ?? 0) + 1;
+          coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
+          eState.botSDState = 'dodge';
+          eState.botSDStream = { x: mx, z: mz }; eState.botSDStreamAt = now;
+          mx = 0; mz = 0;
+        } else if (onOk) {
+          if (eState.botSDPath) { sdDrop(); eState.botSDSearchAt = now + SD.searchMs; }   // (a route that turned back is given up)
+          coverMove = { hold: false, hide: true, dash: eState.boost > SD.dashFloor, mx: st.x, mz: st.z };
+          mx = st.x; mz = st.z;
+          eState.botSDStrafeSign = (st.x * side.x + st.z * side.z) >= 0 ? 1 : -1;   // (the strafe sign follows the kept heading)
+          eState.botSDStrafeUntil = now + 600 + Math.random() * 300;
+          eState.botSDState = 'stream';
+          eState.botSDStreamHolds = (eState.botSDStreamHolds ?? 0) + 1;
+        } else {
+          eState.botSDStreamTurns = (eState.botSDStreamTurns ?? 0) + 1;   // (nothing better: the turn stands)
+        }
+      }
+      if (mx !== 0 || mz !== 0) {
+        const k = st ? Math.min(1, (now - eState.botSDStreamAt) / sdStreamMs) : 1;
+        const nx = st ? st.x * (1 - k) + mx * k : mx, nz = st ? st.z * (1 - k) + mz * k : mz;
+        const nl = Math.hypot(nx, nz);
+        if (nl > 1e-3) { eState.botSDStream = { x: nx / nl, z: nz / nl }; eState.botSDStreamAt = now; }
+      }
+    } else if (sdStreamWin && sdHidden && !eState.botSDPeekTo
+        && (sdTrailSeen || !coverMove || coverMove.hold || (!coverMove.jump && (coverMove.mx * eState.botSDStream.x + coverMove.mz * eState.botSDStream.z) / (Math.hypot(coverMove.mx, coverMove.mz) || 1) < -SD.streamTurn))) {
+      // (hidden for less than a flight time: the rounds fired at the exposure are still landing — the run on, not a stand or a turn back; never a stand where the trail eyes see — mirrors shared)
+      const st = eState.botSDStream;
+      const ex = e.x + st.x * 4, ez = e.z + st.z * 4;
+      const ok = !walkSegmentBlocked(e.x, e.z, ex, ez, eBodyY, arenaObstacles) && sdLandsHiddenFrom(sdSearchEyes, ex, ez);   // (R1: 4 u on hides from the live and predicted eyes — the trail is what the run leaves behind)
+      if (ok && sdTrailSeen) eState.botSDTrailRunOns = (eState.botSDTrailRunOns ?? 0) + 1;
+      if (ok) {
+        if (eState.botSDPath) { sdDrop(); eState.botSDSearchAt = now + SD.searchMs; }
+        coverMove = { hold: false, hide: true, dash: eState.boost > SD.dashFloor, mx: st.x, mz: st.z };
+        eState.botSDPaceAnchor = null;
+        eState.botSDState = 'stream';
+        eState.botSDStreamRunOns = (eState.botSDStreamRunOns ?? 0) + 1;
+      }
+    }
+    // THE BODY MUST RUN, every exposed leg (mirrors shared): an exposed dash that
+    // moved the body less than crossStallMove in crossStallMs is stalled — the
+    // side it leaned to is dead for crossStallDeadMs, the strafe sign flips.
+    if (!sdHidden && coverMove && !coverMove.hold && coverMove.dash && !eState.airborne) {
+      const an = eState.botSDCrossAnchor;
+      if (!an) eState.botSDCrossAnchor = { x: e.x, z: e.z, at: now };
+      else if (now - an.at >= SD.crossStallMs) {
+        if (Math.hypot(e.x - an.x, e.z - an.z) < SD.crossStallMove) {
+          let lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z;
+          const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+          const al = coverMove.mx * lx + coverMove.mz * lz;
+          const sx = coverMove.mx - al * lx, sz = coverMove.mz - al * lz, sl = Math.hypot(sx, sz);
+          if (sl > 0.2) eState.botSDStallSide = { x: sx / sl, z: sz / sl, until: now + SD.crossStallDeadMs };
+          eState.botSDStrafeSign = -(eState.botSDStrafeSign ?? 1);
+          eState.botSDStrafeUntil = now + 600 + Math.random() * 300;
+          eState.botSDCrossSide = null;
+          eState.botSDLatSide = null;
+          eState.botSDCrossStalls = (eState.botSDCrossStalls ?? 0) + 1;
+        }
+        eState.botSDCrossAnchor = { x: e.x, z: e.z, at: now };
+      }
+    } else if (!sdHidden) eState.botSDCrossAnchor = null;
     // (UNDER FIRE, mirrors shared: no handover to the plain brain while an enemy fired within recentFireMs)
     if (sdHidden && !sdRecentFire && !eState.botSDPath && !eState.botSDPeekTo && eState.botSDStallSince != null
         && now - eState.botSDStallSince > SD.stallMs) {
@@ -7411,6 +8040,32 @@ function updateEnemy(now) {
       eState.botSDPaceAnchor = null;   // (mirrors shared)
     }
     if (!sdHidden) eState.botSDStallSince = null;
+    // DEATH REPORT TAPE (owner 2026-10-15, "show you how the BOT got caught
+    // easily"): every 100 ms one line of what the brain sees and does, the
+    // last 8 s kept; printed to the console the frame the unit dies
+    // (sdDeathReport) and on demand from window.__SD_REPORT(). Offline only.
+    if (now - (eState.botSDTapeAt ?? -1e9) >= 100) {
+      eState.botSDTapeAt = now;
+      const tape = eState.botSDTape ?? (eState.botSDTape = []);
+      tape.push({
+        t: now, x: e.x, z: e.z, tx: sdThreatPos.x, tz: sdThreatPos.z, d: sdThreatDist,
+        hid: sdHidden ? 1 : 0, hot: sdHot ? 1 : 0, far: sdFarHot ? 1 : 0, heard: sdHeard,
+        st: eState.botSDState ?? '-',
+        kind: eState.botSDPeekTo ? 'peek' : eState.botSDPath ? (eState.botSDHopKind ?? 'path') : (now <= (eState.stepUntil || 0) ? 'step' : '-'),
+        plan: eState.botSDPlanned ? 1 : 0, over: sdOverBudget ? 1 : 0, exp: sdExposedFor,
+        risk: eState.botSDLastRisk, trade: eState.botSDLastTrade, boost: eState.boost, hp: eState.hp,
+        bloom: sdThreat.state?.bloom ?? 0, idle: eState.botSDIdleSince != null ? now - eState.botSDIdleSince : null,
+        // (what the legs COMMANDED this frame, against what the body did — a wall or a wedge shows as a dash that goes nowhere)
+        cmd: coverMove ? (coverMove.hold ? 'hold' : coverMove.dash ? 'dash' : 'walk') : 'plain',
+        hl: (() => { if (!coverMove || coverMove.hold) return null; const lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z, ll = Math.hypot(lx, lz) || 1; return Math.abs(coverMove.mx * lz - coverMove.mz * lx) / ll; })(),
+        // (which side of the threat's line the order leans to, a wall 1.6 u along the order, the speed the body was told last frame, its action)
+        sg: (() => { if (!coverMove || coverMove.hold) return 0; const lx = sdThreatPos.x - e.x, lz = sdThreatPos.z - e.z; const c = coverMove.mx * lz - coverMove.mz * lx; return c > 0.05 ? 1 : c < -0.05 ? -1 : 0; })(),
+        wall: (coverMove && !coverMove.hold) ? (unitOverlapsObstacle(e.x + coverMove.mx * 1.6, eBodyY, e.z + coverMove.mz * 1.6, 1.3) ? 1 : 0) : null,
+        cmdv: Math.hypot(state.enemy.body.velocity?.x ?? 0, state.enemy.body.velocity?.z ?? 0),
+        act: eState.action ?? '-',
+      });
+      if (tape.length > 80) tape.splice(0, tape.length - 80);
+    }
   } else if (state.suddenDeathActive) {
     eState.botSDState = 'dodge';
   }
@@ -8375,7 +9030,8 @@ function updateEnemy(now) {
       s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
-    } else if (!botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z), state.mode)) {
+    } else if (!(SDG && s.botSDExposedAt != null) && !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z), state.mode)) {
+      // (SUDDEN DEATH, EXPOSED: no bloom-gate hold while a line is open on the unit — mirrors shared)
       // BLOOM GATE (ported from the demo line 2026-09-22, shared bloom.js
       // botMayFire): inside the CURRENT gate line — the 33%-hit distance for
       // the autos, the sure-hit distance for the marksman rifles — the bot
@@ -8393,7 +9049,7 @@ function updateEnemy(now) {
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       // SD in band: poll every firePollMs — a sprint through a one-cell gap
       // lasts ~200 ms and the 220 ms poll let it go unshot.
-      s.nextFireAt = now + ((SDG && dist <= (s.botSDUpper ?? upperRange) + 20) ? SDG.firePollMs : 220);
+      s.nextFireAt = now + ((SDG && (dist <= (s.botSDUpper ?? upperRange) + 20 || s.botSDExposedAt != null)) ? SDG.firePollMs : 220);   // (exposed at any range: the fast poll too — exposedDump, mirrors shared)
       s.machineBurstRemaining = 0;
       botClearFireRule(s);
       if (SDG) sdFireLineLost(s, now, SDG);
@@ -8423,20 +9079,29 @@ function updateEnemy(now) {
       // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
       // carry cap 4 — four blasts per trigger pull, then the usual rest).
       const bursted = u.spreadCount === 1 || u.botFireCap;
+      // EXPOSED DUMP (BOT_SD exposedDump, mirrors shared): while an enemy line
+      // is open on the unit there is no burst rest and no cadence jitter —
+      // rounds at the gun's own cooldown until the line closes or the
+      // magazine empties. SD only.
+      const sdDump = !!(SDG && SDG.exposedDump && s.botSDExposedAt != null);
       if (bursted && s.machineBurstRemaining <= 0) {
         s.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = s.lastFireAt;
       attemptFire(state.enemy, state.player, now);
       const fired = s.lastFireAt !== firedAt;
-      if (fired) botNoteShot(s);
+      if (fired) {
+        botNoteShot(s);
+        if (s.botSDExposedAt != null) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
+        if (s.botSDFireStep && now <= (s.stepUntil || 0)) s.botSDFireStepShots = (s.botSDFireStepShots ?? 0) + 1;   // (… and inside a fire step's invulnerability)
+      }
       if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
         // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
         // firePerMinute and the bot's DPS scales with it. Inter-burst pause
         // is short (0.8-1.5 s) so the bot keeps sustained pressure on like a
         // real MG user would.
-        s.nextFireAt = s.machineBurstRemaining > 0
+        s.nextFireAt = (s.machineBurstRemaining > 0 || sdDump)
           ? now + u.fireCooldownMs
           : now + PhaserLikeBetween(800, 1500);
         if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
@@ -8446,7 +9111,7 @@ function updateEnemy(now) {
         // instead of dawdling 1+ s between shots. Small jitter avoids a
         // perfectly robotic cadence; the magazine + autoReload still impose
         // a natural burst rhythm without the AI gating on top.
-        if (fired) s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(40, 220);
+        if (fired) s.nextFireAt = now + u.fireCooldownMs + (sdDump ? 0 : PhaserLikeBetween(40, 220));
         else s.nextFireAt = now + 120;
       }
     }
@@ -10021,7 +10686,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1015i';
+const CLIENT_BUILD_TAG = 'b1016f';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13550,6 +14215,8 @@ if (typeof window !== 'undefined') {
   };
   // Live tuning of the Sudden Death brain from the console: __BOT_SD.peekWaitMs = 800, etc.
   window.__BOT_SD = BOT_SD;
+  // The Sudden Death brain's last 8 s as text, on demand (the bot still alive): __SD_REPORT(), __SD_REPORT(3) for the last 3 s
+  window.__SD_REPORT = (secs = 8) => sdDeathReport(state.enemy, 'on demand', secs);
   // Dev hook: the All Random roll (headless checks of the SD sniper exclusion).
   window.__rollRandomUnit = (excluded = []) => rollRandomUnit(excluded);
   // Dev hooks: the renderer's draw stats, the 3D characters' per-frame cost, the art warm-up and its model cache.
@@ -19718,6 +20385,12 @@ function animate() {
       updateHud();
       updateDioramaHud();
 
+      // DEATH REPORT (Sudden Death, offline): the brain's tape the frame a bot dies.
+      if (state.suddenDeathActive) {
+        for (const f of [state.enemy, state.enemy2]) {
+          if (f?.state?.botSDTape && f.state.hp <= 0 && !f.state.botSDReported) { f.state.botSDReported = true; sdDeathReport(f); }
+        }
+      }
       // Win condition. Trio: dead units are replaced from their roster
       // first; a team is out only when every roster on it is spent.
       // Sudden Death (classic): first death decides — 1v1 player-vs-enemy,
