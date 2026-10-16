@@ -148,8 +148,8 @@ const BOT_CH_AREA_R = 14;
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // fire block below and for the client's imports.
-import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017e_ref.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017e_ref.js';
+import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017g_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017g_ref.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -2158,10 +2158,12 @@ export function tickBot(matchState, botId, now) {
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
-    } else if (!me.botSDFire && !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
-      // (SUDDEN DEATH: the brain's trigger is open (botSDFire) — no bloom-gate
-      // hold; a 1 HP duel is the same lottery both ways, and a held trigger
-      // returns nothing. Otherwise the gate stands as before.)
+    } else if (SDG ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
+      // (SUDDEN DEATH: the brain's trigger (botSDFire) is the unit's only
+      // trigger — open, no bloom-gate hold: a 1 HP duel is the same lottery
+      // both ways, and a held trigger returns nothing; closed (hidden, or the
+      // unit's own reaction still running), no shot, polled every tick.
+      // Otherwise the gate stands as before.)
       // BLOOM GATE (owner 2026-09-21, bloom.js botMayFire; gate line
       // 2026-09-22): inside the CURRENT gate line (8.84 / SA-now for the
       // autos — the 33%-hit distance — and 3.2 / SA-now, sure-hit, for the

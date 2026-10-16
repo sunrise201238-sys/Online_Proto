@@ -17,7 +17,8 @@
 //      enemy's reaction — none while its stream is on, riskReactMs while its
 //      gun is aimed (fired within aimHoldMs), acquireMs when it is not — with
 //      its live bloom and cadence (sdExposureRisk); and the chance the unit's
-//      own rounds land in the same window (sdOwnHitChance). An attack is
+//      own rounds land in the same window, from ownReactMs after the line
+//      (sdOwnHitChance). An attack is
 //      taken when the deaths it costs to land one hit stay under riskCap; a
 //      route, when its death chance does. One cap.
 //   3. THE PLAN: hidden with nothing under way, the unit prices THE ENGAGE
@@ -46,7 +47,10 @@
 //      ends the tick its way out would cost the cap. THE WAIT paces its
 //      hidden cell inside a leash, every step hidden by the same test, the
 //      cell read at the horizon at the cadence. The
-//      trigger is open whenever an eye sees the unit (botSDFire).
+//      trigger opens ownReactMs after the unit knew (botSDFire): an attack's
+//      take (THE STAND PEEK and THE ENGAGE RUN walk it into sight), else the
+//      first sighting — the unit's own reaction, the hosts' only trigger in
+//      Sudden Death.
 //
 // THE HOST INTERFACE (sdBrainTick(h)):
 //   now, SD (the knobs), me (the unit's state: boost, hp, ammo, step clocks,
@@ -164,8 +168,11 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
 // cadence, its round's flight, and the threat's drift across the line
 // during that flight (its live velocity, walking at the least — a sprayer
 // standing this instant will not stand for the shot). A volley gun lands
-// by its pattern. The first round goes the tick the line opens.
-export function sdOwnHitChance(me, threat, d, T, SD) {
+// by its pattern. The first round goes when the unit's reaction is done —
+// counted from when it knew, `known` ms before the window — then the flight.
+// THE FIRST ROUND of the unit at distance d: what is left of its reaction `known` ms after it knew, then the flight.
+export const sdFirstRoundMs = (SD, unit, d, known = 0) => Math.max(0, SD.ownReactMs - known) + d / (unit?.projectileSpeed ?? 600) * 1000;
+export function sdOwnHitChance(me, threat, d, T, SD, known = 0) {
   const u = me.unit ?? {};
   const pv = u.projectileSpeed ?? 600;
   const base = u.spreadAngle ?? 0.02, cap = Math.max(base, u.bloomCap ?? base), perShot = u.bloomPerShot ?? 0;
@@ -176,7 +183,7 @@ export function sdOwnHitChance(me, threat, d, T, SD) {
   const lx = threat.pos.x - me.pos.x, lz = threat.pos.z - me.pos.z, ll = Math.hypot(lx, lz) || 1;
   const latSpeed = Math.max(threat.unit?.walkSpeed ?? 12, Math.abs(vx * lz - vz * lx) / ll);
   const s = latSpeed * (d / pv);
-  const first = (d / pv) * 1000;
+  const first = sdFirstRoundMs(SD, u, d, known);
   const shots = T >= first ? 1 + (T - first) / shotMs : 0;
   const volley = (u.spreadCount ?? 1) > 1;
   let survive = 1;
@@ -244,6 +251,7 @@ export function sdRouteRisk(path, sx, sz, floorY, seen, threat, SD, speed = SD.r
 export const BOT_SD = {
   // THE ENEMY'S HAND
   riskReactMs: 250,       // a human's reaction: the first round comes this long after a line opens, when the gun is aimed at the spot
+  ownReactMs: 250,        // THE UNIT'S OWN REACTION: its trigger opens this long after it knew — an attack's take (the plan walks it into sight), else the first sighting of its silhouette; its own-hit price counts rounds from then
   acquireMs: 600,         // a human's acquisition: the first round when the gun is NOT aimed there (the turn and the aim)
   aimHoldMs: 2000,        // a gun that fired within this long is aimed (the attention holds on the last target)
   hotMs: 200,             // the STREAM is on: the gun fired within this long, within its round's flight to the unit, or within hotCycles of its own cycle
@@ -504,7 +512,7 @@ export function sdBrainTick(host) {
   const sdPriceAs = (T, d, lat, elapsed, react) => sdExposureRisk(sdThreat, SD, d, lat, T, elapsed, sdSprint, undefined, react);
   const sdPrice = (T, d = sdThreatDist, lat = 0, elapsed = 0) => sdPriceAs(T, d, lat, elapsed, sdReact);
   // (the chance the unit lands a hit inside T ms at distance d; none without rounds, none on an immune target)
-  const sdOwnAs = (T, d, as) => (!as.ammo || as.immune) ? 0 : sdOwnHitChance(selfRef, sdThreat, d, T, SD);
+  const sdOwnAs = (T, d, as, known = 0) => (!as.ammo || as.immune) ? 0 : sdOwnHitChance(selfRef, sdThreat, d, T, SD, known);
   const sdOwn = (T, d = sdThreatDist) => sdOwnAs(T, d, sdReal);
   // THE TRADE: the deaths it takes to land one hit — each exposure pe dead,
   // 1 / pm of them needed. Under the cap, the attack is worth it.
@@ -524,7 +532,11 @@ export function sdBrainTick(host) {
   else me.botSDExposedAt = null;
   const sdExposedFor = sdHidden ? 0 : now - me.botSDExposedAt;
   const sdOpened = !sdHidden && me.botSDExposedAt === now;   // (the tick the line opened: the dodge is the opening move of every exposure)
-  me.botSDFire = !sdHidden;
+  // THE UNIT KNEW: an attack's take (THE STAND PEEK and THE ENGAGE RUN walk
+  // the unit into sight — the sighting was decided), else the first sighting.
+  const sdSought = !!me.botSDPlan && (me.botSDPlan.kind === 'peek' || me.botSDPlan.kind === 'engage');
+  const sdKnownFor = sdHidden ? 0 : now - (sdSought ? Math.min(me.botSDPlan.taken ?? now, me.botSDExposedAt) : me.botSDExposedAt);
+  me.botSDFire = !sdHidden && sdKnownFor >= SD.ownReactMs;   // (the unit's own reaction, counted from when it knew)
   // THE PLAN under way: me.botSDPlan = { kind, ... }
   //   route  : { kind: 'close'|'flank'|'approach'|'escape', path, idx, goal }
   //   engage : { kind: 'engage', end, side, at, exposed }
@@ -533,6 +545,7 @@ export function sdBrainTick(host) {
   let plan = me.botSDPlan ?? null;
   const sdDrop = () => { me.botSDPlan = null; plan = null; me.botSDReact = null; };
   const sdTake = (p) => {
+    p.taken = now;
     me.botSDPlan = p; plan = p;
     me.botSDPlans ??= {}; me.botSDPlans[p.kind] = (me.botSDPlans[p.kind] ?? 0) + 1;
     me.botSDSearchStage = 0; me.botSDSearchJob = null;
@@ -655,11 +668,12 @@ export function sdBrainTick(host) {
     for (const leg of sdFiringLegs(mePos.x, mePos.z, myFloorY)) {
       if (as.tank && me.boost < sdNeed(leg.L)) continue;
       const d = Math.hypot(opp.pos.x - leg.x, opp.pos.z - leg.z);
-      const first = d / (meUnit.projectileSpeed ?? 600) * 1000;
+      const legMs = leg.dodge ? STEP_DURATION_MS : leg.L / sdSprint * 1000;   // (the leg: how long the unit has known by the sighting)
+      const first = sdFirstRoundMs(SD, meUnit, d, legMs);   // (what is left of its reaction, then its first round's flight)
       const exit = leg.dodge ? leg.L / sdSprint * 1000 : TICK_RATE_MS;   // (the sprint back after a dodge leg; the dodge back after a sprint leg)
       const legRisk = leg.dodge ? 0 : sdRouteRisk([{ x: leg.x, z: leg.z, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react).risk;
       const pe = 1 - (1 - legRisk) * (1 - sdPriceAs(first + exit, d, 0, 0, as.react));
-      const dph = sdDeathsPerHit(pe, sdOwnAs(first + Math.max(SD.riskShotMs, meUnit.fireCooldownMs ?? 0), d, as));
+      const dph = sdDeathsPerHit(pe, sdOwnAs(first + Math.max(SD.riskShotMs, meUnit.fireCooldownMs ?? 0), d, as, legMs));
       me.botSDLastRisk = pe; me.botSDLastTrade = dph;
       consider(dph, leg.L, () => {
         sdTake({ kind: 'peek', point: { x: leg.x, z: leg.z }, origin: { x: mePos.x, z: mePos.z }, leg: { x: leg.cx, z: leg.cz }, dodge: leg.dodge, at: now, armed: false });
