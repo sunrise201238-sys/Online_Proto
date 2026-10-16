@@ -256,8 +256,13 @@ export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS
 // inside an AABB this tick, we revert to that known-outside position rather
 // than picking the nearest face (which would teleport them across the
 // obstacle in pathological cases).
+// Returns the outward normal {x, z} of the face(s) the body was pushed out of
+// (unit length, the faces summed), or null when it touched none: physics' own
+// note of a wall, for the bots' brains (tick.js keeps it per tick, off the
+// fighter and out of every snapshot).
 export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radius = FIGHTER_RADIUS) {
   const pos = fighter.pos;
+  let nx = 0, nz = 0, touched = false;
   for (let i = 0; i < obstacles.length; i += 1) {
     const o = obstacles[i];
     const topBuffer = o.topBuffer ?? 4;
@@ -273,6 +278,7 @@ export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radiu
       const push = radius - d;
       pos.x += (dx / d) * push;
       pos.z += (dz / d) * push;
+      nx += dx / d; nz += dz / d;
     } else {
       const prevOutside = prevPos
         && (prevPos.x < o.minX - radius || prevPos.x > o.maxX + radius
@@ -280,21 +286,29 @@ export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radiu
       if (prevOutside) {
         pos.x = prevPos.x;
         pos.z = prevPos.z;
+        // (the face: from the box's nearest point out to the restored body)
+        const ex = pos.x - Math.max(o.minX, Math.min(pos.x, o.maxX)), ez = pos.z - Math.max(o.minZ, Math.min(pos.z, o.maxZ));
+        const el = Math.hypot(ex, ez) || 1;
+        nx += ex / el; nz += ez / el;
       } else {
         const dMinX = pos.x - o.minX;
         const dMaxX = o.maxX - pos.x;
         const dMinZ = pos.z - o.minZ;
         const dMaxZ = o.maxZ - pos.z;
         const minD = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-        if (minD === dMinX) pos.x = o.minX - radius;
-        else if (minD === dMaxX) pos.x = o.maxX + radius;
-        else if (minD === dMinZ) pos.z = o.minZ - radius;
-        else pos.z = o.maxZ + radius;
+        if (minD === dMinX) { pos.x = o.minX - radius; nx -= 1; }
+        else if (minD === dMaxX) { pos.x = o.maxX + radius; nx += 1; }
+        else if (minD === dMinZ) { pos.z = o.minZ - radius; nz -= 1; }
+        else { pos.z = o.maxZ + radius; nz += 1; }
       }
     }
+    touched = true;
     fighter.vel.x = 0;
     fighter.vel.z = 0;
   }
+  if (!touched) return null;
+  const nl = Math.hypot(nx, nz);
+  return nl > 1e-6 ? { x: nx / nl, z: nz / nl } : null;
 }
 
 // Returns the highest surface Y at (x,z) that the fighter can step up to

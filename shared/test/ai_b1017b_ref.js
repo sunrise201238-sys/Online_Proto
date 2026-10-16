@@ -148,8 +148,8 @@ const BOT_CH_AREA_R = 14;
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // fire block below and for the client's imports.
-import { sdBrainTick, makeMuzzleClear, BOT_SD, sdFireReactHold, sdFireLineLost } from './sdbrain_b1016n_ref.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdFireReactHold, sdFireLineLost, sdRouteRisk } from './sdbrain_b1016n_ref.js';
+import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017b_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017b_ref.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -1176,6 +1176,7 @@ export function tickBot(matchState, botId, now) {
     }
     coverMove = sdBrainTick({
       now, SD: SDG, me, pos: me.pos, unit: me.unit, vel: me.vel, grounded: me.grounded,
+      wall: matchState.walls?.[me.id] ?? null,   // (physics' note from the last tick: the face the body was pushed out of — tick.js stage 5)
       opp, enemies: sdEnemies,
       obstacles, grid: navGridFor(arena), clear: makeMuzzleClear(obstacles, surfaces),
       eyeUp: PROJECTILE_MUZZLE_Y_OFFSET, muzzleH: PROJECTILE_MUZZLE_Y_OFFSET,
@@ -2133,8 +2134,6 @@ export function tickBot(matchState, botId, now) {
   // --- Firing: LoS-aware + universal burst sizing ---
   if (now >= me.nextFireAt) {
     const u = me.unit;
-    // (the fire reaction: the SD brain's knobs; none for the plain bot)
-    const reactSD = SDG;
     // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
     // shots from an immune attacker deal full damage (every hit check is
     // target-side), and humans can already shoot while protected. Only the
@@ -2153,11 +2152,10 @@ export function tickBot(matchState, botId, now) {
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
-    } else if (!(me.botSDExposedAt != null) && !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z), matchState.mode)) {
-      // (SUDDEN DEATH, EXPOSED (owner 2026-10-15, the loop): no bloom-gate hold
-      // while a line is open on the unit — a 1 HP duel is the same lottery
-      // both ways, and a held trigger returns nothing; whatever the cone is,
-      // it fires. Hidden, the gate stands as before.)
+    } else if (!me.botSDFire && !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z), matchState.mode)) {
+      // (SUDDEN DEATH: the brain's trigger is open (botSDFire) — no bloom-gate
+      // hold; a 1 HP duel is the same lottery both ways, and a held trigger
+      // returns nothing. Otherwise the gate stands as before.)
       // BLOOM GATE (owner 2026-09-21, bloom.js botMayFire; gate line
       // 2026-09-22): inside the CURRENT gate line (8.84 / SA-now for the
       // autos — the 33%-hit distance — and 3.2 / SA-now, sure-hit, for the
@@ -2174,16 +2172,7 @@ export function tickBot(matchState, botId, now) {
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       // SD in band: poll every firePollMs — a sprint through a one-cell gap
       // lasts ~200 ms and the 220 ms poll let it go unshot.
-      me.nextFireAt = now + ((SDG && (dist <= (me.botSDUpper ?? upperRange) + 20 || me.botSDExposedAt != null)) ? SDG.firePollMs : 220);   // (exposed at any range: the fast poll too — exposedDump)
-      me.machineBurstRemaining = 0;
-      botClearFireRule(me);
-      if (reactSD) sdFireLineLost(me, now, reactSD);
-    } else if (reactSD && sdFireReactHold(me, now, reactSD)) {
-      // FIRE REACTION (owner 2026-10-06, "make SD bot attack reaction 250 ms
-      // like human"): the line opened less than fireReactMs ago — still
-      // acquiring. Polls every tick; the first round goes the tick the
-      // reaction is up.
-      me.nextFireAt = now + TICK_RATE_MS;
+      me.nextFireAt = now + (SDG ? SDG.firePollMs : 220);   // (the Sudden Death brain: the fast poll — a line opens and closes within one sprint)
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
     } else if (u.sniperCharge) {
@@ -2208,7 +2197,7 @@ export function tickBot(matchState, botId, now) {
       // while an enemy line is open on the unit there is no burst rest and
       // no cadence jitter — rounds at the gun's own cooldown until the line
       // closes or the magazine empties. SD only.
-      const sdDump = !!(SDG && me.botSDExposedAt != null);
+      const sdDump = !!(SDG && me.botSDFire);
       if (bursted && me.machineBurstRemaining <= 0) {
         me.machineBurstRemaining = botBurstSize(u);
       }
@@ -2217,7 +2206,7 @@ export function tickBot(matchState, botId, now) {
       const fired = me.lastFireAt !== firedAt;
       if (fired) {
         botNoteShot(me);
-        if (me.botSDExposedAt != null) me.botSDExposedShots = (me.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
+        if (me.botSDFire) me.botSDExposedShots = (me.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
       }
       if (bursted) {
         if (fired) me.machineBurstRemaining -= 1;

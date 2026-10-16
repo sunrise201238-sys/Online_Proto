@@ -319,9 +319,13 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   }));
   for (const f of fighters) integrateFighter(f, arena.surfaces, dt);
 
-  // 5. Resolve obstacle penetrations.
+  // 5. Resolve obstacle penetrations. The wall each body was pushed out of
+  //    (its outward normal, or null) is kept in matchState.walls for the bots'
+  //    brains (tickBot hands it over as host.wall): per-tick state like
+  //    events, off the fighter, never in a snapshot.
+  const walls = matchState.walls ?? (matchState.walls = {});
   for (const { f, pos } of prevPositions) {
-    resolveUnitObstacleCollisions(f, pos, arena.obstacles);
+    walls[f.id] = resolveUnitObstacleCollisions(f, pos, arena.obstacles);
   }
 
   // 6. Tiny-velocity damping (replicates the offline build's "stops below
