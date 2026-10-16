@@ -11,7 +11,7 @@
 //      the capsule, both shoulders, the four shoulder corners, the top —
 //      against every eye: each enemy
 //      where it stands, where its run takes it in predictS, and where it
-//      fired from while that round is still in flight.
+//      fired each round still in flight.
 //   2. THE PRICE (sdPrice, sdOwn, sdDeathsPerHit): the chance of dying in an
 //      exposure of T ms at distance d moving lat across the line, after the
 //      enemy's reaction — none while its stream is on, riskReactMs while its
@@ -32,17 +32,20 @@
 //      gone quiet, the dodge in hand, the magazine and the tank full, the
 //      target's immunity over — an option under the cap makes the plan THE
 //      WAIT for it; none makes it THE APPROACH: the pathfinder's route to
-//      the enemy, taken unpriced until a line opens or a cheaper plan
-//      appears. A route under way is priced against the attacks at the same
+//      the enemy, priced like every route, until a line opens or a cheaper
+//      plan appears. A route under way is priced against the attacks at the same
 //      cadence. Caught exposed with no plan, the plan is THE REACTION: the
-//      nearest hidden cell.
+//      nearest hidden cell. Hidden, but seen by the horizon's eyes where it
+//      stands, the plan is THE ESCAPE: the nearest cell hidden through the
+//      horizon, by a priced route.
 //   4. THE LEGS: hidden, along the route; exposed, THE CROSSING LEGS: the
 //      dodge across the line when it is in hand, then the sprint on the kept
 //      side leaning reactDriftDeg toward the goal, the side flipped by a wall
 //      alone (the room test, or physics' note of the face it was pushed out
 //      of). A peek's window runs across the line away from its cover and
 //      ends the tick its way out would cost the cap. THE WAIT paces its
-//      hidden cell inside a leash, every step hidden by the same test. The
+//      hidden cell inside a leash, every step hidden by the same test, the
+//      cell read at the horizon at the cadence. The
 //      trigger is open whenever an eye sees the unit (botSDFire).
 //
 // THE HOST INTERFACE (sdBrainTick(h)):
@@ -62,7 +65,7 @@
 //   the trigger: me.botSDFire.
 import { walkSegmentBlocked, unitOverlapsObstacle, segmentHitsObstacle, projectileHitsSurface, obstaclesNearSegment } from '../src/sim/physics.js';
 import { findHiddenSpot, findPathOnGrid, coverDistanceAt } from '../src/sim/navgrid.js';
-import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE } from '../src/sim/constants.js';
+import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S } from '../src/sim/constants.js';
 
 // ===================== THE MODELS =====================
 // Fraction of a uniform disc of radius c (a cone's footprint at the target's
@@ -252,7 +255,7 @@ export const BOT_SD = {
   sprintFactor: 2.5,      //   the body's sprint with the dash momentum, measured 24-32 u/s, over the unit's sprintSpeed (11.76)
   predictS: 0.5,          // an eye is also where the enemy's run takes it this far ahead
   dashFloor: 8,           // an exposed leg sprints down to this much boost
-  boostReserve: 110,      // a hidden leg sprints above this and walks below it: a dodge (48) and a jump (48) stay in hand
+  boostReserve: 86,       // THE RESERVE: a dodge (48) and half a second of lateral sprint (38), kept in the tank through every plan — a planned exposure starts only with its leg's sprint on top of it (sdNeed), a hidden leg sprints only while the longest peek's need is still there. The body exposed spends to dashFloor.
   acrossMin: 0.7,         // ACROSS THE LINE: a heading's lateral fraction at least this much (45 deg is 0.71)
   waitLeash: 6,           // THE WAIT paces its hidden cell within this of where the wait began
   paceSpeed: 0.4,         //   at this share of the walk: a human shifting in cover, not a march
@@ -318,7 +321,9 @@ export function sdBrainTick(host) {
   sdEnemies.sort((a, b) => Math.hypot(a.pos.x - mePos.x, a.pos.z - mePos.z) - Math.hypot(b.pos.x - mePos.x, b.pos.z - mePos.z));
   // THE EYES of a point the body reaches tMs from now: each enemy where it
   // stands, where its run takes it by then (predictS at the most), and
-  // where it fired from while that round is still in the air at that time.
+  // where it fired each round still in the air at that time. THE SHOT LOG
+  // keeps every shot for a round's life (PROJECTILE_TTL_S); an eye within
+  // 1 u of one already counted is the same eye.
   const sdSprint = (meUnit.sprintSpeed ?? BOOST_MOVE_SPEED) * SD.sprintFactor;
   const logs = (me.botSDShotLogs ??= {});
   const sdShotLogs = [];
@@ -326,8 +331,9 @@ export function sdBrainTick(host) {
     const f = sdEnemies[k];
     const last = f.lastFireAt ?? -1e9;
     const key = f.id?.id ?? f.id ?? k;
-    const log = logs[key] ?? (logs[key] = { at: -1e9, x: 0, y: 0, z: 0 });
-    if (last > log.at) { log.at = last; log.x = f.pos.x; log.y = f.pos.y; log.z = f.pos.z; }
+    const log = Array.isArray(logs[key]) ? logs[key] : (logs[key] = []);
+    if (last > (log.length ? log[log.length - 1].at : -1e9)) log.push({ at: last, x: f.pos.x, y: f.pos.y, z: f.pos.z });
+    while (log.length && log[0].at + PROJECTILE_TTL_S * 1000 <= now) log.shift();
     sdShotLogs.push(log);
   }
   const sdEyesAt = (x, z, tMs) => {
@@ -338,9 +344,15 @@ export function sdBrainTick(host) {
       eyes.push({ x: f.pos.x, y: f.pos.y + EYE_UP, z: f.pos.z, k });
       const vx = f.vel?.x ?? 0, vz = f.vel?.z ?? 0;
       if (horizon > 0 && Math.hypot(vx, vz) > 1) eyes.push({ x: f.pos.x + vx * horizon, y: f.pos.y + EYE_UP, z: f.pos.z + vz * horizon, k });
-      const log = sdShotLogs[k];
-      const flight = Math.hypot(log.x - x, log.z - z) / (f.unit?.projectileSpeed ?? 600) * 1000;
-      if (log.at + flight > now + tMs && Math.hypot(log.x - f.pos.x, log.z - f.pos.z) > 1) eyes.push({ x: log.x, y: log.y + EYE_UP, z: log.z, k });
+      const log = sdShotLogs[k], speed = f.unit?.projectileSpeed ?? 600;
+      let px = f.pos.x, pz = f.pos.z;   // (the eye last counted, the live one first; newest shot to oldest)
+      for (let i = log.length - 1; i >= 0; i -= 1) {
+        const s = log[i];
+        if (s.at + Math.hypot(s.x - x, s.z - z) / speed * 1000 <= now + tMs) continue;
+        if (Math.hypot(s.x - px, s.z - pz) <= 1) continue;
+        eyes.push({ x: s.x, y: s.y + EYE_UP, z: s.z, k });
+        px = s.x; pz = s.z;
+      }
     }
     return eyes;
   };
@@ -500,8 +512,11 @@ export function sdBrainTick(host) {
   // THE WAY OUT: the exposed time until hidden — one tick when the dodge is
   // in hand (its i-frames carry the body), else the sprint back.
   const sdExitMs = (back) => (sdDodgeReady && me.boost >= sdStepCost) ? TICK_RATE_MS : back / sdSprint * 1000;
-  // THE TANK for a planned exposure: the floor, the dodge, the sprint there and back.
-  const sdNeed = (legLen) => SD.dashFloor + sdStepCost + sdSprintCost(legLen * 2);
+  // THE TANK for a planned exposure: the sprint of its leg on top of the
+  // reserve. The reserve's dodge is the exposure's own — the next exposure's
+  // dodge is on cooldown (1175 ms) for longer than any planned exposure
+  // lasts, so a second dodge in the tank would buy nothing.
+  const sdNeed = (legLen) => SD.boostReserve + sdSprintCost(legLen);
 
   // ===================== 3. THE STATE =====================
   // The exposure clock (the price's `elapsed`); the trigger.
@@ -528,7 +543,7 @@ export function sdBrainTick(host) {
   const sdCross = (kind, goal, side) => { const c = { kind, goal: goal ?? null, side, at: now, moved: false }; me.botSDReact = c; return c; };
   // Arrivals and ends.
   if (plan) {
-    if (plan.kind === 'close' || plan.kind === 'flank' || plan.kind === 'nearer') {
+    if (plan.kind === 'close' || plan.kind === 'flank' || plan.kind === 'nearer' || plan.kind === 'escape') {
       const g = plan.goal;
       // (ON the goal — the cell the silhouette was tested at — the plan is over; the last stretch is walked)
       if (Math.hypot(g.x - mePos.x, g.z - mePos.z) < SD.onPointU) { sdDrop(); me.botSDSearchAt = now; }
@@ -657,18 +672,27 @@ export function sdBrainTick(host) {
   // THE APPROACH: the route to the enemy — the pathfinder's as far as the
   // grid goes, then straight onto him where the body fits (he may stand
   // where the grid has no cell: a pocket, a wall's foot).
+  // Priced like every route: its exposed stretches at a sprint under the
+  // cap, the tank able to sprint them and keep the reserve; refused, its
+  // first exposed stretch is marked. Returns the path, or null.
   const sdApproachRoute = () => {
     const oppFloor = host.groundHeightAt(opp.pos.x, opp.pos.z, opp.pos.y - GROUND_BASE_Y);
     const path = (findPathOnGrid(sdGrid, mePos.x, mePos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloor, obstacles) ?? []).slice();
     const end = path.length ? path[path.length - 1] : { x: mePos.x, z: mePos.z, y: myFloorY };
     if (Math.hypot(opp.pos.x - end.x, opp.pos.z - end.z) > 1 && sdLegFitsAt(end.x, end.z, opp.pos.x, opp.pos.z, (end.y ?? myFloorY) + GROUND_BASE_Y)) path.push({ x: opp.pos.x, z: opp.pos.z, y: oppFloor });
-    return path.length ? path : null;
+    if (!path.length) return null;
+    const rr = sdRouteRisk(path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
+    me.botSDLastRisk = rr.risk;
+    if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve) return path;
+    if (rr.first) sdMark(rr.first.x, rr.first.z);
+    me.botSDRejects = (me.botSDRejects ?? 0) + 1;
+    return null;
   };
   // Hidden: with nothing under way, with a route under way (the attacks at
   // the cadence; THE APPROACH re-routed as the enemy moves), or waiting
   // (priced again). Exposed on THE REACTION with no goal yet: the escape
   // search. One route search per tick per match (the host's slot).
-  const sdOnRoute = !!plan && (plan.kind === 'close' || plan.kind === 'flank' || plan.kind === 'nearer' || plan.kind === 'approach');
+  const sdOnRoute = !!plan && (plan.kind === 'close' || plan.kind === 'flank' || plan.kind === 'nearer' || plan.kind === 'escape' || plan.kind === 'approach');
   const sdWantPlan = (sdHidden && (!plan || plan.kind === 'wait' || sdOnRoute)) || (!!plan && plan.kind === 'react' && !plan.goal);
   if (sdWantPlan && now >= (me.botSDSearchAt ?? 0)) {
     if (sdOnRoute && plan.kind !== 'approach') {
@@ -680,7 +704,7 @@ export function sdBrainTick(host) {
       let taken = false;
       if (sdHidden && inReach) { const best = sdAttacks(sdReal); if (best) { if (plan) sdDrop(); best.take(); taken = true; } }
       if (!taken && plan && plan.kind === 'approach') {
-        // (THE APPROACH under way: re-routed to where the enemy is now; no route -> THE WAIT)
+        // (THE APPROACH under way: re-routed to where the enemy is now and priced again; no route under the cap -> THE WAIT)
         const path = sdApproachRoute();
         if (path) { plan.path = path; plan.idx = 0; plan.goal = path[path.length - 1]; me.botSDSearchAt = now + SD.searchMs; }
         else { sdDrop(); sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDSearchAt = now + SD.failRetryMs; }
@@ -688,14 +712,19 @@ export function sdBrainTick(host) {
       }
       // ---- THE RELOCATION / THE ESCAPE: one route search, by stage ----
       if (!taken) {
-        const escape = !sdHidden;
+        // THE ESCAPE is the stage exposed, and hidden where the horizon's eyes
+        // (the enemy's run in predictS, the rounds in the air by then) reach
+        // the cell the unit stands in — the wait's cell read like any endpoint.
+        const sdStaysAt = (gx, gz, fy) => sdHiddenAt(gx, gz, fy, Math.max(Math.hypot(gx - mePos.x, gz - mePos.z) / sdSprint * 1000, SD.predictS * 1000));
+        const escape = !sdHidden || !sdStaysAt(mePos.x, mePos.z, myFloorY);
         const gain = Math.min(SD.hopGainMax, Math.max(SD.hopGainMin, dist * 0.3));
         const nearer = (gx, gz) => -Math.hypot(gx - opp.pos.x, gz - opp.pos.z);
         // (THE GOAL hides the whole silhouette — the one test, sdHiddenAt; a flank's goal has a firing leg — the one scan, sdFiringLegs)
         const hiddenGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy);
         const flankGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy) && sdFiringLegs(gx, gz, fy).length > 0;
         let stages;
-        if (escape) stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: hiddenGoal }, { kind: 'escape', maxPops: SD.farPops, accept: hiddenGoal }];
+        // (exposed, the nearest cell hidden on arrival; hidden, the nearest cell hidden through the horizon — the cell it will wait in)
+        if (escape) { const stays = sdHidden ? sdStaysAt : hiddenGoal; stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: stays }, { kind: 'escape', maxPops: SD.farPops, accept: stays }]; }
         else if (!inReach) stages = [
           { kind: 'close', maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdReach, dist - gain) }, minDistFrom: { x: mePos.x, z: mePos.z, d: SD.shiftMin }, accept: hiddenGoal, score: nearer, scoreStop: -Math.max(sdReach, dist - gain - 15) }];
         else stages = [
@@ -712,24 +741,25 @@ export function sdBrainTick(host) {
           exposurePenalty: SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist,
           threat: { x: sdThreat.pos.x, z: sdThreat.pos.z }, alongWeight: SD.alongWeight, avoid: sdAvoid,
           score: a.score ?? null, scoreStop: a.scoreStop ?? Infinity,
-          allowJump: !escape, deadline: host.deadline(), job: me.botSDSearchJob
+          allowJump: sdHidden, deadline: host.deadline(), job: me.botSDSearchJob
         });
         let pending = false;
         if (found && found.pending) { found = null; pending = true; }
         if (pending) me.botSDSearchAt = now;
         else if (found) {
           let ok = true;
-          if (!escape) {
+          if (sdHidden) {
             // THE PRICE of the route: its exposed stretches at a sprint, the
             // tank able to sprint them; over the cap, the first exposed
-            // stretch is marked and the next stage is tried.
+            // stretch is marked and the next stage is tried. (Exposed, the
+            // escape's route is taken unpriced: any hidden cell beats the open.)
             const rr = sdRouteRisk(found.path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
             me.botSDLastRisk = rr.risk;
-            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.dashFloor;
+            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve;
             if (!ok) { if (rr.first) sdMark(rr.first.x, rr.first.z); me.botSDRejects = (me.botSDRejects ?? 0) + 1; me.botSDRefusedPath = found.path; }
           }
           if (ok) {
-            if (escape) { plan.goal = found.goal; plan.path = found.path; plan.idx = 0; me.botSDReact.goal = found.goal; me.botSDSearchStage = 0; me.botSDSearchJob = null; me.botSDSearchAt = now + SD.searchMs; }
+            if (!sdHidden) { plan.goal = found.goal; plan.path = found.path; plan.idx = 0; me.botSDReact.goal = found.goal; me.botSDSearchStage = 0; me.botSDSearchJob = null; me.botSDSearchAt = now + SD.searchMs; }
             else { if (plan) sdDrop(); sdTake({ kind: a.kind, path: found.path, idx: 0, goal: found.goal }); }
             taken = true;
           }
@@ -737,7 +767,7 @@ export function sdBrainTick(host) {
         if (!pending && !taken) {
           me.botSDSearchJob = null;
           if (stage < stages.length - 1) { me.botSDSearchStage = stage + 1; me.botSDSearchAt = now; }
-          else if (escape) { me.botSDSearchStage = 0; me.botSDSearchAt = now + SD.exposedRetryMs; }
+          else if (!sdHidden) { me.botSDSearchStage = 0; me.botSDSearchAt = now + SD.exposedRetryMs; }
           else {
             // THE FLOOR OF THE LIST. Every option refused: what is the unit
             // waiting for? Priced once more under what time brings back — the
@@ -745,8 +775,8 @@ export function sdBrainTick(host) {
             // full, the target's immunity over. An attack or the refused route
             // under the cap then: THE WAIT for it (the plan, paced in the leash,
             // priced again at the cadence). Nothing: THE APPROACH — the
-            // pathfinder's route to the enemy, unpriced; no route at all -> the
-            // wait (he cannot be reached from here).
+            // pathfinder's route to the enemy, priced like every route; none
+            // under the cap -> the wait, priced again at the cadence.
             me.botSDSearchStage = 0;
             const refused = me.botSDRefusedPath;
             const waitFor = !!sdAttacks(sdRestored) || (!!refused && sdRouteRisk(refused, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, SD.acquireMs).risk <= SD.riskCap);
@@ -898,7 +928,7 @@ export function sdBrainTick(host) {
         if (host.startStep(wp.x - mePos.x, wp.z - mePos.z)) { plan.jumpStepped = true; me.botSDDodges = (me.botSDDodges ?? 0) + 1; }
       }
       const lastLeg = plan.idx === sp.length - 1 && wl <= 2;   // (the last 2 u onto the goal are walked: the body stops ON the cell)
-      const dash = !lastLeg && (aheadExposed ? me.boost > SD.dashFloor : (!jumpAhead && me.boost > SD.boostReserve));
+      const dash = !lastLeg && (aheadExposed ? me.boost > SD.dashFloor : (!jumpAhead && me.boost > sdNeed(SD.peekLegMax)));   // (a hidden leg sprints while the tank still holds the longest peek's need: it arrives able to attack)
       if (bank) { me.momentumVX = 0; me.momentumVZ = 0; coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 }; me.botSDState = 'bank'; }
       else { coverMove = { hold: false, hide: true, dash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 }; me.botSDState = dash ? 'dash' : 'walk'; }
     }
