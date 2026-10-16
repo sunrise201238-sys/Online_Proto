@@ -257,7 +257,6 @@ export const UNIT_DATA = {
     firePerMinute: 250,        // = 240 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.02,
-    sdEngageFloor: 95,         // SD engage floor, measured (owner 2026-10-11): the laser bolt's long body lands on a sprinter like Hina's stream (13% a crossing at 40 u) — Hina's 95, not the formula's "nowhere safe"
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune)
     magCapacity: 8,
     reloadMs: 1200,
@@ -368,7 +367,6 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — M14: sure-hit 160 at base, 16 at cap (bloom 2026-09-21)
     bloomPerShot: 0.1,        // SA added per shot
     bloomCap: 0.2,            // SA ceiling while spraying
-    sdEngageFloor: 75,         // SD engage floor, measured (owner 2026-10-11): one 0.5 s sprint crossing under this gun is the least deadly of any — the formula read its bloom cap as "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
@@ -676,7 +674,6 @@ export const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — SVD: sure-hit 160 at base, 8 at cap (bloom 2026-09-21)
     bloomPerShot: 0.1,        // SA added per shot
     bloomCap: 0.4,            // SA ceiling while spraying
-    sdEngageFloor: 75,         // SD engage floor, measured on the M14 (owner 2026-10-11, "Fubuki means both M14 and SVD"): the formula read the wide bloom cap as "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts no delay — recovers between shots too
     botSuppressBurst: 1,       // bot: a single round when suppressing outside its gate line (autos fire BOT_SUPPRESS_BURST)
