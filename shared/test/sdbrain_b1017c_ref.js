@@ -22,8 +22,9 @@
 //      route, when its death chance does. One cap.
 //   3. THE PLAN: hidden with nothing under way, the unit prices THE ENGAGE
 //      RUN (a straight run across the line through a firing point to a
-//      hidden end), THE STAND PEEK (a leg to a firing point — the dodge when
-//      the point is one step away — the window, the way back), and a
+//      hidden end), THE STAND PEEK (a leg to a firing point — the dodge
+//      inside closePeekDist, the sprint beyond it — the window, the way
+//      back), and a
 //      RELOCATION (a hidden cell by a priced route: closer while beyond the
 //      reach, a line-capable cell inside it, else any cell nearer), takes
 //      the cheapest under the cap. Every option refused, it asks what it is
@@ -270,6 +271,7 @@ export const BOT_SD = {
   shiftMin: 8,            // a relocation inside the reach moves at least this far
   bandSlack: 10,          // inside the reach plus this the unit attacks from where it is
   // THE ATTACKS
+  closePeekDist: 30,      // THE CLOSE PEEK: inside this the sprint does not save the body — its drift during a 600 u/s round's flight is under the hit radius out to 33 u — so the dodge goes IN (the leg to the firing point) and the way back is the sprint; beyond it the dodge is kept for the way out and the leg is a sprint
   firePointMargin: 1,     // a FIRING POINT sees the target's muzzle from itself and from this far either side across the line
   onPointU: 0.3,          // a peek leg has arrived within this of its point
   peekLegMax: 10,         // the stand peek's leg is scanned out to this
@@ -437,21 +439,26 @@ export function sdBrainTick(host) {
   const sdLine = sdClear({ x: mePos.x, y: myShotY, z: mePos.z }, sdOppMuzzle);
   // THE FIRING LEGS from (x, z) on floor fy — the stand peek's geometry, and
   // what makes a cell line-capable: for each of 8 headings across the line
-  // from there (acrossMin), the dodge's landing when it is a firing point
-  // and the dodge is in hand, else the first firing point every 2 u out to
-  // peekLegMax whose dodge back (stepD through the origin) lands walkable
-  // and hidden.
-  const sdFiringLegs = (x, z, fy, dodgeOk) => {
+  // from there (acrossMin), a leg that ends on a firing point. The range
+  // decides which way the dodge is used: inside closePeekDist (THE CLOSE
+  // PEEK) the leg IS the dodge — its landing must be a firing point, the
+  // way back is the sprint; beyond it the leg is a sprint to the first
+  // firing point every 2 u out to peekLegMax, and the dodge back (stepD
+  // through the origin) must land walkable and hidden.
+  const sdFiringLegs = (x, z, fy) => {
     const by = fy + GROUND_BASE_Y, my = by + MUZZLE_H;
     let lx = opp.pos.x - x, lz = opp.pos.z - z;
-    const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+    const ll = Math.hypot(lx, lz) || 1;
+    const close = ll <= SD.closePeekDist;
+    lx /= ll; lz /= ll;
     const out = [];
     for (let k = 0; k < 8; k += 1) {
       const ang = k * Math.PI / 4, cx = Math.cos(ang), cz = Math.sin(ang);
       if (Math.abs(cx * lz - cz * lx) < SD.acrossMin) continue;
-      if (dodgeOk) {
+      if (close) {
         const px = x + cx * stepD, pz = z + cz * stepD;
-        if (sdLegFitsAt(x, z, px, pz, by) && sdFiringPoint(px, pz, my)) { out.push({ x: px, z: pz, L: stepD, cx, cz, dodge: true }); continue; }
+        if (sdLegFitsAt(x, z, px, pz, by) && sdFiringPoint(px, pz, my)) out.push({ x: px, z: pz, L: stepD, cx, cz, dodge: true });
+        continue;
       }
       for (let L = 2; L <= SD.peekLegMax; L += 2) {
         const px = x + cx * L, pz = z + cz * L;
@@ -630,11 +637,11 @@ export function sdBrainTick(host) {
         break;
       }
     }
-    for (const leg of sdFiringLegs(mePos.x, mePos.z, myFloorY, as.dodge)) {
+    for (const leg of sdFiringLegs(mePos.x, mePos.z, myFloorY)) {
       if (as.tank && me.boost < sdNeed(leg.L)) continue;
       const d = Math.hypot(opp.pos.x - leg.x, opp.pos.z - leg.z);
       const first = d / (meUnit.projectileSpeed ?? 600) * 1000;
-      const exit = (leg.dodge || !as.dodge) ? leg.L / sdSprint * 1000 : TICK_RATE_MS;
+      const exit = leg.dodge ? leg.L / sdSprint * 1000 : TICK_RATE_MS;   // (the sprint back after a dodge leg; the dodge back after a sprint leg)
       const legRisk = leg.dodge ? 0 : sdRouteRisk([{ x: leg.x, z: leg.z, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react).risk;
       const pe = 1 - (1 - legRisk) * (1 - sdPriceAs(first + exit, d, 0, 0, as.react));
       const dph = sdDeathsPerHit(pe, sdOwnAs(first + Math.max(SD.riskShotMs, meUnit.fireCooldownMs ?? 0), d, as));
@@ -686,7 +693,7 @@ export function sdBrainTick(host) {
         const nearer = (gx, gz) => -Math.hypot(gx - opp.pos.x, gz - opp.pos.z);
         // (THE GOAL hides the whole silhouette — the one test, sdHiddenAt; a flank's goal has a firing leg — the one scan, sdFiringLegs)
         const hiddenGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy);
-        const flankGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy) && sdFiringLegs(gx, gz, fy, true).length > 0;
+        const flankGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy) && sdFiringLegs(gx, gz, fy).length > 0;
         let stages;
         if (escape) stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: hiddenGoal }, { kind: 'escape', maxPops: SD.farPops, accept: hiddenGoal }];
         else if (!inReach) stages = [
