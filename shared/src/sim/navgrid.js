@@ -1005,10 +1005,6 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   // the exposure penalty still steers the route).
   const openPenalty = opts.openPenalty ?? 0;
   const openDist = opts.openDist ?? 6;
-  // SD prototype (R8 THE FIRE ZONE, 2026-10-16): opts.zoneCost(x, z, floorY)
-  // — an extra walk cost per node the caller prices (a node the enemy's
-  // reachable ground can see). Null = off.
-  const zoneCost = opts.zoneCost ?? null;
   const goalCoverMax = opts.goalCoverMax ?? null;
   const anyGoal = !!opts.anyGoal;
   // SD prototype (play test 2026-10-05, "deadly openings when the moving
@@ -1210,7 +1206,6 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
         ng += pen;
       }
       if (openPenalty > 0 && coverDist[nb] > openDist) ng += openPenalty;
-      if (zoneCost) ng += zoneCost(nodeCenterX(grid, nb), nodeCenterZ(grid, nb), floor[nb]);
       if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng, nb); }
     };
     if (allowJump) forEachNeighbor(grid, cur, expand);

@@ -1,7 +1,9 @@
 // THE EQUIVALENCE TEST (owner 2026-10-16, "patchless with the same
 // behaviour"): the Sudden Death brain in sdbrain.js must play tick for tick
-// what the frozen reference (ai_b1016e_ref.js, the brain as it was inside
-// tickBot) plays. Two matches are set up alike, every random draw comes from
+// what the frozen reference plays (ai_b1016n_ref.js + sdbrain_b1016n_ref.js,
+// the brain as frozen at b1016n — the engage run and the close peek open the line, no fire hop; the
+// b1016e reference went with that change, which alters play by design).
+// Two matches are set up alike, every random draw comes from
 // the same seeded stream on each side, and after every tick both fighters'
 // whole state (position, body, boost, ammo and every botSD* scratch field)
 // must agree to the last digit. Any change of logic — an extra random draw,
@@ -10,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1016e_ref.js';
+import { tickBot as tickOld } from './ai_b1016n_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -71,10 +73,10 @@ for (const sc of SCENARIOS) {
         now += TICK_RATE_MS;
         Math.random = rA;
         tickOld(mA, 'p1', now); tickOld(mA, 'p2', now);
-        tickMatch(mA, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT);
+        tickMatch(mA, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT, ['p1', 'p2']);
         Math.random = rB;
         tickNew(mB, 'p1', now); tickNew(mB, 'p2', now);
-        tickMatch(mB, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT);
+        tickMatch(mB, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT, ['p1', 'p2']);
         const a = snap(mA), b = snap(mB);
         if (a !== b) assert.fail(`diverged at tick ${i} (${((now - 1000) / 1000).toFixed(2)} s): ${firstDiff(a, b)}`);
         ran = i + 1;

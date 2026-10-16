@@ -149,7 +149,7 @@ const BOT_CH_AREA_R = 14;
 // (one module for the server and the client); re-exported here for the
 // fire block below and for the client's imports.
 import { sdBrainTick, makeMuzzleClear, BOT_SD, sdFireReactHold, sdFireLineLost } from './sdbrain.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdEngageFloor, sdOwnReach, sdFireReactHold, sdFireLineLost, sdRouteRisk } from './sdbrain.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdFireReactHold, sdFireLineLost, sdRouteRisk } from './sdbrain.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
@@ -1177,7 +1177,6 @@ export function tickBot(matchState, botId, now) {
     coverMove = sdBrainTick({
       now, SD: SDG, me, pos: me.pos, unit: me.unit, vel: me.vel, grounded: me.grounded,
       opp, enemies: sdEnemies,
-      fighter: (id) => matchState.fighters[id] ?? null,
       obstacles, grid: navGridFor(arena), clear: makeMuzzleClear(obstacles, surfaces),
       eyeUp: PROJECTILE_MUZZLE_Y_OFFSET, muzzleH: PROJECTILE_MUZZLE_Y_OFFSET,
       dist, sideX, sideZ, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
@@ -2219,7 +2218,6 @@ export function tickBot(matchState, botId, now) {
       if (fired) {
         botNoteShot(me);
         if (me.botSDExposedAt != null) me.botSDExposedShots = (me.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
-        if (me.botSDFireStep && now <= (me.stepUntil || 0)) me.botSDFireStepShots = (me.botSDFireStepShots ?? 0) + 1;   // (… and inside a fire step's invulnerability)
       }
       if (bursted) {
         if (fired) me.machineBurstRemaining -= 1;

@@ -343,7 +343,6 @@ const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
     bloomPerShot: 0.10,        // SA added per shot
     bloomCap: 0.20,            // SA ceiling while spraying
-    sdEngageFloor: 95,         // SD engage floor, measured (owner 2026-10-11): the laser bolt's long body lands on a sprinter like Hina's stream (13% a crossing at 40 u) — Hina's 95, not the formula's "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
@@ -478,7 +477,6 @@ const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
     bloomPerShot: 0.10,        // SA added per shot
     bloomCap: 0.30,            // SA ceiling while spraying
-    sdEngageFloor: 75,         // SD engage floor, measured (owner 2026-10-11): one 0.5 s sprint crossing under this gun is the least deadly of any — the formula read its 0.30 bloom cap as "nowhere safe"
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
@@ -5325,13 +5323,13 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
   const end = tape[tape.length - 1].t;
   const lines = [];
   lines.push(`[sd-report ${CLIENT_BUILD_TAG}] ${mech.unit?.name ?? '?'} ${why} on ${state.mapKey ?? '?'} | hp ${st.hp} | last ${((end - tape[0].t) / 1000).toFixed(1)} s`
-    + ` | hops ${JSON.stringify(st.botSDHopKinds ?? {})} peeks ${st.botSDPeeks ?? 0} cornerFires ${st.botSDCornerFires ?? 0} dodges ${st.botSDDodges ?? 0} jumps ${st.botSDJumps ?? 0}`
-    + ` | rejects: risk ${st.botSDRiskRejects ?? 0} trade ${st.botSDTradeRejects ?? 0} | hotWaits ${st.botSDHotWaits ?? 0} farHotFireDrops ${st.botSDFarHotFireDrops ?? 0}`
-    + ` | body: wedges ${st.botSDWedges ?? 0} slides ${st.botSDLateralSlides ?? 0} backoffs ${st.botSDBackoffs ?? 0} holds ${st.botSDHolds ?? 0} crossStalls ${st.botSDCrossStalls ?? 0} shortRooms ${st.botSDShortRooms ?? 0} runOns ${st.botSDRunOns ?? 0} hotRouteDrops ${st.botSDHotRouteDrops ?? 0} cornered ${st.botSDCorneredTicks ?? 0} noRoomSteps ${st.botSDNoRoomSteps ?? 0} flinches ${st.botSDFlinches ?? 0} (hidden landings ${st.botSDFlinchHidden ?? 0}) stucks ${st.botSDStucks ?? 0} (band re-search ${st.botSDBandStucks ?? 0})`
+    + ` | hops ${JSON.stringify(st.botSDHopKinds ?? {})} peeks ${st.botSDPeeks ?? 0} (close peeks ${st.botSDClosePeeks ?? 0}) engageRuns ${st.botSDEngages ?? 0} (dodge-opened ${st.botSDEngageDodges ?? 0}) dodges ${st.botSDDodges ?? 0} jumps ${st.botSDJumps ?? 0}`
+    + ` | rejects: risk ${st.botSDRiskRejects ?? 0} trade ${st.botSDTradeRejects ?? 0} | hotWaits ${st.botSDHotWaits ?? 0}`
+    + ` | body: wedges ${st.botSDWedges ?? 0} slides ${st.botSDLateralSlides ?? 0} backoffs ${st.botSDBackoffs ?? 0} holds ${st.botSDHolds ?? 0} crossStalls ${st.botSDCrossStalls ?? 0} shortRooms ${st.botSDShortRooms ?? 0} runOns ${st.botSDRunOns ?? 0} hotRouteDrops ${st.botSDHotRouteDrops ?? 0} cornered ${st.botSDCorneredTicks ?? 0} reactions ${st.botSDReacts ?? 0} (dodges ${st.botSDReactDodges ?? 0} flips ${st.botSDReactFlips ?? 0} corridor ticks ${st.botSDReactCorridorTicks ?? 0} react ticks ${st.botSDReactTicks ?? 0}) stucks ${st.botSDStucks ?? 0} (band re-search ${st.botSDBandStucks ?? 0})`
     + ` | own fire: ${st.botSDExposedShots ?? 0} rounds over ${st.botSDExposures ?? 0} exposures`
-    + ` | stream: runOns ${st.botSDStreamHolds ?? 0} steps ${st.botSDStreamSteps ?? 0} turnsStood ${st.botSDStreamTurns ?? 0} escapesRefused ${st.botSDStreamRejects ?? 0} runOnsAfterHiding ${st.botSDStreamRunOns ?? 0} (trail ${st.botSDTrailRunOns ?? 0} of ${st.botSDTrailSeenTicks ?? 0} trail-seen ticks) flinchRuns ${st.botSDFlinchRuns ?? 0}`
+    + ` | stream: runOns ${st.botSDStreamHolds ?? 0} steps ${st.botSDStreamSteps ?? 0} turnsStood ${st.botSDStreamTurns ?? 0} runOnsAfterHiding ${st.botSDStreamRunOns ?? 0} (trail ${st.botSDTrailRunOns ?? 0} of ${st.botSDTrailSeenTicks ?? 0} trail-seen ticks)`
     + ` | reactions: short escapes ${st.botSDNearEscapes ?? 0} of ${st.botSDHopKinds?.escape ?? 0} escapes, rotation legs strict ${st.botSDPaceStrictLegs ?? 0} loose ${st.botSDPaceLooseLegs ?? 0}`
-    + ` | close range: fireSteps ${st.botSDFireSteps ?? 0} (rounds inside ${st.botSDFireStepShots ?? 0}) peekNoLanding ${st.botSDPeekNoLanding ?? 0} | deep hold ticks ${st.botSDDeepTicks ?? 0} (out of the zone ${st.botSDDeepHereTicks ?? 0}) | R8 zone: hidden-in-zone ticks ${st.botSDZoneTicks ?? 0} hops out ${st.botSDZoneHops ?? 0} | R9 fee peeks ${st.botSDFeePeeks ?? 0} | skin ticks ${st.botSDSkinTicks ?? 0} | quiet lift ticks ${st.botSDQuietLiftTicks ?? 0} | R7: hot routes refused ${st.botSDHotRouteRejects ?? 0} long crossings refused ${st.botSDLongCrossRejects ?? 0} | near band ticks ${st.botSDNearHotTicks ?? 0} (exposed routes refused ${st.botSDNearHotRejects ?? 0})`);
+    + ` | close range: peekNoLanding ${st.botSDPeekNoLanding ?? 0} | deep hold ticks ${st.botSDDeepTicks ?? 0} (deep ${st.botSDDeepHereTicks ?? 0}) | R9 fee peeks ${st.botSDFeePeeks ?? 0} | skin ticks ${st.botSDSkinTicks ?? 0} | quiet lift ticks ${st.botSDQuietLiftTicks ?? 0} | R7: hot routes refused ${st.botSDHotRouteRejects ?? 0} long crossings refused ${st.botSDLongCrossRejects ?? 0} | near band ticks ${st.botSDNearHotTicks ?? 0} (exposed routes refused ${st.botSDNearHotRejects ?? 0})`);
   let open = -1;
   for (let i = tape.length - 1; i > 0; i -= 1) if (tape[i].hid === 0 && tape[i - 1].hid === 1) { open = i; break; }
   if (open < 0 && tape[tape.length - 1].hid === 0) open = 0;
@@ -5350,8 +5348,8 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
     if (k.ownLine != null) lines.push(`  killing round, the firing eye: the round's own line (spawn to hit) reads ${k.ownLine ? 'CLEAR' : 'BLOCKED'} to the brain; from where the shooter fired, this spot's centre ${yn(k.fireCentre)}, shoulders ${yn(k.fireShL)} / ${yn(k.fireShR)}, top ${yn(k.fireTop)}; where the unit WAS at the fire was ${k.wasOpen == null ? '?' : k.wasOpen ? 'OPEN' : 'hidden'}; the shooter moved ${k.eyeMoved == null ? '?' : k.eyeMoved.toFixed(1)} u during the flight`);
   }
   // (cmd / cmdlat / sg: what the legs ordered that frame — dash, walk, hold, or the plain brain — how lateral the ORDERED heading was and which side of the line it leaned to; W: a wall 1.6 u along the order; cmdv / act: the speed the body was told last frame and its action; spd / lat: what the body did)
-  // (zn / ev / eo: this hold inside the enemy's fire zone (R8); the enemy's speed (u/s) and whether it is on open ground — the crossing R9 answers)
-  lines.push('      t hid   d hot far heard zn  ev eo kind        st     cmd  cmdlat sg W cmdv act    exp   spd  lat  risk trade boost hp      x     z');
+  // (rc / ev / eo: THE REACTION running (R5); the enemy's speed (u/s) and whether it is on open ground — the crossing R9 answers)
+  lines.push('      t   fr hid   d hot far heard rc  ev eo kind        st     cmd  cmdlat sg W cmdv act    exp   spd  lat  risk trade boost hp      x     z');
   for (let i = 0; i < tape.length; i += 1) {
     const s = tape[i], p = tape[i - 1];
     let spd = '  -', lat = '  - ';
@@ -5365,7 +5363,7 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
     const wC = s.wall == null ? '-' : s.wall ? 'W' : '.';
     const cv = s.cmdv == null ? '  -' : String(Math.round(s.cmdv)).padStart(3);
     const aC = String(s.act ?? '-').slice(0, 4).padEnd(4);
-    lines.push(`  ${((s.t - end) / 1000).toFixed(1).padStart(5)}  ${s.hid}  ${String(Math.round(s.d)).padStart(3)}   ${s.hot}   ${s.far}    ${String(s.heard).padStart(2)}  ${s.zn ?? '-'} ${String(s.ev ?? '-').padStart(3)}  ${s.eo ?? '-'} ${String(s.kind).padEnd(10)} ${String(s.st).padEnd(6)} ${String(s.cmd ?? '-').padEnd(5)} ${s.hl == null ? '   - ' : s.hl.toFixed(2).padStart(5)}  ${sgC} ${wC}  ${cv} ${aC} ${String(Math.round(s.exp)).padStart(5)}  ${spd} ${String(lat).padStart(5)} ${f3(s.risk)} ${f3(s.trade)}   ${String(Math.round(s.boost)).padStart(3)} ${s.hp}  ${s.x.toFixed(0).padStart(5)} ${s.z.toFixed(0).padStart(5)}`);
+    lines.push(`  ${((s.t - end) / 1000).toFixed(1).padStart(5)} ${String(Math.round(s.fr ?? 0)).padStart(4)}  ${s.hid}  ${String(Math.round(s.d)).padStart(3)}   ${s.hot}   ${s.far}    ${String(s.heard).padStart(2)}  ${s.rc ?? '-'} ${String(s.ev ?? '-').padStart(3)}  ${s.eo ?? '-'} ${String(s.kind).padEnd(10)} ${String(s.st).padEnd(6)} ${String(s.cmd ?? '-').padEnd(5)} ${s.hl == null ? '   - ' : s.hl.toFixed(2).padStart(5)}  ${sgC} ${wC}  ${cv} ${aC} ${String(Math.round(s.exp)).padStart(5)}  ${spd} ${String(lat).padStart(5)} ${f3(s.risk)} ${f3(s.trade)}   ${String(Math.round(s.boost)).padStart(3)} ${s.hp}  ${s.x.toFixed(0).padStart(5)} ${s.z.toFixed(0).padStart(5)}`);
   }
   console.log(lines.join('\n'));
 }
@@ -6066,7 +6064,6 @@ function updateEnemy(now) {
       now, SD: SDG, me: eState, pos: { x: e.x, y: eBodyY, z: e.z }, unit: state.enemy.unit ?? {}, vel: state.enemy.body.velocity, grounded: state.enemy.grounded,
       opp: { id: state.player, pos: p, hp: state.player.state.hp, unit: state.player.unit, invulnerableUntil: state.player.state.invulnerableUntil },
       enemies: sdEnemies,
-      fighter: (ref) => (ref && ref.state) ? { hp: ref.state.hp, pos: ref.root.position } : null,
       obstacles: arenaObstacles, grid: offlineNavGrid, clear: botShotCanLand,
       eyeUp: BOT_MUZZLE_ABOVE_ROOT, muzzleH: sdEyeH,
       dist, sideX: side.x, sideZ: side.z, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
@@ -7107,7 +7104,6 @@ function updateEnemy(now) {
       if (fired) {
         botNoteShot(s);
         if (s.botSDExposedAt != null) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
-        if (s.botSDFireStep && now <= (s.stepUntil || 0)) s.botSDFireStepShots = (s.botSDFireStepShots ?? 0) + 1;   // (… and inside a fire step's invulnerability)
       }
       if (bursted) {
         if (fired) s.machineBurstRemaining -= 1;
@@ -8700,7 +8696,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1016g';
+const CLIENT_BUILD_TAG = 'b1016n';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12231,6 +12227,8 @@ if (typeof window !== 'undefined') {
   window.__BOT_SD = BOT_SD;
   // The Sudden Death brain's last 8 s as text, on demand (the bot still alive): __SD_REPORT(), __SD_REPORT(3) for the last 3 s
   window.__SD_REPORT = (secs = 8) => sdDeathReport(state.enemy, 'on demand', secs);
+  // F9 prints the same report (the page runs inside the artifact's iframe, where the console's default context cannot see window.__SD_REPORT)
+  window.addEventListener('keydown', (ev) => { if (ev.key === 'F9') { ev.preventDefault(); sdDeathReport(state.enemy, 'on demand (F9)', 8); } });
   // Dev hook: the All Random roll (headless checks of the SD sniper exclusion).
   window.__rollRandomUnit = (excluded = []) => rollRandomUnit(excluded);
   // Dev hooks: the renderer's draw stats, the 3D characters' per-frame cost, the art warm-up and its model cache.
