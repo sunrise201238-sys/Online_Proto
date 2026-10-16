@@ -8,9 +8,9 @@
 // shimmering, then jump. The same costs hit a normal match at its start.
 //
 // So the work moves here, to boot, in small chunks between event-loop
-// turns (connections keep flowing): every map's grid, the engage floors of
-// every gun, and a few seconds of dry Sudden Death and normal matches so
-// both brains are compiled before anyone plays. Nothing here may throw
+// turns (connections keep flowing): every map's grid and a few seconds of
+// dry Sudden Death and normal matches so both brains are compiled before
+// anyone plays. Nothing here may throw
 // out: a failed step is logged and the server runs as before.
 import {
   createMatchState,
@@ -21,10 +21,9 @@ import {
   TICK_RATE_MS,
   TICK_DT,
   getArena,
-  MAP_DATA,
-  UNIT_DATA
+  MAP_DATA
 } from '@gvg/shared/src/sim/index.js';
-import { navGridFor, sdEngageFloor, BOT_SD } from '@gvg/shared/src/sim/ai.js';
+import { navGridFor } from '@gvg/shared/src/sim/ai.js';
 
 // Build (or fetch) the map's nav grid — a no-op once built. startMatchFor
 // calls it too, so a match on a map the boot pass has not reached yet pays
@@ -77,13 +76,6 @@ export function warmSimulation() {
   const t0 = performance.now();
   const steps = [];
   for (const mapKey of Object.keys(MAP_DATA)) steps.push([`grid ${mapKey}`, () => warmMap(mapKey)]);
-  steps.push(['engage floors', () => {
-    // (the SD band: cached per target gun and mover sprint — every pair)
-    const units = Object.values(UNIT_DATA);
-    for (const mover of units) {
-      for (const target of units) sdEngageFloor(target, BOT_SD, (mover.sprintSpeed ?? 1) * BOT_SD.riskSprintFactor);
-    }
-  }]);
   // both brains, both team sizes, a few maps
   const dry = (name, mapKey, mode, suddenDeath) => {
     let step = null;
