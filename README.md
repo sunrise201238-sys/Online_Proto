@@ -83,6 +83,9 @@ Picked as the **rules mode** beside the view mode. Everyone fights at **1 HP** �
 - **The dead-end pocket** on flashpoint, N(112, 81.35): the grid has no cell there and the Approach's straight last leg clips a corner. A map change, held.
 - Two guards that cannot fire (`taken ?? now`, `Array.isArray` on the shot log) to be deleted with the next change; one report with a geometry the tape cannot explain (a perpendicular dodge whose ends both sit 1.1 u from the killing round's line).
 
+**The one-brain experiment** (2026-10-17): the Sudden Death brain priced in life — a hit costs damage / HP of a life, so one brain and one price serve both modes — replaced the plain brain, was measured (against the plain brain: 69% wins, a 30.8 s median kill against 16.3 s, five times the CPU) and was shelved the same day: the plain brain is cheap, predictable and the easier game. It is archived on branch `Testing_0.9.0_New-BOT-Brain` (`docs/NEW_BOT_BRAIN.md` there: the principle, the structure, the reports, the pending designs). The plain brain here is that work's first two steps: its dead code deleted and one module for both hosts (`shared/src/sim/nbrain.js`), behaviour unchanged.
+
+
 ## Command mode
 
 The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama overview** of the whole map where the units fight on the standard bot brain and you play the commander — observe, select, order. The picker is a Classic / Command chip in the menus; like Duel / 1v1 the choice is session-only — every site open starts Classic. Offline, `V` or the pause menu also toggles it mid-match, and solo 2v2 play commands **both** of team one's units; online the pick happens in the queue room, is final once the match starts, and commands your own unit **plus a bot-filled teammate slot** (2026-08-22 — human teammates are never commandable; details in Command mode online below).
