@@ -39,7 +39,12 @@
 //      nearest hidden cell. Hidden, but seen by the horizon's eyes where it
 //      stands, the plan is THE ESCAPE: the nearest cell hidden through the
 //      horizon, by a priced route.
-//   4. THE LEGS: hidden, along the route; exposed, THE CROSSING LEGS: the
+//   4. THE LEGS: hidden, along the route, sprinting through THE VALVE (the
+//      tank is spent in one draught and refilled in one: the valve shuts at
+//      the longest peek's need and opens again when the gauge is full;
+//      planned spending — a hidden sprint, an attack, a route's exposed
+//      stretch — passes through it, defensive spending — the dodge, the
+//      crossing legs, the escape — does not); exposed, THE CROSSING LEGS: the
 //      dodge across the line when it is in hand, then the sprint on the kept
 //      side leaning reactDriftDeg toward the goal, the side flipped by a wall
 //      alone (the room test, or physics' note of the face it was pushed out
@@ -69,7 +74,7 @@
 //   the trigger: me.botSDFire.
 import { walkSegmentBlocked, unitOverlapsObstacle, segmentHitsObstacle, projectileHitsSurface, obstaclesNearSegment } from '../src/sim/physics.js';
 import { findHiddenSpot, findPathOnGrid, coverDistanceAt } from '../src/sim/navgrid.js';
-import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S } from '../src/sim/constants.js';
+import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S, BOOST_CAP } from '../src/sim/constants.js';
 
 // ===================== THE MODELS =====================
 // Fraction of a uniform disc of radius c (a cone's footprint at the target's
@@ -525,6 +530,19 @@ export function sdBrainTick(host) {
   // dodge is on cooldown (1175 ms) for longer than any planned exposure
   // lasts, so a second dodge in the tank would buy nothing.
   const sdNeed = (legLen) => SD.boostReserve + sdSprintCost(legLen);
+  // THE VALVE: the tank is spent in one draught and refilled in one. It
+  // shuts when the gauge is down to what the hidden legs leave for the next
+  // exposure (the longest peek's need) and opens again only when the gauge
+  // is full. Planned spending — a hidden leg's sprint, an attack, a route's
+  // exposed stretch — passes through it; defensive spending — the dodge,
+  // the crossing legs, the escape — does not. (Before, a hidden leg sprinted
+  // whenever the gauge stood above the need: a sprint tick every few
+  // hundred ms as it refilled, each resetting the refill pause — the gauge
+  // never rose while walking and the attack was taken on a third of a tank.)
+  me.botSDTankOpen ??= true;
+  if (me.boost >= (meUnit.boostCap ?? BOOST_CAP)) me.botSDTankOpen = true;
+  else if (me.boost <= sdNeed(SD.peekLegMax)) me.botSDTankOpen = false;
+  const sdTankOpen = me.botSDTankOpen;
 
   // ===================== 3. THE STATE =====================
   // The exposure clock (the price's `elapsed`); the trigger.
@@ -650,7 +668,7 @@ export function sdBrainTick(host) {
         if (Math.hypot(ex - opp.pos.x, ez - opp.pos.z) > sdReach + SD.bandSlack) continue;
         if (!sdHiddenAt(ex, ez, myFloorY)) continue;
         if (coverDistanceAt(sdGrid, ex, ez, myFloorY, obstacles) > SD.goalCoverMax) continue;
-        if (as.tank && me.boost < sdNeed(L)) break;
+        if (as.tank && (!sdTankOpen || me.boost < sdNeed(L))) break;
         const rr = sdRouteRisk([{ x: ex, z: ez, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react);
         const T = rr.exposedLen / sdSprint * 1000;
         const dph = sdDeathsPerHit(rr.risk, sdOwnAs(T, Math.hypot(opp.pos.x - (mePos.x + cx * L / 2), opp.pos.z - (mePos.z + cz * L / 2)), as));
@@ -666,7 +684,7 @@ export function sdBrainTick(host) {
       }
     }
     for (const leg of sdFiringLegs(mePos.x, mePos.z, myFloorY)) {
-      if (as.tank && me.boost < sdNeed(leg.L)) continue;
+      if (as.tank && (!sdTankOpen || me.boost < sdNeed(leg.L))) continue;
       const d = Math.hypot(opp.pos.x - leg.x, opp.pos.z - leg.z);
       const legMs = leg.dodge ? STEP_DURATION_MS : leg.L / sdSprint * 1000;   // (the leg: how long the unit has known by the sighting)
       const first = sdFirstRoundMs(SD, meUnit, d, legMs);   // (what is left of its reaction, then its first round's flight)
@@ -697,7 +715,7 @@ export function sdBrainTick(host) {
     if (!path.length) return null;
     const rr = sdRouteRisk(path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
     me.botSDLastRisk = rr.risk;
-    if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve) return path;
+    if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (rr.exposedLen <= 0 || sdTankOpen)) return path;
     if (rr.first) sdMark(rr.first.x, rr.first.z);
     me.botSDRejects = (me.botSDRejects ?? 0) + 1;
     return null;
@@ -738,7 +756,7 @@ export function sdBrainTick(host) {
         const flankGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy) && sdFiringLegs(gx, gz, fy).length > 0;
         let stages;
         // (exposed, the nearest cell hidden on arrival; hidden, the nearest cell hidden through the horizon — the cell it will wait in)
-        if (escape) { const stays = sdHidden ? sdStaysAt : hiddenGoal; stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: stays }, { kind: 'escape', maxPops: SD.farPops, accept: stays }]; }
+        if (escape) { const stays = sdHidden ? sdStaysAt : hiddenGoal; stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: stays, defensive: true }, { kind: 'escape', maxPops: SD.farPops, accept: stays, defensive: true }]; }
         else if (!inReach) stages = [
           { kind: 'close', maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdReach, dist - gain) }, minDistFrom: { x: mePos.x, z: mePos.z, d: SD.shiftMin }, accept: hiddenGoal, score: nearer, scoreStop: -Math.max(sdReach, dist - gain - 15) }];
         else stages = [
@@ -769,7 +787,7 @@ export function sdBrainTick(host) {
             // escape's route is taken unpriced: any hidden cell beats the open.)
             const rr = sdRouteRisk(found.path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
             me.botSDLastRisk = rr.risk;
-            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve;
+            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (a.defensive || rr.exposedLen <= 0 || sdTankOpen);
             if (!ok) { if (rr.first) sdMark(rr.first.x, rr.first.z); me.botSDRejects = (me.botSDRejects ?? 0) + 1; me.botSDRefusedPath = found.path; }
           }
           if (ok) {
@@ -942,7 +960,9 @@ export function sdBrainTick(host) {
         if (host.startStep(wp.x - mePos.x, wp.z - mePos.z)) { plan.jumpStepped = true; me.botSDDodges = (me.botSDDodges ?? 0) + 1; }
       }
       const lastLeg = plan.idx === sp.length - 1 && wl <= 2;   // (the last 2 u onto the goal are walked: the body stops ON the cell)
-      const dash = !lastLeg && (aheadExposed ? me.boost > SD.dashFloor : (!jumpAhead && me.boost > sdNeed(SD.peekLegMax)));   // (a hidden leg sprints while the tank still holds the longest peek's need: it arrives able to attack)
+      // (a hidden leg sprints through THE VALVE; an exposed stretch ahead and the escape are defensive and spend to the floor)
+      const defensive = aheadExposed || plan.kind === 'escape';
+      const dash = !lastLeg && (defensive ? me.boost > SD.dashFloor : (!jumpAhead && sdTankOpen));
       if (bank) { me.momentumVX = 0; me.momentumVZ = 0; coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 }; me.botSDState = 'bank'; }
       else { coverMove = { hold: false, hide: true, dash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 }; me.botSDState = dash ? 'dash' : 'walk'; }
     }
