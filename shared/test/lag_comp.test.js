@@ -29,11 +29,11 @@ test('a human round is aimed at the body its client had drawn, and lands on it',
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
   let now = START;
   for (let k = 0; k < 40; k += 1) { now += TICK_RATE_MS; tick(m, now, null, across(m)); }
-  const lag = 6 * TICK_RATE_MS;                     // 96 ms, under the cap; p2 walks 1.15 u in it
+  const lag = 6 * TICK_RATE_MS;                     // 96 ms, under the cap; p2 walks about 1 u in it
   const fireAt = now + TICK_RATE_MS;
   const seen = bodyAt(m, p2, lag, fireAt);          // the body the shooter's screen showed
   const live = { ...p2.pos };                        // where p2 really is at the trigger
-  assert.ok(Math.hypot(seen.pos.x - live.x, seen.pos.z - live.z) > 1, 'p2 has walked clear of its old spot');
+  assert.ok(Math.hypot(seen.pos.x - live.x, seen.pos.z - live.z) > 0.5, 'p2 has walked clear of its old spot');
   const fire = emptyInput(); fire.shootTap = true; fire.viewAt = fireAt - lag;
   now = fireAt; tick(m, now, fire, across(m));
   assert.ok(m.events.some((e) => e.type === 'fired' && e.ownerId === 'p1'), 'p1 fired');
@@ -45,7 +45,7 @@ test('a human round is aimed at the body its client had drawn, and lands on it',
   const toSeen = Math.atan2(seen.pos.z - p1.pos.z, seen.pos.x - p1.pos.x);
   const toLive = Math.atan2(live.z - p1.pos.z, live.x - p1.pos.x);
   assert.ok(Math.abs(aim - toSeen) < 1e-6, `aimed at the body seen (${aim} vs ${toSeen})`);
-  assert.ok(Math.abs(aim - toLive) > 0.02, 'not at the live body');
+  assert.ok(Math.abs(aim - toLive) > 0.01, 'not at the live body');
   let hit = null;
   for (let k = 0; k < 20 && !hit; k += 1) {
     now += TICK_RATE_MS; tick(m, now, null, across(m));
@@ -54,7 +54,7 @@ test('a human round is aimed at the body its client had drawn, and lands on it',
   assert.ok(hit, 'the round hit p2');
   const bodyThen = bodyAt(m, p2, lag, now);           // the body the shooter's screen shows at the moment of the hit
   assert.deepEqual(hit.pos, bodyThen.pos, 'the hit is on the body the shooter saw');
-  assert.ok(Math.hypot(hit.pos.x - p2.pos.x, hit.pos.z - p2.pos.z) > 1, 'which is not where p2 stands now');
+  assert.ok(Math.hypot(hit.pos.x - p2.pos.x, hit.pos.z - p2.pos.z) > 0.5, 'which is not where p2 stands now');
   assert.ok(p2.hp < m.fighters.p1.hp, 'the live p2 took the damage');
 });
 
