@@ -15,7 +15,8 @@ import {
   JUMP_INITIAL_VELOCITY,
   BOOST_DASH_DRAIN_PER_TICK,
   MOMENTUM_STANDARD,
-  MAX_HP
+  MAX_HP,
+  LAG_COMP_MAX_MS
 } from './constants.js';
 import { clamp, vec3Length2D } from './math.js';
 import { getArena } from './arena.js';
@@ -33,6 +34,7 @@ import {
 import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
 import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
 import { tickStillness } from './bloom.js';
+import { recordBodies } from './history.js';
 
 // One input frame, sent client→server per tick. Defaults to no-op.
 export function emptyInput() {
@@ -47,7 +49,9 @@ export function emptyInput() {
     shootHold: false,   // shoot held continuously
     targetSwitch: false, // 2v2: cycle to next live enemy target this frame
     aimX: 0,            // Kei charged sweep: raw aim-stick X (horizontal sweep)
-    aimY: 0             // Kei charged sweep: raw aim-stick Y (vertical / pitch sweep)
+    aimY: 0,            // Kei charged sweep: raw aim-stick Y (vertical / pitch sweep)
+    viewAt: null        // the serverTime of the snapshot the client had drawn when this frame was made;
+                        // null = the present (a bot, offline, an older client). Lag compensation, history.js.
   };
 }
 
@@ -66,6 +70,10 @@ function cycleTargetId(matchState, fighter) {
 // work, refactored to be input-driven instead of reading the global `input`
 // and `keyState` objects.
 export function applyInput(matchState, fighter, input, now, obstacles, surfaces) {
+  // The shooter's lag (history.js): how far behind the present the world this
+  // frame was given against is. Off the fighter, so it never rides a snapshot.
+  if (!matchState.lagMs) matchState.lagMs = {};
+  matchState.lagMs[fighter.id] = input.viewAt == null ? 0 : clamp(now - input.viewAt, 0, LAG_COMP_MAX_MS);
   // Sniper charge lock — same gating as updatePlayer.
   if (fighter.sniperChargeTargetId) {
     fighter.vel.x = 0;
@@ -331,6 +339,10 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 6. Tiny-velocity damping (replicates the offline build's "stops below
   //    0.14 vel" behavior).
   for (const f of fighters) dampHorizontal(f, dt);
+
+  // 6.5 The bodies' record for the rounds' lag compensation (history.js):
+  //     where everyone stands now that everyone has moved.
+  recordBodies(matchState, now);
 
   // 7. Lock state.
   updateLocks(matchState);

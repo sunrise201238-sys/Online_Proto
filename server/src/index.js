@@ -590,7 +590,8 @@ io.on('connection', (socket) => {
       shootTap: cur.shootTap || !!frame.shootTap,
       targetSwitch: cur.targetSwitch || !!frame.targetSwitch,
       aimX: numericOrZero(frame.aimX),   // Kei charged-sweep horizontal aim
-      aimY: numericOrZero(frame.aimY)    // Kei charged-sweep vertical (pitch) aim
+      aimY: numericOrZero(frame.aimY),   // Kei charged-sweep vertical (pitch) aim
+      viewAt: Number.isFinite(frame.viewAt) ? frame.viewAt : null   // the serverTime of the snapshot the client had drawn (lag compensation, shared history.js)
     };
   });
 

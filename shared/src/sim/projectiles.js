@@ -35,6 +35,7 @@ import {
 import { createProjectile, nextProjectileId } from './state.js';
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
+import { bodyAt } from './history.js';
 
 // SHARED SPREAD SEED (owner 2026-10-15, "implement seed"): the direction a
 // round takes inside its cone is no longer Math.random() but a stream keyed
@@ -71,17 +72,21 @@ export function spawnProjectiles(matchState, owner, target) {
   const u = owner.unit;
   const shotNo = (owner.shotsFired ?? 0) + 1;   // this trigger pull's number (see the shot counter below)
   const rnd = matchState.shotSeed == null ? Math.random : shotRandom(matchState.shotSeed, owner.id, shotNo);
+  // The target as the shooter saw it (history.js): a human's frame was given
+  // against the world of its viewAt; a bot or offline shooter reads the live body.
+  const lagMs = matchState.lagMs?.[owner.id] ?? 0;
+  const body = bodyAt(matchState, target, lagMs, matchState.now);
   // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
   // what the shooter's laser sight showed — a target crossing a boundary while
   // the bullet flies doesn't change the number. Units without rangeDamage keep
   // their flat damage.
   let shotDamage = u.damage;
   if (u.rangeDamage) {
-    const rdDist = Math.hypot(target.pos.x - owner.pos.x, target.pos.z - owner.pos.z);
+    const rdDist = Math.hypot(body.pos.x - owner.pos.x, body.pos.z - owner.pos.z);
     shotDamage = rdDist < u.rangeDamage.nearDist ? u.rangeDamage.near
       : rdDist < u.rangeDamage.midDist ? u.rangeDamage.mid : u.damage;
   }
-  const baseDirRaw = vec3Sub(target.pos, owner.pos);
+  const baseDirRaw = vec3Sub(body.pos, owner.pos);
   const baseDir = vec3Normalize(baseDirRaw);
   const isShotgun = u.spreadCount > 1;
 
@@ -178,7 +183,7 @@ export function spawnProjectiles(matchState, owner, target) {
   // between shots) nor a time window (the prediction's clock is re-based on
   // every snapshot) can do that. No gameplay effect; a few bytes per snapshot.
   owner.shotsFired = shotNo;
-  for (const p of spawned) p.shot = shotNo;
+  for (const p of spawned) { p.shot = shotNo; p.lagMs = lagMs; }   // (lagMs: the shooter's lag, read by every hit test of the round)
 
   matchState.events.push({
     type: 'fired',
@@ -231,7 +236,9 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // direction, and final hit-sphere — measures from here, not from the
     // feet-level target.pos, so HOMING_CLOSE_RANGE_CUTOFF (2.6 m) and
     // HIT_RADIUS both keep their intended meaning after the spawn lift.
-    const hitCenter = { x: target.pos.x, y: target.pos.y + 2.35, z: target.pos.z };
+    const vt = now - (p.lagMs || 0);                       // the shooter's time (history.js)
+    const body = bodyAt(matchState, target, p.lagMs || 0, now);
+    const hitCenter = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
 
     const toTarget = vec3Sub(hitCenter, p.pos);
     if (vec3Length(toTarget) <= HOMING_CLOSE_RANGE_CUTOFF) {
@@ -301,7 +308,7 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
     // target: the round passes through in each of these cases.
     const owner = matchState.fighters[p.ownerId];
     const sameTeam = owner?.team && target.team && owner.team === target.team;
-    const botHit = target.hp > 0 && !sameTeam && now >= target.invulnerableUntil && now > target.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius;
+    const botHit = target.hp > 0 && !sameTeam && vt >= body.invulnerableUntil && vt > body.stepUntil && dx * dx + dy * dy + dz * dz < hitRadius * hitRadius;
     // Clip the wall/surface sweep to the hit point when the target is hit this
     // frame, so obstacles beyond the target don't despawn the round first. When
     // the target isn't hit (or passes through), sweep the full step as before.
@@ -359,7 +366,7 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
         targetId: p.targetId,
         damage,
         targetHp: target.hp,
-        pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z }
+        pos: { x: body.pos.x, y: body.pos.y, z: body.pos.z }
       });
       _despawn(matchState, projectiles, i, p, 'hit');
     }
@@ -443,7 +450,9 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
 
   // Homing steers the VOLLEY (same rules/cutoffs as single projectiles);
   // the pattern rides along rigidly.
-  const hitCenter = { x: target.pos.x, y: target.pos.y + 2.35, z: target.pos.z };
+  const vt = now - (p.lagMs || 0);                         // the shooter's time (history.js)
+  const body = bodyAt(matchState, target, p.lagMs || 0, now);
+  const hitCenter = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
   const toTarget = vec3Sub(hitCenter, p.pos);
   if (vec3Length(toTarget) <= HOMING_CLOSE_RANGE_CUTOFF) {
     p.homing = false;
@@ -481,7 +490,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   const stretchX = owner?.unit?.volleyStretchX ?? 1;
   const sameTeam = owner?.team && target.team && owner.team === target.team;
   const targetable = target.hp > 0 && !sameTeam
-    && now >= target.invulnerableUntil && now > target.stepUntil;
+    && vt >= body.invulnerableUntil && vt > body.stepUntil;
 
   // Each alive pellet flies its own swept segment this tick: target-capsule
   // test first (clipping the wall sweep to the hit point, like the single-
@@ -544,7 +553,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
       targetId: p.targetId,
       damage,
       targetHp: target.hp,
-      pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z }
+      pos: { x: body.pos.x, y: body.pos.y, z: body.pos.z }
     });
   }
 
@@ -566,8 +575,11 @@ export function spawnBeam(matchState, owner, target, now, obstacles) {
   if (!matchState.beams) matchState.beams = []; // predicted states clone from a beam-less snapshot
   const u = owner.unit;
   const origin = { x: owner.pos.x, y: owner.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: owner.pos.z };
-  // Level aim toward the target (feet→feet ⇒ dy = 0), same as the projectile.
-  const dir = vec3Normalize(vec3Sub(target.pos, owner.pos));
+  // Level aim toward the target (feet→feet ⇒ dy = 0), same as the projectile —
+  // the target as the shooter saw it (history.js).
+  const lagMs = matchState.lagMs?.[owner.id] ?? 0;
+  const body = bodyAt(matchState, target, lagMs, now);
+  const dir = vec3Normalize(vec3Sub(body.pos, owner.pos));
   const length = raycastObstacleDistance(origin, dir, BEAM_MAX_LENGTH, obstacles || []);
   const radius = u.beam?.radius ?? HIT_RADIUS_NORMAL;
   const durationMs = u.beam?.durationMs ?? 500;
@@ -582,7 +594,8 @@ export function spawnBeam(matchState, owner, target, now, obstacles) {
     damage: u.damage,
     hitStunMs: u.stun?.ms ?? PROJECTILE_HIT_STUN_MS,
     hitStunScale: u.stun?.moveScale ?? 0.25,
-    hitIds: []
+    hitIds: [],
+    lagMs
   });
   matchState.events.push({
     type: 'beam-fired', ownerId: owner.id,
@@ -630,9 +643,11 @@ export function tickBeams(matchState, now, damageScaler = null) {
       if (f.hp <= 0 || f.id === b.ownerId) continue;
       if (b.hitIds.includes(f.id)) continue;
       if (b.team && f.team && b.team === f.team) continue;   // friendly fire off
-      if (now < f.invulnerableUntil) continue;               // spawn protection
-      if (now <= f.stepUntil) continue;                      // dodge i-frames
-      const hc = { x: f.pos.x, y: f.pos.y + 2.35, z: f.pos.z };
+      const vt = now - (b.lagMs || 0);                       // the shooter's time (history.js)
+      const body = bodyAt(matchState, f, b.lagMs || 0, now);
+      if (vt < body.invulnerableUntil) continue;             // spawn protection
+      if (vt <= body.stepUntil) continue;                    // dodge i-frames
+      const hc = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
       const near = closestPointOnSegment(bA, bB, hc);
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
@@ -648,7 +663,7 @@ export function tickBeams(matchState, now, damageScaler = null) {
       b.hitIds.push(f.id);
       matchState.events.push({
         type: 'hit', ownerId: b.ownerId, targetId: f.id, damage, targetHp: f.hp,
-        pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
+        pos: { x: body.pos.x, y: body.pos.y, z: body.pos.z }
       });
     }
     _deleteProjectilesInBeam(matchState, b, b.radius);   // #1: laser deletes projectiles it touches
@@ -677,9 +692,10 @@ export function startChargedBeam(matchState, owner, target, now) {
   // fire before this call, so we must NOT decrement ammo again here — doing so
   // double-spent ammo on the charged path online (the quick-beam and regular
   // sniper paths never decrement here either; they rely on tickSniperCharge).
-  // Level aim toward the target (degenerate → due +X).
-  let dx = target.pos.x - owner.pos.x;
-  let dz = target.pos.z - owner.pos.z;
+  // Level aim toward the target as the shooter saw it (history.js; degenerate → due +X).
+  const body = bodyAt(matchState, target, matchState.lagMs?.[owner.id] ?? 0, now);
+  let dx = body.pos.x - owner.pos.x;
+  let dz = body.pos.z - owner.pos.z;
   const len = Math.hypot(dx, dz);
   if (len < 1e-4) { dx = 1; dz = 0; } else { dx /= len; dz /= len; }
   owner.chargedBeamUntil = now + KEI_CHARGED_DURATION_MS;
@@ -692,7 +708,7 @@ export function startChargedBeam(matchState, owner, target, now) {
   owner.chargedBeamDirZ = dz;
   // Start the vertical aim pointed at the target's height (so the channel opens
   // on-target); the player can then sweep it up/down. Bots re-aim it each tick.
-  owner.chargedBeamPitch = clamp(Math.atan2(target.pos.y - owner.pos.y, len), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
+  owner.chargedBeamPitch = clamp(Math.atan2(body.pos.y - owner.pos.y, len), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
   owner.chargedBeamHitIds = [];
 }
 
@@ -774,14 +790,17 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
     const hitLen = Math.max(0, length - rrC);
     const cA = { x: origin.x, y: origin.y, z: origin.z };
     const cB = { x: origin.x + f.chargedBeamDirX * hitLen, y: origin.y + tanY * hitLen, z: origin.z + f.chargedBeamDirZ * hitLen };
-    // --- One hit per fighter ---
+    // --- One hit per fighter, each body as the shooter saw it (history.js) ---
+    const lagMs = matchState.lagMs?.[f.id] ?? 0;
+    const vt = now - lagMs;
     if (!f.chargedBeamHitIds) f.chargedBeamHitIds = [];
     for (const t of fighters) {
       if (t.id === f.id || t.hp <= 0) continue;
       if (f.chargedBeamHitIds.includes(t.id)) continue;
       if (f.team && t.team && f.team === t.team) continue;
-      if (now < t.invulnerableUntil || now <= t.stepUntil) continue;
-      const hc = { x: t.pos.x, y: t.pos.y + 2.35, z: t.pos.z };
+      const body = bodyAt(matchState, t, lagMs, now);
+      if (vt < body.invulnerableUntil || vt <= body.stepUntil) continue;
+      const hc = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
       const near = closestPointOnSegment(cA, cB, hc);
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
@@ -798,7 +817,7 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       f.chargedBeamHitIds.push(t.id);
       matchState.events.push({
         type: 'hit', ownerId: f.id, targetId: t.id, damage, targetHp: t.hp,
-        pos: { x: t.pos.x, y: t.pos.y, z: t.pos.z }
+        pos: { x: body.pos.x, y: body.pos.y, z: body.pos.z }
       });
     }
     _deleteProjectilesInBeam(matchState, beam, radius);

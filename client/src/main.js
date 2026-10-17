@@ -6479,7 +6479,11 @@ function buildOnlineInputFrame() {
     shootHold: !!input.shootHold,
     targetSwitch: !!input.targetSwitchTap,
     aimX: input.x,   // raw aim-stick → Kei charged-sweep horizontal aim
-    aimY: input.y    // raw aim-stick → Kei charged-sweep vertical (pitch) aim
+    aimY: input.y,   // raw aim-stick → Kei charged-sweep vertical (pitch) aim
+    // The world this frame was given against: the serverTime of the snapshot
+    // drawn right now. The server judges this frame's shot in that world
+    // (lag compensation, shared history.js).
+    viewAt: state.online?.conn?.getLatestSnapshot?.()?.serverTime ?? null
   };
 }
 
