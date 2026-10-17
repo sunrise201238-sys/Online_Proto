@@ -13,10 +13,7 @@ import {
   PROJECTILE_MUZZLE_Y_OFFSET as SIM_MUZZLE_Y_OFFSET,
   buildNavGrid,
   findPathOnGrid,
-  findFiringPath,
-  findHiddenSpot,
   smoothPath,
-  walkSegmentBlocked,
   CMD_TRAVEL_BOOST_FLOOR,
   CMD_TRAVEL_DASH_ARM,
   CMD_TRAVEL_JUMP_BANK,
@@ -29,21 +26,17 @@ import {
   MANDATED_JUMP_MIN_BOOST,
   volleyAxes,
   volleyPelletOffset,
-  volleySpreadFactor,
   SHOTGUN_PATTERN,
   effectiveSpread,
   bloomAfterShot,
   bloomAfterTime,
-  botMayFire,
-  botNoteShot,
-  botClearFireRule,
   tickStillness,
   isStill,
   obstaclesNearSegment
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
-import { sdBrainTick } from '@gvg/shared/src/sim/sdbrain.js';
+import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
 import { coverDistanceAt } from '@gvg/shared/src/sim/navgrid.js';
 
 const app = document.getElementById('app');
@@ -761,7 +754,8 @@ function pickBotTargetOf(mech) {
     );
     const seen = botHasLineOfSight(
       { x: mech.body.position.x, y: mech.body.position.y + BOT_LOS_EYE_HEIGHT, z: mech.body.position.z },
-      { x: e.body.position.x, y: e.body.position.y + BOT_LOS_EYE_HEIGHT, z: e.body.position.z }
+      { x: e.body.position.x, y: e.body.position.y + BOT_LOS_EYE_HEIGHT, z: e.body.position.z },
+      arenaObstacles, arenaSurfaces
     );
     const score = d + (seen ? 0 : BOT_TARGET_BLOCKED_PENALTY);
     if (e === mech.state.botTargetRef) currentScore = score;
@@ -1072,43 +1066,6 @@ const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
 // Spawn protection — fighters take no damage for this long at round start
 // (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
 const SPAWN_IMMUNITY_MS = 3000;
-
-// --- Bot tactical-sprint tunables (mirrored in shared/src/sim/ai.js) ---
-const BOT_SPRINT_MIN_BOOST = 8;
-// Strategic reserve: bots never VOLUNTARILY spend below this — one knob
-// gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
-// cruise/jump funding, the anti-glint dodge). The sole exception is
-// Defense: escaping live fire may burn down to BOT_SPRINT_MIN_BOOST.
-// This is purely a bot DECISION threshold — the stamina MECHANICS
-// (costs, drain, regen, caps, empty-recovery) stay identical to the
-// human player's.
-const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg ARMS only from a topped-up tank
-const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (mirrors shared/src/sim/ai.js)
-// Pursue / Maze sprint latch: arm at the reserve, release at the floor (mirrors ai.js botTravelSprint).
-function botTravelSprint(s) {
-  if (s.boost >= BOT_BOOST_RESERVE) s.botPursueSprinting = true;
-  else if (s.boost <= BOT_TRAVEL_SPRINT_FLOOR) s.botPursueSprinting = false;
-  return !!s.botPursueSprinting;
-}
-// A fresh hit forces an evade for this long (so taking damage always provokes a
-// relocate, even if the shot landed at the edge of the fire window).
-const BOT_HIT_EVADE_MS = 350;
-// Mirrors shared/src/sim/ai.js — the bot rolls its anti-glint reaction PER
-// CHARGE, a defensive mixed strategy vs the sniper's 50/50 snap/hold flip.
-// The slow roll is charger-aware:
-//   ANTI-ARU (bullet snipers): 50% fast 400 ms / 50% slow 800 ms (snaps
-//   land first and cancel the pending dodge; i-frames ~800-1100 sit on the
-//   full hold's impact). ANTI-KEI (beam snipers): 50% fast 400 ms / 50%
-//   slow 900 ms — the dodge starts just ahead of the sweep channel's
-//   opening (i-frames ~900-1200 blanket it), then the follow-up sprint
-//   outruns the steer at normal fighting ranges.
-// REACT_MS = fast roll vs the locked attacker; REACT_UNLOCKED_MS = fast
-// roll vs any other enemy (kept separable for future tuning).
-const BOT_GLINT_REACT_MS = 400;
-const BOT_GLINT_REACT_UNLOCKED_MS = 400;
-const BOT_GLINT_REACT_SLOW_MS = 800;        // anti-Aru slow roll
-const BOT_GLINT_REACT_SLOW_BEAM_MS = 900;   // anti-Kei slow roll
-const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
 
 const input = {
   x: 0,
@@ -4828,20 +4785,7 @@ function updatePlayer(now) {
   updateBoost(state.player, now, action);
 }
 
-// ===== Universal bot AI helpers =====
-// Tunables shared across the bot's situational checks. Sized so the avoidance
-// vector is felt without overwhelming the player-tracking direction.
-const BOT_OBSTACLE_AVOID_RADIUS = 7;
-// After a stuck event, remember the pinned spot for this long and bias
-// movement away from it so the bot picks a different route around the wall
-// instead of grinding into the same corner. Radius caps the influence so
-// distant memories don't warp kiting. (Briefly 6/1500 on 2026-08-08 while
-// chasing the Airport "bots avoid the middle" report — reverted by the user
-// once that turned out to be the 2v2 spawn asymmetry, since fixed.)
-// Mirrored in shared ai.js.
-const BOT_STUCK_MEMORY_MS = 3500;
-const BOT_STUCK_MEMORY_RADIUS = 12;
-const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nudges the path angle without ever reversing pursuit (was 1.4 — strong enough to shove the bot away from the player and stall its search)
+// ===== The bot host's own pieces — the brain is shared/src/sim/nbrain.js =====
 const BOT_LOS_EYE_HEIGHT = 1.6;
 // Muzzle height above the ROOT (offline works in root space; root = body +
 // modelYOffset 2.35, so this is the same point as the sim's
@@ -4849,40 +4793,6 @@ const BOT_LOS_EYE_HEIGHT = 1.6;
 // spawn and the laser sight. The bot's FIRE gate tests this line, not the eye
 // line — see botShotCanLand. Mirrored in shared/src/sim/ai.js.
 const BOT_MUZZLE_ABOVE_ROOT = 0.8;
-// RELOAD HIDE (the 2026-08-08 cover reload, re-based on the Hide stance by
-// the owner 2026-09-26): units with a MANUAL reload at least MIN_MS long
-// (Hina's 7 s drum, Koyuki's 5 s) spend the famine in the Hide stance —
-// entered the frame the reload starts, left the frame it completes. Mirrors
-// shared ai.js.
-const BOT_RELOAD_HIDE_MIN_MS = 3000;
-// HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
-// updateEnemy): a hidden-spot search runs at most every SEARCH_MS per unit
-// (and once per frame across every driven unit), a search that found
-// nothing at all retries after FAIL_RETRY_MS, a route that stops making
-// progress bails after BAIL_MS and retries after BAIL_RETRY_MS, and MAX_POPS
-// bounds the Dijkstra (there is no distance cap — the unit walks as far as
-// it takes). Mirrored in shared ai.js.
-const BOT_HIDE_SEARCH_MS = 500;
-const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep looking for a double-block spot)
-const BOT_HIDE_BAIL_MS = 700;
-const BOT_HIDE_BAIL_RETRY_MS = 700;
-const BOT_HIDE_MAX_POPS = 600;
-const BOT_HIDE_SHOULDER = 1.6;   // (HIT_RADIUS_NORMAL — the hide goal hides the unit's width, mirrors shared 2026-10-10)
-// Pacing and slipping while hidden (owner 2026-09-26: no statue) — the
-// shared ai.js constants, mirrored.
-const BOT_HIDE_LEG = 2.5;
-const BOT_HIDE_LEASH = 6;
-const BOT_HIDE_DRIFT_MS = 350;
-const BOT_HIDE_DRIFT_RETRY_MS = 150;
-const BOT_HIDE_PREDICT_S = 0.5;
-const BOT_HIDE_PREDICT_MIN_SPEED = 1;
-const BOT_HIDE_CLOSE_DIST = 26;
-const BOT_HIDE_APPROACH_SPEED = 2;
-const BOT_HIDE_SLIP_GAIN = 6;
-// COVER HIDE (owner 2026-09-26/27): a long reload under a move order is spent
-// in a hide bound to the order — the shared ai.js constant, mirrored (see
-// its note; the hit-triggered variant was retired 2026-09-27).
-const BOT_CH_AREA_R = 14;
 // Frame stamp of the last hidden-spot search — the offline twin of
 // matchState.hideSearchTick: every driven unit of a frame runs with the
 // same `now`, so two hiding units never search in the same frame.
@@ -4891,190 +4801,6 @@ let botHideSearchFrameAt = null;
 // and continues next frame (owner 2026-10-08, "BOT sometimes freezes": an
 // unbudgeted search ran 50-70 ms on a desktop core, several frames on a phone).
 const SD_FRAME_SEARCH_MS = 4;
-// Null every hide-order scratch field on a mech state (the shared brain
-// inlines the same nine writes): the brain calls it the first tick it sees
-// the order cleared, and dioramaCommandTick on death alongside the command
-// wipe, so a corpse never carries a stale route into anything that reads it.
-function resetBotHideFields(st) {
-  st.botHidePath = null;
-  st.botHidePathIdx = null;
-  st.botHideGoal = null;
-  st.botHideSearchAt = null;
-  st.botHideFailedAt = null;
-  st.botHideHold = null;
-  st.botHideDashArmed = null;
-  st.botHideTier = null;
-  st.botHideMoveAnchor = null;
-  st.botHideSearchStage = null;
-  st.botHideAnchor = null;
-  st.botHideDriftX = null;
-  st.botHideDriftZ = null;
-  st.botHideDriftUntil = null;
-  st.botHideNoCover = null;
-}
-const BOT_JUMP_HEIGHT_DIFF = 2.5;
-// LoS-aware 2v2 targeting: an enemy with no line of sight (sealed behind
-// glass/walls) reads this many units FARTHER than it really is, so a visible
-// enemy wins the lock unless the blocked one is drastically closer. The
-// margin keeps the current lock unless a rival clearly beats it (no flicker).
-const BOT_TARGET_BLOCKED_PENALTY = 50;
-const BOT_TARGET_SWITCH_MARGIN = 6;
-
-// --- Elevation-kiting tunables ---
-// A ledge whose lip rises more than the auto-step height (1.6) above the
-// bot's floor can't be walked onto — it needs a jump. The upper bound is
-// what a jump arc can actually clear (apex ≈ jumpVelocity² / 2·|gravity|,
-// ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
-const BOT_CLIMB_MIN_RISE = 1.7;
-const BOT_CLIMB_MAX_RISE = 4.8;
-// Narrowest surface still worth treating as a perch — mirrors shared ai.js.
-// Below this a jump overshoots it entirely; 6 sits in the gap between the
-// 4-wide conveyors and the next-narrowest real platform at 10.
-const BOT_PERCH_MIN_WIDTH = 6;
-// How close the Maze follower gets to a waypoint before starting the next
-// leg. 3 -> 1.5 (2026-08-12): at 3 on the 4-unit nav grid the early turn
-// rounded corners INTO obstacle end faces, where the radial-only avoidance
-// has no sideways component — the residual wall-grind. Measured A/B in the
-// shared sim (see the fuller note there); the final-arrival test stays 3.
-// Used at the follower AND its statue-escape replay: the two must stay
-// identical or the replay's waypoint comparison silently stops matching.
-// Mirrors shared ai.js BOT_WAYPOINT_ADVANCE_RADIUS.
-const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
-// How far out the bot scans for a ledge to perch on, and how close it has to
-// get to that ledge (or to a drop edge) before it commits the jump.
-const BOT_PERCH_SEEK_RADIUS = 24;
-const BOT_LEDGE_JUMP_REACH = 4.5;
-// A floor more than this above base ground means "the bot is on high ground".
-const BOT_HIGH_GROUND_MIN_Y = 1.7;
-// How far past a surface edge to sample when testing whether stepping off it
-// actually drops to lower ground (vs. running straight into a wall).
-const BOT_DESCENT_PROBE = 3;
-// How long after an elevation jump the bot keeps driving toward the ledge so
-// the arc lands where it was aimed instead of drifting off on the kiting
-// vector. Covers the longest arc (a drop off high ground, ~0.85 s airborne).
-const BOT_AIR_STEER_MS = 900;
-
-// Repulsion vector from blocking obstacles within `radius` of (px, py, pz).
-// Returns un-normalized {rx, rz} that the caller can blend into the kiting
-// direction. Uses the same y-skip math as resolveUnitObstacleCollisions so
-// obstacles the bot is over (e.g. low platform decks) or below (high
-// overheads) don't push them. JUMPABLE `noProjectile` fences (height <=
-// BOT_CLIMB_MAX_RISE — station / flashpoint 4-high platform edges) are
-// skipped so the jump handler below can walk the bot up to them; UNJUMPABLE
-// ones (square's 14-high fountain colonnade, streets' tall under-bridge
-// blockers) DO repel — they block movement like any wall but were invisible
-// to this steering, so straight-line behaviors (Defense escapes, kiting,
-// dodge follow-ups) pinned bots against them while enemies shot straight
-// through (fixed 2026-08-05; mirrored in shared/src/sim/ai.js).
-function computeBotAvoidance(px, py, pz, obstacles, radius) {
-  let rx = 0, rz = 0;
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
-    // streets bridge deck over its 6-high under-deck end walls — passes over
-    // it freely and must not be shoved sideways.)
-    if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
-    const topBuffer = o.topBuffer ?? 4;
-    if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
-    const nx = Math.max(o.minX, Math.min(px, o.maxX));
-    const nz = Math.max(o.minZ, Math.min(pz, o.maxZ));
-    const dx = px - nx;
-    const dz = pz - nz;
-    const d2 = dx * dx + dz * dz;
-    if (d2 > radius * radius) continue;
-    const d = Math.sqrt(d2);
-    if (d > 0.001) {
-      const t = 1 - d / radius;
-      const strength = t * t;
-      rx += (dx / d) * strength;
-      rz += (dz / d) * strength;
-    } else {
-      // Bot center is on the AABB face — push along the axis of shallowest
-      // penetration so resolveUnitObstacleCollisions doesn't have to.
-      const dMinX = Math.abs(px - o.minX);
-      const dMaxX = Math.abs(o.maxX - px);
-      const dMinZ = Math.abs(pz - o.minZ);
-      const dMaxZ = Math.abs(o.maxZ - pz);
-      const minD = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-      if (minD === dMinX) rx -= 1;
-      else if (minD === dMaxX) rx += 1;
-      else if (minD === dMinZ) rz -= 1;
-      else rz += 1;
-    }
-  }
-  return { rx, rz };
-}
-
-// Soft repulsion away from a spot the bot got recently pinned at. Same
-// quadratic falloff as the obstacle avoidance so it blends naturally with
-// the existing kiting vector, and zero outside `radius` so old memories
-// don't pull the bot toward weird headings on the far side of the map.
-function computeStuckRepulsion(px, pz, memX, memZ, radius) {
-  const dx = px - memX;
-  const dz = pz - memZ;
-  const d2 = dx * dx + dz * dz;
-  if (d2 >= radius * radius) return { rx: 0, rz: 0 };
-  const d = Math.sqrt(d2);
-  if (d < 0.001) return { rx: 0, rz: 0 };
-  const t = 1 - d / radius;
-  const strength = t * t;
-  return { rx: (dx / d) * strength, rz: (dz / d) * strength };
-}
-
-// Line-of-sight check between two world points using the same swept-AABB
-// math projectiles use, so the bot only "sees" through gaps a bullet would
-// actually pass through. Skips obstacles flagged noProjectile because bullets
-// pass through those too.
-// Sight vs a walkable surface (2026-08-06, mirrors shared/src/sim/ai.js):
-// decks/ramps are NOT obstacle boxes, so without this a sight ray passed
-// straight through a bridge slope's solid wedge or an elevated deck's floor.
-// RAMPS are solid fill — blocked wherever the ray dips below the local ramp
-// height inside the footprint (ray y and ramp height are both linear along
-// the ray, so the clipped interval's endpoints are exact). FLAT elevated
-// decks stand on open pillars — only CROSSING the deck plane blocks, so two
-// units both under the bridge keep their sight lines. 0.4 eps forgives lips.
-function sightHitsSurface(p0, p1, s) {
-  const dx = p1.x - p0.x, dz = p1.z - p0.z;
-  let t0 = 0, t1 = 1;
-  const axes = [[p0.x, dx, s.minX, s.maxX], [p0.z, dz, s.minZ, s.maxZ]];
-  for (let i = 0; i < 2; i++) {
-    const p = axes[i][0], d = axes[i][1], lo = axes[i][2], hi = axes[i][3];
-    if (Math.abs(d) < 1e-9) {
-      if (p < lo || p > hi) return false;
-    } else {
-      let a = (lo - p) / d, b = (hi - p) / d;
-      if (a > b) { const t = a; a = b; b = t; }
-      if (a > t0) t0 = a;
-      if (b < t1) t1 = b;
-      if (t0 > t1) return false;
-    }
-  }
-  const dy = p1.y - p0.y;
-  const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
-  const EPS = 0.4;
-  if (s.type === 'ramp') {
-    const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
-    const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
-    return yA < hA - EPS || yB < hB - EPS;
-  }
-  const top = s.top ?? s.maxTop;
-  if (top == null) return false;
-  return (yA > top + EPS && yB < top - EPS) || (yA < top - EPS && yB > top + EPS);
-}
-
-function botHasLineOfSight(p0, p1) {
-  for (const o of arenaObstacles) {
-    // blocksBotSight bars stay opaque to BOT sight even though bullets pass
-    // — see the shared ai.js note (Streets under-slope bars, 2026-08-13).
-    if (o.noProjectile && !o.blocksBotSight) continue;
-    if (segmentHitsObstacle(p0, p1, o)) return false;
-  }
-  for (const s of arenaSurfaces) {
-    if (sightHitsSurface(p0, p1, s)) return false;
-  }
-  return true;
-}
-
 // Can the SHOT actually land? The fire gate has to test the line the BULLET
 // takes, not the eye line: bullets leave root.y + BOT_MUZZLE_ABOVE_ROOT and fly
 // to the target's matching point, which sits 0.8 BELOW the bot's eye line
@@ -5101,39 +4827,17 @@ function botShotCanLand(p0, p1) {
 }
 
 
-// Burst size for continuous-fire weapons (spreadCount === 1). Units with a
-// botFireCap fire EXACTLY that many per trigger pull (bounded by remaining
-// ammo — an empty mag ends the burst early into the reload); units without
-// one keep the legacy rule: about half the mag, clamped so tiny or huge
-// mags still feel right (2026-08-01: all listed autos carry explicit caps;
-// the formula now only serves Fubuki/Aris and future unlisted guns).
-function botBurstSize(unit) {
-  if (unit.botFireCap) return unit.botFireCap;
-  if (!unit.magCapacity || unit.magCapacity === Infinity) return 6;
-  return Math.max(3, Math.min(20, Math.floor(unit.magCapacity / 2)));
-}
-
-// Inline jump bookkeeping for the bot — mirrors the gating the player jump
-// uses (boost cost + cooldown) plus the bot's extra BOT_SPRINT_MIN_BOOST
-// margin so it never jumps itself completely dry. Returns true if a jump
-// started this tick.
-function botStartJump(now, survival = false) {
+// The bot's jump mechanic — the player jump's gating (raw boost cost +
+// cooldown) and bookkeeping on the aliased state.enemy. The brain's funding
+// policy (the strategic reserve, the survival tier) sits in nbrain.js
+// (botTryJump / botTryJumpSurvival) and calls this. Returns true if a jump
+// started this frame.
+function botStartJump(now) {
   const eState = state.enemy.state;
   const jumpBoostCost = state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST;
   if (!state.enemy.grounded || eState.airborne) return false;
   if (now < eState.jumpCooldownUntil) return false;
-  // Jump funding respects the strategic reserve (falls back to cost + floor
-  // if the reserve is ever tuned below that). SURVIVAL jumps (the Defense
-  // hop/vault, 2026-08-05) fire from the flat MANDATED tier (owner
-  // 2026-08-22: 60, shared with commanded-travel route jumps — was raw
-  // cost + sprint floor 56) — same doctrine as the other survival
-  // exemptions (Defense sprints to the hard floor, anti-glint dodge at raw
-  // step cost). Discretionary jumps keep the reserve gate.
-  // Mirrored in shared/src/sim/ai.js (botTryJumpSurvival).
-  const funded = survival
-    ? MANDATED_JUMP_MIN_BOOST
-    : Math.max(BOT_TRAVEL_SPRINT_FLOOR, jumpBoostCost + BOT_SPRINT_MIN_BOOST);
-  if (eState.boost < funded) return false;
+  if (eState.boost < jumpBoostCost) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
   eState.refillPausedUntil = now + 500;
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -5145,80 +4849,6 @@ function botStartJump(now, survival = false) {
   eState.jumpCooldownUntil = now + Math.max(state.enemy.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS, 1500);
   inheritMomentum(state.enemy, 70);
   return true;
-}
-
-// Scan for the nearest walkable surface whose lip sits a jump-height above
-// the bot's floor — a ledge it can hop onto for a high-ground kiting
-// advantage. Skips ledges too tall to clear with a jump (those need a ramp)
-// and ones level enough to just walk onto. Returns a unit vector toward the
-// nearest reachable point on that ledge plus the horizontal distance to it,
-// or null if nothing suitable is in range.
-// minWidth defaults to the perch floor; MAZE passes 0 — mirrors shared ai.js,
-// see the note at its Maze call site for the measurements behind the split.
-function findHighGroundPerch(px, pz, myFloorY, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
-  let best = null;
-  let bestDist = searchRadius;
-  for (const s of arenaSurfaces) {
-    if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
-    // TOO NARROW TO LAND ON (user 2026-08-09) — mirrors shared ai.js; see the
-    // note there. A jump carries 12-17 units, so a thinner strip gets sailed
-    // clean over rather than mounted, and the bot bounces back and forth.
-    if (Math.min(s.maxX - s.minX, s.maxZ - s.minZ) < minWidth) continue;
-    const nx = Math.max(s.minX, Math.min(px, s.maxX));
-    const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
-    const rise = s.heightAt(nx, nz) - myFloorY;
-    if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
-    // A wall standing ON the ledge lip (e.g. Airport's rim glass fences) means
-    // a unit couldn't stand at this point — treat it like any wall and don't
-    // steer/jump toward it. (Station's edge walls top out AT the platform
-    // surface with topBuffer 0, so they pass this check unchanged.)
-    if (unitOverlapsObstacle(nx, myFloorY + rise + 2.45, nz)) continue;
-    const ddx = nx - px;
-    const ddz = nz - pz;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d >= bestDist) continue;
-    bestDist = d;
-    const inv = d > 1e-3 ? 1 / d : 0;
-    best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
-  }
-  return best;
-}
-
-// The bot is standing on a raised surface — find the edge it should run or
-// jump off to drop back to lower ground. Prefers the edge most aligned with
-// `away` (a direction, usually away from the opponent) and rejects edges
-// that just lead into a wall or don't actually descend. Returns a unit
-// vector toward that edge plus the distance to it, or null if the bot isn't
-// on a droppable surface.
-function findDescentDirection(px, pz, myFloorY, awayX, awayZ) {
-  let host = null;
-  for (const s of arenaSurfaces) {
-    if (px < s.minX || px > s.maxX || pz < s.minZ || pz > s.maxZ) continue;
-    if (Math.abs(s.heightAt(px, pz) - myFloorY) > 1) continue;
-    host = s;
-    break;
-  }
-  if (!host) return null;
-  const lowerY = myFloorY - BOT_CLIMB_MIN_RISE;
-  const probeY = myFloorY + GROUND_BASE_Y;
-  const edges = [
-    { x: -1, z: 0, edgeDist: px - host.minX, probeX: host.minX - BOT_DESCENT_PROBE, probeZ: pz },
-    { x: 1, z: 0, edgeDist: host.maxX - px, probeX: host.maxX + BOT_DESCENT_PROBE, probeZ: pz },
-    { x: 0, z: -1, edgeDist: pz - host.minZ, probeX: px, probeZ: host.minZ - BOT_DESCENT_PROBE },
-    { x: 0, z: 1, edgeDist: host.maxZ - pz, probeX: px, probeZ: host.maxZ + BOT_DESCENT_PROBE }
-  ];
-  let best = null;
-  let bestScore = -Infinity;
-  for (const e of edges) {
-    if (groundHeightAt(e.probeX, e.probeZ, myFloorY + 50) > lowerY) continue;
-    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ)) continue;
-    const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
-    if (score > bestScore) {
-      bestScore = score;
-      best = { toX: e.x, toZ: e.z, edgeDist: Math.max(0, e.edgeDist) };
-    }
-  }
-  return best;
 }
 
 // DEATH REPORT (owner 2026-10-15): the Sudden Death brain's tape (see the
@@ -5346,1699 +4976,131 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
   console.log(lines.join('\n'));
 }
 
-function updateEnemy(now) {
-  if (state.enemy.state.sniperChargeTarget) {
-    state.enemy.body.velocity.x = 0;
-    state.enemy.body.velocity.z = 0;
-    state.enemy.state.momentumVX = 0;
-    state.enemy.state.momentumVZ = 0;
-    state.enemy.state.action = 'shoot';
-    updateBoost(state.enemy, now, 'shoot');
-    return;
-  }
-  // Locked while channeling a charged sweep (beam steers toward target in updateChargedBeams).
-  if (state.enemy.state.chargedBeamUntil > now) {
-    state.enemy.body.velocity.x = 0;
-    state.enemy.body.velocity.z = 0;
-    state.enemy.state.momentumVX = 0;
-    state.enemy.state.momentumVZ = 0;
-    state.enemy.state.action = 'shoot';
-    updateBoost(state.enemy, now, 'shoot');
-    return;
-  }
-  const p = state.player.root.position;
-  const e = state.enemy.root.position;
-  // The BODY centre height (alignment check 2026-10-09): the walk tests and
-  // the nav grid take the body centre (ground + GROUND_BASE_Y), the same
-  // window the collision code uses; `e` is the mech ROOT, 2.35 higher, and
-  // at that height a 3-high walkable-top block read as passable and an
-  // overhang as a wall — legs the physics then refused (offline wedges).
-  const eBodyY = state.enemy.body.position.y;
-  const toPlayer = new THREE.Vector3().subVectors(p, e).setY(0);
-  const dist = toPlayer.length();
-  const dir = toPlayer.normalize();
-  const side = new THREE.Vector3(-dir.z, 0, dir.x);
-  const eState = state.enemy.state;
-
-  // --- Anti-sniper glint response (mirrors tickBot in shared/src/sim/ai.js):
-  // dodge a fixed reaction delay after a glint AIMED AT ME appears — from ANY
-  // enemy, locked or not (humans see off-lock glints on the edge indicator
-  // too; no LoS check, matching the locked case). Earliest-started active
-  // charge wins; one step per charge, one schedule at a time — an overlapping
-  // second charge gets its own dodge only after the first resolves. The
-  // schedule survives the glint vanishing so a late/full-charge shot is still
-  // covered. `sniperCharging` (locked-target charge) keeps driving the
-  // regular Defense durations below unchanged. Anyone charging AT me is an
-  // enemy by construction, so the scan needs no team logic.
-  const sniperCharging = state.player.state.sniperChargeTarget === state.enemy;
-  let glintThreat = null;
-  for (const m of (_botTrueFighters ?? getAllFighters())) {
-    if (!m || m === state.enemy || m.state.hp <= 0) continue;
-    if (m.state.sniperChargeTarget !== state.enemy) continue;
-    if (!glintThreat || m.state.sniperChargeStartAt < glintThreat.state.sniperChargeStartAt) glintThreat = m;
-  }
-  if (glintThreat) {
-    const sameCharge = eState.botGlintKeyRef === glintThreat
-      && eState.botGlintKeyStart === glintThreat.state.sniperChargeStartAt;
-    if (!sameCharge && eState.botGlintStepAt == null) {
-      eState.botGlintKeyRef = glintThreat;
-      eState.botGlintKeyStart = glintThreat.state.sniperChargeStartAt;
-      eState.botGlintAtkRef = glintThreat;
-      // Per-charge defensive roll: fast (snap-dodger) or slow (hold-dodger).
-      // The slow value is charger-aware: anti-Kei (beam) waits for the sweep
-      // channel's opening; anti-Aru (bullet) sits on the full hold's impact.
-      const fastReact = glintThreat === state.player
-        ? BOT_GLINT_REACT_MS
-        : BOT_GLINT_REACT_UNLOCKED_MS;
-      const slowReact = glintThreat.unit?.beam
-        ? BOT_GLINT_REACT_SLOW_BEAM_MS
-        : BOT_GLINT_REACT_SLOW_MS;
-      eState.botGlintStepAt = now + (Math.random() < BOT_GLINT_REACT_FAST_CHANCE
-        ? fastReact
-        : slowReact);
-    }
-  } else if (eState.botGlintStepAt == null) {
-    eState.botGlintKeyRef = null;
-    eState.botGlintKeyStart = 0;
-  }
-  // A fresh hit means the shot already landed — drop the now-pointless dodge.
-  // (botPrevHitStun is only advanced by the threat block below, so the rising
-  // edge is still visible here.)
-  if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botGlintStepAt = null;
-
-  // The guessed dodge comes due: one attempt, then the guess is spent.
-  if (eState.botGlintStepAt != null && now >= eState.botGlintStepAt) {
-    eState.botGlintStepAt = null;
-    if (
-      now > (eState.stepUntil || 0)
-      && now >= (eState.stepCooldownUntil || 0)
-      // SURVIVAL EXEMPTION (like Defense): the glint dodge gates at the raw
-      // step cost (the unit's own, if declared), not the strategic reserve —
-      // even a suppressed bot may spend its last savings to survive a shot.
-      && eState.boost >= (state.enemy.unit?.stepBoostCost ?? STEP_BOOST_COST)
-    ) {
-      // Direction: perpendicular to the ATTACKER's line of fire. A NON-locked
-      // attacker gets a strict perpendicular (overriding any active Defense
-      // direction for this dodge+follow-up window — Defense itself stays
-      // keyed to the locked target and re-arms afterwards if still
-      // triggered). The locked attacker keeps today's behavior: continue a
-      // committed Defense escape line, else a random lateral vs the locked
-      // target (== perpendicular to it).
-      let sdx, sdz;
-      const glintAtk = eState.botGlintAtkRef;
-      if (glintAtk && glintAtk !== state.player && glintAtk.state.hp > 0) {
-        const adx = state.enemy.body.position.x - glintAtk.body.position.x;
-        const adz = state.enemy.body.position.z - glintAtk.body.position.z;
-        const ad = Math.hypot(adx, adz) || 1;
-        const lat = Math.random() < 0.5 ? 1 : -1;
-        sdx = (-adz / ad) * lat;
-        sdz = (adx / ad) * lat;
-      } else if (eState.botState === 'defense' && eState.botDefenseDirX != null) {
-        sdx = eState.botDefenseDirX; sdz = eState.botDefenseDirZ;
-      } else {
-        const lat = Math.random() < 0.5 ? 1 : -1;
-        sdx = side.x * lat; sdz = side.z * lat;
-      }
-      const sLen = Math.hypot(sdx, sdz) || 1;
-      sdx /= sLen; sdz /= sLen;
-      const botStepU = state.enemy.unit;
-      eState.stepStartAt = now;
-      eState.stepUntil = now + (botStepU?.stepDurationMs ?? STEP_DURATION_MS);
-      eState.stepCooldownUntil = now + (botStepU?.stepCooldownMs ?? STEP_COOLDOWN_MS);
-      eState.stepFromX = state.enemy.body.position.x;
-      eState.stepFromZ = state.enemy.body.position.z;
-      const botStepDist = botStepU?.stepDistance ?? STEP_DISTANCE;
-      eState.stepToX = eState.stepFromX + sdx * botStepDist;
-      eState.stepToZ = eState.stepFromZ + sdz * botStepDist;
-      eState.queuedMomentumVX = eState.momentumVX * 0.65 + state.enemy.body.velocity.x * 0.35;
-      eState.queuedMomentumVZ = eState.momentumVZ * 0.65 + state.enemy.body.velocity.z * 0.35;
-      eState.momentumVX = 0;
-      eState.momentumVZ = 0;
-      eState.boost = Math.max(0, eState.boost - (botStepU?.stepBoostCost ?? STEP_BOOST_COST));
-      eState.refillPausedUntil = now + 500;
-      clearIncomingHoming(state.enemy, now);
-      // "Dodge + sprint": after the i-frame step ends, keep sprinting the
-      // same way for 520 ms via a brief Defense commit (REPLACES any prior
-      // Defense countdown by design — live triggers re-arm it afterwards).
-      eState.botState = 'defense';
-      eState.botStateEnteredAt = now;
-      eState.botDefenseDirX = sdx; eState.botDefenseDirZ = sdz;
-      eState.botDefenseDirAt = now;
-      eState.botDefenseUntil = eState.stepUntil + 520;
-      eState.botDefenseInCover = false;
-      eState.botDefenseCoverAt = 0;
-      eState.botDefensePeekDone = false;
-      eState.botDefenseStuckTicks = 0;
-      eState.botDefenseFlips = 0;
-      eState.botDefenseStuckMode = false;
-    }
-  }
-
-  // Step lifecycle (mirrors the player's step block in updatePlayer): while
-  // mid-step the lerp owns position/velocity/action and the rest of the AI
-  // sits out the tick; the first tick after it ends pays out queued momentum.
-  // THE SUDDEN DEATH BRAIN WATCHES THE DODGE (mirrors shared ai.js): the
-  // step's lerp owns the body, the brain still sees and the gun still fires;
-  // the velocity dispatch and the boost update below stand down for the step.
-  let sdStepping = false;
-  if (now <= (eState.stepUntil || 0)) {
-    const span = Math.max(1, eState.stepUntil - eState.stepStartAt);
-    const progress = THREE.MathUtils.clamp((now - eState.stepStartAt) / span, 0, 1);
-    const targetX = THREE.MathUtils.lerp(eState.stepFromX, eState.stepToX, progress);
-    const targetZ = THREE.MathUtils.lerp(eState.stepFromZ, eState.stepToZ, progress);
+// ===== THE BOT HOST, CLIENT SIDE (owner 2026-10-17) =====
+// The brain is the shared module (nbrain.js — the Health Point brain with
+// the Sudden Death brain inside it), one brain for the server and the
+// client. This host hands it the unit's body, its enemies (the true
+// fighters: the player and any 2v2 enemy), the arena and the body's
+// actions, and runs the client's own physics after it: the hover floor,
+// the momentum, the hit-stun slowdown, the boost tick. runBotAIForMech
+// aliases state.enemy / state.player to drive any bot mech.
+const botMechIds = new WeakMap();
+let botMechSeq = 0;
+function botMechId(m) {
+  let id = botMechIds.get(m);
+  if (!id) { botMechSeq += 1; id = `m${botMechSeq}`; botMechIds.set(m, id); }
+  return id;
+}
+// An enemy as the brain sees it: the body centre, the live velocity, the gun's
+// clocks. (The mirror stamps lastFireAt at spawn for the cooldown clock — a
+// shot is only "heard" after that stamp.)
+function botEnemyView(f) {
+  const st = f.state, b = f.body.position;
+  return {
+    id: botMechId(f), pos: { x: b.x, y: b.y, z: b.z }, vel: f.body.velocity, hp: st.hp, unit: f.unit ?? {},
+    lastFireAt: ((st.lastFireAt ?? -1e9) > (st.fireInitAt ?? -1e9)) ? st.lastFireAt : -1e9,
+    bloom: st.bloom ?? 0, invulnerableUntil: st.invulnerableUntil,
+    chargeStartAt: st.sniperChargeStartAt, chargingAtMe: st.sniperChargeTarget === state.enemy
+  };
+}
+// The command entry the brain reads and writes, over the mech's own fields
+// (the diorama HUD reads mech.cmdMove / cmdLock / cmdHide directly).
+function botCmdView(m) {
+  return {
+    get hide() { return m.cmdHide; }, set hide(v) { m.cmdHide = v; },
+    get hideAuto() { return m.cmdHideAuto; }, set hideAuto(v) { m.cmdHideAuto = v; },
+    get move() { return m.cmdMove; }, set move(v) { m.cmdMove = v; },
+    get lockTargetId() { return m.cmdLock; }, set lockTargetId(v) { m.cmdLock = v; }
+  };
+}
+// The step's lerp (mirrors the player's step block in updatePlayer): while
+// mid-step the lerp owns position / velocity / action and the boost ticks as
+// a step; the first frame after it ends pays out the queued momentum.
+function botTickStep(mech, now) {
+  const st = mech.state;
+  if (now <= (st.stepUntil || 0)) {
+    const span = Math.max(1, st.stepUntil - st.stepStartAt);
+    const progress = THREE.MathUtils.clamp((now - st.stepStartAt) / span, 0, 1);
+    const targetX = THREE.MathUtils.lerp(st.stepFromX, st.stepToX, progress);
+    const targetZ = THREE.MathUtils.lerp(st.stepFromZ, st.stepToZ, progress);
     // Bonk: the next lerp point lands inside an obstacle. Halt the dodge here for
     // the rest of the step — collapse the lerp path to this spot so a later point
     // on the FAR side of a thin wall can't tunnel the unit through. The step is
     // NOT ended early, so the animation + i-frames run the full duration.
-    if (!unitOverlapsObstacle(targetX, state.enemy.body.position.y, targetZ)) {
-      state.enemy.body.position.x = targetX;
-      state.enemy.body.position.z = targetZ;
+    if (!unitOverlapsObstacle(targetX, mech.body.position.y, targetZ)) {
+      mech.body.position.x = targetX;
+      mech.body.position.z = targetZ;
     } else {
-      eState.stepFromX = state.enemy.body.position.x; eState.stepToX = state.enemy.body.position.x;
-      eState.stepFromZ = state.enemy.body.position.z; eState.stepToZ = state.enemy.body.position.z;
+      st.stepFromX = mech.body.position.x; st.stepToX = mech.body.position.x;
+      st.stepFromZ = mech.body.position.z; st.stepToZ = mech.body.position.z;
     }
-    state.enemy.body.velocity.x = 0;
-    state.enemy.body.velocity.z = 0;
-    eState.action = 'step';
-    updateBoost(state.enemy, now, 'step');
-    if (!state.suddenDeathActive) return;
-    sdStepping = true;
-  } else if ((eState.stepUntil || 0) > 0) {
-    eState.stepUntil = 0;
-    eState.momentumVX += eState.queuedMomentumVX || 0;
-    eState.momentumVZ += eState.queuedMomentumVZ || 0;
-    eState.queuedMomentumVX = 0;
-    eState.queuedMomentumVZ = 0;
+    mech.body.velocity.x = 0;
+    mech.body.velocity.z = 0;
+    st.action = 'step';
+    updateBoost(mech, now, 'step');
+  } else if ((st.stepUntil || 0) > 0) {
+    st.stepUntil = 0;
+    st.momentumVX += st.queuedMomentumVX || 0;
+    st.momentumVZ += st.queuedMomentumVZ || 0;
+    st.queuedMomentumVX = 0;
+    st.queuedMomentumVZ = 0;
   }
-
-  // Range band centers ON the lock range: sweet spot = lockRange exactly,
-  // edges ±7. The bot hovers right at the red-lock boundary — drifting past
-  // it briefly is fine, the Engage pull immediately corrects back. One
-  // universal rule for every weapon.
-  // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
-  // compressed 50–70 team-synergy table (long locks let a teammate die
-  // alone at the front). Units without the field (hidden ones) and every
-  // other mode keep lockRange. Mirrored in shared ai.js tickBot.
-  const lockRange = (state.mode === '2v2' && state.enemy.unit.lockRange2v2)
-    ? state.enemy.unit.lockRange2v2
-    : (state.enemy.unit.lockRange ?? 50);
-  const upperRange = lockRange + 7;
-  const optimalRange = Math.max(10, lockRange);
-  const lowerRange = Math.max(6, lockRange - 7);
-  // === Behavior state machine: Defense > Maze > Engage > Pursue.
-  // Each state has explicit time-bound exits — no latching. Replaces the
-  // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
-  // flags with one botState whose transitions are recomputed every tick.
-
-  // LoS + threats
-  // GROUNDED SIGHT (2026-08-14) — mirrors shared ai.js: every sight test the
-  // bot makes about itself uses the eye it has with its feet down, so a jump
-  // can never manufacture a firing line (or reset the no-sight clock). Takes
-  // the LOWER of the latched grounded height and the live one, so a drop off
-  // a ledge stays honest. The opponent endpoint stays live.
-  if (state.enemy.grounded && !eState.airborne) eState.botSightY = e.y;
-  const myEyeY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_LOS_EYE_HEIGHT;
-  // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
-  const myShotY = Math.min(e.y, eState.botSightY ?? e.y) + BOT_MUZZLE_ABOVE_ROOT;
-  const playerHasLoS = botHasLineOfSight(
-    { x: e.x, y: myEyeY, z: e.z },
-    { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
-  );
-  // Would the player still be visible from (px, pz)? LoS-gates the range
-  // discipline below: never retreat or drift outward past the edge of sight.
-  const losFromPoint = (px, pz) => botHasLineOfSight(
-    { x: px, y: myEyeY, z: pz },
-    { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
-  );
-  // Are the next `len` units straight toward the player WALKABLE? Uses the
-  // real movement rules (walkSegmentBlocked, topBuffer semantics) — the old
-  // chest-height ray sailed clean over 2.4-high belts that physically stop
-  // a unit, so the triggers/exits kept releasing the bot into low walls.
-  const walkTowardClear = (len) => !walkSegmentBlocked(
-    e.x, e.z,
-    e.x + dir.x * len, e.z + dir.z * len,
-    eBodyY, arenaObstacles
-  );
-  if (eState.hitStunUntil > (eState.botPrevHitStun ?? 0)) eState.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
-  eState.botPrevHitStun = eState.hitStunUntil;
-  // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
-  // longer triggers Defense — the bot's sole response to a glint is the
-  // committed dodge scheduled above, so it ALWAYS dodges instead of sometimes
-  // sprinting to cover. We also deliberately do NOT trigger on "player squeezed
-  // the trigger". "Sprint when getting hit" is provided by hitEvading below.
-  const hitEvading = now < (eState.botHitEvadeUntil ?? 0);
-  const underFire = hitEvading;
-  const inBandDist = dist >= lowerRange && dist <= upperRange;
-
-  // LoS clock (Reposition's 3 s timeout) + position-progress clock (Maze's 2 s
-  // trigger). Progress is measured as real net displacement over a rolling
-  // 500 ms window, not per-tick velocity, so the stun crawl can't false-trigger
-  // Maze the way the old velocity-based stuck-detector did.
-  if (playerHasLoS || eState.botLastLoSAt == null) eState.botLastLoSAt = now;
-  const noLoSTime = now - eState.botLastLoSAt;
-  if (eState.botProgressAnchorAt == null) {
-    eState.botProgressAnchorX = e.x;
-    eState.botProgressAnchorZ = e.z;
-    eState.botProgressAnchorAt = now;
-    eState.botLastProgressAt = now;
+}
+function updateEnemy(now) {
+  const mech = state.enemy, eState = mech.state;
+  if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  const myTeam = getTeamOf(mech);
+  const enemies = [];
+  for (const f of (_botTrueFighters ?? getAllFighters())) {
+    if (!f || f === mech || f.state.hp <= 0 || getTeamOf(f) === myTeam) continue;
+    enemies.push(botEnemyView(f));
   }
-  if (now - eState.botProgressAnchorAt > 500) {
-    const ddx = e.x - eState.botProgressAnchorX;
-    const ddz = e.z - eState.botProgressAnchorZ;
-    // Hit-stun overlapped this window → excused. Being slowed to a crawl by
-    // landing bullets is suppression, not "stuck": sustained fire otherwise
-    // starves this clock and drops the bot into spurious mid-fight Maze
-    // episodes (the angled-backward-sprint sightings on Plain Field).
-    // Under-fire wedges are Defense's job, on its own 2-tick trigger.
-    if (Math.hypot(ddx, ddz) > 3 || eState.hitStunUntil > eState.botProgressAnchorAt) {
-      eState.botLastProgressAt = now;
-    }
-    eState.botProgressAnchorX = e.x;
-    eState.botProgressAnchorZ = e.z;
-    eState.botProgressAnchorAt = now;
+  const targetId = botMechId(state.player);
+  const opp = enemies.find((v) => v.id === targetId) ?? botEnemyView(state.player);
+  // The eye is BOT_LOS_EYE_HEIGHT above the body centre, as online (owner
+  // 2026-10-17; the mirror had it above the ROOT, 2.35 higher). The muzzle
+  // is BOT_MUZZLE_ABOVE_ROOT above the root (root = body + modelYOffset), the
+  // same point as the sim's PROJECTILE_MUZZLE_Y_OFFSET above the body.
+  const b = mech.body.position;
+  const ran = nbBrainTick({
+    now, me: eState, pos: { x: b.x, y: b.y, z: b.z }, vel: mech.body.velocity, grounded: mech.grounded, unit: mech.unit ?? {},
+    opp, enemies, cmd: botCmdView(mech),
+    obstacles: arenaObstacles, surfaces: arenaSurfaces, grid: offlineNavGrid,
+    eyeUp: BOT_LOS_EYE_HEIGHT, muzzleUp: (mech.modelYOffset ?? 2.35) + BOT_MUZZLE_ABOVE_ROOT,
+    mode: state.mode, tickMs: 16,
+    charging: !!eState.sniperChargeTarget,
+    sd: state.suddenDeathActive ? BOT_SD : null,
+    wall: mech.wallTouch ?? null,   // (physics' note from the last frame — resolveUnitObstacleCollisions)
+    clear: botShotCanLand,
+    startStep: (dx, dz) => sdBotStartStep(mech, dx, dz, now),
+    tickStep: () => botTickStep(mech, now),
+    startJump: () => botStartJump(now),
+    fire: () => attemptFire(mech, state.player, now),
+    inheritMomentum: (k) => inheritMomentum(mech, k),
+    navGet: () => eState.botNav ?? null,
+    navSet: (v) => { eState.botNav = v; },
+    // (one route search per frame across every driven unit)
+    searchSlot: () => { if (botHideSearchFrameAt === now) return false; botHideSearchFrameAt = now; return true; },
+    // (a search gets SD_FRAME_SEARCH_MS of this frame; what is left parks in botSDSearchJob and continues next frame)
+    deadline: () => performance.now() + SD_FRAME_SEARCH_MS,
+    // DEATH REPORT TAPE: one line per 100 ms, the last 8 s kept; printed the frame the unit dies (sdDeathReport) or on demand (window.__SD_REPORT())
+    tape: (row) => { const tape = eState.botSDTape ?? (eState.botSDTape = []); tape.push(row); if (tape.length > 80) tape.splice(0, tape.length - 80); }
+  });
+  if (ran === 'locked') { updateBoost(mech, now, 'shoot'); return; }
+  if (ran === 'step') return;   // (the step's own boost update ran in botTickStep)
+  if (mech.grounded && now > eState.hoverUntil && eState.action !== 'jump') {
+    mech.body.velocity.y = 0;
   }
-  const noProgressTime = now - (eState.botLastProgressAt ?? now);
-
-  const avoid = computeBotAvoidance(e.x, e.y, e.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
-  const avoidMag = Math.hypot(avoid.rx, avoid.rz);
-  const obstacleNear = avoidMag > 0.3;
-
-  const myFloorY = groundHeightAt(e.x, e.z, eBodyY - GROUND_BASE_Y);   // (the current floor as the step hint — mirrors shared; the root height overstated it by 2.35)
-  const oppFloorY = groundHeightAt(p.x, p.z, p.y - GROUND_BASE_Y);
-  const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
-
-  // HIDE STANCE flag (owner 2026-09-26): the mech's command flag (set by
-  // setUnitStance / the card hold; online it mirrors the snapshot echo) OR
-  // the RELOAD HIDE — offline twin of the shared tickBot read: a manual
-  // reload of BOT_RELOAD_HIDE_MIN_MS or more enters the stance on the mech
-  // (cmdHide + cmdHideAuto, wiping its move / lock orders — the badge shows
-  // on own slots) the frame the reload starts and leaves it the frame it
-  // completes; a manual stance or a landed order clears cmdHideAuto and
-  // only an auto hide is released at the end (a unit released early stays
-  // out for the rest of that reload). state.enemy is the driven unit inside
-  // runBotAIForMech's alias window.
-  const rMech = state.enemy;
-  const rUnit = rMech.unit ?? {};
-  const reloadHide = rUnit.magCapacity != null && !rUnit.autoReload
-    && (rUnit.reloadMs ?? 0) >= BOT_RELOAD_HIDE_MIN_MS
-    && (eState.reloadingUntil ?? 0) > now;
-  if (reloadHide && !eState.botReloadHide) {
-    eState.botReloadHide = true;
-    if (rMech.cmdMove && !rMech.cmdHide) {
-      // Under a MOVE ORDER (owner 2026-09-26): the reload is spent in a
-      // COVER HIDE bound to the order — the order stays and resumes after;
-      // no stance, no badge (the lifecycle below starts it). A new order
-      // landing mid-reload takes over at once (botReloadCH drops).
-      eState.botReloadCH = true;
-    } else if (!rMech.cmdHide) {
-      rMech.cmdHide = true;
-      rMech.cmdHideAuto = true;
-      rMech.cmdMove = null;
-      rMech.cmdLock = null;
-    }
-  } else if (!reloadHide && eState.botReloadHide) {
-    eState.botReloadHide = false;
-    eState.botReloadCH = false;
-    if (rMech.cmdHide && rMech.cmdHideAuto) {
-      rMech.cmdHide = false;
-      rMech.cmdHideAuto = false;
-    }
-  }
-  const hideOrdered = !!rMech.cmdHide;
-  // COVER HIDE lifecycle (owner 2026-09-26/27 — offline twin of shared
-  // tickBot): a long reload on a unit with a standing move order (the
-  // mech's cmdMove) and no Hide stance; a live Defense keeps its frames
-  // first, and a no-cover verdict holds the trigger off for the retry window.
-  const defenseLive = (eState.botState ?? 'pursue') === 'defense' && now < (eState.botDefenseUntil ?? 0);
-  const chOrder = (!hideOrdered && rMech.cmdMove) ? rMech.cmdMove : null;
-  if (eState.botCH && (!chOrder || defenseLive || chOrder !== eState.botCH.order || !reloadHide)) {
-    // The order ended or was REPLACED (the new order takes over at once and
-    // the rest of the reload is spent on it), Defense owns the frame, or
-    // the reload completed.
-    if (eState.botCH.order !== chOrder && chOrder) eState.botReloadCH = false;
-    eState.botCH = null;
-    resetBotHideFields(eState);
-  }
-  const reloadCH = !!(eState.botReloadCH && reloadHide);   // read AFTER the end block: a replaced order drops botReloadCH
-  if (!eState.botCH && chOrder && !defenseLive && now >= (eState.botCHNoCoverUntil ?? 0) && reloadCH) {
-    eState.botCH = {
-      startedAt: now,
-      order: chOrder,
-      reload: true,   // bound to the reload: lasts until it completes
-      within: chOrder.phase === 'anchor' ? { x: chOrder.x, z: chOrder.z, r: BOT_CH_AREA_R } : null
-    };
-    resetBotHideFields(eState);
-  }
-  // Which hide runs this frame: the stance (ordered / reload) or the cover hide.
-  const hideMode = state.suddenDeathActive ? null : (hideOrdered ? 'stance' : (eState.botCH ? 'cover' : null));
-
-  // Movement override carried by the hide stance below (the 2026-08-08
-  // cover reload's vehicle, kept: the dispatch and the stall-clock pinning
-  // key on it).
-  let coverMove = null;
-  // --- HIDE STANCE (owner 2026-09-26) ---
-  // The 2026-08-08 cover reload generalised into a stance: ordered from the
-  // card, or entered automatically for a long manual reload (hideOrdered
-  // above). While it stands on this unit:
-  //   hidden at its tier   -> PACE: keep moving at walk speed on short legs
-  //                           that are verified hidden BEFORE they are taken
-  //                           (a BOT_HIDE_LEG look-ahead eye test against
-  //                           every enemy eye plus the walk rule), on a
-  //                           BOT_HIDE_LEASH around the hide anchor, biased
-  //                           away from the nearest enemy (owner 2026-09-26:
-  //                           a statue "looks awful");
-  //   exposure ahead /     -> SLIP: the enemies are watched every tick — an
-  //   enemy closing in        eye that would see the unit BOT_HIDE_PREDICT_S
-  //                           ahead on its live velocity, or a nearest enemy
-  //                           inside BOT_HIDE_CLOSE_DIST closing faster than
-  //                           BOT_HIDE_APPROACH_SPEED, triggers a
-  //                           findHiddenSpot route to a cell hidden from the
-  //                           live AND the predicted eyes (when closing, one
-  //                           at least BOT_HIDE_SLIP_GAIN farther from that
-  //                           enemy than the unit stands now);
-  //   exposed              -> follow / search a findHiddenSpot route to the
-  //                           nearest cell no enemy sees, live and predicted
-  //                           eyes first, then live only; still none -> the
-  //                           plain pursue legs move it while the search
-  //                           retries.
-  // Firing is untouched: the fire block at the bottom still shoots whatever
-  // it can see from where the unit stands — the unit never moves for a
-  // shot. Defense never triggers on a hit (state transition below; hit-stun
-  // physics still applies); the anti-glint dodge, charge locks and beam
-  // channels stay as they are, and the dodge's Defense follow-up owns its
-  // frames like any reflex. coverMove carries the hide override (hide:
-  // true; dash = the latched sprint on a route).
-  // Online budget: per tick <= 2 (position) + 2 (predicted eyes) + 2 (route
-  // goal) + 2 (current leg) LoS tests and one walk-rule segment test; a leg
-  // re-pick every BOT_HIDE_DRIFT_MS costs 8 headings x (walk test + <= 4
-  // LoS); searches keep the BOT_HIDE_SEARCH_MS cadence, run ONE attempt per
-  // tick (the fallback tiers follow on the next ticks) and at most one per
-  // tick per match (botHideSearchFrameAt). Offline twin of the shared
-  // tickBot block (fields eState.botHide*).
-  if (!hideMode) {
-    if (eState.botHideHold != null) {
-      // Stance cleared (or the cover hide ended): null every hide field so
-      // the normal brain resumes from a clean slate.
-      resetBotHideFields(eState);
-    }
-  } else if (!defenseLive) {
-    // (A live Defense here can only be the anti-glint dodge's 520 ms
-    // follow-up sprint — it keeps its frames; the hide resumes after.)
-    const hideEnemies = [];
-    // Enemies come from the TRUE fighter list (the alias window scrambles
-    // getAllFighters — see runBotAIForMech), judged by team like shared.
-    const hideMyTeam = getTeamOf(state.enemy);
-    for (const f of (_botTrueFighters ?? getAllFighters())) {
-      if (f && f !== state.enemy && f.state.hp > 0 && getTeamOf(f) !== hideMyTeam) hideEnemies.push(f);
-    }
-    // Nearest first: eyes[0] is the threat the pacing steers away from.
-    hideEnemies.sort((a, b) =>
-      Math.hypot(a.root.position.x - e.x, a.root.position.z - e.z)
-      - Math.hypot(b.root.position.x - e.x, b.root.position.z - e.z));
-    // Enemy eyes stay LIVE (the existing convention — a jumping human must
-    // still count); the unit's own eye is the grounded latch (myEyeY).
-    const hideEyes = hideEnemies.map((f) => ({
-      x: f.root.position.x, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z
-    }));
-    // Predicted eyes: where each enemy will be BOT_HIDE_PREDICT_S ahead on
-    // its live velocity; a near-still enemy adds none (saves the tests).
-    const hidePredEyes = [];
-    for (let k = 0; k < hideEnemies.length; k += 1) {
-      const f = hideEnemies[k];
-      const vx = f.body?.velocity?.x ?? 0, vz = f.body?.velocity?.z ?? 0;
-      if (Math.hypot(vx, vz) > BOT_HIDE_PREDICT_MIN_SPEED) {
-        hidePredEyes.push({
-          x: f.root.position.x + vx * BOT_HIDE_PREDICT_S, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z + vz * BOT_HIDE_PREDICT_S
-        });
-      }
-    }
-    const hideMyEye = { x: e.x, y: myEyeY, z: e.z };
-    // Position test (<= 2 LoS tests): nearest eye first, early exit on the
-    // first eye that sees the unit.
-    let hiddenAll = true;
-    for (let k = 0; k < hideEyes.length; k += 1) {
-      const seen = botHasLineOfSight(hideEyes[k], hideMyEye);
-      if (seen) { hiddenAll = false; break; }
-    }
-    // Only cover from BOTH enemies counts (owner 2026-09-27: the nearest-
-    // enemy-only tier is gone for the stance too — hidden from one enemy
-    // while the other shoots a walking target measured worse than Defense).
-    // Exposed to either with no such spot: the pursue legs and Defense on a
-    // hit, re-searching every BOT_HIDE_FAIL_RETRY_MS until one appears.
-    const hideTier = hiddenAll ? 'all' : null;
-    if (hideTier) eState.botHideNoCover = false;   // standing hidden = cover exists
-    // Threat read: the nearest enemy, the unit's bearing away from it and
-    // whether it is closing in.
-    const threat = hideEnemies[0] ?? null;
-    let threatDist = Infinity, awayX = 0, awayZ = 0, closing = false;
-    if (threat) {
-      const dx = e.x - threat.root.position.x, dz = e.z - threat.root.position.z;
-      threatDist = Math.hypot(dx, dz) || 1;
-      awayX = dx / threatDist;
-      awayZ = dz / threatDist;
-      const closingSpeed = (threat.body?.velocity?.x ?? 0) * awayX + (threat.body?.velocity?.z ?? 0) * awayZ;
-      closing = threatDist < BOT_HIDE_CLOSE_DIST && closingSpeed > BOT_HIDE_APPROACH_SPEED;
-    }
-    // Exposure ahead (<= 2 LoS tests, only while hidden from all): would a
-    // predicted eye see the unit where it stands?
-    let exposedSoon = false;
-    if (hiddenAll) {
-      for (let k = 0; k < hidePredEyes.length; k += 1) {
-        if (botHasLineOfSight(hidePredEyes[k], hideMyEye)) { exposedSoon = true; break; }
-      }
-    }
-    // Is a route goal still hidden from the live eyes?
-    const hideGoalStillHidden = (goal) => {
-      const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: goal.z };
-      for (let k = 0; k < hideEyes.length; k += 1) {
-        if (botHasLineOfSight(hideEyes[k], gEye)) return false;
-      }
-      return true;
-    };
-    const hideDropPath = () => {
-      eState.botHidePath = null;
-      eState.botHidePathIdx = null;
-      eState.botHideGoal = null;
-      eState.botHideMoveAnchor = null;
-    };
-    // 1. Route bookkeeping: arrived -> drop it and re-anchor the pacing
-    //    there; goal exposed by a moving enemy -> drop it (a fresh search
-    //    follows on the cadence).
-    if (eState.botHidePath) {
-      const goal = eState.botHideGoal;
-      if (Math.hypot(goal.x - e.x, goal.z - e.z) < 2) {
-        hideDropPath();
-        eState.botHideAnchor = null;
-      } else if (!hideGoalStillHidden(goal)) {
-        hideDropPath();
-      }
-    }
-    // 2. Searches. The attempt list depends on the situation; exactly ONE
-    //    attempt runs per tick (the next tier follows next tick) so a
-    //    search never costs more than one Dijkstra in a tick.
-    const hideAttempts = [];
-    if (!hiddenAll) {
-      if (hidePredEyes.length) hideAttempts.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null });
-      hideAttempts.push({ eyes: hideEyes, tier: 'all', minDistFrom: null });
-    }
-    if (!hiddenAll && hideMode === 'cover' && eState.botCH.within) {
-      // COVER HIDE first tier: cover inside the order's area, ahead of the
-      // unrestricted tiers.
-      const w = eState.botCH.within;
-      const inArea = [];
-      if (hidePredEyes.length) inArea.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null, within: w });
-      inArea.push({ eyes: hideEyes, tier: 'all', minDistFrom: null, within: w });
-      hideAttempts.unshift(...inArea);
-    }
-    if (hiddenAll && (exposedSoon || closing)) {
-      const eyes = hideEyes.concat(hidePredEyes);
-      hideAttempts.push({
-        eyes, tier: 'all',
-        minDistFrom: closing ? { x: threat.root.position.x, z: threat.root.position.z, d: threatDist + BOT_HIDE_SLIP_GAIN } : null
-      });
-      if (closing && exposedSoon) hideAttempts.push({ eyes, tier: 'all', minDistFrom: null });
-    }
-    if (hideAttempts.length
-        && !eState.botHidePath
-        && now >= (eState.botHideSearchAt ?? 0)
-        && botHideSearchFrameAt !== now) {
-      botHideSearchFrameAt = now;
-      if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
-      const stage = Math.min(eState.botHideSearchStage ?? 0, hideAttempts.length - 1);
-      const attempt = hideAttempts[stage];
-      const found = findHiddenSpot(
-        offlineNavGrid, e.x, e.z, myFloorY, attempt.eyes, arenaObstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER }
-      );
-      if (found) {
-        eState.botHideNoCover = false;
-        eState.botHidePath = found.path;
-        eState.botHidePathIdx = 0;
-        eState.botHideGoal = found.goal;
-        eState.botHideTier = attempt.tier;
-        eState.botHideMoveAnchor = null;
-        eState.botHideSearchStage = 0;
-        eState.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
-      } else if (stage < hideAttempts.length - 1) {
-        eState.botHideSearchStage = stage + 1;   // next tier next tick
-        eState.botHideSearchAt = now;
-      } else {
-        eState.botHideSearchStage = 0;
-        if (hideTier) {
-          // Hidden at some tier: keep probing on the cadence (the enemies
-          // move — the scan stays dynamic).
-          eState.botHideSearchAt = now + BOT_HIDE_SEARCH_MS;
-        } else {
-          // Exposed and NOTHING anywhere within the budget: no cover. Until a
-          // later search finds one, a fresh hit runs the plain Defense escape
-          // (owner 2026-09-26; the transition below reads the flag).
-          eState.botHideNoCover = true;
-          eState.botHideFailedAt = now;
-          eState.botHideSearchAt = now + BOT_HIDE_FAIL_RETRY_MS;
-        }
-      }
-    }
-    // 3. Legs.
-    if (eState.botHidePath) {
-      // Route follow — the cover-reload follower's recipe: advance within
-      // 2 u, avoidance blend, 700 ms no-progress bail.
-      const hp = eState.botHidePath;
-      let wp = hp[eState.botHidePathIdx];
-      while (eState.botHidePathIdx < hp.length - 1
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < 2) {
-        eState.botHidePathIdx += 1;
-        wp = hp[eState.botHidePathIdx];
-      }
-      let tx = wp.x - e.x, tz = wp.z - e.z;
-      const wl = Math.hypot(tx, tz) || 1;
-      tx = tx / wl + avoid.rx * 0.6;
-      tz = tz / wl + avoid.rz * 0.6;
-      const tl = Math.hypot(tx, tz) || 1;
-      // Latched sprint (owner 2026-09-26): arm above CMD_TRAVEL_BOOST_FLOOR
-      // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
-      // The dispatch funds it at the 8 floor (its own tier below).
-      if (eState.botHideDashArmed) {
-        if (eState.boost <= BOT_SPRINT_MIN_BOOST) eState.botHideDashArmed = false;
-      } else if (eState.boost > CMD_TRAVEL_BOOST_FLOOR) {
-        eState.botHideDashArmed = true;
-      }
-      eState.botHideHold = false;
-      // The COVER HIDE sprints like Defense: no arming, the 8 floor only.
-      coverMove = { hold: false, hide: true, dash: hideMode === 'cover' ? true : !!eState.botHideDashArmed, mx: tx / tl, mz: tz / tl };
-      if (!eState.botHideMoveAnchor
-          || Math.hypot(e.x - eState.botHideMoveAnchor.x, e.z - eState.botHideMoveAnchor.z) > 1) {
-        eState.botHideMoveAnchor = { x: e.x, z: e.z, at: now };
-      } else if (now - eState.botHideMoveAnchor.at > BOT_HIDE_BAIL_MS) {
-        // No progress: drop the route, retry the search shortly; until then
-        // the plain legs below move the unit.
-        hideDropPath();
-        eState.botHideFailedAt = now;
-        eState.botHideSearchAt = now + BOT_HIDE_BAIL_RETRY_MS;
-        coverMove = null;
-      }
-    } else if (hideTier) {
-      // PACE the cover. A leg is a BOT_HIDE_LEG step that must (a) stay on
-      // the leash, (b) be walkable and (c) keep the unit's eye hidden from
-      // every eye — the predicted eyes too when possible (pass 0), live
-      // eyes only as the fallback (pass 1). The current leg is
-      // re-checked against the live eyes every tick and re-picked at
-      // BOT_HIDE_DRIFT_MS: 8 headings from a random phase, scored away from
-      // the nearest enemy with a little continuity and noise so the pacing
-      // reads as a person, not a metronome. No hidden leg at all (a tight
-      // nook) -> stand for BOT_HIDE_DRIFT_RETRY_MS, then try again.
-      if (!eState.botHideAnchor) eState.botHideAnchor = { x: e.x, z: e.z };
-      const anchor = eState.botHideAnchor;
-      const legOk = (hx, hz, strict) => {
-        const lx = e.x + hx * BOT_HIDE_LEG, lz = e.z + hz * BOT_HIDE_LEG;
-        if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
-        if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
-        const eye = { x: lx, y: myEyeY, z: lz };
-        for (let k = 0; k < hideEyes.length; k += 1) if (botHasLineOfSight(hideEyes[k], eye)) return false;
-        if (strict) for (let k = 0; k < hidePredEyes.length; k += 1) if (botHasLineOfSight(hidePredEyes[k], eye)) return false;
-        return true;
-      };
-      let hx = eState.botHideDriftX ?? 0, hz = eState.botHideDriftZ ?? 0;
-      const moving = hx !== 0 || hz !== 0;
-      if (!moving || now >= (eState.botHideDriftUntil ?? 0) || !legOk(hx, hz, false)) {
-        let best = null, bestScore = -Infinity;
-        const phase = Math.random() * Math.PI * 2;
-        for (let pass = 0; pass < 2 && !best; pass += 1) {
-          for (let k = 0; k < 8; k += 1) {
-            const a = phase + k * Math.PI / 4;
-            const cx = Math.cos(a), cz = Math.sin(a);
-            if (!legOk(cx, cz, pass === 0)) continue;
-            const score = (cx * awayX + cz * awayZ) + 0.5 * (cx * hx + cz * hz) + (Math.random() - 0.5) * 0.8;
-            if (score > bestScore) { bestScore = score; best = { x: cx, z: cz }; }
-          }
-        }
-        if (best) {
-          hx = best.x; hz = best.z;
-          eState.botHideDriftUntil = now + BOT_HIDE_DRIFT_MS;
-        } else {
-          hx = 0; hz = 0;
-          eState.botHideDriftUntil = now + BOT_HIDE_DRIFT_RETRY_MS;
-        }
-        eState.botHideDriftX = hx;
-        eState.botHideDriftZ = hz;
-      }
-      eState.botHideHold = true;
-      eState.botHideTier = hideTier;
-      if (hx === 0 && hz === 0) {
-        eState.momentumVX = 0;
-        eState.momentumVZ = 0;
-        coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
-      } else {
-        coverMove = { hold: false, hide: true, dash: false, mx: hx, mz: hz };
-      }
-    } else {
-      // Exposed with nothing to walk (search not due / nothing found): the
-      // plain pursue legs below keep the unit moving while the search
-      // retries — a statue in the open is the worst of both.
-      eState.botHideHold = false;
-      eState.botHideTier = null;
-      eState.botHideAnchor = null;
-    }
-    if (hideMode === 'cover') {
-      // COVER HIDE end: no cover anywhere -> give the reload up (the order's
-      // legs resume; a fresh hit then runs Defense as usual) and hold the
-      // trigger off for the retry window. Otherwise the hide ends with its
-      // reload (lifecycle above).
-      if (eState.botHideNoCover) {
-        eState.botCH = null;
-        eState.botCHNoCoverUntil = now + BOT_HIDE_FAIL_RETRY_MS;
-        resetBotHideFields(eState);
-        eState.botHideNoCover = true;   // keeps this tick's transition on Defense
-        coverMove = null;
-      }
-    }
-  }
-  // ===== SUDDEN DEATH BRAIN — the shared module (sdbrain.js), one brain for
-  // the server and the client. This host hands it the unit, its enemies (the
-  // true fighters, the player and any 2v2 enemy), the arena and the body's
-  // actions, and takes its order for the legs (coverMove). The death-report
-  // tape is recorded through the host's tape callback. =====
-  const SDG = state.suddenDeathActive ? BOT_SD : null;   // read by the fire block too
-  if (state.suddenDeathActive && !defenseLive) {
-    if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
-    const sdMyTeam = getTeamOf(state.enemy);
-    const sdEnemies = [];
-    for (const f of (_botTrueFighters ?? getAllFighters())) {
-      if (!f || f === state.enemy || f.state.hp <= 0 || getTeamOf(f) === sdMyTeam) continue;
-      const st = f.state;
-      sdEnemies.push({
-        id: f, pos: f.root.position, vel: f.body?.velocity, unit: f.unit ?? {},
-        // (the mirror stamps lastFireAt at spawn for the cooldown clock — a shot is only "heard" after that stamp)
-        lastFireAt: ((st?.lastFireAt ?? -1e9) > (st?.fireInitAt ?? -1e9)) ? st.lastFireAt : -1e9,
-        bloom: st?.bloom ?? 0, hp: st.hp, ammo: st.ammo, reloadingUntil: st.reloadingUntil,
-        log: st   // (the shooter's shot log lives on its state object)
-      });
-    }
-    // (a cell's muzzle above its floor: the model's root offset plus the muzzle above the root)
-    const sdEyeH = (state.enemy.modelYOffset ?? 2.35) + BOT_MUZZLE_ABOVE_ROOT;
-    coverMove = sdBrainTick({
-      now, SD: SDG, me: eState, pos: { x: e.x, y: eBodyY, z: e.z }, unit: state.enemy.unit ?? {}, vel: state.enemy.body.velocity, grounded: state.enemy.grounded,
-      opp: { id: state.player, pos: p, hp: state.player.state.hp, unit: state.player.unit, invulnerableUntil: state.player.state.invulnerableUntil },
-      wall: state.enemy.wallTouch ?? null,   // (physics' note from the last frame: the face the body was pushed out of — resolveUnitObstacleCollisions)
-      enemies: sdEnemies,
-      obstacles: arenaObstacles, grid: offlineNavGrid, clear: botShotCanLand,
-      eyeUp: BOT_MUZZLE_ABOVE_ROOT, muzzleH: sdEyeH,
-      dist, sideX: side.x, sideZ: side.z, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
-      groundHeightAt,
-      startStep: (dx, dz) => sdBotStartStep(state.enemy, dx, dz, now),
-      startJump: () => botStartJump(now, true),
-      // (one route search per frame across every driven unit — shares the hide search's slot)
-      searchSlot: () => { if (botHideSearchFrameAt === now) return false; botHideSearchFrameAt = now; return true; },
-      // (the search gets SD_FRAME_SEARCH_MS of this frame; what is left parks in botSDSearchJob and continues next frame)
-      deadline: () => performance.now() + SD_FRAME_SEARCH_MS,
-      // DEATH REPORT TAPE: one line per 100 ms, the last 8 s kept; printed the frame the unit dies (sdDeathReport) or on demand (window.__SD_REPORT())
-      tape: (row) => { const tape = eState.botSDTape ?? (eState.botSDTape = []); tape.push(row); if (tape.length > 80) tape.splice(0, tape.length - 80); }
-    });
-  } else if (state.suddenDeathActive) {
-    eState.botSDState = 'dodge';
-  }
-
-  if (coverMove) {
-    // Pin the stall clocks: a deliberate hide (cover reload OR the hide
-    // order) must not read as wedged / stalled / sightless — those
-    // detectors' remedies all route toward SIGHTED cells and would fight
-    // the cover intent on exit.
-    eState.botLastProgressAt = now;
-    eState.botLastLoSAt = now;
-    eState.botStuckCheckX = e.x;
-    eState.botStuckCheckZ = e.z;
-    eState.botStuckCheckAt = now;
-    eState.botPathLen = 0;
-  }
-
-  // --- Stuck cut-in detection over a rolling 1.5 s window, two flavors:
-  //   WEDGED   — barely any net movement AND barely any path traveled.
-  //   SPINNING — plenty of path traveled but almost no net displacement
-  //              (ping-ponging, orbit jams, wall grinding).
-  // Either funnels into Maze (committed go-around) below — the old remedy
-  // (a blind Defense strafe) is gone. Skips airborne and stun frames; a
-  // window inflated by a charge-lock freeze (the AI early-returns while
-  // charging, so the clock runs without samples) is discarded unevaluated.
-  let stuckTriggered = false;
-  let stuckFrozen = false;
-  eState.botPathLen = (eState.botPathLen ?? 0)
-    + Math.hypot(e.x - (eState.botPrevX ?? e.x), e.z - (eState.botPrevZ ?? e.z));
-  eState.botPrevX = e.x;
-  eState.botPrevZ = e.z;
-  if (eState.botStuckCheckAt == null) {
-    eState.botStuckCheckX = e.x;
-    eState.botStuckCheckZ = e.z;
-    eState.botStuckCheckAt = now;
-    eState.botPathLen = 0;
-  } else if (now - eState.botStuckCheckAt >= 1000) {   // 1.5 s -> 1 s (2026-08-05 trim)
-    const windowStale = now - eState.botStuckCheckAt > 1700;
-    const net = Math.hypot(e.x - eState.botStuckCheckX, e.z - eState.botStuckCheckZ);
-    // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
-    // movement rates that count as wedged/spinning are unchanged.
-    // WEDGED's path cap was 4 until 2026-08-08: a bot SLIDING along a wall
-    // travelled 4–12 u/s while netting nothing, which was too fast for
-    // wedged and too slow for spinning — 47% of Airport's ramp-corner
-    // grinds fell in that gap with no detector to free them. Raising the
-    // cap to spinning's 12 makes the pair partition the space: net < 1.7
-    // is stuck no matter how much wall it rubbed. Mirrored in shared ai.js.
-    const wedged = net < 1.7 && eState.botPathLen < 12;
-    const spinning = eState.botPathLen > 12 && net < 4;
-    if (!windowStale
-        && (wedged || spinning)
-        && !eState.airborne
-        && now >= eState.hitStunUntil
-        && (eState.botState ?? 'pursue') !== 'defense') {
-      stuckTriggered = true;
-      // TRUE STATUE: not merely slow — collision-pinned to a standstill
-      // (the Airport ramp-top notch cancels velocity to exactly zero).
-      // Only this flavor is allowed the escape back-out in the maze
-      // re-commit; anything that still moves resolves via normal re-plans.
-      stuckFrozen = net < 0.8;
-      // STUCK MEMORY (revived 2026-08-08 with the Maze slim-down): remember
-      // the pinned spot so the maze fallback's retries bend away from it.
-      eState.botStuckMemX = e.x;
-      eState.botStuckMemZ = e.z;
-      eState.botStuckMemAt = now;
-    }
-    eState.botStuckCheckX = e.x;
-    eState.botStuckCheckZ = e.z;
-    eState.botStuckCheckAt = now;
-    eState.botPathLen = 0;
-  }
-
-  // (Heuristic stack RETIRED 2026-08-08, user-ordered: the committed
-  // wall-follow, the opening scan, and the ramp-seeker are gone — the
-  // pathfinder owns Maze outright. No-route ticks run the minimal fallback
-  // in the maze movement leg, paced by the stall detectors and bent away
-  // from the last pinned spot by the revived stuck-memory repulsion.
-  // Mirrored in shared ai.js.)
-
-  // NAV PLAN — the universal pathfinder (offline mirror of the shared one).
-  // Ask the grid for a real walk route to the target; Maze follows it
-  // waypoint by waypoint. Returns false when no walk route exists (target
-  // on a jump-only platform, degenerate snap) — the minimal fallback in the
-  // maze movement leg covers those ticks until the detectors re-fire.
-  // FIRING-POSITION TRUNCATION — the raw path ends at the player's FEET.
-  // Walk it (6-unit samples) and cut it at the first spot that already SEES
-  // the player from inside the band's upper edge: the bot travels to a
-  // FIRING POSITION, never to the player. Without this, a blind approach
-  // rode the path until sight happened to open — often point-blank on
-  // cover-heavy maps — before range discipline could act (the "runs at me
-  // at match start" report). Nothing qualifies → keep the full path (some
-  // fights genuinely require getting close before any sight exists).
-  const truncateAtFiringPoint = (path) => {
-    let prev = { x: e.x, z: e.z };
-    for (let i = 0; i < path.length; i += 1) {
-      const seg = path[i];
-      const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
-      const steps = Math.max(1, Math.ceil(segLen / 6));
-      for (let s = 1; s <= steps; s += 1) {
-        const px = prev.x + ((seg.x - prev.x) * s) / steps;
-        const pz = prev.z + ((seg.z - prev.z) * s) / steps;
-        if (Math.hypot(p.x - px, p.z - pz) > upperRange) continue;
-        const fy = groundHeightAt(px, pz, 1000);
-        if (botHasLineOfSight(
-          { x: px, y: fy + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: pz },
-          { x: p.x, y: p.y + BOT_LOS_EYE_HEIGHT, z: p.z }
-        )) {
-          const cut = path.slice(0, i);
-          // Carry the sample's floor: smoothPath's same-floor gate reads
-          // (y ?? 0), so a y-less cut point on a deck froze the final leg
-          // out of smoothing (review 2026-08-13). Mirrored in shared ai.js.
-          cut.push({ x: px, z: pz, y: fy });
-          return cut;
-        }
-      }
-      prev = seg;
-    }
-    return path;
-  };
-  const navPlan = () => {
-    if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
-    // FIRST CHOICE: walk to a FIRING POSITION — the nearest reachable spot
-    // that already sees the target from inside the band. This is what makes
-    // a sniper cross the map to a sniping lane instead of to the enemy.
-    // FALLBACK: path to the target itself, cut at the first sighted sample
-    // (some pockets have no in-band sight anywhere — then getting close is
-    // genuinely the only option, and the exit gates take over from there).
-    let path = findFiringPath(
-      offlineNavGrid, e.x, e.z, myFloorY,
-      p.x, p.z, p.y + BOT_LOS_EYE_HEIGHT,
-      lowerRange, upperRange, arenaObstacles, oppFloorY
-    );
-    if (!path || path.length < 2) {
-      path = findPathOnGrid(
-        offlineNavGrid, e.x, e.z, p.x, p.z, myFloorY, oppFloorY, arenaObstacles
-      );
-      if (path && path.length > 1) path = truncateAtFiringPoint(path);
-    }
-    // Diagonal legs where the swept corridor proves them safe (see
-    // smoothPath's header note). Mirrored in shared ai.js navPlan.
-    if (path && path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
-    if (path && path.length > 1) {
-      // idx 0: walk to the pinned start square first — beelining to square
-      // #2 from an off-grid position can clip the corner between them.
-      eState.botNav = {
-        path, idx: 0, gx: p.x, gz: p.z, at: now
-      };
-      eState.botMazeLosBlockedAtEntry = !playerHasLoS;
-      return true;
-    }
-    eState.botNav = null;
-    return false;
-  };
-
-  // --- State transition by precedence ---
-  const prevState = eState.botState ?? 'pursue';
-  let nextState = prevState;
-  const inDefenseGrace = prevState === 'defense' && now < (eState.botDefenseUntil ?? 0);
-
-  // PROACTIVE ROUTE (2026-08-05): test the walk itself instead of waiting
-  // for the stuck clocks to prove a wall. Out of band with the straight
-  // approach blocked: sightless fires INSTANTLY (the original fast lane);
-  // SIGHTED (seeing the target over a low wall / across unwalkable ground)
-  // fires after a 250 ms persistence — long enough that a graze the
-  // avoidance slide already handles never cuts normal play into Maze.
-  const towardBlocked = !walkTowardClear(Math.min(dist, 30));
-  const approachBlocked = !inBandDist && towardBlocked;
-  // Sighted variant is APPROACH-only (dist beyond the band's upper edge):
-  // a too-close bot retreating over a crate must stay Engage's problem.
-  const sightedBlocked = dist > upperRange && towardBlocked;
-  if (!sightedBlocked) eState.botApproachBlockedSince = null;
-  else if (eState.botApproachBlockedSince == null) eState.botApproachBlockedSince = now;
-  const approachBlockedLong = sightedBlocked
-    && now - eState.botApproachBlockedSince >= 250;
-
-  // HIDE (stance or cover hide, owner 2026-09-26): parked on 'pursue' — a
-  // fresh hit never enters Defense and no Maze/Engage transition runs while
-  // the hide block owns the legs. Two exceptions: a Defense already live
-  // (the anti-glint dodge's follow-up) runs its grace out first, and when NO
-  // cover exists anywhere (botHideNoCover) a fresh hit runs the plain
-  // Defense escape until a later search finds cover. Shared parity.
-  const hideParks = hideMode != null && !(eState.botHideNoCover && underFire);
-  // SD brain owning the legs this tick: same parking as a hide.
-  const sdParks = !!(state.suddenDeathActive && coverMove);
-  if ((hideParks || sdParks) && !inDefenseGrace) {
-    nextState = 'pursue';
-  } else if (underFire || inDefenseGrace) {
-    nextState = 'defense';
-  } else if (stuckTriggered || noProgressTime > 1500 || noLoSTime > 2000
-      || (!playerHasLoS && approachBlocked)
-      || approachBlockedLong) {
-    // Wedged, spinning, stalled (1.5 s — trimmed from 2 s, 2026-08-05),
-    // sightless for 2 s, or the approach walk is BLOCKED (instant when
-    // sightless, 250 ms persistence when sighted) — commit to going AROUND
-    // whatever is in the way instead of beelining into it. In-band sight
-    // flickers (the cover peek-dance) still get the full 2 s buffer.
-    nextState = 'maze';
-  } else if (prevState === 'maze') {
-    // Maze latches until the job is done: entered sightless, only reacquiring
-    // sight releases it. Entered WITH sight (pillar graze), a short cap
-    // releases it — else nothing ever would.
-    // VIABILITY GATE: sight alone doesn't hand control back to Pursue —
-    // either the fight starts here (in band → Engage, legitimate even
-    // through a corridor window), or the walk TOWARD the player must be
-    // clear for up to 50 units on the SAME floor. The old 20-unit probe
-    // passed whenever the plateau was more than 20 away, releasing Maze
-    // into a beeline that ground the plateau side 30 units later.
-    const losReacquired = playerHasLoS && eState.botMazeLosBlockedAtEntry
-      && (inBandDist
-        || (walkTowardClear(Math.min(dist, 50))
-          && Math.abs(oppFloorY - myFloorY) < 2.5));
-    const visibleEntryDone = !eState.botMazeLosBlockedAtEntry
-      && (now - (eState.botStateEnteredAt ?? now)) > 3000;
-    if (losReacquired || visibleEntryDone) {
-      nextState = inBandDist ? 'engage' : 'pursue';
-    }
-  } else if (inBandDist) {
-    // (Reposition removed: its no-sight-in-band case is fully owned by the
-    // 2 s Maze trigger above, which fires before its 3 s timer ever could.)
-    nextState = 'engage';
-  } else {
-    nextState = 'pursue';
-  }
-
-  // Maze re-commit: a stuck signal mid-Maze, or 7 s on one heading, re-plans
-  // the route from the CURRENT position — Maze doesn't give up, it retries
-  // the pathfinder (heuristic stack retired 2026-08-08; the stall detectors
-  // pace the retries, and the stuck-memory bias in the fallback leg keeps
-  // them from re-treading the pinned spot).
-  const escapeDue = eState.botMazeEscapeUntil != null && now >= eState.botMazeEscapeUntil;
-  if (nextState === 'maze' && prevState === 'maze'
-      && (stuckTriggered || escapeDue || (now - (eState.botStateEnteredAt ?? now)) > 7000)) {
-    if (escapeDue) eState.botMazeEscapeUntil = null;
-    eState.botStateEnteredAt = now;
-    // STATUE ESCAPE (kept): a FROZEN bot is body-pinched in a corner pocket
-    // the zero-width pin test can't see (the ramp-top notch against
-    // Airport's rim glass) — the planner then re-issues the identical line
-    // every 1.5 s forever. If the fresh plan below starts at the very
-    // waypoint it froze against, treat it as NO ROUTE: back out along the
-    // stored escape heading for a beat, then replan from the freed spot.
-    // Deliberately statue-only (zero net movement): bots that still move
-    // never take the back-out, so live routing gains no back-and-forth.
-    const navPrev = eState.botNav;
-    const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
-    let planned = navPlan();
-    if (planned && frozenWp) {
-      const fresh = eState.botNav;
-      // The follower's own advance rule: the waypoint it would steer to.
-      let fi = fresh.idx;
-      while (fi < fresh.path.length - 1
-          && Math.hypot(fresh.path[fi].x - e.x, fresh.path[fi].z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
-      const firstWp = fresh.path[fi];
-      // Match against EVERY remaining waypoint of the frozen route, not just
-      // the indexed steer-to: smoothPath's greedy anchors are start/goal-
-      // dependent, so a re-plan from the same frozen spot can re-issue the
-      // same line under a different first anchor — single-index matching
-      // dropped mid-leg statue detection ~20pp and a moving target could
-      // dodge it every re-commit (review 2026-08-13). Waypoints are unmoved
-      // cell centres in both paths, so the 0.5 equality stays exact; the
-      // trigger only fires on stuckFrozen bots, where backing out of ANY
-      // retraced line is the right call. Mirrored in shared ai.js.
-      const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
-        Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
-      if (retraced) {
-        eState.botNav = null;
-        planned = false;
-        eState.botMazeEscapeUntil = now + 800;
-        const edx = e.x - frozenWp.x, edz = e.z - frozenWp.z;
-        const edl = Math.hypot(edx, edz);
-        eState.botMazeEscapeDirX = edl > 0.05 ? edx / edl : -dir.x;
-        eState.botMazeEscapeDirZ = edl > 0.05 ? edz / edl : -dir.z;
-      }
-    }
-    if (!planned && stuckTriggered && eState.botMazeEscapeUntil == null) {
-      // No route AND still stuck: back out for a beat before the next retry —
-      // the fallback's forward lean alone would press straight back into the
-      // same wall between detector firings. Heading: AWAY from the pinning
-      // wall (the avoidance vector points off the nearest obstacle face);
-      // reverse of the target line as the tiebreak. (The stuck-memory spot
-      // is stamped to the CURRENT position this same tick, so "away from
-      // memory" would always be degenerate here — audit finding 2026-08-08.)
-      eState.botMazeEscapeUntil = now + 500;
-      const mdl = Math.hypot(avoid.rx, avoid.rz);
-      eState.botMazeEscapeDirX = mdl > 0.05 ? avoid.rx / mdl : -dir.x;
-      eState.botMazeEscapeDirZ = mdl > 0.05 ? avoid.rz / mdl : -dir.z;
-    }
-  }
-
-  // --- State entry: commit per-state directions and timers ---
-  if (nextState !== prevState) {
-    eState.botState = nextState;
-    eState.botStateEnteredAt = now;
-
-    if (nextState === 'maze') {
-      eState.botMazeEscapeUntil = null;
-      // Pathfinder only (heuristics retired): no route → the minimal
-      // fallback movement covers the ticks until the detectors re-fire.
-      // The LoS-at-entry record must still be stamped for the exit gate.
-      if (!navPlan()) eState.botMazeLosBlockedAtEntry = !playerHasLoS;
-    }
-
-    if (nextState === 'engage'
-        && (prevState === 'pursue' || prevState === 'maze' || prevState === 'defense' || eState.botOrbitSign == null)) {
-      // Orbit direction by SIGHT PROBE, not coin flip: from ~12 units along
-      // each orbit tangent, which way keeps the player visible? The blind
-      // coin flip walked the bot out of hard-won sight windows half the
-      // time (the plateau-edge pacing). Ties fall back to random.
-      const losCw = losFromPoint(e.x + side.x * 12, e.z + side.z * 12);
-      const losCcw = losFromPoint(e.x - side.x * 12, e.z - side.z * 12);
-      if (losCw !== losCcw) eState.botOrbitSign = losCw ? 1 : -1;
-      else eState.botOrbitSign = Math.random() > 0.5 ? 1 : -1;
-    }
-
-    if (nextState === 'defense') {
-      // Commit a perpendicular-to-player sprint direction; flip away from the
-      // nearest wall if we'd otherwise immediately drive into it.
-      const sg = eState.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-      let dxd = side.x * sg;
-      let dzd = side.z * sg;
-      if (obstacleNear && (dxd * (-avoid.rx) + dzd * (-avoid.rz) > 0.3)) {
-        dxd = -dxd; dzd = -dzd;
-      }
-      eState.botDefenseDirX = dxd;
-      eState.botDefenseDirZ = dzd;
-      eState.botDefenseDirAt = now;
-      // 350 ms for a normal hit; ≥600 ms while a sniper is mid-charge so the
-      // sprint outlasts the glint window. Stuck-triggered runs 1.5 s to give
-      // the strafe room to break the wedge.
-      eState.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
-      eState.botDefenseInCover = false;
-      eState.botDefenseCoverAt = 0;
-      eState.botDefensePeekDone = false;
-      eState.botDefenseStuckTicks = 0;
-      eState.botDefenseFlips = 0;
-      eState.botDefenseStuckMode = !!stuckTriggered;
-      // Reset the stuck window — next check starts fresh after this entry.
-      eState.botStuckCheckX = e.x;
-      eState.botStuckCheckZ = e.z;
-      eState.botStuckCheckAt = now;
-      eState.botPathLen = 0;
-    }
-  }
-
-  // Extend Defense duration while fire continues (keeps the bot evading until
-  // the threat actually lets up, rather than committing exactly 350 ms).
-  // (Hide order: a hit never extends the glint dodge's Defense follow-up —
-  // sustained fire must not keep the unit sprinting out of its hide.)
-  if (eState.botState === 'defense' && underFire && !hideParks) {
-    // Hit during stuck-Defense → snap back to regular Defense: refresh the
-    // strafe direction and clear cover/peek so it behaves as if this hit
-    // had triggered Defense fresh.
-    if (eState.botDefenseStuckMode) {
-      const sg2 = eState.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-      let dxd2 = side.x * sg2;
-      let dzd2 = side.z * sg2;
-      if (obstacleNear && (dxd2 * (-avoid.rx) + dzd2 * (-avoid.rz) > 0.3)) {
-        dxd2 = -dxd2; dzd2 = -dzd2;
-      }
-      eState.botDefenseDirX = dxd2;
-      eState.botDefenseDirZ = dzd2;
-      eState.botDefenseDirAt = now;
-      eState.botDefenseUntil = now + (sniperCharging ? 600 : 350);
-      eState.botDefenseInCover = false;
-      eState.botDefenseCoverAt = 0;
-      eState.botDefensePeekDone = false;
-      eState.botDefenseStuckTicks = 0;
-      eState.botDefenseFlips = 0;
-      eState.botDefenseStuckMode = false;
-    }
-    const minDur = sniperCharging ? 600 : 350;
-    if ((eState.botDefenseUntil ?? 0) < now + minDur) {
-      eState.botDefenseUntil = now + minDur;
-    }
-    // SUSTAINED-FIRE RE-ALIGN: under a continuous stream (fresh hits keep
-    // Defense alive indefinitely) the once-picked perpendicular slowly
-    // rotates into a stale TANGENT — a straight line that flies away from
-    // the shooter forever. That was the "shorter the lock range, the harder
-    // they flee" report: short-LR bots must close through the densest fire,
-    // so their Defense chains never break and the tangent-flight runs long.
-    // Re-perpendicularize at most every 400 ms so the bot CIRCLES the
-    // shooter instead. Single-burst Defense (< 400 ms) is untouched.
-    if (now - (eState.botDefenseDirAt ?? 0) > 400) {
-      const sg3 = eState.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-      let dxd3 = side.x * sg3;
-      let dzd3 = side.z * sg3;
-      if (obstacleNear && (dxd3 * (-avoid.rx) + dzd3 * (-avoid.rz) > 0.3)) {
-        dxd3 = -dxd3; dzd3 = -dzd3;
-      }
-      // RANGE-HOLD: sideways steps have an outward chord drift that
-      // compounds over an endless hit chain (the shotgun bot slowly spiraled
-      // to double its band and read as "backing off"). Bias the fresh
-      // perpendicular with the same range pull Engage uses, so a suppressed
-      // bot circle-strafes AT its band radius — closing while weaving when
-      // it's too far, instead of drifting out forever.
-      const pull3 = Math.max(-0.4, Math.min(0.4, (dist - optimalRange) * 0.12));
-      dxd3 += dir.x * pull3;
-      dzd3 += dir.z * pull3;
-      const dl3 = Math.hypot(dxd3, dzd3) || 1;
-      eState.botDefenseDirX = dxd3 / dl3;
-      eState.botDefenseDirZ = dzd3 / dl3;
-      eState.botDefenseDirAt = now;
-    }
-  }
-
-  // --- State behavior: heading + sprint intent + optional jump ---
-  let mx = 0, mz = 0;
-  let wantSprint = false;
-  let jumpThisTick = false;
-  let jumpDirX = dir.x, jumpDirZ = dir.z;
-  // Default to 'pursue' — botState is only ASSIGNED on a state CHANGE, so
-  // it's undefined for the whole first stretch of a match; the raw read
-  // matched no movement branch and the bot stood frozen until the
-  // no-progress timer shoved it into maze (the 2 s statue at match start).
-  const botS = eState.botState ?? 'pursue';
-
-  if (coverMove) {
-    // The HIDE stance owns movement for the tick — the state branches below
-    // (including their jump commands) don't run, so a maze path can't vault
-    // the bot mid-hide. Never active during a live Defense (the hide block
-    // yields those frames).
-    // HIDE ORDER (hide: true): pacing legs and routes walk (routes sprint
-    // only while the 50/8 latch is armed — dash); a hold (no hidden leg at
-    // all) is mx = mz = 0 and skips the anti-freeze nudge below.
-    mx = coverMove.mx;
-    mz = coverMove.mz;
-    wantSprint = coverMove.hide ? !!coverMove.dash : !coverMove.hold;
-    // (SD jump-link vault, mirrors shared: the jump started in the SD block)
-    if (coverMove.jump) { jumpThisTick = true; jumpDirX = coverMove.jx; jumpDirZ = coverMove.jz; }
-  } else if (botS === 'pursue') {
-    // Pursue handles BOTH sides of the band: toward the player when too far,
-    // AWAY from them when too close. Without the negative branch the bot just
-    // keeps closing through lowerRange and collides at zero distance.
-    // VERTICAL STACK (2026-08-14) — mirrors shared ai.js: `dist` is
-    // horizontal, so an enemy a floor above reads as distance ~0 and range
-    // discipline walks the bot away and back forever. Backing off does
-    // nothing about a vertical gap; let the (multi-layer) router handle it.
-    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
-    const tooClose = dist < lowerRange && !stackedVertically;
-    // Range discipline is unconditional outside Defense (the old LoS-gated
-    // hold made the bot give up its range advantage to keep a peek — a
-    // crutch for the pre-pathfinder Maze). If the retreat costs sight, the
-    // 2 s no-LoS trigger hands off to Maze, which now PATHS back to a
-    // firing position — kite out, return, fire, repeat.
-    const dirSign = tooClose ? -1 : 1;
-    let tx = dir.x * dirSign + avoid.rx * 0.8;
-    let tz = dir.z * dirSign + avoid.rz * 0.8;
-    const l = Math.hypot(tx, tz) || 1;
-    mx = tx / l; mz = tz / l;
-    // TRAVEL SPRINT LATCH (owner 2026-09-29): a leg arms only from a full tank
-    // (BOT_BOOST_RESERVE) and runs down to BOT_TRAVEL_SPRINT_FLOOR, then the
-    // bot walks until the tank is full again. Both bounds used to sit on the
-    // one 250 knob: in Pursue the release won at exactly 250 (no sprint at
-    // all), in Maze the dispatch floor let one dash tick through every half
-    // second — the flickering sprint pose. Shared with Maze below.
-    wantSprint = botTravelSprint(eState);
-    // Elevation aids close the gap; skip them when we're trying to back off.
-    if (!tooClose && state.enemy.grounded && !eState.airborne) {
-      // Climb aid: only for a step a jump can actually clear (above that the
-      // router owns it). Mirrors shared ai.js.
-      if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
-          && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
-          && dist < 32 && Math.random() > 0.5) {
-        if (botStartJump(now)) jumpThisTick = true;
-      } else if (onHighGround) {
-        const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
-        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
-          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      } else {
-        // Low ground: take any reachable platform — no "toward player" gate,
-        // since on maps like Station the raised decks are the strong positions
-        // and we'd rather be up there than on the tracks. The jump cooldown
-        // rate-limits this; no strict random gate needed.
-        const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
-        if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
-          jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botStartJump(now)) jumpThisTick = true;
-        }
-      }
-    }
-  } else if (botS === 'maze') {
-    let nav = eState.botNav;
-    // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
-    // whose goal is meaningfully CLOSER to the player is an approach — done,
-    // drop it. A pathless maze has nothing sane to do here
-    // either — its stale committed direction charged straight through the
-    // player during sighted-entry windows. Both cases: trip the sighted-
-    // entry cap so the maze ENDS and Engage/Pursue own the fight. A
-    // REPOSITION path (goal not closer — e.g. a sidestep to an unjammed
-    // in-band cell) keeps running.
-    // SAME FLOOR required: raw distance isn't arrival when there's a cliff
-    // between — a player at the Station platform's edge read as "arrived"
-    // from the tracks below, which dropped every climb path and ground the
-    // bot into the edge wall forever.
-    if (playerHasLoS && dist <= optimalRange
-        && Math.abs(oppFloorY - myFloorY) < 2.5) {
-      const goalWp = nav && nav.path[nav.path.length - 1];
-      const goalCloser = goalWp
-        && Math.hypot(p.x - goalWp.x, p.z - goalWp.z) < dist - 4;
-      if (!nav || goalCloser) {
-        if (nav) eState.botNav = null;
-        nav = null;
-        eState.botStateEnteredAt = now - 3001;
-      }
-    }
-    // FINAL-WAYPOINT ARRIVAL: destination reached but the maze hasn't
-    // exited yet (e.g. sighted-entry cap still counting). Drop the path
-    // rather than stand on it — a standing bot re-arms the no-progress
-    // trigger every 2 s, which keeps re-selecting maze and STARVES the
-    // exit branch forever (the Plain Field never-orbits bug). The minimal
-    // fallback covers the remaining ticks until the exit fires.
-    if (nav && nav.path.length > 0) {
-      const lastWp = nav.path[nav.path.length - 1];
-      if (Math.hypot(lastWp.x - e.x, lastWp.z - e.z) < 3) {
-        // Arrived — but if the trip did NOT buy sight, dropping to the
-        // pathless fallback beelines the bot back where it came from (the
-        // Streets under-bridge out-and-back loop). Ask for a fresh route
-        // first and take it when it aims somewhere NEW. Mirrors shared ai.js.
-        let replaced = false;
-        if (!playerHasLoS) {
-          navPlan();
-          const fresh = eState.botNav;
-          const freshLast = fresh && fresh.path[fresh.path.length - 1];
-          if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
-            nav = fresh;
-            replaced = true;
-          }
-        }
-        if (!replaced) {
-          eState.botNav = null;
-          nav = null;
-        }
-      }
-    }
-    if (nav && nav.path && nav.idx < nav.path.length) {
-      // PATH FOLLOW — the universal pathfinder owns Maze whenever a route
-      // exists. Head for the current waypoint, advance within
-      // BOT_WAYPOINT_ADVANCE_RADIUS (see its note — 1.5, tight on purpose so
-      // corners are not cut into obstacle end faces), and refresh the route
-      // (rate-limited) when the target wanders off the planned goal.
-      // Avoidance stays blended in for dynamic wiggle room.
-      let wp = nav.path[nav.idx];
-      while (nav.idx < nav.path.length - 1
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
-        nav.idx += 1;
-        wp = nav.path[nav.idx];
-      }
-      if (now - nav.at > 1000
-          && Math.hypot(p.x - nav.gx, p.z - nav.gz) > 12) {
-        navPlan();
-        if (eState.botNav && eState.botNav.path[eState.botNav.idx]) {
-          wp = eState.botNav.path[eState.botNav.idx];
-        }
-      }
-      // JUMP-LINK crossing: the upcoming waypoint sits on a ledge above the
-      // bot's floor (the path bridged a walk-island, e.g. Station's
-      // platforms) — vault toward it once close enough. Downward crossings
-      // need nothing: the bot just walks off the ledge.
-      if (wp.y != null && wp.y - myFloorY > 1.7
-          && state.enemy.grounded && !eState.airborne
-          && Math.hypot(wp.x - e.x, wp.z - e.z) < 7) {
-        const jdx = wp.x - e.x, jdz = wp.z - e.z;
-        const jln = Math.hypot(jdx, jdz) || 1;
-        jumpDirX = jdx / jln;
-        jumpDirZ = jdz / jln;
-        if (botStartJump(now)) jumpThisTick = true;
-      }
-      let tx = wp.x - e.x, tz = wp.z - e.z;
-      const wl = Math.hypot(tx, tz) || 1;
-      tx = tx / wl + avoid.rx * 0.3;
-      tz = tz / wl + avoid.rz * 0.3;
-      const l = Math.hypot(tx, tz) || 1;
-      mx = tx / l; mz = tz / l;
-      // JUMP RESERVE: an upcoming jump-link costs 48 boost, but maze's
-      // permanent sprint pins the gauge at the ~8 floor — the bot arrived
-      // at the ledge eternally unable to afford the hop (the "never jumps
-      // onto Station's platform" bug). Walk and bank while a jump is ahead
-      // and unaffordable; sprint resumes once the jump is funded.
-      let jumpAhead = false;
-      for (let k = nav.idx; k < nav.path.length; k += 1) {
-        if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
-      }
-      // Bank target: the strategic reserve already exceeds jump cost + pad
-      // at current tuning; the Math.max keeps the old jump-funding guarantee
-      // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (state.enemy.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
-      wantSprint = botTravelSprint(eState) && !(jumpAhead && eState.boost < jumpBank);
-    } else if (eState.botMazeEscapeUntil != null && now < eState.botMazeEscapeUntil) {
-      // STATUE BACK-OUT (no route, escape armed): reverse along the stored
-      // escape heading to free the body, then the next re-commit replans
-      // from the freed spot.
-      let tx = (eState.botMazeEscapeDirX ?? -dir.x) + avoid.rx * 0.3;
-      let tz = (eState.botMazeEscapeDirZ ?? -dir.z) + avoid.rz * 0.3;
-      const l = Math.hypot(tx, tz) || 1;
-      mx = tx / l; mz = tz / l;
-      wantSprint = false;
-    } else {
-      // MINIMAL FALLBACK (no route exists — rare with the full nav grid):
-      // pursue-style steering toward the player with avoidance, bent by the
-      // revived STUCK-MEMORY repulsion so each detector-paced retry leans
-      // away from the last pinned spot instead of re-treading it. The
-      // detectors keep polling; the next stuck/7 s signal replans.
-      let tx = dir.x + avoid.rx * 0.8;
-      let tz = dir.z + avoid.rz * 0.8;
-      if (eState.botStuckMemAt != null && now - eState.botStuckMemAt < BOT_STUCK_MEMORY_MS) {
-        const rep = computeStuckRepulsion(
-          e.x, e.z, eState.botStuckMemX, eState.botStuckMemZ, BOT_STUCK_MEMORY_RADIUS);
-        tx += rep.rx * BOT_STUCK_MEMORY_WEIGHT;
-        tz += rep.rz * BOT_STUCK_MEMORY_WEIGHT;
-      }
-      const l = Math.hypot(tx, tz) || 1;
-      mx = tx / l; mz = tz / l;
-      wantSprint = botTravelSprint(eState);
-    }
-    // Vertical Maze: hop up onto a reachable platform (Station).
-    // minWidth 0 here ONLY — Maze walks a route, so a strip too thin to be a
-    // vantage point is still a legitimate step. Mirrors shared ai.js.
-    if (state.enemy.grounded && !eState.airborne) {
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS, 0);
-      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
-        jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botStartJump(now)) jumpThisTick = true;
-      }
-    }
-  } else if (botS === 'engage') {
-    // Mid-orbit sight keeping: if the next ~12 units along the orbit lose
-    // sight while the other way keeps it, flip once (1 s cooldown so
-    // opposing probes can't jitter it). Engage patrols INSIDE the sight
-    // window it was handed instead of blindly strolling out of it.
-    if (playerHasLoS && now >= (eState.botOrbitFlipAt ?? 0)) {
-      const sgn = eState.botOrbitSign ?? 1;
-      if (!losFromPoint(e.x + side.x * sgn * 12, e.z + side.z * sgn * 12)
-          && losFromPoint(e.x - side.x * sgn * 12, e.z - side.z * sgn * 12)) {
-        eState.botOrbitSign = -sgn;
-        eState.botOrbitFlipAt = now + 1000;
-      }
-    }
-    const sign = eState.botOrbitSign ?? 1;
-    // Full-strength range correction — the sweet spot always wins outside
-    // Defense (the LoS gate that froze the outward drift is gone; Maze
-    // paths back to a firing position if spacing ever costs sight).
-    const pull = Math.max(-0.5, Math.min(0.5, (dist - optimalRange) * 0.12));
-    let tx = side.x * sign + dir.x * pull + avoid.rx * 0.6;
-    let tz = side.z * sign + dir.z * pull + avoid.rz * 0.6;
-    const l = Math.hypot(tx, tz) || 1;
-    mx = tx / l; mz = tz / l;
-
-    // WEDGE REVERSE (2026-08-08, user-ordered — Defense's first recovery
-    // stage, ported): two consecutive ticks of driving INTO a wall flips the
-    // orbit. The tangent is perpendicular to the aim line, so reversing it
-    // points away from the face just hit BY CONSTRUCTION — no need to know
-    // which wall it is. Without this the bot stuck to the wall at ~6% of
-    // walk speed until the 1 s wedge detector shipped it to Maze, which
-    // breaks off the fight entirely (10% of engage time was spent that way).
-    // Deliberately stage ONE only: measured on Defense, the reverse alone
-    // clears >70% of wedges, while its stage-2 wall-slide bails almost as
-    // often as it fires (92 slides, 91 bails). The LoS flip's 1 s cooldown
-    // is NOT consulted — a bot pressed into a wall can't wait a second —
-    // but firing here re-arms it so the two can't fight over the same tick.
-    // Mirrored in shared ai.js.
-    const engageIntoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4;
-    eState.botEngageWallTicks = engageIntoWall ? (eState.botEngageWallTicks ?? 0) + 1 : 0;
-    if (eState.botEngageWallTicks >= 2) {
-      eState.botEngageWallTicks = 0;
-      eState.botOrbitSign = -sign;
-      eState.botOrbitFlipAt = now + 1000;
-      let rx = side.x * eState.botOrbitSign + dir.x * pull + avoid.rx * 0.6;
-      let rz = side.z * eState.botOrbitSign + dir.z * pull + avoid.rz * 0.6;
-      const rl = Math.hypot(rx, rz) || 1;
-      mx = rx / rl; mz = rz / rl;
-    }
-
-    // On low ground? Hop onto any reachable platform — high ground is the
-    // better engagement / vantage spot on Station-like maps. Doesn't override
-    // the orbit (just adds a jump when the chance is there); the jump cooldown
-    // limits how often this fires.
-    if (state.enemy.grounded && !eState.airborne && !onHighGround) {
-      const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
-        jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botStartJump(now)) jumpThisTick = true;
-      }
-    }
-
-    if (botS === 'engage') {
-      // Peek-cover: while behind cover (obstacle near + line blocked) AND not
-      // yet ready to fire, tuck (slow the orbit way down). The instant the
-      // weapon is ready, the orbit resumes and naturally peeks out — fires —
-      // continues. That's the peek-cover loop, tied to the weapon's cadence.
-      if (obstacleNear && !playerHasLoS && now < eState.nextFireAt) {
-        mx *= 0.15; mz *= 0.15;
-      }
-      wantSprint = false; // walk in engage — conserve boost
-    } else {
-      // Reposition — sprint along the orbit to break to a new vantage.
-      wantSprint = true;
-    }
-  } else if (botS === 'defense') {
-    // Committed perpendicular sprint.
-    mx = eState.botDefenseDirX ?? side.x;
-    mz = eState.botDefenseDirZ ?? side.z;
-    wantSprint = true;
-
-    // Did this evade just run us into cover?
-    if (!eState.botDefenseInCover && obstacleNear && !playerHasLoS) {
-      eState.botDefenseInCover = true;
-      eState.botDefenseCoverAt = now;
-      eState.botDefensePeekDone = false;
-    }
-
-    if (eState.botDefenseInCover) {
-      // Single peek-cover loop, then exit Defense.
-      const sinceCover = now - (eState.botDefenseCoverAt ?? now);
-      if (sinceCover < 300) {
-        mx *= 0.1; mz *= 0.1;
-        wantSprint = false;
-      } else if (!eState.botDefensePeekDone) {
-        // One peek toward the player.
-        mx = dir.x; mz = dir.z;
-        wantSprint = false;
-        if ((now >= eState.nextFireAt && playerHasLoS) || sinceCover > 1000) {
-          eState.botDefensePeekDone = true;
-        }
-      } else {
-        eState.botDefenseUntil = now;
-        eState.botDefenseInCover = false;
-      }
-    } else {
-      // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
-      // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
-      // the committed line (tight ~35° cone; the stuck vault below keeps
-      // its wider one), jump it the moment it's in reach and keep sprinting
-      // the same direction up top. Adds ZERO decision time: the direction
-      // never changes, the ledge is simply cleared instead of deflecting
-      // the sprint. GLINT GATE: never while an anti-glint dodge is
-      // scheduled (botGlintStepAt) — airborne can't dodge, and a hop there
-      // converts a guaranteed-dodgeable sniper shot into a hit.
-      if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
-        const ahead = findHighGroundPerch(e.x, e.z, myFloorY, 6);
-        if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
-            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
-          jumpDirX = ahead.toX;
-          jumpDirZ = ahead.toZ;
-          if (botStartJump(now, true)) {
-            jumpThisTick = true;
-            eState.botDefenseStuckTicks = 0;
-          }
-        }
-      }
-      // Defense's wall read must be FAST — under fire there's no time for the
-      // 2 s Maze trigger. Drive straight into a wall for ~2 ticks and we hand
-      // off to Maze immediately (force the trigger by ageing the progress
-      // timer).
-      const intoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4;
-      if (intoWall && avoidMag > 0.4) {
-        eState.botDefenseStuckTicks = (eState.botDefenseStuckTicks ?? 0) + 1;
-      } else {
-        eState.botDefenseStuckTicks = 0;
-      }
-      if (!jumpThisTick && eState.botDefenseStuckTicks >= 2) {
-        // VAULT FIRST: if the "wall" being pressed is actually a jumpable
-        // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
-        // check used elsewhere, so Airport's rim glass still rejects it)
-        // roughly along the committed escape line, jump ONTO it and keep
-        // sprinting the same direction up top: the dodge continues with an
-        // elevation change instead of a turn. Jump unaffordable (boost /
-        // cooldown) or no ledge → the usual flip → slide → bail chain.
-        // Same glint gate as the proactive hop above.
-        let vaulted = false;
-        if (state.enemy.grounded && !eState.airborne && eState.botGlintStepAt == null) {
-          const ledge = findHighGroundPerch(e.x, e.z, myFloorY, 6);
-          if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
-              && ledge.toX * (eState.botDefenseDirX ?? side.x) + ledge.toZ * (eState.botDefenseDirZ ?? side.z) > 0.3) {
-            jumpDirX = ledge.toX;
-            jumpDirZ = ledge.toZ;
-            if (botStartJump(now, true)) {
-              jumpThisTick = true;
-              vaulted = true;
-              eState.botDefenseStuckTicks = 0;
-            }
-          }
-        }
-        if (vaulted) {
-          // committed direction kept — the sprint resumes on the ledge
-        } else {
-        // Wedged mid-escape (~2 ticks of zero lateral motion pressing a
-        // wall). The old response — end Defense and hand off to Maze — never
-        // won under sustained fire: "under fire" re-asserted Defense every
-        // tick with the SAME direction still pointed into the wall, so the
-        // bot stood there getting farmed. Recover IN PLACE instead:
-        //   1st wedge → the OTHER perpendicular (equally across the aim
-        //               line, and away from the wall just hit by construction);
-        //   2nd wedge → slide along the wall (concave corner / corridor);
-        //   after that → the old bail-to-Maze as a last resort.
-        const flips = eState.botDefenseFlips ?? 0;
-        if (flips === 0) {
-          eState.botDefenseDirX = -(eState.botDefenseDirX ?? side.x);
-          eState.botDefenseDirZ = -(eState.botDefenseDirZ ?? side.z);
-          eState.botDefenseDirAt = now;
-          eState.botDefenseFlips = 1;
-          eState.botDefenseStuckTicks = 0;
-        } else if (flips === 1) {
-          const am = avoidMag || 1;
-          let tx2 = -avoid.rz / am, tz2 = avoid.rx / am;
-          if (tx2 * (eState.botDefenseDirX ?? side.x) + tz2 * (eState.botDefenseDirZ ?? side.z) < 0) {
-            tx2 = -tx2; tz2 = -tz2;
-          }
-          eState.botDefenseDirX = tx2;
-          eState.botDefenseDirZ = tz2;
-          eState.botDefenseDirAt = now;
-          eState.botDefenseFlips = 2;
-          eState.botDefenseStuckTicks = 0;
-        } else {
-          eState.botLastProgressAt = now - 2001;
-          eState.botDefenseUntil = now;
-        }
-        }
-      }
-    }
-  }
-
-  // === Velocity dispatch — drives the heading and sprint intent produced by
-  // the active state into the body's velocity. Mid-jump airborne ticks hold
-  // the launch aim so the arc lands where it was committed.
-  const botSprintBase = state.enemy.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
-  const botWalkSpeed = state.enemy.unit.walkSpeed ?? WALK_SPEED;
-  // Sprint funding tiers: Defense (escaping live fire) may spend down to the
-  // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
-  // funded down to the hard floor too — the latch itself (arm > 50, drop
-  // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
-  // travel floor — the latch above arms them only from a full tank.
-  const botSprintFloor = eState.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
-    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
-    : BOT_TRAVEL_SPRINT_FLOOR;
-  const botCanSprint = eState.boost >= botSprintFloor && now >= eState.emptyRecoverUntil;
-
-  if (sdStepping) {
-    // (the dodge's lerp owns the body this frame: no velocity, no action from the brain)
-  } else if (jumpThisTick) {
-    eState.botAirSteerX = jumpDirX;
-    eState.botAirSteerZ = jumpDirZ;
-    eState.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    state.enemy.body.velocity.x = jumpDirX * botSprintBase;
-    state.enemy.body.velocity.z = jumpDirZ * botSprintBase;
-    eState.action = 'jump';
-  } else if (eState.airborne && (eState.botAirSteerUntil ?? 0) > now) {
-    const ax = eState.botAirSteerX ?? mx;
-    const az = eState.botAirSteerZ ?? mz;
-    state.enemy.body.velocity.x = ax * botSprintBase;
-    state.enemy.body.velocity.z = az * botSprintBase;
-    eState.action = 'dash';
-  } else if (wantSprint && botCanSprint) {
-    state.enemy.body.velocity.x = mx * botSprintBase;
-    state.enemy.body.velocity.z = mz * botSprintBase;
-    inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
-    eState.action = 'dash';
-  } else {
-    state.enemy.body.velocity.x = mx * botWalkSpeed;
-    state.enemy.body.velocity.z = mz * botWalkSpeed;
-    // Anti-freeze nudge — skipped during a cover-reload HOLD (the hold paces
-    // its own narrow sway; the nudge must not override a flip instant).
-    if (!(coverMove && coverMove.hold)
-        && Math.abs(state.enemy.body.velocity.x) + Math.abs(state.enemy.body.velocity.z) < 0.08) {
-      state.enemy.body.velocity.x = side.x * 4.5;
-      state.enemy.body.velocity.z = side.z * 4.5;
-    }
-    eState.action = 'idle';
-  }
-
-  // --- Firing: LoS-aware + universal burst sizing ---
-  // Skip firing entirely if line of sight is blocked — there's no point
-  // dumping rounds into a wall. The bot keeps repositioning (via the
-  // avoidance + kiting movement above) until the shot is clear.
-  if (now >= eState.nextFireAt) {
-    const u = state.enemy.unit;
-    const s = eState;
-    // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
-    // shots from an immune attacker deal full damage (every hit check is
-    // target-side), and humans can already shoot while protected. Only the
-    // TARGET-immunity hold below remains.
-    if (u.magCapacity != null && s.ammo <= 0) {
-      const wait = u.autoReload
-        ? u.reloadMs
-        : Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
-      s.nextFireAt = now + wait;
-      s.machineBurstRemaining = 0;
-      botClearFireRule(s);
-    } else if (now < state.player.state.invulnerableUntil) {
-      // Target is spawn-immune — no shot can hurt it, so hold fire instead
-      // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
-      // regular 220 ms poll, whichever comes first (the target can change).
-      s.nextFireAt = Math.min(state.player.state.invulnerableUntil, now + 220);
-      s.machineBurstRemaining = 0;
-      botClearFireRule(s);
-    } else if (SDG ? !s.botSDFire : !botMayFire(u, s, Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z), state.mode)) {
-      // (SUDDEN DEATH: the brain's trigger (botSDFire) is the unit's only trigger — open, no bloom-gate hold; closed, no shot, polled every frame; mirrors shared)
-      // BLOOM GATE (ported from the demo line 2026-09-22, shared bloom.js
-      // botMayFire): inside the CURRENT gate line — the 33%-hit distance for
-      // the autos, the sure-hit distance for the marksman rifles — the bot
-      // fires freely (the old burst / rest rhythm underneath); outside it the
-      // bot waits for a full recovery (released early only if the target
-      // closes in) and then fires a committed suppress burst (5 autos, 10
-      // SMGs, 1 marksman rifles). Checked before the obstacle scan; polls
-      // every frame. Mirrors shared ai.js.
-      s.nextFireAt = now + 16;
-    } else if (!botShotCanLand(
-      { x: e.x, y: myShotY, z: e.z },
-      { x: p.x, y: p.y + BOT_MUZZLE_ABOVE_ROOT, z: p.z }
-    )) {
-      // No clear shot — hold fire and check again shortly. The origin is the
-      // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
-      // SD in band: poll every firePollMs — a sprint through a one-cell gap
-      // lasts ~200 ms and the 220 ms poll let it go unshot.
-      s.nextFireAt = now + (SDG ? SDG.firePollMs : 220);   // (the Sudden Death brain: the fast poll, mirrors shared)
-      s.machineBurstRemaining = 0;
-      botClearFireRule(s);
-    } else if (u.sniperCharge) {
-      const fired = attemptFire(state.enemy, state.player, now);
-      if (fired) {
-        // Sniper release timing — a 50/50 coin flip for BOTH snipers:
-        // Kei (beam): quick floor beam OR the full-charge sweep channel.
-        // Aru: exact floor snap OR held to FULL charge. The hold lands after
-        // a defender's spent dodge i-frames, the snap punishes non-dodgers.
-        s.sniperChargeUntil = now + (Math.random() < 0.5
-          ? SNIPER_CANCEL_MIN_CHARGE_MS
-          : (u.chargeMs ?? 1000));
-        s.nextFireAt = now + u.fireCooldownMs + PhaserLikeBetween(400, 1200);
-      } else s.nextFireAt = now + 220;
-      s.machineBurstRemaining = 0;
-    } else {
-      // Universal burst: derive length from magCapacity so different weapons
-      // (5-round mag, 30-round MG, future 100-round LMG) all feel right.
-      // Burst gating applies to every single-projectile gun AND to any
-      // multi-pellet gun with an explicit botFireCap (2026-08-01: shotguns
-      // carry cap 4 — four blasts per trigger pull, then the usual rest).
-      const bursted = u.spreadCount === 1 || u.botFireCap;
-      // EXPOSED DUMP (BOT_SD exposedDump, mirrors shared): while an enemy line
-      // is open on the unit there is no burst rest and no cadence jitter —
-      // rounds at the gun's own cooldown until the line closes or the
-      // magazine empties. SD only.
-      const sdDump = !!(SDG && s.botSDFire);
-      if (bursted && s.machineBurstRemaining <= 0) {
-        s.machineBurstRemaining = botBurstSize(u);
-      }
-      const firedAt = s.lastFireAt;
-      attemptFire(state.enemy, state.player, now);
-      const fired = s.lastFireAt !== firedAt;
-      if (fired) {
-        botNoteShot(s);
-        if (s.botSDFire) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;   // (the report: rounds fired while exposed)
-      }
-      if (bursted) {
-        if (fired) s.machineBurstRemaining -= 1;
-        // Intra-burst cadence ties to the unit's actual fireCooldownMs — tune
-        // firePerMinute and the bot's DPS scales with it. Inter-burst pause
-        // is short (0.8-1.5 s) so the bot keeps sustained pressure on like a
-        // real MG user would.
-        s.nextFireAt = (s.machineBurstRemaining > 0 || sdDump)
-          ? now + u.fireCooldownMs
-          : now + PhaserLikeBetween(800, 1500);
-        if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
-      } else {
-        // Capless multi-pellet pacing — pace shots near the weapon's
-        // mechanical fire cooldown so the bot uses its full per-shot DPS
-        // instead of dawdling 1+ s between shots. Small jitter avoids a
-        // perfectly robotic cadence; the magazine + autoReload still impose
-        // a natural burst rhythm without the AI gating on top.
-        if (fired) s.nextFireAt = now + u.fireCooldownMs + (sdDump ? 0 : PhaserLikeBetween(40, 220));
-        else s.nextFireAt = now + 120;
-      }
-    }
-  }
-  if (state.enemy.grounded && now > state.enemy.state.hoverUntil && state.enemy.state.action !== 'jump') {
-    state.enemy.body.velocity.y = 0;
-  }
-  applyMomentum(state.enemy);
+  applyMomentum(mech);
   // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
   // weapon's move-scale, stored on the victim) while stunned rather than
-  // freezing. Apply the same scale to the bot AFTER momentum so sprint +
-  // momentum scale together, matching the player's velocity exactly.
+  // freezing. Applied AFTER momentum so sprint + momentum scale together,
+  // matching the player's velocity exactly.
   if (now < eState.hitStunUntil) {
-    state.enemy.body.velocity.x *= eState.hitStunScale;
-    state.enemy.body.velocity.z *= eState.hitStunScale;
+    mech.body.velocity.x *= eState.hitStunScale;
+    mech.body.velocity.z *= eState.hitStunScale;
   }
-  if (!sdStepping) updateBoost(state.enemy, now, state.enemy.state.action);   // (the step's own update ran above)
+  if (ran !== 'stepping') updateBoost(mech, now, eState.action);   // (the step's own update ran in botTickStep)
 }
 
 // How long the reticle stays red after each enemy shot. Re-armed on every
@@ -7611,7 +5673,8 @@ function updateMechXRayVisibility() {
   const cp = camera.position;
   const blocked = !botHasLineOfSight(
     { x: cp.x, y: cp.y, z: cp.z },
-    { x: bp.x, y: bp.y, z: bp.z }
+    { x: bp.x, y: bp.y, z: bp.z },
+    arenaObstacles, arenaSurfaces
   );
   for (const ghost of mech.xRayGhosts) ghost.visible = blocked;
 }
@@ -8596,7 +6659,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1018a';
+const CLIENT_BUILD_TAG = 'b1018c';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
