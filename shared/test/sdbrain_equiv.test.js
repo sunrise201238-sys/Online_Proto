@@ -1,8 +1,9 @@
 // THE EQUIVALENCE TEST (owner 2026-10-16, "patchless with the same
 // behaviour"): the Sudden Death brain in sdbrain.js must play tick for tick
-// what the frozen reference plays (ai_b1017c_ref.js + sdbrain_b1017c_ref.js,
-// the brain as frozen at b1017c — one rule in four parts, the close peek by range; the b1016o
-// reference went with that rewrite, which alters play by design).
+// what the frozen reference plays (sdbrain_b1017h_ref.js, the brain as frozen at
+// b1017h — one rule in four parts, the own reaction, the valve — inside the host as
+// frozen at b1018a, ai_b1018a_ref.js; the b1016o reference went with the b1017 rewrite,
+// which alters play by design).
 // Two matches are set up alike, every random draw comes from
 // the same seeded stream on each side, and after every tick both fighters'
 // whole state (position, body, boost, ammo and every botSD* scratch field)
@@ -12,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1017h_ref.js';
+import { tickBot as tickOld } from './ai_b1018a_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
