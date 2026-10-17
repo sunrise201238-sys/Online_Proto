@@ -148,8 +148,8 @@ const BOT_CH_AREA_R = 14;
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // fire block below and for the client's imports.
-import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017g_ref.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017g_ref.js';
+import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017h_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017h_ref.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
 // hide over) so the normal brain resumes from a clean slate. Offline twin:
 // client resetBotHideFields.
