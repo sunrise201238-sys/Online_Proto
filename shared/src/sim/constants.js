@@ -618,7 +618,7 @@ export const SD_START_HOLD_MS = 2300;
 // Lag compensation (2026-10-17, shared/src/sim/history.js): a human's shot is
 // judged against the world their screen showed, at most this far behind the
 // server's present. Above it the shooter is compensated this much and no more.
-export const LAG_COMP_MAX_MS = 200;
+export const LAG_COMP_MAX_MS = 100;
 // Sprint-lock release grace: a joystick flip (left→right) crosses the center
 // deadzone for a few frames and used to read as the let-go-to-stop gesture,
 // killing the locked sprint mid-flip. Only a neutral stick SUSTAINED this
