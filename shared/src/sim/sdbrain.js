@@ -1,9 +1,14 @@
-// SUDDEN DEATH BRAIN (b1017a): ONE RULE IN FOUR PARTS, EACH WRITTEN ONCE.
+// THE BRAIN (b1017a Sudden Death, b1019a both modes): ONE RULE IN FOUR
+// PARTS, EACH WRITTEN ONCE.
 //
 // THE RULE: the unit stands only where it is hidden; it is exposed only to
 // buy something — a firing line, a better cell, the way back — and every
-// exposure is priced the same way: the chance of dying in it under the
-// enemy's eyes and gun, against the chance of landing a hit. The planner
+// exposure is priced the same way, IN LIFE: the share of its life the
+// exposure costs under the enemy's eyes and gun, against the share of the
+// enemy's life its own rounds take. A hit costs damage / HP of a life — in
+// Sudden Death (1 HP) the whole of it, and the price is the chance of
+// dying; in Health Point mode a part, and the unit behind on HP pays more
+// per hit than the one ahead. No flag says which mode it is. The planner
 // takes the cheapest exposure that buys the most, else it holds; the legs
 // run every exposure across the line.
 //
@@ -12,15 +17,15 @@
 //      against every eye: each enemy
 //      where it stands, where its run takes it in predictS, and where it
 //      fired each round still in flight.
-//   2. THE PRICE (sdPrice, sdOwn, sdDeathsPerHit): the chance of dying in an
+//   2. THE PRICE (sdPrice, sdOwn, sdTrade): the share of its life lost in an
 //      exposure of T ms at distance d moving lat across the line, after the
 //      enemy's reaction — none while its stream is on, riskReactMs while its
 //      gun is aimed (fired within aimHoldMs), acquireMs when it is not — with
 //      its live bloom and cadence (sdExposureRisk); and the chance the unit's
 //      own rounds land in the same window, from ownReactMs after the line
 //      (sdOwnHitChance). An attack is
-//      taken when the deaths it costs to land one hit stay under riskCap; a
-//      route, when its death chance does. One cap.
+//      taken when the share of its life it spends to take the whole of the
+//      enemy's stays under riskCap; a route, when its price does. One cap.
 //   3. THE PLAN: hidden with nothing under way, the unit prices THE ENGAGE
 //      RUN (a straight run across the line through a firing point to a
 //      hidden end), THE STAND PEEK (a leg to a firing point — the dodge
@@ -63,11 +68,12 @@
 //   ({x,z}: the outward normal of the face physics pushed the body out of
 //   last tick; null when it touched none),
 //   opp {id, pos, hp, unit, invulnerableUntil}, enemies [{id, pos, vel,
-//   unit, lastFireAt, bloom, hp, ammo, reloadingUntil, log}],
+//   unit, lastFireAt, bloom, hp}], hold (a Hide or a Move order stands: no
+//   attacks, no approach, no relocation — the wait and the escape only),
 //   obstacles, grid, clear(p0, p1), eyeUp (a unit's muzzle above its
 //   position), muzzleH (a cell's muzzle above its floor + GROUND_BASE_Y),
 //   dist, sideX, sideZ, myFloorY, myShotY, avoid {rx, rz}, avoidMag,
-//   playerHasLoS, groundHeightAt(x, z, fallback), startStep(dx, dz),
+//   groundHeightAt(x, z, fallback), startStep(dx, dz),
 //   startJump(), searchSlot() (claims this tick's one route search),
 //   deadline() (the search's CPU budget), tape(row) or null.
 //   The order back: coverMove {hold, hide, dash, mx, mz, jump, jx, jz};
@@ -104,11 +110,12 @@ export function capsuleHitFrac(c, R, H, s) {
 // VOLLEY (the shotguns, spreadCount > 1): a blast is not a cone that thins
 // with distance — a fixed 8-slot pattern (SHOTGUN_PATTERN, stretched by the
 // gun's volleyStretchX) that opens over SHOTGUN_CLUSTER_SPREAD_DISTANCE and
-// then keeps its size, every pellet lethal at 1 HP. A blast lands when ANY
-// slot falls on the capsule after the no-lead drift `s`: the share of the
-// per-shot rotations that do. Cached on a 5 u / 0.25 u grid.
+// then keeps its size. A blast lands when ANY slot falls on the capsule
+// after the no-lead drift `s`: the share of the per-shot rotations that do
+// (frac), and the mean pellets on the capsule when it does (pellets) — a
+// landed blast's damage is that many pellets'. Cached on a 5 u / 0.25 u grid.
 const sdVolleyCache = new Map();
-function sdVolleyHitFrac(u, d, s) {
+function sdVolleyHit(u, d, s) {
   const stretch = u.volleyStretchX ?? 1;
   const dq = Math.min(SHOTGUN_CLUSTER_SPREAD_DISTANCE, Math.round(d / 5) * 5), sq = Math.round(s * 4) / 4;
   const key = `${stretch}|${dq}|${sq}`;
@@ -116,23 +123,28 @@ function sdVolleyHitFrac(u, d, s) {
   if (hit != null) return hit;
   const f = Math.min(1, dq / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
   const N = 36;
-  let lands = 0;
+  let lands = 0, pellets = 0;
   for (let i = 0; i < N; i += 1) {
     const rot = (i / N) * Math.PI * 2, c = Math.cos(rot), sn = Math.sin(rot);
+    let n = 0;
     for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
       const px = SHOTGUN_PATTERN[k][0], py = SHOTGUN_PATTERN[k][1];
       const x = (px * c - py * sn) * stretch * f, y = (px * sn + py * c) * f;
-      if (Math.abs(x - sq) < HIT_RADIUS_NORMAL && Math.abs(y) < HIT_HALF_HEIGHT + HIT_RADIUS_NORMAL) { lands += 1; break; }
+      if (Math.abs(x - sq) < HIT_RADIUS_NORMAL && Math.abs(y) < HIT_HALF_HEIGHT + HIT_RADIUS_NORMAL) n += 1;
     }
+    if (n) { lands += 1; pellets += n; }
   }
-  const frac = lands / N;
+  const out = { frac: lands / N, pellets: lands ? pellets / lands : 0 };
   if (sdVolleyCache.size > 4096) sdVolleyCache.clear();
-  sdVolleyCache.set(key, frac);
-  return frac;
+  sdVolleyCache.set(key, out);
+  return out;
 }
 
-// Chance of dying while exposed to `threat` for T ms at distance d, moving
-// with lateral fraction `lat` (of `speed`, u/s) across its line. No shot in
+// THE PRICE of being exposed to `threat` for T ms at distance d, moving with
+// lateral fraction `lat` (of `speed`, u/s) across its line: the share of a
+// life of `hp` the exposure costs. A round that lands takes damage / hp of
+// the life (a volley's, its pellets' damage); at 1 HP every hit is the whole
+// life and the price is the chance of dying. No shot in
 // this game leads its target: every round is aimed at the position of the
 // moment, so a body moving across the line is missed by the drift `s` it
 // makes during the round's flight. The shooter's first round comes `react`
@@ -141,7 +153,7 @@ function sdVolleyHitFrac(u, d, s) {
 // drift credit for them) — and every shotMs after; the cone is the base
 // spread plus the live `bloom`, widened by each round up to the cap.
 // `elapsed` ms of the exposure are already spent (a reaction consumed).
-export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint, bloom = (threat.bloom ?? threat.state?.bloom ?? 0), react = SD.riskReactMs) {
+export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.riskSprint, bloom = (threat.bloom ?? threat.state?.bloom ?? 0), react = SD.riskReactMs, hp = 1) {
   const u = threat.unit ?? {};
   const base = u.spreadAngle ?? 0.02, pv = u.projectileSpeed ?? 600;
   const volley = (u.spreadCount ?? 1) > 1;
@@ -161,14 +173,17 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
     const fireAt = first + n * shotMs;
     const sK = fireAt < edgeMs ? 0 : s;
     let p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, sK);
-    if (volley) p = Math.max(p, sdVolleyHitFrac(u, d, sK));
-    survive *= 1 - p * Math.min(1, left);
+    const vh = volley ? sdVolleyHit(u, d, sK) : null;
+    if (vh) p = Math.max(p, vh.frac);
+    const life = Math.min(1, (u.damage ?? 1) * (vh ? Math.max(1, vh.pellets) : 1) / hp);
+    survive *= 1 - p * life * Math.min(1, left);
   }
   return 1 - survive;
 }
 
-// THE UNIT'S OWN SIDE: the chance that at least one of `me`'s rounds lands
-// on `threat` inside a window of T ms at distance d — the same capsule
+// THE UNIT'S OWN SIDE: the share of `threat`'s life of `hp` that `me`'s
+// rounds take inside a window of T ms at distance d (at 1 HP, the chance
+// that at least one lands) — the same capsule
 // arithmetic from the other side: the unit's cone plus its live bloom, its
 // cadence, its round's flight, and the threat's drift across the line
 // during that flight (its live velocity, walking at the least — a sprayer
@@ -177,7 +192,7 @@ export function sdExposureRisk(threat, SD, d, lat, T, elapsed = 0, speed = SD.ri
 // counted from when it knew, `known` ms before the window — then the flight.
 // THE FIRST ROUND of the unit at distance d: what is left of its reaction `known` ms after it knew, then the flight.
 export const sdFirstRoundMs = (SD, unit, d, known = 0) => Math.max(0, SD.ownReactMs - known) + d / (unit?.projectileSpeed ?? 600) * 1000;
-export function sdOwnHitChance(me, threat, d, T, SD, known = 0) {
+export function sdOwnHitChance(me, threat, d, T, SD, known = 0, hp = 1) {
   const u = me.unit ?? {};
   const pv = u.projectileSpeed ?? 600;
   const base = u.spreadAngle ?? 0.02, cap = Math.max(base, u.bloomCap ?? base), perShot = u.bloomPerShot ?? 0;
@@ -195,8 +210,10 @@ export function sdOwnHitChance(me, threat, d, T, SD, known = 0) {
   for (let k = 0, left = shots; left > 0; k += 1, left -= 1) {
     const sa = Math.min(cap, sa0 + k * perShot);
     let p = capsuleHitFrac(d * Math.tan(sa / 2), HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, s);
-    if (volley) p = Math.max(p, sdVolleyHitFrac(u, d, s));
-    survive *= 1 - p * Math.min(1, left);
+    const vh = volley ? sdVolleyHit(u, d, s) : null;
+    if (vh) p = Math.max(p, vh.frac);
+    const life = Math.min(1, (u.damage ?? 1) * (vh ? Math.max(1, vh.pellets) : 1) / hp);
+    survive *= 1 - p * life * Math.min(1, left);
   }
   return 1 - survive;
 }
@@ -213,14 +230,14 @@ export function sdOwnReach(unit) {
   return sa > 1e-6 ? HIT_RADIUS_NORMAL / Math.tan(sa / 2) : 200;
 }
 
-// The death chance of a route from (sx, sz) through `path` (navgrid points,
+// THE PRICE of a route (the share of a life of `hp`) from (sx, sz) through `path` (navgrid points,
 // y = floor), sub-divided into ~4 u pieces; a piece is exposed when
 // `seen(x, z, floorY)` says so (the brain's silhouette test); each
 // contiguous exposed run shares one reaction (`react`, see
 // sdExposureRisk). Returns { risk, first, exposedLen } with the first
 // exposed piece's midpoint (the avoid mark on rejection) and the exposed
 // length in u.
-export function sdRouteRisk(path, sx, sz, floorY, seen, threat, SD, speed = SD.riskSprint, react = SD.riskReactMs) {
+export function sdRouteRisk(path, sx, sz, floorY, seen, threat, SD, speed = SD.riskSprint, react = SD.riskReactMs, hp = 1) {
   let survive = 1, first = null, elapsed = 0, inRun = false, exposedLen = 0, tAcc = 0;
   let px = sx, pz = sz;
   for (let i = 0; i < path.length; i += 1) {
@@ -242,7 +259,7 @@ export function sdRouteRisk(path, sx, sz, floorY, seen, threat, SD, speed = SD.r
       let lx = threat.pos.x - mid.x, lz = threat.pos.z - mid.z;
       const d = Math.hypot(lx, lz) || 1; lx /= d; lz /= d;
       const lat = Math.abs(dx * lz - dz * lx);
-      survive *= 1 - sdExposureRisk(threat, SD, d, lat, T, elapsed, speed, undefined, react);
+      survive *= 1 - sdExposureRisk(threat, SD, d, lat, T, elapsed, speed, undefined, react, hp);
       elapsed += T;
     }
     px = q.x; pz = q.z;
@@ -273,7 +290,7 @@ export const BOT_SD = {
   waitLeash: 6,           // THE WAIT paces its hidden cell within this of where the wait began
   paceSpeed: 0.4,         //   at this share of the walk: a human shifting in cover, not a march
   // THE ONE CAP
-  riskCap: 0.15,          // the death chance accepted for a planned route, and the deaths-per-hit accepted for an attack
+  riskCap: 0.15,          // THE ONE CAP, in life: the share of its life a planned route may cost; the share of its life an attack may spend to take the whole of the enemy's (at 1 HP: the death chance; the deaths per hit)
   // THE GROUND
   goalCoverMax: 4,        // a goal cell stands within this of muzzle-blocking cover; open ground is never a goal
   openDist: 6,            //   a route cell farther than this from cover is open ground ...
@@ -401,6 +418,11 @@ export function sdBrainTick(host) {
   const sdHidden = sdSeenBy == null;
   const sdThreat = sdSeenBy ? sdEnemies[sdSeenBy.k] : (sdEnemies[0] ?? opp);
   const sdThreatDist = Math.hypot(sdThreat.pos.x - mePos.x, sdThreat.pos.z - mePos.z);
+  // THE TWO LIVES the price is read in: a hit costs damage / HP of one (1 HP: the whole of it)
+  const sdMyHp = Math.max(1, me.hp ?? 1), sdHisHp = Math.max(1, sdThreat.hp ?? 1);
+  // THE HOLD: a Hide or a Move order stands — nothing is bought (no attacks,
+  // no approach, no relocation); the wait and the escape only.
+  const sdHold = !!host.hold;
   const sdWall = host.wall ?? null;
   const sdIntoWall = (hx, hz) => !!sdWall && hx * sdWall.x + hz * sdWall.z < 0;
   if (sdWall) me.botSDWallTicks = (me.botSDWallTicks ?? 0) + 1;
@@ -513,15 +535,17 @@ export function sdBrainTick(host) {
   // brings back (THE WAIT's question).
   const sdReal = { react: sdReact, dodge: sdDodgeReady && me.boost >= sdStepCost, ammo: !sdMyEmpty, tank: true, immune: now < (opp.invulnerableUntil ?? 0) };
   const sdRestored = { react: SD.acquireMs, dodge: true, ammo: true, tank: false, immune: false };
-  // (the death chance of standing T ms at distance d, lat across the line, elapsed ms already spent, under the enemy's reaction `react`)
-  const sdPriceAs = (T, d, lat, elapsed, react) => sdExposureRisk(sdThreat, SD, d, lat, T, elapsed, sdSprint, undefined, react);
+  // (the price of standing T ms at distance d, lat across the line, elapsed ms already spent, under the enemy's reaction `react`)
+  const sdPriceAs = (T, d, lat, elapsed, react) => sdExposureRisk(sdThreat, SD, d, lat, T, elapsed, sdSprint, undefined, react, sdMyHp);
   const sdPrice = (T, d = sdThreatDist, lat = 0, elapsed = 0) => sdPriceAs(T, d, lat, elapsed, sdReact);
-  // (the chance the unit lands a hit inside T ms at distance d; none without rounds, none on an immune target)
-  const sdOwnAs = (T, d, as, known = 0) => (!as.ammo || as.immune) ? 0 : sdOwnHitChance(selfRef, sdThreat, d, T, SD, known);
+  // (the share of his life the unit takes inside T ms at distance d; none without rounds, none on an immune target)
+  const sdOwnAs = (T, d, as, known = 0) => (!as.ammo || as.immune) ? 0 : sdOwnHitChance(selfRef, sdThreat, d, T, SD, known, sdHisHp);
   const sdOwn = (T, d = sdThreatDist) => sdOwnAs(T, d, sdReal);
-  // THE TRADE: the deaths it takes to land one hit — each exposure pe dead,
-  // 1 / pm of them needed. Under the cap, the attack is worth it.
-  const sdDeathsPerHit = (pe, pm) => (pm <= 0 ? 1 : pe <= 0 ? 0 : 1 - Math.pow(1 - pe, 1 / Math.max(0.02, pm)));
+  // THE TRADE: the share of its life the unit spends to take the whole of
+  // the enemy's by this exposure — each costs pe of its life and takes pm of
+  // his, 1 / pm of them needed (at 1 HP: the deaths it takes to land one
+  // hit). Under the cap, the attack is worth it.
+  const sdTrade = (pe, pm) => (pm <= 0 ? 1 : pe <= 0 ? 0 : 1 - Math.pow(1 - pe, 1 / Math.max(0.02, pm)));
   // THE WAY OUT: the exposed time until hidden — one tick when the dodge is
   // in hand (its i-frames carry the body), else the sprint back.
   const sdExitMs = (back) => (sdDodgeReady && me.boost >= sdStepCost) ? TICK_RATE_MS : back / sdSprint * 1000;
@@ -652,7 +676,7 @@ export function sdBrainTick(host) {
   // the leg out plus the window it takes to land the first round, against
   // the way out). Returns the cheapest under the cap, or null.
   const sdAttacks = (as) => {
-    if (!as.dodge) return null;   // (A PLANNED EXPOSURE STARTS WITH ITS WAY OUT IN HAND: the dodge — the leg out of a close peek, the way back of the others)
+    if (sdHold || !as.dodge) return null;   // (A PLANNED EXPOSURE STARTS WITH ITS WAY OUT IN HAND: the dodge — the leg out of a close peek, the way back of the others)
     let best = null;
     const consider = (dph, len, take) => { if (dph <= SD.riskCap && (!best || dph < best.dph || (dph === best.dph && len < best.len))) best = { dph, len, take }; };
     for (let k = 0; k < 16; k += 1) {
@@ -669,9 +693,9 @@ export function sdBrainTick(host) {
         if (!sdHiddenAt(ex, ez, myFloorY)) continue;
         if (coverDistanceAt(sdGrid, ex, ez, myFloorY, obstacles) > SD.goalCoverMax) continue;
         if (as.tank && (!sdTankOpen || me.boost < sdNeed(L))) break;
-        const rr = sdRouteRisk([{ x: ex, z: ez, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react);
+        const rr = sdRouteRisk([{ x: ex, z: ez, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react, sdMyHp);
         const T = rr.exposedLen / sdSprint * 1000;
-        const dph = sdDeathsPerHit(rr.risk, sdOwnAs(T, Math.hypot(opp.pos.x - (mePos.x + cx * L / 2), opp.pos.z - (mePos.z + cz * L / 2)), as));
+        const dph = sdTrade(rr.risk, sdOwnAs(T, Math.hypot(opp.pos.x - (mePos.x + cx * L / 2), opp.pos.z - (mePos.z + cz * L / 2)), as));
         me.botSDLastRisk = rr.risk; me.botSDLastTrade = dph;
         consider(dph, L, () => {
           const p1 = sdPerp(1);
@@ -689,9 +713,9 @@ export function sdBrainTick(host) {
       const legMs = leg.dodge ? STEP_DURATION_MS : leg.L / sdSprint * 1000;   // (the leg: how long the unit has known by the sighting)
       const first = sdFirstRoundMs(SD, meUnit, d, legMs);   // (what is left of its reaction, then its first round's flight)
       const exit = leg.dodge ? leg.L / sdSprint * 1000 : TICK_RATE_MS;   // (the sprint back after a dodge leg; the dodge back after a sprint leg)
-      const legRisk = leg.dodge ? 0 : sdRouteRisk([{ x: leg.x, z: leg.z, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react).risk;
+      const legRisk = leg.dodge ? 0 : sdRouteRisk([{ x: leg.x, z: leg.z, y: myFloorY }], mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, as.react, sdMyHp).risk;
       const pe = 1 - (1 - legRisk) * (1 - sdPriceAs(first + exit, d, 0, 0, as.react));
-      const dph = sdDeathsPerHit(pe, sdOwnAs(first + Math.max(SD.riskShotMs, meUnit.fireCooldownMs ?? 0), d, as, legMs));
+      const dph = sdTrade(pe, sdOwnAs(first + Math.max(SD.riskShotMs, meUnit.fireCooldownMs ?? 0), d, as, legMs));
       me.botSDLastRisk = pe; me.botSDLastTrade = dph;
       consider(dph, leg.L, () => {
         sdTake({ kind: 'peek', point: { x: leg.x, z: leg.z }, origin: { x: mePos.x, z: mePos.z }, leg: { x: leg.cx, z: leg.cz }, dodge: leg.dodge, at: now, armed: false });
@@ -708,12 +732,13 @@ export function sdBrainTick(host) {
   // cap, the tank able to sprint them and keep the reserve; refused, its
   // first exposed stretch is marked. Returns the path, or null.
   const sdApproachRoute = () => {
+    if (sdHold) return null;
     const oppFloor = host.groundHeightAt(opp.pos.x, opp.pos.z, opp.pos.y - GROUND_BASE_Y);
     const path = (findPathOnGrid(sdGrid, mePos.x, mePos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloor, obstacles) ?? []).slice();
     const end = path.length ? path[path.length - 1] : { x: mePos.x, z: mePos.z, y: myFloorY };
     if (Math.hypot(opp.pos.x - end.x, opp.pos.z - end.z) > 1 && sdLegFitsAt(end.x, end.z, opp.pos.x, opp.pos.z, (end.y ?? myFloorY) + GROUND_BASE_Y)) path.push({ x: opp.pos.x, z: opp.pos.z, y: oppFloor });
     if (!path.length) return null;
-    const rr = sdRouteRisk(path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
+    const rr = sdRouteRisk(path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact, sdMyHp);
     me.botSDLastRisk = rr.risk;
     if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (rr.exposedLen <= 0 || sdTankOpen)) return path;
     if (rr.first) sdMark(rr.first.x, rr.first.z);
@@ -754,20 +779,45 @@ export function sdBrainTick(host) {
         // (THE GOAL hides the whole silhouette — the one test, sdHiddenAt; a flank's goal has a firing leg — the one scan, sdFiringLegs)
         const hiddenGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy);
         const flankGoal = (gx, gz, fy) => sdHiddenAt(gx, gz, fy) && sdFiringLegs(gx, gz, fy).length > 0;
-        let stages;
+        // THE FLOOR OF THE LIST. Every option refused (or nothing to buy
+        // under the hold): what is the unit waiting for? Priced once more
+        // under what time brings back — the gun gone quiet, the dodge in
+        // hand, the magazine and the tank full, the target's immunity over.
+        // An attack or the refused route under the cap then: THE WAIT for it
+        // (the plan, paced in the leash, priced again at the cadence).
+        // Nothing: THE APPROACH — the pathfinder's route to the enemy, priced
+        // like every route; none under the cap -> the wait, priced again at
+        // the cadence.
+        const sdFloor = () => {
+          me.botSDSearchStage = 0;
+          const refused = me.botSDRefusedPath;
+          const waitFor = !!sdAttacks(sdRestored) || (!!refused && sdRouteRisk(refused, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, SD.acquireMs, sdMyHp).risk <= SD.riskCap);
+          if (waitFor) {
+            if (!plan || plan.kind !== 'wait') { if (plan) sdDrop(); sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); }
+            me.botSDWaits = (me.botSDWaits ?? 0) + 1;
+          } else {
+            const path = sdApproachRoute();
+            if (plan) sdDrop();
+            if (path) { sdTake({ kind: 'approach', path, idx: 0, goal: path[path.length - 1] }); me.botSDApproaches = (me.botSDApproaches ?? 0) + 1; }
+            else { sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDUnreachable = (me.botSDUnreachable ?? 0) + 1; }   // (no route to him at all: the wait, like any other)
+          }
+          if (plan && plan.kind === 'wait') me.botSDSearchAt = now + SD.failRetryMs;
+        };
+        let stages = null;
         // (exposed, the nearest cell hidden on arrival; hidden, the nearest cell hidden through the horizon — the cell it will wait in)
         if (escape) { const stays = sdHidden ? sdStaysAt : hiddenGoal; stages = [{ kind: 'escape', maxPops: SD.nearPops, accept: stays, defensive: true }, { kind: 'escape', maxPops: SD.farPops, accept: stays, defensive: true }]; }
+        else if (sdHold) sdFloor();   // (the hold: the wait, where the unit stands hidden)
         else if (!inReach) stages = [
           { kind: 'close', maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: Math.max(sdReach, dist - gain) }, minDistFrom: { x: mePos.x, z: mePos.z, d: SD.shiftMin }, accept: hiddenGoal, score: nearer, scoreStop: -Math.max(sdReach, dist - gain - 15) }];
         else stages = [
           { kind: 'flank', maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: sdReach + SD.bandSlack }, minDistFrom: { x: mePos.x, z: mePos.z, d: SD.shiftMin }, accept: flankGoal },
           { kind: 'nearer', maxPops: SD.farPops, within: { x: opp.pos.x, z: opp.pos.z, r: Math.max(2, dist - SD.hopGainMin) }, minDistFrom: { x: mePos.x, z: mePos.z, d: SD.shiftMin }, accept: hiddenGoal, score: nearer, scoreStop: -Math.max(2, dist - 15) }];
-        const stage = Math.min(me.botSDSearchStage ?? 0, stages.length - 1);
-        if (stage === 0 && !me.botSDSearchJob) me.botSDRefusedPath = null;   // (a new cycle: no refused route yet)
-        const a = stages[stage];
-        const jobKey = `${a.kind}|${stage}|${Math.round(mePos.x)},${Math.round(mePos.z)}`;
-        if (!me.botSDSearchJob || me.botSDSearchJob.key !== jobKey) me.botSDSearchJob = { key: jobKey, state: null };
-        let found = findHiddenSpot(sdGrid, mePos.x, mePos.z, myFloorY, sdEyes, obstacles, {
+        const stage = stages ? Math.min(me.botSDSearchStage ?? 0, stages.length - 1) : -1;
+        if (stages && stage === 0 && !me.botSDSearchJob) me.botSDRefusedPath = null;   // (a new cycle: no refused route yet)
+        const a = stages ? stages[stage] : null;
+        const jobKey = a ? `${a.kind}|${stage}|${Math.round(mePos.x)},${Math.round(mePos.z)}` : null;
+        if (a && (!me.botSDSearchJob || me.botSDSearchJob.key !== jobKey)) me.botSDSearchJob = { key: jobKey, state: null };
+        let found = !a ? null : findHiddenSpot(sdGrid, mePos.x, mePos.z, myFloorY, sdEyes, obstacles, {
           maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept, eyeHeight: MUZZLE_H,
           goalCoverMax: SD.goalCoverMax,
           exposurePenalty: SD.exposurePenalty, openPenalty: SD.openPenalty, openDist: SD.openDist,
@@ -785,7 +835,7 @@ export function sdBrainTick(host) {
             // tank able to sprint them; over the cap, the first exposed
             // stretch is marked and the next stage is tried. (Exposed, the
             // escape's route is taken unpriced: any hidden cell beats the open.)
-            const rr = sdRouteRisk(found.path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
+            const rr = sdRouteRisk(found.path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact, sdMyHp);
             me.botSDLastRisk = rr.risk;
             ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (a.defensive || rr.exposedLen <= 0 || sdTankOpen);
             if (!ok) { if (rr.first) sdMark(rr.first.x, rr.first.z); me.botSDRejects = (me.botSDRejects ?? 0) + 1; me.botSDRefusedPath = found.path; }
@@ -796,33 +846,11 @@ export function sdBrainTick(host) {
             taken = true;
           }
         }
-        if (!pending && !taken) {
+        if (a && !pending && !taken) {
           me.botSDSearchJob = null;
           if (stage < stages.length - 1) { me.botSDSearchStage = stage + 1; me.botSDSearchAt = now; }
           else if (!sdHidden) { me.botSDSearchStage = 0; me.botSDSearchAt = now + SD.exposedRetryMs; }
-          else {
-            // THE FLOOR OF THE LIST. Every option refused: what is the unit
-            // waiting for? Priced once more under what time brings back — the
-            // gun gone quiet, the dodge in hand, the magazine and the tank
-            // full, the target's immunity over. An attack or the refused route
-            // under the cap then: THE WAIT for it (the plan, paced in the leash,
-            // priced again at the cadence). Nothing: THE APPROACH — the
-            // pathfinder's route to the enemy, priced like every route; none
-            // under the cap -> the wait, priced again at the cadence.
-            me.botSDSearchStage = 0;
-            const refused = me.botSDRefusedPath;
-            const waitFor = !!sdAttacks(sdRestored) || (!!refused && sdRouteRisk(refused, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, SD.acquireMs).risk <= SD.riskCap);
-            if (waitFor) {
-              if (!plan || plan.kind !== 'wait') { if (plan) sdDrop(); sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); }
-              me.botSDWaits = (me.botSDWaits ?? 0) + 1;
-            } else {
-              const path = sdApproachRoute();
-              if (plan) sdDrop();
-              if (path) { sdTake({ kind: 'approach', path, idx: 0, goal: path[path.length - 1] }); me.botSDApproaches = (me.botSDApproaches ?? 0) + 1; }
-              else { sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDUnreachable = (me.botSDUnreachable ?? 0) + 1; }   // (no route to him at all: the wait, like any other)
-            }
-            if (plan && plan.kind === 'wait') me.botSDSearchAt = now + SD.failRetryMs;
-          }
+          else sdFloor();
         }
       }
     }

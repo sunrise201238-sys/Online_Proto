@@ -1,3 +1,10 @@
+> **Branch `Testing_0.9.0_New-BOT-Brain` — an archive, not a line.** This is 0.8.9 with the bot work of
+> 2026-10-17 laid on it in three commits: the plain brain's dead code deleted (b1018a), one module for both
+> hosts (b1018c), and one brain for both modes — the Sudden Death brain priced in life (b1019a), which the
+> owner shelved the same day. `docs/NEW_BOT_BRAIN.md` is the record: the principle, the structure, the
+> reports, the measurements, the pending designs. Nothing here is meant to merge; the live lines carry the
+> first two steps only.
+
 # Gun VS Gun
 
 A fast-paced 1v1 / 2v2 arena prototype with two main modes — **Duel** (single stock) and **Trio** (three-unit rosters). Auto-aim — no manual targeting. The fight is about resource management: when to sprint, when to dodge, when to break line of sight, when to fire.

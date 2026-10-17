@@ -49,7 +49,6 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,                // owner 2026-09-24 (was 4.5): 25 rounds to a full-HP kill instead of 23
     magCapacity: 30,
-    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -85,7 +84,6 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
-    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 },
@@ -156,11 +154,9 @@ export const UNIT_DATA = {
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 3.5,               // 9mm — lightest bullet in the block; the 64ms cadence is her payload
 
     magCapacity: 30,
-    botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
@@ -187,7 +183,6 @@ export const UNIT_DATA = {
     // Weapon spec
     lockRange: 80,
     lockRange2v2: 65,
-    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 600,
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -198,7 +193,6 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 250,
-    botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 7000,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -271,8 +265,6 @@ export const UNIT_DATA = {
     bloomCap: 0.20,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
-    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
     magCapacity: 8,
     reloadMs: 1200,
@@ -318,10 +310,8 @@ export const UNIT_DATA = {
     bloomCap: 0.09,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 4,
     magCapacity: 50,
-    botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
@@ -357,7 +347,6 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
     magCapacity: 25,
-    botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -392,12 +381,9 @@ export const UNIT_DATA = {
     bloomCap: 0.30,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
-    botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     bulletTrail: true,         // client visual only: keeps the smoky bullet trail (the autos have none since 2026-10-14). Here because the online renderer reads this copy of the unit data; the sim ignores it
     damage: 13,               // owner 2026-09-22 (was 10): 8 rounds to a full-HP kill instead of 10
     magCapacity: 30,
-    botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -431,7 +417,6 @@ export const UNIT_DATA = {
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
-    botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
     stun: { ms: 100, moveScale: 0.25 }
@@ -457,7 +442,6 @@ export const UNIT_DATA = {
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 80,
     lockRange2v2: 65,
-    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 600,
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
@@ -469,7 +453,6 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4.5,               // 7.62 chunk — outhits Mika's 9mm (4) per shot; same 600 RPM rhythm
     magCapacity: 100,
-    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
@@ -505,11 +488,9 @@ export const UNIT_DATA = {
     bloomCap: 0.11,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
-    botSuppressBurst: 10,       // bot: rounds fired as one committed suppress burst outside its gate line
     damage: 2.5,               // suppression-first: the 48 ms stun cadence is the payload, not the bullet
 
     magCapacity: 71,
-    botFireCap: 71,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
@@ -583,22 +564,6 @@ export const HIT_RADIUS_NORMAL = 1.6;
 export const HIT_HALF_HEIGHT = 1.6;
 // Standing-target sure-hit numerator (bloom.js): sure-hit distance = SURE_HIT_WIDTH / spread.
 export const SURE_HIT_WIDTH = HIT_RADIUS_NORMAL * 2;
-// Bot fire-gate line (owner 2026-09-22: "33% for the auto weapons, 100% for
-// the semi rifles"; the old burst / rest rhythm stays underneath). An auto
-// weapon's bot keeps firing while the target sits inside the distance where
-// its CURRENT cone still lands one round in three on a STANDING target: the
-// 3.2 x 6.4 capsule is a third of the cone's disc at radius 4.42, so the line
-// is BOT_GATE_WIDTH_AUTO / cone = 2.76x the sure-hit line (Saori at her 0.06 cap:
-// 147; Atsuko at 0.08: 110; Koyuki at 0.12: 74). The marksman rifles gate
-// on the sure-hit line itself (per-unit `botGateWidth: 3.2`). Ported from the demo line 0.8.3 on 2026-09-22 (owner
-// questionnaire); the demo-line duel batches behind the numbers are in that
-// branch's README.
-export const BOT_GATE_WIDTH_AUTO = 8.84;
-// Bot suppressing fire (owner 2026-09-21): an auto weapon whose target sits
-// OUTSIDE its current gate line waits for the cone to fully recover, then
-// fires this many rounds as one committed burst; a unit can override the
-// size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
-export const BOT_SUPPRESS_BURST = 5;
 // Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
 // ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least
 // BLOOM_STILL_DWELL_MS fires without adding bloom, and its bloom recovers

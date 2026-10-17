@@ -1,9 +1,10 @@
 // THE EQUIVALENCE TEST (owner 2026-10-16, "patchless with the same
 // behaviour"): the Sudden Death brain in sdbrain.js must play tick for tick
-// what the frozen reference plays (sdbrain_b1017h_ref.js, the brain as frozen at
-// b1017h — one rule in four parts, the own reaction, the valve — inside the host as
-// frozen at b1018a, ai_b1018a_ref.js; the b1016o reference went with the b1017 rewrite,
-// which alters play by design).
+// what the frozen reference plays (sdbrain_b1019a_ref.js — one rule in four
+// parts, the own reaction, the valve, the price in life — inside the tick and
+// the host as frozen at b1019a: nbrain_b1019a_ref.js, ai_b1019a_ref.js). At
+// 1 HP the b1019a brain plays the b1017h brain's game digit for digit (the
+// proof ran once against the b1018c sim); from here this test is the guard.
 // Two matches are set up alike, every random draw comes from
 // the same seeded stream on each side, and after every tick both fighters'
 // whole state (position, body, boost, ammo and every botSD* scratch field)
@@ -13,7 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1018a_ref.js';
+import { tickBot as tickOld } from './ai_b1019a_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -51,18 +52,18 @@ const firstDiff = (a, b) => {
 
 const SCENARIOS = [
   { mapKey: 'arena1', p1: 'unit1', p2: 'unit2', hp: 1, seed: 11, ticks: 4000 },
-  { mapKey: 'factory', p1: 'unit4', p2: 'unit5', hp: 150, seed: 22, ticks: 2500 },
+  { mapKey: 'factory', p1: 'unit4', p2: 'unit5', hp: 1, seed: 22, ticks: 2500 },
   { mapKey: 'airport', p1: 'unit1', p2: 'unit7', hp: 1, seed: 33, ticks: 4000 },
-  { mapKey: 'station', p1: 'unit2', p2: 'unit4', hp: 150, seed: 44, ticks: 2500 },
+  { mapKey: 'station', p1: 'unit2', p2: 'unit4', hp: 1, seed: 44, ticks: 2500 },
   { mapKey: 'lobby', p1: 'unit5', p2: 'unit1', hp: 1, seed: 55, ticks: 4000 },
-  { mapKey: 'flashpoint', p1: 'unit7', p2: 'unit9', hp: 150, seed: 66, ticks: 2500 },
+  { mapKey: 'flashpoint', p1: 'unit7', p2: 'unit9', hp: 1, seed: 66, ticks: 2500 },
 ];
 
 for (const sc of SCENARIOS) {
   test(`sdbrain equals the frozen brain: ${sc.mapKey} ${sc.p1} vs ${sc.p2} hp ${sc.hp} seed ${sc.seed}`, () => {
     const make = () => {
       const m = createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 });
-      for (const id of ['p1', 'p2']) { m.fighters[id].botSD = true; m.fighters[id].hp = sc.hp; }
+      for (const id of ['p1', 'p2']) m.fighters[id].hp = sc.hp;
       return m;
     };
     const mA = make(), mB = make();

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA, BOT_GATE_WIDTH_AUTO,
-  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire
+  createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA,
+  effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit
 } from '../src/sim/index.js';
 
 const hold = (walk = true) => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; if (walk) i.moveZ = 1; return i; };   // walking: bloom applies
@@ -83,129 +83,11 @@ test('standing still: no bloom per shot, and recovery runs even mid-burst', () =
   void atStop;
 });
 
-test('sure-hit closed form and the bot gate', () => {
+test('sure-hit closed form', () => {
   assert.equal(sureHitDistance(0.02), 160);
   assert.equal(+sureHitDistance(0.06).toFixed(1), 53.3);
   assert.equal(withinSureHit(UNIT_DATA.unit1, 0, 159), true);
   assert.equal(withinSureHit(UNIT_DATA.unit1, 0.04, 60), false);   // M4 at cap: sure-hit 53
   assert.equal(withinSureHit(UNIT_DATA.unit2, 0, 999), true);       // shotgun: pattern, never gated
   assert.equal(withinSureHit(UNIT_DATA.unit3, 0, 999), true);       // sniper: never gated
-});
-
-// Bot harness: p2 is the bot, p1 the pinned target at `dist` units.
-function botRun(botUnit, dist, ms, mode = '1v1') {
-  const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: botUnit, startTime: 1000, mode });
-  const p1 = m.fighters.p1, p2 = m.fighters.p2;
-  p2.pos.x = p1.pos.x + dist; p2.pos.z = p1.pos.z; p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9;
-  p2.botControlled = true;
-  let now = 1000, last = p2.lastFireAt; const fireTimes = [], coneAtFire = [];
-  for (let i = 0; i < ms / TICK_RATE_MS; i += 1) {
-    p1.pos.x = p2.pos.x - dist; p1.pos.z = p2.pos.z; p1.vel.x = 0; p1.vel.z = 0;
-    const cone = effectiveSpread(p2.unit, p2.bloom);
-    tickBot(m, 'p2', now);
-    tickMatch(m, { p1: emptyInput() }, now, TICK_DT, ['p2']);
-    if (p2.lastFireAt !== last) { fireTimes.push(now); coneAtFire.push(cone); last = p2.lastFireAt; }
-    p2.ammo = Math.max(p2.ammo, 2);   // measure the trigger rule, not the reload
-    p2.boost = 0;                     // ...nor the travel sprint: since the 2026-09-29 latch the bot would sprint the teleporting pair into the -x boundary wall by ~4.4 s and lose its shot line
-    now += TICK_RATE_MS;
-  }
-  const gaps = fireTimes.slice(1).map((t, i) => t - fireTimes[i]);
-  return { fireTimes, gaps, coneAtFire };
-}
-
-test('Koyuki bot at 80 u: no gate line in either mode (owner 2026-09-25), so the spray never pauses for the cone', () => {
-  for (const mode of ['1v1', '2v2']) {
-    const { gaps, fireTimes } = botRun('unit12', 80, 8000, mode);
-    assert.ok(fireTimes.length >= 40, mode + ' shots ' + fireTimes.length);
-    assert.deepEqual(gaps.slice(0, 40), Array(40).fill(112), mode);                // with the 33% line this run paused after round 23 (cone 0.1105 at 80 u)
-  }
-});
-
-
-test('evo3 bot at 100 u: the 33% line at its cap (110) is past the target, so the gate never trips and the old burst / rest rhythm runs', () => {
-  const { gaps, fireTimes } = botRun('unit4', 100, 5000);
-  assert.ok(fireTimes.length >= 40, 'shots ' + fireTimes.length);
-  assert.deepEqual(gaps.slice(0, 29), Array(29).fill(64));                         // the whole 30-round fire cap at the 64 ms slot
-  assert.ok(gaps[29] >= 780 && gaps[29] <= 1600, 'old-rhythm rest ' + gaps[29]);  // botFireCap reached: ~0.8-1.5 s rest (no gate hold)
-  assert.deepEqual(gaps.slice(30, 39), Array(9).fill(64));                         // and the next burst
-});
-
-test('gate lines: autos 8.84 / cone (one round in three on a standing target), marksman rifles 3.2 / cone (sure-hit)', () => {
-  assert.equal(BOT_GATE_WIDTH_AUTO, 8.84);
-  assert.equal(UNIT_DATA.unit1.botGateWidth, undefined);                          // autos ride the default
-  assert.equal(UNIT_DATA.unit10.botGateWidth, 3.2);
-  assert.equal(UNIT_DATA.unit7.botGateWidth, 3.2);
-  assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit1, 0.06) - 147.3) < 0.1);       // M4 at cap: 2.76x its 53 sure-hit
-  assert.equal(botGateDistance(UNIT_DATA.unit12, 0.12), Infinity);                   // Koyuki: ungated (botGateWidth 0)
-  assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit10, 0.06) - 53.3) < 0.1);      // M14: sure-hit itself
-  assert.equal(UNIT_DATA.unit13.botSuppressBurst, 10);                            // P90 keeps the 10-round suppress override
-  assert.equal(UNIT_DATA.unit1.botSuppressBurst, undefined);                      // the rifles stay on the 5-round default
-  // suppress bursts for an SMG start only past its base line (8.84 / 0.03 = 295 u)
-  const bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(UNIT_DATA.unit4, bot, 400), true);
-  assert.equal(bot.botSuppressRemaining, 10);
-});
-
-test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so it fires once per full recovery', () => {
-  const { gaps, coneAtFire } = botRun('unit10', 56, 3000);
-  assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
-  for (const g of gaps) assert.ok(g >= 576 && g <= 624, 'gap ' + g);   // 0.1 / 0.17 = 0.59 s
-  for (const c of coneAtFire) assert.equal(c, 0.02);                    // and always from the base cone
-});
-
-test('auto on a recovery hold releases at once when the target closes in', () => {
-  const u = UNIT_DATA.unit13, bot = { bloom: 0.04, botSuppressRemaining: 0, botHoldDist: 0 };   // Marina, cone 0.10 -> 33% line 88.4 (Koyuki carried this test until she lost her gate, 2026-09-25)
-  assert.equal(botMayFire(u, bot, 95), false);            // outside: hold begins, line frozen at 88.4
-  assert.ok(bot.botHoldDist > 88 && bot.botHoldDist < 89);
-  bot.bloom = 0.03;                                       // line drifts out to 98.2 — a static target must NOT release the hold
-  assert.equal(botMayFire(u, bot, 95), false);
-  assert.equal(botMayFire(u, bot, 85), true);             // but a target that closed in past the frozen line does
-  assert.equal(bot.botHoldDist, 0);
-  const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold
-  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
-  assert.ok(m14.botHoldDist > 0);
-  m14.bloom = 0.03;                                       // line back out past the target: still holding
-  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
-  m14.bloom = 0;
-  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), true);
-});
-
-test('botMayFire state machine', () => {
-  const u = UNIT_DATA.unit1, bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(u, bot, 100), true);           // inside the base line (8.84 / 0.02 = 442)
-  bot.bloom = 0.04;                                       // cone 0.06 -> 33% line 147
-  assert.equal(botMayFire(u, bot, 160), false);           // outside, bloom up: hold
-  bot.bloom = 0;
-  assert.equal(botMayFire(u, bot, 500), true);            // outside the base line, recovered: burst starts
-  assert.equal(bot.botSuppressRemaining, 5);
-  bot.bloom = 0.01;
-  assert.equal(botMayFire(u, bot, 500), true);            // committed burst runs on
-  bot.botSuppressRemaining = 0;
-  assert.equal(botMayFire(u, bot, 500), false);           // burst spent, cone up: hold
-  const m14 = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);
-  assert.equal(m14.botSuppressRemaining, 1);
-  assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
-});
-
-test('bot gate — Koyuki and Hina are ungated in both modes (owner 2026-09-25); a 1v1-only width would still be honoured', () => {
-  for (const k of ['unit12', 'unit5']) {
-    const u = UNIT_DATA[k];
-    assert.equal(u.botGateWidth, 0);
-    assert.equal(u.botGateWidth1v1, undefined);
-    for (const mode of ['1v1', '2v2', undefined]) {
-      assert.equal(botGateDistance(u, u.bloomCap, mode), Infinity);
-      const capped = { bloom: u.bloomCap - u.spreadAngle, botSuppressRemaining: 0, botHoldDist: 0 };
-      assert.equal(botMayFire(u, capped, 400, mode), true);          // keeps firing at any range with the cone at its cap
-      assert.equal(capped.botHoldDist, 0);                            // and never enters a hold
-    }
-  }
-  // The per-mode override: a synthetic unit ungated in 1v1 only.
-  const synth = { ...UNIT_DATA.unit1, botGateWidth1v1: 0 };
-  assert.equal(botGateDistance(synth, 0.06, '1v1'), Infinity);
-  assert.ok(Math.abs(botGateDistance(synth, 0.06, '2v2') - 8.84 / 0.06) < 1e-9);
-  // The other autos and the marksman rifles ignore the mode.
-  assert.equal(UNIT_DATA.unit1.botGateWidth1v1, undefined);
-  assert.equal(botGateDistance(UNIT_DATA.unit1, 0.06, '1v1'), botGateDistance(UNIT_DATA.unit1, 0.06, '2v2'));
-  assert.equal(botGateDistance(UNIT_DATA.unit10, 0.06, '1v1'), botGateDistance(UNIT_DATA.unit10, 0.06, '2v2'));
 });

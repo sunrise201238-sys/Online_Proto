@@ -1,7 +1,7 @@
-// THE PLAIN BRAIN'S EQUIVALENCE TEST (owner 2026-10-17, the plain-brain rework: "one place, one
-// structure, patchless", behaviour unchanged until the price goes in): the Health Point brain in
-// ai.js must play tick for tick what the frozen reference plays (ai_b1018a_ref.js, the host as frozen
-// at b1018a — the dead code gone, the brain itself untouched). Two matches are set up alike, every
+// THE HEALTH POINT EQUIVALENCE TEST (owner 2026-10-17, the plain-brain rework: "one brain, two
+// prices"): the one brain in Health Point mode (the price in life: a hit is damage / HP of one) must
+// play tick for tick what the frozen reference plays (ai_b1019a_ref.js with nbrain_b1019a_ref.js and
+// sdbrain_b1019a_ref.js, as frozen at b1019a). Two matches are set up alike, every
 // random draw comes from the same seeded stream on each side, and after every tick both fighters'
 // whole state must agree to the last digit. Any change of logic — an extra random draw, a condition
 // read a tick earlier, a knob renamed — breaks it.
@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1018a_ref.js';
+import { tickBot as tickOld } from './ai_b1019a_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

@@ -36,7 +36,7 @@ import {
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
-import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
+import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
 import { coverDistanceAt } from '@gvg/shared/src/sim/navgrid.js';
 
 const app = document.getElementById('app');
@@ -2202,7 +2202,6 @@ function createMech(color, unitData, isOwnUnit = false) {
       stepToZ: 0,
       queuedMomentumVX: 0,
       queuedMomentumVZ: 0,
-      machineBurstRemaining: 0,
       nextFireAt: 0,
       strafeSign: 1,
       stackUntil: 0,
@@ -2213,8 +2212,6 @@ function createMech(color, unitData, isOwnUnit = false) {
       bloom: 0,               // spread bloom above spreadAngle (shared bloom.js)
       bloomTickAt: 0,         // last offline recovery step (performance.now)
       stillSince: 0,          // grounded standstill stamp (shared bloom.js isStill)
-      botSuppressRemaining: 0, // bot: rounds left in a committed suppress burst outside its gate line
-      botHoldDist: 0,          // bot: gate line frozen when a recovery hold began
       ammo: unitData.magCapacity ?? Infinity,
       reloadingUntil: 0,
       reloadTickStartAt: 0,
@@ -4763,7 +4760,6 @@ function updatePlayer(now) {
       if (action === 'idle') action = 'shoot';
     }
   }
-  state.player.state.machineBurstRemaining = 0;
 
   applyMomentum(state.player, { suspend: action === 'step' });
   const canAttemptMove = moveMag > 0.2 && !hitStunned && !inStep;
@@ -5008,7 +5004,6 @@ function botEnemyView(f) {
 function botCmdView(m) {
   return {
     get hide() { return m.cmdHide; }, set hide(v) { m.cmdHide = v; },
-    get hideAuto() { return m.cmdHideAuto; }, set hideAuto(v) { m.cmdHideAuto = v; },
     get move() { return m.cmdMove; }, set move(v) { m.cmdMove = v; },
     get lockTargetId() { return m.cmdLock; }, set lockTargetId(v) { m.cmdLock = v; }
   };
@@ -5057,19 +5052,18 @@ function updateEnemy(now) {
   }
   const targetId = botMechId(state.player);
   const opp = enemies.find((v) => v.id === targetId) ?? botEnemyView(state.player);
-  // The eye is BOT_LOS_EYE_HEIGHT above the body centre, as online (owner
-  // 2026-10-17; the mirror had it above the ROOT, 2.35 higher). The muzzle
-  // is BOT_MUZZLE_ABOVE_ROOT above the root (root = body + modelYOffset), the
-  // same point as the sim's PROJECTILE_MUZZLE_Y_OFFSET above the body.
+  // The muzzle (the brain's one eye) is BOT_MUZZLE_ABOVE_ROOT above the root
+  // (root = body + modelYOffset), the same point as the sim's
+  // PROJECTILE_MUZZLE_Y_OFFSET above the body.
   const b = mech.body.position;
   const ran = nbBrainTick({
     now, me: eState, pos: { x: b.x, y: b.y, z: b.z }, vel: mech.body.velocity, grounded: mech.grounded, unit: mech.unit ?? {},
     opp, enemies, cmd: botCmdView(mech),
     obstacles: arenaObstacles, surfaces: arenaSurfaces, grid: offlineNavGrid,
-    eyeUp: BOT_LOS_EYE_HEIGHT, muzzleUp: (mech.modelYOffset ?? 2.35) + BOT_MUZZLE_ABOVE_ROOT,
-    mode: state.mode, tickMs: 16,
+    muzzleUp: (mech.modelYOffset ?? 2.35) + BOT_MUZZLE_ABOVE_ROOT,
+    tickMs: 16,
     charging: !!eState.sniperChargeTarget,
-    sd: state.suddenDeathActive ? BOT_SD : null,
+    sd: BOT_SD,
     wall: mech.wallTouch ?? null,   // (physics' note from the last frame — resolveUnitObstacleCollisions)
     clear: botShotCanLand,
     startStep: (dx, dz) => sdBotStartStep(mech, dx, dz, now),
@@ -5087,7 +5081,6 @@ function updateEnemy(now) {
     tape: (row) => { const tape = eState.botSDTape ?? (eState.botSDTape = []); tape.push(row); if (tape.length > 80) tape.splice(0, tape.length - 80); }
   });
   if (ran === 'locked') { updateBoost(mech, now, 'shoot'); return; }
-  if (ran === 'step') return;   // (the step's own boost update ran in botTickStep)
   if (mech.grounded && now > eState.hoverUntil && eState.action !== 'jump') {
     mech.body.velocity.y = 0;
   }
@@ -6659,7 +6652,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1018c';
+const CLIENT_BUILD_TAG = 'b1019a';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10497,8 +10490,8 @@ function commandTargetOf(m) {
 // Reflex layers that outrank a move order for THIS frame (route resumes after).
 function botReflexActive(m, now) {
   const st = m.state;
-  return st.botState === 'defense'
-    || !!st.botCH                          // COVER HIDE (owner 2026-09-26): the hit reflex of an ordered unit
+  return now < (st.botDodgeUntil ?? 0)   // the anti-glint dodge's run
+    || st.botSDReact != null               // THE REACTION, THE RETREAT, an escape's crossing legs
     || st.action === 'step'
     || now < (st.hitStunUntil ?? 0)
     // Sniper charge + sweep channel + a scheduled anti-glint dodge (owner
@@ -10551,7 +10544,6 @@ function dioramaCommandTick() {
     if (!m) continue;
     if (m.state.hp <= 0) {
       clearUnitCommands(m);
-      if (m.state.botHideHold != null) resetBotHideFields(m.state);
       continue;
     }
     if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;

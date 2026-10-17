@@ -13,19 +13,14 @@
 //                 then hold an Engage-style orbit on the CMD_RADIUS ring
 //                 for CMD_ANCHOR_MS before autonomy resumes.
 //   HIDE STANCE — (owner 2026-09-26) cmd.hide: the Hide stance. While it
-//                 stands, tickBot's HIDE block owns the legs (break every
-//                 enemy's line of sight, pace the cover, slip away from a
-//                 closing enemy; fire back only from where it stands — see
-//                 ai.js). setStance(true) wipes the move order and the lock;
-//                 a move order or force lock that LANDS releases the stance
-//                 again (owner 2026-09-26), as do clearCommands and
-//                 setStance(false). A manual reload of BOT_RELOAD_HIDE_MIN_MS
-//                 or more enters it automatically (hideAuto, ai.js tickBot)
-//                 and leaves it when the reload completes; a manual stance or
-//                 a landed order clears hideAuto. tickBot reads
-//                 the flag straight off matchState.commands[slot].hide: this
-//                 module imports ai.js (navGridFor), so ai.js importing
-//                 isHideOrdered back would close an import cycle.
+//                 stands the brain's hold is on (nbrain.js: nothing is
+//                 bought — no attacks, no approach, no relocation; the wait
+//                 in cover and the escape only; it fires back only from
+//                 where it stands). setStance(true) wipes the move order
+//                 and the lock; a move order or force lock that LANDS
+//                 releases the stance again (owner 2026-09-26), as do
+//                 clearCommands and setStance(false). The brain reads the
+//                 flag off its host's cmd entry (matchState.commands[slot]).
 // Combat reflexes always win their frames (commandReflexActive) — the
 // route resumes after them, exactly like offline.
 //
@@ -71,7 +66,7 @@ import { tryStartJump } from './actions.js';
 function commandsFor(matchState, slot) {
   if (matchState.commands == null) matchState.commands = {};
   let cmd = matchState.commands[slot];
-  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false, hideAuto: false };
+  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false };
   return cmd;
 }
 
@@ -94,7 +89,6 @@ export function clearCommands(matchState, slot) {
   cmd.move = null;
   cmd.lockTargetId = null;
   cmd.hide = false;
-  cmd.hideAuto = false;
 }
 
 // Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
@@ -119,7 +113,6 @@ export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
   if (!path) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.hide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
-  cmd.hideAuto = false;
   cmd.move = {
     x: tx, z: tz, y: targetFloorY,
     path, idx: 0,
@@ -165,7 +158,6 @@ export function setForceLock(matchState, slot, targetSlot) {
   const t = matchState.fighters[targetSlot];
   if (!t || t.hp <= 0 || t.team === f.team) return false;
   cmd.hide = false;
-  cmd.hideAuto = false;
   cmd.lockTargetId = targetSlot;
   return true;
 }
@@ -180,7 +172,6 @@ export function setStance(matchState, slot, hide) {
   if (!f || f.hp <= 0) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.hide = !!hide;
-  cmd.hideAuto = false;   // a manual stance, either way, is never released by a reload ending
   if (cmd.hide) {
     cmd.move = null;
     cmd.lockTargetId = null;
@@ -202,7 +193,6 @@ export function commandTargetIdOf(matchState, slot) {
     cmd.lockTargetId = null;
     cmd.move = null;
     cmd.hide = false;
-    cmd.hideAuto = false;
     return null;
   }
   const t = matchState.fighters[cmd.lockTargetId];
@@ -217,8 +207,8 @@ export function commandTargetIdOf(matchState, slot) {
 // resumes after (offline botReflexActive parity, plus the online-only
 // charge/beam locks which hard-zero velocity in the sim).
 function commandReflexActive(f, now) {
-  return f.botState === 'defense'
-    || f.botCH != null                     // COVER HIDE (owner 2026-09-26): the hit reflex of an ordered unit
+  return now < (f.botDodgeUntil ?? 0)    // the anti-glint dodge's run
+    || f.botSDReact != null                // THE REACTION, THE RETREAT, an escape's crossing legs
     || now <= (f.stepUntil ?? 0)
     || now < (f.hitStunUntil ?? 0)
     || f.sniperChargeTargetId != null
@@ -234,7 +224,7 @@ export function tickCommandDriver(matchState, slot, now) {
   const mv = cmd?.move;
   if (!mv) return;
   const f = matchState.fighters[slot];
-  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; cmd.hideAuto = false; return; }
+  if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; return; }
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex (Defense escape, cover hide) may have moved

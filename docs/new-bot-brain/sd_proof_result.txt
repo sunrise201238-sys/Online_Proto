@@ -1,0 +1,11 @@
+sd_proof.mjs, 2026-10-17 — the b1018c sim (Sudden Death brain on by botSD) against the b1019a sim (one brain), 1 HP, 4000 ticks or the first death:
+arena1 unit1 vs unit2: same for 212 ticks
+factory unit4 vs unit5: same for 353 ticks
+airport unit1 vs unit7: same for 888 ticks
+station unit2 vs unit4: same for 935 ticks
+lobby unit5 vs unit1: same for 549 ticks
+flashpoint unit7 vs unit9: same for 721 ticks
+airport unit3 vs unit10: same for 368 ticks
+factory unit6 vs unit1: same for 655 ticks
+8/8 scenarios identical in every observable field and every botSD* field
+(each run ends at the first death; unit3 and unit6 are the snipers)

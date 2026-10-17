@@ -1,5 +1,5 @@
-// THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/nbrain.js (the
-// Health Point brain, with the Sudden Death brain sdbrain.js inside it); this
+// THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/sdbrain.js inside
+// the tick shared/src/sim/nbrain.js (one brain, both modes, both hosts); this
 // file finds the unit and its target, builds the host the brain reads and
 // acts through, and keeps the server's own pieces: the nav-grid cache, the
 // 2v2 target pick, the per-fighter Sudden Death overrides, the hit-stun
@@ -100,11 +100,11 @@ export function tickBot(matchState, botId, now) {
     // imports this module, so importing isHideOrdered back would close a cycle)
     cmd: matchState.commands?.[botId] ?? null,
     obstacles, surfaces, grid: navGridFor(arena),
-    eyeUp: BOT_LOS_EYE_HEIGHT, muzzleUp: PROJECTILE_MUZZLE_Y_OFFSET,
-    mode: matchState.mode, tickMs: TICK_RATE_MS,
+    muzzleUp: PROJECTILE_MUZZLE_Y_OFFSET,
+    tickMs: TICK_RATE_MS,
     charging: !!me.sniperChargeTargetId,
     // Per-fighter overrides (me.botSDOpts) let the harness A/B two rule sets inside one match.
-    sd: me.botSD ? (me.botSDOpts ? { ...BOT_SD, ...me.botSDOpts } : BOT_SD) : null,
+    sd: me.botSDOpts ? { ...BOT_SD, ...me.botSDOpts } : BOT_SD,
     wall: matchState.walls?.[me.id] ?? null,   // (tick.js stage 5)
     clear: makeMuzzleClear(obstacles, surfaces),
     startStep: (dx, dz) => tryStartStep(matchState, me, dx, dz, now, obstacles),

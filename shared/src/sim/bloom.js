@@ -12,7 +12,7 @@
 // Both sims (shared / server and the offline client mirror) use these helpers
 // so the numbers can never drift apart. Everything here is closed-form: no
 // sampling, no per-tick allocation.
-import { SURE_HIT_WIDTH, BOT_GATE_WIDTH_AUTO, BOT_SUPPRESS_BURST, BLOOM_STILL_SPEED, BLOOM_STILL_DWELL_MS } from './constants.js';
+import { SURE_HIT_WIDTH, BLOOM_STILL_SPEED, BLOOM_STILL_DWELL_MS } from './constants.js';
 
 // How much bloom the unit can carry (bloomCap - base). 0 = the gun has no bloom.
 export function bloomMax(unit) {
@@ -59,65 +59,6 @@ export function sureHitDistance(spread) {
 export function withinSureHit(unit, bloom, dist) {
   if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
   return dist <= sureHitDistance(effectiveSpread(unit, bloom));
-}
-
-// Bot fire-gate line for a cone of full angle `spread` (owner 2026-09-22):
-// `botGateWidth` / spread. Autos default to BOT_GATE_WIDTH_AUTO (8.84 — the
-// distance where the cone still lands one round in three on a standing
-// target, 2.76x the sure-hit line); the marksman rifles carry 3.2, the
-// sure-hit line itself.
-// A width of 0 means NO gate line (a 0% hit-rate threshold — the line sits
-// at infinity): the machine guns carry botGateWidth: 0 (owner 2026-09-25).
-// `mode` ('1v1' / '2v2') lets a unit carry a 1v1-only width instead,
-// botGateWidth1v1 (no unit uses it today). Otherwise botGateWidth (3.2 for
-// the marksman rifles) or the autos' 8.84.
-export function botGateDistance(unit, spread, mode) {
-  const width = (mode === '1v1' && unit.botGateWidth1v1 !== undefined)
-    ? unit.botGateWidth1v1
-    : (unit.botGateWidth ?? BOT_GATE_WIDTH_AUTO);
-  if (!(width > 0)) return Infinity;           // 0 = ungated
-  return spread > 0 ? width / spread : Infinity;
-}
-
-// Bot trigger rule (owner 2026-09-21), one call per fire poll. `bot` is the
-// fighter (or the offline mech state) carrying `bloom`,
-// `botSuppressRemaining` and `botHoldDist`; returns true when the bot may pull
-// the trigger now. One rule for every gun:
-//   - A committed suppress burst runs to its end.
-//   - Inside the current sure-hit distance: fire freely.
-//   - Outside it with the cone fully recovered: start a suppress burst of
-//     `botSuppressBurst` rounds (BOT_SUPPRESS_BURST = 5 for the autos, 10 for
-//     the SMGs, 1 for the marksman rifles) and fire.
-//   - Outside it with bloom still up: hold until the cone has fully
-//     recovered — the line drifting back out past a static target does not
-//     release the hold (no one-round trickle) — unless the target closes in
-//     past where the line stood when the hold began, which releases it at
-//     once.
-export function botMayFire(unit, bot, dist, mode) {
-  if (unit.spreadCount !== 1 || unit.sniperCharge) return true;
-  if (bot.botSuppressRemaining > 0) return true;
-  if (bot.botHoldDist > 0) {
-    if (bot.bloom > 0 && dist > bot.botHoldDist) return false;
-    bot.botHoldDist = 0;                       // recovered, or the target closed in
-  }
-  const cone = effectiveSpread(unit, bot.bloom);
-  const line = botGateDistance(unit, cone, mode);   // 33%-hit line (autos) / sure-hit line (marksman rifles) / none (MGs in 1v1)
-  if (dist <= line) return true;
-  if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.botSuppressBurst ?? BOT_SUPPRESS_BURST; return true; }
-  bot.botHoldDist = line;                      // freeze where the line stood
-  return false;
-}
-
-// Call after a bot shot actually spawned: consumes one round of a running
-// suppress burst.
-export function botNoteShot(bot) {
-  if (bot.botSuppressRemaining > 0) bot.botSuppressRemaining -= 1;
-}
-
-// Abort any suppress burst / recovery hold (target lost, reload, immunity).
-export function botClearFireRule(bot) {
-  bot.botSuppressRemaining = 0;
-  bot.botHoldDist = 0;
 }
 
 // Standing-still tracking (owner 2026-09-21). Call once per tick with the

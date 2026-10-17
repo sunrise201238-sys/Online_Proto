@@ -82,10 +82,7 @@ export function createFighter(id, unitKey, spawn) {
     lastFireAt: 0,
     bloom: 0,                 // spread bloom carried above spreadAngle (bloom.js)
     stillSince: 0,            // when the fighter last came to a grounded stop (0 = moving); bloom.js isStill
-    botSuppressRemaining: 0,  // bot: rounds left in a committed out-of-sure-hit suppress burst
-    botHoldDist: 0,           // bot (autos): sure-hit line frozen when a recovery hold began, 0 = no hold
     nextFireAt: 0,
-    machineBurstRemaining: 0,
     strafeSign: 1,
 
     // Ammo / reload.
@@ -366,11 +363,11 @@ export function buildSnapshotFor(state, viewerTeam) {
     const f = state.fighters[id];
     if (!viewerTeam || f.team === viewerTeam) {
       // Own team keeps its bot-intent fields (the command UI reads them) —
-      // but not the Sudden Death brain's scratch (botSD*: ~50 fields with
+      // but not the brain's scratch (botSD*: ~50 fields with
       // route and avoid-mark arrays, no reader on the client; owner
       // 2026-10-07 "online SD is very lag": they added 1.8 KB to every
       // snapshot of a team with a bot, 110 KB/s per client at 62.5 Hz).
-      if (!f.botSD) { fighters[id] = f; continue; }
+      if (!f.botControlled) { fighters[id] = f; continue; }
       const own = {};
       for (const k in f) if (!k.startsWith('botSD')) own[k] = f[k];
       fighters[id] = own;
