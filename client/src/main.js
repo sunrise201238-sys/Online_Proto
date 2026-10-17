@@ -1090,14 +1090,6 @@ function botTravelSprint(s) {
   else if (s.boost <= BOT_TRAVEL_SPRINT_FLOOR) s.botPursueSprinting = false;
   return !!s.botPursueSprinting;
 }
-// Projectiles are near-hitscan (500-800 u/s), so a round in flight can't be
-// reacted to — the bot reacts to the enemy *firing* instead. Treat the enemy
-// as "shooting at me" for this long after their last shot, which covers the
-// MG's fast cadence and bridges the gaps between rounds in a burst.
-const BOT_FIRE_REACT_MS = 280;
-// Cover-seek: how far to look for an obstacle to hide behind, how hard to
-// steer toward it, and the largest obstacle footprint still treated as cover
-// (anything bigger is an arena boundary wall, which can't be flanked — skip).
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
@@ -1117,9 +1109,6 @@ const BOT_GLINT_REACT_UNLOCKED_MS = 400;
 const BOT_GLINT_REACT_SLOW_MS = 800;        // anti-Aru slow roll
 const BOT_GLINT_REACT_SLOW_BEAM_MS = 900;   // anti-Kei slow roll
 const BOT_GLINT_REACT_FAST_CHANCE = 0.5;
-// No clear line to the player for this long => enter "dire search": drop all
-// range discipline and beeline to the player until a clear line is regained.
-const BOT_DIRE_SEARCH_MS = 4000;
 
 const input = {
   x: 0,
@@ -4843,7 +4832,6 @@ function updatePlayer(now) {
 // Tunables shared across the bot's situational checks. Sized so the avoidance
 // vector is felt without overwhelming the player-tracking direction.
 const BOT_OBSTACLE_AVOID_RADIUS = 7;
-const BOT_OBSTACLE_AVOID_WEIGHT = 1.8;
 // After a stuck event, remember the pinned spot for this long and bias
 // movement away from it so the bot picks a different route around the wall
 // instead of grinding into the same corner. Radius caps the influence so
@@ -4955,19 +4943,12 @@ const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
-// STATION-SPECIFIC BOT RULES master switch (2026-08-05): HIDDEN, not
-// deleted — the deck-spawn experiment runs with these off. Flip to true to
-// re-enable the station perch pull, low-level discouragement dwell, mount
-// hold, and descent suppression in one move. Mirrored in shared ai.js.
-const STATION_BOT_RULES = false;
 const BOT_LEDGE_JUMP_REACH = 4.5;
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
 // How far past a surface edge to sample when testing whether stepping off it
 // actually drops to lower ground (vs. running straight into a wall).
 const BOT_DESCENT_PROBE = 3;
-// Weight of the ledge-seek steering when blended into the kiting vector.
-const BOT_ELEV_STEER_WEIGHT = 2.4;
 // How long after an elevation jump the bot keeps driving toward the ledge so
 // the arc lands where it was aimed instead of drifting off on the kiting
 // vector. Covers the longest arc (a drop off high ground, ~0.85 s airborne).
@@ -5737,10 +5718,9 @@ function updateEnemy(now) {
   //                           enemy than the unit stands now);
   //   exposed              -> follow / search a findHiddenSpot route to the
   //                           nearest cell no enemy sees, live and predicted
-  //                           eyes first (tier 'all'), then live only, then
-  //                           a cell the NEAREST enemy cannot see (tier
-  //                           'nearest'); still none -> the plain pursue
-  //                           legs move it while the search retries.
+  //                           eyes first, then live only; still none -> the
+  //                           plain pursue legs move it while the search
+  //                           retries.
   // Firing is untouched: the fire block at the bottom still shoots whatever
   // it can see from where the unit stands — the unit never moves for a
   // shot. Defense never triggers on a hit (state transition below; hit-stun
@@ -5827,11 +5807,10 @@ function updateEnemy(now) {
         if (botHasLineOfSight(hidePredEyes[k], hideMyEye)) { exposedSoon = true; break; }
       }
     }
-    // Is a route goal still hidden at its tier (live eyes)? (<= 2 LoS tests)
-    const hideGoalStillHidden = (goal, tier) => {
+    // Is a route goal still hidden from the live eyes?
+    const hideGoalStillHidden = (goal) => {
       const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: goal.z };
-      const count = tier === 'nearest' ? 1 : hideEyes.length;
-      for (let k = 0; k < count; k += 1) {
+      for (let k = 0; k < hideEyes.length; k += 1) {
         if (botHasLineOfSight(hideEyes[k], gEye)) return false;
       }
       return true;
@@ -5850,7 +5829,7 @@ function updateEnemy(now) {
       if (Math.hypot(goal.x - e.x, goal.z - e.z) < 2) {
         hideDropPath();
         eState.botHideAnchor = null;
-      } else if (!hideGoalStillHidden(goal, eState.botHideTier)) {
+      } else if (!hideGoalStillHidden(goal)) {
         hideDropPath();
       }
     }
@@ -5861,10 +5840,6 @@ function updateEnemy(now) {
     if (!hiddenAll) {
       if (hidePredEyes.length) hideAttempts.push({ eyes: hideEyes.concat(hidePredEyes), tier: 'all', minDistFrom: null });
       hideAttempts.push({ eyes: hideEyes, tier: 'all', minDistFrom: null });
-      // The 'nearest' tier only when the unit is NOT already hidden from
-      // the nearest enemy — from a nearest-tier hide that search would just
-      // re-issue the next nearest-hidden cell every cadence and the unit
-      // would shuffle between neighbours instead of pacing its cover.
     }
     if (!hiddenAll && hideMode === 'cover' && eState.botCH.within) {
       // COVER HIDE first tier: cover inside the order's area, ahead of the
@@ -5964,15 +5939,13 @@ function updateEnemy(now) {
     } else if (hideTier) {
       // PACE the cover. A leg is a BOT_HIDE_LEG step that must (a) stay on
       // the leash, (b) be walkable and (c) keep the unit's eye hidden from
-      // every eye of its tier — the predicted eyes too when possible (pass
-      // 0), live eyes only as the fallback (pass 1). The current leg is
+      // every eye — the predicted eyes too when possible (pass 0), live
+      // eyes only as the fallback (pass 1). The current leg is
       // re-checked against the live eyes every tick and re-picked at
       // BOT_HIDE_DRIFT_MS: 8 headings from a random phase, scored away from
       // the nearest enemy with a little continuity and noise so the pacing
       // reads as a person, not a metronome. No hidden leg at all (a tight
       // nook) -> stand for BOT_HIDE_DRIFT_RETRY_MS, then try again.
-      const paceEyes = hideTier === 'all' ? hideEyes : hideEyes.slice(0, 1);
-      const pacePred = hideTier === 'all' ? hidePredEyes : [];
       if (!eState.botHideAnchor) eState.botHideAnchor = { x: e.x, z: e.z };
       const anchor = eState.botHideAnchor;
       const legOk = (hx, hz, strict) => {
@@ -5980,8 +5953,8 @@ function updateEnemy(now) {
         if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
         if (walkSegmentBlocked(e.x, e.z, lx, lz, eBodyY, arenaObstacles)) return false;
         const eye = { x: lx, y: myEyeY, z: lz };
-        for (let k = 0; k < paceEyes.length; k += 1) if (botHasLineOfSight(paceEyes[k], eye)) return false;
-        if (strict) for (let k = 0; k < pacePred.length; k += 1) if (botHasLineOfSight(pacePred[k], eye)) return false;
+        for (let k = 0; k < hideEyes.length; k += 1) if (botHasLineOfSight(hideEyes[k], eye)) return false;
+        if (strict) for (let k = 0; k < hidePredEyes.length; k += 1) if (botHasLineOfSight(hidePredEyes[k], eye)) return false;
         return true;
       };
       let hx = eState.botHideDriftX ?? 0, hz = eState.botHideDriftZ ?? 0;
@@ -6544,23 +6517,10 @@ function updateEnemy(now) {
           && dist < 32 && Math.random() > 0.5) {
         if (botStartJump(now)) jumpThisTick = true;
       } else if (onHighGround) {
-        // STATION MOUNT HOLD (map-keyed, 2026-08-05): for a beat after a
-        // fresh mount, skip the descent aid so the bot doesn't yo-yo right
-        // back down — the 22-wide track corridor keeps the firing band
-        // valid from the deck edge, so hopping down to close a small gap
-        // is a needless descent. EXCEPTIONS that still descend: sight lost,
-        // or the target pulled well past the band (those need the chase).
-        // Mirrored in shared/src/sim/ai.js.
-        const holdUp = STATION_BOT_RULES && state.mapKey === 'station'
-          && now < (eState.botMountHoldUntil ?? 0)
-          && playerHasLoS
-          && dist < upperRange + 12;
-        if (!holdUp) {
-          const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
-          if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
-            jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-            if (botStartJump(now)) jumpThisTick = true;
-          }
+        const exit = findDescentDirection(e.x, e.z, myFloorY, dir.x, dir.z);
+        if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
+          jumpDirX = exit.toX; jumpDirZ = exit.toZ;
+          if (botStartJump(now)) jumpThisTick = true;
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
@@ -6570,27 +6530,7 @@ function updateEnemy(now) {
         const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botStartJump(now)) {
-            jumpThisTick = true;
-            // STATION MOUNT HOLD: see the onHighGround branch above.
-            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
-          }
-        } else if (STATION_BOT_RULES && state.mapKey === 'station' && perch
-            && (perch.toX * dir.x + perch.toZ * dir.z > 0.2 || perch.dist < 12)) {
-          // STATION-ONLY PERCH PULL (map-keyed, 2026-08-05 user order):
-          // on this one map the decks are the strong positions but they're
-          // jump-only (no ramps, so paths never cross them) — steer the
-          // approach toward a scanned ledge that's roughly ON THE WAY
-          // (within ~78° of the target direction, or already close — 12 covers
-          // the track corridor half-width), and the jump above fires when it
-          // comes into reach. Weight 0.6
-          // keeps the target-pull dominant; every other map skips this
-          // branch entirely (behavior byte-identical elsewhere).
-          // Mirrored in shared/src/sim/ai.js.
-          const tx = mx + perch.toX * 0.6;
-          const tz = mz + perch.toZ * 0.6;
-          const tl = Math.hypot(tx, tz) || 1;
-          mx = tx / tl; mz = tz / tl;
+          if (botStartJump(now)) jumpThisTick = true;
         }
       }
     }
@@ -6786,32 +6726,6 @@ function updateEnemy(now) {
       mx = rx / rl; mz = rz / rl;
     }
 
-    // STATION LOW-LEVEL DISCOURAGEMENT (map-keyed, 2026-08-05 user order):
-    // fighting on the track level is tolerated only briefly. After ~3 s of
-    // continuous Engage time down there, a ramping pull (0 → 0.6 over the
-    // next 3 s; the orbit/range discipline stays dominant) drifts the bot
-    // toward the nearest mountable deck edge, and the perch jump below
-    // completes the mount. Short exchanges and transit are untouched; the
-    // continuity check restarts the clock after any gap (state change,
-    // death, leaving the low floor). Other maps skip all of it.
-    // Mirrored in shared/src/sim/ai.js.
-    if (STATION_BOT_RULES && state.mapKey === 'station' && !onHighGround) {
-      const cont = now - (eState.botLowDwellTickAt ?? 0) < 250;
-      eState.botLowDwellTickAt = now;
-      if (!cont || eState.botLowDwellSince == null) eState.botLowDwellSince = now;
-      const dwell = now - eState.botLowDwellSince;
-      if (dwell > 3000) {
-        const deck = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
-        if (deck) {
-          const w = Math.min(0.6, ((dwell - 3000) / 3000) * 0.6);
-          const px2 = mx + deck.toX * w;
-          const pz2 = mz + deck.toZ * w;
-          const pl = Math.hypot(px2, pz2) || 1;
-          mx = px2 / pl; mz = pz2 / pl;
-        }
-      }
-    }
-
     // On low ground? Hop onto any reachable platform — high ground is the
     // better engagement / vantage spot on Station-like maps. Doesn't override
     // the orbit (just adds a jump when the chance is there); the jump cooldown
@@ -6820,13 +6734,7 @@ function updateEnemy(now) {
       const perch = findHighGroundPerch(e.x, e.z, myFloorY, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botStartJump(now)) {
-          jumpThisTick = true;
-          // STATION MOUNT HOLD: a fresh mount suppresses the pursue descent
-          // aid for a beat (see onHighGround branch) so the bot doesn't
-          // yo-yo straight back down.
-          if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
-        }
+        if (botStartJump(now)) jumpThisTick = true;
       }
     }
 
@@ -6892,8 +6800,6 @@ function updateEnemy(now) {
           if (botStartJump(now, true)) {
             jumpThisTick = true;
             eState.botDefenseStuckTicks = 0;
-            // STATION MOUNT HOLD: an escape mount also holds the deck.
-            if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
           }
         }
       }
@@ -6926,8 +6832,6 @@ function updateEnemy(now) {
             if (botStartJump(now, true)) {
               jumpThisTick = true;
               vaulted = true;
-              // STATION MOUNT HOLD: an escape mount also holds the deck.
-              if (STATION_BOT_RULES && state.mapKey === 'station') eState.botMountHoldUntil = now + 7000;
               eState.botDefenseStuckTicks = 0;
             }
           }
@@ -7018,8 +6922,6 @@ function updateEnemy(now) {
     }
     eState.action = 'idle';
   }
-
-  if (dist > 14 && Math.random() > 0.9) eState.evadeHomingUntil = now + 90;
 
   // --- Firing: LoS-aware + universal burst sizing ---
   // Skip firing entirely if line of sight is blocked — there's no point
@@ -8694,7 +8596,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1017h';
+const CLIENT_BUILD_TAG = 'b1018a';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
