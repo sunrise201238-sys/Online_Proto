@@ -26,22 +26,20 @@
 // between two cell centers cannot slip through.
 
 import {
-  surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
-  groundHeightAt, obstaclesNearSegment
-} from './physics.js';
-import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT } from './constants.js';
+  walkFloorTo, surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
+  groundHeightAt, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
+import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN } from './constants.js';
 
 const CELL = 4;
-// Max floor rise between adjacent samples. SURFACE_STEP_HEIGHT is 1.6 and a
-// 4-unit cell on the steepest shipped ramp (Airport: 10 long, 4 rise) steps
-// exactly 1.6 — the slack absorbs float error at that boundary.
-const MAX_STEP = 1.7;
+// Max floor rise between adjacent samples: the sim's step plus slack for float
+// error at the boundary (a 4-unit cell on the steepest shipped ramp, Airport's
+// 10 long 4 rise, steps exactly the old 1.6).
 const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 
 // ===== LAYERS ==========================================================
 // A candidate standing height becomes its own layer only when the next
 // surface above it is more than LAYER_MIN_GAP up. Below that the sim's own
-// step rule (SURFACE_STEP_HEIGHT 1.6) simply walks the unit onto the higher
+// step rule (SURFACE_STEP_HEIGHT) simply walks the unit onto the higher
 // surface, so the two heights are the SAME standing level — that is what
 // keeps kerbs, sidewalks and Station's platform lips from doubling every
 // cell. LAYER_CAP bounds the arrays on pathological geometry; no shipped map
@@ -116,45 +114,38 @@ export function buildNavGrid(obstacles, surfaces) {
     return s === -Infinity ? 0 : s;
   };
   const fitsAt = (x, z, fy) => !unitOverlapsObstacle(x, fy + GROUND_BASE_Y, z, obstacles);
-  // Every distinct standing height at (x, z): base ground plus each surface
-  // covering the point, ascending, deduped.
+  // Every distinct standing height at (x, z): each surface covering the point,
+  // and the street (0) where no surface lies within a step of it — the sim's
+  // own ground rule (groundHeightAt), so the grid stands the bot where the sim
+  // does. Ascending, deduped.
+  const _floorScratch = [];
   const candidateFloors = (x, z) => {
-    const hs = [0];
-    for (let k = 0; k < surfaces.length; k += 1) {
-      const s = surfaces[k];
+    const hs = [];
+    const near = obstaclesNearPoint(surfaces, x, z, 0, _floorScratch);   // (the broadphase: the surfaces whose box can cover the point; sorted below, so the same list)
+    for (let k = 0; k < near.length; k += 1) {
+      const s = near[k];
       if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
       const h = s.heightAt ? s.heightAt(x, z) : (s.top ?? s.maxTop);
       if (h == null || !Number.isFinite(h)) continue;
       hs.push(h);
     }
+    if (!hs.some((h) => h <= SURFACE_STEP_HEIGHT)) hs.push(0);   // (the street, where nothing lies on it; a slab higher than a step is a floor over the street, not instead of it)
     hs.sort((a, b) => a - b);
     const out = [];
     for (const h of hs) if (!out.length || h - out[out.length - 1] > 0.05) out.push(h);
     return out;
   };
   // The standing height a walk between two levels passes through at the
-  // midpoint: the candidate nearest the midpoint of the two floors. Ties
-  // prefer the HIGHER candidate, which is what v1's "top surface" midpoint
-  // probe returned — that is the parity hinge for single-layer maps.
-  const midFloorOf = (cands, fa, fb) => {
-    const target = (fa + fb) / 2;
-    let best = target, bestD = Infinity;
-    for (let k = 0; k < cands.length; k += 1) {
-      const d = Math.abs(cands[k] - target);
-      if (d <= bestD) { bestD = d; best = cands[k]; }
-    }
-    return best;
-  };
-  // Where the SIM would stand a unit that walks into (x, z) with its feet at
-  // `fromFloor` — the same step rule movement uses. This is what stops the
-  // layer split from inventing space: under the low end of a ramp the body
-  // does fit and the gap to the slab above passes LAYER_MIN_GAP, but a unit
-  // walking in from the open floor is STEPPED UP onto the ramp and can never
-  // stand there. Requiring both directions of an edge to agree deletes those
-  // phantom nodes' only connections, and the sealed-void pass then prunes
-  // them. The +0.1 keeps the 1.6 step rule's float slack aligned with
-  // MAX_STEP 1.7, so single-layer maps keep v1's edges exactly.
-  const arriveFloor = (x, z, fromFloor) => groundHeightAt(x, z, surfaces, fromFloor + 0.1);
+  // An edge is a WALK edge when a body walking it (walkFloorTo: the sim's step
+  // rule every unit of the way) arrives on the far node's floor, from both
+  // ends. This is what stops the layer split from inventing space: under the
+  // low end of a ramp the body does fit and the gap to the slab above passes
+  // LAYER_MIN_GAP, but a unit walking in from the open floor is STEPPED UP
+  // onto the ramp and can never stand there — its only connections fail and
+  // the sealed-void pass prunes it. And a rise the body climbs step by step
+  // (a kerb's 45-degree ramp, a flight of steps) is a walk edge however much
+  // it rises over the cell, where the floor difference between the two node
+  // centres called it a jump (b1021s).
 
   // --- Layer discovery ---
   const cellLayers = new Array(n);
@@ -222,6 +213,7 @@ export function buildNavGrid(obstacles, surfaces) {
   // layers^2 times per cell and cost Station ~600 ms extra at build.
   const arriveInto = new Float32Array(layers);
   const arriveBack = new Float32Array(layers);
+  const midInto = new Float32Array(layers);   // (the floor the walk stands on at the edge's midpoint: the headroom test's)
   for (let r = 0; r < rows; r += 1) {
     for (let c = 0; c < cols; c += 1) {
       const i = r * cols + c;
@@ -235,23 +227,21 @@ export function buildNavGrid(obstacles, surfaces) {
         if (!cellLayers[j].length) continue;
         const bx = east ? x + CELL : x, bz = east ? z : z + CELL;
         const mx = east ? x + CELL / 2 : x, mz = east ? z : z + CELL / 2;
-        const cands = candidateFloors(mx, mz);
         for (let l = 0; l < layers; l += 1) {
-          arriveInto[l] = walk[l * n + i] ? arriveFloor(bx, bz, floor[l * n + i]) : NaN;
-          arriveBack[l] = walk[l * n + j] ? arriveFloor(x, z, floor[l * n + j]) : NaN;
+          arriveInto[l] = walk[l * n + i] ? walkFloorTo(x, z, floor[l * n + i], bx, bz, surfaces) : NaN;
+          arriveBack[l] = walk[l * n + j] ? walkFloorTo(bx, bz, floor[l * n + j], x, z, surfaces) : NaN;
+          midInto[l] = walk[l * n + i] ? walkFloorTo(x, z, floor[l * n + i], mx, mz, surfaces) : NaN;
         }
         for (let la = 0; la < layers; la += 1) {
           const a = la * n + i;
           if (!walk[a]) continue;
           for (let lb = 0; lb < layers; lb += 1) {
             const b = lb * n + j;
-            if (!walk[b] || Math.abs(floor[a] - floor[b]) > MAX_STEP) continue;
-            // Both directions must land on each other's level (see arriveFloor).
+            if (!walk[b]) continue;
+            // Both directions must arrive on each other's level, walking (see walkFloorTo).
             if (Math.abs(arriveInto[la] - floor[b]) > 0.05) continue;
             if (Math.abs(arriveBack[lb] - floor[a]) > 0.05) continue;
-            const mfy = midFloorOf(cands, floor[a], floor[b]);
-            if (Math.abs(mfy - floor[a]) <= MAX_STEP && Math.abs(mfy - floor[b]) <= MAX_STEP
-                && fitsAt(mx, mz, mfy)) {
+            if (fitsAt(mx, mz, midInto[la])) {
               if (east) edgeE[(la * layers + lb) * n + i] = 1;
               else edgeS[(la * layers + lb) * n + i] = 1;
             }
@@ -338,7 +328,7 @@ export function buildNavGrid(obstacles, surfaces) {
   // works (ramped plateaus, flat maps) produces ZERO links, so existing
   // routes stay byte-identical. Links are bidirectional — traversed upward
   // the path-follower jumps; downward it simply walks off the ledge.
-  const JUMP_MIN = 1.7;
+  const JUMP_MIN = JUMP_RISE_MIN;
   const JUMP_MAX = 4.8;
   // ==== SAME-COMPONENT SHORTCUT LINKS (2026-07-12) ====================
   // REVERSIBILITY SWITCH: set to false to restore the pre-change builder
@@ -501,6 +491,9 @@ function forEachNeighbor(grid, node, visit) {
   const jl = grid.jumpAdj ? grid.jumpAdj.get(node) : null;
   if (jl) for (const nb of jl) visit(nb, JUMP_LINK_COST);
 }
+// Does a WALK edge join a to b? The path builders flag the node a jump link leads to (`jump`): the follower
+// vaults toward that waypoint, and toward no other — a slope or a kerb's ramp the body walks is a walk edge.
+function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, (nb) => { if (nb === b) yes = true; }); return yes; }
 
 const nodeCenterX = (grid, node) => grid.minX + (((node % grid.n) % grid.cols) + 0.5) * grid.cell;
 const nodeCenterZ = (grid, node) => grid.minZ + ((((node % grid.n) / grid.cols) | 0) + 0.5) * grid.cell;
@@ -632,22 +625,21 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
 
   const pts = [];
   for (let i = goal; i !== -1; i = parent[i]) {
-    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i] });
+    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
   }
   pts.reverse();
   return collapseWaypoints(pts);
 }
 
 // Collapse straight runs — fewer waypoints, smoother following. NEVER
-// collapses across a floor jump (a jump-link crossing): the follower needs
-// the waypoint on each side of the ledge to know where to vault.
+// collapses across a jump link (the node it leads to is flagged `jump`): the
+// follower needs the waypoint on each side of the ledge to know where to vault.
 function collapseWaypoints(pts) {
   if (pts.length < 3) return pts;
   const out = [pts[0]];
   for (let k = 1; k < pts.length - 1; k += 1) {
     const a = out[out.length - 1], b = pts[k], c2 = pts[k + 1];
-    const floorJump = Math.abs((b.y ?? 0) - (a.y ?? 0)) > 1.7
-      || Math.abs((c2.y ?? 0) - (b.y ?? 0)) > 1.7;
+    const floorJump = !!(b.jump || c2.jump);
     const cross = (b.x - a.x) * (c2.z - b.z) - (b.z - a.z) * (c2.x - b.x);
     if (!floorJump && Math.abs(cross) < 1e-6) continue;
     out.push(b);
@@ -724,6 +716,7 @@ export function smoothPath(grid, path, obstacles) {
     let best = a + 1;
     const bMax = Math.min(path.length, a + 13);
     for (let b = a + 2; b < bMax; b += 1) {
+      if (path[b].jump) break;   // (never a chord across a jump link)
       if (Math.abs((path[b].y ?? 0) - (path[a].y ?? 0)) > 0.5) break;
       if (!clearLeg(path[a], path[b])) break;
       best = b;
@@ -852,7 +845,7 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     if (goal < 0) return null;
     const pts = [];
     for (let i = goal; i !== -1; i = parent[i]) {
-      pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i] });
+      pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
     }
     pts.reverse();
     return collapseWaypoints(pts);
@@ -1221,7 +1214,7 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   if (goal < 0) return null;
   const pts = [];
   for (let i = goal; i !== -1; i = parent[i]) {
-    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i] });
+    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
   }
   pts.reverse();
   let path = collapseWaypoints(pts);

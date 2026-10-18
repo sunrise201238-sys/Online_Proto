@@ -3,9 +3,7 @@
 // client/src/main.js. Operates on plain {x,y,z} POJOs and obstacle/surface
 // arrays — no THREE or cannon involvement.
 
-import { FIGHTER_RADIUS, GROUND_BASE_Y } from './constants.js';
-
-const SURFACE_STEP_HEIGHT = 1.6;
+import { FIGHTER_RADIUS, GROUND_BASE_Y, SURFACE_STEP_HEIGHT } from './constants.js';
 
 // Slab method — does the segment p0→p1 (t in [0,1]) intersect the AABB o?
 // Used to catch fast/homing projectiles that would tunnel through obstacles
@@ -111,6 +109,9 @@ const BROADPHASE_CELL = 24;
 const BROADPHASE_MIN_OBSTACLES = 24;   // below this, brute force is already optimal
 const _gridCache = new WeakMap();
 const _bpScratch = [];
+const _bpIndex = [];
+const _gndScratch = [];   // (the ground lookups' own list: they are called from inside loops over the other one)
+const _ovlScratch = [], _resScratch = [];   // (the body's own box tests' lists, for the same reason)
 
 function buildObstacleGrid(obstacles) {
   let minX = Infinity;
@@ -146,7 +147,7 @@ function buildObstacleGrid(obstacles) {
   return { minX, minZ, cols, rows, cells, seen: new Float64Array(obstacles.length), stamp: 0 };
 }
 
-export function obstaclesNearSegment(obstacles, p0, p1) {
+function obstacleGridFor(obstacles) {
   let grid = _gridCache.get(obstacles);
   // (SD proto: the offline client refills ONE obstacles array per map, so an
   // identity-keyed cache must also check that the contents are the ones it
@@ -156,6 +157,11 @@ export function obstaclesNearSegment(obstacles, p0, p1) {
     if (grid) { grid.len = obstacles.length; grid.first = obstacles[0]; grid.last = obstacles[obstacles.length - 1]; }
     _gridCache.set(obstacles, grid);
   }
+  return grid;
+}
+
+export function obstaclesNearSegment(obstacles, p0, p1) {
+  const grid = obstacleGridFor(obstacles);
   if (grid === null) return obstacles;
   // Same `/ BROADPHASE_CELL` floor math as the build pass — build and query
   // must bucket identically or an on-boundary obstacle could be missed.
@@ -194,6 +200,48 @@ export function obstaclesNearSegment(obstacles, p0, p1) {
   return _bpScratch;
 }
 
+// The same broadphase for a POINT with a reach: every obstacle whose box can come
+// within r of (x, z) overlaps a cell the square [x - r, x + r] x [z - r, z + r]
+// touches, so those cells hold a superset; the caller's exact test decides.
+export function obstaclesNearPoint(obstacles, x, z, r, out = _bpScratch) {
+  const grid = obstacleGridFor(obstacles);
+  if (grid === null) return obstacles;
+  grid.stamp += 1;
+  const stamp = grid.stamp;
+  out.length = 0;
+  const cs = BROADPHASE_CELL;
+  const c0 = Math.max(0, Math.floor((x - r - grid.minX) / cs)), c1 = Math.min(grid.cols - 1, Math.floor((x + r - grid.minX) / cs));
+  const r0 = Math.max(0, Math.floor((z - r - grid.minZ) / cs)), r1 = Math.min(grid.rows - 1, Math.floor((z + r - grid.minZ) / cs));
+  _bpIndex.length = 0;
+  for (let rr = r0; rr <= r1; rr += 1) {
+    for (let c = c0; c <= c1; c += 1) {
+      const cell = grid.cells[rr * grid.cols + c];
+      if (cell === null) continue;
+      for (let k = 0; k < cell.length; k += 1) {
+        const idx = cell[k];
+        if (grid.seen[idx] === stamp) continue;
+        grid.seen[idx] = stamp;
+        _bpIndex.push(idx);
+      }
+    }
+  }
+  // in the list's own order: a caller that SUMS over the candidates (the steering's pushes) adds the same
+  // numbers in the same order as a full scan would, so its floating point comes out identical
+  _bpIndex.sort((a, b) => a - b);
+  for (let k = 0; k < _bpIndex.length; k += 1) out.push(obstacles[_bpIndex[k]]);
+  return out;
+}
+
+// Does a box hold a body whose centre is at height y? Not when the body is 2 or more under its bottom (it
+// passes beneath), nor over its top by more than its topBuffer (4 for a wall) — nor, for a box whose top is a
+// floor (floorTop, arena.js: a surface lies on it), when the body's feet are within SURFACE_STEP_HEIGHT of that
+// top: the ground rule (groundHeightAt) steps the body onto the floor, so the box lets it come. The one window the
+// movement's push-out, the overlap test, the walk test and the bots' steering use.
+export function boxHoldsAt(o, y) {
+  if (y < o.minY - 2 || y > o.maxY + (o.topBuffer ?? 4)) return false;
+  return !(o.floorTop && y - GROUND_BASE_Y + SURFACE_STEP_HEIGHT >= o.maxY);
+}
+
 // Does the horizontal segment (x0,z0)→(x1,z1), walked at body-center height
 // `y`, cross any obstacle a unit cannot WALK through? Uses the same y-window
 // as unitOverlapsObstacle (topBuffer semantics) — a 2.4-high belt blocks
@@ -206,7 +254,7 @@ export function walkSegmentBlocked(x0, z0, x1, z1, y, obstacles) {
   const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });
   for (let i = 0; i < cand.length; i += 1) {
     const o = cand[i];
-    if (y < o.minY - 2 || y > o.maxY + (o.topBuffer ?? 4)) continue;
+    if (!boxHoldsAt(o, y)) continue;
     // (two slabs, unrolled with no per-call arrays — see segmentHitsObstacle)
     let tMin = 0, tMax = 1, miss = false;
     let start = x0, delta = x1 - x0, lo = o.minX, hi = o.maxX;
@@ -238,10 +286,11 @@ export function walkSegmentBlocked(x0, z0, x1, z1, y, obstacles) {
 
 // Does a fighter's bounding cylinder at (x, y, z) overlap any AABB obstacle?
 export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS) {
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const o = obstacles[i];
-    const topBuffer = o.topBuffer ?? 4;
-    if (y < o.minY - 2 || y > o.maxY + topBuffer) continue;
+  // (the broadphase: only the boxes that can come within the radius; any one of them answers, so the same answer as the full scan)
+  const near = obstaclesNearPoint(obstacles, x, z, radius, _ovlScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const o = near[i];
+    if (!boxHoldsAt(o, y)) continue;
     const nearestX = Math.max(o.minX, Math.min(x, o.maxX));
     const nearestZ = Math.max(o.minZ, Math.min(z, o.maxZ));
     const dx = x - nearestX;
@@ -263,10 +312,13 @@ export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS
 export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radius = FIGHTER_RADIUS) {
   const pos = fighter.pos;
   let nx = 0, nz = 0, touched = false;
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const o = obstacles[i];
-    const topBuffer = o.topBuffer ?? 4;
-    if (pos.y < o.minY - 2 || pos.y > o.maxY + topBuffer) continue;
+  // (the broadphase: the boxes within the radius plus 2 units, in the list's own order, so the pushes come in
+  // the order the full scan would give them; a box farther out can only matter if this tick's pushes carry the
+  // body more than 2 units, which a step's worth of penetration never does)
+  const near = obstaclesNearPoint(obstacles, pos.x, pos.z, radius + 2, _resScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const o = near[i];
+    if (!boxHoldsAt(o, pos.y)) continue;
     const nearestX = Math.max(o.minX, Math.min(pos.x, o.maxX));
     const nearestZ = Math.max(o.minZ, Math.min(pos.z, o.maxZ));
     const dx = pos.x - nearestX;
@@ -312,25 +364,50 @@ export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radiu
 }
 
 // Returns the highest surface Y at (x,z) that the fighter can step up to
-// from currentSurfaceY. Returns 0 if no surface is found (default ground).
+// from currentSurfaceY; the street (0) where no surface covers the point — so
+// a surface below the street (a sunken yard) is the ground there.
 export function groundHeightAt(x, z, surfaces, currentSurfaceY = 0) {
-  let best = 0;
-  for (let i = 0; i < surfaces.length; i += 1) {
-    const s = surfaces[i];
+  let best = -Infinity;
+  // (the broadphase: only the surfaces whose box can cover the point; a maximum, so the same answer as the full scan)
+  const near = obstaclesNearPoint(surfaces, x, z, 0, _gndScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const s = near[i];
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
     const h = s.heightAt(x, z);
     if (h > currentSurfaceY + SURFACE_STEP_HEIGHT) continue;
     if (h > best) best = h;
   }
-  return best;
+  return best === -Infinity ? 0 : best;
+}
+
+// Where a body WALKING from (x0, z0), its feet on floor0, to (x1, z1) stands when it gets there: the step rule
+// above, applied every WALK_SAMPLE along the way as movement applies it every tick — so a rise a body climbs step
+// by step (a kerb's 45-degree ramp, a flight of steps) is walked however much it rises over the whole way, and a
+// ledge taller than a step is not. The one place that says what a body can walk to: the nav grid's edges and the
+// bots' jump decisions ask this, not the difference between two floors four units apart (b1021s). The +0.1 is the
+// step rule's float slack, as the grid always had it.
+const WALK_SAMPLE = 1;
+export function walkFloorTo(x0, z0, floor0, x1, z1, surfaces) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / WALK_SAMPLE));
+  let cur = floor0;
+  for (let s = 1; s <= steps; s += 1) {
+    const x = x0 + ((x1 - x0) * s) / steps, z = z0 + ((z1 - z0) * s) / steps;
+    let g = groundHeightAt(x, z, surfaces, cur + 0.1);
+    // (a rise too steep for one sample — a kerb's ramp climbs a step's height in a quarter of a metre — is walked in
+    // finer steps before it is called a wall: the body moves a fifth of a unit a tick and takes a step a tick)
+    if (g < surfaceHeightAtXZ(x, z, surfaces) - 1e-6) { const px = x0 + ((x1 - x0) * (s - 1)) / steps, pz = z0 + ((z1 - z0) * (s - 1)) / steps; let c = cur; for (let f = 1; f <= 4; f += 1) c = groundHeightAt(px + ((x - px) * f) / 4, pz + ((z - pz) * f) / 4, surfaces, c + 0.1); g = c; }
+    cur = g;
+  }
+  return cur;
 }
 
 // Returns max surface Y at (x,z) ignoring step-up restrictions, or -Infinity
 // if no surface covers the point. Used by the projectile-vs-surface check.
 export function surfaceHeightAtXZ(x, z, surfaces) {
   let best = -Infinity;
-  for (let i = 0; i < surfaces.length; i += 1) {
-    const s = surfaces[i];
+  const near = obstaclesNearPoint(surfaces, x, z, 0, _gndScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const s = near[i];
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
     const h = s.heightAt(x, z);
     if (h > best) best = h;
@@ -449,8 +526,8 @@ export function getGroundLevelY(fighter, surfaces) {
   return groundHeightAt(fighter.pos.x, fighter.pos.z, surfaces, currentSurfaceY) + GROUND_BASE_Y;
 }
 
-// Does a sight ray hit this surface's mass? RAMPS block wherever the ray dips
-// below the ramp's local height inside the footprint (both the ray's y and the
+// Does a sight ray hit this surface's mass? RAMPS and PLANES block wherever the ray dips
+// below the surface's local height inside the footprint (both the ray's y and the
 // ramp height are linear along the ray, so checking the clipped interval's
 // endpoints is exact). FLAT elevated decks stand on open pillars, so only
 // CROSSING the deck plane blocks — two units both under the bridge keep their
@@ -479,7 +556,7 @@ export function sightHitsSurface(p0, p1, s) {
   const dy = p1.y - p0.y;
   const yA = p0.y + dy * t0, yB = p0.y + dy * t1;
   const EPS = 0.4;
-  if (s.type === 'ramp') {
+  if (s.type === 'ramp' || s.type === 'plane') {
     const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
     const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
     return yA < hA - EPS || yB < hB - EPS;

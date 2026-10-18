@@ -32,9 +32,9 @@
 // dodge out), 'stepping' (the Sudden Death brain watched it) or 'ran'.
 
 import { between } from './math.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
-import { GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from './constants.js';
+import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick } from './sdbrain.js';
 
@@ -178,11 +178,11 @@ export const BOT_TARGET_BLOCKED_PENALTY = 50;
 export const BOT_TARGET_SWITCH_MARGIN = 6;
 
 // --- Elevation-kiting tunables ---
-// A ledge whose lip rises more than the auto-step height (1.6) above the
+// A ledge whose lip rises more than the auto-step height above the
 // bot's floor can't be walked onto — it needs a jump. The upper bound is
 // what a jump arc can actually clear (apex ≈ jumpVelocity² / 2·|gravity|,
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
-const BOT_CLIMB_MIN_RISE = 1.7;
+const BOT_CLIMB_MIN_RISE = JUMP_RISE_MIN;
 const BOT_CLIMB_MAX_RISE = 4.8;
 // Narrowest surface still worth treating as a perch. Below this a jump
 // overshoots it entirely (see findHighGroundPerch). 6 sits in the gap between
@@ -227,15 +227,15 @@ const BOT_AIR_STEER_MS = 900;
 // line behaviors (Defense escapes, kiting, dodge follow-ups) pinned bots
 // against them while enemies shot straight through (fixed 2026-08-05).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
-  let rx = 0, rz = 0;
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
+  let rx = 0, rz = 0, top = 0;
+  const near = obstaclesNearPoint(obstacles, px, pz, radius);   // the broadphase: the boxes within reach
+  for (let i = 0; i < near.length; i++) {
+    const o = near[i];
     // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
     // streets bridge deck over its 6-high under-deck end walls — passes over
     // it freely and must not be shoved sideways.)
     if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
-    const topBuffer = o.topBuffer ?? 4;
-    if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
+    if (!boxHoldsAt(o, py)) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
     const nz = Math.max(o.minZ, Math.min(pz, o.maxZ));
     const dx = px - nx;
@@ -248,7 +248,9 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
       const strength = t * t;
       rx += (dx / d) * strength;
       rz += (dz / d) * strength;
+      if (strength > top) top = strength;
     } else {
+      top = 1;
       const dMinX = Math.abs(px - o.minX);
       const dMaxX = Math.abs(o.maxX - px);
       const dMinZ = Math.abs(pz - o.minZ);
@@ -260,6 +262,16 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
       else rz += 1;
     }
   }
+  // The field is bounded by the nearest box's own push: the boxes stand for the
+  // walls, not the other way round, so a wall cut into twenty boxes (the glTF
+  // maps' fences, rails, deck edges and facades) weighs what one wall weighs.
+  // Unbounded, the sum of a cluster 3-5 u away reached 1.7 and more, outweighing
+  // the route's own pull (weight 0.6 on the sum): the heading normalised a
+  // near-zero vector and flipped 180 degrees every tick, the body stepping back
+  // and forth on one spot for as long as the goal stayed hidden (Town, Plaza;
+  // b1021g). The direction stays the sum's; one box alone is untouched.
+  const mag = Math.sqrt(rx * rx + rz * rz);
+  if (mag > top + 1e-9) { rx *= top / mag; rz *= top / mag; }
   return { rx, rz };
 }
 
@@ -297,8 +309,9 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // exotic callers without surface data stay safe. Exported (2026-09-26) so the
 // hide-order tests judge "hidden" by the bot's own rule.
 export function botHasLineOfSight(p0, p1, obstacles, surfaces) {
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
+  const cand = obstaclesNearSegment(obstacles, p0, p1);   // the broadphase: the boxes the segment's cells hold
+  for (let i = 0; i < cand.length; i++) {
+    const o = cand[i];
     // Invisible unit-fences normally don't block sight (bullets pass), but
     // bars flagged blocksBotSight DO: a see-through wall the bot cannot walk
     // through defeats every routing trigger — the bot paces in Engage
@@ -308,8 +321,9 @@ export function botHasLineOfSight(p0, p1, obstacles, surfaces) {
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   if (surfaces) {
-    for (let i = 0; i < surfaces.length; i++) {
-      if (sightHitsSurface(p0, p1, surfaces[i])) return false;
+    const near = obstaclesNearSegment(surfaces, p0, p1);   // (floors are boxes to the broadphase too)
+    for (let i = 0; i < near.length; i++) {
+      if (sightHitsSurface(p0, p1, near[i])) return false;
     }
   }
   return true;
@@ -354,14 +368,21 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
     if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
+    // Farther than the best so far: it cannot win, whatever its lip holds.
+    const ddx = nx - px;
+    const ddz = nz - pz;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d >= bestDist) continue;
     // A wall standing ON the ledge lip (e.g. Airport's rim glass fences) means
     // a unit couldn't stand at this point — treat it like any wall and don't
     // steer/jump toward it. Same y-window semantics as unit collision; Station's
-    // edge walls (maxY == platform top, topBuffer 0) pass unchanged. 
+    // edge walls (maxY == platform top, topBuffer 0) pass unchanged. Only the
+    // boxes the broadphase puts within 1.15 u of the lip are looked at.
     const lipY = myFloorY + rise + 2.45;
     let lipBlocked = false;
-    for (let j = 0; j < obstacles.length; j++) {
-      const o = obstacles[j];
+    const near = obstaclesNearPoint(obstacles, nx, nz, 1.15);
+    for (let j = 0; j < near.length; j++) {
+      const o = near[j];
       const tb = o.topBuffer ?? 4;
       if (lipY < o.minY - 2 || lipY > o.maxY + tb) continue;
       const ox = Math.max(o.minX, Math.min(nx, o.maxX));
@@ -371,10 +392,6 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
       if (bdx * bdx + bdz * bdz < 1.15 * 1.15) { lipBlocked = true; break; }
     }
     if (lipBlocked) continue;
-    const ddx = nx - px;
-    const ddz = nz - pz;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d >= bestDist) continue;
     bestDist = d;
     const inv = d > 1e-3 ? 1 / d : 0;
     best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
@@ -411,7 +428,7 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i];
     if (groundHeightAt(e.probeX, e.probeZ, surfaces, myFloorY + 50) > lowerY) continue;
-    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstacles)) continue;
+    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstaclesNearPoint(obstacles, e.probeX, e.probeZ, 4))) continue;
     const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
     if (score > bestScore) {
       bestScore = score;
@@ -1636,11 +1653,13 @@ export function nbBrainTick(host) {
         const fresh = host.navGet();
         if (fresh && fresh.path[fresh.idx]) wp = fresh.path[fresh.idx];
       }
-      // JUMP-LINK crossing: the upcoming waypoint sits on a ledge above the
-      // bot's floor (the path bridged a walk-island, e.g. Station's
-      // platforms) — vault toward it once close enough. Downward crossings
-      // need nothing: the bot just walks off the ledge.
-      if (wp.y != null && wp.y - myFloorY > 1.7
+      // JUMP-LINK crossing: the path reaches the upcoming waypoint by a jump
+      // link (flagged `jump`: a ledge above the bot's floor, a walk-island
+      // bridged, e.g. Station's platforms) — vault toward it once close
+      // enough. A slope or a kerb's ramp the body walks is a walk edge and
+      // flagged nothing: no vault (b1021s). Downward crossings need nothing:
+      // the bot just walks off the ledge.
+      if (wp.jump
           && grounded && !me.airborne
           && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 7) {
         const jdx = wp.x - pos.x, jdz = wp.z - pos.z;
@@ -1662,7 +1681,7 @@ export function nbBrainTick(host) {
       // and unaffordable; sprint resumes once the jump is funded.
       let jumpAhead = false;
       for (let k = nav.idx; k < nav.path.length; k += 1) {
-        if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
+        if (nav.path[k].jump) { jumpAhead = true; break; }
       }
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee

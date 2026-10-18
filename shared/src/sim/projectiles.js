@@ -322,8 +322,8 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       const t = segmentObstacleImpactT(prevPos, sweepEnd, o);
       if (t >= 0 && (deathT < 0 || t < deathT)) { deathT = t; deathReason = 'obstacle'; }
     }
-    if (!deathReason && projectileHitsSurface(prevPos, sweepEnd, surfaces)) {
-      const st = surfaceImpactT(prevPos, sweepEnd, surfaces);
+    if (!deathReason && projectileHitsSurface(prevPos, sweepEnd, obstaclesNearSegment(surfaces, prevPos, sweepEnd))) {   // (floors are boxes to the broadphase too)
+      const st = surfaceImpactT(prevPos, sweepEnd, obstaclesNearSegment(surfaces, prevPos, sweepEnd));
       deathT = st >= 0 ? st : 1;
       deathReason = 'surface';
     }
@@ -513,7 +513,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
       hitThis = false;   // the wall was in front of the hit point
       break;
     }
-    if (!dead && projectileHitsSurface(a, sweepEnd, surfaces)) {
+    if (!dead && projectileHitsSurface(a, sweepEnd, obstaclesNearSegment(surfaces, a, sweepEnd))) {
       dead = true;
       hitThis = false;
     }

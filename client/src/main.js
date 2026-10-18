@@ -7,6 +7,7 @@ import {
   emptyInput as simEmptyInput,
   TICK_RATE_MS as SIM_TICK_RATE_MS,
   TICK_DT as SIM_TICK_DT,
+  SURFACE_STEP_HEIGHT as SIM_SURFACE_STEP_HEIGHT,
   UNIT_DATA as SIM_UNIT_DATA,
   PROJECTILE_MUZZLE_Y_OFFSET as SIM_MUZZLE_Y_OFFSET,
   buildNavGrid,
@@ -30,7 +31,13 @@ import {
   bloomAfterTime,
   tickStillness,
   isStill,
-  obstaclesNearSegment
+  obstaclesNearSegment,
+  obstaclesNearPoint,
+  getArenaSpawns,
+  pickRespawnSpawn,
+  getArenaSurfaces,
+  getArenaBounds,
+  getGeneratedObstacles
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
@@ -803,6 +810,7 @@ const MAP_DATA = {
   station: { name: 'Station' },
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
+  town: { name: 'Town' },             // cut from the Invasion Map glTF (2026-10-18, README: Maps)
   range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
 };
 
@@ -1107,7 +1115,6 @@ const gridHelper = new THREE.GridHelper(200, 50, 0xff0000, 0x444444);
 scene.add(gridHelper);
 const arenaDecor = [];
 const arenaObstacles = [];
-createArenaWalls();
 
 // ---- Diorama view (POC) state — declared with the other early globals so
 // the boot calls further down (showSelectMenu -> cleanupMatch, the first
@@ -5978,6 +5985,10 @@ function startMatch() {
     // Mirrored in shared arena.js ARENA_SPAWNS.
     state.player.body.position.set(-68, 2.45, -62);
     state.enemy.body.position.set(68, 2.45, 62);
+  } else if (GLB_MAPS[state.mapKey]) {
+    const sp = getArenaSpawns(state.mapKey);   // a modelled map's spawns live in the shared data only
+    state.player.body.position.set(sp.p1.x, sp.p1.y, sp.p1.z);
+    state.enemy.body.position.set(sp.p2.x, sp.p2.y, sp.p2.z);
   } else if (state.mapKey === 'range') {
     // 100 units out, centered on the walking lane, pre-locked on its slider.
     state.player.body.position.set(-40, 2.45, RANGE_TARGET_Z + 100);
@@ -6029,7 +6040,8 @@ function startMatch() {
     if (m) m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
   }
   // Trio bookkeeping: per-slot roster cursor + the spawn positions recorded
-  // for mid-match respawns (next roster unit spawns where its team started).
+  // for mid-match respawns (next roster unit spawns where its team started —
+  // unless the map has spawn places: respawnSlotMech asks spawn.js).
   // The Shooting Range ignores Trio entirely (solo practice stays SD-style).
   state.rosterIdx = { player: 0, ally: 0, enemy: 0, enemy2: 0 };
   const trioActive = state.mainMode === 'trio' && state.mapKey !== 'range' && state.trioRosters;
@@ -6489,7 +6501,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1018c';
+const CLIENT_BUILD_TAG = 'b1021z';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7286,7 +7298,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -8987,6 +8999,7 @@ function wireMapGrid(menu, onPick) {
       if (key === RANDOM_PICK_KEY) {
         showRandomProfilePopup(card, true, () => { clearPending(); confirm(key); });
       } else {
+        warmMapModel(key);   // a modelled map's scene starts downloading at the first tap
         showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); confirm(key); });
       }
     });
@@ -9396,7 +9409,11 @@ function respawnSlotMech(slotName, unitKey) {
     ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player', artRoleFor(slotName));
   fresh.state.team = old.state.team;
   if (state.suddenDeathActive) fresh.state.hp = 1;   // Sudden Death: Trio respawns arrive at 1 HP too
-  const sp = state.spawnPoints?.[slotName];
+  // The place: on a map with spawn places the shared rule (spawn.js), from the other mechs' teams, health and
+  // positions — the call the server makes; elsewhere the slot's own start.
+  const others = ['player', 'ally', 'enemy', 'enemy2'].filter((s) => s !== slotName && state[s])
+    .map((s) => ({ team: state[s].state.team, hp: state[s].state.hp, pos: state[s].body.position }));
+  const sp = pickRespawnSpawn(state.mapKey, old.state.team, others) ?? state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
   // Body teleport only — sync the visual root NOW. The bot AI reads
   // root.position and the frame sync runs after it; without this the fresh
@@ -9638,7 +9655,7 @@ function applyMomentum(mech, { suspend = false } = {}) {
 
 
 const arenaSurfaces = [];
-const SURFACE_STEP_HEIGHT = 1.6;
+const SURFACE_STEP_HEIGHT = SIM_SURFACE_STEP_HEIGHT;   // (the shared constant: the step a body takes onto a higher floor)
 
 // Camera-proximity wall fade: registered walls (state.wallFadeMeshes, set by
 // map builders) ease to translucent when the camera gets close, so backing
@@ -9866,15 +9883,17 @@ function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
   }
 }
 
+// (the street, 0, only where no surface covers the point: a floor below the street is the ground there — the mirror of physics.js)
+const _groundScratch = [];   // (the ground lookups' own broadphase list, as in physics.js)
 function groundHeightAt(x, z, currentSurfaceY = 0) {
-  let best = 0;
-  for (const s of arenaSurfaces) {
+  let best = -Infinity;
+  for (const s of obstaclesNearPoint(arenaSurfaces, x, z, 0, _groundScratch)) {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
     const h = s.heightAt(x, z);
     if (h > currentSurfaceY + SURFACE_STEP_HEIGHT) continue;
     if (h > best) best = h;
   }
-  return best;
+  return best === -Infinity ? 0 : best;
 }
 
 function getGroundLevelY(mech) {
@@ -9885,7 +9904,7 @@ function getGroundLevelY(mech) {
 
 function surfaceHeightAtXZ(x, z) {
   let best = -Infinity;
-  for (const s of arenaSurfaces) {
+  for (const s of obstaclesNearPoint(arenaSurfaces, x, z, 0, _groundScratch)) {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
     const h = s.heightAt(x, z);
     if (h > best) best = h;
@@ -9953,7 +9972,7 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.6;
     key.color.setHex(0xffe9b8);
     key.intensity = 1.0;
-  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2' || mapKey === 'flashpoint') {
+  } else if (mapKey === 'airport' || mapKey === 'factory2' || mapKey === 'arena2' || mapKey === 'flashpoint' || GLB_MAPS[mapKey]) {
     // Bright daylight departure hall: white terminal light, pale sky seen
     // through the glass curtain walls, long fog range for the big sightlines.
     // Factory 2 and Streets share this daylight tone (user calls 2026-07-18);
@@ -9971,8 +9990,55 @@ function applyMapAmbience(mapKey) {
   }
 }
 
+// ===== MODELLED MAPS (2026-10-18): a glTF scene is the arena's visual; its collision is the shared
+// arena data, generated from the same model's triangles by shared/tools/glb_collision.mjs (README,
+// Maps) — the model's metres times `scale`, the crop centre at the origin, the street at y 0. The
+// model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
+// per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
+const GLB_MAPS = {
+  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 }
+};
+const _mapModelCache = {};     // file -> gltf
+const _mapModelPending = {};   // file -> [callbacks]
+function loadMapModel(file, onReady) {
+  if (_mapModelCache[file]) { onReady(_mapModelCache[file]); return; }
+  if (_mapModelPending[file]) { _mapModelPending[file].push(onReady); return; }
+  _mapModelPending[file] = [onReady];
+  _gltfLoader.load(`${import.meta.env.BASE_URL}${file}${MODEL_FILE_EXT}`, (gltf) => {
+    _mapModelCache[file] = gltf;
+    const cbs = _mapModelPending[file] || [];
+    delete _mapModelPending[file];
+    for (const cb of cbs) cb(gltf);
+  }, undefined, (err) => { console.warn('map model failed to load', file, err); delete _mapModelPending[file]; });
+}
+function warmMapModel(mapKey) {
+  const cfg = GLB_MAPS[mapKey];
+  if (cfg) loadMapModel(cfg.file, () => {});
+}
+function buildGlbArena(mapKey) {
+  const cfg = GLB_MAPS[mapKey];
+  const { halfX, halfZ } = getArenaBounds(mapKey);
+  addBoundaryIndicator(halfX, halfZ, cfg.ceilY);
+  for (const o of getGeneratedObstacles(mapKey)) arenaObstacles.push({ ...o });   // collision only: the model is the visual
+  for (const s of getArenaSurfaces(mapKey)) arenaSurfaces.push(s);              // the raised floors (stairs, porches, pavements)
+  const group = new THREE.Group();
+  group.scale.setScalar(cfg.scale);
+  group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);
+  scene.add(group);
+  arenaDecor.push(group);
+  loadMapModel(cfg.file, (gltf) => {
+    if (!arenaDecor.includes(group)) return;   // the map changed while the model was loading
+    const inst = gltf.scene.clone(true);
+    const drop = [];
+    inst.traverse((o) => { if (cfg.drop.includes(o.name)) drop.push(o); });
+    for (const o of drop) o.parent.remove(o);
+    group.add(inst);
+  });
+}
+
 function buildArenaForMap(mapKey) {
   clearArenaDecor();
+  ground.visible = gridHelper.visible = !GLB_MAPS[mapKey];   // a modelled map brings its own ground
   applyMapAmbience(mapKey);
   arenaBounds = null;   // re-recorded by addBoundaryIndicator (diorama plate)
   if (mapKey === 'arena1') buildPlainFieldArena();
@@ -9985,6 +10051,7 @@ function buildArenaForMap(mapKey) {
   else if (mapKey === 'station') buildStationArena();
   else if (mapKey === 'flashpoint') buildFlashpointArena();
   else if (mapKey === 'airport') buildAirportArena();
+  else if (GLB_MAPS[mapKey]) buildGlbArena(mapKey);
   // Diorama POC: re-dress the fresh arena (cropped plate, plinth, daylight
   // grade) — or clear leftovers if the mode was switched off / went online.
   if (diorama.enabled && !state.online) {
@@ -10184,7 +10251,7 @@ function setPlayerTargetMech(next) {
 function dioramaBoundsNow() {
   if (arenaBounds) return arenaBounds;
   // Maps that bake their perimeter inline (Station/Airport/Lobby): infer the
-  // extent from the collision boxes, capped at the outer cannon wall.
+  // extent from the collision boxes, capped at the cannon ground slab (140).
   let hx = 0, hz = 0;
   for (const o of arenaObstacles) {
     hx = Math.max(hx, Math.abs(o.minX), Math.abs(o.maxX));
@@ -10198,6 +10265,10 @@ function applyDioramaDressing() {
   const b = dioramaBoundsNow();
   const w = (b.halfX + 2.5) * 2;
   const d = (b.halfZ + 2.5) * 2;
+  // The stand's top sits under the map's lowest floor. A hand-made map's floors lie on y 0; a modelled map's
+  // streets run a few centimetres under its reference and its yards and garages metres under (Town: -12 u), and
+  // a plate at -0.12 and a plinth top at -0.02 covered them (command mode, user 2026-10-18).
+  const floorLow = Math.min(0, ...arenaSurfaces.map((s) => Math.min(s.heightAt(s.minX, s.minZ), s.heightAt(s.maxX, s.minZ), s.heightAt(s.minX, s.maxZ), s.heightAt(s.maxX, s.maxZ))));
   const group = new THREE.Group();
   // Cropped ground plate — the global 280x280 ground's material family with
   // the texture repeat rescaled so the grid density matches exactly.
@@ -10216,7 +10287,7 @@ function applyDioramaDressing() {
     })
   );
   plate.rotation.x = -Math.PI / 2;
-  plate.position.y = -0.12;
+  plate.position.y = floorLow - 0.12;
   group.add(plate);
   // Plinth + trim: the miniature's display base. Reads as "model on a stand"
   // and gives the map a real visible edge (the diorama's whole point).
@@ -10225,13 +10296,13 @@ function applyDioramaDressing() {
     new THREE.BoxGeometry(w + 3, plinthH, d + 3),
     new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.85, metalness: 0.1 })
   );
-  plinth.position.y = -plinthH / 2 - 0.02;
+  plinth.position.y = floorLow - plinthH / 2 - 0.02;
   group.add(plinth);
   const trim = new THREE.Mesh(
     new THREE.BoxGeometry(w + 3.6, 0.7, d + 3.6),
     new THREE.MeshStandardMaterial({ color: 0x39435a, roughness: 0.5, metalness: 0.45 })
   );
-  trim.position.y = -0.37;
+  trim.position.y = floorLow - 0.37;
   group.add(trim);
   scene.add(group);
   diorama.base = group;
@@ -10298,8 +10369,7 @@ function removeDioramaBase() {
 
 function removeDioramaDressing() {
   removeDioramaBase();
-  ground.visible = true;
-  gridHelper.visible = true;
+  ground.visible = gridHelper.visible = !GLB_MAPS[state.mapKey];
   // Back to classic: the cmdHide airborne dressing returns.
   for (const o of arenaDecor) {
     if (o.userData?.cmdHide) o.visible = true;
@@ -14849,7 +14919,7 @@ function buildStationArena() {
   }
 
   // ===== Raised platforms (PLATFORM_Y = 4 m, no ramps — must JUMP up) =====
-  // SURFACE_STEP_HEIGHT is 1.6, so a 4 m step cannot be walked up automatically.
+  // SURFACE_STEP_HEIGHT is 2.6 (0.65 m), so a 4 m step cannot be walked up automatically.
   addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: TRACK_Z_HALF, maxZ: HALF_Z - 1, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
   addPlatform({ minX: -HALF_X + 1, maxX: HALF_X - 1, minZ: -(HALF_Z - 1), maxZ: -TRACK_Z_HALF, top: PLATFORM_Y, material: platformFloor, thickness: 0.6 });
   // Visible 4 m platform face skirts (decor only — the surface above catches a
@@ -16084,34 +16154,15 @@ function buildFlashpointArena() {
   addBoundaryIndicator(110, 75, 12);
 }
 
-function createArenaWalls() {
-  const WALL_HEIGHT = 16;
-  const HALF = 138;
-  const THICKNESS = 2;
-  const walls = [
-    { x: HALF, z: 0, sx: THICKNESS, sz: HALF },
-    { x: -HALF, z: 0, sx: THICKNESS, sz: HALF },
-    { x: 0, z: HALF, sx: HALF, sz: THICKNESS },
-    { x: 0, z: -HALF, sx: HALF, sz: THICKNESS }
-  ];
-  walls.forEach((wall) => {
-    const wallBody = new CANNON.Body({
-      mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(wall.sx, WALL_HEIGHT, wall.sz))
-    });
-    wallBody.position.set(wall.x, WALL_HEIGHT, wall.z);
-    world.addBody(wallBody);
-  });
-}
-
 function wrapAngle(angle) {
   while (angle <= -Math.PI) angle += Math.PI * 2;
   while (angle > Math.PI) angle -= Math.PI * 2;
   return angle;
 }
 
+const _overlapScratch = [], _resolveScratch = [];   // (the body's own box tests' broadphase lists, as in physics.js)
 function unitOverlapsObstacle(x, y, z, radius = 1.15) {
-  for (const o of arenaObstacles) {
+  for (const o of obstaclesNearPoint(arenaObstacles, x, z, radius, _overlapScratch)) {
     const topBuffer = o.topBuffer ?? 4;
     if (y < o.minY - 2 || y > o.maxY + topBuffer) continue;
     const nearestX = Math.max(o.minX, Math.min(x, o.maxX));
@@ -16131,7 +16182,7 @@ function resolveUnitObstacleCollisions(mech, prevPos) {
   const radius = 1.15;
   const pos = mech.body.position;
   let nx = 0, nz = 0, touched = false;
-  for (const o of arenaObstacles) {
+  for (const o of obstaclesNearPoint(arenaObstacles, pos.x, pos.z, radius + 2, _resolveScratch)) {   // (within the radius plus 2 units, in order — see physics.js)
     const topBuffer = o.topBuffer ?? 4;
     if (pos.y < o.minY - 2 || pos.y > o.maxY + topBuffer) continue;
     const nearestX = Math.max(o.minX, Math.min(pos.x, o.maxX));

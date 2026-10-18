@@ -1,26 +1,47 @@
-// Bot AI — pure-JS port of updateEnemy from main.js. Used by the headless
-// test harness for bot-vs-bot soak testing. The actual online server only
-// runs this if a player slot is unoccupied (e.g. spectator-only modes or
-// "fight a bot" mode).
+// FROZEN at b1021z for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
+// re-frozen with the build whose play it must match (freeze_refs.py).
+// THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
+// 2026-10-17, the plain-brain rework: "one place, one structure, patchless").
+// The server's tickBot (ai.js) and the offline client's updateEnemy (main.js)
+// each build a host and call nbBrainTick once a tick; there is no second copy.
+// The brain is the b1018a brain unchanged (the equivalence test
+// shared/test/nb_equiv.test.js plays it tick for tick against the frozen
+// host): the state machine Defense > Maze > Engage > Pursue, the hide stance,
+// the anti-glint dodge, the stuck detectors, the pathfinder's Maze, the
+// velocity dispatch and the fire block. The Sudden Death brain (sdbrain.js)
+// runs inside it on the same host.
 //
-// Designed to be agnostic to weapon stats and map layout:
-//   - Range bands derive from the unit's lockRange (works for any weapon).
-//   - Burst length derives from magCapacity (works for any future mag size).
-//   - Obstacle avoidance, LoS firing, and elevation tactics (jumping onto
-//     ledges for a high-ground advantage, dropping off them to reset kiting
-//     distance) all work from the map's obstacle/surface lists, so re-tuning
-//     a map's geometry is enough to re-tune the bot.
+// THE HOST — what the brain reads and does through it:
+//   now, me          the clock; the unit's state object (its bot* scratch,
+//                    boost, ammo, reload, fire clocks, momentum, action...)
+//   pos, vel         the body centre {x, y, z} and the velocity it writes
+//   grounded, unit   the body's ground contact; the unit's data
+//   opp, enemies     views of the target and of every live enemy: {id, pos,
+//                    vel, hp, unit, lastFireAt, bloom, invulnerableUntil,
+//                    chargeStartAt, chargingAtMe}; opp is one of enemies
+//   cmd              the command entry {hide, hideAuto, move, lockTargetId}
+//                    the brain reads and writes, or null
+//   obstacles, surfaces, grid   the arena and its nav grid
+//   eyeUp, muzzleUp  the eye and the muzzle above the body centre
+//   mode, tickMs     the match mode; the host's tick length (the fire poll)
+//   charging         the unit holds a sniper charge (stands still)
+//   sd               the Sudden Death knobs when that brain runs, else null
+//   wall             physics' note of the face the body was pushed out of
+//   clear(p0, p1)    can a round fly p0 -> p1 (the projectile rules)
+//   startStep(dx, dz), tickStep(), startJump(), fire()   the body's actions
+//   inheritMomentum(k), navGet(), navSet(v), searchSlot(), deadline(), tape
+// Returns 'locked' (charge or beam: standing), 'step' (the plain bot sat the
+// dodge out), 'stepping' (the Sudden Death brain watched it) or 'ran'.
 
 import { between } from '../src/sim/math.js';
-import { attemptFire, tryStartJump, tryStartStep, tickStep } from '../src/sim/actions.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, projectileHitsSurface, obstaclesNearSegment } from '../src/sim/physics.js';
-import { getArena } from '../src/sim/arena.js';
-import { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, coverDistanceAt } from '../src/sim/navgrid.js';
-import { inheritMomentum } from '../src/sim/movement.js';
-import { MAX_HP, STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, PROJECTILE_MUZZLE_Y_OFFSET, MANDATED_JUMP_MIN_BOOST, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE } from '../src/sim/constants.js';
+import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
+import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
+import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
+import { sdBrainTick } from './sdbrain_b1021z_ref.js';
 
-// --- Bot tactical-sprint tunables (mirrored in client/src/main.js) ---
+// --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
 // Strategic reserve: bots never VOLUNTARILY spend below this — one knob
 // gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
@@ -40,8 +61,7 @@ function botTravelSprint(me) {
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// Anti-sniper humanization: the bot rolls its reaction PER CHARGE (mirrored
-// in client/src/main.js) — a defensive mixed strategy against the sniper's
+// Anti-sniper humanization: the bot rolls its reaction PER CHARGE  — a defensive mixed strategy against the sniper's
 // own 50/50 snap/hold coin flip. The slow roll is charger-aware:
 //   ANTI-ARU (bullet snipers): 50% react at 400 ms (i-frames ~400-712 cover
 //       every floor snap at any range; a full hold at ~1040 sails in after)
@@ -86,8 +106,7 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 // once per tick per match), a search that found nothing at all retries
 // after FAIL_RETRY_MS, a route that stops making progress bails after
 // BAIL_MS and retries after BAIL_RETRY_MS, and MAX_POPS bounds the Dijkstra
-// (there is no distance cap — the unit walks as far as it takes). Mirrored
-// in client/src/main.js.
+// (there is no distance cap — the unit walks as far as it takes). 
 const BOT_HIDE_SEARCH_MS = 500;
 const BOT_HIDE_FAIL_RETRY_MS = 500;   // 1500 -> 500 (owner 2026-09-27: keep looking for a double-block spot)
 const BOT_HIDE_BAIL_MS = 700;
@@ -133,15 +152,10 @@ const BOT_HIDE_SLIP_GAIN = 6;
 // Factory / Streets / Airport and was retired). Never alongside the Hide
 // stance (it wipes move orders anyway).
 const BOT_CH_AREA_R = 14;
-// The Sudden Death brain, its knobs and its risk models live in sdbrain.js
-// (one module for the server and the client); re-exported here for the
-// fire block below and for the client's imports.
-import { sdBrainTick, makeMuzzleClear, BOT_SD } from './sdbrain_b1017h_ref.js';
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1017h_ref.js';
 // Every hide scratch field, nulled when a hide ends (stance cleared, cover
-// hide over) so the normal brain resumes from a clean slate. Offline twin:
-// client resetBotHideFields.
-function resetBotHideFields(f) {
+// hide over) so the normal brain resumes from a clean slate; the client also
+// wipes a corpse with it.
+export function resetBotHideFields(f) {
   f.botHidePath = null;
   f.botHidePathIdx = null;
   f.botHideGoal = null;
@@ -163,28 +177,15 @@ const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // glass/walls) reads this many units FARTHER than it really is, so a visible
 // enemy wins the lock unless the blocked one is drastically closer. The
 // margin keeps the current lock unless a rival clearly beats it (no flicker).
-const BOT_TARGET_BLOCKED_PENALTY = 50;
-const BOT_TARGET_SWITCH_MARGIN = 6;
-
-// Nav grids are built once per arena object (the ARENAS entries are module
-// singletons, so this is once per map per process) and shared by all bots
-// and lobbies on that map.
-const navGridCache = new WeakMap();
-export function navGridFor(arena) {
-  let grid = navGridCache.get(arena);
-  if (!grid) {
-    grid = buildNavGrid(arena.obstacles, arena.surfaces);
-    navGridCache.set(arena, grid);
-  }
-  return grid;
-}
+export const BOT_TARGET_BLOCKED_PENALTY = 50;
+export const BOT_TARGET_SWITCH_MARGIN = 6;
 
 // --- Elevation-kiting tunables ---
-// A ledge whose lip rises more than the auto-step height (1.6) above the
+// A ledge whose lip rises more than the auto-step height above the
 // bot's floor can't be walked onto — it needs a jump. The upper bound is
 // what a jump arc can actually clear (apex ≈ jumpVelocity² / 2·|gravity|,
 // ≈ 5.6 with the default 30 jump velocity), kept conservative for margin.
-const BOT_CLIMB_MIN_RISE = 1.7;
+const BOT_CLIMB_MIN_RISE = JUMP_RISE_MIN;
 const BOT_CLIMB_MAX_RISE = 4.8;
 // Narrowest surface still worth treating as a perch. Below this a jump
 // overshoots it entirely (see findHighGroundPerch). 6 sits in the gap between
@@ -203,7 +204,7 @@ const BOT_PERCH_MIN_WIDTH = 6;
 // arrival test stays at 3 — shrinking THAT re-arms the no-progress trigger
 // on a standing bot (the Plain Field never-orbits bug). Used at the follower
 // AND its statue-escape replay: the two must stay identical or the replay's
-// waypoint comparison silently stops matching. Mirrored in client main.js.
+// waypoint comparison silently stops matching. 
 const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
@@ -229,15 +230,15 @@ const BOT_AIR_STEER_MS = 900;
 // line behaviors (Defense escapes, kiting, dodge follow-ups) pinned bots
 // against them while enemies shot straight through (fixed 2026-08-05).
 function computeBotAvoidance(px, py, pz, obstacles, radius) {
-  let rx = 0, rz = 0;
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
+  let rx = 0, rz = 0, top = 0;
+  const near = obstaclesNearPoint(obstacles, px, pz, radius);   // the broadphase: the boxes within reach
+  for (let i = 0; i < near.length; i++) {
+    const o = near[i];
     // (py > o.maxY: a bot already ABOVE the fence top — e.g. crossing the
     // streets bridge deck over its 6-high under-deck end walls — passes over
     // it freely and must not be shoved sideways.)
     if (o.noProjectile && ((o.maxY - o.minY) <= BOT_CLIMB_MAX_RISE || py > o.maxY)) continue;
-    const topBuffer = o.topBuffer ?? 4;
-    if (py < o.minY - 2 || py > o.maxY + topBuffer) continue;
+    if (!boxHoldsAt(o, py)) continue;
     const nx = Math.max(o.minX, Math.min(px, o.maxX));
     const nz = Math.max(o.minZ, Math.min(pz, o.maxZ));
     const dx = px - nx;
@@ -250,7 +251,9 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
       const strength = t * t;
       rx += (dx / d) * strength;
       rz += (dz / d) * strength;
+      if (strength > top) top = strength;
     } else {
+      top = 1;
       const dMinX = Math.abs(px - o.minX);
       const dMaxX = Math.abs(o.maxX - px);
       const dMinZ = Math.abs(pz - o.minZ);
@@ -262,6 +265,16 @@ function computeBotAvoidance(px, py, pz, obstacles, radius) {
       else rz += 1;
     }
   }
+  // The field is bounded by the nearest box's own push: the boxes stand for the
+  // walls, not the other way round, so a wall cut into twenty boxes (the glTF
+  // maps' fences, rails, deck edges and facades) weighs what one wall weighs.
+  // Unbounded, the sum of a cluster 3-5 u away reached 1.7 and more, outweighing
+  // the route's own pull (weight 0.6 on the sum): the heading normalised a
+  // near-zero vector and flipped 180 degrees every tick, the body stepping back
+  // and forth on one spot for as long as the goal stayed hidden (Town, Plaza;
+  // b1021g). The direction stays the sum's; one box alone is untouched.
+  const mag = Math.sqrt(rx * rx + rz * rz);
+  if (mag > top + 1e-9) { rx *= top / mag; rz *= top / mag; }
   return { rx, rz };
 }
 
@@ -299,46 +312,24 @@ function computeStuckRepulsion(px, pz, memX, memZ, radius) {
 // exotic callers without surface data stay safe. Exported (2026-09-26) so the
 // hide-order tests judge "hidden" by the bot's own rule.
 export function botHasLineOfSight(p0, p1, obstacles, surfaces) {
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
+  const cand = obstaclesNearSegment(obstacles, p0, p1);   // the broadphase: the boxes the segment's cells hold
+  for (let i = 0; i < cand.length; i++) {
+    const o = cand[i];
     // Invisible unit-fences normally don't block sight (bullets pass), but
     // bars flagged blocksBotSight DO: a see-through wall the bot cannot walk
     // through defeats every routing trigger — the bot paces in Engage
     // against the invisible face instead of routing around (Streets
-    // under-slope bars, 2026-08-13). Mirrored in client main.js.
+    // under-slope bars, 2026-08-13). 
     if (o.noProjectile && !o.blocksBotSight) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   if (surfaces) {
-    for (let i = 0; i < surfaces.length; i++) {
-      if (sightHitsSurface(p0, p1, surfaces[i])) return false;
+    const near = obstaclesNearSegment(surfaces, p0, p1);   // (floors are boxes to the broadphase too)
+    for (let i = 0; i < near.length; i++) {
+      if (sightHitsSurface(p0, p1, near[i])) return false;
     }
   }
   return true;
-}
-
-// Can the SHOT actually land? The fire gate has to test the line the BULLET
-// takes, not the eye line. spawnProjectiles fires from pos.y +
-// PROJECTILE_MUZZLE_Y_OFFSET along (target.pos - owner.pos), i.e. the pos→pos
-// line raised by that offset at BOTH ends — 1.55 ABOVE the eye line online and
-// 0.8 BELOW it offline (root space). Anything inside that band — a slope's
-// guard rail, the bridge deck underside, the ramp plane itself — let the bot
-// hold a clear sight line into a shot that died on the geometry. Measured on
-// Streets: 3.1% of clear-sight pairs online, 7.4% offline, worst on
-// road→slope, i.e. a unit standing on the bridge slope (user 2026-08-15).
-//
-// Uses the PROJECTILE rules, not the sight rules, so the gate and the shot can
-// never disagree: noProjectile fences never stop a bullet (blocksBotSight is a
-// NAVIGATION rule — movement LoS still honours it, so the 2026-08-13 pacing fix
-// stands), and surfaces use the projectile's own crossing test.
-function botShotCanLand(originY, me, opp, obstacles, surfaces) {
-  const from = { x: me.pos.x, y: originY, z: me.pos.z };
-  const to = { x: opp.pos.x, y: opp.pos.y + PROJECTILE_MUZZLE_Y_OFFSET, z: opp.pos.z };
-  for (let i = 0; i < obstacles.length; i++) {
-    if (obstacles[i].noProjectile) continue;
-    if (segmentHitsObstacle(from, to, obstacles[i])) return false;
-  }
-  return !(surfaces && projectileHitsSurface(from, to, surfaces));
 }
 
 // Burst size for continuous-fire weapons (spreadCount === 1). Units with a
@@ -380,15 +371,21 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
     const nz = Math.max(s.minZ, Math.min(pz, s.maxZ));
     const rise = s.heightAt(nx, nz) - myFloorY;
     if (rise < BOT_CLIMB_MIN_RISE || rise > BOT_CLIMB_MAX_RISE) continue;
+    // Farther than the best so far: it cannot win, whatever its lip holds.
+    const ddx = nx - px;
+    const ddz = nz - pz;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d >= bestDist) continue;
     // A wall standing ON the ledge lip (e.g. Airport's rim glass fences) means
     // a unit couldn't stand at this point — treat it like any wall and don't
     // steer/jump toward it. Same y-window semantics as unit collision; Station's
-    // edge walls (maxY == platform top, topBuffer 0) pass unchanged. Mirrors
-    // offline main.js.
+    // edge walls (maxY == platform top, topBuffer 0) pass unchanged. Only the
+    // boxes the broadphase puts within 1.15 u of the lip are looked at.
     const lipY = myFloorY + rise + 2.45;
     let lipBlocked = false;
-    for (let j = 0; j < obstacles.length; j++) {
-      const o = obstacles[j];
+    const near = obstaclesNearPoint(obstacles, nx, nz, 1.15);
+    for (let j = 0; j < near.length; j++) {
+      const o = near[j];
       const tb = o.topBuffer ?? 4;
       if (lipY < o.minY - 2 || lipY > o.maxY + tb) continue;
       const ox = Math.max(o.minX, Math.min(nx, o.maxX));
@@ -398,10 +395,6 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
       if (bdx * bdx + bdz * bdz < 1.15 * 1.15) { lipBlocked = true; break; }
     }
     if (lipBlocked) continue;
-    const ddx = nx - px;
-    const ddz = nz - pz;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d >= bestDist) continue;
     bestDist = d;
     const inv = d > 1e-3 ? 1 / d : 0;
     best = { toX: ddx * inv, toZ: ddz * inv, dist: d };
@@ -438,7 +431,7 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i];
     if (groundHeightAt(e.probeX, e.probeZ, surfaces, myFloorY + 50) > lowerY) continue;
-    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstacles)) continue;
+    if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstaclesNearPoint(obstacles, e.probeX, e.probeZ, 4))) continue;
     const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
     if (score > bestScore) {
       bestScore = score;
@@ -448,50 +441,14 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
   return best;
 }
 
-// Drives the bot's velocity directly (legacy-style — sets vel and fires
-// through attemptFire). Mirrors updateEnemy.
-// LoS-aware bot target pick (2v2). Score = real distance + a flat penalty
-// when the enemy is out of line of sight — raw closest-distance locked the
-// enemy sealed behind the Airport rim glass (unreachable without rounding
-// the whole plateau) while the OTHER enemy shot freely. An enemy standing at
-// an opening HAS LoS, so it still reads as genuinely close. Hysteresis: keep
-// the current lock unless a rival beats it by a clear margin.
-export function pickBotTargetId(matchState, fighter) {
-  const enemies = Object.values(matchState.fighters)
-    .filter((f) => f.team !== fighter.team && f.hp > 0);
-  if (enemies.length === 0) return null;
-  if (enemies.length === 1) return enemies[0].id;
-  const obstacles = getArena(matchState.mapKey).obstacles;
-  const sightSurfaces = getArena(matchState.mapKey).surfaces;
-  let bestId = enemies[0].id;
-  let bestScore = Infinity;
-  let currentScore = null;
-  for (const e of enemies) {
-    const d = Math.hypot(e.pos.x - fighter.pos.x, e.pos.z - fighter.pos.z);
-    const seen = botHasLineOfSight(
-      { x: fighter.pos.x, y: fighter.pos.y + BOT_LOS_EYE_HEIGHT, z: fighter.pos.z },
-      { x: e.pos.x, y: e.pos.y + BOT_LOS_EYE_HEIGHT, z: e.pos.z },
-      obstacles, sightSurfaces
-    );
-    const score = d + (seen ? 0 : BOT_TARGET_BLOCKED_PENALTY);
-    if (e.id === fighter.targetId) currentScore = score;
-    if (score < bestScore) { bestScore = score; bestId = e.id; }
-  }
-  if (currentScore != null && currentScore <= bestScore + BOT_TARGET_SWITCH_MARGIN) {
-    return fighter.targetId;
-  }
-  return bestId;
-}
-
-// Bot jump funding: the shared tryStartJump gates at the raw jump cost
-// (human mechanics — untouched); bots additionally respect the strategic
-// reserve so a hop never leaves them without an emergency dodge. This also
-// closes an old offline/online gap — offline botStartJump always carried a
-// +BOT_SPRINT_MIN_BOOST margin that the online path lacked.
-function botTryJump(me, now) {
-  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
-  if (me.boost < funded) return false;
-  return tryStartJump(me, now);
+// Bot jump funding: the host's jump (the shared tryStartJump online, the
+// client's botStartJump offline) gates at the raw jump cost — human
+// mechanics, untouched; bots additionally respect the strategic reserve so a
+// hop never leaves them without an emergency dodge.
+function botTryJump(host) {
+  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
+  if (host.me.boost < funded) return false;
+  return host.startJump();
 }
 
 // SURVIVAL jump funding (2026-08-05): the Defense hop/vault is an escape
@@ -503,50 +460,38 @@ function botTryJump(me, now) {
 // commanded-travel route jumps, was cost+sprint-floor 56). Discretionary
 // jumps (pursue perch, elevation aids) keep the reserve gate — bots still
 // hoard for the road.
-function botTryJumpSurvival(me, now) {
-  if (me.boost < MANDATED_JUMP_MIN_BOOST) return false;
-  return tryStartJump(me, now);
+function botTryJumpSurvival(host) {
+  if (host.me.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  return host.startJump();
 }
 
-export function tickBot(matchState, botId, now) {
-  const me = matchState.fighters[botId];
-  if (!me || me.hp <= 0) return;
-  // Mark bot control for shared helpers that behave differently for bots
-  // (tryStartJump floors zero-cooldown jumps at 1.5 s for bots so the perch
-  // reflex can't bunny-hop Aris — bots play flight units grounded).
-  me.botControlled = true;
-  // Bot's opp is its current targetId. In 1v1 there's only ever one enemy so
-  // this is equivalent to the old hardcoded pair lookup. In 2v2 the server
-  // (or the caller) picks the closest live enemy via pickClosestEnemyId and
-  // writes it onto me.targetId before this call.
-  const opp = me.targetId ? matchState.fighters[me.targetId] : null;
-  if (!opp || opp.hp <= 0) return;
+export function nbBrainTick(host) {
+  const { now, me, pos, vel, grounded, unit, opp, enemies, obstacles, surfaces, grid, eyeUp, muzzleUp, mode, sd } = host;
 
   // Sniper-charge lock: stand still until the charge resolves.
-  if (me.sniperChargeTargetId) {
-    me.vel.x = 0;
-    me.vel.z = 0;
+  if (host.charging) {
+    vel.x = 0;
+    vel.z = 0;
     me.momentumVX = 0;
     me.momentumVZ = 0;
     me.action = 'shoot';
-    return;
+    return 'locked';
   }
   // Locked while channeling a charged sweep (beam tracks target in tickChargedBeams).
   if (me.chargedBeamUntil > now) {
-    me.vel.x = 0;
-    me.vel.z = 0;
+    vel.x = 0;
+    vel.z = 0;
     me.momentumVX = 0;
     me.momentumVZ = 0;
     me.action = 'shoot';
-    return;
+    return 'locked';
   }
 
-  const arena = getArena(matchState.mapKey);
-  const obstacles = arena.obstacles;
-  const surfaces = arena.surfaces;
+  // Which enemies have a sniper charge on this unit (the glint the unit sees).
+  const chargers = enemies.filter((f) => f.chargingAtMe);
 
-  const dx = opp.pos.x - me.pos.x;
-  const dz = opp.pos.z - me.pos.z;
+  const dx = opp.pos.x - pos.x;
+  const dz = opp.pos.z - pos.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
   const dirX = dist > 1e-6 ? dx / dist : 1;
   const dirZ = dist > 1e-6 ? dz / dist : 0;
@@ -562,15 +507,13 @@ export function tickBot(matchState, botId, now) {
   // charge resolves. The schedule survives the glint vanishing so a
   // late/full-charge shot is still covered. `sniperCharging` (locked-target
   // charge) keeps driving the regular Defense durations below unchanged.
-  const sniperCharging = opp.sniperChargeTargetId === me.id;
+  const sniperCharging = chargers.some((c) => c.id === opp.id);
   let glintThreat = null;
-  for (const f of Object.values(matchState.fighters)) {
-    if (!f || f === me || f.hp <= 0) continue;
-    if (f.sniperChargeTargetId !== me.id) continue;
-    if (!glintThreat || f.sniperChargeStartAt < glintThreat.sniperChargeStartAt) glintThreat = f;
+  for (const f of chargers) {
+    if (!glintThreat || f.chargeStartAt < glintThreat.chargeStartAt) glintThreat = f;
   }
   if (glintThreat) {
-    const glintKey = `${glintThreat.id}:${glintThreat.sniperChargeStartAt}`;
+    const glintKey = `${glintThreat.id}:${glintThreat.chargeStartAt}`;
     if (me.botGlintKey !== glintKey && me.botGlintStepAt == null) {
       me.botGlintKey = glintKey;
       me.botGlintAttackerId = glintThreat.id;
@@ -611,10 +554,10 @@ export function tickBot(matchState, botId, now) {
       // continue a committed Defense escape line if one is active, else a
       // random lateral vs the locked target (== perpendicular to it).
       let sdx, sdz;
-      const glintAtk = me.botGlintAttackerId ? matchState.fighters[me.botGlintAttackerId] : null;
-      if (glintAtk && glintAtk !== opp && glintAtk.hp > 0) {
-        const adx = me.pos.x - glintAtk.pos.x;
-        const adz = me.pos.z - glintAtk.pos.z;
+      const glintAtk = me.botGlintAttackerId ? (enemies.find((f) => f.id === me.botGlintAttackerId) ?? null) : null;
+      if (glintAtk && glintAtk.id !== opp.id) {
+        const adx = pos.x - glintAtk.pos.x;
+        const adz = pos.z - glintAtk.pos.z;
         const ad = Math.sqrt(adx * adx + adz * adz) || 1;
         const lat = Math.random() < 0.5 ? 1 : -1;
         sdx = (-adz / ad) * lat;
@@ -625,7 +568,7 @@ export function tickBot(matchState, botId, now) {
         const lat = Math.random() < 0.5 ? 1 : -1;
         sdx = sideX * lat; sdz = sideZ * lat;
       }
-      if (tryStartStep(matchState, me, sdx, sdz, now, obstacles)) {
+      if (host.startStep(sdx, sdz)) {
         // "Dodge + sprint": after the i-frame step ends, keep sprinting the
         // same way for 520 ms via a brief Defense commit (REPLACES any prior
         // Defense countdown by design — live triggers re-arm it afterwards).
@@ -652,11 +595,11 @@ export function tickBot(matchState, botId, now) {
   // but the brain still sees (the eyes, the rounds in the air, the clock)
   // and the gun still fires — the velocity dispatch below stands down for
   // the step's duration. The plain bot sits the step out as before.
-  const sdStepping = !!me.botSD && now <= me.stepUntil;
+  const sdStepping = !!sd && now <= me.stepUntil;
   if (now <= me.stepUntil) {
-    tickStep(me, now, obstacles);
-    if (!sdStepping) return;
-  } else if (me.stepUntil > 0) tickStep(me, now, obstacles);
+    host.tickStep();
+    if (!sdStepping) return 'step';
+  } else if (me.stepUntil > 0) host.tickStep();
 
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
@@ -665,10 +608,10 @@ export function tickBot(matchState, botId, now) {
   // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
   // compressed 50–70 team-synergy table (long locks let a teammate die
   // alone at the front). Units without the field (hidden ones) and every
-  // other mode keep lockRange. Mirrored in client updateEnemy.
-  const lockRange = (matchState.mode === '2v2' && me.unit?.lockRange2v2)
-    ? me.unit.lockRange2v2
-    : (me.unit?.lockRange ?? 50);
+  // other mode keep lockRange.
+  const lockRange = (mode === '2v2' && unit?.lockRange2v2)
+    ? unit.lockRange2v2
+    : (unit?.lockRange ?? 50);
   const upperRange = lockRange + 7;
   const optimalRange = Math.max(10, lockRange);
   const lowerRange = Math.max(6, lockRange - 7);
@@ -687,22 +630,22 @@ export function tickBot(matchState, botId, now) {
   // height and take the LOWER of it and the live one, so a drop off a ledge
   // stays honest too. The OPPONENT endpoint stays live: bots must still
   // react to a jumping human.
-  if (me.grounded && !me.airborne) me.botSightY = me.pos.y;
-  const myEyeY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + BOT_LOS_EYE_HEIGHT;
+  if (grounded && !me.airborne) me.botSightY = pos.y;
+  const myEyeY = Math.min(pos.y, me.botSightY ?? pos.y) + eyeUp;
   // Same grounded latch, at MUZZLE height — the fire gate's line (botShotCanLand).
-  const myShotY = Math.min(me.pos.y, me.botSightY ?? me.pos.y) + PROJECTILE_MUZZLE_Y_OFFSET;
+  const myShotY = Math.min(pos.y, me.botSightY ?? pos.y) + muzzleUp;
 
   // LoS + threats
   const playerHasLoS = botHasLineOfSight(
-    { x: me.pos.x, y: myEyeY, z: me.pos.z },
-    { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+    { x: pos.x, y: myEyeY, z: pos.z },
+    { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z },
     obstacles, surfaces
   );
   // Would the player still be visible from (px, pz)? LoS-gates the range
   // discipline below: never retreat or drift outward past the edge of sight.
   const losFromPoint = (px, pz) => botHasLineOfSight(
     { x: px, y: myEyeY, z: pz },
-    { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+    { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z },
     obstacles, surfaces
   );
   // Are the next `len` units straight toward the player WALKABLE? Uses the
@@ -710,9 +653,9 @@ export function tickBot(matchState, botId, now) {
   // chest-height ray sailed clean over 2.4-high belts that physically stop
   // a unit, so the triggers/exits kept releasing the bot into low walls.
   const walkTowardClear = (len) => !walkSegmentBlocked(
-    me.pos.x, me.pos.z,
-    me.pos.x + dirX * len, me.pos.z + dirZ * len,
-    me.pos.y, obstacles
+    pos.x, pos.z,
+    pos.x + dirX * len, pos.z + dirZ * len,
+    pos.y, obstacles
   );
   if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitStun = me.hitStunUntil;
@@ -732,14 +675,14 @@ export function tickBot(matchState, botId, now) {
   if (playerHasLoS || me.botLastLoSAt == null) me.botLastLoSAt = now;
   const noLoSTime = now - me.botLastLoSAt;
   if (me.botProgressAnchorAt == null) {
-    me.botProgressAnchorX = me.pos.x;
-    me.botProgressAnchorZ = me.pos.z;
+    me.botProgressAnchorX = pos.x;
+    me.botProgressAnchorZ = pos.z;
     me.botProgressAnchorAt = now;
     me.botLastProgressAt = now;
   }
   if (now - me.botProgressAnchorAt > 500) {
-    const ddx = me.pos.x - me.botProgressAnchorX;
-    const ddz = me.pos.z - me.botProgressAnchorZ;
+    const ddx = pos.x - me.botProgressAnchorX;
+    const ddz = pos.z - me.botProgressAnchorZ;
     // Hit-stun overlapped this window → excused. Being slowed to a crawl by
     // landing bullets is suppression, not "stuck": sustained fire otherwise
     // starves this clock and drops the bot into spurious mid-fight Maze
@@ -748,23 +691,22 @@ export function tickBot(matchState, botId, now) {
     if (Math.hypot(ddx, ddz) > 3 || me.hitStunUntil > me.botProgressAnchorAt) {
       me.botLastProgressAt = now;
     }
-    me.botProgressAnchorX = me.pos.x;
-    me.botProgressAnchorZ = me.pos.z;
+    me.botProgressAnchorX = pos.x;
+    me.botProgressAnchorZ = pos.z;
     me.botProgressAnchorAt = now;
   }
   const noProgressTime = now - (me.botLastProgressAt ?? now);
 
-  const avoid = computeBotAvoidance(me.pos.x, me.pos.y, me.pos.z, obstacles, BOT_OBSTACLE_AVOID_RADIUS);
+  const avoid = computeBotAvoidance(pos.x, pos.y, pos.z, obstacles, BOT_OBSTACLE_AVOID_RADIUS);
   const avoidMag = Math.hypot(avoid.rx, avoid.rz);
   const obstacleNear = avoidMag > 0.3;
 
-  const myFloorY = groundHeightAt(me.pos.x, me.pos.z, surfaces, me.pos.y - GROUND_BASE_Y);
+  const myFloorY = groundHeightAt(pos.x, pos.z, surfaces, pos.y - GROUND_BASE_Y);
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
   const onHighGround = myFloorY > BOT_HIGH_GROUND_MIN_Y;
 
-  // HIDE STANCE flag (owner 2026-09-26): read straight off the command
-  // side-table (matchState.commands[slot].hide — command.js imports this
-  // module, so importing isHideOrdered back would close a cycle), OR the
+  // HIDE STANCE flag (owner 2026-09-26): read off the host's command entry
+  // (the server's side-table matchState.commands[slot]), OR the
   // RELOAD HIDE: a manual reload of BOT_RELOAD_HIDE_MIN_MS or more is spent
   // in the stance — entered the tick the reload starts, left the tick it
   // completes. A command-side unit (a side-table entry exists) carries it as
@@ -774,8 +716,8 @@ export function tickBot(matchState, botId, now) {
   // (a unit released early stays out for the rest of that reload). Bots
   // without an entry (enemies, classic mode) run the same behaviour off
   // botReloadHide alone.
-  const cmdEntry = matchState.commands?.[botId] ?? null;
-  const rUnit = me.unit ?? {};
+  const cmdEntry = host.cmd ?? null;
+  const rUnit = unit ?? {};
   const reloadHide = rUnit.magCapacity != null && !rUnit.autoReload
     && (rUnit.reloadMs ?? 0) >= BOT_RELOAD_HIDE_MIN_MS
     && (me.reloadingUntil ?? 0) > now;
@@ -827,7 +769,7 @@ export function tickBot(matchState, botId, now) {
     resetBotHideFields(me);
   }
   // Which hide runs this tick: the stance (ordered / reload) or the cover hide.
-  const hideMode = me.botSD ? null : (hideOrdered ? 'stance' : (me.botCH ? 'cover' : null));
+  const hideMode = sd ? null : (hideOrdered ? 'stance' : (me.botCH ? 'cover' : null));
 
   // Movement override carried by the hide stance below (the 2026-08-08
   // cover reload's vehicle, kept: the dispatch and the stall-clock pinning
@@ -881,16 +823,12 @@ export function tickBot(matchState, botId, now) {
   } else if (!defenseLive) {
     // (A live Defense here can only be the anti-glint dodge's 520 ms
     // follow-up sprint — it keeps its frames; the hide resumes after.)
-    const hideEnemies = [];
-    for (const f of Object.values(matchState.fighters)) {
-      if (f.team !== me.team && f.hp > 0) hideEnemies.push(f);
-    }
     // Nearest first: eyes[0] is the threat the pacing steers away from.
-    hideEnemies.sort((a, b) =>
-      Math.hypot(a.pos.x - me.pos.x, a.pos.z - me.pos.z) - Math.hypot(b.pos.x - me.pos.x, b.pos.z - me.pos.z));
+    const hideEnemies = enemies.slice().sort((a, b) =>
+      Math.hypot(a.pos.x - pos.x, a.pos.z - pos.z) - Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z));
     // Enemy eyes stay LIVE (the existing convention — a jumping human must
     // still count); the unit's own eye is the grounded latch (myEyeY).
-    const hideEyes = hideEnemies.map((f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z }));
+    const hideEyes = hideEnemies.map((f) => ({ x: f.pos.x, y: f.pos.y + eyeUp, z: f.pos.z }));
     // Predicted eyes: where each enemy will be BOT_HIDE_PREDICT_S ahead on
     // its live velocity; a near-still enemy adds none (saves the tests).
     const hidePredEyes = [];
@@ -899,11 +837,11 @@ export function tickBot(matchState, botId, now) {
       const vx = f.vel?.x ?? 0, vz = f.vel?.z ?? 0;
       if (Math.hypot(vx, vz) > BOT_HIDE_PREDICT_MIN_SPEED) {
         hidePredEyes.push({
-          x: f.pos.x + vx * BOT_HIDE_PREDICT_S, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z + vz * BOT_HIDE_PREDICT_S
+          x: f.pos.x + vx * BOT_HIDE_PREDICT_S, y: f.pos.y + eyeUp, z: f.pos.z + vz * BOT_HIDE_PREDICT_S
         });
       }
     }
-    const hideMyEye = { x: me.pos.x, y: myEyeY, z: me.pos.z };
+    const hideMyEye = { x: pos.x, y: myEyeY, z: pos.z };
     // Position test (<= 2 LoS tests): nearest eye first, early exit on the
     // first eye that sees the unit.
     let hiddenAll = true;
@@ -923,7 +861,7 @@ export function tickBot(matchState, botId, now) {
     const threat = hideEnemies[0] ?? null;
     let threatDist = Infinity, awayX = 0, awayZ = 0, closing = false;
     if (threat) {
-      const dx = me.pos.x - threat.pos.x, dz = me.pos.z - threat.pos.z;
+      const dx = pos.x - threat.pos.x, dz = pos.z - threat.pos.z;
       threatDist = Math.hypot(dx, dz) || 1;
       awayX = dx / threatDist;
       awayZ = dz / threatDist;
@@ -940,7 +878,7 @@ export function tickBot(matchState, botId, now) {
     }
     // Is a route goal still hidden from the live eyes?
     const hideGoalStillHidden = (goal) => {
-      const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: goal.z };
+      const gEye = { x: goal.x, y: (goal.y ?? 0) + GROUND_BASE_Y + eyeUp, z: goal.z };
       for (let k = 0; k < hideEyes.length; k += 1) {
         if (botHasLineOfSight(hideEyes[k], gEye, obstacles, surfaces)) return false;
       }
@@ -957,7 +895,7 @@ export function tickBot(matchState, botId, now) {
     //    follows on the cadence).
     if (me.botHidePath) {
       const goal = me.botHideGoal;
-      if (Math.hypot(goal.x - me.pos.x, goal.z - me.pos.z) < 2) {
+      if (Math.hypot(goal.x - pos.x, goal.z - pos.z) < 2) {
         hideDropPath();
         me.botHideAnchor = null;
       } else if (!hideGoalStillHidden(goal)) {
@@ -992,13 +930,12 @@ export function tickBot(matchState, botId, now) {
     if (hideAttempts.length
         && !me.botHidePath
         && now >= (me.botHideSearchAt ?? 0)
-        && matchState.hideSearchTick !== matchState.tick) {
-      matchState.hideSearchTick = matchState.tick;
+        && host.searchSlot()) {
       const stage = Math.min(me.botHideSearchStage ?? 0, hideAttempts.length - 1);
       const attempt = hideAttempts[stage];
       const found = findHiddenSpot(
-        navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes, obstacles,
-        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER, deadline: matchState.searchDeadline ?? 0 }
+        grid, pos.x, pos.z, myFloorY, attempt.eyes, obstacles,
+        { maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER, deadline: host.deadline() }
       );
       if (found) {
         me.botHideNoCover = false;
@@ -1035,11 +972,11 @@ export function tickBot(matchState, botId, now) {
       const hp = me.botHidePath;
       let wp = hp[me.botHidePathIdx];
       while (me.botHidePathIdx < hp.length - 1
-          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 2) {
+          && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 2) {
         me.botHidePathIdx += 1;
         wp = hp[me.botHidePathIdx];
       }
-      let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
+      let tx = wp.x - pos.x, tz = wp.z - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.6;
       tz = tz / wl + avoid.rz * 0.6;
@@ -1056,8 +993,8 @@ export function tickBot(matchState, botId, now) {
       // The COVER HIDE sprints like Defense: no arming, the 8 floor only.
       coverMove = { hold: false, hide: true, dash: hideMode === 'cover' ? true : !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
       if (!me.botHideMoveAnchor
-          || Math.hypot(me.pos.x - me.botHideMoveAnchor.x, me.pos.z - me.botHideMoveAnchor.z) > 1) {
-        me.botHideMoveAnchor = { x: me.pos.x, z: me.pos.z, at: now };
+          || Math.hypot(pos.x - me.botHideMoveAnchor.x, pos.z - me.botHideMoveAnchor.z) > 1) {
+        me.botHideMoveAnchor = { x: pos.x, z: pos.z, at: now };
       } else if (now - me.botHideMoveAnchor.at > BOT_HIDE_BAIL_MS) {
         // No progress: drop the route, retry the search shortly; until then
         // the plain legs below move the unit.
@@ -1076,12 +1013,12 @@ export function tickBot(matchState, botId, now) {
       // the nearest enemy with a little continuity and noise so the pacing
       // reads as a person, not a metronome. No hidden leg at all (a tight
       // nook) -> stand for BOT_HIDE_DRIFT_RETRY_MS, then try again.
-      if (!me.botHideAnchor) me.botHideAnchor = { x: me.pos.x, z: me.pos.z };
+      if (!me.botHideAnchor) me.botHideAnchor = { x: pos.x, z: pos.z };
       const anchor = me.botHideAnchor;
       const legOk = (hx, hz, strict) => {
-        const lx = me.pos.x + hx * BOT_HIDE_LEG, lz = me.pos.z + hz * BOT_HIDE_LEG;
+        const lx = pos.x + hx * BOT_HIDE_LEG, lz = pos.z + hz * BOT_HIDE_LEG;
         if (Math.hypot(lx - anchor.x, lz - anchor.z) > BOT_HIDE_LEASH) return false;
-        if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y, obstacles)) return false;
+        if (walkSegmentBlocked(pos.x, pos.z, lx, lz, pos.y, obstacles)) return false;
         const eye = { x: lx, y: myEyeY, z: lz };
         for (let k = 0; k < hideEyes.length; k += 1) if (botHasLineOfSight(hideEyes[k], eye, obstacles, surfaces)) return false;
         if (strict) for (let k = 0; k < hidePredEyes.length; k += 1) if (botHasLineOfSight(hidePredEyes[k], eye, obstacles, surfaces)) return false;
@@ -1143,31 +1080,24 @@ export function tickBot(matchState, botId, now) {
     }
   }
   // ===== SUDDEN DEATH BRAIN (see sdbrain.js — one module, both hosts) =====
-  // Per-fighter overrides (me.botSDOpts) let the harness A/B two rule sets
-  // inside one match; the fire block below reads SDG too.
-  const SDG = me.botSD ? (me.botSDOpts ? { ...BOT_SD, ...me.botSDOpts } : BOT_SD) : null;
-  if (me.botSD && !defenseLive) {
-    const sdEnemies = [];
-    for (const f of Object.values(matchState.fighters)) {
-      if (f.team !== me.team && f.hp > 0) sdEnemies.push(f);
-    }
+  // Its host is this host: the same body, enemies, arena and actions; the
+  // fire block below reads `sd` too.
+  if (sd && !defenseLive) {
     coverMove = sdBrainTick({
-      now, SD: SDG, me, pos: me.pos, unit: me.unit, vel: me.vel, grounded: me.grounded,
-      wall: matchState.walls?.[me.id] ?? null,   // (physics' note from the last tick: the face the body was pushed out of — tick.js stage 5)
-      opp, enemies: sdEnemies,
-      obstacles, grid: navGridFor(arena), clear: makeMuzzleClear(obstacles, surfaces),
-      eyeUp: PROJECTILE_MUZZLE_Y_OFFSET, muzzleH: PROJECTILE_MUZZLE_Y_OFFSET,
+      now, SD: sd, me, pos, unit, vel, grounded,
+      wall: host.wall,   // (physics' note from the last tick: the face the body was pushed out of)
+      opp, enemies,
+      obstacles, grid, clear: host.clear,
+      eyeUp: muzzleUp, muzzleH: muzzleUp,
       dist, sideX, sideZ, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
       groundHeightAt: (x, z, fallback) => groundHeightAt(x, z, surfaces, fallback),
-      startStep: (dx, dz) => tryStartStep(matchState, me, dx, dz, now, obstacles),
-      startJump: () => tryStartJump(me, now),
-      // (one route search per tick per match — shares the hide search's slot)
-      searchSlot: () => { if (matchState.hideSearchTick === matchState.tick) return false; matchState.hideSearchTick = matchState.tick; return true; },
-      // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
-      deadline: () => matchState.searchDeadline ?? 0,
-      tape: null
+      startStep: host.startStep,
+      startJump: host.startJump,
+      searchSlot: host.searchSlot,
+      deadline: host.deadline,
+      tape: host.tape ?? null
     });
-  } else if (me.botSD) {
+  } else if (sd) {
     me.botSDState = 'dodge';
   }
 
@@ -1178,8 +1108,8 @@ export function tickBot(matchState, botId, now) {
     // the cover intent on exit.
     me.botLastProgressAt = now;
     me.botLastLoSAt = now;
-    me.botStuckCheckX = me.pos.x;
-    me.botStuckCheckZ = me.pos.z;
+    me.botStuckCheckX = pos.x;
+    me.botStuckCheckZ = pos.z;
     me.botStuckCheckAt = now;
     me.botPathLen = 0;
   }
@@ -1195,17 +1125,17 @@ export function tickBot(matchState, botId, now) {
   let stuckTriggered = false;
   let stuckFrozen = false;
   me.botPathLen = (me.botPathLen ?? 0)
-    + Math.hypot(me.pos.x - (me.botPrevX ?? me.pos.x), me.pos.z - (me.botPrevZ ?? me.pos.z));
-  me.botPrevX = me.pos.x;
-  me.botPrevZ = me.pos.z;
+    + Math.hypot(pos.x - (me.botPrevX ?? pos.x), pos.z - (me.botPrevZ ?? pos.z));
+  me.botPrevX = pos.x;
+  me.botPrevZ = pos.z;
   if (me.botStuckCheckAt == null) {
-    me.botStuckCheckX = me.pos.x;
-    me.botStuckCheckZ = me.pos.z;
+    me.botStuckCheckX = pos.x;
+    me.botStuckCheckZ = pos.z;
     me.botStuckCheckAt = now;
     me.botPathLen = 0;
   } else if (now - me.botStuckCheckAt >= 1000) {   // 1.5 s -> 1 s (2026-08-05 trim)
     const windowStale = now - me.botStuckCheckAt > 1700;
-    const net = Math.hypot(me.pos.x - me.botStuckCheckX, me.pos.z - me.botStuckCheckZ);
+    const net = Math.hypot(pos.x - me.botStuckCheckX, pos.z - me.botStuckCheckZ);
     // Thresholds scaled 2/3 with the window (1.5 s -> 1 s) so the per-second
     // movement rates that count as wedged/spinning are unchanged.
     // WEDGED's path cap was 4 until 2026-08-08: a bot SLIDING along a wall
@@ -1229,12 +1159,12 @@ export function tickBot(matchState, botId, now) {
       stuckFrozen = net < 0.8;
       // STUCK MEMORY (revived 2026-08-08 with the Maze slim-down): remember
       // the pinned spot so the maze fallback's retries bend away from it.
-      me.botStuckMemX = me.pos.x;
-      me.botStuckMemZ = me.pos.z;
+      me.botStuckMemX = pos.x;
+      me.botStuckMemZ = pos.z;
       me.botStuckMemAt = now;
     }
-    me.botStuckCheckX = me.pos.x;
-    me.botStuckCheckZ = me.pos.z;
+    me.botStuckCheckX = pos.x;
+    me.botStuckCheckZ = pos.z;
     me.botStuckCheckAt = now;
     me.botPathLen = 0;
   }
@@ -1249,8 +1179,9 @@ export function tickBot(matchState, botId, now) {
   // to the target; Maze follows it waypoint by waypoint. Returns false when
   // no walk route exists (target on a jump-only platform, degenerate snap) —
   // the minimal fallback in the maze movement leg covers those ticks until
-  // the detectors re-fire. Paths live on matchState._navPaths, NOT on the fighter: the
-  // fighter object is serialized into every snapshot.
+  // the detectors re-fire. Paths live where the host keeps them (navGet /
+  // navSet — the server keeps them off the fighter, which is serialized
+  // into every snapshot).
   // FIRING-POSITION TRUNCATION — the raw path ends at the player's FEET.
   // Walk it (6-unit samples) and cut it at the first spot that already SEES
   // the player from inside the band's upper edge: the bot travels to a
@@ -1260,7 +1191,7 @@ export function tickBot(matchState, botId, now) {
   // at match start" report). Nothing qualifies → keep the full path (some
   // fights genuinely require getting close before any sight exists).
   const truncateAtFiringPoint = (path) => {
-    let prev = { x: me.pos.x, z: me.pos.z };
+    let prev = { x: pos.x, z: pos.z };
     for (let i = 0; i < path.length; i += 1) {
       const seg = path[i];
       const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
@@ -1271,8 +1202,8 @@ export function tickBot(matchState, botId, now) {
         if (Math.hypot(opp.pos.x - px, opp.pos.z - pz) > upperRange) continue;
         const fy = groundHeightAt(px, pz, surfaces, 1000);
         if (botHasLineOfSight(
-          { x: px, y: fy + GROUND_BASE_Y + BOT_LOS_EYE_HEIGHT, z: pz },
-          { x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+          { x: px, y: fy + GROUND_BASE_Y + eyeUp, z: pz },
+          { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z },
           obstacles, surfaces
         )) {
           const cut = path.slice(0, i);
@@ -1288,7 +1219,6 @@ export function tickBot(matchState, botId, now) {
     return path;
   };
   const navPlan = () => {
-    const grid = navGridFor(arena);
     // FIRST CHOICE: walk to a FIRING POSITION — the nearest reachable spot
     // that already sees the target from inside the band. This is what makes
     // a sniper cross the map to a sniping lane instead of to the enemy.
@@ -1296,30 +1226,27 @@ export function tickBot(matchState, botId, now) {
     // (some pockets have no in-band sight anywhere — then getting close is
     // genuinely the only option, and the exit gates take over from there).
     let path = findFiringPath(
-      grid, me.pos.x, me.pos.z, myFloorY,
-      opp.pos.x, opp.pos.z, opp.pos.y + BOT_LOS_EYE_HEIGHT,
+      grid, pos.x, pos.z, myFloorY,
+      opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
       lowerRange, upperRange, obstacles, oppFloorY
     );
     if (!path || path.length < 2) {
       path = findPathOnGrid(
-        grid, me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles
+        grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles
       );
       if (path && path.length > 1) path = truncateAtFiringPoint(path);
     }
     // Diagonal legs where the swept corridor proves them safe (see
-    // smoothPath's header note). Mirrored in main.js navPlan.
+    // smoothPath's header note).
     if (path && path.length > 2) path = smoothPath(grid, path, obstacles);
-    if (matchState._navPaths == null) matchState._navPaths = {};
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
       // #2 from an off-grid position can clip the corner between them.
-      matchState._navPaths[botId] = {
-        path, idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now
-      };
+      host.navSet({ path, idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now });
       me.botMazeLosBlockedAtEntry = !playerHasLoS;
       return true;
     }
-    delete matchState._navPaths[botId];
+    host.navSet(null);
     return false;
   };
 
@@ -1355,7 +1282,7 @@ export function tickBot(matchState, botId, now) {
   // plain Defense escape until a later search finds cover.
   const hideParks = hideMode != null && !(me.botHideNoCover && underFire);
   // SD brain owning the legs this tick: same parking as a hide.
-  const sdParks = !!(me.botSD && coverMove);
+  const sdParks = !!(sd && coverMove);
   if ((hideParks || sdParks) && !inDefenseGrace) {
     nextState = 'pursue';
   } else if (underFire || inDefenseGrace) {
@@ -1414,15 +1341,15 @@ export function tickBot(matchState, botId, now) {
     // stored escape heading for a beat, then replan from the freed spot.
     // Deliberately statue-only (zero net movement): bots that still move
     // never take the back-out, so live routing gains no back-and-forth.
-    const navPrev = matchState._navPaths ? matchState._navPaths[botId] : null;
+    const navPrev = host.navGet();
     const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
     let planned = navPlan();
     if (planned && frozenWp) {
-      const fresh = matchState._navPaths[botId];
+      const fresh = host.navGet();
       // The follower's own advance rule: the waypoint it would steer to.
       let fi = fresh.idx;
       while (fi < fresh.path.length - 1
-          && Math.hypot(fresh.path[fi].x - me.pos.x, fresh.path[fi].z - me.pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
+          && Math.hypot(fresh.path[fi].x - pos.x, fresh.path[fi].z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) fi += 1;
       const firstWp = fresh.path[fi];
       // Match against EVERY remaining waypoint of the frozen route, not just
       // the indexed steer-to: smoothPath's greedy anchors are start/goal-
@@ -1436,10 +1363,10 @@ export function tickBot(matchState, botId, now) {
       const retraced = navPrev.path.slice(navPrev.idx).some((w) =>
         Math.abs(firstWp.x - w.x) < 0.5 && Math.abs(firstWp.z - w.z) < 0.5);
       if (retraced) {
-        delete matchState._navPaths[botId];
+        host.navSet(null);
         planned = false;
         me.botMazeEscapeUntil = now + 800;
-        const edx = me.pos.x - frozenWp.x, edz = me.pos.z - frozenWp.z;
+        const edx = pos.x - frozenWp.x, edz = pos.z - frozenWp.z;
         const edl = Math.hypot(edx, edz);
         me.botMazeEscapeDirX = edl > 0.05 ? edx / edl : -dirX;
         me.botMazeEscapeDirZ = edl > 0.05 ? edz / edl : -dirZ;
@@ -1479,8 +1406,8 @@ export function tickBot(matchState, botId, now) {
       // each orbit tangent, which way keeps the player visible? The blind
       // coin flip walked the bot out of hard-won sight windows half the
       // time (the plateau-edge pacing). Ties fall back to random.
-      const losCw = losFromPoint(me.pos.x + sideX * 12, me.pos.z + sideZ * 12);
-      const losCcw = losFromPoint(me.pos.x - sideX * 12, me.pos.z - sideZ * 12);
+      const losCw = losFromPoint(pos.x + sideX * 12, pos.z + sideZ * 12);
+      const losCcw = losFromPoint(pos.x - sideX * 12, pos.z - sideZ * 12);
       if (losCw !== losCcw) me.botOrbitSign = losCw ? 1 : -1;
       else me.botOrbitSign = Math.random() > 0.5 ? 1 : -1;
     }
@@ -1505,8 +1432,8 @@ export function tickBot(matchState, botId, now) {
       me.botDefenseFlips = 0;
       me.botDefenseStuckMode = !!stuckTriggered;
       // Reset the stuck window — next check starts fresh after this entry.
-      me.botStuckCheckX = me.pos.x;
-      me.botStuckCheckZ = me.pos.z;
+      me.botStuckCheckX = pos.x;
+      me.botStuckCheckZ = pos.z;
       me.botStuckCheckAt = now;
       me.botPathLen = 0;
     }
@@ -1627,7 +1554,7 @@ export function tickBot(matchState, botId, now) {
     // second — the flickering sprint pose. Shared with Maze below.
     wantSprint = botTravelSprint(me);
     // Elevation aids close the gap; skip them when we're trying to back off.
-    if (!tooClose && me.grounded && !me.airborne) {
+    if (!tooClose && grounded && !me.airborne) {
       // Climb aid: only for a step a jump can actually clear. Above that the
       // router owns it — and the aid was unreachable dead code until the
       // vertical-stack fix above (it needs dist < 32 while tooClose held for
@@ -1635,27 +1562,27 @@ export function tickBot(matchState, botId, now) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
           && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
           && dist < 32 && Math.random() > 0.5) {
-        if (botTryJump(me, now)) jumpThisTick = true;
+        if (botTryJump(host)) jumpThisTick = true;
       } else if (onHighGround) {
-        const exit = findDescentDirection(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
+        const exit = findDescentDirection(pos.x, pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
         if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
           jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botTryJump(me, now)) jumpThisTick = true;
+          if (botTryJump(host)) jumpThisTick = true;
         }
       } else {
         // Low ground: take any reachable platform — no "toward player" gate,
         // since on maps like Station the raised decks are the strong positions
         // and we'd rather be up there than on the tracks. The jump cooldown
         // rate-limits this; no strict random gate needed.
-        const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+        const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
         if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botTryJump(me, now)) jumpThisTick = true;
+          if (botTryJump(host)) jumpThisTick = true;
         }
       }
     }
   } else if (botS === 'maze') {
-    let nav = matchState._navPaths ? matchState._navPaths[botId] : null;
+    let nav = host.navGet();
     // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
     // whose goal is meaningfully CLOSER to the player is an approach — done,
     // drop it. A pathless maze has nothing sane to do here
@@ -1674,7 +1601,7 @@ export function tickBot(matchState, botId, now) {
       const goalCloser = goalWp
         && Math.hypot(opp.pos.x - goalWp.x, opp.pos.z - goalWp.z) < dist - 4;
       if (!nav || goalCloser) {
-        if (nav) delete matchState._navPaths[botId];
+        if (nav) host.navSet(null);
         nav = null;
         me.botStateEnteredAt = now - 3001;
       }
@@ -1687,7 +1614,7 @@ export function tickBot(matchState, botId, now) {
     // fallback covers the remaining ticks until the exit fires.
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
-      if (Math.hypot(lastWp.x - me.pos.x, lastWp.z - me.pos.z) < 3) {
+      if (Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
         // Arrived — but if the trip did NOT buy sight of the target, dropping
         // to the pathless fallback sends the bot beelining back where it came
         // from (the Streets under-bridge out-and-back loop). Ask for a fresh
@@ -1697,7 +1624,7 @@ export function tickBot(matchState, botId, now) {
         let replaced = false;
         if (!playerHasLoS) {
           navPlan();
-          const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
+          const fresh = host.navGet();
           const freshLast = fresh && fresh.path[fresh.path.length - 1];
           if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
             nav = fresh;
@@ -1705,7 +1632,7 @@ export function tickBot(matchState, botId, now) {
           }
         }
         if (!replaced) {
-          delete matchState._navPaths[botId];
+          host.navSet(null);
           nav = null;
         }
       }
@@ -1719,30 +1646,32 @@ export function tickBot(matchState, botId, now) {
       // Avoidance stays blended in for dynamic wiggle room.
       let wp = nav.path[nav.idx];
       while (nav.idx < nav.path.length - 1
-          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
+          && Math.hypot(wp.x - pos.x, wp.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
       }
       if (now - nav.at > 1000
           && Math.hypot(opp.pos.x - nav.gx, opp.pos.z - nav.gz) > 12) {
         navPlan();
-        const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
+        const fresh = host.navGet();
         if (fresh && fresh.path[fresh.idx]) wp = fresh.path[fresh.idx];
       }
-      // JUMP-LINK crossing: the upcoming waypoint sits on a ledge above the
-      // bot's floor (the path bridged a walk-island, e.g. Station's
-      // platforms) — vault toward it once close enough. Downward crossings
-      // need nothing: the bot just walks off the ledge.
-      if (wp.y != null && wp.y - myFloorY > 1.7
-          && me.grounded && !me.airborne
-          && Math.hypot(wp.x - me.pos.x, wp.z - me.pos.z) < 7) {
-        const jdx = wp.x - me.pos.x, jdz = wp.z - me.pos.z;
+      // JUMP-LINK crossing: the path reaches the upcoming waypoint by a jump
+      // link (flagged `jump`: a ledge above the bot's floor, a walk-island
+      // bridged, e.g. Station's platforms) — vault toward it once close
+      // enough. A slope or a kerb's ramp the body walks is a walk edge and
+      // flagged nothing: no vault (b1021s). Downward crossings need nothing:
+      // the bot just walks off the ledge.
+      if (wp.jump
+          && grounded && !me.airborne
+          && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 7) {
+        const jdx = wp.x - pos.x, jdz = wp.z - pos.z;
         const jln = Math.hypot(jdx, jdz) || 1;
         jumpDirX = jdx / jln;
         jumpDirZ = jdz / jln;
-        if (botTryJump(me, now)) jumpThisTick = true;
+        if (botTryJump(host)) jumpThisTick = true;
       }
-      let tx = wp.x - me.pos.x, tz = wp.z - me.pos.z;
+      let tx = wp.x - pos.x, tz = wp.z - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.3;
       tz = tz / wl + avoid.rz * 0.3;
@@ -1755,12 +1684,12 @@ export function tickBot(matchState, botId, now) {
       // and unaffordable; sprint resumes once the jump is funded.
       let jumpAhead = false;
       for (let k = nav.idx; k < nav.path.length; k += 1) {
-        if ((nav.path[k].y ?? 0) - myFloorY > 1.7) { jumpAhead = true; break; }
+        if (nav.path[k].jump) { jumpAhead = true; break; }
       }
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee
       // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit?.jumpBoostCost ?? 48) + 10);
+      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (unit?.jumpBoostCost ?? 48) + 10);
       wantSprint = botTravelSprint(me) && !(jumpAhead && me.boost < jumpBank);
     } else if (me.botMazeEscapeUntil != null && now < me.botMazeEscapeUntil) {
       // STATUE BACK-OUT (no route, escape armed): reverse along the stored
@@ -1781,7 +1710,7 @@ export function tickBot(matchState, botId, now) {
       let tz = dirZ + avoid.rz * 0.8;
       if (me.botStuckMemAt != null && now - me.botStuckMemAt < BOT_STUCK_MEMORY_MS) {
         const rep = computeStuckRepulsion(
-          me.pos.x, me.pos.z, me.botStuckMemX, me.botStuckMemZ, BOT_STUCK_MEMORY_RADIUS);
+          pos.x, pos.z, me.botStuckMemX, me.botStuckMemZ, BOT_STUCK_MEMORY_RADIUS);
         tx += rep.rx * BOT_STUCK_MEMORY_WEIGHT;
         tz += rep.rz * BOT_STUCK_MEMORY_WEIGHT;
       }
@@ -1796,11 +1725,11 @@ export function tickBot(matchState, botId, now) {
     // of 21 crossings-and-straight-back, 76% happened in Defense and only 10%
     // in Maze, so the floor is worth keeping exactly where the bouncing is and
     // dropping exactly where the routing is.
-    if (me.grounded && !me.airborne) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS, 0);
+    if (grounded && !me.airborne) {
+      const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS, 0);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botTryJump(me, now)) jumpThisTick = true;
+        if (botTryJump(host)) jumpThisTick = true;
       }
     }
   } else if (botS === 'engage') {
@@ -1810,8 +1739,8 @@ export function tickBot(matchState, botId, now) {
     // window it was handed instead of blindly strolling out of it.
     if (playerHasLoS && now >= (me.botOrbitFlipAt ?? 0)) {
       const sgn = me.botOrbitSign ?? 1;
-      if (!losFromPoint(me.pos.x + sideX * sgn * 12, me.pos.z + sideZ * sgn * 12)
-          && losFromPoint(me.pos.x - sideX * sgn * 12, me.pos.z - sideZ * sgn * 12)) {
+      if (!losFromPoint(pos.x + sideX * sgn * 12, pos.z + sideZ * sgn * 12)
+          && losFromPoint(pos.x - sideX * sgn * 12, pos.z - sideZ * sgn * 12)) {
         me.botOrbitSign = -sgn;
         me.botOrbitFlipAt = now + 1000;
       }
@@ -1854,11 +1783,11 @@ export function tickBot(matchState, botId, now) {
     // better engagement / vantage spot on Station-like maps. Doesn't override
     // the orbit (just adds a jump when the chance is there); the jump cooldown
     // limits how often this fires.
-    if (me.grounded && !me.airborne && !onHighGround) {
-      const perch = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+    if (grounded && !me.airborne && !onHighGround) {
+      const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botTryJump(me, now)) jumpThisTick = true;
+        if (botTryJump(host)) jumpThisTick = true;
       }
     }
 
@@ -1906,13 +1835,13 @@ export function tickBot(matchState, botId, now) {
       // the sprint. GLINT GATE: never while an anti-glint dodge is
       // scheduled (me.botGlintStepAt) — airborne can't dodge, and a hop
       // there converts a guaranteed-dodgeable sniper shot into a hit.
-      if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
-        const ahead = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
+      if (grounded && !me.airborne && me.botGlintStepAt == null) {
+        const ahead = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, 6);
         if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
             && ahead.toX * mx + ahead.toZ * mz > 0.8) {
           jumpDirX = ahead.toX;
           jumpDirZ = ahead.toZ;
-          if (botTryJumpSurvival(me, now)) {
+          if (botTryJumpSurvival(host)) {
             jumpThisTick = true;
             me.botDefenseStuckTicks = 0;
           }
@@ -1934,13 +1863,13 @@ export function tickBot(matchState, botId, now) {
         // cooldown) or no ledge → the usual flip → slide → bail chain.
         // Same glint gate as the proactive hop above.
         let vaulted = false;
-        if (me.grounded && !me.airborne && me.botGlintStepAt == null) {
-          const ledge = findHighGroundPerch(me.pos.x, me.pos.z, myFloorY, surfaces, obstacles, 6);
+        if (grounded && !me.airborne && me.botGlintStepAt == null) {
+          const ledge = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, 6);
           if (ledge && ledge.dist < BOT_LEDGE_JUMP_REACH
               && ledge.toX * (me.botDefenseDirX ?? sideX) + ledge.toZ * (me.botDefenseDirZ ?? sideZ) > 0.3) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
-            if (botTryJumpSurvival(me, now)) {
+            if (botTryJumpSurvival(host)) {
               jumpThisTick = true;
               vaulted = true;
               me.botDefenseStuckTicks = 0;
@@ -1989,8 +1918,8 @@ export function tickBot(matchState, botId, now) {
   // === Velocity dispatch — drives the heading and sprint intent produced by
   // the active state into the body's velocity. Mid-jump airborne ticks hold
   // the launch aim so the arc lands where it was committed.
-  const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
-  const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
+  const botSprintBase = unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
+  const botWalkSpeed = unit?.walkSpeed ?? WALK_SPEED;
   // Sprint funding tiers: Defense (escaping live fire) may spend down to the
   // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
   // funded down to the hard floor too — the latch itself (arm > 50, drop
@@ -2007,44 +1936,36 @@ export function tickBot(matchState, botId, now) {
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    me.vel.x = jumpDirX * botSprintBase;
-    me.vel.z = jumpDirZ * botSprintBase;
+    vel.x = jumpDirX * botSprintBase;
+    vel.z = jumpDirZ * botSprintBase;
     me.action = 'jump';
   } else if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
     const ax = me.botAirSteerX ?? mx;
     const az = me.botAirSteerZ ?? mz;
-    me.vel.x = ax * botSprintBase;
-    me.vel.z = az * botSprintBase;
+    vel.x = ax * botSprintBase;
+    vel.z = az * botSprintBase;
     me.action = 'dash';
   } else if (wantSprint && botCanSprint) {
-    me.vel.x = mx * botSprintBase;
-    me.vel.z = mz * botSprintBase;
-    inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
+    vel.x = mx * botSprintBase;
+    vel.z = mz * botSprintBase;
+    host.inheritMomentum(MOMENTUM_STANDARD * 1.5);
     me.action = 'dash';
   } else {
-    me.vel.x = mx * botWalkSpeed;
-    me.vel.z = mz * botWalkSpeed;
+    vel.x = mx * botWalkSpeed;
+    vel.z = mz * botWalkSpeed;
     // Anti-freeze nudge — skipped during a cover-reload HOLD (the hold paces
     // its own narrow sway; the nudge must not override a flip instant).
     if (!(coverMove && coverMove.hold)
-        && Math.abs(me.vel.x) + Math.abs(me.vel.z) < 0.08) {
-      me.vel.x = sideX * 4.5;
-      me.vel.z = sideZ * 4.5;
+        && Math.abs(vel.x) + Math.abs(vel.z) < 0.08) {
+      vel.x = sideX * 4.5;
+      vel.z = sideZ * 4.5;
     }
     me.action = 'idle';
   }
 
-  // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
-  // weapon's move-scale, stored on the victim) while stunned rather than
-  // freezing. Mirrors offline main.js updateEnemy.
-  if (now < me.hitStunUntil) {
-    me.vel.x *= me.hitStunScale;
-    me.vel.z *= me.hitStunScale;
-  }
-
   // --- Firing: LoS-aware + universal burst sizing ---
   if (now >= me.nextFireAt) {
-    const u = me.unit;
+    const u = unit;
     // NOTE (2026-08-01): the bot's OWN spawn immunity no longer holds fire —
     // shots from an immune attacker deal full damage (every hit check is
     // target-side), and humans can already shoot while protected. Only the
@@ -2063,7 +1984,7 @@ export function tickBot(matchState, botId, now) {
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
-    } else if (SDG ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z))) {
+    } else if (sd ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - pos.x, opp.pos.y - pos.y, opp.pos.z - pos.z), mode)) {
       // (SUDDEN DEATH: the brain's trigger (botSDFire) is the unit's only
       // trigger — open, no bloom-gate hold: a 1 HP duel is the same lottery
       // both ways, and a held trigger returns nothing; closed (hidden, or the
@@ -2079,17 +2000,17 @@ export function tickBot(matchState, botId, now) {
       // marksman rifles). Closed form,
       // checked BEFORE the obstacle scan; polls every tick. Mirrors offline
       // main.js updateEnemy.
-      me.nextFireAt = now + TICK_RATE_MS;
-    } else if (!botShotCanLand(myShotY, me, opp, obstacles, surfaces)) {
+      me.nextFireAt = now + host.tickMs;
+    } else if (!host.clear({ x: pos.x, y: myShotY, z: pos.z }, { x: opp.pos.x, y: opp.pos.y + muzzleUp, z: opp.pos.z })) {
       // No clear shot — hold fire and check again shortly. The origin is the
       // GROUNDED muzzle (see myShotY): a jump must not manufacture a firing line.
       // SD in band: poll every firePollMs — a sprint through a one-cell gap
       // lasts ~200 ms and the 220 ms poll let it go unshot.
-      me.nextFireAt = now + (SDG ? SDG.firePollMs : 220);   // (the Sudden Death brain: the fast poll — a line opens and closes within one sprint)
+      me.nextFireAt = now + (sd ? sd.firePollMs : 220);   // (the Sudden Death brain: the fast poll — a line opens and closes within one sprint)
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
     } else if (u.sniperCharge) {
-      const fired = attemptFire(matchState, me, opp, now);
+      const fired = host.fire();
       if (fired) {
         // Sniper release timing — a 50/50 coin flip for BOTH snipers:
         // Kei (beam): quick floor beam OR the full-charge sweep channel.
@@ -2110,12 +2031,12 @@ export function tickBot(matchState, botId, now) {
       // while an enemy line is open on the unit there is no burst rest and
       // no cadence jitter — rounds at the gun's own cooldown until the line
       // closes or the magazine empties. SD only.
-      const sdDump = !!(SDG && me.botSDFire);
+      const sdDump = !!(sd && me.botSDFire);
       if (bursted && me.machineBurstRemaining <= 0) {
         me.machineBurstRemaining = botBurstSize(u);
       }
       const firedAt = me.lastFireAt;
-      attemptFire(matchState, me, opp, now);
+      host.fire();
       const fired = me.lastFireAt !== firedAt;
       if (fired) {
         botNoteShot(me);
@@ -2138,4 +2059,5 @@ export function tickBot(matchState, botId, now) {
       }
     }
   }
+  return sdStepping ? 'stepping' : 'ran';
 }
