@@ -541,13 +541,22 @@ export const MAP_DATA = {
   lobby: { id: 'lobby', name: 'Lobby' },
   station: { id: 'station', name: 'Station' },
   flashpoint: { id: 'flashpoint', name: 'Flashpoint' },
-  airport: { id: 'airport', name: 'Airport' }
+  airport: { id: 'airport', name: 'Airport' },
+  // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
+  town: { id: 'town', name: 'Town' }
 };
 
 // Match-wide tunables.
 export const MAX_HP = 100;   // 150 -> 100 (2026-08-08 demo-line user tune, all units)
 export const BOOST_CAP = 250;
 export const GROUND_BASE_Y = 2.45;
+// The step: a body walks onto a floor no more than this higher than the one it stands on — no jump. 2.6 units
+// is 0.65 m, the modelled maps' tallest kerb (was 1.6: pavements then needed ramps of their own). The nav grid
+// and the bots' ledge reading derive theirs from it.
+export const SURFACE_STEP_HEIGHT = 2.6;
+// A rise above this needs a jump: the step walks anything lower. The nav grid's walkable step and its jump links,
+// the path smoother and the bots' ledge tests all read this one number.
+export const JUMP_RISE_MIN = SURFACE_STEP_HEIGHT + 0.1;
 
 // Movement / boost. BOOST_MOVE_SPEED is the sprint default; WALK_SPEED is
 // the non-sprint default. Both are fall-throughs for units that omit

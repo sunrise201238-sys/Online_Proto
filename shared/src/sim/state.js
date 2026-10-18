@@ -169,8 +169,9 @@ export function createProjectile({
 // Trio: `rosters` maps slot id → ordered array of 3 unit keys (repeats
 // allowed). When present each fighter starts as roster[0] and carries
 // `roster` + `rosterIdx` in its snapshot state; on death the server calls
-// respawnFighterNext to swap in the next unit at the slot's recorded
-// spawn point. Omitted (null) = classic Duel, no roster fields at all.
+// respawnFighterNext to swap in the next unit at the place spawn.js picks
+// (the slot's recorded spawn point on a map without spawn places).
+// Omitted (null) = classic Duel, no roster fields at all.
 export function createMatchState({
   mapKey = 'arena1',
   mode = '1v1',
@@ -300,17 +301,18 @@ export function pickClosestEnemyId(matchState, fighter) {
   return bestId;
 }
 
-// Trio respawn: replace a dead fighter with its next roster unit at the
-// slot's recorded spawn point, with fresh spawn immunity. The killer keeps
+// Trio respawn: replace a dead fighter with its next roster unit at `at` — the place the caller picked
+// (spawn.js pickRespawnSpawn; the server and the offline client both ask it) or, on a map without spawn
+// places, the slot's recorded spawn point — with fresh spawn immunity. The killer keeps
 // all its state (no reward) — we only ever touch the dead slot. Returns the
 // fresh fighter, or null when the roster is spent (slot stays dead) or the
 // match isn't Trio.
-export function respawnFighterNext(matchState, id) {
+export function respawnFighterNext(matchState, id, at = null) {
   const old = matchState.fighters[id];
   if (!old || !old.roster) return null;
   const nextIdx = old.rosterIdx + 1;
   if (nextIdx >= old.roster.length) return null;
-  const fresh = createFighter(id, old.roster[nextIdx], matchState.spawnPoints[id]);
+  const fresh = createFighter(id, old.roster[nextIdx], at ?? matchState.spawnPoints[id]);
   fresh.team = old.team;
   fresh.roster = old.roster;
   fresh.rosterIdx = nextIdx;

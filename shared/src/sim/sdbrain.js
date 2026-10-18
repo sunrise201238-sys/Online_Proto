@@ -72,7 +72,7 @@
 //   deadline() (the search's CPU budget), tape(row) or null.
 //   The order back: coverMove {hold, hide, dash, mx, mz, jump, jx, jz};
 //   the trigger: me.botSDFire.
-import { walkSegmentBlocked, unitOverlapsObstacle, segmentHitsObstacle, projectileHitsSurface, obstaclesNearSegment } from './physics.js';
+import { walkSegmentBlocked, unitOverlapsObstacle, segmentHitsObstacle, projectileHitsSurface, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
 import { findHiddenSpot, findPathOnGrid, coverDistanceAt } from './navgrid.js';
 import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S, BOOST_CAP } from './constants.js';
 
@@ -316,7 +316,7 @@ export const makeMuzzleClear = (obstacles, surfaces) => (p0, p1) => {
     if (o.noProjectile) continue;
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
-  return !(surfaces && projectileHitsSurface(p0, p1, surfaces));
+  return !(surfaces && projectileHitsSurface(p0, p1, obstaclesNearSegment(surfaces, p0, p1)));   // (floors are boxes to the broadphase too)
 };
 
 const SILHOUETTE_TOP = HIT_HALF_HEIGHT + HIT_RADIUS_NORMAL;   // the capsule's top above its centre
@@ -445,7 +445,8 @@ export function sdBrainTick(host) {
     const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.6));
     for (let k = 1; k <= n; k += 1) {
       const f = k / n;
-      if (unitOverlapsObstacle(x0 + (x1 - x0) * f, y, z0 + (z1 - z0) * f, obstacles)) return false;
+      const sx = x0 + (x1 - x0) * f, sz = z0 + (z1 - z0) * f;
+      if (unitOverlapsObstacle(sx, y, sz, obstaclesNearPoint(obstacles, sx, sz, 4))) return false;
     }
     return true;
   };
@@ -950,9 +951,9 @@ export function sdBrainTick(host) {
     } else {
       const aheadExposed = !sdHidden || !sdHiddenAt(mePos.x + hx * SD.aheadProbe, mePos.z + hz * SD.aheadProbe, myFloorY);
       let jumpAhead = false;
-      for (let k = plan.idx; k < sp.length; k += 1) if ((sp[k].y ?? myFloorY) - myFloorY > 1.7) { jumpAhead = true; break; }
+      for (let k = plan.idx; k < sp.length; k += 1) if (sp[k].jump) { jumpAhead = true; break; }
       let sdJump = null, bank = false;
-      if ((wp.y ?? myFloorY) - myFloorY > 1.7 && host.grounded && !me.airborne && wl < SD.jumpReach) {
+      if (wp.jump && host.grounded && !me.airborne && wl < SD.jumpReach) {   // (the path says where the jump link is)
         if (me.boost >= SD.boostReserve && now >= (me.jumpCooldownUntil ?? 0)) {
           if (host.startJump()) { sdJump = { x: hx, z: hz }; plan.jumpAt = now; plan.jumpStepped = false; me.botSDJumps = (me.botSDJumps ?? 0) + 1; }
         } else bank = true;   // (the tank or the cooldown: stand at the ledge)

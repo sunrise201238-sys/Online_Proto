@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import {
   createMatchState,
   respawnFighterNext,
+  pickRespawnSpawn,
   buildSnapshotFor,
   tickMatch,
   tickBot,
@@ -468,7 +469,8 @@ function tickLobby(lobby) {
   }
 
   // 4. Trio respawns — a dead slot with roster left swaps to its next unit
-  //    at the recorded spawn point (fresh 3 s immunity; the killer keeps all
+  //    at the place spawn.js picks — by sight among a map's spawn places
+  //    (Town), the slot's start elsewhere (fresh 3 s immunity; the killer keeps all
   //    its state). Runs before the end check so a mid-swap death is never
   //    counted as a team wipe. Respawned BOTS hold fire briefly (offline
   //    parity: respawnSlotMech's +650 ms nextFireAt).
@@ -476,7 +478,8 @@ function tickLobby(lobby) {
     for (const s of activeSlots(lobby.mode)) {
       const fighter = lobby.match.fighters[s];
       if (fighter && fighter.hp <= 0) {
-        const fresh = respawnFighterNext(lobby.match, s);
+        const others = Object.values(lobby.match.fighters).filter((f) => f.id !== s);
+        const fresh = respawnFighterNext(lobby.match, s, pickRespawnSpawn(lobby.match.mapKey, fighter.team, others));
         if (fresh && lobby.botSlots.has(s)) fresh.nextFireAt = lobby.match.now + 650;
         // Sudden Death: Trio respawns arrive at 1 HP too, bots on the SD brain.
         if (fresh && lobby.suddenDeath) { fresh.hp = 1; if (lobby.botSlots.has(s)) fresh.botSD = true; }
