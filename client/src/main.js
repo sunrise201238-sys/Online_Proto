@@ -801,7 +801,7 @@ for (const unit of Object.values(UNIT_DATA)) {
 }
 
 const MAP_DATA = {
-  arena1: { name: 'Plain Field' },
+  arena1: { name: 'Plain Field', noRandom: true },   // (a manual pick only: no Random card rolls it)
   arena2: { name: 'Streets' },
   factory: { name: 'Factory' },
   factory2: { name: 'Scrapyard' },   // scrapyard retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
@@ -812,7 +812,7 @@ const MAP_DATA = {
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
-  range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
+  range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
 };
 
 const state = {
@@ -6505,7 +6505,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022t';
+const CLIENT_BUILD_TAG = 'b1022u';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8960,51 +8960,59 @@ function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) 
 // Map-card grid + two-tap wiring — the map-picker twins of unitGridHTML /
 // wireUnitGrid (same scroll-safe click activation, same preview→confirm flow,
 // same dismiss-only tap on other cards). Disabled ids render dimmed and inert.
+// Two sections, divided as the unit menu divides Offline from Online (user 2026-10-19): SCENE MAPS — the maps cut from
+// modelled scenes, those with a model in GLB_MAPS (Town, Spacecraft) — over CONCEPT MAPS, the hand-made arenas. Each
+// section carries a Random card of its own, which rolls among that section's enabled cards alone (wireMapGrid).
+const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) }];
 function mapGridHTML(mapEntries, disabled = new Set()) {
-  return `<div class="unit-grid map-grid">${mapEntries.map(([id, m]) => {
-    const off = disabled.has(id);
-    return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
+  return MAP_SECTIONS.map((sec) => {
+    const entries = mapEntries.filter(([id]) => sec.has(id));
+    if (!entries.length) return '';
+    return `<div class="menu-divider">— ${sec.title} —</div><div class="unit-grid map-grid">${entries.map(([id, m]) => {
+      const off = disabled.has(id);
+      return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
       <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false" />
       <span class="unit-label">${m.name}${off ? '<br>(offline only)' : ''}</span>
     </button>`;
-  }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
+    }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
       <span class="unit-thumb map-thumb random-thumb">?</span>
       <span class="unit-label">Random</span>
     </button></div>`;
+  }).join('');
 }
 function wireMapGrid(menu, onPick) {
-  const grid = menu.querySelector('.map-grid');
-  if (!grid) return;
+  const grids = [...menu.querySelectorAll('.map-grid')];
+  if (!grids.length) return;
   let pendingKey = null;
   const clearPending = () => {
     pendingKey = null;
-    grid.querySelectorAll('.map-card.selecting').forEach((c) => c.classList.remove('selecting'));
+    for (const grid of grids) grid.querySelectorAll('.map-card.selecting').forEach((c) => c.classList.remove('selecting'));
     removeProfilePopup();
   };
-  // Random map: uniform over this grid's ENABLED cards, minus the Shooting
-  // Range (practice map — never a random battleground; it's absent online
-  // and excluded offline) and Plain Field (arena1 — manual pick only).
-  const resolveRandomMap = () => {
+  // Random map: uniform over the ENABLED cards of the Random card's own section, minus the maps the map table marks
+  // noRandom — the Shooting Range (a practice map, never a random battleground; absent online, excluded offline) and
+  // Plain Field (a manual pick only).
+  const resolveRandomMap = (grid) => {
     const pool = [...grid.querySelectorAll('.map-card:not([disabled])')]
       .map((c) => c.dataset.mapCard)
-      .filter((k) => k !== RANDOM_PICK_KEY && k !== 'range' && k !== 'arena1');
+      .filter((k) => k !== RANDOM_PICK_KEY && !MAP_DATA[k]?.noRandom);
     return pool[Math.floor(Math.random() * pool.length)];
   };
-  const confirm = (key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomMap() : key);
-  grid.querySelectorAll('.map-card:not([disabled])').forEach((card) => {
+  const confirm = (card, key) => onPick(key === RANDOM_PICK_KEY ? resolveRandomMap(card.closest('.map-grid')) : key);
+  menu.querySelectorAll('.map-grid .map-card:not([disabled])').forEach((card) => {
     card.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const key = card.dataset.mapCard;
-      if (pendingKey === key) { clearPending(); confirm(key); return; }
+      if (pendingKey === key) { clearPending(); confirm(card, key); return; }
       if (pendingKey) { clearPending(); return; }
       pendingKey = key;
       card.classList.add('selecting');
       if (key === RANDOM_PICK_KEY) {
-        showRandomProfilePopup(card, true, () => { clearPending(); confirm(key); });
+        showRandomProfilePopup(card, true, () => { clearPending(); confirm(card, key); });
       } else {
         warmMapModel(key);   // a modelled map's scene starts downloading at the first tap
-        showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); confirm(key); });
+        showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); confirm(card, key); });
       }
     });
   });
