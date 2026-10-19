@@ -47,7 +47,7 @@ The grid keeps the same sizes on phones (checked at 390 px: nothing wraps or spi
 
 Both offline and online pickers carry them:
 
-- Every unit grid has a gray **Random** card (question-mark thumbnail): it rolls a unit the roster being built doesn't already contain (different players can still land on the same unit). The map grid's Random skips **Shooting Range** and **Plain Field**.
+- Every unit grid has a gray **Random** card (question-mark thumbnail): it rolls a unit the roster being built doesn't already contain (different players can still land on the same unit). The map picker is two sections, each with a Random card of its own: **Scene Maps** — the maps cut from modelled scenes (Town, Spacecraft) — over **Concept Maps**, the hand-made arenas; a section's Random rolls among that section alone and skips **Shooting Range** and **Plain Field** (`noRandom` in the map table; user 2026-10-19).
 - Every unit grid also carries a golden **All Random** card: one confirm fills every remaining unit slot of the current flow at once and advances it (offline: the rest of your roster, then every bot picker that follows — Duel included; online: the rest of your roster). The map picker deliberately has no All Random.
 
 ## Sudden Death
