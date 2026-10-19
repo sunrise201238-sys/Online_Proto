@@ -30595,8 +30595,8 @@ const ARENA_SPAWNS = {
   town: { p1: { x: -208, y: GROUND_BASE_Y + 9.4, z: 10 }, p2: { x: 168, y: GROUND_BASE_Y + 15.6, z: 22 },
     more: [{ x: -124, y: GROUND_BASE_Y + 9.4, z: -74 }, { x: 116, y: GROUND_BASE_Y, z: -78 }, { x: -104, y: GROUND_BASE_Y, z: 118 }, { x: 236, y: GROUND_BASE_Y + 15.6, z: 122 }] },
   // Space Station: the two far corners the generator picked (spawn_pick.mjs), until places are set.
-  S_Station: { p1: { x: -200, y: GROUND_BASE_Y, z: -2 }, p2: { x: 198, y: GROUND_BASE_Y, z: -10 },
-    more: [{ x: 85, y: GROUND_BASE_Y, z: -20 }, { x: -75, y: GROUND_BASE_Y, z: -11 }, { x: -121, y: GROUND_BASE_Y, z: -3 }, { x: 82, y: GROUND_BASE_Y, z: 21 }, { x: -72, y: GROUND_BASE_Y + -1, z: 31 }, { x: 117, y: GROUND_BASE_Y, z: 69 }, { x: 51, y: GROUND_BASE_Y, z: 112 }] },
+  S_Station: { p1: { x: 198, y: GROUND_BASE_Y, z: -10 }, p2: { x: -200, y: GROUND_BASE_Y, z: -2 },
+    more: [{ x: 85, y: GROUND_BASE_Y, z: -20 }, { x: -75, y: GROUND_BASE_Y, z: -11 }, { x: -121, y: GROUND_BASE_Y, z: -3 }, { x: 82, y: GROUND_BASE_Y, z: 21 }, { x: -72, y: GROUND_BASE_Y + -1, z: 31 }, { x: 117, y: GROUND_BASE_Y, z: 69 }, { x: 51, y: GROUND_BASE_Y, z: 112 }], pick: 'random' },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so

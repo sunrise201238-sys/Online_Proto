@@ -6505,7 +6505,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022g';
+const CLIENT_BUILD_TAG = 'b1022i';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9860,7 +9860,7 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
 // outside (HALF_X..HALF_X+2 etc.) the play extent so the camera never clips
 // against a solid mesh when the player backs into a corner. Mirrors the
 // pattern Station uses inline.
-function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
+function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y, stripe = true) {   // (stripe: the red edge line; a map its own model confines does without — GLB_MAPS `edge: false`)
   // Diorama POC: the play extent doubles as the base-plate footprint.
   arenaBounds = { halfX: HALF_X, halfZ: HALF_Z, ceilY: CEIL_Y };
   arenaObstacles.push(
@@ -9869,6 +9869,7 @@ function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y) {
     { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
     { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
   );
+  if (!stripe) return;
   const boundaryGlow = new THREE.MeshStandardMaterial({
     color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4
   });
@@ -10001,7 +10002,7 @@ function applyMapAmbience(mapKey) {
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 },
-  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fade: [[15.61, -24.78, 26.92, -15.61], [15.61, -57.61, 28.0, -47.39], [5.74, -37.8, 9.94, -33.6]], tone: 'factory' }
+  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fade: [[15.61, -24.78, 26.92, -15.61], [15.61, -57.61, 28.0, -47.39], [5.74, -37.8, 9.94, -33.6]], tone: 'factory', edge: false }
 };
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
@@ -10023,7 +10024,7 @@ function warmMapModel(mapKey) {
 function buildGlbArena(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   const { halfX, halfZ } = getArenaBounds(mapKey);
-  addBoundaryIndicator(halfX, halfZ, cfg.ceilY);
+  addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false);   // (the boundary walls always; the red edge line unless the map's data says `edge: false`)
   for (const o of getGeneratedObstacles(mapKey)) arenaObstacles.push({ ...o });   // collision only: the model is the visual
   for (const s of getArenaSurfaces(mapKey)) arenaSurfaces.push(s);              // the raised floors (stairs, porches, pavements)
   const group = new THREE.Group();
