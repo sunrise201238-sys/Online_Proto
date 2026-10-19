@@ -546,8 +546,6 @@ export const MAP_DATA = {
   town: { id: 'town', name: 'Town' },
   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   spacecraft: { id: 'spacecraft', name: 'Spacecraft' },
-  // Cut from the Map Ep 73 glTF (2026-10-19, README: Maps): the prison compound and its tower.
-  prison: { id: 'prison', name: 'Prison' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms: { id: 'backrooms', name: 'Backrooms' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules.
