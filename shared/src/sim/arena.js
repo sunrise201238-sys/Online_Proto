@@ -39872,8 +39872,11 @@ const ARENA_SPAWNS = {
   // Spacecraft: the two far corners the generator picked (spawn_pick.mjs), until places are set.
   spacecraft: { p1: { x: 198, y: GROUND_BASE_Y, z: -10 }, p2: { x: -200, y: GROUND_BASE_Y, z: -2 },
     more: [{ x: 85, y: GROUND_BASE_Y, z: -20 }, { x: -75, y: GROUND_BASE_Y, z: -11 }, { x: -121, y: GROUND_BASE_Y, z: -3 }, { x: 82, y: GROUND_BASE_Y, z: 21 }, { x: -72, y: GROUND_BASE_Y + -1, z: 31 }, { x: 117, y: GROUND_BASE_Y, z: 69 }, { x: 51, y: GROUND_BASE_Y, z: 112 }, { x: 5, y: GROUND_BASE_Y, z: 115 }], pick: 'random' },
-  // Dust: two clear spots far apart on the middle (the plateau's east ramp top, the lower yard's south end), until the user marks places.
-  dust: { p1: { x: 82, y: GROUND_BASE_Y + 14.32, z: -70 }, p2: { x: 38, y: GROUND_BASE_Y - 1.84, z: 266 } },
+  // Dust: the user's places (2026-10-19) — the homes at the long path's gate (north, on the plateau) and the lower yard's south end, and six
+  // more places (the site's west, the east passage, west and inside the roofed hall, the lower yard's north, the east lower passage);
+  // a Trio respawn picks among all eight by sight (spawn.js), as Town's. Set by spawn_set.mjs on the generator's json.
+  dust: { p1: { x: 49, y: GROUND_BASE_Y + 14.32, z: -65 }, p2: { x: 27, y: GROUND_BASE_Y - 2.1, z: 228 },
+    more: [{ x: -52, y: GROUND_BASE_Y + 12.12, z: -5 }, { x: 103, y: GROUND_BASE_Y + 2.48, z: 33 }, { x: -50, y: GROUND_BASE_Y - 0.68, z: 102 }, { x: 21, y: GROUND_BASE_Y - 0.68, z: 105 }, { x: -15, y: GROUND_BASE_Y - 2.28, z: 174 }, { x: 102, y: GROUND_BASE_Y + 3.92, z: 189 }] },
   // Backrooms: the homes at the north-west and south-east corners, two more places from the user's marked plan (2026-10-19); respawns at random among them, as Spacecraft's.
   backrooms: { p1: { x: -88, y: GROUND_BASE_Y, z: -92 }, p2: { x: 84, y: GROUND_BASE_Y, z: 68 },
     more: [{ x: 21, y: GROUND_BASE_Y, z: -64 }, { x: -90, y: GROUND_BASE_Y, z: 38 }], pick: 'random' },

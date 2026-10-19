@@ -22,7 +22,7 @@ read off the nav grid, a point off it is refused):
 
 | map | places |
 | --- | --- |
-| Dust | `82,-70 38,266` (provisional: the plateau's east ramp top, the lower yard's south end) |
+| Dust | `49,-65 27,228 -52,-5 103,33 -50,102 21,105 -15,174 102,189` (the user's marks, 2026-10-19: the homes at the long path's gate and the lower yard's south end, six more) |
 | Town | `-208,10 168,22 -124,-74 116,-78 -104,118 236,122` |
 | Spacecraft | `198,-10 -200,-2 85,-20 -75,-11 -121,-3 82,21 -72,31 117,69 51,112 5,115 --random` |
 | Backrooms | `-88,-92 84,68 21,-64 -90,38 --random` (Backrooms (Anomaly) shares the data) |
