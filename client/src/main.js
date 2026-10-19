@@ -631,7 +631,8 @@ const MAP_DATA = {
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   prison: { name: 'Prison', section: 'concept' },   // Cut from the Map Ep 73 glTF (2026-10-19, README: Maps): the prison compound and its tower. Listed among the Concept Maps while in the making.
-  backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors.
+  backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
+  backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
 };
 
@@ -1924,8 +1925,8 @@ function drawHealthBar(sprite, frac) {
   // has loaded (the update loop repaints the bar then); until then the frame
   // alone marks the slot.
   const T = UNIT_BAR_THUMB, TP = UNIT_BAR_PAD, E = UNIT_BAR_EDGE_W;
-  sprite.userData.barMinimal = hudMinimal();   // (the minimal HUD: no portrait — the pill alone)
-  if (!sprite.userData.barMinimal) {
+  sprite.userData.barAnomaly = anomalyRules();   // (the anomaly rules: no portrait — the pill alone)
+  if (!sprite.userData.barAnomaly) {
   pill(TP - E, TP - E, T + 2 * E, T + 2 * E, 8 + E);
   x.fillStyle = UNIT_BAR_EDGE;
   x.fill();
@@ -2038,8 +2039,8 @@ function updateMechAnimations(dt, now) {
       // right, converted into the root's frame below): 0 = the group centred
       // over the unit, the normal bar's placement.
       let shiftX = 0;
-      if (hudMinimal()) {
-        // THE MINIMAL HUD (Backrooms, user 2026-10-19): only the camera's own unit carries a bar — the pill alone, no
+      if (anomalyRules()) {
+        // THE ANOMALY RULES (Backrooms, user 2026-10-19): only the camera's own unit carries a bar — the pill alone, no
         // portrait (drawHealthBar leaves it out), centred over the head; every other unit's group hides.
         if (m !== camFocus) { bar.visible = false; continue; }
         bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
@@ -2100,7 +2101,7 @@ function updateMechAnimations(dt, now) {
       }
       // (mode switch between matches: repaint bar <-> portrait-only)
       if (bar.userData.barSD !== !!state.suddenDeathActive) bar.userData.barFrac = -1;
-      if (bar.userData.barMinimal !== hudMinimal()) bar.userData.barFrac = -1;   // (the minimal HUD on or off: repaint without or with the portrait)
+      if (bar.userData.barAnomaly !== anomalyRules()) bar.userData.barFrac = -1;   // (the anomaly rules on or off: repaint without or with the portrait)
       // The sprite carries the portrait and the margins: scale it off the same world-per-texel so the PILL keeps its 2.42 x 0.3025 world size.
       bar.scale.set(UNIT_BAR_TEX_W * u, UNIT_BAR_TEX_H * u, 1);
       const ti = bar.userData.thumbImg;
@@ -5180,6 +5181,7 @@ function applyImmunityGlow(mech, immune) {
   if (!mech || !mech.root) return;
   if (immune) createImmunityAuraForMech(mech);
   else removeImmunityAuraFromMech(mech);
+  if (mech.immunityAura) mech.immunityAura.material.depthTest = anomalyRules();   // (the anomaly rules: the glow is hidden by what hides the unit — elsewhere it shows through, as it always did; user 2026-10-19)
 }
 
 // Lock bracket bloom visual (ported from the demo line, owner 2026-09-22):
@@ -5214,7 +5216,7 @@ function updateLocksAndReticle() {
   }
   // Diorama POC: lock state below still updates (bots read redLock), but the
   // world-space bracket is replaced by the annotation layer's square.
-  if (state.reticle) state.reticle.visible = !dioramaActive() && !hudMinimal();   // (the minimal HUD: no lock bracket)
+  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules();   // (the anomaly rules: no lock bracket)
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5385,8 +5387,8 @@ const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
   // Diorama POC: the whole fight is in frame and the annotation layer carries
-  // identity — both arrow forms are parked. (The minimal HUD parks them too.)
-  if (dioramaActive() || hudMinimal()) {
+  // identity — both arrow forms are parked. (The anomaly rules parks them too.)
+  if (dioramaActive() || anomalyRules()) {
     if (state.allyArrow) state.allyArrow.visible = false;
     hideAllyEdgeArrow();
     return;
@@ -5507,7 +5509,7 @@ const _enemyArrowCam = new THREE.Vector3();
 const OVERHEAD_TEAM_CHEVRONS = false;   // the floating triangles over the teammate and the unlocked enemy (owner 2026-09-19: both sat on the overhead HP bars); the screen-edge arrows stay
 function updateEnemyArrow() {
   // Diorama POC: parked for the same reason as updateAllyArrow.
-  if (dioramaActive() || hudMinimal()) {
+  if (dioramaActive() || anomalyRules()) {
     if (state.enemyArrow) state.enemyArrow.visible = false;
     hideEnemyEdgeArrow();
     return;
@@ -5878,7 +5880,7 @@ function updateHud(now = performance.now()) {
   // 1 HP — the HP bars (own, enemy, the 2v2 team bars) hide; the boost
   // gauge and the remaining-units icons stay.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
-  if (state.hud) state.hud.classList.toggle('hud-minimal', hudMinimal());   // (the minimal HUD: the other units' corner bars hide)
+  if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' corner bars hide)
   hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
   if (hudRefs.allyHp && state.ally) {
@@ -6692,7 +6694,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023d';
+const CLIENT_BUILD_TAG = 'b1023e';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7489,7 +7491,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison', 'backrooms']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison', 'backrooms', 'backrooms_anomaly']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -10111,17 +10113,18 @@ function applyMapAmbience(mapKey) {
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `neverFade` are no
 // things that stand between the camera and a unit — a ground (Prison's valley floor and mountains), a ceiling
 // (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
-// looks down from above; `cmdDark`: command mode draws pure black around the map, the stand included; `hud: 'minimal'`:
-// indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
+// looks down from above; `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
+// rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
   prison: { file: 'maps/prison', scale: 4, cx: 38.95, cz: 108.65, ground: 0, drop: [], ceilY: 28, modelM: 4.1, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, neverFade: ['Object_9', 'Object_4'] },
-  backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, hud: 'minimal' }
+  backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
+  backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
 const underNodes = (o, names, stop) => { for (let n = o; n && n !== stop; n = n.parent) if (names.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
 function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
-function hudMinimal() { return GLB_MAPS[state.mapKey]?.hud === 'minimal' && !dioramaActive(); }
+function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaActive(); }   // (a boolean: classList.toggle(name, undefined) flips the class every frame)
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
 const _mapModelCache = {};     // file -> gltf
