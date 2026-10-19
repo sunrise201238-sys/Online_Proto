@@ -6693,7 +6693,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023f';
+const CLIENT_BUILD_TAG = 'b1023g';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10121,6 +10121,30 @@ const GLB_MAPS = {
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
 const underNodes = (o, names, stop) => { for (let n = o; n && n !== stop; n = n.parent) if (names.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
+// A chunked map's walls cut into pieces no longer than half a chunk (world units) before the fade reads them: the model's
+// long walls are two triangles each, 27 m long, so a wall seeded one cell under its centre, was claimed whole by that
+// cell's chunk, and the camera's line crossed it anywhere else with nothing to fade (user 2026-10-19: a wall stayed
+// solid and black over the whole view). Every attribute is interpolated at the split; the result is non-indexed.
+function splitLong(geo, matrixWorld, maxLen) {
+  const names = Object.keys(geo.attributes); const src = names.map((n) => geo.attributes[n]); const out = names.map(() => []); const pi = names.indexOf('position');
+  const idx = geo.index ? geo.index.array : null; const count = idx ? idx.length : geo.attributes.position.count;
+  const pa = new THREE.Vector3(), pb = new THREE.Vector3();
+  const vert = (i) => src.map((a) => { const v = []; for (let c = 0; c < a.itemSize; c += 1) v.push(a.getComponent(i, c)); return v; });
+  const mid = (a, b) => a.map((va, k) => va.map((x, c) => (x + b[k][c]) / 2));
+  const wlen = (a, b) => pa.fromArray(a[pi]).applyMatrix4(matrixWorld).distanceTo(pb.fromArray(b[pi]).applyMatrix4(matrixWorld));
+  const emit = (a, b, c) => { for (const v of [a, b, c]) v.forEach((comp, k) => { for (const x of comp) out[k].push(x); }); };
+  const split = (a, b, c, depth) => {
+    const ab = wlen(a, b), bc = wlen(b, c), ca = wlen(c, a); const m = Math.max(ab, bc, ca);
+    if (m <= maxLen || depth >= 10) { emit(a, b, c); return; }
+    if (m === ab) { const d = mid(a, b); split(a, d, c, depth + 1); split(d, b, c, depth + 1); }
+    else if (m === bc) { const d = mid(b, c); split(a, b, d, depth + 1); split(a, d, c, depth + 1); }
+    else { const d = mid(c, a); split(a, b, d, depth + 1); split(d, b, c, depth + 1); }
+  };
+  for (let t = 0; t + 2 < count; t += 3) split(vert(idx ? idx[t] : t), vert(idx ? idx[t + 1] : t + 1), vert(idx ? idx[t + 2] : t + 2), 0);
+  const g = new THREE.BufferGeometry();
+  names.forEach((n, k) => g.setAttribute(n, new THREE.Float32BufferAttribute(out[k], src[k].itemSize)));
+  return g;
+}
 function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
 function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaActive(); }   // (a boolean: classList.toggle(name, undefined) flips the class every frame)
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
@@ -10194,6 +10218,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
   const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
+  if (cfg.fadeChunk) for (const mesh of meshes) geoOf.set(mesh, splitLong(geoOf.get(mesh), mesh.matrixWorld, cfg.fadeChunk / 2));   // (a chunked map: the walls in pieces no longer than half a chunk)
   const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
   // 1. the seed cells, joined into things: the fade boxes
   const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`;
