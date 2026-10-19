@@ -813,7 +813,6 @@ const MAP_DATA = {
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
-  prison: { name: 'Prison', section: 'concept' },   // Cut from the Map Ep 73 glTF (2026-10-19, README: Maps): the prison compound and its tower. Listed among the Concept Maps while in the making.
   backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
@@ -6512,7 +6511,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023e';
+const CLIENT_BUILD_TAG = 'b1023f';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7309,7 +7308,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison', 'backrooms', 'backrooms_anomaly']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'backrooms', 'backrooms_anomaly']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -8970,7 +8969,7 @@ function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) 
 // Two sections, divided as the unit menu divides Offline from Online (user 2026-10-19): SCENE MAPS — the maps cut from
 // modelled scenes, those with a model in GLB_MAPS (Town, Spacecraft) — over CONCEPT MAPS, the hand-made arenas. Each
 // section carries a Random card of its own, which rolls among that section's enabled cards alone (wireMapGrid).
-const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS && MAP_DATA[id]?.section !== 'concept' }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) || MAP_DATA[id]?.section === 'concept' }];   // (a modelled map the map table marks `section: 'concept'` sits among the concept maps: a map still in the making — Prison, user 2026-10-19)
+const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) }];
 function mapGridHTML(mapEntries, disabled = new Set()) {
   return MAP_SECTIONS.map((sec) => {
     const entries = mapEntries.filter(([id]) => sec.has(id));
@@ -10018,14 +10017,13 @@ function applyMapAmbience(mapKey) {
 // Maps) — the model's metres times `scale`, the crop centre at the origin, the street at y 0. The
 // model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `neverFade` are no
-// things that stand between the camera and a unit — a ground (Prison's valley floor and mountains), a ceiling
+// things that stand between the camera and a unit — a ground (a desert map's valley floor and mountains), a ceiling
 // (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
 // looks down from above; `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
 // rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
-  prison: { file: 'maps/prison', scale: 4, cx: 38.95, cz: 108.65, ground: 0, drop: [], ceilY: 28, modelM: 4.1, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, neverFade: ['Object_9', 'Object_4'] },
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10089,8 +10087,8 @@ function buildGlbArena(mapKey) {
 // own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
 // a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
 // box ignores the index — so the engines faded all the time. The nodes in `neverFade` are no things that stand between
-// the camera and a unit and are left as they are: a ground (Prison's valley floor and its mountains, kept far out so
-// the ground does not end in sky — read as things, their big sparse triangles seeded thousands of pieces beyond the
+// the camera and a unit and are left as they are: a ground (a desert map's valley floor and its mountains, kept far out
+// so the ground did not end in sky — read as things, their big sparse triangles seeded thousands of pieces beyond the
 // edge, 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame, and the map lagged; user 2026-10-19), a ceiling
 // (the Backrooms' tiles, lights and vents: the camera stays under them, and they would join every wall into one thing).
 // Indoors every wall touches every other, so a map may set `fadeChunk` (units): a thing is then the touching cells within
@@ -10170,7 +10168,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       mesh.parent.add(m); m.updateMatrixWorld(true);
       const parts = [...cols[i].values()];
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
-      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — Prison)
+      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
     });
     mesh.geometry = part(geo, rest);
   }
