@@ -630,6 +630,7 @@ const MAP_DATA = {
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
@@ -6693,7 +6694,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023i';
+const CLIENT_BUILD_TAG = 'b1023k';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10117,6 +10118,7 @@ function applyMapAmbience(mapKey) {
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
+  dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
