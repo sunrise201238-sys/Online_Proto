@@ -627,5 +627,5 @@ body.pseudo-fullscreen #app {
    white / golden filters stay) */
 .touch-hud .trio-line.spec-watched-icon .trio-weapon-tag { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }
 
-/* the minimal HUD (GLB_MAPS hud: 'minimal' — the Backrooms): only the player's own bar; user 2026-10-19 */
-.touch-hud.hud-minimal .enemy-health, .touch-hud.hud-minimal .ally-health, .touch-hud.hud-minimal .enemy2-health { display: none; }
+/* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own bar; user 2026-10-19 */
+.touch-hud.hud-anomaly .enemy-health, .touch-hud.hud-anomaly .ally-health, .touch-hud.hud-anomaly .enemy2-health { display: none; }
