@@ -630,6 +630,7 @@ const MAP_DATA = {
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  prison: { name: 'Prison', section: 'concept' },   // Cut from the Map Ep 73 glTF (2026-10-19, README: Maps): the prison compound and its tower. Listed among the Concept Maps while in the making.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
 };
 
@@ -6679,7 +6680,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022x';
+const CLIENT_BUILD_TAG = 'b1023b';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7476,7 +7477,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -9059,7 +9060,7 @@ function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) 
 // Two sections, divided as the unit menu divides Offline from Online (user 2026-10-19): SCENE MAPS — the maps cut from
 // modelled scenes, those with a model in GLB_MAPS (Town, Spacecraft) — over CONCEPT MAPS, the hand-made arenas. Each
 // section carries a Random card of its own, which rolls among that section's enabled cards alone (wireMapGrid).
-const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) }];
+const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS && MAP_DATA[id]?.section !== 'concept' }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) || MAP_DATA[id]?.section === 'concept' }];   // (a modelled map the map table marks `section: 'concept'` sits among the concept maps: a release line's call on a map still in the making — Prison, user 2026-10-19)
 function mapGridHTML(mapEntries, disabled = new Set()) {
   return MAP_SECTIONS.map((sec) => {
     const entries = mapEntries.filter(([id]) => sec.has(id));
@@ -9778,6 +9779,7 @@ function updateWallFade() {
       const boxes = b.parts ?? [b];
       const hidesFrom = (root) => {
         const target = { x: root.position.x, y: root.position.y + 1.6, z: root.position.z };
+        if (b.parts && !segmentHitsObstacle(camera.position, target, b)) return false;   // (the parts lie within the box: a line that misses the box misses them all — a modelled map's thing has hundreds of hull columns)
         for (const part of boxes) {
           if (segmentHitsObstacle(camera.position, target, part)) return true;
         }
@@ -9836,6 +9838,7 @@ function updateWallFade() {
     }
     const target = blocking ? 0.25 : 1;
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
+    mesh.material.transparent = !!mesh.userData.fadeBox.ownTransparent || mesh.material.opacity < 0.995;   // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
     // Depth-toggled groups (Station's trains): write depth while solid
     // (self-occluding — no seeing the car's inside structure), stop while
     // faded (no depth = the own-unit X-ray can't patch onto the ghost).
@@ -9855,6 +9858,7 @@ function updateWallFade() {
 // test against, for tilted meshes whose AABB is a poor fit. `box` itself
 // still needs to be the full AABB — proximity mode reads it directly.
 function registerWallFade(mesh, box) {
+  box.ownTransparent = mesh.material.transparent;   // (a material transparent in its own right — a glass, a masked fence — stays so)
   mesh.material.transparent = true;
   mesh.userData.fadeBox = box;
   if (box.fadeGroup) mesh.userData.fadeGroup = box.fadeGroup;
@@ -10092,10 +10096,12 @@ function applyMapAmbience(mapKey) {
 // arena data, generated from the same model's triangles by shared/tools/glb_collision.mjs (README,
 // Maps) — the model's metres times `scale`, the crop centre at the origin, the street at y 0. The
 // model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
-// per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
+// per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `terrain` are the
+// ground (Prison's valley floor and mountains) and never fade. =====
 const GLB_MAPS = {
-  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 },
-  spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fadeTall: 9.6, tone: 'factory', edge: false }
+  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
+  spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false },
+  prison: { file: 'maps/prison', scale: 4, cx: 38.95, cz: 108.65, ground: 0, drop: [], ceilY: 28, modelM: 4.1, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, terrain: ['Object_9', 'Object_4'] }
 };
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
@@ -10149,11 +10155,15 @@ function buildGlbArena(mapKey) {
 // the rest of the model, the floor under it included, stays as it is. The occlusion test runs against the piece's
 // own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
 // a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
-// box ignores the index — so the engines faded all the time.
+// box ignores the index — so the engines faded all the time. The map's terrain nodes (`terrain` in GLB_MAPS: Prison's
+// valley floor and its mountains, kept far out so the ground does not end in sky) are the ground, not things that
+// stand on it, and are left as they are: read as things, their big sparse triangles seeded thousands of pieces beyond
+// the edge — 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame — and the map lagged (user 2026-10-19).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
   const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a thing)
-  const meshes = []; inst.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  const terrain = cfg.terrain ?? []; const isTerrain = (o) => { for (let n = o; n && n !== inst; n = n.parent) if (terrain.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
+  const meshes = []; inst.traverse((o) => { if (o.isMesh && !isTerrain(o)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
   const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
@@ -10212,7 +10222,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       mesh.parent.add(m); m.updateMatrixWorld(true);
       const parts = [...cols[i].values()];
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
-      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: true, fadeGroup: boxes[i].group });
+      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — Prison)
     });
     mesh.geometry = part(geo, rest);
   }
