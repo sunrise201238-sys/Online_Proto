@@ -27,6 +27,8 @@ import {
   applyMomentum,
   applyRepulsion,
   integrateFighter,
+  integrateHorizontal,
+  integrateVertical,
   dampHorizontal,
   faceTowards
 } from './movement.js';
@@ -327,9 +329,10 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
     f,
     pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
   }));
-  for (const f of fighters) integrateFighter(f, arena.surfaces, dt, arena.ceil ?? Infinity);
+  for (const f of fighters) integrateHorizontal(f, dt);
 
-  // 5. Resolve obstacle penetrations. The wall each body was pushed out of
+  // 5. Resolve obstacle penetrations — before the vertical step, so the floor is read where the body stands once
+  //    the walls have pushed it back, not where it tried to go (b1022x; the offline client's order). The wall each body was pushed out of
   //    (its outward normal, or null) is kept in matchState.walls for the bots'
   //    brains (tickBot hands it over as host.wall): per-tick state like
   //    events, off the fighter, never in a snapshot.
@@ -337,6 +340,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   for (const { f, pos } of prevPositions) {
     walls[f.id] = resolveUnitObstacleCollisions(f, pos, arena.obstacles);
   }
+  for (const f of fighters) integrateVertical(f, arena.surfaces, dt, arena.ceil ?? Infinity);
 
   // 6. Tiny-velocity damping (replicates the offline build's "stops below
   //    0.14 vel" behavior).
