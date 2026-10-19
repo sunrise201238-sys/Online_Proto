@@ -36,7 +36,7 @@ const MAP_BOUNDARY = {
   flashpoint: { halfX: 110, halfZ:  75 },
   airport:    { halfX: 138, halfZ: 112 },
   town:       { halfX: 270, halfZ: 200 },   // Invasion Map, the town block (135 x 100 m at 4 units per metre)
-  S_Station:  { halfX: 240, halfZ: 140, ceil: 5.2 },   // The Skeld (Among Us), the whole ship (118 x 69 m at 4 units per metre, 14 m per model unit)
+  spacecraft: { halfX: 240, halfZ: 140, ceil: 5.2 },   // The Skeld (Among Us), the whole ship (118 x 69 m at 4 units per metre, 14 m per model unit)
 };
 const BOUNDARY_WALL_THICKNESS = 2;
 const BOUNDARY_WALL_HEIGHT = 16;
@@ -14918,7 +14918,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 140, "maxX": 141, "minZ": 198, "maxZ": 200, "maxTop": 15.6, "type": "plane", "y0": 14.84, "gx": 0.76, "gz": 0}
     ]
   },
-  "S_Station": {
+  "spacecraft": {
     // 3414 boxes and 2161 floors from the Skeld glTF by shared/tools/glb_collision.mjs: crop x 62 z -35 (metres) at the origin, 4 units per metre, the street at y 0.
     "obstacles": [
       {"minX": -248, "maxX": 248, "minZ": -148, "maxZ": -138, "minY": 0, "maxY": 100},
@@ -30595,7 +30595,7 @@ const ARENA_SPAWNS = {
   town: { p1: { x: -208, y: GROUND_BASE_Y + 9.4, z: 10 }, p2: { x: 168, y: GROUND_BASE_Y + 15.6, z: 22 },
     more: [{ x: -124, y: GROUND_BASE_Y + 9.4, z: -74 }, { x: 116, y: GROUND_BASE_Y, z: -78 }, { x: -104, y: GROUND_BASE_Y, z: 118 }, { x: 236, y: GROUND_BASE_Y + 15.6, z: 122 }] },
   // Spacecraft: the two far corners the generator picked (spawn_pick.mjs), until places are set.
-  S_Station: { p1: { x: 198, y: GROUND_BASE_Y, z: -10 }, p2: { x: -200, y: GROUND_BASE_Y, z: -2 },
+  spacecraft: { p1: { x: 198, y: GROUND_BASE_Y, z: -10 }, p2: { x: -200, y: GROUND_BASE_Y, z: -2 },
     more: [{ x: 85, y: GROUND_BASE_Y, z: -20 }, { x: -75, y: GROUND_BASE_Y, z: -11 }, { x: -121, y: GROUND_BASE_Y, z: -3 }, { x: 82, y: GROUND_BASE_Y, z: 21 }, { x: -72, y: GROUND_BASE_Y + -1, z: 31 }, { x: 117, y: GROUND_BASE_Y, z: 69 }, { x: 51, y: GROUND_BASE_Y, z: 112 }], pick: 'random' },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
@@ -30655,7 +30655,7 @@ const ARENAS = {
   flashpoint: buildGeneratedArena('flashpoint'),
   airport: buildGeneratedArena('airport'),
   town: buildGeneratedArena('town'),
-  S_Station: buildGeneratedArena('S_Station')
+  spacecraft: buildGeneratedArena('spacecraft')
 };
 
 // A box whose top is a floor — a surface lies on it (a deck's body, a crate, a car's roof) — is one a body steps

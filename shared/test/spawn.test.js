@@ -81,16 +81,16 @@ test('a map without spawn places keeps the slot\'s own start', () => {
 });
 
 test('Spacecraft draws its respawn at random among the nine places (pick: random)', () => {
-  const ss = getArena('S_Station');
+  const ss = getArena('spacecraft');
   assert.equal(ss.spawns.pick, 'random');
   const all = [ss.spawns.p1, ss.spawns.p2, ...ss.spawns.more];
   assert.equal(all.length, 9);
-  const m = createMatchState({ mapKey: 'S_Station', mode: '1v1', rosters: ROSTERS, startTime: 1000 });
+  const m = createMatchState({ mapKey: 'spacecraft', mode: '1v1', rosters: ROSTERS, startTime: 1000 });
   const enemy = m.fighters.p2; put(enemy, ss.spawns.more[0]);   // standing on the central junction: that place is passed over
   m.fighters.p1.hp = 0;
   const drawn = new Set();
   for (let i = 0; i < 400; i += 1) {
-    const p = pickRespawnSpawn('S_Station', 'A', [enemy]);
+    const p = pickRespawnSpawn('spacecraft', 'A', [enemy]);
     assert.ok(all.some((q) => q.x === p.x && q.z === p.z), 'not one of the places');
     assert.ok(dist(p, enemy.pos) >= 8, 'spawned on the enemy');
     drawn.add(`${p.x},${p.z}`);

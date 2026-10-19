@@ -811,7 +811,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  S_Station: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
 };
 
@@ -6505,7 +6505,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022k';
+const CLIENT_BUILD_TAG = 'b1022l';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7302,7 +7302,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'S_Station']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -10002,7 +10002,7 @@ function applyMapAmbience(mapKey) {
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 },
-  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fadeTall: 9.6, tone: 'factory', edge: false }
+  spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fadeTall: 9.6, tone: 'factory', edge: false }
 };
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
