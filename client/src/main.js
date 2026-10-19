@@ -6505,7 +6505,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022m';
+const CLIENT_BUILD_TAG = 'b1022t';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10039,13 +10039,17 @@ function buildGlbArena(mapKey) {
     inst.traverse((o) => { if (cfg.drop.includes(o.name)) drop.push(o); });
     for (const o of drop) o.parent.remove(o);
     group.add(inst);
-    if (cfg.fadeTall) splitFadeParts(inst, group, cfg);
+    splitFadeParts(inst, group, cfg, halfX, halfZ);
   });
 }
 // VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): whatever stands tall enough to
-// hide a unit from the camera goes translucent while it does. The map's `fadeTall` (units over the floor; Space
-// Station 2.4 m, over its 2.0–2.2 m walls) says how tall: every metre cell holding a triangle that high is a tall
-// cell, touching tall cells are one thing (an engine, the reactor core, a pile of crates — a stack counts by its
+// hide a unit from the camera goes translucent while it does. Two kinds of cell seed it. Inside the arena, every metre
+// cell holding a triangle over the map's `fadeTall` (units over the floor; Spacecraft 2.4 m, over its 2.0–2.2 m
+// walls). Beyond the arena's edge, every cell holding a triangle over a body's height: a body at an edge has the
+// camera outside the arena, behind whatever stands there — Town's wall along the south edge and the buildings beyond
+// it, the houses past its other three limits (a hand-set box used to name the south-edge wall and a stretch of the
+// buildings behind it, and the buildings east and west of the box still hid a body on the garage roofs; user
+// 2026-10-19). Touching seed cells are one thing (an engine, the reactor core, a pile of crates — a stack counts by its
 // top and fades whole, as every triangle over the thing's footprint above the floor is its), and each thing's
 // triangles are split off into a mesh of their own per source mesh (the attribute buffers shared, its own index and
 // a cloned material: the model shares materials between unrelated pieces), registered to fade as one structure;
@@ -10053,22 +10057,24 @@ function buildGlbArena(mapKey) {
 // own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
 // a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
 // box ignores the index — so the engines faded all the time.
-function splitFadeParts(inst, group, cfg) {
+function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
-  const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a tall thing)
+  const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a thing)
   const meshes = []; inst.traverse((o) => { if (o.isMesh) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
   const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
   const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
-  // 1. the tall cells, joined into things: the fade boxes
+  // 1. the seed cells, joined into things: the fade boxes
   const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`;
+  const tallY = cfg.fadeTall ?? Infinity, hideY = 2 * GROUND_BASE_Y;   // (a body's height: what stands that tall hides one)
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
-      if ((w[0].y + w[1].y + w[2].y) / 3 < cfg.fadeTall) continue;
-      tall.add(cellKey(Math.floor((w[0].x + w[1].x + w[2].x) / 3 / COL), Math.floor((w[0].z + w[1].z + w[2].z) / 3 / COL)));
+      const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
+      if (cy < tallY && !(cy >= hideY && (Math.abs(cx) > halfX || Math.abs(cz) > halfZ))) continue;
+      tall.add(cellKey(Math.floor(cx / COL), Math.floor(cz / COL)));
     }
   }
   const boxes = []; const seen = new Set();

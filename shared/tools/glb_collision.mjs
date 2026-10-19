@@ -186,6 +186,8 @@ const reach = new Uint8Array(N), reachBits = new Uint8Array(N), onThing = new Ui
 const isTop = (LL, lj) => lj > 0 && Math.abs(LL[lj].top - LL[lj - 1].st) <= 0.1;
 const covering = (x) => !Number.isNaN(x.under) && x.bot - x.under < HEADROOM;
 // (cappedTop: a standing thing's top the map's ceiling took — still a thing, a box to its own top, never stood on)
+const BODY_CELLS = Math.ceil(1.15 / SCALE / CELL - 0.5); let narrowFloor = 0; const narrowTop = new Float64Array(N).fill(NaN);   // (the floor the narrow-floor rule took back from a column, the highest: the dead-floor rule reads it)
+const parapet = new Uint8Array(N); let parapets = 0;   // (a raised strip narrower than GROUND_MIN with a drop beyond it: not floor, low cover without a top — the terrace's parapet)   // (the cells a body centred in a cell covers each way: its radius 1.15 units over the cell)
 const floorH = new Float64Array(N).fill(NaN), ceilH = new Float64Array(N).fill(NaN), standTop = new Float64Array(N).fill(NaN), cappedTop = new Float64Array(N).fill(NaN); const hang = new Array(N).fill(null);
 const slabUnder = new Float64Array(N).fill(NaN), passTop = new Float64Array(N).fill(NaN);   // a floor over a walked passage: the passage's roof (the slab's underside) and the passage's floor
 { const st = []; for (let j = 0; j < N; j += 1) { const L = layersOf[j]; if (!L) continue; for (let li = 0; li < L.length; li += 1) if (Math.abs(L[li].top) <= 0.1 && passableL(L[li])) { reachBits[j] |= 1 << li; st.push(j * 4 + li); } }
@@ -223,6 +225,56 @@ const slabUnder = new Float64Array(N).fill(NaN), passTop = new Float64Array(N).f
               const w = (i1 - i0 + 1) * CELL, d = (k1 - k0 + 1) * CELL;
               if (Math.min(w, d) >= GROUND_MIN && cells.length * CELL * CELL > GROUND_MIN * GROUND_MIN) { for (const c of cells) { reachBits[(c / 4) | 0] |= 1 << (c & 3); st.push(c); } seeded = true; } } } } }
       if (!seeded) break; flood(); } }
+  // NARROW FLOOR: a floor a body cannot stand on is not floor — a railing's top, a post's, a ledge a hand wide. The
+  // flood climbs them by their bevels (a rise within a step, a cell at a time, under the two-cell limit) and read the
+  // east terrace's railing as a floor a step up, laid a ramp onto it, and a body walked over the railing and off the
+  // terrace. A body centred in a cell covers the cells around it (BODY_CELLS each way); a reached floor cell is stood
+  // in when every cell of that block has a reached floor within a step of its height, and a reached floor cell no
+  // stood-in cell covers is no floor: its reach is taken back, and what stands there is a thing again — the railing
+  // slim, low and free-standing: a fence. The dead floor's twin (a slot narrower than a body is not floor either).
+  const narrowPass = () => { const within = (jj, t) => { const LL = layersOf[jj]; if (!LL) return false; for (let lj = 0; lj < LL.length; lj += 1) if (((reachBits[jj] >> lj) & 1) && Math.abs(LL[lj].top - t) <= STEP) return true; return false; };
+    for (let changed = true; changed;) { changed = false; const stood = new Uint8Array(N * 4);
+      for (let j = 0; j < N; j += 1) { if (!reachBits[j]) continue; const i = j % nx, k = (j - i) / nx; const L = layersOf[j];
+        for (let li = 0; li < L.length; li += 1) { if (!((reachBits[j] >> li) & 1)) continue; const t = L[li].top; let ok = 1;
+          for (let dk = -BODY_CELLS; dk <= BODY_CELLS && ok; dk += 1) for (let di = -BODY_CELLS; di <= BODY_CELLS; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz || !within(kk * nx + ii, t)) { ok = 0; break; } }
+          stood[j * 4 + li] = ok; } }
+      for (let j = 0; j < N; j += 1) { if (!reachBits[j]) continue; const i = j % nx, k = (j - i) / nx; const L = layersOf[j];
+        for (let li = 0; li < L.length; li += 1) { if (!((reachBits[j] >> li) & 1) || stood[j * 4 + li]) continue; const t = L[li].top; let covered = 0;
+          for (let dk = -BODY_CELLS; dk <= BODY_CELLS && !covered; dk += 1) for (let di = -BODY_CELLS; di <= BODY_CELLS && !covered; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const jj = kk * nx + ii; const LL = layersOf[jj]; if (!LL) continue;
+            for (let lj = 0; lj < LL.length; lj += 1) if (stood[jj * 4 + lj] && Math.abs(LL[lj].top - t) <= STEP) { covered = 1; break; } }
+          if (!covered) { reachBits[j] &= ~(1 << li); onThing[j] &= ~(1 << li); if (!(narrowTop[j] >= t)) narrowTop[j] = t; narrowFloor += 1; changed = true; } } } } };
+  narrowPass();
+  // PARAPET: a raised strip narrower than GROUND_MIN, standing a hop over a walked floor on one side and over a drop on
+  // another. The flood reached the east terrace's parapet (a metre thick, 0.9 m up, a 3.5 m drop beyond) over its
+  // corner block, and the kerb rule laid ramps onto it along its length: a body walked up and off the terrace. Read
+  // cell by cell (a terrace's rim is L-shaped; no box around it is narrow): a reached floor cell is WIDE when every
+  // cell within GROUND_MIN/2 of it has a reached floor within a step of its height; one no wide cell covers, with a
+  // walked floor more than a step and no more than KERB_MAX under it within GROUND_MIN in one direction and a floor
+  // more than KERB_MAX under it (or nothing) within GROUND_MIN in another, is a parapet: not floor (its reach taken
+  // back), and low cover without a top — a body walking stops at it, a hop crosses it (the user's call: a low wall is
+  // jumped, 2026-10-19), nothing stands on it. A planter a step up on every side stays what it was; a catwalk over
+  // drops on both sides stays a floor.
+  { const R = Math.ceil(GROUND_MIN / 2 / CELL), reachOut = Math.round(GROUND_MIN / CELL);
+    const within = (jj, t) => { const LL = layersOf[jj]; if (!LL) return false; for (let lj = 0; lj < LL.length; lj += 1) if (((reachBits[jj] >> lj) & 1) && Math.abs(LL[lj].top - t) <= STEP) return true; return false; };
+    const highest = (jj) => { const LL = layersOf[jj]; if (!LL) return NaN; let h = -Infinity; for (const x of LL) if (x.top > h) h = x.top; return h; };
+    const walkedBelow = (jj, t) => { const LL = layersOf[jj]; if (!LL) return false; for (let lj = 0; lj < LL.length; lj += 1) if (((reachBits[jj] >> lj) & 1) && t - LL[lj].top > STEP && t - LL[lj].top <= KERB_MAX) return true; return false; };
+    const wide = new Uint8Array(N * 4);
+    for (let j = 0; j < N; j += 1) { if (!reachBits[j]) continue; const i = j % nx, k = (j - i) / nx; const L = layersOf[j];
+      for (let li = 0; li < L.length; li += 1) { if (!((reachBits[j] >> li) & 1)) continue; const t = L[li].top; let ok = 1;
+        for (let dk = -R; dk <= R && ok; dk += 1) for (let di = -R; di <= R; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz || !within(kk * nx + ii, t)) { ok = 0; break; } }
+        wide[j * 4 + li] = ok; } }
+    const flagged = [];
+    for (let j = 0; j < N; j += 1) { if (!reachBits[j]) continue; const i = j % nx, k = (j - i) / nx; const L = layersOf[j];
+      for (let li = 0; li < L.length; li += 1) { if (!((reachBits[j] >> li) & 1) || wide[j * 4 + li]) continue; const t = L[li].top; let covered = 0;
+        for (let dk = -R; dk <= R && !covered; dk += 1) for (let di = -R; di <= R && !covered; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const jj = kk * nx + ii; const LL = layersOf[jj]; if (!LL) continue;
+          for (let lj = 0; lj < LL.length; lj += 1) if (wide[jj * 4 + lj] && Math.abs(LL[lj].top - t) <= STEP) { covered = 1; break; } }
+        if (covered) continue;
+        let hop = false, drop = false;
+        for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { let low = Infinity, walked = false; for (let q = 1; q <= reachOut; q += 1) { const ii = i + di * q, kk = k + dk * q; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) break; const jj = kk * nx + ii; if (walkedBelow(jj, t)) walked = true; const h = highest(jj); if (Number.isNaN(h)) { low = -Infinity; break; } if (h < low) low = h; }
+          if (walked) hop = true; if (t - low > KERB_MAX) drop = true; }
+        if (hop && drop) flagged.push(j * 4 + li); } }
+    for (const c of flagged) { const j = (c / 4) | 0, li = c & 3; reachBits[j] &= ~(1 << li); onThing[j] &= ~(1 << li); parapet[j] = 1; } parapets = flagged.length; }
+  narrowPass();   // (what the parapets left: their bevelled edges, a cell wide, covered by nothing now)
   // the column's floor: its lowest reached floor — unless that is a passage under another reached floor (HEADROOM
   // between its top and the next surface, the upper floor's underside): then the upper floor is the column's and
   // the passage stays walked beneath it (a yard's edge overhanging the street, a bridge), the floor's body a slab
@@ -350,15 +402,21 @@ for (let j = 0; j < N; j += 1) { if (reach[j]) { const top = Number.isNaN(standT
 // cells around it (BODY_CELLS each way); a cell is stood in when none of those holds a thing more than a step over the
 // floor, and a floor cell no stood-in cell covers is dead — a slot between two parts of a machine, the strip behind a
 // railing set against a wall. A dead cell joins the tallest thing beside it (the railing against the wall is the wall),
-// so no body comes down into the slot from the air to be pushed from one thing into the other (b1022e).
-const BODY_CELLS = Math.ceil(1.15 / SCALE / CELL - 0.5); let deadFloor = 0;
-{ const blocks = (j, n) => !Number.isNaN(thingTop[n]) && thingTop[n] - floorH[j] > STEP;
+// so no body comes down into the slot from the air to be pushed from one thing into the other (b1022e). The same for
+// a floor the narrow-floor rule took back with nothing standing on it — the ledge outside the south-east terrace's
+// parapet, a cell wide between the parapet and the rim's drop, walked into from the terrace's corner: it stayed a thing
+// at its own height, its box standing from the floor beside it (higher than its top), and a body walked onto it, fell
+// into the slot and hung between the rim and the parapet (user 2026-10-19). Joined to the parapet, the slot is parapet.
+let deadFloor = 0;
+{ const floorOf = (j) => reach[j] ? floorH[j] : narrowTop[j];
+  const isFloor = (j) => reach[j] ? Number.isNaN(thingTop[j]) : !Number.isNaN(narrowTop[j]) && thingTop[j] <= narrowTop[j] + FLOOR_MIN;   // (a reached floor cell; or a column whose floor the narrow-floor rule took back, nothing standing on it)
+  const blocks = (j, n) => !Number.isNaN(thingTop[n]) && thingTop[n] - floorOf(j) > STEP;
   const stood = new Uint8Array(N);
   for (let j = 0; j < N; j += 1) { if (!reach[j] || !Number.isNaN(thingTop[j])) continue; const i = j % nx, k = (j - i) / nx; let ok = 1;
     for (let dk = -BODY_CELLS; dk <= BODY_CELLS && ok; dk += 1) for (let di = -BODY_CELLS; di <= BODY_CELLS; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; if (blocks(j, kk * nx + ii)) { ok = 0; break; } }
     stood[j] = ok; }
   const fill = [];
-  for (let j = 0; j < N; j += 1) { if (!reach[j] || !Number.isNaN(thingTop[j]) || stood[j]) continue; const i = j % nx, k = (j - i) / nx; let covered = 0, top = -Infinity;
+  for (let j = 0; j < N; j += 1) { if (!isFloor(j) || stood[j]) continue; const i = j % nx, k = (j - i) / nx; let covered = 0, top = -Infinity;
     for (let dk = -BODY_CELLS; dk <= BODY_CELLS; dk += 1) for (let di = -BODY_CELLS; di <= BODY_CELLS; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (stood[n]) covered = 1; if (blocks(j, n) && thingTop[n] > top) top = thingTop[n]; }
     if (!covered && top > -Infinity) fill.push([j, top]); }
   for (const [j, top] of fill) thingTop[j] = top; deadFloor = fill.length; }
@@ -393,7 +451,7 @@ for (let j = 0; j < N; j += 1) if (reach[j] && Number.isNaN(thingTop[j])) { stan
 { const order = []; for (let j = 0; j < N; j += 1) if (!Number.isNaN(thingTop[j])) order.push(j); order.sort((p, q) => thingTop[p] - thingTop[q]);
   let changed = true;
   while (changed) { changed = false;
-    for (const j of order) { if (!Number.isNaN(lowTop[j])) continue; const top = thingTop[j]; const i = j % nx, k = (j - i) / nx; let lf = NaN, lb = NaN;
+    for (const j of order) { if (!Number.isNaN(lowTop[j]) || parapet[j]) continue; const top = thingTop[j]; const i = j % nx, k = (j - i) / nx; let lf = NaN, lb = NaN;
       for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (Number.isNaN(stand[n])) continue;
         if (wideOf[j] && !Number.isNaN(thingTop[n])) continue;   // (a wide thing: from a floor only)
         if (Number.isNaN(lf) || stand[n] > lf) { lf = stand[n]; lb = base[n]; } }
@@ -431,7 +489,7 @@ for (let j = 0; j < N; j += 1) {
   // STANDABLE: a thick thing no taller than WALK_MAX over the floor beside it — a kiosk, a garage, a truck, a tree's crown — is landed on from the
   // air and stood on: 0.5 m classes, a floor on top; taller is a building, and nothing stands on a building)
   // (a standable thing — landed on from the air, its top a floor — is one whose top is under the map's ceiling, as low cover is: a top at or over the ceiling is stood on by nothing, so the thing is a wall — no hop passes over it, no floor lies on it; it used to keep the deck's body (topBuffer 0.8), so a body at the top of its hop sailed over it and came down among the thing's parts)
-  if (!Number.isNaN(thingTop[j])) { wallCells += 1; wallH[j] = thingTop[j]; wallKey[j] = !Number.isNaN(lowTop[j]) ? (thick(j) ? 1000 + Math.ceil(thingTop[j] / DECK_Q - 1e-9) : 1500 + Math.ceil(thingTop[j] / 0.5 - 1e-9)) : (thick(j) && thingTop[j] - baseOf[j] <= WALK_MAX && thingTop[j] < CEIL) ? 2000 + Math.ceil(thingTop[j] / 0.5 - 1e-9) : voidWall[j] ? 9 : qTall(thingTop[j]); }   // (9: the void, its own class — it never merges with a building's)
+  if (!Number.isNaN(thingTop[j])) { wallCells += 1; wallH[j] = thingTop[j]; wallKey[j] = parapet[j] ? 1700 + Math.ceil(thingTop[j] / 0.5 - 1e-9) : !Number.isNaN(lowTop[j]) ? (thick(j) ? 1000 + Math.ceil(thingTop[j] / DECK_Q - 1e-9) : 1500 + Math.ceil(thingTop[j] / 0.5 - 1e-9)) : (thick(j) && thingTop[j] - baseOf[j] <= WALK_MAX && thingTop[j] < CEIL) ? 2000 + Math.ceil(thingTop[j] / 0.5 - 1e-9) : voidWall[j] ? 9 : qTall(thingTop[j]); }   // (9: the void, its own class — it never merges with a building's)
 }
 function rects(vals) { const seen = new Uint8Array(N); const out = [];
   for (let k = 0; k < nz; k += 1) for (let i = 0; i < nx; i += 1) { const j = k * nx + i; if (seen[j] || vals[j] === 0) continue; const v = vals[j];
@@ -449,7 +507,22 @@ const walls = rects(wallKey).filter(inCrop), decks = rects(deckCode).filter(inCr
 const rampId = new Float64Array(N); for (let j = 0; j < N; j += 1) if (kind[j] === 1) rampId[j] = regionOf[j] + 1; const rampRects = rects(rampId).filter(inCrop);
 let tallOver = 0, tallOverMax = 0;   // (walls below the flight ceiling whose box stands more than 1 m above their lowest column, and the worst case)
 // (a low or standable thing's own top: its class only merges — a body on it stands on the model's top, not up to 0.25 m over it)
-for (const w of walls) { w.key = w.h; w.low = w.key >= 1000 && w.key < 2000; w.stand = w.key >= 2000;
+// (the parapet that was never flooded: a thing's top a hop up, narrower than GROUND_MIN, with a floor more than KERB_MAX
+// under it within GROUND_MIN beyond one of its sides, standing a hop (more than a step, no more than KERB_MAX) over the
+// floor beside it — the south-east terrace's rim, a thick low thing the generator
+// gave a top to, which a body hopped onto and walked off into the road 3 m below (user 2026-10-19). It carries no
+// floor either: nothing perches over a drop. A planter in the square, floor a step down on every side, keeps its top.)
+const parapetThing = (w) => { if (Math.min(w.w, w.d) * CELL >= GROUND_MIN) return false; const reachOut = Math.round(GROUND_MIN / CELL); let hop = false, drop = false;
+  // (each side, GROUND_MIN out: a walked floor a hop under the top (more than a step, no more than KERB_MAX) — the terrace it stands on;
+  // a floor more than KERB_MAX under it — the road beyond; a column with no floor (the rim's own face) is looked past)
+  const side = (i, k, di, dk) => { let low = Infinity; for (let q = 1; q <= reachOut; q += 1) { const ii = i + di * q, kk = k + dk * q; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) break; const jj = kk * nx + ii; const LL = layersOf[jj]; if (!LL) continue;
+      for (let lj = 0; lj < LL.length; lj += 1) { const t = LL[lj].top; if (t < low) low = t; if (((reachBits[jj] >> lj) & 1) && w.h - t > STEP && w.h - t <= KERB_MAX) hop = true; } }
+    if (w.h - low > KERB_MAX) drop = true; };
+  for (let ci = w.i; ci < w.i + w.w; ci += 1) { side(ci, w.k, 0, -1); side(ci, w.k + w.d - 1, 0, 1); }
+  for (let kk = w.k; kk < w.k + w.d; kk += 1) { side(w.i, kk, -1, 0); side(w.i + w.w - 1, kk, 1, 0); }
+  return hop && drop; };
+let thingParapets = 0;
+for (const w of walls) { w.key = w.h; w.low = w.key >= 1000 && w.key < 2000; w.stand = w.key >= 2000; w.parapet = w.key >= 1700 && w.key < 2000;   // (a parapet: low cover without a top — a body stops, a hop crosses, nothing stands on it; the thing kind is read below, once the rectangle's height and base are known)
   if (w.low || w.stand) w.h = maxIn(w, wallH); else { w.h = Math.ceil(maxIn(w, wallH) * 2) / 2; const lo = minIn(w, wallH), over = w.h - lo; if (lo < 7) { if (over > 1) tallOver += 1; if (over > tallOverMax) tallOverMax = over; } }
   // (the highest walked floor beside the rectangle: what its height is measured from — a railing on a terrace is a railing)
   let bse = NaN, bseLo = NaN; for (let kk = w.k; kk < w.k + w.d; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = ci + di, kq = kk + dk; if (ii < 0 || kq < 0 || ii >= nx || kq >= nz) continue; const n = kq * nx + ii; if (reach[n] && Number.isNaN(thingTop[n])) { if (Number.isNaN(bse) || floorH[n] > bse) bse = floorH[n]; if (Number.isNaN(bseLo) || floorH[n] < bseLo) bseLo = floorH[n]; } } w.base = Number.isNaN(bse) ? 0 : bse; w.baseLo = Number.isNaN(bseLo) ? 0 : bseLo;   // (and the lowest: the floor the thing stands from)
@@ -468,7 +541,7 @@ const cx = (x0c + x1c) / 2, cz = (z0c + z1c) / 2; const U = (v) => Math.round(v 
 const halfX = U((x1c - x0c) / 2), halfZ = U((z1c - z0c) / 2);
 const box = (b, hh) => ({ minX: U(b.x0 - cx), maxX: U(b.x1 - cx), minZ: U(b.z0 - cz), maxZ: U(b.z1 - cz), minY: 0, maxY: U(hh) });
 const thin = (b) => Math.min(b.x1 - b.x0, b.z1 - b.z0) <= FENCE_MAX;
-const obstacles = [], surfaces = []; let lowCover = 0, standable = 0, fences = 0, deckBodies = 0, slabs = 0, skirts = 0, voids = 0;
+const obstacles = [], surfaces = []; let lowCover = 0, standable = 0, fences = 0, deckBodies = 0, slabs = 0, skirts = 0, voids = 0, planeBodies = 0;
 for (const w of walls) {
   // a SEAM of the model's terrain tiles: a slim run no taller than SEAM_TALL that rises from under the floor beside it
   // and has that same floor on both of its sides (the tiles' edges meeting under a street): nothing stands there
@@ -477,13 +550,14 @@ for (const w of walls) {
       for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = ci + di, kq = kk + dk; if (ii < 0 || kq < 0 || ii >= nx || kq >= nz) continue; const n = kq * nx + ii; if (reach[n] && Number.isNaN(thingTop[n])) { nCnt += 1; if (floorH[n] < nLo) nLo = floorH[n]; if (floorH[n] > nHi) nHi = floorH[n]; } }
       if (nCnt >= 2 && nHi - nLo <= FLOOR_MIN) same += 1; }
     if (lowMax < w.base - UNDER_STREET && same >= 0.7 * w.w * w.d) { seams += 1; continue; } }
-  const o = box(w, w.h); if (w.baseLo > 0) o.minY = U(w.baseLo); if (w.key === 9) voids += 1;   // (a thing on a raised floor stands from that floor: its box starts there, so its height is its own)
+  if (!w.parapet && (w.low || w.stand) && Math.min(w.w, w.d) * CELL > FENCE_MAX && parapetThing(w)) { w.parapet = true; thingParapets += 1; }   // (thick: a slim one carries no top anyway)
+  const o = box(w, w.h); if (w.baseLo > 0 && w.h - w.baseLo > FLOOR_MIN) o.minY = U(w.baseLo); if (w.key === 9) voids += 1;   // (a thing on a raised floor stands from that floor: its box starts there, so its height is its own; one no higher than the lowest floor beside it stands on nothing walked — the rim of that floor, from the ground — never a box whose bottom is over its top)
   if (w.low) { o.topBuffer = 0.8; lowCover += 1; }   // low cover is a deck no step reaches: its body blocks a body below it, a hop lands on its top
   if (w.free && w.h - w.base <= FENCE_TALL && w.h < CEIL) { o.noProjectile = true; fences += 1; }   // (a slim thing reaching the map's ceiling is a wall: a ship's partition) a fence, a railing, a post — slim, free-standing, no taller than a fence over the floor beside it: a body stops, a round and an eye pass (a bus's side, a wall's plane are slim and taller: walls; a car's door panel is a slim face of a thick thing: it stops rounds and carries the car's floor)
   else if (w.stand) { o.topBuffer = 0.8; standable += 1; }   // a standable thing: landed on from the air, its top a floor
   obstacles.push(o);
   // (a floor on top of what is wide enough to stand on: a slim face of a thick thing — a car's door panel — stops rounds but carries none, so a bot does not perch on a railing's top)
-  if ((w.low || w.stand) && !o.noProjectile && !thin(w)) surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); }
+  if ((w.low || w.stand) && !o.noProjectile && !thin(w) && !w.parapet) surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); }
 for (const d of decks) { const top = regH[(d.h >> 9) - 1], under = d.h & 255, bodyless = d.h & 256; const o = box(d, top); surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY });
   if (top >= STEP && !bodyless) { if (under) { o.minY = U((under - 1) * DECK_Q); slabs += 1; } obstacles.push({ ...o, topBuffer: 0.8 }); deckBodies += 1; } }   // (a sunken floor has no body: the rims of the floors around it are its walls; a slab's body stops at the passage's roof)
 for (const p of passes) { const o = box(p, p.h); surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); }
@@ -493,18 +567,35 @@ for (const r of rims) { const o = box(r, 0); o.minY = U(minIn(r, rimLo)); o.maxY
 for (const bm of beams) { let lo = Infinity, hi = -Infinity; for (let kk = bm.k; kk < bm.k + bm.d; kk += 1) for (let c = bm.i; c < bm.i + bm.w; c += 1) { const h = hang[kk * nx + c]; if (h[0] < lo) lo = h[0]; if (h[1] > hi) hi = h[1]; }
   const hangTop = Math.round(hi / DECK_Q) * DECK_Q; const o = box(bm, hangTop); o.minY = U(Math.floor(lo / DECK_Q) * DECK_Q); if (hangTop < CEIL) o.topBuffer = 0.8; if (thin(bm)) o.noProjectile = true; if (o.maxY <= o.minY) o.maxY = o.minY + 1; obstacles.push(o);
   if (hangTop < CEIL && !o.noProjectile) surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); }
-for (const c of ceils) { const o = box(c, Math.ceil(maxIn(c, H))); o.minY = U(Math.floor(minIn(c, ceilH) * 2) / 2); if (o.maxY > o.minY) obstacles.push(o); }
+// (a ceiling over a walked passage with the roof beside it a floor — a standable thing's top, or a deck's, within SLAB
+// of its own top — is that roof's slab over the passage: its top the model's, not a metre class above it (the lip was
+// an invisible wall to a body on the roof), a floor on it (the gap was a hole), hopped over like the roof; the body
+// in the passage under it walks on. Town's south-edge garages: the roofs of their open ground floors, user 2026-10-19)
+let roofSlabs = 0;
+for (const c of ceils) { const top = maxIn(c, H); let roof = false;
+  for (let kk = c.k - 1; kk <= c.k + c.d && !roof; kk += 1) for (let ci = c.i - 1; ci <= c.i + c.w && !roof; ci += 1) { if (ci < 0 || kk < 0 || ci >= nx || kk >= nz || (ci >= c.i && ci < c.i + c.w && kk >= c.k && kk < c.k + c.d)) continue; const n = kk * nx + ci;
+    const nTop = (wallKey[n] >= 1000 && wallKey[n] < 3000 && !parapet[n]) ? thingTop[n] : (deckH[n] > FLOOR_MIN ? deckH[n] : NaN); if (!Number.isNaN(nTop) && Math.abs(nTop - top) <= SLAB) roof = true; }
+  const o = box(c, roof ? top : Math.ceil(top)); o.minY = U(Math.floor(minIn(c, ceilH) * 2) / 2); if (o.maxY <= o.minY) continue;
+  if (roof) { o.topBuffer = 0.8; surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); roofSlabs += 1; }
+  obstacles.push(o); }
 // slopes: each rectangle of a stretch is one PLANE surface (y0 at its (minX, minZ) corner, gx and gz the rise per
-// unit along x and z: the plane of the stretch); skirts where the floor beside the rectangle stands more than a
-// step off the plane, in SEG-cell lengths along each side
+// unit along x and z: the plane of the stretch), with a BODY beneath it — from the ground, or the roof of a walked
+// passage under it, up to the plane's lowest corner — as a deck has: a slope used to be a surface in the air with
+// its skirts the only solid under it, and a house's hip roof (a slope each way from the ridge, the model's house
+// a hollow shell) let a body that walked under its eave from the ledge beside it fall into the house and hang there
+// (user 2026-10-19); skirts where the floor beside the rectangle stands more than a step under the plane's edge
+// (the plane read on the edge itself: read a cell beyond it, a steep eave lost its skirt), in SEG-cell lengths
+// along each side
 const plane = (b, hAt) => { const hs = [hAt(b.x0, b.z0), hAt(b.x1, b.z0), hAt(b.x0, b.z1), hAt(b.x1, b.z1)]; return { s: { minX: U(b.x0 - cx), maxX: U(b.x1 - cx), minZ: U(b.z0 - cz), maxZ: U(b.z1 - cz), maxTop: U(Math.max(...hs)), type: 'plane', y0: U(hAt(b.x0, b.z0)), gx: 0, gz: 0 }, lo: Math.min(...hs), hi: Math.max(...hs) }; };
+const underOf = (b) => { let u = 0; for (let kk = b.k; kk < b.k + b.d; kk += 1) for (let ci = b.i; ci < b.i + b.w; ci += 1) { const s = slabUnder[kk * nx + ci]; if (s > u) u = s; } return u; };   // (the highest passage roof under the rectangle; NaN where there is none)
+const planeBody = (b, lo) => { const o = box(b, lo); o.minY = U(underOf(b)); if (o.maxY - o.minY >= U(STEP)) { obstacles.push({ ...o, topBuffer: 0.8 }); planeBodies += 1; } };   // (as a deck's: a slope within a step of what is under it has nothing a body fits under)
 for (const rr of rampRects) { const r = regions[rr.h - 1]; const hAt = (x, z) => r.a + r.b * x + r.c * z;
-  const p = plane(rr, hAt); p.s.gx = Math.round(r.b * 1e4) / 1e4; p.s.gz = Math.round(r.c * 1e4) / 1e4; surfaces.push(p.s);
+  const p = plane(rr, hAt); p.s.gx = Math.round(r.b * 1e4) / 1e4; p.s.gz = Math.round(r.c * 1e4) / 1e4; surfaces.push(p.s); planeBody(rr, p.lo);
   for (const side of ['x0', 'x1', 'z0', 'z1']) { const alongX = side[0] === 'z'; const len = alongX ? rr.w : rr.d;
     for (let q0 = 0; q0 < len; q0 += SEG) { const n = Math.min(SEG, len - q0); let need = false;
       for (let q = q0; q < q0 + n && !need; q += 1) { const i = alongX ? rr.i + q : (side === 'x0' ? rr.i - 1 : rr.i + rr.w), k = alongX ? (side === 'z0' ? rr.k - 1 : rr.k + rr.d) : rr.k + q;
         if (i < 0 || k < 0 || i >= nx || k >= nz) { need = true; break; } const j = k * nx + i; if (regionOf[j] === r.id) continue;
-        const here = hAt(X0 + (i + 0.5) * CELL, Z0 + (k + 0.5) * CELL); if (!reach[j] || Math.abs(floorH[j] - here) > STEP) need = true; }
+        const here = alongX ? hAt(X0 + (i + 0.5) * CELL, side === 'z0' ? rr.z0 : rr.z1) : hAt(side === 'x0' ? rr.x0 : rr.x1, Z0 + (k + 0.5) * CELL); if (!reach[j] || Math.abs(floorH[j] - here) > STEP) need = true; }
       if (!need) continue;
       const t = CELL; const bx = alongX ? { x0: rr.x0 + q0 * CELL, x1: rr.x0 + (q0 + n) * CELL, z0: side === 'z0' ? rr.z0 - t : rr.z1, z1: side === 'z0' ? rr.z0 : rr.z1 + t } : { x0: side === 'x0' ? rr.x0 - t : rr.x1, x1: side === 'x0' ? rr.x0 : rr.x1 + t, z0: rr.z0 + q0 * CELL, z1: rr.z0 + (q0 + n) * CELL };
       const e = plane(bx, hAt); const o = box(bx, e.hi); if (o.maxY <= 0) o.minY = U(e.lo - 0.5);   // (a sunken slope's skirt stands below the street)
@@ -512,8 +603,8 @@ for (const rr of rampRects) { const r = regions[rr.h - 1]; const hAt = (x, z) =>
 // kerb ramps: one plane per run of kerb cells with the same two floors, rising from the low floor's side
 const kerbRects = rects(kerbKey).filter(inCrop); let kerbs = 0;
 for (const kr of kerbRects) { const info = kerbInfo.get(kr.h); const depth = info.axis === 'x' ? kr.x1 - kr.x0 : kr.z1 - kr.z0; const g = info.dir * (info.hi - info.lo) / depth; const y0 = info.dir > 0 ? info.lo : info.hi;
-  surfaces.push({ minX: U(kr.x0 - cx), maxX: U(kr.x1 - cx), minZ: U(kr.z0 - cz), maxZ: U(kr.z1 - cz), maxTop: U(info.hi), type: 'plane', y0: U(y0), gx: info.axis === 'x' ? Math.round(g * 1e4) / 1e4 : 0, gz: info.axis === 'z' ? Math.round(g * 1e4) / 1e4 : 0 }); kerbs += 1; }
-const stats = { key, crop_m: [x0c, x1c, z0c, z1c], kerbs, scale: SCALE, ground_m: GROUND, cell_m: CELL, triangles: triCount, trianglesInCrop: used, cells: N, floorCells, wallCells, ceilCells, deadFloor, voids, walls: walls.length, lowCover, standable, fences, seams, tallOver1m: tallOver, tallOverMaxM: Math.round(tallOverMax * 100) / 100, decks: decks.length, deckBodies, slabs, passageFloors: passes.length, rims: rims.length, beams: beams.length, ramps: rampRects.length, rampStretches: regions.filter((r) => r.cells.length && !r.stairs).length, stairs: regions.filter((r) => r.cells.length && r.stairs).length, skirts, ceilings: ceils.length, obstacles: obstacles.length, surfaces: surfaces.length, halfX, halfZ };
+  surfaces.push({ minX: U(kr.x0 - cx), maxX: U(kr.x1 - cx), minZ: U(kr.z0 - cz), maxZ: U(kr.z1 - cz), maxTop: U(info.hi), type: 'plane', y0: U(y0), gx: info.axis === 'x' ? Math.round(g * 1e4) / 1e4 : 0, gz: info.axis === 'z' ? Math.round(g * 1e4) / 1e4 : 0 }); kerbs += 1; planeBody(kr, info.lo); }   // (a ramp's body: up to the low floor — a ridge's kerb cells over a house's hollow, a strip's edge cell over nothing)
+const stats = { key, crop_m: [x0c, x1c, z0c, z1c], kerbs, scale: SCALE, ground_m: GROUND, cell_m: CELL, triangles: triCount, trianglesInCrop: used, cells: N, floorCells, wallCells, ceilCells, narrowFloor, parapets, thingParapets, roofSlabs, deadFloor, voids, walls: walls.length, lowCover, standable, fences, seams, tallOver1m: tallOver, tallOverMaxM: Math.round(tallOverMax * 100) / 100, decks: decks.length, deckBodies, slabs, passageFloors: passes.length, rims: rims.length, beams: beams.length, ramps: rampRects.length, rampStretches: regions.filter((r) => r.cells.length && !r.stairs).length, stairs: regions.filter((r) => r.cells.length && r.stairs).length, skirts, planeBodies, ceilings: ceils.length, obstacles: obstacles.length, surfaces: surfaces.length, halfX, halfZ };
 writeFileSync(`${outDir}/${key}.json`, JSON.stringify({ key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: [...EXCLUDE], ceil: Number.isFinite(CEIL) ? CEIL : null }, halfX, halfZ, spawns: null, obstacles, surfaces }));   // (ceil: the map's ceiling in metres, the sim's cap on a body's feet — null when the map has none)
 writeFileSync(`${outDir}/${key}.stats.json`, JSON.stringify(stats, null, 1));
 // ---- DUMP=1: every column's reading, for review scripts (metres, relative to the street)
