@@ -16,10 +16,10 @@ const jumpPeak = (mapKey) => {
 };
 
 test('the map ceiling caps a jump on Spacecraft and leaves Town free', () => {
-  const ceil = getArena('S_Station').ceil;
+  const ceil = getArena('spacecraft').ceil;
   assert.ok(ceil > 0 && ceil < 8, `Spacecraft carries a ceiling (${ceil})`);
   assert.equal(getArena('town').ceil, undefined);
-  const station = jumpPeak('S_Station'), town = jumpPeak('town');
+  const station = jumpPeak('spacecraft'), town = jumpPeak('town');
   assert.ok(station > 2, `still a jump on Spacecraft (${station.toFixed(2)})`);
   assert.ok(station <= ceil + 1e-6, `capped at the ceiling (${station.toFixed(2)} vs ${ceil})`);
   assert.ok(town > station + 0.2, `Town's jump is higher (${town.toFixed(2)} vs ${station.toFixed(2)})`);
