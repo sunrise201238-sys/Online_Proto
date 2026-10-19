@@ -80,11 +80,11 @@ test('a map without spawn places keeps the slot\'s own start', () => {
   assert.deepEqual({ x: fresh.pos.x, y: fresh.pos.y, z: fresh.pos.z }, m.spawnPoints.p1);
 });
 
-test('Spacecraft draws its respawn at random among the nine places (pick: random)', () => {
+test('Spacecraft draws its respawn at random among all its places (pick: random)', () => {
   const ss = getArena('spacecraft');
   assert.equal(ss.spawns.pick, 'random');
-  const all = [ss.spawns.p1, ss.spawns.p2, ...ss.spawns.more];
-  assert.equal(all.length, 9);
+  const all = [ss.spawns.p1, ss.spawns.p2, ...ss.spawns.more];   // (the homes and the `more` places: ten at this writing; the count is the data's)
+  assert.ok(all.length >= 3);
   const m = createMatchState({ mapKey: 'spacecraft', mode: '1v1', rosters: ROSTERS, startTime: 1000 });
   const enemy = m.fighters.p2; put(enemy, ss.spawns.more[0]);   // standing on the central junction: that place is passed over
   m.fighters.p1.hp = 0;
@@ -95,5 +95,5 @@ test('Spacecraft draws its respawn at random among the nine places (pick: random
     assert.ok(dist(p, enemy.pos) >= 8, 'spawned on the enemy');
     drawn.add(`${p.x},${p.z}`);
   }
-  assert.equal(drawn.size, 8, 'every free place drawn over 400 picks');
+  assert.equal(drawn.size, all.length - 1, 'every free place drawn over 400 picks');
 });
