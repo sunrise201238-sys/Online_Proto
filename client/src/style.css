@@ -569,3 +569,6 @@ body.pseudo-fullscreen #app {
    the corner-bar rim's sibling, and the only marker in Sudden Death where
    the bars hide. */
 .touch-hud .trio-line.spec-watched-icon .trio-weapon-icon { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }
+
+/* the minimal HUD (GLB_MAPS hud: 'minimal' — the Backrooms): only the player's own bar; user 2026-10-19 */
+.touch-hud.hud-minimal .enemy-health, .touch-hud.hud-minimal .ally-health, .touch-hud.hud-minimal .enemy2-health { display: none; }

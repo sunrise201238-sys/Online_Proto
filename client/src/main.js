@@ -631,6 +631,7 @@ const MAP_DATA = {
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   prison: { name: 'Prison', section: 'concept' },   // Cut from the Map Ep 73 glTF (2026-10-19, README: Maps): the prison compound and its tower. Listed among the Concept Maps while in the making.
+  backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
 };
 
@@ -1923,6 +1924,8 @@ function drawHealthBar(sprite, frac) {
   // has loaded (the update loop repaints the bar then); until then the frame
   // alone marks the slot.
   const T = UNIT_BAR_THUMB, TP = UNIT_BAR_PAD, E = UNIT_BAR_EDGE_W;
+  sprite.userData.barMinimal = hudMinimal();   // (the minimal HUD: no portrait — the pill alone)
+  if (!sprite.userData.barMinimal) {
   pill(TP - E, TP - E, T + 2 * E, T + 2 * E, 8 + E);
   x.fillStyle = UNIT_BAR_EDGE;
   x.fill();
@@ -1937,6 +1940,7 @@ function drawHealthBar(sprite, frac) {
     pill(TP, TP, T, T, 8);
     x.fillStyle = 'rgba(11, 17, 25, 0.92)';
     x.fill();
+  }
   }
   // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at
   // 1 HP, the bar would say nothing — the portrait alone is drawn.
@@ -2034,7 +2038,13 @@ function updateMechAnimations(dt, now) {
       // right, converted into the root's frame below): 0 = the group centred
       // over the unit, the normal bar's placement.
       let shiftX = 0;
-      if (state.suddenDeathActive) {
+      if (hudMinimal()) {
+        // THE MINIMAL HUD (Backrooms, user 2026-10-19): only the camera's own unit carries a bar — the pill alone, no
+        // portrait (drawHealthBar leaves it out), centred over the head; every other unit's group hides.
+        if (m !== camFocus) { bar.visible = false; continue; }
+        bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
+        shiftX = (0.5 * UNIT_BAR_TEX_W - (UNIT_BAR_PILL_X + UNIT_BAR_PILL_W / 2)) * u;   // the pill's centre over the unit
+      } else if (state.suddenDeathActive) {
         // The camera's own unit carries no portrait in Sudden Death (owner
         // 2026-10-06: "player's own unit does not need thumbnail");
         // teammates and enemies keep theirs.
@@ -2090,6 +2100,7 @@ function updateMechAnimations(dt, now) {
       }
       // (mode switch between matches: repaint bar <-> portrait-only)
       if (bar.userData.barSD !== !!state.suddenDeathActive) bar.userData.barFrac = -1;
+      if (bar.userData.barMinimal !== hudMinimal()) bar.userData.barFrac = -1;   // (the minimal HUD on or off: repaint without or with the portrait)
       // The sprite carries the portrait and the margins: scale it off the same world-per-texel so the PILL keeps its 2.42 x 0.3025 world size.
       bar.scale.set(UNIT_BAR_TEX_W * u, UNIT_BAR_TEX_H * u, 1);
       const ti = bar.userData.thumbImg;
@@ -5203,7 +5214,7 @@ function updateLocksAndReticle() {
   }
   // Diorama POC: lock state below still updates (bots read redLock), but the
   // world-space bracket is replaced by the annotation layer's square.
-  if (state.reticle) state.reticle.visible = !dioramaActive();
+  if (state.reticle) state.reticle.visible = !dioramaActive() && !hudMinimal();   // (the minimal HUD: no lock bracket)
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5374,8 +5385,8 @@ const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
   // Diorama POC: the whole fight is in frame and the annotation layer carries
-  // identity — both arrow forms are parked.
-  if (dioramaActive()) {
+  // identity — both arrow forms are parked. (The minimal HUD parks them too.)
+  if (dioramaActive() || hudMinimal()) {
     if (state.allyArrow) state.allyArrow.visible = false;
     hideAllyEdgeArrow();
     return;
@@ -5496,7 +5507,7 @@ const _enemyArrowCam = new THREE.Vector3();
 const OVERHEAD_TEAM_CHEVRONS = false;   // the floating triangles over the teammate and the unlocked enemy (owner 2026-09-19: both sat on the overhead HP bars); the screen-edge arrows stay
 function updateEnemyArrow() {
   // Diorama POC: parked for the same reason as updateAllyArrow.
-  if (dioramaActive()) {
+  if (dioramaActive() || hudMinimal()) {
     if (state.enemyArrow) state.enemyArrow.visible = false;
     hideEnemyEdgeArrow();
     return;
@@ -5867,6 +5878,7 @@ function updateHud(now = performance.now()) {
   // 1 HP — the HP bars (own, enemy, the 2v2 team bars) hide; the boost
   // gauge and the remaining-units icons stay.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
+  if (state.hud) state.hud.classList.toggle('hud-minimal', hudMinimal());   // (the minimal HUD: the other units' corner bars hide)
   hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
   if (hudRefs.allyHp && state.ally) {
@@ -6680,7 +6692,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023b';
+const CLIENT_BUILD_TAG = 'b1023d';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7477,7 +7489,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'prison', 'backrooms']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -9060,7 +9072,7 @@ function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) 
 // Two sections, divided as the unit menu divides Offline from Online (user 2026-10-19): SCENE MAPS — the maps cut from
 // modelled scenes, those with a model in GLB_MAPS (Town, Spacecraft) — over CONCEPT MAPS, the hand-made arenas. Each
 // section carries a Random card of its own, which rolls among that section's enabled cards alone (wireMapGrid).
-const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS && MAP_DATA[id]?.section !== 'concept' }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) || MAP_DATA[id]?.section === 'concept' }];   // (a modelled map the map table marks `section: 'concept'` sits among the concept maps: a release line's call on a map still in the making — Prison, user 2026-10-19)
+const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS && MAP_DATA[id]?.section !== 'concept' }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) || MAP_DATA[id]?.section === 'concept' }];   // (a modelled map the map table marks `section: 'concept'` sits among the concept maps: a map still in the making — Prison, user 2026-10-19)
 function mapGridHTML(mapEntries, disabled = new Set()) {
   return MAP_SECTIONS.map((sec) => {
     const entries = mapEntries.filter(([id]) => sec.has(id));
@@ -10096,13 +10108,20 @@ function applyMapAmbience(mapKey) {
 // arena data, generated from the same model's triangles by shared/tools/glb_collision.mjs (README,
 // Maps) — the model's metres times `scale`, the crop centre at the origin, the street at y 0. The
 // model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
-// per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `terrain` are the
-// ground (Prison's valley floor and mountains) and never fade. =====
+// per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `neverFade` are no
+// things that stand between the camera and a unit — a ground (Prison's valley floor and mountains), a ceiling
+// (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
+// looks down from above; `cmdDark`: command mode draws pure black around the map, the stand included; `hud: 'minimal'`:
+// indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
-  spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false },
-  prison: { file: 'maps/prison', scale: 4, cx: 38.95, cz: 108.65, ground: 0, drop: [], ceilY: 28, modelM: 4.1, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, terrain: ['Object_9', 'Object_4'] }
+  spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
+  prison: { file: 'maps/prison', scale: 4, cx: 38.95, cz: 108.65, ground: 0, drop: [], ceilY: 28, modelM: 4.1, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, neverFade: ['Object_9', 'Object_4'] },
+  backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, hud: 'minimal' }
 };
+const underNodes = (o, names, stop) => { for (let n = o; n && n !== stop; n = n.parent) if (names.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
+function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
+function hudMinimal() { return GLB_MAPS[state.mapKey]?.hud === 'minimal' && !dioramaActive(); }
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
 function loadMapModel(file, onReady) {
@@ -10139,6 +10158,8 @@ function buildGlbArena(mapKey) {
     for (const o of drop) o.parent.remove(o);
     group.add(inst);
     splitFadeParts(inst, group, cfg, halfX, halfZ);
+    group.userData.roof = []; if (cfg.roof) inst.traverse((o) => { if (o.isMesh && underNodes(o, cfg.roof, inst)) group.userData.roof.push(o); });
+    updateMapRoof();
   });
 }
 // VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): whatever stands tall enough to
@@ -10155,15 +10176,18 @@ function buildGlbArena(mapKey) {
 // the rest of the model, the floor under it included, stays as it is. The occlusion test runs against the piece's
 // own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
 // a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
-// box ignores the index — so the engines faded all the time. The map's terrain nodes (`terrain` in GLB_MAPS: Prison's
-// valley floor and its mountains, kept far out so the ground does not end in sky) are the ground, not things that
-// stand on it, and are left as they are: read as things, their big sparse triangles seeded thousands of pieces beyond
-// the edge — 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame — and the map lagged (user 2026-10-19).
+// box ignores the index — so the engines faded all the time. The nodes in `neverFade` are no things that stand between
+// the camera and a unit and are left as they are: a ground (Prison's valley floor and its mountains, kept far out so
+// the ground does not end in sky — read as things, their big sparse triangles seeded thousands of pieces beyond the
+// edge, 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame, and the map lagged; user 2026-10-19), a ceiling
+// (the Backrooms' tiles, lights and vents: the camera stays under them, and they would join every wall into one thing).
+// Indoors every wall touches every other, so a map may set `fadeChunk` (units): a thing is then the touching cells within
+// one chunk of the floor plan, and only the walls around the line from the camera to the unit fade (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
   const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a thing)
-  const terrain = cfg.terrain ?? []; const isTerrain = (o) => { for (let n = o; n && n !== inst; n = n.parent) if (terrain.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
-  const meshes = []; inst.traverse((o) => { if (o.isMesh && !isTerrain(o)) meshes.push(o); });
+  const still = cfg.neverFade ?? [];
+  const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
   const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
@@ -10181,13 +10205,16 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     }
   }
   const boxes = []; const seen = new Set();
+  const chunk = cfg.fadeChunk ? Math.max(1, Math.round(cfg.fadeChunk / COL)) : 0;   // (cells per chunk of the floor plan; 0: a thing is whatever touches)
+  const chunkOf = (ix, iz) => `${Math.floor(ix / chunk)},${Math.floor(iz / chunk)}`;
   for (const k0 of tall) {
     if (seen.has(k0)) continue;
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; const st = [k0]; seen.add(k0);
+    const home = chunk ? chunkOf(...k0.split(',').map(Number)) : null;
     while (st.length) {
       const [ix, iz] = st.pop().split(',').map(Number);
       if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iz < z0) z0 = iz; if (iz > z1) z1 = iz;
-      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n)) { seen.add(n); st.push(n); } }
+      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n) && (!chunk || chunkOf(ix + dx, iz + dz) === home)) { seen.add(n); st.push(n); } }
     }
     boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, group: `glb-fade-${boxes.length}` });
   }
@@ -10203,14 +10230,17 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       const b = boxes.findIndex((bx) => cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY);
       if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
-      // (the hull: every metre column under the triangle's footprint, within the box, takes the triangle's y span)
-      const bx = boxes[b]; const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
-      const ix0 = Math.floor(Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)) / COL), ix1 = Math.floor(Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x)) / COL);
-      const iz0 = Math.floor(Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)) / COL), iz1 = Math.floor(Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z)) / COL);
-      for (let ix = ix0; ix <= ix1; ix += 1) for (let iz = iz0; iz <= iz1; iz += 1) {
+      // (the hull: every metre column under the triangle's whole footprint takes the triangle's box within that cell — a low-poly
+      // wall is two triangles, and the line may cross it far from the cell that claimed it; the box, not the cell: a 0.2 m wall
+      // read as metre columns faded whenever the camera came within a metre of it, as the line began inside the column
+      // (user 2026-10-19); a flat floor's columns have no height, so a line over them never meets them)
+      const tx0 = Math.min(w[0].x, w[1].x, w[2].x), tx1 = Math.max(w[0].x, w[1].x, w[2].x), tz0 = Math.min(w[0].z, w[1].z, w[2].z), tz1 = Math.max(w[0].z, w[1].z, w[2].z);
+      const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
+      for (let ix = Math.floor(tx0 / COL); ix <= Math.floor(tx1 / COL); ix += 1) for (let iz = Math.floor(tz0 / COL); iz <= Math.floor(tz1 / COL); iz += 1) {
+        const x0 = Math.max(ix * COL, tx0), x1 = Math.min((ix + 1) * COL, tx1), z0 = Math.max(iz * COL, tz0), z1 = Math.min((iz + 1) * COL, tz1);
         const key = `${ix},${iz}`; const c = cols[b].get(key);
-        if (!c) cols[b].set(key, { minX: ix * COL, maxX: (ix + 1) * COL, minZ: iz * COL, maxZ: (iz + 1) * COL, minY: y0, maxY: y1 });
-        else { if (y0 < c.minY) c.minY = y0; if (y1 > c.maxY) c.maxY = y1; }
+        if (!c) cols[b].set(key, { minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1 });
+        else { if (x0 < c.minX) c.minX = x0; if (x1 > c.maxX) c.maxX = x1; if (z0 < c.minZ) c.minZ = z0; if (z1 > c.maxZ) c.maxZ = z1; if (y0 < c.minY) c.minY = y0; if (y1 > c.maxY) c.maxY = y1; }
       }
     }
     if (inBox.every((a) => a.length === 0)) continue;
@@ -10501,6 +10531,7 @@ function applyDioramaDressing() {
   );
   trim.position.y = floorLow - 0.37;
   group.add(trim);
+  if (GLB_MAPS[state.mapKey]?.cmdDark) group.traverse((o) => { if (o.isMesh) { o.material.dispose(); o.material = new THREE.MeshBasicMaterial({ color: 0x000000, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }); } });   // (cmdDark: pure black around the map — Spacecraft's plate grid flickered against the hull; user 2026-10-19)
   scene.add(group);
   diorama.base = group;
   ground.visible = false;
@@ -10510,6 +10541,7 @@ function applyDioramaDressing() {
   // Fog object exists, and it restores everything on exit/map change.
   scene.background.setHex(0xb9c3d2);
   scene.fog.color.setHex(0xb9c3d2);
+  if (GLB_MAPS[state.mapKey]?.cmdDark) { scene.background.setHex(0x000000); scene.fog.color.setHex(0x000000); }
   scene.fog.near = 4000;
   scene.fog.far = 8000;
   ambient.color.setHex(0xf3ead9);
@@ -16591,6 +16623,7 @@ function animate() {
     }
     // Drive 3D character models (idle/walk/sprint/dodge/fire) + gun attach —
     // both online and offline. No-op for mechs still on the billboard fallback.
+    updateMapRoof();   // (a modelled map's roof hides in command mode — GLB_MAPS `roof`)
     updateMechAnimations(dt, now);
     if (dioramaActive()) renderDiorama();
     else renderer.render(scene, camera);

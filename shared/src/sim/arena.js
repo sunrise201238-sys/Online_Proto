@@ -38,6 +38,7 @@ const MAP_BOUNDARY = {
   town:       { halfX: 270, halfZ: 200 },   // Invasion Map, the town block (135 x 100 m at 4 units per metre)
   spacecraft: { halfX: 240, halfZ: 140, ceil: 5.2 },   // The Skeld (Among Us), the whole ship (118 x 69 m at 4 units per metre, 14 m per model unit)
   prison:     { halfX: 319.8, halfZ: 287 },   // Map Ep 73, the prison compound (160 x 144 m at 4 units per metre, 4.1 m per model unit)
+  backrooms:  { halfX: 109.6, halfZ: 114.4, ceil: 15.2 },   // Original Backrooms, the whole hall (55 x 57 m at 4 units per metre, 2 m per model unit)
 };
 const BOUNDARY_WALL_THICKNESS = 2;
 const BOUNDARY_WALL_HEIGHT = 16;
@@ -41723,6 +41724,71 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 299.2, "maxX": 300.2, "minZ": 287, "maxZ": 288, "maxTop": 3, "type": "plane", "y0": 2.46, "gx": 0.5423, "gz": 0}
     ]
   },
+  "backrooms": {
+    // 54 boxes and 4 floors from the Original Backrooms glTF by shared/tools/glb_collision.mjs: crop x 0.5999999999999996 z 1.4000000000000004 (metres) at the origin, 4 units per metre, the street at y 0.
+    "obstacles": [
+      {"minX": -117.6, "maxX": 118.4, "minZ": -122.4, "maxZ": -113.4, "minY": 0, "maxY": 100},
+      {"minX": -117.6, "maxX": -105.6, "minZ": -113.4, "maxZ": 122.6, "minY": 0, "maxY": 100},
+      {"minX": 100.4, "maxX": 118.4, "minZ": -113.4, "maxZ": 122.6, "minY": 0, "maxY": 100},
+      {"minX": -102.4, "maxX": 100.4, "minZ": -106.16, "maxZ": -105.4, "minY": 0, "maxY": 22},
+      {"minX": -102.4, "maxX": -100.6, "minZ": -105.4, "maxZ": 94.47, "minY": 0, "maxY": 22},
+      {"minX": 97.4, "maxX": 98.4, "minZ": -105.4, "maxZ": 94.47, "minY": 0, "maxY": 22},
+      {"minX": 98.4, "maxX": 99.4, "minZ": -105.4, "maxZ": -104.4, "minY": 0, "maxY": 100},
+      {"minX": 99.4, "maxX": 100.4, "minZ": -105.4, "maxZ": 94.47, "minY": 0, "maxY": 22},
+      {"minX": -100.6, "maxX": 97.4, "minZ": -104.08, "maxZ": -103.92, "minY": 0, "maxY": 22},
+      {"minX": 98.4, "maxX": 99.4, "minZ": -104.4, "maxZ": -103.92, "minY": 0, "maxY": 22},
+      {"minX": -74.13, "maxX": -73.13, "minZ": -84.1, "maxZ": -8.4, "minY": 0, "maxY": 22},
+      {"minX": -50.2, "maxX": -5.16, "minZ": -77.69, "maxZ": -77.4, "minY": 0, "maxY": 22},
+      {"minX": -50.2, "maxX": -49.6, "minZ": -77.4, "maxZ": -76.04, "minY": 0, "maxY": 22},
+      {"minX": -31.6, "maxX": -29.6, "minZ": -77.4, "maxZ": -32.53, "minY": 0, "maxY": 22},
+      {"minX": -5.6, "maxX": -5.16, "minZ": -77.4, "maxZ": -76.04, "minY": 0, "maxY": 22},
+      {"minX": -49.6, "maxX": -31.6, "minZ": -76.2, "maxZ": -76.04, "minY": 0, "maxY": 22},
+      {"minX": -29.6, "maxX": -5.6, "minZ": -76.2, "maxZ": -76.04, "minY": 0, "maxY": 22},
+      {"minX": -15.6, "maxX": 65.63, "minZ": -48.18, "maxZ": -47.4, "minY": 0, "maxY": 24},
+      {"minX": -15.6, "maxX": -14.6, "minZ": -47.4, "maxZ": -32.16, "minY": 0, "maxY": 24},
+      {"minX": 65.4, "maxX": 65.63, "minZ": -47.4, "maxZ": -32.16, "minY": 0, "maxY": 24},
+      {"minX": 62.4, "maxX": 64.4, "minZ": -33.78, "maxZ": 31.76, "minY": 0, "maxY": 24},
+      {"minX": 10.62, "maxX": 12.27, "minZ": -32.93, "maxZ": -32.4, "minY": 0, "maxY": 20},
+      {"minX": -14.6, "maxX": 13.04, "minZ": -32.4, "maxZ": -31.4, "minY": 0, "maxY": 24},
+      {"minX": 22.91, "maxX": 62.4, "minZ": -32.32, "maxZ": -31.4, "minY": 0, "maxY": 24},
+      {"minX": 64.4, "maxX": 65.4, "minZ": -32.32, "maxZ": -32.16, "minY": 0, "maxY": 24},
+      {"minX": 10.62, "maxX": 12.4, "minZ": -31.4, "maxZ": -6.61, "minY": 0, "maxY": 20},
+      {"minX": 12.4, "maxX": 23.07, "minZ": -31.4, "maxZ": -31.22, "minY": 0, "maxY": 24},
+      {"minX": -74.17, "maxX": -72.52, "minZ": 5.01, "maxZ": 5.6, "minY": 0, "maxY": 22},
+      {"minX": -74.21, "maxX": -73.6, "minZ": 5.6, "maxZ": 81.09, "minY": 0, "maxY": 22},
+      {"minX": -73.6, "maxX": -72.6, "minZ": 5.6, "maxZ": 80.6, "minY": 0, "maxY": 100},
+      {"minX": -72.6, "maxX": -72.52, "minZ": 5.6, "maxZ": 81.06, "minY": 0, "maxY": 22},
+      {"minX": -57.83, "maxX": -53.64, "minZ": 33.16, "maxZ": 33.6, "minY": 0, "maxY": 18},
+      {"minX": -46.06, "maxX": -16.95, "minZ": 33.16, "maxZ": 33.6, "minY": 0, "maxY": 18},
+      {"minX": -58.6, "maxX": -57.67, "minZ": 33.6, "maxZ": 61.83, "minY": 0, "maxY": 18},
+      {"minX": -53.8, "maxX": -53.6, "minZ": 33.6, "maxZ": 67.93, "minY": 0, "maxY": 18},
+      {"minX": -46.6, "maxX": -45.9, "minZ": 33.6, "maxZ": 67.93, "minY": 0, "maxY": 18},
+      {"minX": -17.11, "maxX": -16.95, "minZ": 33.6, "maxZ": 91.6, "minY": 0, "maxY": 18},
+      {"minX": -58.77, "maxX": -58.6, "minZ": 61.67, "maxZ": 71.85, "minY": 0, "maxY": 18},
+      {"minX": -53.6, "maxX": -46.6, "minZ": 67.77, "maxZ": 67.93, "minY": 0, "maxY": 18},
+      {"minX": -58.6, "maxX": -57.67, "minZ": 71.69, "maxZ": 91.6, "minY": 0, "maxY": 18},
+      {"minX": -73.6, "maxX": -72.6, "minZ": 80.6, "maxZ": 81.09, "minY": 0, "maxY": 22},
+      {"minX": -100.6, "maxX": 97.4, "minZ": 91.6, "maxZ": 92.6, "minY": 0, "maxY": 22},
+      {"minX": 98.4, "maxX": 99.4, "minZ": 92.14, "maxZ": 92.3, "minY": 0, "maxY": 22},
+      {"minX": -57.83, "maxX": -57.67, "minZ": 92.6, "maxZ": 93.6, "minY": 0, "maxY": 18},
+      {"minX": -17.11, "maxX": -16.95, "minZ": 92.6, "maxZ": 93.6, "minY": 0, "maxY": 18},
+      {"minX": -100.6, "maxX": 97.4, "minZ": 93.6, "maxZ": 94.6, "minY": 0, "maxY": 22},
+      {"minX": 98.4, "maxX": 99.4, "minZ": 93.63, "maxZ": 94.47, "minY": 2.4, "maxY": 22},
+      {"minX": -58.6, "maxX": -57.6, "minZ": 94.6, "maxZ": 114.6, "minY": 0, "maxY": 18},
+      {"minX": -17.6, "maxX": -16.6, "minZ": 94.6, "maxZ": 114.6, "minY": 0, "maxY": 18},
+      {"minX": -105.6, "maxX": -58.6, "minZ": 101.6, "maxZ": 122.6, "minY": 0, "maxY": 100},
+      {"minX": -57.6, "maxX": -17.6, "minZ": 101.6, "maxZ": 113.6, "minY": 0, "maxY": 100},
+      {"minX": -16.6, "maxX": 100.4, "minZ": 101.6, "maxZ": 122.6, "minY": 0, "maxY": 100},
+      {"minX": -57.6, "maxX": -17.6, "minZ": 113.6, "maxZ": 114.6, "minY": 0, "maxY": 18},
+      {"minX": -58.6, "maxX": -16.6, "minZ": 114.6, "maxZ": 122.6, "minY": 0, "maxY": 100}
+    ],
+    "surfaces": [
+      {"minX": -13.6, "maxX": -12.6, "minZ": -33.4, "maxZ": -32.4, "maxTop": 2.4, "type": "plane", "y0": 0, "gx": 2.4, "gz": 0},
+      {"minX": -12.6, "maxX": 10.4, "minZ": -33.4, "maxZ": -32.4, "maxTop": 2.4, "type": "plane", "y0": 0, "gx": 0, "gz": 2.4},
+      {"minX": 12.4, "maxX": 62.4, "minZ": -33.4, "maxZ": -32.4, "maxTop": 2.4, "type": "plane", "y0": 0, "gx": 0, "gz": 2.4},
+      {"minX": 98.4, "maxX": 99.4, "minZ": 94.6, "maxZ": 96.6, "maxTop": 2.4, "type": "plane", "y0": 0, "gx": 2.4, "gz": 0}
+    ]
+  },
   "factory2": {
     "obstacles": [
       {
@@ -51823,6 +51889,9 @@ const ARENA_SPAWNS = {
   // Prison: the homes at the south-west corner and east of the tower, five more places (spawn_pick.mjs, by hand on the largest walkable region), until the user marks places.
   prison: { p1: { x: -222, y: GROUND_BASE_Y + 1, z: -188 }, p2: { x: 263, y: GROUND_BASE_Y + -3.08, z: 114 },
     more: [{ x: -32, y: GROUND_BASE_Y + -3.52, z: -50 }, { x: -140, y: GROUND_BASE_Y + -3.52, z: -188 }, { x: 164, y: GROUND_BASE_Y + -3.52, z: -214 }, { x: 132, y: GROUND_BASE_Y + -3.52, z: 50 }, { x: 196, y: GROUND_BASE_Y + -3.08, z: 147 }] },
+  // Backrooms: the homes at the north-west and south-east corners, two more places from the user's marked plan (2026-10-19); respawns at random among them, as Spacecraft's.
+  backrooms: { p1: { x: -88, y: GROUND_BASE_Y, z: -92 }, p2: { x: 84, y: GROUND_BASE_Y, z: 68 },
+    more: [{ x: 21, y: GROUND_BASE_Y, z: -64 }, { x: -90, y: GROUND_BASE_Y, z: 38 }], pick: 'random' },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u
   // off the foot, with the 2v2 teammate offset stepping AWAY from centre so
@@ -51882,7 +51951,8 @@ const ARENAS = {
   airport: buildGeneratedArena('airport'),
   town: buildGeneratedArena('town'),
   spacecraft: buildGeneratedArena('spacecraft'),
-  prison: buildGeneratedArena('prison')
+  prison: buildGeneratedArena('prison'),
+  backrooms: buildGeneratedArena('backrooms')
 };
 
 // A box whose top is a floor — a surface lies on it (a deck's body, a crate, a car's roof) — is one a body steps
