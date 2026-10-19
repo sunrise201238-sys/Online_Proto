@@ -626,3 +626,6 @@ body.pseudo-fullscreen #app {
    bare .trio-weapon-icon images: the glow sits on the box so the img's own
    white / golden filters stay) */
 .touch-hud .trio-line.spec-watched-icon .trio-weapon-tag { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }
+
+/* the minimal HUD (GLB_MAPS hud: 'minimal' — the Backrooms): only the player's own bar; user 2026-10-19 */
+.touch-hud.hud-minimal .enemy-health, .touch-hud.hud-minimal .ally-health, .touch-hud.hud-minimal .enemy2-health { display: none; }
