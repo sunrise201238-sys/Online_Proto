@@ -325,7 +325,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
     f,
     pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }
   }));
-  for (const f of fighters) integrateFighter(f, arena.surfaces, dt);
+  for (const f of fighters) integrateFighter(f, arena.surfaces, dt, arena.ceil ?? Infinity);
 
   // 5. Resolve obstacle penetrations. The wall each body was pushed out of
   //    (its outward normal, or null) is kept in matchState.walls for the bots'

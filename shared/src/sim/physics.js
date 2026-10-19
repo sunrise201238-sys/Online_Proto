@@ -309,6 +309,7 @@ export function unitOverlapsObstacle(x, y, z, obstacles, radius = FIGHTER_RADIUS
 // (unit length, the faces summed), or null when it touched none: physics' own
 // note of a wall, for the bots' brains (tick.js keeps it per tick, off the
 // fighter and out of every snapshot).
+const REST_SLACK = 0.05;
 export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radius = FIGHTER_RADIUS) {
   const pos = fighter.pos;
   let nx = 0, nz = 0, touched = false;
@@ -357,6 +358,17 @@ export function resolveUnitObstacleCollisions(fighter, prevPos, obstacles, radiu
     touched = true;
     fighter.vel.x = 0;
     fighter.vel.z = 0;
+  }
+  // A body never rests in a box. When the pushes above leave it in one — a slot narrower than itself, which it can
+  // only have come down into from the air; a corner of thin boxes, where one push lands it in the next and the push
+  // from inside is to the nearest face — it is put back where this tick began, which was clear, and the next tick
+  // tries again from there: it hangs at the lip until its input takes it elsewhere, instead of wedging between the
+  // boxes or being flung face to face through a wall of them (b1022e). REST_SLACK: a body pushed clean out of a box
+  // sits exactly a radius from its face, so only a deeper overlap counts.
+  if (touched && prevPos && prevPos.y !== undefined
+      && unitOverlapsObstacle(pos.x, pos.y, pos.z, obstacles, radius - REST_SLACK)
+      && !unitOverlapsObstacle(prevPos.x, prevPos.y, prevPos.z, obstacles, radius - REST_SLACK)) {
+    pos.x = prevPos.x; pos.y = prevPos.y; pos.z = prevPos.z;
   }
   if (!touched) return null;
   const nl = Math.hypot(nx, nz);

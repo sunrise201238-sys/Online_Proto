@@ -92,7 +92,7 @@ export function applyRepulsion(p1, p2, now) {
 // Integrate horizontal velocity (vx, vz) and explicit vertical jump physics.
 // Replaces world.step from cannon-es. Pure: only modifies fighter.pos and
 // the airborne / jumpVelocity / grounded flags.
-export function integrateFighter(fighter, surfaces, dt) {
+export function integrateFighter(fighter, surfaces, dt, ceil = Infinity) {
   // Horizontal — straight Euler integration.
   fighter.pos.x += fighter.vel.x * dt;
   fighter.pos.z += fighter.vel.z * dt;
@@ -118,6 +118,9 @@ export function integrateFighter(fighter, surfaces, dt) {
       fighter.jumpVelocity += GRAVITY_Y * dt;
     }
     fighter.pos.y += fighter.jumpVelocity * dt;
+    // The map's ceiling (a modelled map's `ceil`, units over the street): a body's feet never rise above it — the jump
+    // stops there, Aris's climb holds there — so nothing lands on or crosses a wall taller than the ceiling (b1022b).
+    if (fighter.pos.y > GROUND_BASE_Y + ceil) { fighter.pos.y = GROUND_BASE_Y + ceil; if (fighter.jumpVelocity > 0) fighter.jumpVelocity = 0; }
     if (fighter.pos.y <= groundY && fighter.jumpVelocity <= 0) {
       fighter.pos.y = groundY;
       fighter.vel.y = 0;

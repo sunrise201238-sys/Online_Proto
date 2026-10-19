@@ -628,7 +628,8 @@ const MAP_DATA = {
   station: { name: 'Station' },
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
-  town: { name: 'Town' },             // cut from the Invasion Map glTF (2026-10-18, README: Maps)
+  town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
+  S_Station: { name: 'Space Station' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
 };
 
@@ -5617,6 +5618,9 @@ function updateTransforms(dt) {
         m.state.jumpVelocity += world.gravity.y * dt;
       }
       m.body.position.y += m.state.jumpVelocity * dt;
+      // The map's ceiling caps a body's feet (mirrors integrateFighter in the shared sim, b1022b).
+      const ceilY = getArenaBounds(state.mapKey).ceil ?? Infinity;
+      if (m.body.position.y > GROUND_BASE_Y + ceilY) { m.body.position.y = GROUND_BASE_Y + ceilY; if (m.state.jumpVelocity > 0) m.state.jumpVelocity = 0; }
       if (m.body.position.y <= groundY && m.state.jumpVelocity <= 0) {
         m.body.position.y = groundY;
         m.body.velocity.y = 0;
@@ -6675,7 +6679,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1021z';
+const CLIENT_BUILD_TAG = 'b1022g';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7472,7 +7476,7 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town']);
+const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'S_Station']);
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
@@ -10028,7 +10032,7 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xeaf2ff);
     key.intensity = 1.4;
-  } else if (mapKey === 'factory') {
+  } else if (mapKey === 'factory' || GLB_MAPS[mapKey]?.tone === 'factory') {   // (a modelled map may take Factory's tone — its `tone` in GLB_MAPS: Space Station, user 2026-10-19)
     scene.background.setHex(0x141821);
     scene.fog.color.setHex(0x14181f);
     scene.fog.near = 40;
@@ -10081,7 +10085,8 @@ function applyMapAmbience(mapKey) {
 // model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
 const GLB_MAPS = {
-  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 }
+  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 },
+  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fade: [[15.61, -24.78, 26.92, -15.61], [15.61, -57.61, 28.0, -47.39], [5.74, -37.8, 9.94, -33.6]], tone: 'factory' }
 };
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
@@ -10118,7 +10123,57 @@ function buildGlbArena(mapKey) {
     inst.traverse((o) => { if (cfg.drop.includes(o.name)) drop.push(o); });
     for (const o of drop) o.parent.remove(o);
     group.add(inst);
+    if (cfg.fade?.length) splitFadeParts(inst, group, cfg);
   });
+}
+// VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): the map's `fade` boxes (metres,
+// x0 z0 x1 z1) say what may hide the player from the camera — Space Station's two engines. Every triangle of the
+// model whose centre lies in a box, above the floor, is split off into a mesh of its own (the attribute buffers
+// shared, its own index and a cloned material: the model shares materials between unrelated pieces), registered
+// to fade as one structure per box; the rest of the model, the floor under the engine included, stays as it is.
+// The occlusion test runs against the piece's own hull (`parts`: metre columns, each the y span of the triangles
+// over it), read off the triangles themselves: a Box3 of the piece would be the whole source mesh's box, as the
+// position buffer is shared and three's bounding box ignores the index — so the engines faded all the time.
+function splitFadeParts(inst, group, cfg) {
+  group.updateMatrixWorld(true);
+  const COL = 4;   // (units: a metre)
+  const boxes = cfg.fade.map(([x0, z0, x1, z1], i) => ({ minX: (x0 - cfg.cx) * cfg.scale, maxX: (x1 - cfg.cx) * cfg.scale, minZ: (z0 - cfg.cz) * cfg.scale, maxZ: (z1 - cfg.cz) * cfg.scale, minY: 0.4, group: `glb-fade-${i}` }));
+  const meshes = []; inst.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
+  for (const mesh of meshes) {
+    const geo = mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed();
+    const pos = geo.attributes.position; const idx = geo.index ? geo.index.array : Uint32Array.from({ length: pos.count }, (_, k) => k);
+    const inBox = boxes.map(() => []); const rest = []; const cols = boxes.map(() => new Map());
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
+      const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
+      const b = boxes.findIndex((bx) => cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY);
+      if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
+      inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
+      // (the hull: every metre column under the triangle's footprint, within the box, takes the triangle's y span)
+      const bx = boxes[b]; const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
+      const ix0 = Math.floor(Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)) / COL), ix1 = Math.floor(Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x)) / COL);
+      const iz0 = Math.floor(Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)) / COL), iz1 = Math.floor(Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z)) / COL);
+      for (let ix = ix0; ix <= ix1; ix += 1) for (let iz = iz0; iz <= iz1; iz += 1) {
+        const key = `${ix},${iz}`; const c = cols[b].get(key);
+        if (!c) cols[b].set(key, { minX: ix * COL, maxX: (ix + 1) * COL, minZ: iz * COL, maxZ: (iz + 1) * COL, minY: y0, maxY: y1 });
+        else { if (y0 < c.minY) c.minY = y0; if (y1 > c.maxY) c.maxY = y1; }
+      }
+    }
+    if (inBox.every((a) => a.length === 0)) continue;
+    inBox.forEach((indices, i) => {
+      if (!indices.length) return;
+      const m = new THREE.Mesh(part(geo, indices), mesh.material.clone());
+      m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
+      m.userData.fadeDepthToggle = true;
+      mesh.parent.add(m); m.updateMatrixWorld(true);
+      const parts = [...cols[i].values()];
+      const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
+      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: true, fadeGroup: boxes[i].group });
+    });
+    mesh.geometry = part(geo, rest);
+  }
 }
 
 function buildArenaForMap(mapKey) {
@@ -16318,6 +16373,17 @@ function resolveUnitObstacleCollisions(mech, prevPos) {
     touched = true;
     mech.body.velocity.x = 0; mech.body.velocity.z = 0;
   }
+  // A body never rests in a box. When the pushes above leave it in one — a slot narrower than itself, which it can
+  // only have come down into from the air; a corner of thin boxes, where one push lands it in the next and the push
+  // from inside is to the nearest face — it is put back where this tick began, which was clear, and the next tick
+  // tries again from there: it hangs at the lip until its input takes it elsewhere, instead of wedging between the
+  // boxes or being flung face to face through a wall of them (b1022e; the mirror of physics.js). REST_SLACK: a body pushed clean out of a box
+  // sits exactly a radius from its face, so only a deeper overlap counts.
+  if (touched && prevPos && prevPos.y !== undefined
+      && unitOverlapsObstacle(pos.x, pos.y, pos.z, radius - 0.05)
+      && !unitOverlapsObstacle(prevPos.x, prevPos.y, prevPos.z, radius - 0.05)) {
+    pos.x = prevPos.x; pos.y = prevPos.y; pos.z = prevPos.z;
+  }
   if (!touched) return null;
   const nl = Math.hypot(nx, nz);
   return nl > 1e-6 ? { x: nx / nl, z: nz / nl } : null;
@@ -16397,10 +16463,10 @@ function animate() {
       }
       applyRepulsion(now);
       const prevPositions = getAllFighters().map((m) => ({
-        m, x: m.body.position.x, z: m.body.position.z
+        m, x: m.body.position.x, y: m.body.position.y, z: m.body.position.z
       }));
       world.step(1 / 60, dt, 3);
-      prevPositions.forEach(({ m, x, z }) => { m.wallTouch = resolveUnitObstacleCollisions(m, { x, z }); });   // (the wall note for the Sudden Death brain: host.wall next frame)
+      prevPositions.forEach(({ m, x, y, z }) => { m.wallTouch = resolveUnitObstacleCollisions(m, { x, y, z }); });   // (the wall note for the Sudden Death brain: host.wall next frame)
 
       updateTransforms(dt);
       updateLocksAndReticle();
