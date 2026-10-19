@@ -25,6 +25,8 @@ export {
   applyMomentum,
   applyRepulsion,
   integrateFighter,
+  integrateHorizontal,
+  integrateVertical,
   dampHorizontal,
   faceTowards
 } from './movement.js';

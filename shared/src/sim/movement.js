@@ -93,10 +93,19 @@ export function applyRepulsion(p1, p2, now) {
 // Replaces world.step from cannon-es. Pure: only modifies fighter.pos and
 // the airborne / jumpVelocity / grounded flags.
 export function integrateFighter(fighter, surfaces, dt, ceil = Infinity) {
+  integrateHorizontal(fighter, dt);
+  integrateVertical(fighter, surfaces, dt, ceil);
+}
+// The two halves, for the tick to run the walls' push-out between them: the floor is read where the body stands once
+// the walls have pushed it back, not where it tried to go (a body walking into the wall at a roof's edge found no
+// floor under that spot, fell a hair each tick while the wall held it at the edge, and sank through the roof; the
+// offline client has always read it in this order, b1022x).
+export function integrateHorizontal(fighter, dt) {
   // Horizontal — straight Euler integration.
   fighter.pos.x += fighter.vel.x * dt;
   fighter.pos.z += fighter.vel.z * dt;
-
+}
+export function integrateVertical(fighter, surfaces, dt, ceil = Infinity) {
   // Vertical — explicit jump arc. Cannon was being used purely as a y
   // integrator with -80.19 gravity in the offline build; we replicate that
   // behavior here without it.
