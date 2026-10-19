@@ -714,7 +714,9 @@ export const MAP_DATA = {
   flashpoint: { id: 'flashpoint', name: 'Flashpoint' },
   airport: { id: 'airport', name: 'Airport' },
   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  town: { id: 'town', name: 'Town' }
+  town: { id: 'town', name: 'Town' },
+  // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  S_Station: { id: 'S_Station', name: 'Space Station' }
 };
 
 // Match-wide tunables.
