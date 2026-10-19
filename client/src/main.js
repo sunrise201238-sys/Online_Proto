@@ -10122,13 +10122,15 @@ const GLB_MAPS = {
 const underNodes = (o, names, stop) => { for (let n = o; n && n !== stop; n = n.parent) if (names.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
 function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
 function hudMinimal() { return GLB_MAPS[state.mapKey]?.hud === 'minimal' && !dioramaActive(); }
+const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
+const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
 function loadMapModel(file, onReady) {
   if (_mapModelCache[file]) { onReady(_mapModelCache[file]); return; }
   if (_mapModelPending[file]) { _mapModelPending[file].push(onReady); return; }
   _mapModelPending[file] = [onReady];
-  _gltfLoader.load(`${import.meta.env.BASE_URL}${file}${MODEL_FILE_EXT}`, (gltf) => {
+  _mapGltfLoader.load(`${import.meta.env.BASE_URL}${file}${MAP_FILE_EXT}`, (gltf) => {
     _mapModelCache[file] = gltf;
     const cbs = _mapModelPending[file] || [];
     delete _mapModelPending[file];
@@ -10230,12 +10232,18 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       const b = boxes.findIndex((bx) => cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY);
       if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
-      // (the hull: every metre column under the triangle's whole footprint takes the triangle's box within that cell — a low-poly
-      // wall is two triangles, and the line may cross it far from the cell that claimed it; the box, not the cell: a 0.2 m wall
-      // read as metre columns faded whenever the camera came within a metre of it, as the line began inside the column
-      // (user 2026-10-19); a flat floor's columns have no height, so a line over them never meets them)
-      const tx0 = Math.min(w[0].x, w[1].x, w[2].x), tx1 = Math.max(w[0].x, w[1].x, w[2].x), tz0 = Math.min(w[0].z, w[1].z, w[2].z), tz1 = Math.max(w[0].z, w[1].z, w[2].z);
+      // (the hull: every metre column under the triangle's footprint, within the thing's box and a chunk beyond it, takes the
+      // triangle's box within that cell. A chunk beyond: a chunked map's low-poly wall is two triangles, and the line may cross it
+      // far from the cell that claimed it; no farther: Town's hillsides, big sloped triangles claimed by the things at their
+      // centres, gave its things 300,000 columns over their whole footprints. The box within the cell, not the cell: a 0.2 m
+      // wall read as metre columns faded whenever the camera came within a metre of it, as the line began inside the column
+      // (user 2026-10-19). A face with no height — a floor, a flat roof, a plate — hides nothing and gets no columns.)
       const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
+      if (y1 - y0 < 1) continue;
+      const bx = boxes[b], reach = cfg.fadeChunk ?? 0;
+      const tx0 = Math.max(bx.minX - reach, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX + reach, Math.max(w[0].x, w[1].x, w[2].x));
+      const tz0 = Math.max(bx.minZ - reach, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ + reach, Math.max(w[0].z, w[1].z, w[2].z));
+      if (tx0 > tx1 || tz0 > tz1) continue;
       for (let ix = Math.floor(tx0 / COL); ix <= Math.floor(tx1 / COL); ix += 1) for (let iz = Math.floor(tz0 / COL); iz <= Math.floor(tz1 / COL); iz += 1) {
         const x0 = Math.max(ix * COL, tx0), x1 = Math.min((ix + 1) * COL, tx1), z0 = Math.max(iz * COL, tz0), z1 = Math.min((iz + 1) * COL, tz1);
         const key = `${ix},${iz}`; const c = cols[b].get(key);
