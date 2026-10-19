@@ -80,7 +80,7 @@ test('a map without spawn places keeps the slot\'s own start', () => {
   assert.deepEqual({ x: fresh.pos.x, y: fresh.pos.y, z: fresh.pos.z }, m.spawnPoints.p1);
 });
 
-test('Space Station draws its respawn at random among the nine places (pick: random)', () => {
+test('Spacecraft draws its respawn at random among the nine places (pick: random)', () => {
   const ss = getArena('S_Station');
   assert.equal(ss.spawns.pick, 'random');
   const all = [ss.spawns.p1, ss.spawns.p2, ...ss.spawns.more];
