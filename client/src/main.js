@@ -6693,7 +6693,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023g';
+const CLIENT_BUILD_TAG = 'b1023i';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10117,14 +10117,14 @@ function applyMapAmbience(mapKey) {
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
-  backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
-  backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeChunk: 16, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
+  backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
+  backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
 const underNodes = (o, names, stop) => { for (let n = o; n && n !== stop; n = n.parent) if (names.includes(n.name)) return true; return false; };   // (a node's mesh, or the meshes under a node of several primitives)
-// A chunked map's walls cut into pieces no longer than half a chunk (world units) before the fade reads them: the model's
-// long walls are two triangles each, 27 m long, so a wall seeded one cell under its centre, was claimed whole by that
-// cell's chunk, and the camera's line crossed it anywhere else with nothing to fade (user 2026-10-19: a wall stayed
-// solid and black over the whole view). Every attribute is interpolated at the split; the result is non-indexed.
+// An indoor map's long faces cut into pieces no longer than two cells (world units) before the fade reads them: the model's
+// long walls are two triangles each, 27 m long, so a wall seeded one cell under its centre alone, and the camera's line
+// crossed it anywhere else with nothing to fade (user 2026-10-19: a wall stayed solid and black over the whole view).
+// Every attribute is interpolated at the split; the result is non-indexed.
 function splitLong(geo, matrixWorld, maxLen) {
   const names = Object.keys(geo.attributes); const src = names.map((n) => geo.attributes[n]); const out = names.map(() => []); const pi = names.indexOf('position');
   const idx = geo.index ? geo.index.array : null; const count = idx ? idx.length : geo.attributes.position.count;
@@ -10208,8 +10208,8 @@ function buildGlbArena(mapKey) {
 // so the ground did not end in sky — read as things, their big sparse triangles seeded thousands of pieces beyond the
 // edge, 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame, and the map lagged; user 2026-10-19), a ceiling
 // (the Backrooms' tiles, lights and vents: the camera stays under them, and they would join every wall into one thing).
-// Indoors every wall touches every other, so a map may set `fadeChunk` (units): a thing is then the touching cells within
-// one chunk of the floor plan, and only the walls around the line from the camera to the unit fade (the Backrooms).
+// Indoors every wall touches every other, so a map may set `fadeWalls`: a thing is then a straight wall — the run of touching
+// cells whose steep faces face the same way — and a wall crossed by the line from the camera to the unit fades whole (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
   const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a thing)
@@ -10218,33 +10218,40 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
   const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
-  if (cfg.fadeChunk) for (const mesh of meshes) geoOf.set(mesh, splitLong(geoOf.get(mesh), mesh.matrixWorld, cfg.fadeChunk / 2));   // (a chunked map: the walls in pieces no longer than half a chunk)
+  if (cfg.fadeWalls) for (const mesh of meshes) geoOf.set(mesh, splitLong(geoOf.get(mesh), mesh.matrixWorld, 2 * COL));   // (indoors: the long faces in pieces no longer than two cells, so a wall seeds every cell along it)
   const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
-  // 1. the seed cells, joined into things: the fade boxes
-  const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`;
+  // 1. the seed cells, joined into things: the fade boxes. Indoors (`fadeWalls`) a thing is a straight wall: the run of
+  // touching seed cells whose steep faces face the same way (x or z), so a T-junction's two walls are two things while
+  // every piece of one wall is one — crossed anywhere, a wall fades whole (user 2026-10-19: with pieces by chunk, a crossed
+  // outer wall opened a jagged hole and stayed black around it; with every wall touching every other, the hall was one thing).
+  const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`; const vote = new Map();   // (cell -> the steep faces' weight facing x and facing z)
   const tallY = cfg.fadeTall ?? Infinity, hideY = 2 * GROUND_BASE_Y;   // (a body's height: what stands that tall hides one)
+  const byWall = !!cfg.fadeWalls;
+  const facing = () => {   // (the triangle's normal's weight along x and along z, scaled by its area: which way a face faces)
+    const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z;
+    return [Math.abs(ay * bz - az * by) / 2, Math.abs(ax * by - ay * bx) / 2];
+  };
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
       if (cy < tallY && !(cy >= hideY && (Math.abs(cx) > halfX || Math.abs(cz) > halfZ))) continue;
-      tall.add(cellKey(Math.floor(cx / COL), Math.floor(cz / COL)));
+      const key = cellKey(Math.floor(cx / COL), Math.floor(cz / COL)); tall.add(key);
+      if (byWall && Math.max(w[0].y, w[1].y, w[2].y) - Math.min(w[0].y, w[1].y, w[2].y) >= 1) { const [fx, fz] = facing(); const v = vote.get(key) ?? [0, 0]; v[0] += fx; v[1] += fz; vote.set(key, v); }
     }
   }
+  const axisOf = (key) => { const v = vote.get(key); return !v ? 'o' : v[0] > v[1] ? 'x' : 'z'; };   // ('o': a cell of flat or sloped faces only)
   const boxes = []; const seen = new Set();
-  const chunk = cfg.fadeChunk ? Math.max(1, Math.round(cfg.fadeChunk / COL)) : 0;   // (cells per chunk of the floor plan; 0: a thing is whatever touches)
-  const chunkOf = (ix, iz) => `${Math.floor(ix / chunk)},${Math.floor(iz / chunk)}`;
   for (const k0 of tall) {
     if (seen.has(k0)) continue;
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; const st = [k0]; seen.add(k0);
-    const home = chunk ? chunkOf(...k0.split(',').map(Number)) : null;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; const st = [k0]; seen.add(k0); const axis = byWall ? axisOf(k0) : null;
     while (st.length) {
       const [ix, iz] = st.pop().split(',').map(Number);
       if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iz < z0) z0 = iz; if (iz > z1) z1 = iz;
-      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n) && (!chunk || chunkOf(ix + dx, iz + dz) === home)) { seen.add(n); st.push(n); } }
+      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n) && (!byWall || axisOf(n) === axis)) { seen.add(n); st.push(n); } }
     }
-    boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, group: `glb-fade-${boxes.length}` });
+    boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, axis, group: `glb-fade-${boxes.length}` });
   }
   if (!boxes.length) return;
   // 2. the split: each thing's triangles out of each source mesh, with the hull columns
@@ -10255,20 +10262,22 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
-      const b = boxes.findIndex((bx) => cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY);
+      // (the thing whose box holds the triangle's centre; indoors, among the boxes meeting at a corner, the wall the face faces along)
+      let b = -1, want = null;
+      if (byWall) { const [fx, fz] = facing(); want = fx > fz ? 'x' : fz > fx ? 'z' : null; }
+      for (let q = 0; q < boxes.length; q += 1) { const bx = boxes[q]; if (!(cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY)) continue; if (b < 0) b = q; if (!want || bx.axis === want) { b = q; break; } }
       if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
-      // (the hull: every metre column under the triangle's footprint, within the thing's box and a chunk beyond it, takes the
-      // triangle's box within that cell. A chunk beyond: a chunked map's low-poly wall is two triangles, and the line may cross it
-      // far from the cell that claimed it; no farther: Town's hillsides, big sloped triangles claimed by the things at their
-      // centres, gave its things 300,000 columns over their whole footprints. The box within the cell, not the cell: a 0.2 m
-      // wall read as metre columns faded whenever the camera came within a metre of it, as the line began inside the column
-      // (user 2026-10-19). A face with no height — a floor, a flat roof, a plate — hides nothing and gets no columns.)
+      // (the hull: every metre column under the triangle's footprint, within the thing's box, takes the triangle's box within
+      // that cell — the box, not the cell: a 0.2 m wall read as metre columns faded whenever the camera came within a metre of
+      // it, as the line began inside the column (user 2026-10-19); within the thing's box: Town's hillsides, big sloped
+      // triangles claimed by the things at their centres, gave its things 300,000 columns over their whole footprints. A face
+      // with no height — a floor, a flat roof, a plate — hides nothing and gets no columns.)
       const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
       if (y1 - y0 < 1) continue;
-      const bx = boxes[b], reach = cfg.fadeChunk ?? 0;
-      const tx0 = Math.max(bx.minX - reach, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX + reach, Math.max(w[0].x, w[1].x, w[2].x));
-      const tz0 = Math.max(bx.minZ - reach, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ + reach, Math.max(w[0].z, w[1].z, w[2].z));
+      const bx = boxes[b];
+      const tx0 = Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x));
+      const tz0 = Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z));
       if (tx0 > tx1 || tz0 > tz1) continue;
       for (let ix = Math.floor(tx0 / COL); ix <= Math.floor(tx1 / COL); ix += 1) for (let iz = Math.floor(tz0 / COL); iz <= Math.floor(tz1 / COL); iz += 1) {
         const x0 = Math.max(ix * COL, tx0), x1 = Math.min((ix + 1) * COL, tx1), z0 = Math.max(iz * COL, tz0), z1 = Math.min((iz + 1) * COL, tz1);
@@ -10285,6 +10294,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
       const parts = [...cols[i].values()];
+      if (!parts.length) parts.push({ minX: boxes[i].minX, maxX: boxes[i].maxX, minZ: boxes[i].minZ, maxZ: boxes[i].maxZ, minY: 0, maxY: 0 });   // (a piece of flat faces alone: a hull nothing meets)
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
       registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
     });
