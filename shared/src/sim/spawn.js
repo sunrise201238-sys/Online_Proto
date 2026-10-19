@@ -5,7 +5,7 @@
 // nearest to a teammate. No living teammate means "stay unseen": a place no living enemy sees, the farthest from
 // the nearest enemy. Sight is the bots' own rule at their eye height. A place within SPAWN_CLEAR of a living body
 // is passed over while another remains; ties keep the data's order. A map whose spawns say `pick: 'random'` draws
-// any free place at random instead (Space Station, user 2026-10-19). The server (index.js, the Trio step) and the
+// any free place at random instead (Spacecraft, user 2026-10-19). The server (index.js, the Trio step) and the
 // offline client (main.js respawnSlotMech) ask this and hand the place to respawnFighterNext / the fresh mech.
 import { MAP_DATA, GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT } from './constants.js';
 import { getArena } from './arena.js';
@@ -30,7 +30,7 @@ export function pickRespawnSpawn(mapKey, team, others) {
     : enemies.length ? (p) => [enemies.some((f) => sees(p, f)) ? 1 : 0, -nearest(p, enemies)]
       : () => [0, 0];
   const free = places.filter((p) => live.every((f) => Math.hypot(f.pos.x - p.x, f.pos.z - p.z) >= SPAWN_CLEAR));
-  // a map whose spawns say `pick: 'random'` (Space Station, user 2026-10-19): any free place, each as likely; the sight
+  // a map whose spawns say `pick: 'random'` (Spacecraft, user 2026-10-19): any free place, each as likely; the sight
   // rule below is Town's
   if (sp.pick === 'random') { const pool = free.length ? free : places; return pool[Math.floor(Math.random() * pool.length)]; }
   let best = null, bs = null;

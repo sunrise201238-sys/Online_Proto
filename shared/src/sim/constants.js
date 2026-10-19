@@ -545,7 +545,7 @@ export const MAP_DATA = {
   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   town: { id: 'town', name: 'Town' },
   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
-  S_Station: { id: 'S_Station', name: 'Space Station' }
+  S_Station: { id: 'S_Station', name: 'Spacecraft' }
 };
 
 // Match-wide tunables.

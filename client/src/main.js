@@ -629,7 +629,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  S_Station: { name: 'Space Station' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  S_Station: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   range: { name: 'Shooting Range' }   // offline-only practice range (hidden online); listed last
 };
 
@@ -6679,7 +6679,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022j';
+const CLIENT_BUILD_TAG = 'b1022k';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10033,7 +10033,7 @@ function applyMapAmbience(mapKey) {
     ambient.intensity = 0.95;
     key.color.setHex(0xeaf2ff);
     key.intensity = 1.4;
-  } else if (mapKey === 'factory' || GLB_MAPS[mapKey]?.tone === 'factory') {   // (a modelled map may take Factory's tone — its `tone` in GLB_MAPS: Space Station, user 2026-10-19)
+  } else if (mapKey === 'factory' || GLB_MAPS[mapKey]?.tone === 'factory') {   // (a modelled map may take Factory's tone — its `tone` in GLB_MAPS: Spacecraft, user 2026-10-19)
     scene.background.setHex(0x141821);
     scene.fog.color.setHex(0x14181f);
     scene.fog.near = 40;
