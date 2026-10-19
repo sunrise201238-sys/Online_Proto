@@ -6679,7 +6679,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1022i';
+const CLIENT_BUILD_TAG = 'b1022j';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10087,7 +10087,7 @@ function applyMapAmbience(mapKey) {
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO). =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28 },
-  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fade: [[15.61, -24.78, 26.92, -15.61], [15.61, -57.61, 28.0, -47.39], [5.74, -37.8, 9.94, -33.6]], tone: 'factory', edge: false }
+  S_Station: { file: 'maps/skeld', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, fadeTall: 9.6, tone: 'factory', edge: false }
 };
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
@@ -10124,27 +10124,54 @@ function buildGlbArena(mapKey) {
     inst.traverse((o) => { if (cfg.drop.includes(o.name)) drop.push(o); });
     for (const o of drop) o.parent.remove(o);
     group.add(inst);
-    if (cfg.fade?.length) splitFadeParts(inst, group, cfg);
+    if (cfg.fadeTall) splitFadeParts(inst, group, cfg);
   });
 }
-// VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): the map's `fade` boxes (metres,
-// x0 z0 x1 z1) say what may hide the player from the camera — Space Station's two engines. Every triangle of the
-// model whose centre lies in a box, above the floor, is split off into a mesh of its own (the attribute buffers
-// shared, its own index and a cloned material: the model shares materials between unrelated pieces), registered
-// to fade as one structure per box; the rest of the model, the floor under the engine included, stays as it is.
-// The occlusion test runs against the piece's own hull (`parts`: metre columns, each the y span of the triangles
-// over it), read off the triangles themselves: a Box3 of the piece would be the whole source mesh's box, as the
-// position buffer is shared and three's bounding box ignores the index — so the engines faded all the time.
+// VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): whatever stands tall enough to
+// hide a unit from the camera goes translucent while it does. The map's `fadeTall` (units over the floor; Space
+// Station 2.4 m, over its 2.0–2.2 m walls) says how tall: every metre cell holding a triangle that high is a tall
+// cell, touching tall cells are one thing (an engine, the reactor core, a pile of crates — a stack counts by its
+// top and fades whole, as every triangle over the thing's footprint above the floor is its), and each thing's
+// triangles are split off into a mesh of their own per source mesh (the attribute buffers shared, its own index and
+// a cloned material: the model shares materials between unrelated pieces), registered to fade as one structure;
+// the rest of the model, the floor under it included, stays as it is. The occlusion test runs against the piece's
+// own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
+// a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
+// box ignores the index — so the engines faded all the time.
 function splitFadeParts(inst, group, cfg) {
   group.updateMatrixWorld(true);
-  const COL = 4;   // (units: a metre)
-  const boxes = cfg.fade.map(([x0, z0, x1, z1], i) => ({ minX: (x0 - cfg.cx) * cfg.scale, maxX: (x1 - cfg.cx) * cfg.scale, minZ: (z0 - cfg.cz) * cfg.scale, maxZ: (z1 - cfg.cz) * cfg.scale, minY: 0.4, group: `glb-fade-${i}` }));
+  const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a tall thing)
   const meshes = []; inst.traverse((o) => { if (o.isMesh) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
+  const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
+  const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
+  // 1. the tall cells, joined into things: the fade boxes
+  const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`;
   for (const mesh of meshes) {
-    const geo = mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed();
-    const pos = geo.attributes.position; const idx = geo.index ? geo.index.array : Uint32Array.from({ length: pos.count }, (_, k) => k);
+    const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
+      if ((w[0].y + w[1].y + w[2].y) / 3 < cfg.fadeTall) continue;
+      tall.add(cellKey(Math.floor((w[0].x + w[1].x + w[2].x) / 3 / COL), Math.floor((w[0].z + w[1].z + w[2].z) / 3 / COL)));
+    }
+  }
+  const boxes = []; const seen = new Set();
+  for (const k0 of tall) {
+    if (seen.has(k0)) continue;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; const st = [k0]; seen.add(k0);
+    while (st.length) {
+      const [ix, iz] = st.pop().split(',').map(Number);
+      if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iz < z0) z0 = iz; if (iz > z1) z1 = iz;
+      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n)) { seen.add(n); st.push(n); } }
+    }
+    boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, group: `glb-fade-${boxes.length}` });
+  }
+  if (!boxes.length) return;
+  // 2. the split: each thing's triangles out of each source mesh, with the hull columns
+  for (const mesh of meshes) {
+    const geo = geoOf.get(mesh);
+    const pos = geo.attributes.position; const idx = indexOf(geo);
     const inBox = boxes.map(() => []); const rest = []; const cols = boxes.map(() => new Map());
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
