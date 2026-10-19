@@ -1,0 +1,11 @@
+// Two map jsons' nav grids compared on one lattice (every 4 units): points walkable in one and not the other, clustered (metres). usage: node walk_diff.mjs <root> <a.json> <b.json> <cxM> <czM>
+import { readFileSync } from 'node:fs';
+const [root, fa, fb, cxS, czS] = process.argv.slice(2); const CX = Number(cxS), CZ = Number(czS); const SIM = new URL(root.replace(/\/?$/, '/') + 'shared/src/sim/', 'file://').href;
+const { buildNavGrid } = await import(SIM + 'index.js');
+const grid = (f) => { const data = JSON.parse(readFileSync(f, 'utf8')); const surfaces = (data.surfaces ?? []).map((s) => ({ ...s, heightAt: s.type === 'plane' ? (x, z) => s.y0 + s.gx * (x - s.minX) + s.gz * (z - s.minZ) : () => s.top })); return { g: buildNavGrid(data.obstacles, surfaces), hx: data.halfX, hz: data.halfZ }; };
+const A = grid(fa), B = grid(fb);
+const top = (G, x, z) => { const { cols, rows, n, layers, minX, minZ, cell, walk, floor } = G.g; const c = Math.floor((x - minX) / cell), r = Math.floor((z - minZ) / cell); if (c < 0 || r < 0 || c >= cols || r >= rows) return null; let f = null; for (let l = 0; l < layers; l += 1) { const a = l * n + r * cols + c; if (walk[a] && (f == null || floor[a] > f)) f = floor[a]; } return f; };
+const lost = [], gained = []; const S = 4; for (let z = -A.hz + S / 2; z < A.hz; z += S) for (let x = -A.hx + S / 2; x < A.hx; x += S) { const a = top(A, x, z), b = top(B, x, z); if (a != null && b == null) lost.push([x, z, a]); if (a == null && b != null) gained.push([x, z, b]); }
+const cluster = (list, name) => { const cl = new Map(); for (const p of list) { const k = Math.floor(p[0] / 24) + ',' + Math.floor(p[1] / 24); if (!cl.has(k)) cl.set(k, []); cl.get(k).push(p); }
+  console.log(`${name}: ${list.length} points (4 u apart) in ${cl.size} spots (6 m squares); the biggest:`); for (const c of [...cl.values()].sort((a, b) => b.length - a.length).slice(0, 8)) { const mx = c.reduce((s, p) => s + p[0], 0) / c.length, mz = c.reduce((s, p) => s + p[1], 0) / c.length, mf = c.reduce((s, p) => s + p[2], 0) / c.length; console.log(`  ${c.length} points at x ${(mx / 4 + CX).toFixed(1)} z ${(mz / 4 + CZ).toFixed(1)} m, floor ${(mf / 4).toFixed(1)} m`); } };
+cluster(lost, 'lost'); cluster(gained, 'gained');

@@ -1,0 +1,66 @@
+# Map tools (2026-10-19)
+
+The generator itself is one level up: `shared/tools/glb_collision.mjs` (v6). These are the tools around it, kept here
+after the session's scratch space was lost to a container restart. Every served model is in `client/public/maps/*.glb`,
+every map's data in `shared/src/sim/arena.js` (`GENERATED_ARENA_COLLISION_DATA`, `ARENA_SPAWNS`, `MAP_BOUNDARY`,
+`ARENAS`), its name in `shared/src/sim/constants.js` and `client/src/main.js` (`MAP_DATA`, `GLB_MAPS`).
+
+## Reading a model
+
+Run from a scratch directory; `node` 22. `<out>` gets `<key>.json` (the data), `.stats.json`, `.svg`, and with `DUMP=1`
+`.cells.json` (every column's reading, plus `tags`: the rule behind each box).
+
+| map | generator |
+| --- | --- |
+| Dust | `DUMP=1 SCALE=4 GROUND=83.92 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=3.6 node glb_collision.mjs client/public/maps/dust.glb dust -7.1 106.7 -120.9 56.9 <out>` |
+| Town | `DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo) |
+| Spacecraft | `DUMP=1 GROUND=0 EXCLUDE= UNDER_STREET=3 CEIL=1.3 node glb_collision.mjs client/public/maps/spacecraft.glb spacecraft 2 122 -70 0 <out>` |
+| Backrooms | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 CEIL=3.8 node glb_collision.mjs client/public/maps/backrooms.glb backrooms -26.8 28 -27.2 30 <out>` |
+
+Then the spawns, in game units (`spawn_set.mjs <tree root> <json> x,z x,z [more...] [--random]`; the floor height is
+read off the nav grid, a point off it is refused):
+
+| map | places |
+| --- | --- |
+| Dust | `82,-70 38,266` (provisional: the plateau's east ramp top, the lower yard's south end) |
+| Town | `-208,10 168,22 -124,-74 116,-78 -104,118 236,122` |
+| Spacecraft | `198,-10 -200,-2 85,-20 -75,-11 -121,-3 82,21 -72,31 117,69 51,112 5,115 --random` |
+| Backrooms | `-88,-92 84,68 21,-64 -90,38 --random` (Backrooms (Anomaly) shares the data) |
+
+Town, Spacecraft and Backrooms on this line still carry the data the v5 generator read (2026-10-19, before v6); Dust is v6.
+
+- `glb_rescale.mjs <in> <out> <factor>`: a served copy at another size (a root scale node). Dust's `.glb` is already at
+  142.23 m per model unit; it was made from the x40 copy by 3.55575.
+- `dust_splice.py <tree> <dust.json> <tag> <ext>`: the one-shot that put Dust into this tree (already applied here);
+  the pattern for the next map. `v6_apply.py <glb_collision.mjs>`: the v6 rules as replacements on the v5 generator
+  (already applied to the copy one level up; kept as the record of what changed).
+
+## Looking at a reading
+
+- `cellplan.mjs <cells.json> <out.png> [x0 z0 x1 z1 metres] [px per cell]`: the plan — floors by height, walls black,
+  low cover and standable things orange, void dark grey, covered floors stippled, ramps hatched.
+- `regions.mjs <tree> <json> <cxM> <czM> [top]`: the walked regions of the nav grid (size, floor range, box).
+- `walk_diff.mjs <tree> <a.json> <b.json> <cxM> <czM>`: walkable points lost and gained between two readings.
+- `dust_frontier.mjs <tree> <json> [cxM czM]`: where two regions nearly meet and the boxes between them.
+- `dust_tunnels.mjs <cells.json>`: walked floor under a ceiling, as blobs, with their rims (open / wall).
+- `dust_hmap.mjs <cells.json> [m per char] [height|ceil|reach]`: ASCII maps of the columns.
+- `boxes_in.mjs <json> <cxM> <czM> x0 z0 x1 z1`: the boxes and surfaces in a window (with their rule tags beside a
+  cells dump). `flat_faces.mjs <glb> x0 z0 x1 z1`, `faces_over.mjs <glb> x z`, `glb_materials.mjs <glb>`: the model's
+  faces and which way they face, the faces over a point, the double-sided materials.
+- The crop centre (cxM, czM) is the generator's: Dust 49.8 -32, Town -0.5 -10, Spacecraft 62 -35, Backrooms 0.6 1.4.
+
+## The built client, headlessly
+
+Both need the global playwright and `/opt/pw-browsers/chromium` (`NODE_PATH=$(npm root -g)`); they run the game client —
+only with the user's leave. `hud_probe.cjs <client/dist> <mapKey>`: a 2v2 started on the map, the HUD read, command
+mode toggled, the renderer's draw calls. `map_photo.cjs <client/dist> <mapKey> <out.png> [dist yaw height cx cz waitMs]`:
+the map card's photo (Dust's: `560 2.4 0.85 0 0 14000`).
+
+## The PT site from this tree
+
+A worktree of this branch, then in `client/src/main.js` set `MODEL_FILE_EXT` and `MAP_FILE_EXT` to `'.wasm'` (the
+artifact host serves no `.glb`) and `CLIENT_BUILD_TAG`; copy each `client/public/maps/*.glb` to `*.wasm`; `npm install`;
+`cd client && npx vite build`. The page is `dist/index.html` with the built asset names; publish it to the PT artifact
+with `assets/index-*.js`, `assets/debugPanel-*.js`, `assets/index-*.css` and whichever `maps/*.wasm` / `maps/*.png`
+changed, and null for the assets replaced. Lost with the scratch space, not on this line: the PT-only map scale test
+(F7) and collision view (F8).
