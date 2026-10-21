@@ -58,9 +58,19 @@ the map card's photo (Dust's: `560 2.4 0.85 0 0 14000`).
 
 ## The PT site from this tree
 
-A worktree of this branch, then in `client/src/main.js` set `MODEL_FILE_EXT` and `MAP_FILE_EXT` to `'.wasm'` (the
-artifact host serves no `.glb`) and `CLIENT_BUILD_TAG`; copy each `client/public/maps/*.glb` to `*.wasm`; `npm install`;
-`cd client && npx vite build`. The page is `dist/index.html` with the built asset names; publish it to the PT artifact
-with `assets/index-*.js`, `assets/debugPanel-*.js`, `assets/index-*.css` and whichever `maps/*.wasm` / `maps/*.png`
-changed, and null for the assets replaced. Lost with the scratch space, not on this line: the PT-only map scale test
-(F7) and collision view (F8).
+The PT site is this tree plus `pt_deltas.py <tree> <tag>` (2026-10-21): the served models' extension `.wasm` (the artifact
+host serves no `.glb`) and the build tag; the infinite boost (every fighter's gauge refilled each tick); the collision
+view (F8 / `__COLLISION_VIEW()`: the arena as the sim holds it — boxes, floors, the bodies — the model hidden meanwhile);
+the map scale test (F7 / `__MAP_SCALE(mPerUnit)`, `__MAP_SCALE_PANEL()`: a modelled map tried at another size, model and
+data scaled alike, the match restarted). So: a worktree of this branch, `pt_deltas.py`, copy each `client/public/maps/*.glb`
+to `*.wasm`, `npm install`, `cd client && npx vite build`. The page is `dist/index.html` with the built asset names;
+publish it to the PT artifact with `assets/index-*.js`, `assets/debugPanel-*.js`, `assets/index-*.css` and whichever
+`maps/*.wasm` / `maps/*.png` changed, and null for the assets replaced. On that tree one test fails by design (the
+travel sprint latch: no boost drains). `pt_probe.cjs <client/dist> <mapKey> <mPerUnit>` checks the three hooks headlessly;
+`fade_probe.cjs <client/dist> <mapKey> x,z ...` counts what fades around the player at given spots.
+
+## Replacing a map's data
+
+`data_splice.py <tree> <key> <json> "<source note>"` replaces the map's entry in `arena.js` and keeps the old one as
+`<key>_old.json` beside the new (compare with `regions.mjs` and `walk_diff.mjs`); Backrooms (Anomaly) takes a copy of
+Backrooms' json. The spawn lines are not touched: set them by hand when the places change.
