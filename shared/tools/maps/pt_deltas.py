@@ -1,6 +1,6 @@
 """The PT site, defined as what it adds to a tree of the 0.8.9 line (2026-10-21, after the site's own patch sources were
-lost): the served models' extension .wasm (the artifact host serves no .glb) and the build tag; the infinite boost (no
-fighter's boost drains: the gauge is refilled every tick — map testing); the collision view (F8 / __COLLISION_VIEW(): the arena as the sim holds it — boxes,
+lost): the served models' extension .wasm (the artifact host serves no .glb) and the build tag; the infinite boost (the
+human's gauge refilled every tick in tickBoost — map testing; the offline bots run their own drain path, updateEnemy, and keep it); the collision view (F8 / __COLLISION_VIEW(): the arena as the sim holds it — boxes,
 floors, the bodies — the model hidden meanwhile); the map scale test (F7 / __MAP_SCALE(mPerUnit): a modelled map tried at
 another size, its model and its data scaled alike, the match restarted). Every replacement asserted once.
 usage: python3 -I pt_deltas.py <tree root> <tag>"""

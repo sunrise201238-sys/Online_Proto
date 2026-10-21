@@ -59,7 +59,7 @@ the map card's photo (Dust's: `560 2.4 0.85 0 0 14000`).
 ## The PT site from this tree
 
 The PT site is this tree plus `pt_deltas.py <tree> <tag>` (2026-10-21): the served models' extension `.wasm` (the artifact
-host serves no `.glb`) and the build tag; the infinite boost (every fighter's gauge refilled each tick); the collision
+host serves no `.glb`) and the build tag; the infinite boost (the human's gauge refilled each tick; the offline bots keep their own drain); the collision
 view (F8 / `__COLLISION_VIEW()`: the arena as the sim holds it — boxes, floors, the bodies — the model hidden meanwhile);
 the map scale test (F7 / `__MAP_SCALE(mPerUnit)`, `__MAP_SCALE_PANEL()`: a modelled map tried at another size, model and
 data scaled alike, the match restarted). So: a worktree of this branch, `pt_deltas.py`, copy each `client/public/maps/*.glb`
