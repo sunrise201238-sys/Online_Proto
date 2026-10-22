@@ -36973,8 +36973,11 @@ const ARENA_SPAWNS = {
   // A Trio respawn picks among all ten by the rule in spawn.js. Set by spawn_set.mjs on the generator's json.
   dust: { p1: { x: 49, y: GROUND_BASE_Y + 14.32, z: -65 }, p2: { x: 27, y: GROUND_BASE_Y - 2.13, z: 228 },
     more: [{ x: -42, y: GROUND_BASE_Y + 12.12, z: -18 }, { x: -25, y: GROUND_BASE_Y - 9.19, z: 33 }, { x: -52, y: GROUND_BASE_Y + 12.12, z: 42 }, { x: 21, y: GROUND_BASE_Y - 0.68, z: 104 }, { x: -86, y: GROUND_BASE_Y - 0.68, z: 118 }, { x: 104, y: GROUND_BASE_Y + 3.92, z: 187 }, { x: -16, y: GROUND_BASE_Y - 2.28, z: 225 }, { x: 84, y: GROUND_BASE_Y + 39.39, z: 261 }] },
-  // Warehouse: Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
-  warehouse: { p1: { x: -58, y: GROUND_BASE_Y, z: 102 }, p2: { x: 58, y: GROUND_BASE_Y, z: -102 } },
+  // Warehouse: the homes at the south-west and north-east corners of the doubled yard, and the user's eight more places (the marked
+  // plan, 2026-10-22): the copy's south end, its west and east, the middle's west, the middle's east gap, the original's west,
+  // its east gap, and south of the standing container. A Trio respawn picks among all ten by the rule in spawn.js.
+  warehouse: { p1: { x: -58, y: GROUND_BASE_Y, z: 102 }, p2: { x: 58, y: GROUND_BASE_Y, z: -102 },
+    more: [{ x: 18, y: GROUND_BASE_Y, z: -81 }, { x: -46, y: GROUND_BASE_Y, z: -46 }, { x: 34, y: GROUND_BASE_Y, z: -43 }, { x: -28, y: GROUND_BASE_Y, z: -6 }, { x: 26, y: GROUND_BASE_Y, z: 3 }, { x: -36, y: GROUND_BASE_Y, z: 41 }, { x: 44, y: GROUND_BASE_Y, z: 42 }, { x: -20, y: GROUND_BASE_Y, z: 76 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
   // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22).

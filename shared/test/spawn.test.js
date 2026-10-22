@@ -5,8 +5,7 @@ import {
   unitOverlapsObstacle, groundHeightAt, GROUND_BASE_Y
 } from '../src/sim/index.js';
 
-// A map's spawn places (Town: the user's six, 2026-10-18; Dust, Backrooms: the user's ten, 2026-10-22; Warehouse: two corners
-// until the user marks places on the doubled yard); a Trio
+// A map's spawn places (Town: the user's six, 2026-10-18; Dust, Backrooms, Warehouse: the user's ten, 2026-10-22); a Trio
 // respawn picks among them by the rule in spawn.js (user 2026-10-22): a place no living enemy sees, at random; none
 // unseen, the farthest from the nearest enemy. Sight at a metre over the floor, the bots' own test. Teammates count for nothing.
 const ROSTERS = { p1: ['unit1', 'unit2', 'unit4'], p2: ['unit4', 'unit1', 'unit2'], p3: ['unit2', 'unit4', 'unit1'], p4: ['unit1', 'unit4', 'unit2'] };
@@ -19,7 +18,7 @@ const put = (f, p) => { f.pos.x = p.x; f.pos.y = p.y; f.pos.z = p.z; };
 const at = (x, floor, z) => ({ x, y: GROUND_BASE_Y + floor, z });
 const same = (p, q) => p.x === q.x && p.z === q.z;
 
-for (const [key, count] of [['town', 6], ['dust', 10], ['backrooms', 10], ['backrooms_anomaly', 10], ['warehouse', 2]]) {
+for (const [key, count] of [['town', 6], ['dust', 10], ['backrooms', 10], ['backrooms_anomaly', 10], ['warehouse', 10]]) {
   test(`${key}: ${count} spawn places, each on clear floor at its own height`, () => {
     const a = getArena(key); const ps = a.spawns.more ? placesOf(a) : [a.spawns.p1, a.spawns.p2];
     assert.equal(ps.length, count);
@@ -40,7 +39,7 @@ test('Town 2v2 start: each pair on its terrace, nobody inside a box', () => {
 
 // (the rule, on each map the user set: with one enemy at its home, the places it does not see exist, and 200 draws land on
 // those alone, every one of them drawn — no place is left unused, user 2026-10-22)
-for (const key of ['town', 'dust', 'backrooms']) {
+for (const key of ['town', 'dust', 'backrooms', 'warehouse']) {
   test(`${key}: a respawn is a place the enemy does not see, drawn at random among all such places`, () => {
     const a = getArena(key); const sees = seesOn(a);
     const m = createMatchState({ mapKey: key, mode: '1v1', rosters: ROSTERS, startTime: 1000 });

@@ -55,7 +55,7 @@ place on the open street beyond it is refused — Warehouse's north-west and eas
 | Town | `-208,10 168,22 -124,-74 116,-78 -104,118 236,122` |
 | Spacecraft | `198,-10 -200,-2 85,-20 -75,-11 -121,-3 82,21 -72,31 117,69 51,112 5,115 --random` |
 | Backrooms | `-88,-92 84,68 84,-96 -45,-67 -19,-66 37,-20 -87,-6 -64,54 -50,66 -92,79 --bounds 109.6,114.4` (the user's marked plan, 2026-10-22; Backrooms (Anomaly) shares the data) |
-| Warehouse | `-58,102 58,-102 --bounds 76,124` (two corners of the doubled yard until the user marks places; the single cluster's ten places of 2026-10-22 went with it) |
+| Warehouse | `-58,102 58,-102 18,-81 -46,-46 34,-43 -28,-6 26,3 -36,41 44,42 -20,76 --bounds 76,124` (the homes at two corners of the doubled yard and the user's marked plan, 2026-10-22; the single cluster's ten places went with it) |
 
 The user marks places on a plan: `spawn_plan.cjs <plan.png> <x0> <z0> <pxPerM> <out.png> "P1=x,z;P2=x,z;1=x,z" [title]`
 draws the current places and a labelled metre grid on a `cellplan.mjs` plan (the plan's x0, z0 are its window's, px per
