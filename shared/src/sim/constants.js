@@ -514,6 +514,81 @@ export const UNIT_DATA = {
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  // Subaru / HK33 (user 2026-10-22): Saori's M4 numbers, bar the bloom per shot — 0.005, the cap at the 9th round where
+  // the M4 reaches it at the 21st. Mirrored in the client.
+  unit14: {
+    id: 'unit14',
+    name: 'Unit 14 / Assault Rifle',
+
+    // Pilot stats — Saori's block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Saori's M4, the bloom per shot her own.
+    lockRange: 56,
+    lockRange2v2: 60,
+    projectileSpeed: 600,
+    firePerMinute: 700,
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.005,       // user 2026-10-22 (the M4: 0.002)
+    bloomCap: 0.06,
+    bloomRecoverPerSec: 0.035,
+    bloomRecoverDelayMs: 200,
+    damage: 4,
+    magCapacity: 30,
+    botFireCap: 30,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  // Yuuka / MPX (user 2026-10-22): Atsuko's evo3 numbers with her own cadence and bloom — 850 rpm (a 70.6 ms cooldown
+  // lands on the 80 ms tick slot, Asuna's: 64 and 80 ms are the only slots near) and 0.01 per shot (the cap at the 6th
+  // round, the evo3's at the 17th). Mirrored in the client.
+  unit15: {
+    id: 'unit15',
+    name: 'Unit 15 / Submachine Gun',
+
+    // Pilot stats — Atsuko's block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Atsuko's evo3, the cadence and the bloom per shot her own.
+    lockRange: 50,
+    lockRange2v2: 55,
+    projectileSpeed: 600,
+    firePerMinute: 850,        // user 2026-10-22 (the evo3: 1100) — fires on the 80 ms tick slot, 750 real
+    spreadCount: 1,
+    spreadAngle: 0.03,
+    bloomPerShot: 0.01,        // user 2026-10-22 (the evo3: 0.003)
+    bloomCap: 0.08,
+    bloomRecoverPerSec: 0.05,
+    bloomRecoverDelayMs: 200,
+    botSuppressBurst: 10,
+    damage: 3.5,
+    magCapacity: 30,
+    botFireCap: 30,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 

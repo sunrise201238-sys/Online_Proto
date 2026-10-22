@@ -608,6 +608,83 @@ const UNIT_DATA = {
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  // Subaru / HK33 (user 2026-10-22): Saori's M4 numbers, bar the bloom per shot — 0.005, the cap at the 9th round where
+  // the M4 reaches it at the 21st. Mirrors shared/src/sim/constants.js.
+  unit14: {
+    name: 'Unit 14 / Assault Rifle',
+    spriteKey: 'subaru', char: 'Subaru', weapon: 'HK33', accent: 0xd98c7a,
+    model: 'subaru',   // 3D character (UNIT_MODELS)
+
+    // Pilot stats — Saori's block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Saori's M4, the bloom per shot her own.
+    lockRange: 56,
+    lockRange2v2: 60,
+    projectileSpeed: 600,
+    firePerMinute: 700,
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.005,       // user 2026-10-22 (the M4: 0.002)
+    bloomCap: 0.06,
+    bloomRecoverPerSec: 0.035,
+    bloomRecoverDelayMs: 200,
+    damage: 4,
+    magCapacity: 30,
+    botFireCap: 30,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  // Yuuka / MPX (user 2026-10-22): Atsuko's evo3 numbers with her own cadence and bloom — 850 rpm (a 70.6 ms cooldown
+  // lands on the 80 ms tick slot, Asuna's: 64 and 80 ms are the only slots near) and 0.01 per shot (the cap at the 6th
+  // round, the evo3's at the 17th). Mirrors shared/src/sim/constants.js.
+  unit15: {
+    name: 'Unit 15 / Submachine Gun',
+    spriteKey: 'yuuka', char: 'Yuuka', weapon: 'MPX', accent: 0x5a7fd8,
+    model: 'yuuka',   // 3D character (UNIT_MODELS)
+
+    // Pilot stats — Atsuko's block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — Atsuko's evo3, the cadence and the bloom per shot her own.
+    lockRange: 50,
+    lockRange2v2: 55,
+    projectileSpeed: 600,
+    firePerMinute: 850,        // user 2026-10-22 (the evo3: 1100) — fires on the 80 ms tick slot, 750 real
+    spreadCount: 1,
+    spreadAngle: 0.03,
+    bloomPerShot: 0.01,        // user 2026-10-22 (the evo3: 0.003)
+    bloomCap: 0.08,
+    bloomRecoverPerSec: 0.05,
+    bloomRecoverDelayMs: 200,
+    botSuppressBurst: 10,
+    damage: 3.5,
+    magCapacity: 30,
+    botFireCap: 30,
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 50, moveScale: 0.50 }
   }
 };
 
@@ -1494,6 +1571,14 @@ const UNIT_MODELS = {
     dodge: { name: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Atsuko's form, 2026-10-10: the default map as is)
   atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (Subaru's form, user 2026-10-22, a first map until the user's motion sheet: her file names its firing clips in two sets,
+  // Normal01_* and Normal02_*, with no Normal_Attack_Ing / Normal_Reload — the first set is taken; the rest as the default map)
+  subaru: { file: 'models/subaru', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    shoot: { name: 'Normal01_Attack_Ing', speed: 1 },
+    reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
+  // (Yuuka's form, user 2026-10-22, a first map until the user's motion sheet: every default name is in her file; she also
+  // carries a Stand_* set and Move_End_* clips, unused)
+  yuuka: { file: 'models/yuuka', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
   // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
   marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 } } },
   // (Haruka's form, 2026-10-10: nothing changed from the default map)
@@ -1938,7 +2023,10 @@ function drawHealthBar(sprite, frac) {
     x.save();
     pill(TP, TP, T, T, 8);
     x.clip();
-    x.drawImage(img, TP, TP, T, T);
+    // The art is any shape (the user's 2026-10-22 set is 252 x 204): its centre square is drawn, as the picker's CSS
+    // (object-fit: cover) shows it — never squashed into the frame.
+    const iw = img.naturalWidth, ih = img.naturalHeight, side = Math.min(iw, ih);
+    x.drawImage(img, (iw - side) / 2, (ih - side) / 2, side, side, TP, TP, T, T);
     x.restore();
   } else {
     pill(TP, TP, T, T, 8);
@@ -6708,7 +6796,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023k';
+const CLIENT_BUILD_TAG = 'b1023m';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
