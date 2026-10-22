@@ -55,7 +55,7 @@ VIEW = r"""// COLLISION VIEW (PT site, a dev hook, pt_deltas.py; rebuilt 2026-10
 // shows the arena as the sim holds it — every box (walls dark blue, the boxes a body steps onto orange), every floor as a
 // quad (a plane with its corner heights), each unit's body as a cylinder — and hides the map model while it is on. One
 // merged mesh per colour: the boxes are thousands.
-let collisionView = null;
+var collisionView = null;   // (var, not let: the render loop's first frame runs before the module's later statements, and a let was not yet initialised then — one 'before initialization' error logged at boot, 2026-10-22)
 function collisionViewToggle(on = !collisionView) {
   if (collisionView) { scene.remove(collisionView.group); collisionView.group.traverse((o) => { o.geometry?.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); }); for (const m of collisionView.hidden) m.visible = true; collisionView = null; }
   if (!on) return false;
