@@ -67,7 +67,7 @@ to `*.wasm`, `npm install`, `cd client && npx vite build`. The page is `dist/ind
 publish it to the PT artifact with `assets/index-*.js`, `assets/debugPanel-*.js`, `assets/index-*.css` and whichever
 `maps/*.wasm` / `maps/*.png` changed, and null for the assets replaced. On that tree one test fails by design (the
 travel sprint latch: no boost drains). `pt_probe.cjs <client/dist> <mapKey> <mPerUnit>` checks the three hooks headlessly;
-`fade_probe.cjs <client/dist> <mapKey> x,z ...` counts what fades around the player at given spots.
+`fade_probe.cjs <client/dist> <mapKey> x,z ...` counts what fades around the player at given spots; `fade_things.cjs`, `fade_hist.cjs` and `fade_one.cjs <client/dist> <mapKey> [rank]` list the fade's things — the biggest, by size, and one looked into (its columns, cells, rows across).
 
 ## Replacing a map's data
 

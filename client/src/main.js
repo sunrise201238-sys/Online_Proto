@@ -10118,7 +10118,7 @@ function applyMapAmbience(mapKey) {
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
-  dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls)
+  dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10214,7 +10214,7 @@ function buildGlbArena(mapKey) {
 // cells whose steep faces face the same way — and a wall crossed by the line from the camera to the unit fades whole (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
-  const COL = 4, PAD = 2;   // (units: a metre cell; half a metre around a thing)
+  const COL = cfg.fadeCell ?? 4, PAD = 2;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing)
   const still = cfg.neverFade ?? [];
   const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -10229,6 +10229,16 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const tall = new Set(); const cellKey = (ix, iz) => `${ix},${iz}`; const vote = new Map();   // (cell -> the steep faces' weight facing x and facing z)
   const tallY = cfg.fadeTall ?? Infinity, hideY = 2 * GROUND_BASE_Y;   // (a body's height: what stands that tall hides one)
   const byWall = !!cfg.fadeWalls;
+  // (what hides a body is what stands a body's height over the floor it stands on, not over the street: a raised floor is no
+  // thing, nor a crate or a parapet on a plateau — Dust's plateau floor, 3 m up, was a thing and faded whenever the camera's
+  // line crossed its plane, user 2026-10-21; and a flat face is a thing only with a body's height of air under it — a roof
+  // over a room, not a floor over a deck's body. The floors and boxes are the arena's, in 4 m buckets.)
+  const bucket = new Map(); const bkey = (x, z) => `${Math.floor(x / 16)},${Math.floor(z / 16)}`;
+  const put = (o, kind) => { for (let bx = Math.floor(o.minX / 16); bx <= Math.floor(o.maxX / 16); bx += 1) for (let bz = Math.floor(o.minZ / 16); bz <= Math.floor(o.maxZ / 16); bz += 1) { const k = `${bx},${bz}`; let e = bucket.get(k); if (!e) { e = { boxes: [], floors: [] }; bucket.set(k, e); } e[kind].push(o); } };
+  for (const o of arenaObstacles) put(o, 'boxes'); for (const s of arenaSurfaces) put(s, 'floors');
+  const solidAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const o of e.boxes) if (x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && y >= o.minY && y <= o.maxY) return true; return false; };
+  const floorAt = (x, z, below) => { const e = bucket.get(bkey(x, z)); let f = 0; if (e) for (const s of e.floors) { if (x < s.minX - COL || x > s.maxX + COL || z < s.minZ - COL || z > s.maxZ + COL) continue; const h = s.type === 'plane' ? s.y0 + s.gx * (Math.max(s.minX, Math.min(x, s.maxX)) - s.minX) + s.gz * (Math.max(s.minZ, Math.min(z, s.maxZ)) - s.minZ) : s.top; if (h <= below && h > f) f = h; } return f; };
+  const tallHere = (cx, cy, cz, flat) => flat ? !solidAt(cx, cy - hideY, cz) && cy - floorAt(cx, cz, cy - hideY) >= tallY : cy - floorAt(cx, cz, cy + 2) >= tallY;
   const facing = () => {   // (the triangle's normal's weight along x and along z, scaled by its area: which way a face faces)
     const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z;
     return [Math.abs(ay * bz - az * by) / 2, Math.abs(ax * by - ay * bx) / 2];
@@ -10238,21 +10248,38 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
-      if (cy < tallY && !(cy >= hideY && (Math.abs(cx) > halfX || Math.abs(cz) > halfZ))) continue;
+      const outside = Math.abs(cx) > halfX || Math.abs(cz) > halfZ;
+      if (outside ? cy < hideY : !tallHere(cx, cy, cz, (() => { const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z; const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz); })())) continue;   // (flat: the face leans no more than 45 degrees)
       const key = cellKey(Math.floor(cx / COL), Math.floor(cz / COL)); tall.add(key);
       if (byWall && Math.max(w[0].y, w[1].y, w[2].y) - Math.min(w[0].y, w[1].y, w[2].y) >= 1) { const [fx, fz] = facing(); const v = vote.get(key) ?? [0, 0]; v[0] += fx; v[1] += fz; vote.set(key, v); }
     }
   }
   const axisOf = (key) => { const v = vote.get(key); return !v ? 'o' : v[0] > v[1] ? 'x' : 'z'; };   // ('o': a cell of flat or sloped faces only)
-  const boxes = []; const seen = new Set();
+  // (by wall, a thing is one straight wall: the run of touching same-facing cells along the wall's own direction — an x-facing
+  // wall runs along z — no more than two cells thick. A thicker run of same-facing cells is a block (a building's corner, a
+  // pile) and splits into one-cell-wide runs; cells of flat or sloped faces only (a roof) go in chunks of sixty-four. The flood
+  // of 8-neighbours by axis alone made Dust's blocks into things 30 m across that faded whole whenever the camera's line
+  // crossed any column of theirs, and the map seemed to fade on approach, user 2026-10-21. A slanted wall is many short runs.)
+  const boxes = []; const seen = new Set(); const at = (k) => k.split(',').map(Number);
+  const flood = (k0, link, cap = Infinity) => { const cells = [k0]; seen.add(k0); const st = [k0]; while (st.length && cells.length < cap) { const [ix, iz] = at(st.pop()); for (const [dx, dz] of link) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n) && (!byWall || axisOf(n) === axisOf(k0))) { seen.add(n); cells.push(n); st.push(n); if (cells.length >= cap) break; } } } return cells; };
+  const ALL = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]], ALONG_Z = [[-1, -1], [0, -1], [1, -1], [-1, 1], [0, 1], [1, 1]], ALONG_X = [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]], FOUR = [[-1, 0], [1, 0], [0, -1], [0, 1]], COL_Z = [[0, -1], [0, 1]], ROW_X = [[-1, 0], [1, 0]];
+  const things = [];
   for (const k0 of tall) {
     if (seen.has(k0)) continue;
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; const st = [k0]; seen.add(k0); const axis = byWall ? axisOf(k0) : null;
-    while (st.length) {
-      const [ix, iz] = st.pop().split(',').map(Number);
-      if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iz < z0) z0 = iz; if (iz > z1) z1 = iz;
-      for (let dx = -1; dx <= 1; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { const n = cellKey(ix + dx, iz + dz); if (tall.has(n) && !seen.has(n) && (!byWall || axisOf(n) === axis)) { seen.add(n); st.push(n); } }
-    }
+    const axis = byWall ? axisOf(k0) : null;
+    if (!byWall) { things.push([flood(k0, ALL), axis]); continue; }
+    if (axis === 'o') { const chunk = flood(k0, FOUR, 64); if (chunk.length >= 4) things.push([chunk, axis]); continue; }   // (a chunk of flat faces smaller than four cells — a sill, a ledge — is no thing)
+    const run = flood(k0, axis === 'x' ? ALONG_Z : ALONG_X);
+    // (thin at every step along its direction — no more than two cells across — it is a wall, a slanted one too; thick anywhere it is a block)
+    const across = new Map(); let thick = false; for (const k of run) { const [ix, iz] = at(k); const s = axis === 'x' ? iz : ix; const n = (across.get(s) ?? 0) + 1; across.set(s, n); if (n > 2) thick = true; }
+    if (!thick) { things.push([run, axis]); continue; }
+    for (const k of run) seen.delete(k);   // (a block: its cells again, as one-cell-wide runs)
+    for (const k of run) { if (seen.has(k)) continue; things.push([flood(k, axis === 'x' ? COL_Z : ROW_X), axis]); }
+  }
+  const owner = new Map();   // (cell -> the thing that owns it)
+  for (const [cells, axis] of things) {
+    for (const k of cells) owner.set(k, boxes.length);
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const k of cells) { const [ix, iz] = at(k); if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iz < z0) z0 = iz; if (iz > z1) z1 = iz; }
     boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, axis, group: `glb-fade-${boxes.length}` });
   }
   if (!boxes.length) return;
@@ -10264,19 +10291,25 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
-      // (the thing whose box holds the triangle's centre; indoors, among the boxes meeting at a corner, the wall the face faces along)
+      // (the thing that owns the cell under the triangle's centre; a centre in no thing's cell looks to the eight cells around
+      // it — a lid over a thing's sides — preferring, by wall, the wall the face faces along. A thing's box no longer claims
+      // whatever lies within it: a slanted wall's box took the whole floor of the long path, user 2026-10-21)
       let b = -1, want = null;
       if (byWall) { const [fx, fz] = facing(); want = fx > fz ? 'x' : fz > fx ? 'z' : null; }
-      for (let q = 0; q < boxes.length; q += 1) { const bx = boxes[q]; if (!(cx >= bx.minX && cx <= bx.maxX && cz >= bx.minZ && cz <= bx.maxZ && cy >= bx.minY)) continue; if (b < 0) b = q; if (!want || bx.axis === want) { b = q; break; } }
+      const flatFace = (() => { const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z; const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz); })();
+      // (a flat face joins a thing only as a roof — a body's height of air under it — and only through its own cell: a floor beside a wall, claimed through the wall's cell, gave the wall columns along the plateau's top)
+      if (cy >= 0.4 && !(flatFace && !tallHere(cx, cy, cz, true))) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
+        if (own != null && (!want || boxes[own].axis === want)) b = own;
+        else if (!flatFace) { for (let dx = -1; dx <= 1 && b < 0; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { if (!dx && !dz) continue; const o = owner.get(cellKey(ix + dx, iz + dz)); if (o == null) continue; if (alt < 0) alt = o; if (!want || boxes[o].axis === want) { b = o; break; } } if (b < 0) b = own != null ? own : alt; } }
       if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
       // (the hull: every metre column under the triangle's footprint, within the thing's box, takes the triangle's box within
       // that cell — the box, not the cell: a 0.2 m wall read as metre columns faded whenever the camera came within a metre of
       // it, as the line began inside the column (user 2026-10-19); within the thing's box: Town's hillsides, big sloped
       // triangles claimed by the things at their centres, gave its things 300,000 columns over their whole footprints. A face
-      // with no height — a floor, a flat roof, a plate — hides nothing and gets no columns.)
-      const y0 = Math.min(w[0].y, w[1].y, w[2].y), y1 = Math.max(w[0].y, w[1].y, w[2].y);
-      if (y1 - y0 < 1) continue;
+      // with no height is a roof — a floor never seeds a thing — and gets a column a unit high at its own height: the line
+      // through it from above fades it, a body in a pit below does not — its part used to sit at the street's height.)
+      const ym0 = Math.min(w[0].y, w[1].y, w[2].y), ym1 = Math.max(w[0].y, w[1].y, w[2].y); const y0 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 - 0.5 : ym0, y1 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 + 0.5 : ym1;
       const bx = boxes[b];
       const tx0 = Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x));
       const tz0 = Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z));
