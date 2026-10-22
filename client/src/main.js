@@ -10262,16 +10262,17 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
     return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz);
   };
-  // (a floor is a walked surface of the arena — the generator's planes: the street, a plateau, a hillside, a ramp, a low
-  // top stepped onto; a thing's lid is a 'flat' surface, a crate's top too high to walk onto, and a roof over nothing is
-  // no surface at all. A face is a floor piece when its footprint overlaps a walked surface within half a metre of its
+  // (a floor is a walked surface of the arena — every surface the generator emits but a thing's lid (`lid`: a crate's
+  // top, a container's): the street, a plateau, a hillside, a ramp, a deck, a slab, a low top stepped onto; a roof over
+  // nothing is no surface at all. The plateau's level floor is a 'flat' surface like a lid, and reading the type alone
+  // took the whole plateau for lids and its ground into the walls' things, user 2026-10-22 — the mark, not the type. A face is a floor piece when its footprint overlaps a walked surface within half a metre of its
   // height, the surface taken a metre wider — overlaps, not at its centre: the floors are rectangles with gaps under the
   // things, and a ground piece whose centre fell in a gap joined the wall's thing and faded with it, 353 pieces on Dust;
   // and a metre wider, as the ground runs on under the strip along a wall that no body walks, 205 pieces more; and ground
   // with solid under it at or below a walked floor within three metres — a fenced yard, the ground under a low awning —
   // where a roof with air under it stays a roof. A floor never joins a thing:
   // the ground beside a wall faded with the wall, user 2026-10-22, "floor needs no transparent effect")
-  const onFloor = (x0, x1, z0, z1, cx, cy, cz) => { let solidUnder = null; for (let bx = Math.floor((x0 - 12) / 16); bx <= Math.floor((x1 + 12) / 16); bx += 1) for (let bz = Math.floor((z0 - 12) / 16); bz <= Math.floor((z1 + 12) / 16); bz += 1) { const e = bucket.get(`${bx},${bz}`); if (!e) continue; for (const s of e.floors) { if (s.type === 'flat' || x1 < s.minX - 12 || x0 > s.maxX + 12 || z1 < s.minZ - 12 || z0 > s.maxZ + 12) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(cx, s.maxX)), Math.max(s.minZ, Math.min(cz, s.maxZ))) : s.top;
+  const onFloor = (x0, x1, z0, z1, cx, cy, cz) => { let solidUnder = null; for (let bx = Math.floor((x0 - 12) / 16); bx <= Math.floor((x1 + 12) / 16); bx += 1) for (let bz = Math.floor((z0 - 12) / 16); bz <= Math.floor((z1 + 12) / 16); bz += 1) { const e = bucket.get(`${bx},${bz}`); if (!e) continue; for (const s of e.floors) { if (s.lid || x1 < s.minX - 12 || x0 > s.maxX + 12 || z1 < s.minZ - 12 || z0 > s.maxZ + 12) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(cx, s.maxX)), Math.max(s.minZ, Math.min(cz, s.maxZ))) : s.top;
     if (x1 >= s.minX - 4 && x0 <= s.maxX + 4 && z1 >= s.minZ - 4 && z0 <= s.maxZ + 4 && Math.abs(h - cy) <= 2) return true;   // (on a walked floor, a metre wide)
     if (h >= cy - 2) { if (solidUnder == null) solidUnder = !tallHere(cx, cy, cz, true); if (solidUnder) return true; } } } return false; };   // (ground with solid under it, at or below a walked floor within three metres: a fenced yard, the ground under an awning)
   for (const mesh of meshes) {

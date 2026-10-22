@@ -9,14 +9,14 @@ const require = createRequire(import.meta.url); const { chromium } = require('pl
 const [tree, dir, mapKey, cxS, czS, stepS] = process.argv.slice(2); const CXM = Number(cxS), CZM = Number(czS), STEP = Number(stepS ?? 8);
 const arena = await import(path.resolve(tree, 'shared/src/sim/arena.js')); const C = await import(path.resolve(tree, 'shared/src/sim/constants.js'));
 const obstacles = arena.getArenaObstacles(mapKey), surfaces = arena.getArenaSurfaces(mapKey), bounds = arena.getArenaBounds(mapKey);
-const GB = C.GROUND_BASE_Y, TALL = 2 * GB; const OFF = [-1.2, 21.2, -12.4];
+const GB = C.GROUND_BASE_Y, TALL = 2 * GB; const OFF = [2, 6.8 + 2.35, 13];   // (the classic camera: 13 u behind the player, 2 u to the side, 6.8 u over the root — the root 2.35 u over the body)
 const hAt = (s, x, z) => s.heightAt ? s.heightAt(x, z) : s.type === 'plane' ? s.y0 + s.gx * (Math.max(s.minX, Math.min(x, s.maxX)) - s.minX) + s.gz * (Math.max(s.minZ, Math.min(z, s.maxZ)) - s.minZ) : s.top;
 const floorAt = (x, z, below) => { let f = -Infinity; for (const s of surfaces) { if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue; const h = hAt(s, x, z); if (h <= below && h > f) f = h; } return f; };
 const segs = [];
 for (let x = -bounds.halfX + 4; x < bounds.halfX; x += STEP) for (let z = -bounds.halfZ + 4; z < bounds.halfZ; z += STEP) {
   const h = floorAt(x, z, Infinity); if (!Number.isFinite(h)) continue;
   if (obstacles.some((o) => x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && o.minY < h + TALL && o.maxY > h + 0.6)) continue;
-  const rootY = h + GB; for (let yaw = 0; yaw < 4; yaw += 1) { const s = Math.sin(yaw * Math.PI / 2), c = Math.cos(yaw * Math.PI / 2); segs.push({ x, z, h, yaw, cam: [x + OFF[0] * c - OFF[2] * s, rootY + OFF[1], z + OFF[0] * s + OFF[2] * c], tgt: [x, rootY + 1.6, z] }); } }
+  const bodyY = h + GB, rootY = bodyY + 2.35; for (let yaw = 0; yaw < 4; yaw += 1) { const s = Math.sin(yaw * Math.PI / 2), c = Math.cos(yaw * Math.PI / 2); segs.push({ x, z, h, yaw, cam: [x + OFF[0] * c - OFF[2] * s, bodyY + OFF[1], z + OFF[0] * s + OFF[2] * c], tgt: [x, rootY + 1.6, z] }); } }
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.wasm': 'application/octet-stream', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const root = path.resolve(dir); const server = http.createServer((req, res) => { const u = decodeURIComponent(req.url.split('?')[0]); const f = path.join(root, u === '/' ? 'index.html' : u); if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] ?? 'application/octet-stream' }); fs.createReadStream(f).pipe(res); });

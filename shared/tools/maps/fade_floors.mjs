@@ -5,7 +5,7 @@
 import { createRequire } from 'node:module'; import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 const require = createRequire(import.meta.url); const { chromium } = require('playwright');
 const [tree, dir, mapKey, cxS, czS] = process.argv.slice(2); const CXM = Number(cxS), CZM = Number(czS);
-const arena = await import(path.resolve(tree, 'shared/src/sim/arena.js')); const surfaces = arena.getArenaSurfaces(mapKey).filter((s) => s.type !== 'flat');
+const arena = await import(path.resolve(tree, 'shared/src/sim/arena.js')); const surfaces = arena.getArenaSurfaces(mapKey).filter((s) => !s.lid);
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.wasm': 'application/octet-stream', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const root = path.resolve(dir); const server = http.createServer((req, res) => { const u = decodeURIComponent(req.url.split('?')[0]); const f = path.join(root, u === '/' ? 'index.html' : u); if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] ?? 'application/octet-stream' }); fs.createReadStream(f).pipe(res); });

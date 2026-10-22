@@ -115,9 +115,14 @@ const walk = (ni, parent) => { const n = json.nodes[ni]; if (EXCLUDE.has(n.name)
       if (Math.max(a[1], b[1], c[1]) < GROUND - UNDER_STREET && (steep || area2 / 2 >= Math.cos(RAMP_MIN_DEG * Math.PI / 180) * area3)) continue;   // (under the street, a flat face is the model's hidden plate — the ground plane around the town's slab, the plate under the map, the tiles' bottoms — and a steep one its skirt; a sloped face is a ramp going down: read)
       if (Math.min(a[1], b[1], c[1]) >= GROUND + CEIL) continue;   // (at or above the map's ceiling nothing is read: a ship's wall tops are no floors)
       if (steep) { for (const [p, q] of [[a, b], [b, c], [c, a]]) { const len = Math.hypot(q[0] - p[0], q[2] - p[2]); const steps = Math.max(1, Math.ceil(len / (CELL / 2))); for (let u = 0; u <= steps; u += 1) { const f = u / steps; markEdge(p[0] + (q[0] - p[0]) * f, p[2] + (q[2] - p[2]) * f, p[1] + (q[1] - p[1]) * f); } }
-        // a steep face spans, in each cell its edges cross, the heights its samples reach there — not its whole height
-        // everywhere (a face's top edge passing over an opening is no wall below it); its lowest sample is the column's
-        const cm = new Map(); for (const [p, q] of [[a, b], [b, c], [c, a]]) { const len = Math.hypot(q[0] - p[0], q[2] - p[2]); const steps = Math.max(1, Math.ceil(len / (CELL / 2))); for (let u = 0; u <= steps; u += 1) { const f = u / steps; const j = cellOf(p[0] + (q[0] - p[0]) * f, p[2] + (q[2] - p[2]) * f); if (j < 0) continue; const y = p[1] + (q[1] - p[1]) * f; const e = cm.get(j); if (!e) cm.set(j, [y, y]); else { if (y < e[0]) e[0] = y; if (y > e[1]) e[1] = y; } } }
+        // a steep face spans, in each cell it covers, the heights it reaches there — not its whole height everywhere (a
+        // face's top edge passing over an opening is no wall below it); its lowest sample is the column's
+        // (sampled over its whole area, not its edges alone: a gate's leaf, one quad of 2 by 2 m, left the cells between its
+        // edges reading floor and top rail only, and the gate read open — a body walked through the closed gate at the long
+        // path's end, user 2026-10-22. A face's own area is wall wherever it is; an opening in a wall is outside its faces.)
+        const cm = new Map(); const take = (x, z, y) => { const j = cellOf(x, z); if (j < 0) return; const e = cm.get(j); if (!e) cm.set(j, [y, y]); else { if (y < e[0]) e[0] = y; if (y > e[1]) e[1] = y; } };
+        const n = Math.max(1, Math.ceil(Math.max(e1, e2, e3) / (CELL / 2)));
+        for (let i = 0; i <= n; i += 1) for (let k = 0; k <= n - i; k += 1) { const u = i / n, v = k / n, ww = 1 - u - v; take(a[0] * ww + b[0] * u + c[0] * v, a[2] * ww + b[2] * u + c[2] * v, a[1] * ww + b[1] * u + c[1] * v); }
         for (const [j, [lo, hi]] of cm) { if (lo < lowAll[j]) lowAll[j] = lo; const b0 = Math.max(0, Math.floor((lo - GROUND) / BAND)), b1 = Math.min(BANDS - 1, Math.floor((hi - GROUND) / BAND)); for (let bb = b0; bb <= b1; bb += 1) bands[j * BANDS + bb] = 1; }
         continue; }
       if (Math.abs(d) < 1e-9) continue;
@@ -566,7 +571,7 @@ const thin = (b) => Math.min(b.x1 - b.x0, b.z1 - b.z0) <= FENCE_MAX;
 const obstacles = [], surfaces = [], tags = []; const emit = (o, t) => { obstacles.push(o); tags.push(t); };   /* (tags: the rule behind each box, for the DUMP) */ let lowCover = 0, standable = 0, fences = 0, deckBodies = 0, slabs = 0, skirts = 0, voids = 0, planeBodies = 0, thinLids = 0;
 // a thing's top as a floor: the lid, and the cells it covers (lidH), for the slim things read after the thick ones
 const lidH = new Float64Array(N).fill(NaN); const thinTops = [];
-const lid = (w, o) => { surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); for (let kk = w.k; kk < w.k + w.d; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) lidH[kk * nx + ci] = w.h; };
+const lid = (w, o) => { surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY, lid: 1 });   /* (lid: a thing's own top — a crate's, a container's — where every other flat surface is a floor a body walks: a deck, a passage, a slab, a roof. The client's fade keeps floors out of its things by this) */ for (let kk = w.k; kk < w.k + w.d; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) lidH[kk * nx + ci] = w.h; };
 // (a slim thing whose top lies within a step of a floor beside it — a reached floor, or a thick thing's lid — is that floor's
 // seam: a roof's ridge, the step between two roof slopes, a quarter of a metre wide, carries the floor across at its own top.
 // It used to carry none, as a railing's top carries none, and a body crossing a roof fell through it to the ground under the
