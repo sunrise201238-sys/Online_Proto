@@ -5,7 +5,8 @@ import {
   unitOverlapsObstacle, groundHeightAt, GROUND_BASE_Y
 } from '../src/sim/index.js';
 
-// A map's spawn places (Town: the user's six, 2026-10-18; Dust, Backrooms, Warehouse: the user's ten, 2026-10-22); a Trio
+// A map's spawn places (Town: the user's six, 2026-10-18; Dust, Backrooms: the user's ten, 2026-10-22; Warehouse: two corners
+// until the user marks places on the doubled yard); a Trio
 // respawn picks among them by the rule in spawn.js (user 2026-10-22): a place no living enemy sees, at random; none
 // unseen, the farthest from the nearest enemy. Sight at a metre over the floor, the bots' own test. Teammates count for nothing.
 const ROSTERS = { p1: ['unit1', 'unit2', 'unit4'], p2: ['unit4', 'unit1', 'unit2'], p3: ['unit2', 'unit4', 'unit1'], p4: ['unit1', 'unit4', 'unit2'] };
@@ -18,9 +19,9 @@ const put = (f, p) => { f.pos.x = p.x; f.pos.y = p.y; f.pos.z = p.z; };
 const at = (x, floor, z) => ({ x, y: GROUND_BASE_Y + floor, z });
 const same = (p, q) => p.x === q.x && p.z === q.z;
 
-for (const [key, count] of [['town', 6], ['dust', 10], ['backrooms', 10], ['backrooms_anomaly', 10], ['warehouse', 10]]) {
+for (const [key, count] of [['town', 6], ['dust', 10], ['backrooms', 10], ['backrooms_anomaly', 10], ['warehouse', 2]]) {
   test(`${key}: ${count} spawn places, each on clear floor at its own height`, () => {
-    const a = getArena(key); const ps = placesOf(a);
+    const a = getArena(key); const ps = a.spawns.more ? placesOf(a) : [a.spawns.p1, a.spawns.p2];
     assert.equal(ps.length, count);
     for (const p of ps) {
       assert.ok(!unitOverlapsObstacle(p.x, p.y, p.z, a.obstacles), `place (${p.x}, ${p.z}) is inside a box`);
@@ -39,7 +40,7 @@ test('Town 2v2 start: each pair on its terrace, nobody inside a box', () => {
 
 // (the rule, on each map the user set: with one enemy at its home, the places it does not see exist, and 200 draws land on
 // those alone, every one of them drawn — no place is left unused, user 2026-10-22)
-for (const key of ['town', 'dust', 'backrooms', 'warehouse']) {
+for (const key of ['town', 'dust', 'backrooms']) {
   test(`${key}: a respawn is a place the enemy does not see, drawn at random among all such places`, () => {
     const a = getArena(key); const sees = seesOn(a);
     const m = createMatchState({ mapKey: key, mode: '1v1', rosters: ROSTERS, startTime: 1000 });
@@ -60,9 +61,9 @@ for (const key of ['town', 'dust', 'backrooms', 'warehouse']) {
 }
 
 test('every place in sight: the farthest from the nearest enemy', () => {
-  // (Warehouse, two enemies posted on places so that every other place is in sight of one of them, if such a posting exists)
-  const a = getArena('warehouse'); const sees = seesOn(a); const ps = placesOf(a);
-  const m = createMatchState({ mapKey: 'warehouse', mode: '2v2', rosters: ROSTERS, startTime: 1000 });
+  // (Backrooms, two enemies posted on places so that every other place is in sight of one of them, if such a posting exists)
+  const a = getArena('backrooms'); const sees = seesOn(a); const ps = placesOf(a);
+  const m = createMatchState({ mapKey: 'backrooms', mode: '2v2', rosters: ROSTERS, startTime: 1000 });
   m.fighters.p1.hp = 0; m.fighters.p3.hp = 0;
   const e1 = m.fighters.p2, e2 = m.fighters.p4;
   let posted = false;
@@ -70,10 +71,10 @@ test('every place in sight: the farthest from the nearest enemy', () => {
     if (i === j) continue; put(e1, ps[i]); put(e2, ps[j]);
     if (ps.every((p) => Math.min(dist(p, e1.pos), dist(p, e2.pos)) < 8 || sees(p, e1.pos) || sees(p, e2.pos))) { posted = true; break; } }
     if (posted) break; }
-  if (!posted) { assert.ok(true, 'no posting of two enemies sees the whole yard: an unseen place always remains here'); return; }
+  if (!posted) { assert.ok(true, 'no posting of two enemies sees the whole hall: an unseen place always remains here'); return; }
   const near = (p) => Math.min(dist(p, e1.pos), dist(p, e2.pos));
   const free = ps.filter((p) => near(p) >= 8); const pool = free.length ? free : ps;
-  for (let i = 0; i < 20; i += 1) { const pick = pickRespawnSpawn('warehouse', 'A', [e1, m.fighters.p3, e2]); for (const p of pool) assert.ok(near(p) <= near(pick) + 1e-9, `(${p.x}, ${p.z}) is farther than the pick`); }
+  for (let i = 0; i < 20; i += 1) { const pick = pickRespawnSpawn('backrooms', 'A', [e1, m.fighters.p3, e2]); for (const p of pool) assert.ok(near(p) <= near(pick) + 1e-9, `(${p.x}, ${p.z}) is farther than the pick`); }
 });
 
 test('a living teammate counts for nothing: the pick is by the enemy alone', () => {

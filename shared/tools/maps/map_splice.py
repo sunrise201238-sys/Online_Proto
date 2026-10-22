@@ -30,9 +30,11 @@ sp = d['spawns']; assert sp, 'no spawns in the json (spawn_set.mjs first)'
 y = lambda v: 'GROUND_BASE_Y' + ('' if abs(v) < 1e-9 else f' + {v}' if v > 0 else f' - {-v}')
 pt = lambda p: f"{{ x: {p['x']}, y: {y(p['y'])}, z: {p['z']} }}"
 spawn_line = f"  {key}: {{ p1: {pt(sp['p1'])}, p2: {pt(sp['p2'])}" + (",\n    more: [" + ", ".join(pt(p) for p in sp['more']) + "]" if sp.get('more') else "") + (", pick: 'random'" if sp.get('pick') == 'random' else "") + " },\n"
-A = 'shared/src/sim/arena.js'
-bnd = line_starting(A, f"  {AFTER}:"); spn = line_starting(A, f"  {AFTER}: {{ p1:"); arn = line_starting(A, f"  {AFTER}: buildGeneratedArena(")
-spawn_block = spn if spn.rstrip().endswith('},') else spn + line_starting(A, "    more: [")   # (the spawn row runs on to a second line when it has more places)
+A = 'shared/src/sim/arena.js'; At = open(os.path.join(root, A), encoding='utf-8').read()
+import re
+bl = [l for l in At.split('\n') if re.match(rf"  {re.escape(AFTER)}:\s+\{{ halfX", l)]; assert len(bl) == 1, (AFTER, 'boundary rows', len(bl)); bnd = bl[0] + '\n'
+spn = line_starting(A, f"  {AFTER}: {{ p1:"); arn = line_starting(A, f"  {AFTER}: buildGeneratedArena(")
+lines = At.split('\n'); k = lines.index(spn[:-1]); spawn_block = spn if spn.rstrip().endswith('} },') else spn + lines[k + 1] + '\n'   # (the spawn row runs on to a second line when it has more places)
 edit(A, [
     (bnd, bnd + f"  {key}:{' ' * max(1, 11 - len(key))}{{ halfX: {d['halfX']}, halfZ: {d['halfZ']} }},   // {BOUNDARY}\n"),
     ("const GENERATED_ARENA_COLLISION_DATA = {\n", "const GENERATED_ARENA_COLLISION_DATA = {\n" + entry),
