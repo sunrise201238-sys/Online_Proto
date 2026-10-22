@@ -102,6 +102,7 @@ function mapScalePanelToggle() {
 }
 """
 edit('client/src/main.js', [
+    ('  if (consume) {\n    if (ticks) s.boost = Math.max(0, s.boost - drain * ticks);\n    s.refillPausedUntil = now + 500;\n  } else if (grounded && now >= s.refillPausedUntil && ticks) {\n    s.boost = Math.min(cap, s.boost + regen * ticks);\n  }\n', "  if (consume) {\n    if (ticks) s.boost = Math.max(0, s.boost - drain * ticks);\n    s.refillPausedUntil = now + 500;\n  } else if (grounded && now >= s.refillPausedUntil && ticks) {\n    s.boost = Math.min(cap, s.boost + regen * ticks);\n  }\n  if (PT.infiniteBoost) s.boost = cap;   // (PT site, pt_deltas.py: the switch — the local player's gauge runs here, not in the sim's tickBoost, so the refill of 2026-10-21 in movement.js never reached it; user 2026-10-22, F10 showed its toast and nothing changed)\n"),
     ("import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';", "import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';\nimport { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';   // (PT site: the collision view's merged boxes)\nimport { PT } from '@gvg/shared/src/sim/constants.js';   // (PT site: the infinite boost switch)"),
     ("  getGeneratedObstacles\n} from '@gvg/shared/src/sim/index.js';", "  getGeneratedObstacles,\n  mapScale\n} from '@gvg/shared/src/sim/index.js';"),
     ("function buildGlbArena(mapKey) {", VIEW + "function buildGlbArena(mapKey) {"),

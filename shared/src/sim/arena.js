@@ -35573,8 +35573,8 @@ function materializeSurface(surface) {
     const { minX, maxX, minZ, maxZ, maxTop, y0, gx, gz } = surface;
     return { minX, maxX, minZ, maxZ, maxTop, type: 'plane', y0, gx, gz, heightAt(x, z) { return y0 + gx * (x - minX) + gz * (z - minZ); } };
   }
-  const { minX, maxX, minZ, maxZ, maxTop, top } = surface;
-  return { minX, maxX, minZ, maxZ, maxTop, heightAt: () => top };
+  const { minX, maxX, minZ, maxZ, maxTop, top, type } = surface;
+  return { minX, maxX, minZ, maxZ, maxTop, type, heightAt: () => top };   // (type kept: the generator's 'flat' is a thing's lid — a crate's top — where a 'plane' is a walked floor; the client's fade tells them apart)
 }
 
 function buildGeneratedArena(mapKey) {

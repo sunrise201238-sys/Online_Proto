@@ -10251,19 +10251,29 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const put = (o, kind) => { for (let bx = Math.floor(o.minX / 16); bx <= Math.floor(o.maxX / 16); bx += 1) for (let bz = Math.floor(o.minZ / 16); bz <= Math.floor(o.maxZ / 16); bz += 1) { const k = `${bx},${bz}`; let e = bucket.get(k); if (!e) { e = { boxes: [], floors: [] }; bucket.set(k, e); } e[kind].push(o); } };
   for (const o of arenaObstacles) put(o, 'boxes'); for (const s of arenaSurfaces) put(s, 'floors');
   const solidAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const o of e.boxes) if (x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && y >= o.minY && y <= o.maxY) return true; return false; };
-  const floorAt = (x, z, below) => { const e = bucket.get(bkey(x, z)); let f = 0; if (e) for (const s of e.floors) { if (x < s.minX - COL || x > s.maxX + COL || z < s.minZ - COL || z > s.maxZ + COL) continue; const h = s.type === 'plane' ? s.y0 + s.gx * (Math.max(s.minX, Math.min(x, s.maxX)) - s.minX) + s.gz * (Math.max(s.minZ, Math.min(z, s.maxZ)) - s.minZ) : s.top; if (h <= below && h > f) f = h; } return f; };
+  const floorAt = (x, z, below) => { const e = bucket.get(bkey(x, z)); let f = 0; if (e) for (const s of e.floors) { if (x < s.minX - COL || x > s.maxX + COL || z < s.minZ - COL || z > s.maxZ + COL) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(x, s.maxX)), Math.max(s.minZ, Math.min(z, s.maxZ))) : s.top; if (h <= below && h > f) f = h; } return f; };   /* (heightAt: the arena's surfaces as materialised — a lid's top was lost on the way and read as no floor) */
   const tallHere = (cx, cy, cz, flat) => flat ? !solidAt(cx, cy - hideY, cz) && cy - floorAt(cx, cz, cy - hideY) >= tallY : cy - floorAt(cx, cz, cy + 2) >= tallY;
   const facing = () => {   // (the triangle's normal's weight along x and along z, scaled by its area: which way a face faces)
     const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z;
     return [Math.abs(ay * bz - az * by) / 2, Math.abs(ax * by - ay * bx) / 2];
   };
+  const leaning = () => {   // (flat: the triangle leans no more than 45 degrees)
+    const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z;
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+    return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz);
+  };
+  // (a floor is a walked surface of the arena — the generator's planes: the street, a plateau, a hillside, a ramp, a low
+  // top stepped onto — read within a quarter of a metre of the face; a thing's lid is a 'flat' surface, a crate's top too
+  // high to walk onto, and a roof over nothing is no surface at all. A floor never joins a thing: the ground beside a
+  // wall faded with the wall, user 2026-10-22, "floor needs no transparent effect")
+  const walkedAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const s of e.floors) { if (s.type === 'flat' || x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue; const h = s.heightAt ? s.heightAt(x, z) : s.top; if (Math.abs(h - y) <= 1) return true; } return false; };
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
       const outside = Math.abs(cx) > halfX || Math.abs(cz) > halfZ;
-      if (outside ? cy < hideY : !tallHere(cx, cy, cz, (() => { const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z; const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz); })())) continue;   // (flat: the face leans no more than 45 degrees)
+      if (outside ? cy < hideY : !tallHere(cx, cy, cz, leaning())) continue;
       const key = cellKey(Math.floor(cx / COL), Math.floor(cz / COL)); tall.add(key);
       if (byWall && Math.max(w[0].y, w[1].y, w[2].y) - Math.min(w[0].y, w[1].y, w[2].y) >= 1) { const [fx, fz] = facing(); const v = vote.get(key) ?? [0, 0]; v[0] += fx; v[1] += fz; vote.set(key, v); }
     }
@@ -10318,8 +10328,8 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       // walls' cells, and the camera, 3 m behind the player at the block's foot, looks down through the roof's piece within
       // 3 m of the wall. It used to join only with a body's height of air under it, a roof over a room: the crates' lids stayed
       // solid over the player hidden behind them, and the thing faded around a plank of wood, user 2026-10-22. A steep face
-      // looks one cell around, as before.)
-      if (cy >= 0.4) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
+      // looks one cell around, as before. A floor — a flat face on a walked surface of the arena — never joins.)
+      if (cy >= 0.4 && !(flatFace && walkedAt(cx, cy, cz))) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
         if (own != null && (!want || boxes[own].axis === want)) b = own;
         else { const reach = flatFace ? 2 : 1, grow = 2 * COL;
           for (let r = 1; r <= reach && b < 0; r += 1) for (let dx = -r; dx <= r && b < 0; dx += 1) for (let dz = -r; dz <= r; dz += 1) { if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; const o = owner.get(cellKey(ix + dx, iz + dz)); if (o == null) continue; if (flatFace && !(fx0 >= boxes[o].minX - grow && fx1 <= boxes[o].maxX + grow && fz0 >= boxes[o].minZ - grow && fz1 <= boxes[o].maxZ + grow)) continue; if (alt < 0) alt = o; if (!want || boxes[o].axis === want) { b = o; break; } }
