@@ -18,6 +18,7 @@ The generator reads a steep face over its whole area, not its edges alone (2026-
 | Town | `LIDS="-17.05,-20.2,-12.9,-19.05,2.65" DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo; the lid: the plaza's slot, a 4 by 1 m pit 2.5 m deep with no way out, filled to the plaza) |
 | Spacecraft | `DUMP=1 GROUND=0 EXCLUDE= UNDER_STREET=3 CEIL=1.3 node glb_collision.mjs client/public/maps/spacecraft.glb spacecraft 2 122 -70 0 <out>` |
 | Backrooms | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 CEIL=3.8 node glb_collision.mjs client/public/maps/backrooms.glb backrooms -26.8 28 -27.2 30 <out>` |
+| Warehouse | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 node glb_collision.mjs <map_79_void.glb> warehouse -14 24 1 39 <out>` (read on the original model; the served copy is `glb_slim.cjs <in> <out> [maxPx=1024] [quality=0.8]` of it — textures to 1024 px, JPEG where opaque, 29.9 → 11.6 MB, the geometry untouched) |
 
 Edges, voids and pits (2026-10-22, every map's data regenerated; bodies fell into Town's plaza slot and Dust's channel and
 ditch walking their rims, and met invisible 25 m pillars): a reached floor cell beside a drop of more than a STEP that no
@@ -43,23 +44,38 @@ ops; `glb_zfight.mjs <glb> x0 x1 z0 z1` finds coplanar overlaps; `glb_lum.mjs` /
 texture for dark faces and dark strips; `glb_box.mjs` / `glb_verts.mjs` / `glb_cutinfo.mjs` list faces and vertices in a
 box; `glb_read.mjs` is what they share.
 
-Then the spawns, in game units (`spawn_set.mjs <tree root> <json> x,z x,z [more...] [--random]`; the floor height is
-read off the nav grid, a point off it is refused):
+Then the spawns, in game units (`spawn_set.mjs <tree root> <json> x,z x,z [more...] [--random] [--bounds hx,hz]`; the floor
+height is the sim's own at the point (`groundHeightAt`), a point the nav grid does not walk is refused; `--bounds` adds the
+arena's boundary walls (MAP_BOUNDARY's halfX, halfZ) as the game does, or the grid ends at the last modelled thing and a
+place on the open street beyond it is refused — Warehouse's north-west and east places, 2026-10-22):
 
 | map | places |
 | --- | --- |
-| Dust | `49,-65 27,228 -52,-5 103,33 -50,102 21,105 -15,174 102,189` (the user's marks, 2026-10-19: the homes at the long path's gate and the lower yard's south end, six more) |
+| Dust | `49,-65 27,228 -42,-18 -25,33 -52,42 21,104 -86,118 104,187 -16,225 84,261 --bounds 227.6,355.6` (the homes, user 2026-10-19; the eight more from the user's marked plan, 2026-10-22, the last on the south-east roof) |
 | Town | `-208,10 168,22 -124,-74 116,-78 -104,118 236,122` |
 | Spacecraft | `198,-10 -200,-2 85,-20 -75,-11 -121,-3 82,21 -72,31 117,69 51,112 5,115 --random` |
-| Backrooms | `-88,-92 84,68 21,-64 -90,38 --random` (Backrooms (Anomaly) shares the data) |
+| Backrooms | `-88,-92 84,68 84,-96 -45,-67 -19,-66 37,-20 -87,-6 -64,54 -50,66 -92,79 --bounds 109.6,114.4` (the user's marked plan, 2026-10-22; Backrooms (Anomaly) shares the data) |
+| Warehouse | `-55,55 57,-53 -64,-66 -24,-49 -52,-21 0,-11 63,-2 40,8 -20,32 12,50 --bounds 76,76` (the user's marked plan, 2026-10-22) |
+
+The user marks places on a plan: `spawn_plan.cjs <plan.png> <x0> <z0> <pxPerM> <out.png> "P1=x,z;P2=x,z;1=x,z" [title]`
+draws the current places and a labelled metre grid on a `cellplan.mjs` plan (the plan's x0, z0 are its window's, px per
+metre = 4 × px per cell); `marks_read.cjs <shot.png> <origW> <origH> <margin=56> <pxPerM> <x0> <z0>` reads the user's blue
+crosses and red markers off a screenshot of it, in model metres (the plan's frame found as the non-border area; the red
+markers' known places check the reading, ±0.5 m); `spot_check.mjs <tree> <json> <cxM> <czM> x,z ...` tells of each spot
+the floor the grid walks there and the clear radius around it (a corridor's middle reads 1 m; the two Backrooms corridor
+places and Warehouse's pile gap are such). Model metres to units: (x − cx) × 4, (z − cz) × 4.
 
 Town, Spacecraft and Backrooms on this line still carry the data the v5 generator read (2026-10-19, before v6); Dust is v6.
 
 - `glb_rescale.mjs <in> <out> <factor>`: a served copy at another size (a root scale node). Dust's `.glb` is already at
   142.23 m per model unit; it was made from the x40 copy by 3.55575.
-- `dust_splice.py <tree> <dust.json> <tag> <ext>`: the one-shot that put Dust into this tree (already applied here);
-  the pattern for the next map. `v6_apply.py <glb_collision.mjs>`: the v6 rules as replacements on the v5 generator
-  (already applied to the copy one level up; kept as the record of what changed).
+- `dust_splice.py <tree> <dust.json> <tag> <ext>`: the one-shot that put Dust into this tree (already applied here).
+  `map_splice.py <tree> <key> <Name> <json>` (its docstring names the environment it reads: the name tables' note, the
+  data comment's source, the GLB_MAPS row, the README paragraph) puts a new modelled map into a tree: boundary, data and
+  spawns in arena.js, the name in both MAP_DATA tables, the row, the README's count and paragraph — Warehouse went in this
+  way (2026-10-22). `nav_corners.mjs <tree> <json>` finds the walkable points nearest a new map's four corners, for a first
+  pair of homes. `v6_apply.py <glb_collision.mjs>`: the v6 rules as replacements on the v5 generator (already applied to
+  the copy one level up; kept as the record of what changed).
 
 ## Looking at a reading
 
@@ -96,8 +112,13 @@ data scaled alike, the match restarted). So: a worktree of this branch, `pt_delt
 to `*.wasm`, `npm install`, `cd client && npx vite build`. The page is `dist/index.html` with the built asset names;
 publish it to the PT artifact with `assets/index-*.js`, `assets/debugPanel-*.js`, `assets/index-*.css` and whichever
 `maps/*.wasm` / `maps/*.png` changed, and null for the assets replaced. On that tree one test fails by design (the
-travel sprint latch: no boost drains). `pt_probe.cjs <client/dist> <mapKey> <mPerUnit>` checks the three hooks headlessly;
-`fade_probe.cjs <client/dist> <mapKey> x,z ...` counts what fades around the player at given spots; `fade_things.cjs`, `fade_hist.cjs` and `fade_one.cjs <client/dist> <mapKey> [rank]` list the fade's things — the biggest, by size, and one looked into (its columns, cells, rows across); `fade_at.cjs <client/dist> <mapKey> x0 z0 x1 z1` the things with hull columns over a window (metres); `fade_why.cjs <client/dist> <mapKey> x,z` what fades at a spot with the camera's place (the headless camera does not follow a teleported body, so read the camera's place with it); `fade_geo.cjs <client/dist> <mapKey> cx cz radius [dx dy dz]` the game's own line test against the hull on a ring around a spot, the camera at a fixed offset from the player (metres; the classic camera sits about 3 m north and 5 m up).
+travel sprint latch: no boost drains). The way back (2026-10-22, after the PT tree was edited first for a day):
+`pt_inverse.py <pt_deltas.py> <pt tree> <out dir>` undoes every replacement of `pt_deltas.py` on the PT tree's sim files
+(the collision view's text in the PT tree may be an older copy, then main.js is reported and left alone) and strips the
+switch from constants.js, so those files can be copied into this tree; `port_main.py <pt main.js> <this main.js>` is what
+carried the day's main.js changes by their anchors instead (the Warehouse rows, the fade by node, the hull's span rule,
+fadeAlpha) — a record of the method, not a tool for the next time. `pt_probe.cjs <client/dist> <mapKey> <mPerUnit>` checks the three hooks headlessly;
+`fade_probe.cjs <client/dist> <mapKey> x,z ...` counts what fades around the player at given spots; `fade_hull.cjs <client/dist> <mapKey> <cxM> <czM>` lists every fade thing with its triangles' box in model metres, its source nodes, its triangle count and its hull's size (the Warehouse's 21 objects, 2026-10-22; `fade_things.cjs` converts with Dust's centre); `fade_things.cjs`, `fade_hist.cjs` and `fade_one.cjs <client/dist> <mapKey> [rank]` list the fade's things — the biggest, by size, and one looked into (its columns, cells, rows across); `fade_at.cjs <client/dist> <mapKey> x0 z0 x1 z1` the things with hull columns over a window (metres); `fade_why.cjs <client/dist> <mapKey> x,z` what fades at a spot with the camera's place (the headless camera does not follow a teleported body, so read the camera's place with it); `fade_geo.cjs <client/dist> <mapKey> cx cz radius [dx dy dz]` the game's own line test against the hull on a ring around a spot, the camera at a fixed offset from the player (metres; the classic camera sits about 3 m north and 5 m up).
 
 The fade, map-wide (2026-10-22, after a wall between the camera and the player stayed black, then crate lids blocked the sight): `fade_sweep.mjs <tree> <client/dist> <mapKey> cxM czM [stepU]` puts the camera at the classic offset, turned to four headings, at every standable spot of the arena's floors, and asks of each line to the chest which model faces cross it (flat ones too) and which things' hulls do — a face crossed that belongs to no fading thing is a texture blocking the sight, classed as a post face (narrower than a body both ways: no hull by design), a face in no thing (under the street: never claimed; a low lid), or a face in a thing whose hull the line misses (the bug); and a hull crossed with no face on the line is a fade with nothing in the way (the approach fades). The camera is the classic one: 13 u behind the player away from the enemy, 2 u to the side, 6.8 u over the root (the sweep assumed 5 m up until 2026-10-22, and its earlier numbers were for that camera). Dust, 1,021 lines crossed by a face: 133 show a texture that fades nothing (70 posts, 37 low or under-street faces too short to be things, 26 lids of low boxes); fades with nothing in the way 0 — the hull is the thing's own faces now. A floor is every surface of the arena but a thing's lid — the generator marks a lid (`lid: 1`, a crate's or container's top); a plateau's level floor is a 'flat' surface like a lid, so the type alone is no guide — and the sim's materialised surfaces keep type and lid for this. `fade_view.cjs <client/dist> <mapKey> xM zM cxM czM <out.png> [yawDeg]` is the game's own classic view at a spot with the player put there, with what lies on the camera's line to the chest and which things fade. `load_rounds.cjs <client/dist> <mapKey> [rounds]` starts that many matches in a row and prints, per round, the arena's build time and what the renderer still holds (geometries, textures, programs) with the JS heap: a leak climbs round by round. Each match used to leave its ~750 part geometries on the GPU (the arena's group was removed, its children never disposed) and the map loads slowed over a session, user 2026-10-22; the fade's copies, parts and cloned materials are now the arena's own and go with it — Dust 747 → 751 over four rounds, Town 264 → 262 over three. Textures still climb by one to four a round (another, smaller leak, not this one). `fade_case.mjs <tree> <client/dist> <mapKey> cxM czM xM zM yawDeg group [hxM hzM hyM]` shows one case: the line, the first box it enters, the thing's hull and triangles around the entry (or around a given hit point); `fade_region.mjs <tree> <client/dist> <mapKey> cxM czM x0 x1 z0 z1` what the fade did with the model's triangles in a region, and the seed test's reading of those it left; `fade_empty.cjs <client/dist> <mapKey>` the things with no hull at all; `fade_floors.mjs <tree> <client/dist> <mapKey> cxM czM` the flat faces inside things that overlap a walked surface at their height — floor pieces that would fade with their thing, 0 on Dust; with `BESIDE=<units>` it also counts the pieces within that distance of a walked floor at its height — the ground in the strips along walls and in yards no body walks, taken in as floors when solid lies under them (127 pieces with air under them remain within 3 m: roofs beside floors); `f10_probe.cjs <client/dist> <mapKey> <out.png>` the PT keys F10 (the infinite boost switch: the gauge read while dashing with the switch off and on) and F8, with a screenshot. The tree is the checkout whose arena data the probe reads (the PT worktree).
 

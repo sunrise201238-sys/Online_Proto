@@ -631,6 +631,7 @@ const MAP_DATA = {
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
+  warehouse: { name: 'Warehouse' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the wreck cluster at the middle of an empty plain, 38 by 38 m.
   backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
@@ -9869,7 +9870,7 @@ function updateWallFade() {
     if (!blocking && groupBlocking && mesh.userData.fadeGroup) {
       blocking = groupBlocking.has(mesh.userData.fadeGroup);
     }
-    const target = blocking ? 0.25 : 1;
+    const target = blocking ? (mesh.userData.fadeAlpha ?? 0.25) : 1;   // (how far a blocking thing fades: a quarter, or the map's own number — Warehouse, crowded with containers, a tenth; user 2026-10-22)
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
     mesh.material.transparent = !!mesh.userData.fadeBox.ownTransparent || mesh.material.opacity < 0.995;   // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
     // Depth-toggled groups (Station's trains): write depth while solid
@@ -9895,6 +9896,7 @@ function registerWallFade(mesh, box) {
   mesh.material.transparent = true;
   mesh.userData.fadeBox = box;
   if (box.fadeGroup) mesh.userData.fadeGroup = box.fadeGroup;
+  if (box.fadeAlpha != null) mesh.userData.fadeAlpha = box.fadeAlpha;   // (`box.fadeAlpha` (optional): the opacity it fades to instead of a quarter)
   if (!state.wallFadeMeshes) state.wallFadeMeshes = [];
   state.wallFadeMeshes.push(mesh);
 }
@@ -10139,6 +10141,7 @@ const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
+  warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 20, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; a cluster of containers on open ground; the red edge confines the arena to the cluster. The fade by the model's own objects (fadeNodes): each container, machine and crate is one node of the model and fades whole, alone, when it hides the player's own character — not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10261,6 +10264,44 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const solidAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const o of e.boxes) if (x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && y >= o.minY && y <= o.maxY) return true; return false; };
   const floorAt = (x, z, below) => { const e = bucket.get(bkey(x, z)); let f = 0; if (e) for (const s of e.floors) { if (x < s.minX - COL || x > s.maxX + COL || z < s.minZ - COL || z > s.maxZ + COL) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(x, s.maxX)), Math.max(s.minZ, Math.min(z, s.maxZ))) : s.top; if (h <= below && h > f) f = h; } return f; };   /* (heightAt: the arena's surfaces as materialised — a lid's top was lost on the way and read as no floor) */
   const tallHere = (cx, cy, cz, flat) => flat ? !solidAt(cx, cy - hideY, cz) && cy - floorAt(cx, cz, cy - hideY) >= tallY : cy - floorAt(cx, cz, cy + 2) >= tallY;
+  // BY NODE (`fadeNodes`): a thing is one of the model's own objects — a node under the scene's root with everything under
+  // it: a container, a machine, a crate — where the model is built that way (Warehouse: 33 objects, each one piece of
+  // the yard). The cells' things served a map that is one mesh; here they joined every object that touched the next into
+  // one thing the size of the yard, or, seeded by the faces' centres, cut one container into islands that faded apart
+  // (user 2026-10-22). An object is a thing when it stands `fadeTall` over the floor at its foot; every face of it is its
+  // hull (an object narrower than a body both ways — a post — has none and never fades); it fades whole, alone.
+  if (cfg.fadeNodes) {
+    // (an object: the highest ancestor of the mesh that has siblings — the scene's root is wrapped in a chain of single-child
+    // nodes (Sketchfab_model, root, the scene root node), and the objects are the children of the first node that branches)
+    const objOf = (o) => { let obj = o; for (let n = o; n && n !== inst; n = n.parent) if (n.parent && n.parent.children.length > 1) obj = n; return obj; };
+    const objs = new Map(); for (const mesh of meshes) { const o = objOf(mesh); let e = objs.get(o); if (!e) { e = { meshes: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; objs.set(o, e); } e.meshes.push(mesh); }
+    for (const e of objs.values()) for (const mesh of e.meshes) { const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); for (let i = 0; i < idx.length; i += 1) { w[0].fromBufferAttribute(pos, idx[i]).applyMatrix4(mesh.matrixWorld); if (w[0].x < e.minX) e.minX = w[0].x; if (w[0].x > e.maxX) e.maxX = w[0].x; if (w[0].y < e.minY) e.minY = w[0].y; if (w[0].y > e.maxY) e.maxY = w[0].y; if (w[0].z < e.minZ) e.minZ = w[0].z; if (w[0].z > e.maxZ) e.maxZ = w[0].z; } }
+    let n = 0;
+    for (const [o, e] of objs) {
+      const cx = (e.minX + e.maxX) / 2, cz = (e.minZ + e.maxZ) / 2;
+      if (e.maxY - floorAt(cx, cz, e.minY + 0.5) < tallY) continue;   // (its top under `fadeTall` over the floor at its foot — a surface no higher than its bottom, give or take: half a metre up took a generator's own skid and a crate stack's own ledge for the floor, and both fell short)
+      const hull = e.maxX - e.minX >= 2.3 || e.maxZ - e.minZ >= 2.3; const group = `glb-node-${n += 1}`;
+      for (const mesh of e.meshes) {
+        const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); const indices = []; const rest = []; const parts = []; const bb = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+        for (let t = 0; t + 2 < idx.length; t += 3) {
+          for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
+          if ((w[0].y + w[1].y + w[2].y) / 3 < 0.4) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }   // (a face at the street: the object's underside)
+          indices.push(idx[t], idx[t + 1], idx[t + 2]); if (!hull) continue;
+          const f = { minX: Math.min(w[0].x, w[1].x, w[2].x), maxX: Math.max(w[0].x, w[1].x, w[2].x), minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: Math.min(w[0].z, w[1].z, w[2].z), maxZ: Math.max(w[0].z, w[1].z, w[2].z), tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z] };
+          parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ;
+        }
+        if (!indices.length) continue;
+        const mat = mesh.material.clone(); fadeOwned.push(mat);
+        const m = new THREE.Mesh(part(geo, indices), mat);
+        m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
+        m.userData.fadeDepthToggle = true;
+        mesh.parent.add(m); m.updateMatrixWorld(true);
+        registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: group, fadeAlpha: cfg.fadeAlpha });
+        mesh.geometry = part(geo, rest);
+      }
+    }
+    return;
+  }
   const facing = () => {   // (the triangle's normal's weight along x and along z, scaled by its area: which way a face faces)
     const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z;
     return [Math.abs(ay * bz - az * by) / 2, Math.abs(ax * by - ay * bx) / 2];
@@ -10283,6 +10324,9 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const onFloor = (x0, x1, z0, z1, cx, cy, cz) => { let solidUnder = null; for (let bx = Math.floor((x0 - 12) / 16); bx <= Math.floor((x1 + 12) / 16); bx += 1) for (let bz = Math.floor((z0 - 12) / 16); bz <= Math.floor((z1 + 12) / 16); bz += 1) { const e = bucket.get(`${bx},${bz}`); if (!e) continue; for (const s of e.floors) { if (s.lid || x1 < s.minX - 12 || x0 > s.maxX + 12 || z1 < s.minZ - 12 || z0 > s.maxZ + 12) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(cx, s.maxX)), Math.max(s.minZ, Math.min(cz, s.maxZ))) : s.top;
     if (x1 >= s.minX - 4 && x0 <= s.maxX + 4 && z1 >= s.minZ - 4 && z0 <= s.maxZ + 4 && Math.abs(h - cy) <= 2) return true;   // (on a walked floor, a metre wide)
     if (h >= cy - 2) { if (solidUnder == null) solidUnder = !tallHere(cx, cy, cz, true); if (solidUnder) return true; } } } return false; };   // (ground with solid under it, at or below a walked floor within three metres: a fenced yard, the ground under an awning)
+  // (a face seeds the cell under its centre. Seeding every cell under its footprint was tried for the Warehouse's containers,
+  // user 2026-10-22 — one 6 m side seeds one cell, so a container's cells fell into islands that faded apart — and it joined
+  // Town's whole background into one thing 300 m across; the Warehouse fades by the model's objects instead, `fadeNodes`.)
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
     for (let t = 0; t + 2 < idx.length; t += 3) {
@@ -10324,6 +10368,13 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   }
   if (!boxes.length) return;
   // 2. the split: each thing's triangles out of each source mesh, the claimed faces as its hull
+  // (the split in two passes: first every mesh's triangles are claimed and the thing's faces gathered by cell, then the hull
+  // is chosen — a face narrower than a body both ways is a post's only where the thing's faces in its cell are narrow too
+  // (`span`): a container's side is modelled in corrugation strips, a machine in thousands of small faces, and by the face
+  // alone none of them was a hull — the thing faded only when the line crossed its lid, user 2026-10-22 "some objects and some
+  // containers are not going transparent")
+  const span = new Map(); const spanKey = (b, cx, cz) => `${b}:${Math.floor(cx / COL)},${Math.floor(cz / COL)}`;
+  const claimed = [];
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh);
     const pos = geo.attributes.position; const idx = indexOf(geo);
@@ -10358,11 +10409,16 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       // the face too, and the thing faded with nothing in the way; a wall's end piece went out as a post, a lid's piece was
       // cut away, and a wall stayed black over the whole view — user 2026-10-22, twice in a day. A post's face — narrower
       // than a body both ways — hides nothing and is no hull: a 10 m post among 2.7 m crates faded the stack whenever the
-      // line grazed it. The face keeps its box for the quick slab test before the exact one.)
-      if (fx1 - fx0 < 2.3 && fz1 - fz0 < 2.3) continue;
-      faces[b].push({ minX: fx0, maxX: fx1, minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: fz0, maxZ: fz1, tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z] });
+      // line grazed it — unless the thing's faces in the face's cell reach a body's width together (`span`, the second pass):
+      // then it is a strip of a wall, a plate of a machine. The face keeps its box for the quick slab test before the exact one.)
+      const k = spanKey(b, cx, cz); const s = span.get(k); if (!s) span.set(k, { x0: fx0, x1: fx1, z0: fz0, z1: fz1 }); else { if (fx0 < s.x0) s.x0 = fx0; if (fx1 > s.x1) s.x1 = fx1; if (fz0 < s.z0) s.z0 = fz0; if (fz1 > s.z1) s.z1 = fz1; }
+      faces[b].push({ minX: fx0, maxX: fx1, minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: fz0, maxZ: fz1, tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z], narrow: fx1 - fx0 < 2.3 && fz1 - fz0 < 2.3, cell: k });
     }
     if (inBox.every((a) => a.length === 0)) continue;
+    claimed.push({ mesh, geo, inBox, rest, faces });
+  }
+  const wide = (k) => { const s = span.get(k); return !!s && (s.x1 - s.x0 >= 2.3 || s.z1 - s.z0 >= 2.3); };
+  for (const { mesh, geo, inBox, rest, faces } of claimed) {
     inBox.forEach((indices, i) => {
       if (!indices.length) return;
       const mat = mesh.material.clone(); fadeOwned.push(mat);
@@ -10370,9 +10426,9 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
-      const parts = faces[i];   // (a thing of posts alone has no hull and never fades)
-      const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
-      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
+      const parts = []; const bb = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+      for (const f of faces[i]) { if (f.narrow && !wide(f.cell)) continue; delete f.narrow; delete f.cell; parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ; }   // (a thing of posts alone has no hull and never fades)
+      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group, fadeAlpha: cfg.fadeAlpha });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms; fadeAlpha: how far it fades, the map's own number or the usual quarter)
     });
     mesh.geometry = part(geo, rest);
   }

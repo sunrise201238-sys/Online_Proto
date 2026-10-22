@@ -548,6 +548,8 @@ export const MAP_DATA = {
   spacecraft: { id: 'spacecraft', name: 'Spacecraft' },
   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   dust: { id: 'dust', name: 'Dust' },
+  // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the wreck cluster at the middle of an empty plain, 38 by 38 m.
+  warehouse: { id: 'warehouse', name: 'Warehouse' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms: { id: 'backrooms', name: 'Backrooms' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules.
