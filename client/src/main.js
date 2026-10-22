@@ -10263,10 +10263,12 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz);
   };
   // (a floor is a walked surface of the arena — the generator's planes: the street, a plateau, a hillside, a ramp, a low
-  // top stepped onto — read within a quarter of a metre of the face; a thing's lid is a 'flat' surface, a crate's top too
-  // high to walk onto, and a roof over nothing is no surface at all. A floor never joins a thing: the ground beside a
-  // wall faded with the wall, user 2026-10-22, "floor needs no transparent effect")
-  const walkedAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const s of e.floors) { if (s.type === 'flat' || x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue; const h = s.heightAt ? s.heightAt(x, z) : s.top; if (Math.abs(h - y) <= 1) return true; } return false; };
+  // top stepped onto; a thing's lid is a 'flat' surface, a crate's top too high to walk onto, and a roof over nothing is
+  // no surface at all. A face is a floor piece when its footprint overlaps a walked surface within half a metre of its
+  // height — overlaps, not at its centre: the floors are rectangles with gaps under the things, and a ground piece whose
+  // centre fell in a gap joined the wall's thing and faded with it, 353 pieces on Dust. A floor never joins a thing:
+  // the ground beside a wall faded with the wall, user 2026-10-22, "floor needs no transparent effect")
+  const onFloor = (x0, x1, z0, z1, cx, cy, cz) => { for (let bx = Math.floor(x0 / 16); bx <= Math.floor(x1 / 16); bx += 1) for (let bz = Math.floor(z0 / 16); bz <= Math.floor(z1 / 16); bz += 1) { const e = bucket.get(`${bx},${bz}`); if (!e) continue; for (const s of e.floors) { if (s.type === 'flat' || x1 < s.minX || x0 > s.maxX || z1 < s.minZ || z0 > s.maxZ) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(cx, s.maxX)), Math.max(s.minZ, Math.min(cz, s.maxZ))) : s.top; if (Math.abs(h - cy) <= 2) return true; } } return false; };
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo);
     for (let t = 0; t + 2 < idx.length; t += 3) {
@@ -10329,7 +10331,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       // 3 m of the wall. It used to join only with a body's height of air under it, a roof over a room: the crates' lids stayed
       // solid over the player hidden behind them, and the thing faded around a plank of wood, user 2026-10-22. A steep face
       // looks one cell around, as before. A floor — a flat face on a walked surface of the arena — never joins.)
-      if (cy >= 0.4 && !(flatFace && walkedAt(cx, cy, cz))) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
+      if (cy >= 0.4 && !(flatFace && onFloor(fx0, fx1, fz0, fz1, cx, cy, cz))) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
         if (own != null && (!want || boxes[own].axis === want)) b = own;
         else { const reach = flatFace ? 2 : 1, grow = 2 * COL;
           for (let r = 1; r <= reach && b < 0; r += 1) for (let dx = -r; dx <= r && b < 0; dx += 1) for (let dz = -r; dz <= r; dz += 1) { if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; const o = owner.get(cellKey(ix + dx, iz + dz)); if (o == null) continue; if (flatFace && !(fx0 >= boxes[o].minX - grow && fx1 <= boxes[o].maxX + grow && fz0 >= boxes[o].minZ - grow && fz1 <= boxes[o].maxZ + grow)) continue; if (alt < 0) alt = o; if (!want || boxes[o].axis === want) { b = o; break; } }

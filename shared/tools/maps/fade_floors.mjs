@@ -1,0 +1,23 @@
+// Floor pieces inside fade things: every flat face in a thing, tested against the arena's walked surfaces (the generator's
+// planes) — at its centre, and by overlap of its footprint at its height. What overlaps a walked floor is a floor piece
+// that fades with its thing (user 2026-10-22: "still seeing transparent floors").
+// usage: NODE_PATH=$(npm root -g) node fade_floors.mjs <tree> <client/dist> <mapKey> <cxM> <czM>
+import { createRequire } from 'node:module'; import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+const require = createRequire(import.meta.url); const { chromium } = require('playwright');
+const [tree, dir, mapKey, cxS, czS] = process.argv.slice(2); const CXM = Number(cxS), CZM = Number(czS);
+const arena = await import(path.resolve(tree, 'shared/src/sim/arena.js')); const surfaces = arena.getArenaSurfaces(mapKey).filter((s) => s.type !== 'flat');
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.wasm': 'application/octet-stream', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const root = path.resolve(dir); const server = http.createServer((req, res) => { const u = decodeURIComponent(req.url.split('?')[0]); const f = path.join(root, u === '/' ? 'index.html' : u); if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] ?? 'application/octet-stream' }); fs.createReadStream(f).pipe(res); });
+await new Promise((r) => server.listen(0, '127.0.0.1', r)); const port = server.address().port;
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--no-sandbox'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); await p.goto(`http://127.0.0.1:${port}/`); await sleep(2000);
+await p.evaluate((k) => { window.__gvgState.spectatorMode = false; return window.__startMatch({ mapKey: k, mode: '1v1', player: 'unit1', enemy: 'unit2' }); }, mapKey); await sleep(10000);
+const flats = await p.evaluate(() => { const T = window.__THREE; const w = [new T.Vector3(), new T.Vector3(), new T.Vector3()]; const out = []; for (const m of window.__gvgState.wallFadeMeshes ?? []) { const g = m.userData.fadeGroup; if (!g?.startsWith('glb-fade')) continue; const geo = m.geometry; const pos = geo.attributes.position; const idx = geo.index.array; for (let t = 0; t + 2 < idx.length; t += 3) { for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(m.matrixWorld); const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z; const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; const len = Math.hypot(nx, ny, nz); if (Math.abs(ny) < 0.7 * len) continue; out.push({ g, cx: (w[0].x + w[1].x + w[2].x) / 3, cy: (w[0].y + w[1].y + w[2].y) / 3, cz: (w[0].z + w[1].z + w[2].z) / 3, x0: Math.min(w[0].x, w[1].x, w[2].x), x1: Math.max(w[0].x, w[1].x, w[2].x), z0: Math.min(w[0].z, w[1].z, w[2].z), z1: Math.max(w[0].z, w[1].z, w[2].z), area: len / 2 }); } } return out; });
+await b.close(); server.close();
+const M = (u, c) => (u / 4 + c).toFixed(1);
+const hAt = (s, x, z) => s.heightAt(Math.max(s.minX, Math.min(x, s.maxX)), Math.max(s.minZ, Math.min(z, s.maxZ)));
+let atCentre = 0, byOverlap = 0, area = 0; const byG = new Map();
+for (const f of flats) { const c = surfaces.some((s) => f.cx >= s.minX && f.cx <= s.maxX && f.cz >= s.minZ && f.cz <= s.maxZ && Math.abs(hAt(s, f.cx, f.cz) - f.cy) <= 1); const o = surfaces.some((s) => f.x1 >= s.minX && f.x0 <= s.maxX && f.z1 >= s.minZ && f.z0 <= s.maxZ && Math.abs(hAt(s, f.cx, f.cz) - f.cy) <= 2); if (c) atCentre += 1; if (o) { byOverlap += 1; area += f.area; const e = byG.get(f.g) ?? { n: 0, eg: `(${M(f.cx, CXM)}, ${M(f.cz, CZM)}) y ${(f.cy / 4).toFixed(1)}` }; e.n += 1; byG.set(f.g, e); } }
+console.log(`flat faces in things ${flats.length}; on a walked floor at their centre ${atCentre}; overlapping a walked floor at their height ${byOverlap} (${(area / 16).toFixed(0)} m²), in ${byG.size} things`);
+for (const [g, e] of [...byG.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 8)) console.log(`  ${g}: ${e.n} floor pieces, e.g. ${e.eg}`);
