@@ -1,6 +1,6 @@
 """The PT site, defined as what it adds to a tree of the 0.8.9 line (2026-10-21, after the site's own patch sources were
 lost): the served models' extension .wasm (the artifact host serves no .glb) and the build tag; the infinite boost (the
-human's gauge refilled every tick in tickBoost — map testing; the offline bots run their own drain path, updateEnemy, and keep it); the collision view (F8 / __COLLISION_VIEW(): the arena as the sim holds it — boxes,
+human's gauge refilled every tick in tickBoost while the switch is on, F10 flips it — map testing; the offline bots run their own drain path, updateEnemy, and keep it); the collision view (F8 / __COLLISION_VIEW(): the arena as the sim holds it — boxes,
 floors, the bodies — the model hidden meanwhile); the map scale test (F7 / __MAP_SCALE(mPerUnit): a modelled map tried at
 another size, its model and its data scaled alike, the match restarted). Every replacement asserted once.
 usage: python3 -I pt_deltas.py <tree root> <tag>"""
@@ -18,12 +18,12 @@ edit('client/src/main.js', [
     ("const CLIENT_BUILD_TAG = 'b1023k';", f"const CLIENT_BUILD_TAG = '{tag}';"),
 ])
 # ---- the infinite boost: no fighter's boost drains (the dash in movement.js, the flight climb in tick.js)
-with open(os.path.join(root, 'shared/src/sim/constants.js'), 'a', encoding='utf-8') as f: f.write("\n// (PT site only, pt_deltas.py: no fighter's boost drains — the maps are tested on foot and in the air without the gauge)\nexport const INFINITE_BOOST = true;\n")
+with open(os.path.join(root, 'shared/src/sim/constants.js'), 'a', encoding='utf-8') as f: f.write("\n// (PT site only, pt_deltas.py: no fighter's boost drains — the maps are tested on foot and in the air without the gauge)\nexport const PT = { infiniteBoost: true };   // (a switch: F10 on the page flips it)\n")
 # (one rule, not a guard at each of the six costs — the dash, the flight climb, the air pop, the step, the jump, the sniper's
 # cancel: the gauge is refilled to its cap every tick in tickBoost, so whatever a tick spends is back before the next)
 edit('shared/src/sim/movement.js', [
-    ("// Boost gauge, momentum, jump physics, integration.", "import { INFINITE_BOOST } from './constants.js';   // (PT site: the boost never drains)\n// Boost gauge, momentum, jump physics, integration."),
-    ("  if (consume) {\n    fighter.boost = Math.max(0, fighter.boost - drain);\n", "  if (INFINITE_BOOST) fighter.boost = cap;   // (PT site: the gauge refilled every tick, whatever the tick spent)\n  else if (consume) {\n    fighter.boost = Math.max(0, fighter.boost - drain);\n"),
+    ("// Boost gauge, momentum, jump physics, integration.", "import { PT } from './constants.js';   // (PT site: the boost never drains while the switch is on)\n// Boost gauge, momentum, jump physics, integration."),
+    ("  if (consume) {\n    fighter.boost = Math.max(0, fighter.boost - drain);\n", "  if (PT.infiniteBoost) fighter.boost = cap;   // (PT site: the gauge refilled every tick, whatever the tick spent)\n  else if (consume) {\n    fighter.boost = Math.max(0, fighter.boost - drain);\n"),
 ])
 # ---- the map scale: the sim's arena scaled alike (boxes, floors, spawns, bounds), cached per scale
 edit('shared/src/sim/arena.js', [
@@ -76,11 +76,16 @@ function updateCollisionView() {
   // (two volumes on each body, as the sim has them: the hit capsule the rounds see — HIT_RADIUS_NORMAL 1.6 u round, HIT_HALF_HEIGHT
   // 1.6 u of straight side, 6.4 u tall in all, centred on hitCenter = the body 2.35 u up = the root — in yellow; and the window
   // the walls see — FIGHTER_RADIUS 1.15 u round, a box holds the body from 4 u under its centre to 2 u over it (boxHoldsAt) — in
-  // orange. The rebuilt view of 2026-10-21 drew one 2.45 u cylinder for the wall window, read wrong, and the user missed the
+  // pink (the orange of the tops hid it, 2026-10-22). The rebuilt view of 2026-10-21 drew one 2.45 u cylinder for the wall window, read wrong, and the user missed the
   // full-height body of the old view, 2026-10-22.)
-  for (const f of getAllFighters()) { let c = collisionView.bodies.get(f); if (!c) { const off = f.modelYOffset ?? 2.35; c = new THREE.Group(); const hit = new THREE.Mesh(new THREE.CapsuleGeometry(1.6, 3.2, 4, 12), new THREE.MeshBasicMaterial({ color: 0xf2e24a, wireframe: true, transparent: true, opacity: 0.9 })); hit.position.y = 2.35 - off; const wall = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xe0a040, wireframe: true, transparent: true, opacity: 0.7 })); wall.position.y = -off - 1; c.add(hit, wall); collisionView.bodies.set(f, c); collisionView.group.add(c); }
+  for (const f of getAllFighters()) { let c = collisionView.bodies.get(f); if (!c) { const off = f.modelYOffset ?? 2.35; c = new THREE.Group(); const hit = new THREE.Mesh(new THREE.CapsuleGeometry(1.6, 3.2, 4, 12), new THREE.MeshBasicMaterial({ color: 0xf2e24a, wireframe: true, transparent: true, opacity: 0.9 })); hit.position.y = 2.35 - off; const wall = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xff5fa8, wireframe: true, transparent: true, opacity: 0.8 })); wall.position.y = -off - 1; c.add(hit, wall); collisionView.bodies.set(f, c); collisionView.group.add(c); }
     c.position.copy(f.root.position); c.visible = !!f.root.visible; }
 }
+// INFINITE BOOST (PT site, pt_deltas.py; a key since 2026-10-22): F10 / __INFINITE_BOOST(on?) flips the sim's switch — on, the
+// gauge is refilled every tick (movement.js); off, it drains as in the game. A toast names the state. It starts on.
+let ptToastEl = null;
+function ptToast(text) { if (!ptToastEl) { ptToastEl = document.createElement('div'); ptToastEl.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(0,0,0,.75);color:#fff;font:15px monospace;padding:8px 14px;border-radius:6px;pointer-events:none;'; document.body.appendChild(ptToastEl); } ptToastEl.textContent = text; ptToastEl.style.display = ''; clearTimeout(ptToastEl._t); ptToastEl._t = setTimeout(() => { ptToastEl.style.display = 'none'; }, 1600); }
+function infiniteBoostToggle(on = !PT.infiniteBoost) { PT.infiniteBoost = !!on; ptToast(`infinite boost ${PT.infiniteBoost ? 'ON' : 'OFF'} (F10)`); return PT.infiniteBoost; }
 // MAP SCALE TEST (PT site, a dev hook, pt_deltas.py; rebuilt 2026-10-21): F7 shows a panel with the modelled map's scale —
 // metres per model unit = the map's modelM × mapScale.k — and the arena's size at it; − / + step it by 5 %, reset puts it
 // back; each restarts the match with the model and its data scaled alike (the sim's getArena). __MAP_SCALE(mPerUnit) from
@@ -97,13 +102,13 @@ function mapScalePanelToggle() {
 }
 """
 edit('client/src/main.js', [
-    ("import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';", "import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';\nimport { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';   // (PT site: the collision view's merged boxes)"),
+    ("import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';", "import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';\nimport { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';   // (PT site: the collision view's merged boxes)\nimport { PT } from '@gvg/shared/src/sim/constants.js';   // (PT site: the infinite boost switch)"),
     ("  getGeneratedObstacles\n} from '@gvg/shared/src/sim/index.js';", "  getGeneratedObstacles,\n  mapScale\n} from '@gvg/shared/src/sim/index.js';"),
     ("function buildGlbArena(mapKey) {", VIEW + "function buildGlbArena(mapKey) {"),
     ("  group.scale.setScalar(cfg.scale);\n  group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);",
      "  const ms = cfg.scale * mapScale.k;   // (the map scale test: the model scaled as its data is)\n  group.scale.setScalar(ms);\n  group.position.set(-cfg.cx * ms, -cfg.ground * ms, -cfg.cz * ms);"),
     ("function clearArenaDecor() {\n  state.wallFadeMeshes = [];", "function clearArenaDecor() {\n  collisionViewToggle(false);   // (the collision view belongs to the arena it drew)\n  state.wallFadeMeshes = [];"),
     ("    updateMechAnimations(dt, now);", "    updateCollisionView();\n    updateMechAnimations(dt, now);"),
-    ("  window.__modelCacheKeys = () => Object.keys(_modelCache);", "  window.__modelCacheKeys = () => Object.keys(_modelCache);\n  // PT site (pt_deltas.py): the collision view and the map scale test, by key and from the console.\n  window.__COLLISION_VIEW = collisionViewToggle; window.__MAP_SCALE = setMapScale; window.__MAP_SCALE_PANEL = mapScalePanelToggle; window.__camera = camera;\n  window.addEventListener('keydown', (ev) => { if (ev.key === 'F8') { ev.preventDefault(); collisionViewToggle(); } else if (ev.key === 'F7') { ev.preventDefault(); mapScalePanelToggle(); } });"),
+    ("  window.__modelCacheKeys = () => Object.keys(_modelCache);", "  window.__modelCacheKeys = () => Object.keys(_modelCache);\n  // PT site (pt_deltas.py): the collision view and the map scale test, by key and from the console.\n  window.__COLLISION_VIEW = collisionViewToggle; window.__MAP_SCALE = setMapScale; window.__MAP_SCALE_PANEL = mapScalePanelToggle; window.__camera = camera; window.__INFINITE_BOOST = infiniteBoostToggle; window.__PT = PT;\n  window.addEventListener('keydown', (ev) => { if (ev.key === 'F8') { ev.preventDefault(); collisionViewToggle(); } else if (ev.key === 'F7') { ev.preventDefault(); mapScalePanelToggle(); } else if (ev.key === 'F10') { ev.preventDefault(); infiniteBoostToggle(); } });"),
 ])
 print('PT deltas applied:', tag)

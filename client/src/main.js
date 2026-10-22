@@ -9773,6 +9773,20 @@ const SURFACE_STEP_HEIGHT = SIM_SURFACE_STEP_HEIGHT;   // (the shared constant: 
 // map builders) ease to translucent when the camera gets close, so backing
 // into a wall or hugging the plateau edge doesn't fill the screen with a
 // solid face. Render-only; collision is untouched.
+// A segment against one face of a modelled map's thing (Möller–Trumbore, the segment's own span): the fade's hull is the
+// thing's faces themselves, tested after the face's box.
+function segmentHitsFace(a, b, f) {
+  const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  const e1x = f[3] - f[0], e1y = f[4] - f[1], e1z = f[5] - f[2], e2x = f[6] - f[0], e2y = f[7] - f[1], e2z = f[8] - f[2];
+  const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+  const det = e1x * px + e1y * py + e1z * pz; if (Math.abs(det) < 1e-9) return false;
+  const inv = 1 / det; const tx = a.x - f[0], ty = a.y - f[1], tz = a.z - f[2];
+  const u = (tx * px + ty * py + tz * pz) * inv; if (u < 0 || u > 1) return false;
+  const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+  const v = (dx * qx + dy * qy + dz * qz) * inv; if (v < 0 || u + v > 1) return false;
+  const t = (e2x * qx + e2y * qy + e2z * qz) * inv; return t >= 0 && t <= 1;
+}
+
 function updateWallFade() {
   const list = state.wallFadeMeshes;
   if (!list || list.length === 0) return;
@@ -9795,7 +9809,7 @@ function updateWallFade() {
         const target = { x: root.position.x, y: root.position.y + 1.6, z: root.position.z };
         if (b.parts && !segmentHitsObstacle(camera.position, target, b)) return false;   // (the parts lie within the box: a line that misses the box misses them all — a modelled map's thing has hundreds of hull columns)
         for (const part of boxes) {
-          if (segmentHitsObstacle(camera.position, target, part)) return true;
+          if (segmentHitsObstacle(camera.position, target, part) && (!part.tri || segmentHitsFace(camera.position, target, part.tri))) return true;   // (a modelled map's part is one face of the thing: its box first, then the face itself)
         }
         return false;
       };
@@ -10203,9 +10217,9 @@ function buildGlbArena(mapKey) {
 // triangles are split off into a mesh of their own per source mesh (the attribute buffers shared, its own index and
 // a cloned material: the model shares materials between unrelated pieces), registered to fade as one structure;
 // the rest of the model, the floor under it included, stays as it is. The occlusion test runs against the piece's
-// own hull (`parts`: metre columns, each the y span of the triangles over it), read off the triangles themselves:
-// a Box3 of the piece would be the whole source mesh's box, as the position buffer is shared and three's bounding
-// box ignores the index — so the engines faded all the time. The nodes in `neverFade` are no things that stand between
+// own hull (`parts`: its faces, each with its box), read off the triangles themselves: a Box3 of the piece would
+// be the whole source mesh's box, as the position buffer is shared and three's bounding box ignores the index — so
+// the engines faded all the time. The nodes in `neverFade` are no things that stand between
 // the camera and a unit and are left as they are: a ground (a desert map's valley floor and its mountains, kept far out
 // so the ground did not end in sky — read as things, their big sparse triangles seeded thousands of pieces beyond the
 // edge, 3200 meshes, 13,000 draw calls and 100,000 hull tests a frame, and the map lagged; user 2026-10-19), a ceiling
@@ -10214,7 +10228,7 @@ function buildGlbArena(mapKey) {
 // cells whose steep faces face the same way — and a wall crossed by the line from the camera to the unit fades whole (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
-  const COL = cfg.fadeCell ?? 4, PAD = 2, HCOL = 4;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing; the hull always by the metre)
+  const COL = cfg.fadeCell ?? 4, PAD = 2;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing)
   const still = cfg.neverFade ?? [];
   const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -10283,11 +10297,11 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     boxes.push({ minX: x0 * COL - PAD, maxX: (x1 + 1) * COL + PAD, minZ: z0 * COL - PAD, maxZ: (z1 + 1) * COL + PAD, minY: 0.4, axis, group: `glb-fade-${boxes.length}` });
   }
   if (!boxes.length) return;
-  // 2. the split: each thing's triangles out of each source mesh, with the hull columns
+  // 2. the split: each thing's triangles out of each source mesh, the claimed faces as its hull
   for (const mesh of meshes) {
     const geo = geoOf.get(mesh);
     const pos = geo.attributes.position; const idx = indexOf(geo);
-    const inBox = boxes.map(() => []); const rest = []; const cols = boxes.map(() => new Map());
+    const inBox = boxes.map(() => []); const rest = []; const faces = boxes.map(() => []);
     for (let t = 0; t + 2 < idx.length; t += 3) {
       for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
       const cx = (w[0].x + w[1].x + w[2].x) / 3, cy = (w[0].y + w[1].y + w[2].y) / 3, cz = (w[0].z + w[1].z + w[2].z) / 3;
@@ -10295,46 +10309,32 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       // it — a lid over a thing's sides — preferring, by wall, the wall the face faces along. A thing's box no longer claims
       // whatever lies within it: a slanted wall's box took the whole floor of the long path, user 2026-10-21)
       let b = -1, want = null;
-      if (byWall) { const [fx, fz] = facing(); want = fx > fz ? 'x' : fz > fx ? 'z' : null; }
       const flatFace = (() => { const ax = w[1].x - w[0].x, ay = w[1].y - w[0].y, az = w[1].z - w[0].z, bx = w[2].x - w[0].x, by = w[2].y - w[0].y, bz = w[2].z - w[0].z; const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; return Math.abs(ny) >= 0.7 * Math.hypot(nx, ny, nz); })();
-      // (a flat face joins a thing only as a roof — a body's height of air under it — and only through its own cell: a floor beside a wall, claimed through the wall's cell, gave the wall columns along the plateau's top)
-      if (cy >= 0.4 && !(flatFace && !tallHere(cx, cy, cz, true))) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
+      if (byWall && !flatFace) { const [fx, fz] = facing(); want = fx > fz ? 'x' : fz > fx ? 'z' : null; }
+      const fx0 = Math.min(w[0].x, w[1].x, w[2].x), fx1 = Math.max(w[0].x, w[1].x, w[2].x), fz0 = Math.min(w[0].z, w[1].z, w[2].z), fz1 = Math.max(w[0].z, w[1].z, w[2].z);
+      // (a flat face joins the thing that owns its own cell — a crate's lid, a roof, the floor strip at a plateau's edge: whatever
+      // lies over a thing's cell hides what stands behind the thing when the camera looks down over it — or, as a lid, the nearest
+      // thing within two cells whose box, grown by two cells, holds its whole footprint: a low block's roof is wider than its
+      // walls' cells, and the camera, 3 m behind the player at the block's foot, looks down through the roof's piece within
+      // 3 m of the wall. It used to join only with a body's height of air under it, a roof over a room: the crates' lids stayed
+      // solid over the player hidden behind them, and the thing faded around a plank of wood, user 2026-10-22. A steep face
+      // looks one cell around, as before.)
+      if (cy >= 0.4) { const ix = Math.floor(cx / COL), iz = Math.floor(cz / COL); const own = owner.get(cellKey(ix, iz)); let alt = -1;
         if (own != null && (!want || boxes[own].axis === want)) b = own;
-        else if (!flatFace) { for (let dx = -1; dx <= 1 && b < 0; dx += 1) for (let dz = -1; dz <= 1; dz += 1) { if (!dx && !dz) continue; const o = owner.get(cellKey(ix + dx, iz + dz)); if (o == null) continue; if (alt < 0) alt = o; if (!want || boxes[o].axis === want) { b = o; break; } } if (b < 0) b = own != null ? own : alt; } }
+        else { const reach = flatFace ? 2 : 1, grow = 2 * COL;
+          for (let r = 1; r <= reach && b < 0; r += 1) for (let dx = -r; dx <= r && b < 0; dx += 1) for (let dz = -r; dz <= r; dz += 1) { if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; const o = owner.get(cellKey(ix + dx, iz + dz)); if (o == null) continue; if (flatFace && !(fx0 >= boxes[o].minX - grow && fx1 <= boxes[o].maxX + grow && fz0 >= boxes[o].minZ - grow && fz1 <= boxes[o].maxZ + grow)) continue; if (alt < 0) alt = o; if (!want || boxes[o].axis === want) { b = o; break; } }
+          if (b < 0) b = own != null ? own : alt; } }
       if (b < 0) { rest.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
-      // (the hull: every metre column under the triangle's footprint, within the thing's box, takes the triangle's box within
-      // that cell — the box, not the cell: a 0.2 m wall read as metre columns faded whenever the camera came within a metre of
-      // it, as the line began inside the column (user 2026-10-19); within a cell of the thing's box: Town's hillsides, big
-      // sloped triangles claimed by the things at their centres, gave its things 300,000 columns over their whole footprints. A face
-      // with no height is a roof — a floor never seeds a thing — and gets a column a unit high at its own height: the line
-      // through it from above fades it, a body in a pit below does not — its part used to sit at the street's height.)
-      const ym0 = Math.min(w[0].y, w[1].y, w[2].y), ym1 = Math.max(w[0].y, w[1].y, w[2].y); const y0 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 - 0.5 : ym0, y1 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 + 0.5 : ym1;
-      // (a post's face — narrower than a body both ways, the face itself and not its piece in a metre cell — hides nothing and
-      // makes no column: a 10 m post among 2.7 m crates faded the stack whenever the line grazed it. The pieces were judged
-      // once, and a wall's end piece, cut to half a metre by the thing's box, went out with the posts: the wall's last metre
-      // had no hull, and the camera's line through it faded nothing — user 2026-10-22, a wall black over the whole view.)
-      const fx0 = Math.min(w[0].x, w[1].x, w[2].x), fx1 = Math.max(w[0].x, w[1].x, w[2].x), fz0 = Math.min(w[0].z, w[1].z, w[2].z), fz1 = Math.max(w[0].z, w[1].z, w[2].z);
+      // (the hull is the thing's own faces: a line from the camera to a body fades the thing when it crosses one of them —
+      // what blocks the sight is what fades, no more. The hull used to be metre columns, each the box of a face's piece in a
+      // metre cell, merged when tight, cut to the thing's box: a slanted wall's or a sloped roof's column held the air around
+      // the face too, and the thing faded with nothing in the way; a wall's end piece went out as a post, a lid's piece was
+      // cut away, and a wall stayed black over the whole view — user 2026-10-22, twice in a day. A post's face — narrower
+      // than a body both ways — hides nothing and is no hull: a 10 m post among 2.7 m crates faded the stack whenever the
+      // line grazed it. The face keeps its box for the quick slab test before the exact one.)
       if (fx1 - fx0 < 2.3 && fz1 - fz0 < 2.3) continue;
-      // (the columns reach as far as the claim does — a cell beyond the thing's box: a face claimed through a neighbour cell,
-      // its own cell no thing, lay 3 cm outside the box, was cut away whole and left the wall with no hull there)
-      const bx = boxes[b];
-      const tx0 = Math.max(bx.minX - COL, fx0), tx1 = Math.min(bx.maxX + COL, fx1), tz0 = Math.max(bx.minZ - COL, fz0), tz1 = Math.min(bx.maxZ + COL, fz1);
-      if (tx0 > tx1 || tz0 > tz1) continue;
-      // (the hull by the metre, and in a metre as many columns as faces stand apart there — a crate against a wall had the
-      // wall's column over it, 2 m across and 16 m tall, and the wall faded whenever the body passed over the crate's cell;
-      // a face joins the column it overlaps, else a column of its own, at most four in a metre)
-      for (let ix = Math.floor(tx0 / HCOL); ix <= Math.floor(tx1 / HCOL); ix += 1) for (let iz = Math.floor(tz0 / HCOL); iz <= Math.floor(tz1 / HCOL); iz += 1) {
-        const x0 = Math.max(ix * HCOL, tx0), x1 = Math.min((ix + 1) * HCOL, tx1), z0 = Math.max(iz * HCOL, tz0), z1 = Math.min((iz + 1) * HCOL, tz1);
-        const key = `${ix},${iz}`; let list = cols[b].get(key); if (!list) { list = []; cols[b].set(key, list); }
-        // (a face joins the column it keeps tight — the box around both grows by no more than half their own volumes; a 10 m post
-        // among 2.7 m crates made one column 10 m tall over the crates, and the thing faded whenever the line passed over them)
-        const vol = (a, b_, c_, d, e, f) => Math.max(b_ - a, 0.1) * Math.max(d - c_, 0.1) * Math.max(f - e, 0.1); const vf = vol(x0, x1, z0, z1, y0, y1);
-        let c = null, best = Infinity; for (const q of list) { const g = vol(Math.min(q.minX, x0), Math.max(q.maxX, x1), Math.min(q.minZ, z0), Math.max(q.maxZ, z1), Math.min(q.minY, y0), Math.max(q.maxY, y1)) - vol(q.minX, q.maxX, q.minZ, q.maxZ, q.minY, q.maxY) - vf; if (g < best) { best = g; c = q; } }
-        if (c && list.length < 4 && best > 0.5 * (vol(c.minX, c.maxX, c.minZ, c.maxZ, c.minY, c.maxY) + vf)) c = null;
-        if (!c) list.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1 });
-        else { if (x0 < c.minX) c.minX = x0; if (x1 > c.maxX) c.maxX = x1; if (z0 < c.minZ) c.minZ = z0; if (z1 > c.maxZ) c.maxZ = z1; if (y0 < c.minY) c.minY = y0; if (y1 > c.maxY) c.maxY = y1; }
-      }
+      faces[b].push({ minX: fx0, maxX: fx1, minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: fz0, maxZ: fz1, tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z] });
     }
     if (inBox.every((a) => a.length === 0)) continue;
     inBox.forEach((indices, i) => {
@@ -10343,7 +10343,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
-      const parts = [...cols[i].values()].flat();   // (a thing of posts alone has no hull and never fades)
+      const parts = faces[i];   // (a thing of posts alone has no hull and never fades)
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
       registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
     });
