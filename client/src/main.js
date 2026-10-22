@@ -9767,6 +9767,11 @@ function applyMomentum(mech, { suspend = false } = {}) {
 
 
 const arenaSurfaces = [];
+// (what splitFadeParts makes for one arena — its copies of the model's geometry, the parts cut from them, the cloned
+// materials — disposed with the arena. The model's own geometry and materials are the cache's, shared by every instance,
+// and stay: without this, each match left its ~750 part geometries on the GPU, and the map loads slowed round by round,
+// user 2026-10-22.)
+const fadeOwned = [];
 const SURFACE_STEP_HEIGHT = SIM_SURFACE_STEP_HEIGHT;   // (the shared constant: the step a body takes onto a higher floor)
 
 // Camera-proximity wall fade: registered walls (state.wallFadeMeshes, set by
@@ -9900,6 +9905,7 @@ let offlineNavGrid = null;
 
 function clearArenaDecor() {
   state.wallFadeMeshes = [];
+  for (const o of fadeOwned) o.dispose(); fadeOwned.length = 0;   // (the fade's own geometry and materials of the arena going)
   offlineNavGrid = null;
   while (arenaDecor.length) {
     const obj = arenaDecor.pop();
@@ -10232,9 +10238,11 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const still = cfg.neverFade ?? [];
   const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-  const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); return g; };
-  const geoOf = new Map(); for (const mesh of meshes) geoOf.set(mesh, mesh.geometry.index ? mesh.geometry : mesh.geometry.toNonIndexed());
-  if (cfg.fadeWalls) for (const mesh of meshes) geoOf.set(mesh, splitLong(geoOf.get(mesh), mesh.matrixWorld, 2 * COL));   // (indoors: the long faces in pieces no longer than two cells, so a wall seeds every cell along it)
+  const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); fadeOwned.push(g); return g; };
+  // (every mesh's geometry copied for this arena — split into pieces indoors (fadeWalls: the long faces in pieces no longer
+  // than two cells, so a wall seeds every cell along it), cloned otherwise — so that the parts share this arena's buffers,
+  // never the cache's, and all of it can go with the arena)
+  const geoOf = new Map(); for (const mesh of meshes) { const g = cfg.fadeWalls ? splitLong(mesh.geometry, mesh.matrixWorld, 2 * COL) : mesh.geometry.index ? mesh.geometry.clone() : mesh.geometry.toNonIndexed(); fadeOwned.push(g); geoOf.set(mesh, g); }
   const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
   // 1. the seed cells, joined into things: the fade boxes. Indoors (`fadeWalls`) a thing is a straight wall: the run of
   // touching seed cells whose steep faces face the same way (x or z), so a T-junction's two walls are two things while
@@ -10357,7 +10365,8 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     if (inBox.every((a) => a.length === 0)) continue;
     inBox.forEach((indices, i) => {
       if (!indices.length) return;
-      const m = new THREE.Mesh(part(geo, indices), mesh.material.clone());
+      const mat = mesh.material.clone(); fadeOwned.push(mat);
+      const m = new THREE.Mesh(part(geo, indices), mat);
       m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
