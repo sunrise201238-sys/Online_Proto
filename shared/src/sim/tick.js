@@ -7,6 +7,7 @@
 import {
   BOOST_MOVE_SPEED,
   WALK_SPEED,
+  LAND_PLANT_MS,
   SPRINT_LOCK_RELEASE_GRACE_MS,
   STEP_DISTANCE,
   STEP_DURATION_MS,
@@ -114,6 +115,12 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   }
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
+  // The landing plant (constants.js LAND_PLANT_MS): the body just landed on a thing's lid at another level than the floor
+  // it left (integrateVertical raised the flag and dropped its momentum) — it is held where it landed, the stick it still
+  // holds ignored, until the stick is let go or the plant times out. Mirrored in the client's updatePlayer.
+  if (fighter.landedOnLid) { fighter.landedOnLid = false; fighter.plantUntil = now + LAND_PLANT_MS; }
+  if (!hasDirInput) fighter.plantUntil = 0;
+  const planted = now < fighter.plantUntil;
   let sprintLocked = input.sprintLocked;
   // Sprint-lock release grace (2026-08-01, mirrors the client rule): a stick
   // flip crosses the neutral deadzone for a few frames — only a SUSTAINED
@@ -126,7 +133,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(fighter.unit?.flight && fighter.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
-  const boostActive = input.boost || sprintLocked;
+  const boostActive = !planted && (input.boost || sprintLocked);   // (no dash out of a plant)
 
   const recoveringFromDash = now < fighter.dashRecoverUntil;
   const hasBoost = fighter.boost > 0;
@@ -154,8 +161,8 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
 
   const inStep = now <= fighter.stepUntil;
   if (!inStep) {
-    fighter.vel.x = canInputMove ? input.moveX * speed * hitStunScale : 0;
-    fighter.vel.z = canInputMove ? input.moveZ * speed * hitStunScale : 0;
+    fighter.vel.x = canInputMove && !planted ? input.moveX * speed * hitStunScale : 0;
+    fighter.vel.z = canInputMove && !planted ? input.moveZ * speed * hitStunScale : 0;
   }
 
   let action = 'idle';

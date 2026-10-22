@@ -391,6 +391,20 @@ export function groundHeightAt(x, z, surfaces, currentSurfaceY = 0) {
   }
   return best === -Infinity ? 0 : best;
 }
+// The surface groundHeightAt stands a body on, or null on the street: the landing plant (movement.js) asks whether a
+// landing is on a thing's lid. The same scan; the surface instead of its height.
+export function groundSurfaceAt(x, z, surfaces, currentSurfaceY = 0) {
+  let best = -Infinity, found = null;
+  const near = obstaclesNearPoint(surfaces, x, z, 0, _gndScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const s = near[i];
+    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+    const h = s.heightAt(x, z);
+    if (h > currentSurfaceY + SURFACE_STEP_HEIGHT) continue;
+    if (h > best) { best = h; found = s; }
+  }
+  return found;
+}
 
 // Where a body WALKING from (x0, z0), its feet on floor0, to (x1, z1) stands when it gets there: the step rule
 // above, applied every WALK_SAMPLE along the way as movement applies it every tick — so a rise a body climbs step

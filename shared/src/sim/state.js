@@ -66,6 +66,11 @@ export function createFighter(id, unitKey, spawn) {
     airborne: false,
     jumpVelocity: 0,
     hoverUntil: 0,
+    // The landing plant (constants.js LAND_PLANT_MS): the floor the body last stood on (units, feet), whether its last
+    // landing was on a thing's lid at another level (read and cleared by the input), and until when the plant holds.
+    floorY: 0,
+    landedOnLid: false,
+    plantUntil: 0,
 
     // Dash.
     dashRecoverUntil: 0,

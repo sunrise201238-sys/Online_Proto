@@ -585,6 +585,15 @@ export const STEP_HOMING_CUT_MS = 260;
 // Jump tunables.
 export const JUMP_BOOST_COST = STEP_BOOST_COST;
 export const JUMP_INITIAL_VELOCITY = 30;
+// THE LANDING PLANT (user 2026-10-22, "make the containers standable"): a body that lands on a thing's lid — a crate's,
+// a container's, a roof (the generator marks them `lid`) — at another level than the floor it left, up onto it or down
+// onto it from a taller thing, is planted there: its momentum dropped, the stick it still holds ignored, until the stick
+// is let go or LAND_PLANT_MS pass. A sprint-jump from a 3.2 m crate onto a container's 2.4 m roof crossed it in a third
+// of a second and fell off the far side while the player still held the stick (the user's clip, Warehouse). A landing on
+// the street, on a plateau, or a hop along the same roof (the level unchanged within LAND_PLANT_LEVEL) plants nothing:
+// the ground game is as it was.
+export const LAND_PLANT_MS = 600;
+export const LAND_PLANT_LEVEL = 0.4;   // (units: a tenth of a metre — the level counts as changed beyond this)
 export const JUMP_HOVER_MS = 300;
 export const JUMP_COOLDOWN_MS = 1500;
 

@@ -37,6 +37,8 @@ import {
   obstaclesNearPoint,
   getArenaSpawns,
   pickRespawnSpawn,
+  LAND_PLANT_MS,
+  LAND_PLANT_LEVEL,
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles
@@ -4556,6 +4558,12 @@ function updatePlayer(now) {
   const stepState = state.player.state;
   const inStep = now <= stepState.stepUntil;
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
+  // The landing plant (shared constants.js LAND_PLANT_MS; mirrors the sim's applyInput): the body just landed on a thing's
+  // lid at another level than the floor it left (updateTransforms raised the flag and dropped its momentum) — it is held
+  // where it landed, the stick it still holds ignored, until the stick is let go or the plant times out.
+  if (stepState.landedOnLid) { stepState.landedOnLid = false; stepState.plantUntil = now + LAND_PLANT_MS; }
+  if (!hasDirInput) stepState.plantUntil = 0;
+  const planted = now < stepState.plantUntil;
   // Sprint-lock release grace (2026-08-01): a joystick flip (left→right)
   // crosses the neutral deadzone for a few frames and used to read as the
   // let-go-to-stop gesture, killing the lock mid-flip. Only a SUSTAINED
@@ -4567,7 +4575,7 @@ function updatePlayer(now) {
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
-  input.boost = input.boostHeld || input.sprintLocked;
+  input.boost = !planted && (input.boostHeld || input.sprintLocked);   // (no dash out of a plant)
 
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -4600,8 +4608,8 @@ function updatePlayer(now) {
   const hitStunScale = hitStunned ? state.player.state.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
   if (!inStep) {
-    state.player.body.velocity.x = canInputMove ? move.x * speed * hitStunScale : 0;
-    state.player.body.velocity.z = canInputMove ? move.z * speed * hitStunScale : 0;
+    state.player.body.velocity.x = canInputMove && !planted ? move.x * speed * hitStunScale : 0;
+    state.player.body.velocity.z = canInputMove && !planted ? move.z * speed * hitStunScale : 0;
   }
 
   let action = 'idle';
@@ -5641,6 +5649,10 @@ function updateTransforms(dt) {
         m.body.velocity.y = 0;
         m.state.airborne = false;
         m.state.jumpVelocity = 0;
+        // The landing plant (mirrors integrateVertical in the shared sim): landed on a thing's lid at another level than
+        // the floor it left — the momentum is dropped and the input (updatePlayer) holds the body.
+        const lid = groundSurfaceAt(m.body.position.x, m.body.position.z, groundY - GROUND_BASE_Y);
+        if (lid?.lid && Math.abs(groundY - (m.state.floorY ?? groundY)) > LAND_PLANT_LEVEL) { m.state.landedOnLid = true; m.state.momentumVX = 0; m.state.momentumVZ = 0; }
       }
     } else if (m.body.position.y > groundY + 0.6) {
       m.state.airborne = true;
@@ -5649,6 +5661,7 @@ function updateTransforms(dt) {
       m.body.position.y = groundY;
       m.body.velocity.y = 0;
     }
+    if (!m.state.airborne) m.state.floorY = groundY;   // (the floor it stands on: what the next landing is measured against)
 
     m.body.linearFactor.set(1, 0, 1);
     m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
@@ -10032,6 +10045,19 @@ function groundHeightAt(x, z, currentSurfaceY = 0) {
     if (h > best) best = h;
   }
   return best === -Infinity ? 0 : best;
+}
+
+// (the surface groundHeightAt stands a body on, or null on the street — the landing plant asks whether it is a thing's
+// lid; mirrors the shared physics.js groundSurfaceAt)
+function groundSurfaceAt(x, z, currentSurfaceY = 0) {
+  let best = -Infinity, found = null;
+  for (const s of obstaclesNearPoint(arenaSurfaces, x, z, 0, _groundScratch)) {
+    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+    const h = s.heightAt(x, z);
+    if (h > currentSurfaceY + SURFACE_STEP_HEIGHT) continue;
+    if (h > best) { best = h; found = s; }
+  }
+  return found;
 }
 
 function getGroundLevelY(mech) {

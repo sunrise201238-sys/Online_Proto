@@ -14,9 +14,10 @@ import {
   REPULSION_RANGE,
   REPULSION_FORCE,
   REPULSION_DECAY_MS,
-  GROUND_BASE_Y
+  GROUND_BASE_Y,
+  LAND_PLANT_LEVEL
 } from './constants.js';
-import { getGroundLevelY } from './physics.js';
+import { getGroundLevelY, groundSurfaceAt } from './physics.js';
 import { vec3Length2D } from './math.js';
 
 // Boost regen / drain. Mirrors updateBoost. The action string drives whether
@@ -135,6 +136,11 @@ export function integrateVertical(fighter, surfaces, dt, ceil = Infinity) {
       fighter.vel.y = 0;
       fighter.airborne = false;
       fighter.jumpVelocity = 0;
+      // The landing plant (LAND_PLANT_MS): landed on a thing's lid — a crate's, a container's, a roof — at another level
+      // than the floor it left (up onto it, or down onto it from a taller thing; a hop along the same roof is no landing
+      // on anything new): the momentum is dropped here and the input (applyInput, the client's updatePlayer) holds the body.
+      const lid = groundSurfaceAt(fighter.pos.x, fighter.pos.z, surfaces, groundY - GROUND_BASE_Y);
+      if (lid?.lid && Math.abs(groundY - (fighter.floorY ?? groundY)) > LAND_PLANT_LEVEL) { fighter.landedOnLid = true; fighter.momentumVX = 0; fighter.momentumVZ = 0; }
     }
   } else if (fighter.pos.y > groundY + 0.6) {
     fighter.airborne = true;
@@ -143,6 +149,7 @@ export function integrateVertical(fighter, surfaces, dt, ceil = Infinity) {
     fighter.pos.y = groundY;
     fighter.vel.y = 0;
   }
+  if (!fighter.airborne) fighter.floorY = groundY;   // (the floor it stands on: what the next landing is measured against)
   fighter.grounded = !fighter.airborne;
 }
 
