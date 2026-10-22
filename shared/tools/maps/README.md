@@ -18,7 +18,7 @@ The generator reads a steep face over its whole area, not its edges alone (2026-
 | Town | `LIDS="-17.05,-20.2,-12.9,-19.05,2.65" DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo; the lid: the plaza's slot, a 4 by 1 m pit 2.5 m deep with no way out, filled to the plaza) |
 | Spacecraft | `DUMP=1 GROUND=0 EXCLUDE= UNDER_STREET=3 CEIL=1.3 node glb_collision.mjs client/public/maps/spacecraft.glb spacecraft 2 122 -70 0 <out>` |
 | Backrooms | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 CEIL=3.8 node glb_collision.mjs client/public/maps/backrooms.glb backrooms -26.8 28 -27.2 30 <out>` |
-| Warehouse | the served model first: `glb_slim.cjs <map_79_void.glb> <slim.glb> [maxPx=1024] [quality=0.8]` (textures to 1024 px, JPEG where opaque, 29.9 → 11.6 MB, the geometry untouched), then `glb_clone.mjs <slim.glb> client/public/maps/warehouse.glb map_1_4 180 10 16 --skip Object_5_85_12 --suffix _copy` (the cluster's 22 objects copied, turned 180° about (5, 8) and set end to end over the original — the user's sketch, 2026-10-22; the ground plane skipped; nodes only, the meshes shared); then `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 node glb_collision.mjs client/public/maps/warehouse.glb warehouse -14 24 -23 39 <out>` |
+| Warehouse | the served model first: `glb_slim.cjs <map_79_void.glb> <slim.glb> [maxPx=1024] [quality=0.8]` (textures to 1024 px, JPEG where opaque, 29.9 → 11.6 MB, the geometry untouched), then `glb_clone.mjs <slim.glb> client/public/maps/warehouse.glb map_1_4 180 10 16 --skip Object_5_85_12 --suffix _copy` (the cluster's 22 objects copied, turned 180° about (5, 8) and set end to end over the original — the user's sketch, 2026-10-22; the ground plane skipped; nodes only, the meshes shared); then `glb_open_ends.mjs <doubled.glb> client/public/maps/warehouse.glb 9,29,31` (the six containers the user marked on the plan, 2026-10-22 — three meshes, each on a container and its copy — opened at both ends into tunnels, their materials double-sided); then `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 node glb_collision.mjs client/public/maps/warehouse.glb warehouse -14 24 -23 39 <out>` |
 
 Edges, voids and pits (2026-10-22, every map's data regenerated; bodies fell into Town's plaza slot and Dust's channel and
 ditch walking their rims, and met invisible 25 m pillars): a reached floor cell beside a drop of more than a STEP that no
@@ -42,7 +42,8 @@ and its dark faces repainted. The recipe is `backrooms_ops.json` for `glb_edit.m
 (`glb_cut.mjs <in> <out> <node> <zWorld> below|above` first); `glb_pieces.mjs` lists a model's pieces by id for the copy
 ops; `glb_zfight.mjs <glb> x0 x1 z0 z1` finds coplanar overlaps; `glb_lum.mjs` / `glb_lumstrip.mjs` sample each face's
 texture for dark faces and dark strips; `glb_box.mjs` / `glb_verts.mjs` / `glb_cutinfo.mjs` list faces and vertices in a
-box; `glb_read.mjs` is what they share.
+box; `glb_read.mjs` is what they share. `glb_open_ends.mjs <in> <out> <meshIds> [band=0.35]` drops the triangles within `band` m of either end
+of a mesh's long axis and makes its material double-sided — a closed container prop becomes a tunnel, on every node sharing the mesh.
 
 Then the spawns, in game units (`spawn_set.mjs <tree root> <json> x,z x,z [more...] [--random] [--bounds hx,hz]`; the floor
 height is the sim's own at the point (`groundHeightAt`), a point the nav grid does not walk is refused; `--bounds` adds the
