@@ -143,7 +143,7 @@ Fourteen pickable units, near-identical base stats (100 HP, 250 boost, 11.76 spr
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
 | Unit 7 — Rifle (Aris) | 8 | 12 / bolt | ~180 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 2500 | 120 / 70 | 2.5 s + 1 s charge |
+| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 4000 | 120 / 70 | 2.5 s + 1 s charge |
 | Unit 6 — Sniper Rifle (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
 **Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
@@ -252,7 +252,7 @@ Projectiles fly straight (homing is zeroed universally). The targeting reticle i
 | 1.00 (server auto-fires) | 1.00 | 1.00 | **0.90** |
 
 Three properties the table encodes: glint duration equals the release time on **every** screen (both endpoints of the interval shift by the same delivery delay, so its length is preserved for any observer); the defender's read & decide time is always the release time minus their round trip (one delivery lost at each end); and the earliest-release fence sits at ack + 0.5 s precisely so the read & decide column can never fall below 0.50 — the guarantee is produced by *placing the fence*, not by adjusting any clock. The full charge is the one release with no fence involvement: it fires at press + 1.0 s flat, so its read & decide time shrinks with the defender's round trip (lag-taxed like every ordinary attack), while the fast cancel's 0.50 is lag-proof.
-- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **2500 u/s** (near-hitscan — only ~0.05 s flight even at max range); Kei's beam is instant.
+- The **dodge** is the counter: a step grants **0.3 s** of i-frame immunity, so a well-timed dodge passes through the shot. Aru's bullet speed is **4000 u/s** (user 2026-10-22, 2500 before: near-hitscan — 0.03 s of flight even at max range, two ticks); Kei's beam is instant.
 
 ### Aru (Unit 3) — range zones & the lock reticle
 

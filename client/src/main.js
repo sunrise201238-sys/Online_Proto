@@ -180,7 +180,7 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 120,
     lockRange2v2: 70,
-    projectileSpeed: 2500,
+    projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
