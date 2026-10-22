@@ -10214,7 +10214,7 @@ function buildGlbArena(mapKey) {
 // cells whose steep faces face the same way — and a wall crossed by the line from the camera to the unit fades whole (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
-  const COL = cfg.fadeCell ?? 4, PAD = 2;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing)
+  const COL = cfg.fadeCell ?? 4, PAD = 2, HCOL = 4;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing; the hull always by the metre)
   const still = cfg.neverFade ?? [];
   const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -10314,10 +10314,18 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       const tx0 = Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x));
       const tz0 = Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z));
       if (tx0 > tx1 || tz0 > tz1) continue;
-      for (let ix = Math.floor(tx0 / COL); ix <= Math.floor(tx1 / COL); ix += 1) for (let iz = Math.floor(tz0 / COL); iz <= Math.floor(tz1 / COL); iz += 1) {
-        const x0 = Math.max(ix * COL, tx0), x1 = Math.min((ix + 1) * COL, tx1), z0 = Math.max(iz * COL, tz0), z1 = Math.min((iz + 1) * COL, tz1);
-        const key = `${ix},${iz}`; const c = cols[b].get(key);
-        if (!c) cols[b].set(key, { minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1 });
+      // (the hull by the metre, and in a metre as many columns as faces stand apart there — a crate against a wall had the
+      // wall's column over it, 2 m across and 16 m tall, and the wall faded whenever the body passed over the crate's cell;
+      // a face joins the column it overlaps, else a column of its own, at most four in a metre)
+      for (let ix = Math.floor(tx0 / HCOL); ix <= Math.floor(tx1 / HCOL); ix += 1) for (let iz = Math.floor(tz0 / HCOL); iz <= Math.floor(tz1 / HCOL); iz += 1) {
+        const x0 = Math.max(ix * HCOL, tx0), x1 = Math.min((ix + 1) * HCOL, tx1), z0 = Math.max(iz * HCOL, tz0), z1 = Math.min((iz + 1) * HCOL, tz1);
+        const key = `${ix},${iz}`; let list = cols[b].get(key); if (!list) { list = []; cols[b].set(key, list); }
+        // (a face joins the column it keeps tight — the box around both grows by no more than half their own volumes; a 10 m post
+        // among 2.7 m crates made one column 10 m tall over the crates, and the thing faded whenever the line passed over them)
+        const vol = (a, b_, c_, d, e, f) => Math.max(b_ - a, 0.1) * Math.max(d - c_, 0.1) * Math.max(f - e, 0.1); const vf = vol(x0, x1, z0, z1, y0, y1);
+        let c = null, best = Infinity; for (const q of list) { const g = vol(Math.min(q.minX, x0), Math.max(q.maxX, x1), Math.min(q.minZ, z0), Math.max(q.maxZ, z1), Math.min(q.minY, y0), Math.max(q.maxY, y1)) - vol(q.minX, q.maxX, q.minZ, q.maxZ, q.minY, q.maxY) - vf; if (g < best) { best = g; c = q; } }
+        if (c && list.length < 4 && best > 0.5 * (vol(c.minX, c.maxX, c.minZ, c.maxZ, c.minY, c.maxY) + vf)) c = null;
+        if (!c) list.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1 });
         else { if (x0 < c.minX) c.minX = x0; if (x1 > c.maxX) c.maxX = x1; if (z0 < c.minZ) c.minZ = z0; if (z1 > c.maxZ) c.maxZ = z1; if (y0 < c.minY) c.minY = y0; if (y1 > c.maxY) c.maxY = y1; }
       }
     }
@@ -10328,8 +10336,9 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
-      const parts = [...cols[i].values()];
-      if (!parts.length) parts.push({ minX: boxes[i].minX, maxX: boxes[i].maxX, minZ: boxes[i].minZ, maxZ: boxes[i].maxZ, minY: 0, maxY: 0 });   // (a piece of flat faces alone: a hull nothing meets)
+      // (a column narrower than a body both ways — a post, a pole, a wall's sliver at a cell's corner — hides nothing and is no
+      // hull: a 10 m post among 2.7 m crates faded the stack whenever the line grazed it; a thing with no hull never fades)
+      const parts = [...cols[i].values()].flat().filter((c) => c.maxX - c.minX >= 2.3 || c.maxZ - c.minZ >= 2.3);
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
       registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
     });
