@@ -636,7 +636,7 @@ const MAP_DATA = {
   warehouse: { name: 'Warehouse' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
   backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
-  range: { name: 'Shooting Range', noRandom: true }   // offline-only practice range (hidden online); listed last; no Random card rolls it
+  range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
 };
 
 const state = {
@@ -7505,8 +7505,6 @@ function refreshEndMenuIfStale(onl, conn) {
   }
 }
 
-const ONLINE_AVAILABLE_MAPS = new Set(['arena1', 'arena2', 'factory', 'factory2', 'square', 'lobby', 'station', 'flashpoint', 'airport', 'town', 'spacecraft', 'backrooms', 'backrooms_anomaly']);
-
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
 // size (1v1 | 2v2). Both ride one match:set-mode once the second pick
 // lands. Only shown once per session (gated by onl.modePushedToServer);
@@ -7720,14 +7718,15 @@ function showOnlineBotUnitPicker(onl, conn) {
 function showOnlineMapPicker(onl, conn) {
   const menu = document.createElement('div');
   menu.className = 'menu';
-  // The Shooting Range is offline-only and fully HIDDEN online (not grayed).
-  const mapEntries = Object.entries(MAP_DATA).filter(([id]) => id !== 'range');
+  // Every map is online but the ones MAP_DATA marks `offlineOnly` (the Shooting Range), and those are fully HIDDEN (not
+  // grayed). Until 2026-10-22 a hand-kept list named the maps that were online, and the two newest modelled maps (Dust,
+  // Warehouse) were never put on it — user: "make all scene maps online available".
+  const mapEntries = Object.entries(MAP_DATA).filter(([, m]) => !m.offlineOnly);
   const mode = conn?.getLobbyConfig?.()?.mode ?? '1v1';
-  const disabled = new Set(mapEntries.map(([id]) => id).filter((id) => !ONLINE_AVAILABLE_MAPS.has(id)));
   menu.innerHTML = `
     <h2>Pick a Map</h2>
     <div class="menu-divider">Online ${mode} — you are p1 (host)</div>
-    ${mapGridHTML(mapEntries, disabled)}
+    ${mapGridHTML(mapEntries)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
