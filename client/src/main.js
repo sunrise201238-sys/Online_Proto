@@ -10305,14 +10305,21 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       inBox[b].push(idx[t], idx[t + 1], idx[t + 2]);
       // (the hull: every metre column under the triangle's footprint, within the thing's box, takes the triangle's box within
       // that cell — the box, not the cell: a 0.2 m wall read as metre columns faded whenever the camera came within a metre of
-      // it, as the line began inside the column (user 2026-10-19); within the thing's box: Town's hillsides, big sloped
-      // triangles claimed by the things at their centres, gave its things 300,000 columns over their whole footprints. A face
+      // it, as the line began inside the column (user 2026-10-19); within a cell of the thing's box: Town's hillsides, big
+      // sloped triangles claimed by the things at their centres, gave its things 300,000 columns over their whole footprints. A face
       // with no height is a roof — a floor never seeds a thing — and gets a column a unit high at its own height: the line
       // through it from above fades it, a body in a pit below does not — its part used to sit at the street's height.)
       const ym0 = Math.min(w[0].y, w[1].y, w[2].y), ym1 = Math.max(w[0].y, w[1].y, w[2].y); const y0 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 - 0.5 : ym0, y1 = ym1 - ym0 < 1 ? (ym0 + ym1) / 2 + 0.5 : ym1;
+      // (a post's face — narrower than a body both ways, the face itself and not its piece in a metre cell — hides nothing and
+      // makes no column: a 10 m post among 2.7 m crates faded the stack whenever the line grazed it. The pieces were judged
+      // once, and a wall's end piece, cut to half a metre by the thing's box, went out with the posts: the wall's last metre
+      // had no hull, and the camera's line through it faded nothing — user 2026-10-22, a wall black over the whole view.)
+      const fx0 = Math.min(w[0].x, w[1].x, w[2].x), fx1 = Math.max(w[0].x, w[1].x, w[2].x), fz0 = Math.min(w[0].z, w[1].z, w[2].z), fz1 = Math.max(w[0].z, w[1].z, w[2].z);
+      if (fx1 - fx0 < 2.3 && fz1 - fz0 < 2.3) continue;
+      // (the columns reach as far as the claim does — a cell beyond the thing's box: a face claimed through a neighbour cell,
+      // its own cell no thing, lay 3 cm outside the box, was cut away whole and left the wall with no hull there)
       const bx = boxes[b];
-      const tx0 = Math.max(bx.minX, Math.min(w[0].x, w[1].x, w[2].x)), tx1 = Math.min(bx.maxX, Math.max(w[0].x, w[1].x, w[2].x));
-      const tz0 = Math.max(bx.minZ, Math.min(w[0].z, w[1].z, w[2].z)), tz1 = Math.min(bx.maxZ, Math.max(w[0].z, w[1].z, w[2].z));
+      const tx0 = Math.max(bx.minX - COL, fx0), tx1 = Math.min(bx.maxX + COL, fx1), tz0 = Math.max(bx.minZ - COL, fz0), tz1 = Math.min(bx.maxZ + COL, fz1);
       if (tx0 > tx1 || tz0 > tz1) continue;
       // (the hull by the metre, and in a metre as many columns as faces stand apart there — a crate against a wall had the
       // wall's column over it, 2 m across and 16 m tall, and the wall faded whenever the body passed over the crate's cell;
@@ -10336,9 +10343,7 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
       m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
       m.userData.fadeDepthToggle = true;
       mesh.parent.add(m); m.updateMatrixWorld(true);
-      // (a column narrower than a body both ways — a post, a pole, a wall's sliver at a cell's corner — hides nothing and is no
-      // hull: a 10 m post among 2.7 m crates faded the stack whenever the line grazed it; a thing with no hull never fades)
-      const parts = [...cols[i].values()].flat().filter((c) => c.maxX - c.minX >= 2.3 || c.maxZ - c.minZ >= 2.3);
+      const parts = [...cols[i].values()].flat();   // (a thing of posts alone has no hull and never fades)
       const bb = { minX: Math.min(...parts.map((p) => p.minX)), maxX: Math.max(...parts.map((p) => p.maxX)), minY: Math.min(...parts.map((p) => p.minY)), maxY: Math.max(...parts.map((p) => p.maxY)), minZ: Math.min(...parts.map((p) => p.minZ)), maxZ: Math.max(...parts.map((p) => p.maxZ)) };
       registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms)
     });

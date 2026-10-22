@@ -73,8 +73,13 @@ function collisionViewToggle(on = !collisionView) {
 }
 function updateCollisionView() {
   if (!collisionView) return;
-  for (const f of getAllFighters()) { let c = collisionView.bodies.get(f); if (!c) { c = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 2.45, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xf2e24a, wireframe: true, transparent: true, opacity: 0.9 })); collisionView.bodies.set(f, c); collisionView.group.add(c); }   // (FIGHTER_RADIUS 1.15 u; the body's collision window runs 0.45 u under its centre to 2 u over it)
-    c.position.set(f.root.position.x, f.root.position.y + 0.775, f.root.position.z); c.visible = !!f.root.visible; }
+  // (two volumes on each body, as the sim has them: the hit capsule the rounds see — HIT_RADIUS_NORMAL 1.6 u round, HIT_HALF_HEIGHT
+  // 1.6 u of straight side, 6.4 u tall in all, centred on hitCenter = the body 2.35 u up = the root — in yellow; and the window
+  // the walls see — FIGHTER_RADIUS 1.15 u round, a box holds the body from 4 u under its centre to 2 u over it (boxHoldsAt) — in
+  // orange. The rebuilt view of 2026-10-21 drew one 2.45 u cylinder for the wall window, read wrong, and the user missed the
+  // full-height body of the old view, 2026-10-22.)
+  for (const f of getAllFighters()) { let c = collisionView.bodies.get(f); if (!c) { const off = f.modelYOffset ?? 2.35; c = new THREE.Group(); const hit = new THREE.Mesh(new THREE.CapsuleGeometry(1.6, 3.2, 4, 12), new THREE.MeshBasicMaterial({ color: 0xf2e24a, wireframe: true, transparent: true, opacity: 0.9 })); hit.position.y = 2.35 - off; const wall = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xe0a040, wireframe: true, transparent: true, opacity: 0.7 })); wall.position.y = -off - 1; c.add(hit, wall); collisionView.bodies.set(f, c); collisionView.group.add(c); }
+    c.position.copy(f.root.position); c.visible = !!f.root.visible; }
 }
 // MAP SCALE TEST (PT site, a dev hook, pt_deltas.py; rebuilt 2026-10-21): F7 shows a panel with the modelled map's scale —
 // metres per model unit = the map's modelM × mapScale.k — and the arena's size at it; − / + step it by 5 %, reset puts it
