@@ -92,13 +92,15 @@ function infiniteBoostToggle(on = !PT.infiniteBoost) { PT.infiniteBoost = !!on; 
 // the console does the same. The scale stays until reset, for every modelled map.
 let mapScalePanel = null;
 function setMapScale(mPerUnit) { const cfg = GLB_MAPS[state.mapKey]; if (!cfg) return false; mapScale.k = mPerUnit / (cfg.modelM ?? 1); startMatch(); mapScalePanelRefresh(); return mapScale.k; }
-function mapScalePanelRefresh() { if (!mapScalePanel) return; const cfg = GLB_MAPS[state.mapKey]; const b = getArenaBounds(state.mapKey); mapScalePanel.querySelector('.ms-text').textContent = cfg ? `${state.mapKey}: ${((cfg.modelM ?? 1) * mapScale.k).toFixed(2)} m per model unit (×${mapScale.k.toFixed(3)}), arena ${(2 * b.halfX / 4).toFixed(0)} × ${(2 * b.halfZ / 4).toFixed(0)} m` : `${state.mapKey}: not a modelled map`; }
+function mapScalePanelRefresh() { if (!mapScalePanel) return; const cfg = GLB_MAPS[state.mapKey]; const b = getArenaBounds(state.mapKey); mapScalePanel.querySelector('.ms-text').textContent = cfg ? `${state.mapKey}: ${((cfg.modelM ?? 1) * mapScale.k).toFixed(2)} m per model unit (×${mapScale.k.toFixed(3)}), arena ${(2 * b.halfX / 4).toFixed(0)} × ${(2 * b.halfZ / 4).toFixed(0)} m` : `${state.mapKey}: not a modelled map`;;
+  // (where the player stands, in the model's metres — the plan's coordinates — so a spot can be reported by number, 2026-10-22)
+  const p = state.player?.body?.position; const posEl = mapScalePanel.querySelector('.ms-pos'); if (posEl) posEl.textContent = p && cfg ? `player at x ${(p.x / (cfg.scale * mapScale.k) + cfg.cx).toFixed(1)}  z ${(p.z / (cfg.scale * mapScale.k) + cfg.cz).toFixed(1)}  floor ${((p.y - 2.45) / (cfg.scale * mapScale.k)).toFixed(2)} m` : ''; }
 function mapScalePanelToggle() {
-  if (mapScalePanel) { mapScalePanel.remove(); mapScalePanel = null; return false; }
+  if (mapScalePanel) { clearInterval(mapScalePanel._iv); mapScalePanel.remove(); mapScalePanel = null; return false; }
   const el = document.createElement('div'); el.id = 'mapScalePanel'; el.style.cssText = 'position:fixed;top:8px;right:8px;z-index:1000;background:rgba(0,0,0,.75);color:#fff;font:13px monospace;padding:8px 10px;border-radius:6px;pointer-events:auto';
-  el.innerHTML = '<div class="ms-text"></div><div style="margin-top:6px"><button data-ms="-">-5%</button> <button data-ms="+">+5%</button> <button data-ms="reset">reset</button> <span style="opacity:.7">F7 hides</span></div>';
+  el.innerHTML = '<div class="ms-text"></div><div class="ms-pos" style="margin-top:4px;color:#ffd"></div><div style="margin-top:6px"><button data-ms="-">-5%</button> <button data-ms="+">+5%</button> <button data-ms="reset">reset</button> <span style="opacity:.7">F7 hides</span></div>';
   el.addEventListener('click', (e) => { const btn = e.target.closest('button'); if (!btn) return; const cfg = GLB_MAPS[state.mapKey]; if (!cfg) return; const m = (cfg.modelM ?? 1) * mapScale.k; setMapScale(btn.dataset.ms === 'reset' ? (cfg.modelM ?? 1) : btn.dataset.ms === '+' ? m * 1.05 : m / 1.05); });
-  document.body.appendChild(el); mapScalePanel = el; mapScalePanelRefresh(); return true;
+  document.body.appendChild(el); mapScalePanel = el; mapScalePanelRefresh(); el._iv = setInterval(mapScalePanelRefresh, 500); return true;
 }
 """
 edit('client/src/main.js', [

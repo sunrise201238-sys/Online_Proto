@@ -52,7 +52,7 @@ const DECK_Q = 0.25;              // merge classes (1 unit) for slab bottoms, be
 const FENCE_MAX = 0.35;           // a thing no thicker than this is a fence, a railing, a post: rounds pass it, nothing stands on it
 const CHAIN_MAX = 3;              // the most a body climbs by hopping part to part (a car, a truck's step), above the floor it started from
 const OBJECT_MAX = 3;             // a thing wider than this both ways is ground (a plaza, a roof): stepped onto from a floor, never climbed from another thing
-const PIT_MAX = 3;                // a floor sloping down from the street is read this far below it
+const PIT_MAX = Number(process.env.PIT_MAX ?? 3);   // (a map's own, env PIT_MAX: Dust's basin by the east wall goes 5 m under the street and is walked, 2026-10-22)                // a floor sloping down from the street is read this far below it
 const UNDER_STREET = Number(process.env.UNDER_STREET ?? 0.12);   // (a map's own: Town 0.12, its plates lie just under the street; the Skeld 3, nothing of it lies under the street but space) the street's own band: a FLAT (or steep) face whose highest point lies more than this under the street datum is the model's hidden underside — the plates under the terraces and the plateau, the terrain tiles' bottoms — and is not read; a SLOPED face is a ramp going down (a garage's, 13 cm under the street at its top and 2 m under at its foot) and is read however deep; a road 10 cm under the street is read. Also the SEAM rule's band
 const CEIL = Number(process.env.CEIL ?? Infinity);   // (a map's own, metres over the street: the Skeld 2.5, its walls' tops; none for Town) the map's ceiling: no face at or above it is read, and nothing's top at or above it is stood on — a ship's interior has a roof the model leaves open
 const VOID_WALL = 25;             // a column with no surface and nothing standing, in a stretch of such columns GROUND_MIN or wider, is outside the model: a wall this tall (above a flight's ceiling), the world's edge
@@ -302,6 +302,13 @@ const slabUnder = new Float64Array(N).fill(NaN), passTop = new Float64Array(N).f
       // over the plate beneath them, a raised bed's top over its hidden plate — is where the body is; this one is none)
       if (up >= 0) li = up; else while (li + 1 < L.length && (reachBits[j] & (1 << (li + 1))) && L[li + 1].bot - L[li].top < HEADROOM) li += 1; }
     const F = li >= 0 ? L[li] : L[0]; floorH[j] = F.top; standTop[j] = F.st >= CEIL ? NaN : F.st; cappedTop[j] = F.st >= CEIL ? F.st : NaN; hang[j] = F.hg; if (F.next !== Infinity && F.next >= F.top + CEIL_MIN) ceilH[j] = F.next; if (li >= 0) reach[j] = 1; } }
+// ---- LIDS: a pit filled and lidded by hand, a data field of the map: every cell of each rect is floor at the given height,
+// the model's sunken floor and whatever stood in it below that height gone — the yard's body box fills the pit up to the
+// lid ("find the pit, add a lid", user 2026-10-22). env LIDS="x0,z0,x1,z1,h;..." in model metres, h above the street.
+const LIDS = (process.env.LIDS ?? '').split(';').filter(Boolean).map((s) => s.split(',').map(Number)); let lidCells = 0;
+for (const [lx0, lz0, lx1, lz1, lh] of LIDS) { const i0 = Math.max(0, Math.floor((lx0 - X0) / CELL)), i1 = Math.min(nx - 1, Math.ceil((lx1 - X0) / CELL) - 1), k0 = Math.max(0, Math.floor((lz0 - Z0) / CELL)), k1 = Math.min(nz - 1, Math.ceil((lz1 - Z0) / CELL) - 1);
+  for (let k = k0; k <= k1; k += 1) for (let i = i0; i <= i1; i += 1) { const j = k * nx + i; reach[j] = 1; floorH[j] = lh; if (!(standTop[j] > lh + STEP)) standTop[j] = NaN; if (!(cappedTop[j] > lh + STEP)) cappedTop[j] = NaN; hang[j] = null; slabUnder[j] = NaN; passTop[j] = NaN; ceilH[j] = NaN; narrowTop[j] = NaN; parapet[j] = 0; lidCells += 1; }
+  console.log(`lid: x ${lx0}..${lx1} z ${lz0}..${lz1} at ${lh} m: ${(i1 - i0 + 1) * (k1 - k0 + 1)} cells`); }
 // ---- the VOID: a column no floor of which a body reaches, with nothing standing in it — nothing there, or only the
 // model's hidden plates under it — is outside the model's world (the ground around the town's slab, the margins, the
 // world's end north of the terrace). Narrower than GROUND_MIN it is a gap between the model's tiles (a 25 cm slot
@@ -310,16 +317,24 @@ const slabUnder = new Float64Array(N).fill(NaN), passTop = new Float64Array(N).f
 // sim stands a body on the street wherever no surface covers the point, so the void had to be a wall, not merely no
 // floor). It used to be read as the street; and it was read before the flood, from the surfaces alone, which made
 // the garage ramps — every surface of theirs below the street — a wall before a body could walk down them.
-const voidWall = new Uint8Array(N);
+const voidWall = new Uint8Array(N); const voidGapCells = [];
 { const isVoid = (j) => !reach[j] && H[j] <= 0.1; const seen = new Uint8Array(N); const gaps = [];
   for (let j = 0; j < N; j += 1) { if (seen[j] || !isVoid(j)) continue; const cells = [j]; seen[j] = 1; let i0 = nx, i1 = -1, k0 = nz, k1 = -1;
     for (let p = 0; p < cells.length; p += 1) { const q = cells[p]; const i = q % nx, k = (q - i) / nx; if (i < i0) i0 = i; if (i > i1) i1 = i; if (k < k0) k0 = k; if (k > k1) k1 = k;
       for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const m = kk * nx + ii; if (seen[m] || !isVoid(m)) continue; seen[m] = 1; cells.push(m); } }
-    if (Math.min(i1 - i0 + 1, k1 - k0 + 1) * CELL < GROUND_MIN) gaps.push(...cells); else for (const q of cells) voidWall[q] = 1; }
+    if (Math.min(i1 - i0 + 1, k1 - k0 + 1) * CELL < GROUND_MIN) { gaps.push(...cells); continue; }
+    // (a region wide by its box is not wide everywhere: an L-shaped or ragged void has slivers a cell wide hanging off
+    // its body, and each became a 25 m wall — invisible pillars on Dust's yards and terraces (user 2026-10-22). The
+    // wall is only where the void is a body wide: cells whose GROUND_MIN square is all void (the grid's outside counts
+    // as void), and the cells within that square of them; the rest of the region is gaps.)
+    { const R = Math.ceil(GROUND_MIN / 2 / CELL); const core = []; for (const q of cells) { const i = q % nx, k = (q - i) / nx; let ok = 1;
+        for (let dk = -R; dk <= R && ok; dk += 1) for (let di = -R; di <= R; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; if (!isVoid(kk * nx + ii)) { ok = 0; break; } } if (ok) core.push(q); }
+      const wide = new Uint8Array(N); for (const q of core) { const i = q % nx, k = (q - i) / nx; for (let dk = -R; dk <= R; dk += 1) for (let di = -R; di <= R; di += 1) { const ii = i + di, kk = k + dk; if (ii >= 0 && kk >= 0 && ii < nx && kk < nz) wide[kk * nx + ii] = 1; } }
+      for (const q of cells) if (wide[q]) voidWall[q] = 1; else gaps.push(q); } }
   // (a gap takes the floor of a walked column beside it; a gap cell beside gap cells only waits for them; one no floor ever reaches is void)
   let left = gaps; while (left.length) { const next = []; for (const q of left) { const i = q % nx, k = (q - i) / nx; let got = -1;
       for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (reach[n]) { got = n; break; } }
-      if (got >= 0) { reach[q] = 1; floorH[q] = floorH[got]; standTop[q] = NaN; hang[q] = null; ceilH[q] = ceilH[got]; } else next.push(q); } if (next.length === left.length) { for (const q of next) voidWall[q] = 1; break; } left = next; } }
+      if (got >= 0) { reach[q] = 1; floorH[q] = floorH[got]; standTop[q] = NaN; hang[q] = null; ceilH[q] = ceilH[got]; } else next.push(q); } if (next.length === left.length) { voidGapCells.push(...next); break; } left = next; } }   // (a gap no floor reaches — a slot walled in by things — joins the tallest thing beside it below, not a 25 m void wall: those stood as invisible pillars, user 2026-10-22)
 // ---- RAMPS: sloped stretches of the reached floor along one axis, each one plane
 // A cell is sloped when the floor around it rises RAMP_MIN_DEG..RAMP_MAX_DEG mostly along x or along z; cells of
 // one direction that touch are one stretch; a plane h = a + b s is fitted through the stretch (twice: cells off
@@ -418,7 +433,8 @@ for (let j = 0; j < N; j += 1) { if (reach[j]) { const top = Number.isNaN(standT
     if (top > mf + FLOOR_MIN) thingTop[j] = top; }
   // (an unwalked column: what stands on its floor, when something does — a post under a tree's crown is the post, not the
   // crown; else its highest point — a building's roof, an overhang that left it no floor)
-  else if (voidWall[j]) thingTop[j] = VOID_WALL; else if (!Number.isNaN(standTop[j]) && standTop[j] - floorH[j] >= STEP) thingTop[j] = standTop[j]; else if (H[j] >= STEP) thingTop[j] = H[j]; }
+  else if (voidWall[j]) thingTop[j] = VOID_WALL; else if (!Number.isNaN(standTop[j]) && standTop[j] - floorH[j] >= STEP) thingTop[j] = standTop[j]; else if (H[j] >= STEP) thingTop[j] = H[j]; else if (H[j] > 0.1) thingTop[j] = H[j]; }
+for (const j of voidGapCells) { if (!Number.isNaN(thingTop[j])) continue; const i = j % nx, k = (j - i) / nx; let top = NaN; for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (!Number.isNaN(thingTop[n]) && thingTop[n] < VOID_WALL && (Number.isNaN(top) || thingTop[n] > top)) top = thingTop[n]; } if (!Number.isNaN(top)) thingTop[j] = top; }   // (an unwalked floor over the street, however low, is solid: the sim stands a body on the street wherever no surface covers the point, and a kerb strip no body reaches was walked through at street level into the ditch beyond it, Dust 2026-10-22)
 // DEAD FLOOR: a slot a body cannot stand in is not floor. A body (its radius 1.15 units) centred in a cell covers the
 // cells around it (BODY_CELLS each way); a cell is stood in when none of those holds a thing more than a step over the
 // floor, and a floor cell no stood-in cell covers is dead — a slot between two parts of a machine, the strip behind a
@@ -490,7 +506,7 @@ for (let j = 0; j < N; j += 1) if (reach[j] && Number.isNaN(thingTop[j])) { stan
 // head height then 1 m to 7 m (the flight ceiling), one class above; beams by bottom and top; ceilings by
 // bottom and top; rims by the two floors they stand between
 const qTall = (h) => h <= 2 ? 2 : h <= 7 ? Math.ceil(h - 1e-9) : 8;
-const deckH = new Float64Array(N), deckCode = new Float64Array(N), passDeck = new Float64Array(N), wallKey = new Float64Array(N), wallH = new Float64Array(N), beamKey = new Float64Array(N), ceilKey = new Float64Array(N), rimKey = new Float64Array(N), rimLo = new Float64Array(N).fill(NaN);
+const deckH = new Float64Array(N), deckCode = new Float64Array(N), passDeck = new Float64Array(N), wallKey = new Float64Array(N), wallH = new Float64Array(N), beamKey = new Float64Array(N), ceilKey = new Float64Array(N), rimKey = new Float64Array(N), rimLo = new Float64Array(N).fill(NaN), guardSide = [0, 1, 2, 3].map(() => new Float64Array(N)), guardTop = new Float64Array(N).fill(NaN);
 let floorCells = 0, wallCells = 0, ceilCells = 0;
 for (let j = 0; j < N; j += 1) {
   // (a kerb cell has no deck: its ramp is its floor; the cell behind a kerb cell has its deck and no body beneath, so a
@@ -505,7 +521,16 @@ for (let j = 0; j < N; j += 1) {
     // from that floor up to the street level (a pit's wall); deck bodies cover what stands above the street
     const f = floorH[j]; const i = j % nx, k = (j - i) / nx; let lo = NaN;
     if (kind[j] !== 2) for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (reach[n] && floorH[n] < Math.min(f, 0) - STEP && (Number.isNaN(lo) || floorH[n] < lo)) lo = floorH[n]; }   // (a kerb ramp is the way up, not a rim)
-    if (!Number.isNaN(lo)) { rimLo[j] = lo; rimKey[j] = 7000 + (Math.round(lo / DECK_Q) + 64) * 128 + (Math.round(Math.min(f, 0) / DECK_Q) + 64); } }
+    if (!Number.isNaN(lo)) { rimLo[j] = lo; rimKey[j] = 7000 + (Math.round(lo / DECK_Q) + 64) * 128 + (Math.round(Math.min(f, 0) / DECK_Q) + 64); }
+    // GUARD (2026-10-22): a reached floor cell beside a drop of more than a STEP — to a lower floor, a thing's top, or
+    // the street where nothing is reached — that no kerb ramp climbs back (a drop within KERB_MAX off a kerb ramp cell is
+    // the kerb's own way down) gets a slim box on that edge, a step taller than the floor: a body walking the floor stops
+    // at the edge instead of falling (Town's plaza slot and its ledge, Dust's channel beside the raised yard and its
+    // ditch: bodies walking the rims fell in, user 2026-10-22). A round and an eye pass it; a jump clears it (the feet
+    // rise above its hold). The box straddles the cell's edge a hand wide, so two guards a metre apart leave a body room.
+    if (Number.isNaN(thingTop[j])) { const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; const standH = (n) => !Number.isNaN(thingTop[n]) ? thingTop[n] : reach[n] ? floorH[n] : 0;
+      for (let q = 0; q < 4; q += 1) { const [di, dk] = dirs[q]; const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const d = f - standH(kk * nx + ii);
+        if (d > KERB_MAX || (d > STEP && kind[j] !== 2)) { guardTop[j] = f + STEP + 0.1; guardSide[q][j] = 9000 + Math.min(999, Math.round(guardTop[j] / DECK_Q) + 64); } } } }
   // (low cover: DECK_Q classes when something can stand on it, 0.5 m when it is thin — nothing stands on a railing, so its height class is coarse.
   // STANDABLE: a thick thing no taller than WALK_MAX over the floor beside it — a kiosk, a garage, a truck, a tree's crown — is landed on from the
   // air and stood on: 0.5 m classes, a floor on top; taller is a building, and nothing stands on a building)
@@ -590,7 +615,7 @@ for (const w of walls) {
     if (lowMax < w.base - UNDER_STREET && same >= 0.7 * w.w * w.d) { seams += 1; continue; } }
   if (!w.parapet && (w.low || w.stand) && Math.min(w.w, w.d) * CELL > FENCE_MAX && parapetThing(w)) { w.parapet = true; thingParapets += 1; }   // (thick: a slim one carries no top anyway)
   // (the void's wall stands from the street whatever floor lies beside it: raised beside Dust's long path, it floated 4.5 m up and the nav grid found street under it, 2026-10-19)
-  const o = box(w, w.h); if (w.key !== 9 && w.baseLo > 0 && w.h - w.baseLo > FLOOR_MIN) o.minY = U(w.baseLo); if (w.key === 9) voids += 1;   // (a thing on a raised floor stands from that floor: its box starts there, so its height is its own; one no higher than the lowest floor beside it stands on nothing walked — the rim of that floor, from the ground — never a box whose bottom is over its top)
+  const o = box(w, w.h); if (w.key !== 9 && !Number.isNaN(w.baseLo) && w.baseLo !== 0 && w.h - w.baseLo > FLOOR_MIN) o.minY = U(w.baseLo);   // (beside a floor under the street the box goes down to that floor too: Dust's retaining wall by the basin was a slab floating over the yard beside it, user 2026-10-22) if (w.key === 9) voids += 1;   // (a thing on a raised floor stands from that floor: its box starts there, so its height is its own; one no higher than the lowest floor beside it stands on nothing walked — the rim of that floor, from the ground — never a box whose bottom is over its top)
   if (w.low) { o.topBuffer = 0.8; lowCover += 1; }   // low cover is a deck no step reaches: its body blocks a body below it, a hop lands on its top
   if (w.free && w.h - w.base <= FENCE_TALL && w.h < CEIL) { o.noProjectile = true; fences += 1; }   // (a slim thing reaching the map's ceiling is a wall: a ship's partition) a fence, a railing, a post — slim, free-standing, no taller than a fence over the floor beside it: a body stops, a round and an eye pass (a bus's side, a wall's plane are slim and taller: walls; a car's door panel is a slim face of a thick thing: it stops rounds and carries the car's floor)
   else if (w.stand) { o.topBuffer = 0.8; standable += 1; }   // a standable thing: landed on from the air, its top a floor
@@ -602,6 +627,11 @@ for (const d of decks) { const top = regH[(d.h >> 9) - 1], under = d.h & 255, bo
   if (top >= STEP && !bodyless) { if (under) { o.minY = U((under - 1) * DECK_Q); slabs += 1; } emit({ ...o, topBuffer: 0.8 }, 'deck'); deckBodies += 1; } }   // (a sunken floor has no body: the rims of the floors around it are its walls; a slab's body stops at the passage's roof)
 for (const p of passes) { const o = box(p, p.h); surfaces.push({ minX: o.minX, maxX: o.maxX, minZ: o.minZ, maxZ: o.maxZ, maxTop: o.maxY, type: 'flat', top: o.maxY }); }
 for (const r of rims) { const o = box(r, 0); o.minY = U(minIn(r, rimLo)); o.maxY = U(Math.min(0, maxIn(r, floorH))); if (o.maxY > o.minY) emit({ ...o, topBuffer: 0.8 }, 'rim'); }
+// (the drop's edge: a slim box straddling the cell's edge towards the drop, GUARD_T each way; the floor's own body gives none, holding no body on its top)
+const GUARD_T = 0.05; let guardsN = 0, guardCells = 0;
+for (let q = 0; q < 4; q += 1) for (const g of rects(guardSide[q]).filter(inCrop)) { const o = box(g, 0); o.minY = U(maxIn(g, floorH) - KERB_MAX); o.maxY = U(maxIn(g, guardTop));
+  if (q === 0) { o.minX = U(g.x1 - cx - GUARD_T); o.maxX = U(g.x1 - cx + GUARD_T); } else if (q === 1) { o.minX = U(g.x0 - cx - GUARD_T); o.maxX = U(g.x0 - cx + GUARD_T); } else if (q === 2) { o.minZ = U(g.z1 - cz - GUARD_T); o.maxZ = U(g.z1 - cz + GUARD_T); } else { o.minZ = U(g.z0 - cz - GUARD_T); o.maxZ = U(g.z0 - cz + GUARD_T); }
+  emit({ ...o, topBuffer: 0.8, noProjectile: true }, 'guard'); guardsN += 1; guardCells += g.w * g.d; }
 // a hanging thing a body hops: a box from its bottom, a deck's body above (topBuffer 0.8) with a floor on top
 // when it is thick (a table), none when thin (a bar, a gate arm: rounds pass it)
 for (const bm of beams) { let lo = Infinity, hi = -Infinity; for (let kk = bm.k; kk < bm.k + bm.d; kk += 1) for (let c = bm.i; c < bm.i + bm.w; c += 1) { const h = hang[kk * nx + c]; if (h[0] < lo) lo = h[0]; if (h[1] > hi) hi = h[1]; }
@@ -648,7 +678,7 @@ for (const rr of rampRects) { const r = regions[rr.h - 1]; const hAt = (x, z) =>
 const kerbRects = rects(kerbKey).filter(inCrop); let kerbs = 0;
 for (const kr of kerbRects) { const info = kerbInfo.get(kr.h); const depth = info.axis === 'x' ? kr.x1 - kr.x0 : kr.z1 - kr.z0; const g = info.dir * (info.hi - info.lo) / depth; const y0 = info.dir > 0 ? info.lo : info.hi;
   surfaces.push({ minX: U(kr.x0 - cx), maxX: U(kr.x1 - cx), minZ: U(kr.z0 - cz), maxZ: U(kr.z1 - cz), maxTop: U(info.hi), type: 'plane', y0: U(y0), gx: info.axis === 'x' ? Math.round(g * 1e4) / 1e4 : 0, gz: info.axis === 'z' ? Math.round(g * 1e4) / 1e4 : 0 }); kerbs += 1; planeBody(kr, info.lo); }   // (a ramp's body: up to the low floor — a ridge's kerb cells over a house's hollow, a strip's edge cell over nothing)
-const stats = { key, crop_m: [x0c, x1c, z0c, z1c], kerbs, scale: SCALE, ground_m: GROUND, cell_m: CELL, triangles: triCount, trianglesInCrop: used, cells: N, floorCells, wallCells, ceilCells, narrowFloor, parapets, thingParapets, roofSlabs, deadFloor, voids, walls: walls.length, lowCover, standable, fences, seams, tallOver1m: tallOver, tallOverMaxM: Math.round(tallOverMax * 100) / 100, decks: decks.length, deckBodies, slabs, passageFloors: passes.length, rims: rims.length, beams: beams.length, ramps: rampRects.length, rampStretches: regions.filter((r) => r.cells.length && !r.stairs).length, stairs: regions.filter((r) => r.cells.length && r.stairs).length, skirts, planeBodies, thinLids, ceilings: ceils.length, obstacles: obstacles.length, surfaces: surfaces.length, halfX, halfZ };
+const stats = { key, crop_m: [x0c, x1c, z0c, z1c], kerbs, scale: SCALE, ground_m: GROUND, cell_m: CELL, triangles: triCount, trianglesInCrop: used, cells: N, floorCells, wallCells, ceilCells, narrowFloor, parapets, thingParapets, roofSlabs, deadFloor, voids, guards: guardsN, guardCells, lidCells, walls: walls.length, lowCover, standable, fences, seams, tallOver1m: tallOver, tallOverMaxM: Math.round(tallOverMax * 100) / 100, decks: decks.length, deckBodies, slabs, passageFloors: passes.length, rims: rims.length, beams: beams.length, ramps: rampRects.length, rampStretches: regions.filter((r) => r.cells.length && !r.stairs).length, stairs: regions.filter((r) => r.cells.length && r.stairs).length, skirts, planeBodies, thinLids, ceilings: ceils.length, obstacles: obstacles.length, surfaces: surfaces.length, halfX, halfZ };
 writeFileSync(`${outDir}/${key}.json`, JSON.stringify({ key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: [...EXCLUDE], ceil: Number.isFinite(CEIL) ? CEIL : null }, halfX, halfZ, spawns: null, obstacles, surfaces }));   // (ceil: the map's ceiling in metres, the sim's cap on a body's feet — null when the map has none)
 writeFileSync(`${outDir}/${key}.stats.json`, JSON.stringify(stats, null, 1));
 // ---- DUMP=1: every column's reading, for review scripts (metres, relative to the street)

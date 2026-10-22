@@ -14,10 +14,34 @@ Run from a scratch directory; `node` 22. `<out>` gets `<key>.json` (the data), `
 | --- | --- |
 The generator reads a steep face over its whole area, not its edges alone (2026-10-22): a closed gate modelled as one 2 by 2 m quad left the cells between its edges reading floor and top rail, and a body walked through it at the long path's end (x 66..70, z −51.4). The maps' data were regenerated with it: Dust 4,518 → 4,637 boxes, 3,310 → 3,261 floors (the walked region behind that gate no longer reached, 447 walkable points lost there and at a few fences); Town 7,334 → 7,173 boxes (11 walkable points lost at 10 spots); Spacecraft 3,349 → 3,361 boxes (6 points lost); Backrooms unchanged. A thing's lid carries `lid: 1` on its surface.
 
-| Dust | `DUMP=1 SCALE=4 GROUND=83.92 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=3.6 node glb_collision.mjs client/public/maps/dust.glb dust -7.1 106.7 -120.9 56.9 <out>` |
-| Town | `DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo) |
+| Dust | `DUMP=1 SCALE=4 GROUND=83.92 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=5.6 PIT_MAX=5.5 node glb_collision.mjs client/public/maps/dust.glb dust -7.1 106.7 -120.9 56.9 <out>` (the basin by the east wall, x 62..75 z 2..33, slopes 5 m under the street and is walked: read that deep) |
+| Town | `LIDS="-17.05,-20.2,-12.9,-19.05,2.65" DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo; the lid: the plaza's slot, a 4 by 1 m pit 2.5 m deep with no way out, filled to the plaza) |
 | Spacecraft | `DUMP=1 GROUND=0 EXCLUDE= UNDER_STREET=3 CEIL=1.3 node glb_collision.mjs client/public/maps/spacecraft.glb spacecraft 2 122 -70 0 <out>` |
 | Backrooms | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 CEIL=3.8 node glb_collision.mjs client/public/maps/backrooms.glb backrooms -26.8 28 -27.2 30 <out>` |
+
+Edges, voids and pits (2026-10-22, every map's data regenerated; bodies fell into Town's plaza slot and Dust's channel and
+ditch walking their rims, and met invisible 25 m pillars): a reached floor cell beside a drop of more than a STEP that no
+kerb ramp climbs back gets a GUARD on that edge — a slim box (10 cm, straddling the cell's edge) a step taller than the
+floor: a body stops at the edge instead of falling, a jump clears it (the feet rise over its hold), a round and an eye pass
+it (`noProjectile`), bots take the ramps. A void region is walled only where it is a body wide (cells whose GROUND_MIN
+square is all void, and their square); the slivers hanging off it are gaps, and a gap no floor reaches joins the tallest
+thing beside it (they used to be 25 m void walls each — the pillars). An unwalked floor column over the street, however
+low, is solid (the sim stands a body on the street wherever no surface covers the point: Dust's retaining-wall top was
+walked through at street level). A thing beside a floor under the street stands from that floor (its box went down to the
+street only and floated over the yard beside it). `LIDS="x0,z0,x1,z1,h;..."` (model metres, h over the street) fills a pit
+and lids it: every cell of the rect is floor at h, the yard's body box under it. `PIT_MAX` (default 3) is how far under
+the street a sloping floor is still read. Counts after: Town 7,247 boxes (81 guards), Dust 4,434 (56), Spacecraft 3,298
+(2), Backrooms 57 (0); walkable points lost 21 / 27 / 16 / 2 (edge cells), gained 1 / 75 (the basin) / 33 (slots between
+hull parts that were void walls) / 0; boxes 1.5 m and taller on 2 m² or less holding no model face: Dust 22 (from 38),
+Town 14, Spacecraft 5, the rest on real voids' edges (`phantom_boxes.mjs`).
+
+The Backrooms model served is the edited one (2026-10-22): the chamber cut at z 21.8, P18 and P19 closed blocks with the
+lane between them open at both ends, the lane's walls and the south walls copied from the hall's own walls, the plinth kept
+and its dark faces repainted. The recipe is `backrooms_ops.json` for `glb_edit.mjs` over the cut model
+(`glb_cut.mjs <in> <out> <node> <zWorld> below|above` first); `glb_pieces.mjs` lists a model's pieces by id for the copy
+ops; `glb_zfight.mjs <glb> x0 x1 z0 z1` finds coplanar overlaps; `glb_lum.mjs` / `glb_lumstrip.mjs` sample each face's
+texture for dark faces and dark strips; `glb_box.mjs` / `glb_verts.mjs` / `glb_cutinfo.mjs` list faces and vertices in a
+box; `glb_read.mjs` is what they share.
 
 Then the spawns, in game units (`spawn_set.mjs <tree root> <json> x,z x,z [more...] [--random]`; the floor height is
 read off the nav grid, a point off it is refused):
@@ -40,7 +64,11 @@ Town, Spacecraft and Backrooms on this line still carry the data the v5 generato
 ## Looking at a reading
 
 - `cellplan.mjs <cells.json> <out.png> [x0 z0 x1 z1 metres] [px per cell]`: the plan — floors by height, walls black,
-  low cover and standable things orange, void dark grey, covered floors stippled, ramps hatched.
+  low cover and standable things orange, void dark grey, covered floors stippled, ramps hatched. `MARK="x0,z0,x1,z1;..."` outlines spots in red.
+- `data_at.py <out dir> <key> x0 x1 z0 z1 [stride] [zTransect]`: the surfaces, boxes and a cell chart of a window, and a
+  transect's every field. `phantom_boxes.mjs <json> <glb> <cxM> <czM> <groundM>`: boxes holding no model face.
+- `walk_probe.cjs <client/dist> <map> xM zM cxM czM yawDeg seconds`: the W key held in the built client, the body's
+  position and floor sampled (runs the game client — only with the user's leave). `label_plan.cjs`, `clone_cost.cjs`.
 - `regions.mjs <tree> <json> <cxM> <czM> [top]`: the walked regions of the nav grid (size, floor range, box).
 - `walk_diff.mjs <tree> <a.json> <b.json> <cxM> <czM>`: walkable points lost and gained between two readings.
 - `dust_frontier.mjs <tree> <json> [cxM czM]`: where two regions nearly meet and the boxes between them.

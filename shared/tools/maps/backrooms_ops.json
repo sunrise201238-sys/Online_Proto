@@ -1,0 +1,15 @@
+[
+  { "op": "delete", "node": "Object_6", "x0": -12.95, "x1": -10.75, "y0": 0.7, "y1": 6.0, "z0": 18.2, "z1": 18.5 },
+  { "op": "delete", "node": "Object_6", "x0": -10.905, "x1": -10.885, "y0": 1.0, "y1": 4.5, "z0": 9.715, "z1": 18.40 },
+  { "op": "delete", "node": "Object_6", "x0": -12.835, "x1": -12.815, "y0": 1.0, "y1": 4.5, "z0": 9.715, "z1": 18.40 },
+  { "op": "delete", "node": "Object_6", "x0": -13.9, "x1": -3.6, "y0": 0.7, "y1": 6.0, "z0": 21.79, "z1": 21.81 },
+  { "op": "uvpatch", "node": "Object_6", "x0": -10.93, "x1": -10.91, "y0": -0.1, "y1": 0.62, "z0": 9.6, "z1": 21.85, "faces": "-x", "sampleAt": [-7.3, 0.3, 9.68], "sampleFace": "-z" },
+  { "op": "uvpatch", "node": "Object_6", "x0": -10.95, "x1": -3.6, "y0": -0.1, "y1": 0.62, "z0": 21.79, "z1": 21.81, "faces": "+z", "sampleAt": [-7.3, 0.3, 9.68], "sampleFace": "-z" },
+  { "op": "uvpatch", "node": "Object_6", "x0": -12.815, "x1": -12.795, "y0": 0.45, "y1": 0.62, "z0": 9.6, "z1": 21.85, "faces": "+x", "sampleAt": [-13.87, 0.54, 11.0], "sampleFace": "-x" },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [30], "dx": -27.2023, "dz": 15.7439, "clip": { "z0": 9.719, "z1": 21.79 } },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [30], "dx": -29.5253, "dz": 15.7439, "clip": { "z0": 9.719, "z1": 21.79 } },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [14], "dx": -17.386, "dz": 28.45, "clip": { "x0": -10.886, "x1": -3.657, "z0": 21.42, "z1": 21.79, "y1": 5.46 } },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [14], "dx": -20.838, "dz": 28.45, "clip": { "x0": -13.838, "x1": -12.837, "z0": 21.42, "z1": 21.79, "y1": 5.46 } },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [14], "dx": -22.0, "dz": 25.19, "clip": { "x0": -13.0, "x1": -10.70, "z0": 18.16, "z1": 18.53, "y0": 4.2, "y1": 5.46 } },
+  { "op": "copy", "node": "Object_10", "from": "glbmap/backrooms_cut_pieces.json", "pieces": [14], "dx": -22.0, "dz": 28.79, "clip": { "x0": -13.0, "x1": -10.70, "z0": 18.16, "z1": 18.53, "y0": 4.2, "y1": 5.46 } }
+]
