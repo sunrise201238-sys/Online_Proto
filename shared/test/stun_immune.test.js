@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createMatchState, applyHitStun, UNIT_DATA, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot } from '../src/sim/ai.js';   // (the brain is the host's call; tickMatch alone moves the body)
 
-// Kurumi's shield (user 2026-10-23): 150 HP from her unit data, and `stunImmune` — the one hit-stun routine leaves her
+// Kurumi's shield (user 2026-10-23): `stunImmune` — the one hit-stun routine leaves her
 // unslowed; a unit without the flag takes the stun, the heavier stun winning as before.
 test('a unit flagged stunImmune is never slowed by a hit', () => {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit17', p2UnitKey: 'unit1', startTime: 1000, mode: '1v1' });
@@ -20,9 +20,9 @@ test('a unit without the flag takes the stun, and a heavier one replaces a runni
   assert.equal(applyHitStun(y, y.unit, 100, 0.25, 1010), true, 'a heavier stun replaces it'); assert.equal(y.hitStunUntil, 1110);
 });
 
-test('Kurumi spawns with the 150 HP her data names; the others with 100', () => {
+test('a fighter spawns with the HP its unit data names (Kurumi back on the base 100 since 2026-10-23)', () => {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit17', p2UnitKey: 'unit4', startTime: 1000, mode: '1v1' });
-  assert.equal(m.fighters.p1.hp, 150); assert.equal(m.fighters.p2.hp, 100); assert.equal(UNIT_DATA.unit17.hp, 150);
+  assert.equal(m.fighters.p1.hp, UNIT_DATA.unit17.hp); assert.equal(m.fighters.p2.hp, UNIT_DATA.unit4.hp); assert.equal(UNIT_DATA.unit17.hp, 100);
 });
 
 test('a stun-immune bot still knows it was hit: the hit evade arms off the hit itself', () => {

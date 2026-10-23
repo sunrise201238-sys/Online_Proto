@@ -688,8 +688,8 @@ const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 150 HP, never stunned (stunImmune); for it a
-  // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — never stunned (stunImmune; her 150 HP of a day went
+  // back to 100, "a bloody tank"); for it a slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and a 3-damage bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
   unit17: {
@@ -697,8 +697,8 @@ const UNIT_DATA = {
     spriteKey: 'kurumi', char: 'Kurumi', weapon: 'UMP45', accent: 0xc8a66a,
     model: 'kurumi',   // 3D character (UNIT_MODELS)
 
-    // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 150,   // user 2026-10-23 (the rest: 100)
+    // Pilot stats — Atsuko's block, the walk her own.
+    hp: 100,                   // user 2026-10-23: 150 for a day — "a bloody tank" — then the base 100
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
