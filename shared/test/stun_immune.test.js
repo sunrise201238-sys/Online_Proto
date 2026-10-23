@@ -20,9 +20,9 @@ test('a unit without the flag takes the stun, and a heavier one replaces a runni
   assert.equal(applyHitStun(y, y.unit, 100, 0.25, 1010), true, 'a heavier stun replaces it'); assert.equal(y.hitStunUntil, 1110);
 });
 
-test('a fighter spawns with the HP its unit data names (Kurumi 150, the rest 100)', () => {
+test('a fighter spawns with the HP its unit data names (Kurumi 125, the rest 100)', () => {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit17', p2UnitKey: 'unit4', startTime: 1000, mode: '1v1' });
-  assert.equal(m.fighters.p1.hp, UNIT_DATA.unit17.hp); assert.equal(m.fighters.p2.hp, UNIT_DATA.unit4.hp); assert.equal(UNIT_DATA.unit17.hp, 150); assert.equal(UNIT_DATA.unit4.hp, 100);
+  assert.equal(m.fighters.p1.hp, UNIT_DATA.unit17.hp); assert.equal(m.fighters.p2.hp, UNIT_DATA.unit4.hp); assert.equal(UNIT_DATA.unit17.hp, 125); assert.equal(UNIT_DATA.unit4.hp, 100);
 });
 
 test('a stun-immune bot still knows it was hit: the hit evade arms off the hit itself', () => {

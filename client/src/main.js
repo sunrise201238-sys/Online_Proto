@@ -688,9 +688,9 @@ const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 150 HP, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 125 HP, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
-  // Marina's 0.11 and Marina's 2.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
+  // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
   unit17: {
     name: 'Unit 17 / Submachine Gun',
@@ -698,7 +698,7 @@ const UNIT_DATA = {
     model: 'kurumi',   // 3D character (UNIT_MODELS)
 
     // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 150,                   // user 2026-10-23: 150, then 100 ("a bloody tank"), then 150 again with a 2.5 bullet
+    hp: 125,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day): a mainline magazine, 100–120, still falls short
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
@@ -721,7 +721,7 @@ const UNIT_DATA = {
     bloomRecoverPerSec: 0.05,   // user 2026-10-23 (was 0.035 the same day) — the SMGs' pace
     bloomRecoverDelayMs: 200,
     botSuppressBurst: 10,
-    damage: 2.5,               // user 2026-10-23 (3.5, 2.5, 3, then 2.5 with the 150 HP back) — Marina's bullet
+    damage: 3.5,               // user 2026-10-23 (3.5 → 2.5 → 3 → 2.5 → 3.5 the same day) — Atsuko's bullet
     magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
     botFireCap: 25,
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
