@@ -590,16 +590,16 @@ export const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — never stunned (stunImmune; her 150 HP of a day went
-  // back to 100, "a bloody tank"); for it a slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
-  // Marina's 0.11 and a 3-damage bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 150 HP, never stunned (stunImmune); for it a
+  // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
+  // Marina's 0.11 and Marina's 2.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrored in the client.
   unit17: {
     id: 'unit17',
     name: 'Unit 17 / Submachine Gun',
 
-    // Pilot stats — Atsuko's block, the walk her own.
-    hp: 100,                   // user 2026-10-23: 150 for a day — "a bloody tank" — then the base 100
+    // Pilot stats — Atsuko's block, the HP and the walk her own.
+    hp: 150,                   // user 2026-10-23: 150, then 100 ("a bloody tank"), then 150 again with a 2.5 bullet
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
@@ -622,7 +622,7 @@ export const UNIT_DATA = {
     bloomRecoverPerSec: 0.05,   // user 2026-10-23 (was 0.035 the same day) — the SMGs' pace
     bloomRecoverDelayMs: 200,
     botSuppressBurst: 10,
-    damage: 3,                 // user 2026-10-23 (3.5, then 2.5, then 3 the same day)
+    damage: 2.5,               // user 2026-10-23 (3.5, 2.5, 3, then 2.5 with the 150 HP back) — Marina's bullet
     magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
     botFireCap: 25,
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
