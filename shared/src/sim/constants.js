@@ -629,6 +629,38 @@ export const UNIT_DATA = {
     autoReload: false,
     stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
     stun: { ms: 100, moveScale: 0.25 },   // user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
+  },
+  // Rabu / M590 (user 2026-10-23): Haruka's SDASS — the concentrated pattern — on a 10-shell box magazine that reloads as
+  // one in 2 s (the other shotguns load shell by shell); the rest hers until her own are set. Mirrored in the client.
+  unit18: {
+    id: 'unit18',
+    name: 'Unit 18 / Shotgun',
+
+    // Pilot stats — Haruka's block.
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 16,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
+    lockRange: 40,
+    lockRange2v2: 50,
+    projectileSpeed: 350,
+    firePerMinute: 250,
+    spreadCount: 8,
+    spreadAngle: (16 * Math.PI) / 180,
+    damage: 4,               // per pellet, 8 x 4 = 32 point-blank
+    magCapacity: 10,           // user 2026-10-23 (the SDASS: 7 shells)
+    botFireCap: 10,            // user 2026-10-23: the bot empties the magazine in one pull, as Marina does (the shell-loaders: 4)
+    reloadMs: 2000,            // user 2026-10-23 (the SDASS: 1.2 s a shell)
+    autoReload: false,         // user 2026-10-23: a box magazine, reloaded as one when empty — the only shotgun on the magazine rule
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 

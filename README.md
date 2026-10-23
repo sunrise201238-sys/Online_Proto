@@ -38,7 +38,7 @@ The first tap on a unit card opens its profile beside the grid (tap the same car
 
 - **Mag**, **RPM** and **Reload** (seconds) as plain numbers.
 - **Dmg** shows every tier where a gun has them: Aru's PSG1 `50/35/20` (far / mid / near), Kei's Railgun `30/20` (quick / charged), the shotguns per pellet `3 ×8`.
-- **Movement** is the walk-speed tier word (walk speeds retuned 2026-09-24): **Fast** (walk 16 — Atsuko, Marina, Yuuka, Hoshino, Haruka), **Medium** (12 — Saori, Asuna, Subaru, Fubuki, Aris, Aru, Kei), **Slow** (Koyuki and Kurumi at 10, Hina at 8).
+- **Movement** is the walk-speed tier word (walk speeds retuned 2026-09-24): **Fast** (walk 16 — Atsuko, Marina, Yuuka, Hoshino, Haruka, Rabu), **Medium** (12 — Saori, Asuna, Subaru, Fubuki, Aris, Aru, Kei), **Slow** (Koyuki and Kurumi at 10, Hina at 8).
 - The **Spread picture** is a seeded mini-simulation of a **walking spray at a common 60-unit reference** (the shotguns at their own 40): the ring is a standing target's half-width at that distance, the orange dots are up to 30 rounds — magazine-limited — each leaving on the cone the sim gives that round (base + bloom, per-round bloom up to the cap, and the between-round recovery of the no-delay marksman rifles), fading with round order so the first rounds read brightest. The spray stops at the first round whose cone no longer fits the frame (2026-09-22, owner pick from samples — pinning spilled rounds to the frame's edge had piled Fubuki's 27 out-of-frame rounds into a rectangle), so nothing is drawn outside the frame: Saori's whole 30-round spray stays inside the ring, Koyuki's and Hina's pictures end a few rounds short of the magazine with their late rounds at the frame's edge, and Fubuki's and Aris's show their first three quick rounds — one on the ring's centre, two at its edge — because the fourth already flies wider than the frame; the shotguns show their 8-pellet pattern (the Beretta 1301 with its 1.4× horizontal stretch — Hoshino's since the two shotguns swapped patterns on 2026-10-10).
 
 The grid keeps the same sizes on phones (checked at 390 px: nothing wraps or spills).
@@ -76,7 +76,7 @@ Picked as the **rules mode** beside the view mode (**Health Point** is the norma
 | Hina | 80 |
 | Aris | 160 |
 | Marina | 53 |
-| Hoshino, Haruka | 40 |
+| Hoshino, Haruka, Rabu | 40 |
 
 **Measured** (headless, the shared sim driven tick by tick): against the brain it replaced, 63% of decided duels at b1017e and about 50% once the unit's own reaction was in (the old brain reacts in 0 ms); the wall-hugger scan on flashpoint (the human 1.2 u off every obstacle face) 29–30 of 31 kills in 40 s; 10 ms of CPU per bot per second (was 14). The equivalence test (`shared/test/sdbrain_equiv.test.js`) plays the live brain against a frozen copy tick for tick on seeded matches, so a port between lines changes nothing. **F9** in the client prints the Sudden Death report to the console — the plans taken, the pricings refused, the rounds fired, and the last five seconds as a tape — and a bot's death prints the same with the killing round's geometry.
 
@@ -125,7 +125,7 @@ The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama
 
 ## Units
 
-Fifteen pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprint base; walk speeds since 2026-09-24: 16 for the SMGs and shotguns, 12 for the assault rifles, rifles and snipers, 10 for Unit 12, 8 for Unit 5; Unit 7 flies):
+Sixteen pickable units, near-identical base stats (100 HP, 250 boost, 11.76 sprint base; walk speeds since 2026-09-24: 16 for the SMGs and shotguns, 12 for the assault rifles, rifles and snipers, 10 for Unit 12, 8 for Unit 5; Unit 7 flies):
 
 **Weapons:**
 
@@ -140,6 +140,7 @@ Fifteen pickable units, near-identical base stats (100 HP, 250 boost, 11.76 spri
 | Unit 17 — Submachine Gun (Kurumi) | 25 | 2.5 / shot | ~600 RPM | 600 | 40 / 50 | 2 s |
 | Unit 2 — Shotgun (Hoshino) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
 | Unit 11 — Shotgun (Haruka) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 18 — Shotgun (Rabu) | 10 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 2 s (magazine) |
 | Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
 | Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
 | Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
@@ -152,6 +153,7 @@ Fifteen pickable units, near-identical base stats (100 HP, 250 boost, 11.76 spri
 | Unit | Real cadence | Dmg/shot | Burst DPS | Sustained (incl. reload) |
 |---|---|---|---|---|
 | Hoshino / Haruka | 4.17 blasts/s | 32 (8×4, point-blank) | **133.3** | ~26.7 (shell-regen limited) |
+| Rabu | 4.17 blasts/s | 32 (8×4, point-blank) | **133.3** | ~76.9 (10-shell magazine, 2 s reload) |
 | Hina | 20.8/s (48 ms) | 4 | **83.3** | 52.8 |
 | Atsuko | 15.6/s (64 ms) | 3.5 | **54.7** | 31.3 |
 | Marina | 20.8/s (48 ms) | 2.5 | **52.1** | 33.1 |
@@ -180,6 +182,7 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | Unit 17 — Kurumi | 100 ms @ 0.25 | 0.03 | +0.015 | 0.11 | 0.05/s, 200 ms | 107 → 29 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | — | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern (see below) | — | — | — | pattern |
+| Unit 18 — Rabu | 100 ms @ 0.25 | pattern (Haruka's) | — | — | — | pattern |
 | Unit 12 — Koyuki | 100 ms @ 0.25 | 0.02 | +0.004 | 0.12 | 0.03/s, 200 ms | 160 → 27 |
 | Unit 5 — Hina | 50 ms @ 0.85 | 0.04 | +0.003 | 0.14 | 0.03/s, 200 ms | 80 → 23 |
 | Unit 10 — Fubuki | 100 ms @ 0.25 | 0.02 | +0.10 | 0.30 | 0.17/s, no delay | 160 → 11 |
@@ -192,6 +195,8 @@ Unit 13 is the lightest bullet in the game on Hina's cadence: the 48 ms tick slo
 Units 14 and 15 (user 2026-10-22) are Saori's and Atsuko's chassis with guns of their own. Subaru's HK33 is the M4 with 0.005 bloom per shot: the cap at the 9th round where the M4 reaches it at the 21st (standing still adds no bloom, so a planted shooter has the M4 exactly). Yuuka's MPX is the evo3 with 850 label RPM and 0.01 bloom per shot: a 70.6 ms cooldown lands on the 80 ms tick slot, Asuna's cadence — 64 and 80 ms are the only slots near — so she fires 12.5/s to Atsuko's 15.6, and her cone reaches the cap at the 6th round where the evo3's takes 18. Both sit at the bottom of the picker.
 
 Unit 17 (user 2026-10-23): Kurumi is the shield bearer, the only unit off the 100 HP base — **150 HP**, and she is **never stunned** (`stunImmune`, a unit field read by the one hit-stun routine, `applyHitStun`: the hit's damage and momentum cut stand, the slow does not). The price is the UMP45's kit: a walk of 10 (Koyuki's tier), the shotguns' 40 / 50 reach, 600 RPM on the 112 ms slot (8.9 rounds/s) with Marina's 2.5 bullet (22.3 burst DPS, the lowest in the game), a 25-round magazine on a 2 s reload, and a cone of 0.03 that opens by 0.015 a round to Marina's 0.11 (sure-hit 107 → 29), recovering at the SMGs' 0.05/s. (The **reload hold** — `reloadHolds`, a unit field: no walk and no sprint while the magazine is changed, the dodge and the jump open, the same for a player and for the bot — came and went twice the same day; the field stays for any unit to carry.) Her rounds stun as the rifles' do (100 ms at 0.25). Sudden Death puts her at 1 HP like everyone, so she still dies to the first hit there. (The 150 HP went to 100 for an hour on player feedback — "a bloody tank", no mainline magazine killed her — and came back paired with the 2.5 bullet.) Her pictures are the user's. (Unit 16, Rio's M1911, was added and removed the same day; the key is left unused.)
+
+Unit 18 (user 2026-10-23): Rabu's M590 is Haruka's SDASS — the concentrated pattern, the 250 RPM, the 40 / 50 reach — on a **10-shell box magazine** that reloads as one in 2 s where the other shotguns load shell by shell: ten blasts in 2.2 s (320 damage point-blank, 76.9 sustained DPS against the shell-loaders' 26.7), then a 2 s gap with nothing in the gun. The bot empties the magazine in one pull (`botFireCap` 10, as Marina's drum; the shell-loaders fire 4 and rest). The only shotgun on the magazine rule; the key after Kurumi's. Her pictures are the user's.
 
 **Reading the stun column** (`duration @ move-scale`): every landed hit slows the victim's movement to *move-scale* for *duration* — e.g. `100 ms @ 0.25` means crawling at 25% speed for 100 ms. Each new hit refreshes it; when two stuns compete, the heavier slow (lower scale) wins. **In practice the slow itself is a minor stat**: sprinting pays straight through it (and everyone sprints away from fire anyway, stun or not), while a walking target was already highly hittable — so the currencies that actually decide fights are the damage actually landed and the boost the target burns escaping, not the movement penalty.
 
