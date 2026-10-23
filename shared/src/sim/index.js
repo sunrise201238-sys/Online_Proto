@@ -40,10 +40,11 @@ export {
   tryStartStep,
   tickStep,
   tryStartJump,
-  startDash
+  startDash,
+  reloadHolds
 } from './actions.js';
 export {
-  spawnProjectiles, tickProjectiles,
+  spawnProjectiles, tickProjectiles, applyHitStun,
   // Shotgun volley pattern math — shared by the sim, the offline renderer,
   // and the online snapshot mirror so pellet hitboxes and visuals can never
   // drift apart.

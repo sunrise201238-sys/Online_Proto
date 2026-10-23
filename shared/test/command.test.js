@@ -232,8 +232,9 @@ test('hide order: a fresh hit while hidden-ordered never enters Defense (and doe
     for (let i = 0; i < 5000 / TICK_RATE_MS; i += 1) {
       const now = step();
       if (now - lastHitAt >= 400) {
-        // What a landing round does to its victim (projectiles.js): the stun
-        // window rises, which tickBot reads as a fresh hit.
+        // What a landing round does to its victim (projectiles.js applyHitStun): the hit is stamped — which tickBot reads
+        // as a fresh hit — and the stun window rises.
+        f.lastHitAt = now;
         f.hitStunUntil = now + 300;
         f.hitStunScale = 0.25;
         lastHitAt = now;
@@ -417,7 +418,7 @@ function plainNoCoverFixture(order) {
     tickMatch(m, inputs, now, TICK_DT, ['p1']);
     return now;
   };
-  const hit = () => { m.fighters.p1.hitStunUntil = now + 300; m.fighters.p1.hitStunScale = 0.25; };
+  const hit = () => { m.fighters.p1.lastHitAt = now; m.fighters.p1.hitStunUntil = now + 300; m.fighters.p1.hitStunScale = 0.25; };
   return { m, step, hit, now: () => now };
 }
 
@@ -437,7 +438,7 @@ test('a hit under a move order runs Defense (the hit-triggered cover hide was re
   assert.equal(setMoveOrder(m, 'p1', p1.pos.x + 6, p1.pos.z, 0), true);
   for (let i = 0; i < 2000 / TICK_RATE_MS && getCommands(m, 'p1').move.phase !== 'anchor'; i += 1) step();
   const order = getCommands(m, 'p1').move;
-  p1.hitStunUntil = nowFn() + 300; p1.hitStunScale = 0.25;   // a landing round
+  p1.lastHitAt = nowFn(); p1.hitStunUntil = nowFn() + 300; p1.hitStunScale = 0.25;   // a landing round
   let defenseAt = null;
   for (let i = 0; i < 10; i += 1) { step(); assert.ok(!p1.botCH, 'no cover hide on a hit'); if (p1.botState === 'defense') { defenseAt = i; break; } }
   assert.ok(defenseAt != null, 'the hit runs Defense');

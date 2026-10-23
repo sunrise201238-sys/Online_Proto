@@ -34,7 +34,7 @@ import {
   dampHorizontal,
   faceTowards
 } from './movement.js';
-import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash } from './actions.js';
+import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash, reloadHolds } from './actions.js';
 import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
 import { tickStillness } from './bloom.js';
 import { recordBodies } from './history.js';
@@ -121,6 +121,9 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   if (fighter.landedOnLid) { fighter.landedOnLid = false; fighter.plantUntil = now + LAND_PLANT_MS; }
   if (!hasDirInput) fighter.plantUntil = 0;
   const planted = now < fighter.plantUntil;
+  // The reload hold (user 2026-10-23, Kurumi): a unit flagged reloadHolds neither walks nor sprints while its magazine is
+  // being changed; the dodge and the jump stay open. Mirrored in the client's updatePlayer; the bots in ai.js / updateEnemy.
+  const reloadHeld = reloadHolds(fighter.unit, fighter, now);
   let sprintLocked = input.sprintLocked;
   // Sprint-lock release grace (2026-08-01, mirrors the client rule): a stick
   // flip crosses the neutral deadzone for a few frames — only a SUSTAINED
@@ -133,7 +136,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(fighter.unit?.flight && fighter.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
-  const boostActive = !planted && (input.boost || sprintLocked);   // (no dash out of a plant)
+  const boostActive = !planted && !reloadHeld && (input.boost || sprintLocked);   // (no dash out of a plant, nor out of a held reload)
 
   const recoveringFromDash = now < fighter.dashRecoverUntil;
   const hasBoost = fighter.boost > 0;
@@ -161,8 +164,8 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
 
   const inStep = now <= fighter.stepUntil;
   if (!inStep) {
-    fighter.vel.x = canInputMove && !planted ? input.moveX * speed * hitStunScale : 0;
-    fighter.vel.z = canInputMove && !planted ? input.moveZ * speed * hitStunScale : 0;
+    fighter.vel.x = canInputMove && !planted && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
+    fighter.vel.z = canInputMove && !planted && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
   }
 
   let action = 'idle';

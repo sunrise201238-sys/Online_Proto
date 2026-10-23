@@ -103,6 +103,9 @@ Both need the global playwright and `/opt/pw-browsers/chromium` (`NODE_PATH=$(np
 only with the user's leave. `hud_probe.cjs <client/dist> <mapKey>`: a 2v2 started on the map, the HUD read, command
 mode toggled, the renderer's draw calls. `map_photo.cjs <client/dist> <mapKey> <out.png> [dist yaw height cx cz waitMs]`:
 the map card's photo (Dust's: `560 2.4 0.85 0 0 14000`).
+`portrait_render.cjs <client tree> <model.glb> <idleClip> <outPrefix> [yaw frame thumbFrac thumbTop]`: a character's profile picture and picker
+thumbnail rendered from its model (three.js from the tree's node_modules, the formation idle, yaw 345, a transparent ground) in the
+existing set's framing — Rio and Kurumi were made with `Formation_Idle 345 0.6 0.42 -0.10` (user 2026-10-23).
 
 ## The PT site from this tree
 

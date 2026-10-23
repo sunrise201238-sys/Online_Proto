@@ -589,6 +589,46 @@ export const UNIT_DATA = {
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 150 HP, never stunned (stunImmune); for it a
+  // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
+  // Marina's 0.11 and a 3-damage bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
+  // any unit. Sudden Death puts her at 1 HP like everyone. Mirrored in the client.
+  unit17: {
+    id: 'unit17',
+    name: 'Unit 17 / Submachine Gun',
+
+    // Pilot stats — Atsuko's block, the HP and the walk her own.
+    hp: 150,   // user 2026-10-23 (the rest: 100)
+    boostCap: 250,
+    walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — the MPX's shape with her own numbers (user 2026-10-23).
+    lockRange: 40,   // user 2026-10-23 (the MPX: 50) — the shotguns' reach
+    lockRange2v2: 50,   // user 2026-10-23 (the MPX: 55)
+    projectileSpeed: 600,
+    firePerMinute: 600,   // user 2026-10-23 (the MPX: 850) — the 112 ms tick slot, Koyuki's, 535 real
+    spreadCount: 1,
+    spreadAngle: 0.03,
+    bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
+    bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
+    bloomRecoverPerSec: 0.05,   // user 2026-10-23 (was 0.035 the same day) — the SMGs' pace
+    bloomRecoverDelayMs: 200,
+    botSuppressBurst: 10,
+    damage: 3,                 // user 2026-10-23 (3.5, then 2.5, then 3 the same day)
+    magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
+    botFireCap: 25,
+    reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
+    autoReload: false,
+    stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
+    stun: { ms: 100, moveScale: 0.25 },   // user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   }
 };
 

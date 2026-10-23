@@ -39,6 +39,7 @@ export function createFighter(id, unitKey, spawn) {
     // Lock & stun.
     redLock: false,
     hitStunUntil: 0,
+    lastHitAt: 0,          // the last landed hit (projectiles.js applyHitStun), stunned or not
     hitStunScale: 0.25,
     staggerUntil: 0,
     // Spawn protection — set per round in createMatchState; no damage while

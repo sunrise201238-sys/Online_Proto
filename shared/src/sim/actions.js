@@ -27,6 +27,12 @@ import { unitOverlapsObstacle } from './physics.js';
 import { inheritMomentum } from './movement.js';
 import { bloomAfterTime, isStill } from './bloom.js';
 
+// The reload hold (user 2026-10-23, Kurumi's UMP45): a unit whose data says `reloadHolds` stands while its magazine is being
+// changed — the walk and the sprint are refused, the dodge and the jump are not. A rule from data, one call for the player's
+// input (tick.js applyInput, the client's updatePlayer) and for the bots (ai.js, the client's updateEnemy). `unit` is passed
+// apart from the fighter because the client's own state objects carry no unit.
+export function reloadHolds(unit, fighter, now) { return !!unit?.reloadHolds && (fighter.reloadingUntil ?? 0) > now; }
+
 // Reload ticking. Mirrors tickAmmo.
 export function tickAmmo(fighter, now) {
   const u = fighter.unit;

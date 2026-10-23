@@ -33,6 +33,18 @@ import {
   closestPointOnSegment
 } from './math.js';
 import { createProjectile, nextProjectileId } from './state.js';
+
+// Hit-stun on a body (every hit path: bullets, pellets, the beam, the sniper's round; the offline client's mirrors call it
+// too): a new stun lands when none is running OR it is strictly heavier (a lower move-scale), taking its own duration even
+// if shorter. A unit whose data says `stunImmune` (user 2026-10-23, Kurumi's shield) is never slowed — the hit's damage and
+// its momentum cut stand as before. `unit` is passed apart from the body because the client's state objects carry none.
+export function applyHitStun(target, unit, ms, scale, now) {
+  target.lastHitAt = now;   // (the hit itself, stun or no stun: the bot brains read it as "I was hit" — user 2026-10-23, Kurumi's Defense never fired)
+  if (unit?.stunImmune) return false;
+  if (now >= target.hitStunUntil || scale < target.hitStunScale) { target.hitStunScale = scale; target.hitStunUntil = now + ms; return true; }
+  return false;
+}
+
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
 import { bodyAt } from './history.js';
@@ -351,10 +363,7 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       // Per-weapon stun, lowest-move-scale-wins: apply when the target is free
       // OR the new stun is strictly heavier (lower move-scale), taking its own
       // duration even if shorter. Mirrors offline main.js.
-      if (now >= target.hitStunUntil || p.hitStunScale < target.hitStunScale) {
-        target.hitStunScale = p.hitStunScale;
-        target.hitStunUntil = now + p.hitStunMs;
-      }
+      applyHitStun(target, target.unit, p.hitStunMs, p.hitStunScale, now);
       target.momentumVX = 0;
       target.momentumVZ = 0;
       target.vel.x = 0;
@@ -538,10 +547,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
     const per = damageScaler ? damageScaler(p) : p.damage;
     const damage = per * pelletsHit;
     target.hp = Math.max(0, target.hp - damage);
-    if (now >= target.hitStunUntil || p.hitStunScale < target.hitStunScale) {
-      target.hitStunScale = p.hitStunScale;
-      target.hitStunUntil = now + p.hitStunMs;
-    }
+    applyHitStun(target, target.unit, p.hitStunMs, p.hitStunScale, now);
     target.momentumVX = 0;
     target.momentumVZ = 0;
     target.vel.x = 0;
@@ -654,10 +660,7 @@ export function tickBeams(matchState, now, damageScaler = null) {
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       const damage = damageScaler ? damageScaler(b) : b.damage;
       f.hp = Math.max(0, f.hp - damage);
-      if (now >= f.hitStunUntil || b.hitStunScale < f.hitStunScale) {
-        f.hitStunScale = b.hitStunScale;
-        f.hitStunUntil = now + b.hitStunMs;
-      }
+      applyHitStun(f, f.unit, b.hitStunMs, b.hitStunScale, now);
       f.momentumVX = 0; f.momentumVZ = 0;
       f.vel.x = 0; f.vel.y = 0; f.vel.z = 0;
       b.hitIds.push(f.id);
@@ -808,10 +811,7 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       // The charged sweep channel hits softer than the quick beam / normal shot.
       const damage = u.beam?.chargedDamage ?? u.damage;
       t.hp = Math.max(0, t.hp - damage);
-      if (now >= t.hitStunUntil || (u.stun?.moveScale ?? 0.25) < t.hitStunScale) {
-        t.hitStunScale = u.stun?.moveScale ?? 0.25;
-        t.hitStunUntil = now + (u.stun?.ms ?? PROJECTILE_HIT_STUN_MS);
-      }
+      applyHitStun(t, t.unit, u.stun?.ms ?? PROJECTILE_HIT_STUN_MS, u.stun?.moveScale ?? 0.25, now);
       t.momentumVX = 0; t.momentumVZ = 0;
       t.vel.x = 0; t.vel.y = 0; t.vel.z = 0;
       f.chargedBeamHitIds.push(t.id);

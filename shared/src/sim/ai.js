@@ -5,7 +5,7 @@
 // 2v2 target pick, the per-fighter Sudden Death overrides, the hit-stun
 // slowdown after the brain's velocity.
 
-import { attemptFire, tryStartJump, tryStartStep, tickStep } from './actions.js';
+import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from './actions.js';
 import { getArena } from './arena.js';
 import { buildNavGrid } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
@@ -125,6 +125,10 @@ export function tickBot(matchState, botId, now) {
     deadline: () => matchState.searchDeadline ?? 0,
     tape: null
   });
+  // The reload hold (actions.js reloadHolds): whatever the brain set, a unit changing its magazine stands — and a sprint the
+  // brain asked for is withdrawn with it: 'dash' would drain the gauge (movement.js) and play the sprint clip on a standing body
+  // (user 2026-10-23, "the bot's reload motion is wrong"). A step or a jump in flight keeps its action.
+  if (reloadHolds(me.unit, me, now)) { me.vel.x = 0; me.vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }   // (the momentum too: the brain's sprint had banked some)
   // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
   // weapon's move-scale, stored on the victim) while stunned rather than
   // freezing — the host's physics, applied to whatever velocity the brain set.

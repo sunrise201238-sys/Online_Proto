@@ -1,6 +1,6 @@
-// FROZEN at b1021z for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1023n for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
-// re-frozen with the build whose play it must match (freeze_refs.py).
+// re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
 // 2026-10-17, the plain-brain rework: "one place, one structure, patchless").
 // The server's tickBot (ai.js) and the offline client's updateEnemy (main.js)
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1021z_ref.js';
+import { sdBrainTick } from './sdbrain_b1023n_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -534,9 +534,11 @@ export function nbBrainTick(host) {
     me.botGlintKey = null;
   }
   // A fresh hit means the shot already landed — drop the now-pointless dodge.
-  // (botPrevHitStun is only advanced by the threat block below, so the rising
-  // edge is still visible here.)
-  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
+  // (botPrevHitAt is only advanced by the threat block below, so the rising
+  // edge is still visible here. The hit is read off lastHitAt, which every
+  // landed hit stamps — the stun timer no longer, since a stunImmune unit's
+  // never moves and her bot never knew it was hit; user 2026-10-23.)
+  if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botGlintStepAt = null;
 
   // The dodge comes due: one i-frame step, then a 520 ms sprint in the same
   // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
@@ -657,8 +659,8 @@ export function nbBrainTick(host) {
     pos.x + dirX * len, pos.z + dirZ * len,
     pos.y, obstacles
   );
-  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
-  me.botPrevHitStun = me.hitStunUntil;
+  if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
+  me.botPrevHitAt = me.lastHitAt ?? 0;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
   // longer triggers Defense — the bot's sole response to a glint is the
   // committed dodge scheduled above, so it ALWAYS dodges instead of sometimes
@@ -688,7 +690,7 @@ export function nbBrainTick(host) {
     // starves this clock and drops the bot into spurious mid-fight Maze
     // episodes (the angled-backward-sprint sightings on Plain Field).
     // Under-fire wedges are Defense's job, on its own 2-tick trigger.
-    if (Math.hypot(ddx, ddz) > 3 || me.hitStunUntil > me.botProgressAnchorAt) {
+    if (Math.hypot(ddx, ddz) > 3 || (me.lastHitAt ?? 0) > me.botProgressAnchorAt) {
       me.botLastProgressAt = now;
     }
     me.botProgressAnchorX = pos.x;

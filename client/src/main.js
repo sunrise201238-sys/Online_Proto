@@ -41,7 +41,9 @@ import {
   LAND_PLANT_LEVEL,
   getArenaSurfaces,
   getArenaBounds,
-  getGeneratedObstacles
+  getGeneratedObstacles,
+  reloadHolds,
+  applyHitStun
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
@@ -685,6 +687,47 @@ const UNIT_DATA = {
     reloadMs: 1500,
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
+  },
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 150 HP, never stunned (stunImmune); for it a
+  // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
+  // Marina's 0.11 and a 3-damage bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
+  // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
+  unit17: {
+    name: 'Unit 17 / Submachine Gun',
+    spriteKey: 'kurumi', char: 'Kurumi', weapon: 'UMP45', accent: 0xc8a66a,
+    model: 'kurumi',   // 3D character (UNIT_MODELS)
+
+    // Pilot stats — Atsuko's block, the HP and the walk her own.
+    hp: 150,   // user 2026-10-23 (the rest: 100)
+    boostCap: 250,
+    walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec — the MPX's shape with her own numbers (user 2026-10-23).
+    lockRange: 40,   // user 2026-10-23 (the MPX: 50) — the shotguns' reach
+    lockRange2v2: 50,   // user 2026-10-23 (the MPX: 55)
+    projectileSpeed: 600,
+    firePerMinute: 600,   // user 2026-10-23 (the MPX: 850) — the 112 ms tick slot, Koyuki's, 535 real
+    spreadCount: 1,
+    spreadAngle: 0.03,
+    bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
+    bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
+    bloomRecoverPerSec: 0.05,   // user 2026-10-23 (was 0.035 the same day) — the SMGs' pace
+    bloomRecoverDelayMs: 200,
+    botSuppressBurst: 10,
+    damage: 3,                 // user 2026-10-23 (3.5, then 2.5, then 3 the same day)
+    magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
+    botFireCap: 25,
+    reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
+    autoReload: false,
+    stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
+    stun: { ms: 100, moveScale: 0.25 },   // user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   }
 };
 
@@ -1579,6 +1622,17 @@ const UNIT_MODELS = {
   // (Yuuka's form, user 2026-10-22, a first map until the user's motion sheet: every default name is in her file; she also
   // carries a Stand_* set and Move_End_* clips, unused)
   yuuka: { file: 'models/yuuka', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (Kurumi's form, the user's motion sheet of 2026-10-23: her file names its idle, move and reload clips in two sets,
+  // Normal01_* / Move01_* and Normal02_* / Move02_*, and carries no Move_Jump — the formation idle stands, the first move set
+  // walks, the second set's move-end clip is her dodge and her jump)
+  kurumi: { file: 'models/kurumi', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    stand: { name: 'Formation_Idle', speed: 1 },
+    walk: { name: 'Move01_Ing', speed: 0.5 },
+    sprint: { name: 'Move01_Ing', speed: 1 },
+    sprintShoot: { name: 'Move01_Ing', speed: 1 },
+    dodge: { name: 'Move02_End_Normal', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move02_End_Normal', speed: 1, once: true },
+    reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
   // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
   marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 } } },
   // (Haruka's form, 2026-10-10: nothing changed from the default map)
@@ -2285,6 +2339,7 @@ function createMech(color, unitData, isOwnUnit = false) {
       redLock: false,
       overheatedUntil: 0,
       hitStunUntil: 0,
+      lastHitAt: 0,
       hitStunScale: 0.25,
       invulnerableUntil: 0,
       hoverUntil: 0,
@@ -3736,10 +3791,7 @@ function updateProjectileSystem(dt) {
         const finalDamage = getProjectileDamage(p) * pelletsHit;
         tgtState.hp = Math.max(0, tgtState.hp - finalDamage);
         if (tgtState.hp <= 0) sdRecordKill(p.target, p.owner, hitCenter, hitCenter);   // (death report: a volley — the pellet's path is not kept)
-        if (now >= tgtState.hitStunUntil || p.hitStunScale < tgtState.hitStunScale) {
-          tgtState.hitStunScale = p.hitStunScale;
-          tgtState.hitStunUntil = now + p.hitStunMs;
-        }
+        applyHitStun(tgtState, p.target.unit, p.hitStunMs, p.hitStunScale, now);
         tgtState.momentumVX = 0;
         tgtState.momentumVZ = 0;
         spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
@@ -3894,10 +3946,7 @@ function updateProjectileSystem(dt) {
       // when the target is free OR when its stun is strictly heavier (lower
       // move-scale) than the active one — taking its own duration even if shorter.
       const _ts = p.target.state;
-      if (now >= _ts.hitStunUntil || p.hitStunScale < _ts.hitStunScale) {
-        _ts.hitStunScale = p.hitStunScale;
-        _ts.hitStunUntil = now + p.hitStunMs;
-      }
+      applyHitStun(_ts, p.target.unit, p.hitStunMs, p.hitStunScale, now);
       p.target.state.momentumVX = 0;
       p.target.state.momentumVZ = 0;
       spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
@@ -4067,10 +4116,7 @@ function updateBeamDamage(now) {
       let dmg = b.damage;
       if (state.dummyMode && b.owner !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       st.hp = Math.max(0, st.hp - dmg);
-      if (now >= st.hitStunUntil || b.hitStunScale < st.hitStunScale) {
-        st.hitStunScale = b.hitStunScale;
-        st.hitStunUntil = now + b.hitStunMs;
-      }
+      applyHitStun(st, m.unit, b.hitStunMs, b.hitStunScale, now);
       st.momentumVX = 0;
       st.momentumVZ = 0;
       m.body.velocity.set(0, 0, 0);
@@ -4337,10 +4383,7 @@ function updateChargedBeams(now, dt) {
       let dmg = u.beam?.chargedDamage ?? u.damage;
       if (state.dummyMode && m !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       tst.hp = Math.max(0, tst.hp - dmg);
-      if (now >= tst.hitStunUntil || (u.stun?.moveScale ?? 0.25) < tst.hitStunScale) {
-        tst.hitStunScale = u.stun?.moveScale ?? 0.25;
-        tst.hitStunUntil = now + (u.stun?.ms ?? 100);
-      }
+      applyHitStun(tst, t.unit, u.stun?.ms ?? 100, u.stun?.moveScale ?? 0.25, now);
       tst.momentumVX = 0; tst.momentumVZ = 0; t.body.velocity.set(0, 0, 0);
       spawnHitEffect(t.root.position, t === state.player ? 0x67f2ff : 0xff73d2);
       m.chargedBeamHitIds.push(t);
@@ -4652,6 +4695,9 @@ function updatePlayer(now) {
   if (stepState.landedOnLid) { stepState.landedOnLid = false; stepState.plantUntil = now + LAND_PLANT_MS; }
   if (!hasDirInput) stepState.plantUntil = 0;
   const planted = now < stepState.plantUntil;
+  // The reload hold (shared actions.js reloadHolds; mirrors the sim's applyInput): a unit flagged reloadHolds neither walks
+  // nor sprints while its magazine is being changed; the dodge and the jump stay open.
+  const reloadHeld = reloadHolds(state.player.unit, stepState, now);
   // Sprint-lock release grace (2026-08-01): a joystick flip (left→right)
   // crosses the neutral deadzone for a few frames and used to read as the
   // let-go-to-stop gesture, killing the lock mid-flip. Only a SUSTAINED
@@ -4663,7 +4709,7 @@ function updatePlayer(now) {
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
-  input.boost = !planted && (input.boostHeld || input.sprintLocked);   // (no dash out of a plant)
+  input.boost = !planted && !reloadHeld && (input.boostHeld || input.sprintLocked);   // (no dash out of a plant, nor out of a held reload)
 
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -4696,8 +4742,8 @@ function updatePlayer(now) {
   const hitStunScale = hitStunned ? state.player.state.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
   if (!inStep) {
-    state.player.body.velocity.x = canInputMove && !planted ? move.x * speed * hitStunScale : 0;
-    state.player.body.velocity.z = canInputMove && !planted ? move.z * speed * hitStunScale : 0;
+    state.player.body.velocity.x = canInputMove && !planted && !reloadHeld ? move.x * speed * hitStunScale : 0;
+    state.player.body.velocity.z = canInputMove && !planted && !reloadHeld ? move.z * speed * hitStunScale : 0;
   }
 
   let action = 'idle';
@@ -5214,6 +5260,8 @@ function updateEnemy(now) {
   // weapon's move-scale, stored on the victim) while stunned rather than
   // freezing. Applied AFTER momentum so sprint + momentum scale together,
   // matching the player's velocity exactly.
+  // The reload hold (shared actions.js reloadHolds; mirrors ai.js): whatever the brain set, a unit changing its magazine stands.
+  if (reloadHolds(mech.unit, eState, now)) { mech.body.velocity.x = 0; mech.body.velocity.z = 0; eState.momentumVX = 0; eState.momentumVZ = 0; if (eState.action === 'dash') eState.action = 'idle'; }   // (a 'dash' left standing drained the gauge and played the sprint clip — user 2026-10-23)
   if (now < eState.hitStunUntil) {
     mech.body.velocity.x *= eState.hitStunScale;
     mech.body.velocity.z *= eState.hitStunScale;
@@ -6796,7 +6844,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1023m';
+const CLIENT_BUILD_TAG = 'b1023n';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

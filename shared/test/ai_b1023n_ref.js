@@ -1,6 +1,6 @@
-// FROZEN at b1021z for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1023n for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/ai.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
-// re-frozen with the build whose play it must match (freeze_refs.py).
+// re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/nbrain.js (the
 // Health Point brain, with the Sudden Death brain sdbrain.js inside it); this
 // file finds the unit and its target, builds the host the brain reads and
@@ -8,19 +8,19 @@
 // 2v2 target pick, the per-fighter Sudden Death overrides, the hit-stun
 // slowdown after the brain's velocity.
 
-import { attemptFire, tryStartJump, tryStartStep, tickStep } from '../src/sim/actions.js';
+import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from '../src/sim/actions.js';
 import { getArena } from '../src/sim/arena.js';
 import { buildNavGrid } from '../src/sim/navgrid.js';
 import { inheritMomentum } from '../src/sim/movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from '../src/sim/constants.js';
-import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1021z_ref.js';
-import { makeMuzzleClear, BOT_SD } from './sdbrain_b1021z_ref.js';
+import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1023n_ref.js';
+import { makeMuzzleClear, BOT_SD } from './sdbrain_b1023n_ref.js';
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // client's imports. The plain brain's sight rule is re-exported for the
 // hide-order tests, which judge "hidden" by the bot's own rule.
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1021z_ref.js';
-export { botHasLineOfSight } from './nbrain_b1021z_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1023n_ref.js';
+export { botHasLineOfSight } from './nbrain_b1023n_ref.js';
 
 // Nav grids are built once per arena object (the ARENAS entries are module
 // singletons, so this is once per map per process) and shared by all bots
@@ -128,6 +128,10 @@ export function tickBot(matchState, botId, now) {
     deadline: () => matchState.searchDeadline ?? 0,
     tape: null
   });
+  // The reload hold (actions.js reloadHolds): whatever the brain set, a unit changing its magazine stands — and a sprint the
+  // brain asked for is withdrawn with it: 'dash' would drain the gauge (movement.js) and play the sprint clip on a standing body
+  // (user 2026-10-23, "the bot's reload motion is wrong"). A step or a jump in flight keeps its action.
+  if (reloadHolds(me.unit, me, now)) { me.vel.x = 0; me.vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }   // (the momentum too: the brain's sprint had banked some)
   // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
   // weapon's move-scale, stored on the victim) while stunned rather than
   // freezing — the host's physics, applied to whatever velocity the brain set.

@@ -531,9 +531,11 @@ export function nbBrainTick(host) {
     me.botGlintKey = null;
   }
   // A fresh hit means the shot already landed — drop the now-pointless dodge.
-  // (botPrevHitStun is only advanced by the threat block below, so the rising
-  // edge is still visible here.)
-  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botGlintStepAt = null;
+  // (botPrevHitAt is only advanced by the threat block below, so the rising
+  // edge is still visible here. The hit is read off lastHitAt, which every
+  // landed hit stamps — the stun timer no longer, since a stunImmune unit's
+  // never moves and her bot never knew it was hit; user 2026-10-23.)
+  if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botGlintStepAt = null;
 
   // The dodge comes due: one i-frame step, then a 520 ms sprint in the same
   // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
@@ -654,8 +656,8 @@ export function nbBrainTick(host) {
     pos.x + dirX * len, pos.z + dirZ * len,
     pos.y, obstacles
   );
-  if (me.hitStunUntil > (me.botPrevHitStun ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
-  me.botPrevHitStun = me.hitStunUntil;
+  if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
+  me.botPrevHitAt = me.lastHitAt ?? 0;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
   // longer triggers Defense — the bot's sole response to a glint is the
   // committed dodge scheduled above, so it ALWAYS dodges instead of sometimes
@@ -685,7 +687,7 @@ export function nbBrainTick(host) {
     // starves this clock and drops the bot into spurious mid-fight Maze
     // episodes (the angled-backward-sprint sightings on Plain Field).
     // Under-fire wedges are Defense's job, on its own 2-tick trigger.
-    if (Math.hypot(ddx, ddz) > 3 || me.hitStunUntil > me.botProgressAnchorAt) {
+    if (Math.hypot(ddx, ddz) > 3 || (me.lastHitAt ?? 0) > me.botProgressAnchorAt) {
       me.botLastProgressAt = now;
     }
     me.botProgressAnchorX = pos.x;
