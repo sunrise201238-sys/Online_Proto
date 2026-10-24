@@ -1,0 +1,4 @@
+A (live)  : games 96 | wins 66 draws 0 (69% of decided) | kill time median 30.8 s | damage dealt/taken 1.18 | rounds per game 64 | dash 26% wait 20% walk 19% react 12% dodge 10% window 3% retreat 3% flank 2% peek 2% close 2% escape 1% hold 1% engage 0% nearer 0% bank 0% | per game: peeks 3.8 engages 0.2 reacts 11.7 approaches 0.0 waits 12.0 dodges 10.5 | slow seconds per game 1.2 of 31 | jumps per game 0.5 | cpu mean 0.107 ms p99 1.95
+B (frozen): games 96 | wins 30 draws 0 (31% of decided) | kill time median 20.6 s | damage dealt/taken 0.85 | rounds per game 59 | maze 50% defense 23% engage 19% pursue 9% | per game: maze entries 7.8 stuck 0.91 | slow seconds per game 0.4 of 31 | jumps per game 1.2 | cpu mean 0.022 ms p99 0.12
+(27 s, flashpoint/factory/airport, unit10 vs unit4, unit1 vs unit5, 8 seeds x 2 seats)
+exit 0

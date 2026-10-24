@@ -1,0 +1,704 @@
+--- server tickBot
++++ client updateEnemy
+@@ -1,7 +1,2 @@
+-export function tickBot(matchState, botId, now) {
+-const me = matchState.fighters[botId];
+-if (!me || me.hp <= 0) return;
+-me.botControlled = true;
+-const opp = me.targetId ? matchState.fighters[me.targetId] : null;
+-if (!opp || opp.hp <= 0) return;
+-if (me.sniperChargeTargetId) {
++function updateEnemy(now) {
++if (me.sniperChargeTarget) {
+@@ -12,0 +8 @@
++updateBoost(state.enemy, now, 'shoot');
+@@ -20,0 +17 @@
++updateBoost(state.enemy, now, 'shoot');
+@@ -23,11 +20,9 @@
+-const arena = getArena(matchState.mapKey);
+-const obstacles = arena.obstacles;
+-const surfaces = arena.surfaces;
+-const dx = opp.pos.x - me.pos.x;
+-const dz = opp.pos.z - me.pos.z;
+-const dist = Math.sqrt(dx * dx + dz * dz);
+-const dirX = dist > 1e-6 ? dx / dist : 1;
+-const dirZ = dist > 1e-6 ? dz / dist : 0;
+-const sideX = -dirZ;
+-const sideZ = dirX;
+-const sniperCharging = opp.sniperChargeTargetId === me.id;
++const p = state.player.root.position;
++const e = state.enemy.root.position;
++const eBodyY = state.enemy.body.position.y;
++const toPlayer = new THREE.Vector3().subVectors(p, e).setY(0);
++const dist = toPlayer.length();
++const dir = toPlayer.normalize();
++const side = new THREE.Vector3(-dirZ, 0, dirX);
++const me = state.enemy.state;
++const sniperCharging = opp.sniperChargeTarget === state.enemy;
+@@ -35,4 +30,4 @@
+-for (const f of Object.values(matchState.fighters)) {
+-if (!f || f === me || f.hp <= 0) continue;
+-if (f.sniperChargeTargetId !== me.id) continue;
+-if (!glintThreat || f.sniperChargeStartAt < glintThreat.sniperChargeStartAt) glintThreat = f;
++for (const m of (_botTrueFighters ?? getAllFighters())) {
++if (!m || m === state.enemy || m.state.hp <= 0) continue;
++if (m.state.sniperChargeTarget !== state.enemy) continue;
++if (!glintThreat || m.state.sniperChargeStartAt < glintThreat.state.sniperChargeStartAt) glintThreat = m;
+@@ -41,5 +36,7 @@
+-const glintKey = `${glintThreat.id}:${glintThreat.sniperChargeStartAt}`;
+-if (me.botGlintKey !== glintKey && me.botGlintStepAt == null) {
+-me.botGlintKey = glintKey;
+-me.botGlintAttackerId = glintThreat.id;
+-const fastReact = glintThreat.id === opp.id
++const sameCharge = me.botGlintKeyRef === glintThreat
++&& me.botGlintKeyStart === glintThreat.state.sniperChargeStartAt;
++if (!sameCharge && me.botGlintStepAt == null) {
++me.botGlintKeyRef = glintThreat;
++me.botGlintKeyStart = glintThreat.state.sniperChargeStartAt;
++me.botGlintAtkRef = glintThreat;
++const fastReact = glintThreat === state.player
+@@ -56 +53,2 @@
+-me.botGlintKey = null;
++me.botGlintKeyRef = null;
++me.botGlintKeyStart = 0;
+@@ -61 +59,5 @@
+-if (now > me.stepUntil) {
++if (
++now > (me.stepUntil || 0)
++&& now >= (me.stepCooldownUntil || 0)
++&& me.boost >= (me.unit?.stepBoostCost ?? STEP_BOOST_COST)
++) {
+@@ -63,5 +65,5 @@
+-const glintAtk = me.botGlintAttackerId ? matchState.fighters[me.botGlintAttackerId] : null;
+-if (glintAtk && glintAtk !== opp && glintAtk.hp > 0) {
+-const adx = me.pos.x - glintAtk.pos.x;
+-const adz = me.pos.z - glintAtk.pos.z;
+-const ad = Math.sqrt(adx * adx + adz * adz) || 1;
++const glintAtk = me.botGlintAtkRef;
++if (glintAtk && glintAtk !== state.player && glintAtk.state.hp > 0) {
++const adx = state.enemy.body.position.x - glintAtk.body.position.x;
++const adz = state.enemy.body.position.z - glintAtk.body.position.z;
++const ad = Math.hypot(adx, adz) || 1;
+@@ -77 +79,18 @@
+-if (tryStartStep(matchState, me, sdx, sdz, now)) {
++const sLen = Math.hypot(sdx, sdz) || 1;
++sdx /= sLen; sdz /= sLen;
++const botStepU = me.unit;
++me.stepStartAt = now;
++me.stepUntil = now + (botStepU?.stepDurationMs ?? STEP_DURATION_MS);
++me.stepCooldownUntil = now + (botStepU?.stepCooldownMs ?? STEP_COOLDOWN_MS);
++me.stepFromX = state.enemy.body.position.x;
++me.stepFromZ = state.enemy.body.position.z;
++const botStepDist = botStepU?.stepDistance ?? STEP_DISTANCE;
++me.stepToX = me.stepFromX + sdx * botStepDist;
++me.stepToZ = me.stepFromZ + sdz * botStepDist;
++me.queuedMomentumVX = me.momentumVX * 0.65 + me.vel.x * 0.35;
++me.queuedMomentumVZ = me.momentumVZ * 0.65 + me.vel.z * 0.35;
++me.momentumVX = 0;
++me.momentumVZ = 0;
++me.boost = Math.max(0, me.boost - (botStepU?.stepBoostCost ?? STEP_BOOST_COST));
++me.refillPausedUntil = now + 500;
++clearIncomingHoming(state.enemy, now);
+@@ -91,7 +110,27 @@
+-}
+-const sdStepping = !!me.botSD && now <= me.stepUntil;
+-if (now <= me.stepUntil) {
+-tickStep(me, now);
+-if (!sdStepping) return;
+-} else if (me.stepUntil > 0) tickStep(me, now);
+-const lockRange = (matchState.mode === '2v2' && me.unit?.lockRange2v2)
++let sdStepping = false;
++if (now <= (me.stepUntil || 0)) {
++const span = Math.max(1, me.stepUntil - me.stepStartAt);
++const progress = THREE.MathUtils.clamp((now - me.stepStartAt) / span, 0, 1);
++const targetX = THREE.MathUtils.lerp(me.stepFromX, me.stepToX, progress);
++const targetZ = THREE.MathUtils.lerp(me.stepFromZ, me.stepToZ, progress);
++if (!unitOverlapsObstacle(targetX, state.enemy.body.position.y, targetZ)) {
++state.enemy.body.position.x = targetX;
++state.enemy.body.position.z = targetZ;
++} else {
++me.stepFromX = state.enemy.body.position.x; me.stepToX = state.enemy.body.position.x;
++me.stepFromZ = state.enemy.body.position.z; me.stepToZ = state.enemy.body.position.z;
++}
++me.vel.x = 0;
++me.vel.z = 0;
++me.action = 'step';
++updateBoost(state.enemy, now, 'step');
++if (!state.suddenDeathActive) return;
++sdStepping = true;
++} else if ((me.stepUntil || 0) > 0) {
++me.stepUntil = 0;
++me.momentumVX += me.queuedMomentumVX || 0;
++me.momentumVZ += me.queuedMomentumVZ || 0;
++me.queuedMomentumVX = 0;
++me.queuedMomentumVZ = 0;
++}
++const lockRange = (matchState.mode === '2v2' && me.unit.lockRange2v2)
+@@ -99 +138 @@
+-: (me.unit?.lockRange ?? 50);
++: (me.unit.lockRange ?? 50);
+@@ -108,2 +147 @@
+-{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+-obstacles, surfaces
++{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z }
+@@ -113,2 +151 @@
+-{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+-obstacles, surfaces
++{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z }
+@@ -119 +156 @@
+-me.pos.y, obstacles
++eBodyY, arenaObstacles
+@@ -145 +182 @@
+-const avoid = computeBotAvoidance(me.pos.x, me.pos.y, me.pos.z, BOT_OBSTACLE_AVOID_RADIUS);
++const avoid = computeBotAvoidance(me.pos.x, me.pos.y, me.pos.z, arenaObstacles, BOT_OBSTACLE_AVOID_RADIUS);
+@@ -148 +185 @@
+-const myFloorY = groundHeightAt(me.pos.x, me.pos.z, me.pos.y - GROUND_BASE_Y);
++const myFloorY = groundHeightAt(me.pos.x, me.pos.z, eBodyY - GROUND_BASE_Y);
+@@ -151,2 +188,2 @@
+-const cmdEntry = matchState.commands?.[botId] ?? null;
+-const rUnit = me.unit ?? {};
++const rMech = state.enemy;
++const rUnit = rMech.unit ?? {};
+@@ -158 +195 @@
+-if (cmdEntry && cmdEntry.move && !cmdEntry.hide) {
++if (rMech.cmdMove && !rMech.cmdHide) {
+@@ -160,5 +197,5 @@
+-} else if (cmdEntry && !cmdEntry.hide) {
+-cmdEntry.hide = true;
+-cmdEntry.hideAuto = true;
+-cmdEntry.move = null;
+-cmdEntry.lockTargetId = null;
++} else if (!rMech.cmdHide) {
++rMech.cmdHide = true;
++rMech.cmdHideAuto = true;
++rMech.cmdMove = null;
++rMech.cmdLock = null;
+@@ -169,6 +206,6 @@
+-if (cmdEntry && cmdEntry.hide && cmdEntry.hideAuto) {
+-cmdEntry.hide = false;
+-cmdEntry.hideAuto = false;
+-}
+-}
+-const hideOrdered = cmdEntry ? !!cmdEntry.hide : !!me.botReloadHide;
++if (rMech.cmdHide && rMech.cmdHideAuto) {
++rMech.cmdHide = false;
++rMech.cmdHideAuto = false;
++}
++}
++const hideOrdered = !!rMech.cmdHide;
+@@ -176 +213 @@
+-const chOrder = (!hideOrdered && cmdEntry?.move) ? cmdEntry.move : null;
++const chOrder = (!hideOrdered && rMech.cmdMove) ? rMech.cmdMove : null;
+@@ -192 +229 @@
+-const hideMode = me.botSD ? null : (hideOrdered ? 'stance' : (me.botCH ? 'cover' : null));
++const hideMode = state.suddenDeathActive ? null : (hideOrdered ? 'stance' : (me.botCH ? 'cover' : null));
+@@ -200,2 +237,3 @@
+-for (const f of Object.values(matchState.fighters)) {
+-if (f.team !== me.team && f.hp > 0) hideEnemies.push(f);
++const hideMyTeam = getTeamOf(state.enemy);
++for (const f of (_botTrueFighters ?? getAllFighters())) {
++if (f && f !== state.enemy && f.state.hp > 0 && getTeamOf(f) !== hideMyTeam) hideEnemies.push(f);
+@@ -204,2 +242,5 @@
+-Math.hypot(a.pos.x - me.pos.x, a.pos.z - me.pos.z) - Math.hypot(b.pos.x - me.pos.x, b.pos.z - me.pos.z));
+-const hideEyes = hideEnemies.map((f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z }));
++Math.hypot(a.root.position.x - me.pos.x, a.root.position.z - me.pos.z)
++- Math.hypot(b.root.position.x - me.pos.x, b.root.position.z - me.pos.z));
++const hideEyes = hideEnemies.map((f) => ({
++x: f.root.position.x, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z
++}));
+@@ -209 +250 @@
+-const vx = f.vel?.x ?? 0, vz = f.vel?.z ?? 0;
++const vx = f.body?.velocity?.x ?? 0, vz = f.body?.velocity?.z ?? 0;
+@@ -212 +253 @@
+-x: f.pos.x + vx * BOT_HIDE_PREDICT_S, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z + vz * BOT_HIDE_PREDICT_S
++x: f.root.position.x + vx * BOT_HIDE_PREDICT_S, y: f.root.position.y + BOT_LOS_EYE_HEIGHT, z: f.root.position.z + vz * BOT_HIDE_PREDICT_S
+@@ -227 +268 @@
+-const dx = me.pos.x - threat.pos.x, dz = me.pos.z - threat.pos.z;
++const dx = me.pos.x - threat.root.position.x, dz = me.pos.z - threat.root.position.z;
+@@ -231 +272 @@
+-const closingSpeed = (threat.vel?.x ?? 0) * awayX + (threat.vel?.z ?? 0) * awayZ;
++const closingSpeed = (threat.body?.velocity?.x ?? 0) * awayX + (threat.body?.velocity?.z ?? 0) * awayZ;
+@@ -278 +319 @@
+-minDistFrom: closing ? { x: threat.pos.x, z: threat.pos.z, d: threatDist + BOT_HIDE_SLIP_GAIN } : null
++minDistFrom: closing ? { x: threat.root.position.x, z: threat.root.position.z, d: threatDist + BOT_HIDE_SLIP_GAIN } : null
+@@ -285,2 +326,3 @@
+-&& matchState.hideSearchTick !== matchState.tick) {
+-matchState.hideSearchTick = matchState.tick;
++&& botHideSearchFrameAt !== now) {
++botHideSearchFrameAt = now;
++if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+@@ -290,2 +332,2 @@
+-navGridFor(arena), me.pos.x, me.pos.z, myFloorY, attempt.eyes,
+-{ maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER, deadline: matchState.searchDeadline ?? 0 }
++offlineNavGrid, me.pos.x, me.pos.z, myFloorY, attempt.eyes, arenaObstacles,
++{ maxPops: BOT_HIDE_MAX_POPS, minDistFrom: attempt.minDistFrom, within: attempt.within ?? null, goalShoulder: BOT_HIDE_SHOULDER }
+@@ -351 +393 @@
+-if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, me.pos.y)) return false;
++if (walkSegmentBlocked(me.pos.x, me.pos.z, lx, lz, eBodyY, arenaObstacles)) return false;
+@@ -405,2 +447,4 @@
+-const SDG = me.botSD ? (me.botSDOpts ? { ...BOT_SD, ...me.botSDOpts } : BOT_SD) : null;
+-if (me.botSD && !defenseLive) {
++const SDG = state.suddenDeathActive ? BOT_SD : null;
++if (state.suddenDeathActive && !defenseLive) {
++if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
++const sdMyTeam = getTeamOf(state.enemy);
+@@ -408,3 +452,11 @@
+-for (const f of Object.values(matchState.fighters)) {
+-if (f.team !== me.team && f.hp > 0) sdEnemies.push(f);
+-}
++for (const f of (_botTrueFighters ?? getAllFighters())) {
++if (!f || f === state.enemy || f.state.hp <= 0 || getTeamOf(f) === sdMyTeam) continue;
++const st = f.state;
++sdEnemies.push({
++id: f, pos: f.root.position, vel: f.body?.velocity, unit: f.unit ?? {},
++lastFireAt: ((st?.lastFireAt ?? -1e9) > (st?.fireInitAt ?? -1e9)) ? st.lastFireAt : -1e9,
++bloom: st?.bloom ?? 0, hp: st.hp, ammo: st.ammo, reloadingUntil: st.reloadingUntil,
++log: st
++});
++}
++const sdEyeH = (state.enemy.modelYOffset ?? 2.35) + MUZZLE;
+@@ -412,12 +464,13 @@
+-now, SD: SDG, me, pos: me.pos, unit: me.unit, vel: me.vel, grounded: me.grounded,
+-wall: matchState.walls?.[me.id] ?? null,
+-opp, enemies: sdEnemies,
+-obstacles, grid: navGridFor(arena), clear: makeMuzzleClear(obstacles),
+-eyeUp: MUZZLE, muzzleH: MUZZLE,
+-dist, sideX, sideZ, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
+-groundHeightAt: (x, z, fallback) => groundHeightAt(x, z, fallback),
+-startStep: (dx, dz) => tryStartStep(matchState, me, dx, dz, now),
+-startJump: () => tryStartJump(me, now),
+-searchSlot: () => { if (matchState.hideSearchTick === matchState.tick) return false; matchState.hideSearchTick = matchState.tick; return true; },
+-deadline: () => matchState.searchDeadline ?? 0,
+-tape: null
++now, SD: SDG, me: me, pos: { x: me.pos.x, y: eBodyY, z: me.pos.z }, unit: me.unit ?? {}, vel: me.vel, grounded: me.grounded,
++opp: { id: state.player, pos: p, hp: opp.hp, unit: opp.unit, invulnerableUntil: opp.invulnerableUntil },
++wall: state.enemy.wallTouch ?? null,
++enemies: sdEnemies,
++obstacles: arenaObstacles, grid: offlineNavGrid, clear: botShotCanLand,
++eyeUp: MUZZLE, muzzleH: sdEyeH,
++dist, sideX: sideX, sideZ: sideZ, myFloorY, myShotY, avoid, avoidMag, playerHasLoS,
++groundHeightAt,
++startStep: (dx, dz) => sdBotStartStep(state.enemy, dx, dz, now),
++startJump: () => botTryJumpSurvival(me, now),
++searchSlot: () => { if (botHideSearchFrameAt === now) return false; botHideSearchFrameAt = now; return true; },
++deadline: () => performance.now() + SD_FRAME_SEARCH_MS,
++tape: (row) => { const tape = me.botSDTape ?? (me.botSDTape = []); tape.push(row); if (tape.length > 80) tape.splice(0, tape.length - 80); }
+@@ -425 +478 @@
+-} else if (me.botSD) {
++} else if (state.suddenDeathActive) {
+@@ -481,2 +534 @@
+-{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z },
+-obstacles, surfaces
++{ x: opp.pos.x, y: opp.pos.y + BOT_LOS_EYE_HEIGHT, z: opp.pos.z }
+@@ -494 +546 @@
+-const grid = navGridFor(arena);
++if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+@@ -496 +548 @@
+-grid, me.pos.x, me.pos.z, myFloorY,
++offlineNavGrid, me.pos.x, me.pos.z, myFloorY,
+@@ -498 +550 @@
+-lowerRange, upperRange, oppFloorY
++lowerRange, upperRange, arenaObstacles, oppFloorY
+@@ -502 +554 @@
+-grid, me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles
++offlineNavGrid, me.pos.x, me.pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, arenaObstacles
+@@ -506,2 +558 @@
+-if (path && path.length > 2) path = smoothPath(grid, path);
+-if (matchState._navPaths == null) matchState._navPaths = {};
++if (path && path.length > 2) path = smoothPath(offlineNavGrid, path, arenaObstacles);
+@@ -509 +560 @@
+-matchState._navPaths[botId] = {
++me.botNav = {
+@@ -515 +566 @@
+-delete matchState._navPaths[botId];
++me.botNav = null;
+@@ -529 +580 @@
+-const sdParks = !!(me.botSD && coverMove);
++const sdParks = !!(state.suddenDeathActive && coverMove);
+@@ -558 +609 @@
+-const navPrev = matchState._navPaths ? matchState._navPaths[botId] : null;
++const navPrev = me.botNav;
+@@ -562 +613 @@
+-const fresh = matchState._navPaths[botId];
++const fresh = me.botNav;
+@@ -570 +621 @@
+-delete matchState._navPaths[botId];
++me.botNav = null;
+@@ -701 +752 @@
+-let nav = matchState._navPaths ? matchState._navPaths[botId] : null;
++let nav = me.botNav;
+@@ -708 +759 @@
+-if (nav) delete matchState._navPaths[botId];
++if (nav) me.botNav = null;
+@@ -719 +770 @@
+-const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
++const fresh = me.botNav;
+@@ -727 +778 @@
+-delete matchState._navPaths[botId];
++me.botNav = null;
+@@ -742,2 +793,3 @@
+-const fresh = matchState._navPaths ? matchState._navPaths[botId] : null;
+-if (fresh && fresh.path[fresh.idx]) wp = fresh.path[fresh.idx];
++if (me.botNav && me.botNav.path[me.botNav.idx]) {
++wp = me.botNav.path[me.botNav.idx];
++}
+@@ -764 +816 @@
+-const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit?.jumpBoostCost ?? 48) + 10);
++const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (me.unit.jumpBoostCost ?? JUMP_BOOST_COST) + 10);
+@@ -919,2 +971,2 @@
+-const botSprintBase = me.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
+-const botWalkSpeed = me.unit?.walkSpeed ?? WALK_SPEED;
++const botSprintBase = me.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
++const botWalkSpeed = me.unit.walkSpeed ?? WALK_SPEED;
+@@ -942 +994 @@
+-inheritMomentum(me, MOMENTUM_STANDARD * 1.5);
++inheritMomentum(state.enemy, MOMENTUM_STANDARD * 1.5);
+@@ -953,0 +1006,61 @@
++if (now >= me.nextFireAt) {
++const u = me.unit;
++const s = me;
++if (u.magCapacity != null && s.ammo <= 0) {
++const wait = u.autoReload
++? u.reloadMs
++: Math.max(120, (s.reloadingUntil || now + u.reloadMs) - now);
++s.nextFireAt = now + wait;
++s.machineBurstRemaining = 0;
++botClearFireRule(s);
++} else if (now < opp.invulnerableUntil) {
++s.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
++s.machineBurstRemaining = 0;
++botClearFireRule(s);
++} else if (SDG ? !s.botSDFire : !botMayFire(u, s, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z), matchState.mode)) {
++s.nextFireAt = now + 16;
++} else if (!botShotCanLand(
++{ x: me.pos.x, y: myShotY, z: me.pos.z },
++{ x: opp.pos.x, y: opp.pos.y + MUZZLE, z: opp.pos.z }
++)) {
++s.nextFireAt = now + (SDG ? SDG.firePollMs : 220);
++s.machineBurstRemaining = 0;
++botClearFireRule(s);
++} else if (u.sniperCharge) {
++const fired = attemptFire(matchState, me, opp, now);
++if (fired) {
++s.sniperChargeUntil = now + (Math.random() < 0.5
++? SNIPER_CANCEL_MIN_CHARGE_MS
++: (u.chargeMs ?? 1000));
++s.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
++} else s.nextFireAt = now + 220;
++s.machineBurstRemaining = 0;
++} else {
++const bursted = u.spreadCount === 1 || u.botFireCap;
++const sdDump = !!(SDG && s.botSDFire);
++if (bursted && s.machineBurstRemaining <= 0) {
++s.machineBurstRemaining = botBurstSize(u);
++}
++const firedAt = s.lastFireAt;
++attemptFire(matchState, me, opp, now);
++const fired = s.lastFireAt !== firedAt;
++if (fired) {
++botNoteShot(s);
++if (s.botSDFire) s.botSDExposedShots = (s.botSDExposedShots ?? 0) + 1;
++}
++if (bursted) {
++if (fired) s.machineBurstRemaining -= 1;
++s.nextFireAt = (s.machineBurstRemaining > 0 || sdDump)
++? now + u.fireCooldownMs
++: now + between(800, 1500);
++if (s.machineBurstRemaining <= 0) s.machineBurstRemaining = 0;
++} else {
++if (fired) s.nextFireAt = now + u.fireCooldownMs + (sdDump ? 0 : between(40, 220));
++else s.nextFireAt = now + 120;
++}
++}
++}
++if (me.grounded && now > me.hoverUntil && me.action !== 'jump') {
++me.vel.y = 0;
++}
++applyMomentum(state.enemy);
+@@ -958,54 +1071,232 @@
+-if (now >= me.nextFireAt) {
+-const u = me.unit;
+-if (u.magCapacity != null && me.ammo <= 0) {
+-const wait = u.autoReload
+-? u.reloadMs
+-: Math.max(120, (me.reloadingUntil || now + u.reloadMs) - now);
+-me.nextFireAt = now + wait;
+-me.machineBurstRemaining = 0;
+-botClearFireRule(me);
+-} else if (now < opp.invulnerableUntil) {
+-me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
+-me.machineBurstRemaining = 0;
+-botClearFireRule(me);
+-} else if (SDG ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - me.pos.x, opp.pos.y - me.pos.y, opp.pos.z - me.pos.z), matchState.mode)) {
+-me.nextFireAt = now + TICK_RATE_MS;
+-} else if (!botShotCanLand(myShotY, me, opp)) {
+-me.nextFireAt = now + (SDG ? SDG.firePollMs : 220);
+-me.machineBurstRemaining = 0;
+-botClearFireRule(me);
+-} else if (u.sniperCharge) {
+-const fired = attemptFire(matchState, me, opp, now);
+-if (fired) {
+-me.sniperChargeUntil = now + (Math.random() < 0.5
+-? SNIPER_CANCEL_MIN_CHARGE_MS
+-: (u.chargeMs ?? 1000));
+-me.nextFireAt = now + u.fireCooldownMs + between(400, 1200);
+-} else me.nextFireAt = now + 220;
+-me.machineBurstRemaining = 0;
+-} else {
+-const bursted = u.spreadCount === 1 || u.botFireCap;
+-const sdDump = !!(SDG && me.botSDFire);
+-if (bursted && me.machineBurstRemaining <= 0) {
+-me.machineBurstRemaining = botBurstSize(u);
+-}
+-const firedAt = me.lastFireAt;
+-attemptFire(matchState, me, opp, now);
+-const fired = me.lastFireAt !== firedAt;
+-if (fired) {
+-botNoteShot(me);
+-if (me.botSDFire) me.botSDExposedShots = (me.botSDExposedShots ?? 0) + 1;
+-}
+-if (bursted) {
+-if (fired) me.machineBurstRemaining -= 1;
+-me.nextFireAt = (me.machineBurstRemaining > 0 || sdDump)
+-? now + u.fireCooldownMs
+-: now + between(800, 1500);
+-if (me.machineBurstRemaining <= 0) me.machineBurstRemaining = 0;
+-} else {
+-if (fired) me.nextFireAt = now + u.fireCooldownMs + (sdDump ? 0 : between(40, 220));
+-else me.nextFireAt = now + 120;
+-}
+-}
+-}
+-}
++if (!sdStepping) updateBoost(state.enemy, now, me.action);
++}
++const RETICLE_FIRING_FLASH_MS = 200;
++function createImmunityAuraForMech(mech) {
++if (!mech || mech.immunityAura) return;
++const c = document.createElement('canvas');
++c.width = c.height = 128;
++const x = c.getContext('2d');
++const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
++grad.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
++grad.addColorStop(0.55, 'rgba(255, 255, 255, 0.13)');
++grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
++x.fillStyle = grad;
++x.beginPath();
++x.arc(64, 64, 64, 0, Math.PI * 2);
++x.fill();
++const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
++map: new THREE.CanvasTexture(c),
++transparent: true,
++depthTest: false,
++depthWrite: false,
++fog: false,
++blending: THREE.AdditiveBlending
++}));
++sprite.scale.set(5.5, 9, 1);
++sprite.position.set(0, -0.4, 0);
++sprite.renderOrder = 9000;
++mech.root.add(sprite);
++mech.immunityAura = sprite;
++}
++function removeImmunityAuraFromMech(mech) {
++if (!mech?.immunityAura) return;
++mech.root.remove(mech.immunityAura);
++if (mech.immunityAura.material) {
++if (mech.immunityAura.material.map) mech.immunityAura.material.map.dispose();
++mech.immunityAura.material.dispose();
++}
++mech.immunityAura = null;
++}
++function applyImmunityGlow(mech, immune) {
++if (!mech || !mech.root) return;
++if (immune) createImmunityAuraForMech(mech);
++else removeImmunityAuraFromMech(mech);
++}
++const BLOOM_BRACKET_MAX_SCALE = 4.5;
++const BLOOM_BRACKET_FULL_BLOOM = 0.38;
++const BLOOM_BRACKET_GAIN = 2;
++const LOCK_BRACKET_SIZE = 0.5;
++function updateLocksAndReticle() {
++const nowMs = performance.now();
++const viewer = cameraFocusMech();
++if (!viewer || viewer.state.hp <= 0) {
++if (state.reticle) state.reticle.visible = false;
++return;
++}
++if (state.reticle) state.reticle.visible = !dioramaActive();
++const tgt = state.playerCurrentTarget ?? state.enemy;
++const dist = viewer.root.position.distanceTo(tgt.root.position);
++if (viewer === state.player) {
++opp.redLock = dist <= opp.unit.lockRange;
++me.redLock = state.player.root.position.distanceTo(state.enemy.root.position) <= me.unit.lockRange;
++}
++const enemyFireAt = tgt.state.lastFireAt;
++if (state.reticleLastEnemyFireAt != null && enemyFireAt > state.reticleLastEnemyFireAt) {
++state.reticleEnemyFiringUntil = nowMs + RETICLE_FIRING_FLASH_MS;
++}
++state.reticleLastEnemyFireAt = enemyFireAt;
++const enemyFiring = nowMs < state.reticleEnemyFiringUntil;
++const chargeTgt = tgt.state.sniperChargeTarget;
++const viewerId = !state.online ? null
++: viewer === state.player ? state.online.myPlayerId
++: state.online.slotMap?.allyId;
++const chargingAtMe = !!chargeTgt && (state.online
++? chargeTgt.id === viewerId
++: chargeTgt === viewer);
++const sweepChannelActive = !!tgt.chargedBeamVisual;
++const rd = viewer.unit?.rangeDamage ?? tgt.unit?.rangeDamage;
++const tex = getReticleTierTextures();
++let tierTex = tex.base;
++if (rd) {
++const distXZ = Math.hypot(tgt.root.position.x - viewer.root.position.x, tgt.root.position.z - viewer.root.position.z);
++tierTex = distXZ >= rd.midDist ? tex.far : distXZ >= rd.nearDist ? tex.mid : tex.base;
++}
++if (state.reticle.material.map !== tierTex) {
++state.reticle.material.map = tierTex;
++state.reticle.material.needsUpdate = true;
++}
++state.reticle.position.set(0, 0.2, 0);
++state.reticle.material.color.set((enemyFiring || chargingAtMe || sweepChannelActive) ? 0xff5f72 : 0x7effbd);
++const camDist = camera.position.distanceTo(tgt.root.position);
++const distScale = THREE.MathUtils.clamp(camDist / 22, 0.7, 4.5);
++const bloomScale = 1 + (BLOOM_BRACKET_MAX_SCALE - 1) * Math.min(1, Math.max(0, BLOOM_BRACKET_GAIN * (viewer.state.bloom || 0) / BLOOM_BRACKET_FULL_BLOOM));
++state.reticle.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * distScale * bloomScale);
++state.reticle.userData.baseScale = 9.15 * LOCK_BRACKET_SIZE * distScale;
++state.reticle.quaternion.copy(camera.quaternion);
++}
++function ensureAllyEdgeArrow() {
++if (state.allyEdgeArrow && state.allyEdgeArrow.isConnected) return state.allyEdgeArrow;
++const el = document.createElement('div');
++el.id = 'ally-edge-arrow';
++el.style.cssText = [
++'position:fixed', 'left:0', 'top:0', 'width:34px', 'height:34px',
++'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
++'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
++].join(';');
++el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+++ 'background-position:center; background-repeat:no-repeat; background-size:contain;'
+++ 'display:none;"></div>'
+++ '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
+++ '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="' + UNIT_BAR_INK_ALLY + '" stroke="#0b1622" '
+++ 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
++document.body.appendChild(el);
++state.allyEdgeArrow = el;
++return el;
++}
++function hideAllyEdgeArrow() {
++if (state.allyEdgeArrow) state.allyEdgeArrow.style.display = 'none';
++}
++function ensureEnemyEdgeArrow() {
++if (state.enemyEdgeArrow && state.enemyEdgeArrow.isConnected) return state.enemyEdgeArrow;
++const el = document.createElement('div');
++el.id = 'enemy-edge-arrow';
++el.style.cssText = [
++'position:fixed', 'left:0', 'top:0', 'width:34px', 'height:34px',
++'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
++'filter:drop-shadow(0 0 3px rgba(0,0,0,0.55))'
++].join(';');
++el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+++ 'background-position:center; background-repeat:no-repeat; background-size:contain;'
+++ 'display:none;"></div>'
+++ '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
+++ '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#ff6a2c" stroke="#0b1622" '
+++ 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
++document.body.appendChild(el);
++state.enemyEdgeArrow = el;
++return el;
++}
++const _arrowGlintUrl = { std: null, beam: null };
++function getArrowGlintUrl(isBeam) {
++const key = isBeam ? 'beam' : 'std';
++if (!_arrowGlintUrl[key]) _arrowGlintUrl[key] = drawGlintCanvas(isBeam).toDataURL();
++return _arrowGlintUrl[key];
++}
++function hideEnemyEdgeArrow() {
++if (state.enemyEdgeArrow) state.enemyEdgeArrow.style.display = 'none';
++}
++function teammateOfMech(mech) {
++if (mech === state.player) return state.ally;
++if (mech === state.ally) return state.player;
++if (mech === state.enemy) return state.enemy2;
++if (mech === state.enemy2) return state.enemy;
++return null;
++}
++const _allyArrowNdc = new THREE.Vector3();
++const _allyArrowCam = new THREE.Vector3();
++function updateAllyArrow() {
++if (dioramaActive()) {
++if (state.allyArrow) state.allyArrow.visible = false;
++hideAllyEdgeArrow();
++return;
++}
++const mate = matchState.mode === '2v2' ? teammateOfMech(cameraFocusMech()) : null;
++const active = !!mate && mate.state.hp > 0;
++const allyGlint = active
++&& (!!mate.state.sniperChargeTarget || !!mate.chargedBeamVisual);
++const allyGlintBeam = active && !!mate.unit?.beam;
++const arrow = state.allyArrow;
++if (arrow) {
++if (!active || !OVERHEAD_TEAM_CHEVRONS) {
++arrow.visible = false;
++} else {
++if (arrow.parent !== mate.root) mate.root.add(arrow);
++arrow.visible = true;
++const bob = Math.sin(performance.now() * 0.004) * 0.18;
++arrow.position.set(0, 4.6 + bob, 0);
++const camDist = camera.position.distanceTo(mate.root.position);
++const distScale = THREE.MathUtils.clamp(camDist / 26, 0.85, 4.0);
++arrow.scale.setScalar(2.55 * distScale);
++}
++}
++if (!active) { hideAllyEdgeArrow(); return; }
++const edge = ensureAllyEdgeArrow();
++camera.updateMatrixWorld();
++camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
++_allyArrowNdc.set(mate.root.position.x, mate.root.position.y + 2.0, mate.root.position.z);
++const camZ = _allyArrowCam.copy(_allyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
++const inFront = camZ < 0;
++_allyArrowNdc.project(camera);
++const onScreen = inFront
++&& Math.abs(_allyArrowNdc.x) <= 1
++&& Math.abs(_allyArrowNdc.y) <= 1;
++if (onScreen) { edge.style.display = 'none'; return; }
++let dx = _allyArrowNdc.x;
++let dy = _allyArrowNdc.y;
++if (!inFront) { dx = -dx; dy = -dy; }
++if (dx === 0 && dy === 0) dy = -1;
++const inset = 0.82;
++const k = inset / Math.max(Math.abs(dx), Math.abs(dy));
++const ex = dx * k;
++const ey = dy * k;
++const w = renderer.domElement.clientWidth;
++const h = renderer.domElement.clientHeight;
++const sx = (ex * 0.5 + 0.5) * w;
++const sy = (-ey * 0.5 + 0.5) * h;
++const rot = Math.atan2(-dy, dx) + Math.PI / 2;
++edge.style.display = 'block';
++edge.style.left = `${sx}px`;
++edge.style.top = `${sy}px`;
++edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
++const halo = edge.firstElementChild;
++if (halo && halo.hasAttribute('data-glint')) {
++halo.style.display = allyGlint ? 'block' : 'none';
++if (allyGlint) {
++const variant = allyGlintBeam ? 'beam' : 'std';
++if (halo.dataset.variant !== variant) {
++halo.dataset.variant = variant;
++halo.style.backgroundImage = `url(${getArrowGlintUrl(allyGlintBeam)})`;
++}
++}
++}
++}
++function getUnlockedEnemy(viewer = state.player) {
++if (matchState.mode !== '2v2' || !viewer) return null;
++const locked = state.playerCurrentTarget;
++for (const e of getEnemiesOf(viewer)) {
++if (e && e.state.hp > 0 && e !== locked) return e;
++}
++return null;
++}
++const _enemyArrowNdc = new THREE.Vector3();
++const _enemyArrowCam = new THREE.Vector3();
++const OVERHEAD_TEAM_CHEVRONS = false;
