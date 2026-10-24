@@ -76143,9 +76143,12 @@ const ARENA_SPAWNS = {
   // its east gap, and south of the standing container. A Trio respawn picks among all ten by the rule in spawn.js.
   warehouse: { p1: { x: -58, y: GROUND_BASE_Y, z: 102 }, p2: { x: 58, y: GROUND_BASE_Y, z: -102 },
     more: [{ x: 18, y: GROUND_BASE_Y, z: -81 }, { x: -46, y: GROUND_BASE_Y, z: -46 }, { x: 34, y: GROUND_BASE_Y, z: -43 }, { x: -28, y: GROUND_BASE_Y, z: -6 }, { x: 26, y: GROUND_BASE_Y, z: 3 }, { x: -36, y: GROUND_BASE_Y, z: 41 }, { x: 44, y: GROUND_BASE_Y, z: 42 }, { x: -20, y: GROUND_BASE_Y, z: 76 }] },
-  // Compound: Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
+  // Compound: the homes in the north shed (p1) and the south yard (p2), and the user's eight more places (the marked plan, 2026-10-24):
+  // the north-west yard by the parked cars, the yard north of the big building's tank, the north-east road, the yard road north of the
+  // big building, the loading strip at the road's west gate and its south half, the yard east of the big building, the south yard east of
+  // the shed. A Trio respawn picks among all ten by the rule in spawn.js (by sight, as Town's and Dust's). Set by spawn_set.mjs on the generator's json.
   compound: { p1: { x: -80, y: GROUND_BASE_Y, z: -247 }, p2: { x: -107, y: GROUND_BASE_Y, z: 220 },
-    more: [{ x: -241, y: GROUND_BASE_Y, z: -166 }, { x: -241, y: GROUND_BASE_Y, z: 155 }, { x: 118, y: GROUND_BASE_Y, z: -134 }, { x: 0, y: GROUND_BASE_Y, z: 102 }, { x: -161, y: GROUND_BASE_Y, z: -86 }, { x: -54, y: GROUND_BASE_Y - 0.01, z: 188 }] },
+    more: [{ x: -160, y: GROUND_BASE_Y + 1.43, z: -186 }, { x: -139, y: GROUND_BASE_Y, z: -106 }, { x: 87, y: GROUND_BASE_Y, z: -93 }, { x: -134, y: GROUND_BASE_Y, z: 14 }, { x: -241, y: GROUND_BASE_Y, z: 16 }, { x: 3, y: GROUND_BASE_Y, z: 81 }, { x: -234, y: GROUND_BASE_Y, z: 140 }, { x: -32, y: GROUND_BASE_Y, z: 155 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
   // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22).
