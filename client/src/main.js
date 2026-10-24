@@ -788,6 +788,7 @@ const MAP_DATA = {
   spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
+  compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true, thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
@@ -10188,27 +10189,30 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
 // outside (HALF_X..HALF_X+2 etc.) the play extent so the camera never clips
 // against a solid mesh when the player backs into a corner. Mirrors the
 // pattern Station uses inline.
-function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y, stripe = true) {   // (stripe: the red edge line; a map its own model confines does without — GLB_MAPS `edge: false`)
+function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y, stripe = true, open = []) {   // (stripe: the red edge line; a map its own model confines does without — GLB_MAPS `edge: false`. open: the sides — east +x, west -x, south +z, north -z, the compass of the F4 line — a modelled map's boundary row (MAP_BOUNDARY `open`) leaves without a wall, the model's own wall or fence inside the crop being the edge there: no wall and no line on those, as the shared arena builds them; user 2026-10-24)
   // Diorama POC: the play extent doubles as the base-plate footprint.
   arenaBounds = { halfX: HALF_X, halfZ: HALF_Z, ceilY: CEIL_Y };
-  arenaObstacles.push(
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y },
-    { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y },
-    { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }
-  );
+  const walls = [
+    ['south', { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }],
+    ['north', { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y }],
+    ['west', { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }],
+    ['east', { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }]
+  ];
+  for (const [side, o] of walls) if (!open.includes(side)) arenaObstacles.push(o);
   if (!stripe) return;
   const boundaryGlow = new THREE.MeshStandardMaterial({
     color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4
   });
   const stripeInset = 1.6;
-  for (const zEdge of [HALF_Z - stripeInset, -(HALF_Z - stripeInset)]) {
+  for (const [side, zEdge] of [['south', HALF_Z - stripeInset], ['north', -(HALF_Z - stripeInset)]]) {
+    if (open.includes(side)) continue;
     const s = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF_X - 4, 1.4), boundaryGlow);
     s.rotation.x = -Math.PI / 2;
     s.position.set(0, 0.05, zEdge);
     scene.add(s); arenaDecor.push(s);
   }
-  for (const xEdge of [HALF_X - stripeInset, -(HALF_X - stripeInset)]) {
+  for (const [side, xEdge] of [['east', HALF_X - stripeInset], ['west', -(HALF_X - stripeInset)]]) {
+    if (open.includes(side)) continue;
     const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * HALF_Z - 4), boundaryGlow);
     s.rotation.x = -Math.PI / 2;
     s.position.set(xEdge, 0.05, 0);
@@ -10350,6 +10354,7 @@ const GLB_MAPS = {
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
+  compound: { file: 'maps/compound', scale: 4, cx: 0, cz: 1.34, ground: -0.094, drop: [], ceilY: 28, modelM: 1.34, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1.34 m per model unit, the user's pick with the map scale test, 2026-10-24: the served copy is scaled by 1.34 (glb_rescale.mjs), so the file's units are the game's metres; the street at the yard's grass, y -0.094; each object fades whole when it hides the player's own unit, as Warehouse's; the west and north sides are open — MAP_BOUNDARY `open` — the model's wall and fences being the edge there)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10401,8 +10406,8 @@ function warmMapModel(mapKey) {
 }
 function buildGlbArena(mapKey) {
   const cfg = GLB_MAPS[mapKey];
-  const { halfX, halfZ } = getArenaBounds(mapKey);
-  addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false);   // (the boundary walls always; the red edge line unless the map's data says `edge: false`)
+  const { halfX, halfZ, open } = getArenaBounds(mapKey);
+  addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false, open ?? []);   // (the boundary walls and the red edge line, except on the sides the map's boundary row leaves open; no line at all where the map's data says `edge: false`)
   for (const o of getGeneratedObstacles(mapKey)) arenaObstacles.push({ ...o });   // collision only: the model is the visual
   for (const s of getArenaSurfaces(mapKey)) arenaSurfaces.push(s);              // the raised floors (stairs, porches, pavements)
   const group = new THREE.Group();

@@ -697,6 +697,8 @@ export const MAP_DATA = {
   dust: { id: 'dust', name: 'Dust' },
   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
   warehouse: { id: 'warehouse', name: 'Warehouse' },
+  // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
+  compound: { id: 'compound', name: 'Compound' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms: { id: 'backrooms', name: 'Backrooms' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules.
