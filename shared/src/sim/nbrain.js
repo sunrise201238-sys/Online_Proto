@@ -367,11 +367,18 @@ function botBurstSize(unit) {
 // minWidth defaults to the perch floor. MAZE passes 0: it is following a route,
 // not shopping for a vantage point, so a narrow strip its path climbs is a
 // legitimate step — see the call site for the measurements behind that split.
+// (the floors a perch or a descent is looked for in, read from the sim's point broadphase and not from every floor of the map —
+// Compound has 16,878, and the two searches below scanned them all up to five times a tick per bot, the brains' largest cost
+// there; user 2026-10-24. The broadphase hands back a superset of the floors within the radius, in the list's own order, so
+// the tests below pick the same floor as the full scan did, to the tick — the frozen-brain tests say so. Its own scratch list:
+// the lip test inside the loop calls the broadphase too, on the default one.)
+const _perchScratch = [];
 function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
-  for (let i = 0; i < surfaces.length; i++) {
-    const s = surfaces[i];
+  const cands = obstaclesNearPoint(surfaces, px, pz, searchRadius, _perchScratch);
+  for (let i = 0; i < cands.length; i++) {
+    const s = cands[i];
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
     // TOO NARROW TO LAND ON (user 2026-08-09). A jump carries 12-17 units
     // horizontally, so a strip thinner than this isn't a perch — the bot sails
@@ -424,8 +431,9 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
 // on a droppable surface.
 function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, awayZ) {
   let deck = null;
-  for (let i = 0; i < surfaces.length; i++) {
-    const s = surfaces[i];
+  const cands = obstaclesNearPoint(surfaces, px, pz, 0, _perchScratch);   // (the floors under the point, in the list's order: the first that fits, as before)
+  for (let i = 0; i < cands.length; i++) {
+    const s = cands[i];
     if (px < s.minX || px > s.maxX || pz < s.minZ || pz > s.maxZ) continue;
     if (Math.abs(s.heightAt(px, pz) - myFloorY) > 1) continue;
     deck = s;
