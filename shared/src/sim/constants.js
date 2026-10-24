@@ -619,8 +619,8 @@ export const UNIT_DATA = {
     spreadAngle: 0.03,
     bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
     bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
-    bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.035 then 0.05 on 2026-10-23; 0.17, 0.3 and 0.17 again the same day) — the rifles' pace; with no delay a 112 ms slot recovers 0.019 against the 0.015 a round adds. The client's UNIT_DATA in client/src/main.js mirrors this line
-    bloomRecoverDelayMs: 0,   // user 2026-10-24 (200 until then): she recovers between the rounds of a burst, as the rifles do
+    bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.035 then 0.05 on 2026-10-23; 0.17, 0.3 and 0.17 again the same day) — the rifles' pace; behind the 200 ms delay the cone is frozen while she sprays (112 ms a round) and comes back at this pace after. The client's UNIT_DATA in client/src/main.js mirrors this line
+    bloomRecoverDelayMs: 200,   // user 2026-10-24 (200, then 0 for an hour, then 200 again the same day): frozen while she sprays, recovering from 200 ms after the last round
     botSuppressBurst: 10,
     damage: 3.5,               // user 2026-10-23 (3.5 → 2.5 → 3 → 2.5 → 3.5 the same day) — Atsuko's bullet
     magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
