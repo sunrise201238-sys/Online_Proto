@@ -52,7 +52,7 @@ place on the open street beyond it is refused — Warehouse's north-west and eas
 
 | map | places |
 | --- | --- |
-| Dust | `49,-65 27,228 -42,-18 -25,33 -52,42 21,104 -86,118 104,187 -16,225 84,261 --bounds 227.6,355.6` (the homes, user 2026-10-19; the eight more from the user's marked plan, 2026-10-22, the last on the south-east roof) |
+| Dust | `49,-65 27,228 -42,-18 -25,33 -52,42 21,104 -86,118 104,187 -16,225 69,234 --bounds 227.6,355.6` (the homes, user 2026-10-19; the eight more from the user's marked plan, 2026-10-22; the last was on the south-east roof, 9.9 m up, until the user's green cross of 2026-10-24 moved it 7 m north-west onto the slope below, 3 m under the street — 1 m east of the cross for a 2 m clearance) |
 | Town | `-208,10 168,22 -124,-74 116,-78 -104,118 236,122` |
 | Spacecraft | `198,-10 -200,-2 85,-20 -75,-11 -121,-3 82,21 -72,31 117,69 51,112 5,115 --random` |
 | Backrooms | `-88,-92 84,68 84,-96 -45,-67 -19,-66 37,-20 -87,-6 -64,54 -50,66 -92,79 --bounds 109.6,114.4` (the user's marked plan, 2026-10-22; Backrooms (Anomaly) shares the data) |
