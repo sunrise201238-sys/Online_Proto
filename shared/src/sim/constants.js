@@ -590,7 +590,7 @@ export const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 125 HP, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrored in the client.
@@ -599,7 +599,7 @@ export const UNIT_DATA = {
     name: 'Unit 17 / Submachine Gun',
 
     // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 125,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day): a mainline magazine, 100–120, still falls short
+    hp: 120,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24: a mainline magazine, 100–120, falls just short
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,

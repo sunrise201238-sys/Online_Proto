@@ -688,7 +688,7 @@ const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 50, moveScale: 0.50 }
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 125 HP, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
@@ -698,7 +698,7 @@ const UNIT_DATA = {
     model: 'kurumi',   // 3D character (UNIT_MODELS)
 
     // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 125,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day): a mainline magazine, 100–120, still falls short
+    hp: 120,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24: a mainline magazine, 100–120, falls just short
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
@@ -837,6 +837,9 @@ state.suddenDeathActive = false;
 function mechMaxHp(m) {
   return state.suddenDeathActive ? 1 : (m.unit.hp ?? MAX_HP);
 }
+// A unit's HP bars are as long as its HP (user 2026-10-24): the 100 HP base is the base length, Kurumi's 120 HP bar is
+// 1.2 of it — the corner bar, the overhead pill, the command card alike. From the unit's own hp, not Sudden Death's 1.
+function hpBarScale(m) { return (m?.unit?.hp ?? MAX_HP) / MAX_HP; }
 // Spectator mode (offline map-picker toggle, like Dummy): a BOT takes over
 // the player's slot and the human just watches. spectatorMode is the sticky
 // checkbox; spectatorActive is the per-match flag (off on the Shooting
@@ -2095,7 +2098,7 @@ function drawHealthBar(sprite, frac) {
     x.lineTo(px, py + r); x.arcTo(px, py, px + r, py, r);
     x.closePath();
   };
-  const PX = UNIT_BAR_PILL_X, PY = UNIT_BAR_PILL_Y, pw = UNIT_BAR_PILL_W, ph = UNIT_BAR_PILL_H;   // the pill's box in the texture
+  const PX = UNIT_BAR_PILL_X, PY = UNIT_BAR_PILL_Y, pw = sprite.userData.pillW ?? UNIT_BAR_PILL_W, ph = UNIT_BAR_PILL_H;   // the pill's box in the texture
   const grown = (g) => pill(PX - g, PY - g, pw + 2 * g, ph + 2 * g, 5 + g);   // the pill grown outward by g (pill() begins a fresh path)
   x.clearRect(0, 0, W, H);
   // Portrait, left of the pill: dark rounded frame (the bar's outline width),
@@ -2155,9 +2158,10 @@ function drawHealthBar(sprite, frac) {
   sprite.material.map.needsUpdate = true;
 }
 
-function makeHealthBarSprite(ink, spriteKey) {
+function makeHealthBarSprite(ink, spriteKey, hpScale = 1) {
   const cv = document.createElement('canvas');
-  cv.width = UNIT_BAR_TEX_W;
+  const pillW = Math.round(UNIT_BAR_PILL_W * hpScale);   // (the pill as long as the unit's HP; the canvas grows with it, the rest of the group as it was)
+  cv.width = UNIT_BAR_TEX_W + (pillW - UNIT_BAR_PILL_W);
   cv.height = UNIT_BAR_TEX_H;
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -2168,6 +2172,7 @@ function makeHealthBarSprite(ink, spriteKey) {
   s.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP + 0.3;
   s.renderOrder = 9997;
   s.userData.barInk = ink;
+  s.userData.pillW = pillW;
   s.userData.barFrac = -1;                  // forces the first draw
   s.userData.thumbImg = unitThumbImage(spriteKey);
   s.userData.thumbDrawn = false;            // set once the portrait has been painted in
@@ -2212,6 +2217,7 @@ function updateMechAnimations(dt, now) {
         _barWork.copy(m.root.position).sub(camera.position).dot(_barCamFwd));
       const k = depth / UNIT_BAR_REF_DIST;
       const u = UNIT_BAR_WORLD_W / UNIT_BAR_PILL_W * k;                          // world units per texture px
+      const texW = bar.material.map.image.width, pillW = bar.userData.pillW ?? UNIT_BAR_PILL_W;   // (this sprite's own canvas and pill: a unit's pill is as long as its HP)
       const pillLift = (UNIT_BAR_PILL_Y + UNIT_BAR_PILL_H) * u;                   // sprite top -> pill bottom
       const groupLift = (UNIT_BAR_TEX_H - UNIT_BAR_PAD) * u;                      // sprite top -> the portrait's bottom edge (the group's lowest ink)
       const hostile = getTeamOf(m) !== camTeam;
@@ -2225,7 +2231,7 @@ function updateMechAnimations(dt, now) {
         // portrait (drawHealthBar leaves it out), centred over the head; every other unit's group hides.
         if (m !== camFocus) { bar.visible = false; continue; }
         bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
-        shiftX = (0.5 * UNIT_BAR_TEX_W - (UNIT_BAR_PILL_X + UNIT_BAR_PILL_W / 2)) * u;   // the pill's centre over the unit
+        shiftX = (0.5 * texW - (UNIT_BAR_PILL_X + pillW / 2)) * u;   // the pill's centre over the unit
       } else if (state.suddenDeathActive) {
         // The camera's own unit carries no portrait in Sudden Death (owner
         // 2026-10-06: "player's own unit does not need thumbnail");
@@ -2246,10 +2252,10 @@ function updateMechAnimations(dt, now) {
           bar.position.y = clearY + groupLift;
           // the bracket's left edge (half its original width left of the
           // centre) -> the portrait frame's left edge (texel PAD - EDGE)
-          shiftX = -RETICLE_TOP_FRACTION_BASE * baseS + (0.5 * UNIT_BAR_TEX_W - (UNIT_BAR_PAD - UNIT_BAR_EDGE_W)) * u;
+          shiftX = -RETICLE_TOP_FRACTION_BASE * baseS + (0.5 * texW - (UNIT_BAR_PAD - UNIT_BAR_EDGE_W)) * u;
         } else {
           bar.position.y = UNIT_BAR_HEAD_TOP + UNIT_BAR_TEAM_GAP * k + pillLift;
-          shiftX = (0.5 * UNIT_BAR_TEX_W - UNIT_BAR_PAD - UNIT_BAR_THUMB / 2) * u;   // the portrait's centre over the unit
+          shiftX = (0.5 * texW - UNIT_BAR_PAD - UNIT_BAR_THUMB / 2) * u;   // the portrait's centre over the unit
         }
       } else if (hostile && !m.isOwnSprite && lockedOn) {
         // The locked hostile: a thin gap above the crosshair's top edge as
@@ -2284,7 +2290,7 @@ function updateMechAnimations(dt, now) {
       if (bar.userData.barSD !== !!state.suddenDeathActive) bar.userData.barFrac = -1;
       if (bar.userData.barAnomaly !== anomalyRules()) bar.userData.barFrac = -1;   // (the anomaly rules on or off: repaint without or with the portrait)
       // The sprite carries the portrait and the margins: scale it off the same world-per-texel so the PILL keeps its 2.42 x 0.3025 world size.
-      bar.scale.set(UNIT_BAR_TEX_W * u, UNIT_BAR_TEX_H * u, 1);
+      bar.scale.set(texW * u, UNIT_BAR_TEX_H * u, 1);
       const ti = bar.userData.thumbImg;
       if (ti && !bar.userData.thumbDrawn && ti.complete && ti.naturalWidth > 0) {
         bar.userData.thumbDrawn = true;
@@ -2326,7 +2332,7 @@ function createMech(color, unitData, isOwnUnit = false) {
   }
   // Overhead HP bar — the per-frame updater corrects ink (team-relative),
   // size, and anchor; start white.
-  const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY, unitData.spriteKey);
+  const healthBar = makeHealthBarSprite(UNIT_BAR_INK_ALLY, unitData.spriteKey, (unitData.hp ?? MAX_HP) / MAX_HP);
   root.add(healthBar);
 
   const plumeLight = new THREE.PointLight(0x7efbff, 0, 7, 2);
@@ -6067,6 +6073,10 @@ function updateHud(now = performance.now()) {
   // gauge and the remaining-units icons stay.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' corner bars hide)
+  // (a unit's corner bar is as long as its HP: the track's CSS width is 180px times --hp-scale; the fullscreen button
+  // docked right of the LEFT bar follows whichever unit's bar that is — the player's offline, slot p1's online)
+  const fills = [[hudRefs.hp, state.player], [hudRefs.enemyHp, state.enemy], [hudRefs.allyHp, state.ally], [hudRefs.enemy2Hp, state.enemy2]];
+  for (const [fill, m] of fills) { if (!fill || !m) continue; const s = String(hpBarScale(m)); if (fill.parentElement.style.getPropertyValue('--hp-scale') !== s) fill.parentElement.style.setProperty('--hp-scale', s); if (fill.parentElement.classList.contains('health') && document.documentElement.style.getPropertyValue('--left-hp-scale') !== s) document.documentElement.style.setProperty('--left-hp-scale', s); }
   hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
   hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
   if (hudRefs.allyHp && state.ally) {
@@ -6880,7 +6890,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1024b';
+const CLIENT_BUILD_TAG = 'b1024c';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12702,11 +12712,12 @@ function updateDioramaHud() {
   const foeCol = [];
   for (const c of cards) (getTeamOf(c.m) === viewerTeam ? ownCol : foeCol).push(c);
   const placeColumn = (list, side) => {
-    const cardX = side === 'left' ? 10 : W - 10 - cardW;
     let y = H - 12 - cardH;
     for (const c of list) {
+      const s = hpBarScale(c.m);   // (a unit's card is as long as its HP bar; the right column keeps its right edge)
       c.side = side;
-      c.cardX = cardX;
+      c.cardX = side === 'left' ? 10 : W - 10 - cardW * s;
+      c.cardW = cardW * s;
       c.want = y;
       y -= cardH + 10;
       orderedCards.push(c);
@@ -12722,6 +12733,7 @@ function updateDioramaHud() {
     els.cardY = els.cardY == null ? want : els.cardY + (want - els.cardY) * 0.25;
     els.card.style.display = '';
     els.card.style.transform = `translate(${cardX.toFixed(1)}px, ${els.cardY.toFixed(1)}px)`;
+    if (els.cardW !== c.cardW) { els.cardW = c.cardW; els.card.style.width = `${c.cardW.toFixed(1)}px`; }
     const m = c.m;
     // BA line: the card carries the character's portrait thumbnail (the
     // menu's units/<spriteKey>_profile_thumbnail.png — owner call, replacing
