@@ -1,4 +1,4 @@
-// FROZEN at b1024w for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1024z12 for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1024w_ref.js';
+import { sdBrainTick } from './sdbrain_b1024z12_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -219,6 +219,9 @@ const BOT_LEDGE_JUMP_REACH = 4.5;
 // Defense VAULT — pressed against the ledge with nowhere else to go — keeps its own gates: it is the way out, not a vantage.
 const BOT_HOP_ALONG_MIN = 0.5;
 const BOT_HOP_QUIET_MS = 1000;
+// (A fourth question — "did I not just come down from there?", a 4 s refusal of a hop back to the floor just left — was
+// tried for Station's platform yo-yo and removed the same day on the user's call, 2026-10-24: it read heights, not places,
+// so it also kept a body backing off from hopping onto the other platform, and a hop that keeps the range must stay.)
 function hopAllowed(perch, mx, mz, opp, now) {
   if (perch.toX * mx + perch.toZ * mz <= BOT_HOP_ALONG_MIN) return false;            // not the way I am going
   if (opp && now - (opp.lastFireAt ?? -Infinity) < BOT_HOP_QUIET_MS) return false;   // the enemy fired at me this second
@@ -716,6 +719,12 @@ export function nbBrainTick(host) {
   const avoid = computeBotAvoidance(pos.x, pos.y, pos.z, obstacles, BOT_OBSTACLE_AVOID_RADIUS);
   const avoidMag = Math.hypot(avoid.rx, avoid.rz);
   const obstacleNear = avoidMag > 0.3;
+  // THE SIM'S OWN NOTE OF A WALL (user 2026-10-24, Station): host.wall is the outward normal of the face physics pushed the
+  // body out of last tick (tick.js stage 5; the offline client's wallTouch). The wedge detectors below read the steering's
+  // boxes, and the steering leaves jumpable fences out on purpose — Station's 1 m platform fronts among them — so a body
+  // pressed against a front stood still under fire with every "wedged" rule asleep, once the low-ground hop that used to
+  // lift it was gone. A push is a wall whatever the thing: moving into the pushed face counts as wedged everywhere below.
+  const pushedInto = (ux, uz) => !!host.wall && (ux * host.wall.x + uz * host.wall.z) < -0.4;
 
   const myFloorY = groundHeightAt(pos.x, pos.z, surfaces, pos.y - GROUND_BASE_Y);
   const oppFloorY = groundHeightAt(opp.pos.x, opp.pos.z, surfaces, opp.pos.y - GROUND_BASE_Y);
@@ -1538,7 +1547,7 @@ export function nbBrainTick(host) {
     wantSprint = coverMove.hide ? !!coverMove.dash : !coverMove.hold;
     // (SD jump-link vault: the jump was started in the SD block; the dispatch
     // below sets the launch velocity and the air steer toward the ledge)
-    if (coverMove.jump) { jumpThisTick = true; jumpDirX = coverMove.jx; jumpDirZ = coverMove.jz; }
+    if (coverMove.jump) { jumpThisTick = true; jumpDirX = coverMove.jx; jumpDirZ = coverMove.jz; me.botHopWhy = 'cover-move'; }
   } else if (botS === 'pursue') {
     // Pursue handles BOTH sides of the band: toward the player when too far,
     // AWAY from them when too close. Without the negative branch the bot just
@@ -1581,24 +1590,17 @@ export function nbBrainTick(host) {
         // (the enemy stands a jump higher: the hop goes only when a ledge is actually within reach the way we are going —
         // the blind jump at a belt 10 u off landed on the same floor, Factory 2, user 2026-10-24; the three questions as everywhere)
         const up = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
-        if (up && up.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(up, mx, mz, opp, now)) { jumpDirX = up.toX; jumpDirZ = up.toZ; if (botTryJump(host)) jumpThisTick = true; }
+        if (up && up.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(up, mx, mz, opp, now)) { jumpDirX = up.toX; jumpDirZ = up.toZ; if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'pursue-climb'; } }
       } else if (onHighGround) {
         const exit = findDescentDirection(pos.x, pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
         if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
           jumpDirX = exit.toX; jumpDirZ = exit.toZ;
-          if (botTryJump(host)) jumpThisTick = true;
-        }
-      } else {
-        // Low ground: take any reachable platform — no "toward player" gate,
-        // since on maps like Station the raised decks are the strong positions
-        // and we'd rather be up there than on the tracks. The jump cooldown
-        // rate-limits this; no strict random gate needed.
-        const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
-        if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now) && Math.random() > 0.2) {
-          jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-          if (botTryJump(host)) jumpThisTick = true;
+          if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'pursue-descent'; }
         }
       }
+      // (The low-ground rule — "on low ground, take any reachable platform, no 'toward player' gate; on Station the decks are
+      // the strong positions" — is removed, user 2026-10-24: it hopped a body back onto the platform it had just left,
+      // whatever range that gave. A ledge the enemy stands on is still climbed (above); a route still vaults its links.)
     }
   } else if (botS === 'maze') {
     let nav = host.navGet();
@@ -1688,7 +1690,7 @@ export function nbBrainTick(host) {
         const jln = Math.hypot(jdx, jdz) || 1;
         jumpDirX = jdx / jln;
         jumpDirZ = jdz / jln;
-        if (botTryJump(host)) jumpThisTick = true;
+        if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'maze-route'; }
       }
       let tx = wp.x - pos.x, tz = wp.z - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
@@ -1745,7 +1747,7 @@ export function nbBrainTick(host) {
       const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
       if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now)) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botTryJump(host)) jumpThisTick = true;
+        if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'maze-perch'; }
       }
     }
   } else if (botS === 'engage') {
@@ -1783,7 +1785,7 @@ export function nbBrainTick(host) {
     // often as it fires (92 slides, 91 bails). The LoS flip's 1 s cooldown
     // is NOT consulted — a bot pressed into a wall can't wait a second —
     // but firing here re-arms it so the two can't fight over the same tick.
-    const engageIntoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4;
+    const engageIntoWall = ((mx * avoid.rx + mz * avoid.rz) < -0.4 && avoidMag > 0.4) || pushedInto(mx, mz);
     me.botEngageWallTicks = engageIntoWall ? (me.botEngageWallTicks ?? 0) + 1 : 0;
     if (me.botEngageWallTicks >= 2) {
       me.botEngageWallTicks = 0;
@@ -1795,17 +1797,8 @@ export function nbBrainTick(host) {
       mx = rx / rl; mz = rz / rl;
     }
 
-    // On low ground? Hop onto any reachable platform — high ground is the
-    // better engagement / vantage spot on Station-like maps. Doesn't override
-    // the orbit (just adds a jump when the chance is there); the jump cooldown
-    // limits how often this fires.
-    if (grounded && !me.airborne && !onHighGround) {
-      const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now) && Math.random() > 0.3) {
-        jumpDirX = perch.toX; jumpDirZ = perch.toZ;
-        if (botTryJump(host)) jumpThisTick = true;
-      }
-    }
+    // (The low-ground hop onto any reachable platform that stood here — Engage's and Defense's — is removed, user
+    // 2026-10-24, with Pursue's: see there.)
 
     if (botS === 'engage') {
       if (obstacleNear && !playerHasLoS && now < me.nextFireAt) {
@@ -1858,13 +1851,13 @@ export function nbBrainTick(host) {
           jumpDirX = ahead.toX;
           jumpDirZ = ahead.toZ;
           if (botTryJumpSurvival(host)) {
-            jumpThisTick = true;
+            jumpThisTick = true; me.botHopWhy = 'defense-ahead';
             me.botDefenseStuckTicks = 0;
           }
         }
       }
       const intoWall = (mx * avoid.rx + mz * avoid.rz) < -0.4;
-      if (intoWall && avoidMag > 0.4) {
+      if ((intoWall && avoidMag > 0.4) || pushedInto(mx, mz)) {
         me.botDefenseStuckTicks = (me.botDefenseStuckTicks ?? 0) + 1;
       } else {
         me.botDefenseStuckTicks = 0;
@@ -1886,7 +1879,7 @@ export function nbBrainTick(host) {
             jumpDirX = ledge.toX;
             jumpDirZ = ledge.toZ;
             if (botTryJumpSurvival(host)) {
-              jumpThisTick = true;
+              jumpThisTick = true; me.botHopWhy = 'defense-vault';
               vaulted = true;
               me.botDefenseStuckTicks = 0;
             }
