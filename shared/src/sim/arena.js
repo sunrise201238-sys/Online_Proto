@@ -2969,7 +2969,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 133.4, "maxX": 134.4, "minZ": -15.6, "maxZ": -14.6, "minY": 0, "maxY": 8.02, "topBuffer": 0.8},
       {"minX": -66.6, "maxX": -65.6, "minZ": -14.6, "maxZ": -13.6, "minY": 0, "maxY": 32, "topBuffer": 0.8},
       {"minX": -65.6, "maxX": -64.6, "minZ": -14.6, "maxZ": 38.4, "minY": 0, "maxY": 18, "topBuffer": 0.8},
-      {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "minY": 0, "maxY": 52},
+      // (by hand, the user 2026-10-24: a 13 m "invisible pillar" at model x 64.4..64.9 z −35.65..−34.4 removed — the generator read something there; nothing is seen in the game: {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "minY": 0, "maxY": 52})
       {"minX": 60.4, "maxX": 61.4, "minZ": -14.6, "maxZ": 18.4, "minY": 0, "maxY": 16.8, "topBuffer": 0.8},
       {"minX": 115.4, "maxX": 116.4, "minZ": -14.6, "maxZ": 12.4, "minY": 0, "maxY": 5.9, "topBuffer": 0.8},
       {"minX": 116.4, "maxX": 121.4, "minZ": -14.6, "maxZ": -13.6, "minY": 0, "maxY": 6.45, "topBuffer": 0.8},
@@ -3121,7 +3121,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 19.4, "maxX": 25.4, "minZ": 6.4, "maxZ": 11.4, "minY": 0, "maxY": 10, "topBuffer": 0.8},
       {"minX": 25.4, "maxX": 27.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 16.4, "topBuffer": 0.8},
       {"minX": 51.4, "maxX": 51.98, "minZ": 6.82, "maxZ": 8.98, "minY": 12.12, "maxY": 17.6, "topBuffer": 0.8},
-      {"minX": 92.4, "maxX": 94.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 46},
+      // (by hand, the user 2026-10-24: an 11.5 m "invisible pillar" at model x 72.9..73.4 z −30.4..−30.15, in the crate row, removed: {"minX": 92.4, "maxX": 94.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 46})
       {"minX": 133.4, "maxX": 134.4, "minZ": 6.4, "maxZ": 13.4, "minY": 0, "maxY": 5.97, "topBuffer": 0.8},
       {"minX": 134.4, "maxX": 135.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 6.06, "topBuffer": 0.8},
       {"minX": 25.4, "maxX": 26.4, "minZ": 7.4, "maxZ": 14.4, "minY": 0, "maxY": 10, "topBuffer": 0.8},
@@ -5451,7 +5451,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -10.6, "maxX": -9.6, "minZ": 15.2, "maxZ": 15.6, "minY": -7.08, "maxY": 1.92, "topBuffer": 0.8, "noProjectile": true},
       {"minX": -9.6, "maxX": -7.6, "minZ": 15.2, "maxZ": 15.6, "minY": -7.68, "maxY": 1.32, "topBuffer": 0.8, "noProjectile": true},
       {"minX": -35.6, "maxX": -32.6, "minZ": 35.2, "maxZ": 35.6, "minY": 8.72, "maxY": 17.72, "topBuffer": 0.8, "noProjectile": true},
-      {"minX": -46.6, "maxX": -33.6, "minZ": 62.2, "maxZ": 62.6, "minY": 6.12, "maxY": 15.12, "topBuffer": 0.8, "noProjectile": true},
+      // (by hand, the user 2026-10-24: the guard along the deck's north edge, x 38.15..41.4 z −16.4 in the model, lowered from 15.12 to the deck's top — a body on the deck walks off the 3.2 m drop here; the generator writes 15.12, so a regeneration must lower it again)
+      {"minX": -46.6, "maxX": -33.6, "minZ": 62.2, "maxZ": 62.6, "minY": 6.12, "maxY": 12.12, "topBuffer": 0.8, "noProjectile": true},
       {"minX": -48.6, "maxX": -46.6, "minZ": 80.2, "maxZ": 80.6, "minY": -3.68, "maxY": 5.32, "topBuffer": 0.8, "noProjectile": true},
       {"minX": -29.6, "maxX": -28.6, "minZ": 6.2, "maxZ": 6.6, "minY": 3.92, "maxY": 12.92, "topBuffer": 0.8, "noProjectile": true},
       {"minX": -28.6, "maxX": -26.6, "minZ": 6.2, "maxZ": 6.6, "minY": 2.72, "maxY": 11.72, "topBuffer": 0.8, "noProjectile": true},
@@ -6174,7 +6175,11 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -63.6, "maxX": -48.6, "minZ": 74.4, "maxZ": 75.4, "minY": 0, "maxY": 3.12, "topBuffer": 0.8},
       {"minX": 115.4, "maxX": 116.4, "minZ": 79.4, "maxZ": 80.4, "minY": 0, "maxY": 2.71, "topBuffer": 0.8},
       {"minX": 116.4, "maxX": 118.4, "minZ": 79.4, "maxZ": 80.4, "minY": 0, "maxY": 2.9, "topBuffer": 0.8},
-      {"minX": 99.4, "maxX": 100.4, "minZ": 179.4, "maxZ": 198.4, "minY": 0, "maxY": 3.2, "topBuffer": 0.8}
+      {"minX": 99.4, "maxX": 100.4, "minZ": 179.4, "maxZ": 198.4, "minY": 0, "maxY": 3.2, "topBuffer": 0.8},
+      // (by hand, the user 2026-10-24: the thin slot at model x 63.65..64.4 z −1.4..1.85 — a 0.25 m column between a wall and a crate the push-out parked a body in after a jump — filled solid)
+      {"minX": 55.4, "maxX": 58.4, "minZ": 122.4, "maxZ": 135.4, "minY": 0, "maxY": 42},
+      // (by hand, the user 2026-10-24: the pocket among the crates at model x 72.4..74.17 z −29.65..−27.9 — a 0.6 m ramp floor walled by 3 m crates, entered over the 1.4 m lip on its south — filled to the crates' 3 m)
+      {"minX": 90.4, "maxX": 97.48, "minZ": 9.4, "maxZ": 16.4, "minY": 0, "maxY": 12}
     ],
     "surfaces": [
       {"minX": 118.4, "maxX": 120.4, "minZ": -227.6, "maxZ": -225.6, "maxTop": 18.47, "type": "flat", "top": 18.47, "lid": 1},
@@ -9317,7 +9322,11 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 93.4, "maxX": 94.4, "minZ": 264.4, "maxZ": 265.4, "maxTop": -16.88, "type": "plane", "y0": -16.88, "gx": 0, "gz": -1.2},
       {"minX": 94.4, "maxX": 95.4, "minZ": 264.4, "maxZ": 265.4, "maxTop": -16.4, "type": "plane", "y0": -16.4, "gx": 0, "gz": -1.68},
       {"minX": 95.4, "maxX": 97.4, "minZ": 264.4, "maxZ": 265.4, "maxTop": -15.88, "type": "plane", "y0": -15.88, "gx": 0, "gz": -2.2},
-      {"minX": 91.4, "maxX": 92.4, "minZ": 265.4, "maxZ": 266.4, "maxTop": -18.08, "type": "plane", "y0": -18.65, "gx": 0.5667, "gz": 0}
+      {"minX": 91.4, "maxX": 92.4, "minZ": 265.4, "maxZ": 266.4, "maxTop": -18.08, "type": "plane", "y0": -18.65, "gx": 0.5667, "gz": 0},
+      // (by hand, the user 2026-10-24: the 1.8 m ledge beside the deck at model x 73.9..74.9 z 18.85..31.85 gets a floor on its top — three 1.8 m things the generator left topless, so a body jumping onto them slid off)
+      {"minX": 98.4, "maxX": 102.4, "minZ": 203.4, "maxZ": 255.4, "maxTop": 7.19, "type": "flat", "top": 7.19},
+      // (by hand, the user 2026-10-24, with the slot above: the 1.3 m crate east of the slot, model x 64.4..65.54 z −1.15..1.6, gets a floor on its top — a body jumping west lands on it instead of being pushed about inside it)
+      {"minX": 58.4, "maxX": 62.96, "minZ": 123.4, "maxZ": 134.4, "maxTop": 5.2, "type": "flat", "top": 5.2}
     ]
   },
   "town": {
