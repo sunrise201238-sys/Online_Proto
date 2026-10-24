@@ -784,11 +784,11 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  spacecraft: { name: 'Spacecraft' },   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
-  warehouse: { name: 'Warehouse' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
-  backrooms: { name: 'Backrooms' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
-  backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
+  warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
+  backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
+  backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true, thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
 };
 
@@ -6880,7 +6880,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1024a';
+const CLIENT_BUILD_TAG = 'b1024b';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9267,7 +9267,7 @@ function mapGridHTML(mapEntries, disabled = new Set()) {
     return `<div class="menu-divider">— ${sec.title} —</div><div class="unit-grid map-grid">${entries.map(([id, m]) => {
       const off = disabled.has(id);
       return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
-      <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false" />
+      <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false"${m.thumb ? ` style="object-position:${m.thumb}"` : ''} />
       <span class="unit-label">${m.name}${off ? '<br>(offline only)' : ''}</span>
     </button>`;
     }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
