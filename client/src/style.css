@@ -572,3 +572,6 @@ body.pseudo-fullscreen #app {
 
 /* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own bar; user 2026-10-19 */
 .touch-hud.hud-anomaly .enemy-health, .touch-hud.hud-anomaly .ally-health, .touch-hud.hud-anomaly .enemy2-health { display: none; }
+
+/* (2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health) */
+.unit-profile-popup .unit-note { position: absolute; left: 10px; bottom: 7px; max-width: 108px; font-size: 9px; line-height: 11px; font-weight: 700; color: #ffd76a; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }

@@ -694,6 +694,7 @@ const UNIT_DATA = {
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
   unit17: {
     name: 'Unit 17 / Submachine Gun',
+    cardNote: 'This unit has 20% more health.',   // (user 2026-10-24: one line at the profile card's bottom-left, under the art — any unit may carry one)
     spriteKey: 'kurumi', char: 'Kurumi', weapon: 'UMP45', accent: 0xc8a66a,
     model: 'kurumi',   // 3D character (UNIT_MODELS)
 
@@ -9128,7 +9129,7 @@ function showProfilePopup(card, unit, onConfirm) {
       </div>`
     : '';
   spawnProfilePopup(card,
-    `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}`,
+    `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (a unit's cardNote, one line at the card's bottom-left under the art; 2026-10-24)
     onConfirm);
 }
 
