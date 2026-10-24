@@ -125,28 +125,28 @@ The alternative to the classic chase camera (2026-08-21): a tilt-shift **diorama
 
 ## Units
 
-Sixteen pickable units, near-identical base stats (100 HP — Kurumi 120, 250 boost, 11.76 sprint base; walk speeds since 2026-09-24: 16 for the SMGs and shotguns, 12 for the assault rifles, rifles and snipers, 10 for Units 12 and 17, 8 for Unit 5; Unit 7 flies):
+Sixteen pickable units, near-identical base stats (100 HP — Kurumi 120; 250 boost; 11.76 sprint base; the walk speed is per unit since 2026-09-24, in the table):
 
 **Weapons:**
 
-| | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload |
-|---|---|---|---|---|---|---|
-| Unit 1 — Assault Rifle (Saori) | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
-| Unit 9 — Assault Rifle (Asuna) | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
-| Unit 14 — Assault Rifle (Subaru) | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
-| Unit 4 — Submachine Gun (Atsuko) | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
-| Unit 13 — Submachine Gun (Marina) | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
-| Unit 15 — Submachine Gun (Yuuka) | 30 | 3.5 / shot | ~850 RPM | 600 | 50 / 55 | 1.5 s |
-| Unit 17 — Submachine Gun (Kurumi) | 25 | 3.5 / shot | ~600 RPM | 600 | 40 / 50 | 2 s |
-| Unit 2 — Shotgun (Hoshino) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
-| Unit 11 — Shotgun (Haruka) | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
-| Unit 18 — Shotgun (Rabu) | 10 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 2 s (magazine) |
-| Unit 12 — Machine Gun (Koyuki) | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
-| Unit 5 — Machine Gun (Hina) | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
-| Unit 10 — Rifle (Fubuki) | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
-| Unit 7 — Rifle (Aris) | 8 | 12 / bolt | ~180 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
-| Unit 3 — Sniper Rifle (Aru) | 5 | 50 / 35 / 20 by range | 60 RPM | 4000 | 120 / 70 | 2.5 s + 1 s charge |
-| Unit 6 — Sniper Rifle (Kei) | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
+| | Walk | Mag | Damage | Fire rate | Projectile speed | Lock range (1v1 / 2v2) | Reload |
+|---|---|---|---|---|---|---|---|
+| Unit 1 — Assault Rifle (Saori) | 12 | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
+| Unit 9 — Assault Rifle (Asuna) | 12 | 25 | 4 / shot | ~900 RPM | 600 | 56 / 60 | 1.5 s |
+| Unit 14 — Assault Rifle (Subaru) | 12 | 30 | 4 / shot | ~700 RPM | 600 | 56 / 60 | 1.5 s |
+| Unit 4 — Submachine Gun (Atsuko) | 16 | 30 | 3.5 / shot | ~1100 RPM | 600 | 50 / 55 | 1.5 s |
+| Unit 13 — Submachine Gun (Marina) | 16 | 71 | 2.5 / shot | ~1250 RPM | 600 | 50 / 55 | 2 s |
+| Unit 15 — Submachine Gun (Yuuka) | 16 | 30 | 3.5 / shot | ~850 RPM | 600 | 50 / 55 | 1.5 s |
+| Unit 17 — Submachine Gun (Kurumi) | 10 | 25 | 3.5 / shot | ~600 RPM | 600 | 40 / 50 | 2 s |
+| Unit 2 — Shotgun (Hoshino) | 16 | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 11 — Shotgun (Haruka) | 16 | 7 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 1.2 s (auto, per round) |
+| Unit 18 — Shotgun (Rabu) | 16 | 10 | 4 × 8 pellets | ~250 RPM | 350 | 40 / 50 | 2 s (magazine) |
+| Unit 12 — Machine Gun (Koyuki) | 10 | 100 | 4.5 / shot | ~600 RPM | 600 | 80 / 65 | 5 s |
+| Unit 5 — Machine Gun (Hina) | 8 | 250 | 4 / shot | ~1250 RPM | 600 | 80 / 65 | 7 s |
+| Unit 10 — Rifle (Fubuki) | 12 | 30 | 13 / shot | ~180 RPM | 600 | 56 / 65 | 2 s |
+| Unit 7 — Rifle (Aris) | 12 (flies) | 8 | 12 / bolt | ~180 RPM | 600 | 56 / 65 | 1.2 s (auto, per round) |
+| Unit 3 — Sniper Rifle (Aru) | 12 | 5 | 50 / 35 / 20 by range | 60 RPM | 4000 | 120 / 70 | 2.5 s + 1 s charge |
+| Unit 6 — Sniper Rifle (Kei) | 12 | 5 | 30 / beam (charged sweep: 20) | 60 RPM | instant (hitscan) | 120 / 70 | 2.5 s + 1 s charge |
 
 **Theoretical DPS** (every shot landing; cadences are the real 16 ms tick slots, not label RPM):
 
