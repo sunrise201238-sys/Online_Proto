@@ -620,7 +620,7 @@ export const UNIT_DATA = {
     bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
     bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.035 then 0.05 on 2026-10-23) — the rifles' pace
-    bloomRecoverDelayMs: 200,   // (kept at 200 on 2026-10-24)
+    bloomRecoverDelayMs: 0,   // user 2026-10-24 (200 until then): she recovers between the rounds of a burst, as the rifles do
     botSuppressBurst: 10,
     damage: 3.5,               // user 2026-10-23 (3.5 → 2.5 → 3 → 2.5 → 3.5 the same day) — Atsuko's bullet
     magCapacity: 25,   // user 2026-10-23 (the MPX: 30)
