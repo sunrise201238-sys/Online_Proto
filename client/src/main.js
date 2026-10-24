@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';   // (the dev tools' collision view: the boxes as merged meshes)
+import { DEV_SIM } from '@gvg/shared/src/sim/constants.js';   // (the dev tools' switches in the sim: the infinite boost)
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
@@ -42,6 +44,7 @@ import {
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles,
+  mapScale,
   reloadHolds,
   applyHitStun
 } from '@gvg/shared/src/sim/index.js';
@@ -1129,6 +1132,10 @@ const diorama = {
 };
 
 // Global framing/grade tunables — live-tweakable via window.__diorama.view.
+// PHOTO MODE (a dev tool): the state of the map-card photo mode — see enterPhotoMode, by mapPhoto. Declared here because the
+// render loop starts before that part of the module and reads `photo.active` every frame.
+const photo = { active: false, layer: null, frame: null, panel: null, v: null, prevFog: null, prevFov: 45, prevVis: null, prevDioLayer: '', pointers: new Map(), pinch: null, drag: null, keys: new Set(), roofHidden: false };
+const PHOTO_SIZE = 1024;
 const DIORAMA_VIEW = {
   fov: 45,
   lookY: 4,            // look-at height — keeps the board low in frame
@@ -4674,6 +4681,7 @@ function updateBoost(mech, now, action) {
   } else if (grounded && now >= s.refillPausedUntil && ticks) {
     s.boost = Math.min(cap, s.boost + regen * ticks);
   }
+  if (DEV_SIM.infiniteBoost) s.boost = cap;   // (the dev tools' switch — the local player's gauge runs here, not in the sim's tickBoost, so the refill in movement.js never reached it; user 2026-10-22)
 
   if (s.boost <= 0) {
     if (s.emptyRecoverUntil <= now) s.emptyRecoverUntil = now + 100;
@@ -6891,6 +6899,12 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
+// DEV TOOLS (2026-10-24, the PT site's tools kept in the line): the collision view (F8), the collision inspector (F4, and a
+// click in the F8 view), the map scale test (F7), the infinite boost (F10), the map card's photo mode (the pause menu) and
+// the build line under "Paused". Off for players: the keys are not bound and the menu shows none of it. On with `?dev=1`
+// in the address — kept in localStorage until `?dev=0` — or where DEV_TOOLS_DEFAULT is true (the PT site: pt_deltas.py).
+const DEV_TOOLS_DEFAULT = false;
+const DEV_TOOLS = (() => { try { const q = new URLSearchParams(window.location.search).get('dev'); if (q != null) localStorage.setItem('gvg-dev', q === '0' ? '0' : '1'); const s = localStorage.getItem('gvg-dev'); if (s != null) return s === '1'; } catch (e) { /* no storage: the default */ } return DEV_TOOLS_DEFAULT; })();
 const CLIENT_BUILD_TAG = 'b1024c';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
@@ -9920,8 +9934,15 @@ function showPauseMenu() {
   // Offline: the diorama view toggle lives here so touch devices can reach
   // it too (V key remains the desktop shortcut).
   const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Shooter'}</button>`;
-  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
+  // (the dev tools: the map card's photo, taken in the game — offline only, see enterPhotoMode; and the build tag under the title)
+  const photoBtn = DEV_TOOLS && !state.online ? '<button data-action="photo">Photo (map card)</button>' : '';
+  const buildLine = DEV_TOOLS ? `<div style="margin:-6px 0 8px;font:12px monospace;opacity:.7">build ${CLIENT_BUILD_TAG}</div>` : '';
+  menu.innerHTML = `<h2>Paused</h2>${buildLine}<button data-action="resume">Resume</button>${dioramaBtn}${photoBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
+  menu.querySelector('button[data-action="photo"]')?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    enterPhotoMode();
+  });
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
     clearMenus();
@@ -10101,6 +10122,8 @@ function registerWallFade(mesh, box) {
 let offlineNavGrid = null;
 
 function clearArenaDecor() {
+  collisionViewToggle(false);   // (the collision view belongs to the arena it drew)
+  inspectorClearMarks();        // (and so do the inspector's marks)
   state.wallFadeMeshes = [];
   for (const o of fadeOwned) o.dispose(); fadeOwned.length = 0;   // (the fade's own geometry and materials of the arena going)
   offlineNavGrid = null;
@@ -10378,7 +10401,7 @@ function splitLong(geo, matrixWorld, maxLen) {
   names.forEach((n, k) => g.setAttribute(n, new THREE.Float32BufferAttribute(out[k], src[k].itemSize)));
   return g;
 }
-function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
+function updateMapRoof() { const hide = photo.active ? photo.roofHidden : dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
 function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaActive(); }   // (a boolean: classList.toggle(name, undefined) flips the class every frame)
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
@@ -10399,6 +10422,128 @@ function warmMapModel(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   if (cfg) loadMapModel(cfg.file, () => {});
 }
+// COLLISION VIEW (a dev tool — DEV_TOOLS; from the PT site, rebuilt 2026-10-21 after the first was lost): F8 / __COLLISION_VIEW()
+// shows the arena as the sim holds it — every box (walls dark blue, the boxes a body steps onto orange), every floor as a
+// quad (a plane with its corner heights), each unit's body as a cylinder — and hides the map model while it is on. One
+// merged mesh per colour: the boxes are thousands.
+var collisionView = null;   // (var, not let: the render loop's first frame runs before the module's later statements, and a let was not yet initialised then — one 'before initialization' error logged at boot, 2026-10-22)
+function collisionViewToggle(on = !collisionView) {
+  if (collisionView) { scene.remove(collisionView.group); collisionView.group.traverse((o) => { o.geometry?.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); }); for (const m of collisionView.hidden) m.visible = true; collisionView = null; for (const m of inspector.marks) m.mesh = null; }   // (the marks' meshes went with the group; the marks stay)
+  if (!on) return false;
+  const group = new THREE.Group(); const hidden = [];
+  for (const g of arenaDecor) if (g.isGroup) g.traverse((o) => { if (o.isMesh && o.visible) { hidden.push(o); o.visible = false; } });
+  const fills = { wall: [], top: [] }, edges = { wall: [], top: [] };
+  for (const o of arenaObstacles) { const w = o.maxX - o.minX, h = o.maxY - o.minY, d = o.maxZ - o.minZ; if (!(w > 0 && h > 0 && d > 0)) continue; const g = new THREE.BoxGeometry(w, h, d); g.translate((o.minX + o.maxX) / 2, (o.minY + o.maxY) / 2, (o.minZ + o.maxZ) / 2); const kind = o.topBuffer != null ? 'top' : 'wall'; fills[kind].push(g); edges[kind].push(new THREE.EdgesGeometry(g)); }
+  const quads = [];
+  for (const s of arenaSurfaces) { const hAt = (x, z) => s.type === 'plane' ? s.y0 + s.gx * (x - s.minX) + s.gz * (z - s.minZ) : s.top; const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([s.minX, hAt(s.minX, s.minZ), s.minZ, s.maxX, hAt(s.maxX, s.minZ), s.minZ, s.maxX, hAt(s.maxX, s.maxZ), s.maxZ, s.minX, hAt(s.minX, s.maxZ), s.maxZ], 3)); g.setIndex([0, 2, 1, 0, 3, 2]); quads.push(g); }
+  const mesh = (list, color, opacity) => { if (!list.length) return null; const m = new THREE.Mesh(mergeGeometries(list, false), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide })); list.forEach((g) => g.dispose()); return m; };
+  const lines = (list, color) => { if (!list.length) return null; const m = new THREE.LineSegments(mergeGeometries(list, false), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 })); list.forEach((g) => g.dispose()); return m; };
+  for (const m of [mesh(fills.wall, 0x34507a, 0.16), mesh(fills.top, 0xe0a040, 0.22), lines(edges.wall, 0x34507a), lines(edges.top, 0xe0a040), mesh(quads, 0x9fd3ff, 0.35)]) if (m) group.add(m);
+  scene.add(group);
+  collisionView = { group, hidden, bodies: new Map() }; updateCollisionView(); inspectorDrawMarks(); return true;
+}
+function updateCollisionView() {
+  inspectorRefresh();   // (the inspector's panel: the position line with F4 or this view, the marks with this view)
+  if (!collisionView) return;
+  // (two volumes on each body, as the sim has them: the hit capsule the rounds see — HIT_RADIUS_NORMAL 1.6 u round, HIT_HALF_HEIGHT
+  // 1.6 u of straight side, 6.4 u tall in all, centred on hitCenter = the body 2.35 u up = the root — in yellow; and the window
+  // the walls see — FIGHTER_RADIUS 1.15 u round, a box holds the body from 4 u under its centre to 2 u over it (boxHoldsAt) — in
+  // pink (the orange of the tops hid it, 2026-10-22). The rebuilt view of 2026-10-21 drew one 2.45 u cylinder for the wall window, read wrong, and the user missed the
+  // full-height body of the old view, 2026-10-22.)
+  for (const f of getAllFighters()) { let c = collisionView.bodies.get(f); if (!c) { const off = f.modelYOffset ?? 2.35; c = new THREE.Group(); const hit = new THREE.Mesh(new THREE.CapsuleGeometry(1.6, 3.2, 4, 12), new THREE.MeshBasicMaterial({ color: 0xf2e24a, wireframe: true, transparent: true, opacity: 0.9 })); hit.position.y = 2.35 - off; const wall = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xff5fa8, wireframe: true, transparent: true, opacity: 0.8 })); wall.position.y = -off - 1; c.add(hit, wall); collisionView.bodies.set(f, c); collisionView.group.add(c); }
+    c.position.copy(f.root.position); c.visible = !!f.root.visible; }
+}
+// COLLISION INSPECTOR (a dev tool — DEV_TOOLS; from the PT site, 2026-10-24): the player's place by number, and the box the mouse points at. F4 /
+// __POS_PANEL() shows a line with where the player stands — the model's metres (the plan's coordinates: x, z, and the
+// feet's height over the street), the camera's heading (N is the model's −z), and the arena's units — and the collision
+// view (F8) shows it as well. In the collision view a click on the picture (left button, no drag) casts a ray from the
+// camera through the pointer and finds the nearest box it enters — the sim's own list, not the drawn mesh — marks it red
+// and adds its card to the panel: the map and the box's index in the generated data (GENERATED…obstacles, the order of
+// arena.js), the bounds in arena units and in the model's metres, the flags, the point hit, and the box's JSON as arena.js
+// writes it (to grep). A click on a marked box unmarks it; Clear drops them all; Copy puts the panel's text on the
+// clipboard (the console gets each card too). A click that meets no box names where the ray meets the street. The marks
+// live with the arena: F8 off and on redraws them, a new match drops them (clearArenaDecor). __PICK(clientX, clientY)
+// does the click. (The user asked for both on 2026-10-24, after a wall was located by guesswork twice.)
+var inspector = { posOn: false, suspended: false, panel: null, marks: [] };   // (var, like collisionView: the render loop's first frame runs before this line)
+const INSPECTOR_HEADINGS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+function inspectorModel() { const cfg = GLB_MAPS[state.mapKey]; const s = cfg ? cfg.scale * mapScale.k : 1; return { cfg, s, xM: (x) => cfg ? x / s + cfg.cx : x, zM: (z) => cfg ? z / s + cfg.cz : z, hM: (y) => y / s }; }
+function inspectorPosText() {
+  const p = state.player?.body?.position; if (!p) return 'no match running';
+  const M = inspectorModel(); const dir = camera.getWorldDirection(new THREE.Vector3()); const deg = ((Math.atan2(dir.x, -dir.z) * 180 / Math.PI) + 360) % 360;
+  return `${state.mapKey}  x ${M.xM(p.x).toFixed(2)}  z ${M.zM(p.z).toFixed(2)}  feet ${M.hM(p.y - GROUND_BASE_Y).toFixed(2)} ${M.cfg ? 'm (model)' : 'u'}  cam ${INSPECTOR_HEADINGS[Math.round(deg / 45) % 8]} ${deg.toFixed(0)}°   [arena x ${p.x.toFixed(1)} y ${p.y.toFixed(2)} z ${p.z.toFixed(1)}]   build ${CLIENT_BUILD_TAG}`;
+}
+function inspectorPanel() {
+  if (inspector.panel) return inspector.panel;
+  const el = document.createElement('div'); el.id = 'ptInspector';
+  el.style.cssText = 'position:fixed;top:58px;left:50%;transform:translateX(-50%);z-index:1000;max-width:min(94vw,980px);max-height:60vh;overflow:auto;background:rgba(0,0,0,.72);color:#fff;font:12px/1.4 monospace;padding:6px 10px;border-radius:6px;pointer-events:auto;white-space:pre-wrap;word-break:break-all;user-select:text;';
+  el.innerHTML = '<div class="pi-pos" style="color:#ffd"></div><div class="pi-marks"></div><div class="pi-bar" style="margin-top:4px"><button data-pi="copy">Copy</button> <button data-pi="clear">Clear marks</button> <span style="opacity:.7">click a box to mark it · F8 hides · F4 the position alone</span></div>';
+  el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); if (b.dataset.pi === 'clear') inspectorClearMarks(); else if (b.dataset.pi === 'copy') inspectorCopy(); });
+  document.body.appendChild(el); inspector.panel = el; return el;
+}
+function inspectorRefresh() {
+  if (!inspector) return;   // (the render loop's first frame, before the var above is assigned)
+  const show = (inspector.posOn || !!collisionView) && !inspector.suspended;
+  if (!show) { if (inspector.panel) inspector.panel.style.display = 'none'; return; }
+  const el = inspectorPanel(); el.style.display = ''; el.querySelector('.pi-pos').textContent = inspectorPosText();
+  const marks = collisionView ? '' : 'none'; el.querySelector('.pi-bar').style.display = marks; el.querySelector('.pi-marks').style.display = marks;
+}
+function inspectorPosToggle(on = !inspector.posOn) { inspector.posOn = !!on; inspectorRefresh(); return inspector.posOn; }
+function inspectorMarksRender() { const el = inspector.panel?.querySelector('.pi-marks'); if (el) el.textContent = inspector.marks.map((m, n) => `[${n + 1}] ${m.text}`).join('\n'); }
+function inspectorDropMesh(m) { if (!m.mesh) return; m.mesh.parent?.remove(m.mesh); m.mesh.traverse((x) => { x.geometry?.dispose(); x.material?.dispose(); }); m.mesh = null; }
+function inspectorDrawMarks() {
+  if (!collisionView) return;
+  for (const m of inspector.marks) { if (m.mesh) continue; const o = m.o; const g = new THREE.BoxGeometry(o.maxX - o.minX, o.maxY - o.minY, o.maxZ - o.minZ); g.translate((o.minX + o.maxX) / 2, (o.minY + o.maxY) / 2, (o.minZ + o.maxZ) / 2);
+    const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide })), new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0xff3b30 }))); collisionView.group.add(grp); m.mesh = grp; }
+}
+function inspectorClearMarks() { for (const m of inspector.marks) inspectorDropMesh(m); inspector.marks.length = 0; inspectorMarksRender(); }
+function inspectorText() { return [inspectorPosText(), ...inspector.marks.map((m, n) => `[${n + 1}] ${m.text}`)].join('\n'); }
+function inspectorCopy() { const text = inspectorText(); (navigator.clipboard?.writeText(text) ?? Promise.reject(new Error('no clipboard'))).then(() => ptToast('copied'), () => ptToast('copy failed — select the text instead')); }
+function inspectorPick(clientX, clientY) {
+  if (!collisionView) return null;
+  const r = renderer.domElement.getBoundingClientRect(); const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1)), camera);
+  const ray = rc.ray, box = new THREE.Box3(), hit = new THREE.Vector3(); let best = null;
+  arenaObstacles.forEach((o, i) => {
+    if (!(o.maxX > o.minX && o.maxY > o.minY && o.maxZ > o.minZ)) return;
+    box.min.set(o.minX, o.minY, o.minZ); box.max.set(o.maxX, o.maxY, o.maxZ);
+    if (box.containsPoint(ray.origin) || !ray.intersectBox(box, hit)) return;   // (a box the camera sits in is not what the pointer means)
+    const d = hit.distanceTo(ray.origin); if (!best || d < best.d) best = { o, i, d, at: hit.clone() };
+  });
+  const M = inspectorModel();
+  if (!best) { const t = ray.direction.y < 0 ? -ray.origin.y / ray.direction.y : NaN; const q = Number.isFinite(t) ? ray.at(t, new THREE.Vector3()) : null; const text = q ? `no box — the street at x ${M.xM(q.x).toFixed(2)}  z ${M.zM(q.z).toFixed(2)}` : 'no box — the sky'; ptToast(text); console.log('[inspector]', text); return null; }
+  const k = inspector.marks.findIndex((m) => m.o === best.o);
+  if (k >= 0) { inspectorDropMesh(inspector.marks[k]); inspector.marks.splice(k, 1); inspectorMarksRender(); return null; }
+  const o = best.o, gen = getGeneratedObstacles(state.mapKey); const fields = ['minX', 'maxX', 'minZ', 'maxZ', 'minY', 'maxY'];
+  const gi = gen.findIndex((g) => fields.every((f) => Math.abs(g[f] - o[f]) < 1e-6)); const src = gi >= 0 ? gen[gi] : o;
+  const json = '{' + Object.entries(src).filter(([f]) => f !== 'floorTop').map(([f, v]) => `"${f}": ${JSON.stringify(v)}`).join(', ') + '}';   // (floorTop: the sim's own mark, markFloorTops — not in the file)
+  const flags = [o.topBuffer != null ? `topBuffer ${o.topBuffer} (a body stands on it)` : 'wall (no top)', o.noProjectile ? 'noProjectile' : ''].filter(Boolean).join('  ');
+  const text = `${state.mapKey} ${gi >= 0 ? `#${gi}  (GENERATED .obstacles[${gi}])` : `arena list #${best.i}  (not in the generated data: the perimeter)`}  ${flags}\n  arena x ${o.minX}..${o.maxX}  y ${o.minY}..${o.maxY}  z ${o.minZ}..${o.maxZ}\n  model x ${M.xM(o.minX).toFixed(2)}..${M.xM(o.maxX).toFixed(2)}  z ${M.zM(o.minZ).toFixed(2)}..${M.zM(o.maxZ).toFixed(2)}  top ${M.hM(o.maxY).toFixed(2)} m  base ${M.hM(o.minY).toFixed(2)} m  (${M.hM(o.maxX - o.minX).toFixed(2)} × ${M.hM(o.maxY - o.minY).toFixed(2)} × ${M.hM(o.maxZ - o.minZ).toFixed(2)} m)  hit at x ${M.xM(best.at.x).toFixed(2)} z ${M.zM(best.at.z).toFixed(2)} h ${M.hM(best.at.y).toFixed(2)} m\n  ${json}`;
+  const mark = { o, i: best.i, gi, text, mesh: null }; inspector.marks.push(mark); inspectorDrawMarks(); inspectorMarksRender(); console.log('[inspector]', text); return mark;
+}
+{ let down = null;   // (a click on the picture: down and up within 6 px, the left button, the collision view on)
+  renderer.domElement.addEventListener('pointerdown', (e) => { down = collisionView && e.button === 0 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null; });
+  renderer.domElement.addEventListener('pointerup', (e) => { if (!down || e.pointerId !== down.id) return; const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null; if (moved <= 6 && collisionView) inspectorPick(e.clientX, e.clientY); }); }
+// INFINITE BOOST (a dev tool — DEV_TOOLS; from the PT site, a key since 2026-10-22): F10 / __INFINITE_BOOST(on?) flips the sim's switch — on, the
+// gauge is refilled every tick (movement.js); off, it drains as in the game. A toast names the state. It starts off (DEV_SIM in the sim's constants; the PT site starts it on).
+let ptToastEl = null;
+function ptToast(text) { if (!ptToastEl) { ptToastEl = document.createElement('div'); ptToastEl.style.cssText = 'position:fixed;top:14%;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(0,0,0,.75);color:#fff;font:15px monospace;padding:8px 14px;border-radius:6px;pointer-events:none;'; document.body.appendChild(ptToastEl); } ptToastEl.textContent = text; ptToastEl.style.display = ''; clearTimeout(ptToastEl._t); ptToastEl._t = setTimeout(() => { ptToastEl.style.display = 'none'; }, 1600); }
+function infiniteBoostToggle(on = !DEV_SIM.infiniteBoost) { DEV_SIM.infiniteBoost = !!on; ptToast(`infinite boost ${DEV_SIM.infiniteBoost ? 'ON' : 'OFF'} (F10)`); return DEV_SIM.infiniteBoost; }
+// MAP SCALE TEST (a dev tool — DEV_TOOLS; from the PT site, rebuilt 2026-10-21): F7 shows a panel with the modelled map's scale —
+// metres per model unit = the map's modelM × mapScale.k — and the arena's size at it; − / + step it by 5 %, reset puts it
+// back; each restarts the match with the model and its data scaled alike (the sim's getArena). __MAP_SCALE(mPerUnit) from
+// the console does the same. The scale stays until reset, for every modelled map.
+let mapScalePanel = null;
+function setMapScale(mPerUnit) { const cfg = GLB_MAPS[state.mapKey]; if (!cfg) return false; mapScale.k = mPerUnit / (cfg.modelM ?? 1); startMatch(); mapScalePanelRefresh(); return mapScale.k; }
+function mapScalePanelRefresh() { if (!mapScalePanel) return; const cfg = GLB_MAPS[state.mapKey]; const b = getArenaBounds(state.mapKey); mapScalePanel.querySelector('.ms-text').textContent = cfg ? `${state.mapKey}: ${((cfg.modelM ?? 1) * mapScale.k).toFixed(2)} m per model unit (×${mapScale.k.toFixed(3)}), arena ${(2 * b.halfX / 4).toFixed(0)} × ${(2 * b.halfZ / 4).toFixed(0)} m` : `${state.mapKey}: not a modelled map`;
+  // (where the player stands, in the model's metres — the plan's coordinates — so a spot can be reported by number)
+  const p = state.player?.body?.position; const posEl = mapScalePanel.querySelector('.ms-pos'); if (posEl) posEl.textContent = p && cfg ? `player at x ${(p.x / (cfg.scale * mapScale.k) + cfg.cx).toFixed(1)}  z ${(p.z / (cfg.scale * mapScale.k) + cfg.cz).toFixed(1)}  floor ${((p.y - 2.45) / (cfg.scale * mapScale.k)).toFixed(2)} m` : ''; }
+function mapScalePanelToggle() {
+  if (mapScalePanel) { clearInterval(mapScalePanel._iv); mapScalePanel.remove(); mapScalePanel = null; return false; }
+  const el = document.createElement('div'); el.id = 'mapScalePanel'; el.style.cssText = 'position:fixed;top:8px;right:8px;z-index:1000;background:rgba(0,0,0,.75);color:#fff;font:13px monospace;padding:8px 10px;border-radius:6px;pointer-events:auto';
+  el.innerHTML = '<div class="ms-text"></div><div class="ms-pos" style="margin-top:4px;color:#ffd"></div><div style="margin-top:6px"><button data-ms="-">-5%</button> <button data-ms="+">+5%</button> <button data-ms="reset">reset</button> <span style="opacity:.7">F7 hides</span></div>';
+  el.addEventListener('click', (e) => { const btn = e.target.closest('button'); if (!btn) return; const cfg = GLB_MAPS[state.mapKey]; if (!cfg) return; const m = (cfg.modelM ?? 1) * mapScale.k; setMapScale(btn.dataset.ms === 'reset' ? (cfg.modelM ?? 1) : btn.dataset.ms === '+' ? m * 1.05 : m / 1.05); });
+  document.body.appendChild(el); mapScalePanel = el; mapScalePanelRefresh(); el._iv = setInterval(mapScalePanelRefresh, 500); return true;
+}
 function buildGlbArena(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   const { halfX, halfZ } = getArenaBounds(mapKey);
@@ -10406,8 +10551,9 @@ function buildGlbArena(mapKey) {
   for (const o of getGeneratedObstacles(mapKey)) arenaObstacles.push({ ...o });   // collision only: the model is the visual
   for (const s of getArenaSurfaces(mapKey)) arenaSurfaces.push(s);              // the raised floors (stairs, porches, pavements)
   const group = new THREE.Group();
-  group.scale.setScalar(cfg.scale);
-  group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);
+  const ms = cfg.scale * mapScale.k;   // (the map scale test: the model scaled as its data is)
+  group.scale.setScalar(ms);
+  group.position.set(-cfg.cx * ms, -cfg.ground * ms, -cfg.cz * ms);
   scene.add(group);
   arenaDecor.push(group);
   loadMapModel(cfg.file, (gltf) => {
@@ -10753,6 +10899,117 @@ function mapPhoto(opts = {}) {
 }
 if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
 
+// ---- PHOTO MODE (a dev tool — DEV_TOOLS; from the PT site, offline): the map card's photo taken in the game itself (user 2026-10-24). From the pause menu:
+// the match stays frozen, the HUD and the units hide, the fog drops, every faded wall comes back solid, and the camera
+// becomes mapPhoto's own orbit camera — the same dist / yaw / height / centre the headless map_photo.cjs takes, so a view
+// found by hand is one line of numbers that re-takes it anywhere. One finger or the left button turns the camera
+// (sideways: yaw; up and down: height); two fingers pinch for distance and drag to pan; the wheel is distance; the right
+// button or a Shift-drag pans; keys: WASD / arrows pan, Q/E turn, R/F raise and lower, +/- distance, Enter snaps, Esc
+// leaves. A square frame shows what the 1024-px square photo holds: the photo's vertical field is the live one, so the
+// square of the screen's height, centred, is the photo (a portrait screen is given the photo's field across, and the
+// square of its width is the photo). SNAP renders through mapPhoto and offers <map>.png — a download, and the picture
+// itself to long-press and save on a phone. The view is kept per map (localStorage pt-photo-<map>). DONE goes back to
+// the pause menu. The roof of a modelled map that has one (GLB_MAPS `roof`) can be hidden for the shot.
+// (`photo`, the mode's state, is declared with the diorama's constants near the top: the render loop reads it from its
+// first frame, which runs before this part of the module)
+function photoDefaults() { const mv = DIORAMA_MAP_VIEW[state.mapKey] ?? DIORAMA_MAP_VIEW.default; return { dist: mv.dist, yaw: mv.yaw, height: mv.height, cx: 0, cz: 0 }; }
+function photoLoad() { try { const s = localStorage.getItem('pt-photo-' + state.mapKey); if (s) { const o = JSON.parse(s); if ([o.dist, o.yaw, o.height, o.cx, o.cz].every(Number.isFinite)) return o; } } catch (e) { /* no storage: the defaults */ } return photoDefaults(); }
+function photoSave() { try { localStorage.setItem('pt-photo-' + state.mapKey, JSON.stringify(photo.v)); } catch (e) { /* ignore */ } }
+function photoClamp() { const v = photo.v; v.dist = THREE.MathUtils.clamp(v.dist, 10, 3000); v.height = THREE.MathUtils.clamp(v.height, 0.05, 4); const b = getArenaBounds(state.mapKey); v.cx = THREE.MathUtils.clamp(v.cx, -b.halfX * 1.5, b.halfX * 1.5); v.cz = THREE.MathUtils.clamp(v.cz, -b.halfZ * 1.5, b.halfZ * 1.5); }
+// the line that re-takes the view: map_photo.cjs's own arguments, and the centre in the model's metres on a modelled map
+function photoLine() { const v = photo.v; const cfg = GLB_MAPS[state.mapKey]; const k = cfg ? cfg.scale * mapScale.k : 0;
+  return `dist ${v.dist.toFixed(0)}  yaw ${v.yaw.toFixed(3)}  height ${v.height.toFixed(2)}  cx ${v.cx.toFixed(1)}  cz ${v.cz.toFixed(1)}` + (cfg ? `   (model x ${(v.cx / k + cfg.cx).toFixed(1)}  z ${(v.cz / k + cfg.cz).toFixed(1)}; camera ${(v.dist * v.height / k).toFixed(0)} m up)` : `   (camera ${(v.dist * v.height).toFixed(0)} units up)`); }
+function photoFrameFit() { if (!photo.frame) return; const w = window.innerWidth, h = window.innerHeight, side = Math.min(w, h); photo.frame.style.left = `${(w - side) / 2}px`; photo.frame.style.top = `${(h - side) / 2}px`; photo.frame.style.width = `${side}px`; photo.frame.style.height = `${side}px`; }
+function photoPanelRefresh() { const el = photo.panel?.querySelector('.ph-line'); if (el) el.textContent = photoLine(); const r = photo.panel?.querySelector('button[data-ph="roof"]'); if (r) r.textContent = `Roof: ${photo.roofHidden ? 'hidden' : 'shown'}`; }
+function updatePhotoCamera() {
+  const v = photo.v; const k = photo.keys;
+  if (k.size) { const f = { x: -Math.cos(v.yaw), z: -Math.sin(v.yaw) }, r = { x: Math.sin(v.yaw), z: -Math.cos(v.yaw) }; const step = v.dist * 0.012;   // (forward: from the camera to the centre; right: forward turned a quarter)
+    if (k.has('up')) { v.cx += f.x * step; v.cz += f.z * step; } if (k.has('down')) { v.cx -= f.x * step; v.cz -= f.z * step; }
+    if (k.has('right')) { v.cx += r.x * step; v.cz += r.z * step; } if (k.has('left')) { v.cx -= r.x * step; v.cz -= r.z * step; }
+    if (k.has('rotL')) v.yaw += 0.03; if (k.has('rotR')) v.yaw -= 0.03; if (k.has('raise')) v.height *= 1.015; if (k.has('lower')) v.height /= 1.015; if (k.has('in')) v.dist /= 1.02; if (k.has('out')) v.dist *= 1.02; }
+  photoClamp();
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+  const fov = aspect >= 1 ? 45 : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(22.5)) / aspect));
+  if (Math.abs(camera.fov - fov) > 1e-6) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  camera.position.set(v.cx + Math.cos(v.yaw) * v.dist, v.dist * v.height, v.cz + Math.sin(v.yaw) * v.dist);
+  camera.lookAt(v.cx, 0, v.cz);
+  photoFrameFit(); photoPanelRefresh();
+}
+function photoSnap() {
+  if (!photo.active) return null; const v = photo.v; photoSave();
+  const url = mapPhoto({ size: PHOTO_SIZE, dist: v.dist, yaw: v.yaw, height: v.height, cx: v.cx, cz: v.cz });
+  const name = `${state.mapKey}.png`;
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  const o = document.createElement('div'); o.className = 'photo-shot'; o.style.cssText = 'position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.86);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:auto';
+  o.innerHTML = `<img src="${url}" alt="${name}" style="max-width:min(88vw,80vh);max-height:min(88vw,80vh);border:1px solid #4c6176;-webkit-touch-callout:default" /><div style="color:#d7f6ff;font:12px monospace;text-align:center;padding:0 12px">${name} — 已下載；手機請長按圖片儲存 / downloaded; on a phone long-press the picture to save<br>${photoLine()}</div><button style="padding:10px 28px;border-radius:10px;border:1px solid #4c6176;background:#1a2634;color:#e5fbff">Close</button>`;
+  o.querySelector('button').addEventListener('pointerdown', (e) => { e.preventDefault(); o.remove(); });
+  document.body.appendChild(o);
+  return url;
+}
+function photoPointerDown(e) { if (!photo.active) return; e.preventDefault(); photo.layer.setPointerCapture?.(e.pointerId); photo.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (photo.pointers.size >= 2) { const pts = [...photo.pointers.values()]; const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }; const g = dioramaGroundPoint(mid.x, mid.y, 0);
+    photo.pinch = { span: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), dist: photo.v.dist, grab: g }; photo.drag = null; return; }
+  const pan = e.button === 2 || e.shiftKey; photo.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, yaw0: photo.v.yaw, height0: photo.v.height, pan, grab: pan ? dioramaGroundPoint(e.clientX, e.clientY, 0) : null }; }
+function photoPointerMove(e) { if (!photo.active) return; const p = photo.pointers.get(e.pointerId); if (p) { p.x = e.clientX; p.y = e.clientY; }
+  if (photo.pinch && photo.pointers.size >= 2) { const pts = [...photo.pointers.values()]; const span = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y); if (span > 8) photo.v.dist = photo.pinch.dist * (photo.pinch.span / span);
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }; const cur = dioramaGroundPoint(mid.x, mid.y, 0); if (cur && photo.pinch.grab) { photo.v.cx += photo.pinch.grab.x - cur.x; photo.v.cz += photo.pinch.grab.z - cur.z; } return; }
+  const g = photo.drag; if (!g || g.id !== e.pointerId) return;
+  if (g.pan) { const cur = dioramaGroundPoint(e.clientX, e.clientY, 0); if (cur && g.grab) { photo.v.cx += g.grab.x - cur.x; photo.v.cz += g.grab.z - cur.z; } return; }
+  photo.v.yaw = g.yaw0 + (e.clientX - g.x0) * 0.005; photo.v.height = g.height0 * Math.exp(-(e.clientY - g.y0) * 0.004); }
+function photoPointerUp(e) { photo.pointers.delete(e.pointerId); if (photo.pointers.size < 2) photo.pinch = null; if (photo.drag && photo.drag.id === e.pointerId) photo.drag = null;
+  if (photo.pointers.size === 1 && photo.active) { const [[id, p]] = photo.pointers.entries(); photo.drag = { id, x0: p.x, y0: p.y, yaw0: photo.v.yaw, height0: photo.v.height, pan: false, grab: null }; } }   // (the finger left behind turns the camera from where it is)
+function photoWheel(e) { if (!photo.active) return; e.preventDefault(); photo.v.dist *= Math.exp(e.deltaY * 0.0012); }
+const PHOTO_KEYS = { w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right', q: 'rotL', e: 'rotR', r: 'raise', f: 'lower', '+': 'in', '=': 'in', '-': 'out', '_': 'out' };
+function photoKey(e) { if (!photo.active) return; const k = e.key.toLowerCase(); e.stopImmediatePropagation();   // (the game's own key handler never sees a key while the photo is being framed)
+  if (e.type === 'keydown' && !e.repeat) { if (k === 'escape') { exitPhotoMode(); return; } if (k === 'enter') { photoSnap(); return; } }
+  const act = PHOTO_KEYS[k]; if (!act) return; e.preventDefault(); if (e.type === 'keydown') photo.keys.add(act); else photo.keys.delete(act); }
+function enterPhotoMode() {
+  if (photo.active || state.online || !state.player) return false;
+  clearMenus(); photo.active = true; state.phase = 'photo'; state.running = false; photo.keys.clear(); photo.pointers.clear(); photo.pinch = null; photo.drag = null; inspector.suspended = true;   // (the inspector's panel hides with the HUD)
+  photo.v = photoLoad(); photo.prevFov = camera.fov; photo.prevFog = scene.fog; scene.fog = null;
+  // (the live camera sees 300 units for play; the photo camera sees 4,000 — the preview showed the far town cut off by
+  // the near camera's far plane while the saved photo kept it, user 2026-10-24: the live camera takes the photo camera's planes)
+  photo.prevNear = camera.near; photo.prevFar = camera.far; camera.near = 1; camera.far = 4000; camera.updateProjectionMatrix();
+  const fighters = getAllFighters(); photo.prevVis = fighters.map((m) => m.root.visible); fighters.forEach((m) => { m.root.visible = false; });
+  for (const mesh of state.wallFadeMeshes ?? []) { if (!mesh.material || !mesh.userData.fadeBox) continue; mesh.userData.fadeBlocking = false; mesh.material.opacity = 1; mesh.material.transparent = !!mesh.userData.fadeBox.ownTransparent; if (mesh.userData.fadeDepthToggle) mesh.material.depthWrite = true; }   // (every faded wall solid: the photo has no player to see past them)
+  if (state.hud) state.hud.style.visibility = 'hidden';
+  if (diorama.layer) { photo.prevDioLayer = diorama.layer.style.visibility; diorama.layer.style.visibility = 'hidden'; }
+  const layer = document.createElement('div'); layer.className = 'photo-layer'; layer.style.cssText = 'position:fixed;inset:0;z-index:1050;touch-action:none;pointer-events:auto;cursor:grab;user-select:none;-webkit-user-select:none';
+  layer.addEventListener('pointerdown', photoPointerDown); layer.addEventListener('pointermove', photoPointerMove); layer.addEventListener('pointerup', photoPointerUp); layer.addEventListener('pointercancel', photoPointerUp); layer.addEventListener('wheel', photoWheel, { passive: false }); layer.addEventListener('contextmenu', (e) => e.preventDefault());
+  const frame = document.createElement('div'); frame.className = 'photo-frame'; frame.style.cssText = 'position:fixed;z-index:1060;pointer-events:none;border:1px solid rgba(215,246,255,.8);box-shadow:0 0 0 4000px rgba(0,0,0,.45);box-sizing:border-box';
+  const panel = document.createElement('div'); panel.className = 'photo-panel'; panel.style.cssText = 'position:fixed;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:1100;background:rgba(5,8,14,.82);color:#e5fbff;font:12px monospace;padding:8px 10px;border-radius:10px;border:1px solid #4c6176;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:6px;max-width:96vw';
+  const roofBtn = GLB_MAPS[state.mapKey]?.roof ? '<button data-ph="roof"></button>' : '';
+  // (the hold buttons: each is one of the key actions, held while the finger is down — the same per-frame step as the keys,
+  // so a phone has every control on screen: height, distance, turn, pan; user 2026-10-24)
+  const hold = (act, label, title) => `<button data-hold="${act}" title="${title}" style="min-width:44px;padding:8px 0">${label}</button>`;
+  const group = (title, inner) => `<div style="display:flex;align-items:center;gap:4px"><span style="opacity:.75;min-width:52px;text-align:right;padding-right:4px">${title}</span>${inner}</div>`;
+  panel.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button data-ph="snap" style="background:#1a4a32;border-color:#4ec07a;color:#c8ffe0;font-weight:700">SNAP</button>${roofBtn}<button data-ph="reset">Reset view</button><button data-ph="done">Done</button></div>`
+    + `<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">${group('height', hold('lower', '▼', 'lower the camera (F)') + hold('raise', '▲', 'raise the camera (R)'))}${group('distance', hold('in', '−', 'closer (+)') + hold('out', '+', 'farther (-)'))}${group('turn', hold('rotR', '↶', 'turn (E)') + hold('rotL', '↷', 'turn (Q)'))}${group('pan', hold('left', '←', 'pan left (A)') + hold('up', '↑', 'pan forward (W)') + hold('down', '↓', 'pan back (S)') + hold('right', '→', 'pan right (D)'))}</div>`
+    + `<div class="ph-line" style="color:#ffd"></div><div style="opacity:.75;text-align:center">drag: turn / height · two fingers: distance, pan · wheel: distance · right-drag or Shift: pan · Enter: snap · Esc: done</div>`;
+  panel.querySelectorAll('button').forEach((b) => { b.style.cssText += ';padding:10px 16px;border-radius:10px;border:1px solid #4c6176;background:#1a2634;color:#e5fbff;font:600 13px system-ui;touch-action:none'; if (b.dataset.ph === 'snap') b.style.cssText += ';background:#1a4a32;border-color:#4ec07a;color:#c8ffe0'; if (b.dataset.hold) b.style.cssText += ';padding:8px 0;min-width:44px;font-size:16px'; });
+  panel.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); e.stopPropagation();
+    if (b.dataset.hold) { const act = b.dataset.hold; photo.keys.add(act);
+      // (released by any pointer-up anywhere — a finger that slides off the button still lets go; the window listener is
+      // armed before the capture, so a capture that fails on an odd pointer cannot leave the button held)
+      const release = () => { photo.keys.delete(act); window.removeEventListener('pointerup', release, true); window.removeEventListener('pointercancel', release, true); };
+      window.addEventListener('pointerup', release, true); window.addEventListener('pointercancel', release, true);
+      try { b.setPointerCapture?.(e.pointerId); } catch (err) { /* no capture: the window listener releases */ } return; }
+    if (b.dataset.ph === 'snap') photoSnap(); else if (b.dataset.ph === 'done') exitPhotoMode(); else if (b.dataset.ph === 'reset') { photo.v = photoDefaults(); photo.roofHidden = false; } else if (b.dataset.ph === 'roof') photo.roofHidden = !photo.roofHidden; });
+  document.body.appendChild(layer); document.body.appendChild(frame); document.body.appendChild(panel); photo.layer = layer; photo.frame = frame; photo.panel = panel;
+  window.addEventListener('keydown', photoKey, true); window.addEventListener('keyup', photoKey, true); window.addEventListener('resize', photoFrameFit);
+  updatePhotoCamera(); return true;
+}
+function exitPhotoMode() {
+  if (!photo.active) return false; photoSave(); photo.active = false; photo.keys.clear(); photo.pointers.clear(); photo.pinch = null; photo.drag = null; photo.roofHidden = false; inspector.suspended = false;
+  window.removeEventListener('keydown', photoKey, true); window.removeEventListener('keyup', photoKey, true); window.removeEventListener('resize', photoFrameFit);
+  for (const el of [photo.layer, photo.frame, photo.panel]) el?.remove(); photo.layer = photo.frame = photo.panel = null; document.querySelectorAll('.photo-shot').forEach((el) => el.remove());
+  scene.fog = photo.prevFog; camera.fov = photo.prevFov; camera.near = photo.prevNear ?? camera.near; camera.far = photo.prevFar ?? camera.far; camera.updateProjectionMatrix();
+  getAllFighters().forEach((m, i) => { m.root.visible = photo.prevVis?.[i] ?? true; });
+  if (state.hud) state.hud.style.visibility = ''; if (diorama.layer) diorama.layer.style.visibility = photo.prevDioLayer;
+  state.phase = 'match'; state.running = true; showPauseMenu(); return true;
+}
+if (typeof window !== 'undefined') { window.__photoEnter = enterPhotoMode; window.__photoSnap = photoSnap; window.__photoExit = exitPhotoMode; window.__photoView = (v) => { if (v && photo.v) Object.assign(photo.v, v); return photo.v ? { ...photo.v } : null; }; }
+
 // Dev hook: read-only-ish handle on the live client state for console
 // debugging / automated preview checks (same family as __exportArenaCollision
 // and __mapPhoto). Offline client only — never used by game code.
@@ -10791,6 +11048,10 @@ if (typeof window !== 'undefined') {
   window.__modelProf = { ms: 0, frames: 0 };
   window.__warmUnit = (key, own = false) => warmUnitArt(UNIT_DATA[key], own);
   window.__modelCacheKeys = () => Object.keys(_modelCache);
+  // The dev tools (DEV_TOOLS): the collision view, the inspector, the map scale test and the infinite boost, from the console always, by key only with the tools on.
+  window.__COLLISION_VIEW = collisionViewToggle; window.__MAP_SCALE = setMapScale; window.__MAP_SCALE_PANEL = mapScalePanelToggle; window.__camera = camera; window.__INFINITE_BOOST = infiniteBoostToggle; window.__DEV_SIM = DEV_SIM;
+  window.__POS_PANEL = inspectorPosToggle; window.__PICK = inspectorPick; window.__INSPECTOR = inspector; window.__collisionViewOn = () => !!collisionView; window.__DEV_TOOLS = DEV_TOOLS;
+  if (DEV_TOOLS) window.addEventListener('keydown', (ev) => { if (ev.key === 'F8') { ev.preventDefault(); collisionViewToggle(); } else if (ev.key === 'F7') { ev.preventDefault(); mapScalePanelToggle(); } else if (ev.key === 'F10') { ev.preventDefault(); infiniteBoostToggle(); } else if (ev.key === 'F4') { ev.preventDefault(); inspectorPosToggle(); } });
 }
 
 // ---------------------------------------------------------------------------
@@ -16989,6 +17250,9 @@ function animate() {
       } else if (state.player.state.hp <= 0 || state.enemy.state.hp <= 0) {
         showEndMenu(state.enemy.state.hp <= 0);
       }
+    } else if (photo.active) {
+      // PHOTO MODE (a dev tool): the match frozen, the orbit camera framing the map card's photo.
+      updatePhotoCamera();
     } else if (state.sdIntro) {
       // SUDDEN DEATH INTRO (banner showing): the simulation is frozen — no
       // input, AI, physics, projectiles or win check — but the match view
@@ -17010,8 +17274,9 @@ function animate() {
     // Drive 3D character models (idle/walk/sprint/dodge/fire) + gun attach —
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMapRoof();   // (a modelled map's roof hides in command mode — GLB_MAPS `roof`)
+    updateCollisionView();
     updateMechAnimations(dt, now);
-    if (dioramaActive()) renderDiorama();
+    if (dioramaActive() && !photo.active) renderDiorama();   // (the photo is framed plain: what mapPhoto renders)
     else renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);

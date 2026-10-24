@@ -1,3 +1,4 @@
+import { DEV_SIM } from './constants.js';   // (the dev tools: the boost never drains while the switch is on)
 // Boost gauge, momentum, jump physics, integration. Pure-JS port of the
 // pieces of updateBoost / updatePlayer / updateTransforms in main.js that
 // don't involve input or rendering.
@@ -40,7 +41,8 @@ export function tickBoost(fighter, now, action, surfaces = []) {
   const drain = fighter.unit?.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
   const regen = fighter.unit?.boostRegen ?? BOOST_REGEN_PER_TICK;
   const cap = fighter.unit?.boostCap ?? BOOST_CAP;
-  if (consume) {
+  if (DEV_SIM.infiniteBoost) fighter.boost = cap;   // (the dev tools' switch: the gauge refilled every tick, whatever the tick spent)
+  else if (consume) {
     fighter.boost = Math.max(0, fighter.boost - drain);
     fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   } else if (grounded && now >= fighter.refillPausedUntil) {

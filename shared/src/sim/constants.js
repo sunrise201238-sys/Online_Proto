@@ -954,3 +954,8 @@ export const CMD_ANCHOR_LEASH = 20;
 // own line-of-sight tests share ONE eye rule; the client's updateEnemy
 // mirrors the value). findFiringPath's inline 1.6 is this same height.
 export const BOT_LOS_EYE_HEIGHT = 1.6;
+
+// The dev tools' switches in the sim (2026-10-24, from the PT site): no fighter's boost drains while infiniteBoost is on — the
+// maps are tested on foot and in the air without the gauge. Off in the game; F10 flips it with the client's dev tools on; the
+// PT site starts it on (pt_deltas.py).
+export const DEV_SIM = { infiniteBoost: false };

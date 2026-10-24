@@ -36678,9 +36678,23 @@ function markFloorTops(arena) {
   arena.floorTopsMarked = true;
 }
 
+// (the dev tools' map scale test, from the PT site — a modelled map tried at another size. mapScale.k scales a modelled map's
+// boxes, floors, spawn places and bounds alike, from the street at y 0; the client scales the model the same and restarts
+// the match. 1 is the data as read; concept maps are never scaled. 1 in the game.)
+export const mapScale = { k: 1 };
+const scaledArenas = new Map();
+function scaleArena(a, k) {
+  const sO = (o) => ({ ...o, minX: o.minX * k, maxX: o.maxX * k, minZ: o.minZ * k, maxZ: o.maxZ * k, minY: o.minY * k, maxY: o.maxY * k });
+  const sS = (s) => ({ ...s, minX: s.minX * k, maxX: s.maxX * k, minZ: s.minZ * k, maxZ: s.maxZ * k, top: s.top == null ? s.top : s.top * k, maxTop: s.maxTop == null ? s.maxTop : s.maxTop * k, y0: s.y0 == null ? s.y0 : s.y0 * k });
+  const sP = (p) => p && { ...p, x: p.x * k, z: p.z * k, y: GROUND_BASE_Y + ((p.y ?? GROUND_BASE_Y) - GROUND_BASE_Y) * k };
+  const spawns = a.spawns ? { ...a.spawns, p1: sP(a.spawns.p1), p2: sP(a.spawns.p2), more: a.spawns.more ? a.spawns.more.map(sP) : a.spawns.more } : a.spawns;
+  return { ...a, obstacles: a.obstacles.map(sO), surfaces: a.surfaces.map(sS), spawns, floorTopsMarked: false };
+}
 export function getArena(mapKey) {
-  const arena = ARENAS[mapKey];
-  if (!arena) throw new Error(`No arena data for map: ${mapKey}`);
+  const base = ARENAS[mapKey];
+  if (!base) throw new Error(`No arena data for map: ${mapKey}`);
+  let arena = base;
+  if (mapScale.k !== 1 && MAP_BOUNDARY[mapKey]) { const key = `${mapKey}@${mapScale.k}`; arena = scaledArenas.get(key); if (!arena) { arena = scaleArena(base, mapScale.k); scaledArenas.set(key, arena); } }
   if (!arena.floorTopsMarked) markFloorTops(arena);
   return arena;
 }
@@ -36690,5 +36704,5 @@ export function getArenaSurfaces(mapKey) { return getArena(mapKey).surfaces; }
 export function getArenaSpawns(mapKey) { return getArena(mapKey).spawns; }
 // Modelled maps (client buildGlbArena): the play extent, and the collision data's own boxes without
 // the runtime perimeter — the offline client raises its own perimeter (addBoundaryIndicator).
-export function getArenaBounds(mapKey) { return MAP_BOUNDARY[mapKey] ?? { halfX: 138, halfZ: 138 }; }
-export function getGeneratedObstacles(mapKey) { return GENERATED_ARENA_COLLISION_DATA[mapKey]?.obstacles ?? []; }
+export function getArenaBounds(mapKey) { const b = MAP_BOUNDARY[mapKey]; if (!b) return { halfX: 138, halfZ: 138 }; const k = mapScale.k; return k === 1 ? b : { ...b, halfX: b.halfX * k, halfZ: b.halfZ * k, ceil: b.ceil == null ? b.ceil : b.ceil * k }; }
+export function getGeneratedObstacles(mapKey) { const list = GENERATED_ARENA_COLLISION_DATA[mapKey]?.obstacles ?? []; const k = mapScale.k; return k === 1 || !MAP_BOUNDARY[mapKey] ? list : list.map((o) => ({ ...o, minX: o.minX * k, maxX: o.maxX * k, minZ: o.minZ * k, maxZ: o.maxZ * k, minY: o.minY * k, maxY: o.maxY * k })); }
