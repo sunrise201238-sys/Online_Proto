@@ -543,8 +543,8 @@ export const UNIT_DATA = {
     sdReach: 80,
     bloomPerShot: 0.005,       // user 2026-10-22 (the M4: 0.002)
     bloomCap: 0.06,
-    bloomRecoverPerSec: 0.035,
-    bloomRecoverDelayMs: 200,
+    bloomRecoverPerSec: 0.17,   // user 2026-10-24 (the M4's 0.035 until then) — the rifles' pace, 200 ms behind the last round (both tables: shared/src/sim/constants.js and the client's UNIT_DATA)
+    bloomRecoverDelayMs: 200,   // (kept at 200 on 2026-10-24)
     damage: 4,
     magCapacity: 30,
     botFireCap: 30,
