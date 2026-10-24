@@ -678,8 +678,8 @@ const UNIT_DATA = {
     spreadAngle: 0.03,
     bloomPerShot: 0.01,        // user 2026-10-22 (the evo3: 0.003)
     bloomCap: 0.08,
-    bloomRecoverPerSec: 0.05,
-    bloomRecoverDelayMs: 200,
+    bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.05 until then) — the rifles' pace, 200 ms behind the last round (both tables: shared/src/sim/constants.js and the client's UNIT_DATA)
+    bloomRecoverDelayMs: 200,   // (kept at 200 on 2026-10-24)
     botSuppressBurst: 10,
     damage: 3.5,
     magCapacity: 30,
