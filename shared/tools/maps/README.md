@@ -41,13 +41,25 @@ fell into a 0.9 m slot between the pavement's edge wall and its kerb skin, 2.4 m
 model has, so the plate inside a sealed kerb, the floor of a slot between two walls, the ground of a court no door opens
 on all counted as walked — a sealed cavity read as a passage, the slab over it left hollow, its floor cells walked. It now
 starts from the one connected street-level floor that is largest and walks everywhere else from there; what it does not
-reach is solid by the rules above. The hand lid (`LIDS`) is gone with its one use. Counts after: Town 7,221 boxes (73
-guards), Dust 4,613 (55), Spacecraft 3,325, Backrooms 69, Warehouse 802 unchanged. Floor the generator stopped calling
+reach is solid by the rules above. The hand lid (`LIDS`) is gone with its one use. Two rules came with it, from what the
+filled slot then showed: the GUARD rule reads what a body stands on past an edge by the sim's own box window — a thing
+holds the body only while its top is `HOLD` (1.65 units, 0.41 m) or more over the floor, so a lower thing with no top to
+stand on (a parapet a hand above the terrace, a filled slot's cap flush with the slab) is walked over onto air, and the
+drop beyond it is to whatever lies under the thing (the slab's end over the filled slot read as level ground and a body
+walking the slab fell into the slot's boxes); and a thing over columns no body walks stands from the ground (the fence
+post's base over the slot floated at 2.65 m and left the slot hollow beneath it). Counts after: Town 7,258 boxes (110
+guards), Dust 4,616 (58), Spacecraft 3,329 (6), Backrooms 69, Warehouse 798 unchanged. Floor the generator stopped calling
 walked: Town 1,072 m², Dust 851, Spacecraft 145, Backrooms 293 — all of it enclosed (frontiers of walls, buildings and the
-crop's edge; `lost_regions2.py`). What a body in the sim can reach from its spawn, walking and jumping (`reach_fill.mjs`):
-Dust, Backrooms and Warehouse unchanged; Town −25 m² (the slot itself 3.8, the old lid's top 3.1, a hidden first-floor
-plate behind the south arcade 15.5, two roof slivers) and +3.6; Spacecraft −71.5 m² — the two sunken bays at x 17..26
-(1.85 m deep, entered by a hop over their 1.25 m rim, no way out: pits, now solid) — and +3.5.
+crop's edge; `lost_regions2.py`). What a body in the sim can reach from its spawn, walking and jumping (`reach_fill.mjs`),
+against the data before: Backrooms and Warehouse unchanged; Town −36 m² (the slot 3.8, the old lid's top 4.9, a hidden
+first-floor plate behind the south arcade 15.5, the 0.5 m slot beside the elevated road at x 39..48 z 11 that a 4.8 m drop
+filled 2.4, roof slivers) and +11 (the garage ramps' lower reaches, no pit among them); Dust −2 m² (slivers) and +11 (more
+of the east basin's floor); Spacecraft −72 m² — the two sunken engine bays at x 17..26 (1.85 m deep, entered by a hop over
+their 1.25 m rim, no way out: pits, now solid) — and +3.5. Pits the probe still names, older than this change and unverified
+in the client: Town's pocket under the overpass at x 33..48 z −31..−22 (entered off a 0.9 m kerb; the probe's apex test
+is binary, so the ceiling there may only look like no way back) and the 1.25 m slot beside the elevated road at x 35.5..36
+z −15..8 (a 5 m drop); Spacecraft's room at x 78..90 z −49..−41 (a 0.7 m step down under a low ceiling); Dust's four
+terraces at x 65..81 z −61..−28 reached off higher roofs.
 
 The Backrooms model served is the edited one (2026-10-22): the chamber cut at z 21.8, P18 and P19 closed blocks with the
 lane between them open at both ends, the lane's walls and the south walls copied from the hall's own walls, the plinth kept

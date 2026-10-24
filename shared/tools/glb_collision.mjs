@@ -532,7 +532,16 @@ for (let j = 0; j < N; j += 1) {
     // at the edge instead of falling (Town's plaza slot and its ledge, Dust's channel beside the raised yard and its
     // ditch: bodies walking the rims fell in, user 2026-10-22). A round and an eye pass it; a jump clears it (the feet
     // rise above its hold). The box straddles the cell's edge a hand wide, so two guards a metre apart leave a body room.
-    if (Number.isNaN(thingTop[j])) { const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; const standH = (n) => !Number.isNaN(thingTop[n]) ? thingTop[n] : reach[n] ? floorH[n] : 0;
+    // (what the body stands on past the edge: a walked floor at its height; a thing's top when the thing HOLDS the body —
+    // its top HOLD or more above the floor, the sim's box window (physics.js boxHoldsAt: a box holds a body while its top
+    // is at least 1.65 units over the feet) — or when the thing carries a top to stand on (low cover, a standable thing:
+    // a lid below); a lower thing with no top — a parapet a hand above the terrace, a filled slot's cap flush with the
+    // slab — is walked over onto air, and the body drops to whatever lies under it: the floor the thing stands on, or
+    // the ground where nothing is walked (2026-10-24: the slab's end over the filled slot read as level ground, and a body
+    // walking along the slab fell into the slot's boxes))
+    if (Number.isNaN(thingTop[j])) { const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; const HOLD = (2.45 - 0.8) / SCALE;
+      const topped = (n) => !parapet[n] && (!Number.isNaN(lowTop[n]) || (thick(n) && thingTop[n] - baseOf[n] <= WALK_MAX && thingTop[n] < CEIL));
+      const standH = (n) => !Number.isNaN(thingTop[n]) ? (thingTop[n] >= f + HOLD || topped(n) ? thingTop[n] : reach[n] ? floorH[n] : 0) : reach[n] ? floorH[n] : 0;
       for (let q = 0; q < 4; q += 1) { const [di, dk] = dirs[q]; const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const d = f - standH(kk * nx + ii);
         if (d > KERB_MAX || (d > STEP && kind[j] !== 2)) { guardTop[j] = f + STEP + 0.1; guardSide[q][j] = 9000 + Math.min(999, Math.round(guardTop[j] / DECK_Q) + 64); } } } }
   // (low cover: DECK_Q classes when something can stand on it, 0.5 m when it is thin — nothing stands on a railing, so its height class is coarse.
@@ -581,7 +590,8 @@ let thingParapets = 0;
 for (const w of walls) { w.key = w.h; w.low = w.key >= 1000 && w.key < 2000; w.stand = w.key >= 2000; w.parapet = w.key >= 1700 && w.key < 2000;   // (a parapet: low cover without a top — a body stops, a hop crosses, nothing stands on it; the thing kind is read below, once the rectangle's height and base are known)
   if (w.low || w.stand) w.h = maxIn(w, wallH); else { w.h = Math.ceil(maxIn(w, wallH) * 2) / 2; const lo = minIn(w, wallH), over = w.h - lo; if (lo < 7) { if (over > 1) tallOver += 1; if (over > tallOverMax) tallOverMax = over; } }
   // (the highest walked floor beside the rectangle: what its height is measured from — a railing on a terrace is a railing)
-  let bse = NaN, bseLo = NaN; for (let kk = w.k; kk < w.k + w.d; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = ci + di, kq = kk + dk; if (ii < 0 || kq < 0 || ii >= nx || kq >= nz) continue; const n = kq * nx + ii; if (reach[n] && Number.isNaN(thingTop[n])) { if (Number.isNaN(bse) || floorH[n] > bse) bse = floorH[n]; if (Number.isNaN(bseLo) || floorH[n] < bseLo) bseLo = floorH[n]; } } w.base = Number.isNaN(bse) ? 0 : bse; w.baseLo = Number.isNaN(bseLo) ? 0 : bseLo;   // (and the lowest: the floor the thing stands from)
+  let bse = NaN, bseLo = NaN; for (let kk = w.k; kk < w.k + w.d; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = ci + di, kq = kk + dk; if (ii < 0 || kq < 0 || ii >= nx || kq >= nz) continue; const n = kq * nx + ii; if (reach[n] && Number.isNaN(thingTop[n])) { if (Number.isNaN(bse) || floorH[n] > bse) bse = floorH[n]; if (Number.isNaN(bseLo) || floorH[n] < bseLo) bseLo = floorH[n]; } } { let walked = false; for (let kk = w.k; kk < w.k + w.d && !walked; kk += 1) for (let ci = w.i; ci < w.i + w.w; ci += 1) if (reach[kk * nx + ci]) { walked = true; break; } if (!walked) bseLo = NaN; }   // (a thing over columns no body walks stands from the ground: nothing passes under it, and a box floating over a sealed slot left the slot hollow beneath — the fence post's base over Town's filled kerb slot, 2026-10-24)
+  w.base = Number.isNaN(bse) ? 0 : bse; w.baseLo = Number.isNaN(bseLo) ? 0 : bseLo;   // (and the lowest: the floor the thing stands from)
   // the box reaches only as far as the solid samples in its cells do (a face on a cell's edge is not a cell of wall) —
   // on the sides that face open cells. A side that meets another cell of a thing stays on the cell line, so the
   // rectangles of one thing abut: a car's roof and its door panels used to be trimmed each to its own samples, with
