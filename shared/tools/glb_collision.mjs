@@ -412,9 +412,9 @@ const deckReg = new Int32Array(N).fill(-1); const regH = [];
 const qDeck = (v) => Math.round(v / DECK_Q) * DECK_Q;   // (a merge class, for a passage floor's height)
 // a column's floor as written: a slope's plane, a deck's region height, else the street
 const written = (j) => { if (kind[j] === 1) { const r = regions[regionOf[j]]; return r.a + r.b * (X0 + (j % nx + 0.5) * CELL) + r.c * (Z0 + (Math.floor(j / nx) + 0.5) * CELL); } return deckReg[j] >= 0 ? regH[deckReg[j]] : 0; };
-const kerbKey = new Float64Array(N); const kerbInfo = new Map(); const noBody = new Uint8Array(N);
+const kerbKey = new Float64Array(N); const kerbInfo = new Map(); const noBody = new Uint8Array(N); const slopeNoBody = new Uint8Array(N);   // (slopeNoBody: a slope's cell behind a kerb cell of its own — no body beneath, as a deck's)
 { const q = (v) => Math.round(v / 0.05) + 200;
-  for (let k = 0; k < nz; k += 1) for (let i = 0; i < nx; i += 1) { const j = k * nx + i; if (!reach[j] || kind[j] !== 0) continue;
+  for (let k = 0; k < nz; k += 1) for (let i = 0; i < nx; i += 1) { const j = k * nx + i; if (!reach[j] || kind[j] === 2) continue;   // (the high side: a deck's cell, or a SLOPE's edge cell — a stair's side over a strip of street, 0.7–1.5 m, was a wall with a guard on it where a deck's edge was a kerb, user 2026-10-24)
     for (const [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const li = i - di, lk = k - dk; if (li < 0 || lk < 0 || li >= nx || lk >= nz) continue; const n = lk * nx + li;
       // (the low side may be a slope's cell: the road's plane below a raised strip's edge)
       if (!reach[n] || kind[n] === 2) continue; const lo = written(n), hi = written(j); if (hi - lo < FLOOR_MIN || floorH[j] - floorH[n] > KERB_MAX) continue;
@@ -425,7 +425,7 @@ const kerbKey = new Float64Array(N); const kerbInfo = new Map(); const noBody = 
       kind[j] = 2; kerbKey[j] = key;
       // (the cell behind: a walked flat floor at the high floor's level, of this region or the next — two regions a few
       // centimetres apart meet at a corner, and the second one's body held the body at the line all the same)
-      const bi = i + di, bk = k + dk; if (bi >= 0 && bk >= 0 && bi < nx && bk < nz) { const b2 = bk * nx + bi; if (reach[b2] && kind[b2] === 0 && Math.abs(written(b2) - hi) <= FLOOR_MIN) noBody[b2] = 1; }
+      const bi = i + di, bk = k + dk; if (bi >= 0 && bk >= 0 && bi < nx && bk < nz) { const b2 = bk * nx + bi; if (reach[b2] && kind[b2] === 0 && Math.abs(written(b2) - hi) <= FLOOR_MIN) noBody[b2] = 1; else if (reach[b2] && kind[b2] === 1 && regionOf[b2] === regionOf[j]) slopeNoBody[b2] = 1; }   // (behind a slope's kerb cell: the slope's own next cell, bodiless the same way)
       break; } } }
 // ---- what stands: a column a body does not walk through. Its top is the standing thing's on a reached floor,
 // the column's highest point elsewhere (a car's roof, a building: no floor of theirs is reached).
@@ -563,7 +563,7 @@ const minIn = (r, arr) => { let m = Infinity; for (let kk = r.k; kk < r.k + r.d;
 // walls) but lies beyond the boundary, and the valley floor out there is no part of the arena
 const inCrop = (r) => r.x1 > x0c - 0.5 && r.x0 < x1c + 0.5 && r.z1 > z0c - 0.5 && r.z0 < z1c + 0.5;
 const walls = rects(wallKey).filter(inCrop), decks = rects(deckCode).filter(inCrop), passes = rects(passDeck).filter(inCrop), ceils = rects(ceilKey).filter(inCrop), beams = rects(beamKey).filter(inCrop), rims = rects(rimKey).filter(inCrop);
-const rampId = new Float64Array(N); for (let j = 0; j < N; j += 1) if (kind[j] === 1) rampId[j] = regionOf[j] + 1; const rampRects = rects(rampId).filter(inCrop);
+const rampId = new Float64Array(N); for (let j = 0; j < N; j += 1) if (kind[j] === 1) rampId[j] = regionOf[j] + 1 + (slopeNoBody[j] ? 0.5 : 0); const rampRects = rects(rampId).filter(inCrop);   // (+0.5: the bodiless cells behind a slope's kerb merge apart, so their rectangles carry the plane and no body)
 let tallOver = 0, tallOverMax = 0;   // (walls below the flight ceiling whose box stands more than 1 m above their lowest column, and the worst case)
 // (a low or standable thing's own top: its class only merges — a body on it stands on the model's top, not up to 0.25 m over it)
 // (the parapet that was never flooded: a thing's top a hop up, narrower than GROUND_MIN, with a floor more than KERB_MAX
@@ -676,8 +676,8 @@ for (const c of rects(ceilMerge).filter(inCrop)) { const o = box(c, Math.ceil(ma
 const plane = (b, hAt) => { const hs = [hAt(b.x0, b.z0), hAt(b.x1, b.z0), hAt(b.x0, b.z1), hAt(b.x1, b.z1)]; return { s: { minX: U(b.x0 - cx), maxX: U(b.x1 - cx), minZ: U(b.z0 - cz), maxZ: U(b.z1 - cz), maxTop: U(Math.max(...hs)), type: 'plane', y0: U(hAt(b.x0, b.z0)), gx: 0, gz: 0 }, lo: Math.min(...hs), hi: Math.max(...hs) }; };
 const underOf = (b) => { let u = 0; for (let kk = b.k; kk < b.k + b.d; kk += 1) for (let ci = b.i; ci < b.i + b.w; ci += 1) { const s = slabUnder[kk * nx + ci]; if (s > u) u = s; } return u; };   // (the highest passage roof under the rectangle; NaN where there is none)
 const planeBody = (b, lo) => { const o = box(b, lo); o.minY = U(underOf(b)); if (o.maxY - o.minY >= U(STEP)) { emit({ ...o, topBuffer: 0.8 }, 'plane'); planeBodies += 1; } };   // (as a deck's: a slope within a step of what is under it has nothing a body fits under)
-for (const rr of rampRects) { const r = regions[rr.h - 1]; const hAt = (x, z) => r.a + r.b * x + r.c * z;
-  const p = plane(rr, hAt); p.s.gx = Math.round(r.b * 1e4) / 1e4; p.s.gz = Math.round(r.c * 1e4) / 1e4; surfaces.push(p.s); planeBody(rr, p.lo);
+for (const rr of rampRects) { const r = regions[Math.floor(rr.h) - 1]; const hAt = (x, z) => r.a + r.b * x + r.c * z;
+  const p = plane(rr, hAt); p.s.gx = Math.round(r.b * 1e4) / 1e4; p.s.gz = Math.round(r.c * 1e4) / 1e4; surfaces.push(p.s); if (rr.h % 1 === 0) planeBody(rr, p.lo);   // (a slope's cells behind its kerb carry no body: the kerb's own, up to the low floor, is theirs — the body at the kerb's line met the slope's body a cell in)
   for (const side of ['x0', 'x1', 'z0', 'z1']) { const alongX = side[0] === 'z'; const len = alongX ? rr.w : rr.d;
     for (let q0 = 0; q0 < len; q0 += SEG) { const n = Math.min(SEG, len - q0); let need = false;
       for (let q = q0; q < q0 + n && !need; q += 1) { const i = alongX ? rr.i + q : (side === 'x0' ? rr.i - 1 : rr.i + rr.w), k = alongX ? (side === 'z0' ? rr.k - 1 : rr.k + rr.d) : rr.k + q;
