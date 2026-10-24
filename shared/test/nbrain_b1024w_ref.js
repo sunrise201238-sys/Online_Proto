@@ -1,4 +1,4 @@
-// FROZEN at b1023n for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1024w for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1023n_ref.js';
+import { sdBrainTick } from './sdbrain_b1024w_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -210,6 +210,20 @@ const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
 const BOT_LEDGE_JUMP_REACH = 4.5;
+// A HOP ONTO A LEDGE ASKS THREE QUESTIONS (user 2026-10-24, after Warehouse's and Factory's bots hopped every 1 m crate and
+// belt, 23 hops a minute, half of them off again): is the top a body wide (BOT_PERCH_MIN_WIDTH — now in every state; the
+// Maze's width-0 exemption of 2026-08-10 is withdrawn: bought with one Factory belt measurement, it made the 0.25 m lips of
+// Warehouse's containers into steps), is it the way I am going (the perch's direction within ~60° of this tick's move,
+// BOT_HOP_ALONG_MIN), and has the enemy not fired at me in the last second (BOT_HOP_QUIET_MS — a body in the air cannot
+// dodge, so a hop under fire hands over a round). Three comparisons on numbers the brain already holds: no new scan. The
+// Defense VAULT — pressed against the ledge with nowhere else to go — keeps its own gates: it is the way out, not a vantage.
+const BOT_HOP_ALONG_MIN = 0.5;
+const BOT_HOP_QUIET_MS = 1000;
+function hopAllowed(perch, mx, mz, opp, now) {
+  if (perch.toX * mx + perch.toZ * mz <= BOT_HOP_ALONG_MIN) return false;            // not the way I am going
+  if (opp && now - (opp.lastFireAt ?? -Infinity) < BOT_HOP_QUIET_MS) return false;   // the enemy fired at me this second
+  return true;
+}
 // A floor more than this above base ground means "the bot is on high ground".
 const BOT_HIGH_GROUND_MIN_Y = 1.7;
 // How far past a surface edge to sample when testing whether stepping off it
@@ -1564,7 +1578,10 @@ export function nbBrainTick(host) {
       if (oppFloorY - myFloorY > BOT_JUMP_HEIGHT_DIFF
           && oppFloorY - myFloorY <= BOT_CLIMB_MAX_RISE
           && dist < 32 && Math.random() > 0.5) {
-        if (botTryJump(host)) jumpThisTick = true;
+        // (the enemy stands a jump higher: the hop goes only when a ledge is actually within reach the way we are going —
+        // the blind jump at a belt 10 u off landed on the same floor, Factory 2, user 2026-10-24; the three questions as everywhere)
+        const up = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+        if (up && up.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(up, mx, mz, opp, now)) { jumpDirX = up.toX; jumpDirZ = up.toZ; if (botTryJump(host)) jumpThisTick = true; }
       } else if (onHighGround) {
         const exit = findDescentDirection(pos.x, pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
         if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
@@ -1577,7 +1594,7 @@ export function nbBrainTick(host) {
         // and we'd rather be up there than on the tracks. The jump cooldown
         // rate-limits this; no strict random gate needed.
         const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
-        if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.2) {
+        if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now) && Math.random() > 0.2) {
           jumpDirX = perch.toX; jumpDirZ = perch.toZ;
           if (botTryJump(host)) jumpThisTick = true;
         }
@@ -1720,16 +1737,13 @@ export function nbBrainTick(host) {
       mx = tx / l; mz = tz / l;
       wantSprint = botTravelSprint(me);
     }
-    // minWidth 0 here ONLY (2026-08-10). Maze is walking a route, so a strip
-    // too thin to be a vantage point is still a legitimate thing to climb —
-    // the width floor added in 367a87b applied everywhere and doubled Factory
-    // belt crossings from 2.6 s to 5.3 s. Measured on the reversal breakdown:
-    // of 21 crossings-and-straight-back, 76% happened in Defense and only 10%
-    // in Maze, so the floor is worth keeping exactly where the bouncing is and
-    // dropping exactly where the routing is.
+    // (The Maze's width-0 exemption of 2026-08-10 — "a strip too thin to be a vantage point is still a legitimate thing
+    // to climb", bought with Factory's belt crossings — is withdrawn, user 2026-10-24: on Warehouse it read the 0.25 m lips
+    // of the containers as steps and hopped at them. The hop asks the three questions now, here as everywhere; a route
+    // over a real deck still climbs it — a deck is a body wide and on the way.)
     if (grounded && !me.airborne) {
-      const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS, 0);
-      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH) {
+      const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
+      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now)) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botTryJump(host)) jumpThisTick = true;
       }
@@ -1787,7 +1801,7 @@ export function nbBrainTick(host) {
     // limits how often this fires.
     if (grounded && !me.airborne && !onHighGround) {
       const perch = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
-      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.3) {
+      if (perch && perch.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(perch, mx, mz, opp, now) && Math.random() > 0.3) {
         jumpDirX = perch.toX; jumpDirZ = perch.toZ;
         if (botTryJump(host)) jumpThisTick = true;
       }
@@ -1840,7 +1854,7 @@ export function nbBrainTick(host) {
       if (grounded && !me.airborne && me.botGlintStepAt == null) {
         const ahead = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, 6);
         if (ahead && ahead.dist < BOT_LEDGE_JUMP_REACH
-            && ahead.toX * mx + ahead.toZ * mz > 0.8) {
+            && ahead.toX * mx + ahead.toZ * mz > 0.8 && hopAllowed(ahead, mx, mz, opp, now)) {   // (the third question: not under fire this second)
           jumpDirX = ahead.toX;
           jumpDirZ = ahead.toZ;
           if (botTryJumpSurvival(host)) {
