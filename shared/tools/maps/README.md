@@ -175,7 +175,9 @@ Backrooms' json. The spawn lines are not touched: set them by hand when the plac
 them, so they are re-applied after one — the user picked each spot in the game with the PT site's collision inspector,
 2026-10-24): Dust — the guard along the deck's north edge at model x 38.15..41.4, z −16.4 lowered to the deck's top (a body
 walks off the 3.2 m drop there); a 13 m "invisible pillar" at x 64.4..64.9, z −35.65..−34.4 and an 11.5 m one at x 72.9..73.4,
-z −30.4..−30.15 removed (the generator read something; nothing is seen in the game); the thin slot at x 63.65..64.4,
+z −30.4..−30.15 removed (the generator read something; nothing is seen in the game) — the first one's slot, between the deck's
+parapet and a 4.2 m thing, is a shelf at the deck's height (a body jumping the parapet fell to the street in it), the second
+one's seam is crate-high and solid and its crate stack has a floor on its top (a body came down the seam); the thin slot at x 63.65..64.4,
 z −1.4..1.85 filled solid and the 1.3 m crate east of it given a floor on its top (a body jumped over the crate into the slot
 and the push-out parked it inside the wall); the pocket among the crates at x 72.4..74.17, z −29.65..−27.9 filled to the
 crates' 3 m (entered over its 1.4 m south lip); the 1.8 m ledge beside the deck at x 73.9..74.9, z 18.85..31.85 given a floor

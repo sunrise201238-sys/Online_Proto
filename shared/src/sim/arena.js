@@ -2969,7 +2969,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 133.4, "maxX": 134.4, "minZ": -15.6, "maxZ": -14.6, "minY": 0, "maxY": 8.02, "topBuffer": 0.8},
       {"minX": -66.6, "maxX": -65.6, "minZ": -14.6, "maxZ": -13.6, "minY": 0, "maxY": 32, "topBuffer": 0.8},
       {"minX": -65.6, "maxX": -64.6, "minZ": -14.6, "maxZ": 38.4, "minY": 0, "maxY": 18, "topBuffer": 0.8},
-      // (by hand, the user 2026-10-24: a 13 m "invisible pillar" at model x 64.4..64.9 z −35.65..−34.4 removed — the generator read something there; nothing is seen in the game: {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "minY": 0, "maxY": 52})
+      // (by hand, the user 2026-10-24: a 13 m "invisible pillar" at model x 64.4..64.9 z −35.65..−34.4 removed — the generator read something there; nothing is seen in the game: {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "minY": 0, "maxY": 52}. The slot it left, between the deck's parapet and the 4.2 m thing east of it, is a shelf at the deck's height instead — a body jumping the parapet fell to the street in it and was parked there, the same day)
+      {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "minY": 0, "maxY": 12.12, "topBuffer": 0.8},
       {"minX": 60.4, "maxX": 61.4, "minZ": -14.6, "maxZ": 18.4, "minY": 0, "maxY": 16.8, "topBuffer": 0.8},
       {"minX": 115.4, "maxX": 116.4, "minZ": -14.6, "maxZ": 12.4, "minY": 0, "maxY": 5.9, "topBuffer": 0.8},
       {"minX": 116.4, "maxX": 121.4, "minZ": -14.6, "maxZ": -13.6, "minY": 0, "maxY": 6.45, "topBuffer": 0.8},
@@ -3121,7 +3122,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": 19.4, "maxX": 25.4, "minZ": 6.4, "maxZ": 11.4, "minY": 0, "maxY": 10, "topBuffer": 0.8},
       {"minX": 25.4, "maxX": 27.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 16.4, "topBuffer": 0.8},
       {"minX": 51.4, "maxX": 51.98, "minZ": 6.82, "maxZ": 8.98, "minY": 12.12, "maxY": 17.6, "topBuffer": 0.8},
-      // (by hand, the user 2026-10-24: an 11.5 m "invisible pillar" at model x 72.9..73.4 z −30.4..−30.15, in the crate row, removed: {"minX": 92.4, "maxX": 94.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 46})
+      // (by hand, the user 2026-10-24: an 11.5 m "invisible pillar" at model x 72.9..73.4 z −30.4..−30.15, in the crate row, removed: {"minX": 92.4, "maxX": 94.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 46}. Its seam between the crates is crate-high and solid instead, and the crate stack has a floor on its top (surfaces) — a body got down the seam to the street and was parked there, the same day)
+      {"minX": 92.4, "maxX": 94.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 8.8, "topBuffer": 0.8},
       {"minX": 133.4, "maxX": 134.4, "minZ": 6.4, "maxZ": 13.4, "minY": 0, "maxY": 5.97, "topBuffer": 0.8},
       {"minX": 134.4, "maxX": 135.4, "minZ": 6.4, "maxZ": 7.4, "minY": 0, "maxY": 6.06, "topBuffer": 0.8},
       {"minX": 25.4, "maxX": 26.4, "minZ": 7.4, "maxZ": 14.4, "minY": 0, "maxY": 10, "topBuffer": 0.8},
@@ -9326,7 +9328,12 @@ const GENERATED_ARENA_COLLISION_DATA = {
       // (by hand, the user 2026-10-24: the 1.8 m ledge beside the deck at model x 73.9..74.9 z 18.85..31.85 gets a floor on its top — three 1.8 m things the generator left topless, so a body jumping onto them slid off)
       {"minX": 98.4, "maxX": 102.4, "minZ": 203.4, "maxZ": 255.4, "maxTop": 7.19, "type": "flat", "top": 7.19},
       // (by hand, the user 2026-10-24, with the slot above: the 1.3 m crate east of the slot, model x 64.4..65.54 z −1.15..1.6, gets a floor on its top — a body jumping west lands on it instead of being pushed about inside it)
-      {"minX": 58.4, "maxX": 62.96, "minZ": 123.4, "maxZ": 134.4, "maxTop": 5.2, "type": "flat", "top": 5.2}
+      {"minX": 58.4, "maxX": 62.96, "minZ": 123.4, "maxZ": 134.4, "maxTop": 5.2, "type": "flat", "top": 5.2},
+      // (by hand, the user 2026-10-24: the floor of the shelf where the 13 m pillar stood, model x 64.4..64.9 z −35.65..−34.4, at the deck's height)
+      {"minX": 58.4, "maxX": 60.4, "minZ": -14.6, "maxZ": -9.6, "maxTop": 12.12, "type": "flat", "top": 12.12},
+      // (by hand, the user 2026-10-24: the crate stack at model x 72.7..74.15 z −32.8..−29.9 — five topless 2.1–2.2 m crates, the second pillar's row — gets a floor on its top, so a body coming down on it stands instead of dropping between the crates)
+      {"minX": 92.4, "maxX": 97.4, "minZ": -3.18, "maxZ": 8.4, "maxTop": 8.8, "type": "flat", "top": 8.8},
+      {"minX": 91.57, "maxX": 92.4, "minZ": 1.52, "maxZ": 8.4, "maxTop": 8.8, "type": "flat", "top": 8.8}
     ]
   },
   "town": {
