@@ -179,7 +179,7 @@ Reading the DPS table: the shotgun row is the most theoretical — all 8 pellets
 | Unit 4 — Atsuko | 50 ms @ 0.50 | 0.03 | +0.003 | 0.08 | 0.05/s, 200 ms | 107 → 40 |
 | Unit 13 — Marina | 50 ms @ 0.50 | 0.06 | +0.003 | 0.11 | 0.05/s, 200 ms | 53 → 29 |
 | Unit 15 — Yuuka | 50 ms @ 0.50 | 0.03 | +0.01 | 0.08 | 0.17/s, 200 ms | 107 → 40 |
-| Unit 17 — Kurumi | 100 ms @ 0.25 | 0.03 | +0.015 | 0.11 | 0.05/s, 200 ms | 107 → 29 |
+| Unit 17 — Kurumi | 100 ms @ 0.25 | 0.03 | +0.015 | 0.11 | 0.17/s, 200 ms | 107 → 29 |
 | Unit 2 — Hoshino | 100 ms @ 0.25 | pattern, 1.4× wide (see below) | — | — | — | pattern |
 | Unit 11 — Haruka | 100 ms @ 0.25 | pattern (see below) | — | — | — | pattern |
 | Unit 18 — Rabu | 100 ms @ 0.25 | pattern (Haruka's) | — | — | — | pattern |
