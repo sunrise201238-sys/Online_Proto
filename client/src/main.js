@@ -785,10 +785,10 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
+  compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
-  compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
+  spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true, thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
