@@ -15,7 +15,7 @@ Run from a scratch directory; `node` 22. `<out>` gets `<key>.json` (the data), `
 The generator reads a steep face over its whole area, not its edges alone (2026-10-22): a closed gate modelled as one 2 by 2 m quad left the cells between its edges reading floor and top rail, and a body walked through it at the long path's end (x 66..70, z −51.4). The maps' data were regenerated with it: Dust 4,518 → 4,637 boxes, 3,310 → 3,261 floors (the walked region behind that gate no longer reached, 447 walkable points lost there and at a few fences); Town 7,334 → 7,173 boxes (11 walkable points lost at 10 spots); Spacecraft 3,349 → 3,361 boxes (6 points lost); Backrooms unchanged. A thing's lid carries `lid: 1` on its surface.
 
 | Dust | `DUMP=1 SCALE=4 GROUND=83.92 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=5.6 PIT_MAX=5.5 node glb_collision.mjs client/public/maps/dust.glb dust -7.1 106.7 -120.9 56.9 <out>` (the basin by the east wall, x 62..75 z 2..33, slopes 5 m under the street and is walked: read that deep) |
-| Town | `LIDS="-17.05,-20.2,-12.9,-19.05,2.65" DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo; the lid: the plaza's slot, a 4 by 1 m pit 2.5 m deep with no way out, filled to the plaza) |
+| Town | `DUMP=1 node glb_collision.mjs client/public/maps/invasion.glb town -68 67 -60 40 <out>` (the served copy is the original minus its billboard logo) |
 | Spacecraft | `DUMP=1 GROUND=0 EXCLUDE= UNDER_STREET=3 CEIL=1.3 node glb_collision.mjs client/public/maps/spacecraft.glb spacecraft 2 122 -70 0 <out>` |
 | Backrooms | `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 CEIL=3.8 node glb_collision.mjs client/public/maps/backrooms.glb backrooms -26.8 28 -27.2 30 <out>` |
 | Warehouse | the served model first: `glb_slim.cjs <map_79_void.glb> <slim.glb> [maxPx=1024] [quality=0.8]` (textures to 1024 px, JPEG where opaque, 29.9 → 11.6 MB, the geometry untouched), then `glb_clone.mjs <slim.glb> client/public/maps/warehouse.glb map_1_4 180 10 16 --skip Object_5_85_12 --suffix _copy` (the cluster's 22 objects copied, turned 180° about (5, 8) and set end to end over the original — the user's sketch, 2026-10-22; the ground plane skipped; nodes only, the meshes shared); then `glb_open_ends.mjs <doubled.glb> client/public/maps/warehouse.glb 9,29,31` (the six containers the user marked on the plan, 2026-10-22 — three meshes, each on a container and its copy — opened at both ends into tunnels, their materials double-sided); then `DUMP=1 SCALE=4 GROUND=0 CELL=0.25 EXCLUDE= MARGIN=2 LOW_MAX=1.5 WALK_MAX=6 HEADROOM=2 UNDER_STREET=0.12 node glb_collision.mjs client/public/maps/warehouse.glb warehouse -14 24 -23 39 <out>` |
@@ -29,12 +29,25 @@ square is all void, and their square); the slivers hanging off it are gaps, and 
 thing beside it (they used to be 25 m void walls each — the pillars). An unwalked floor column over the street, however
 low, is solid (the sim stands a body on the street wherever no surface covers the point: Dust's retaining-wall top was
 walked through at street level). A thing beside a floor under the street stands from that floor (its box went down to the
-street only and floated over the yard beside it). `LIDS="x0,z0,x1,z1,h;..."` (model metres, h over the street) fills a pit
-and lids it: every cell of the rect is floor at h, the yard's body box under it. `PIT_MAX` (default 3) is how far under
+street only and floated over the yard beside it). `PIT_MAX` (default 3) is how far under
 the street a sloping floor is still read. Counts after: Town 7,247 boxes (81 guards), Dust 4,434 (56), Spacecraft 3,298
 (2), Backrooms 57 (0); walkable points lost 21 / 27 / 16 / 2 (edge cells), gained 1 / 75 (the basin) / 33 (slots between
 hull parts that were void walls) / 0; boxes 1.5 m and taller on 2 m² or less holding no model face: Dust 22 (from 38),
 Town 14, Spacecraft 5, the rest on real voids' edges (`phantom_boxes.mjs`).
+
+The street the flood starts from (2026-10-24; a body hopped over the 0.4 m wall beside Town's west pavement ramp and
+fell into a 0.9 m slot between the pavement's edge wall and its kerb skin, 2.4 m deep, no way out; the plaza's slot of
+2026-10-22 was the same thing and had been lidded by hand): the flood used to start from EVERY street-level floor the
+model has, so the plate inside a sealed kerb, the floor of a slot between two walls, the ground of a court no door opens
+on all counted as walked — a sealed cavity read as a passage, the slab over it left hollow, its floor cells walked. It now
+starts from the one connected street-level floor that is largest and walks everywhere else from there; what it does not
+reach is solid by the rules above. The hand lid (`LIDS`) is gone with its one use. Counts after: Town 7,221 boxes (73
+guards), Dust 4,613 (55), Spacecraft 3,325, Backrooms 69, Warehouse 802 unchanged. Floor the generator stopped calling
+walked: Town 1,072 m², Dust 851, Spacecraft 145, Backrooms 293 — all of it enclosed (frontiers of walls, buildings and the
+crop's edge; `lost_regions2.py`). What a body in the sim can reach from its spawn, walking and jumping (`reach_fill.mjs`):
+Dust, Backrooms and Warehouse unchanged; Town −25 m² (the slot itself 3.8, the old lid's top 3.1, a hidden first-floor
+plate behind the south arcade 15.5, two roof slivers) and +3.6; Spacecraft −71.5 m² — the two sunken bays at x 17..26
+(1.85 m deep, entered by a hop over their 1.25 m rim, no way out: pits, now solid) — and +3.5.
 
 The Backrooms model served is the edited one (2026-10-22): the chamber cut at z 21.8, P18 and P19 closed blocks with the
 lane between them open at both ends, the lane's walls and the south walls copied from the hall's own walls, the plinth kept
@@ -89,6 +102,19 @@ Town, Spacecraft and Backrooms on this line still carry the data the v5 generato
   position and floor sampled (runs the game client — only with the user's leave). `label_plan.cjs`, `clone_cost.cjs`.
 - `regions.mjs <tree> <json> <cxM> <czM> [top]`: the walked regions of the nav grid (size, floor range, box).
 - `walk_diff.mjs <tree> <a.json> <b.json> <cxM> <czM>`: walkable points lost and gained between two readings.
+- `reach_fill.mjs <tree> <map> <cxM> <czM> <x,z[,feetM]|spawn> x0 x1 z0 z1 [cell=0.25] [jumpM=1.4]`: the sim's own
+  reach — a flood over cells with the sim's step rule and body test, walking (any drop) and jumping (the body at its apex
+  carried up to `JUMP_REACH` 3 m, clear of boxes over every cell on the way) — and its PITS: states the body reaches with no
+  path back to the start, as regions with the ways in. `REACHED_OUT=<json>` dumps the reached cells; `reach_diff.py <old>
+  <new>` compares two dumps (reach lost and gained, pits). The apex test is binary, so a hop under a low ceiling that would
+  still clear a 0.7–0.9 m step in the sim reads as no way back: a pit under a roof or in a low room wants a look before it
+  is believed.
+- `lost_regions2.py <old cells.json> <new cells.json> [top]`: the floor one reading walked and another does not, each region
+  with its frontier classified (walked floor and the step to it, a column with no floor layer and its surfaces, a thing
+  standing and its height, floor nobody walks). `cells_png.py <cells.json> <out.png> x0 x1 z0 z1 [px/m] [other cells.json]`
+  (pillow): a reading as a picture, the other reading's lost cells magenta and gained cyan.
+- `regen_all.sh <tree> <out> [map ...]`: every map's data from the committed generator (`<out>/old`) and the working copy
+  (`<out>/new`), with the recipes above, and the stats that differ.
 - `dust_frontier.mjs <tree> <json> [cxM czM]`: where two regions nearly meet and the boxes between them.
 - `dust_tunnels.mjs <cells.json>`: walked floor under a ceiling, as blobs, with their rims (open / wall).
 - `dust_hmap.mjs <cells.json> [m per char] [height|ceil|reach]`: ASCII maps of the columns.
