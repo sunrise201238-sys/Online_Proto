@@ -114,6 +114,16 @@ export function buildNavGrid(obstacles, surfaces) {
     return s === -Infinity ? 0 : s;
   };
   const fitsAt = (x, z, fy) => !unitOverlapsObstacle(x, fy + GROUND_BASE_Y, z, obstacles);
+  // WHERE A NODE STANDS (2026-10-24): at its cell's centre when a body fits there, else a quarter cell to one side.
+  // A lane narrower than two cells — Compound's 1.5 m catwalk between a kerb and a wall, its 1.75 m mezzanine between
+  // a guard rail and a balustrade — holds a body, but neither row of cell centres falls in the clear band (they miss
+  // it by 3 to 27 cm), so the whole lane was no floor to the bots and the bridge between the two buildings an island
+  // a bot could not route to (user 2026-10-24: "BOT seemed to have no idea how to approach"). The node sits at the
+  // point the body fits; the walk edges are read between the nodes' own points (posX/posZ, below), and the fit at a
+  // crossing's midpoint stays the strict one — loosening that test too let a route slip past Station's 0.5-unit
+  // platform face into the hollow platforms (76 edges, measured and rejected the same day).
+  const SAMPLES = [[0, 0], [CELL / 4, 0], [-CELL / 4, 0], [0, CELL / 4], [0, -CELL / 4]];
+  const standAt = (x, z, fy) => { for (let s = 0; s < SAMPLES.length; s += 1) { const sx = x + SAMPLES[s][0], sz = z + SAMPLES[s][1]; if (fitsAt(sx, sz, fy)) return [sx, sz]; } return null; };
   // Every distinct standing height at (x, z): each surface covering the point,
   // and the street (0) where no surface lies within a step of it — the sim's
   // own ground rule (groundHeightAt), so the grid stands the bot where the sim
@@ -149,6 +159,7 @@ export function buildNavGrid(obstacles, surfaces) {
 
   // --- Layer discovery ---
   const cellLayers = new Array(n);
+  const cellPos = new Array(n);       // per kept level: where the body stands in the cell
   const cellCovered = new Array(n);   // per kept level: is there geometry overhead?
   let layers = 1;
   for (let r = 0; r < rows; r += 1) {
@@ -157,16 +168,16 @@ export function buildNavGrid(obstacles, surfaces) {
       const x = minX + (c + 0.5) * CELL;
       const z = minZ + (r + 0.5) * CELL;
       const hs = candidateFloors(x, z);
-      const keep = [];
+      const keep = [], keepPos = [];
       for (let k = 0; k < hs.length; k += 1) {
         const above = k + 1 < hs.length ? hs[k + 1] : null;
         if (above != null && above - hs[k] < LAYER_MIN_GAP) continue;   // stepped up onto the level above
-        if (!fitsAt(x, z, hs[k])) continue;
-        keep.push(hs[k]);
+        const at = standAt(x, z, hs[k]); if (!at) continue;
+        keep.push(hs[k]); keepPos.push(at);
       }
-      keep.reverse();                       // layer 0 = highest level
-      if (keep.length > LAYER_CAP) keep.length = LAYER_CAP;
-      cellLayers[i] = keep;
+      keep.reverse(); keepPos.reverse();    // layer 0 = highest level
+      if (keep.length > LAYER_CAP) { keep.length = LAYER_CAP; keepPos.length = LAYER_CAP; }
+      cellLayers[i] = keep; cellPos[i] = keepPos;
       // COVERED is about real overhead geometry, not about which levels were
       // kept: where furniture blocks the deck level, the ground beneath it is
       // still under the deck, and calling it "open" would keep a sealed void
@@ -179,6 +190,7 @@ export function buildNavGrid(obstacles, surfaces) {
   const size = n * layers;
   const floor = new Float32Array(size);
   const walk = new Uint8Array(size);
+  const posX = new Float32Array(size), posZ = new Float32Array(size);   // where each node's body stands: the cell's centre, unless the body fits only beside it
   const clearGrade = new Uint8Array(size); // 0 tight / 1 mid / 2 wide (see TIGHT_COST)
   // edgeE[(la * layers + lb) * n + i]: cell i layer la <-> cell i+1 layer lb.
   // edgeS likewise for cell i <-> cell i+cols. With one layer these collapse
@@ -195,10 +207,12 @@ export function buildNavGrid(obstacles, surfaces) {
       // Unwalkable cells still carry the top surface height in layer 0 — the
       // v1 value every floor-hint comparison was tuned against.
       if (!keep.length) floor[i] = floorAt(x, z);
+      for (let l = 0; l < layers; l += 1) { posX[l * n + i] = x; posZ[l * n + i] = z; }
       for (let l = 0; l < keep.length; l += 1) {
         const node = l * n + i;
         floor[node] = keep[l];
         walk[node] = 1;
+        posX[node] = cellPos[i][l][0]; posZ[node] = cellPos[i][l][1];
       }
       // clearGrade is filled AFTER the sealed-void prune — it is the most
       // expensive per-node work (two expanded-radius overlap scans) and the
@@ -211,9 +225,6 @@ export function buildNavGrid(obstacles, surfaces) {
   // on one layer (the step-rule arrivals) is computed once per cell/layer,
   // not once per layer PAIR — the naive form re-walked the surface list
   // layers^2 times per cell and cost Station ~600 ms extra at build.
-  const arriveInto = new Float32Array(layers);
-  const arriveBack = new Float32Array(layers);
-  const midInto = new Float32Array(layers);   // (the floor the walk stands on at the edge's midpoint: the headroom test's)
   for (let r = 0; r < rows; r += 1) {
     for (let c = 0; c < cols; c += 1) {
       const i = r * cols + c;
@@ -225,23 +236,25 @@ export function buildNavGrid(obstacles, surfaces) {
         if (east ? c + 1 >= cols : r + 1 >= rows) continue;
         const j = east ? i + 1 : i + cols;
         if (!cellLayers[j].length) continue;
-        const bx = east ? x + CELL : x, bz = east ? z : z + CELL;
-        const mx = east ? x + CELL / 2 : x, mz = east ? z : z + CELL / 2;
-        for (let l = 0; l < layers; l += 1) {
-          arriveInto[l] = walk[l * n + i] ? walkFloorTo(x, z, floor[l * n + i], bx, bz, surfaces) : NaN;
-          arriveBack[l] = walk[l * n + j] ? walkFloorTo(bx, bz, floor[l * n + j], x, z, surfaces) : NaN;
-          midInto[l] = walk[l * n + i] ? walkFloorTo(x, z, floor[l * n + i], mx, mz, surfaces) : NaN;
-        }
         for (let la = 0; la < layers; la += 1) {
           const a = la * n + i;
           if (!walk[a]) continue;
+          const ax = posX[a], az = posZ[a];
           for (let lb = 0; lb < layers; lb += 1) {
             const b = lb * n + j;
             if (!walk[b]) continue;
+            // (between the two nodes' own points: a body's walk from one to the other, and the fit at its midpoint;
+            // read per pair of nodes now that a node may stand beside its cell's centre)
+            const bx = posX[b], bz = posZ[b], mx = (ax + bx) / 2, mz = (az + bz) / 2;
             // Both directions must arrive on each other's level, walking (see walkFloorTo).
-            if (Math.abs(arriveInto[la] - floor[b]) > 0.05) continue;
-            if (Math.abs(arriveBack[lb] - floor[a]) > 0.05) continue;
-            if (fitsAt(mx, mz, midInto[la])) {
+            if (Math.abs(walkFloorTo(ax, az, floor[a], bx, bz, surfaces) - floor[b]) > 0.05) continue;
+            if (Math.abs(walkFloorTo(bx, bz, floor[b], ax, az, surfaces) - floor[a]) > 0.05) continue;
+            // (and nothing stands in the walk at the lower floor's body height, the whole way: the fit at the midpoint is read
+            // at the floor the walk stands on there — past a step up — so a lip before the step, Factory's belt rails, 2.9
+            // units over the ground beside a 2.6-unit belt top, was never met, the belt read as walked onto, no link ever
+            // bridged it, and no bot crossed a belt; user 2026-10-24)
+            if (walkSegmentBlocked(ax, az, bx, bz, Math.min(floor[a], floor[b]) + GROUND_BASE_Y, obstacles)) continue;
+            if (fitsAt(mx, mz, walkFloorTo(ax, az, floor[a], mx, mz, surfaces))) {
               if (east) edgeE[(la * layers + lb) * n + i] = 1;
               else edgeS[(la * layers + lb) * n + i] = 1;
             }
@@ -253,7 +266,7 @@ export function buildNavGrid(obstacles, surfaces) {
 
   const grid = {
     cols, rows, n, layers, minX, minZ, cell: CELL,
-    floor, walk, clearGrade, edgeE, edgeS, surfaces,
+    floor, walk, clearGrade, edgeE, edgeS, surfaces, posX, posZ,
     jumpAdj: new Map(), jumpLinkCount: 0
   };
 
@@ -312,9 +325,7 @@ export function buildNavGrid(obstacles, surfaces) {
   // --- Clearance grading (survivors only; see the note at node creation) ---
   for (let node = 0; node < size; node += 1) {
     if (!walk[node]) continue;
-    const i = node % n;
-    const x = minX + ((i % cols) + 0.5) * CELL;
-    const z = minZ + (((i / cols) | 0) + 0.5) * CELL;
+    const x = posX[node], z = posZ[node];
     const y = floor[node] + GROUND_BASE_Y;
     clearGrade[node] = !unitOverlapsObstacle(x, y, z, obstacles, CLEAR_WIDE) ? 2
       : (!unitOverlapsObstacle(x, y, z, obstacles, CLEAR_MID) ? 1 : 0);
@@ -398,8 +409,8 @@ export function buildNavGrid(obstacles, surfaces) {
     grid.jumpAdj.get(b).push(a);
     grid.jumpLinkCount += 1;
   };
-  const nodeX = (node) => minX + (((node % n) % cols) + 0.5) * CELL;
-  const nodeZ = (node) => minZ + (((((node % n) / cols) | 0)) + 0.5) * CELL;
+  const nodeX = (node) => posX[node];
+  const nodeZ = (node) => posZ[node];
   const anyWalkable = (i) => {
     for (let l = 0; l < layers; l += 1) if (walk[l * n + i]) return true;
     return false;
@@ -427,7 +438,11 @@ export function buildNavGrid(obstacles, surfaces) {
           const sameComp = comp[a] === comp[b];
           if (sameComp && !SAME_COMPONENT_LINKS) continue;
           const dyF = Math.abs(floor[a] - floor[b]);
-          if (dyF < JUMP_MIN || dyF > JUMP_MAX) continue;
+          // (an island link needs no least rise: the two components are apart, so no walk joins them whatever the rise.
+          // Factory's belts — 2.6 units up, a step's height, with 2.9-unit lips a body cannot step — were islands no link
+          // reached, a rise under JUMP_MIN being left to walking, and no bot ever crossed one; user 2026-10-24. A shortcut
+          // within one component keeps the least rise: a step is walked.)
+          if (dyF > JUMP_MAX || (sameComp && dyF < JUMP_MIN)) continue;
           // The crossing must be PHYSICALLY jumpable: test the segment between
           // the two node centers at the UPPER floor's body height. A thin
           // edge-seam wall (top == upper floor, topBuffer 0 — Station's
@@ -495,8 +510,9 @@ function forEachNeighbor(grid, node, visit) {
 // vaults toward that waypoint, and toward no other — a slope or a kerb's ramp the body walks is a walk edge.
 function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, (nb) => { if (nb === b) yes = true; }); return yes; }
 
-const nodeCenterX = (grid, node) => grid.minX + (((node % grid.n) % grid.cols) + 0.5) * grid.cell;
-const nodeCenterZ = (grid, node) => grid.minZ + ((((node % grid.n) / grid.cols) | 0) + 0.5) * grid.cell;
+// (a node's point: where its body stands — the cell's centre, or a quarter cell beside it; see standAt)
+const nodeCenterX = (grid, node) => (grid.posX ? grid.posX[node] : grid.minX + (((node % grid.n) % grid.cols) + 0.5) * grid.cell);
+const nodeCenterZ = (grid, node) => (grid.posZ ? grid.posZ[node] : grid.minZ + ((((node % grid.n) / grid.cols) | 0) + 0.5) * grid.cell);
 
 // Nearest walkable NODE to (x, z). `floorHint` (the actor's floor height)
 // picks the right LAYER as well as the right cell — without it, a bot on the
@@ -533,8 +549,7 @@ function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
         }
         if (best < 0) continue;
         if (reachObstacles) {
-          const cx = minX + (c + 0.5) * cell;
-          const cz = minZ + (r + 0.5) * cell;
+          const cx = nodeCenterX(grid, best), cz = nodeCenterZ(grid, best);
           if (walkSegmentBlocked(x, z, cx, cz, reachY, reachObstacles)) continue;
         }
         if (floorHint == null || bestD <= 2) return best;
