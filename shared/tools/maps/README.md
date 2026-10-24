@@ -61,17 +61,6 @@ is binary, so the ceiling there may only look like no way back) and the 1.25 m s
 z −15..8 (a 5 m drop); Spacecraft's room at x 78..90 z −49..−41 (a 0.7 m step down under a low ceiling); Dust's four
 terraces at x 65..81 z −61..−28 reached off higher roofs.
 
-Kerbs on a slope's edge (2026-10-24; Dust's stair at x 37..38 z −16..−12 drops 0.7–3 m onto a strip of street along a
-building, and a body on the stair met a guard where the user wanted to walk straight down): the kerb rule took only a
-deck's cell as the high side, so a slope's edge over a lower walked floor was a wall, guarded. A slope's edge cell is a
-kerb like a deck's — its own ramp from the low floor at the line to the slope's height at the far side, up to KERB_MAX
-— and the slope's cell behind it carries no body, as the deck's cell behind a kerb does (`slopeNoBody`: those cells
-merge apart, rampId + 0.5, their rectangles carrying the plane and no body); taller than KERB_MAX the edge stays a
-wall with its guard. Counts after: Town 7,715 boxes (77 guards, 5,443 floors), Dust 4,678 (50, 3,447), Spacecraft 3,324
-(4, 1,786); Backrooms and Warehouse unchanged. A body from its spawn (`reach_fill.mjs`): Dust +4 m² (the stair's side and
-three small kerbs), Town +12 m² and −0.1, Spacecraft +0.9; no new pit anywhere, and Town's pocket under the overpass at
-x 33..48 z −31..−22 — 86 m² entered off a 0.9 m kerb with no way back — is a pit no more: the kerb climbs back.
-
 The Backrooms model served is the edited one (2026-10-22): the chamber cut at z 21.8, P18 and P19 closed blocks with the
 lane between them open at both ends, the lane's walls and the south walls copied from the hall's own walls, the plinth kept
 and its dark faces repainted. The recipe is `backrooms_ops.json` for `glb_edit.mjs` over the cut model
