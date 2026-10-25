@@ -1,4 +1,4 @@
-// FROZEN at b1025e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025g for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/sdbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // SUDDEN DEATH BRAIN (b1017a): ONE RULE IN FOUR PARTS, EACH WRITTEN ONCE.

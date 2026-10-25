@@ -678,47 +678,66 @@ function collapseWaypoints(pts) {
 // an unbounded scan is O(N^2) samples on exactly the long open-field paths
 // smoothing exists for (review 2026-08-13); chained capped chords read the
 // same in play.
+// 2026-10-25 (user, the 200–400 ms ticks on the free instance): the smoothing is a STEPPER. A route across Compound
+// (70 waypoints, 716 u) smoothed whole cost 13 ms on a fast core and a quarter second on the free one, in the tick the
+// route landed. smoothBegin / smoothStep run the same scan a few chords at a time (nbrain.js routeTick, two a tick
+// while the bot walks the raw route and six when it nears the smoothed frontier), and smoothPath itself is the stepper
+// run to the end, so the two agree waypoint for waypoint (shared/test/route_budget.test.js).
+function clearLeg(grid, a, b, obstacles) {
+  const { cols, rows, cell, minX, minZ, n, layers, floor, walk } = grid;
+  const ya = a.y ?? 0;
+  const dx = b.x - a.x, dz = b.z - a.z;
+  // (the per-chord prefilter that walked every box of the map is gone — 2026-10-25: unitOverlapsObstacle reads the
+  // sim's point index itself, so each sample asks only the boxes within its radius; the same boxes answer)
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz)));
+  for (let s = 1; s <= steps; s += 1) {
+    const x = a.x + (dx * s) / steps;
+    const z = a.z + (dz * s) / steps;
+    const c = Math.floor((x - minX) / cell);
+    const r = Math.floor((z - minZ) / cell);
+    if (c < 0 || r < 0 || c >= cols || r >= rows) return false;
+    const i = r * cols + c;
+    let onFloor = false;
+    for (let l = 0; l < layers; l += 1) {
+      const node = l * n + i;
+      if (walk[node] && Math.abs(floor[node] - ya) <= 0.5) { onFloor = true; break; }
+    }
+    if (!onFloor) return false;
+    if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, obstacles, CLEAR_WIDE)) return false;
+  }
+  return true;
+}
+// The smoother's state over `path` (collapsed waypoints): `out` the smoothed prefix so far, `a` the anchor (an index
+// into path), `b` the chord under scan, `best` the farthest waypoint the anchor reaches straight. `commits` counts the
+// anchors settled, for a caller that rebuilds its view of the route.
+export function smoothBegin(path) {
+  return { raw: path, out: [path[0]], a: 0, b: 2, best: 1, done: !path || path.length < 3, commits: 0 };
+}
+// Up to `maxChords` chord tests; true when the whole route is smoothed (st.out is then the smoothed route).
+export function smoothStep(grid, st, obstacles, maxChords = Infinity) {
+  if (st.done) return true;
+  if (!obstacles) { st.out = st.raw; st.done = true; return true; }
+  const raw = st.raw;
+  let chords = 0;
+  while (!st.done) {
+    const bMax = Math.min(raw.length, st.a + 13);
+    if (st.b < bMax && !raw[st.b].jump && Math.abs((raw[st.b].y ?? 0) - (raw[st.a].y ?? 0)) <= 0.5) {
+      if (chords >= maxChords) return false;   // (this chord next time)
+      chords += 1;
+      if (clearLeg(grid, raw[st.a], raw[st.b], obstacles)) { st.best = st.b; st.b += 1; continue; }
+    }
+    // the anchor's scan ends — a failing chord, a jump link, a floor change or the window's end: settle it
+    st.out.push(raw[st.best]);
+    st.a = st.best; st.b = st.a + 2; st.best = st.a + 1; st.commits += 1;
+    if (st.a >= raw.length - 1) st.done = true;
+  }
+  return true;
+}
 export function smoothPath(grid, path, obstacles) {
   if (!path || path.length < 3 || !obstacles) return path;
-  const { cols, rows, cell, minX, minZ, n, layers, floor, walk } = grid;
-  const clearLeg = (a, b) => {
-    const ya = a.y ?? 0;
-    const dx = b.x - a.x, dz = b.z - a.z;
-    // (the per-chord prefilter that walked every box of the map is gone — 2026-10-25: unitOverlapsObstacle reads the
-    // sim's point index itself, so each sample asks only the boxes within its radius; the same boxes answer)
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz)));
-    for (let s = 1; s <= steps; s += 1) {
-      const x = a.x + (dx * s) / steps;
-      const z = a.z + (dz * s) / steps;
-      const c = Math.floor((x - minX) / cell);
-      const r = Math.floor((z - minZ) / cell);
-      if (c < 0 || r < 0 || c >= cols || r >= rows) return false;
-      const i = r * cols + c;
-      let onFloor = false;
-      for (let l = 0; l < layers; l += 1) {
-        const node = l * n + i;
-        if (walk[node] && Math.abs(floor[node] - ya) <= 0.5) { onFloor = true; break; }
-      }
-      if (!onFloor) return false;
-      if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, obstacles, CLEAR_WIDE)) return false;
-    }
-    return true;
-  };
-  const out = [path[0]];
-  let a = 0;
-  while (a < path.length - 1) {
-    let best = a + 1;
-    const bMax = Math.min(path.length, a + 13);
-    for (let b = a + 2; b < bMax; b += 1) {
-      if (path[b].jump) break;   // (never a chord across a jump link)
-      if (Math.abs((path[b].y ?? 0) - (path[a].y ?? 0)) > 0.5) break;
-      if (!clearLeg(path[a], path[b])) break;
-      best = b;
-    }
-    out.push(path[best]);
-    a = best;
-  }
-  return out;
+  const st = smoothBegin(path);
+  smoothStep(grid, st, obstacles);
+  return st.out;
 }
 
 // FIRING-POSITION SEARCH. Find the cheapest-by-walking node that can FIGHT
