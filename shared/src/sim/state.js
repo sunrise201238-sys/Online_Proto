@@ -329,6 +329,16 @@ export function respawnFighterNext(matchState, id, at = null) {
     ? old.targetId
     : (pickClosestEnemyId(matchState, fresh) ?? old.targetId);
   matchState.fighters[id] = fresh;
+  // THE LOCK MOVES TO THE LIVING ENEMY (user 2026-10-25, "not the respawned same one"): an opponent locked on this slot moves
+  // its lock to another living enemy when there is one. applyInput's auto-retarget (2026-08-12) meant to do this on the
+  // death, but the server refills the slot in the very tick the unit dies, so by the human's next frame the slot held a
+  // living unit again and the lock went, silently, to the fresh spawn behind its immunity. With no other living enemy
+  // (Trio-1v1, a dead teammate) the lock keeps the slot, as before. Bots re-pick their target every tick regardless.
+  for (const e of Object.values(matchState.fighters)) {
+    if (e.team === fresh.team || e.targetId !== id) continue;
+    const other = Object.values(matchState.fighters).find((f) => f.team === fresh.team && f.id !== id && f.hp > 0);
+    if (other) e.targetId = other.id;
+  }
   return fresh;
 }
 
