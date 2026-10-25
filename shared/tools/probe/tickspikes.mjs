@@ -1,0 +1,7 @@
+import { pathToFileURL } from 'node:url';
+const [root, secs, ...maps] = process.argv.slice(2); const SIM = pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/').href; const S = await import(SIM + 'index.js'); const C = await import(SIM + 'constants.js'); const AI = await import(SIM + 'ai.js');
+for (const map of maps) { let seed = 9; Math.random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; AI.navGridFor(S.getArena(map));
+  const m = S.createMatchState({ mapKey: map, mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit4', startTime: 1000 }); const ids = Object.keys(m.fighters); for (const id of ids) m.fighters[id].invulnerableUntil = 0; const inputs = {}; for (const id of ids) inputs[id] = S.emptyInput(); let now = 1000;
+  const ticks = Math.round(Number(secs) * 1000 / C.TICK_RATE_MS); let over4 = 0, over8 = 0, over16 = 0, worst = 0, total = 0;
+  for (let t = 0; t < ticks; t += 1) { now += C.TICK_RATE_MS; m.searchDeadline = performance.now() + 6; const a = performance.now(); for (const id of ids) { const me = m.fighters[id]; if (me.hp <= 0) me.hp = 1000; me.targetId = S.pickBotTargetId(m, me) ?? me.targetId; S.tickBot(m, id, now); } S.tickMatch(m, inputs, now, C.TICK_DT, ids); const d = performance.now() - a; total += d; if (d > 4) over4 += 1; if (d > 8) over8 += 1; if (d > 16) over16 += 1; if (d > worst) worst = d; }
+  console.log(`${map.padEnd(11)} ${secs} s: mean ${(total / ticks).toFixed(2)} ms/tick; ticks over 4 ms ${over4}, over 8 ms ${over8}, over 16 ms ${over16}; worst ${worst.toFixed(0)} ms`); }

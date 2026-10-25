@@ -1,0 +1,14 @@
+// Station: ticks a bot spends in the trench pressed still (moved < 1 u over the last second) while the enemy fired at it within 2 s; and its state, boost, where it presses.
+import { pathToFileURL } from 'node:url';
+const [root, secs, seedArg] = process.argv.slice(2); const SIM = pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/').href; const S = await import(SIM + 'index.js'); const C = await import(SIM + 'constants.js');
+let seed = Number(seedArg ?? 7); Math.random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+const m = S.createMatchState({ mapKey: 'station', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit4', startTime: 1000 }); const ids = Object.keys(m.fighters); for (const id of ids) m.fighters[id].invulnerableUntil = 0;
+const inputs = {}; for (const id of ids) inputs[id] = S.emptyInput(); let now = 1000; const GB = C.GROUND_BASE_Y; const surfaces = S.getArena('station').surfaces;
+const hist = Object.fromEntries(ids.map((id) => [id, []])); const st = Object.fromEntries(ids.map((id) => [id, { trench: 0, stuckFire: 0, stuck: 0, byState: {}, samples: [] }]));
+const ticks = Math.round(Number(secs) * 1000 / C.TICK_RATE_MS); const T1 = Math.round(1000 / C.TICK_RATE_MS);
+for (let t = 0; t < ticks; t += 1) { now += C.TICK_RATE_MS; m.searchDeadline = performance.now() + 6;
+  for (const id of ids) { const me = m.fighters[id]; if (me.hp <= 0) me.hp = 1000; me.targetId = S.pickBotTargetId(m, me) ?? me.targetId; S.tickBot(m, id, now); }
+  S.tickMatch(m, inputs, now, C.TICK_DT, ids);
+  for (const id of ids) { const me = m.fighters[id]; const opp = m.fighters[ids.find((o) => o !== id)]; const h = hist[id]; h.push({ x: me.pos.x, z: me.pos.z }); const floor = S.groundHeightAt(me.pos.x, me.pos.z, surfaces, me.pos.y - GB); if (floor > 2 || me.airborne) continue; const s = st[id]; s.trench += 1;
+    if (h.length > T1) { const o = h[h.length - 1 - T1]; const moved = Math.hypot(me.pos.x - o.x, me.pos.z - o.z); const fired = now - (opp.lastFireAt ?? -Infinity) < 2000; if (moved < 1) { s.stuck += 1; if (fired) { s.stuckFire += 1; const k = me.botState ?? '?'; s.byState[k] = (s.byState[k] ?? 0) + 1; if (s.samples.length < 3 && s.stuckFire % 20 === 1) s.samples.push(`t=${(t * C.TICK_RATE_MS / 1000).toFixed(1)}s at (${me.pos.x.toFixed(0)}, ${me.pos.z.toFixed(0)}) u state ${me.botState} boost ${me.boost?.toFixed(0)} opp at (${opp.pos.x.toFixed(0)}, ${opp.pos.z.toFixed(0)}) dist ${(Math.hypot(opp.pos.x - me.pos.x, opp.pos.z - me.pos.z) / 4).toFixed(1)} m`); } } } } }
+for (const id of ids) { const s = st[id]; console.log(`station ${id}: ticks in the trench ${s.trench} (${(s.trench / ticks * 100).toFixed(0)}%), still for a second ${s.stuck}, still under fire ${s.stuckFire} (${Object.entries(s.byState).map(([k, v]) => k + ' ' + v).join(', ')})`); for (const x of s.samples) console.log('   ', x); }

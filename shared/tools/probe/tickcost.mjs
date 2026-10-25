@@ -1,0 +1,9 @@
+// The sim's cost per tick with two bots, per map: ms per tickMatch+tickBot, and the nav grid's build time.
+import { pathToFileURL } from 'node:url';
+const [root, secs, ...maps] = process.argv.slice(2); const SIM = pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/').href; const S = await import(SIM + 'index.js'); const C = await import(SIM + 'constants.js'); const AI = await import(SIM + 'ai.js');
+for (const map of maps) { let seed = 5; Math.random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const t0 = performance.now(); AI.navGridFor(S.getArena(map)); const gridMs = performance.now() - t0;
+  const m = S.createMatchState({ mapKey: map, mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit4', startTime: 1000 }); const ids = Object.keys(m.fighters); for (const id of ids) m.fighters[id].invulnerableUntil = 0; const inputs = {}; for (const id of ids) inputs[id] = S.emptyInput(); let now = 1000;
+  const ticks = Math.round(Number(secs) * 1000 / C.TICK_RATE_MS); let botMs = 0, simMs = 0; const samples = [];
+  for (let t = 0; t < ticks; t += 1) { now += C.TICK_RATE_MS; m.searchDeadline = performance.now() + 6; const a = performance.now(); for (const id of ids) { const me = m.fighters[id]; if (me.hp <= 0) me.hp = 1000; me.targetId = S.pickBotTargetId(m, me) ?? me.targetId; S.tickBot(m, id, now); } const b = performance.now(); S.tickMatch(m, inputs, now, C.TICK_DT, ids); const c = performance.now(); botMs += b - a; simMs += c - b; samples.push(c - a); }
+  samples.sort((p, q) => p - q); console.log(`${map.padEnd(11)} grid build ${gridMs.toFixed(0).padStart(5)} ms | per tick: bots ${(botMs / ticks).toFixed(2)} ms + sim ${(simMs / ticks).toFixed(2)} ms = ${((botMs + simMs) / ticks).toFixed(2)} ms (p99 ${samples[Math.floor(ticks * 0.99)].toFixed(1)} ms, max ${samples[ticks - 1].toFixed(1)} ms); boxes ${S.getArena(map).obstacles.length}, floors ${S.getArena(map).surfaces.length}`); }

@@ -1,0 +1,10 @@
+// Route lengths (units walked) from the first home to every spawn, two grid variants side by side; and where the snapped nodes stand on Compound's catwalk and mezzanine.
+import { pathToFileURL } from 'node:url';
+const [root, modA, modB, ...maps] = process.argv.slice(2); const SIM = pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/').href; const A = await import(SIM + 'arena.js');
+const NA = await import(pathToFileURL(modA).href), NB = await import(pathToFileURL(modB).href);
+const len = (p) => { if (!p) return null; let s = 0; for (let i = 1; i < p.length; i += 1) s += Math.hypot(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z); return s; };
+for (const map of maps) { const arena = A.getArena(map); const surfaces = arena.surfaces.map((s) => (s.heightAt ? s : { ...s, heightAt: s.type === 'plane' ? (x, z) => s.y0 + s.gx * (x - s.minX) + s.gz * (z - s.minZ) : () => s.top }));
+  const ga = NA.buildNavGrid(arena.obstacles, surfaces), gb = NB.buildNavGrid(arena.obstacles, surfaces); const sp = arena.spawns; const places = [sp.p2, ...(sp.more ?? [])]; const out = [];
+  for (const p of places) { const f1 = (sp.p1.y ?? 2.45) - 2.45, f2 = (p.y ?? 2.45) - 2.45; const a = len(NA.findPathOnGrid(ga, sp.p1.x, sp.p1.z, p.x, p.z, f1, f2, arena.obstacles)), b = len(NB.findPathOnGrid(gb, sp.p1.x, sp.p1.z, p.x, p.z, f1, f2, arena.obstacles)); out.push(`${a == null ? '-' : (a / 4).toFixed(0)}/${b == null ? '-' : (b / 4).toFixed(0)}`); }
+  console.log(`${map.padEnd(11)} ${out.join(' ')}`);
+  if (map === 'compound') { const { cols, n, layers, minX, minZ, cell, walk, floor, posX, posZ } = gb; for (const [mx, mz] of [[-30.5, -4.5], [-22.5, -4.5], [-29.4, 16.2], [-21.4, 15.9], [-21.4, 16.7], [-35.62, 19.99]]) { const x = mx * 4, z = (mz - 1.34) * 4; const c = Math.floor((x - minX) / cell), r = Math.floor((z - minZ) / cell); const i = r * cols + c; const ls = []; for (let l = 0; l < layers; l += 1) { const k = l * n + i; if (walk[k] && Math.abs(floor[k] - 27.64) < 3) ls.push(`node at (${(posX[k] / 4).toFixed(2)}, ${(posZ[k] / 4 + 1.34).toFixed(2)}) m`); } console.log(`  compound cell of (${mx}, ${mz}): ${ls.join('; ') || 'no 6.9 m node'}`); } } }

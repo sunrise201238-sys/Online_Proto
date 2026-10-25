@@ -1,0 +1,7 @@
+// Where a body walking at a height finds no floor under its centre: groundHeightAt sampled on a fine grid. usage: node holescan.mjs <tree> <map> x0 x1 z0 z1 feetM stepM
+import { pathToFileURL } from 'node:url';
+const [root, map, x0, x1, z0, z1, feetM, stepM] = process.argv.slice(2); const SIM = pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/').href; const A = await import(SIM + 'arena.js'); const S = await import(SIM + 'index.js');
+const arena = A.getArena(map); const surfaces = arena.surfaces; const feet = Number(feetM) * 4; const step = Number(stepM);
+const rows = []; for (let mz = Number(z0); mz <= Number(z1) + 1e-9; mz += step) { let row = ''; for (let mx = Number(x0); mx <= Number(x1) + 1e-9; mx += step) { const g = S.groundHeightAt(mx * 4, (mz - 1.34) * 4, surfaces, feet) / 4; row += g > feet / 4 - 1 ? '#' : g > 1 ? 'o' : '_'; } rows.push(`${mz.toFixed(2).padStart(6)} ${row}`); }
+console.log(`floor under a body with feet at ${feetM} m: # within 1 m below the feet, o lower floor, _ the ground; x ${x0}..${x1} step ${stepM}`); console.log(rows.join('\n'));
+console.log('surfaces covering x -33..-25, z 51.5..53 (model m):'); for (const s of surfaces) { const ax0 = s.minX / 4, ax1 = s.maxX / 4, az0 = s.minZ / 4 + 1.34, az1 = s.maxZ / 4 + 1.34; if (ax1 > -33 && ax0 < -25 && az1 > 51.5 && az0 < 53) console.log(`  x ${ax0.toFixed(2)}..${ax1.toFixed(2)} z ${az0.toFixed(2)}..${az1.toFixed(2)} top ${((s.top ?? s.maxTop ?? 0) / 4).toFixed(2)}${s.type === 'plane' ? ' plane' : ''}`); }

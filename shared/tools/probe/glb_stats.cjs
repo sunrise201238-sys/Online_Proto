@@ -1,0 +1,6 @@
+const fs = require('fs');
+for (const f of process.argv.slice(2)) { const b = fs.readFileSync(f); const jlen = b.readUInt32LE(12); const j = JSON.parse(b.slice(20, 20 + jlen).toString()); let tris = 0, prims = 0; const meshes = j.meshes ?? [];
+  for (const m of meshes) for (const p of m.primitives ?? []) { prims += 1; const acc = p.indices != null ? j.accessors[p.indices] : j.accessors[p.attributes.POSITION]; tris += Math.floor(acc.count / 3); }
+  // nodes with a mesh = draw units before fading splits; textures and their stored sizes
+  const meshNodes = (j.nodes ?? []).filter((n) => n.mesh != null).length; let texBytes = 0; for (const im of j.images ?? []) if (im.bufferView != null) texBytes += j.bufferViews[im.bufferView].byteLength;
+  console.log(`${f.padEnd(16)} ${(b.length / 1048576).toFixed(1).padStart(5)} MB  nodes ${String((j.nodes ?? []).length).padStart(4)} (with mesh ${String(meshNodes).padStart(4)})  meshes ${String(meshes.length).padStart(4)}  primitives ${String(prims).padStart(4)}  triangles ${String(tris).padStart(8)}  materials ${String((j.materials ?? []).length).padStart(3)}  textures ${String((j.images ?? []).length).padStart(3)} (${(texBytes / 1048576).toFixed(1)} MB)`); }
