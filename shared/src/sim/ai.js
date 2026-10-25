@@ -130,7 +130,9 @@ export function tickBot(matchState, botId, now) {
       else if (matchState._navPaths) delete matchState._navPaths[botId];
     },
     // (one route search per tick per match)
-    searchSlot: () => { if (matchState.hideSearchTick === matchState.tick) return false; matchState.hideSearchTick = matchState.tick; return true; },
+    // (a tick the server marked searchClosed — one that started late, the loop already behind — grants no search at all:
+    //  the parked searches wait a tick, the bots walk on; user 2026-10-25, "smoothness over the bots' route")
+    searchSlot: () => { if (matchState.searchClosed || matchState.hideSearchTick === matchState.tick) return false; matchState.hideSearchTick = matchState.tick; return true; },
     // (the server's per-tick CPU budget — see findHiddenSpot; the sim sets none)
     deadline: () => matchState.searchDeadline ?? 0,
     tape: null

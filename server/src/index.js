@@ -45,7 +45,15 @@ const ORDER_MIN_INTERVAL_MS = 500;
 // (resumable, 2026-10-08 — before, a cut search counted as "nothing found",
 // and on a slow host every far stage failed); the plain brain's hide search
 // still ends like one out of pops and retries at its cadence.
-const SEARCH_BUDGET_MS = 6;
+// 2 ms since 2026-10-25 (6 before; user: "smoothness over the bots' route"): with the route searches resumable the slice is
+// spent nearly every tick while any bot's search is pending, and on the free instance's tenth of a core 6 ms of wall clock
+// was a third of the tick for a tenth of the progress a fast core makes — the tick ran late every time and the players'
+// prediction snapped back. A route now lands in more ticks (a cross-map route on Compound: ~90 ms of work on that core,
+// ~45 ticks at 2 ms) and the bots walk toward the target meanwhile.
+const SEARCH_BUDGET_MS = 2;
+// A tick that starts this much after the previous one is a late tick: the loop is behind, and it grants no search at all
+// (matchState.searchClosed) rather than add to the delay.
+const LATE_TICK_GAP_MS = TICK_RATE_MS * 1.5;
 // The empty frames every slot reads during a Sudden Death start hold.
 const HOLD_INPUTS = { p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput() };
 function activeSlots(mode) {
@@ -405,9 +413,10 @@ function emitSnapshotsFor(lobby) {
   }
 }
 
-function tickLobby(lobby) {
+function tickLobby(lobby, late = false) {
   if (lobby.state !== 'active' || !lobby.match) return;
   const now = Date.now();
+  lobby.match.searchClosed = late;   // (a late tick: no route search this tick — ai.js searchSlot)
 
   // 1. Drive bots AND command-mode humans — both are tickBot-driven; a
   //    force lock (commandTargetIdOf) overrides the bot target pick, and
@@ -420,7 +429,13 @@ function tickLobby(lobby) {
   // START HOLD (Sudden Death): while the banner shows, no bot thinks and
   // every human frame reads as empty — the fighters stand on their spawns.
   const holding = (lobby.match.holdUntil ?? 0) > now;
-  for (const botId of holding ? [] : driven) {
+  // (the order rotates each tick, 2026-10-25: the one route search a tick (ai.js searchSlot) went to the first bot in
+  //  the list every tick while its search was pending, and the others waited for all of it; the brains read last tick's
+  //  bodies, so the order changes nothing else)
+  const roster = holding ? [] : [...driven];
+  const rot = roster.length ? lobby.match.tick % roster.length : 0;
+  const order = roster.slice(rot).concat(roster.slice(0, rot));
+  for (const botId of order) {
     const me = lobby.match.fighters[botId];
     if (!me || me.hp <= 0) {
       // A dead unit's standing orders die with it — commander or commanded
@@ -516,9 +531,25 @@ function tickLobby(lobby) {
   emitSnapshotsFor(lobby);
 }
 
+// THE TICK'S OWN BOOKKEEPING (2026-10-25): whether this tick started late (the loop behind by half a tick or more —
+// such a tick grants the bots no route search), and a line every 30 s with the tick's cost and lateness, so the
+// server's real numbers can be read off the host's log.
+let _lastTickStart = 0;
+const _tickStats = { n: 0, ms: 0, max: 0, over16: 0, late: 0, since: 0 };
 function tickAllLobbies() {
+  const t0 = performance.now();
+  const late = _lastTickStart > 0 && t0 - _lastTickStart > LATE_TICK_GAP_MS;
+  _lastTickStart = t0;
   for (const lobby of lobbies.values()) {
-    tickLobby(lobby);
+    tickLobby(lobby, late);
+  }
+  const d = performance.now() - t0;
+  _tickStats.n += 1; _tickStats.ms += d; if (d > _tickStats.max) _tickStats.max = d; if (d > 16) _tickStats.over16 += 1; if (late) _tickStats.late += 1;
+  if (!_tickStats.since) _tickStats.since = t0;
+  if (t0 - _tickStats.since >= 30000) {
+    let active = 0; for (const l of lobbies.values()) if (l.state === 'active') active += 1;
+    if (active > 0) console.log(`[tick] 30 s: mean ${(_tickStats.ms / _tickStats.n).toFixed(2)} ms, max ${_tickStats.max.toFixed(0)} ms, over 16 ms ${_tickStats.over16}, late starts ${_tickStats.late} of ${_tickStats.n}, active lobbies ${active}`);
+    _tickStats.n = 0; _tickStats.ms = 0; _tickStats.max = 0; _tickStats.over16 = 0; _tickStats.late = 0; _tickStats.since = t0;
   }
 }
 
