@@ -505,3 +505,8 @@ After the first deploy, set the client's `VITE_SERVER_URL` environment variable 
 ## Status
 
 Prototype. Phases 0–3 from `PLAN.md` are landed in code (boot, sim extraction, networking, prediction & interpolation — PLAN.md's own status lines for phases 2–4 were never updated); Phase 4's robustness checklist is still open. 2v2 mode and the Duel / Trio main-mode split (Trio = three-unit stock rosters with in-place respawns) have been added on top of the original 1v1 scope, both offline and online. The Command view mode (see its section above) is playable offline and online per `DIORAMA_PLAN.md`.
+
+## Saved here on 2026-10-25, before a pause
+
+- `docs/pt/`: how to rebuild the PT play-test page from 0.8.9 — the PT-only patch, the page file, the publish steps. PT never had a branch of its own.
+- `shared/tools/probe/`: the headless harness the bot and map work of b1024z8–z15 was measured with (tick cost, bot matches on Station and Factory, nav grid probes, plan renders), each with its usage line in that folder's README.
