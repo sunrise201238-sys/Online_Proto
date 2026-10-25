@@ -1,4 +1,4 @@
-// FROZEN at b1024z12 for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025a for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1024z12_ref.js';
+import { sdBrainTick } from './sdbrain_b1025a_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -370,11 +370,18 @@ function botBurstSize(unit) {
 // minWidth defaults to the perch floor. MAZE passes 0: it is following a route,
 // not shopping for a vantage point, so a narrow strip its path climbs is a
 // legitimate step — see the call site for the measurements behind that split.
+// (the floors a perch or a descent is looked for in, read from the sim's point broadphase and not from every floor of the map —
+// Compound has 16,878, and the two searches below scanned them all up to five times a tick per bot, the brains' largest cost
+// there; user 2026-10-24. The broadphase hands back a superset of the floors within the radius, in the list's own order, so
+// the tests below pick the same floor as the full scan did, to the tick — the frozen-brain tests say so. Its own scratch list:
+// the lip test inside the loop calls the broadphase too, on the default one.)
+const _perchScratch = [];
 function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius, minWidth = BOT_PERCH_MIN_WIDTH) {
   let best = null;
   let bestDist = searchRadius;
-  for (let i = 0; i < surfaces.length; i++) {
-    const s = surfaces[i];
+  const cands = obstaclesNearPoint(surfaces, px, pz, searchRadius, _perchScratch);
+  for (let i = 0; i < cands.length; i++) {
+    const s = cands[i];
     if (s.maxTop - myFloorY < BOT_CLIMB_MIN_RISE) continue;
     // TOO NARROW TO LAND ON (user 2026-08-09). A jump carries 12-17 units
     // horizontally, so a strip thinner than this isn't a perch — the bot sails
@@ -427,8 +434,9 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
 // on a droppable surface.
 function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, awayZ) {
   let deck = null;
-  for (let i = 0; i < surfaces.length; i++) {
-    const s = surfaces[i];
+  const cands = obstaclesNearPoint(surfaces, px, pz, 0, _perchScratch);   // (the floors under the point, in the list's order: the first that fits, as before)
+  for (let i = 0; i < cands.length; i++) {
+    const s = cands[i];
     if (px < s.minX || px > s.maxX || pz < s.minZ || pz > s.maxZ) continue;
     if (Math.abs(s.heightAt(px, pz) - myFloorY) > 1) continue;
     deck = s;
@@ -1991,6 +1999,14 @@ export function nbBrainTick(host) {
       // of wasting the burst (2026-08-01). Wake at the immunity lapse or the
       // regular 220 ms poll, whichever comes first (the target can change).
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
+      me.machineBurstRemaining = 0;
+      botClearFireRule(me);
+    } else if (u.pelletRange && Math.hypot(opp.pos.x - pos.x, opp.pos.y - pos.y, opp.pos.z - pos.z) > u.pelletRange) {
+      // THE BLAST'S REACH (user 2026-10-25, PT first): a gun carrying pelletRange loses its volley at that distance
+      // (projectiles.js), so a target beyond it cannot be hit — hold fire, poll each tick. The shotguns have no bloom gate
+      // (botMayFire passes every multi-pellet gun), so until now a shotgun bot with a clear line fired at any distance. A
+      // burst in progress is dropped, as in the no-line case below. Stands in every mode, Sudden Death included.
+      me.nextFireAt = now + host.tickMs;
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
     } else if (sd ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - pos.x, opp.pos.y - pos.y, opp.pos.z - pos.z), mode)) {

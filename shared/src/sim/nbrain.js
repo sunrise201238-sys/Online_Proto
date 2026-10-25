@@ -1998,6 +1998,14 @@ export function nbBrainTick(host) {
       me.nextFireAt = Math.min(opp.invulnerableUntil, now + 220);
       me.machineBurstRemaining = 0;
       botClearFireRule(me);
+    } else if (u.pelletRange && Math.hypot(opp.pos.x - pos.x, opp.pos.y - pos.y, opp.pos.z - pos.z) > u.pelletRange) {
+      // THE BLAST'S REACH (user 2026-10-25, PT first): a gun carrying pelletRange loses its volley at that distance
+      // (projectiles.js), so a target beyond it cannot be hit — hold fire, poll each tick. The shotguns have no bloom gate
+      // (botMayFire passes every multi-pellet gun), so until now a shotgun bot with a clear line fired at any distance. A
+      // burst in progress is dropped, as in the no-line case below. Stands in every mode, Sudden Death included.
+      me.nextFireAt = now + host.tickMs;
+      me.machineBurstRemaining = 0;
+      botClearFireRule(me);
     } else if (sd ? !me.botSDFire : !botMayFire(u, me, Math.hypot(opp.pos.x - pos.x, opp.pos.y - pos.y, opp.pos.z - pos.z), mode)) {
       // (SUDDEN DEATH: the brain's trigger (botSDFire) is the unit's only
       // trigger — open, no bloom-gate hold: a 1 HP duel is the same lottery

@@ -149,6 +149,8 @@ const UNIT_DATA = {
     projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
@@ -520,6 +522,8 @@ const UNIT_DATA = {
     projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
@@ -755,6 +759,8 @@ const UNIT_DATA = {
     projectileSpeed: 350,
     firePerMinute: 250,
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     spreadAngle: THREE.MathUtils.degToRad(16),
     damage: 4,               // per pellet, 8 x 4 = 32 point-blank
     magCapacity: 10,           // user 2026-10-23 (the SDASS: 7 shells)
@@ -3639,9 +3645,9 @@ function surfaceCrossT(p0, p1, s) {
   return t0 + (t1 - t0) * (dA / (dA - dB));
 }
 
-function projectileHitsSurface(prevPos, nextPos) {
-  for (const s of arenaSurfaces) {
-    if (surfaceCrossT(prevPos, nextPos, s) >= 0) return true;
+function projectileHitsSurface(prevPos, nextPos, list = arenaSurfaces) {   // (`list`: the broadphase's candidates, as the volley branch passes)
+  for (let i = 0; i < list.length; i += 1) {
+    if (surfaceCrossT(prevPos, nextPos, list[i]) >= 0) return true;
   }
   return false;
 }
@@ -3767,6 +3773,16 @@ function updateProjectileSystem(dt) {
       const factor = Math.min(1, p.center.distanceTo(p.spawnPos) / SHOTGUN_CLUSTER_SPREAD_DISTANCE);
       const axes = volleyAxes(p.vel);
       const stretchX = p.owner?.unit?.volleyStretchX ?? 1;
+      // The blast's reach (unit.pelletRange, user 2026-10-25; mirrors shared _tickVolley): past it the volley is gone, pellets
+      // and all, where before only the common 2.2 s TTL (770 u at 350 u/s) ended it.
+      const pelletRange = p.owner?.unit?.pelletRange;
+      if (pelletRange && p.center.distanceTo(p.spawnPos) >= pelletRange) {
+        despawnProjectileTrail(p, now);
+        disposeProjectileMesh(p.mesh);
+        for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
+        state.projectiles.splice(i, 1);
+        continue;
+      }
       const sameTeam = p.owner?.state?.team && tgtState.team && p.owner.state.team === tgtState.team;
       const targetable = tgtState.hp > 0 && !sameTeam
         && now >= tgtState.invulnerableUntil && now > tgtState.stepUntil;
@@ -3793,14 +3809,21 @@ function updateProjectileSystem(dt) {
           }
         }
         let dead = false;
-        for (const obstacle of arenaObstacles) {
+        // THE SIM'S BROADPHASE, as the shared _tickVolley has had since the online shotgun fix (user 2026-10-25, "the online SG
+        // pellet mechanics, PT offline first"): only the boxes and floors near this pellet's step are tested. The full scan it
+        // replaces — Compound's 22,666 boxes and 16,878 floors, eight pellets a volley, every frame — measured 1.16 ms per
+        // pellet-step there (0.008 ms with the index): about 10 ms a frame with four shotgun bots, the offline Compound lag.
+        // The index returns a superset of the boxes the step can touch, so what dies here dies exactly as before.
+        const cand = obstaclesNearSegment(arenaObstacles, a, sweepEnd);
+        for (let j = 0; j < cand.length; j += 1) {
+          const obstacle = cand[j];
           if (obstacle.noProjectile) continue;
           if (!segmentHitsObstacle(a, sweepEnd, obstacle)) continue;
           dead = true;
           hitThis = false;   // the wall was in front of the hit point
           break;
         }
-        if (!dead && projectileHitsSurface(a, sweepEnd)) {
+        if (!dead && projectileHitsSurface(a, sweepEnd, obstaclesNearSegment(arenaSurfaces, a, sweepEnd))) {
           dead = true;
           hitThis = false;
         }

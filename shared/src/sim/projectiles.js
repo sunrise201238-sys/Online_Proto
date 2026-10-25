@@ -497,6 +497,15 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   const axes = volleyAxes(p.vel);
   const owner = matchState.fighters[p.ownerId];
   const stretchX = owner?.unit?.volleyStretchX ?? 1;
+  // The blast's reach (unit.pelletRange, user 2026-10-25): once the centre has flown that far from the muzzle the volley is
+  // gone, pellets and all — before, only the common TTL (PROJECTILE_TTL_S, 2.2 s: 770 units at 350 u/s) ended it, and a
+  // shotgun bot's long shots kept a sky of pellets alive on the big maps. A unit without the field flies as before.
+  // The offline client mirrors this in its volley branch (main.js updateProjectileSystem).
+  const pelletRange = owner?.unit?.pelletRange;
+  if (pelletRange) {
+    const fx = p.pos.x - p.spawnX, fy = p.pos.y - p.spawnY, fz = p.pos.z - p.spawnZ;
+    if (fx * fx + fy * fy + fz * fz >= pelletRange * pelletRange) { _despawn(matchState, projectiles, i, p, 'range'); return; }
+  }
   const sameTeam = owner?.team && target.team && owner.team === target.team;
   const targetable = target.hp > 0 && !sameTeam
     && vt >= body.invulnerableUntil && vt > body.stepUntil;

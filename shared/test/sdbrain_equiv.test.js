@@ -15,7 +15,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1024z12_ref.js';
+import { tickBot as tickOld } from './ai_b1025a_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

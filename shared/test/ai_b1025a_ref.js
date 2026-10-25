@@ -1,4 +1,4 @@
-// FROZEN at b1024z12 for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025a for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/ai.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/nbrain.js (the
@@ -13,14 +13,14 @@ import { getArena } from '../src/sim/arena.js';
 import { buildNavGrid } from '../src/sim/navgrid.js';
 import { inheritMomentum } from '../src/sim/movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from '../src/sim/constants.js';
-import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1024z12_ref.js';
-import { makeMuzzleClear, BOT_SD } from './sdbrain_b1024z12_ref.js';
+import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1025a_ref.js';
+import { makeMuzzleClear, BOT_SD } from './sdbrain_b1025a_ref.js';
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // client's imports. The plain brain's sight rule is re-exported for the
 // hide-order tests, which judge "hidden" by the bot's own rule.
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1024z12_ref.js';
-export { botHasLineOfSight } from './nbrain_b1024z12_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1025a_ref.js';
+export { botHasLineOfSight } from './nbrain_b1025a_ref.js';
 
 // Nav grids are built once per arena object (the ARENAS entries are module
 // singletons, so this is once per map per process) and shared by all bots

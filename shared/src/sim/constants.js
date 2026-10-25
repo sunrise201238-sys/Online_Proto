@@ -81,6 +81,8 @@ export const UNIT_DATA = {
     projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
@@ -427,6 +429,8 @@ export const UNIT_DATA = {
     projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     // 16 degrees in radians, computed once.
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
@@ -654,6 +658,8 @@ export const UNIT_DATA = {
     projectileSpeed: 350,
     firePerMinute: 250,
     spreadCount: 8,
+    pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
+                             // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
     spreadAngle: (16 * Math.PI) / 180,
     damage: 4,               // per pellet, 8 x 4 = 32 point-blank
     magCapacity: 10,           // user 2026-10-23 (the SDASS: 7 shells)
