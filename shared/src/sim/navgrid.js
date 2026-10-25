@@ -564,60 +564,44 @@ function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
 // A* over the graph. Returns waypoints [{x, z, y}, ...] from near the start to
 // near the goal (node centers, collinear runs collapsed), or null when no
 // walk route exists (e.g. target on a jump-only platform).
-export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null, obstacles = null) {
+// 2026-10-25 (user, "the respawn lag is the far route"): RESUMABLE like findFiringPath — with opts.job and opts.deadline
+// (a performance.now() instant) a search that runs out of its slice parks its open set in job.state and returns
+// { pending: true }; the next call with the same job goes on from there, so a route across Compound (20,010 nodes) is
+// spread over a few ticks instead of freezing one. Without a job the deadline ends the search as a miss, as before; with
+// neither the search runs whole, as the command layer and the client's order previews call it.
+export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null, obstacles = null, opts = {}) {
   const { cols, n, layers, floor } = grid;
   const size = n * layers;
-  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
-  const goal = nearestWalkable(grid, tx, tz, goalFloor);
-  if (start < 0 || goal < 0 || start === goal) return null;
-  const g = new Float32Array(size).fill(Infinity);
-  const parent = new Int32Array(size).fill(-1);
-  const closed = new Uint8Array(size);
+  const job = opts.job ?? null;
+  const deadline = opts.deadline ?? 0;
+  const resume = !!(job && job.state);
+  const st = resume ? job.state : null;
+  const start = resume ? st.start : nearestWalkable(grid, sx, sz, startFloor, obstacles);
+  const goal = resume ? st.goal : nearestWalkable(grid, tx, tz, goalFloor);
+  if (start < 0 || goal < 0 || start === goal) { if (job) job.state = null; return null; }
   const gCell = goal % n;
   const gc = gCell % cols, gr = (gCell / cols) | 0;
   const h = (i) => {
     const cell = i % n;
     return Math.abs((cell % cols) - gc) + Math.abs(((cell / cols) | 0) - gr);
   };
-
-  // Small binary heap of [f, node].
-  const heap = [];
-  const push = (f, i) => {
-    heap.push([f, i]);
-    let k = heap.length - 1;
-    while (k > 0) {
-      const p = (k - 1) >> 1;
-      if (heap[p][0] <= heap[k][0]) break;
-      const t = heap[p]; heap[p] = heap[k]; heap[k] = t;
-      k = p;
-    }
-  };
-  const pop = () => {
-    const top = heap[0];
-    const last = heap.pop();
-    if (heap.length) {
-      heap[0] = last;
-      let k = 0;
-      for (;;) {
-        const l = 2 * k + 1, r = l + 1;
-        let s = k;
-        if (l < heap.length && heap[l][0] < heap[s][0]) s = l;
-        if (r < heap.length && heap[r][0] < heap[s][0]) s = r;
-        if (s === k) break;
-        const t = heap[s]; heap[s] = heap[k]; heap[k] = t;
-        k = s;
-      }
-    }
-    return top;
-  };
-
-  g[start] = 0;
-  push(h(start), start);
-  let guard = 0;
+  const g = resume ? st.g : new Float32Array(size).fill(Infinity);
+  const parent = resume ? st.parent : new Int32Array(size).fill(-1);
+  const closed = resume ? st.closed : new Uint8Array(size);
+  const heap = resume ? st.heap : createMinHeap();
+  let guard = resume ? st.guard : 0;
+  if (!resume) { g[start] = 0; heap.push(h(start), start); }
   let found = false;
-  while (heap.length) {
+  let callPops = 0;   // (a call always makes 32 pops of progress before it may park: a deadline already past must not stall the search for good)
+  while (heap.size()) {
+    // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
+    if (deadline && callPops >= 32 && (guard & 31) === 0 && performance.now() > deadline) {
+      if (job) { job.state = { start, goal, g, parent, closed, heap, guard }; return { pending: true }; }
+      break;
+    }
     if (++guard > 30000) break;
-    const cur = pop()[1];
+    callPops += 1;
+    const cur = heap.pop()[1];
     if (closed[cur]) continue;
     closed[cur] = 1;
     if (cur === goal) { found = true; break; }
@@ -633,10 +617,11 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
       if (ng < g[nb]) {
         g[nb] = ng;
         parent[nb] = cur;
-        push(ng + h(nb), nb);
+        heap.push(ng + h(nb), nb);
       }
     });
   }
+  if (job) job.state = null;
   if (!found) return null;
 
   const pts = [];
@@ -800,13 +785,16 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
       heap.push(hOf(start), start);
     }
     let goal = -1;
+    let callPops = 0;   // (a call always makes 32 pops of progress before it may park — a deadline already past must not stall the search for good)
     while (heap.size()) {
-      if (++pops > 30000) break;
-      const cur = heap.pop()[1];
-      if (deadline && (pops & 31) === 0 && performance.now() > deadline) {
-        if (job) { heap.push(g[cur] + hOf(cur), cur); pops -= 1; return { parked: { parent, g, closed, heap, pops } }; }   // (this node pops first next time)
+      // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
+      if (deadline && callPops >= 32 && (pops & 31) === 0 && performance.now() > deadline) {
+        if (job) return { parked: { parent, g, closed, heap, pops } };
         break;
       }
+      if (++pops > 30000) break;
+      callPops += 1;
+      const cur = heap.pop()[1];
       if (closed[cur]) continue;
       closed[cur] = 1;
       const cx = nodeCenterX(grid, cur);

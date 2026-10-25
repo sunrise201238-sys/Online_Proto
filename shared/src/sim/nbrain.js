@@ -1255,61 +1255,67 @@ export function nbBrainTick(host) {
     // FALLBACK: path to the target itself, cut at the first sighted sample
     // (some pockets have no in-band sight anywhere — then getting close is
     // genuinely the only option, and the exit gates take over from there).
-    // THE SEARCH'S REACH, TURN AND BUDGET (user 2026-10-25, the online lag on Compound: the firing-position search was
-    // the brains' largest single cost, 20,010 nodes there, three bots in one tick):
+    // THE SEARCHES' REACH, TURN AND BUDGET (user 2026-10-25, the online lag on Compound: the firing-position search was
+    // the brains' largest single cost, 20,010 nodes there, three bots in one tick; and the walk route across the map
+    // after a respawn the next):
     //   - REACH: beyond BOT_FIRING_SEARCH_REACH times the band's upper edge the bot walks first (the fallback route,
     //     cut at the first spot that fires) and searches for a spot only once inside the reach — a shotgun 117 u out
     //     does not need the map's best spot yet; a sniper's reach is 317 u, so it keeps crossing the map to its lane.
-    //   - TURN: one route search per tick per match (host.searchSlot, shared with the hide search); a bot without the
-    //     turn walks an interim route this tick and takes its turn next tick.
-    //   - BUDGET: the search gets the tick's slice (host.deadline) and PARKS when it runs out, continuing next tick
-    //     (findFiringPath's job, kept on the route record — off the fighter, which is serialized into every snapshot);
-    //     meanwhile the bot follows the same interim route. The parked search is dropped when the target has moved
-    //     more than 12 u from where it was aimed: its open set was ordered for the old spot.
+    //   - TURN: one route search per tick per match (host.searchSlot, shared with the hide search).
+    //   - BUDGET: a search gets the tick's slice (host.deadline) and PARKS when it runs out, continuing next tick — both
+    //     the firing-position search and the walk route (findPathOnGrid), each with its job on the route record (off
+    //     the fighter, which is serialized into every snapshot). The walk route runs first when the bot has no route at
+    //     all (it is the cheaper search and gets the bot moving the right way around the walls), the firing search next,
+    //     and the spot it finds replaces the interim route. Until any route lands the Maze leg's minimal fallback walks
+    //     the bot toward the target. A plan whose target has moved more than 12 u from where it was aimed starts afresh
+    //     (its parked open sets were ordered for the old spot), the old route standing in meanwhile.
     const prev = host.navGet();
     const moved = !!(prev && Math.hypot(opp.pos.x - prev.gx, opp.pos.z - prev.gz) > 12);
+    const cont = !!(prev && prev.pending && !moved);
     const inReach = dist <= upperRange * BOT_FIRING_SEARCH_REACH;
-    const walkRoute = () => {
-      let r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles);
-      if (r && r.length > 1) r = truncateAtFiringPoint(r);
-      if (r && r.length > 2) r = smoothPath(grid, r, obstacles);
-      return (r && r.length > 1) ? r : null;
-    };
-    let path = null;
-    let pendingJob = null;
-    if (inReach) {
-      const job = (prev && prev.pending && prev.job && !moved) ? prev.job : {};
-      if (host.searchSlot()) {
+    let rec;
+    if (cont) rec = prev;
+    else {
+      const stands = !!(prev && prev.path.length > 1);
+      rec = { path: stands ? prev.path : [], idx: stands ? prev.idx : 0, gx: opp.pos.x, gz: opp.pos.z, at: now, pending: true, fireJob: inReach ? {} : null, fireDone: !inReach, walkJob: {}, interim: true };
+      me.botMazeLosBlockedAtEntry = !playerHasLoS;
+    }
+    if (host.searchSlot()) {
+      const dl = host.deadline();
+      const walk = () => {
+        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl });
+        if (r && r.pending) return;
+        rec.walkJob = null;
+        let p = r;
+        if (p && p.length > 1) p = truncateAtFiringPoint(p);
+        if (p && p.length > 2) p = smoothPath(grid, p, obstacles);
+        if (p && p.length > 1) { rec.path = p; rec.idx = 0; rec.interim = !rec.fireDone; }
+      };
+      const fire = () => {
         const r = findFiringPath(
           grid, pos.x, pos.z, myFloorY,
           opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
           lowerRange, upperRange, obstacles, oppFloorY,
-          { job, deadline: host.deadline() }
+          { job: rec.fireJob, deadline: dl }
         );
-        if (r && r.pending) pendingJob = job;
-        else path = r;
-      } else {
-        pendingJob = job;   // (no turn this tick: the search starts, or goes on, next tick)
-      }
+        if (r && r.pending) return;
+        rec.fireJob = null; rec.fireDone = true;
+        if (r && r.length > 1) {
+          let p = r;
+          if (p.length > 2) p = smoothPath(grid, p, obstacles);
+          // idx 0: walk to the pinned start square first — beelining to square #2 from an off-grid position can clip
+          // the corner between them.
+          rec.path = p; rec.idx = 0; rec.interim = false; rec.walkJob = null;
+        } else if (!rec.walkJob && rec.path.length > 1) rec.interim = false;   // (no spot anywhere: the walk route already found is the route)
+      };
+      if (rec.walkJob && rec.path.length < 2) walk();
+      else if (rec.fireJob) fire();
+      else if (rec.walkJob) walk();
     }
-    if (pendingJob) {
-      if (prev && prev.pending && !moved && prev.path.length > 1) { prev.job = pendingJob; return true; }   // (the interim route stands)
-      const interim = walkRoute();
-      host.navSet({ path: interim ?? [], idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now, pending: true, job: pendingJob });
-      me.botMazeLosBlockedAtEntry = !playerHasLoS;
-      return !!interim;
-    }
-    if (path && path.length > 2) path = smoothPath(grid, path, obstacles);
-    if (!path || path.length < 2) path = walkRoute();
-    if (path && path.length > 1) {
-      // idx 0: walk to the pinned start square first — beelining to square
-      // #2 from an off-grid position can clip the corner between them.
-      host.navSet({ path, idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now });
-      me.botMazeLosBlockedAtEntry = !playerHasLoS;
-      return true;
-    }
-    host.navSet(null);
-    return false;
+    rec.pending = !!(rec.fireJob || rec.walkJob);
+    if (!rec.pending && rec.path.length < 2) { host.navSet(null); return false; }
+    host.navSet(rec);
+    return rec.path.length > 1;
   };
 
   // --- State transition by precedence ---
@@ -1687,6 +1693,13 @@ export function nbBrainTick(host) {
           const fresh = host.navGet();
           const freshLast = fresh && fresh.path[fresh.path.length - 1];
           if (freshLast && Math.hypot(freshLast.x - lastWp.x, freshLast.z - lastWp.z) > 0.5) {
+            nav = fresh;
+            replaced = true;
+          } else if (fresh && fresh.pending) {
+            // (2026-10-25: the new plan is still searching — keep it, with no route to stand on meanwhile; the searches go
+            // on next tick and their route replaces this one when it lands. Dropping it, as a finished plan with nothing
+            // new is dropped, would start the searches over at the next stall signal.)
+            fresh.path = []; fresh.idx = 0;
             nav = fresh;
             replaced = true;
           }
