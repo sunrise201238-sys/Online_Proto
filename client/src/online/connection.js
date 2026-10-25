@@ -7,11 +7,20 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 const MAX_LOG_ENTRIES = 40;
 
 export function createConnection() {
+  // RECONNECTION (user 2026-10-25, "the web socket error"): the server sleeps between sessions (a free instance spins down
+  // after 15 idle minutes, ~1 min to wake) and then warms every map's route grid before it answers anyone (Compound alone
+  // ~3.4 s on a fast core, a minute or more on the free one). Five tries 600 ms apart gave up inside that window, and the
+  // player was left with "Connection error: websocket error" and a dead page. Now the client never gives up: it retries
+  // every 1–5 s (backing off, jittered) for as long as the page is open, and the overlay says the server is waking up.
   const socket = io(SERVER_URL, {
     autoConnect: false,
     transports: ['websocket', 'polling'],
-    reconnectionAttempts: 5,
-    reconnectionDelay: 600
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.5,
+    timeout: 20000
   });
 
   const events = [];
@@ -19,6 +28,8 @@ export function createConnection() {
   let playerId = null;
   let connected = false;
   let lastError = null;
+  let attempts = 0;            // failed connection attempts since the last success (the overlay shows the count)
+  let waitingSince = 0;        // when the current wait for the server began (open(), or the moment the link dropped)
   let snapshotCount = 0;
   const snapshotTimes = [];
 
@@ -55,17 +66,22 @@ export function createConnection() {
   socket.on('connect', () => {
     connected = true;
     lastError = null;
+    attempts = 0;
+    waitingSince = 0;
     log('connect', { id: socket.id });
   });
 
   socket.on('disconnect', (reason) => {
     connected = false;
+    if (!waitingSince) waitingSince = Date.now();
     log('disconnect', { reason });
   });
 
   socket.on('connect_error', (err) => {
     lastError = err?.message || String(err);
-    log('connect_error', { message: lastError });
+    attempts += 1;
+    if (!waitingSince) waitingSince = Date.now();
+    log('connect_error', { message: lastError, attempt: attempts });
   });
 
   socket.on('player:assigned', (payload) => {
@@ -123,7 +139,7 @@ export function createConnection() {
     serverUrl: SERVER_URL,
     socket,
 
-    open: () => { if (!socket.connected) socket.connect(); },
+    open: () => { if (!socket.connected) { if (!waitingSince) waitingSince = Date.now(); socket.connect(); } },
     close: () => { if (socket.connected) socket.disconnect(); },
 
     isConnected: () => connected,
@@ -132,6 +148,8 @@ export function createConnection() {
     getMatchStart: () => matchStart,
     getLastMatchEnd: () => lastMatchEnd,
     getLastError: () => lastError,
+    getAttempts: () => attempts,
+    getWaitingSince: () => waitingSince,   // 0 when connected
 
     // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),

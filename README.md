@@ -485,7 +485,9 @@ The repo ships with `render.yaml` defining two free-tier services:
 
 After the first deploy, set the client's `VITE_SERVER_URL` environment variable in the Render dashboard to your server's public URL (e.g. `https://gvg-server-xxxx.onrender.com`) and redeploy the client. Both services are `autoDeploy: true`, the server exposes `/health` for Render's health check, and `render.yaml` bakes a placeholder `VITE_SERVER_URL` into the static build — the dashboard value overrides it.
 
-> Free-tier services spin down after ~15 min idle. First connection to a cold server takes 30–60 s. Acceptable for prototype testing, not for production.
+> Free-tier services spin down after ~15 min idle. First connection to a cold server takes 30–60 s, and then the server warms every map's route grid before it answers anyone — Compound alone is ~3.4 s on a fast core and a minute or more on the free instance's tenth of a core (`server/src/warmup.js`; the health check and every handshake wait with it). Acceptable for prototype testing, not for production.
+>
+> **The client waits it out (2026-10-25, the user's "web socket error").** Until then the client tried five times 600 ms apart and gave up, leaving "Connection error: websocket error" on the screen for anyone who arrived while the server was waking. `client/src/online/connection.js` now retries without limit, 1–5 s apart with jitter (`reconnectionAttempts: Infinity`, `reconnectionDelay` 1000 → `reconnectionDelayMax` 5000), and counts the attempts; the online overlay reads "Waking the server up… Ns — attempt N" for the first two minutes and names the last error after that, still retrying. Nothing changed on the server: the wait is as long as it was, only no longer fatal. Shortening it is the route-grid precompute on the Compound list.
 
 ## Implementation notes
 

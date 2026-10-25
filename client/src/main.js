@@ -8744,7 +8744,15 @@ function tickOnline(dt, _now) {
     onl.modePushedToServer = true;
   }
   if (!conn.isConnected() && conn.getLastError()) {
-    showOnlineOverlay(`Connection error: ${conn.getLastError()}`);
+    // The link is down and the connection keeps retrying on its own (connection.js: no attempt limit, 1–5 s apart). The
+    // usual reason is a sleeping server waking up and warming its maps, which takes up to a minute or two on the free
+    // instance, so the overlay says that, with the wait and the attempt count, instead of a bare "websocket error".
+    // Past two minutes it names the error too, since by then the server may really be down.
+    const waited = Math.max(0, Math.round((Date.now() - (conn.getWaitingSince() || Date.now())) / 1000));
+    const tries = conn.getAttempts();
+    showOnlineOverlay(waited < 120
+      ? `Waking the server up… ${waited}s (a sleeping server takes up to a minute or two) — attempt ${tries}`
+      : `Still trying to reach the server… ${waited}s, attempt ${tries}. Last error: ${conn.getLastError()}`);
   }
 
   // Phase machine — re-render UI on transition.
