@@ -1,4 +1,4 @@
-// FROZEN at b1025g for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -36,10 +36,10 @@
 
 import { between } from '../src/sim/math.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
-import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, smoothBegin, smoothStep } from '../src/sim/navgrid.js';
+import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1025g_ref.js';
+import { sdBrainTick } from './sdbrain_b1025e_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -1289,10 +1289,10 @@ export function nbBrainTick(host) {
         const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl });
         if (r && r.pending) return;
         rec.walkJob = null;
-        // (the route lands RAW and the bot sets off on it; the firing-point truncation scans it a few samples a tick
-        //  and the smoothing follows a few chords a tick — routeTick, below in the Maze leg. Both ran whole here once:
-        //  13 + 3 ms on a fast core for a route across Compound, a quarter second on the free instance, in one tick.)
-        if (r && r.length > 1) { rec.raw = r; rec.path = r; rec.idx = 0; rec.interim = !rec.fireDone; rec.tr = { seg: 0, step: 1, prevX: pos.x, prevZ: pos.z }; rec.sm = null; }
+        let p = r;
+        if (p && p.length > 1) p = truncateAtFiringPoint(p);
+        if (p && p.length > 2) p = smoothPath(grid, p, obstacles);
+        if (p && p.length > 1) { rec.path = p; rec.idx = 0; rec.interim = !rec.fireDone; }
       };
       const fire = () => {
         const r = findFiringPath(
@@ -1304,9 +1304,11 @@ export function nbBrainTick(host) {
         if (r && r.pending) return;
         rec.fireJob = null; rec.fireDone = true;
         if (r && r.length > 1) {
+          let p = r;
+          if (p.length > 2) p = smoothPath(grid, p, obstacles);
           // idx 0: walk to the pinned start square first — beelining to square #2 from an off-grid position can clip
-          // the corner between them. (The spot's route lands raw too; the smoothing follows a few chords a tick.)
-          rec.raw = r; rec.path = r; rec.idx = 0; rec.interim = false; rec.walkJob = null; rec.tr = null; rec.sm = r.length > 2 ? smoothBegin(r) : null;
+          // the corner between them.
+          rec.path = p; rec.idx = 0; rec.interim = false; rec.walkJob = null;
         } else if (!rec.walkJob && rec.path.length > 1) rec.interim = false;   // (no spot anywhere: the walk route already found is the route)
       };
       if (rec.walkJob && rec.path.length < 2) walk();
@@ -1650,48 +1652,6 @@ export function nbBrainTick(host) {
     let nav = host.navGet();
     // (a parked firing-position search goes on each tick, within the tick's slice and turn — see navPlan)
     if (nav && nav.pending) { navPlan(); nav = host.navGet(); }
-    // ROUTE WORK, A LITTLE A TICK (2026-10-25): the firing-point truncation of a walk route — the first sample along it,
-    // inside the band's upper edge, that sees the target ends the route there (the bot travels to a FIRING POSITION,
-    // never to the player; see truncateAtFiringPoint's note) — at most three sight tests a tick, the samples beyond the
-    // band skipped for free; then the smoothing, two chords a tick and six when the follower nears the smoothed
-    // frontier, the smoothed prefix replacing the raw waypoints ahead of the follower only. The bot walks the raw route
-    // from the first tick; the smoothing was whole-in-one-tick until now, a quarter second on the free instance.
-    if (nav && nav.tr && nav.raw && nav.raw.length > 1) {
-      const tr = nav.tr; const raw = nav.raw; let tests = 0;
-      while (tr.seg < raw.length && tests < 3) {
-        const seg = raw[tr.seg];
-        const segLen = Math.hypot(seg.x - tr.prevX, seg.z - tr.prevZ) || 1;
-        const steps = Math.max(1, Math.ceil(segLen / 6));
-        if (tr.step > steps) { tr.prevX = seg.x; tr.prevZ = seg.z; tr.seg += 1; tr.step = 1; continue; }
-        const px = tr.prevX + ((seg.x - tr.prevX) * tr.step) / steps;
-        const pz = tr.prevZ + ((seg.z - tr.prevZ) * tr.step) / steps;
-        tr.step += 1;
-        if (Math.hypot(opp.pos.x - px, opp.pos.z - pz) > upperRange) continue;
-        tests += 1;
-        const fy = groundHeightAt(px, pz, surfaces, 1000);
-        if (botHasLineOfSight({ x: px, y: fy + GROUND_BASE_Y + eyeUp, z: pz }, { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z }, obstacles, surfaces)) {
-          const cut = raw.slice(0, tr.seg);
-          cut.push({ x: px, z: pz, y: fy });   // (the sample's floor: the smoother's same-floor gate reads y)
-          nav.raw = cut; nav.path = cut; if (nav.idx >= cut.length) nav.idx = cut.length - 1;
-          tr.seg = raw.length;   // done
-          break;
-        }
-      }
-      if (tr.seg >= raw.length) { nav.tr = null; nav.sm = nav.raw.length > 2 ? smoothBegin(nav.raw) : null; }
-    }
-    if (nav && nav.sm && !nav.sm.done) {
-      const sm = nav.sm;
-      const L = sm.out.length;
-      if (nav.idx >= L) {   // (the follower passed the smoothed frontier: the waypoints up to it settle as they are, so nothing behind it moves)
-        const rawIdx = sm.a + 1 + (nav.idx - L);
-        while (sm.a < rawIdx && sm.a < sm.raw.length - 1) { sm.a += 1; sm.out.push(sm.raw[sm.a]); sm.commits += 1; }
-        sm.b = sm.a + 2; sm.best = sm.a + 1; nav.idx = sm.out.length - 1;
-        if (sm.a >= sm.raw.length - 1) sm.done = true;
-      }
-      const before = sm.commits;
-      smoothStep(grid, sm, obstacles, nav.idx >= sm.out.length - 1 ? 6 : 2);
-      if (sm.commits !== before || sm.done) nav.path = sm.done ? sm.out : sm.out.concat(sm.raw.slice(sm.a + 1));
-    }
     // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
     // whose goal is meaningfully CLOSER to the player is an approach — done,
     // drop it. A pathless maze has nothing sane to do here
@@ -1742,7 +1702,7 @@ export function nbBrainTick(host) {
             // (2026-10-25: the new plan is still searching — keep it, with no route to stand on meanwhile; the searches go
             // on next tick and their route replaces this one when it lands. Dropping it, as a finished plan with nothing
             // new is dropped, would start the searches over at the next stall signal.)
-            fresh.path = []; fresh.raw = []; fresh.idx = 0; fresh.tr = null; fresh.sm = null;
+            fresh.path = []; fresh.idx = 0;
             nav = fresh;
             replaced = true;
           }
