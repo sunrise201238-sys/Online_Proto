@@ -29,6 +29,7 @@ import {
 } from '@gvg/shared/src/sim/index.js';
 import { SPAWN_IMMUNITY_MS, SD_START_HOLD_MS } from '@gvg/shared/src/sim/constants.js';
 import { warmSimulation, warmMap } from './warmup.js';
+import { normalizeFrame, enqueueFrame, consumeFrames, drainQueue } from '@gvg/shared/src/sim/inputqueue.js';
 
 // Slot ids match the shared-sim fighter ids one-to-one. In 1v1 only p1/p2
 // are active; in 2v2 p3/p4 join. p1+p3 = team A, p2+p4 = team B (matches
@@ -102,6 +103,7 @@ function createLobby() {
       p1: emptyInput(), p2: emptyInput(), p3: emptyInput(), p4: emptyInput()
     },
     lastAcked: { p1: -1, p2: -1, p3: -1, p4: -1 },
+    inputQueue: { p1: [], p2: [], p3: [], p4: [] },   // the humans' frames waiting their tick (shared/src/sim/inputqueue.js, 2026-10-25)
     config: {
       p1: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
       p2: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' },
@@ -290,6 +292,7 @@ function startMatchFor(lobby) {
   for (const s of SLOT_IDS) {
     lobby.inputs[s] = emptyInput();
     lobby.lastAcked[s] = -1;
+    lobby.inputQueue[s] = [];
     lobby.rematchRequested[s] = false;
   }
   lobby.startedAt = startTime;
@@ -452,6 +455,16 @@ function tickLobby(lobby, late = false) {
 
   // 2. Shared sim tick. Humans drive via lobby.inputs; tickBot-driven
   //    fighters are listed so tickMatch skips applyInput for them.
+  // THE INPUT QUEUE: each human's input this tick is the next frame off its queue (two, merged, past the catch-up mark),
+  // acknowledged as taken; an empty queue leaves last tick's frame standing (its taps cleared below). During a start
+  // hold the queues drain unapplied — the client mutes its frames then, and a backlog must not replay into the match.
+  for (const slot of activeSlots(lobby.mode)) {
+    if (lobby.botSlots.has(slot) || lobby.commandSlots.has(slot)) continue;
+    const q = lobby.inputQueue[slot];
+    if (holding) { const a = drainQueue(q); if (a != null && a > lobby.lastAcked[slot]) lobby.lastAcked[slot] = a; continue; }
+    const r = consumeFrames(q, lobby.inputs[slot]);
+    if (r.acked != null) { lobby.inputs[slot] = r.input; if (r.acked > lobby.lastAcked[slot]) lobby.lastAcked[slot] = r.acked; }
+  }
   tickMatch(lobby.match, holding ? HOLD_INPUTS : lobby.inputs, now, TICK_DT, driven);
 
   // 3. Clear human tap flags so they fire once per press. `jump` resets to
@@ -602,31 +615,11 @@ io.on('connection', (socket) => {
     if (lb.botSlots.has(slot)) return;
     if (lb.commandSlots.has(slot)) return;   // command units are bot-driven
 
-    if (typeof frame.seq === 'number' && frame.seq > lb.lastAcked[slot]) {
-      lb.lastAcked[slot] = frame.seq;
-    }
-
-    const cur = lb.inputs[slot];
-    lb.inputs[slot] = {
-      moveX: numericOrZero(frame.moveX),
-      moveZ: numericOrZero(frame.moveZ),
-      boost: !!frame.boost,
-      sprintLocked: !!frame.sprintLocked,
-      shootHold: !!frame.shootHold,
-      jump: cur.jump || !!frame.jump,
-      // Raw held value of the LAST frame — after each tick consumes the
-      // latched `jump`, it resets to this instead of false, so a held jump
-      // (Aris flight climb) doesn't flicker on ticks that received no frame
-      // (client sends 40 Hz vs the 62.5 Hz tick). The flicker re-armed the
-      // sim's air-pop edge detector every 250 ms.
-      jumpHeld: !!frame.jump,
-      stepTap: cur.stepTap || !!frame.stepTap,
-      shootTap: cur.shootTap || !!frame.shootTap,
-      targetSwitch: cur.targetSwitch || !!frame.targetSwitch,
-      aimX: numericOrZero(frame.aimX),   // Kei charged-sweep horizontal aim
-      aimY: numericOrZero(frame.aimY),   // Kei charged-sweep vertical (pitch) aim
-      viewAt: Number.isFinite(frame.viewAt) ? frame.viewAt : null   // the serverTime of the snapshot the client had drawn (lag compensation, shared history.js)
-    };
+    // THE INPUT QUEUE (2026-10-25, shared/src/sim/inputqueue.js — the "backtrace while sprinting"): the frame waits its
+    // turn, and the tick takes one and acknowledges it then; it used to overwrite the last frame and be acknowledged on
+    // arrival, so two frames in one tick meant a step the client had taken and the server never did — the pull-back.
+    // Past the queue's cap the oldest are dropped as taken; their seqs are acknowledged here.
+    for (const seq of enqueueFrame(lb.inputQueue[slot], normalizeFrame(frame))) if (seq > lb.lastAcked[slot]) lb.lastAcked[slot] = seq;
   });
 
   // ---- COMMAND-MODE orders (phase 3 R3) ----------------------------------
@@ -842,6 +835,8 @@ io.on('connection', (socket) => {
     lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
     lb.lastAcked[newSlot] = -1;
     lb.lastAcked[slot] = -1;
+    lb.inputQueue[newSlot] = [];
+    lb.inputQueue[slot] = [];
     lb.rematchRequested[newSlot] = false;
     lb.rematchRequested[slot] = false;
 
@@ -937,6 +932,7 @@ io.on('connection', (socket) => {
         lb.config.p1 = lb.config[oldSlot];
         lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
         lb.lastAcked.p1 = -1;
+        lb.inputQueue.p1 = [];
         lb.rematchRequested.p1 = false;
         lb.rematchRequested[oldSlot] = false;
         const s = io.sockets.sockets.get(sid);
