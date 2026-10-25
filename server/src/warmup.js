@@ -23,7 +23,16 @@ import {
   getArena,
   MAP_DATA
 } from '@gvg/shared/src/sim/index.js';
-import { navGridFor } from '@gvg/shared/src/sim/ai.js';
+import { navGridFor, registerNavGridData, hasNavGrid } from '@gvg/shared/src/sim/ai.js';
+import { navDataFile } from '@gvg/shared/src/sim/navgrid.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+// THE GRID AS DATA (user 2026-10-25): the client's public folder carries each modelled map's grid file
+// (shared/tools/maps/navgrid_build.mjs); read here, a map's warm-up is milliseconds instead of a build — Compound's was
+// 3.4 s on a fast core and a minute on the free instance, a freeze no handshake survived. A missing or stale file builds.
+const CLIENT_PUBLIC = fileURLToPath(new URL('../../client/public/', import.meta.url));
 
 // Build (or fetch) the map's nav grid — a no-op once built. startMatchFor
 // calls it too, so a match on a map the boot pass has not reached yet pays
@@ -31,7 +40,18 @@ import { navGridFor } from '@gvg/shared/src/sim/ai.js';
 export function warmMap(mapKey) {
   try {
     if (!MAP_DATA[mapKey]) return false;
-    navGridFor(getArena(mapKey));
+    const arena = getArena(mapKey);
+    if (!hasNavGrid(arena)) {
+      const t0 = performance.now();
+      const file = path.join(CLIENT_PUBLIC, navDataFile(mapKey));
+      let from = 'built';
+      if (existsSync(file)) {
+        if (registerNavGridData(arena, new Uint8Array(readFileSync(file)))) from = 'file';
+        else console.warn(`[warmup] ${path.basename(file)} is not this map's grid (other collision data?) — building`);
+      }
+      navGridFor(arena);
+      console.log(`[warmup] grid ${mapKey}: ${from}, ${(performance.now() - t0).toFixed(0)} ms`);
+    }
     return true;
   } catch (e) {
     console.warn(`[warmup] grid for ${mapKey} failed:`, e?.message ?? e);

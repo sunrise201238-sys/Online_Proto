@@ -962,3 +962,15 @@ export const CMD_ANCHOR_LEASH = 20;
 // own line-of-sight tests share ONE eye rule; the client's updateEnemy
 // mirrors the value). findFiringPath's inline 1.6 is this same height.
 export const BOT_LOS_EYE_HEIGHT = 1.6;
+
+// THE FIRING-POSITION SEARCH'S REACH (user 2026-10-25, "the near guns walk first"): a bot farther from its target than this
+// many times its band's upper edge (lockRange + 7) walks toward the target first (A*, cut at the first spot that fires) and
+// runs the firing-position search only once inside the reach. Shotgun 47 → 117 u, SMG 57 → 142 u; a sniper's 127 → 317 u,
+// so it keeps crossing the map to its lane as before. The search is the brains' largest single cost on the big maps.
+export const BOT_FIRING_SEARCH_REACH = 2.5;
+
+// THE ROUTE GRID AS DATA (user 2026-10-25): a modelled map's nav grid is built by shared/tools/maps/navgrid_build.mjs and
+// served beside the map model as maps/<mapKey>_nav<NAV_FILE_EXT> (navgrid.js navDataFile); the server's warm-up and the
+// client read it instead of building the grid — Compound's build is 3.4 s on a fast core, a minute on the free instance.
+// '.nav' on the release lines; '.wasm' on the PT site, whose host serves no other type (pt_deltas.py).
+export const NAV_FILE_EXT = '.nav';

@@ -1,4 +1,4 @@
-// FROZEN at b1025a for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025c for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -37,9 +37,9 @@
 import { between } from '../src/sim/math.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
-import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL } from '../src/sim/constants.js';
+import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1025a_ref.js';
+import { sdBrainTick } from './sdbrain_b1025c_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 const BOT_SPRINT_MIN_BOOST = 8;
@@ -1258,20 +1258,52 @@ export function nbBrainTick(host) {
     // FALLBACK: path to the target itself, cut at the first sighted sample
     // (some pockets have no in-band sight anywhere — then getting close is
     // genuinely the only option, and the exit gates take over from there).
-    let path = findFiringPath(
-      grid, pos.x, pos.z, myFloorY,
-      opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
-      lowerRange, upperRange, obstacles, oppFloorY
-    );
-    if (!path || path.length < 2) {
-      path = findPathOnGrid(
-        grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles
-      );
-      if (path && path.length > 1) path = truncateAtFiringPoint(path);
+    // THE SEARCH'S REACH, TURN AND BUDGET (user 2026-10-25, the online lag on Compound: the firing-position search was
+    // the brains' largest single cost, 20,010 nodes there, three bots in one tick):
+    //   - REACH: beyond BOT_FIRING_SEARCH_REACH times the band's upper edge the bot walks first (the fallback route,
+    //     cut at the first spot that fires) and searches for a spot only once inside the reach — a shotgun 117 u out
+    //     does not need the map's best spot yet; a sniper's reach is 317 u, so it keeps crossing the map to its lane.
+    //   - TURN: one route search per tick per match (host.searchSlot, shared with the hide search); a bot without the
+    //     turn walks an interim route this tick and takes its turn next tick.
+    //   - BUDGET: the search gets the tick's slice (host.deadline) and PARKS when it runs out, continuing next tick
+    //     (findFiringPath's job, kept on the route record — off the fighter, which is serialized into every snapshot);
+    //     meanwhile the bot follows the same interim route. The parked search is dropped when the target has moved
+    //     more than 12 u from where it was aimed: its open set was ordered for the old spot.
+    const prev = host.navGet();
+    const moved = !!(prev && Math.hypot(opp.pos.x - prev.gx, opp.pos.z - prev.gz) > 12);
+    const inReach = dist <= upperRange * BOT_FIRING_SEARCH_REACH;
+    const walkRoute = () => {
+      let r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles);
+      if (r && r.length > 1) r = truncateAtFiringPoint(r);
+      if (r && r.length > 2) r = smoothPath(grid, r, obstacles);
+      return (r && r.length > 1) ? r : null;
+    };
+    let path = null;
+    let pendingJob = null;
+    if (inReach) {
+      const job = (prev && prev.pending && prev.job && !moved) ? prev.job : {};
+      if (host.searchSlot()) {
+        const r = findFiringPath(
+          grid, pos.x, pos.z, myFloorY,
+          opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
+          lowerRange, upperRange, obstacles, oppFloorY,
+          { job, deadline: host.deadline() }
+        );
+        if (r && r.pending) pendingJob = job;
+        else path = r;
+      } else {
+        pendingJob = job;   // (no turn this tick: the search starts, or goes on, next tick)
+      }
     }
-    // Diagonal legs where the swept corridor proves them safe (see
-    // smoothPath's header note).
+    if (pendingJob) {
+      if (prev && prev.pending && !moved && prev.path.length > 1) { prev.job = pendingJob; return true; }   // (the interim route stands)
+      const interim = walkRoute();
+      host.navSet({ path: interim ?? [], idx: 0, gx: opp.pos.x, gz: opp.pos.z, at: now, pending: true, job: pendingJob });
+      me.botMazeLosBlockedAtEntry = !playerHasLoS;
+      return !!interim;
+    }
     if (path && path.length > 2) path = smoothPath(grid, path, obstacles);
+    if (!path || path.length < 2) path = walkRoute();
     if (path && path.length > 1) {
       // idx 0: walk to the pinned start square first — beelining to square
       // #2 from an off-grid position can clip the corner between them.
@@ -1612,6 +1644,8 @@ export function nbBrainTick(host) {
     }
   } else if (botS === 'maze') {
     let nav = host.navGet();
+    // (a parked firing-position search goes on each tick, within the tick's slice and turn — see navPlan)
+    if (nav && nav.pending) { navPlan(); nav = host.navGet(); }
     // ARRIVED / NOTHING-TO-DO-HERE: sighted inside the sweet spot. A path
     // whose goal is meaningfully CLOSER to the player is an approach — done,
     // drop it. A pathless maze has nothing sane to do here

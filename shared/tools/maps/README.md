@@ -184,3 +184,9 @@ z −1.4..1.85 filled solid and the 1.3 m crate east of it given a floor on its 
 and the push-out parked it inside the wall); the pocket among the crates at x 72.4..74.17, z −29.65..−27.9 filled to the
 crates' 3 m (entered over its 1.4 m south lip); the 1.8 m ledge beside the deck at x 73.9..74.9, z 18.85..31.85 given a floor
 on its top (three 1.8 m things the generator left topless, so a body slid off them).
+
+## The route grid as data (2026-10-25)
+
+`navgrid_build.mjs <tree root> <mapKey>...` builds each map's nav grid and writes it as `client/public/maps/<mapKey>_nav<NAV_FILE_EXT>` (the extension from `shared/src/sim/constants.js`: `.nav` on the release lines, `.wasm` on the PT site). The server's warm-up and the client read the file instead of building the grid. Re-run it after any change to a map's collision data (the file carries the data's signature and is refused otherwise) or to the grid builder (`shared/test/navdata.test.js` compares every shipped file to a fresh build and fails until the files are regenerated). Shipped: town, compound, dust, warehouse, spacecraft — the concept maps build in under 150 ms and ship none.
+
+    node shared/tools/maps/navgrid_build.mjs . town compound dust warehouse spacecraft

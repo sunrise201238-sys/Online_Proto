@@ -7,7 +7,7 @@
 
 import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from './actions.js';
 import { getArena } from './arena.js';
-import { buildNavGrid } from './navgrid.js';
+import { buildNavGrid, deserializeNavGrid, navDataSignature } from './navgrid.js';
 import { inheritMomentum } from './movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from './constants.js';
 import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain.js';
@@ -31,6 +31,16 @@ export function navGridFor(arena) {
   }
   return grid;
 }
+// THE GRID AS DATA (2026-10-25, navgrid.js): a grid file read back for this arena, when its signature is the arena's
+// collision data's — then navGridFor hands it out instead of building. False when the bytes are not this map's grid.
+export function registerNavGridData(arena, bytes) {
+  if (navGridCache.has(arena)) return true;
+  const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces));
+  if (!grid) return false;
+  navGridCache.set(arena, grid);
+  return true;
+}
+export function hasNavGrid(arena) { return navGridCache.has(arena); }
 
 // LoS-aware bot target pick (2v2). Score = real distance + a flat penalty
 // when the enemy is out of line of sight — raw closest-distance locked the

@@ -378,17 +378,18 @@ export function buildSnapshotFor(state, viewerTeam) {
       // route and avoid-mark arrays, no reader on the client; owner
       // 2026-10-07 "online SD is very lag": they added 1.8 KB to every
       // snapshot of a team with a bot, 110 KB/s per client at 62.5 Hz).
-      if (!f.botSD) { fighters[id] = f; continue; }
+      // (and no `unit` for anyone, 2026-10-25, the 5 GB month: the fighter's unit table — 580 bytes, a quarter of a
+      // snapshot — travelled with every fighter in every snapshot; each carries unitKey, and the client re-attaches the
+      // table from its own copy on arrival (connection.js; the prediction's clone always did))
       const own = {};
-      for (const k in f) if (!k.startsWith('botSD')) own[k] = f[k];
+      const sd = !!f.botSD;
+      for (const k in f) { if (k === 'unit' || (sd && k.startsWith('botSD'))) continue; own[k] = f[k]; }
       fighters[id] = own;
       continue;
     }
-    const r = { ...f };
+    const r = {};
+    for (const k in f) { if (k === 'unit' || k.startsWith('bot')) continue; r[k] = f[k]; }
     r.boost = null;
-    for (const k in r) {
-      if (k.startsWith('bot')) delete r[k];
-    }
     fighters[id] = r;
   }
   return {

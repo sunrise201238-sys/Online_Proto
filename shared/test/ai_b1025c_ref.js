@@ -1,4 +1,4 @@
-// FROZEN at b1025a for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1025c for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/ai.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/nbrain.js (the
@@ -10,17 +10,17 @@
 
 import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from '../src/sim/actions.js';
 import { getArena } from '../src/sim/arena.js';
-import { buildNavGrid } from '../src/sim/navgrid.js';
+import { buildNavGrid, deserializeNavGrid, navDataSignature } from '../src/sim/navgrid.js';
 import { inheritMomentum } from '../src/sim/movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from '../src/sim/constants.js';
-import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1025a_ref.js';
-import { makeMuzzleClear, BOT_SD } from './sdbrain_b1025a_ref.js';
+import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1025c_ref.js';
+import { makeMuzzleClear, BOT_SD } from './sdbrain_b1025c_ref.js';
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // client's imports. The plain brain's sight rule is re-exported for the
 // hide-order tests, which judge "hidden" by the bot's own rule.
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1025a_ref.js';
-export { botHasLineOfSight } from './nbrain_b1025a_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1025c_ref.js';
+export { botHasLineOfSight } from './nbrain_b1025c_ref.js';
 
 // Nav grids are built once per arena object (the ARENAS entries are module
 // singletons, so this is once per map per process) and shared by all bots
@@ -34,6 +34,16 @@ export function navGridFor(arena) {
   }
   return grid;
 }
+// THE GRID AS DATA (2026-10-25, navgrid.js): a grid file read back for this arena, when its signature is the arena's
+// collision data's — then navGridFor hands it out instead of building. False when the bytes are not this map's grid.
+export function registerNavGridData(arena, bytes) {
+  if (navGridCache.has(arena)) return true;
+  const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces));
+  if (!grid) return false;
+  navGridCache.set(arena, grid);
+  return true;
+}
+export function hasNavGrid(arena) { return navGridCache.has(arena); }
 
 // LoS-aware bot target pick (2v2). Score = real distance + a flat penalty
 // when the enemy is out of line of sight — raw closest-distance locked the

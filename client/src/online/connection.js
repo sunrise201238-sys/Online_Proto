@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { UNIT_DATA } from '@gvg/shared/src/sim/index.js';   // (the unit tables the snapshots no longer carry)
 
 // Vite injects import.meta.env.VITE_SERVER_URL at build time. Falls back to
 // localhost for local dev.
@@ -113,6 +114,9 @@ export function createConnection() {
 
   socket.on('match:snapshot', (payload) => {
     if (!payload) return;
+    // The server sends no unit tables (2026-10-25, a quarter of every snapshot): each fighter carries its unitKey, and the
+    // same shared table it used to carry is re-attached here, so every reader downstream sees what it always saw.
+    if (payload.fighters) for (const id in payload.fighters) { const f = payload.fighters[id]; if (f && !f.unit && f.unitKey) f.unit = UNIT_DATA[f.unitKey]; }
     prevSnapshot = latestSnapshot;
     latestSnapshot = payload;
     lastSnapshotAt = Date.now();

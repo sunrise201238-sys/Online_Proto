@@ -28,7 +28,7 @@
 import {
   walkFloorTo, surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
   groundHeightAt, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
-import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN } from './constants.js';
+import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, NAV_FILE_EXT } from './constants.js';
 
 const CELL = 4;
 // Max floor rise between adjacent samples: the sim's step plus slack for float
@@ -365,8 +365,9 @@ export function buildNavGrid(obstacles, surfaces) {
   const JUMP_ARC_CLEARANCE = 5.2;           // jump apex ~5.6, with margin
   // Does any obstacle crossing the XZ segment stick up past `topLimit`?
   const segBlockedAbove = (x0, z0, x1, z1, topLimit) => {
-    for (let k = 0; k < obstacles.length; k += 1) {
-      const o = obstacles[k];
+    const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });   // (the boxes the segment can cross; the slab test below is the exact one — 2026-10-25)
+    for (let k = 0; k < cand.length; k += 1) {
+      const o = cand[k];
       if (o.maxY <= topLimit || o.minY > topLimit) continue;
       let tMin = 0, tMax = 1, miss = false;
       for (const [s, dl, lo, hi] of [[x0, x1 - x0, o.minX, o.maxX], [z0, z1 - z0, o.minZ, o.maxZ]]) {
@@ -698,15 +699,8 @@ export function smoothPath(grid, path, obstacles) {
   const clearLeg = (a, b) => {
     const ya = a.y ?? 0;
     const dx = b.x - a.x, dz = b.z - a.z;
-    // Per-chord obstacle prefilter: only boxes near the chord's bounding
-    // box can fail a sample — spares the full-map scan per 1u sample.
-    const pad = CLEAR_WIDE + 1;
-    const bx0 = Math.min(a.x, b.x) - pad, bx1 = Math.max(a.x, b.x) + pad;
-    const bz0 = Math.min(a.z, b.z) - pad, bz1 = Math.max(a.z, b.z) + pad;
-    const nearObs = [];
-    for (const o of obstacles) {
-      if (o.maxX >= bx0 && o.minX <= bx1 && o.maxZ >= bz0 && o.minZ <= bz1) nearObs.push(o);
-    }
+    // (the per-chord prefilter that walked every box of the map is gone — 2026-10-25: unitOverlapsObstacle reads the
+    // sim's point index itself, so each sample asks only the boxes within its radius; the same boxes answer)
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz)));
     for (let s = 1; s <= steps; s += 1) {
       const x = a.x + (dx * s) / steps;
@@ -721,7 +715,7 @@ export function smoothPath(grid, path, obstacles) {
         if (walk[node] && Math.abs(floor[node] - ya) <= 0.5) { onFloor = true; break; }
       }
       if (!onFloor) return false;
-      if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, nearObs, CLEAR_WIDE)) return false;
+      if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, obstacles, CLEAR_WIDE)) return false;
     }
     return true;
   };
@@ -752,101 +746,74 @@ export function smoothPath(grid, path, obstacles) {
 // sampling only along the direct path missed band positions that live off
 // to the side (e.g. clear lanes past the clutter). Returns waypoints like
 // findPathOnGrid, or null when no reachable firing node exists.
-export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles, targetFloor = null) {
+// 2026-10-25 (user, the online lag on Compound — "the firing-position search is the main traffic"): three things, the
+// answer unchanged.
+//   - The sight test is sightClear's (the broadphase): a candidate used to be tested against EVERY box and EVERY floor of
+//     the map, twice (two eye heights). On Compound that is 22,666 boxes and 16,878 floors per candidate.
+//   - The expansion is DIRECTED (A*): each node's key is its walking cost plus a lower bound of the walk still needed to
+//     reach the band — the straight-line distance to the band's outer edge, in cells, over 1.5 (a walk edge joins two
+//     node points up to 1.5 cells apart for its cost of 1, so the bound never exceeds the true cost; a jump link's 2.5
+//     covers its two cells). With an admissible bound the first qualifying node popped is still a cheapest-walk firing
+//     node; only ties between equally cheap spots may fall the other way. The far side of the map is expanded only when
+//     the walls force a detour.
+//   - RESUMABLE, like findHiddenSpot: with opts.job and opts.deadline (a performance.now() instant), a search that runs out
+//     of its slice parks its open set in job.state and returns { pending: true }; the next call with the same job goes
+//     on from there. Without a job the deadline ends the search as a miss, as before.
+export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles, targetFloor = null, opts = {}) {
   const { n, layers, floor, clearGrade, surfaces } = grid;
   const size = n * layers;
-  const start = nearestWalkable(grid, sx, sz, startFloor, obstacles);
-  if (start < 0) return null;
   const pTarget = { x: tx, y: targetEyeY, z: tz };
-  // Sight rule is the BOT'S rule (2026-08-14): sight-blocking invisible bars
-  // count, and SURFACES count — this search used to ignore surfaces entirely
-  // and happily certified firing cells whose line ran straight through the
-  // Streets bridge deck, sending bots to spots they could not shoot from.
-  const seesAtEye = (node, dy) => {
-    const p0 = {
-      x: nodeCenterX(grid, node),
-      y: floor[node] + GROUND_BASE_Y + 1.6 + dy,
-      z: nodeCenterZ(grid, node)
-    };
-    for (const o of obstacles) {
-      if (o.noProjectile && !o.blocksBotSight) continue;
-      if (segmentHitsObstacle(p0, pTarget, o)) return false;
-    }
-    if (surfaces) {
-      for (let i = 0; i < surfaces.length; i += 1) if (sightHitsSurface(p0, pTarget, surfaces[i])) return false;
-    }
-    return true;
-  };
-  // BOTH eyes must see: the real one (the shot the bot will actually take)
-  // and one lowered by the margin (so the cell keeps its sight when the
-  // follower stops short). Testing only the lowered eye is NOT conservative
-  // — a lower ray can slip UNDER overhead geometry (Streets' upper storeys,
-  // the bastion hoardings at y 8..16) that the real eye runs into, which
-  // measured as 14 blind "firing" cells on Factory 2 alone.
+  // Sight rule is the BOT'S rule (2026-08-14): sight-blocking invisible bars count, and SURFACES count — this search
+  // used to ignore surfaces entirely and happily certified firing cells whose line ran straight through the Streets
+  // bridge deck, sending bots to spots they could not shoot from.
+  const seesAtEye = (node, dy) => sightClear(
+    { x: nodeCenterX(grid, node), y: floor[node] + GROUND_BASE_Y + 1.6 + dy, z: nodeCenterZ(grid, node) },
+    pTarget, obstacles, surfaces
+  );
+  // BOTH eyes must see: the real one (the shot the bot will actually take) and one lowered by the margin (so the cell
+  // keeps its sight when the follower stops short). Testing only the lowered eye is NOT conservative — a lower ray can
+  // slip UNDER overhead geometry (Streets' upper storeys, the bastion hoardings at y 8..16) that the real eye runs into,
+  // which measured as 14 blind "firing" cells on Factory 2 alone.
   const sees = (node) => seesAtEye(node, 0) && seesAtEye(node, -FIRING_SIGHT_MARGIN);
-  // Two passes: firing nodes ON THE TARGET'S FLOOR first, anywhere second.
-  // A short-range bot facing an edge-camper on a Station platform can "see"
-  // the target from a ground peephole over the 4-high edge wall — accepting
-  // that first meant its paths never contained a climb, and it ground the
-  // wall forever instead of jumping up to fight properly.
-  const run = (sameFloorOnly) => {
-    // Dijkstra, not BFS (2026-08-12): this planner answers ~98% of live bot
-    // routes, and as a fewest-cells BFS it hugged walls and clipped doorway
-    // posts BY CONSTRUCTION — the "bots grind the wall right after spawn"
-    // report from the Flashpoint room spawns. It now pays the same
-    // wall-clearance tax as findPathOnGrid (TIGHT_COST on the entered
-    // node), so routes prefer the middle of a corridor when the room
-    // exists. The first qualifying node POPPED is the cheapest-walk firing
-    // node — the BFS's nearest-cell guarantee, upgraded to clearance-aware
-    // cost. No heuristic: the goal is discovered, not known in advance.
-    const parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
-    const g = new Float64Array(size).fill(Infinity);
-    const closed = new Uint8Array(size);
-    const heap = [];
-    const push = (f, i) => {
-      heap.push([f, i]);
-      let k = heap.length - 1;
-      while (k > 0) {
-        const p = (k - 1) >> 1;
-        if (heap[p][0] <= heap[k][0]) break;
-        const t = heap[p]; heap[p] = heap[k]; heap[k] = t;
-        k = p;
-      }
-    };
-    const pop = () => {
-      const top = heap[0];
-      const last = heap.pop();
-      if (heap.length) {
-        heap[0] = last;
-        let k = 0;
-        for (;;) {
-          const l = 2 * k + 1, r = l + 1;
-          let s = k;
-          if (l < heap.length && heap[l][0] < heap[s][0]) s = l;
-          if (r < heap.length && heap[r][0] < heap[s][0]) s = r;
-          if (s === k) break;
-          const t = heap[s]; heap[s] = heap[k]; heap[k] = t;
-          k = s;
-        }
-      }
-      return top;
-    };
-    parent[start] = -1;
-    g[start] = 0;
-    push(0, start);
+  const job = opts.job ?? null;
+  const deadline = opts.deadline ?? 0;
+  const resume = !!(job && job.state);
+  const st = resume ? job.state : null;
+  const start = resume ? st.start : nearestWalkable(grid, sx, sz, startFloor, obstacles);
+  if (start < 0) { if (job) job.state = null; return null; }
+  const H_SCALE = 1 / (CELL * 1.5);
+  const hOf = (node) => { const d = Math.hypot(tx - nodeCenterX(grid, node), tz - nodeCenterZ(grid, node)) - maxD; return d > 0 ? d * H_SCALE : 0; };
+  // Two passes: firing nodes ON THE TARGET'S FLOOR first, anywhere second. A short-range bot facing an edge-camper on a
+  // Station platform can "see" the target from a ground peephole over the 4-high edge wall — accepting that first meant
+  // its paths never contained a climb, and it ground the wall forever instead of jumping up to fight properly.
+  const run = (sameFloorOnly, parked) => {
+    let parent, g, closed, heap, pops;
+    if (parked) { ({ parent, g, closed, heap, pops } = parked); }
+    else {
+      parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
+      g = new Float64Array(size).fill(Infinity);
+      closed = new Uint8Array(size);
+      heap = createMinHeap();
+      pops = 0;
+      parent[start] = -1;
+      g[start] = 0;
+      heap.push(hOf(start), start);
+    }
     let goal = -1;
-    let guard = 0;
-    while (heap.length) {
-      if (++guard > 30000) break;
-      const cur = pop()[1];
+    while (heap.size()) {
+      if (++pops > 30000) break;
+      const cur = heap.pop()[1];
+      if (deadline && (pops & 31) === 0 && performance.now() > deadline) {
+        if (job) { heap.push(g[cur] + hOf(cur), cur); pops -= 1; return { parked: { parent, g, closed, heap, pops } }; }   // (this node pops first next time)
+        break;
+      }
       if (closed[cur]) continue;
       closed[cur] = 1;
       const cx = nodeCenterX(grid, cur);
       const cz = nodeCenterZ(grid, cur);
       const d = Math.hypot(tx - cx, tz - cz);
-      // The start node itself never qualifies: this is called when the bot
-      // needs to GO somewhere (jammed, blind, out of band) — "stay where
-      // you are" is a degenerate answer that starved the caller.
+      // The start node itself never qualifies: this is called when the bot needs to GO somewhere (jammed, blind, out of
+      // band) — "stay where you are" is a degenerate answer that starved the caller.
       const floorOk = !sameFloorOnly
         || targetFloor == null
         || Math.abs(floor[cur] - targetFloor) <= 2;
@@ -854,18 +821,27 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
       forEachNeighbor(grid, cur, (nb, cost) => {
         if (closed[nb]) return;
         const ng = g[cur] + cost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
-        if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; push(ng, nb); }
+        if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng + hOf(nb), nb); }
       });
     }
-    if (goal < 0) return null;
+    if (goal < 0) return { none: true };
     const pts = [];
     for (let i = goal; i !== -1; i = parent[i]) {
       pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
     }
     pts.reverse();
-    return collapseWaypoints(pts);
+    return { path: collapseWaypoints(pts) };
   };
-  return run(true) ?? run(false);
+  let pass = resume ? st.pass : 0;
+  let parked = resume ? st.run : null;
+  while (pass < 2) {
+    const r = run(pass === 0, parked);
+    if (r.parked) { job.state = { start, pass, run: r.parked }; return { pending: true }; }
+    if (r.path) { if (job) job.state = null; return r.path; }
+    pass += 1; parked = null;
+  }
+  if (job) job.state = null;
+  return null;
 }
 
 // The bot's sight rule (ai.js botHasLineOfSight, mirrored in client main.js):
@@ -885,7 +861,9 @@ function sightClear(p0, p1, obstacles, surfaces) {
     if (segmentHitsObstacle(p0, p1, o)) return false;
   }
   if (surfaces) {
-    for (let i = 0; i < surfaces.length; i += 1) if (sightHitsSurface(p0, p1, surfaces[i])) return false;
+    // (the floors through the same index — 2026-10-25: the walk over all of Compound's 16,878 floors per eye was the other half of the cost)
+    const sc = obstaclesNearSegment(surfaces, p0, p1);
+    for (let i = 0; i < sc.length; i += 1) if (sightHitsSurface(p0, p1, sc[i])) return false;
   }
   return true;
 }
@@ -1236,4 +1214,81 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   if (path.length > 2) path = smoothPath(grid, path, obstacles);
   const last = path[path.length - 1];
   return { path, goal: { x: last.x, z: last.z, y: last.y }, score: score ? bestScore : null };
+}
+
+// ===== THE GRID AS DATA (user 2026-10-25, "the route grid precomputed") =====
+// A grid built here can be written out and read back whole: every array, the jump links in their order, the scalars —
+// so a map's grid is built once, by shared/tools/maps/navgrid_build.mjs, and served beside the map model
+// (maps/<mapKey>_nav<NAV_FILE_EXT>). The server's warm-up and the client read the file and skip the build: Compound's is
+// 3.4 s on a fast core, a minute on the free instance, during which neither answered anyone (the "websocket error" at
+// boot, the offline match-start stall). A read-back grid is the built grid to the byte (shared/test/navdata.test.js
+// rebuilds every shipped file and compares), so routes do not change.
+// SAFETY: the file carries a signature of the collision data it was built from (navDataSignature — every box's and
+// floor's fields), and the loader refuses a file whose signature is not the arena's: a regenerated map or a boundary
+// change falls back to building, never to a stale grid. A change to the BUILDER itself is not caught by the signature;
+// it is caught by the test, which fails until the files are regenerated.
+export const NAV_DATA_VERSION = 1;
+export const navDataFile = (mapKey) => `maps/${mapKey}_nav${NAV_FILE_EXT}`;
+export function navDataSignature(obstacles, surfaces) {
+  let h = 0x811c9dc5;
+  const mix = (s) => { for (let i = 0; i < s.length; i += 1) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } };
+  const one = (o) => {
+    const keys = Object.keys(o).sort();
+    let s = '';
+    for (let i = 0; i < keys.length; i += 1) { const v = o[keys[i]]; if (typeof v === 'function') continue; s += keys[i] + '=' + (typeof v === 'number' ? String(v) : JSON.stringify(v)) + ';'; }
+    return s + '|';
+  };
+  mix(`o${obstacles.length}:`); for (let i = 0; i < obstacles.length; i += 1) mix(one(obstacles[i]));
+  mix(`s${surfaces.length}:`); for (let i = 0; i < surfaces.length; i += 1) mix(one(surfaces[i]));
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+const NAV_ARRAYS = ['floor', 'walk', 'clearGrade', 'edgeE', 'edgeS', 'posX', 'posZ'];
+const NAV_TYPES = { Float32Array, Uint8Array, Int32Array, Float64Array, Uint16Array, Int8Array };
+const _pad8 = (n) => (n + 7) & ~7;
+export function serializeNavGrid(grid, sig) {
+  const arrays = NAV_ARRAYS.map((name) => ({ name, type: grid[name].constructor.name, length: grid[name].length, bytes: grid[name].byteLength }));
+  const links = [];
+  for (const [node, nbs] of grid.jumpAdj) { links.push(node, nbs.length); for (let i = 0; i < nbs.length; i += 1) links.push(nbs[i]); }
+  const linkArr = Int32Array.from(links);
+  const meta = {
+    version: NAV_DATA_VERSION, sig, cols: grid.cols, rows: grid.rows, n: grid.n, layers: grid.layers,
+    minX: grid.minX, minZ: grid.minZ, cell: grid.cell, jumpLinkCount: grid.jumpLinkCount, arrays, links: linkArr.length
+  };
+  const metaBytes = new TextEncoder().encode(JSON.stringify(meta));
+  let size = _pad8(8 + metaBytes.length);
+  for (const a of arrays) size += _pad8(a.bytes);
+  size += _pad8(linkArr.byteLength);
+  const out = new Uint8Array(size);
+  const dv = new DataView(out.buffer);
+  out.set([0x47, 0x56, 0x47, 0x4e], 0);   // 'GVGN'
+  dv.setUint32(4, metaBytes.length, true);
+  out.set(metaBytes, 8);
+  let off = _pad8(8 + metaBytes.length);
+  for (const name of NAV_ARRAYS) { const a = grid[name]; out.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), off); off += _pad8(a.byteLength); }
+  out.set(new Uint8Array(linkArr.buffer, linkArr.byteOffset, linkArr.byteLength), off);
+  return out;
+}
+// The grid read back, or null when the bytes are not a grid file, another version, or another map's data (the signature).
+export function deserializeNavGrid(bytes, surfaces, sig) {
+  try {
+    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+    if (bytes.length < 8 || bytes[0] !== 0x47 || bytes[1] !== 0x56 || bytes[2] !== 0x47 || bytes[3] !== 0x4e) return null;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const metaLen = dv.getUint32(4, true);
+    const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + metaLen)));
+    if (meta.version !== NAV_DATA_VERSION || meta.sig !== sig) return null;
+    const grid = {
+      cols: meta.cols, rows: meta.rows, n: meta.n, layers: meta.layers, minX: meta.minX, minZ: meta.minZ, cell: meta.cell,
+      surfaces, jumpAdj: new Map(), jumpLinkCount: meta.jumpLinkCount
+    };
+    let off = _pad8(8 + metaLen);
+    for (const a of meta.arrays) {
+      const T = NAV_TYPES[a.type]; if (!T) return null;
+      grid[a.name] = new T(bytes.slice(off, off + a.bytes).buffer);   // (a copy: its own buffer, aligned)
+      off += _pad8(a.bytes);
+    }
+    const links = new Int32Array(bytes.slice(off, off + meta.links * 4).buffer);
+    for (let i = 0; i < links.length;) { const node = links[i++], count = links[i++]; const nbs = new Array(count); for (let k = 0; k < count; k += 1) nbs[k] = links[i++]; grid.jumpAdj.set(node, nbs); }
+    return grid;
+  } catch (e) { return null; }
 }

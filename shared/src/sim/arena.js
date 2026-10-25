@@ -3,6 +3,7 @@
 // creation stays client-side.
 
 import { GROUND_BASE_Y } from './constants.js';
+import { obstaclesNearPoint } from './physics.js';   // (markFloorTops: the surfaces near a box, 2026-10-25)
 
 // Each obstacle is an axis-aligned bounding box (AABB) used for unit and
 // projectile collision. Optional flags:
@@ -76227,10 +76228,15 @@ const ARENAS = {
 // onto when its feet are within SURFACE_STEP_HEIGHT of that top, so it holds no such body (physics.js boxHoldsAt).
 // Marked once, the first time an arena is asked for.
 function markFloorTops(arena) {
+  // (2026-10-25: each box asks the point index for the surfaces whose footprint can touch its own — the pass over every box
+  //  times every floor, 22,666 × 16,878 on Compound, was 0.8 s on a fast core at an arena's first use, on the server's boot
+  //  and the client's map load alike; the same surfaces answer, so the same boxes are marked)
   for (const o of arena.obstacles) {
     o.floorTop = false;
     if (o.topBuffer == null) continue;   // (a wall: never stepped onto)
-    for (const s of arena.surfaces) {
+    const near = obstaclesNearPoint(arena.surfaces, (o.minX + o.maxX) / 2, (o.minZ + o.maxZ) / 2, Math.max(o.maxX - o.minX, o.maxZ - o.minZ) / 2 + 0.02);
+    for (let k = 0; k < near.length; k += 1) {
+      const s = near[k];
       if (Math.abs(s.maxTop - o.maxY) > 0.3) continue;
       if (s.minX > o.maxX + 0.01 || s.maxX < o.minX - 0.01 || s.minZ > o.maxZ + 0.01 || s.maxZ < o.minZ - 0.01) continue;
       o.floorTop = true; break;

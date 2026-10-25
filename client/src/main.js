@@ -43,12 +43,13 @@ import {
   getArenaBounds,
   getGeneratedObstacles,
   reloadHolds,
-  applyHitStun
+  applyHitStun,
+  getArena,
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
 import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
-import { coverDistanceAt } from '@gvg/shared/src/sim/navgrid.js';
+import { coverDistanceAt, deserializeNavGrid, navDataSignature, navDataFile } from '@gvg/shared/src/sim/navgrid.js';
 
 const app = document.getElementById('app');
 
@@ -5279,7 +5280,7 @@ function botTickStep(mech, now) {
 }
 function updateEnemy(now) {
   const mech = state.enemy, eState = mech.state;
-  if (!offlineNavGrid) offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  if (!ensureOfflineNavGrid()) return;   // (the grid file is still on its way: the bot stands this frame — see ensureOfflineNavGrid)
   const myTeam = getTeamOf(mech);
   const enemies = [];
   for (const f of (_botTrueFighters ?? getAllFighters())) {
@@ -6491,11 +6492,11 @@ function startMatch() {
     }
   }
   buildArenaForMap(state.mapKey);
-  // Build the nav grid HERE rather than lazily on the first bot Maze plan
-  // (2026-08-14): it is a single-digit-to-few-hundred-ms job depending on the
-  // map, and paying it mid-fight is a visible hitch. During the match-start
-  // transition it is invisible.
-  offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  // The nav grid: from its data file when that is here (fetched at the map pick, warmNavData; 2026-10-25), else built
+  // HERE rather than lazily on the first bot Maze plan (2026-08-14: paying a build mid-fight is a visible hitch) — and
+  // while a young fetch is still on its way, by the bots' first frame (ensureOfflineNavGrid).
+  warmNavData(state.mapKey);
+  ensureOfflineNavGrid();
   const now = performance.now();
   getAllFighters().forEach((m) => {
     m.state.lastFireAt = now;
@@ -8284,7 +8285,7 @@ function ensureOnlineMatchSetup(snap) {
   if (onl.commandMode) {
     diorama.cam2.snapped = false;
     applyDioramaDressing();
-    offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+    warmNavData(state.mapKey); ensureOfflineNavGrid();   // (the grid file when it is here; the command previews read ensureOfflineNavGrid)
   }
   onl.consumedOrderSeq = onl.conn?.getOrderResult()?.seq ?? 0;
   // Classic-teammate share visuals (world ring + lock sprite) rebuild lazily.
@@ -10220,16 +10221,16 @@ function addRamp({ minX, maxX, minZ, maxZ, axis, lowY, highY, material, thicknes
 // outside (HALF_X..HALF_X+2 etc.) the play extent so the camera never clips
 // against a solid mesh when the player backs into a corner. Mirrors the
 // pattern Station uses inline.
-function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y, stripe = true, open = []) {   // (stripe: the red edge line; a map its own model confines does without — GLB_MAPS `edge: false`. open: the sides — east +x, west -x, south +z, north -z, the compass of the F4 line — a modelled map's boundary row (MAP_BOUNDARY `open`) leaves without a wall, the model's own wall or fence inside the crop being the edge there: no wall and no line on those, as the shared arena builds them; user 2026-10-24)
+function addBoundaryIndicator(HALF_X, HALF_Z, CEIL_Y, stripe = true, open = [], walls = true) {   // (walls: false when the arena's own list already carries the shared perimeter — the modelled maps since 2026-10-25)   // (stripe: the red edge line; a map its own model confines does without — GLB_MAPS `edge: false`. open: the sides — east +x, west -x, south +z, north -z, the compass of the F4 line — a modelled map's boundary row (MAP_BOUNDARY `open`) leaves without a wall, the model's own wall or fence inside the crop being the edge there: no wall and no line on those, as the shared arena builds them; user 2026-10-24)
   // Diorama POC: the play extent doubles as the base-plate footprint.
   arenaBounds = { halfX: HALF_X, halfZ: HALF_Z, ceilY: CEIL_Y };
-  const walls = [
+  const wallBoxes = [
     ['south', { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: HALF_Z, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }],
     ['north', { minX: -HALF_X - 2, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: -HALF_Z, minY: 0, maxY: CEIL_Y }],
     ['west', { minX: -HALF_X - 2, maxX: -HALF_X, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }],
     ['east', { minX: HALF_X, maxX: HALF_X + 2, minZ: -HALF_Z - 2, maxZ: HALF_Z + 2, minY: 0, maxY: CEIL_Y }]
   ];
-  for (const [side, o] of walls) if (!open.includes(side)) arenaObstacles.push(o);
+  if (walls) for (const [side, o] of wallBoxes) if (!open.includes(side)) arenaObstacles.push(o);
   if (!stripe) return;
   const boundaryGlow = new THREE.MeshStandardMaterial({
     color: 0xff2a32, emissive: 0xff2a32, emissiveIntensity: 1.4, roughness: 0.4
@@ -10434,13 +10435,52 @@ function loadMapModel(file, onReady) {
 function warmMapModel(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   if (cfg) loadMapModel(cfg.file, () => {});
+  warmNavData(mapKey);
+}
+// THE ROUTE GRID AS DATA (user 2026-10-25; navgrid.js "THE GRID AS DATA"): a modelled map's nav grid is served beside its
+// model (maps/<mapKey>_nav, shared/tools/maps/navgrid_build.mjs) and fetched here when the map is picked or the match
+// starts. The grid used to be BUILT at match start — a 3.8 s stall on Compound — and the bots stood on it. Now: the file,
+// verified against this arena's collision data (a stale or foreign file is refused); while the fetch is young
+// (NAV_DATA_WAIT_MS) the bots wait without a grid; after that, or without a file, the grid is built as before.
+const _navData = {};   // mapKey -> { bytes, startedAt, failed }
+const NAV_DATA_WAIT_MS = 3000;
+function warmNavData(mapKey) {
+  if (!GLB_MAPS[mapKey] || _navData[mapKey]) return;
+  const rec = _navData[mapKey] = { bytes: null, startedAt: performance.now(), failed: false };
+  fetch(`${import.meta.env.BASE_URL}${navDataFile(mapKey)}`)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((b) => { rec.bytes = new Uint8Array(b); })
+    .catch((e) => { rec.failed = true; console.warn('[nav] no grid file for', mapKey, e?.message ?? e); });
+}
+// The arena's grid: read from the data when it is here and is this arena's; null while the fetch is young; built otherwise.
+function ensureOfflineNavGrid() {
+  if (offlineNavGrid) return offlineNavGrid;
+  const rec = _navData[state.mapKey];
+  const t0 = performance.now();
+  if (rec && rec.bytes) {
+    const g = deserializeNavGrid(rec.bytes, arenaSurfaces, navDataSignature(arenaObstacles, arenaSurfaces));
+    if (g) { offlineNavGrid = g; console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
+    console.warn(`[nav] ${state.mapKey}: grid file refused (other collision data: ${arenaObstacles.length} boxes / ${arenaSurfaces.length} floors here) — building`);
+    rec.bytes = null; rec.failed = true;
+  } else if (rec && !rec.failed && performance.now() - rec.startedAt < NAV_DATA_WAIT_MS) {
+    return null;   // (the file is on its way)
+  }
+  offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  console.log(`[nav] ${state.mapKey}: grid built, ${(performance.now() - t0).toFixed(0)} ms`);
+  return offlineNavGrid;
 }
 function buildGlbArena(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   const { halfX, halfZ, open } = getArenaBounds(mapKey);
-  addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false, open ?? []);   // (the boundary walls and the red edge line, except on the sides the map's boundary row leaves open; no line at all where the map's data says `edge: false`)
-  for (const o of getGeneratedObstacles(mapKey)) arenaObstacles.push({ ...o });   // collision only: the model is the visual
-  for (const s of getArenaSurfaces(mapKey)) arenaSurfaces.push(s);              // the raised floors (stairs, porches, pavements)
+  // THE SHARED LIST, WALLS INCLUDED (2026-10-25): the arena the server plays — its perimeter slabs (makeBoundaryObstacles)
+  // and its generated boxes, floor tops marked — is what this client plays too, box for box and in the same order. Until
+  // then the client raised its own perimeter (addBoundaryIndicator's walls: 28 high, no topBuffer) over the generated
+  // boxes, so the two sims differed along the edges and the shared grid file (navgrid.js "THE GRID AS DATA") could not
+  // be this arena's. The red edge line is still drawn here.
+  const shared = getArena(mapKey);
+  addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false, open ?? [], false);   // (the red edge line only, except on the open sides; none where the map's data says `edge: false`)
+  for (const o of shared.obstacles) arenaObstacles.push({ ...o });   // collision only: the model is the visual
+  for (const s of shared.surfaces) arenaSurfaces.push(s);           // the raised floors (stairs, porches, pavements)
   const group = new THREE.Group();
   group.scale.setScalar(cfg.scale);
   group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);
@@ -11197,7 +11237,7 @@ function dioramaCommandTick() {
 // that layer. Scans the 3x3 cell ring (~6u, matching computeOrderPath's
 // endpoint tolerance) so taps hugging a walkable edge still count.
 function dioramaLayerStandable(x, z, y) {
-  const g = offlineNavGrid;
+  const g = ensureOfflineNavGrid();
   if (!g) return true;   // no grid yet: keep the permissive old behavior
   const c0 = Math.floor((x - g.minX) / g.cell);
   const r0 = Math.floor((z - g.minZ) / g.cell);
@@ -11238,7 +11278,7 @@ function dioramaLayerStackAt(x, z) {
 }
 
 function computeOrderPath(m, tx, tz, targetFloorY) {
-  if (!offlineNavGrid || !m || m.state.hp <= 0) return null;
+  if (!ensureOfflineNavGrid() || !m || m.state.hp <= 0) return null;
   // COMMAND-layer strictness: the shared pathfinder clamps ANY goal into the
   // grid and snaps up to 3 cells onto walkable — right for bot self-routing,
   // wrong for orders ("Area is not available" must actually fire, and an
