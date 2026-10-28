@@ -183,7 +183,15 @@ one's seam is crate-high and solid and its crate stack has a floor on its top (a
 z −1.4..1.85 filled solid and the 1.3 m crate east of it given a floor on its top (a body jumped over the crate into the slot
 and the push-out parked it inside the wall); the pocket among the crates at x 72.4..74.17, z −29.65..−27.9 filled to the
 crates' 3 m (entered over its 1.4 m south lip); the 1.8 m ledge beside the deck at x 73.9..74.9, z 18.85..31.85 given a floor
-on its top (three 1.8 m things the generator left topless, so a body slid off them).
+on its top (three 1.8 m things the generator left topless, so a body slid off them). Town (user 2026-10-28, "the rooftop of the
+small building is very unsmooth; make it smooth and no pit") — the roof of the small building at model x −42.98..−36.75,
+z −2.16..5.75 is one floor at 6.15 m on a slab box (5.5..6.15 m) under the whole footprint, where the generator had left a
+25 cm slot along the east edge, a 1.2 m notch at z 1..2.25 and a hole at the north edge (x −38.5..−37.75), each a drop into
+the building or the street; a 1.5 m "invisible wall" on the east edge at z 1.25..2 removed; the stepped block in the roof's
+middle (x −41.44..−38.34, z 0.16..3.16, 0.5 m steps the body popped up and 1.2–1.4 m ends) read as a flight is read: a plane
+up each side from 6.15 to 7.54 m over 0.97 m, a lidded body under the top, skirts along the two ends where the plane stands
+more than a step over the roof (its eleven column boxes cut to the roof, their lids removed). The stair landing west of the
+roof stays 0.87 m under it (the model's parapet): a jump, as before. The route grid file regenerated with it.
 
 ## The route grid as data (2026-10-25)
 
