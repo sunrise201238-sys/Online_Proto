@@ -798,7 +798,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  district: { name: 'District' },   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
+  district: { name: 'District', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the map's own note on its info card, as a unit's — District's boost scale, user 2026-10-29)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   hospital: { name: 'Hospital', thumb: 'top' },   // (the card: the user's own photo of a ward, 2026-10-29 — the picker's wide thumb its upper part, the open door and the desk)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
@@ -9174,8 +9174,9 @@ function showProfilePopup(card, unit, onConfirm) {
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
 // __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
+  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's stamina, user 2026-10-29)
   spawnProfilePopup(card,
-    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />`,
+    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
     onConfirm);
 }
 
