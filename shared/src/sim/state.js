@@ -10,6 +10,7 @@ import {
   SPAWN_IMMUNITY_MS
 } from './constants.js';
 import { getArena } from './arena.js';
+import { mateSpawnFor } from './spawn.js';
 
 // One fighter's full sim state. Mirrors the fields populated by createMech
 // in client/src/main.js, minus the Three.js / cannon refs (root, body,
@@ -218,20 +219,10 @@ export function createMatchState({
     // END walls — offset along the deck toward centre (X) instead. Streets'
     // corner spawns sit 8u off the south/north walls, so +Z would bury the
     // teammate in the wall — offset along Z TOWARD CENTRE there.
-    const xOffset = mapKey === 'station' || mapKey === 'airport' || mapKey === 'flashpoint';
-    const zTowardCentre = mapKey === 'arena2' || mapKey === 'factory';
-    const zOff = (s) => zTowardCentre ? s.z - Math.sign(s.z) * 12 : s.z + 12;
-    const xOff = (s) => s.x - Math.sign(s.x) * 12;
-    const p3Spawn = {
-      x: xOffset ? xOff(arena.spawns.p1) : arena.spawns.p1.x,
-      y: arena.spawns.p1.y ?? GROUND_BASE_Y,
-      z: xOffset ? arena.spawns.p1.z : zOff(arena.spawns.p1)
-    };
-    const p4Spawn = {
-      x: xOffset ? xOff(arena.spawns.p2) : arena.spawns.p2.x,
-      y: arena.spawns.p2.y ?? GROUND_BASE_Y,
-      z: xOffset ? arena.spawns.p2.z : zOff(arena.spawns.p2)
-    };
+    // (the one rule, spawn.js mateSpawnFor: the map's own offset — along z, or along x toward the centre on the decks, or
+    // along z toward the centre off the end walls — and, where that lands in a thing, the first clear side; 2026-10-29)
+    const p3Spawn = mateSpawnFor(mapKey, arena.spawns.p1);
+    const p4Spawn = mateSpawnFor(mapKey, arena.spawns.p2);
     fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
     fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
     fighters.p3.team = 'A';

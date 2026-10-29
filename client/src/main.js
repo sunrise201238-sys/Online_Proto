@@ -15,6 +15,7 @@ import {
   buildNavGrid,
   findPathOnGrid,
   smoothPath,
+  mateSpawnFor,
   CMD_TRAVEL_BOOST_FLOOR,
   CMD_TRAVEL_DASH_ARM,
   CMD_TRAVEL_JUMP_BANK,
@@ -6425,20 +6426,14 @@ function startMatch() {
   // the teammate stacks BEHIND the leader toward centre rather than beside it.
   // p1 (−95, 47) → p3 (−95, 35); mirrored, p2 (95, −47) → p4 (95, −35). All
   // four sit at 12u clearance and p4 = −p3 still holds exactly.
-  // Mirrored in shared state.js.
+  // The one rule now lives in the shared sim (spawn.js mateSpawnFor, 2026-10-29): the map's own offset above, and, where it
+  // lands in a thing — the Hospital's ward home, its wall 3 m north — the first clear side; the server's createMatchState
+  // asks the same, so an offline 2v2 and an online one open alike.
   if (state.mode === '2v2') {
     const pp = state.player.body.position;
     const ep = state.enemy.body.position;
-    if (state.mapKey === 'station' || state.mapKey === 'airport' || state.mapKey === 'flashpoint') {
-      state.ally.body.position.set(pp.x - Math.sign(pp.x) * 12, pp.y, pp.z);
-      state.enemy2.body.position.set(ep.x - Math.sign(ep.x) * 12, ep.y, ep.z);
-    } else if (state.mapKey === 'arena2' || state.mapKey === 'factory') {
-      state.ally.body.position.set(pp.x, pp.y, pp.z - Math.sign(pp.z) * 12);
-      state.enemy2.body.position.set(ep.x, ep.y, ep.z - Math.sign(ep.z) * 12);
-    } else {
-      state.ally.body.position.set(pp.x, pp.y, pp.z + 12);
-      state.enemy2.body.position.set(ep.x, ep.y, ep.z + 12);
-    }
+    const a = mateSpawnFor(state.mapKey, { x: pp.x, y: pp.y, z: pp.z }); state.ally.body.position.set(a.x, a.y, a.z);
+    const e2 = mateSpawnFor(state.mapKey, { x: ep.x, y: ep.y, z: ep.z }); state.enemy2.body.position.set(e2.x, e2.y, e2.z);
   }
   // The teleports above move only the physics BODIES. The visual roots sync
   // from the bodies in the frame loop — AFTER updateEnemy has read
