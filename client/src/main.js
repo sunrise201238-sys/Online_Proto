@@ -50,6 +50,7 @@ import {
 import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
 import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
 import { coverDistanceAt, deserializeNavGrid, navDataSignature, navDataFile } from '@gvg/shared/src/sim/navgrid.js';
+import { boxHoldsAt } from '@gvg/shared/src/sim/physics.js';   // (the one hold window, the shared sim's: a box whose top is a floor lets a body within a step of that top come, so the ground rule steps it up — this file's mirror lacked that clause, and offline a body was pushed off a chair row's side before it could step on; user 2026-10-29)
 
 const app = document.getElementById('app');
 
@@ -10389,7 +10390,7 @@ const GLB_MAPS = {
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
   compound: { file: 'maps/compound', scale: 4, cx: 0, cz: 1.34, ground: -0.094, drop: [], ceilY: 28, modelM: 1.34, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1.34 m per model unit, the user's pick with the map scale test, 2026-10-24: the served copy is scaled by 1.34 (glb_rescale.mjs), so the file's units are the game's metres; the street at the yard's grass, y -0.094; each object fades whole when it hides the player's own unit, as Warehouse's; the west and north sides are open — MAP_BOUNDARY `open` — the model's wall and fences being the edge there)
-  hospital: { file: 'maps/hospital', scale: 4, cx: -28.925, cz: -1.9, ground: 0.185, drop: [], ceilY: 28, modelM: 0.37, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, cmdDark: true, cmdCeil: 4.6, neverFade: ['Doors_open_Object_4', 'Doors_open_Object_6', 'Doors_open_Object_7', 'Doors_open_Object_10', 'Doors_open_Object_11', 'Doors_open_Object_13'] },   // (0.37 m per model unit; command mode cuts the model 4.6 m over the floor — under the lower ceiling's fixtures at 5.1 m and over the doors, 3.0 m — so the rooms show from above, user 2026-10-29; the open door and gate leaves sit in nodes of their own, Doors_open_*, kept out of the wall fade, which carved them into torn shapes when a body stood beside them, user 2026-10-29, the user's pick with the map scale test on the 0.25 m first cut, 2026-10-28: the served copy is scaled by 0.37 (glb_rescale.mjs), so the file's units are the game's metres; the street is the building's floor, y 0.185; indoors, so the Backrooms' fade rules — the walls between the camera and the player fade — and no red edge, the crop's rim being the road's far wall and the building's far walls)
+  hospital: { file: 'maps/hospital', scale: 4, cx: -28.925, cz: -1.9, ground: 0.185, drop: [], ceilY: 28, modelM: 0.37, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, cmdDark: true, cmdCeil: 4.6, fadeWhole: ['Door'] },   // (0.37 m per model unit; command mode cuts the model 4.6 m over the floor — under the lower ceiling's fixtures at 5.1 m and over the doors, 3.0 m — so the rooms show from above, user 2026-10-29; the twenty open leaves — twelve doors, the gate's two, the six glass leaves the model has standing open — sit in nodes of their own, DoorD1_…, DoorGATEn_…, DoorG1_…, and each fades whole, alone, when it hides a body (fadeWhole): in the wall fade's pieces a leaf faded by the piece and showed torn, user 2026-10-29, the user's pick with the map scale test on the 0.25 m first cut, 2026-10-28: the served copy is scaled by 0.37 (glb_rescale.mjs), so the file's units are the game's metres; the street is the building's floor, y 0.185; indoors, so the Backrooms' fade rules — the walls between the camera and the player fade — and no red edge, the crop's rim being the road's far wall and the building's far walls)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10534,13 +10535,21 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   group.updateMatrixWorld(true);
   const COL = cfg.fadeCell ?? 4, PAD = 2;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing)
   const still = cfg.neverFade ?? [];
-  const meshes = []; inst.traverse((o) => { if (o.isMesh && !underNodes(o, still, inst)) meshes.push(o); });
+  // FADE WHOLE (`fadeWhole`, 2026-10-29): the nodes whose names start with one of these prefixes — the Hospital's door leaves, one
+  // node per leaf per source mesh, DoorD1_…: the name up to its first '_' names the leaf — are things of their own that fade whole,
+  // alone, as fadeNodes' objects do, and seed no wall cell. In the walls' pieces a leaf faded by the piece — the pieces between
+  // the camera and the body — and showed a see-through, jagged bottom (user 2026-10-29, "they shouldn't go transparent only the
+  // bottom part; that'd make the door look broken"); kept out of the fade altogether, as before, a leaf hid a body.
+  const whole = cfg.fadeWhole ?? []; const wholeOf = new Map();
+  const wholeKey = (o) => { for (let n = o; n && n !== inst; n = n.parent) { if (n.name && whole.some((p) => n.name.startsWith(p))) return n.name.split('_')[0]; } return null; };
+  const meshes = []; inst.traverse((o) => { if (!o.isMesh || underNodes(o, still, inst)) return; const key = wholeKey(o); if (key) { if (!wholeOf.has(key)) wholeOf.set(key, []); wholeOf.get(key).push(o); } else meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); fadeOwned.push(g); return g; };
   // (every mesh's geometry copied for this arena — split into pieces indoors (fadeWalls: the long faces in pieces no longer
   // than two cells, so a wall seeds every cell along it), cloned otherwise — so that the parts share this arena's buffers,
   // never the cache's, and all of it can go with the arena)
   const geoOf = new Map(); for (const mesh of meshes) { const g = cfg.fadeWalls ? splitLong(mesh.geometry, mesh.matrixWorld, 2 * COL) : mesh.geometry.index ? mesh.geometry.clone() : mesh.geometry.toNonIndexed(); fadeOwned.push(g); geoOf.set(mesh, g); }
+  for (const list of wholeOf.values()) for (const mesh of list) { const g = mesh.geometry.index ? mesh.geometry.clone() : mesh.geometry.toNonIndexed(); fadeOwned.push(g); geoOf.set(mesh, g); }   // (a whole thing is never split into pieces)
   const indexOf = (geo) => geo.index ? geo.index.array : Uint32Array.from({ length: geo.attributes.position.count }, (_, k) => k);
   // 1. the seed cells, joined into things: the fade boxes. Indoors (`fadeWalls`) a thing is a straight wall: the run of
   // touching seed cells whose steep faces face the same way (x or z), so a T-junction's two walls are two things while
@@ -10559,6 +10568,32 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const solidAt = (x, y, z) => { const e = bucket.get(bkey(x, z)); if (!e) return false; for (const o of e.boxes) if (x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && y >= o.minY && y <= o.maxY) return true; return false; };
   const floorAt = (x, z, below) => { const e = bucket.get(bkey(x, z)); let f = 0; if (e) for (const s of e.floors) { if (x < s.minX - COL || x > s.maxX + COL || z < s.minZ - COL || z > s.maxZ + COL) continue; const h = s.heightAt ? s.heightAt(Math.max(s.minX, Math.min(x, s.maxX)), Math.max(s.minZ, Math.min(z, s.maxZ))) : s.top; if (h <= below && h > f) f = h; } return f; };   /* (heightAt: the arena's surfaces as materialised — a lid's top was lost on the way and read as no floor) */
   const tallHere = (cx, cy, cz, flat) => flat ? !solidAt(cx, cy - hideY, cz) && cy - floorAt(cx, cz, cy - hideY) >= tallY : cy - floorAt(cx, cz, cy + 2) >= tallY;
+  // (the whole things — fadeWhole — registered first, each from its own meshes' box and faces, the way fadeNodes registers an object)
+  let wholeN = 0;
+  for (const [key, list] of wholeOf) {
+    const e = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    for (const mesh of list) { const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); for (let i = 0; i < idx.length; i += 1) { w[0].fromBufferAttribute(pos, idx[i]).applyMatrix4(mesh.matrixWorld); if (w[0].x < e.minX) e.minX = w[0].x; if (w[0].x > e.maxX) e.maxX = w[0].x; if (w[0].y < e.minY) e.minY = w[0].y; if (w[0].y > e.maxY) e.maxY = w[0].y; if (w[0].z < e.minZ) e.minZ = w[0].z; if (w[0].z > e.maxZ) e.maxZ = w[0].z; } }
+    const cx = (e.minX + e.maxX) / 2, cz = (e.minZ + e.maxZ) / 2;
+    if (e.maxY - floorAt(cx, cz, e.minY + 0.5) < tallY) continue;   // (a leaf lower than a body's hiding height — none here — fades never)
+    const hull = e.maxX - e.minX >= 2.3 || e.maxZ - e.minZ >= 2.3; const group = `glb-whole-${key}-${wholeN += 1}`;
+    for (const mesh of list) {
+      const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); const indices = []; const parts = []; const bb = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+      for (let t = 0; t + 2 < idx.length; t += 3) {
+        for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
+        indices.push(idx[t], idx[t + 1], idx[t + 2]); if (!hull) continue;
+        const f = { minX: Math.min(w[0].x, w[1].x, w[2].x), maxX: Math.max(w[0].x, w[1].x, w[2].x), minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: Math.min(w[0].z, w[1].z, w[2].z), maxZ: Math.max(w[0].z, w[1].z, w[2].z), tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z] };
+        parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ;
+      }
+      if (!indices.length) continue;
+      const mat = mesh.material.clone(); fadeOwned.push(mat);
+      const m = new THREE.Mesh(part(geo, indices), mat);
+      m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
+      m.userData.fadeDepthToggle = true;
+      mesh.parent.add(m); m.updateMatrixWorld(true);
+      registerWallFade(m, { ...(hull ? bb : e), parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: group, fadeAlpha: cfg.fadeAlpha });
+      mesh.geometry = part(geo, []);   // (the source mesh draws nothing: the whole thing is its fade mesh)
+    }
+  }
   // BY NODE (`fadeNodes`): a thing is one of the model's own objects — a node under the scene's root with everything under
   // it: a container, a machine, a crate — where the model is built that way (Warehouse: 33 objects, each one piece of
   // the yard). The cells' things served a map that is one mesh; here they joined every object that touched the next into
@@ -16864,8 +16899,7 @@ function wrapAngle(angle) {
 const _overlapScratch = [], _resolveScratch = [];   // (the body's own box tests' broadphase lists, as in physics.js)
 function unitOverlapsObstacle(x, y, z, radius = 1.15) {
   for (const o of obstaclesNearPoint(arenaObstacles, x, z, radius, _overlapScratch)) {
-    const topBuffer = o.topBuffer ?? 4;
-    if (y < o.minY - 2 || y > o.maxY + topBuffer) continue;
+    if (!boxHoldsAt(o, y)) continue;   // (the shared window, floorTop clause included — see the import)
     const nearestX = Math.max(o.minX, Math.min(x, o.maxX));
     const nearestZ = Math.max(o.minZ, Math.min(z, o.maxZ));
     const dx = x - nearestX;
@@ -16884,8 +16918,7 @@ function resolveUnitObstacleCollisions(mech, prevPos) {
   const pos = mech.body.position;
   let nx = 0, nz = 0, touched = false;
   for (const o of obstaclesNearPoint(arenaObstacles, pos.x, pos.z, radius + 2, _resolveScratch)) {   // (within the radius plus 2 units, in order — see physics.js)
-    const topBuffer = o.topBuffer ?? 4;
-    if (pos.y < o.minY - 2 || pos.y > o.maxY + topBuffer) continue;
+    if (!boxHoldsAt(o, pos.y)) continue;   // (the shared window, floorTop clause included — see the import)
     const nearestX = Math.max(o.minX, Math.min(pos.x, o.maxX));
     const nearestZ = Math.max(o.minZ, Math.min(pos.z, o.maxZ));
     const dx = pos.x - nearestX;

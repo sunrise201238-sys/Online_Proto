@@ -541,6 +541,17 @@ let deadFloor = 0;
     for (let dk = -BODY_CELLS; dk <= BODY_CELLS; dk += 1) for (let di = -BODY_CELLS; di <= BODY_CELLS; di += 1) { const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue; const n = kk * nx + ii; if (stood[n]) covered = 1; if (blocks(j, n) && thingTop[n] > top) top = thingTop[n]; }
     if (!covered && top > -Infinity) fill.push([j, top]); }
   for (const [j, top] of fill) thingTop[j] = top; deadFloor = fill.length; }
+// CAP (a map's own data, 2026-10-29): boxes of the model's metres, CAP="x0,x1,z0,z1,top;…", in which a thing's top is read
+// as no higher than `top` (metres over the street): the Hospital's waiting room chairs — seats 0.72 m, backs 1.2 m, a jump
+// — read as 0.55 m things, stepped onto and walked across, their backs walked through (user 2026-10-29, "walk-on-able,
+// without jumping needed"). A cell is in a box by its centre.
+const CAP = (process.env.CAP ?? '').split(';').map((s) => s.trim()).filter(Boolean).map((s) => s.split(',').map(Number)); let capped = 0;
+if (CAP.length) for (let j = 0; j < N; j += 1) { const i = j % nx, k = (j - i) / nx; const x = X0 + (i + 0.5) * CELL, z = Z0 + (k + 0.5) * CELL;
+  for (const B of CAP) { if (x < B[0] || x > B[1] || z < B[2] || z > B[3]) continue;
+    if (thingTop[j] > B[4]) { thingTop[j] = B[4]; capped += 1; }
+    if (reach[j] && floorH[j] > B[4]) floorH[j] = B[4];   // (a seat the flood climbed as a kerb is floor at the cap, not an island a step too high)
+    // (what hung over the box under a body's headroom — a chair's back leaning over the cell behind its seat, read as a beam or a ceiling — hangs no more: it made a box a body on the row walked into; the room's ceiling, higher, stays)
+    if (hang[j] !== null && hang[j][0] < B[4] + HEADROOM) hang[j] = null; if (!Number.isNaN(ceilH[j]) && ceilH[j] < B[4] + HEADROOM) ceilH[j] = NaN; } }
 // LOW COVER: a thing a body hops onto from what it can stand on beside it — a reached floor, or low cover it
 // already hopped onto (a car's bonnet, then its roof) — no more than LOW_MAX above that and no more than
 // CHAIN_MAX above the floor the hops started from. Everything else that stands is a WALL. A thin thing (a
