@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { boostScaleOf } from '@gvg/shared/src/sim/constants.js';   // (a map's boost scale: District's gauge and refill five times, the bots' gates with them; user 2026-10-29)
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
@@ -2392,7 +2393,8 @@ function createMech(color, unitData, isOwnUnit = false) {
     glintMesh: null,
     state: {
       action: 'idle',
-      boost: unitData.boostCap ?? BOOST_CAP,
+      boost: (unitData.boostCap ?? BOOST_CAP) * boostScaleOf(state.mapKey),
+      boostScale: boostScaleOf(state.mapKey),   // (the map's boost scale, shared constants.js MAP_DATA: the gauge's volume and refill and the bots' thresholds, times it; District 5)
       hp: unitData.hp ?? MAX_HP,
       redLock: false,
       overheatedUntil: 0,
@@ -4697,8 +4699,9 @@ function updateBoost(mech, now, action) {
   const consume = ['dash'].includes(action);
   // Per-unit drain / regen / cap, with global-default fallbacks.
   const drain = mech.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
-  const regen = mech.unit.boostRegen ?? BOOST_REGEN_PER_TICK;
-  const cap = mech.unit.boostCap ?? BOOST_CAP;
+  const kBoost = s.boostScale ?? boostScaleOf(state.mapKey);   // (the map's boost scale: District 5)
+  const regen = (mech.unit.boostRegen ?? BOOST_REGEN_PER_TICK) * kBoost;
+  const cap = (mech.unit.boostCap ?? BOOST_CAP) * kBoost;
   const ticks = stepBoostTicks(s, 'boostClock', now);
   if (consume) {
     if (ticks) s.boost = Math.max(0, s.boost - drain * ticks);
@@ -6136,7 +6139,7 @@ function updateHud(now = performance.now()) {
   // that last case used to keep reading the dead player's frozen gauge and
   // magazine while the camera sat on the ally).
   const shown = cameraFocusMech() ?? state.player;
-  const shownBoostMax = shown.unit.boostCap ?? BOOST_CAP;
+  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * boostScaleOf(state.mapKey);   // (the map's boost scale: District 5)
   // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
   hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
   // Remaining-units row under each side's HP bar — one small weapon render
@@ -11448,7 +11451,7 @@ function cmdTryStartJump(m, now) {
   const st = m.state;
   if (!m.grounded || st.airborne) return false;
   if (now < st.jumpCooldownUntil) return false;
-  if (st.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  if (st.boost < MANDATED_JUMP_MIN_BOOST * (st.boostScale ?? 1)) return false;
   st.boost = Math.max(0, st.boost - (m.unit.jumpBoostCost ?? JUMP_BOOST_COST));
   st.refillPausedUntil = now + 500;
   st.jumpVelocity = m.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -11536,7 +11539,7 @@ function applyMoveOrder(m, now) {
     for (let k = mv.idx; k < mv.path.length; k += 1) {
       if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
-    const floor = jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR;
+    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? 1);   // (the map's boost scale: District 5)
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
     // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
@@ -11545,7 +11548,7 @@ function applyMoveOrder(m, now) {
     // threshold before the next dash (owner 2.1b — no repeated one-tick
     // boosts hovering at the floor).
     const st = m.state;
-    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP);
+    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? 1);
     if (mv.dashArmed) {
       if (st.boost <= floor || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
     } else if (st.boost >= armAt && now >= (st.emptyRecoverUntil ?? 0)) {

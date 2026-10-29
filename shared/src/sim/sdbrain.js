@@ -436,6 +436,10 @@ export function sdBrainTick(host) {
   const sdDrainPerS = (meUnit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK) * (1000 / TICK_RATE_MS);
   const sdSprintCost = (d) => d / sdSprint * sdDrainPerS;
   const sdStepCost = meUnit.stepBoostCost ?? STEP_BOOST_COST;
+  // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): the reserve,
+  // the dash floor and the full tank THE VALVE opens at scale with the gauge's volume and refill (movement.js); the costs — the
+  // dodge, a sprint's drain — do not.
+  const kB = me.boostScale ?? 1; const sdReserve = SD.boostReserve * kB, sdDashFloor = SD.dashFloor * kB;
   const stepD = meUnit.stepDistance ?? STEP_DISTANCE;
   const stepMs = meUnit.stepDurationMs ?? STEP_DURATION_MS;
   const sdDodgeReady = now >= (me.stepCooldownUntil ?? 0) && now > (me.stepUntil ?? 0);
@@ -534,7 +538,7 @@ export function sdBrainTick(host) {
   // reserve. The reserve's dodge is the exposure's own — the next exposure's
   // dodge is on cooldown (1175 ms) for longer than any planned exposure
   // lasts, so a second dodge in the tank would buy nothing.
-  const sdNeed = (legLen) => SD.boostReserve + sdSprintCost(legLen);
+  const sdNeed = (legLen) => sdReserve + sdSprintCost(legLen);
   // THE VALVE: the tank is spent in one draught and refilled in one. It
   // shuts when the gauge is down to what the hidden legs leave for the next
   // exposure (the longest peek's need) and opens again only when the gauge
@@ -545,7 +549,7 @@ export function sdBrainTick(host) {
   // hundred ms as it refilled, each resetting the refill pause — the gauge
   // never rose while walking and the attack was taken on a third of a tank.)
   me.botSDTankOpen ??= true;
-  if (me.boost >= (meUnit.boostCap ?? BOOST_CAP)) me.botSDTankOpen = true;
+  if (me.boost >= (meUnit.boostCap ?? BOOST_CAP) * kB) me.botSDTankOpen = true;
   else if (me.boost <= sdNeed(SD.peekLegMax)) me.botSDTankOpen = false;
   const sdTankOpen = me.botSDTankOpen;
 
@@ -609,7 +613,7 @@ export function sdBrainTick(host) {
         const back = Math.hypot(plan.origin.x - mePos.x, plan.origin.z - mePos.z);
         const exitPrice = sdPrice(sdExitMs(back), sdThreatDist, 1, sdExposedFor);
         const lineGone = !sdLine && now - plan.at > TICK_RATE_MS * 2;
-        if (exitPrice >= SD.riskCap || sdMyEmpty || lineGone || me.boost <= SD.dashFloor) {
+        if (exitPrice >= SD.riskCap || sdMyEmpty || lineGone || me.boost <= sdDashFloor) {
           me.botSDWindowMs = (me.botSDWindowMs ?? 0) + (now - plan.at);
           const o = plan.origin;
           const p1 = sdPerp(1);
@@ -639,7 +643,7 @@ export function sdBrainTick(host) {
     sdCross('react', null, side);
     me.botSDReacts = (me.botSDReacts ?? 0) + 1;
     me.botSDSearchAt = now;
-    if (sdDodgeReady && me.boost >= sdStepCost + SD.dashFloor && Math.max(rooms[0], rooms[1]) > 0) {
+    if (sdDodgeReady && me.boost >= sdStepCost + sdDashFloor && Math.max(rooms[0], rooms[1]) > 0) {
       const p = sdPerp(side);
       if (host.startStep(p.x, p.z)) me.botSDDodges = (me.botSDDodges ?? 0) + 1;
     }
@@ -731,7 +735,7 @@ export function sdBrainTick(host) {
     if (!path.length) return null;
     const rr = sdRouteRisk(path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
     me.botSDLastRisk = rr.risk;
-    if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (rr.exposedLen <= 0 || sdTankOpen)) return path;
+    if (rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - sdReserve && (rr.exposedLen <= 0 || sdTankOpen)) return path;
     if (rr.first) sdMark(rr.first.x, rr.first.z);
     me.botSDRejects = (me.botSDRejects ?? 0) + 1;
     return null;
@@ -804,7 +808,7 @@ export function sdBrainTick(host) {
             // escape's route is taken unpriced: any hidden cell beats the open.)
             const rr = sdRouteRisk(found.path, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, sdReact);
             me.botSDLastRisk = rr.risk;
-            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - SD.boostReserve && (a.defensive || rr.exposedLen <= 0 || sdTankOpen);
+            ok = rr.risk <= SD.riskCap && sdSprintCost(rr.exposedLen) <= me.boost - sdReserve && (a.defensive || rr.exposedLen <= 0 || sdTankOpen);
             if (!ok) { if (rr.first) sdMark(rr.first.x, rr.first.z); me.botSDRejects = (me.botSDRejects ?? 0) + 1; me.botSDRefusedPath = found.path; }
           }
           if (ok) {
@@ -912,7 +916,7 @@ export function sdBrainTick(host) {
     if (found) {
       hx += avoid.rx * 0.6; hz += avoid.rz * 0.6;
       const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
-      coverMove = { hold: false, hide: true, dash: me.boost > SD.dashFloor, mx: hx, mz: hz };
+      coverMove = { hold: false, hide: true, dash: me.boost > sdDashFloor, mx: hx, mz: hz };
       cross.moved = true;
     } else {
       me.momentumVX = 0; me.momentumVZ = 0;
@@ -928,7 +932,7 @@ export function sdBrainTick(host) {
       // -> stand and fire (never back into the cover: that is THE RETREAT)
       const p = sdPerp(plan.side);
       if (!sdIntoWall(p.x, p.z) && sdLegFits(mePos.x, mePos.z, mePos.x + p.x * SD.reactRoom, mePos.z + p.z * SD.reactRoom)) {
-        coverMove = { hold: false, hide: true, dash: me.boost > SD.dashFloor, mx: p.x, mz: p.z };
+        coverMove = { hold: false, hide: true, dash: me.boost > sdDashFloor, mx: p.x, mz: p.z };
       } else {
         me.momentumVX = 0; me.momentumVZ = 0;
         coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
@@ -939,7 +943,7 @@ export function sdBrainTick(host) {
       let tx = plan.point.x - mePos.x, tz = plan.point.z - mePos.z;
       const tl = Math.hypot(tx, tz) || 1;
       if (sdIntoWall(tx / tl, tz / tl)) { sdMark(plan.point.x, plan.point.z); sdDrop(); me.botSDSearchAt = now; coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 }; me.botSDState = 'hold'; }
-      else { coverMove = { hold: false, hide: true, dash: me.boost > SD.dashFloor && tl > 2, mx: tx / tl, mz: tz / tl }; me.botSDState = 'peek'; }
+      else { coverMove = { hold: false, hide: true, dash: me.boost > sdDashFloor && tl > 2, mx: tx / tl, mz: tz / tl }; me.botSDState = 'peek'; }
     }
   } else if (plan && plan.path) {
     // THE ROUTE: the next waypoint, taken early when the straight cut to it
@@ -990,7 +994,7 @@ export function sdBrainTick(host) {
       for (let k = plan.idx; k < sp.length; k += 1) if (sp[k].jump) { jumpAhead = true; break; }
       let sdJump = null, bank = false;
       if (wp.jump && host.grounded && !me.airborne && wl < SD.jumpReach) {   // (the path says where the jump link is)
-        if (me.boost >= SD.boostReserve && now >= (me.jumpCooldownUntil ?? 0)) {
+        if (me.boost >= sdReserve && now >= (me.jumpCooldownUntil ?? 0)) {
           if (host.startJump()) { sdJump = { x: hx, z: hz }; plan.jumpAt = now; plan.jumpStepped = false; me.botSDJumps = (me.botSDJumps ?? 0) + 1; }
         } else bank = true;   // (the tank or the cooldown: stand at the ledge)
       } else if (me.airborne && plan.jumpAt != null && now - plan.jumpAt <= 250 && !plan.jumpStepped && wl > 3) {
@@ -999,7 +1003,7 @@ export function sdBrainTick(host) {
       const lastLeg = plan.idx === sp.length - 1 && wl <= 2;   // (the last 2 u onto the goal are walked: the body stops ON the cell)
       // (a hidden leg sprints through THE VALVE; an exposed stretch ahead and the escape are defensive and spend to the floor)
       const defensive = aheadExposed || plan.kind === 'escape';
-      const dash = !lastLeg && (defensive ? me.boost > SD.dashFloor : (!jumpAhead && sdTankOpen));
+      const dash = !lastLeg && (defensive ? me.boost > sdDashFloor : (!jumpAhead && sdTankOpen));
       if (bank) { me.momentumVX = 0; me.momentumVZ = 0; coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 }; me.botSDState = 'bank'; }
       else { coverMove = { hold: false, hide: true, dash, mx, mz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 }; me.botSDState = dash ? 'dash' : 'walk'; }
     }
@@ -1043,7 +1047,7 @@ export function sdBrainTick(host) {
   // through the enemy's first rounds, planned exposure or not (THE REACTION
   // and the dodge-leg peek have already stepped; a window on its point has
   // no leg to step along).
-  if (sdOpened && coverMove && !coverMove.hold && sdDodgeReady && me.boost >= sdStepCost + SD.dashFloor && host.startStep(coverMove.mx, coverMove.mz)) {
+  if (sdOpened && coverMove && !coverMove.hold && sdDodgeReady && me.boost >= sdStepCost + sdDashFloor && host.startStep(coverMove.mx, coverMove.mz)) {
     me.botSDDodges = (me.botSDDodges ?? 0) + 1;
     me.botSDOpeningDodges = (me.botSDOpeningDodges ?? 0) + 1;
     coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };

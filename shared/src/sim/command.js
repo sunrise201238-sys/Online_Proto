@@ -290,7 +290,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // reach). tryStartJump paces retries via the bot 1.5 s cooldown floor.
     const wpY = wp ? (wp.y ?? 0) : mv.y;
     if (grounded && wpY - myFloorY > 1.7 && l < 7
-      && f.boost >= MANDATED_JUMP_MIN_BOOST) {
+      && f.boost >= MANDATED_JUMP_MIN_BOOST * (f.boostScale ?? 1)) {   // (the map's boost scale, state.js: District 5 — the tiers with the gauge)
       tryStartJump(f, now);
     }
     if (f.airborne || !f.grounded) {
@@ -313,13 +313,13 @@ export function tickCommandDriver(matchState, slot, now) {
     for (let k = mv.idx; k < mv.path.length; k += 1) {
       if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
-    const floor = jumpAhead ? CMD_TRAVEL_JUMP_BANK : CMD_TRAVEL_BOOST_FLOOR;
+    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : CMD_TRAVEL_BOOST_FLOOR) * (f.boostScale ?? 1);
     // Latched dash segments. The drop check is PREDICTIVE (boost must
     // survive this tick's drain without crossing the floor) because the
     // drain lands later in tickBoost — the reserve is never spent, matching
     // the offline clamp-at-floor exactly to within one drain tick.
     const drain = f.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
-    const armAt = Math.min(CMD_TRAVEL_DASH_ARM, f.unit.boostCap ?? BOOST_CAP);
+    const armAt = Math.min(CMD_TRAVEL_DASH_ARM, f.unit.boostCap ?? BOOST_CAP) * (f.boostScale ?? 1);
     if (mv.dashArmed) {
       if (f.boost < floor + drain || now < (f.emptyRecoverUntil ?? 0)) {
         mv.dashArmed = false;

@@ -55,8 +55,9 @@ const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg
 const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
 // Pursue / Maze sprint latch: arm at the reserve, release at the floor.
 function botTravelSprint(me) {
-  if (me.boost >= BOT_BOOST_RESERVE) me.botPursueSprinting = true;
-  else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR) me.botPursueSprinting = false;
+  const k = me.boostScale ?? 1;   // (the map's boost scale, constants.js boostScaleOf: District 5 — every gate here with the gauge)
+  if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
+  else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;
 }
 // A fresh hit forces an evade for this long (so taking damage always provokes a
@@ -472,7 +473,8 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
 // mechanics, untouched; bots additionally respect the strategic reserve so a
 // hop never leaves them without an emergency dodge.
 function botTryJump(host) {
-  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
+  const k = host.me.boostScale ?? 1;
+  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR * k, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST * k);
   if (host.me.boost < funded) return false;
   return host.startJump();
 }
@@ -487,12 +489,16 @@ function botTryJump(host) {
 // jumps (pursue perch, elevation aids) keep the reserve gate — bots still
 // hoard for the road.
 function botTryJumpSurvival(host) {
-  if (host.me.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  if (host.me.boost < MANDATED_JUMP_MIN_BOOST * (host.me.boostScale ?? 1)) return false;
   return host.startJump();
 }
 
 export function nbBrainTick(host) {
   const { now, me, pos, vel, grounded, unit, opp, enemies, obstacles, surfaces, grid, eyeUp, muzzleUp, mode, sd } = host;
+  // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
+  // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
+  // as the gauge's volume and refill are (movement.js); the costs are not.
+  const kB = me.boostScale ?? 1;
 
   // Sniper-charge lock: stand still until the charge resolves.
   if (host.charging) {
@@ -1019,8 +1025,8 @@ export function nbBrainTick(host) {
       // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
       // The dispatch funds it at the 8 floor (its own tier below).
       if (me.botHideDashArmed) {
-        if (me.boost <= BOT_SPRINT_MIN_BOOST) me.botHideDashArmed = false;
-      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR) {
+        if (me.boost <= BOT_SPRINT_MIN_BOOST * kB) me.botHideDashArmed = false;
+      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR * kB) {
         me.botHideDashArmed = true;
       }
       me.botHideHold = false;
@@ -1766,7 +1772,7 @@ export function nbBrainTick(host) {
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee
       // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (unit?.jumpBoostCost ?? 48) + 10);
+      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR * kB, (unit?.jumpBoostCost ?? 48) + 10);
       wantSprint = botTravelSprint(me) && !(jumpAhead && me.boost < jumpBank);
     } else if (me.botMazeEscapeUntil != null && now < me.botMazeEscapeUntil) {
       // STATUE BACK-OUT (no route, escape armed): reverse along the stored
@@ -1990,9 +1996,9 @@ export function nbBrainTick(host) {
   // funded down to the hard floor too — the latch itself (arm > 50, drop
   // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
   // travel floor — the latch above arms them only from a full tank.
-  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
-    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
-    : BOT_TRAVEL_SPRINT_FLOOR;
+  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST * kB
+    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST * kB
+    : BOT_TRAVEL_SPRINT_FLOOR * kB;
   const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
   if (sdStepping) {

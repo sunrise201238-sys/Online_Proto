@@ -698,7 +698,7 @@ export const MAP_DATA = {
   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   town: { id: 'town', name: 'Town' },
   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out.
-  district: { id: 'district', name: 'District' },
+  district: { id: 'district', name: 'District', boostScale: 5 },   // (boostScale: every unit's gauge volume and refill, and every boost threshold the bots and the command mode hold, times this on the map — the costs stay (boostScaleOf below); user 2026-10-29, "for District only, 5 times every unit's boost gauge amount and 5 times the refill speed, adjust the bots' cost gates accordingly": a 197 x 274 m block)
   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   compound: { id: 'compound', name: 'Compound' },
   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
@@ -718,6 +718,10 @@ export const MAP_DATA = {
 // Match-wide tunables.
 export const MAX_HP = 100;   // 150 -> 100 (2026-08-08 demo-line user tune, all units)
 export const BOOST_CAP = 250;
+// THE MAP'S BOOST SCALE (2026-10-29): MAP_DATA[mapKey].boostScale, 1 where a map names none. state.js createFighter carries it on
+// the fighter, movement.js tickBoost scales the cap and the regen by it, the brains (nbrain.js, sdbrain.js) and command.js their
+// thresholds, the client its own gauge and the HUD's bar; the costs — a dash tick, a jump, a dodge, the sniper's cancel — stay.
+export const boostScaleOf = (mapKey) => MAP_DATA[mapKey]?.boostScale ?? 1;
 export const GROUND_BASE_Y = 2.45;
 // The step: a body walks onto a floor no more than this higher than the one it stands on — no jump. 2.6 units
 // is 0.65 m, the modelled maps' tallest kerb (was 1.6: pavements then needed ramps of their own). The nav grid

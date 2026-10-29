@@ -6,6 +6,7 @@ import {
   MAP_DATA,
   MAX_HP,
   BOOST_CAP,
+  boostScaleOf,
   GROUND_BASE_Y,
   SPAWN_IMMUNITY_MS
 } from './constants.js';
@@ -16,7 +17,7 @@ import { mateSpawnFor } from './spawn.js';
 // in client/src/main.js, minus the Three.js / cannon refs (root, body,
 // thrusters, plumeLight, trail, torso, arms, glintMesh, etc.) which live
 // purely on the client.
-export function createFighter(id, unitKey, spawn) {
+export function createFighter(id, unitKey, spawn, boostScale = 1) {
   const unit = UNIT_DATA[unitKey];
   if (!unit) throw new Error(`Unknown unit: ${unitKey}`);
   return {
@@ -32,7 +33,8 @@ export function createFighter(id, unitKey, spawn) {
     action: 'idle',
 
     // Boost.
-    boost: unit.boostCap ?? BOOST_CAP,
+    boost: (unit.boostCap ?? BOOST_CAP) * boostScale,
+    boostScale,   // (the map's, constants.js boostScaleOf: the gauge's volume and refill and the bots' thresholds, times this — District 5)
     overheatedUntil: 0,
     refillPausedUntil: 0,
     emptyRecoverUntil: 0,
@@ -191,6 +193,7 @@ export function createMatchState({
 } = {}) {
   if (!MAP_DATA[mapKey]) throw new Error(`Unknown map: ${mapKey}`);
   const arena = getArena(mapKey);
+  const kBoost = boostScaleOf(mapKey);
   if (rosters) {
     p1UnitKey = rosters.p1?.[0] ?? p1UnitKey;
     p2UnitKey = rosters.p2?.[0] ?? p2UnitKey;
@@ -198,8 +201,8 @@ export function createMatchState({
     p4UnitKey = rosters.p4?.[0] ?? p4UnitKey;
   }
   const fighters = {
-    p1: createFighter('p1', p1UnitKey, arena.spawns.p1),
-    p2: createFighter('p2', p2UnitKey, arena.spawns.p2)
+    p1: createFighter('p1', p1UnitKey, arena.spawns.p1, kBoost),
+    p2: createFighter('p2', p2UnitKey, arena.spawns.p2, kBoost)
   };
   fighters.p1.team = 'A';
   fighters.p2.team = 'B';
@@ -223,8 +226,8 @@ export function createMatchState({
     // along z toward the centre off the end walls — and, where that lands in a thing, the first clear side; 2026-10-29)
     const p3Spawn = mateSpawnFor(mapKey, arena.spawns.p1);
     const p4Spawn = mateSpawnFor(mapKey, arena.spawns.p2);
-    fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn);
-    fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn);
+    fighters.p3 = createFighter('p3', p3UnitKey, p3Spawn, kBoost);
+    fighters.p4 = createFighter('p4', p4UnitKey, p4Spawn, kBoost);
     fighters.p3.team = 'A';
     fighters.p4.team = 'B';
     // Default targets: each pairs off with the opposite-team counterpart.
@@ -309,7 +312,7 @@ export function respawnFighterNext(matchState, id, at = null) {
   if (!old || !old.roster) return null;
   const nextIdx = old.rosterIdx + 1;
   if (nextIdx >= old.roster.length) return null;
-  const fresh = createFighter(id, old.roster[nextIdx], at ?? matchState.spawnPoints[id]);
+  const fresh = createFighter(id, old.roster[nextIdx], at ?? matchState.spawnPoints[id], old.boostScale ?? 1);
   fresh.team = old.team;
   fresh.roster = old.roster;
   fresh.rosterIdx = nextIdx;
