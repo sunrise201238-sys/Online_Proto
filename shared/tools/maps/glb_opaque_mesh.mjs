@@ -1,0 +1,10 @@
+// A named mesh's primitives given an opaque copy of their material (alpha 1, no alphaMode): the open gate leaves' glass,
+// which the client renders as true 16% glass once the leaves sit outside the fade, while every other pane is drawn opaque.
+// usage: node glb_opaque_mesh.mjs <in.glb> <out.glb> <meshName> [suffix=_opaque]
+import { writeFileSync } from 'node:fs'; import { readGlb } from './glb_read.mjs';
+const [inF, outF, meshName, suffix = '_opaque'] = process.argv.slice(2); const g = readGlb(inF); const json = g.json; const copies = new Map(); let n = 0;
+for (const m of json.meshes) { if (m.name !== meshName) continue; for (const pr of m.primitives) { if (pr.material == null) continue; if (!copies.has(pr.material)) { const src = json.materials[pr.material]; const c = JSON.parse(JSON.stringify(src)); delete c.alphaMode; delete c.alphaCutoff; c.name = (src.name ?? 'mat') + suffix; if (c.pbrMetallicRoughness?.baseColorFactor) c.pbrMetallicRoughness.baseColorFactor[3] = 1; json.materials.push(c); copies.set(pr.material, json.materials.length - 1); } pr.material = copies.get(pr.material); n += 1; } }
+console.log(`${meshName}: ${n} primitives on ${copies.size} opaque material copies: ${[...copies.values()].map((i) => json.materials[i].name).join(', ')}`);
+const binAll = g.bin; json.buffers[0].byteLength = binAll.length; let jsonBytes = Buffer.from(JSON.stringify(json)); const jp = (4 - (jsonBytes.length % 4)) % 4; if (jp) jsonBytes = Buffer.concat([jsonBytes, Buffer.alloc(jp, 0x20)]);
+const header = Buffer.alloc(12); header.write('glTF', 0); header.writeUInt32LE(2, 4); header.writeUInt32LE(28 + jsonBytes.length + binAll.length, 8); const ch1 = Buffer.alloc(8); ch1.writeUInt32LE(jsonBytes.length, 0); ch1.write('JSON', 4); const ch2 = Buffer.alloc(8); ch2.writeUInt32LE(binAll.length, 0); ch2.write('BIN\0', 4);
+writeFileSync(outF, Buffer.concat([header, ch1, jsonBytes, ch2, binAll])); console.log(`-> ${outF}`);

@@ -793,6 +793,7 @@ const MAP_DATA = {
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
+  hospital: { name: 'Hospital', thumb: 'top' },   // (the card: the user's own photo of a ward, 2026-10-29 — the picker's wide thumb its upper part, the open door and the desk)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
   spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
@@ -10379,7 +10380,8 @@ function applyMapAmbience(mapKey) {
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `neverFade` are no
 // things that stand between the camera and a unit — a ground (a desert map's valley floor and mountains), a ceiling
 // (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
-// looks down from above; `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
+// looks down from above, and `cmdCeil` cuts the model flat at that many metres over its ground there (a ceiling that is one
+// mesh with its walls — updateMapRoof); `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
 // rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
@@ -10387,6 +10389,7 @@ const GLB_MAPS = {
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
   compound: { file: 'maps/compound', scale: 4, cx: 0, cz: 1.34, ground: -0.094, drop: [], ceilY: 28, modelM: 1.34, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1.34 m per model unit, the user's pick with the map scale test, 2026-10-24: the served copy is scaled by 1.34 (glb_rescale.mjs), so the file's units are the game's metres; the street at the yard's grass, y -0.094; each object fades whole when it hides the player's own unit, as Warehouse's; the west and north sides are open — MAP_BOUNDARY `open` — the model's wall and fences being the edge there)
+  hospital: { file: 'maps/hospital', scale: 4, cx: -28.925, cz: -1.9, ground: 0.185, drop: [], ceilY: 28, modelM: 0.37, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, cmdDark: true, cmdCeil: 4.6, neverFade: ['Doors_open_Object_4', 'Doors_open_Object_6', 'Doors_open_Object_7', 'Doors_open_Object_10', 'Doors_open_Object_11', 'Doors_open_Object_13'] },   // (0.37 m per model unit; command mode cuts the model 4.6 m over the floor — under the lower ceiling's fixtures at 5.1 m and over the doors, 3.0 m — so the rooms show from above, user 2026-10-29; the open door and gate leaves sit in nodes of their own, Doors_open_*, kept out of the wall fade, which carved them into torn shapes when a body stood beside them, user 2026-10-29, the user's pick with the map scale test on the 0.25 m first cut, 2026-10-28: the served copy is scaled by 0.37 (glb_rescale.mjs), so the file's units are the game's metres; the street is the building's floor, y 0.185; indoors, so the Backrooms' fade rules — the walls between the camera and the player fade — and no red edge, the crop's rim being the road's far wall and the building's far walls)
   backrooms: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true },
   backrooms_anomaly: { file: 'maps/backrooms', scale: 4, cx: 0.6, cz: 1.4, ground: 0, drop: [], ceilY: 28, modelM: 2, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, edge: false, neverFade: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], roof: ['Object_16', 'Object_19', 'Object_17', 'Object_4'], cmdDark: true, anomaly: true }
 };
@@ -10415,7 +10418,15 @@ function splitLong(geo, matrixWorld, maxLen) {
   names.forEach((n, k) => g.setAttribute(n, new THREE.Float32BufferAttribute(out[k], src[k].itemSize)));
   return g;
 }
-function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide; }   // (every frame: the mode may flip while the model is still loading)
+// CEILING CUT (`cmdCeil`, metres over the model's ground; user 2026-10-29, "remove the ceiling in command mode"): where the map says
+// so, command mode clips the model flat at that height — the ceiling, the roof and whatever stands over the cut go, the walls keep
+// their lower part — for a model whose ceiling is one mesh with its walls (the Hospital's, merged by material: no roof node to
+// hide, as the Backrooms has). The plane sits on the map's own materials (local clipping), so the bodies, their markers and the shots
+// are never cut and only the map's few programs take the clipping variant; set on the change, and again when a model lands.
+const cmdCeilPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); let cmdCeilOn = false;
+function applyCmdCeil(on) { cmdCeilOn = on; if (on) renderer.localClippingEnabled = true; for (const g of arenaDecor) g.traverse((o) => { if (o.isMesh) o.material.clippingPlanes = on ? [cmdCeilPlane] : null; }); }
+function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide;   // (every frame: the mode may flip while the model is still loading)
+  const cfg = GLB_MAPS[state.mapKey]; const cut = !!(hide && cfg?.cmdCeil != null); if (cut) cmdCeilPlane.constant = cfg.cmdCeil * cfg.scale; if (cut !== cmdCeilOn) applyCmdCeil(cut); }
 function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaActive(); }   // (a boolean: classList.toggle(name, undefined) flips the class every frame)
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
@@ -10495,7 +10506,7 @@ function buildGlbArena(mapKey) {
     group.add(inst);
     splitFadeParts(inst, group, cfg, halfX, halfZ);
     group.userData.roof = []; if (cfg.roof) inst.traverse((o) => { if (o.isMesh && underNodes(o, cfg.roof, inst)) group.userData.roof.push(o); });
-    updateMapRoof();
+    cmdCeilOn = false; updateMapRoof();   // (the new meshes take the ceiling cut if the mode is on)
   });
 }
 // VIEW-BLOCK FADE for a modelled map (the Streets buildings' rule, updateWallFade): whatever stands tall enough to
