@@ -83,7 +83,7 @@ function buildPlainField() {
 
 const GENERATED_ARENA_COLLISION_DATA = {
   "hospital": {
-    // 1874 boxes and 833 floors from the animal_hospital_map_optimized glTF (0.37 m per model unit, the user's pick with the map scale test, 2026-10-28; the served copy in metres, its doors swung open, 2026-10-29) by shared/tools/glb_collision.mjs: crop x -28.924999999999997 z -1.8999999999999986 (metres) at the origin, 4 units per metre, the street at y 0.
+    // 1881 boxes and 836 floors from the animal_hospital_map_optimized glTF (0.37 m per model unit, the user's pick with the map scale test, 2026-10-28; the served copy in metres, its doors swung open, 2026-10-29) by shared/tools/glb_collision.mjs: crop x -28.924999999999997 z -1.8999999999999986 (metres) at the origin, 4 units per metre, the street at y 0.
     "obstacles": [
       {"minX": -221.7, "maxX": 222.3, "minZ": -199.6, "maxZ": -187.6, "minY": 0, "maxY": 100},
       {"minX": -221.7, "maxX": -88.7, "minZ": -187.6, "maxZ": -186.6, "minY": 0, "maxY": 100},
@@ -542,6 +542,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -32.7, "maxX": -31.7, "minZ": -52.6, "maxZ": -24.6, "minY": 0, "maxY": 14.95, "topBuffer": 0.8},
       {"minX": -31.7, "maxX": -20.97, "minZ": -52.6, "maxZ": -51.6, "minY": 0, "maxY": 24},
       {"minX": 26.36, "maxX": 28.09, "minZ": -52.27, "maxZ": -51.6, "minY": 0, "maxY": 24},
+      {"minX": -144.79, "maxX": -138.71, "minZ": -51.6, "maxZ": -49.6, "minY": -0.14, "maxY": 3.6, "topBuffer": 0.8},
       {"minX": -115.7, "maxX": -114.7, "minZ": -51.6, "maxZ": -47.6, "minY": 0, "maxY": 5.6, "topBuffer": 0.8},
       {"minX": -114.7, "maxX": -113.7, "minZ": -51.6, "maxZ": -50.6, "minY": 0, "maxY": 4.4, "topBuffer": 0.8},
       {"minX": -113.7, "maxX": -112.7, "minZ": -51.6, "maxZ": -50.6, "minY": 0, "maxY": 3.2, "topBuffer": 0.8},
@@ -562,6 +563,10 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -20.7, "maxX": 9.02, "minZ": -50.6, "maxZ": -49.6, "minY": 0, "maxY": 24},
       {"minX": 26.36, "maxX": 27.3, "minZ": -50.6, "maxZ": -49.6, "minY": 0, "maxY": 24},
       {"minX": 96.5, "maxX": 97.91, "minZ": -50.27, "maxZ": -48.93, "minY": 0.66, "maxY": 5.2, "topBuffer": 0.8, "noProjectile": true},
+      {"minX": -144.79, "maxX": -144.7, "minZ": -49.6, "maxZ": -48.6, "minY": -0.14, "maxY": 3.6, "topBuffer": 0.8},
+      {"minX": -144.7, "maxX": -139.7, "minZ": -49.6, "maxZ": -47.08, "minY": -0.14, "maxY": 24},
+      {"minX": -139.7, "maxX": -138.7, "minZ": -49.6, "maxZ": -48.6, "minY": 0, "maxY": 3.6, "topBuffer": 0.8},
+      {"minX": -138.7, "maxX": -137.7, "minZ": -48.59, "maxZ": -47.08, "minY": -0.14, "maxY": 24},
       {"minX": -136.7, "maxX": -129.7, "minZ": -49.6, "maxZ": -48.6, "minY": -0.14, "maxY": 5.2, "topBuffer": 0.8},
       {"minX": -128.7, "maxX": -125.7, "minZ": -49.6, "maxZ": -47.08, "minY": -0.14, "maxY": 24},
       {"minX": -125.7, "maxX": -124.7, "minZ": -49.6, "maxZ": -48.6, "minY": 0, "maxY": 0.59, "topBuffer": 0.8},
@@ -571,7 +576,9 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -20.7, "maxX": 0.3, "minZ": -49.6, "maxZ": -36.6, "minY": 0, "maxY": 100},
       {"minX": 26.72, "maxX": 27.3, "minZ": -49.6, "maxZ": -36.6, "minY": 0, "maxY": 11.99, "topBuffer": 0.8},
       {"minX": -156.7, "maxX": -155.7, "minZ": -48.6, "maxZ": -45.75, "minY": 0, "maxY": 24},
-      {"minX": -154.7, "maxX": -128.7, "minZ": -48.6, "maxZ": -47.08, "minY": 0, "maxY": 24},
+      {"minX": -154.7, "maxX": -144.7, "minZ": -48.6, "maxZ": -46.84, "minY": 0, "maxY": 24},
+      {"minX": -139.7, "maxX": -138.7, "minZ": -48.6, "maxZ": -46.84, "minY": 0, "maxY": 24},
+      {"minX": -137.7, "maxX": -128.7, "minZ": -48.6, "maxZ": -47.08, "minY": 0, "maxY": 24},
       {"minX": -125.7, "maxX": -124.7, "minZ": -48.6, "maxZ": -47.08, "minY": 0, "maxY": 24},
       {"minX": -122.7, "maxX": -118.7, "minZ": -48.13, "maxZ": -47.08, "minY": 0, "maxY": 24},
       {"minX": -117.7, "maxX": -116.7, "minZ": -48.6, "maxZ": -46.6, "minY": 0, "maxY": 24},
@@ -2000,6 +2007,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -78.7, "maxX": -71.52, "minZ": -64.38, "maxZ": -62.6, "maxTop": 12, "type": "flat", "top": 12, "lid": 1},
       {"minX": -153.7, "maxX": -151.7, "minZ": -61.6, "maxZ": -53.6, "maxTop": 18.72, "type": "flat", "top": 18.72, "lid": 1},
       {"minX": -153.7, "maxX": -150.7, "minZ": -52.6, "maxZ": -48.6, "maxTop": 18.72, "type": "flat", "top": 18.72, "lid": 1},
+      {"minX": -144.79, "maxX": -138.71, "minZ": -51.6, "maxZ": -49.6, "maxTop": 3.6, "type": "flat", "top": 3.6, "lid": 1},
       {"minX": -30.7, "maxX": -21.7, "minZ": -51.6, "maxZ": -24.6, "maxTop": 11.99, "type": "flat", "top": 11.99, "lid": 1},
       {"minX": -114.7, "maxX": -112.7, "minZ": -50.6, "maxZ": -48.6, "maxTop": 2.84, "type": "flat", "top": 2.84, "lid": 1},
       {"minX": -84.7, "maxX": -82.7, "minZ": -50.6, "maxZ": -48.6, "maxTop": 2.81, "type": "flat", "top": 2.81, "lid": 1},
@@ -2149,6 +2157,8 @@ const GENERATED_ARENA_COLLISION_DATA = {
       {"minX": -85.69, "maxX": -83.7, "minZ": -51.33, "maxZ": -50.6, "maxTop": 3.2, "type": "flat", "top": 3.2, "lid": 1},
       {"minX": -83.7, "maxX": -82.7, "minZ": -51.6, "maxZ": -50.6, "maxTop": 4.4, "type": "flat", "top": 4.4, "lid": 1},
       {"minX": -85.7, "maxX": -84.7, "minZ": -50.6, "maxZ": -47.72, "maxTop": 3.2, "type": "flat", "top": 3.2, "lid": 1},
+      {"minX": -144.79, "maxX": -144.7, "minZ": -49.6, "maxZ": -48.6, "maxTop": 3.6, "type": "flat", "top": 3.6, "lid": 1},
+      {"minX": -139.7, "maxX": -138.7, "minZ": -49.6, "maxZ": -48.6, "maxTop": 3.6, "type": "flat", "top": 3.6, "lid": 1},
       {"minX": -136.7, "maxX": -129.7, "minZ": -49.6, "maxZ": -48.6, "maxTop": 5.2, "type": "flat", "top": 5.2, "lid": 1},
       {"minX": -114.7, "maxX": -112.7, "minZ": -48.6, "maxZ": -47.6, "maxTop": 4, "type": "flat", "top": 4, "lid": 1},
       {"minX": -84.7, "maxX": -83.7, "minZ": -48.6, "maxZ": -47.49, "maxTop": 3.2, "type": "flat", "top": 3.2, "lid": 1},
