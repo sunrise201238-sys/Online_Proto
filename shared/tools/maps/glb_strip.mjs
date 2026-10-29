@@ -16,17 +16,27 @@ const read = (ai) => { const a = J.accessors[ai]; const bv = J.bufferViews[a.buf
   for (let i = 0; i < a.count; i += 1) { const off = base + i * stride; for (let c = 0; c < n; c += 1) outArr[i * n + c] = T === Float32Array ? BIN.readFloatLE(off + c * sz) : T === Uint32Array ? BIN.readUInt32LE(off + c * sz) : T === Uint16Array ? BIN.readUInt16LE(off + c * sz) : T === Int16Array ? BIN.readInt16LE(off + c * sz) : T === Uint8Array ? BIN.readUInt8(off + c * sz) : BIN.readInt8(off + c * sz); }
   return { a, arr: outArr, n }; };
 const addAccessor = (arr, type, componentType, count, extra = {}) => { const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength); const vi = addView(bytes, extra.target ? { target: extra.target } : {}); const acc = { bufferView: vi, componentType, count, type }; if (extra.minmax) { const n = COMPS[type]; const mn = new Array(n).fill(Infinity), mx = new Array(n).fill(-Infinity); for (let i = 0; i < count; i += 1) for (let c = 0; c < n; c += 1) { const v = arr[i * n + c]; if (v < mn[c]) mn[c] = v; if (v > mx[c]) mx[c] = v; } acc.min = mn; acc.max = mx; } accessors.push(acc); return accessors.length - 1; };
-let verts = 0, tris = 0, dropped = 0, idx16 = 0;
+let verts = 0, tris = 0, dropped = 0, idx16 = 0, compacted = 0, pi = 0;
 const cache = new Map();
-for (const m of J.meshes) for (const p of m.primitives) {
+// COMPACT (2026-10-29): a primitive that references only some of its attribute set's vertices — a door leaf cut out of a
+// merged mesh by glb_extract_node.mjs, which shares the source's attributes and writes only an index buffer; the source
+// mesh itself, its moved vertices unreferenced — is written with an attribute set of its own holding just those vertices,
+// the indices renumbered. The client copies a mesh's attributes whole when it sets the fade up, so the Hospital's eighty
+// leaf meshes each carried a 65k-vertex copy of their source chunk: 4.8 million vertices in the scene for 380 thousand in
+// the file, eleven seconds to load (user 2026-10-29, "Hospital loads longer"). A primitive using its whole set shares it, as before.
+for (const m of J.meshes) for (const p of m.primitives) { pi += 1;
+  const idxA = p.indices != null ? read(p.indices).arr : null; const nAll = J.accessors[p.attributes.POSITION].count;
+  let map = null, used = null; if (idxA) { map = new Int32Array(nAll).fill(-1); used = []; for (const v of idxA) if (map[v] < 0) { map[v] = used.length; used.push(v); } }
+  const compact = !!used && used.length < nAll; const own = compact ? `p${pi}:` : '';
   const attrs = {};
   for (const [sem, ai] of Object.entries(p.attributes)) {
     if (sem === 'TANGENT' || (sem === 'NORMAL' && !keepNormals)) { dropped += 1; continue; }
-    const key = 'a' + ai; if (!cache.has(key)) { const { a, arr } = read(ai); cache.set(key, addAccessor(arr, a.type, a.componentType, a.count, { target: 34962, minmax: sem === 'POSITION' })); if (sem === 'POSITION') verts += a.count; }
+    const key = own + 'a' + ai; if (!cache.has(key)) { const { a, arr, n } = read(ai); let outA = arr, cnt = a.count; if (compact) { outA = new arr.constructor(used.length * n); for (let i = 0; i < used.length; i += 1) for (let c = 0; c < n; c += 1) outA[i * n + c] = arr[used[i] * n + c]; cnt = used.length; }
+      cache.set(key, addAccessor(outA, a.type, a.componentType, cnt, { target: 34962, minmax: sem === 'POSITION' })); if (sem === 'POSITION') { verts += cnt; if (compact) compacted += nAll - cnt; } }
     attrs[sem] = cache.get(key);
   }
   p.attributes = attrs;
-  if (p.indices != null) { const key = 'i' + p.indices; if (!cache.has(key)) { const { a, arr } = read(p.indices); const nv = J.accessors[p.attributes.POSITION ?? Object.values(attrs)[0]]?.count ?? 1e9; let maxI = 0; for (const v of arr) if (v > maxI) maxI = v; const small = maxI < 65536; if (small) idx16 += 1; const packed = small ? Uint16Array.from(arr) : Uint32Array.from(arr); cache.set(key, addAccessor(packed, 'SCALAR', small ? 5123 : 5125, a.count, { target: 34963 })); tris += a.count / 3; } p.indices = cache.get(key); }
+  if (idxA) { const key = own + 'i' + p.indices; if (!cache.has(key)) { const arr = compact ? Uint32Array.from(idxA, (v) => map[v]) : idxA; let maxI = 0; for (const v of arr) if (v > maxI) maxI = v; const small = maxI < 65536; if (small) idx16 += 1; const packed = small ? Uint16Array.from(arr) : Uint32Array.from(arr); cache.set(key, addAccessor(packed, 'SCALAR', small ? 5123 : 5125, arr.length, { target: 34963 })); tris += arr.length / 3; } p.indices = cache.get(key); }
 }
 // the images, carried over as they are
 for (const im of J.images ?? []) { const bv = J.bufferViews[im.bufferView]; const data = BIN.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength); im.bufferView = addView(new Uint8Array(data)); }

@@ -10544,7 +10544,29 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   const wholeKey = (o) => { for (let n = o; n && n !== inst; n = n.parent) { if (n.name && whole.some((p) => n.name.startsWith(p))) return n.name.split('_')[0]; } return null; };
   const meshes = []; inst.traverse((o) => { if (!o.isMesh || underNodes(o, still, inst)) return; const key = wholeKey(o); if (key) { if (!wholeOf.has(key)) wholeOf.set(key, []); wholeOf.get(key).push(o); } else meshes.push(o); });
   const w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-  const part = (geo, indices) => { const g = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex(indices); fadeOwned.push(g); return g; };
+  // (partMulti: one geometry from the triangles of several source geometries of one attribute layout — a thing's pieces from
+  // the chunks of one material, merged (2026-10-29, "merge the wall pieces"): the Hospital's merged meshes come in 65k-vertex
+  // chunks cut by vertex count, not by place, so one wall lay in three of them and took three meshes, three materials and
+  // three hull tests a frame — 1,179 pieces for some 340 walls)
+  const partMulti = (entries) => { const g = new THREE.BufferGeometry(); fadeOwned.push(g); const names = Object.keys(entries[0].geo.attributes);
+    const runs = []; let total = 0, nIdx = 0;
+    for (const { geo, indices } of entries) { const map = new Map(); const order = []; const idx = new Uint32Array(indices.length); for (let i = 0; i < indices.length; i += 1) { const v = indices[i]; let m = map.get(v); if (m === undefined) { m = order.length; map.set(v, m); order.push(v); } idx[i] = m; } runs.push({ geo, order, idx }); total += order.length; nIdx += idx.length; }
+    for (const k of names) { const a0 = entries[0].geo.attributes[k]; const n = a0.itemSize; const dst = new a0.array.constructor(total * n); let d = 0; for (const { geo, order } of runs) { const src = geo.attributes[k].array; for (let i = 0; i < order.length; i += 1) { const s = order[i] * n; for (let c = 0; c < n; c += 1) dst[d + c] = src[s + c]; d += n; } } g.setAttribute(k, new THREE.BufferAttribute(dst, n, a0.normalized)); }
+    const idx = total < 65536 ? new Uint16Array(nIdx) : new Uint32Array(nIdx); let io = 0, vo = 0; for (const { order, idx: src } of runs) { for (let i = 0; i < src.length; i += 1) idx[io + i] = src[i] + vo; io += src.length; vo += order.length; } g.setIndex(new THREE.BufferAttribute(idx, 1)); return g; };
+  // (a piece's geometry holds its own vertices — the ones its triangles use, renumbered — not the source's whole attribute
+  // set with an index into it: three computes a geometry's bounding sphere over the whole position array, so every piece of
+  // the Hospital's 1,179 was measured over its source chunk's 200k vertices at the first frame and culled as if it were the
+  // chunk — ten seconds to the first frame, and no frustum culling after (user 2026-10-29, "Hospital loads longer"). An
+  // empty piece — the source of a whole thing, which draws nothing — keeps the shared set and an empty index.)
+  const part = (geo, indices) => { if (indices.length) return partMulti([{ geo, indices }]); const g = new THREE.BufferGeometry(); fadeOwned.push(g); for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]); g.setIndex([]); return g; };
+  // (what merges: pieces of one material, one transform and one attribute layout — a merged mesh wears the first piece's
+  // material clone and transform; the fade needs a material of its own per mesh, as before)
+  const mergeKey = (mesh, geo) => `${mesh.material.uuid}|${mesh.matrixWorld.elements.map((v) => v.toFixed(4)).join(',')}|${Object.keys(geo.attributes).sort().join()}`;
+  const mergedFadeMesh = (entries, parts, bb, group) => {   // entries: [{ mesh, geo, indices }] of one key → one fade mesh, registered
+    const first = entries[0].mesh; const mat = first.material.clone(); fadeOwned.push(mat);
+    const m = new THREE.Mesh(partMulti(entries), mat); m.position.copy(first.position); m.quaternion.copy(first.quaternion); m.scale.copy(first.scale);
+    m.userData.fadeDepthToggle = true; first.parent.add(m); m.updateMatrixWorld(true);
+    registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: group, fadeAlpha: cfg.fadeAlpha }); return m; };
   // (every mesh's geometry copied for this arena — split into pieces indoors (fadeWalls: the long faces in pieces no longer
   // than two cells, so a wall seeds every cell along it), cloned otherwise — so that the parts share this arena's buffers,
   // never the cache's, and all of it can go with the arena)
@@ -10576,23 +10598,19 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     const cx = (e.minX + e.maxX) / 2, cz = (e.minZ + e.maxZ) / 2;
     if (e.maxY - floorAt(cx, cz, e.minY + 0.5) < tallY) continue;   // (a leaf lower than a body's hiding height — none here — fades never)
     const hull = e.maxX - e.minX >= 2.3 || e.maxZ - e.minZ >= 2.3; const group = `glb-whole-${key}-${wholeN += 1}`;
+    const byKey = new Map();   // (merge key -> { entries, parts, bb }: the leaf's meshes of one material as one mesh)
     for (const mesh of list) {
-      const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); const indices = []; const parts = []; const bb = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+      const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); const indices = []; const mk = mergeKey(mesh, geo); if (!byKey.has(mk)) byKey.set(mk, { entries: [], parts: [], bb: { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity } }); const acc = byKey.get(mk); const bb = acc.bb;
       for (let t = 0; t + 2 < idx.length; t += 3) {
         for (let k = 0; k < 3; k += 1) w[k].fromBufferAttribute(pos, idx[t + k]).applyMatrix4(mesh.matrixWorld);
         indices.push(idx[t], idx[t + 1], idx[t + 2]); if (!hull) continue;
         const f = { minX: Math.min(w[0].x, w[1].x, w[2].x), maxX: Math.max(w[0].x, w[1].x, w[2].x), minY: Math.min(w[0].y, w[1].y, w[2].y), maxY: Math.max(w[0].y, w[1].y, w[2].y), minZ: Math.min(w[0].z, w[1].z, w[2].z), maxZ: Math.max(w[0].z, w[1].z, w[2].z), tri: [w[0].x, w[0].y, w[0].z, w[1].x, w[1].y, w[1].z, w[2].x, w[2].y, w[2].z] };
-        parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ;
+        acc.parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ;
       }
-      if (!indices.length) continue;
-      const mat = mesh.material.clone(); fadeOwned.push(mat);
-      const m = new THREE.Mesh(part(geo, indices), mat);
-      m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
-      m.userData.fadeDepthToggle = true;
-      mesh.parent.add(m); m.updateMatrixWorld(true);
-      registerWallFade(m, { ...(hull ? bb : e), parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: group, fadeAlpha: cfg.fadeAlpha });
+      if (indices.length) acc.entries.push({ mesh, geo, indices });
       mesh.geometry = part(geo, []);   // (the source mesh draws nothing: the whole thing is its fade mesh)
     }
+    for (const { entries, parts, bb } of byKey.values()) if (entries.length) mergedFadeMesh(entries, parts, hull ? bb : e, group);
   }
   // BY NODE (`fadeNodes`): a thing is one of the model's own objects — a node under the scene's root with everything under
   // it: a container, a machine, a crate — where the model is built that way (Warehouse: 33 objects, each one piece of
@@ -10748,20 +10766,19 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
     claimed.push({ mesh, geo, inBox, rest, faces });
   }
   const wide = (k) => { const s = span.get(k); return !!s && (s.x1 - s.x0 >= 2.3 || s.z1 - s.z0 >= 2.3); };
+  // (a thing's pieces gathered by merge key — one material, one transform, one attribute layout — and made one mesh each:
+  // the pieces of one wall from three 65k chunks of the model's merged mesh are one piece; its hull is their faces together)
+  const perThing = boxes.map(() => new Map());
   for (const { mesh, geo, inBox, rest, faces } of claimed) {
     inBox.forEach((indices, i) => {
       if (!indices.length) return;
-      const mat = mesh.material.clone(); fadeOwned.push(mat);
-      const m = new THREE.Mesh(part(geo, indices), mat);
-      m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
-      m.userData.fadeDepthToggle = true;
-      mesh.parent.add(m); m.updateMatrixWorld(true);
-      const parts = []; const bb = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-      for (const f of faces[i]) { if (f.narrow && !wide(f.cell)) continue; delete f.narrow; delete f.cell; parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ; }   // (a thing of posts alone has no hull and never fades)
-      registerWallFade(m, { ...bb, parts, occlude: true, occludeEnemy: !cfg.fadeOwn, fadeGroup: boxes[i].group, fadeAlpha: cfg.fadeAlpha });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms; fadeAlpha: how far it fades, the map's own number or the usual quarter)
+      const mk = mergeKey(mesh, geo); if (!perThing[i].has(mk)) perThing[i].set(mk, { entries: [], parts: [], bb: { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity } }); const acc = perThing[i].get(mk); const bb = acc.bb;
+      acc.entries.push({ mesh, geo, indices });
+      for (const f of faces[i]) { if (f.narrow && !wide(f.cell)) continue; delete f.narrow; delete f.cell; acc.parts.push(f); if (f.minX < bb.minX) bb.minX = f.minX; if (f.maxX > bb.maxX) bb.maxX = f.maxX; if (f.minY < bb.minY) bb.minY = f.minY; if (f.maxY > bb.maxY) bb.maxY = f.maxY; if (f.minZ < bb.minZ) bb.minZ = f.minZ; if (f.maxZ > bb.maxZ) bb.maxZ = f.maxZ; }   // (a thing of posts alone has no hull and never fades)
     });
     mesh.geometry = part(geo, rest);
   }
+  perThing.forEach((byKey, i) => { for (const { entries, parts, bb } of byKey.values()) mergedFadeMesh(entries, parts, bb, boxes[i].group); });   // (fadeOwn: the thing fades for the player's own character alone, not for an ally or an enemy it hides — the Backrooms; fadeAlpha: how far it fades, the map's own number or the usual quarter)
 }
 
 function buildArenaForMap(mapKey) {
