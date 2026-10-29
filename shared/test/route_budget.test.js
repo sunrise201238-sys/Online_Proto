@@ -1,3 +1,4 @@
+import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their files, before any arena is asked for)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getArena } from '../src/sim/index.js';

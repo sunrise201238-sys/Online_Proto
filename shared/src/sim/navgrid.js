@@ -45,7 +45,7 @@ const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 // cell. LAYER_CAP bounds the arrays on pathological geometry; no shipped map
 // needs more than 2.
 const LAYER_MIN_GAP = 2.0;
-const LAYER_CAP = 4;
+const LAYER_CAP = 16;   // (8 until the second day: the tallest building's column stands fifteen levels, floors every 4 m to its roof, so with eight kept the upper storeys and the roof were no part of the grid and a bot never followed a player up — "enemy BOT cannot find me; it's lingering at the ground floor"; the file holds nodes and edges as lists now, so the layers cost memory, not the download. 4 until 2026-10-29: District's car park stacks four decks and their ramps, its stairwells six flights, and under its north-east quarter the street, the station's tunnel and three cellar levels stand in one column; the grid's arrays grow with the square of the layers a map needs, so the cap stays as small as the maps allow)
 
 // ===== WALL CLEARANCE (2026-08-08) =====================================
 // Walkability uses FIGHTER_RADIUS, so a node qualifies with the body only
@@ -114,6 +114,8 @@ export function buildNavGrid(obstacles, surfaces) {
     return s === -Infinity ? 0 : s;
   };
   const fitsAt = (x, z, fy) => !unitOverlapsObstacle(x, fy + GROUND_BASE_Y, z, obstacles);
+  // A body walking from (ax, az) on floor fa to (bx, bz) fits at every unit of the way, standing where the walk stands it
+  const walkFits = (ax, az, fa, bx, bz) => { const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az))); for (let s = 1; s <= steps; s += 1) { const x = ax + ((bx - ax) * s) / steps, z = az + ((bz - az) * s) / steps; if (!fitsAt(x, z, walkFloorTo(ax, az, fa, x, z, surfaces))) return false; } return true; };
   // WHERE A NODE STANDS (2026-10-24): at its cell's centre when a body fits there, else a quarter cell to one side.
   // A lane narrower than two cells — Compound's 1.5 m catwalk between a kerb and a wall, its 1.75 m mezzanine between
   // a guard rail and a balustrade — holds a body, but neither row of cell centres falls in the clear band (they miss
@@ -175,8 +177,10 @@ export function buildNavGrid(obstacles, surfaces) {
         const at = standAt(x, z, hs[k]); if (!at) continue;
         keep.push(hs[k]); keepPos.push(at);
       }
-      keep.reverse(); keepPos.reverse();    // layer 0 = highest level
+      // (over the cap, the LOWEST levels stay — the street and the storeys over it; the cut once fell on the lowest, and a
+      //  stairwell of six flights stacked in one column kept its top four, so no bot walked its ground floor; 2026-10-29)
       if (keep.length > LAYER_CAP) { keep.length = LAYER_CAP; keepPos.length = LAYER_CAP; }
+      keep.reverse(); keepPos.reverse();    // layer 0 = highest level
       cellLayers[i] = keep; cellPos[i] = keepPos;
       // COVERED is about real overhead geometry, not about which levels were
       // kept: where furniture blocks the deck level, the ground beneath it is
@@ -253,7 +257,10 @@ export function buildNavGrid(obstacles, surfaces) {
             // at the floor the walk stands on there — past a step up — so a lip before the step, Factory's belt rails, 2.9
             // units over the ground beside a 2.6-unit belt top, was never met, the belt read as walked onto, no link ever
             // bridged it, and no bot crossed a belt; user 2026-10-24)
-            if (walkSegmentBlocked(ax, az, bx, bz, Math.min(floor[a], floor[b]) + GROUND_BASE_Y, obstacles)) continue;
+            // (2026-10-29: read along the walk, the body at the floor it stands on at each unit of the way — the one test at
+            //  the lower floor's height called a steep ramp blocked by the landing it climbs to, and no bot took District's
+            //  stairs; the lip before a step is still met, the body standing on the ground there)
+            if (!walkFits(ax, az, floor[a], bx, bz) || !walkFits(bx, bz, floor[b], ax, az)) continue;
             if (fitsAt(mx, mz, walkFloorTo(ax, az, floor[a], mx, mz, surfaces))) {
               if (east) edgeE[(la * layers + lb) * n + i] = 1;
               else edgeS[(la * layers + lb) * n + i] = 1;
@@ -282,7 +289,7 @@ export function buildNavGrid(obstacles, surfaces) {
       comp[seed] = compCount;
       while (sp > 0) {
         const cur = stack[--sp];
-        forEachWalkNeighbor(grid, cur, (nb) => {
+        denseWalkNeighbors(grid, cur, (nb) => {
           if (comp[nb] === -1) { comp[nb] = compCount; stack[sp++] = nb; }
         });
       }
@@ -363,26 +370,50 @@ export function buildNavGrid(obstacles, surfaces) {
   const SAME_COMPONENT_LINKS = true;
   const SAME_COMP_MIN_DETOUR = 40;          // world units
   const JUMP_ARC_CLEARANCE = 5.2;           // jump apex ~5.6, with margin
+  // Does the XZ segment cross the box's footprint? (the slab test; exact)
+  const segCrossesBox = (x0, z0, x1, z1, o) => {
+    let tMin = 0, tMax = 1;
+    for (const [s, dl, lo, hi] of [[x0, x1 - x0, o.minX, o.maxX], [z0, z1 - z0, o.minZ, o.maxZ]]) {
+      if (Math.abs(dl) < 1e-9) { if (s < lo || s > hi) return false; }
+      else {
+        const t1 = (lo - s) / dl, t2 = (hi - s) / dl;
+        const tN = Math.min(t1, t2), tF = Math.max(t1, t2);
+        if (tN > tMin) tMin = tN;
+        if (tF < tMax) tMax = tF;
+        if (tMin > tMax) return false;
+      }
+    }
+    return true;
+  };
   // Does any obstacle crossing the XZ segment stick up past `topLimit`?
   const segBlockedAbove = (x0, z0, x1, z1, topLimit) => {
-    const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });   // (the boxes the segment can cross; the slab test below is the exact one — 2026-10-25)
+    const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });   // (the boxes the segment can cross; the slab test is the exact one — 2026-10-25)
     for (let k = 0; k < cand.length; k += 1) {
       const o = cand[k];
       if (o.maxY <= topLimit || o.minY > topLimit) continue;
-      let tMin = 0, tMax = 1, miss = false;
-      for (const [s, dl, lo, hi] of [[x0, x1 - x0, o.minX, o.maxX], [z0, z1 - z0, o.minZ, o.maxZ]]) {
-        if (Math.abs(dl) < 1e-9) { if (s < lo || s > hi) { miss = true; break; } }
-        else {
-          const t1 = (lo - s) / dl, t2 = (hi - s) / dl;
-          const tN = Math.min(t1, t2), tF = Math.max(t1, t2);
-          if (tN > tMin) tMin = tN;
-          if (tF < tMax) tMax = tF;
-          if (tMin > tMax) { miss = true; break; }
-        }
-      }
-      if (!miss) return true;
+      if (segCrossesBox(x0, z0, x1, z1, o)) return true;
     }
     return false;
+  };
+  // THE LIP (2026-10-29, the second day; user: "BOT doesn't seem to know it can jump out from windows or rooftop"): a
+  // segment the body cannot walk at `floorY`'s body height may still be jumped where everything crossing it is a LIP —
+  // a parapet, a sill, a rail — that the jump's arc clears (the box lets the body go once its centre is topBuffer over
+  // the top: physics.js boxHoldsAt; at the arc's apex the centre is JUMP_ARC_CLEARANCE over the standing one) with
+  // nothing over the body's head there (a lintel lower than the centre at the apex plus the 2 units a box holds under
+  // itself). A rooftop's parapet and a window's sill were walls to the links; the bots took the stairs.
+  const LIP_LINKS = true;                  // (the reversibility switch: false builds no link over a lip)
+  const LIP_HEADROOM = JUMP_ARC_CLEARANCE + GROUND_BASE_Y + 2;
+  const onlyLipsAcross = (x0, z0, x1, z1, floorY) => {
+    if (!LIP_LINKS) return false;
+    const cand = obstaclesNearSegment(obstacles, { x: x0, z: z0 }, { x: x1, z: z1 });
+    for (let k = 0; k < cand.length; k += 1) {
+      const o = cand[k];
+      const lipTop = o.maxY + (o.floorTop ? 0 : (o.topBuffer ?? 4));
+      if (lipTop <= floorY + GROUND_BASE_Y + JUMP_ARC_CLEARANCE) continue;   // (a lip: hopped)
+      if (o.minY >= floorY + LIP_HEADROOM) continue;                           // (overhead: passed under)
+      if (segCrossesBox(x0, z0, x1, z1, o)) return false;
+    }
+    return true;
   };
   // Capped BFS walking distance (cells) between two nodes of one component.
   const walkDetourCells = (from, to, capCells) => {
@@ -392,7 +423,7 @@ export function buildNavGrid(obstacles, surfaces) {
     for (let d = 1; d <= capCells; d += 1) {
       const next = [];
       for (const cur of frontier) {
-        forEachWalkNeighbor(grid, cur, (j) => {
+        denseWalkNeighbors(grid, cur, (j) => {
           if (!dist.has(j)) { dist.set(j, d); next.push(j); }
         });
       }
@@ -409,6 +440,13 @@ export function buildNavGrid(obstacles, surfaces) {
     grid.jumpAdj.get(a).push(b);
     grid.jumpAdj.get(b).push(a);
     grid.jumpLinkCount += 1;
+  };
+  const DROP_LINKS = true;                  // (the reversibility switch: false builds no drop link)
+  const DROP_MAX = 200;                     // world units: 50 m, the tallest fall a bot takes on purpose (15 m until the second day: District's towers are 45 m, and the user wants the bot off their roofs; the sim has no fall damage)
+  const addDrop = (hi, lo) => {             // (one way: the fall, never the climb)
+    if (!grid.jumpAdj.has(hi)) grid.jumpAdj.set(hi, []);
+    grid.jumpAdj.get(hi).push(lo);
+    grid.dropLinkCount = (grid.dropLinkCount ?? 0) + 1;
   };
   const nodeX = (node) => posX[node];
   const nodeZ = (node) => posZ[node];
@@ -443,6 +481,21 @@ export function buildNavGrid(obstacles, surfaces) {
           // Factory's belts — 2.6 units up, a step's height, with 2.9-unit lips a body cannot step — were islands no link
           // reached, a rise under JUMP_MIN being left to walking, and no bot ever crossed one; user 2026-10-24. A shortcut
           // within one component keeps the least rise: a step is walked.)
+          // DROP LINKS (user 2026-10-29, "I want the bot to know how to jump off to get to the enemy faster"): a fall past the
+          // jump window, up to DROP_MAX, from the higher node to the lower — one way, the ledge's edge clear at the higher
+          // floor's body height (a parapet, a rail: no drop over it), and, within one walk component, only where the walk
+          // round is SAME_COMP_MIN_DETOUR or more. The follower vaults toward the waypoint a link leads to, so the body
+          // jumps off and falls to it.
+          if (DROP_LINKS && dyF > JUMP_MAX && dyF <= DROP_MAX) {
+            const hi = floor[a] > floor[b] ? a : b, lo = hi === a ? b : a;
+            // (the floor must end between them: a body walking off the higher node lands on the lower node's floor — where
+            //  the higher floor runs on, as a deck over the deck beneath it, there is no fall, and no link)
+            if (Math.abs(walkFloorTo(nodeX(hi), nodeZ(hi), floor[hi], nodeX(lo), nodeZ(lo), surfaces) - floor[lo]) > 0.05) continue;
+            // (the edge clear at the higher floor's body height, or crossed by lips alone — THE LIP above: a parapet, a sill — that the jump hops)
+            if (walkSegmentBlocked(nodeX(hi), nodeZ(hi), nodeX(lo), nodeZ(lo), floor[hi] + GROUND_BASE_Y, obstacles) && !onlyLipsAcross(nodeX(hi), nodeZ(hi), nodeX(lo), nodeZ(lo), floor[hi])) continue;
+            if (sameComp) { const capCells = Math.ceil(SAME_COMP_MIN_DETOUR / CELL) + 2; if (walkDetourCells(hi, lo, capCells) * CELL < SAME_COMP_MIN_DETOUR) continue; }
+            addDrop(hi, lo); linked = true; continue;
+          }
           if (dyF > JUMP_MAX || (sameComp && dyF < JUMP_MIN)) continue;
           // The crossing must be PHYSICALLY jumpable: test the segment between
           // the two node centers at the UPPER floor's body height. A thin
@@ -452,7 +505,8 @@ export function buildNavGrid(obstacles, surfaces) {
           // THROUGH the Lobby's outer wall to ghost cells beyond it.
           const xi = nodeX(a), zi = nodeZ(a), xj = nodeX(b), zj = nodeZ(b);
           const yHi = Math.max(floor[a], floor[b]) + GROUND_BASE_Y;
-          if (walkSegmentBlocked(xi, zi, xj, zj, yHi, obstacles)) continue;
+          // (or crossed by lips alone, hopped from the LOWER floor — THE LIP above: a railing between a balcony and the terrace behind it)
+          if (walkSegmentBlocked(xi, zi, xj, zj, yHi, obstacles) && !onlyLipsAcross(xi, zi, xj, zj, Math.min(floor[a], floor[b]))) continue;
           if (sameComp) {
             // Extra guards for shortcut links (see block comment above).
             if (segBlockedAbove(xi, zi, xj, zj, Math.min(floor[a], floor[b]) + JUMP_ARC_CLEARANCE)) continue;
@@ -474,13 +528,48 @@ export function buildNavGrid(obstacles, surfaces) {
       }
     }
   }
-  return grid;
+  return compactNavGrid(grid);
+}
+// THE NODES AS A LIST (2026-10-29, the second day): the grid the searches read keeps only its walkable nodes — numbered
+// by cell, then by level from the top — with each cell's run of nodes (cellStart), each node's cell, floor, point and
+// clearance, and each node's walk neighbours and links as runs in two adjacency arrays (walkStart/walkAdj for the walk,
+// linkStart/linkAdj for the jump and drop links). The dense form the builder works in — a slot per cell per layer, an
+// edge flag per cell per layer PAIR — was what the searches indexed and what the file held: District at fifteen layers
+// over 54,000 cells was 35 MB of arrays, nearly all empty, and every search allocated 7 MB more; as lists it is 3 MB and
+// a search 0.7 MB. The neighbours come in the order the dense walk gave them, so every route is the same route. (The
+// dense form's layer-0 floor of an unwalkable cell — "the v1 value every floor-hint comparison was tuned against" — is
+// read by nothing any more and is not kept.)
+function compactNavGrid(d) {
+  const { cols, rows, n, layers, floor, walk, clearGrade, posX, posZ } = d;
+  const size = n * layers;
+  const sparseOf = new Int32Array(size).fill(-1);
+  const cellStart = new Int32Array(n + 1);
+  let N = 0;
+  for (let i = 0; i < n; i += 1) { cellStart[i] = N; for (let l = 0; l < layers; l += 1) { const node = l * n + i; if (walk[node]) { sparseOf[node] = N; N += 1; } } }
+  cellStart[n] = N;
+  const nodeCell = new Int32Array(N), nFloor = new Float32Array(N), nPosX = new Float32Array(N), nPosZ = new Float32Array(N), nGrade = new Uint8Array(N);
+  const walkLists = new Array(N), linkLists = new Array(N);
+  for (let node = 0; node < size; node += 1) {
+    const s = sparseOf[node]; if (s < 0) continue;
+    nodeCell[s] = node % n; nFloor[s] = floor[node]; nPosX[s] = posX[node]; nPosZ[s] = posZ[node]; nGrade[s] = clearGrade[node];
+    const w = []; denseWalkNeighbors(d, node, (nb) => { w.push(sparseOf[nb]); }); walkLists[s] = w;
+    const jl = d.jumpAdj.get(node); linkLists[s] = jl ? jl.map((nb) => sparseOf[nb]) : [];
+  }
+  const csr = (lists) => { const start = new Int32Array(N + 1); let e = 0; for (let s = 0; s < N; s += 1) { start[s] = e; e += lists[s].length; } start[N] = e; const adj = new Int32Array(e); for (let s = 0; s < N; s += 1) adj.set(lists[s], start[s]); return [start, adj]; };
+  const [walkStart, walkAdj] = csr(walkLists); const [linkStart, linkAdj] = csr(linkLists);
+  return {
+    cols, rows, n, layers, cell: d.cell, minX: d.minX, minZ: d.minZ, surfaces: d.surfaces, N,
+    cellStart, nodeCell, floor: nFloor, posX: nPosX, posZ: nPosZ, clearGrade: nGrade, walkStart, walkAdj, linkStart, linkAdj,
+    jumpLinkCount: d.jumpLinkCount, dropLinkCount: d.dropLinkCount ?? 0,
+    popCap: SEARCH_POPS_PER_NODE * N   // (THE CAP, see searchPopCap; set again at load)
+  };
 }
 
 // Visit every walk neighbour of `node` (4-way, across layers). Jump-links are
 // NOT included — callers that want them add them explicitly, because the
 // component pass and the detour probe must see walking only.
-function forEachWalkNeighbor(grid, node, visit) {
+// (the builder's dense form: a slot per cell per layer, edge flags per layer pair — walked only while the grid is built)
+function denseWalkNeighbors(grid, node, visit) {
   const { cols, rows, n, layers, edgeE, edgeS } = grid;
   const l = (node / n) | 0;
   const i = node % n;
@@ -501,19 +590,24 @@ function forEachWalkNeighbor(grid, node, visit) {
   }
 }
 
+// A node's walk neighbours (the list form: compactNavGrid).
+function forEachWalkNeighbor(grid, node, visit) {
+  const { walkStart, walkAdj } = grid;
+  for (let k = walkStart[node], e = walkStart[node + 1]; k < e; k += 1) visit(walkAdj[k]);
+}
 // Walk neighbours + jump-links, with the traversal cost of each.
 function forEachNeighbor(grid, node, visit) {
   forEachWalkNeighbor(grid, node, (nb) => visit(nb, 1));
-  const jl = grid.jumpAdj ? grid.jumpAdj.get(node) : null;
-  if (jl) for (const nb of jl) visit(nb, JUMP_LINK_COST);
+  const { linkStart, linkAdj } = grid;
+  for (let k = linkStart[node], e = linkStart[node + 1]; k < e; k += 1) visit(linkAdj[k], JUMP_LINK_COST);
 }
 // Does a WALK edge join a to b? The path builders flag the node a jump link leads to (`jump`): the follower
 // vaults toward that waypoint, and toward no other — a slope or a kerb's ramp the body walks is a walk edge.
 function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, (nb) => { if (nb === b) yes = true; }); return yes; }
 
 // (a node's point: where its body stands — the cell's centre, or a quarter cell beside it; see standAt)
-const nodeCenterX = (grid, node) => (grid.posX ? grid.posX[node] : grid.minX + (((node % grid.n) % grid.cols) + 0.5) * grid.cell);
-const nodeCenterZ = (grid, node) => (grid.posZ ? grid.posZ[node] : grid.minZ + ((((node % grid.n) / grid.cols) | 0) + 0.5) * grid.cell);
+const nodeCenterX = (grid, node) => grid.posX[node];
+const nodeCenterZ = (grid, node) => grid.posZ[node];
 
 // Nearest walkable NODE to (x, z). `floorHint` (the actor's floor height)
 // picks the right LAYER as well as the right cell — without it, a bot on the
@@ -528,7 +622,7 @@ const nodeCenterZ = (grid, node) => (grid.posZ ? grid.posZ[node] : grid.minZ + (
 // tolerance (±2) can't save it — a slope's own height sits within 2 of BOTH
 // adjacent levels.
 function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
-  const { cols, rows, cell, minX, minZ, n, layers, walk, floor } = grid;
+  const { cols, rows, cell, minX, minZ, cellStart, floor } = grid;
   const c0 = Math.max(0, Math.min(cols - 1, Math.floor((x - minX) / cell)));
   const r0 = Math.max(0, Math.min(rows - 1, Math.floor((z - minZ) / cell)));
   const reachY = (floorHint ?? 0) + GROUND_BASE_Y;
@@ -540,11 +634,9 @@ function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
         const r = r0 + dr, c = c0 + dc;
         if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
         const i = r * cols + c;
-        // Layers of this cell, nearest floor to the hint first.
+        // The cell's nodes, nearest floor to the hint first.
         let best = -1, bestD = Infinity;
-        for (let l = 0; l < layers; l += 1) {
-          const node = l * n + i;
-          if (!walk[node]) continue;
+        for (let node = cellStart[i], e = cellStart[i + 1]; node < e; node += 1) {
           const d = floorHint == null ? 0 : Math.abs(floor[node] - floorHint);
           if (d < bestD) { bestD = d; best = node; }
         }
@@ -569,20 +661,30 @@ function nearestWalkable(grid, x, z, floorHint, reachObstacles = null) {
 // { pending: true }; the next call with the same job goes on from there, so a route across Compound (20,010 nodes) is
 // spread over a few ticks instead of freezing one. Without a job the deadline ends the search as a miss, as before; with
 // neither the search runs whole, as the command layer and the client's order previews call it.
+// THE CAP (2026-10-29, user: "no matter how many levels there are, as long as the map connects, it should be able to find
+// it"): a route or firing search gives up after SEARCH_POPS_PER_NODE pops per walkable node of its grid (grid.popCap, set
+// at build and at load), 30,000 at the least, or opts.maxPops. The cap was a flat 30,000: District's grid (75,000 nodes
+// over eight layers) needs up to 41,000 pops for a route from the plaza to the bowling alley three storeys down, and
+// 60,000 to learn that no route exists, so one route in four across the map ended as "no path" (measured over 80 random
+// pairs) and a bot above never came down for an enemy in the cellars. The cost per tick is bounded by THE SLICE
+// (opts.popsPerCall), not by the cap.
+export const SEARCH_POPS_PER_NODE = 2;
+const searchPopCap = (grid) => Math.max(30000, grid.popCap ?? 0);
 export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloor = null, obstacles = null, opts = {}) {
-  const { cols, n, layers, floor } = grid;
-  const size = n * layers;
+  const { cols, floor, nodeCell, N: size } = grid;
   const job = opts.job ?? null;
   const deadline = opts.deadline ?? 0;
+  const maxPops = opts.maxPops ?? searchPopCap(grid);
+  const popsPerCall = opts.popsPerCall ?? Infinity;   // (with a job: park after this many pops in one call — THE SLICE, the bots' per-tick budget where the host sets no deadline; user 2026-10-29, "expand the searching scale gradually as time goes")
   const resume = !!(job && job.state);
   const st = resume ? job.state : null;
   const start = resume ? st.start : nearestWalkable(grid, sx, sz, startFloor, obstacles);
   const goal = resume ? st.goal : nearestWalkable(grid, tx, tz, goalFloor);
   if (start < 0 || goal < 0 || start === goal) { if (job) job.state = null; return null; }
-  const gCell = goal % n;
+  const gCell = nodeCell[goal];
   const gc = gCell % cols, gr = (gCell / cols) | 0;
   const h = (i) => {
-    const cell = i % n;
+    const cell = nodeCell[i];
     return Math.abs((cell % cols) - gc) + Math.abs(((cell / cols) | 0) - gr);
   };
   const g = resume ? st.g : new Float32Array(size).fill(Infinity);
@@ -595,11 +697,12 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
   let callPops = 0;   // (a call always makes 32 pops of progress before it may park: a deadline already past must not stall the search for good)
   while (heap.size()) {
     // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
+    if (job && callPops >= popsPerCall) { job.state = { start, goal, g, parent, closed, heap, guard }; return { pending: true }; }   // (THE SLICE, see below)
     if (deadline && callPops >= 32 && (guard & 31) === 0 && performance.now() > deadline) {
       if (job) { job.state = { start, goal, g, parent, closed, heap, guard }; return { pending: true }; }
       break;
     }
-    if (++guard > 30000) break;
+    if (++guard > maxPops) break;
     callPops += 1;
     const cur = heap.pop()[1];
     if (closed[cur]) continue;
@@ -622,6 +725,7 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     });
   }
   if (job) job.state = null;
+  if (opts.stats) opts.stats.pops = guard;   // (a probe's reading of the search's cost)
   if (!found) return null;
 
   const pts = [];
@@ -680,7 +784,7 @@ function collapseWaypoints(pts) {
 // same in play.
 export function smoothPath(grid, path, obstacles) {
   if (!path || path.length < 3 || !obstacles) return path;
-  const { cols, rows, cell, minX, minZ, n, layers, floor, walk } = grid;
+  const { cols, rows, cell, minX, minZ, cellStart, floor } = grid;
   const clearLeg = (a, b) => {
     const ya = a.y ?? 0;
     const dx = b.x - a.x, dz = b.z - a.z;
@@ -695,9 +799,8 @@ export function smoothPath(grid, path, obstacles) {
       if (c < 0 || r < 0 || c >= cols || r >= rows) return false;
       const i = r * cols + c;
       let onFloor = false;
-      for (let l = 0; l < layers; l += 1) {
-        const node = l * n + i;
-        if (walk[node] && Math.abs(floor[node] - ya) <= 0.5) { onFloor = true; break; }
+      for (let node = cellStart[i], e = cellStart[i + 1]; node < e; node += 1) {
+        if (Math.abs(floor[node] - ya) <= 0.5) { onFloor = true; break; }
       }
       if (!onFloor) return false;
       if (unitOverlapsObstacle(x, ya + GROUND_BASE_Y, z, obstacles, CLEAR_WIDE)) return false;
@@ -745,8 +848,7 @@ export function smoothPath(grid, path, obstacles) {
 //     of its slice parks its open set in job.state and returns { pending: true }; the next call with the same job goes
 //     on from there. Without a job the deadline ends the search as a miss, as before.
 export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, minD, maxD, obstacles, targetFloor = null, opts = {}) {
-  const { n, layers, floor, clearGrade, surfaces } = grid;
-  const size = n * layers;
+  const { floor, clearGrade, surfaces, N: size } = grid;
   const pTarget = { x: tx, y: targetEyeY, z: tz };
   // Sight rule is the BOT'S rule (2026-08-14): sight-blocking invisible bars count, and SURFACES count — this search
   // used to ignore surfaces entirely and happily certified firing cells whose line ran straight through the Streets
@@ -762,6 +864,8 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
   const sees = (node) => seesAtEye(node, 0) && seesAtEye(node, -FIRING_SIGHT_MARGIN);
   const job = opts.job ?? null;
   const deadline = opts.deadline ?? 0;
+  const maxPops = opts.maxPops ?? searchPopCap(grid);
+  const popsPerCall = opts.popsPerCall ?? Infinity;
   const resume = !!(job && job.state);
   const st = resume ? job.state : null;
   const start = resume ? st.start : nearestWalkable(grid, sx, sz, startFloor, obstacles);
@@ -788,11 +892,12 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     let callPops = 0;   // (a call always makes 32 pops of progress before it may park — a deadline already past must not stall the search for good)
     while (heap.size()) {
       // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
+      if (job && callPops >= popsPerCall) return { parked: { parent, g, closed, heap, pops } };   // (THE SLICE, as findPathOnGrid's)
       if (deadline && callPops >= 32 && (pops & 31) === 0 && performance.now() > deadline) {
         if (job) return { parked: { parent, g, closed, heap, pops } };
         break;
       }
-      if (++pops > 30000) break;
+      if (++pops > maxPops) break;
       callPops += 1;
       const cur = heap.pop()[1];
       if (closed[cur]) continue;
@@ -812,6 +917,7 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
         if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng + hOf(nb), nb); }
       });
     }
+    if (opts.stats) opts.stats.pops = (opts.stats.pops ?? 0) + pops;   // (a probe's reading of the search's cost)
     if (goal < 0) return { none: true };
     const pts = [];
     for (let i = goal; i !== -1; i = parent[i]) {
@@ -921,21 +1027,25 @@ function createMinHeap() {
 // least COVER_MIN_ABOVE_BASE above floor + GROUND_BASE_Y; bullets pass
 // noProjectile fences). Open ground is far from any such cover — never
 // "safe" whatever the enemy's current line, because the enemy can appear
-// from anywhere. Cached on the grid on first use (one pass over nodes x
-// obstacles, ~1.4 M box distances on Factory).
+// from anywhere. Cached on the grid on first use. Read through the broadphase within COVER_SCAN_RADIUS of the node
+// (2026-10-29, the second day): every reader compares the distance with a threshold inside that radius (goalCoverMax 4,
+// openDist 6), so a node with no cover within it is open to all of them whatever the true distance; the pass used to
+// visit every box for every node — 735 M box distances on District, 6.8 s at the first bot tick of a match, 0.85 s on
+// Town — and visits the boxes near each node now, a tenth of a second on District.
 const COVER_MIN_ABOVE_BASE = 3.0;   // muzzle line sits 3.15 above the standing base
+const COVER_SCAN_RADIUS = 8;        // (units: cover farther than this counts as none — beyond every threshold that reads it, 4 and 6)
 function coverDistFor(grid, obstacles) {
   if (grid.coverDist) return grid.coverDist;
-  const { n, layers, floor, walk } = grid;
-  const size = n * layers;
+  const { floor, N: size } = grid;
   const out = new Float32Array(size).fill(1e9);
+  const scratch = [];
   for (let node = 0; node < size; node += 1) {
-    if (!walk[node]) continue;
     const cx = nodeCenterX(grid, node), cz = nodeCenterZ(grid, node);
     const base = floor[node] + GROUND_BASE_Y;
+    const near = obstaclesNearPoint(obstacles, cx, cz, COVER_SCAN_RADIUS, scratch);
     let best = 1e9;
-    for (let i = 0; i < obstacles.length; i += 1) {
-      const o = obstacles[i];
+    for (let i = 0; i < near.length; i += 1) {
+      const o = near[i];
       if (o.noProjectile) continue;
       if (o.maxY - base < COVER_MIN_ABOVE_BASE) continue;
       if (o.minY > base + COVER_MIN_ABOVE_BASE) continue;   // floating above the line
@@ -944,7 +1054,7 @@ function coverDistFor(grid, obstacles) {
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < best) best = d;
     }
-    out[node] = best;
+    out[node] = best > COVER_SCAN_RADIUS ? 1e9 : best;
   }
   grid.coverDist = out;
   return out;
@@ -1017,8 +1127,7 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
   };
   if (!anyGoal && (!eyes || eyes.length === 0)) return null;
   if (!eyes) eyes = [];
-  const { n, layers, floor, clearGrade, surfaces } = grid;
-  const size = n * layers;
+  const { floor, clearGrade, surfaces, N: size } = grid;
   // RESUMABLE SEARCH (owner 2026-10-08, "BOT sometimes freezes"): opts.job
   // is an object the caller keeps between ticks. When this call runs out of
   // its slice — opts.deadline (a performance.now() instant) or
@@ -1215,7 +1324,7 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
 // floor's fields), and the loader refuses a file whose signature is not the arena's: a regenerated map or a boundary
 // change falls back to building, never to a stale grid. A change to the BUILDER itself is not caught by the signature;
 // it is caught by the test, which fails until the files are regenerated.
-export const NAV_DATA_VERSION = 1;
+export const NAV_DATA_VERSION = 4;
 export const navDataFile = (mapKey) => `maps/${mapKey}_nav${NAV_FILE_EXT}`;
 export function navDataSignature(obstacles, surfaces) {
   let h = 0x811c9dc5;
@@ -1230,44 +1339,44 @@ export function navDataSignature(obstacles, surfaces) {
   mix(`s${surfaces.length}:`); for (let i = 0; i < surfaces.length; i += 1) mix(one(surfaces[i]));
   return (h >>> 0).toString(16).padStart(8, '0');
 }
-const NAV_ARRAYS = ['floor', 'walk', 'clearGrade', 'edgeE', 'edgeS', 'posX', 'posZ'];
+// THE FILE (version 4, 2026-10-29, the second day): the list form (compactNavGrid) verbatim — the arrays the searches
+// read, so the load is a copy. (Version 3, the same day, listed the nodes and edges of the dense form and filled the
+// dense arrays back in at load; version 2 held the dense arrays themselves, 12.6 MB for District at eight layers.)
 const NAV_TYPES = { Float32Array, Uint8Array, Int32Array, Float64Array, Uint16Array, Int8Array };
+export const NAV_ARRAYS = ['cellStart', 'nodeCell', 'floor', 'posX', 'posZ', 'clearGrade', 'walkStart', 'walkAdj', 'linkStart', 'linkAdj'];
 const _pad8 = (n) => (n + 7) & ~7;
 export function serializeNavGrid(grid, sig) {
-  const arrays = NAV_ARRAYS.map((name) => ({ name, type: grid[name].constructor.name, length: grid[name].length, bytes: grid[name].byteLength }));
-  const links = [];
-  for (const [node, nbs] of grid.jumpAdj) { links.push(node, nbs.length); for (let i = 0; i < nbs.length; i += 1) links.push(nbs[i]); }
-  const linkArr = Int32Array.from(links);
+  const parts = NAV_ARRAYS.map((name) => [name, grid[name]]);
   const meta = {
-    version: NAV_DATA_VERSION, sig, cols: grid.cols, rows: grid.rows, n: grid.n, layers: grid.layers,
-    minX: grid.minX, minZ: grid.minZ, cell: grid.cell, jumpLinkCount: grid.jumpLinkCount, arrays, links: linkArr.length
+    version: NAV_DATA_VERSION, sig, cols: grid.cols, rows: grid.rows, n: grid.n, layers: grid.layers, minX: grid.minX, minZ: grid.minZ, cell: grid.cell, N: grid.N,
+    jumpLinkCount: grid.jumpLinkCount, dropLinkCount: grid.dropLinkCount ?? 0,
+    arrays: parts.map(([name, a]) => ({ name, type: a.constructor.name, length: a.length, bytes: a.byteLength }))
   };
   const metaBytes = new TextEncoder().encode(JSON.stringify(meta));
-  let size = _pad8(8 + metaBytes.length);
-  for (const a of arrays) size += _pad8(a.bytes);
-  size += _pad8(linkArr.byteLength);
-  const out = new Uint8Array(size);
+  let total = _pad8(8 + metaBytes.length);
+  for (const [, a] of parts) total += _pad8(a.byteLength);
+  const out = new Uint8Array(total);
   const dv = new DataView(out.buffer);
   out.set([0x47, 0x56, 0x47, 0x4e], 0);   // 'GVGN'
   dv.setUint32(4, metaBytes.length, true);
   out.set(metaBytes, 8);
   let off = _pad8(8 + metaBytes.length);
-  for (const name of NAV_ARRAYS) { const a = grid[name]; out.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), off); off += _pad8(a.byteLength); }
-  out.set(new Uint8Array(linkArr.buffer, linkArr.byteOffset, linkArr.byteLength), off);
+  for (const [, a] of parts) { out.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), off); off += _pad8(a.byteLength); }
   return out;
 }
 // The grid read back, or null when the bytes are not a grid file, another version, or another map's data (the signature).
 export function deserializeNavGrid(bytes, surfaces, sig) {
   try {
-    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+    // (a plain Uint8Array: a Node Buffer's slice is a view of the whole file, not a copy, and the arrays read through it were the file)
+    if (!(bytes instanceof Uint8Array) || bytes.constructor !== Uint8Array) bytes = new Uint8Array(bytes);
     if (bytes.length < 8 || bytes[0] !== 0x47 || bytes[1] !== 0x56 || bytes[2] !== 0x47 || bytes[3] !== 0x4e) return null;
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const metaLen = dv.getUint32(4, true);
     const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + metaLen)));
     if (meta.version !== NAV_DATA_VERSION || meta.sig !== sig) return null;
     const grid = {
-      cols: meta.cols, rows: meta.rows, n: meta.n, layers: meta.layers, minX: meta.minX, minZ: meta.minZ, cell: meta.cell,
-      surfaces, jumpAdj: new Map(), jumpLinkCount: meta.jumpLinkCount
+      cols: meta.cols, rows: meta.rows, n: meta.n, layers: meta.layers, minX: meta.minX, minZ: meta.minZ, cell: meta.cell, N: meta.N,
+      surfaces, jumpLinkCount: meta.jumpLinkCount, dropLinkCount: meta.dropLinkCount ?? 0
     };
     let off = _pad8(8 + metaLen);
     for (const a of meta.arrays) {
@@ -1275,8 +1384,8 @@ export function deserializeNavGrid(bytes, surfaces, sig) {
       grid[a.name] = new T(bytes.slice(off, off + a.bytes).buffer);   // (a copy: its own buffer, aligned)
       off += _pad8(a.bytes);
     }
-    const links = new Int32Array(bytes.slice(off, off + meta.links * 4).buffer);
-    for (let i = 0; i < links.length;) { const node = links[i++], count = links[i++]; const nbs = new Array(count); for (let k = 0; k < count; k += 1) nbs[k] = links[i++]; grid.jumpAdj.set(node, nbs); }
+    for (const name of NAV_ARRAYS) if (!grid[name]) return null;
+    grid.popCap = SEARCH_POPS_PER_NODE * grid.N;   // (THE CAP, as the builder sets it)
     return grid;
   } catch (e) { return null; }
 }

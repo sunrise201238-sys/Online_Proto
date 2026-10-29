@@ -17,7 +17,7 @@ import {
   GROUND_BASE_Y,
   LAND_PLANT_LEVEL
 } from './constants.js';
-import { getGroundLevelY, groundSurfaceAt } from './physics.js';
+import { getGroundLevelY, groundSurfaceAt, voidUnder } from './physics.js';
 import { vec3Length2D } from './math.js';
 
 // Boost regen / drain. Mirrors updateBoost. The action string drives whether
@@ -110,7 +110,9 @@ export function integrateVertical(fighter, surfaces, dt, ceil = Infinity) {
   // Vertical — explicit jump arc. Cannon was being used purely as a y
   // integrator with -80.19 gravity in the offline build; we replicate that
   // behavior here without it.
-  const groundY = getGroundLevelY(fighter, surfaces);
+  // (THE VOID'S EDGE, physics.js voidUnder: over a void — deep under the street with no surface beneath — the ground is
+  //  the floor the body left, not the street 26 m up; a body in the air there lands back on its own level)
+  const groundY = (fighter.floorY != null && voidUnder(fighter.pos.x, fighter.pos.z, surfaces, fighter.pos.y - GROUND_BASE_Y)) ? fighter.floorY : getGroundLevelY(fighter, surfaces);
 
   if (fighter.airborne) {
     if (fighter.flightClimb) {

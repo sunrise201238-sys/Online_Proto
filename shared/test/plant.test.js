@@ -1,3 +1,4 @@
+import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their files, before any arena is asked for)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, getArena, groundHeightAt, TICK_RATE_MS, TICK_DT, GROUND_BASE_Y, LAND_PLANT_MS } from '../src/sim/index.js';

@@ -43,6 +43,9 @@ import {
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles,
+  registerGeneratedData,
+  hasGeneratedData,
+  generatedDataFile,
   reloadHolds,
   applyHitStun,
   getArena,
@@ -794,6 +797,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
+  district: { name: 'District' },   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   hospital: { name: 'Hospital', thumb: 'top' },   // (the card: the user's own photo of a ward, 2026-10-29 — the picker's wide thumb its upper part, the open door and the desk)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
@@ -6310,6 +6314,7 @@ function cleanupMatch() {
 }
 
 function startMatch() {
+  if (GLB_MAPS[state.mapKey] && !hasGeneratedData(state.mapKey)) { warmMapData(state.mapKey).then(startMatch).catch(() => {}); return; }   // (the map's data file first: arena.js, THE MAPS' DATA AS FILES)
   cleanupMatch();
   clearMenus();
   renderer.domElement.style.pointerEvents = 'auto';
@@ -10275,9 +10280,21 @@ function groundSurfaceAt(x, z, currentSurfaceY = 0) {
   return found;
 }
 
+// THE VOID'S EDGE (mirrors the shared physics.js voidUnder, 2026-10-29): the street is the ground where no surface covers a
+// point only while it is within a step of the body's feet, or below them; deeper with nothing beneath is a void — the
+// end of a cellar's floor where the model has nothing (District's bowling lanes end behind the pins).
+function voidUnder(x, z, feetY) {
+  if (feetY + SURFACE_STEP_HEIGHT >= 0) return false;
+  for (const s of obstaclesNearPoint(arenaSurfaces, x, z, 0, _groundScratch)) {
+    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+    if (s.heightAt(x, z) <= feetY + SURFACE_STEP_HEIGHT) return false;
+  }
+  return true;
+}
 function getGroundLevelY(mech) {
   const pos = mech.body.position;
   const currentSurfaceY = pos.y - GROUND_BASE_Y;
+  if (mech.state?.floorY != null && voidUnder(pos.x, pos.z, currentSurfaceY)) return mech.state.floorY;   // (over a void: the floor it left, as integrateVertical)
   return groundHeightAt(pos.x, pos.z, currentSurfaceY) + GROUND_BASE_Y;
 }
 
@@ -10381,6 +10398,7 @@ function applyMapAmbience(mapKey) {
 // rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
+  district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
@@ -10428,11 +10446,38 @@ const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 l
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
 const _mapModelCache = {};     // file -> gltf
 const _mapModelPending = {};   // file -> [callbacks]
+// THE QUANTIZED MODEL READ BACK AS FLOATS (2026-10-29, the second day; shared/tools/maps/glb_quantize.mjs: a served model's
+// vertex positions are 16-bit integers over each node's box, the node's translation and scale placing them — District's file
+// 5.2 MiB to 4.3). The loader hands such positions over as an interleaved short attribute, which the fade's piece builder
+// (partMulti, below) and anything else that reads a position buffer by index cannot read — District's towers came up as a
+// thicket of spikes in the first photo. So the positions are turned back into floats here, once, on the model as it is
+// cached: each quantized node's transform folded into its meshes' positions and cleared, so that the rest of the client sees
+// the model the float file gave, to the quantization's 2 mm. A float model is left untouched.
+function dequantizeMapModel(scene) {
+  const quantized = (m) => { const p = m.geometry?.attributes?.position; return !!p && !(p.array instanceof Float32Array); };
+  scene.updateMatrixWorld(true);
+  const nodes = []; scene.traverse((o) => { if (o !== scene && (o.position.lengthSq() > 0 || o.scale.x !== 1 || o.scale.y !== 1 || o.scale.z !== 1)) nodes.push(o); });
+  const done = new Set(); const v = new THREE.Vector3(); let meshes = 0;
+  for (const node of nodes) {
+    const under = []; node.traverse((m) => { if (m.isMesh) under.push(m); });
+    if (!under.length || !under.every(quantized)) continue;   // (a node of the model's own transform, if a map ever carries one: left as it is)
+    for (const m of under) {
+      if (done.has(m.geometry)) continue; done.add(m.geometry);
+      const pos = m.geometry.attributes.position; const out = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) { v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); out[3 * i] = v.x; out[3 * i + 1] = v.y; out[3 * i + 2] = v.z; }
+      m.geometry.setAttribute('position', new THREE.BufferAttribute(out, 3)); m.geometry.computeBoundingBox(); m.geometry.computeBoundingSphere(); meshes += 1;
+    }
+    node.position.set(0, 0, 0); node.scale.set(1, 1, 1); node.quaternion.identity(); node.updateMatrix();
+  }
+  if (meshes) scene.updateMatrixWorld(true);
+  return meshes;
+}
 function loadMapModel(file, onReady) {
   if (_mapModelCache[file]) { onReady(_mapModelCache[file]); return; }
   if (_mapModelPending[file]) { _mapModelPending[file].push(onReady); return; }
   _mapModelPending[file] = [onReady];
   _mapGltfLoader.load(`${import.meta.env.BASE_URL}${file}${MAP_FILE_EXT}`, (gltf) => {
+    dequantizeMapModel(gltf.scene);
     _mapModelCache[file] = gltf;
     const cbs = _mapModelPending[file] || [];
     delete _mapModelPending[file];
@@ -10442,7 +10487,23 @@ function loadMapModel(file, onReady) {
 function warmMapModel(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   if (cfg) loadMapModel(cfg.file, () => {});
+  warmMapData(mapKey);
   warmNavData(mapKey);
+}
+// THE MAPS' DATA AS FILES (2026-10-29, the second day; arena.js): a modelled map's collision data is served beside its model
+// and its grid (maps/<mapKey>_data.json) and fetched when the map is picked, not carried in the bundle — the seven maps'
+// data was 7.8 MB of the bundle's 8.3, parsed at every start for whatever map was played. The arena is built, and a match
+// started, once it is here (buildArenaForMap, startMatch); a second pick while it is on its way shares the one fetch.
+const _mapData = {};   // mapKey -> the fetch's promise
+function warmMapData(mapKey) {
+  if (!GLB_MAPS[mapKey] || hasGeneratedData(mapKey)) return Promise.resolve();
+  if (!_mapData[mapKey]) {
+    _mapData[mapKey] = fetch(`${import.meta.env.BASE_URL}${generatedDataFile(mapKey)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((d) => { registerGeneratedData(mapKey, d); })
+      .catch((e) => { delete _mapData[mapKey]; console.warn('[map] no data file for', mapKey, e?.message ?? e); throw e; });
+  }
+  return _mapData[mapKey];
 }
 // THE ROUTE GRID AS DATA (user 2026-10-25; navgrid.js "THE GRID AS DATA"): a modelled map's nav grid is served beside its
 // model (maps/<mapKey>_nav, shared/tools/maps/navgrid_build.mjs) and fetched here when the map is picked or the match
@@ -10777,6 +10838,10 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
 }
 
 function buildArenaForMap(mapKey) {
+  if (GLB_MAPS[mapKey] && !hasGeneratedData(mapKey)) {   // (the map's data file is on its way: built when it lands, if the map is still this one)
+    warmMapData(mapKey).then(() => { if (state.mapKey === mapKey) buildArenaForMap(mapKey); }).catch(() => {});
+    return;
+  }
   clearArenaDecor();
   ground.visible = gridHelper.visible = !GLB_MAPS[mapKey];   // a modelled map brings its own ground
   applyMapAmbience(mapKey);
@@ -11305,9 +11370,8 @@ function dioramaLayerStandable(x, z, y) {
       const r = r0 + dr;
       if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) continue;
       const i = r * g.cols + c;
-      for (let l = 0; l < g.layers; l += 1) {
-        const node = l * g.n + i;
-        if (g.walk[node] && Math.abs(g.floor[node] - y) <= 2) return true;
+      for (let node = g.cellStart[i], e = g.cellStart[i + 1]; node < e; node += 1) {   // (the cell's nodes: the grid's list form, navgrid.js compactNavGrid)
+        if (Math.abs(g.floor[node] - y) <= 2) return true;
       }
     }
   }
@@ -17069,6 +17133,12 @@ function animate() {
       }));
       world.step(1 / 60, dt, 3);
       prevPositions.forEach(({ m, x, y, z }) => { m.wallTouch = resolveUnitObstacleCollisions(m, { x, y, z }); });   // (the wall note for the Sudden Death brain: host.wall next frame)
+      // THE VOID'S EDGE (mirrors tick.js): a grounded body that stepped off a cellar's floor over nothing is held at the edge
+      prevPositions.forEach(({ m, x, y, z }) => {
+        const p = m.body.position;
+        if (m.state.airborne || !voidUnder(p.x, p.z, p.y - GROUND_BASE_Y) || voidUnder(x, z, y - GROUND_BASE_Y)) return;
+        p.x = x; p.z = z; m.body.velocity.x = 0; m.body.velocity.z = 0; m.state.momentumVX = 0; m.state.momentumVZ = 0;
+      });
 
       updateTransforms(dt);
       updateLocksAndReticle();

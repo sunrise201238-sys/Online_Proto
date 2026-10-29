@@ -39,6 +39,10 @@ import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick } from './sdbrain.js';
 
 // --- Bot tactical-sprint tunables ---
+// THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
+// and firing searches park after this many pops a call and go on next tick — the same searches, in slices — instead of
+// running whole in one tick now that the cap covers a map's every route (navgrid.js, THE CAP: District's longest 41,000).
+const BOT_SEARCH_POPS_PER_TICK = 3000;
 const BOT_SPRINT_MIN_BOOST = 8;
 // Strategic reserve: bots never VOLUNTARILY spend below this — one knob
 // gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
@@ -1283,7 +1287,7 @@ export function nbBrainTick(host) {
     if (host.searchSlot()) {
       const dl = host.deadline();
       const walk = () => {
-        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl });
+        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK });
         if (r && r.pending) return;
         rec.walkJob = null;
         let p = r;
@@ -1296,7 +1300,7 @@ export function nbBrainTick(host) {
           grid, pos.x, pos.z, myFloorY,
           opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
           lowerRange, upperRange, obstacles, oppFloorY,
-          { job: rec.fireJob, deadline: dl }
+          { job: rec.fireJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK }
         );
         if (r && r.pending) return;
         rec.fireJob = null; rec.fireDone = true;

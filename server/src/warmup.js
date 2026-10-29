@@ -21,7 +21,11 @@ import {
   TICK_RATE_MS,
   TICK_DT,
   getArena,
-  MAP_DATA
+  MAP_DATA,
+  registerGeneratedData,
+  hasGeneratedData,
+  generatedDataFile,
+  FILE_DATA_MAPS
 } from '@gvg/shared/src/sim/index.js';
 import { navGridFor, registerNavGridData, hasNavGrid } from '@gvg/shared/src/sim/ai.js';
 import { navDataFile } from '@gvg/shared/src/sim/navgrid.js';
@@ -40,6 +44,8 @@ const CLIENT_PUBLIC = fileURLToPath(new URL('../../client/public/', import.meta.
 export function warmMap(mapKey) {
   try {
     if (!MAP_DATA[mapKey]) return false;
+    // (THE MAPS' DATA AS FILES, arena.js: a modelled map's collision data read from the client's public folder, like its grid)
+    if (FILE_DATA_MAPS.includes(mapKey) && !hasGeneratedData(mapKey)) registerGeneratedData(mapKey, JSON.parse(readFileSync(path.join(CLIENT_PUBLIC, generatedDataFile(mapKey)), 'utf8')));
     const arena = getArena(mapKey);
     if (!hasNavGrid(arena)) {
       const t0 = performance.now();

@@ -5,13 +5,17 @@
 // random draw comes from the same seeded stream on each side, and after every tick both fighters'
 // whole state must agree to the last digit. Any change of logic — an extra random draw, a condition
 // read a tick earlier, a knob renamed — breaks it.
+// Re-frozen at b1026h: the route and firing searches run in slices of 3,000 pops a tick where the host sets no deadline
+// (nbrain.js BOT_SEARCH_POPS_PER_TICK, user 2026-10-29), so a route of more than one slice arrives later, by design.
+// Re-frozen at b1026k with the Sudden Death brain's references (THE SLIDE, sdbrain_equiv.test.js): the plain brain is
+// unchanged, and its six matches played equal to the b1026h references before the freeze.
 // Re-frozen at b1021z (freeze_refs.py): the modelled map's rules alter play by design — the bounded wall field, the
 // step height, the one jump threshold, the walk rule — so the ai_b1018a_ref / sdbrain_b1017h_ref pair went with them.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1025e_ref.js';
+import { tickBot as tickOld } from './ai_b1026k_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

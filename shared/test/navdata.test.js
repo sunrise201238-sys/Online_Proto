@@ -1,10 +1,11 @@
+import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their files, before any arena is asked for)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { getArena, MAP_DATA } from '../src/sim/index.js';
-import { buildNavGrid, serializeNavGrid, deserializeNavGrid, navDataSignature, navDataFile } from '../src/sim/navgrid.js';
+import { buildNavGrid, serializeNavGrid, deserializeNavGrid, navDataSignature, navDataFile, NAV_ARRAYS } from '../src/sim/navgrid.js';
 
 // THE GRID AS DATA (2026-10-25): a grid written out and read back is the built grid, field for field; a file built from
 // other collision data is refused; and every grid file shipped in client/public/maps matches a fresh build of its map —
@@ -12,14 +13,12 @@ import { buildNavGrid, serializeNavGrid, deserializeNavGrid, navDataSignature, n
 const PUBLIC = fileURLToPath(new URL('../../client/public/', import.meta.url));
 
 function sameGrid(a, b) {
-  for (const k of ['cols', 'rows', 'n', 'layers', 'minX', 'minZ', 'cell', 'jumpLinkCount']) assert.equal(b[k], a[k], k);
-  for (const k of ['floor', 'walk', 'clearGrade', 'edgeE', 'edgeS', 'posX', 'posZ']) {
+  for (const k of ['cols', 'rows', 'n', 'layers', 'minX', 'minZ', 'cell', 'N', 'jumpLinkCount', 'dropLinkCount', 'popCap']) assert.equal(b[k], a[k], k);
+  // (the list form, navgrid.js compactNavGrid: the nodes' runs per cell, their floors, points and clearance, the walk and link adjacency — every array)
+  for (const k of NAV_ARRAYS) {
     assert.equal(b[k].constructor, a[k].constructor, k + ' type'); assert.equal(b[k].length, a[k].length, k + ' length');
     for (let i = 0; i < a[k].length; i += 1) if (a[k][i] !== b[k][i]) assert.fail(`${k}[${i}]: ${a[k][i]} vs ${b[k][i]}`);
   }
-  assert.equal(b.jumpAdj.size, a.jumpAdj.size, 'jump links');
-  const ea = [...a.jumpAdj.entries()], eb = [...b.jumpAdj.entries()];
-  for (let i = 0; i < ea.length; i += 1) { assert.equal(eb[i][0], ea[i][0], 'link node order'); assert.deepEqual(eb[i][1], ea[i][1], 'links of ' + ea[i][0]); }
   assert.equal(b.surfaces, a.surfaces, 'the surfaces reference');
 }
 

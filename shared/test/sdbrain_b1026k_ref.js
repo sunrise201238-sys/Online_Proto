@@ -1,4 +1,4 @@
-// FROZEN at b1025e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1026k for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/sdbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // SUDDEN DEATH BRAIN (b1017a): ONE RULE IN FOUR PARTS, EACH WRITTEN ONCE.
@@ -297,6 +297,8 @@ export const BOT_SD = {
   crossRunMax: 16,        // the engage run's end is scanned to this beyond the dodge's length
   jumpReach: 7,           // a ledge waypoint is vaulted from within this
   aheadProbe: 8,          // a hidden leg sprints when this much of it ahead is exposed
+  slideMin: 0.35,         // THE SLIDE: a leg grazing the wall the body touches goes along the wall while this much of its heading is left (sin 20°); less is head-on, the route dropped
+  slideTicks: 45,         //   ... and for at most this many ticks at one waypoint (0.7 s), then the route is dropped as a head-on leg's is
   // THE CROSSING LEGS
   reactRoom: 4,           // a crossing heading needs this much walkable room
   reactSideProbe: 14,     // the side with the longer run (to this) is taken first
@@ -307,6 +309,8 @@ export const BOT_SD = {
   exposedRetryMs: 150,    //   ... and this much later while exposed (the escape search)
   nearPops: 800,          // the route search's Dijkstra budget, near then far
   farPops: 3000,
+  routePopsPerTick: 3000, // THE APPROACH's route search in slices: this many pops a tick, the open set parked between ticks (user 2026-10-29, "expand the searching scale gradually as time goes"; District's longest route, 41,000 pops, takes 14 ticks)
+  routeRestartU: 12,      //   ... and started afresh when the enemy has moved this far from where the search was aimed
   firePollMs: 32,         // the host's line poll while the Sudden Death brain drives
 };
 
@@ -711,9 +715,20 @@ export function sdBrainTick(host) {
   // Priced like every route: its exposed stretches at a sprint under the
   // cap, the tank able to sprint them and keep the reserve; refused, its
   // first exposed stretch is marked. Returns the path, or null.
+  // THE SLICE (user 2026-10-29, "expand the searching scale gradually as time goes"): the route search is spread over the
+  // ticks — SD.routePopsPerTick pops a tick, its open set parked in me.botSDRouteJob between them — and starts afresh when
+  // the enemy has moved SD.routeRestartU from where it was aimed; 'pending' while it runs, and the caller keeps its plan
+  // and asks again next tick. The search ran whole in one tick before, under a cap of 30,000 pops that District's routes
+  // across its levels overran (see navgrid.js, THE CAP): the longest, 41,000 pops, is 60 ms whole and 14 ticks in slices.
   const sdApproachRoute = () => {
     const oppFloor = host.groundHeightAt(opp.pos.x, opp.pos.z, opp.pos.y - GROUND_BASE_Y);
-    const path = (findPathOnGrid(sdGrid, mePos.x, mePos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloor, obstacles) ?? []).slice();
+    let job = me.botSDRouteJob;
+    if (job && Math.hypot(opp.pos.x - job.gx, opp.pos.z - job.gz) > SD.routeRestartU) job = null;
+    if (!job) job = me.botSDRouteJob = { gx: opp.pos.x, gz: opp.pos.z };
+    const r = findPathOnGrid(sdGrid, mePos.x, mePos.z, job.gx, job.gz, myFloorY, oppFloor, obstacles, { job, deadline: host.deadline(), popsPerCall: SD.routePopsPerTick });
+    if (r && r.pending) return 'pending';
+    me.botSDRouteJob = null;
+    const path = (r ?? []).slice();
     const end = path.length ? path[path.length - 1] : { x: mePos.x, z: mePos.z, y: myFloorY };
     if (Math.hypot(opp.pos.x - end.x, opp.pos.z - end.z) > 1 && sdLegFitsAt(end.x, end.z, opp.pos.x, opp.pos.z, (end.y ?? myFloorY) + GROUND_BASE_Y)) path.push({ x: opp.pos.x, z: opp.pos.z, y: oppFloor });
     if (!path.length) return null;
@@ -742,7 +757,8 @@ export function sdBrainTick(host) {
       if (!taken && plan && plan.kind === 'approach') {
         // (THE APPROACH under way: re-routed to where the enemy is now and priced again; no route under the cap -> THE WAIT)
         const path = sdApproachRoute();
-        if (path) { plan.path = path; plan.idx = 0; plan.goal = path[path.length - 1]; me.botSDSearchAt = now + SD.searchMs; }
+        if (path === 'pending') me.botSDSearchAt = now;   // (THE SLICE: the route under way stands, the search goes on next tick)
+        else if (path) { plan.path = path; plan.idx = 0; plan.goal = path[path.length - 1]; me.botSDSearchAt = now + SD.searchMs; }
         else { sdDrop(); sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDSearchAt = now + SD.failRetryMs; }
         taken = true;
       }
@@ -816,16 +832,20 @@ export function sdBrainTick(host) {
             me.botSDSearchStage = 0;
             const refused = me.botSDRefusedPath;
             const waitFor = !!sdAttacks(sdRestored) || (!!refused && sdRouteRisk(refused, mePos.x, mePos.z, myFloorY, sdSeenRoute, sdThreat, SD, sdSprint, SD.acquireMs).risk <= SD.riskCap);
+            let routePending = false;
             if (waitFor) {
               if (!plan || plan.kind !== 'wait') { if (plan) sdDrop(); sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); }
               me.botSDWaits = (me.botSDWaits ?? 0) + 1;
             } else {
               const path = sdApproachRoute();
-              if (plan) sdDrop();
-              if (path) { sdTake({ kind: 'approach', path, idx: 0, goal: path[path.length - 1] }); me.botSDApproaches = (me.botSDApproaches ?? 0) + 1; }
-              else { sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDUnreachable = (me.botSDUnreachable ?? 0) + 1; }   // (no route to him at all: the wait, like any other)
+              if (path === 'pending') { routePending = true; me.botSDSearchAt = now; }   // (THE SLICE: the plan as it was, the search goes on next tick)
+              else {
+                if (plan) sdDrop();
+                if (path) { sdTake({ kind: 'approach', path, idx: 0, goal: path[path.length - 1] }); me.botSDApproaches = (me.botSDApproaches ?? 0) + 1; }
+                else { sdTake({ kind: 'wait', cx: mePos.x, cz: mePos.z, hx: 0, hz: 0 }); me.botSDUnreachable = (me.botSDUnreachable ?? 0) + 1; }   // (no route to him at all: the wait, like any other)
+              }
             }
-            if (plan && plan.kind === 'wait') me.botSDSearchAt = now + SD.failRetryMs;
+            if (plan && plan.kind === 'wait' && !routePending) me.botSDSearchAt = now + SD.failRetryMs;
           }
         }
       }
@@ -946,13 +966,29 @@ export function sdBrainTick(host) {
     tx = tx / wl + avoid.rx * 0.6; tz = tz / wl + avoid.rz * 0.6;
     const tl = Math.hypot(tx, tz) || 1;
     const hx = tx / tl, hz = tz / tl;
-    if (sdIntoWall(hx, hz) && wl > 1) {
+    // THE SLIDE (2026-10-29; Town's stairs: a body pressed on a baluster, its route's first square across the post's
+    // line, dropped the route for the leg's part into the post, searched, took the same route and dropped it again —
+    // every tick to the end of the match, 2,000 searches, the body never moving): a heading that merely GRAZES the wall
+    // the body touches goes on along the wall this tick — the heading less its part into the wall, which is what the
+    // physics' push-out leaves of it anyway — and the route is kept. The route is dropped as before where the leg is
+    // head-on (less than SD.slideMin of the heading left along the wall) or when the slide at one waypoint has gone on
+    // for SD.slideTicks ticks without the waypoint being reached.
+    const intoWall = sdIntoWall(hx, hz) && wl > 1;
+    let slide = null;
+    if (intoWall) {
+      const into = hx * sdWall.x + hz * sdWall.z;
+      const sx = hx - into * sdWall.x, sz = hz - into * sdWall.z, sl = Math.hypot(sx, sz);
+      if (plan.slideIdx !== plan.idx) { plan.slideIdx = plan.idx; plan.slideTicks = 0; }
+      if (sl >= SD.slideMin && (plan.slideTicks = (plan.slideTicks ?? 0) + 1) <= SD.slideTicks) { slide = { x: sx / sl, z: sz / sl }; me.botSDSlideTicks = (me.botSDSlideTicks ?? 0) + 1; }
+    }
+    if (intoWall && !slide) {
       sdMark(wp.x, wp.z); sdDrop(); me.botSDSearchAt = now;
       me.momentumVX = 0; me.momentumVZ = 0;
       coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 };
       me.botSDState = 'hold';
     } else {
-      const aheadExposed = !sdHidden || !sdHiddenAt(mePos.x + hx * SD.aheadProbe, mePos.z + hz * SD.aheadProbe, myFloorY);
+      const mx = slide ? slide.x : hx, mz = slide ? slide.z : hz;   // (the move: along the wall on a slide, else at the waypoint)
+      const aheadExposed = !sdHidden || !sdHiddenAt(mePos.x + mx * SD.aheadProbe, mePos.z + mz * SD.aheadProbe, myFloorY);
       let jumpAhead = false;
       for (let k = plan.idx; k < sp.length; k += 1) if (sp[k].jump) { jumpAhead = true; break; }
       let sdJump = null, bank = false;
@@ -968,7 +1004,7 @@ export function sdBrainTick(host) {
       const defensive = aheadExposed || plan.kind === 'escape';
       const dash = !lastLeg && (defensive ? me.boost > SD.dashFloor : (!jumpAhead && sdTankOpen));
       if (bank) { me.momentumVX = 0; me.momentumVZ = 0; coverMove = { hold: true, hide: true, dash: false, mx: 0, mz: 0 }; me.botSDState = 'bank'; }
-      else { coverMove = { hold: false, hide: true, dash, mx: hx, mz: hz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 }; me.botSDState = dash ? 'dash' : 'walk'; }
+      else { coverMove = { hold: false, hide: true, dash, mx, mz, jump: !!sdJump, jx: sdJump?.x ?? 0, jz: sdJump?.z ?? 0 }; me.botSDState = dash ? 'dash' : 'walk'; }
     }
   } else if (plan && plan.kind === 'wait') {
     // THE WAIT's legs: the body paces its hidden cell — a heading is kept

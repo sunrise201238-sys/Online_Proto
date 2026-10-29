@@ -17,12 +17,14 @@ import {
   BOOST_DASH_DRAIN_PER_TICK,
   MOMENTUM_STANDARD,
   MAX_HP,
-  LAG_COMP_MAX_MS
+  LAG_COMP_MAX_MS,
+  GROUND_BASE_Y
 } from './constants.js';
 import { clamp, vec3Length2D } from './math.js';
 import { getArena } from './arena.js';
 import {
-  resolveUnitObstacleCollisions
+  resolveUnitObstacleCollisions,
+  voidUnder
 } from './physics.js';
 import {
   tickBoost,
@@ -347,6 +349,15 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   const walls = matchState.walls ?? (matchState.walls = {});
   for (const { f, pos } of prevPositions) {
     walls[f.id] = resolveUnitObstacleCollisions(f, pos, arena.obstacles);
+  }
+  // THE VOID'S EDGE (physics.js voidUnder, 2026-10-29): a grounded body that stepped off a cellar's floor over nothing —
+  // deep under the street, no surface beneath — is held at the edge like a wall holds it: the move undone, the
+  // velocity dropped. A body already over a void (it jumped there) moves freely, so it can walk back onto a floor.
+  for (const { f, pos } of prevPositions) {
+    if (f.airborne) continue;
+    if (!voidUnder(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y)) continue;
+    if (voidUnder(pos.x, pos.z, arena.surfaces, pos.y - GROUND_BASE_Y)) continue;
+    f.pos.x = pos.x; f.pos.z = pos.z; f.vel.x = 0; f.vel.z = 0; f.momentumVX = 0; f.momentumVZ = 0;
   }
   for (const f of fighters) integrateVertical(f, arena.surfaces, dt, arena.ceil ?? Infinity);
 

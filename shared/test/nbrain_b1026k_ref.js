@@ -1,4 +1,4 @@
-// FROZEN at b1025e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1026k for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,9 +39,13 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1025e_ref.js';
+import { sdBrainTick } from './sdbrain_b1026k_ref.js';
 
 // --- Bot tactical-sprint tunables ---
+// THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
+// and firing searches park after this many pops a call and go on next tick — the same searches, in slices — instead of
+// running whole in one tick now that the cap covers a map's every route (navgrid.js, THE CAP: District's longest 41,000).
+const BOT_SEARCH_POPS_PER_TICK = 3000;
 const BOT_SPRINT_MIN_BOOST = 8;
 // Strategic reserve: bots never VOLUNTARILY spend below this — one knob
 // gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
@@ -1286,7 +1290,7 @@ export function nbBrainTick(host) {
     if (host.searchSlot()) {
       const dl = host.deadline();
       const walk = () => {
-        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl });
+        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK });
         if (r && r.pending) return;
         rec.walkJob = null;
         let p = r;
@@ -1299,7 +1303,7 @@ export function nbBrainTick(host) {
           grid, pos.x, pos.z, myFloorY,
           opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
           lowerRange, upperRange, obstacles, oppFloorY,
-          { job: rec.fireJob, deadline: dl }
+          { job: rec.fireJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK }
         );
         if (r && r.pending) return;
         rec.fireJob = null; rec.fireDone = true;

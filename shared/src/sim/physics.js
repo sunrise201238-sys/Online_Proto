@@ -391,6 +391,24 @@ export function groundHeightAt(x, z, surfaces, currentSurfaceY = 0) {
   }
   return best === -Infinity ? 0 : best;
 }
+// THE VOID'S EDGE (2026-10-29, the second day; user: "the unit got transported above to ground floor from B3 at this
+// spot"): the street (0) is the ground where no surface covers a point only while the street is within reach of the
+// body — above its feet by no more than a step, or below them. A body deeper than that with no surface under it stands
+// over a VOID: the end of a cellar's floor where the model has nothing (District's bowling lanes end behind the pins,
+// and the pit beyond has no floor), and groundHeightAt's street lifted it 26 m to the road. The tick holds a grounded
+// body at the edge instead — its move into the void undone, as a wall's push-out — and a body in the air over a void
+// lands on the floor it left (integrateVertical). Nothing changes where the street is within a step: every map before
+// District stands its bodies there.
+export function voidUnder(x, z, surfaces, feetY) {
+  if (feetY + SURFACE_STEP_HEIGHT >= 0) return false;
+  const near = obstaclesNearPoint(surfaces, x, z, 0, _gndScratch);
+  for (let i = 0; i < near.length; i += 1) {
+    const s = near[i];
+    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+    if (s.heightAt(x, z) <= feetY + SURFACE_STEP_HEIGHT) return false;
+  }
+  return true;
+}
 // The surface groundHeightAt stands a body on, or null on the street: the landing plant (movement.js) asks whether a
 // landing is on a thing's lid. The same scan; the surface instead of its height.
 export function groundSurfaceAt(x, z, surfaces, currentSurfaceY = 0) {

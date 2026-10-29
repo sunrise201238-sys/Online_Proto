@@ -11,11 +11,17 @@
 // a condition read a tick earlier, a knob renamed — breaks it.
 // Re-frozen at b1021z (freeze_refs.py): the modelled map's rules alter play by design — the bounded wall field, the
 // step height, the one jump threshold, the walk rule — so the ai_b1018a_ref / sdbrain_b1017h_ref pair went with them.
+// Re-frozen at b1026h: the approach route's search runs in slices of 3,000 pops a tick (sdbrain.js sdApproachRoute, user
+// 2026-10-29), so a route of more than one slice arrives a tick or more later than the whole search's did, by design.
+// Re-frozen at b1026k: THE SLIDE (sdbrain.js, the route follower) — a leg that grazes the wall the body touches goes on
+// along the wall instead of dropping the route (Town's stairs: a body on a baluster dropped and re-took the same route
+// every tick to the end of the match), so play differs wherever a body brushed a wall on a route: factory, lobby and
+// flashpoint of the six matches here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1025e_ref.js';
+import { tickBot as tickOld } from './ai_b1026k_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

@@ -6,6 +6,7 @@
 // usage: node reach_fill.mjs <tree> <mapKey> <cxM> <czM> <startX,startZ[,feetM]> <x0> <x1> <z0> <z1> [cell=0.25] [jumpM=1.4]
 const [tree, mapKey, cxS, czS, startS, x0S, x1S, z0S, z1S, cellS, jumpS] = process.argv.slice(2);
 const cx = Number(cxS), cz = Number(czS), CELL = Number(cellS ?? 0.25), JUMP = Number(jumpS ?? 1.4) * 4;
+await import(`${tree}/shared/tools/maps/arena_files.mjs`);   // (the modelled maps' data from their files, b1026k)
 const P = await import(`${tree}/shared/src/sim/physics.js`); const A = await import(`${tree}/shared/src/sim/arena.js`);
 const C = await import(`${tree}/shared/src/sim/constants.js`);
 const a = A.getArena(mapKey); const S = a.surfaces, O = a.obstacles; const STEP = C.SURFACE_STEP_HEIGHT ?? P.SURFACE_STEP_HEIGHT ?? 2.6;

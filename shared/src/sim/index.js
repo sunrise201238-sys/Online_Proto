@@ -4,7 +4,7 @@
 export * from './constants.js';
 export * from './math.js';
 export * from './state.js';
-export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaBounds, getGeneratedObstacles } from './arena.js';
+export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
 export {
   segmentHitsObstacle,
   unitOverlapsObstacle,

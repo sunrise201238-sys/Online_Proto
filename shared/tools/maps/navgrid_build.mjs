@@ -8,6 +8,7 @@ import path from 'node:path';
 const [root, ...maps] = process.argv.slice(2);
 if (!root || !maps.length) { console.error('usage: node navgrid_build.mjs <tree root> <mapKey>...'); process.exit(2); }
 const SIM = pathToFileURL(path.resolve(root) + '/shared/src/sim/').href;
+await import(pathToFileURL(path.resolve(root) + '/shared/tools/maps/arena_files.mjs').href);   // (the modelled maps' data from their files)
 const { getArena } = await import(SIM + 'arena.js');
 const { buildNavGrid, serializeNavGrid, navDataSignature, navDataFile } = await import(SIM + 'navgrid.js');
 for (const mapKey of maps) {
@@ -19,6 +20,6 @@ for (const mapKey of maps) {
   const out = path.join(path.resolve(root), 'client/public', navDataFile(mapKey));
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, bytes);
-  let walkable = 0; for (let i = 0; i < grid.walk.length; i += 1) if (grid.walk[i]) walkable += 1;
-  console.log(`${mapKey.padEnd(12)} ${path.basename(out)}  ${(bytes.length / 1048576).toFixed(2)} MB  (${walkable} walkable nodes, ${grid.jumpLinkCount} jump links, built in ${built.toFixed(0)} ms)`);
+  const walkable = grid.N;
+  console.log(`${mapKey.padEnd(12)} ${path.basename(out)}  ${(bytes.length / 1048576).toFixed(2)} MB  (${walkable} walkable nodes, ${grid.jumpLinkCount} jump links, ${grid.dropLinkCount ?? 0} drop links, built in ${built.toFixed(0)} ms)`);
 }
