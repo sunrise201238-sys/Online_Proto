@@ -1,11 +1,13 @@
 // A door swung open in a merged model: the triangles wholly inside a leaf's boxes are turned about a vertical hinge axis so
 // the leaf's span (hinge -> latch, u) comes to lie along the open direction v; positions edited in place (world space, through
 // the node's matrix and back), uvs untouched. usage: node glb_swing.mjs <in> <out> "name:x0,x1,z0,z1,y0,y1|x0,...:hx,hz:ux,uz:vx,vz;..."
+// An empty box list ("name::hx,hz:...") turns every triangle of the nodes whose name starts with name instead — a door that is
+// its own node already, turned back shut (the Hospital's D8, 2026-10-29).
 import { writeFileSync } from 'node:fs';
 import { readGlb, accessor, worlds, apply } from './glb_read.mjs';
 const [inF, outF, spec] = process.argv.slice(2);
-const doors = spec.split(';').map((s) => s.trim()).filter(Boolean).map((s) => { const [name, boxes, h, u, v] = s.split(':'); const [hx, hz] = h.split(',').map(Number); const [ux, uz] = u.split(',').map(Number); const [vx, vz] = v.split(',').map(Number);
-  const th = Math.atan2(ux * vz - uz * vx, ux * vx + uz * vz); return { name, boxes: boxes.split('|').map((b) => b.split(',').map(Number)), hx, hz, cos: Math.cos(th), sin: Math.sin(th), deg: th * 180 / Math.PI, n: 0, moved: new Set(), b: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity] }; });
+const doors = spec.split(';').map((s) => s.trim()).filter(Boolean).map((s) => { const [name, boxes, h, u, v] = s.split(':'); const byName = !boxes; const [hx, hz] = h.split(',').map(Number); const [ux, uz] = u.split(',').map(Number); const [vx, vz] = v.split(',').map(Number);
+  const th = Math.atan2(ux * vz - uz * vx, ux * vx + uz * vz); return { name, byName, boxes: boxes.split('|').map((b) => b.split(',').map(Number)), hx, hz, cos: Math.cos(th), sin: Math.sin(th), deg: th * 180 / Math.PI, n: 0, moved: new Set(), b: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity] }; });
 const g = readGlb(inF); const json = g.json; const W = worlds(json);
 const inv = (m) => { // 4x4 column-major inverse (gl-matrix style)
   const a = m, o = new Array(16); const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3], a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7], a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11], a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
@@ -20,7 +22,7 @@ for (let ni = 0; ni < json.nodes.length; ni += 1) { const n = json.nodes[ni]; if
     const world = (k) => apply(Wi, arr[k * 3], arr[k * 3 + 1], arr[k * 3 + 2]);
     const owner = new Map();   // vertex -> door that moves it
     for (let t = 0; t < nt; t += 1) { const ids = [0, 1, 2].map((k) => (ia ? ia[t * 3 + k] : t * 3 + k)); const T = ids.map(world);
-      let hit = null; for (const d of doors) { if (d.boxes.some((B) => T.every((v) => v[0] >= B[0] && v[0] <= B[1] && v[2] >= B[2] && v[2] <= B[3] && v[1] >= B[4] && v[1] <= B[5]))) { hit = d; break; } }
+      let hit = null; for (const d of doors) { if (d.byName ? (n.name ?? '').startsWith(d.name) : d.boxes.some((B) => T.every((v) => v[0] >= B[0] && v[0] <= B[1] && v[2] >= B[2] && v[2] <= B[3] && v[1] >= B[4] && v[1] <= B[5]))) { hit = d; break; } }
       for (const id of ids) { const o = owner.get(id); if (o === undefined) owner.set(id, hit); else if (o !== hit) { shared += 1; if (o === null) owner.set(id, hit); } }
       if (hit) hit.n += 1; }
     for (const [id, d] of owner) { if (!d || d.moved.has(ni + ':' + id)) continue; d.moved.add(ni + ':' + id); const p = world(id); const dx = p[0] - d.hx, dz = p[2] - d.hz; const nx = d.hx + dx * d.cos - dz * d.sin, nz = d.hz + dx * d.sin + dz * d.cos;
