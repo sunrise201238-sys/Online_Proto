@@ -69,6 +69,19 @@ test('leaving free pov: lockNearest locks the nearest living enemy', () => {
   assert.equal(p1.targetId, 'p2', 'a dead enemy is never the nearest');
 });
 
+test('leaving free pov: lockTarget locks the enemy the client picked (the one nearest its crosshair); a dead or friendly one is refused', () => {
+  const m = setup();
+  const p1 = m.fighters.p1;
+  assert.equal(p1.targetId, 'p2');
+  applyInput(m, p1, { ...emptyInput(), lockTarget: 'p4' }, 1000, arena.obstacles, arena.surfaces);
+  assert.equal(p1.targetId, 'p4', 'the named enemy');
+  applyInput(m, p1, { ...emptyInput(), lockTarget: 'p3' }, 1016, arena.obstacles, arena.surfaces);
+  assert.equal(p1.targetId, 'p4', 'a friend is refused');
+  m.fighters.p2.hp = 0;
+  applyInput(m, p1, { ...emptyInput(), lockTarget: 'p2' }, 1032, arena.obstacles, arena.surfaces);
+  assert.equal(p1.targetId, 'p4', 'a dead enemy is refused');
+});
+
 test('free aim sniper: the charge is marked with the enemy nearest the aim and the shot flies the crosshair', () => {
   const m = setup('unit3');
   const { p1, p2, p4 } = m.fighters;

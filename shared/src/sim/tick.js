@@ -61,7 +61,8 @@ export function emptyInput() {
     freeAim: false,     // FREE POV (user 2026-10-30): the player aims by the crosshair — the lock is not fired at or faced
     aimYaw: 0,          // free pov: the shot's direction from the muzzle to the point under the crosshair — yaw (atan2(dx, dz))
     aimPitch: 0,        // free pov: and its pitch (radians, up positive)
-    lockNearest: false, // free pov → angled: lock the nearest living enemy this frame (a tap flag)
+    lockNearest: false, // free pov → angled: lock the nearest living enemy this frame (a tap flag; older clients)
+    lockTarget: null,   // free pov → angled: lock THIS enemy (its slot id) — the one nearest the crosshair, picked by the client (user 2026-10-30)
     viewAt: null        // the serverTime of the snapshot the client had drawn when this frame was made;
                         // null = the present (a bot, offline, an older client). Lag compensation, history.js.
   };
@@ -115,7 +116,8 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // target), the unit turns to the crosshair while it fires and otherwise faces the way it moves (faceAim / faceMovement).
   // lockNearest is the way back: the frame that leaves free pov locks the
   // nearest living enemy (the user's rule), then the lock drives everything again. Mirrored in the client's updatePlayer.
-  if (input.lockNearest) { const n = nearestEnemyId(matchState, fighter); if (n) fighter.targetId = n; }
+  if (input.lockTarget) { const f = matchState.fighters[input.lockTarget]; if (f && f.team !== fighter.team && f.hp > 0) fighter.targetId = f.id; }   // (the client's pick: the enemy nearest its crosshair, ties to the nearer — a living enemy, or nothing happens)
+  else if (input.lockNearest) { const n = nearestEnemyId(matchState, fighter); if (n) fighter.targetId = n; }
   fighter.freeAim = !!input.freeAim;
   const aim = input.freeAim ? aimDirOf(input.aimYaw || 0, input.aimPitch || 0) : null;
   let opp = matchState.fighters[fighter.targetId];

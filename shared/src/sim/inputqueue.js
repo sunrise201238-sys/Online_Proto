@@ -37,6 +37,7 @@ export function normalizeFrame(frame) {
     aimYaw: numericOrZero(frame.aimYaw),
     aimPitch: numericOrZero(frame.aimPitch),
     lockNearest: !!frame.lockNearest,          // (free pov → angled: lock the nearest enemy, a tap)
+    lockTarget: typeof frame.lockTarget === 'string' && frame.lockTarget.length <= 4 ? frame.lockTarget : null,   // (free pov → angled: lock this slot, the enemy nearest the crosshair — a tap)
     viewAt: Number.isFinite(frame.viewAt) ? frame.viewAt : null
   };
 }
@@ -58,7 +59,8 @@ function mergeFrames(a, b) {
     stepTap: a.stepTap || b.stepTap,
     shootTap: a.shootTap || b.shootTap,
     targetSwitch: a.targetSwitch || b.targetSwitch,
-    lockNearest: a.lockNearest || b.lockNearest
+    lockNearest: a.lockNearest || b.lockNearest,
+    lockTarget: b.lockTarget ?? a.lockTarget
   };
 }
 

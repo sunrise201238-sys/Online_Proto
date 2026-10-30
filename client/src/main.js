@@ -1268,7 +1268,8 @@ const input = {
   shootTap: false,
   shootHold: false,
   targetSwitchTap: false, // 2v2: cycle to next enemy this frame
-  lockNearestTap: false   // FREE POV (user 2026-10-30) → angled: lock the nearest living enemy this frame
+  lockNearestTap: false,  // FREE POV (user 2026-10-30) → angled: lock the nearest living enemy this frame (unused since the crosshair pick below)
+  lockTargetTap: null     // FREE POV → angled: lock this enemy's slot id — the one nearest the crosshair (user 2026-10-30)
 };
 
 let touchSteeringActive = false;
@@ -2610,6 +2611,7 @@ function makeAllyArrowSprite(fillHex = '#86f7c2') {
 function teardownHud() {
   if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.();   // (free pov's mouse)
   input.lockNearestTap = false;
+  input.lockTargetTap = null;
   state.hudAbort?.abort();
   state.hudAbort = null;
   state.hud?.remove();
@@ -6803,6 +6805,7 @@ function buildOnlineInputFrame() {
     aimYaw: state.aim.shotYaw,
     aimPitch: state.aim.shotPitch,
     lockNearest: !!input.lockNearestTap,
+    lockTarget: input.lockTargetTap ?? null,
     // The world this frame was given against: the serverTime of the snapshot
     // drawn right now. The server judges this frame's shot in that world
     // (lag compensation, shared history.js).
@@ -7629,6 +7632,7 @@ function runPredictionTick() {
   input.shootTap = false;
   input.targetSwitchTap = false;
   input.lockNearestTap = false;
+  input.lockTargetTap = null;
   // Jump must stay a HELD state for flight units — the shared sim's climb
   // verb reads the held signal every tick (clearing it here reduced online
   // Aris to pop-only). Non-flight units keep the original tap semantics.
@@ -11086,8 +11090,8 @@ if (typeof window !== 'undefined') {
 // lock is kept but not fired at; the unit turns to the crosshair while it fires or charges and otherwise faces the way
 // it moves, holding its heading when still; the crosshair ring is
 // the rounds' cone drawn on the screen (the base spread plus the bloom, as the rounds sample it) and turns red on an
-// enemy's body. `i`, or two clean taps on the empty screen, toggles; back in angled pov the lock goes to the nearest
-// living enemy. Ignored while command mode stands. The same rules offline (updatePlayer, the offline mirrors) and online (the frame's
+// enemy's body. `i`, or two clean taps on the empty screen, toggles; back in angled pov the lock goes to the enemy nearest
+// the crosshair (ties to the nearer one). Ignored while command mode stands. The same rules offline (updatePlayer, the offline mirrors) and online (the frame's
 // freeAim/aimYaw/aimPitch — tick.js applyInput; the server fires along the aim it is sent).
 // The shot direction is the line from the MUZZLE to the point under the crosshair (the camera ray's first wall, or the
 // enemy body it crosses before that), so the crosshair tells where the round goes even up close, where the camera
@@ -11125,12 +11129,33 @@ function toggleFreePov(force) {
   state.hud?.classList.toggle('free-pov', want);
 }
 
-// Back in angled pov the lock goes to the nearest living enemy (user): offline here, online by the next frame's lockNearest.
+// Back in angled pov the lock goes to the enemy NEAREST THE CROSSHAIR (user 2026-10-30; before: the nearest enemy) — the
+// living enemy whose body lies at the smallest angle off the camera's centre ray; two within half a degree of each other,
+// the one nearer the unit. Offline the lock is set here; online the frame names the slot (lockTarget) and the server sets it.
+function freePovCrosshairPick() {
+  if (!state.player) return null;
+  const o = camera.position, d = new THREE.Vector3(); camera.getWorldDirection(d);
+  const pp = state.player.root.position;
+  let best = null, bestAng = Infinity, bestDist = Infinity;
+  for (const e of getEnemiesOf(state.player)) {
+    if (!e || e.state.hp <= 0) continue;
+    const v = new THREE.Vector3().subVectors(e.root.position, o); const len = v.length() || 1;
+    const ang = Math.acos(THREE.MathUtils.clamp(v.dot(d) / len, -1, 1));
+    const dist = e.root.position.distanceTo(pp);
+    if (ang < bestAng - 0.0087 || (Math.abs(ang - bestAng) <= 0.0087 && dist < bestDist)) { best = e; bestAng = ang; bestDist = dist; }
+  }
+  return best;
+}
 function freePovRelockNearest() {
-  if (!state.player) return;
-  if (state.online) { input.lockNearestTap = true; return; }
-  const n = pickClosestEnemyOf(state.player);
-  if (n) setPlayerTargetMech(n);
+  const pick = freePovCrosshairPick();
+  if (!pick) return;
+  if (state.online) {
+    const sm = state.online.slotMap;
+    const id = sm ? (pick === state.enemy ? sm.enemyId : pick === state.enemy2 ? sm.enemy2Id : null) : null;
+    if (id) input.lockTargetTap = id; else input.lockNearestTap = true;
+    return;
+  }
+  setPlayerTargetMech(pick);
 }
 
 function freePovAimAtEnemy() {   // (a match opening in free pov: the crosshair starts on the enemy, like the angled camera)

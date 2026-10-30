@@ -478,6 +478,7 @@ function tickLobby(lobby, late = false) {
     cur.shootTap = false;
     cur.targetSwitch = false;
     cur.lockNearest = false;   // (free pov → angled, a tap)
+    cur.lockTarget = null;
   }
 
   // 3.5 Floating sniper unlock: a NEW charge aimed at a HUMAN defender gets
