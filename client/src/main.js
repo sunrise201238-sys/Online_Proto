@@ -2018,7 +2018,7 @@ function updateUnitModelState(m, rig, dt, now) {
   // FREE POV (user 2026-10-30): the player's unit turns to the crosshair while it fires or charges and otherwise faces
   // the way it moves, not its lock — the firing override below is skipped for it (the default path turns a moving unit its
   // way and holds it when still); online, a free-aiming remote unit faces the yaw the server set (the snapshot's `yaw`).
-  const freeFacing = m === state.player && state.freePov && !dioramaActive() && !state.spectatorActive;
+  const freeFacing = m === state.player && state.freePov && freePovOwner() && !dioramaActive();
   if (freeFacing && firing) { hx = Math.sin(state.aim.yaw); hz = Math.cos(state.aim.yaw); have = true; }   // (the crosshair's own yaw, not the shot's line — see updateTransforms)
   else if (!freeFacing && state.online && m.state.freeAim && m.state.yaw != null) { hx = Math.sin(m.state.yaw); hz = Math.cos(m.state.yaw); have = true; }
   let tgt = null;
@@ -5490,7 +5490,7 @@ function updateLocksAndReticle() {
   // world-space bracket is replaced by the annotation layer's square.
   // (the anomaly rules: no lock bracket; free pov: the crosshair instead — the PLAYER'S free pov while the player is the live
   // viewer, the WATCHED unit's own free aim while spectating; the spectator's own switch is ignored, user 2026-10-30)
-  const freeViewer = state.spectatorActive || viewer !== state.player ? !!viewer.state.freeAim : state.freePov;
+  const freeViewer = freePovOwner() && viewer === state.player ? state.freePov : !!viewer.state.freeAim;
   if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !freeViewer;
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
@@ -5499,7 +5499,7 @@ function updateLocksAndReticle() {
   const tgt = state.playerCurrentTarget ?? state.enemy;
   const dist = viewer.root.position.distanceTo(tgt.root.position);
   if (viewer === state.player) {
-    state.player.state.redLock = !(state.freePov && !state.spectatorActive) && dist <= state.player.unit.lockRange;   // (free pov: no lock, no red lock — the sim's updateLocks; a spectator-mode player slot is a bot, its lock its own)
+    state.player.state.redLock = !(state.freePov && freePovOwner()) && dist <= state.player.unit.lockRange;   // (free pov: no lock, no red lock — the sim's updateLocks; a spectator-mode player slot is a bot, its lock its own)
     // Enemy bots compute their own redLock against their own targets via the AI
     // loop's runBotAIForMech swap; here we only refresh the primary enemy's
     // redLock against the player (1v1 parity, harmless in 2v2).
@@ -5934,7 +5934,7 @@ function updateTransforms(dt) {
     m.grounded = !m.state.airborne;
   });
   const pToE = new THREE.Vector3().subVectors(state.enemy.root.position, state.player.root.position).normalize();
-  if (state.freePov && !dioramaActive() && !state.spectatorActive) {
+  if (state.freePov && freePovOwner() && !dioramaActive()) {
     // (free pov, user 2026-10-30: the crosshair while firing or charging, else the way it moves, held when still — the sim's faceAim / faceMovement)
     // The CROSSHAIR'S yaw (the camera's), not the shot's: the round flies from the muzzle to the point under the crosshair,
     // and with that point close — Town's Building 12 ramp, the door 3 m ahead — the shot's line leaves the muzzle 10° off
@@ -6114,7 +6114,7 @@ function updateCamera() {
     updateDioramaCamera();
     return;
   }
-  if (state.freePov && cam === state.player && !state.spectatorActive) { updateFreePovCamera(cam); return; }   // FREE POV (user 2026-10-30): behind the aim
+  if (state.freePov && freePovOwner() && cam === state.player) { updateFreePovCamera(cam); return; }   // FREE POV (user 2026-10-30): the owner's own rig; a spectator keeps the chase view of the watched unit
   const p = cam.root.position;
   const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
@@ -6804,7 +6804,7 @@ function buildOnlineInputFrame() {
     aimY: input.y,   // raw aim-stick → Kei charged-sweep vertical (pitch) aim
     // FREE POV (user 2026-10-30): aiming by the crosshair — the shot's direction from the muzzle to the point under
     // it (updateCrosshair), and the way back (lockNearest: lock the nearest enemy, a tap).
-    freeAim: !!(state.freePov && !dioramaActive()),
+    freeAim: !!(state.freePov && freePovOwner() && !dioramaActive()),
     aimYaw: state.aim.shotYaw,
     aimPitch: state.aim.shotPitch,
     lockNearest: !!input.lockNearestTap,
@@ -8762,7 +8762,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   const ddz = state.enemy.root.position.z - state.player.root.position.z;
   if (ddx * ddx + ddz * ddz > 1e-6) {
     const yaw = Math.atan2(ddx, ddz);
-    state.player.root.rotation.y = state.freePov ? ((input.shootTap || input.shootHold) ? state.aim.yaw : (state.player.state.yaw ?? yaw)) : yaw;   // (free pov: firing, the crosshair's yaw; else the server's yaw, the way it moves)
+    state.player.root.rotation.y = state.freePov && freePovOwner() ? ((input.shootTap || input.shootHold) ? state.aim.yaw : (state.player.state.yaw ?? yaw)) : yaw;   // (free pov: firing, the crosshair's yaw; else the server's yaw, the way it moves)
     state.enemy.root.rotation.y = yaw + Math.PI;
   }
 
@@ -11113,7 +11113,14 @@ const FREE_POV = {
 };
 const freePovPtr = { screen: null, shoot: null, lastTapAt: 0 };   // (the pointer swiping the screen / dragging the fire button; the last clean tap)
 
-function freePovAllowed() { return !dioramaActive() && !state.spectatorActive && !!state.player && state.player.state.hp > 0; }
+// The local human driving a LIVE unit — the only one with a pov of their own to switch (user 2026-10-30, "the pov toggle
+// shouldn't react to spectator"): not the spectator-mode watcher nor command mode (playerIsBotDriven), not a dead player
+// watching a teammate, not an online spectator socket (myPlayerId 'spectator' — its state.player is the WATCHED p1, alive).
+// Everyone else sees the pov of the unit they watch: its bracket, or its crosshair while it free-aims.
+function freePovOwner() {
+  return !!state.player && state.player.state.hp > 0 && !playerIsBotDriven() && !(state.online && state.online.myPlayerId === 'spectator');
+}
+function freePovAllowed() { return !dioramaActive() && freePovOwner(); }
 
 function toggleFreePov(force) {
   const want = force !== undefined ? !!force : !state.freePov;
@@ -11122,7 +11129,7 @@ function toggleFreePov(force) {
   // A SPECTATOR has no pov of their own to switch (user 2026-10-30, "the pov toggle shouldn't react to spectator"): the
   // spectator-mode watcher, and a dead player watching a teammate, see the pov of the unit they watch — the bracket when it
   // is in angled pov, its crosshair when it free-aims (updateCrosshair) — and the switch does nothing for them.
-  if (state.spectatorActive || !state.player || state.player.state.hp <= 0) return;
+  if (!freePovOwner()) return;
   state.freePov = want;
   if (want) {
     // Open where the camera looks now, level — no jump.
@@ -11262,7 +11269,7 @@ function updateCrosshair() {
   const live = state.freePov && freePovAllowed() && inMatch;
   state.hud?.classList.toggle('free-pov-live', !!live);
   const viewer = live ? null : cameraFocusMech();
-  const spectated = viewer && viewer !== state.player && viewer.state.freeAim && viewer.state.hp > 0 && viewer.state.aimYaw != null && inMatch && !dioramaActive() ? viewer : null;
+  const spectated = viewer && !(freePovOwner() && viewer === state.player) && viewer.state.freeAim && viewer.state.hp > 0 && viewer.state.aimYaw != null && inMatch && !dioramaActive() ? viewer : null;   // (an online spectator's state.player is the watched p1)
   if (ch) ch.style.display = live || spectated ? 'block' : 'none';
   if (!live && !spectated) return;
   if (live) {
@@ -11379,7 +11386,8 @@ if (typeof window !== 'undefined') {
   window.__freePov = {
     cfg: FREE_POV, toggle: toggleFreePov, aim: state.aim,
     aimTo: (yaw, pitch = 0) => { state.aim.yaw = yaw; state.aim.pitch = pitch; },   // (automation: point the crosshair)
-    get on() { return state.freePov; }
+    get on() { return state.freePov; },
+    owner: () => freePovOwner()   // (automation: is this client the owner of a pov to switch?)
   };
 }
 
