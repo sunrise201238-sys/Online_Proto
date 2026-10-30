@@ -98,7 +98,9 @@ export function tickBot(matchState, botId, now) {
       enemies.push({
         id: f.id, pos: f.pos, vel: f.vel, hp: f.hp, unit: f.unit,
         lastFireAt: f.lastFireAt, bloom: f.bloom, invulnerableUntil: f.invulnerableUntil,
-        chargeStartAt: f.sniperChargeStartAt, chargingAtMe: f.sniperChargeTargetId === me.id
+        chargeStartAt: f.sniperChargeStartAt,
+        // (free pov, user 2026-10-30: a crosshair charge has no lock — its glint warns EVERY enemy bot)
+        chargingAtMe: f.sniperChargeTargetId === me.id || (!!f.sniperChargeTargetId && !!f.freeAim)
       });
     }
   }

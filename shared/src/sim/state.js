@@ -41,6 +41,7 @@ export function createFighter(id, unitKey, spawn, boostScale = 1) {
 
     // Lock & stun.
     redLock: false,
+    freeAim: false,        // FREE POV (user 2026-10-30): aiming by the crosshair this tick — no lock for firing or facing (applyInput, from the frame)
     hitStunUntil: 0,
     lastHitAt: 0,          // the last landed hit (projectiles.js applyHitStun), stunned or not
     hitStunScale: 0.25,

@@ -20,7 +20,8 @@ import {
   LAG_COMP_MAX_MS,
   GROUND_BASE_Y
 } from './constants.js';
-import { clamp, vec3Length2D } from './math.js';
+import { clamp, vec3Length2D, aimDirOf } from './math.js';
+import { nearestEnemyId, aimTargetOf } from './aim.js';
 import { getArena } from './arena.js';
 import {
   resolveUnitObstacleCollisions,
@@ -34,7 +35,9 @@ import {
   integrateHorizontal,
   integrateVertical,
   dampHorizontal,
-  faceTowards
+  faceTowards,
+  faceMovement,
+  faceAim
 } from './movement.js';
 import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash, reloadHolds } from './actions.js';
 import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
@@ -55,6 +58,10 @@ export function emptyInput() {
     targetSwitch: false, // 2v2: cycle to next live enemy target this frame
     aimX: 0,            // Kei charged sweep: raw aim-stick X (horizontal sweep)
     aimY: 0,            // Kei charged sweep: raw aim-stick Y (vertical / pitch sweep)
+    freeAim: false,     // FREE POV (user 2026-10-30): the player aims by the crosshair — the lock is not fired at or faced
+    aimYaw: 0,          // free pov: the shot's direction from the muzzle to the point under the crosshair — yaw (atan2(dx, dz))
+    aimPitch: 0,        // free pov: and its pitch (radians, up positive)
+    lockNearest: false, // free pov → angled: lock the nearest living enemy this frame (a tap flag)
     viewAt: null        // the serverTime of the snapshot the client had drawn when this frame was made;
                         // null = the present (a bot, offline, an older client). Lag compensation, history.js.
   };
@@ -102,6 +109,15 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // Honour a one-tick target switch before resolving opp so the very next
   // shot already lands on the new target.
   if (input.targetSwitch) cycleTargetId(matchState, fighter);
+  // FREE POV (user 2026-10-30): the player aims by a crosshair. The frame says so (freeAim) and carries the shot
+  // direction (aimYaw/aimPitch: from the muzzle to the point under the crosshair, the client's computation); the lock
+  // target is kept but neither fired at nor faced — the shots fly the aim (aim.js aimTargetOf gives them their intent
+  // target), the unit turns to the crosshair while it fires and otherwise faces the way it moves (faceAim / faceMovement).
+  // lockNearest is the way back: the frame that leaves free pov locks the
+  // nearest living enemy (the user's rule), then the lock drives everything again. Mirrored in the client's updatePlayer.
+  if (input.lockNearest) { const n = nearestEnemyId(matchState, fighter); if (n) fighter.targetId = n; }
+  fighter.freeAim = !!input.freeAim;
+  const aim = input.freeAim ? aimDirOf(input.aimYaw || 0, input.aimPitch || 0) : null;
   let opp = matchState.fighters[fighter.targetId];
   // AUTO-RETARGET on target death (2026-08-12, user): when the locked enemy
   // dies, switch to its living teammate instead of staying on the slot —
@@ -233,6 +249,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
       dx = fighter.vel.x;
       dz = fighter.vel.z;
     }
+    if (Math.hypot(dx, dz) < 0.2 && aim) { dx = -aim.x; dz = -aim.z; }   // (free pov: a bare dodge backs away from the aim)
     if (Math.hypot(dx, dz) < 0.2 && opp) {
       dx = fighter.pos.x - opp.pos.x;
       dz = fighter.pos.z - opp.pos.z;
@@ -240,21 +257,27 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     if (tryStartStep(matchState, fighter, dx, dz, now, obstacles)) action = 'step';
   }
 
-  if (input.shootTap && opp) {
-    attemptFire(matchState, fighter, opp, now);
+  const fireAt = aim ? aimTargetOf(matchState, fighter, aim) : opp;   // (free pov: the enemy nearest the aim — the shot's intent target)
+  if (input.shootTap && (fireAt || aim)) {
+    attemptFire(matchState, fighter, fireAt, now, aim);
     if (action === 'idle') action = 'shoot';
   }
 
   // Continuous-fire MG: spreadCount===1 and not sniper.
-  if (input.shootHold && opp && fighter.unit.spreadCount === 1 && !fighter.unit.sniperCharge) {
+  if (input.shootHold && (fireAt || aim) && fighter.unit.spreadCount === 1 && !fighter.unit.sniperCharge) {
     const before = fighter.lastFireAt;
-    attemptFire(matchState, fighter, opp, now);
+    attemptFire(matchState, fighter, fireAt, now, aim);
     if (fighter.lastFireAt !== before && action === 'idle') action = 'shoot';
   }
 
   applyMomentum(fighter, { suspend: action === 'step' });
   tickBoost(fighter, now, action, surfaces);
-  if (opp) faceTowards(fighter, opp);
+  if (aim) {
+    // (free pov, user 2026-10-30: the unit turns to the crosshair while it fires or charges, else faces the way it moves, holding its heading when still)
+    const firing = !!(input.shootTap || input.shootHold || fighter.sniperChargeTargetId || fighter.chargedBeamUntil > now);
+    if (firing) faceAim(fighter, input.aimYaw || 0); else faceMovement(fighter);
+  }
+  else if (opp) faceTowards(fighter, opp);
 }
 
 // Update lock state on each fighter. Called once per tick after movement.
@@ -272,7 +295,7 @@ export function updateLocks(matchState) {
     const dy = f.pos.y - tgt.pos.y;
     const dz = f.pos.z - tgt.pos.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    f.redLock = dist <= f.unit.lockRange;
+    f.redLock = !f.freeAim && dist <= f.unit.lockRange;   // (free pov: no lock — no red lock, no homing)
   }
 }
 

@@ -477,6 +477,7 @@ function tickLobby(lobby, late = false) {
     cur.stepTap = false;
     cur.shootTap = false;
     cur.targetSwitch = false;
+    cur.lockNearest = false;   // (free pov → angled, a tap)
   }
 
   // 3.5 Floating sniper unlock: a NEW charge aimed at a HUMAN defender gets
@@ -491,7 +492,11 @@ function tickLobby(lobby, late = false) {
     if (lobby.glintCharges.get(s) !== key) {
       lobby.glintCharges.set(s, key);
       const targetSlot = fighter.sniperChargeTargetId;
-      const targetHuman = occupiedSlotsOf(lobby).has(targetSlot) && !lobby.botSlots.has(targetSlot);
+      const humanIn = (sl) => occupiedSlotsOf(lobby).has(sl) && !lobby.botSlots.has(sl);
+      // (free pov, user 2026-10-30: a crosshair charge warns every enemy — any human enemy is a defender to wait for)
+      const targetHuman = fighter.freeAim
+        ? activeSlots(lobby.mode).some((sl) => teamOf(sl) !== teamOf(s) && humanIn(sl))
+        : humanIn(targetSlot);
       if (targetHuman) fighter.sniperGlintAt = fighter.sniperChargeStartAt + GLINT_CONFIRM_CAP_MS;
     }
   }
@@ -872,7 +877,8 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
     const shooter = data && typeof data.shooterId === 'string' ? lb.match.fighters[data.shooterId] : null;
-    if (!shooter || shooter.sniperChargeTargetId !== slot) return;
+    if (!shooter || !shooter.sniperChargeTargetId) return;
+    if (shooter.sniperChargeTargetId !== slot && !(shooter.freeAim && teamOf(slot) !== teamOf(shooter.id))) return;   // (free pov: every enemy sees the glint)
     shooter.sniperGlintAt = Math.min(shooter.sniperGlintAt, Date.now());
   });
 

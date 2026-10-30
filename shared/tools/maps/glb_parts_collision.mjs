@@ -455,13 +455,15 @@ for (let pass = 0; pass < 40; pass += 1) { const cell = 16, grid = new Map(); co
   promoted += changed; if (!changed) break; }
 if (promoted) console.log(`lips: ${promoted} walls topping at a floor's level given a lid and the lid's buffer`);
 // ---- HOLE (a map's own data): rectangles of the model's metres where every surface topping over a height is cut away —
-// HOLE="x0,x1,z0,z1,above;..." — the opening of a stair cut down into a block of earth whose top is read as a floor
+// HOLE="x0,x1,z0,z1,above[,below];..." — the opening of a stair cut down into a block of earth whose top is read as a floor
+// (with `below`, only the surfaces topping up to it: Town's Building 12, user 2026-10-30 — the street floor over the
+// entrance ramp goes, the building's own floors above the ramp's end stay)
 // (District's station stair: the block tops at 0.22 m over treads from 0.09 m down, and a body walked over the trench).
 // A surface over the hole keeps its parts outside it, up to four; a plane keeps its slope, its corner height moved with it.
 let holed = 0; cur.branch = 'HOLE';
-for (const spec of (process.env.HOLE ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [hx0, hx1, hz0, hz1, above] = spec.split(',').map(Number); const H = { x0: ax(hx0), x1: ax(hx1), z0: az(hz0), z1: az(hz1), y: ay(above) };
+for (const spec of (process.env.HOLE ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [hx0, hx1, hz0, hz1, above, below] = spec.split(',').map(Number); const H = { x0: ax(hx0), x1: ax(hx1), z0: az(hz0), z1: az(hz1), y: ay(above), yTop: Number.isFinite(below) ? ay(below) : Infinity };
   const clip = (s, minX, maxX, minZ, maxZ) => { if (maxX - minX < 0.05 || maxZ - minZ < 0.05) return null; const c = { ...s, minX, maxX, minZ, maxZ }; if (s.type === 'plane') { c.y0 = Math.round((s.y0 + s.gx * (minX - s.minX) + s.gz * (minZ - s.minZ)) * 100) / 100; c.maxTop = Math.round(Math.min(s.maxTop, Math.max(...[[minX, minZ], [maxX, minZ], [minX, maxZ], [maxX, maxZ]].map(([x, z]) => s.y0 + s.gx * (x - s.minX) + s.gz * (z - s.minZ)))) * 100) / 100; } return c; };
-  for (let i = surfaces.length - 1; i >= 0; i -= 1) { const s = surfaces[i]; if (s.maxTop <= H.y || s.maxX <= H.x0 || s.minX >= H.x1 || s.maxZ <= H.z0 || s.minZ >= H.z1) continue; surfaces.splice(i, 1); holed += 1;
+  for (let i = surfaces.length - 1; i >= 0; i -= 1) { const s = surfaces[i]; if (s.maxTop <= H.y || s.maxTop > H.yTop || s.maxX <= H.x0 || s.minX >= H.x1 || s.maxZ <= H.z0 || s.minZ >= H.z1) continue; surfaces.splice(i, 1); holed += 1;
     const ix0 = Math.max(s.minX, H.x0), ix1 = Math.min(s.maxX, H.x1); for (const c of [clip(s, s.minX, H.x0, s.minZ, s.maxZ), clip(s, H.x1, s.maxX, s.minZ, s.maxZ), clip(s, ix0, ix1, s.minZ, H.z0), clip(s, ix0, ix1, H.z1, s.maxZ)]) if (c) surfaces.push(c); } }
 if (holed) console.log(`hole: ${holed} surfaces cut around the map's HOLE rectangles`);
 // ---- VOID (a map's own data): rectangles of the model's metres where there is no world — the dark beside the station
@@ -485,8 +487,17 @@ for (const spec of (process.env.TRIM ?? '').split(';').map((s) => s.trim()).filt
       for (const q of parts) if (q.maxX - q.minX >= 0.05 && q.maxZ - q.minZ >= 0.05) list.push(q); } };
   cut(obstacles, (o) => o.maxY > T.y); cut(surfaces, (s) => s.lid && s.maxTop > T.y); }
 if (trimmed) console.log(`trim: ${trimmed} boxes and lids cut back at the map's TRIM rectangles`);
+
+// ---- WALL (a map's own data): a box the map says is there — WALL="x0,x1,z0,z1,y0,y1;..." in the model's metres, added as
+// given after every other pass. Town's Building 12 (user 2026-10-30, "the underground slope"): the two sides of its entrance
+// ramp's trench, which Building 11's reading, the same geometry 24 m east, gave itself (its ramp-walls) and this one has
+// from its data.
+let walled = 0; cur.branch = 'WALL';
+for (const spec of (process.env.WALL ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [wx0, wx1, wz0, wz1, wy0, wy1] = spec.split(',').map(Number); const r2 = (v) => Math.round(v * 100) / 100;
+  obstacles.push({ minX: r2(ax(wx0)), maxX: r2(ax(wx1)), minZ: r2(az(wz0)), maxZ: r2(az(wz1)), minY: r2(ay(wy0)), maxY: r2(ay(wy1)) }); walled += 1; }
+if (walled) console.log(`wall: ${walled} boxes added from the map's WALL list`);
 if (n.cut) console.log(`cut: ${n.cut} boxes along the diagonals of the map's CUT parts`);
 mkdirSync(outDir, { recursive: true });
-const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '', trim: process.env.TRIM ?? '', cut: [...CUT] }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
+const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '', trim: process.env.TRIM ?? '', cut: [...CUT], wall: process.env.WALL ?? '' }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
 writeFileSync(`${outDir}/${key}.json`, JSON.stringify(out));
 console.log(`${key}: ${n.parts} parts — ${n.out} outside the crop, ${n.below} under the street, ${n.above} over the ceiling, ${n.tiny} tiny, ${n.markings} flat markings, ${n.mass} blocks of earth (their tops kept), ${n.invisible} invisible, ${n.excluded} excluded; ${obstacles.length} boxes (${n.lids} with a lid, ${n.lowLids} low ones with a lid, ${n.floors} with a floor on top, ${n.panes} sheets given 4 cm), ${surfaces.length} surfaces (${n.ramps} ramps, ${n.sheets} flat sheets); halfX ${out.halfX} halfZ ${out.halfZ}`);

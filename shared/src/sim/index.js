@@ -55,6 +55,7 @@ export { pickRespawnSpawn, mateSpawnFor } from './spawn.js';
 export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire, botNoteShot, botClearFireRule, tickStillness, isStill } from './bloom.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
+export { nearestEnemyId, aimTargetOf } from './aim.js';   // (free pov, user 2026-10-30)
 export {
   setMoveOrder, setForceLock, setStance, isHideOrdered, clearCommands, clearMoveOrder, getCommands, ensureCommands,
   commandTargetIdOf, tickCommandDriver

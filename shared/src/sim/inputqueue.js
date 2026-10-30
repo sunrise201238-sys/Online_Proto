@@ -33,6 +33,10 @@ export function normalizeFrame(frame) {
     targetSwitch: !!frame.targetSwitch,
     aimX: numericOrZero(frame.aimX),
     aimY: numericOrZero(frame.aimY),
+    freeAim: !!frame.freeAim,                  // (free pov, user 2026-10-30: aiming by the crosshair, with its direction)
+    aimYaw: numericOrZero(frame.aimYaw),
+    aimPitch: numericOrZero(frame.aimPitch),
+    lockNearest: !!frame.lockNearest,          // (free pov → angled: lock the nearest enemy, a tap)
     viewAt: Number.isFinite(frame.viewAt) ? frame.viewAt : null
   };
 }
@@ -53,7 +57,8 @@ function mergeFrames(a, b) {
     jump: a.jump || b.jump,
     stepTap: a.stepTap || b.stepTap,
     shootTap: a.shootTap || b.shootTap,
-    targetSwitch: a.targetSwitch || b.targetSwitch
+    targetSwitch: a.targetSwitch || b.targetSwitch,
+    lockNearest: a.lockNearest || b.lockNearest
   };
 }
 

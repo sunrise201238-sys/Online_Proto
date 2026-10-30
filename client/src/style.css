@@ -576,3 +576,10 @@ body.pseudo-fullscreen #app {
 /* (2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health) */
 .unit-profile-popup .unit-note { position: absolute; left: 10px; bottom: 7px; max-width: 108px; font-size: 9px; line-height: 11px; font-weight: 700; color: #ffd76a; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
 .unit-profile-popup .map-note { max-width: 244px; }   /* (a map's note runs under its 260 px picture, one line, user 2026-10-29) */
+
+/* FREE POV (user 2026-10-30): the crosshair at the screen centre — a ring that is the rounds' cone on the screen (--ch-size,
+   set per frame from the spread and the bloom; border-box, so the ring's centre is the screen's); red while it sits on
+   an enemy's body. Shown by the JS (display) only while free pov stands. */
+.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --ch-size: 12px; --ch-color: rgba(126, 255, 189, 0.95); }
+.crosshair .ch-ring { position: absolute; box-sizing: border-box; left: calc(var(--ch-size) / -2); top: calc(var(--ch-size) / -2); width: var(--ch-size); height: var(--ch-size); border: 2px solid var(--ch-color); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6), inset 0 0 4px rgba(0, 0, 0, 0.6); }
+.crosshair.on-target { --ch-color: rgba(255, 95, 114, 0.98); }

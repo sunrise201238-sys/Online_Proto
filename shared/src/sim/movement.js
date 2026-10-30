@@ -176,3 +176,19 @@ export function faceTowards(fighter, other) {
   fighter.facing = dx >= 0 ? 1 : -1;
   fighter.yaw = Math.atan2(dx, dz);
 }
+
+// FREE POV (user 2026-10-30): the unit faces the way it moves and holds its heading when still — the same convention as
+// faceTowards (yaw = atan2(dx, dz), the sprite's facing the sign of dx). The crosshair never turns the unit.
+export function faceMovement(fighter) {
+  const vx = fighter.vel.x, vz = fighter.vel.z;
+  if (vx * vx + vz * vz < 0.25) return;
+  fighter.yaw = Math.atan2(vx, vz);
+  fighter.facing = vx >= 0 ? 1 : -1;
+}
+
+// FREE POV (user 2026-10-30, "when the unit fires, it should turn and face the crosshair direction"): the crosshair's yaw,
+// the same convention — taken while the trigger is pressed or held or a charge runs.
+export function faceAim(fighter, yaw) {
+  fighter.yaw = yaw;
+  fighter.facing = Math.sin(yaw) >= 0 ? 1 : -1;
+}

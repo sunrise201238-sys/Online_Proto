@@ -26,6 +26,8 @@ import { spawnProjectiles, spawnBeam, startChargedBeam } from './projectiles.js'
 import { unitOverlapsObstacle } from './physics.js';
 import { inheritMomentum } from './movement.js';
 import { bloomAfterTime, isStill } from './bloom.js';
+import { aimDirOf } from './math.js';
+import { aimTargetOf } from './aim.js';
 
 // The reload hold (user 2026-10-23, Kurumi's UMP45): a unit whose data says `reloadHolds` stands while its magazine is being
 // changed — the walk and the sprint are refused, the dodge and the jump are not. A rule from data, one call for the player's
@@ -68,7 +70,10 @@ export function tickBloom(fighter, now, dt) {
 }
 
 // Mirrors attemptFire. Returns true if a shot was fired or charge initiated.
-export function attemptFire(matchState, owner, target, now) {
+// `aim` (free pov, user 2026-10-30): the shot direction from the muzzle; the rounds fly it instead of the line to the
+// target, which is then only the shot's intent target (aim.js) — the sniper's charge is marked with it, the rounds carry
+// it. Null = the classic aimed shot.
+export function attemptFire(matchState, owner, target, now, aim = null) {
   // Defensive re-target — if our caller handed us a dead target, swap it
   // for any live enemy on the opposite team. applyInput's auto-fallback
   // already does this for the human path, but a bot path or a continuous-
@@ -81,6 +86,7 @@ export function attemptFire(matchState, owner, target, now) {
     target = live;
     owner.targetId = live.id;
   }
+  if (!target) return false;   // (a free-aim shot with no living enemy: nothing to mark, nothing to fight)
   const u = owner.unit;
   if (u.sniperCharge) {
     if (owner.airborne) return false;
@@ -103,16 +109,16 @@ export function attemptFire(matchState, owner, target, now) {
     matchState.events.push({ type: 'sniper-charge-start', ownerId: owner.id });
     return true;
   }
-  return _spawnNonCharge(matchState, owner, target, now);
+  return _spawnNonCharge(matchState, owner, target, now, aim);
 }
 
-function _spawnNonCharge(matchState, owner, target, now) {
+function _spawnNonCharge(matchState, owner, target, now, aim = null) {
   const u = owner.unit;
   if (u.magCapacity != null && owner.ammo <= 0) return false;
   if (now - owner.lastFireAt < u.fireCooldownMs) return false;
   owner.lastFireAt = now;
   if (u.magCapacity != null) owner.ammo -= 1;
-  spawnProjectiles(matchState, owner, target);
+  spawnProjectiles(matchState, owner, target, aim);
   return true;
 }
 
@@ -163,7 +169,11 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
   fighter.sniperChargeTargetId = null;
   fighter.sniperChargeUntil = 0;
   if (fighter.hp <= 0) return;
-  const target = matchState.fighters[targetId];
+  let target = matchState.fighters[targetId];
+  // FREE POV (user 2026-10-30): the charge was aimed by the crosshair and so is the shot — the aim of THIS frame (the
+  // player kept aiming through the charge); the marked target is only the round's bookkeeping, re-picked if it died.
+  const aim = fighter.freeAim && input ? aimDirOf(input.aimYaw || 0, input.aimPitch || 0) : null;
+  if (aim && (!target || target.hp <= 0)) target = aimTargetOf(matchState, fighter, aim);
   if (!target || target.hp <= 0) return;
   // Sniper fires using the same ammo/cooldown gates as a regular shot.
   fighter.lastFireAt = now;
@@ -173,10 +183,10 @@ export function tickSniperCharge(matchState, fighter, now, input = null, obstacl
     // Sprint-cancel always → quick beam (a late cancel would otherwise start a
     // channel that the still-held sprint kills on frame 1); full natural charge
     // → the sweep channel.
-    if (!cancelled && now - fighter.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(matchState, fighter, target, now);
-    else spawnBeam(matchState, fighter, target, now, obstacles);
+    if (!cancelled && now - fighter.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(matchState, fighter, target, now, aim);
+    else spawnBeam(matchState, fighter, target, now, obstacles, aim);
   } else {
-    spawnProjectiles(matchState, fighter, target);
+    spawnProjectiles(matchState, fighter, target, aim);
   }
   matchState.events.push({ type: 'sniper-charge-fire', ownerId: fighter.id });
 }

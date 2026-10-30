@@ -85,3 +85,7 @@ export const applyYawPitch = (dir, yaw, pitch) => {
   const nz = y * sp + z * cp;
   return { x, y: ny, z: nz };
 };
+
+// FREE POV (user 2026-10-30): the crosshair's shot direction from its yaw (atan2(dx, dz), the fighter's own convention)
+// and pitch (radians, up positive). One formula for the sim, the server and the client.
+export const aimDirOf = (yaw, pitch) => { const c = Math.cos(pitch); return { x: Math.sin(yaw) * c, y: Math.sin(pitch), z: Math.cos(yaw) * c }; };

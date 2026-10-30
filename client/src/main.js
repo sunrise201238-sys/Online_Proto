@@ -811,6 +811,8 @@ const MAP_DATA = {
 
 const state = {
   phase: 'select',
+  freePov: false,   // FREE POV (user 2026-10-30): aiming by a crosshair, the camera behind the aim — the FREE POV block
+  aim: { yaw: 0, pitch: 0, shotYaw: 0, shotPitch: 0, onTarget: false, faceYaw: 0 },   // (the crosshair: its look yaw/pitch; the shot's direction from the muzzle to the point under it; the unit's heading)
   mode: '1v1',                  // '1v1' | '2v2'
   // Main mode. 'sd' = "Duel" in the UI — the classic first-death-decides rules.
   // 'trio' = each player/bot drafts an ORDERED roster of three units
@@ -1265,7 +1267,8 @@ const input = {
   stepTap: false,
   shootTap: false,
   shootHold: false,
-  targetSwitchTap: false  // 2v2: cycle to next enemy this frame
+  targetSwitchTap: false, // 2v2: cycle to next enemy this frame
+  lockNearestTap: false   // FREE POV (user 2026-10-30) → angled: lock the nearest living enemy this frame
 };
 
 let touchSteeringActive = false;
@@ -2010,8 +2013,14 @@ function updateUnitModelState(m, rig, dt, now) {
   // bot's own pick (botTargetRef): where its tracers and laser sight already
   // go — else the nearest live hostile. Not firing, a unit faces the way it
   // moves, else holds.
+  // FREE POV (user 2026-10-30): the player's unit turns to the crosshair while it fires or charges and otherwise faces
+  // the way it moves, not its lock — the firing override below is skipped for it (the default path turns a moving unit its
+  // way and holds it when still); online, a free-aiming remote unit faces the yaw the server set (the snapshot's `yaw`).
+  const freeFacing = m === state.player && state.freePov && !dioramaActive() && !state.spectatorActive;
+  if (freeFacing && firing) { hx = Math.sin(state.aim.shotYaw); hz = Math.cos(state.aim.shotYaw); have = true; }
+  else if (!freeFacing && state.online && m.state.freeAim && m.state.yaw != null) { hx = Math.sin(m.state.yaw); hz = Math.cos(m.state.yaw); have = true; }
   let tgt = null;
-  if (firing) {
+  if (firing && !have && !freeFacing) {
     if (m === state.player && state.playerCurrentTarget && state.playerCurrentTarget !== m
       && state.playerCurrentTarget.root && (state.playerCurrentTarget.state?.hp ?? 0) > 0) tgt = state.playerCurrentTarget;
     if (!tgt) {
@@ -2599,6 +2608,8 @@ function makeAllyArrowSprite(fillHex = '#86f7c2') {
 // survives into the next match/menu. (The leaked pointerup used to do that
 // zeroing by accident on the next finger release; now it's explicit.)
 function teardownHud() {
+  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.();   // (free pov's mouse)
+  input.lockNearestTap = false;
   state.hudAbort?.abort();
   state.hudAbort = null;
   state.hud?.remove();
@@ -2639,9 +2650,11 @@ function setupHUD() {
     <div class="joy" id="joy"><div class="stick"></div></div>
     <div class="buttons" id="buttons"></div>
     <div class="speed-lines" id="speed-lines"></div>
+    <div class="crosshair" id="crosshair"><div class="ch-ring"></div></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
   `;
   app.appendChild(hud);
+  hud.classList.toggle('free-pov', !!state.freePov);   // (free pov: the crosshair shows, TARGET dims)
 
   // ONLINE ABSOLUTE HUD (owner 2026-08-22): corner bars anchor by SERVER
   // SLOT — left column team A (p1 top / p3 bottom), right column team B
@@ -2745,14 +2758,16 @@ function setupHUD() {
     input.boostHeld = false;
     stick.style.transform = 'translate(0px,0px)';
   }, { signal: hudAbort.signal });
+  setupFreePovPointer(hudAbort.signal);   // FREE POV (user 2026-10-30): the mouse, the screen swipe, the double-tap
 
   hud.querySelectorAll('button').forEach((btn) => {
     if (btn.id === 'pause-btn') return;
     const k = btn.dataset.k;
-    btn.addEventListener('pointerdown', () => {
+    btn.addEventListener('pointerdown', (e) => {
       if (k === 'shoot') {
         input.shootTap = true;
         input.shootHold = true;
+        freePovDragStart(e);   // (free pov: dragging the fire button aims the crosshair, the sniper's charge included)
       }
       else if (k === 'step') input.stepTap = true;
       else if (k === 'boost') {
@@ -3202,7 +3217,7 @@ function fireGatePass(st, cooldownMs, now) {
   return true;
 }
 
-function spawnProjectiles(owner, target) {
+function spawnProjectiles(owner, target, aimDir = null) {   // (aimDir, free pov: the rounds fly it, never home, hit whom they meet — the sim's spawnProjectiles)
   const now = performance.now();
   if (owner.unit.magCapacity != null && owner.state.ammo <= 0) return;
   if (!fireGatePass(owner.state, owner.unit.fireCooldownMs, now)) return;
@@ -3213,10 +3228,10 @@ function spawnProjectiles(owner, target) {
   let shotDamage = owner.unit.damage;
   if (owner.unit.rangeDamage) {
     const rd = owner.unit.rangeDamage;
-    const rdDist = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
+    const rdDist = target ? Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z) : Infinity;
     shotDamage = rdDist < rd.nearDist ? rd.near : rdDist < rd.midDist ? rd.mid : owner.unit.damage;
   }
-  const baseDir = new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
+  const baseDir = aimDir ? aimDir.clone().normalize() : new THREE.Vector3().subVectors(target.root.position, owner.root.position).normalize();
   const isShotgun = owner.unit.spreadCount > 1;
 
   // Shotgun VOLLEY STAMP (mirrors shared projectiles.js): ONE flying object
@@ -3234,7 +3249,7 @@ function spawnProjectiles(owner, target) {
     const spawnPos = owner.root.position.clone().add(new THREE.Vector3(0, 0.8, 0));
     const pelletMeshes = [];
     for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
-      const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
+      const mesh = buildProjectileMesh(owner.unit, !aimDir && owner.state.redLock);
       mesh.position.copy(spawnPos);
       scene.add(mesh);
       pelletMeshes.push(mesh);
@@ -3249,8 +3264,9 @@ function spawnProjectiles(owner, target) {
       center: spawnPos.clone(),
       spawnPos,
       vel: dir.multiplyScalar(owner.unit.projectileSpeed),
-      homing: owner.state.redLock,
+      homing: !aimDir && owner.state.redLock,
       homingLost: false,
+      freeAim: !!aimDir,
       pelletMask: (1 << SHOTGUN_PATTERN.length) - 1,
       volleyRot: Math.random() * Math.PI * 2,
       ttl: 2.2,
@@ -3275,7 +3291,7 @@ function spawnProjectiles(owner, target) {
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
       .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
 
-    const mesh = buildProjectileMesh(owner.unit, owner.state.redLock);
+    const mesh = buildProjectileMesh(owner.unit, !aimDir && owner.state.redLock);
     mesh.position.copy(owner.root.position).add(new THREE.Vector3(0, 0.8, 0));
     scene.add(mesh);
     // Bullet trail (MG / Sniper only). Tail trails by (fadeMs / 1000) * speed,
@@ -3299,8 +3315,9 @@ function spawnProjectiles(owner, target) {
       trailSpawnPos: mesh.position.clone(),
       trailSpawnAt: now,
       vel: projVel,
-      homing: owner.state.redLock,
+      homing: !aimDir && owner.state.redLock,
       homingLost: false,
+      freeAim: !!aimDir,
       ttl: 2.2,
       damage: shotDamage,
       hitStunMs: owner.unit.stun?.ms ?? 100,
@@ -3486,7 +3503,7 @@ function sdBotStartStep(mech, sdx, sdz, now) {
   return true;
 }
 
-function attemptFire(owner, target, now) {
+function attemptFire(owner, target, now, aimDir = null) {   // (aimDir, free pov: the shot flies it; `target` is then its intent target)
   // Defensive re-target — never fire at a corpse. Mirrors the shared sim's
   // attemptFire so offline 2v2 also auto-swaps to a live enemy when the
   // current target is dead, including bots that might pass stale refs.
@@ -3518,12 +3535,12 @@ function attemptFire(owner, target, now) {
     return true;
   }
   const before = owner.state.lastFireAt;
-  spawnProjectiles(owner, target);
+  spawnProjectiles(owner, target, aimDir);
   return owner.state.lastFireAt !== before;
 }
 
 function tickSniperCharge(mech, now, sprintHeld = false) {
-  const target = mech.state.sniperChargeTarget;
+  let target = mech.state.sniperChargeTarget;
   if (!target) return;
   // Sprint-cancel: holding sprint while the forced-standing charge is active
   // ends it and fires the projectile. Costs SNIPER_CANCEL_BOOST_COST (half a
@@ -3561,16 +3578,20 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
   mech.state.sniperChargeUntil = 0;
   removeGlintFromMech(mech);
   if (mech.state.hp <= 0) return;
+  // FREE POV (user 2026-10-30; mirrors the sim): the player's charge was aimed by the crosshair and so is the shot —
+  // the aim of THIS frame; the marked target is only the round's bookkeeping, re-picked if it died.
+  const aimDir = mech === state.player && state.freePov ? freePovShotDir() : null;
+  if (aimDir && (!target || target.state.hp <= 0)) target = freePovIntentTarget(aimDir) ?? target;
   if (mech.unit.beam) {
     const chargeMs = mech.unit.chargeMs ?? 1000;
     // Full charge → the 1 s steerable sweep channel; an early sprint-cancel (or
     // the bot's short release) → the quick fixed beam. A sprint-cancel ALWAYS
     // makes a quick beam even if it lands late — otherwise the still-held sprint
     // would cancel the channel on its first frame and the beam would never show.
-    if (!wasCancelled && now - mech.state.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(mech, target);
-    else spawnBeamOffline(mech, target);
+    if (!wasCancelled && now - mech.state.sniperChargeStartAt >= chargeMs - 50) startChargedBeam(mech, target, aimDir);
+    else spawnBeamOffline(mech, target, aimDir);
   } else {
-    spawnProjectiles(mech, target);
+    spawnProjectiles(mech, target, aimDir);
   }
 }
 
@@ -3738,6 +3759,13 @@ function updateProjectileSystem(dt) {
       if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm);
       state.projectiles.splice(i, 1);
       continue;
+    }
+    // FREE POV (user 2026-10-30; mirrors the sim's retargetFreeAim): a free-aim round has no lock — each frame its
+    // target becomes the living enemy its flight comes nearest, and the hit test below runs on that one. Never homes.
+    if (p.freeAim) {
+      const t = freePovRoundTarget(p, dt);
+      if (!t) { despawnProjectileTrail(p, now); disposeProjectileMesh(p.mesh); if (p.pelletMeshes) for (const pm of p.pelletMeshes) disposeProjectileMesh(pm); state.projectiles.splice(i, 1); continue; }
+      p.target = t; p.homing = false; p.homingLost = true;
     }
 
     // Shotgun VOLLEY STAMP (mirrors shared _tickVolley — keep in sync): ONE
@@ -4113,7 +4141,7 @@ function beamPerpDistXZ(b, px, pz) {
   return Math.sqrt(ddx * ddx + ddz * ddz);
 }
 
-function spawnBeamOffline(owner, target) {
+function spawnBeamOffline(owner, target, aimDir = null) {   // (aimDir, free pov: the beam flies the crosshair's line)
   const u = owner.unit;
   const now = performance.now();
   // Same ammo + fire-cooldown bookkeeping as spawnProjectiles (which the beam
@@ -4128,7 +4156,7 @@ function spawnBeamOffline(owner, target) {
   // online shared spawnBeam). Keeping dir.y zeroed pinned the visual flat at
   // Kei's muzzle height even when the target was higher/lower. Hit detection is
   // XZ-only, so this only changes how the line is drawn.
-  const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
+  const dir = aimDir ? aimDir.clone() : new THREE.Vector3().subVectors(target.root.position, owner.root.position);
   if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
   dir.normalize();
   const radius = u.beam?.radius ?? 1.6;
@@ -4146,7 +4174,7 @@ function spawnBeamOffline(owner, target) {
     hitIds: [],
     // Shooting Range: remember the aimed sign so an untouched beam can print
     // its red miss dot when it expires.
-    rangeAim: (state.mapKey === 'range' && target.state.isRangeTarget) ? target : null
+    rangeAim: (state.mapKey === 'range' && target?.state?.isRangeTarget) ? target : null
   });
   spawnBeamMesh(ox, oy, oz, dir.x, dir.y, dir.z, length, radius, durationMs);
 }
@@ -4261,12 +4289,13 @@ function updateBeamVisuals(now) {
 // joystick rotates it toward the aim at a capped rate (bots track their
 // target). Sprint cancels it; the fire cooldown only starts when it ends.
 // ---------------------------------------------------------------------------
-function startChargedBeam(owner, target) {
+function startChargedBeam(owner, target, aimDir = null) {   // (aimDir, free pov: the channel opens on the crosshair's line)
   const u = owner.unit;
   const now = performance.now();
   if (u.magCapacity != null && owner.state.ammo <= 0) return;
   if (u.magCapacity != null) owner.state.ammo -= 1;
-  const dir = new THREE.Vector3().subVectors(target.root.position, owner.root.position);
+  const dir = aimDir ? aimDir.clone() : new THREE.Vector3().subVectors(target.root.position, owner.root.position);
+  const aimPitch = aimDir ? Math.atan2(aimDir.y, Math.hypot(aimDir.x, aimDir.z)) : null;
   dir.y = 0;
   if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
   dir.normalize();
@@ -4281,8 +4310,8 @@ function startChargedBeam(owner, target) {
   owner.state.chargedBeamDirZ = dir.z;
   // Start the vertical aim pointed at the target's height (channel opens on-
   // target); the player can then sweep it up/down, bots re-aim it each tick.
-  const hd = Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z);
-  owner.state.chargedBeamPitch = THREE.MathUtils.clamp(Math.atan2(target.root.position.y - owner.root.position.y, hd), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
+  const hd = target ? Math.hypot(target.root.position.x - owner.root.position.x, target.root.position.z - owner.root.position.z) : 1;
+  owner.state.chargedBeamPitch = THREE.MathUtils.clamp(aimPitch ?? Math.atan2(target.root.position.y - owner.root.position.y, hd), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
   owner.chargedBeamHitIds = [];
   owner.chargedBeamVisual = buildChargedBeamMesh((u.beam?.radius ?? 1.6) * KEI_CHARGED_RADIUS_MULT);
 }
@@ -4395,6 +4424,18 @@ function updateChargedBeams(now, dt) {
     // botSet carries command-mode slots too.
     if (m === state.player && !playerIsBotDriven()) {
       if (input.boostHeld || input.sprintLocked) { endChargedBeam(m, now); continue; } // sprint cancels
+      if (state.freePov) {
+        // FREE POV (user 2026-10-30; mirrors the sim's tickChargedBeams): the channel follows the crosshair at the sweep rate.
+        const sd = freePovShotDir();
+        let delta = Math.atan2(sd.z, sd.x) - curAngle;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const newAngle = curAngle + THREE.MathUtils.clamp(delta, -maxStep, maxStep);
+        st.chargedBeamDirX = Math.cos(newAngle);
+        st.chargedBeamDirZ = Math.sin(newAngle);
+        const wantPitch = THREE.MathUtils.clamp(Math.atan2(sd.y, Math.hypot(sd.x, sd.z)), -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
+        st.chargedBeamPitch += THREE.MathUtils.clamp(wantPitch - st.chargedBeamPitch, -maxStep, maxStep);
+      } else {
       if (Math.abs(input.x) > KEI_BEAM_AIM_DEADZONE) {
         const newAngle = curAngle + input.x * maxStep;   // horizontal sweep
         st.chargedBeamDirX = Math.cos(newAngle);
@@ -4402,6 +4443,7 @@ function updateChargedBeams(now, dt) {
       }
       if (Math.abs(input.y) > KEI_BEAM_AIM_DEADZONE) {     // vertical (pitch) sweep
         st.chargedBeamPitch = THREE.MathUtils.clamp(st.chargedBeamPitch - input.y * maxStep, -KEI_BEAM_MAX_PITCH, KEI_BEAM_MAX_PITCH);
+      }
       }
     } else {
       let targetAngle = curAngle;
@@ -4989,9 +5031,13 @@ function updatePlayer(now) {
       state.reticle && live.root.add(state.reticle);
     }
   }
+  // FREE POV (user 2026-10-30; mirrors the sim's applyInput): the shot flies the crosshair, its intent target the
+  // enemy nearest that line (the glint's and the round's bookkeeping); the lock is kept but not fired at.
+  const aimDir = state.freePov ? freePovShotDir() : null;
+  const fireAt = aimDir ? (freePovIntentTarget(aimDir) ?? pTarget) : pTarget;
   if (input.shootTap) {
     input.boost = false;
-    attemptFire(state.player, pTarget, now);
+    attemptFire(state.player, fireAt, now, aimDir);
     triggerEnemyEvasion(now);
     if (action === 'idle') action = 'shoot';
     input.shootTap = false;
@@ -4999,7 +5045,7 @@ function updatePlayer(now) {
   // Player MG: continuous fire while shoot is held — no burst cap (cooldown still gates rate).
   if (input.shootHold && state.player.unit.spreadCount === 1 && !state.player.unit.sniperCharge) {
     const firedAt = state.player.state.lastFireAt;
-    attemptFire(state.player, pTarget, now);
+    attemptFire(state.player, fireAt, now, aimDir);
     if (state.player.state.lastFireAt !== firedAt) {
       triggerEnemyEvasion(now);
       if (action === 'idle') action = 'shoot';
@@ -5242,7 +5288,8 @@ function botEnemyView(f) {
     id: botMechId(f), pos: { x: b.x, y: b.y, z: b.z }, vel: f.body.velocity, hp: st.hp, unit: f.unit ?? {},
     lastFireAt: ((st.lastFireAt ?? -1e9) > (st.fireInitAt ?? -1e9)) ? st.lastFireAt : -1e9,
     bloom: st.bloom ?? 0, invulnerableUntil: st.invulnerableUntil,
-    chargeStartAt: st.sniperChargeStartAt, chargingAtMe: st.sniperChargeTarget === state.enemy
+    chargeStartAt: st.sniperChargeStartAt,
+    chargingAtMe: st.sniperChargeTarget === state.enemy || (!!st.sniperChargeTarget && f === state.player && state.freePov)   // (free pov: a crosshair charge warns every bot)
   };
 }
 // The command entry the brain reads and writes, over the mech's own fields
@@ -5439,7 +5486,7 @@ function updateLocksAndReticle() {
   }
   // Diorama POC: lock state below still updates (bots read redLock), but the
   // world-space bracket is replaced by the annotation layer's square.
-  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules();   // (the anomaly rules: no lock bracket)
+  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !(state.freePov && viewer === state.player);   // (the anomaly rules: no lock bracket; free pov: the crosshair instead)
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5447,7 +5494,7 @@ function updateLocksAndReticle() {
   const tgt = state.playerCurrentTarget ?? state.enemy;
   const dist = viewer.root.position.distanceTo(tgt.root.position);
   if (viewer === state.player) {
-    state.player.state.redLock = dist <= state.player.unit.lockRange;
+    state.player.state.redLock = !state.freePov && dist <= state.player.unit.lockRange;   // (free pov: no lock, no red lock — the sim's updateLocks)
     // Enemy bots compute their own redLock against their own targets via the AI
     // loop's runBotAIForMech swap; here we only refresh the primary enemy's
     // redLock against the player (1v1 parity, harmless in 2v2).
@@ -5472,9 +5519,9 @@ function updateLocksAndReticle() {
   const viewerId = !state.online ? null
     : viewer === state.player ? state.online.myPlayerId
     : state.online.slotMap?.allyId;
-  const chargingAtMe = !!chargeTgt && (state.online
+  const chargingAtMe = !!chargeTgt && (!!tgt.state.freeAim || (state.online
     ? chargeTgt.id === viewerId
-    : chargeTgt === viewer);
+    : chargeTgt === viewer));   // (free pov: a crosshair charge warns everyone)
 
   // Kei's charged sweep channel: stay red for the channel's WHOLE duration —
   // the beam sweeps and can hit anyone, so no "at me" filter. Returns to green
@@ -5882,7 +5929,13 @@ function updateTransforms(dt) {
     m.grounded = !m.state.airborne;
   });
   const pToE = new THREE.Vector3().subVectors(state.enemy.root.position, state.player.root.position).normalize();
-  state.player.root.rotation.y = Math.atan2(pToE.x, pToE.z);
+  if (state.freePov && !dioramaActive() && !state.spectatorActive) {
+    // (free pov, user 2026-10-30: the crosshair while firing or charging, else the way it moves, held when still — the sim's faceAim / faceMovement)
+    const st = state.player.state, nowT = performance.now();
+    if (input.shootTap || input.shootHold || st.sniperChargeTarget || st.chargedBeamUntil > nowT || nowT - (st.lastFireAt ?? -1e9) < 300) state.aim.faceYaw = state.aim.shotYaw;
+    else { const v = state.player.body.velocity; if (v.x * v.x + v.z * v.z >= 0.25) state.aim.faceYaw = Math.atan2(v.x, v.z); }
+    state.player.root.rotation.y = state.aim.faceYaw;
+  } else state.player.root.rotation.y = Math.atan2(pToE.x, pToE.z);
   state.enemy.root.rotation.y = Math.atan2(-pToE.x, -pToE.z);
 
   getAllFighters().forEach((m) => {
@@ -6052,6 +6105,7 @@ function updateCamera() {
     updateDioramaCamera();
     return;
   }
+  if (state.freePov && cam === state.player && !state.spectatorActive) { updateFreePovCamera(cam); return; }   // FREE POV (user 2026-10-30): behind the aim
   const p = cam.root.position;
   const e = tgt.root.position;
   const line = new THREE.Vector3().subVectors(e, p).normalize();
@@ -6570,6 +6624,7 @@ function showSuddenDeathBanner(durationMs = SD_BANNER_MS) {
   // banner sits over the player's ready-to-go view from its first frame
   // instead of over the camera's fly-in.
   updateTransforms(0);
+  if (state.freePov) freePovAimAtEnemy();   // (a match opening in free pov: the crosshair starts on the enemy)
   for (let i = 0; i < 60; i += 1) updateCamera();
   // Freeze the sim; the frame loop's sdIntro branch keeps the match view
   // (camera, HUD, mech visuals) live behind the banner.
@@ -6738,6 +6793,12 @@ function buildOnlineInputFrame() {
     targetSwitch: !!input.targetSwitchTap,
     aimX: input.x,   // raw aim-stick → Kei charged-sweep horizontal aim
     aimY: input.y,   // raw aim-stick → Kei charged-sweep vertical (pitch) aim
+    // FREE POV (user 2026-10-30): aiming by the crosshair — the shot's direction from the muzzle to the point under
+    // it (updateCrosshair), and the way back (lockNearest: lock the nearest enemy, a tap).
+    freeAim: !!(state.freePov && !dioramaActive()),
+    aimYaw: state.aim.shotYaw,
+    aimPitch: state.aim.shotPitch,
+    lockNearest: !!input.lockNearestTap,
     // The world this frame was given against: the serverTime of the snapshot
     // drawn right now. The server judges this frame's shot in that world
     // (lag compensation, shared history.js).
@@ -6780,6 +6841,8 @@ function mirrorFighterToMech(fighter, mech) {
   s.chargedBeamDirZ = fighter.chargedBeamDirZ ?? 0;
   s.chargedBeamPitch = fighter.chargedBeamPitch ?? 0;   // steered vertical aim, used by the beam visual
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
+  s.freeAim = !!fighter.freeAim;                         // free pov (user 2026-10-30): the glint warns everyone, the unit faces its aim
+  s.yaw = fighter.yaw;
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
@@ -6804,7 +6867,7 @@ function mirrorFighterToMech(fighter, mech) {
     // Floating unlock ack: a charge aimed at ME just became visible — tell
     // the server, so the shooter's 0.5 s floor counts from what I actually
     // saw rather than from their button press.
-    if (state.online?.conn && fighter.sniperChargeTargetId === state.online.myPlayerId) {
+    if (state.online?.conn && (fighter.sniperChargeTargetId === state.online.myPlayerId || fighter.freeAim)) {   // (free pov: every enemy sees the glint)
       state.online.conn.sendGlintAck(fighter.id);
     }
   } else if (!isCharging && wasCharging) removeGlintFromMech(mech);
@@ -7561,6 +7624,7 @@ function runPredictionTick() {
   input.stepTap = false;
   input.shootTap = false;
   input.targetSwitchTap = false;
+  input.lockNearestTap = false;
   // Jump must stay a HELD state for flight units — the shared sim's climb
   // verb reads the held signal every tick (clearing it here reduced online
   // Aris to pop-only). Non-flight units keep the original tap semantics.
@@ -8686,7 +8750,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   const ddz = state.enemy.root.position.z - state.player.root.position.z;
   if (ddx * ddx + ddz * ddz > 1e-6) {
     const yaw = Math.atan2(ddx, ddz);
-    state.player.root.rotation.y = yaw;
+    state.player.root.rotation.y = state.freePov ? (state.player.state.yaw ?? yaw) : yaw;   // (free pov: the way it moves — the server's yaw)
     state.enemy.root.rotation.y = yaw + Math.PI;
   }
 
@@ -8699,6 +8763,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   });
   updateVfx(dt);
   updateCamera();
+  updateCrosshair();   // (free pov: the point under the crosshair, from the camera just placed)
   rebillboardBulletTrails();   // after the camera is final — see the offline note
   updateMechXRayVisibility();
   updateWallFade();
@@ -9613,7 +9678,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'a' || e.key === 'ArrowLeft') keyState.left = true;
   else if (k === 'd' || e.key === 'ArrowRight') keyState.right = true;
   else if (k === ' ') input.jump = true;
-  else if (k === 'k') {
+  else if (k === 'k' || k === 'shift') {   // (Shift too, user 2026-10-30: sprint; a double-tap locks it, as K)
     const now = performance.now();
     const hasDir = Math.hypot(input.x, input.y) > 0.15;
     if (now - lastSprintKeyAt < 260 && hasDir) input.sprintLocked = true;
@@ -9624,8 +9689,9 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
   else if (k === 'u') { if (!dioramaActive()) cyclePlayerTarget(); }
   else if (k === 'v') toggleDiorama();   // classic <-> command mode toggle
-  else if (k === 'q') keyState.rotL = true;
-  else if (k === 'e') keyState.rotR = true;
+  else if (k === 'i') toggleFreePov();   // angled <-> free pov (user 2026-10-30)
+  else if (k === 'q') { if (dioramaActive()) keyState.rotL = true; else input.stepTap = true; }   // (shooter: dodge, user 2026-10-30; command mode: rotate left)
+  else if (k === 'e') { if (dioramaActive()) keyState.rotR = true; else cyclePlayerTarget(); }   // (shooter: target switch, user 2026-10-30; command mode: rotate right)
 });
 
 window.addEventListener('keyup', (e) => {
@@ -9635,7 +9701,7 @@ window.addEventListener('keyup', (e) => {
   else if (k === 'a' || e.key === 'ArrowLeft') keyState.left = false;
   else if (k === 'd' || e.key === 'ArrowRight') keyState.right = false;
   else if (k === ' ') input.jump = false;
-  else if (k === 'k') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
+  else if (k === 'k' || k === 'shift') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
   else if (k === 'j') input.shootHold = false;
   else if (k === 'q') keyState.rotL = false;
   else if (k === 'e') keyState.rotR = false;
@@ -11006,6 +11072,247 @@ if (typeof window !== 'undefined') {
 // annotation HUD (tap an enemy's square to lock). Everything gates on
 // dioramaActive() so the classic chase view stays byte-identical when off.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// FREE POV (user 2026-10-30). The angled pov (the chase camera framing the unit and its lock, every shot aimed at the
+// lock) gets a sibling: in free pov the same camera rig (13 behind, 6.8 up, a shoulder to the right, looking 10° down)
+// is turned to the aim and tilted by it, a crosshair at the screen centre says where the rounds go, and the player aims
+// it — on the desktop a mouse (the pointer lock when the page may have it, a drag with a button held otherwise) and a
+// click to fire; on a phone a swipe on the empty screen or a drag on the fire button, the sniper's charge included. The
+// lock is kept but not fired at; the unit turns to the crosshair while it fires or charges and otherwise faces the way
+// it moves, holding its heading when still; the crosshair ring is
+// the rounds' cone drawn on the screen (the base spread plus the bloom, as the rounds sample it) and turns red on an
+// enemy's body. `i`, or two clean taps on the empty screen, toggles; back in angled pov the lock goes to the nearest
+// living enemy. Ignored while command mode stands. The same rules offline (updatePlayer, the offline mirrors) and online (the frame's
+// freeAim/aimYaw/aimPitch — tick.js applyInput; the server fires along the aim it is sent).
+// The shot direction is the line from the MUZZLE to the point under the crosshair (the camera ray's first wall, or the
+// enemy body it crosses before that), so the crosshair tells where the round goes even up close, where the camera
+// and the muzzle part ways. window.__freePov holds the tunables and the automation hooks.
+// ---------------------------------------------------------------------------
+const FREE_POV = {
+  sensTouch: 0.25,      // degrees per CSS px — a swipe on the screen or a drag on the fire button (a landscape phone's width ≈ 200°)
+  sensTouchY: 0.20,
+  sensMouse: 0.10,      // degrees per px of mouse movement
+  pitchMin: -50 * Math.PI / 180,
+  pitchMax: 60 * Math.PI / 180,
+  lookAhead: 12.5,      // the angled rig looks at the mid-point to the lock: this far ahead of the unit stands in for it (a 25 u fight)
+  aimMax: 400,          // the farthest point under the crosshair
+  crosshairMinPx: 12    // the ring never thinner than this (the cone of a steady rifle is a few px)
+};
+const freePovPtr = { screen: null, shoot: null, lastTapAt: 0 };   // (the pointer swiping the screen / dragging the fire button; the last clean tap)
+
+function freePovAllowed() { return !dioramaActive() && !state.spectatorActive && !!state.player && state.player.state.hp > 0; }
+
+function toggleFreePov(force) {
+  const want = force !== undefined ? !!force : !state.freePov;
+  if (want === state.freePov) return;
+  if (want && dioramaActive()) return;   // command mode: the toggle is ignored (user)
+  state.freePov = want;
+  if (want) {
+    // Open where the camera looks now, level — no jump.
+    const f = new THREE.Vector3(); camera.getWorldDirection(f);
+    state.aim.yaw = Math.atan2(f.x, f.z); state.aim.pitch = 0;
+    state.aim.shotYaw = state.aim.yaw; state.aim.shotPitch = 0;
+    state.aim.faceYaw = state.player?.root.rotation.y ?? state.aim.yaw;   // (the unit keeps the heading it had)
+  } else {
+    if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.();
+    freePovRelockNearest();
+  }
+  state.hud?.classList.toggle('free-pov', want);
+}
+
+// Back in angled pov the lock goes to the nearest living enemy (user): offline here, online by the next frame's lockNearest.
+function freePovRelockNearest() {
+  if (!state.player) return;
+  if (state.online) { input.lockNearestTap = true; return; }
+  const n = pickClosestEnemyOf(state.player);
+  if (n) setPlayerTargetMech(n);
+}
+
+function freePovAimAtEnemy() {   // (a match opening in free pov: the crosshair starts on the enemy, like the angled camera)
+  if (!state.player || !state.enemy) return;
+  const dx = state.enemy.root.position.x - state.player.root.position.x, dz = state.enemy.root.position.z - state.player.root.position.z;
+  state.aim.yaw = Math.atan2(dx, dz); state.aim.pitch = 0; state.aim.shotYaw = state.aim.yaw; state.aim.shotPitch = 0; state.aim.faceYaw = state.aim.yaw;
+}
+
+// A drag of (dx, dy) px turns the crosshair: right → yaw down (yaw = atan2(x, z) grows to the left), up → pitch up.
+function freePovTurn(dxPx, dyPx, degPerPxX, degPerPxY) {
+  if (!state.freePov) return;
+  state.aim.yaw -= dxPx * degPerPxX * Math.PI / 180;
+  state.aim.pitch = THREE.MathUtils.clamp(state.aim.pitch - dyPx * degPerPxY * Math.PI / 180, FREE_POV.pitchMin, FREE_POV.pitchMax);
+}
+
+function freePovShotDir() {
+  const y = state.aim.shotYaw, p = state.aim.shotPitch, c = Math.cos(p);
+  return new THREE.Vector3(Math.sin(y) * c, Math.sin(p), Math.cos(y) * c);
+}
+
+// The enemy nearest the shot's line (in front of the muzzle), else the nearest at all — the shot's intent target
+// (mirrors the sim's aim.js aimTargetOf).
+function freePovIntentTarget(dir) {
+  const m = state.player.root.position; const ox = m.x, oy = m.y + 0.8, oz = m.z;
+  let best = null, bestPerp = Infinity, nearest = null, nearestD = Infinity;
+  for (const e of getEnemiesOf(state.player)) {
+    if (!e || e.state.hp <= 0) continue;
+    const vx = e.root.position.x - ox, vy = e.root.position.y - oy, vz = e.root.position.z - oz;
+    const d2 = vx * vx + vy * vy + vz * vz;
+    if (d2 < nearestD) { nearestD = d2; nearest = e; }
+    const t = vx * dir.x + vy * dir.y + vz * dir.z;
+    if (t <= 0) continue;
+    const perp = d2 - t * t;
+    if (perp < bestPerp) { bestPerp = perp; best = e; }
+  }
+  return best ?? nearest;
+}
+
+// A free-aim round's target this frame: the living enemy whose body lies nearest the segment it flies (mirrors the
+// sim's retargetFreeAim; the hit test then runs on that one).
+function freePovRoundTarget(p, dt) {
+  const a = p.mesh ? p.mesh.position : p.center;
+  const b = new THREE.Vector3(a.x + p.vel.x * dt, a.y + p.vel.y * dt, a.z + p.vel.z * dt);
+  const seg = new THREE.Line3(a.clone(), b), n = new THREE.Vector3();
+  let best = null, bestD = Infinity;
+  for (const e of getEnemiesOf(p.owner)) {
+    if (!e || e.state.hp <= 0) continue;
+    const hc = e.root.position;
+    seg.closestPointToPoint(hc, true, n);
+    const dx = n.x - hc.x, dy = Math.max(0, Math.abs(n.y - hc.y) - 1.6), dz = n.z - hc.z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) { bestD = d; best = e; }
+  }
+  return best;
+}
+
+// The angled pov's own rig turned to the aim (user 2026-10-30, "make the camera angle same as angled pov"): 13 behind the
+// unit, 6.8 up, a shoulder (2) to the right, looking at a point 2.2 up and lookAhead ahead — the mid-point to a lock 25 u
+// away, so the same 10° downward look — and the crosshair's pitch tilts that whole rig about the look point. Snapped, no
+// lag (user: "立刻轉到背後"). The field of view as the angled pov's: by the distance to the lock (76° far, 46° close).
+function updateFreePovCamera(cam) {
+  const p = cam.root.position;
+  const yaw = state.aim.yaw;
+  const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
+  const look = new THREE.Vector3(p.x + fwd.x * FREE_POV.lookAhead, p.y + 2.2, p.z + fwd.z * FREE_POV.lookAhead);
+  const reach = 13 + FREE_POV.lookAhead, rise = 6.8 - 2.2;
+  const pitch = -Math.atan2(rise, reach) + state.aim.pitch;   // (the rig's own downward look, plus the crosshair's tilt)
+  const dist = Math.hypot(reach, rise);
+  const view = new THREE.Vector3(fwd.x * Math.cos(pitch), Math.sin(pitch), fwd.z * Math.cos(pitch));
+  camera.position.copy(look).addScaledVector(view, -dist).addScaledVector(right, 2);
+  camera.lookAt(look);
+  const tgt = state.playerCurrentTarget ?? pickClosestEnemyOf(cam);
+  const d = tgt ? p.distanceTo(tgt.root.position) : 28;
+  camera.fov = THREE.MathUtils.lerp(76, 46, THREE.MathUtils.clamp(1 - d / 28, 0, 1));
+  if (state.player.state.action === 'dash') camera.fov = Math.min(82, camera.fov + 5);
+  camera.updateProjectionMatrix();
+}
+
+// Every frame after the camera moved: the point under the crosshair (the camera ray's first wall, or the enemy body
+// it crosses before that), the shot's direction from the muzzle to it, the ring's size (the bloom) and colour.
+function updateCrosshair() {
+  const ch = state.hud?.querySelector('#crosshair');
+  const show = state.freePov && freePovAllowed() && (state.running || !!state.sdIntro);
+  if (ch) ch.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const o = camera.position;
+  const d = new THREE.Vector3(); camera.getWorldDirection(d);
+  let L = Math.min(FREE_POV.aimMax, beamLengthToWall(o.x, o.y, o.z, d.x, d.y, d.z, FREE_POV.aimMax));
+  let onTarget = false;
+  for (const e of getEnemiesOf(state.player)) {
+    if (!e || e.state.hp <= 0) continue;
+    const hc = e.root.position;                      // (the root is the body centre the hit test uses)
+    const vx = hc.x - o.x, vy = hc.y - o.y, vz = hc.z - o.z;
+    const t = vx * d.x + vy * d.y + vz * d.z;
+    if (t <= 0 || t >= L) continue;
+    const px = o.x + d.x * t, py = o.y + d.y * t, pz = o.z + d.z * t;
+    const ddx = px - hc.x, ddy = Math.max(0, Math.abs(py - hc.y) - 1.6), ddz = pz - hc.z;
+    if (ddx * ddx + ddy * ddy + ddz * ddz < 1.6 * 1.6) { L = t; onTarget = true; }
+  }
+  const ax = o.x + d.x * L, ay = o.y + d.y * L, az = o.z + d.z * L;
+  const m = state.player.root.position;
+  let sx = ax - m.x, sy = ay - (m.y + 0.8), sz = az - m.z;   // (the muzzle: 0.8 above the root — spawnProjectiles)
+  const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+  state.aim.shotYaw = Math.atan2(sx, sz);
+  state.aim.shotPitch = Math.asin(THREE.MathUtils.clamp(sy, -1, 1));
+  state.aim.onTarget = onTarget;
+  if (ch) {
+    // The ring IS the rounds' cone on the screen (user 2026-10-30, "expand as reflecting the bloom"): the full spread the
+    // rounds sample — the unit's base angle plus its bloom (bloom.js effectiveSpread) — projected through the camera's
+    // field of view; a steady rifle's few px are floored at crosshairMinPx.
+    const u = state.player.unit, bl = state.player.state.bloom || 0;
+    // A shotgun's ring is FIXED at the small base size every other gun opens with (user 2026-10-30): its rounds are one
+    // rigid pattern, not a cone that grows with the bloom, so nothing about it changes during the match.
+    const px = u.spreadCount > 1
+      ? FREE_POV.crosshairMinPx
+      : Math.max(FREE_POV.crosshairMinPx, renderer.domElement.clientHeight * Math.tan(effectiveSpread(u, bl) / 2) / Math.tan(camera.fov * Math.PI / 360));
+    ch.style.setProperty('--ch-size', `${px.toFixed(1)}px`);
+    ch.classList.toggle('on-target', onTarget);
+  }
+}
+
+// The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
+// canvas is on the empty screen. Mouse: left button = fire (and the first click asks for the pointer lock; refused
+// by the page's frame, the mouse aims while a button is held), movement = aim. Touch: a swipe aims; two clean taps
+// (< 12 px, < 300 ms each, < 260 ms apart) toggle the pov. The fire button's own pointer aims too (freePovDragStart).
+function setupFreePovPointer(signal) {
+  const canvas = renderer.domElement;
+  window.addEventListener('pointerdown', (e) => {
+    if (!state.running || dioramaActive() || e.target !== canvas) return;
+    if (e.pointerType === 'mouse') {
+      if (!state.freePov || !freePovAllowed() || e.button !== 0) return;
+      if (document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.(); } catch { /* the frame refuses: drag-aim */ } }
+      input.shootTap = true; input.shootHold = true;
+      return;
+    }
+    freePovPtr.screen = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, at: performance.now() };
+  }, { signal });
+  window.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') {
+      if (!state.freePov || !state.running || dioramaActive()) return;
+      if (document.pointerLockElement !== canvas && !(e.buttons & 3)) return;
+      freePovTurn(e.movementX, e.movementY, FREE_POV.sensMouse, FREE_POV.sensMouse);
+      return;
+    }
+    const s = freePovPtr.screen;
+    if (s && e.pointerId === s.id) {
+      const dx = e.clientX - s.x, dy = e.clientY - s.y;
+      s.x = e.clientX; s.y = e.clientY; s.moved += Math.hypot(dx, dy);
+      freePovTurn(dx, dy, FREE_POV.sensTouch, FREE_POV.sensTouchY);
+      return;
+    }
+    const sh = freePovPtr.shoot;
+    if (sh && e.pointerId === sh.id) {
+      const dx = e.clientX - sh.x, dy = e.clientY - sh.y;
+      sh.x = e.clientX; sh.y = e.clientY;
+      freePovTurn(dx, dy, FREE_POV.sensTouch, FREE_POV.sensTouchY);
+    }
+  }, { signal });
+  const end = (e) => {
+    if (e.pointerType === 'mouse') { if (e.button === 0 || e.type === 'pointercancel') input.shootHold = false; return; }
+    const s = freePovPtr.screen;
+    if (s && e.pointerId === s.id) {
+      freePovPtr.screen = null;
+      const now = performance.now();
+      if (e.type === 'pointerup' && s.moved < 12 && now - s.at < 300) {
+        if (now - freePovPtr.lastTapAt < 260) { freePovPtr.lastTapAt = 0; toggleFreePov(); }
+        else freePovPtr.lastTapAt = now;
+      }
+      return;
+    }
+    if (freePovPtr.shoot && e.pointerId === freePovPtr.shoot.id) freePovPtr.shoot = null;
+  };
+  window.addEventListener('pointerup', end, { signal });
+  window.addEventListener('pointercancel', end, { signal });
+  canvas.addEventListener('contextmenu', (e) => { if (state.freePov) e.preventDefault(); }, { signal });
+}
+function freePovDragStart(e) { if (e && e.pointerType !== 'mouse') freePovPtr.shoot = { id: e.pointerId, x: e.clientX, y: e.clientY }; }
+
+if (typeof window !== 'undefined') {
+  window.__freePov = {
+    cfg: FREE_POV, toggle: toggleFreePov, aim: state.aim,
+    aimTo: (yaw, pitch = 0) => { state.aim.yaw = yaw; state.aim.pitch = pitch; },   // (automation: point the crosshair)
+    get on() { return state.freePov; }
+  };
+}
 
 function dioramaActive() {
   // ONLINE (phase 3 R4): the queue-room pick is frozen into
@@ -17146,6 +17453,7 @@ function animate() {
       updateDyingBulletTrails(performance.now());
       updateVfx(dt);
       updateCamera();
+      updateCrosshair();   // (free pov: the point under the crosshair, from the camera just placed)
       // AFTER updateCamera: ribbon trails are re-aimed at the camera every
       // frame; aiming them with last frame's camera leaves a one-frame lag
       // that flickers while the camera settles after a shot. Re-aim once the
