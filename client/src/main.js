@@ -2017,7 +2017,7 @@ function updateUnitModelState(m, rig, dt, now) {
   // the way it moves, not its lock — the firing override below is skipped for it (the default path turns a moving unit its
   // way and holds it when still); online, a free-aiming remote unit faces the yaw the server set (the snapshot's `yaw`).
   const freeFacing = m === state.player && state.freePov && !dioramaActive() && !state.spectatorActive;
-  if (freeFacing && firing) { hx = Math.sin(state.aim.shotYaw); hz = Math.cos(state.aim.shotYaw); have = true; }
+  if (freeFacing && firing) { hx = Math.sin(state.aim.yaw); hz = Math.cos(state.aim.yaw); have = true; }   // (the crosshair's own yaw, not the shot's line — see updateTransforms)
   else if (!freeFacing && state.online && m.state.freeAim && m.state.yaw != null) { hx = Math.sin(m.state.yaw); hz = Math.cos(m.state.yaw); have = true; }
   let tgt = null;
   if (firing && !have && !freeFacing) {
@@ -5931,8 +5931,12 @@ function updateTransforms(dt) {
   const pToE = new THREE.Vector3().subVectors(state.enemy.root.position, state.player.root.position).normalize();
   if (state.freePov && !dioramaActive() && !state.spectatorActive) {
     // (free pov, user 2026-10-30: the crosshair while firing or charging, else the way it moves, held when still — the sim's faceAim / faceMovement)
+    // The CROSSHAIR'S yaw (the camera's), not the shot's: the round flies from the muzzle to the point under the crosshair,
+    // and with that point close — Town's Building 12 ramp, the door 3 m ahead — the shot's line leaves the muzzle 10° off
+    // the camera's (the shoulder, the height), so a unit facing the shot looked turned away from where the player aimed
+    // (user 2026-10-30, "unit is not facing the aiming direction at this spot").
     const st = state.player.state, nowT = performance.now();
-    if (input.shootTap || input.shootHold || st.sniperChargeTarget || st.chargedBeamUntil > nowT || nowT - (st.lastFireAt ?? -1e9) < 300) state.aim.faceYaw = state.aim.shotYaw;
+    if (input.shootTap || input.shootHold || st.sniperChargeTarget || st.chargedBeamUntil > nowT || nowT - (st.lastFireAt ?? -1e9) < 300) state.aim.faceYaw = state.aim.yaw;
     else { const v = state.player.body.velocity; if (v.x * v.x + v.z * v.z >= 0.25) state.aim.faceYaw = Math.atan2(v.x, v.z); }
     state.player.root.rotation.y = state.aim.faceYaw;
   } else state.player.root.rotation.y = Math.atan2(pToE.x, pToE.z);
@@ -8750,7 +8754,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   const ddz = state.enemy.root.position.z - state.player.root.position.z;
   if (ddx * ddx + ddz * ddz > 1e-6) {
     const yaw = Math.atan2(ddx, ddz);
-    state.player.root.rotation.y = state.freePov ? (state.player.state.yaw ?? yaw) : yaw;   // (free pov: the way it moves — the server's yaw)
+    state.player.root.rotation.y = state.freePov ? ((input.shootTap || input.shootHold) ? state.aim.yaw : (state.player.state.yaw ?? yaw)) : yaw;   // (free pov: firing, the crosshair's yaw; else the server's yaw, the way it moves)
     state.enemy.root.rotation.y = yaw + Math.PI;
   }
 
@@ -11095,7 +11099,7 @@ const FREE_POV = {
   sensMouse: 0.10,      // degrees per px of mouse movement
   pitchMin: -50 * Math.PI / 180,
   pitchMax: 60 * Math.PI / 180,
-  lookAhead: 12.5,      // the angled rig looks at the mid-point to the lock: this far ahead of the unit stands in for it (a 25 u fight)
+  lookAhead: 12.5,      // the look point with no lock in sight (else half the distance to the lock, as the angled pov looks)
   aimMax: 400,          // the farthest point under the crosshair
   crosshairMinPx: 12    // the ring never thinner than this (the cone of a steady rifle is a few px)
 };
@@ -11184,24 +11188,31 @@ function freePovRoundTarget(p, dt) {
 }
 
 // The angled pov's own rig turned to the aim (user 2026-10-30, "make the camera angle same as angled pov"): 13 behind the
-// unit, 6.8 up, a shoulder (2) to the right, looking at a point 2.2 up and lookAhead ahead — the mid-point to a lock 25 u
-// away, so the same 10° downward look — and the crosshair's pitch tilts that whole rig about the look point. Snapped, no
-// lag (user: "立刻轉到背後"). The field of view as the angled pov's: by the distance to the lock (76° far, 46° close).
+// unit, 6.8 up, a shoulder (2) to the right, looking at a point 2.2 up HALF WAY to the lock — exactly where the angled
+// pov looks (the mid-point to its target), so with the crosshair level the two cameras stand and look alike at every
+// range (user 2026-10-30, "when the character is aiming horizontally … raise the default angle": a fixed 12.5 u look
+// point looked 10° down where the angled pov, 30–50 u from its lock, looks 6–8° down). The crosshair's pitch SWINGS
+// that whole rig — the camera and its look point together — about the unit's own pivot (2.2 up), not about the far look
+// point: swung about the look point, a glance down at a lock 48 u away lifted the camera 20 u (user 2026-10-30, "the
+// camera is way too high, almost bird view"); about the unit it rises 4 u for a 20° glance and never dives under the
+// floor (held a little above the knees). Snapped, no lag (user: "立刻轉到背後"). The field of view as the angled pov's,
+// by the same distance (76° far, 46° close). No lock in sight: lookAhead stands in for the half distance.
 function updateFreePovCamera(cam) {
   const p = cam.root.position;
   const yaw = state.aim.yaw;
   const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
-  const look = new THREE.Vector3(p.x + fwd.x * FREE_POV.lookAhead, p.y + 2.2, p.z + fwd.z * FREE_POV.lookAhead);
-  const reach = 13 + FREE_POV.lookAhead, rise = 6.8 - 2.2;
-  const pitch = -Math.atan2(rise, reach) + state.aim.pitch;   // (the rig's own downward look, plus the crosshair's tilt)
-  const dist = Math.hypot(reach, rise);
-  const view = new THREE.Vector3(fwd.x * Math.cos(pitch), Math.sin(pitch), fwd.z * Math.cos(pitch));
-  camera.position.copy(look).addScaledVector(view, -dist).addScaledVector(right, 2);
-  camera.lookAt(look);
   const tgt = state.playerCurrentTarget ?? pickClosestEnemyOf(cam);
-  const d = tgt ? p.distanceTo(tgt.root.position) : 28;
-  camera.fov = THREE.MathUtils.lerp(76, 46, THREE.MathUtils.clamp(1 - d / 28, 0, 1));
+  const d = tgt && tgt.state.hp > 0 ? p.distanceTo(tgt.root.position) : null;
+  const ahead = d != null ? d / 2 : FREE_POV.lookAhead;
+  const c = Math.cos(state.aim.pitch), s = Math.sin(state.aim.pitch);
+  const swing = (a, u) => ({ a: a * c - u * s, u: a * s + u * c });   // (a point of the rig, `a` along the aim and `u` up from the pivot, swung by the pitch)
+  const pivot = new THREE.Vector3(p.x, p.y + 2.2, p.z);
+  const co = swing(-13, 6.8 - 2.2), lo = swing(ahead, 0);
+  camera.position.copy(pivot).addScaledVector(fwd, co.a).addScaledVector(right, 2);
+  camera.position.y = Math.max(pivot.y + co.u, p.y - 1.0);   // (never under the floor: a little above the knees at the lowest)
+  camera.lookAt(pivot.x + fwd.x * lo.a, pivot.y + lo.u, pivot.z + fwd.z * lo.a);
+  camera.fov = THREE.MathUtils.lerp(76, 46, THREE.MathUtils.clamp(1 - (d ?? 28) / 28, 0, 1));
   if (state.player.state.action === 'dash') camera.fov = Math.min(82, camera.fov + 5);
   camera.updateProjectionMatrix();
 }
