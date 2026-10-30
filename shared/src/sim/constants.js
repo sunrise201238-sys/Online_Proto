@@ -700,7 +700,7 @@ export const MAP_DATA = {
   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out.
   district: { id: 'district', name: 'District', boostScale: 5 },   // (boostScale: every unit's gauge volume and refill, and every boost threshold the bots and the command mode hold, times this on the map — the costs stay (boostScaleOf below); user 2026-10-29, "for District only, 5 times every unit's boost gauge amount and 5 times the refill speed, adjust the bots' cost gates accordingly": a 197 x 274 m block)
   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
-  compound: { id: 'compound', name: 'Compound' },
+  compound: { id: 'compound', name: 'Compound', boostScale: 5 },   // (five times the gauge and its refill, as District — user 2026-10-30)
   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   hospital: { id: 'hospital', name: 'Hospital' },
   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.

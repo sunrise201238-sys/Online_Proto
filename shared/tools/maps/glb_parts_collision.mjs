@@ -21,7 +21,8 @@ import { readGlb, accessor, worlds } from './glb_read.mjs';
 const [inF, key, X0, X1, Z0, Z1, outDir] = process.argv.slice(2); const x0 = Number(X0), x1 = Number(X1), z0 = Number(Z0), z1 = Number(Z1);
 const SCALE = Number(process.env.SCALE ?? 4), GROUND = Number(process.env.GROUND ?? 0), MIN_SIZE = Number(process.env.MIN_SIZE ?? 0.3), LID_MIN = Number(process.env.LID_MIN ?? 0.6), LID_AREA = Number(process.env.LID_AREA ?? 20), BELOW = Number(process.env.BELOW ?? 7);
 const EXCLUDE = (process.env.EXCLUDE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-const CUT = new Set((process.env.CUT ?? '').split(',').map((s) => s.trim()).filter(Boolean));   // (CUT: parts read cut into half-metre lengths along their long axis — a brick set diagonally, see readPart)
+const CUT = new Set((process.env.CUT ?? '').split(',').map((s) => s.trim()).filter(Boolean));
+const BOX = new Set((process.env.BOX ?? '').split(',').map((s) => s.trim()).filter(Boolean));   // (BOX: parts read as one box whatever the pieces' rules would make of them — a car body read as a roof, see readPart)   // (CUT: parts read cut into half-metre lengths along their long axis — a brick set diagonally, see readPart)
 const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; const halfX = ((x1 - x0) / 2) * SCALE, halfZ = ((z1 - z0) / 2) * SCALE;
 const ax = (x) => Math.round((x - cx) * SCALE * 100) / 100, az = (z) => Math.round((z - cz) * SCALE * 100) / 100, ay = (y) => Math.round((y - GROUND) * SCALE * 100) / 100;
 const g = readGlb(inF); const J = g.json; const W = worlds(J);
@@ -48,7 +49,7 @@ const alphaOf = (mi) => (J.materials?.[mi]?.pbrMetallicRoughness?.baseColorFacto
 // TRACE="x0,x1,z0,z1;..." (the model's metres) prints every box and surface touching a rectangle as it is made, with the part and
 // the reading that made it — the user points at a box with the inspector, the trace says where it came from
 const TRACE = (process.env.TRACE ?? '').split(';').map((s) => s.trim()).filter(Boolean).map((s) => s.split(',').map(Number)); const cur = { name: '', branch: '', info: '' };
-if (TRACE.length) for (const [arr, what] of [[obstacles, 'box'], [surfaces, 'surface']]) arr.push = function (...items) { for (const it of items) { const mx0 = it.minX / SCALE + cx, mx1 = it.maxX / SCALE + cx, mz0 = it.minZ / SCALE + cz, mz1 = it.maxZ / SCALE + cz; if (TRACE.some(([tx0, tx1, tz0, tz1]) => mx1 >= tx0 && mx0 <= tx1 && mz1 >= tz0 && mz0 <= tz1)) console.log(`trace ${what}[${this.length}] ${cur.branch} <- ${cur.name} ${cur.info}: x ${mx0.toFixed(2)}..${mx1.toFixed(2)} z ${mz0.toFixed(2)}..${mz1.toFixed(2)} ${what === 'box' ? `y ${(it.minY / SCALE + GROUND).toFixed(2)}..${(it.maxY / SCALE + GROUND).toFixed(2)}${it.topBuffer != null ? ' lidded' : ''}` : `${it.type} top ${(it.maxTop / SCALE + GROUND).toFixed(2)}${it.lid ? ' lid' : ''}`}`); } return Array.prototype.push.apply(this, items); };
+if (TRACE.length) for (const [arr, what] of [[obstacles, 'box'], [surfaces, 'surface']]) arr.push = function (...items) { for (const it of items) { const mx0 = it.minX / SCALE + cx, mx1 = it.maxX / SCALE + cx, mz0 = it.minZ / SCALE + cz, mz1 = it.maxZ / SCALE + cz; if (TRACE.some(([tx0, tx1, tz0, tz1]) => mx1 >= tx0 && mx0 <= tx1 && mz1 >= tz0 && mz0 <= tz1)) console.log(`trace ${what}[${this.length}] ${cur.branch}${cur.branch === 'shape' && cur.why ? ` (${cur.why})` : ''} <- ${cur.name} ${cur.info}: x ${mx0.toFixed(2)}..${mx1.toFixed(2)} z ${mz0.toFixed(2)}..${mz1.toFixed(2)} ${what === 'box' ? `y ${(it.minY / SCALE + GROUND).toFixed(2)}..${(it.maxY / SCALE + GROUND).toFixed(2)}${it.topBuffer != null ? ' lidded' : ''}` : `${it.type} top ${(it.maxTop / SCALE + GROUND).toFixed(2)}${it.lid ? ' lid' : ''}`}`); } return Array.prototype.push.apply(this, items); };
 const PIECES = process.env.PIECES === '1'; const WELD = Number(process.env.WELD ?? 0.002); const FACES = (process.env.FACES ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const parentName = {}; J.nodes.forEach((nd, i) => (nd.children ?? []).forEach((c) => { parentName[c] = nd.name ?? ''; }));
 function* partsOf() {
@@ -280,7 +281,10 @@ const readPart = (part) => { const { name, tris } = part; if (PIECES && flightPi
   //   else a box — a car, a crate, a bus, a flat-roofed building, a deck slab with its lid.
   // What went wrong before, each a fall or a walk-through on Town: every big piece by its faces (a hollow shell with any gap in
   // the model a door), a roof read as a ramp (a plane in the air), floors cut by rules (holes).
-  if (PIECES) { const foot = dx * dz, thin = Math.min(dx, dz) <= 0.8; let hollow = false, uncovered = 0, excess = 0; const feet = []; let wallArea = 0, slopedArea = 0, roofArea = 0, allArea = 0, levelNearStreet = 0, eave = Infinity; const dirs = new Map();
+  // BOX (a map's own data, 2026-10-30): a part named in BOX= is one box, the pieces' rules passed over — Town's taxi by the police station,
+  // 1,812 faces, its skirt's bevels starting at its bottom, read as a roof shape (two floors, no walls; user: "this taxi does not have a CB for its main body")
+  const asBox = BOX.size && (BOX.has(name) || name.split('/').some((s) => BOX.has(s)));
+  if (PIECES && !asBox) { const foot = dx * dz, thin = Math.min(dx, dz) <= 0.8; let hollow = false, uncovered = 0, excess = 0; const feet = []; let wallArea = 0, slopedArea = 0, roofArea = 0, allArea = 0, levelNearStreet = 0, eave = Infinity; const dirs = new Map();
     for (const v of tris) { const ux = v[1][0] - v[0][0], uy = v[1][1] - v[0][1], uz = v[1][2] - v[0][2], vx = v[2][0] - v[0][0], vy = v[2][1] - v[0][1], vz = v[2][2] - v[0][2]; let nx = uy * vz - uz * vy, ny2 = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny2, nz); if (l < 1e-9) continue; const area = l / 2; allArea += area; const c = Math.abs(ny2) / l; const ys = v.map((q) => q[1]); const yLo = Math.min(...ys), yHi = Math.max(...ys);
       if (c < 0.05) { feet.push([yLo, area]); if (yHi - yLo >= 1.5) wallArea += area; }
       else if (c < 0.95) { slopedArea += area; if (c >= 0.555) { roofArea += area; if (yLo < eave) eave = yLo; } if (ny2 < 0) { nx = -nx; nz = -nz; } const k = `${Math.round(nx / l * 5)},${Math.round(nz / l * 5)}`; dirs.set(k, (dirs.get(k) ?? 0) + area); }
@@ -294,7 +298,7 @@ const readPart = (part) => { const { name, tris } = part; if (PIECES && flightPi
       uncovered = none / (cols * rows); excess = cols * rows - none > 0 ? air / ((cols * rows - none) * dy) : 0; }
     const big = foot >= 30 && Math.min(dx, dz) >= 3, open = foot >= 4 && uncovered >= 0.3, plot = big && levelNearStreet >= 0.3 * foot, terrain = big && wallArea < 2;
     const why = hanging ? 'hanging' : hollow ? 'hollow' : open ? `open ${(uncovered * 100).toFixed(0)}%` : thin && excess > 0.3 ? `thin ${(excess * 100).toFixed(0)}%` : plot ? 'plot' : terrain ? 'terrain' : null;
-    if (why) { n.shapes += 1; if (process.env.SHAPE_LOG) cur.why = why; readFaces(part, 'shape'); return; }
+    if (why) { n.shapes += 1; cur.why = why; readFaces(part, 'shape'); return; }
     // the split height: the eave of a roof on walls, or where the footprint grows two and a half times over the bands below it
     let h = null; if (wallArea >= 2 && eave < Infinity && eave - mn[1] >= 1.0 && mx[1] - eave >= 0.3 && roofArea >= 0.5 * foot) h = eave;
     { const band = 0.5, nb = Math.ceil(dy / band); const areas = []; for (let k = 0; k < nb; k += 1) { let ax0 = Infinity, ax1 = -Infinity, az0 = Infinity, az1 = -Infinity; const lo = mn[1] + k * band, hi = lo + band; for (const v of tris) for (const q of v) { if (q[1] < lo || q[1] >= hi) continue; if (q[0] < ax0) ax0 = q[0]; if (q[0] > ax1) ax1 = q[0]; if (q[2] < az0) az0 = q[2]; if (q[2] > az1) az1 = q[2]; } areas.push(ax0 === Infinity ? 0 : (ax1 - ax0) * (az1 - az0)); }
@@ -314,8 +318,8 @@ const readPart = (part) => { const { name, tris } = part; if (PIECES && flightPi
     // (a roof shape LIES ON ITS BOTTOM — its lowest slope within 0.3 m of the piece's foot: an A-frame, a roof piece set on its own walls' piece.
     //  A car's windscreen and rear window are two slopes over half its faces too, with the hood a metre up: read as a roof shape, the car
     //  was planes a body walked up — Town's red coupe by the north car park, 2026-10-29. A slope hanging in the air makes a box.)
-    if (anySlope) { const D = [...dirs.values()].filter((a) => a >= 0.1 * slopedArea).length; if (D >= 2) { if (D <= 4 && slopedArea >= 0.5 * allArea && eave - mn[1] <= 0.3) { n.shapes += 1; if (process.env.SHAPE_LOG) cur.why = 'roof shape'; readFaces(part, 'shape'); return; } anySlope = false; } else if (eave - mn[1] > 0.3) anySlope = false; } }
-  if (anySlope) { // a ramp: a wedge's one sloped face, or a box tilted to lie as a ramp (its top and bottom slope alike, its ends more) —
+    if (anySlope) { const D = [...dirs.values()].filter((a) => a >= 0.1 * slopedArea).length; if (D >= 2) { if (D <= 4 && slopedArea >= 0.5 * allArea && eave - mn[1] <= 0.3) { n.shapes += 1; cur.why = 'roof shape'; readFaces(part, 'shape'); return; } anySlope = false; } else if (eave - mn[1] > 0.3) anySlope = false; } }
+  if (anySlope && !asBox) { // a ramp: a wedge's one sloped face, or a box tilted to lie as a ramp (its top and bottom slope alike, its ends more) —
     // the flattest sloped faces are the top and the bottom; of a pair, the higher is the top; its plane is the surface
     const flat = Math.max(...sloped.map((t) => t.c)); const top = sloped.filter((t) => t.c > flat - 0.03); let pts = top.flatMap((t) => t.v);
     let f = pts ? fit(pts) : null;
@@ -373,7 +377,8 @@ if (PIECES) console.log(`pieces: the parts are the meshes' separable pieces; ${n
 // ---- one terrace, one height, across the parts: flat floors (not lids) that touch and lie within 5 mm of each other take the
 // highest — the terrace at Town's west home is two ground pieces, 9.46 u here and 9.47 there, and the two units of a 2v2 pair stood a
 // hair apart (the pass within a piece, readFaces, is not enough)
-if (PIECES) { const flats = surfaces.filter((s) => s.type === 'flat' && !s.lid); let changed = true, rounds = 0; while (changed && rounds < 20) {   // (the pieces alone, 2026-10-30: District's data, read whole, keeps its floors' heights as committed — 22 of them would rise a centimetre or two) changed = false; rounds += 1;
+// (the pieces alone, 2026-10-30: District's data, read whole, keeps its floors' heights as committed — 22 of them would rise a centimetre or two)
+if (PIECES) { const flats = surfaces.filter((s) => s.type === 'flat' && !s.lid); let changed = true, rounds = 0; while (changed && rounds < 20) { changed = false; rounds += 1;
   for (let i = 0; i < flats.length; i += 1) { const a = flats[i]; for (let j = i + 1; j < flats.length; j += 1) { const b = flats[j]; if (a.top === b.top || Math.abs(a.top - b.top) > 0.02) continue; if (a.maxX < b.minX - 0.12 || b.maxX < a.minX - 0.12 || a.maxZ < b.minZ - 0.12 || b.maxZ < a.minZ - 0.12) continue; const h = Math.max(a.top, b.top); a.top = h; a.maxTop = h; b.top = h; b.maxTop = h; changed = true; } } } }
 // ---- RAMP (a map's own data): a flight of stacked treads read as one slope — RAMP="x0,x1,z0,z1,lowY,highY,axis;..." — the
 // rectangle's boxes topping between lowY and highY go, their lids with them, and one plane rises from lowY at the low end
