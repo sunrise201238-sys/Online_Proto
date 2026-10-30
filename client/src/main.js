@@ -11124,7 +11124,7 @@ function applyDioramaDressing() {
   diorama.base = group;
   ground.visible = false;
   gridHelper.visible = false;
-  // Daylight studio grade (the vibe refs are all warm daylight). Fog is
+  // The diorama's pale background (black on a cmdDark map). Fog is
   // pushed out of range rather than nulled — applyMapAmbience assumes the
   // Fog object exists, and it restores everything on exit/map change.
   scene.background.setHex(0xb9c3d2);
@@ -11132,26 +11132,10 @@ function applyDioramaDressing() {
   if (GLB_MAPS[state.mapKey]?.cmdDark) { scene.background.setHex(0x000000); scene.fog.color.setHex(0x000000); }
   scene.fog.near = 4000;
   scene.fog.far = 8000;
-  ambient.color.setHex(0xf3ead9);
-  ambient.intensity = 0.92;
-  key.color.setHex(0xfff0d2);
-  key.intensity = 1.45;
-  // Per-map grade correction (owner 2.1g): the warm default cast made the
-  // pale Lobby/Airport floors read yellow — those maps keep their CLASSIC
-  // light colors (applyMapAmbience values) so the command-mode floor tone
-  // matches what the player knows; everything else about the diorama grade
-  // (background, fog push-out, camera planes) stays.
-  if (state.mapKey === 'lobby') {
-    ambient.color.setHex(0xd4e2ff);
-    ambient.intensity = 0.95;
-    key.color.setHex(0xeaf2ff);
-    key.intensity = 1.4;
-  } else if (state.mapKey === 'airport') {
-    ambient.color.setHex(0xe8f0fa);
-    ambient.intensity = 1.0;
-    key.color.setHex(0xffffff);
-    key.intensity = 1.35;
-  }
+  // THE LIGHTS STAY THE MAP'S OWN (user 2026-10-30, "the map looks yellowish in command mode"): a warm daylight grade used to
+  // be set here — ambient 0xf3ead9 at 0.92, key 0xfff0d2 at 1.45 — on every map but Lobby and Airport, exempted in 2.1g for
+  // the same yellow on their pale floors. No map's lights are touched now: command mode shows each map in its normal
+  // lighting (applyMapAmbience's, in place already) and keeps only its own background, fog push-out and camera planes.
   if (diorama.savedFar == null) diorama.savedFar = camera.far;
   if (diorama.savedNear == null) diorama.savedNear = camera.near;
   camera.far = 1600;

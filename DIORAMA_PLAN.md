@@ -360,6 +360,10 @@ switch are implemented but still need a hands-on touch test.
 - Icons: `iconState` ∈ `'order' | 'lock' | 'both' | null` on both the
   marker (`dioCmdIconMarkup`) and the card (`dioCmdIconCardMarkup`,
   inline-block so the pair sits side by side); no command = no icon.
+- **2.1i no grade (owner, 2026-10-30, "the map looks yellowish in command mode"):** the
+  warm daylight grade is gone for every map — command mode keeps each map's own
+  `applyMapAmbience` lights and only sets its background, fog push-out and camera
+  planes; the Lobby/Airport exemption of 2.1g is moot and removed.
 - **2.1g floor tones (owner, 2026-08-21):** the diorama's warm default
   grade made the pale Lobby/Airport floors read YELLOW — those two maps
   now keep their classic `applyMapAmbience` light colors inside
