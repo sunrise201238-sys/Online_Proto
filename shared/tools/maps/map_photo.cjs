@@ -15,6 +15,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', (e) => errs.push(String(e).slice(0, 160)));
   await p.goto(`http://127.0.0.1:${port}/`); await sleep(2000);
   const started = await p.evaluate((k) => { window.__gvgState.spectatorMode = false; return window.__startMatch({ mapKey: k, mode: '1v1', player: 'unit1', enemy: 'unit2' }); }, mapKey); await sleep(Number(waitArg ?? 12000));
+  for (const key of (process.env.KEYS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) { await p.keyboard.press(key); await sleep(1500); }   // (KEYS=F8: the PT site's keys before the photo — the collision view over the model)
   const url = await p.evaluate((o) => window.__mapPhoto(o), opts);
   fs.writeFileSync(outPng, Buffer.from(url.split(',')[1], 'base64'));
   console.log(`started ${started}, photo -> ${outPng} (${fs.statSync(outPng).size} bytes)`, errs.length ? 'page errors: ' + errs.join(' | ') : '');

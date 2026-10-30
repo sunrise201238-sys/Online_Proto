@@ -10401,7 +10401,7 @@ function applyMapAmbience(mapKey) {
 // mesh with its walls — updateMapRoof); `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
 // rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
-  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1 },
+  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false },   // (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
   district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, tone: 'factory', edge: false, cmdDark: true },
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
@@ -10592,6 +10592,7 @@ function buildGlbArena(mapKey) {
 // Indoors every wall touches every other, so a map may set `fadeWalls`: a thing is then a straight wall — the run of touching
 // cells whose steep faces face the same way — and a wall crossed by the line from the camera to the unit fades whole (the Backrooms).
 function splitFadeParts(inst, group, cfg, halfX, halfZ) {
+  if (cfg.fade === false) return;   // (`fade: false`: the map fades nothing — no cell things, no whole things, no nodes; Town, user 2026-10-30)
   group.updateMatrixWorld(true);
   const COL = cfg.fadeCell ?? 4, PAD = 2;   // (units: a metre cell unless the map says otherwise — fadeCell; half a metre around a thing)
   const still = cfg.neverFade ?? [];
