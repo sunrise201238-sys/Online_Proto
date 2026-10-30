@@ -82,6 +82,17 @@ test('leaving free pov: lockTarget locks the enemy the client picked (the one ne
   assert.equal(p1.targetId, 'p4', 'a dead enemy is refused');
 });
 
+test('the aim rides the fighter while it free-aims (3 decimals), and leaves it when it stops', () => {
+  const m = setup();
+  const p1 = m.fighters.p1;
+  applyInput(m, p1, { ...aimPlusX(), aimPitch: 0.123456 }, 1000, arena.obstacles, arena.surfaces);
+  assert.equal(p1.aimYaw, Math.round(Math.PI / 2 * 1000) / 1000);
+  assert.equal(p1.aimPitch, 0.123);
+  applyInput(m, p1, emptyInput(), 1016, arena.obstacles, arena.surfaces);
+  assert.equal(p1.aimYaw, undefined, 'gone from the snapshot when not free-aiming');
+  assert.equal(p1.aimPitch, undefined);
+});
+
 test('free aim sniper: the charge is marked with the enemy nearest the aim and the shot flies the crosshair', () => {
   const m = setup('unit3');
   const { p1, p2, p4 } = m.fighters;

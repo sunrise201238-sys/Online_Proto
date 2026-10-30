@@ -119,6 +119,10 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   if (input.lockTarget) { const f = matchState.fighters[input.lockTarget]; if (f && f.team !== fighter.team && f.hp > 0) fighter.targetId = f.id; }   // (the client's pick: the enemy nearest its crosshair, ties to the nearer — a living enemy, or nothing happens)
   else if (input.lockNearest) { const n = nearestEnemyId(matchState, fighter); if (n) fighter.targetId = n; }
   fighter.freeAim = !!input.freeAim;
+  // (the aim itself rides the fighter while it free-aims — 3 decimals, nothing when it does not — so a spectator's client
+  // can draw this unit's crosshair; user 2026-10-30)
+  if (input.freeAim) { fighter.aimYaw = Math.round((input.aimYaw || 0) * 1000) / 1000; fighter.aimPitch = Math.round((input.aimPitch || 0) * 1000) / 1000; }
+  else if (fighter.aimYaw !== undefined) { fighter.aimYaw = undefined; fighter.aimPitch = undefined; }
   const aim = input.freeAim ? aimDirOf(input.aimYaw || 0, input.aimPitch || 0) : null;
   let opp = matchState.fighters[fighter.targetId];
   // AUTO-RETARGET on target death (2026-08-12, user): when the locked enemy

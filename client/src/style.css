@@ -579,7 +579,10 @@ body.pseudo-fullscreen #app {
 
 /* FREE POV (user 2026-10-30): the crosshair at the screen centre — a ring that is the rounds' cone on the screen (--ch-size,
    set per frame from the spread and the bloom; border-box, so the ring's centre is the screen's); red while it sits on
-   an enemy's body. Shown by the JS (display) only while free pov stands. */
+   an enemy's body. Shown by the JS (display) while the player's own free pov stands, or drawn at a spectated free-aiming
+   unit's aim point (left/top set per frame). The player's own LIVE free pov (.free-pov-live) hides the TARGET button —
+   no lock to switch; a spectator keeps it to change the watched unit (user 2026-10-30). */
+.touch-hud.free-pov-live .btn-target { display: none; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --ch-size: 12px; --ch-color: rgba(126, 255, 189, 0.95); }
 .crosshair .ch-ring { position: absolute; box-sizing: border-box; left: calc(var(--ch-size) / -2); top: calc(var(--ch-size) / -2); width: var(--ch-size); height: var(--ch-size); border: 2px solid var(--ch-color); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6), inset 0 0 4px rgba(0, 0, 0, 0.6); }
 .crosshair.on-target { --ch-color: rgba(255, 95, 114, 0.98); }

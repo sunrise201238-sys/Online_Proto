@@ -8,6 +8,7 @@ import { createConnection } from './online/connection.js';
 import {
   tickMatch as simTickMatch,
   emptyInput as simEmptyInput,
+  aimDirOf,
   TICK_RATE_MS as SIM_TICK_RATE_MS,
   TICK_DT as SIM_TICK_DT,
   SURFACE_STEP_HEIGHT as SIM_SURFACE_STEP_HEIGHT,
@@ -2656,7 +2657,6 @@ function setupHUD() {
     <button id="pause-btn" class="pause-btn">PAUSE</button>
   `;
   app.appendChild(hud);
-  hud.classList.toggle('free-pov', !!state.freePov);   // (free pov: the crosshair shows, TARGET dims)
 
   // ONLINE ABSOLUTE HUD (owner 2026-08-22): corner bars anchor by SERVER
   // SLOT — left column team A (p1 top / p3 bottom), right column team B
@@ -6850,6 +6850,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
   s.freeAim = !!fighter.freeAim;                         // free pov (user 2026-10-30): the glint warns everyone, the unit faces its aim
   s.yaw = fighter.yaw;
+  s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
@@ -11126,7 +11127,6 @@ function toggleFreePov(force) {
     if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.();
     freePovRelockNearest();
   }
-  state.hud?.classList.toggle('free-pov', want);
 }
 
 // Back in angled pov the lock goes to the enemy NEAREST THE CROSSHAIR (user 2026-10-30; before: the nearest enemy) — the
@@ -11242,18 +11242,52 @@ function updateFreePovCamera(cam) {
   camera.updateProjectionMatrix();
 }
 
-// Every frame after the camera moved: the point under the crosshair (the camera ray's first wall, or the enemy body
-// it crosses before that), the shot's direction from the muzzle to it, the ring's size (the bloom) and colour.
+// Every frame after the camera moved. The player's own crosshair (free pov, alive, not spectating): the point under the
+// screen centre — the camera ray's first wall, or the enemy body it crosses before that — the shot's direction from the
+// muzzle to it, the ring's size (the rounds' cone) and colour. SPECTATING a unit in free pov (user 2026-10-30 — online, a
+// dead teammate watching a free-aiming ally; the snapshot carries its aimYaw/aimPitch while it free-aims): that unit's
+// crosshair, drawn where its aim line (from its muzzle to the first wall or enemy) lands on THIS screen, the ring its own
+// cone. The TARGET button hides only for the player's own live free pov (.free-pov-live); a spectator keeps it to change
+// the watched unit.
 function updateCrosshair() {
   const ch = state.hud?.querySelector('#crosshair');
-  const show = state.freePov && freePovAllowed() && (state.running || !!state.sdIntro);
-  if (ch) ch.style.display = show ? 'block' : 'none';
-  if (!show) return;
-  const o = camera.position;
-  const d = new THREE.Vector3(); camera.getWorldDirection(d);
+  const inMatch = state.running || !!state.sdIntro;
+  const live = state.freePov && freePovAllowed() && inMatch;
+  state.hud?.classList.toggle('free-pov-live', !!live);
+  const viewer = live ? null : cameraFocusMech();
+  const spectated = viewer && viewer !== state.player && viewer.state.freeAim && viewer.state.hp > 0 && viewer.state.aimYaw != null && inMatch && !dioramaActive() ? viewer : null;
+  if (ch) ch.style.display = live || spectated ? 'block' : 'none';
+  if (!live && !spectated) return;
+  if (live) {
+    const o = camera.position; const d = new THREE.Vector3(); camera.getWorldDirection(d);
+    const hit = freePovAimPoint(o, d, getEnemiesOf(state.player));
+    const m = state.player.root.position;
+    let sx = hit.x - m.x, sy = hit.y - (m.y + 0.8), sz = hit.z - m.z;   // (the muzzle: 0.8 above the root — spawnProjectiles)
+    const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+    state.aim.shotYaw = Math.atan2(sx, sz);
+    state.aim.shotPitch = Math.asin(THREE.MathUtils.clamp(sy, -1, 1));
+    state.aim.onTarget = hit.onTarget;
+    if (ch) { ch.style.left = '50%'; ch.style.top = '50%'; freePovRing(ch, state.player, hit.onTarget); }
+    return;
+  }
+  const dir = aimDirOf(spectated.state.aimYaw, spectated.state.aimPitch || 0);
+  const mz = spectated.root.position;
+  const hit = freePovAimPoint(new THREE.Vector3(mz.x, mz.y + 0.8, mz.z), new THREE.Vector3(dir.x, dir.y, dir.z), getEnemiesOf(spectated));
+  const v = new THREE.Vector3(hit.x, hit.y, hit.z).project(camera);
+  if (!ch) return;
+  if (v.z > 1 || v.z < -1) { ch.style.display = 'none'; return; }   // (behind this camera)
+  const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight;
+  // (an aim point outside this screen is pinned to its edge, so the spectator still sees which way the unit aims)
+  ch.style.left = `${THREE.MathUtils.clamp((v.x + 1) / 2 * W, 16, W - 16).toFixed(1)}px`;
+  ch.style.top = `${THREE.MathUtils.clamp((1 - v.y) / 2 * H, 16, H - 16).toFixed(1)}px`;
+  freePovRing(ch, spectated, hit.onTarget);
+}
+
+// The point under a ray: its first wall (beamLengthToWall), or the first enemy body it crosses before that — and whether it is one.
+function freePovAimPoint(o, d, enemies) {
   let L = Math.min(FREE_POV.aimMax, beamLengthToWall(o.x, o.y, o.z, d.x, d.y, d.z, FREE_POV.aimMax));
   let onTarget = false;
-  for (const e of getEnemiesOf(state.player)) {
+  for (const e of enemies) {
     if (!e || e.state.hp <= 0) continue;
     const hc = e.root.position;                      // (the root is the body centre the hit test uses)
     const vx = hc.x - o.x, vy = hc.y - o.y, vz = hc.z - o.z;
@@ -11263,26 +11297,18 @@ function updateCrosshair() {
     const ddx = px - hc.x, ddy = Math.max(0, Math.abs(py - hc.y) - 1.6), ddz = pz - hc.z;
     if (ddx * ddx + ddy * ddy + ddz * ddz < 1.6 * 1.6) { L = t; onTarget = true; }
   }
-  const ax = o.x + d.x * L, ay = o.y + d.y * L, az = o.z + d.z * L;
-  const m = state.player.root.position;
-  let sx = ax - m.x, sy = ay - (m.y + 0.8), sz = az - m.z;   // (the muzzle: 0.8 above the root — spawnProjectiles)
-  const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
-  state.aim.shotYaw = Math.atan2(sx, sz);
-  state.aim.shotPitch = Math.asin(THREE.MathUtils.clamp(sy, -1, 1));
-  state.aim.onTarget = onTarget;
-  if (ch) {
-    // The ring IS the rounds' cone on the screen (user 2026-10-30, "expand as reflecting the bloom"): the full spread the
-    // rounds sample — the unit's base angle plus its bloom (bloom.js effectiveSpread) — projected through the camera's
-    // field of view; a steady rifle's few px are floored at crosshairMinPx.
-    const u = state.player.unit, bl = state.player.state.bloom || 0;
-    // A shotgun's ring is FIXED at the small base size every other gun opens with (user 2026-10-30): its rounds are one
-    // rigid pattern, not a cone that grows with the bloom, so nothing about it changes during the match.
-    const px = u.spreadCount > 1
-      ? FREE_POV.crosshairMinPx
-      : Math.max(FREE_POV.crosshairMinPx, renderer.domElement.clientHeight * Math.tan(effectiveSpread(u, bl) / 2) / Math.tan(camera.fov * Math.PI / 360));
-    ch.style.setProperty('--ch-size', `${px.toFixed(1)}px`);
-    ch.classList.toggle('on-target', onTarget);
-  }
+  return { x: o.x + d.x * L, y: o.y + d.y * L, z: o.z + d.z * L, onTarget };
+}
+
+// The ring: a unit's rounds' cone on this screen — the base spread plus the bloom, as the rounds sample it, projected
+// through the camera's field of view; a shotgun's FIXED at the small base size (user 2026-10-30); never under crosshairMinPx.
+function freePovRing(ch, m, onTarget) {
+  const u = m.unit, bl = m.state.bloom || 0;
+  const px = u.spreadCount > 1
+    ? FREE_POV.crosshairMinPx
+    : Math.max(FREE_POV.crosshairMinPx, renderer.domElement.clientHeight * Math.tan(effectiveSpread(u, bl) / 2) / Math.tan(camera.fov * Math.PI / 360));
+  ch.style.setProperty('--ch-size', `${px.toFixed(1)}px`);
+  ch.classList.toggle('on-target', onTarget);
 }
 
 // The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
