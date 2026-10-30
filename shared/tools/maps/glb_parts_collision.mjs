@@ -253,7 +253,7 @@ const readPart = (part) => { const { name, tris } = part; if (PIECES && flightPi
   if (dy >= 1 && dx * dz >= MASS_AREA && mx[1] <= GROUND + 0.1) { cur.branch = 'mass'; surfaces.push({ minX: ax(bx0 - 0.02), maxX: ax(bx1 + 0.02), minZ: az(bz0 - 0.02), maxZ: az(bz1 + 0.02), maxTop: ay(mx[1]), type: 'flat', top: ay(mx[1]) }); n.mass += 1; return; }
   const wide = Math.min(bx1 - bx0, bz1 - bz0) >= LID_MIN && (bx1 - bx0) * (bz1 - bz0) >= 1;
   // (a sheet lying under the street by more than a step — Town's 287 by 308 m base plate at 2 m under the road — is no floor: nothing stands on it, and read as one it was a second ground under the whole map)
-  if (dy < 0.1 && mx[1] < GROUND - 0.3 && dx * dz >= 2000) { n.markings += 1; return; }   // (a PLATE: 2,000 m² and more. A cellar's own floor sheet under the street — District's, 1.4 m down — is a floor, user 2026-10-30; the rule without the size took 274 of them)
+  if (PIECES && dy < 0.1 && mx[1] < GROUND - 0.3 && dx * dz >= 2000) { n.markings += 1; return; }   // (the pieces alone, 2026-10-30: District's plate 0.33 m under its west pavements is a floor of the committed data, kept)   // (a PLATE: 2,000 m² and more. A cellar's own floor sheet under the street — District's, 1.4 m down — is a floor, user 2026-10-30; the rule without the size took 274 of them)
   if (dy < 0.1) { if (wide) { cur.branch = 'sheet'; surfaces.push({ minX: ax(bx0 - 0.02), maxX: ax(bx1 + 0.02), minZ: az(bz0 - 0.02), maxZ: az(bz1 + 0.02), maxTop: ay(mx[1]), type: 'flat', top: ay(mx[1]) }); n.sheets += 1; } else n.markings += 1; return; }
   // THE PIECES' READING (2026-10-29, the fourth pass; user: "very simple geometry cboxes that MATCH THE VISUAL"): with PIECES=1 a
   // piece is measured first — its standing faces square at top and foot 1.5 m or taller (walls), its ceilings, how its footprint
@@ -361,7 +361,7 @@ if (PIECES) console.log(`pieces: the parts are the meshes' separable pieces; ${n
 // ---- one terrace, one height, across the parts: flat floors (not lids) that touch and lie within 5 mm of each other take the
 // highest — the terrace at Town's west home is two ground pieces, 9.46 u here and 9.47 there, and the two units of a 2v2 pair stood a
 // hair apart (the pass within a piece, readFaces, is not enough)
-{ const flats = surfaces.filter((s) => s.type === 'flat' && !s.lid); let changed = true, rounds = 0; while (changed && rounds < 20) { changed = false; rounds += 1;
+if (PIECES) { const flats = surfaces.filter((s) => s.type === 'flat' && !s.lid); let changed = true, rounds = 0; while (changed && rounds < 20) {   // (the pieces alone, 2026-10-30: District's data, read whole, keeps its floors' heights as committed — 22 of them would rise a centimetre or two) changed = false; rounds += 1;
   for (let i = 0; i < flats.length; i += 1) { const a = flats[i]; for (let j = i + 1; j < flats.length; j += 1) { const b = flats[j]; if (a.top === b.top || Math.abs(a.top - b.top) > 0.02) continue; if (a.maxX < b.minX - 0.12 || b.maxX < a.minX - 0.12 || a.maxZ < b.minZ - 0.12 || b.maxZ < a.minZ - 0.12) continue; const h = Math.max(a.top, b.top); a.top = h; a.maxTop = h; b.top = h; b.maxTop = h; changed = true; } } } }
 // ---- RAMP (a map's own data): a flight of stacked treads read as one slope — RAMP="x0,x1,z0,z1,lowY,highY,axis;..." — the
 // rectangle's boxes topping between lowY and highY go, their lids with them, and one plane rises from lowY at the low end
@@ -430,8 +430,9 @@ for (let pass = 0; pass < 40; pass += 1) { const cell = 16, grid = new Map(); co
         // (a plane's height AT the box, not its top: the ramp's high end lidded a rail segment at its foot; and a box narrower than
         //  0.3 m both ways — a rail, a bar — gets a lid only where it rises from the surface (its bottom within 0.1 m of it): a rail
         //  0.5 m over a stair's treads, lidded, was a surface the step rule stood a body on, and the body hopped over the rail)
-        const h = s.type === 'plane' ? s.y0 + s.gx * (Math.max(s.minX, Math.min((o.minX + o.maxX) / 2, s.maxX)) - s.minX) + s.gz * (Math.max(s.minZ, Math.min((o.minZ + o.maxZ) / 2, s.maxZ)) - s.minZ) : s.maxTop;
-        const narrow = Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < 1.2;
+        //  (both for the pieces alone, 2026-10-30: District's data, read whole, keeps its lids as committed — 40 walls topping at a sloped road's height would gain one)
+        const h = s.type === 'plane' && PIECES ? s.y0 + s.gx * (Math.max(s.minX, Math.min((o.minX + o.maxX) / 2, s.maxX)) - s.minX) + s.gz * (Math.max(s.minZ, Math.min((o.minZ + o.maxZ) / 2, s.maxZ)) - s.minZ) : s.maxTop;
+        const narrow = PIECES && Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < 1.2;
         if (h >= o.maxY - STEPU && h <= o.maxY + 4 && (!narrow || h >= o.minY - 0.4)) { hit = true; break; } }
     if (!hit) continue; o.topBuffer = 0.8; surfaces.push({ minX: o.minX - 0.08, maxX: o.maxX + 0.08, minZ: o.minZ - 0.08, maxZ: o.maxZ + 0.08, maxTop: o.maxY, type: 'flat', top: o.maxY, lid: 1 }); changed += 1; }
   promoted += changed; if (!changed) break; }
@@ -452,7 +453,22 @@ if (holed) console.log(`hole: ${holed} surfaces cut around the map's HOLE rectan
 let voids = 0; cur.branch = 'VOID';
 for (const spec of (process.env.VOID ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [vx0, vx1, vz0, vz1] = spec.split(',').map(Number); obstacles.push({ minX: ax(vx0), maxX: ax(vx1), minZ: az(vz0), maxZ: az(vz1), minY: ay(GROUND - 30), maxY: ay(GROUND + 30) }); voids += 1; }
 if (voids) console.log(`void: ${voids} walls of nothing from the map's VOID rectangles`);
+// ---- TRIM (a map's own data): rectangles of the model's metres where every box topping over a height is cut back to the
+// rectangle's edge — TRIM="x0,x1,z0,z1,above;..." — for a part read whole whose bounding box runs on past the thing it is:
+// District's two handrail boards along the wide stair down to the underground, 18.5 m long and falling 9.8 m, were a box
+// each 9.8 m tall over their whole length, and held the street east of the stair's parapet, where the boards run 6 to 8 m
+// under the deck (user 2026-10-30, "blocking the way on the ground floor"). A box the rectangle spans across — its whole
+// width in the other axis — loses the part inside the rectangle and keeps the rest; its lid is cut the same way. A box the
+// rectangle only touches is left alone.
+let trimmed = 0; cur.branch = 'TRIM';
+for (const spec of (process.env.TRIM ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [tx0, tx1, tz0, tz1, above] = spec.split(',').map(Number); const T = { x0: ax(tx0), x1: ax(tx1), z0: az(tz0), z1: az(tz1), y: ay(above) };
+  const cut = (list, eligible) => { for (let i = list.length - 1; i >= 0; i -= 1) { const b = list[i]; if (!eligible(b) || b.maxX <= T.x0 + 0.01 || b.minX >= T.x1 - 0.01 || b.maxZ <= T.z0 + 0.01 || b.minZ >= T.z1 - 0.01) continue;
+      const spansZ = b.minZ >= T.z0 - 0.01 && b.maxZ <= T.z1 + 0.01, spansX = b.minX >= T.x0 - 0.01 && b.maxX <= T.x1 + 0.01; if (!spansZ && !spansX) continue;
+      list.splice(i, 1); trimmed += 1; const parts = []; if (spansZ) { if (b.minX < T.x0) parts.push({ ...b, maxX: T.x0 }); if (b.maxX > T.x1) parts.push({ ...b, minX: T.x1 }); } else { if (b.minZ < T.z0) parts.push({ ...b, maxZ: T.z0 }); if (b.maxZ > T.z1) parts.push({ ...b, minZ: T.z1 }); }
+      for (const q of parts) if (q.maxX - q.minX >= 0.05 && q.maxZ - q.minZ >= 0.05) list.push(q); } };
+  cut(obstacles, (o) => o.maxY > T.y); cut(surfaces, (s) => s.lid && s.maxTop > T.y); }
+if (trimmed) console.log(`trim: ${trimmed} boxes and lids cut back at the map's TRIM rectangles`);
 mkdirSync(outDir, { recursive: true });
-const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '' }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
+const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '', trim: process.env.TRIM ?? '' }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
 writeFileSync(`${outDir}/${key}.json`, JSON.stringify(out));
 console.log(`${key}: ${n.parts} parts — ${n.out} outside the crop, ${n.below} under the street, ${n.above} over the ceiling, ${n.tiny} tiny, ${n.markings} flat markings, ${n.mass} blocks of earth (their tops kept), ${n.invisible} invisible, ${n.excluded} excluded; ${obstacles.length} boxes (${n.lids} with a lid, ${n.lowLids} low ones with a lid, ${n.floors} with a floor on top, ${n.panes} sheets given 4 cm), ${surfaces.length} surfaces (${n.ramps} ramps, ${n.sheets} flat sheets); halfX ${out.halfX} halfZ ${out.halfZ}`);
