@@ -5488,7 +5488,10 @@ function updateLocksAndReticle() {
   }
   // Diorama POC: lock state below still updates (bots read redLock), but the
   // world-space bracket is replaced by the annotation layer's square.
-  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !(state.freePov && viewer === state.player);   // (the anomaly rules: no lock bracket; free pov: the crosshair instead)
+  // (the anomaly rules: no lock bracket; free pov: the crosshair instead — the PLAYER'S free pov while the player is the live
+  // viewer, the WATCHED unit's own free aim while spectating; the spectator's own switch is ignored, user 2026-10-30)
+  const freeViewer = state.spectatorActive || viewer !== state.player ? !!viewer.state.freeAim : state.freePov;
+  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !freeViewer;
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5496,7 +5499,7 @@ function updateLocksAndReticle() {
   const tgt = state.playerCurrentTarget ?? state.enemy;
   const dist = viewer.root.position.distanceTo(tgt.root.position);
   if (viewer === state.player) {
-    state.player.state.redLock = !state.freePov && dist <= state.player.unit.lockRange;   // (free pov: no lock, no red lock — the sim's updateLocks)
+    state.player.state.redLock = !(state.freePov && !state.spectatorActive) && dist <= state.player.unit.lockRange;   // (free pov: no lock, no red lock — the sim's updateLocks; a spectator-mode player slot is a bot, its lock its own)
     // Enemy bots compute their own redLock against their own targets via the AI
     // loop's runBotAIForMech swap; here we only refresh the primary enemy's
     // redLock against the player (1v1 parity, harmless in 2v2).
@@ -11116,6 +11119,10 @@ function toggleFreePov(force) {
   const want = force !== undefined ? !!force : !state.freePov;
   if (want === state.freePov) return;
   if (want && dioramaActive()) return;   // command mode: the toggle is ignored (user)
+  // A SPECTATOR has no pov of their own to switch (user 2026-10-30, "the pov toggle shouldn't react to spectator"): the
+  // spectator-mode watcher, and a dead player watching a teammate, see the pov of the unit they watch — the bracket when it
+  // is in angled pov, its crosshair when it free-aims (updateCrosshair) — and the switch does nothing for them.
+  if (state.spectatorActive || !state.player || state.player.state.hp <= 0) return;
   state.freePov = want;
   if (want) {
     // Open where the camera looks now, level — no jump.
