@@ -21,6 +21,7 @@ import { readGlb, accessor, worlds } from './glb_read.mjs';
 const [inF, key, X0, X1, Z0, Z1, outDir] = process.argv.slice(2); const x0 = Number(X0), x1 = Number(X1), z0 = Number(Z0), z1 = Number(Z1);
 const SCALE = Number(process.env.SCALE ?? 4), GROUND = Number(process.env.GROUND ?? 0), MIN_SIZE = Number(process.env.MIN_SIZE ?? 0.3), LID_MIN = Number(process.env.LID_MIN ?? 0.6), LID_AREA = Number(process.env.LID_AREA ?? 20), BELOW = Number(process.env.BELOW ?? 7);
 const EXCLUDE = (process.env.EXCLUDE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const CUT = new Set((process.env.CUT ?? '').split(',').map((s) => s.trim()).filter(Boolean));   // (CUT: parts read cut into half-metre lengths along their long axis — a brick set diagonally, see readPart)
 const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; const halfX = ((x1 - x0) / 2) * SCALE, halfZ = ((z1 - z0) / 2) * SCALE;
 const ax = (x) => Math.round((x - cx) * SCALE * 100) / 100, az = (z) => Math.round((z - cz) * SCALE * 100) / 100, ay = (y) => Math.round((y - GROUND) * SCALE * 100) / 100;
 const g = readGlb(inF); const J = g.json; const W = worlds(J);
@@ -29,7 +30,7 @@ const STEPU = STEP * SCALE;
 const MASS_AREA = Number(process.env.MASS_AREA ?? 200);   // (m²: a block of earth this big, a metre thick, topping at the street or under it, is its top alone)
 const MAX_GRADE = Number(process.env.MAX_GRADE ?? 1.5);
 const CEIL = Number(process.env.CEIL ?? Infinity);   // (metres over the street: a part or a face whose bottom lies over it is nothing — Town's roofs from 11 m up and the parapets at 22 m, where no body ever stands; the default keeps everything)   // (a sloped face steeper than this rise per metre is no ramp: the part is a box)
-const obstacles = [], surfaces = []; const n = { parts: 0, out: 0, tiny: 0, below: 0, excluded: 0, boxes: 0, lids: 0, lowLids: 0, floors: 0, ramps: 0, steep: 0, sheets: 0, markings: 0, panes: 0, mass: 0, invisible: 0, faceFloors: 0, faceWalls: 0, faceSlopes: 0, flightPieces: 0, faceBlocks: 0, landings: 0, splitWalls: 0, shapes: 0, flights: 0, flightTreads: 0, above: 0, columnWalls: 0, roofs: 0, splits: 0, crowns: 0, rampWalls: 0 };
+const obstacles = [], surfaces = []; const n = { parts: 0, out: 0, tiny: 0, below: 0, excluded: 0, boxes: 0, lids: 0, lowLids: 0, floors: 0, ramps: 0, steep: 0, sheets: 0, markings: 0, panes: 0, mass: 0, invisible: 0, faceFloors: 0, faceWalls: 0, faceSlopes: 0, flightPieces: 0, faceBlocks: 0, landings: 0, splitWalls: 0, shapes: 0, flights: 0, flightTreads: 0, above: 0, columnWalls: 0, roofs: 0, splits: 0, crowns: 0, rampWalls: 0, cut: 0 };
 const fit = (pts) => { // y = a + b x + c z, least squares; returns [a, b, c, rms]
   let sx = 0, sz = 0, sy = 0, sxx = 0, szz = 0, sxz = 0, sxy = 0, szy = 0; const m = pts.length; for (const [x, y, z] of pts) { sx += x; sz += z; sy += y; sxx += x * x; szz += z * z; sxz += x * z; sxy += x * y; szy += z * y; }
   const A = [[m, sx, sz], [sx, sxx, sxz], [sz, sxz, szz]], B = [sy, sxy, szy]; // solve 3x3 by Cramer
@@ -254,6 +255,17 @@ const readPart = (part) => { const { name, tris } = part; if (PIECES && flightPi
   const wide = Math.min(bx1 - bx0, bz1 - bz0) >= LID_MIN && (bx1 - bx0) * (bz1 - bz0) >= 1;
   // (a sheet lying under the street by more than a step — Town's 287 by 308 m base plate at 2 m under the road — is no floor: nothing stands on it, and read as one it was a second ground under the whole map)
   if (PIECES && dy < 0.1 && mx[1] < GROUND - 0.3 && dx * dz >= 2000) { n.markings += 1; return; }   // (the pieces alone, 2026-10-30: District's plate 0.33 m under its west pavements is a floor of the committed data, kept)   // (a PLATE: 2,000 m² and more. A cellar's own floor sheet under the street — District's, 1.4 m down — is a floor, user 2026-10-30; the rule without the size took 274 of them)
+  // CUT (a map's own data, 2026-10-30): a part named in CUT= — a brick set diagonally in the room, whose one box is its whole bounding
+  // square — is read in half-metre lengths along its footprint's long axis, each length the box of its faces clipped to it: a staircase
+  // of small boxes along the diagonal. District's 1 m counter in front of a window, 0.55 m wide and 5 m long at 45 degrees, was a box
+  // 3.8 by 3.6 m, and a body stopped two metres from the window (user: "this CB is blocking unit's way walking to the window").
+  if (CUT.size && (CUT.has(name) || name.split('/').some((s) => CUT.has(s)))) { cur.branch = 'cut'; const alongX = dx >= dz; const lo = alongX ? bx0 : bz0, hi = alongX ? bx1 : bz1; const nseg = Math.max(1, Math.ceil((hi - lo) / 0.5)); let made = 0;
+    for (let s = 0; s < nseg; s += 1) { const s0 = lo + (hi - lo) * s / nseg, s1 = lo + (hi - lo) * (s + 1) / nseg; const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; const k = alongX ? 0 : 2;
+      for (const v of tris) { let poly = v.map((q) => q.slice()); for (const [bound, keepBelow] of [[s0, false], [s1, true]]) { const o = []; for (let i = 0; i < poly.length; i += 1) { const a = poly[i], c = poly[(i + 1) % poly.length]; const ina = keepBelow ? a[k] <= bound : a[k] >= bound, inc = keepBelow ? c[k] <= bound : c[k] >= bound; if (ina) o.push(a); if (ina !== inc) { const tt = (bound - a[k]) / (c[k] - a[k]); o.push([a[0] + (c[0] - a[0]) * tt, a[1] + (c[1] - a[1]) * tt, a[2] + (c[2] - a[2]) * tt]); } } poly = o; if (!poly.length) break; }
+        for (const q of poly) { if (q[0] < b.minX) b.minX = q[0]; if (q[0] > b.maxX) b.maxX = q[0]; if (q[1] < b.minY) b.minY = q[1]; if (q[1] > b.maxY) b.maxY = q[1]; if (q[2] < b.minZ) b.minZ = q[2]; if (q[2] > b.maxZ) b.maxZ = q[2]; } }
+      if (b.minX === Infinity) continue; b.minX = Math.max(b.minX, x0); b.maxX = Math.min(b.maxX, x1); b.minZ = Math.max(b.minZ, z0); b.maxZ = Math.min(b.maxZ, z1); if (b.maxX - b.minX < 0.04 || b.maxZ - b.minZ < 0.04) continue;
+      const box = { minX: ax(b.minX), maxX: ax(b.maxX), minZ: az(b.minZ), maxZ: az(b.maxZ), minY: ay(b.minY), maxY: ay(b.maxY) }; if (b.maxY - b.minY <= STEP) { box.topBuffer = 0.8; surfaces.push({ minX: ax(b.minX - 0.02), maxX: ax(b.maxX + 0.02), minZ: az(b.minZ - 0.02), maxZ: az(b.maxZ + 0.02), maxTop: ay(b.maxY), type: 'flat', top: ay(b.maxY), lid: 1 }); } obstacles.push(box); made += 1; }
+    n.cut += made; return; }
   if (dy < 0.1) { if (wide) { cur.branch = 'sheet'; surfaces.push({ minX: ax(bx0 - 0.02), maxX: ax(bx1 + 0.02), minZ: az(bz0 - 0.02), maxZ: az(bz1 + 0.02), maxTop: ay(mx[1]), type: 'flat', top: ay(mx[1]) }); n.sheets += 1; } else n.markings += 1; return; }
   // THE PIECES' READING (2026-10-29, the fourth pass; user: "very simple geometry cboxes that MATCH THE VISUAL"): with PIECES=1 a
   // piece is measured first — its standing faces square at top and foot 1.5 m or taller (walls), its ceilings, how its footprint
@@ -468,7 +480,8 @@ for (const spec of (process.env.TRIM ?? '').split(';').map((s) => s.trim()).filt
       for (const q of parts) if (q.maxX - q.minX >= 0.05 && q.maxZ - q.minZ >= 0.05) list.push(q); } };
   cut(obstacles, (o) => o.maxY > T.y); cut(surfaces, (s) => s.lid && s.maxTop > T.y); }
 if (trimmed) console.log(`trim: ${trimmed} boxes and lids cut back at the map's TRIM rectangles`);
+if (n.cut) console.log(`cut: ${n.cut} boxes along the diagonals of the map's CUT parts`);
 mkdirSync(outDir, { recursive: true });
-const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '', trim: process.env.TRIM ?? '' }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
+const out = { key, transform: { scale: SCALE, cx, cz, ground: GROUND, exclude: EXCLUDE, ceil: null, parts: true, pieces: PIECES, faces: FACES, hole: process.env.HOLE ?? '', trim: process.env.TRIM ?? '', cut: [...CUT] }, halfX: Math.round(halfX * 10) / 10, halfZ: Math.round(halfZ * 10) / 10, spawns: {}, obstacles, surfaces };
 writeFileSync(`${outDir}/${key}.json`, JSON.stringify(out));
 console.log(`${key}: ${n.parts} parts — ${n.out} outside the crop, ${n.below} under the street, ${n.above} over the ceiling, ${n.tiny} tiny, ${n.markings} flat markings, ${n.mass} blocks of earth (their tops kept), ${n.invisible} invisible, ${n.excluded} excluded; ${obstacles.length} boxes (${n.lids} with a lid, ${n.lowLids} low ones with a lid, ${n.floors} with a floor on top, ${n.panes} sheets given 4 cm), ${surfaces.length} surfaces (${n.ramps} ramps, ${n.sheets} flat sheets); halfX ${out.halfX} halfZ ${out.halfZ}`);
