@@ -697,8 +697,6 @@ export const MAP_DATA = {
   airport: { id: 'airport', name: 'Airport' },
   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   town: { id: 'town', name: 'Town' },
-  // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out.
-  district: { id: 'district', name: 'District', boostScale: 5 },   // (boostScale: every unit's gauge volume and refill, and every boost threshold the bots and the command mode hold, times this on the map — the costs stay (boostScaleOf below); user 2026-10-29, "for District only, 5 times every unit's boost gauge amount and 5 times the refill speed, adjust the bots' cost gates accordingly": a 197 x 274 m block)
   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block.
   neon: { id: 'neon', name: 'Neon', boostScale: 5 },   // (five times the gauge and its refill, as District and Compound — user 2026-11-01)
   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
@@ -711,6 +709,8 @@ export const MAP_DATA = {
   hospital: { id: 'hospital', name: 'Hospital' },
   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   spacecraft: { id: 'spacecraft', name: 'Spacecraft' },
+  // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out.
+  district: { id: 'district', name: 'District', boostScale: 5 },   // (boostScale: every unit's gauge volume and refill, and every boost threshold the bots and the command mode hold, times this on the map — the costs stay (boostScaleOf below); user 2026-10-29, "for District only, 5 times every unit's boost gauge amount and 5 times the refill speed, adjust the bots' cost gates accordingly": a 197 x 274 m block)
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms: { id: 'backrooms', name: 'Backrooms' },
   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules.
