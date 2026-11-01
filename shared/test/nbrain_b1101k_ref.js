@@ -1,4 +1,4 @@
-// FROZEN at b1101j for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1101k for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1101j_ref.js';
+import { sdBrainTick } from './sdbrain_b1101k_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -69,9 +69,10 @@ const BOT_HIT_EVADE_MS = 350;
 // DEFENSE'S COMMITS, by trigger (user 2026-11-01, "change these three to 1,500 ms (keep their categories)"): how long the
 // escape sprint across the locked target's line runs at least — after a hit (350 ms until then), after a hit while the locked
 // enemy's sniper charges (600 ms), and on after the anti-glint dodge's step (520 ms). Every tick of the hit's evade window above
-// re-arms the commit, so one hit's Defense runs that window and then the commit, about 1.84 s on open ground; the re-align below
-// runs only inside the window, so the commit after it is a straight line. Reaching cover still ends it early (the tuck, the peek).
-// The dodge's follow-through runs with the Sudden Death brain on too: its legs are the plain Defense's for the step and the commit.
+// re-arms the commit, so one hit's Defense runs that window and then the commit, about 1.84 s on open ground. The whole run stays
+// across the line (the movement branch's every-tick perpendicular, user 2026-11-01 "all staying vertical"): the bot circles its
+// reference enemy at the distance it had. Reaching cover still ends it early (the tuck, the peek). The dodge's follow-through runs
+// with the Sudden Death brain on too: its legs are the plain Defense's for the step and the commit.
 // The stuck-triggered commit is vestigial: a stuck bot goes to the Maze (since 2026-08-08), and Defense is entered only under
 // fire, where the hit's commit replaces the stuck one on its first tick.
 const BOT_DEFENSE_HIT_MS = 1500;
@@ -587,8 +588,9 @@ export function nbBrainTick(host) {
   // never moves and her bot never knew it was hit; user 2026-10-23.)
   if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botGlintStepAt = null;
 
-  // The dodge comes due: one i-frame step, then a BOT_DEFENSE_DODGE_FOLLOW_MS sprint (1,500 ms; 520 before 2026-11-01) in the same
-  // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
+  // The dodge comes due: one i-frame step, then a BOT_DEFENSE_DODGE_FOLLOW_MS sprint (1,500 ms; 520 before 2026-11-01) the same
+  // way round, across the attacker's line all the way (the movement branch turns it with the line; the guess/schedule is spent
+  // either way). SURVIVAL EXEMPTION
   // (like Defense): gates at the raw step cost only — tryStartStep enforces
   // STEP_BOOST_COST underneath, human-identical — so even a suppressed bot
   // may spend its last savings to survive a sniper shot.
@@ -600,8 +602,8 @@ export function nbBrainTick(host) {
       // direction for this dodge+follow-up window — the Defense system itself
       // stays keyed to the locked target and re-arms afterwards if its
       // trigger is still live). The locked attacker keeps today's behavior:
-      // continue a committed Defense escape line if one is active, else a
-      // random lateral vs the locked target (== perpendicular to it).
+      // the running Defense's way round if one is active (its current
+      // perpendicular), else a random lateral vs the locked target.
       let sdx, sdz;
       const glintAtk = me.botGlintAttackerId ? (enemies.find((f) => f.id === me.botGlintAttackerId) ?? null) : null;
       if (glintAtk && glintAtk.id !== opp.id) {
@@ -618,14 +620,16 @@ export function nbBrainTick(host) {
         sdx = sideX * lat; sdz = sideZ * lat;
       }
       if (host.startStep(sdx, sdz)) {
-        // "Dodge + sprint": after the i-frame step ends, keep sprinting the
-        // same way for BOT_DEFENSE_DODGE_FOLLOW_MS via a Defense commit (REPLACES any prior
+        // "Dodge + sprint": after the i-frame step ends, keep sprinting across
+        // the attacker's line for BOT_DEFENSE_DODGE_FOLLOW_MS via a Defense commit (REPLACES any prior
         // Defense countdown by design — live triggers re-arm it afterwards).
         me.botState = 'defense';
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
         me.botDefenseDirAt = now;
         me.botDefenseUntil = me.stepUntil + BOT_DEFENSE_DODGE_FOLLOW_MS;
+        me.botDefenseRefId = glintAtk ? glintAtk.id : opp.id;   // (the follow-through stays across this enemy's line: the movement branch)
+        me.botDefenseRefLife = (glintAtk ?? opp).invulnerableUntil;   // (this life of it: a respawn stamps a new one)
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
         me.botDefensePeekDone = false;
@@ -1515,6 +1519,8 @@ export function nbBrainTick(host) {
       me.botDefenseDirX = dxd;
       me.botDefenseDirZ = dzd;
       me.botDefenseDirAt = now;
+      me.botDefenseRefId = opp.id;
+      me.botDefenseRefLife = opp.invulnerableUntil;
       // A hit runs BOT_DEFENSE_HIT_MS, under the locked sniper's charge BOT_DEFENSE_SNIPER_MS (1,500 ms each since 2026-11-01); the
       // stuck branch is vestigial (BOT_DEFENSE_STUCK_MS: an entry here is a hit's, and the hit's commit replaces it below).
       me.botDefenseUntil = now + (stuckTriggered ? BOT_DEFENSE_STUCK_MS : (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS));
@@ -1548,6 +1554,8 @@ export function nbBrainTick(host) {
       me.botDefenseDirX = dxd2;
       me.botDefenseDirZ = dzd2;
       me.botDefenseDirAt = now;
+      me.botDefenseRefId = opp.id;
+      me.botDefenseRefLife = opp.invulnerableUntil;
       me.botDefenseUntil = now + (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
@@ -1560,36 +1568,12 @@ export function nbBrainTick(host) {
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
     }
-    // SUSTAINED-FIRE RE-ALIGN: under a continuous stream (fresh hits keep
-    // Defense alive indefinitely) the once-picked perpendicular slowly
-    // rotates into a stale TANGENT — a straight line that flies away from
-    // the shooter forever. That was the "shorter the lock range, the harder
-    // they flee" report: short-LR bots must close through the densest fire,
-    // so their Defense chains never break and the tangent-flight runs long.
-    // Re-perpendicularize at most every 400 ms while under fire (the evade
-    // window after each hit) so the bot CIRCLES the shooter instead. A single hit's Defense is never
-    // re-aligned: its commit after the window runs straight (about 1.5 s since 2026-11-01).
-    if (now - (me.botDefenseDirAt ?? 0) > 400) {
-      const sg3 = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
-      let dxd3 = sideX * sg3;
-      let dzd3 = sideZ * sg3;
-      if (obstacleNear && (dxd3 * (-avoid.rx) + dzd3 * (-avoid.rz) > 0.3)) {
-        dxd3 = -dxd3; dzd3 = -dzd3;
-      }
-      // RANGE-HOLD: sideways steps have an outward chord drift that
-      // compounds over an endless hit chain (the shotgun bot slowly spiraled
-      // to double its band and read as "backing off"). Bias the fresh
-      // perpendicular with the same range pull Engage uses, so a suppressed
-      // bot circle-strafes AT its band radius — closing while weaving when
-      // it's too far, instead of drifting out forever.
-      const pull3 = Math.max(-0.4, Math.min(0.4, (dist - optimalRange) * 0.12));
-      dxd3 += dirX * pull3;
-      dzd3 += dirZ * pull3;
-      const dl3 = Math.hypot(dxd3, dzd3) || 1;
-      me.botDefenseDirX = dxd3 / dl3;
-      me.botDefenseDirZ = dzd3 / dl3;
-      me.botDefenseDirAt = now;
-    }
+    me.botDefenseRefId = opp.id;   // (a hit's Defense stays across the locked target's line, a dodge's follow-through hit included)
+    me.botDefenseRefLife = opp.invulnerableUntil;
+    // (THE SUSTAINED-FIRE RE-ALIGN — every 400 ms under fire the perpendicular re-picked, with a pull toward the band so the
+    //  chords' outward drift could not spiral the bot out — gave way on 2026-11-01 to the movement branch's every-tick
+    //  perpendicular: the run stays across the line for the whole commit, not only under fire, and its chords, a tick long, hold
+    //  the radius without a pull. User: "all staying vertical". A bot hit far out circles there instead of closing as it weaves.)
   }
 
   // --- State behavior: heading + sprint intent + optional jump ---
@@ -1887,6 +1871,30 @@ export function nbBrainTick(host) {
       wantSprint = true;
     }
   } else if (botS === 'defense') {
+    // STAYING ACROSS THE LINE (user 2026-11-01, "all staying vertical" — a hit, a hit under the locked sniper's charge, the anti-glint
+    // dodge's follow-through): every tick the run turns back to the perpendicular of the line from its reference enemy (the locked
+    // target for a hit, the glint's attacker for the dodge), the same way round as it was running, so the bot circles that enemy at
+    // the distance it had instead of flying off along a stale tangent. Not in cover (the tuck and the peek own the legs), and not in
+    // a wall slide's first 400 ms (the flip-slide-bail chain below; a flip only reverses the way round, which the next tick keeps;
+    // after the slide, the way round must not drive back into the wall).
+    if (!me.botDefenseInCover && !((me.botDefenseFlips ?? 0) >= 2 && now - (me.botDefenseDirAt ?? 0) < 400)) {
+      // (The reference is one life of that enemy — its spawn stamp, invulnerableUntil, stored with it. The server's slot id outlives a
+      //  death and the offline host's mech id need not, so without the stamp a respawned enemy stayed the reference online and gave
+      //  way to the locked target offline; now it gives way on both hosts.)
+      const ref = (me.botDefenseRefId != null && enemies.find((f) => f.id === me.botDefenseRefId && (f.hp ?? 1) > 0
+        && f.invulnerableUntil === me.botDefenseRefLife)) || opp;
+      const rx = pos.x - ref.pos.x, rz = pos.z - ref.pos.z, rl = Math.hypot(rx, rz);
+      if (rl > 1e-6) {
+        let px = -rz / rl, pz = rx / rl;
+        if (px * (me.botDefenseDirX ?? sideX) + pz * (me.botDefenseDirZ ?? sideZ) < 0) { px = -px; pz = -pz; }
+        // After a wall slide (flips 2) the way round is checked against the wall: a perpendicular that drives back into it gives way
+        // to the other one, and with both blocked the slide's own line is kept. Without this the run turned back into the wall the
+        // slide had just left, and under fire — every hit re-arming the Defense the bail had ended — it stayed pinned there.
+        const blocked = (ux, uz) => pushedInto(ux, uz) || (obstacleNear && ux * (-avoid.rx) + uz * (-avoid.rz) > 0.3);
+        if ((me.botDefenseFlips ?? 0) < 2 || !blocked(px, pz)) { me.botDefenseDirX = px; me.botDefenseDirZ = pz; }
+        else if (!blocked(-px, -pz)) { me.botDefenseDirX = -px; me.botDefenseDirZ = -pz; }
+      }
+    }
     mx = me.botDefenseDirX ?? sideX;
     mz = me.botDefenseDirZ ?? sideZ;
     wantSprint = true;
@@ -1915,10 +1923,10 @@ export function nbBrainTick(host) {
     } else {
       // PROACTIVE HOP (2026-08-05, user-designed): don't wait to grind —
       // while escaping on the ground, if a jumpable lip sits DEAD AHEAD on
-      // the committed line (tight ~35° cone; the stuck vault below keeps
-      // its wider one), jump it the moment it's in reach and keep sprinting
-      // the same direction up top. Adds ZERO decision time: the direction
-      // never changes, the ledge is simply cleared instead of deflecting
+      // the run's heading (tight ~35° cone; the stuck vault below keeps
+      // its wider one), jump it the moment it's in reach and keep running
+      // the same way round up top. Adds ZERO decision time: the run stays
+      // across the line, the ledge is simply cleared instead of deflecting
       // the sprint. GLINT GATE: never while an anti-glint dodge is
       // scheduled (me.botGlintStepAt) — airborne can't dodge, and a hop
       // there converts a guaranteed-dodgeable sniper shot into a hit.
@@ -1944,8 +1952,8 @@ export function nbBrainTick(host) {
         // VAULT FIRST: if the "wall" being pressed is actually a jumpable
         // ledge (walkable top 1.7–4.8 above, lip unfenced — the same perch
         // check used elsewhere, so Airport's rim glass still rejects it)
-        // roughly along the committed escape line, jump ONTO it and keep
-        // sprinting the same direction up top: the dodge continues with an
+        // roughly along the run's heading, jump ONTO it and keep running
+        // the same way round up top: the escape continues with an
         // elevation change instead of a turn. Jump unaffordable (boost /
         // cooldown) or no ledge → the usual flip → slide → bail chain.
         // Same glint gate as the proactive hop above.
@@ -1964,7 +1972,7 @@ export function nbBrainTick(host) {
           }
         }
         if (vaulted) {
-          // committed direction kept — the sprint resumes on the ledge
+          // the way round kept — the run resumes on the ledge, still across the line
         } else {
         // Wedged mid-escape (~2 ticks of zero lateral motion pressing a
         // wall). The old response — end Defense and hand off to Maze — never
@@ -1973,7 +1981,9 @@ export function nbBrainTick(host) {
         // bot stood there getting farmed. Recover IN PLACE instead:
         //   1st wedge → the OTHER perpendicular (equally across the aim
         //               line, and away from the wall just hit by construction);
-        //   2nd wedge → slide along the wall (concave corner / corridor);
+        //   2nd wedge → slide along the wall (concave corner / corridor),
+        //               held 400 ms, then the circling resumes the way
+        //               round that leaves the wall (the movement branch);
         //   after that → the old bail-to-Maze as a last resort.
         const flips = me.botDefenseFlips ?? 0;
         if (flips === 0) {
