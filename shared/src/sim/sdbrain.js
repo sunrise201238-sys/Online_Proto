@@ -74,7 +74,7 @@
 //   the trigger: me.botSDFire.
 import { walkSegmentBlocked, unitOverlapsObstacle, segmentHitsObstacle, projectileHitsSurface, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
 import { findHiddenSpot, findPathOnGrid, coverDistanceAt } from './navgrid.js';
-import { STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S, BOOST_CAP } from './constants.js';
+import { DEFAULT_BOOST_SCALE, STEP_BOOST_COST, STEP_DURATION_MS, STEP_DISTANCE, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, TICK_RATE_MS, PROJECTILE_MUZZLE_Y_OFFSET, HIT_RADIUS_NORMAL, HIT_HALF_HEIGHT, BOOST_DASH_DRAIN_PER_TICK, SHOTGUN_PATTERN, SHOTGUN_CLUSTER_SPREAD_DISTANCE, PROJECTILE_TTL_S, BOOST_CAP } from './constants.js';
 
 // ===================== THE MODELS =====================
 // Fraction of a uniform disc of radius c (a cone's footprint at the target's
@@ -268,7 +268,7 @@ export const BOT_SD = {
   sprintFactor: 2.5,      //   the body's sprint with the dash momentum, measured 24-32 u/s, over the unit's sprintSpeed (11.76)
   predictS: 0.5,          // an eye is also where the enemy's run takes it this far ahead
   dashFloor: 8,           // an exposed leg sprints down to this much boost
-  boostReserve: 86,       // THE RESERVE: a dodge (48) and half a second of lateral sprint (38), kept in the tank through every plan — a planned exposure starts only with its leg's sprint on top of it (sdNeed), a hidden leg sprints only while the longest peek's need is still there. The body exposed spends to dashFloor.
+  boostReserve: 86,       // THE RESERVE (times the fighter's boost scale where it is read, kB: 430 on every map): a dodge (48) and half a second of lateral sprint (38), kept in the tank through every plan — a planned exposure starts only with its leg's sprint on top of it (sdNeed), a hidden leg sprints only while the longest peek's need is still there. The body exposed spends to dashFloor.
   acrossMin: 0.7,         // ACROSS THE LINE: a heading's lateral fraction at least this much (45 deg is 0.71)
   waitLeash: 6,           // THE WAIT paces its hidden cell within this of where the wait began
   paceSpeed: 0.4,         //   at this share of the walk: a human shifting in cover, not a march
@@ -439,7 +439,7 @@ export function sdBrainTick(host) {
   // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): the reserve,
   // the dash floor and the full tank THE VALVE opens at scale with the gauge's volume and refill (movement.js); the costs — the
   // dodge, a sprint's drain — do not.
-  const kB = me.boostScale ?? 1; const sdReserve = SD.boostReserve * kB, sdDashFloor = SD.dashFloor * kB;
+  const kB = me.boostScale ?? DEFAULT_BOOST_SCALE; const sdReserve = SD.boostReserve * kB, sdDashFloor = SD.dashFloor * kB;
   const stepD = meUnit.stepDistance ?? STEP_DISTANCE;
   const stepMs = meUnit.stepDurationMs ?? STEP_DURATION_MS;
   const sdDodgeReady = now >= (me.stepCooldownUntil ?? 0) && now > (me.stepUntil ?? 0);

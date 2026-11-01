@@ -15,7 +15,8 @@ import {
   REPULSION_FORCE,
   REPULSION_DECAY_MS,
   GROUND_BASE_Y,
-  LAND_PLANT_LEVEL
+  LAND_PLANT_LEVEL,
+  DEFAULT_BOOST_SCALE
 } from './constants.js';
 import { getGroundLevelY, groundSurfaceAt, voidUnder } from './physics.js';
 import { vec3Length2D } from './math.js';
@@ -38,7 +39,7 @@ export function tickBoost(fighter, now, action, surfaces = []) {
   // Per-unit drain / regen / cap with global-default fallbacks. Lets a
   // character spec independently tune its boost economy.
   const drain = fighter.unit?.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
-  const kBoost = fighter.boostScale ?? 1;   // (the map's boost scale, constants.js boostScaleOf via state.js createFighter: District 5)
+  const kBoost = fighter.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf via state.js createFighter: 5 on every map)
   const regen = (fighter.unit?.boostRegen ?? BOOST_REGEN_PER_TICK) * kBoost;
   const cap = (fighter.unit?.boostCap ?? BOOST_CAP) * kBoost;
   if (consume) {

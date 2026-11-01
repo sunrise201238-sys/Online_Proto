@@ -34,7 +34,7 @@
 import { between } from './math.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
-import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from './constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick } from './sdbrain.js';
 
@@ -55,7 +55,7 @@ const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg
 const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
 // Pursue / Maze sprint latch: arm at the reserve, release at the floor.
 function botTravelSprint(me) {
-  const k = me.boostScale ?? 1;   // (the map's boost scale, constants.js boostScaleOf: District 5 — every gate here with the gauge)
+  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: 5 on every map — every gate here with the gauge)
   if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
   else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;
@@ -473,7 +473,7 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
 // mechanics, untouched; bots additionally respect the strategic reserve so a
 // hop never leaves them without an emergency dodge.
 function botTryJump(host) {
-  const k = host.me.boostScale ?? 1;
+  const k = host.me.boostScale ?? DEFAULT_BOOST_SCALE;
   const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR * k, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST * k);
   if (host.me.boost < funded) return false;
   return host.startJump();
@@ -489,7 +489,7 @@ function botTryJump(host) {
 // jumps (pursue perch, elevation aids) keep the reserve gate — bots still
 // hoard for the road.
 function botTryJumpSurvival(host) {
-  if (host.me.boost < MANDATED_JUMP_MIN_BOOST * (host.me.boostScale ?? 1)) return false;
+  if (host.me.boost < MANDATED_JUMP_MIN_BOOST * (host.me.boostScale ?? DEFAULT_BOOST_SCALE)) return false;
   return host.startJump();
 }
 
@@ -498,7 +498,7 @@ export function nbBrainTick(host) {
   // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
   // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
   // as the gauge's volume and refill are (movement.js); the costs are not.
-  const kB = me.boostScale ?? 1;
+  const kB = me.boostScale ?? DEFAULT_BOOST_SCALE;
 
   // Sniper-charge lock: stand still until the charge resolves.
   if (host.charging) {

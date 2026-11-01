@@ -1,14 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
+import * as C from '../src/sim/constants.js';
 
 // Travel sprint latch (owner 2026-09-29): a Pursue leg arms only from a full
 // tank (250) and runs down to 200, then the bot walks until the tank is full
 // again. Before, both bounds sat at 250 — Pursue never sprinted and Maze let a
 // single dash tick through every half second (the flickering sprint pose).
-function pursueRun(ms) {
+// Both bounds are times the map's boost scale — 5 on every map since 2026-11-01 (user, "make all maps (scene and concept) grant
+// units 5 times boost"): the latch is read at the unit's own numbers (scale 1, set by hand) and at the scale in play, 1,250 -> 1,000.
+const withDrain = (fn) => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };   // (the PT site's switch, where the tree has one)
+
+function pursueRun(ms, scaleOne = true) {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000, mode: '1v1' });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
+  if (scaleOne) for (const f of [p1, p2]) { f.boost /= f.boostScale; f.boostScale = 1; }   // (the unit's own numbers)
   p1.pos.x = -100; p1.pos.z = 0; p2.pos.x = 100; p2.pos.z = 0;   // 200 u apart on Plain Field: a long straight pursuit
   p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9;
   p1.botControlled = true; p1.targetId = 'p2';
@@ -20,7 +26,7 @@ function pursueRun(ms) {
     ticks.push({ dash: p1.action === 'dash', boostBefore, boost: p1.boost, state: p1.botState ?? 'pursue', x: p1.pos.x });
     now += TICK_RATE_MS;
   }
-  return ticks;
+  return { ticks, k: p1.boostScale };
 }
 
 function dashRuns(ticks) {
@@ -30,8 +36,8 @@ function dashRuns(ticks) {
   return runs;
 }
 
-test('travel sprint latch: a pursuing bot sprints in legs from 250 down to 200, then walks until full — no one-tick dashes', () => {
-  const ticks = pursueRun(3000);
+test('travel sprint latch: a pursuing bot sprints in legs from 250 down to 200, then walks until full — no one-tick dashes', () => withDrain(() => {
+  const { ticks } = pursueRun(3000);
   const pursue = ticks.filter((t) => t.state === 'pursue');
   assert.ok(pursue.length > 150, 'mostly pursue: ' + pursue.length);
   const runs = dashRuns(ticks);
@@ -45,4 +51,20 @@ test('travel sprint latch: a pursuing bot sprints in legs from 250 down to 200, 
   const rearm = ticks.findIndex((t, i) => i > firstWalk && t.dash);
   assert.ok(ticks[rearm].boostBefore >= 250 - 1e-9, 'the next leg arms only from a full tank: ' + ticks[rearm].boostBefore);
   assert.ok(ticks[ticks.length - 1].x > -100 + 40, 'and the bot actually closes distance: ' + ticks[ticks.length - 1].x.toFixed(1));
-});
+}));
+
+test('travel sprint latch at the scale in play (5 on every map): legs from 1,250 down to 1,000, re-armed only from a full tank', () => withDrain(() => {
+  // (an 8 s window: the first leg is ~228 ticks, then a ~42-tick walk, then the second leg from the full tank, still in Pursue)
+  const { ticks, k } = pursueRun(8000, false);
+  assert.equal(k, 5, 'Plain Field plays at five times the gauge');
+  const runs = dashRuns(ticks);
+  assert.ok(runs.length >= 2, 'at least two legs in 8 s: ' + JSON.stringify(runs));
+  assert.ok(runs[0] >= 215 && runs[0] <= 240, 'first leg ~227 ticks (250 boost at 1.1/tick): ' + runs[0]);
+  for (const t of ticks) if (t.dash) assert.ok(t.boostBefore >= 200 * k - 1e-9, 'a dash tick never starts under the 1,000 floor: ' + t.boostBefore);
+  const firstWalk = ticks.findIndex((t, i) => i > 0 && !t.dash && ticks[i - 1].dash);
+  assert.ok(ticks[firstWalk].boost >= 200 * k - 1.2 && ticks[firstWalk].boost <= 200 * k + 0.1, 'the leg ends at the floor: ' + ticks[firstWalk].boost);
+  const rearm = ticks.findIndex((t, i) => i > firstWalk && t.dash);
+  assert.ok(rearm > firstWalk, 'a second leg starts');
+  assert.equal(ticks[rearm].state, 'pursue', 'the second leg is a Pursue leg');
+  assert.ok(ticks[rearm].boostBefore >= 250 * k - 1e-9, 'the next leg arms only from a full tank: ' + ticks[rearm].boostBefore);
+}));

@@ -7,6 +7,7 @@ import {
   MAX_HP,
   BOOST_CAP,
   boostScaleOf,
+  DEFAULT_BOOST_SCALE,
   GROUND_BASE_Y,
   SPAWN_IMMUNITY_MS
 } from './constants.js';
@@ -17,7 +18,7 @@ import { mateSpawnFor } from './spawn.js';
 // in client/src/main.js, minus the Three.js / cannon refs (root, body,
 // thrusters, plumeLight, trail, torso, arms, glintMesh, etc.) which live
 // purely on the client.
-export function createFighter(id, unitKey, spawn, boostScale = 1) {
+export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCALE) {
   const unit = UNIT_DATA[unitKey];
   if (!unit) throw new Error(`Unknown unit: ${unitKey}`);
   return {
@@ -313,7 +314,7 @@ export function respawnFighterNext(matchState, id, at = null) {
   if (!old || !old.roster) return null;
   const nextIdx = old.rosterIdx + 1;
   if (nextIdx >= old.roster.length) return null;
-  const fresh = createFighter(id, old.roster[nextIdx], at ?? matchState.spawnPoints[id], old.boostScale ?? 1);
+  const fresh = createFighter(id, old.roster[nextIdx], at ?? matchState.spawnPoints[id], old.boostScale ?? boostScaleOf(matchState.mapKey));
   fresh.team = old.team;
   fresh.roster = old.roster;
   fresh.rosterIdx = nextIdx;

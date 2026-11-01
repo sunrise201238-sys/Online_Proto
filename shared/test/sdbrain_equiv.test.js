@@ -17,6 +17,11 @@
 // along the wall instead of dropping the route (Town's stairs: a body on a baluster dropped and re-took the same route
 // every tick to the end of the match), so play differs wherever a body brushed a wall on a route: factory, lobby and
 // flashpoint of the six matches here.
+// Played at the boost scale 1 (2026-11-01): every map has 5 since (user, "make all maps (scene and concept) grant units 5 times
+// boost"), and the frozen brains predate the map's scale (b1026m) — they read their gates at the unit's own numbers where the
+// live brain reads them at the fighter's scale. At 1 the two read alike. The gates at the scale in play are other tests': the
+// gauge, its refill, the respawn's scale, the travel leg, the Sudden Death valve and the commanded-travel latch boost_scale.test.js's,
+// every bound of the Pursue latch travel_sprint.test.js's.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
@@ -70,7 +75,7 @@ for (const sc of SCENARIOS) {
   test(`sdbrain equals the frozen brain: ${sc.mapKey} ${sc.p1} vs ${sc.p2} hp ${sc.hp} seed ${sc.seed}`, () => {
     const make = () => {
       const m = createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 });
-      for (const id of ['p1', 'p2']) { m.fighters[id].botSD = true; m.fighters[id].hp = sc.hp; }
+      for (const id of ['p1', 'p2']) { m.fighters[id].botSD = true; m.fighters[id].hp = sc.hp; m.fighters[id].boost /= m.fighters[id].boostScale; m.fighters[id].boostScale = 1; }   // (at the boost scale 1: the header)
       return m;
     };
     const mA = make(), mB = make();

@@ -11,6 +11,11 @@
 // unchanged, and its six matches played equal to the b1026h references before the freeze.
 // Re-frozen at b1021z (freeze_refs.py): the modelled map's rules alter play by design — the bounded wall field, the
 // step height, the one jump threshold, the walk rule — so the ai_b1018a_ref / sdbrain_b1017h_ref pair went with them.
+// Played at the boost scale 1 (2026-11-01): every map has 5 since (user, "make all maps (scene and concept) grant units 5 times
+// boost"), and the frozen brains predate the map's scale (b1026m) — they read their gates at the unit's own numbers where the
+// live brain reads them at the fighter's scale. At 1 the two read alike. The gates at the scale in play are other tests': the
+// gauge, its refill, the respawn's scale, the travel leg, the Sudden Death valve and the commanded-travel latch boost_scale.test.js's,
+// every bound of the Pursue latch travel_sprint.test.js's.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
@@ -61,7 +66,8 @@ const SCENARIOS = [
 
 for (const sc of SCENARIOS) {
   test(`the plain brain equals the frozen brain: ${sc.mapKey} ${sc.p1} vs ${sc.p2} seed ${sc.seed}`, () => {
-    const make = () => createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 });
+    const unscaled = (m) => { for (const f of Object.values(m.fighters)) { f.boost /= f.boostScale; f.boostScale = 1; } return m; };   // (at the boost scale 1: the header)
+    const make = () => unscaled(createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 }));
     const mA = make(), mB = make();
     const rA = mulberry32(sc.seed), rB = mulberry32(sc.seed);
     const realRandom = Math.random;

@@ -799,13 +799,13 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  neon: { name: 'Neon', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's and Compound's — user 2026-11-01)   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
-  compound: { name: 'Compound', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's — user 2026-10-30)   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
+  neon: { name: 'Neon' },   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
+  compound: { name: 'Compound' },   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
   hospital: { name: 'Hospital', thumb: 'top' },   // (the card: the user's own photo of a ward, 2026-10-29 — the picker's wide thumb its upper part, the open door and the desk)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
-  district: { name: 'District', cardNote: 'Unit has more stamina in this map.', noRandom: true },   // (noRandom, user 2026-10-30: "too much of a special map" — a manual pick only, offline and online; the host's Random card rolls the scene maps without it)   // (cardNote: the map's own note on its info card, as a unit's — District's boost scale, user 2026-10-29)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
+  district: { name: 'District', noRandom: true },   // (noRandom, user 2026-10-30: "too much of a special map" — a manual pick only, offline and online; the host's Random card rolls the scene maps without it)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true, thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
@@ -6203,7 +6203,7 @@ function updateHud(now = performance.now()) {
   // that last case used to keep reading the dead player's frozen gauge and
   // magazine while the camera sat on the ally).
   const shown = cameraFocusMech() ?? state.player;
-  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * boostScaleOf(state.mapKey);   // (the map's boost scale: District 5)
+  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: 5 on every map)
   // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
   hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
   // Remaining-units row under each side's HP bar — one small weapon render
@@ -6835,6 +6835,8 @@ function mirrorFighterToMech(fighter, mech) {
   // (phase 3 R1) — coalesce so no gauge math ever sees a non-number.
   // Own-team fighters always carry the real value.
   s.boost = fighter.boost ?? 0;
+  if (fighter.boostScale != null) s.boostScale = fighter.boostScale;   // (the server's scale, which the snapshot carries: the HUD bar and the
+  // command-mode card read it — the mech was built before the online match's map key was set, at the last map's scale, 2026-11-01)
   s.ammo = fighter.ammo;
   s.lastFireAt = fighter.lastFireAt;
   s.bloom = fighter.bloom ?? 0;
@@ -9252,7 +9254,7 @@ function showProfilePopup(card, unit, onConfirm) {
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
 // __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
-  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's stamina, user 2026-10-29)
+  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture; none carries one since 2026-11-01 — District's, Compound's and Neon's stamina notes went when every map took five times the boost, user: "the notice message in map info cards can be removed")
   spawnProfilePopup(card,
     `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
     onConfirm);
@@ -11823,7 +11825,7 @@ function cmdTryStartJump(m, now) {
   const st = m.state;
   if (!m.grounded || st.airborne) return false;
   if (now < st.jumpCooldownUntil) return false;
-  if (st.boost < MANDATED_JUMP_MIN_BOOST * (st.boostScale ?? 1)) return false;
+  if (st.boost < MANDATED_JUMP_MIN_BOOST * (st.boostScale ?? boostScaleOf(state.mapKey))) return false;
   st.boost = Math.max(0, st.boost - (m.unit.jumpBoostCost ?? JUMP_BOOST_COST));
   st.refillPausedUntil = now + 500;
   st.jumpVelocity = m.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
@@ -11911,7 +11913,7 @@ function applyMoveOrder(m, now) {
     for (let k = mv.idx; k < mv.path.length; k += 1) {
       if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
-    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? 1);   // (the map's boost scale: District 5)
+    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: 5 on every map)
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
     // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
@@ -11920,7 +11922,7 @@ function applyMoveOrder(m, now) {
     // threshold before the next dash (owner 2.1b — no repeated one-tick
     // boosts hovering at the floor).
     const st = m.state;
-    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? 1);
+    const armAt = Math.min(DIO_TRAVEL_DASH_ARM, m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));
     if (mv.dashArmed) {
       if (st.boost <= floor || now < (st.emptyRecoverUntil ?? 0)) mv.dashArmed = false;
     } else if (st.boost >= armAt && now >= (st.emptyRecoverUntil ?? 0)) {
@@ -13337,7 +13339,8 @@ function updateDioramaHud() {
     const boostRedacted = !!state.online && getTeamOf(m) !== viewerTeam;
     els.boostEl.parentElement.style.display = boostRedacted ? 'none' : '';
     if (!boostRedacted) {
-      const bCap = m.unit.boostCap ?? BOOST_CAP;
+      const bCap = (m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the gauge at the unit's scale — 5 on every map; the card read 250 as full
+      // until 2026-11-01, so on District, Compound and Neon it sat full through the top four fifths of the gauge)
       els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
     }
     // The old NO SIGHT status line now hosts the command icon(s) (own units;
