@@ -10371,12 +10371,12 @@ const ARENA_SPAWNS = {
   // generator's json. The inner street west, -177,36, was taken out on the user's call the same day, b1026l: nine places.)
   district: { p1: { x: -353, y: GROUND_BASE_Y, z: -510 }, p2: { x: 351, y: GROUND_BASE_Y, z: 202 },
     more: [{ x: 351, y: GROUND_BASE_Y, z: -510 }, { x: -353, y: GROUND_BASE_Y, z: 202 }, { x: -353, y: GROUND_BASE_Y, z: -154 }, { x: 351, y: GROUND_BASE_Y, z: -154 }, { x: -1, y: GROUND_BASE_Y, z: -510 }, { x: -1, y: GROUND_BASE_Y, z: 202 }, { x: -105, y: GROUND_BASE_Y, z: 318 }] },
-  // Neon: the user's six places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
-  // (35.5, 11.5) and four more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —
-  // the third number names the walked floor nearest the user's feet: (45.5, -15.3) lies under a 12.9 m deck the grid also walks,
-  // and without it the tool took the deck. (The first set of eight, 2026-10-31, is gone.)
+  // Neon: the user's places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
+  // (35.5, 11.5) and three more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —
+  // the third number names the walked floor nearest the user's feet. A sixth, at the junction under the 12.9 m deck (model
+  // (-1.1, 36.6)), came out the same day ("remove spot 3"). (The first set of eight, 2026-10-31, is gone.)
   neon: { p1: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 }, p2: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 },
-    more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: 45.5, y: GROUND_BASE_Y, z: -15.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
+    more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
   // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22).
