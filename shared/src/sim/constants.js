@@ -723,9 +723,10 @@ export const BOOST_CAP = 250;
 // THE MAP'S BOOST SCALE (2026-10-29): MAP_DATA[mapKey].boostScale, DEFAULT_BOOST_SCALE where a map names none. state.js createFighter
 // carries it on the fighter, movement.js tickBoost scales the cap and the regen by it, the brains (nbrain.js, sdbrain.js) and
 // command.js their thresholds, the client its own gauge and the HUD's bar; the costs — a dash tick, a jump, a dodge, the sniper's
-// cancel — stay. The default was 1 until 2026-11-01, when every map took 5 (user: "make all maps (scene and concept) grant units 5
-// times boost"; District, Compound and Neon, which named 5 before, keep it) — the Shooting Range, which has no row here, with them.
-export const DEFAULT_BOOST_SCALE = 5;
+// cancel — stay. District, Compound and Neon name 5; every other map, and the Shooting Range, which has no row here, plays at the
+// default, 1. (The default was 5 for part of 2026-11-01 — user: "make all maps (scene and concept) grant units 5 times boost" — and
+// went back to 1 the same day, user: "revert the boost amount and the BOT boost management gates to 1 time in other maps".)
+export const DEFAULT_BOOST_SCALE = 1;
 export const boostScaleOf = (mapKey) => MAP_DATA[mapKey]?.boostScale ?? DEFAULT_BOOST_SCALE;
 export const GROUND_BASE_Y = 2.45;
 // The step: a body walks onto a floor no more than this higher than the one it stands on — no jump. 2.6 units

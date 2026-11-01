@@ -13,8 +13,9 @@
 // step height, the one jump threshold, the walk rule — so the ai_b1018a_ref / sdbrain_b1017h_ref pair went with them.
 // Re-frozen at b1101j (2026-11-01): Defense's commits by trigger went to 1,500 ms (user, "change these three to 1,500 ms (keep
 // their categories)" — a hit, a hit under the locked sniper's charge, the sprint on after the anti-glint dodge), play altered by
-// design. The frozen brains read the map's boost scale as the live one does, so the matches play at the scale in play, 5 on
-// every map (at b1101i they were set to 1 by hand: the b1026k references predated the scale).
+// design. The frozen brains read the map's boost scale as the live one does, so the matches play at the scale in play: each
+// map's own, 1 on every map here (5 while every map took it, part of 2026-11-01; at b1101i they were set to 1 by hand: the
+// b1026k references predated the scale).
 // Re-frozen at b1101k (2026-11-01): Defense stays across the line every tick — a hit, a hit under the locked sniper's charge and
 // the anti-glint dodge's follow-through circle their enemy instead of running straight (user, "all staying vertical"); the
 // sustained-fire re-align with its pull toward the band went with it. Play altered by design.
