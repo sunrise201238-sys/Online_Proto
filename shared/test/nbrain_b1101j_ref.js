@@ -1,4 +1,4 @@
-// FROZEN at b1026k for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1101j for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -37,9 +37,9 @@
 import { between } from '../src/sim/math.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
-import { SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1026k_ref.js';
+import { sdBrainTick } from './sdbrain_b1101j_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -58,13 +58,26 @@ const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg
 const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
 // Pursue / Maze sprint latch: arm at the reserve, release at the floor.
 function botTravelSprint(me) {
-  if (me.boost >= BOT_BOOST_RESERVE) me.botPursueSprinting = true;
-  else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR) me.botPursueSprinting = false;
+  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: 5 on every map — every gate here with the gauge)
+  if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
+  else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;
 }
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
+// DEFENSE'S COMMITS, by trigger (user 2026-11-01, "change these three to 1,500 ms (keep their categories)"): how long the
+// escape sprint across the locked target's line runs at least — after a hit (350 ms until then), after a hit while the locked
+// enemy's sniper charges (600 ms), and on after the anti-glint dodge's step (520 ms). Every tick of the hit's evade window above
+// re-arms the commit, so one hit's Defense runs that window and then the commit, about 1.84 s on open ground; the re-align below
+// runs only inside the window, so the commit after it is a straight line. Reaching cover still ends it early (the tuck, the peek).
+// The dodge's follow-through runs with the Sudden Death brain on too: its legs are the plain Defense's for the step and the commit.
+// The stuck-triggered commit is vestigial: a stuck bot goes to the Maze (since 2026-08-08), and Defense is entered only under
+// fire, where the hit's commit replaces the stuck one on its first tick.
+const BOT_DEFENSE_HIT_MS = 1500;
+const BOT_DEFENSE_SNIPER_MS = 1500;
+const BOT_DEFENSE_STUCK_MS = 1500;
+const BOT_DEFENSE_DODGE_FOLLOW_MS = 1500;
 // Anti-sniper humanization: the bot rolls its reaction PER CHARGE  — a defensive mixed strategy against the sniper's
 // own 50/50 snap/hold coin flip. The slow roll is charger-aware:
 //   ANTI-ARU (bullet snipers): 50% react at 400 ms (i-frames ~400-712 cover
@@ -475,7 +488,8 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
 // mechanics, untouched; bots additionally respect the strategic reserve so a
 // hop never leaves them without an emergency dodge.
 function botTryJump(host) {
-  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST);
+  const k = host.me.boostScale ?? DEFAULT_BOOST_SCALE;
+  const funded = Math.max(BOT_TRAVEL_SPRINT_FLOOR * k, (host.unit?.jumpBoostCost ?? 48) + BOT_SPRINT_MIN_BOOST * k);
   if (host.me.boost < funded) return false;
   return host.startJump();
 }
@@ -490,12 +504,16 @@ function botTryJump(host) {
 // jumps (pursue perch, elevation aids) keep the reserve gate — bots still
 // hoard for the road.
 function botTryJumpSurvival(host) {
-  if (host.me.boost < MANDATED_JUMP_MIN_BOOST) return false;
+  if (host.me.boost < MANDATED_JUMP_MIN_BOOST * (host.me.boostScale ?? DEFAULT_BOOST_SCALE)) return false;
   return host.startJump();
 }
 
 export function nbBrainTick(host) {
   const { now, me, pos, vel, grounded, unit, opp, enemies, obstacles, surfaces, grid, eyeUp, muzzleUp, mode, sd } = host;
+  // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
+  // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
+  // as the gauge's volume and refill are (movement.js); the costs are not.
+  const kB = me.boostScale ?? DEFAULT_BOOST_SCALE;
 
   // Sniper-charge lock: stand still until the charge resolves.
   if (host.charging) {
@@ -569,7 +587,7 @@ export function nbBrainTick(host) {
   // never moves and her bot never knew it was hit; user 2026-10-23.)
   if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botGlintStepAt = null;
 
-  // The dodge comes due: one i-frame step, then a 520 ms sprint in the same
+  // The dodge comes due: one i-frame step, then a BOT_DEFENSE_DODGE_FOLLOW_MS sprint (1,500 ms; 520 before 2026-11-01) in the same
   // direction (the guess/schedule is spent either way). SURVIVAL EXEMPTION
   // (like Defense): gates at the raw step cost only — tryStartStep enforces
   // STEP_BOOST_COST underneath, human-identical — so even a suppressed bot
@@ -601,13 +619,13 @@ export function nbBrainTick(host) {
       }
       if (host.startStep(sdx, sdz)) {
         // "Dodge + sprint": after the i-frame step ends, keep sprinting the
-        // same way for 520 ms via a brief Defense commit (REPLACES any prior
+        // same way for BOT_DEFENSE_DODGE_FOLLOW_MS via a Defense commit (REPLACES any prior
         // Defense countdown by design — live triggers re-arm it afterwards).
         me.botState = 'defense';
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
         me.botDefenseDirAt = now;
-        me.botDefenseUntil = me.stepUntil + 520;
+        me.botDefenseUntil = me.stepUntil + BOT_DEFENSE_DODGE_FOLLOW_MS;
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
         me.botDefensePeekDone = false;
@@ -858,8 +876,8 @@ export function nbBrainTick(host) {
       resetBotHideFields(me);
     }
   } else if (!defenseLive) {
-    // (A live Defense here can only be the anti-glint dodge's 520 ms
-    // follow-up sprint — it keeps its frames; the hide resumes after.)
+    // (A live Defense keeps its frames here — the anti-glint dodge's follow-up (BOT_DEFENSE_DODGE_FOLLOW_MS),
+    // a hit's commit already running when the stance began, or the no-cover escape; the hide resumes after.)
     // Nearest first: eyes[0] is the threat the pacing steers away from.
     const hideEnemies = enemies.slice().sort((a, b) =>
       Math.hypot(a.pos.x - pos.x, a.pos.z - pos.z) - Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z));
@@ -1022,8 +1040,8 @@ export function nbBrainTick(host) {
       // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
       // The dispatch funds it at the 8 floor (its own tier below).
       if (me.botHideDashArmed) {
-        if (me.boost <= BOT_SPRINT_MIN_BOOST) me.botHideDashArmed = false;
-      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR) {
+        if (me.boost <= BOT_SPRINT_MIN_BOOST * kB) me.botHideDashArmed = false;
+      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR * kB) {
         me.botHideDashArmed = true;
       }
       me.botHideHold = false;
@@ -1352,7 +1370,7 @@ export function nbBrainTick(host) {
   // transition runs while the hide block owns the legs (a Maze entry would
   // burn a firing-position plan the hide would never follow, and its exit
   // would route the unit back into sight). Two exceptions: a Defense already
-  // live (the anti-glint dodge's follow-up) runs its grace out first, and
+  // live (the anti-glint dodge's follow-up, or a hit's commit running when the hide began) runs its grace out first, and
   // when NO cover exists anywhere (botHideNoCover) a fresh hit runs the
   // plain Defense escape until a later search finds cover.
   const hideParks = hideMode != null && !(me.botHideNoCover && underFire);
@@ -1497,9 +1515,9 @@ export function nbBrainTick(host) {
       me.botDefenseDirX = dxd;
       me.botDefenseDirZ = dzd;
       me.botDefenseDirAt = now;
-      // Stuck-triggered Defense runs 1.5 s to give the strafe room to break
-      // the wedge; hit/glint-triggered keeps the original 350/600 ms.
-      me.botDefenseUntil = now + (stuckTriggered ? 1500 : (sniperCharging ? 600 : 350));
+      // A hit runs BOT_DEFENSE_HIT_MS, under the locked sniper's charge BOT_DEFENSE_SNIPER_MS (1,500 ms each since 2026-11-01); the
+      // stuck branch is vestigial (BOT_DEFENSE_STUCK_MS: an entry here is a hit's, and the hit's commit replaces it below).
+      me.botDefenseUntil = now + (stuckTriggered ? BOT_DEFENSE_STUCK_MS : (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS));
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
@@ -1530,7 +1548,7 @@ export function nbBrainTick(host) {
       me.botDefenseDirX = dxd2;
       me.botDefenseDirZ = dzd2;
       me.botDefenseDirAt = now;
-      me.botDefenseUntil = now + (sniperCharging ? 600 : 350);
+      me.botDefenseUntil = now + (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefensePeekDone = false;
@@ -1538,7 +1556,7 @@ export function nbBrainTick(host) {
       me.botDefenseFlips = 0;
       me.botDefenseStuckMode = false;
     }
-    const minDur = sniperCharging ? 600 : 350;
+    const minDur = sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS;
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
     }
@@ -1548,8 +1566,9 @@ export function nbBrainTick(host) {
     // the shooter forever. That was the "shorter the lock range, the harder
     // they flee" report: short-LR bots must close through the densest fire,
     // so their Defense chains never break and the tangent-flight runs long.
-    // Re-perpendicularize at most every 400 ms so the bot CIRCLES the
-    // shooter instead. Single-burst Defense (< 400 ms) is untouched.
+    // Re-perpendicularize at most every 400 ms while under fire (the evade
+    // window after each hit) so the bot CIRCLES the shooter instead. A single hit's Defense is never
+    // re-aligned: its commit after the window runs straight (about 1.5 s since 2026-11-01).
     if (now - (me.botDefenseDirAt ?? 0) > 400) {
       const sg3 = me.botOrbitSign ?? (Math.random() > 0.5 ? 1 : -1);
       let dxd3 = sideX * sg3;
@@ -1769,7 +1788,7 @@ export function nbBrainTick(host) {
       // Bank target: the strategic reserve already exceeds jump cost + pad
       // at current tuning; the Math.max keeps the old jump-funding guarantee
       // if the reserve is ever tuned below it.
-      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR, (unit?.jumpBoostCost ?? 48) + 10);
+      const jumpBank = Math.max(BOT_TRAVEL_SPRINT_FLOOR * kB, (unit?.jumpBoostCost ?? 48) + 10);
       wantSprint = botTravelSprint(me) && !(jumpAhead && me.boost < jumpBank);
     } else if (me.botMazeEscapeUntil != null && now < me.botMazeEscapeUntil) {
       // STATUE BACK-OUT (no route, escape armed): reverse along the stored
@@ -1993,9 +2012,9 @@ export function nbBrainTick(host) {
   // funded down to the hard floor too — the latch itself (arm > 50, drop
   // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
   // travel floor — the latch above arms them only from a full tank.
-  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST
-    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST
-    : BOT_TRAVEL_SPRINT_FLOOR;
+  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST * kB
+    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST * kB
+    : BOT_TRAVEL_SPRINT_FLOOR * kB;
   const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
 
   if (sdStepping) {

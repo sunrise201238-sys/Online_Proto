@@ -1,7 +1,7 @@
 // THE PLAIN BRAIN'S EQUIVALENCE TEST (owner 2026-10-17, the plain-brain rework: "one place, one
 // structure, patchless", behaviour unchanged until the price goes in): the Health Point brain in
-// ai.js must play tick for tick what the frozen reference plays (ai_b1021z_ref.js, the host as frozen
-// at b1018a — the dead code gone, the brain itself untouched). Two matches are set up alike, every
+// ai.js must play tick for tick what the frozen reference plays (its frozen copies, *_<tag>_ref.js, made by
+// shared/tools/freeze_refs.py — first the host as frozen at b1018a, the dead code gone, the brain itself untouched). Two matches are set up alike, every
 // random draw comes from the same seeded stream on each side, and after every tick both fighters'
 // whole state must agree to the last digit. Any change of logic — an extra random draw, a condition
 // read a tick earlier, a knob renamed — breaks it.
@@ -11,16 +11,15 @@
 // unchanged, and its six matches played equal to the b1026h references before the freeze.
 // Re-frozen at b1021z (freeze_refs.py): the modelled map's rules alter play by design — the bounded wall field, the
 // step height, the one jump threshold, the walk rule — so the ai_b1018a_ref / sdbrain_b1017h_ref pair went with them.
-// Played at the boost scale 1 (2026-11-01): every map has 5 since (user, "make all maps (scene and concept) grant units 5 times
-// boost"), and the frozen brains predate the map's scale (b1026m) — they read their gates at the unit's own numbers where the
-// live brain reads them at the fighter's scale. At 1 the two read alike. The gates at the scale in play are other tests': the
-// gauge, its refill, the respawn's scale, the travel leg, the Sudden Death valve and the commanded-travel latch boost_scale.test.js's,
-// every bound of the Pursue latch travel_sprint.test.js's.
+// Re-frozen at b1101j (2026-11-01): Defense's commits by trigger went to 1,500 ms (user, "change these three to 1,500 ms (keep
+// their categories)" — a hit, a hit under the locked sniper's charge, the sprint on after the anti-glint dodge), play altered by
+// design. The frozen brains read the map's boost scale as the live one does, so the matches play at the scale in play, 5 on
+// every map (at b1101i they were set to 1 by hand: the b1026k references predated the scale).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1026k_ref.js';
+import { tickBot as tickOld } from './ai_b1101j_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -62,12 +61,12 @@ const SCENARIOS = [
   { mapKey: 'station', p1: 'unit2', p2: 'unit4', seed: 104, ticks: 4000 },
   { mapKey: 'lobby', p1: 'unit9', p2: 'unit1', seed: 105, ticks: 4000 },
   { mapKey: 'flashpoint', p1: 'unit10', p2: 'unit5', seed: 106, ticks: 4000 },
+  { mapKey: 'arena2', p1: 'unit3', p2: 'unit1', seed: 107, ticks: 4000 },   // (the sniper, since 2026-11-01: its charges drive the anti-glint dodge and the sniper-charge commit)
 ];
 
 for (const sc of SCENARIOS) {
   test(`the plain brain equals the frozen brain: ${sc.mapKey} ${sc.p1} vs ${sc.p2} seed ${sc.seed}`, () => {
-    const unscaled = (m) => { for (const f of Object.values(m.fighters)) { f.boost /= f.boostScale; f.boostScale = 1; } return m; };   // (at the boost scale 1: the header)
-    const make = () => unscaled(createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 }));
+    const make = () => createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 });
     const mA = make(), mB = make();
     const rA = mulberry32(sc.seed), rB = mulberry32(sc.seed);
     const realRandom = Math.random;
