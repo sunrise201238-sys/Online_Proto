@@ -43,6 +43,7 @@ const MAP_BOUNDARY = {
   compound:   { halfX: 300.2, halfZ: 348.4, open: ['west', 'north'] },   // cs_compound, the fenced compound and its surroundings (150 x 174 m at 4 units per metre, 1.34 m per model unit, the user's pick with the map scale test); no slab on the west and the north: the model's wall and fences are the edge there (user 2026-10-24)
   hospital:   { halfX: 213.7, halfZ: 191.6 },   // the animal hospital, its lawn and the road east of the fence (107 x 96 m at 4 units per metre; 0.37 m per model unit, the user's pick with the map scale test, 2026-10-28; the served copy scaled to metres); the parking beyond the road's wall stands as background
   district:   { halfX: 393.4, halfZ: 547.4 },   // the Jujutsu Shenanigans city block inside its wall and the station plaza south of it (197 x 274 m at 4 units per metre; 28 m per model unit — the unit is 100 Roblox studs of 0.28 m; the served copy scaled to metres); the dark beside the plaza is walled by the map's VOID data
+  neon:       { halfX: 384, halfZ: 192, ceil: 104 },   // Downtown Echo (miniroyale.io), the model's ground grid: the main street, the cross street, the lots (192 x 96 m at 4 units per metre, 1 m per model unit); ceil 104: no body's feet over 26 m above the street, the skybridge's roof the highest place to stand (user 2026-10-31) — the towers over it carry no boxes
   backrooms:  { halfX: 109.6, halfZ: 114.4, ceil: 15.2 },   // Original Backrooms, the whole hall (55 x 57 m at 4 units per metre, 2 m per model unit)
   backrooms_anomaly:{ halfX: 109.6, halfZ: 114.4, ceil: 15.2 },   // Original Backrooms, the whole hall (55 x 57 m at 4 units per metre, 2 m per model unit)
 };
@@ -10370,6 +10371,12 @@ const ARENA_SPAWNS = {
   // generator's json. The inner street west, -177,36, was taken out on the user's call the same day, b1026l: nine places.)
   district: { p1: { x: -353, y: GROUND_BASE_Y, z: -510 }, p2: { x: 351, y: GROUND_BASE_Y, z: 202 },
     more: [{ x: 351, y: GROUND_BASE_Y, z: -510 }, { x: -353, y: GROUND_BASE_Y, z: 202 }, { x: -353, y: GROUND_BASE_Y, z: -154 }, { x: 351, y: GROUND_BASE_Y, z: -154 }, { x: -1, y: GROUND_BASE_Y, z: -510 }, { x: -1, y: GROUND_BASE_Y, z: 202 }, { x: -105, y: GROUND_BASE_Y, z: 318 }] },
+  // Neon: the user's six places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
+  // (35.5, 11.5) and four more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —
+  // the third number names the walked floor nearest the user's feet: (45.5, -15.3) lies under a 12.9 m deck the grid also walks,
+  // and without it the tool took the deck. (The first set of eight, 2026-10-31, is gone.)
+  neon: { p1: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 }, p2: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 },
+    more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: 45.5, y: GROUND_BASE_Y, z: -15.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
   // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22).
@@ -10487,7 +10494,7 @@ function markFloorTops(arena) {
 //   town, by hand: the stepped block in the roof's middle, model x -41.44..-38.34 z 0.16..3.16: its eleven column boxes above are cut to the roof and it is read as the generator reads a flight — a plane up each side (6.15 -> 7.54 m over 0.97 m), the top a lidded body, skirts along the two ends where the plane stands more than a step over the roof
 //   town, by hand: by hand, the user 2026-10-28, with the slab above: the small building's roof as one floor at 6.15 m — the eleven lids of the stepped block in its middle removed; a plane up each side of the block and its lidded top
 //   spacecraft: 3329 boxes and 1780 floors from restored: the data of 2026-10-24 before the kerb rule by shared/tools/glb_collision.mjs: crop x 62 z -35 (metres) at the origin, 4 units per metre, the street at y 0.
-export const FILE_DATA_MAPS = ['hospital', 'district', 'compound', 'warehouse', 'dust', 'town', 'spacecraft'];
+export const FILE_DATA_MAPS = ['hospital', 'district', 'compound', 'warehouse', 'dust', 'town', 'spacecraft', 'neon'];
 export const generatedDataFile = (mapKey) => `maps/${mapKey}_data.json`;
 export function hasGeneratedData(mapKey) { return !!GENERATED_ARENA_COLLISION_DATA[mapKey]; }
 export function registerGeneratedData(mapKey, data) {
