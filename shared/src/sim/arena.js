@@ -10369,7 +10369,9 @@ const ARENA_SPAWNS = {
   // stood at 63,398 on the backdrop plate behind the station building, which is walled from the city, the forecourt and the
   // platforms alike: a bot spawned there never came out, no bot came in — moved the second day. Set by spawn_set.mjs on the
   // generator's json. The inner street west, -177,36, was taken out on the user's call the same day, b1026l: nine places.)
-  district: { p1: { x: -353, y: GROUND_BASE_Y, z: -510 }, p2: { x: 351, y: GROUND_BASE_Y, z: 202 },
+  // The homes swapped (user 2026-11-02, "swap the initial spawn spot for Team1 and Team2"): team 1 (p1) at the SE corner, team 2
+  // (p2) at the NW — a 2v2 mate beside its own home as before; the nine places, the Trio respawns' pool, unchanged.
+  district: { p1: { x: 351, y: GROUND_BASE_Y, z: 202 }, p2: { x: -353, y: GROUND_BASE_Y, z: -510 },
     more: [{ x: 351, y: GROUND_BASE_Y, z: -510 }, { x: -353, y: GROUND_BASE_Y, z: 202 }, { x: -353, y: GROUND_BASE_Y, z: -154 }, { x: 351, y: GROUND_BASE_Y, z: -154 }, { x: -1, y: GROUND_BASE_Y, z: -510 }, { x: -1, y: GROUND_BASE_Y, z: 202 }, { x: -105, y: GROUND_BASE_Y, z: 318 }] },
   // Neon: the user's places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
   // (35.5, 11.5) and three more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —

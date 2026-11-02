@@ -123,3 +123,18 @@ test('Spacecraft draws its respawn at random among all its places (pick: random)
   }
   assert.equal(drawn.size, all.length - 1, 'every free place drawn over 400 picks');
 });
+
+// District's homes swapped (user 2026-11-02, "swap the initial spawn spot for Team1 and Team2"): team 1 starts at the ring road's
+// south-east corner, team 2 at the north-west — the server's match (createMatchState) and the offline client (the same arena row,
+// getArenaSpawns) alike; each 2v2 mate beside its own home; the respawn pool the same nine places.
+test('District: team 1 starts at the ring road\'s south-east corner, team 2 at the north-west (swapped 2026-11-02)', () => {
+  const sp = getArena('district').spawns;
+  assert.deepEqual([sp.p1.x, sp.p1.z, sp.p2.x, sp.p2.z], [351, 202, -353, -510]);
+  const m = createMatchState({ mapKey: 'district', p1UnitKey: 'unit1', p2UnitKey: 'unit2', p3UnitKey: 'unit4', p4UnitKey: 'unit5', mode: '2v2' });
+  const F = m.fighters, d = (f, p) => Math.hypot(f.pos.x - p.x, f.pos.z - p.z);
+  assert.equal(F.p1.team, 'A'); assert.equal(F.p2.team, 'B');
+  assert.ok(d(F.p1, { x: 351, z: 202 }) < 1e-9, 'team 1 at the south-east corner'); assert.ok(d(F.p2, { x: -353, z: -510 }) < 1e-9, 'team 2 at the north-west');
+  assert.ok(F.p3.team === 'A' && d(F.p3, F.p1.pos) <= 20, 'team 1\'s mate beside its home'); assert.ok(F.p4.team === 'B' && d(F.p4, F.p2.pos) <= 20, 'team 2\'s mate beside its home');
+  const pool = [sp.p1, sp.p2, ...sp.more].map((p) => `${p.x},${p.z}`).sort();
+  assert.deepEqual(pool, ['-1,-510', '-1,202', '-105,318', '-353,-154', '-353,-510', '-353,202', '351,-154', '351,-510', '351,202'].sort(), 'the nine places unchanged');
+});
