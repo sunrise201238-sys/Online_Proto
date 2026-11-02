@@ -577,12 +577,24 @@ body.pseudo-fullscreen #app {
 .unit-profile-popup .unit-note { position: absolute; left: 10px; bottom: 7px; max-width: 108px; font-size: 9px; line-height: 11px; font-weight: 700; color: #ffd76a; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
 .unit-profile-popup .map-note { max-width: 244px; }   /* (a map's note runs under its 260 px picture, one line, user 2026-10-29) */
 
-/* FREE POV (user 2026-10-30): the crosshair at the screen centre — a ring that is the rounds' cone on the screen (--ch-size,
-   set per frame from the spread and the bloom; border-box, so the ring's centre is the screen's); red while it sits on
-   an enemy's body. Shown by the JS (display) while the player's own free pov stands, or drawn at a spectated free-aiming
-   unit's aim point (left/top set per frame). The player's own LIVE free pov (.free-pov-live) hides the TARGET button —
-   no lock to switch; a spectator keeps it to change the watched unit (user 2026-10-30). */
+/* FREE POV (user 2026-10-30): the crosshair at the screen centre — Counter-Strike's classic since 2026-11-02 (the user's
+   pick of four samples: "the traditional counter-strike style crosshair instead of circle crosshair, and keep the bloom
+   expand effect"): four lines, 8 px long and 2 px thick with a 1 px dark edge, their inner ends on the rounds' cone on
+   the screen (--ch-size, its diameter, set per frame from the spread and the bloom — the ring's own size before), so a
+   burst pushes them out and they close back in as the bloom decays; one green whatever it sits on (red over an enemy's
+   body until 2026-11-02 — user: "remove the 'cross hair becomes red when pointing at enemy' effect"). Shown by the JS
+   (display) while the player's own free pov stands, or drawn at a spectated free-aiming unit's aim point. The JS
+   (freePovCrosshairAt) sets left/top, --ch-gap (the cone's radius), --ch-len, --ch-th and --ch-edge every frame, in the
+   same call that shows it: the length, thickness and dark edge as the nearest whole device pixels to FREE_POV's sizes,
+   the centre and the gap on whole pixels for an even thickness or a pixel's middle for an odd one — so every edge is
+   whole and the four lines sit evenly about the centre at any pixel ratio, and their values below are only fallbacks
+   that never paint (the sizes live in FREE_POV; the colours live here). The player's own LIVE free pov
+   (.free-pov-live) hides the TARGET button — no lock to switch; a spectator keeps it to change the watched unit
+   (user 2026-10-30). */
 .touch-hud.free-pov-live .btn-target { display: none; }
-.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --ch-size: 12px; --ch-color: rgba(126, 255, 189, 0.95); }
-.crosshair .ch-ring { position: absolute; box-sizing: border-box; left: calc(var(--ch-size) / -2); top: calc(var(--ch-size) / -2); width: var(--ch-size); height: var(--ch-size); border: 2px solid var(--ch-color); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6), inset 0 0 4px rgba(0, 0, 0, 0.6); }
-.crosshair.on-target { --ch-color: rgba(255, 95, 114, 0.98); }
+.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --ch-size: 12px; --ch-color: rgba(126, 255, 189, 0.95); --ch-gap: calc(var(--ch-size) / 2); --ch-len: 8px; --ch-th: 2px; --ch-edge: 1px; }
+.crosshair i { position: absolute; display: block; background: var(--ch-color); box-shadow: 0 0 0 var(--ch-edge) rgba(0, 0, 0, 0.78); }
+.crosshair .ch-l { width: var(--ch-len); height: var(--ch-th); left: calc(-1 * (var(--ch-gap) + var(--ch-len))); top: calc(var(--ch-th) / -2); }
+.crosshair .ch-r { width: var(--ch-len); height: var(--ch-th); left: var(--ch-gap); top: calc(var(--ch-th) / -2); }
+.crosshair .ch-t { width: var(--ch-th); height: var(--ch-len); left: calc(var(--ch-th) / -2); top: calc(-1 * (var(--ch-gap) + var(--ch-len))); }
+.crosshair .ch-b { width: var(--ch-th); height: var(--ch-len); left: calc(var(--ch-th) / -2); top: var(--ch-gap); }

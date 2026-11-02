@@ -2654,7 +2654,7 @@ function setupHUD() {
     <div class="joy" id="joy"><div class="stick"></div></div>
     <div class="buttons" id="buttons"></div>
     <div class="speed-lines" id="speed-lines"></div>
-    <div class="crosshair" id="crosshair"><div class="ch-ring"></div></div>
+    <div class="crosshair" id="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
   `;
   app.appendChild(hud);
@@ -11096,9 +11096,10 @@ if (typeof window !== 'undefined') {
 // it — on the desktop a mouse (the pointer lock when the page may have it, a drag with a button held otherwise) and a
 // click to fire; on a phone a swipe on the empty screen or a drag on the fire button, the sniper's charge included. The
 // lock is kept but not fired at; the unit turns to the crosshair while it fires or charges and otherwise faces the way
-// it moves, holding its heading when still; the crosshair ring is
-// the rounds' cone drawn on the screen (the base spread plus the bloom, as the rounds sample it) and turns red on an
-// enemy's body. `i`, or two clean taps on the empty screen, toggles; back in angled pov the lock goes to the enemy nearest
+// it moves, holding its heading when still; the crosshair's four lines (Counter-Strike's classic, user 2026-11-02; a
+// ring until then) have their inner ends on the rounds' cone drawn on the screen (the base spread plus the bloom, as the
+// rounds sample it), one green whatever they sit on (red over an enemy's body until 2026-11-02). `i`, or two clean taps
+// on the empty screen, toggles; back in angled pov the lock goes to the enemy nearest
 // the crosshair (ties to the nearer one). Ignored while command mode stands. The same rules offline (updatePlayer, the offline mirrors) and online (the frame's
 // freeAim/aimYaw/aimPitch — tick.js applyInput; the server fires along the aim it is sent).
 // The shot direction is the line from the MUZZLE to the point under the crosshair (the camera ray's first wall, or the
@@ -11113,7 +11114,10 @@ const FREE_POV = {
   pitchMax: 60 * Math.PI / 180,
   lookAhead: 12.5,      // the look point with no lock in sight (else half the distance to the lock, as the angled pov looks)
   aimMax: 400,          // the farthest point under the crosshair
-  crosshairMinPx: 12    // the ring never thinner than this (the cone of a steady rifle is a few px)
+  crosshairMinPx: 12,   // the cone never narrower than this on the screen: the crosshair's lines 6 px from its centre at the least (a steady rifle's cone is a few px)
+  crosshairLinePx: 8,   // each of the crosshair's four lines, in CSS px: its length, its thickness and its dark edge — drawn in the
+  crosshairThickPx: 2,  // nearest whole device pixels (freePovCrosshairAt), so style.css's --ch-len, --ch-th and --ch-edge never show
+  crosshairEdgePx: 1
 };
 const freePovPtr = { screen: null, shoot: null, lastTapAt: 0 };   // (the pointer swiping the screen / dragging the fire button; the last clean tap)
 
@@ -11262,11 +11266,11 @@ function updateFreePovCamera(cam) {
 
 // Every frame after the camera moved. The player's own crosshair (free pov, alive, not spectating): the point under the
 // screen centre — the camera ray's first wall, or the enemy body it crosses before that — the shot's direction from the
-// muzzle to it, the ring's size (the rounds' cone) and colour. SPECTATING a unit in free pov (user 2026-10-30 — online, a
-// dead teammate watching a free-aiming ally; the snapshot carries its aimYaw/aimPitch while it free-aims): that unit's
-// crosshair, drawn where its aim line (from its muzzle to the first wall or enemy) lands on THIS screen, the ring its own
-// cone. The TARGET button hides only for the player's own live free pov (.free-pov-live); a spectator keeps it to change
-// the watched unit.
+// muzzle to it, and the crosshair on that ray, at the canvas's centre, its lines on the rounds' cone (freePovCrosshairAt).
+// SPECTATING a unit in free pov (user 2026-10-30 — online, a dead teammate watching a free-aiming ally; the snapshot
+// carries its aimYaw/aimPitch while it free-aims): that unit's crosshair, drawn where its aim line (from its muzzle to the
+// first wall or enemy) lands on THIS screen, its lines on that unit's own cone. The TARGET button hides only for the
+// player's own live free pov (.free-pov-live); a spectator keeps it to change the watched unit.
 function updateCrosshair() {
   const ch = state.hud?.querySelector('#crosshair');
   const inMatch = state.running || !!state.sdIntro;
@@ -11285,7 +11289,9 @@ function updateCrosshair() {
     state.aim.shotYaw = Math.atan2(sx, sz);
     state.aim.shotPitch = Math.asin(THREE.MathUtils.clamp(sy, -1, 1));
     state.aim.onTarget = hit.onTarget;
-    if (ch) { ch.style.left = '50%'; ch.style.top = '50%'; freePovRing(ch, state.player, hit.onTarget); }
+    // (the canvas's centre, as the spectator's point below is the canvas's: the HUD fills #app, 100vh — taller than the canvas
+    // in a phone tab with its address bar showing, so the HUD's centre, left/top 50% until 2026-11-02, sat half the bar low)
+    if (ch) freePovCrosshairAt(ch, state.player, renderer.domElement.clientWidth / 2, renderer.domElement.clientHeight / 2);
     return;
   }
   const dir = aimDirOf(spectated.state.aimYaw, spectated.state.aimPitch || 0);
@@ -11296,9 +11302,7 @@ function updateCrosshair() {
   if (v.z > 1 || v.z < -1) { ch.style.display = 'none'; return; }   // (behind this camera)
   const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight;
   // (an aim point outside this screen is pinned to its edge, so the spectator still sees which way the unit aims)
-  ch.style.left = `${THREE.MathUtils.clamp((v.x + 1) / 2 * W, 16, W - 16).toFixed(1)}px`;
-  ch.style.top = `${THREE.MathUtils.clamp((1 - v.y) / 2 * H, 16, H - 16).toFixed(1)}px`;
-  freePovRing(ch, spectated, hit.onTarget);
+  freePovCrosshairAt(ch, spectated, THREE.MathUtils.clamp((v.x + 1) / 2 * W, 16, W - 16), THREE.MathUtils.clamp((1 - v.y) / 2 * H, 16, H - 16));
 }
 
 // The point under a ray: its first wall (beamLengthToWall), or the first enemy body it crosses before that — and whether it is one.
@@ -11318,15 +11322,32 @@ function freePovAimPoint(o, d, enemies) {
   return { x: o.x + d.x * L, y: o.y + d.y * L, z: o.z + d.z * L, onTarget };
 }
 
-// The ring: a unit's rounds' cone on this screen — the base spread plus the bloom, as the rounds sample it, projected
-// through the camera's field of view; a shotgun's FIXED at the small base size (user 2026-10-30); never under crosshairMinPx.
-function freePovRing(ch, m, onTarget) {
+// The crosshair at (x, y) on the HUD, in CSS px, sized to a unit's rounds' cone on this screen — the base spread plus the
+// bloom, as the rounds sample it, projected through the camera's field of view; a shotgun's FIXED at the small base size
+// (user 2026-10-30); never under crosshairMinPx. --ch-size is the cone's diameter and --ch-gap its radius: the four lines'
+// inner ends sit on its circle, so the bloom pushes them out (Counter-Strike's classic crosshair, user 2026-11-02; a ring
+// of that diameter until then — style.css). One colour whatever it sits on (red over an enemy's body until 2026-11-02,
+// user: "remove the 'cross hair becomes red when pointing at enemy' effect"). Every edge on a whole device pixel: each
+// line's thickness, length and dark edge are the nearest whole device pixels to FREE_POV's sizes, and the centre and the
+// gap are whole pixels for an even thickness, a pixel's middle for an odd one, so the four lines sit the same distance
+// from the centre on every side at any pixel ratio. A centre or a gap left on a half pixel (half an odd screen, half a
+// cone) had the browser round one side's line in and the other's out: the crosshair lopsided by a pixel.
+function freePovCrosshairAt(ch, m, x, y) {
   const u = m.unit, bl = m.state.bloom || 0;
   const px = u.spreadCount > 1
     ? FREE_POV.crosshairMinPx
     : Math.max(FREE_POV.crosshairMinPx, renderer.domElement.clientHeight * Math.tan(effectiveSpread(u, bl) / 2) / Math.tan(camera.fov * Math.PI / 360));
+  const dpr = window.devicePixelRatio || 1, dev = (n) => `${(n / dpr).toFixed(4)}px`;   // (n device pixels, in CSS px)
+  const whole = (v) => Math.max(1, Math.round(v * dpr));   // (v CSS px as the nearest whole device pixels, one at the least)
+  const th = whole(FREE_POV.crosshairThickPx), half = (th % 2) / 2;
+  const at = (v) => Math.round(v * dpr - half) + half;   // (v CSS px as device px: a whole pixel, or a pixel's middle for an odd thickness)
+  ch.style.left = dev(at(x));
+  ch.style.top = dev(at(y));
   ch.style.setProperty('--ch-size', `${px.toFixed(1)}px`);
-  ch.classList.toggle('on-target', onTarget);
+  ch.style.setProperty('--ch-gap', dev(at(px / 2)));
+  ch.style.setProperty('--ch-len', dev(whole(FREE_POV.crosshairLinePx)));
+  ch.style.setProperty('--ch-th', dev(th));
+  ch.style.setProperty('--ch-edge', dev(whole(FREE_POV.crosshairEdgePx)));
 }
 
 // The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
