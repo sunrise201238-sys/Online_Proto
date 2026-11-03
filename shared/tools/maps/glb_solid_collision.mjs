@@ -1,4 +1,4 @@
-// THE SOLID READING (2026-10-31, the Neon map; user: "use simple geometries for collision boxes", then on the first
+// THE SOLID READING (2026-10-31, the Blockade map; user: "use simple geometries for collision boxes", then on the first
 // readings "the red marked areas are not accurate enough; C-boxes are taking redundant spaces" — a duct's box holding the
 // air inside its bend, a slanted sign's box standing over the sidewalk — "and note that there's a tunnel inside" — a
 // building's box over the passage under it — and "for the angles/locations that units cannot reach, you can skip
@@ -104,17 +104,17 @@ lap(`${tris} triangles of ${parts} parts drawn (${excluded} excluded, ${invisibl
 // Before the flood the slope is drawn into the grid (the cell its plane crosses, in every column of the rectangle) and the
 // cells within half a metre over it are cleared (the treads' noses, a mesh's frame), so a body is flooded up the slope as up a
 // ramp; after it, the generator's floors topping inside the rectangle within the slope's heights go (the treads' lids, a flight's
-// fragments) and the plane is a floor; the boxes under it end at it (user 2026-10-31, "use slope for stairs" — Neon's fire
+// fragments) and the plane is a floor; the boxes under it end at it (user 2026-10-31, "use slope for stairs" — Blockade's fire
 // escapes and the scaffold's mesh ramps, which the generator read as strips and the solid as steps)
 // ---- CLEAR (a map's own data): CLEAR="x0,x1,z0,z1,y0,y1;..." in the model's metres — boxes where the model is not read: a
-// body walks through what the model draws there (Neon's south-east lobby, the V of a beam hanging into the hall's east arm 0.95 m
+// body walks through what the model draws there (Blockade's south-east lobby, the V of a beam hanging into the hall's east arm 0.95 m
 // over its floor, user 2026-10-31: "tunnel entrance blocked")
 const CLEARS = [];
 for (const spec of (process.env.CLEAR ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [cx0, cx1, cz0, cz1, cy0, cy1] = spec.split(',').map(Number); let n = 0; CLEARS.push({ cx0, cx1, cz0, cz1, cy0, cy1 });
   for (let k = Math.max(0, Math.ceil((cy0 - Y0) / V - 0.5)); k <= Math.min(NY - 1, Math.floor((cy1 - Y0) / V - 0.5)); k += 1) for (let j = Math.max(0, Math.ceil((cz0 - Z0) / V - 0.5)); j <= Math.min(NZ - 1, Math.floor((cz1 - Z0) / V - 0.5)); j += 1) for (let i = Math.max(0, Math.ceil((cx0 - X0) / V - 0.5)); i <= Math.min(NX - 1, Math.floor((cx1 - X0) / V - 0.5)); i += 1) { const id = at(i, k, j); if (surf[id]) { surf[id] = 0; fh[id] = 0; n += 1; } }
   lap(`CLEAR x ${cx0}..${cx1} z ${cz0}..${cz1} y ${cy0}..${cy1}: ${n} cells of the model not read`); }
 // ---- FILL (a map's own data): FILL="x0,x1,z0,z1,y0,y1;..." in the model's metres — boxes read as solid whatever the model draws
-// there: a shell's hollow a body got into, made one block (Neon's south-east podium over its lobby, user 2026-11-01: "unit will
+// there: a shell's hollow a body got into, made one block (Blockade's south-east podium over its lobby, user 2026-11-01: "unit will
 // stuck in some kind of layer when jump in this tunnel ... keep it simple, no weird layers inside" — the lobby's ceiling and the
 // shell's partitions and floors over it are CLEARed to 3.2 m, over a jump's reach, and the shell above FILLed to its roof)
 const FILLS = [];
@@ -131,7 +131,7 @@ const fhOf = (id) => (fh[id] ? Y0 + Math.floor(id / LAYER) * V + ((fh[id] - 1) /
 
 // ---- where a body's feet can be: every cell of its box free (BODY_R each side, the column's body height up from the feet; out
 // of the grid is wall). LOW="x0,x1,z0,z1,h;..." (a map's own data, metres of the model): in those rectangles a body h metres
-// tall counts as fitting — a space the model draws lower than a body, which the user wants walked all the same (Neon's south-
+// tall counts as fitting — a space the model draws lower than a body, which the user wants walked all the same (Blockade's south-
 // east lobby, 1.57 m under its ceiling at 1 m a model unit; user 2026-10-31, "open it up, I'll adjust the unit scale later")
 const colH = new Uint8Array(NX * NZ).fill(H); let lowCols = 0;
 for (const spec of (process.env.LOW ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [lx0, lx1, lz0, lz1, lh] = spec.split(',').map(Number); const hl = Math.max(1, Math.round(lh / V));
@@ -229,7 +229,7 @@ for (const r of RAMPS) {
 }
 // ---- FLOORCUT (a map's own data): FLOORCUT="x0,x1,z0,z1,y0,y1;..." in the model's metres — a generator floor whose top lies
 // within y0..y1 loses its part inside the box; what reaches outside stays, as up to four rectangles (a slope keeps its gradient).
-// The generator reads a plane over its whole rectangle when the model draws three quarters of it: Neon's south building's base
+// The generator reads a plane over its whole rectangle when the model draws three quarters of it: Blockade's south building's base
 // plate, 0.48 m, so spread over the alley and the street north of the building's face, where a body walked a third of a metre
 // over the street (user 2026-11-01, "feet 0.48 m" in the alley east of the south door)
 for (const spec of (process.env.FLOORCUT ?? '').split(';').map((s) => s.trim()).filter(Boolean)) { const [cx0, cx1, cz0, cz1, cy0, cy1] = spec.split(',').map(Number); let cutN = 0, parts = 0;
@@ -385,7 +385,7 @@ const genKept = kept.filter((s) => s.type === 'plane' || s.maxTop / SCALE <= STE
       if (hi > o.maxY + PASS_UNDER && lo <= o.maxY + HOLD_OVER) { o.topBuffer = 0.8; eased += 1; break; } } } }
 // ---- MERGE=<m> (m, 0: off): the big things' boxes merged, the floors read above kept as they are. The boxes grown through one
 // block overlap — each as large as the solid allows, nine in ten of the solid's cells under two or more, their cells seventeen
-// times the solid on Neon — and a bevel, a rounded wall, a roof's lips are stacks of quarter-metre steps (user 2026-11-01: "I'm
+// times the solid on Blockade — and a bevel, a rounded wall, a roof's lips are stacks of quarter-metre steps (user 2026-11-01: "I'm
 // concerning about those huge clustered cboxes; many of them could have been merged"). First each box is shrunk to the bounding box
 // of the cells it alone covers, the smallest first, so the largest keep their reach and the others become the slabs around them.
 // Then two boxes that touch become their bounding box when the air it takes in lies no deeper than m from its sides and no deeper

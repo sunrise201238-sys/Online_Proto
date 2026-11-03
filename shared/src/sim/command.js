@@ -291,7 +291,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // reach). tryStartJump paces retries via the bot 1.5 s cooldown floor.
     const wpY = wp ? (wp.y ?? 0) : mv.y;
     if (grounded && wpY - myFloorY > 1.7 && l < 7
-      && f.boost >= MANDATED_JUMP_MIN_BOOST * (f.boostScale ?? DEFAULT_BOOST_SCALE)) {   // (the map's boost scale, state.js: District, Compound and Neon 5 — the tiers with the gauge)
+      && f.boost >= MANDATED_JUMP_MIN_BOOST * (f.boostScale ?? DEFAULT_BOOST_SCALE)) {   // (the map's boost scale, state.js: District, Compound and Blockade 5 — the tiers with the gauge)
       tryStartJump(f, now);
     }
     if (f.airborne || !f.grounded) {

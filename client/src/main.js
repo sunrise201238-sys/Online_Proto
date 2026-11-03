@@ -799,7 +799,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  neon: { name: 'Neon', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's and Compound's — user 2026-11-01)   // (the card: the user's own picture down the main street over the scaffolds, 2026-11-02 — the picker's wide thumb its middle, the default: "Crop the middle part for the thumbnail")   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
+  blockade: { name: 'Blockade', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's and Compound's — user 2026-11-01)   // (the card: the user's own picture down the main street over the scaffolds, 2026-11-02 — the picker's wide thumb its middle, the default: "Crop the middle part for the thumbnail")   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
   compound: { name: 'Compound', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's — user 2026-10-30)   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
@@ -6203,7 +6203,7 @@ function updateHud(now = performance.now()) {
   // that last case used to keep reading the dead player's frozen gauge and
   // magazine while the camera sat on the ally).
   const shown = cameraFocusMech() ?? state.player;
-  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: District, Compound and Neon 5)
+  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: District, Compound and Blockade 5)
   // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
   hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
   // Remaining-units row under each side's HP bar — one small weapon render
@@ -9254,7 +9254,7 @@ function showProfilePopup(card, unit, onConfirm) {
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
 // __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
-  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's, Compound's and Neon's stamina, user 2026-10-29; off for part of 2026-11-01 while every map had their boost, back with the three maps' own the same day)
+  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's, Compound's and Blockade's stamina, user 2026-10-29; off for part of 2026-11-01 while every map had their boost, back with the three maps' own the same day)
   spawnProfilePopup(card,
     `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
     onConfirm);
@@ -10484,7 +10484,7 @@ function applyMapAmbience(mapKey) {
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false },   // (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
   district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
-  neon: { file: 'maps/neon', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick)
+  blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, edge: false, cmdDark: true },   // (the shooter view's tone the daylight one, as Warehouse's — user 2026-11-01; Factory's night tone from 2026-10-19 to then. Command mode stays black: cmdDark)
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
@@ -11934,7 +11934,7 @@ function applyMoveOrder(m, now) {
     for (let k = mv.idx; k < mv.path.length; k += 1) {
       if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
-    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District, Compound and Neon 5)
+    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District, Compound and Blockade 5)
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
     // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
@@ -13360,7 +13360,7 @@ function updateDioramaHud() {
     const boostRedacted = !!state.online && getTeamOf(m) !== viewerTeam;
     els.boostEl.parentElement.style.display = boostRedacted ? 'none' : '';
     if (!boostRedacted) {
-      const bCap = (m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the gauge at the unit's scale — 5 on District, Compound and Neon; the card read 250 as
+      const bCap = (m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the gauge at the unit's scale — 5 on District, Compound and Blockade; the card read 250 as
       // full until 2026-11-01, so on those three it sat full through the top four fifths of the gauge)
       els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
     }

@@ -1,16 +1,16 @@
 // A map's data with one rectangle read afresh and everything else kept as it was: the boxes and the floors of <with.json> inside
 // the rectangle (model metres, x0,x1,z0,z1), those of <base.json> outside it; an entry across the rectangle's edge cut along it
 // (a box or a flat floor into rectangles, a slope's y0 and maxTop read again for each piece). Both files the solid reading's
-// output for the same map (the same transform and crop). Made for Neon's scaffold copy (user 2026-11-02): the solid reading of
+// output for the same map (the same transform and crop). Made for Blockade's scaffold copy (user 2026-11-02): the solid reading of
 // the model with the copy re-cut the boxes and floors of the ORIGINAL scaffold where the copy touches it — its boxes are grown
 // largest-first over the whole map and the flood fills a gap a body cannot pass, so the two touch in the cells — and the
 // original's walls opened a 14 cm slot at their bottom rail's top; the copy's rectangle alone is taken from that reading, the
 // rest of the map is the reading it had.
 // An optional height band, h0,h1 (metres over the street), makes the rectangle a box: a box entry is cut at the band's floor and
 // ceiling too, and a floor is the new reading's when its height is in the band, the old one's otherwise (a slope across the band's
-// edge is refused). Neon's scaffold edits (user 2026-11-02, the catwalk between the two walkways at 8.6 m): the new reading had
+// edge is refused). Blockade's scaffold edits (user 2026-11-02, the catwalk between the two walkways at 8.6 m): the new reading had
 // re-cut the wall under the catwalk's end, 8 m below it, so the catwalk's rectangle is taken from 7.5 m up only.
-// `none` for <with.json> empties the rectangle: nothing taken, the old reading's boxes and floors in it cut away (Neon's sign over
+// `none` for <with.json> empties the rectangle: nothing taken, the old reading's boxes and floors in it cut away (Blockade's sign over
 // the green container, user 2026-11-02: "these few cboxes should be as high as the container").
 // usage: node data_region.mjs <base.json> <with.json|none> <x0,x1,z0,z1[,h0,h1]> <out.json>
 import { readFileSync, writeFileSync } from 'node:fs';

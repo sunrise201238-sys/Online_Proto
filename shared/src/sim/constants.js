@@ -698,7 +698,7 @@ export const MAP_DATA = {
   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
   town: { id: 'town', name: 'Town' },
   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block.
-  neon: { id: 'neon', name: 'Neon', boostScale: 5 },   // (five times the gauge and its refill, as District and Compound — user 2026-11-01)
+  blockade: { id: 'blockade', name: 'Blockade', boostScale: 5 },   // (five times the gauge and its refill, as District and Compound — user 2026-11-01)
   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   compound: { id: 'compound', name: 'Compound', boostScale: 5 },   // (five times the gauge and its refill, as District — user 2026-10-30)
   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
@@ -723,7 +723,7 @@ export const BOOST_CAP = 250;
 // THE MAP'S BOOST SCALE (2026-10-29): MAP_DATA[mapKey].boostScale, DEFAULT_BOOST_SCALE where a map names none. state.js createFighter
 // carries it on the fighter, movement.js tickBoost scales the cap and the regen by it, the brains (nbrain.js, sdbrain.js) and
 // command.js their thresholds, the client its own gauge and the HUD's bar; the costs — a dash tick, a jump, a dodge, the sniper's
-// cancel — stay. District, Compound and Neon name 5; every other map, and the Shooting Range, which has no row here, plays at the
+// cancel — stay. District, Compound and Blockade name 5; every other map, and the Shooting Range, which has no row here, plays at the
 // default, 1. (The default was 5 for part of 2026-11-01 — user: "make all maps (scene and concept) grant units 5 times boost" — and
 // went back to 1 the same day, user: "revert the boost amount and the BOT boost management gates to 1 time in other maps".)
 export const DEFAULT_BOOST_SCALE = 1;
