@@ -1,5 +1,6 @@
 // A map's boost scale (constants.js MAP_DATA boostScale, DEFAULT_BOOST_SCALE — 1 — where a map names none): District's gauge and
-// refill five times, the bots' gates with them (user 2026-10-29), then Compound's (2026-10-30) and Blockade's (2026-11-01); every other
+// refill five times, the bots' gates with them (user 2026-10-29), then Compound's (2026-10-30), and Blockade's from 2026-11-01 until
+// 2026-11-03 (user: "remove the 5 times boost feature in Blockade": it plays at 1 again); every other
 // map, scene and concept, plays at 1 (every map took 5 for part of 2026-11-01 and went back the same day, user: "keep current 5
 // times boost ... for below map: Neon, Compound, District. Revert the boost amount and the BOT boost management gates to 1 time in
 // other maps"). The fighter's gauge starts full at the scale, refills at the scale, keeps its scale through a Trio respawn; the
@@ -12,17 +13,17 @@ import * as C from '../src/sim/constants.js';
 import { createMatchState, tickMatch, tickBot, tickCommandDriver, setMoveOrder, getCommands, commandTargetIdOf, pickBotTargetId, emptyInput, respawnFighterNext, getArena, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 
 const withDrain = (fn) => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };   // (the PT site's switch, where the tree has one)
-const FIVE = ['blockade', 'compound', 'district'];   // (the maps that name 5)
+const FIVE = ['compound', 'district'];   // (the maps that name 5 — Blockade's went on 2026-11-03)
 const rescale = (f, k) => { f.boost = (f.boost / f.boostScale) * k; f.boostScale = k; };   // (a scale set by hand, the gauge with it)
 
-test('boost scale: Blockade, Compound and District five times, every other map at 1 — every row of MAP_DATA, scene and concept, and a map with no row (the Shooting Range)', () => {
+test('boost scale: Compound and District five times, every other map at 1, Blockade among them since 2026-11-03 — every row of MAP_DATA, scene and concept, and a map with no row (the Shooting Range)', () => {
   assert.equal(C.DEFAULT_BOOST_SCALE, 1);
   for (const key of FIVE) assert.equal(C.MAP_DATA[key]?.boostScale, 5, `${key} names 5`);
   for (const key of Object.keys(C.MAP_DATA)) assert.equal(C.boostScaleOf(key), FIVE.includes(key) ? 5 : 1, key);
   assert.equal(C.boostScaleOf('range'), 1, 'the Shooting Range, the client\'s alone, has no row');
   const d = createMatchState({ mapKey: 'district', p1UnitKey: 'unit1', p2UnitKey: 'unit2', mode: '2v2' });
   for (const id of ['p1', 'p2', 'p3', 'p4']) { assert.equal(d.fighters[id].boostScale, 5, id); assert.equal(d.fighters[id].boost, 1250, id + ' boost'); }
-  for (const [mapKey, k] of [['blockade', 5], ['compound', 5], ['town', 1], ['arena1', 1], ['station', 1]]) {
+  for (const [mapKey, k] of [['blockade', 1], ['compound', 5], ['town', 1], ['arena1', 1], ['station', 1]]) {
     const t = createMatchState({ mapKey, p1UnitKey: 'unit1', p2UnitKey: 'unit2' });
     for (const id of ['p1', 'p2']) { assert.equal(t.fighters[id].boostScale, k, `${mapKey} ${id}`); assert.equal(t.fighters[id].boost, 250 * k, `${mapKey} ${id} boost`); }
   }
@@ -88,7 +89,7 @@ test('boost scale: the refill is five times a tick and the cap five times — Di
 
 test('boost scale: the plain brain\'s travel sprint leg runs the scaled reserve down to the scaled floor', () => withDrain(() => {
   // (the travel sprint latch test's pursuit on Plain Field, the scale set by hand on the pursuer: a leg of 1250 -> 1000 at
-  //  District's, Compound's and Blockade's 5, 250 -> 200 at Plain Field's own 1)
+  //  District's and Compound's 5, 250 -> 200 at Plain Field's own 1)
   const legs = (k) => { const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000, mode: '1v1' }); const p1 = m.fighters.p1, p2 = m.fighters.p2;
     p1.pos.x = -100; p1.pos.z = 0; p2.pos.x = 100; p2.pos.z = 0; p1.invulnerableUntil = 0; p2.invulnerableUntil = 0; p1.hp = 1e9; p2.hp = 1e9; p1.botControlled = true; p1.targetId = 'p2';
     p1.boostScale = k; p1.boost = 250 * k;

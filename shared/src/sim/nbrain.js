@@ -55,7 +55,7 @@ const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg
 const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
 // Pursue / Maze sprint latch: arm at the reserve, release at the floor.
 function botTravelSprint(me) {
-  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: District, Compound and Blockade 5 — every gate here with the gauge)
+  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: District and Compound 5 — every gate here with the gauge)
   if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
   else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;

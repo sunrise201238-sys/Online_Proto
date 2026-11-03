@@ -799,7 +799,7 @@ const MAP_DATA = {
   flashpoint: { name: 'Flashpoint' },
   airport: { name: 'Airport' },
   town: { name: 'Town' },   // Cut from the Invasion Map glTF (2026-10-18, README: Maps): the town block.
-  blockade: { name: 'Blockade', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's and Compound's — user 2026-11-01)   // (the card: the user's own picture down the main street over the scaffolds, 2026-11-02 — the picker's wide thumb its middle, the default: "Crop the middle part for the thumbnail")   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
+  blockade: { name: 'Blockade' },   // (no stamina note: its boost scale is the default 1 again — it had District's and Compound's 5 and their note from 2026-11-01 until 2026-11-03, user: "remove the 5 times boost feature in Blockade")   // (the card: the user's own picture down the main street over the scaffolds, 2026-11-02 — the picker's wide thumb its middle, the default: "Crop the middle part for the thumbnail")   // Cut from the Downtown Echo glTF (miniroyale.io, 2026-10-31, README: Maps): a neon city block — a main street and a cross street in a T, the back lots behind the shops, towers over every block; 1 m per model unit, a ceiling 26 m over the street (user 2026-10-31).
   compound: { name: 'Compound', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's — user 2026-10-30)   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
@@ -6203,7 +6203,7 @@ function updateHud(now = performance.now()) {
   // that last case used to keep reading the dead player's frozen gauge and
   // magazine while the camera sat on the ally).
   const shown = cameraFocusMech() ?? state.player;
-  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: District, Compound and Blockade 5)
+  const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: District and Compound 5)
   // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
   hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
   // Remaining-units row under each side's HP bar — one small weapon render
@@ -9254,7 +9254,7 @@ function showProfilePopup(card, unit, onConfirm) {
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
 // __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
-  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's, Compound's and Blockade's stamina, user 2026-10-29; off for part of 2026-11-01 while every map had their boost, back with the three maps' own the same day)
+  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's and Compound's stamina, user 2026-10-29 (Blockade's too from 2026-11-01 until 2026-11-03); off for part of 2026-11-01 while every map had their boost, back with the maps' own the same day)
   spawnProfilePopup(card,
     `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
     onConfirm);
@@ -11934,7 +11934,7 @@ function applyMoveOrder(m, now) {
     for (let k = mv.idx; k < mv.path.length; k += 1) {
       if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
-    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District, Compound and Blockade 5)
+    const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District and Compound 5)
     // DASH to the assigned area in LATCHED segments — same sprint math as
     // the bot's own (base speed + inherited momentum), no fabricated
     // multiplier. The latch arms once boost reaches DIO_TRAVEL_DASH_ARM
@@ -13360,8 +13360,8 @@ function updateDioramaHud() {
     const boostRedacted = !!state.online && getTeamOf(m) !== viewerTeam;
     els.boostEl.parentElement.style.display = boostRedacted ? 'none' : '';
     if (!boostRedacted) {
-      const bCap = (m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the gauge at the unit's scale — 5 on District, Compound and Blockade; the card read 250 as
-      // full until 2026-11-01, so on those three it sat full through the top four fifths of the gauge)
+      const bCap = (m.unit.boostCap ?? BOOST_CAP) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the gauge at the unit's scale — 5 on District and Compound; the card read 250 as
+      // full until 2026-11-01, so on the maps at 5 it sat full through the top four fifths of the gauge)
       els.boostEl.style.width = `${THREE.MathUtils.clamp(m.state.boost / bCap, 0, 1) * 100}%`;
     }
     // The old NO SIGHT status line now hosts the command icon(s) (own units;

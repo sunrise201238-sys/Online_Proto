@@ -7,7 +7,7 @@ import * as C from '../src/sim/constants.js';
 // tank (250) and runs down to 200, then the bot walks until the tank is full
 // again. Before, both bounds sat at 250 — Pursue never sprinted and Maze let a
 // single dash tick through every half second (the flickering sprint pose).
-// Both bounds are times the map's boost scale — District, Compound and Blockade 5, every other map 1 (constants.js): the latch is read
+// Both bounds are times the map's boost scale — District and Compound 5, every other map 1 (constants.js): the latch is read
 // at Plain Field's own 1 and at 5, set by hand on the same pursuit, 1,250 -> 1,000.
 const withDrain = (fn) => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };   // (the PT site's switch, where the tree has one)
 
@@ -54,7 +54,7 @@ test('travel sprint latch: a pursuing bot sprints in legs from 250 down to 200, 
   assert.ok(ticks[ticks.length - 1].x > -100 + 40, 'and the bot actually closes distance: ' + ticks[ticks.length - 1].x.toFixed(1));
 }));
 
-test('travel sprint latch at five times the gauge (District\'s, Compound\'s and Blockade\'s scale, set by hand): legs from 1,250 down to 1,000, re-armed only from a full tank', () => withDrain(() => {
+test('travel sprint latch at five times the gauge (District\'s and Compound\'s scale, set by hand): legs from 1,250 down to 1,000, re-armed only from a full tank', () => withDrain(() => {
   // (an 8 s window: the first leg is ~228 ticks, then a ~42-tick walk, then the second leg from the full tank, still in Pursue)
   const { ticks, k } = pursueRun(8000, 5);
   assert.equal(k, 5, 'the pursuit plays at five times the gauge');
