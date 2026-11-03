@@ -221,6 +221,10 @@ const BOT_PERCH_MIN_WIDTH = 6;
 // AND its statue-escape replay: the two must stay identical or the replay's
 // waypoint comparison silently stops matching. 
 const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
+// SAME FLOOR: two heights (a body's floor, a waypoint's, the enemy's) under this apart are one floor — a kerb, a step, a
+// slab's rise; more is another storey, and a distance measured in the plan (x, z) alone says nothing about reaching it. The
+// vertical stack, the regained sight, the in-band arrival and the final waypoint all ask it (2026-11-03, b1102s).
+const BOT_SAME_FLOOR_RISE = 2.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -1405,7 +1409,7 @@ export function nbBrainTick(host) {
     const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry
       && (inBandDist
         || (walkTowardClear(Math.min(dist, 50))
-          && Math.abs(oppFloorY - myFloorY) < 2.5));
+          && Math.abs(oppFloorY - myFloorY) < BOT_SAME_FLOOR_RISE));
     const visibleEntryDone = !me.botMazeLosBlockedAtEntry
       && (now - (me.botStateEnteredAt ?? now)) > 3000;
     if (losReacquired || visibleEntryDone) {
@@ -1620,7 +1624,7 @@ export function nbBrainTick(host) {
     // reversal every ~0.4 s, no net progress). Backing off does nothing
     // about a vertical gap, so suppress the retreat and let the router (now
     // multi-layer) take the bot to the other level.
-    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > BOT_SAME_FLOOR_RISE;
     const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
@@ -1680,7 +1684,7 @@ export function nbBrainTick(host) {
     // from the tracks below, which dropped every climb path and ground the
     // bot into the edge wall forever.
     if (playerHasLoS && dist <= optimalRange
-        && Math.abs(oppFloorY - myFloorY) < 2.5) {
+        && Math.abs(oppFloorY - myFloorY) < BOT_SAME_FLOOR_RISE) {
       const goalWp = nav && nav.path[nav.path.length - 1];
       const goalCloser = goalWp
         && Math.hypot(opp.pos.x - goalWp.x, opp.pos.z - goalWp.z) < dist - 4;
@@ -1696,9 +1700,17 @@ export function nbBrainTick(host) {
     // trigger every 2 s, which keeps re-selecting maze and STARVES the
     // exit branch forever (the Plain Field never-orbits bug). The minimal
     // fallback covers the remaining ticks until the exit fires.
+    // Reached means on the destination's floor as well as near it in the
+    // plan (BOT_SAME_FLOOR_RISE): a route up a stair to a firing spot on the
+    // floor above passes right under that spot, and read in the plan alone
+    // the bot had arrived there, dropped the route and beelined back under
+    // its enemy, again and again — then re-planned every tick on the spot
+    // (Compound's big building, its enemy on the second floor; user
+    // 2026-11-03, "the unit cannot break through a back and forth loop").
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
-      if (Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
+      const onItsFloor = lastWp.y == null || Math.abs(lastWp.y - myFloorY) < BOT_SAME_FLOOR_RISE;
+      if (onItsFloor && Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
         // Arrived — but if the trip did NOT buy sight of the target, dropping
         // to the pathless fallback sends the bot beelining back where it came
         // from (the Streets under-bridge out-and-back loop). Ask for a fresh
