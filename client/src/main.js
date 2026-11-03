@@ -17493,7 +17493,7 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne);
+        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne, m.state.action === 'dash');   // (a sprint in place is not still: mirrors the shared tick, user 2026-11-03)
         tickBloomOffline(m, now);
         tickSniperCharge(m, now,
           (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);

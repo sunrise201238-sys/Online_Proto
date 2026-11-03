@@ -83,6 +83,68 @@ test('standing still: no bloom per shot, and recovery runs even mid-burst', () =
   void atStop;
 });
 
+// Sprint held with no direction (user 2026-11-03): the unit stays put at speed 0 but sprints (action 'dash', the gauge
+// drains) — it is not standing still, so its shots bloom. The flag only ever clears the standing stamp, so no way of
+// sprinting adds more than one bloomPerShot a shot: in place, with a direction, pressed into a wall or sliding along
+// one (a wall's push-out zeroes the velocity, which used to count a sprinter there as still too), every sprint blooms
+// shot for shot like a walk across open ground.
+test('sprinting in place blooms like any moving shooter; a sprint with a direction, in the open or at a wall, blooms no more than an open walk', () => {
+  // p1 on arena1, 30 u from p2: stands past the 200 ms dwell, then holds the trigger and this move for `ms`; the bloom
+  // right after each shot. `z` puts it by the arena's -z boundary (about -120), p2 alongside at -100.
+  const shotBlooms = (unitKey, { moveX = 0, moveZ = 0, sprint = false, z = null, ms = 1000 } = {}) => {
+    const { m, p1, p2 } = duel(unitKey, 30);
+    if (z !== null) { p1.pos.z = z; p2.pos.z = -100; }
+    let now = 1000, last = p1.lastFireAt; const seq = [], acts = new Set();
+    const input = () => { const i = hold(false); i.moveX = moveX; i.moveZ = moveZ; if (sprint) i.boost = true; return i; };
+    const run = (t, inp, rec = true) => { for (let i = 0; i < t / TICK_RATE_MS; i += 1) {
+      tickMatch(m, { p1: inp(), p2: emptyInput() }, now, TICK_DT, ['p2']);
+      p1.ammo = Math.max(p1.ammo, 2); p1.boost = Math.max(p1.boost, 50);   // the trigger rule, not the reload nor an empty gauge
+      if (rec) { acts.add(p1.action); if (p1.lastFireAt !== last) { seq.push(p1.bloom); last = p1.lastFireAt; } }
+      now += TICK_RATE_MS; } };
+    run(320, () => emptyInput(), false);
+    last = p1.lastFireAt;
+    const x0 = p1.pos.x, z0 = p1.pos.z;
+    run(ms, input);
+    return { seq, acts: [...acts], p1, run, moved: Math.hypot(p1.pos.x - x0, p1.pos.z - z0) };
+  };
+  const oneShotAtMost = (seq, unitKey, label) => seq.forEach((b, i) =>
+    assert.ok(b - (i ? seq[i - 1] : 0) <= UNIT_DATA[unitKey].bloomPerShot + 1e-12, `${unitKey} ${label}: shot ${i} adds more than one bloomPerShot`));
+  for (const unitKey of ['unit1', 'unit4', 'unit7']) {
+    const walk = shotBlooms(unitKey, { moveZ: 1 });
+    const inPlace = shotBlooms(unitKey, { sprint: true });
+    const sprintDir = shotBlooms(unitKey, { moveZ: 1, sprint: true });
+    assert.deepEqual(inPlace.acts, ['dash'], unitKey + ' sprinting in place every tick');
+    assert.ok(inPlace.moved < 0.01, unitKey + ' in place: moved ' + inPlace.moved);
+    assert.ok(inPlace.seq.length >= 3, unitKey + ' shots ' + inPlace.seq.length);
+    assert.ok(inPlace.seq.at(-1) > 0, unitKey + ' sprinting in place blooms: ' + inPlace.seq.at(-1));
+    assert.deepEqual(inPlace.seq, walk.seq, unitKey + ' in place = an open walk, shot for shot');
+    assert.deepEqual(sprintDir.seq, walk.seq, unitKey + ' a sprint with a direction blooms no more than a walk');
+    oneShotAtMost(sprintDir.seq, unitKey, 'sprint with a direction');
+  }
+  for (const unitKey of ['unit1', 'unit4']) {
+    const walk = shotBlooms(unitKey, { moveZ: 1 });
+    const into = shotBlooms(unitKey, { moveZ: -1, sprint: true, z: -116 });
+    const slide = shotBlooms(unitKey, { moveX: 0.6, moveZ: -0.8, sprint: true, z: -116 });
+    const beside = shotBlooms(unitKey, { sprint: true, z: -118.85 });
+    assert.ok(into.moved < 4, unitKey + ' into the wall: stopped by it, moved ' + into.moved);
+    assert.ok(slide.moved > 10, unitKey + ' along the wall: slid ' + slide.moved);
+    for (const [label, r] of [['into the wall', into], ['along the wall', slide], ['in place by the wall', beside]]) {
+      assert.deepEqual(r.seq, walk.seq, `${unitKey} sprint ${label} = an open walk, shot for shot`);
+      oneShotAtMost(r.seq, unitKey, 'sprint ' + label);
+    }
+  }
+  // Letting go of the sprint while standing: still again after the dwell — its shots add nothing, the bloom drains mid-burst.
+  const after = shotBlooms('unit1', { sprint: true });
+  assert.ok(after.p1.bloom > 0, 'carried bloom ' + after.p1.bloom);
+  after.run(320, () => hold(false));      // let go, keep firing: the dwell
+  const settled = after.p1.bloom, from = after.seq.length;
+  after.run(400, () => hold(false));
+  const tail = after.seq.slice(from);
+  assert.ok(tail.length >= 3, 'shots after the dwell ' + tail.length);
+  tail.forEach((b, i) => assert.ok(b <= (i ? tail[i - 1] : settled), 'standing after the sprint: shot ' + i + ' adds no bloom'));
+  assert.ok(after.p1.bloom < settled, 'standing after the sprint: recovering while firing ' + after.p1.bloom + ' < ' + settled);
+});
+
 test('sure-hit closed form and the bot gate', () => {
   assert.equal(sureHitDistance(0.02), 160);
   assert.equal(+sureHitDistance(0.06).toFixed(1), 53.3);

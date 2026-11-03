@@ -124,8 +124,13 @@ export function botClearFireRule(bot) {
 // fighter's horizontal speed and grounded flag BEFORE the bloom step:
 // `stillSince` stamps the moment a grounded fighter dropped under
 // BLOOM_STILL_SPEED and clears the instant it moves or leaves the ground.
-export function tickStillness(bot, now, speed, grounded) {
-  if (grounded && speed < BLOOM_STILL_SPEED) { if (!bot.stillSince) bot.stillSince = now; }
+// `sprinting` (user 2026-11-03): a fighter sprinting is never still, even in
+// place — sprint held with no direction leaves it at speed 0, and its shots
+// had no bloom. It only ever clears the stamp, so a sprinter blooms like any
+// moving shooter, one bloomPerShot a shot and never more — at a wall too,
+// whose push-out zeroes the speed (that used to count a sprinter there still).
+export function tickStillness(bot, now, speed, grounded, sprinting = false) {
+  if (grounded && !sprinting && speed < BLOOM_STILL_SPEED) { if (!bot.stillSince) bot.stillSince = now; }
   else bot.stillSince = 0;
 }
 

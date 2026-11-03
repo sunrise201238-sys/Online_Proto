@@ -329,7 +329,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 1. Per-fighter pre-tick (ammo, spread bloom recovery, sniper charge timer).
   for (const f of fighters) {
     tickAmmo(f, now);
-    tickStillness(f, now, Math.hypot(f.vel.x, f.vel.z), !f.airborne);   // last tick's motion — a 200 ms dwell makes the lag moot
+    tickStillness(f, now, Math.hypot(f.vel.x, f.vel.z), !f.airborne, f.action === 'dash');   // last tick's motion — a 200 ms dwell makes the lag moot; a sprint, even in place, is not still (user 2026-11-03; action rides every snapshot, so the prediction agrees)
     tickBloom(f, now, dt);
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null, arena.obstacles);
   }

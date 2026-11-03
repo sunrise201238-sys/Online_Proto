@@ -799,7 +799,8 @@ export const BOT_SUPPRESS_BURST = 5;
 // Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
 // ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least
 // BLOOM_STILL_DWELL_MS fires without adding bloom, and its bloom recovers
-// even while it keeps firing (the recovery delay is skipped).
+// even while it keeps firing (the recovery delay is skipped). A sprinting
+// fighter is never still, even sprinting in place (user 2026-11-03).
 export const BLOOM_STILL_SPEED = 1;
 export const BLOOM_STILL_DWELL_MS = 200;
 export const HIT_STUN_MS = 100;
