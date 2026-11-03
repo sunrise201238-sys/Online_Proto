@@ -325,6 +325,26 @@ export const makeMuzzleClear = (obstacles, surfaces) => (p0, p1) => {
 
 const SILHOUETTE_TOP = HIT_HALF_HEIGHT + HIT_RADIUS_NORMAL;   // the capsule's top above its centre
 
+// THE SILHOUETTE TEST — one test, both brains (this brain's every eye in sdSeenAt; the plain brain's Defense cover, nbrain.js;
+// user 2026-11-03): does `eye` reach the capsule standing at (x, z) with its centre at y (the muzzle line's height), along
+// `clear` (the host's round line: a round from a to b, the rounds' own obstacles and floors)? The capsule's outline as the
+// eye sees it — the front toward the eye, both shoulders across the eye's line, the top, the four shoulder corners where the
+// straight part meets the caps — so its width and its height count, not one line through its middle.
+export function silhouetteSeenFrom(eye, x, z, y, clear) {
+  let ux = eye.x - x, uz = eye.z - z;
+  const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
+  const R = HIT_RADIUS_NORMAL, H = HIT_HALF_HEIGHT;
+  const lx = x - uz * R, lz = z + ux * R, rx = x + uz * R, rz = z - ux * R;
+  return clear(eye, { x: x + ux * R, y, z: z + uz * R })
+    || clear(eye, { x: lx, y, z: lz })
+    || clear(eye, { x: rx, y, z: rz })
+    || clear(eye, { x, y: y + SILHOUETTE_TOP, z })
+    || clear(eye, { x: lx, y: y + H, z: lz })
+    || clear(eye, { x: rx, y: y + H, z: rz })
+    || clear(eye, { x: lx, y: y - H, z: lz })
+    || clear(eye, { x: rx, y: y - H, z: rz });
+}
+
 // ===================== THE TICK =====================
 export function sdBrainTick(host) {
   const { now, SD, me, opp, obstacles, dist, sideX, sideZ, myFloorY, myShotY, avoid, avoidMag } = host;
@@ -376,28 +396,12 @@ export function sdBrainTick(host) {
   const sdEyes = sdEyesAt(mePos.x, mePos.z, 0);   // (the eyes of this moment, for the route search's cost shaping)
   // THE SILHOUETTE at (x, z) on floor fy (the muzzle line's height is the
   // capsule's centre), reached tMs from now (the sprint there, unless
-  // given): the capsule's outline as the eye sees it — the front toward the
-  // eye, both shoulders across the eye's line, the four shoulder corners
-  // where the straight part meets the caps, the top. Hidden when no eye of
-  // that moment reaches any of them. Returns the eye that sees it, or null.
+  // given): the silhouette test above (silhouetteSeenFrom) from every eye of
+  // that moment. Hidden when none reaches it. Returns the eye that sees it, or null.
   const sdSeenAt = (x, z, fy, tMs = Math.hypot(x - mePos.x, z - mePos.z) / sdSprint * 1000) => {
     const y = fy + GROUND_BASE_Y + MUZZLE_H;
     const eyes = sdEyesAt(x, z, tMs);
-    for (let i = 0; i < eyes.length; i += 1) {
-      const eye = eyes[i];
-      let ux = eye.x - x, uz = eye.z - z;
-      const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
-      const R = HIT_RADIUS_NORMAL, H = HIT_HALF_HEIGHT;
-      const lx = x - uz * R, lz = z + ux * R, rx = x + uz * R, rz = z - ux * R;
-      if (sdClear(eye, { x: x + ux * R, y, z: z + uz * R })) return eye;
-      if (sdClear(eye, { x: lx, y, z: lz })) return eye;
-      if (sdClear(eye, { x: rx, y, z: rz })) return eye;
-      if (sdClear(eye, { x, y: y + SILHOUETTE_TOP, z })) return eye;
-      if (sdClear(eye, { x: lx, y: y + H, z: lz })) return eye;
-      if (sdClear(eye, { x: rx, y: y + H, z: rz })) return eye;
-      if (sdClear(eye, { x: lx, y: y - H, z: lz })) return eye;
-      if (sdClear(eye, { x: rx, y: y - H, z: rz })) return eye;
-    }
+    for (let i = 0; i < eyes.length; i += 1) if (silhouetteSeenFrom(eyes[i], x, z, y, sdClear)) return eyes[i];
     return null;
   };
   const sdHiddenAt = (x, z, fy, tMs) => sdSeenAt(x, z, fy, tMs) == null;

@@ -19,11 +19,15 @@
 // Re-frozen at b1101k (2026-11-01): Defense stays across the line every tick — a hit, a hit under the locked sniper's charge and
 // the anti-glint dodge's follow-through circle their enemy instead of running straight (user, "all staying vertical"); the
 // sustained-fire re-align with its pull toward the band went with it. Play altered by design.
+// Re-frozen at b1102o (2026-11-03): Defense's cover is the Sudden Death brain's silhouette test from the locked target's muzzle
+// (sdbrain.js silhouetteSeenFrom, both brains), and a hit while tucked or peeking breaks it for the rest of that Defense (user:
+// "the BOT just stood there and take consist damages"); the seven matches played equal to the b1101k references before the
+// change. Play altered by design.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1101k_ref.js';
+import { tickBot as tickOld } from './ai_b1102o_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

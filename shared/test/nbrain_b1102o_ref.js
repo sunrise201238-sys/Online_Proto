@@ -1,4 +1,4 @@
-// FROZEN at b1101k for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1102o for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick } from './sdbrain_b1101k_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1102o_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -58,7 +58,7 @@ const BOT_BOOST_RESERVE = 250;   // 150 -> 250 (2026-08-01): a travel sprint leg
 const BOT_TRAVEL_SPRINT_FLOOR = 200;   // owner 2026-09-29: an armed leg runs down to here, then walk until full again; discretionary jumps fund from this line too (arm and floor both sat at 250 before: one dash tick per half second)
 // Pursue / Maze sprint latch: arm at the reserve, release at the floor.
 function botTravelSprint(me) {
-  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: 5 on every map — every gate here with the gauge)
+  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;   // (the map's boost scale, constants.js boostScaleOf: District and Compound 5 — every gate here with the gauge)
   if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
   else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;
@@ -632,6 +632,7 @@ export function nbBrainTick(host) {
         me.botDefenseRefLife = (glintAtk ?? opp).invulnerableUntil;   // (this life of it: a respawn stamps a new one)
         me.botDefenseInCover = false;
         me.botDefenseCoverAt = 0;
+        me.botDefenseCoverBroken = false;
         me.botDefensePeekDone = false;
         me.botDefenseStuckTicks = 0;
         me.botDefenseFlips = 0;
@@ -710,7 +711,8 @@ export function nbBrainTick(host) {
     pos.x + dirX * len, pos.z + dirZ * len,
     pos.y, obstacles
   );
-  if ((me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0)) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
+  const freshHit = (me.lastHitAt ?? 0) > (me.botPrevHitAt ?? 0);   // (the hit's rising edge: the evade window here, Defense's hit-in-cover rule below)
+  if (freshHit) me.botHitEvadeUntil = now + BOT_HIT_EVADE_MS;
   me.botPrevHitAt = me.lastHitAt ?? 0;
   // Defense (cover-sprint) triggers on a FRESH HIT only. The SNIPER GLINT no
   // longer triggers Defense — the bot's sole response to a glint is the
@@ -1526,6 +1528,7 @@ export function nbBrainTick(host) {
       me.botDefenseUntil = now + (stuckTriggered ? BOT_DEFENSE_STUCK_MS : (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS));
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
+      me.botDefenseCoverBroken = false;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
       me.botDefenseFlips = 0;
@@ -1559,10 +1562,18 @@ export function nbBrainTick(host) {
       me.botDefenseUntil = now + (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
+      me.botDefenseCoverBroken = false;
       me.botDefensePeekDone = false;
       me.botDefenseStuckTicks = 0;
       me.botDefenseFlips = 0;
       me.botDefenseStuckMode = false;
+    }
+    // A HIT IN COVER IS NO COVER (user 2026-11-03, "the BOT just stood there and take consist damages"): a round that lands on a
+    // tucked or peeking bot proves the spot exposed — the tuck is dropped and this Defense runs on as the escape sprint, its cover
+    // broken until the next Defense (botDefenseCoverBroken, reset with the episode's other fields).
+    if (freshHit && me.botDefenseInCover) {
+      me.botDefenseInCover = false;
+      me.botDefenseCoverBroken = true;
     }
     const minDur = sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS;
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
@@ -1899,7 +1910,15 @@ export function nbBrainTick(host) {
     mz = me.botDefenseDirZ ?? sideZ;
     wantSprint = true;
 
-    if (!me.botDefenseInCover && obstacleNear && !playerHasLoS) {
+    // THE COVER (user 2026-11-03): the spot hides the body from the locked target's rounds — the silhouette test both brains share
+    // (sdbrain.js silhouetteSeenFrom: the capsule's front, both shoulders, the top and the four shoulder corners, its centre at
+    // the muzzle line's height, along the host's round line from the target's muzzle). It was the bot's eye line (playerHasLoS),
+    // which runs 1.6 over the body — under its own chest (2.35) and the muzzle (3.15) — through the body's middle only: low cover
+    // and an exposed flank read as cover while the rounds kept landing. A Defense whose cover broke (a hit in cover, above) does
+    // not tuck again.
+    const coverFromTarget = () => !silhouetteSeenFrom({ x: opp.pos.x, y: opp.pos.y + muzzleUp, z: opp.pos.z },
+      pos.x, pos.z, myFloorY + GROUND_BASE_Y + muzzleUp, host.clear);
+    if (!me.botDefenseInCover && !me.botDefenseCoverBroken && obstacleNear && coverFromTarget()) {
       me.botDefenseInCover = true;
       me.botDefenseCoverAt = now;
       me.botDefensePeekDone = false;
