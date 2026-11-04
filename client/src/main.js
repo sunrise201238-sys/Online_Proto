@@ -53,7 +53,7 @@ import {
   getArena,
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
-import { BOT_SD } from '@gvg/shared/src/sim/ai.js';
+import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
 import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
 import { coverDistanceAt, deserializeNavGrid, navDataSignature, navDataFile } from '@gvg/shared/src/sim/navgrid.js';
 import { boxHoldsAt } from '@gvg/shared/src/sim/physics.js';   // (the one hold window, the shared sim's: a box whose top is a floor lets a body within a step of that top come, so the ground rule steps it up — this file's mirror lacked that clause, and offline a body was pushed off a chair row's side before it could step on; user 2026-10-29)
@@ -5272,8 +5272,9 @@ function sdDeathReport(mech, why = 'died', secs = 5) {
 // the Sudden Death brain inside it), one brain for the server and the
 // client. This host hands it the unit's body, its enemies (the true
 // fighters: the player and any 2v2 enemy), the arena and the body's
-// actions, and runs the client's own physics after it: the hover floor,
-// the momentum, the hit-stun slowdown, the boost tick. runBotAIForMech
+// actions, and runs the client's own physics after it: the hover floor, the
+// bots' body rules (the reload hold and the hit-stun — shared with the server,
+// ai.js botBodyRules), the momentum, the boost tick. runBotAIForMech
 // aliases state.enemy / state.player to drive any bot mech.
 const botMechIds = new WeakMap();
 let botMechSeq = 0;
@@ -5383,17 +5384,13 @@ function updateEnemy(now) {
   if (mech.grounded && now > eState.hoverUntil && eState.action !== 'jump') {
     mech.body.velocity.y = 0;
   }
-  applyMomentum(mech);
-  // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
-  // weapon's move-scale, stored on the victim) while stunned rather than
-  // freezing. Applied AFTER momentum so sprint + momentum scale together,
-  // matching the player's velocity exactly.
-  // The reload hold (shared actions.js reloadHolds; mirrors ai.js): whatever the brain set, a unit changing its magazine stands.
-  if (reloadHolds(mech.unit, eState, now)) { mech.body.velocity.x = 0; mech.body.velocity.z = 0; eState.momentumVX = 0; eState.momentumVZ = 0; if (eState.action === 'dash') eState.action = 'idle'; }   // (a 'dash' left standing drained the gauge and played the sprint clip — user 2026-10-23)
-  if (now < eState.hitStunUntil) {
-    mech.body.velocity.x *= eState.hitStunScale;
-    mech.body.velocity.z *= eState.hitStunScale;
-  }
+  // The bots' body rules (shared ai.js botBodyRules — the server's tickBot runs the same): the reload hold and the hit-stun on
+  // what the brain set; then the momentum paid out, held back on a tick the dodge's step still runs — the server's order and
+  // rule (tickMatch after tickBot: applyMomentum suspended on 'step'). Paid out mid-step, a Sudden Death dodge started inside
+  // the brain carried the sprint's momentum through its lerp offline where the server held it (user 2026-11-04, "everything
+  // online should be identical to offline").
+  botBodyRules(mech.body.velocity, eState, mech.unit, now);
+  applyMomentum(mech, { suspend: ran === 'stepping' });
   if (ran !== 'stepping') updateBoost(mech, now, eState.action);   // (the step's own update ran in botTickStep)
 }
 

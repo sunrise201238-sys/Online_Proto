@@ -2,8 +2,9 @@
 // Health Point brain, with the Sudden Death brain sdbrain.js inside it); this
 // file finds the unit and its target, builds the host the brain reads and
 // acts through, and keeps the server's own pieces: the nav-grid cache, the
-// 2v2 target pick, the per-fighter Sudden Death overrides, the hit-stun
-// slowdown after the brain's velocity.
+// 2v2 target pick, the per-fighter Sudden Death overrides. The bots' body
+// rules after the brain (the reload hold, the hit-stun) are botBodyRules
+// below, which the offline client's host runs too.
 
 import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from './actions.js';
 import { getArena } from './arena.js';
@@ -139,15 +140,23 @@ export function tickBot(matchState, botId, now) {
     deadline: () => matchState.searchDeadline ?? 0,
     tape: null
   });
-  // The reload hold (actions.js reloadHolds): whatever the brain set, a unit changing its magazine stands — and a sprint the
-  // brain asked for is withdrawn with it: 'dash' would drain the gauge (movement.js) and play the sprint clip on a standing body
-  // (user 2026-10-23, "the bot's reload motion is wrong"). A step or a jump in flight keeps its action.
-  if (reloadHolds(me.unit, me, now)) { me.vel.x = 0; me.vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }   // (the momentum too: the brain's sprint had banked some)
-  // Hit-stun parity: the player keeps moving at a reduced speed (the hitting
-  // weapon's move-scale, stored on the victim) while stunned rather than
-  // freezing — the host's physics, applied to whatever velocity the brain set.
-  if (now < me.hitStunUntil) {
-    me.vel.x *= me.hitStunScale;
-    me.vel.z *= me.hitStunScale;
-  }
+  botBodyRules(me.vel, me, me.unit, now);   // (the reload hold and the hit-stun on what the brain set; tickMatch pays the momentum out after)
+}
+
+// THE BOTS' BODY RULES — one place for both hosts (user 2026-11-04, "Implement option B"): what the host's physics does to
+// whatever velocity the brain set, before the momentum is paid out. The server's tickBot above runs it (tickMatch pays the
+// momentum after), and the offline client's updateEnemy (main.js, its applyMomentum after), so a bot's body answers alike on
+// both. `vel` is the body's velocity (the sim fighter's vel, the client's physics body's), `me` the bot's state (the fighter,
+// the client's mech state), `unit` its unit data (the client's state carries none).
+//   The reload hold (actions.js reloadHolds): a unit changing its magazine stands — and a sprint the brain asked for is
+//   withdrawn with it: 'dash' would drain the gauge (movement.js) and play the sprint clip on a standing body (user 2026-10-23,
+//   "the bot's reload motion is wrong"); the momentum the sprint banked goes too. A step or a jump in flight keeps its action.
+//   The hit-stun: the hitting weapon's move-scale, stored on the victim, on the brain's velocity — the unit moves on slowed,
+//   not frozen. The momentum the host pays out after is not scaled: a sprinting bot keeps the carried part the brain banked
+//   from its unslowed speed (at 0.25 about 70% of its sprint), where a player's sprint banks its momentum from the slowed
+//   speed and is slowed in full. The offline host had scaled the momentum too, so a stunned sprinting bot kept a quarter of
+//   its speed there and about 70% online (user 2026-11-04, "the mismatch between online and offline bullet stun").
+export function botBodyRules(vel, me, unit, now) {
+  if (reloadHolds(unit, me, now)) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }
+  if (now < me.hitStunUntil) { vel.x *= me.hitStunScale; vel.z *= me.hitStunScale; }
 }
