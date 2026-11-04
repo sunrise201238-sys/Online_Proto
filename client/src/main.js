@@ -1666,7 +1666,7 @@ const MODEL_CLIPS_DEFAULT = {
   reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
   hit: null,
   death: { name: 'Vital_Death', speed: 1, once: true },
-  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in eight files (Kurumi, Rabu, Subaru, Yuuka; Aris, Aru, Fubuki, Kei since their new files, the same day); the rest borrow Kurumi's (borrowClimbClip); the body is turned about in it — CLIMB_CLIP_TURNED
+  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in twelve files (Kurumi, Rabu, Subaru, Yuuka; Aris, Aru, Fubuki, Kei, Haruka, Hina, Koyuki, Hoshino — hers 01_Vital_Retreat — since their new files, the same day); the rest borrow Kurumi's (borrowClimbClip); the body is turned about in it — CLIMB_CLIP_TURNED
 };
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
@@ -1735,7 +1735,7 @@ const UNIT_MODELS = {
       reload: { name: '01_Normal_Attack_Delay', speed: 1, fit: 'reload', once: true },
       hit: null,
       death: { name: '01_Vital_Death', speed: 1, once: true },
-      climb: { name: 'Vital_Retreat', speed: 2.5 },
+      climb: { name: '01_Vital_Retreat', speed: 2.5 },   // (her new file's own, user 2026-11-05: "For Hoshino, use 01_Vital_Retreat")
     },
   },
   // (Aris's form, 2026-10-10: a flight unit. Standing is Formation_Idle; walking on the
