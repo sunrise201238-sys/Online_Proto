@@ -9,7 +9,7 @@
 import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from './actions.js';
 import { getArena } from './arena.js';
 import { buildNavGrid, deserializeNavGrid, navDataSignature } from './navgrid.js';
-import { inheritMomentum } from './movement.js';
+import { inheritMomentum, hitStunMoveScale } from './movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from './constants.js';
 import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain.js';
 import { makeMuzzleClear, BOT_SD } from './sdbrain.js';
@@ -151,12 +151,14 @@ export function tickBot(matchState, botId, now) {
 //   The reload hold (actions.js reloadHolds): a unit changing its magazine stands — and a sprint the brain asked for is
 //   withdrawn with it: 'dash' would drain the gauge (movement.js) and play the sprint clip on a standing body (user 2026-10-23,
 //   "the bot's reload motion is wrong"); the momentum the sprint banked goes too. A step or a jump in flight keeps its action.
-//   The hit-stun: the hitting weapon's move-scale, stored on the victim, on the brain's velocity — the unit moves on slowed,
-//   not frozen. The momentum the host pays out after is not scaled: a sprinting bot keeps the carried part the brain banked
-//   from its unslowed speed (at 0.25 about 70% of its sprint), where a player's sprint banks its momentum from the slowed
-//   speed and is slowed in full. The offline host had scaled the momentum too, so a stunned sprinting bot kept a quarter of
-//   its speed there and about 70% online (user 2026-11-04, "the mismatch between online and offline bullet stun").
+//   The hit-stun: the hitting weapon's move-scale, stored on the victim (movement.js hitStunMoveScale), on the brain's
+//   velocity — the unit moves on slowed, not frozen. The momentum is not this function's: the brain banked a sprint's
+//   momentum at the same scale (nbrain.js), so the host pays it out as it is, and a stunned bot walks and sprints at the
+//   scale as a stunned player does (tick.js applyInput, the offline updatePlayer). Until then the brain banked it from the
+//   unslowed speed, and the stun did not reach that part of a sprinting bot's speed — online always, offline since b1104d;
+//   before b1104d the offline host slowed the summed velocity, as a player's (user 2026-11-04).
 export function botBodyRules(vel, me, unit, now) {
   if (reloadHolds(unit, me, now)) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }
-  if (now < me.hitStunUntil) { vel.x *= me.hitStunScale; vel.z *= me.hitStunScale; }
+  const k = hitStunMoveScale(me, now);
+  vel.x *= k; vel.z *= k;
 }

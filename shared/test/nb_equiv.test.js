@@ -32,7 +32,9 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // the seven matches played equal to the b1102o references before the change.
 // Re-frozen at b1104c (2026-11-04): Defense's four commits 1,000 ms (user: "Change these four from 1500ms to 1000ms.");
 // the seven matches played equal to the b1104b references before the change.
-import { tickBot as tickOld } from './ai_b1104c_ref.js';
+// Re-frozen at b1104e (2026-11-04): a stunned bot's sprint banks its momentum at the stun's move-scale, as a player's (user:
+// "Fix it then"); the seven matches played equal to the b1104c references before the change.
+import { tickBot as tickOld } from './ai_b1104e_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

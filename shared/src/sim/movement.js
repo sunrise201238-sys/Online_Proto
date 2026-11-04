@@ -64,6 +64,12 @@ export function inheritMomentum(fighter, momentumValue = MOMENTUM_STANDARD) {
   fighter.momentumVZ = fighter.vel.z * factor;
 }
 
+// The hit-stun's move-scale on a body at `now` (the stun projectiles.js applyHitStun lands) — the running stun's, else 1: what
+// its walk and sprint run at. A bot reads it twice a tick where a player's applyInput reads it once: the brain banks a
+// sprint's momentum at it (nbrain.js) and botBodyRules (ai.js) slows the velocity by it, so a stunned bot walks and sprints at
+// the scale as a stunned player does (user 2026-11-04). Here, a leaf of the sim, so the brain imports it without a cycle.
+export function hitStunMoveScale(body, now) { return now < body.hitStunUntil ? body.hitStunScale : 1; }
+
 // Add residual momentum on top of velocity, decay it. Mirrors applyMomentum.
 export function applyMomentum(fighter, { suspend = false } = {}) {
   if (suspend) return;

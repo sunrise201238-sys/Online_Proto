@@ -37,6 +37,7 @@ import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './na
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick, silhouetteSeenFrom } from './sdbrain.js';
+import { hitStunMoveScale } from './movement.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -2078,7 +2079,11 @@ export function nbBrainTick(host) {
   } else if (wantSprint && botCanSprint) {
     vel.x = mx * botSprintBase;
     vel.z = mz * botSprintBase;
-    host.inheritMomentum(MOMENTUM_STANDARD * 1.5);
+    // The sprint's momentum banked at the stun's move-scale (user 2026-11-04): a player's dash banks its momentum from its
+    // stunned speed (tick.js applyInput: the input's speed times the stun, then startDash), and the bot's velocity is slowed
+    // only after the brain (ai.js botBodyRules) — banked here from the unslowed speed, the momentum went on unslowed, and the
+    // stun did not reach that part of a sprinting bot's speed. Now a stunned sprinting bot runs at the scale, as a player.
+    host.inheritMomentum(MOMENTUM_STANDARD * 1.5 * hitStunMoveScale(me, now));
     me.action = 'dash';
   } else {
     vel.x = mx * botWalkSpeed;

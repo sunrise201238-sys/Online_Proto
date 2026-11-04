@@ -1,4 +1,4 @@
-// FROZEN at b1104c for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1104e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,8 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104c_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104e_ref.js';
+import { hitStunMoveScale } from '../src/sim/movement.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -2081,7 +2082,11 @@ export function nbBrainTick(host) {
   } else if (wantSprint && botCanSprint) {
     vel.x = mx * botSprintBase;
     vel.z = mz * botSprintBase;
-    host.inheritMomentum(MOMENTUM_STANDARD * 1.5);
+    // The sprint's momentum banked at the stun's move-scale (user 2026-11-04): a player's dash banks its momentum from its
+    // stunned speed (tick.js applyInput: the input's speed times the stun, then startDash), and the bot's velocity is slowed
+    // only after the brain (ai.js botBodyRules) — banked here from the unslowed speed, the momentum went on unslowed, and the
+    // stun did not reach that part of a sprinting bot's speed. Now a stunned sprinting bot runs at the scale, as a player.
+    host.inheritMomentum(MOMENTUM_STANDARD * 1.5 * hitStunMoveScale(me, now));
     me.action = 'dash';
   } else {
     vel.x = mx * botWalkSpeed;
