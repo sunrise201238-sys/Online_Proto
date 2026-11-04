@@ -79,7 +79,6 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     plantUntil: 0,
 
     // Dash.
-    dashRecoverUntil: 0,
     antiMeleeUntil: 0,
 
     // Lock-cut from step (homing-evade).

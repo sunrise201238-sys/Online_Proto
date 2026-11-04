@@ -1,8 +1,7 @@
 // Per-fighter action logic: ammo/reload tick, sniper charge, fire gating,
 // step (dodge), jump, dash defense, evasion. Pure-JS port of tickAmmo,
 // attemptFire, tickSniperCharge, clearIncomingHoming, triggerEnemyEvasion,
-// triggerDashDefense, and the step/jump bookkeeping from updatePlayer in
-// main.js.
+// and the step/jump bookkeeping from updatePlayer in main.js.
 
 import {
   STEP_DISTANCE,
@@ -15,7 +14,6 @@ import {
   JUMP_HOVER_MS,
   JUMP_COOLDOWN_MS,
   ANTI_MELEE_WINDOW_MS,
-  DASH_RECOVER_MS,
   MOMENTUM_STANDARD,
   GROUND_BASE_Y,
   SNIPER_CANCEL_BOOST_COST,
@@ -202,10 +200,6 @@ export function clearIncomingHoming(matchState, fighter, now) {
   }
 }
 
-export function triggerDashDefense(fighter, now) {
-  fighter.dashRecoverUntil = now + DASH_RECOVER_MS;
-}
-
 // Try to start a step (dodge). Returns true if step started.
 // Every step stat is per-unit tunable (unit.stepBoostCost / stepDurationMs /
 // stepCooldownMs / stepDistance), falling back to the STEP_* globals — same
@@ -288,7 +282,9 @@ export function tickStep(fighter, now, obstacles) {
 // Per-unit jump tunables — fall back to globals if a unit doesn't override.
 // v0 sets peak height (≈ v² / (2·|gravity|)); hover holds the apex;
 // cooldown gates the next jump; boostCost gates entry.
-export function tryStartJump(fighter, now) {
+// `carry`: the velocity the jump banks 0.7 of — the velocity the body had as the tick began (user 2026-11-04, "make player unit aligned with BOT"): the bot's brain jumps before its dispatch sets the tick's velocity, so it carried its last tick's speed, sprint momentum and all; a player's input had set this tick's velocity first, so a player's jump carried the bare input speed. Default the body's velocity as it stands
+// (the bot's case); applyInput passes the one it had before this tick's input.
+export function tryStartJump(fighter, now, carry = fighter.vel) {
   const jumpBoostCost = fighter.unit?.jumpBoostCost ?? JUMP_BOOST_COST;
   const jumpVelocity = fighter.unit?.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
   const jumpHoverMs = fighter.unit?.jumpHoverMs ?? JUMP_HOVER_MS;
@@ -307,12 +303,11 @@ export function tryStartJump(fighter, now) {
   // bots have no flight AI and play her grounded). Units with real
   // cooldowns are unaffected (their own value wins the max).
   fighter.jumpCooldownUntil = now + Math.max(jumpCooldownMs, fighter.botControlled ? 1500 : 250);
-  inheritMomentum(fighter, 70);
+  inheritMomentum(fighter, 70, carry);
   return true;
 }
 
 export function startDash(fighter, now) {
   fighter.antiMeleeUntil = now + ANTI_MELEE_WINDOW_MS;
   inheritMomentum(fighter, MOMENTUM_STANDARD * 1.5);
-  triggerDashDefense(fighter, now);
 }

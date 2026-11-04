@@ -58,10 +58,11 @@ export function tickBoost(fighter, now, action, surfaces = []) {
 
 // Snapshot the velocity magnitude as future momentum (e.g. when initiating
 // a dash, the dash's residual momentum is based on current velocity).
-export function inheritMomentum(fighter, momentumValue = MOMENTUM_STANDARD) {
+// `from`: the velocity to bank from, the body's own by default (a jump passes the one the tick began with, actions.js tryStartJump).
+export function inheritMomentum(fighter, momentumValue = MOMENTUM_STANDARD, from = fighter.vel) {
   const factor = momentumValue / MOMENTUM_STANDARD;
-  fighter.momentumVX = fighter.vel.x * factor;
-  fighter.momentumVZ = fighter.vel.z * factor;
+  fighter.momentumVX = from.x * factor;
+  fighter.momentumVZ = from.z * factor;
 }
 
 // The hit-stun's move-scale on a body at `now` (the stun projectiles.js applyHitStun lands) — the running stun's, else 1: what

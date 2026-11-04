@@ -36,7 +36,6 @@ export {
   attemptFire,
   tickSniperCharge,
   clearIncomingHoming,
-  triggerDashDefense,
   tryStartStep,
   tickStep,
   tryStartJump,

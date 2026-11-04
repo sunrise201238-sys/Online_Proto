@@ -934,9 +934,6 @@ export const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Anti-melee window granted on dash start (ms).
 export const ANTI_MELEE_WINDOW_MS = 260;
 
-// Dash-defense recovery window (player slowed for this long after dash).
-export const DASH_RECOVER_MS = 180;
-
 // --- COMMAND MODE (phase 3): one source for the client preview AND the
 // server authority — the offline diorama reads these too. Owner-tuned:
 // dash segments are latched (arm at 125, spend down to the 50 reserve

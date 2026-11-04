@@ -2420,7 +2420,6 @@ function createMech(color, unitData, isOwnUnit = false) {
       staggerUntil: 0,
       evadeHomingUntil: 0,
       evadeCooldownUntil: 0,
-      dashRecoverUntil: 0,
       antiMeleeUntil: 0,
       meleeCooldownUntil: 0,
       meleeStrikeUntil: 0,
@@ -4842,7 +4841,6 @@ function updatePlayer(now) {
   const move = forward.clone().multiplyScalar(-input.y).add(right.multiplyScalar(input.x));
   const moveMag = Math.hypot(input.x, input.y);
 
-  const recoveringFromDash = now < state.player.state.dashRecoverUntil;
   const hasBoost = state.player.state.boost > 0;
   const emptyPenaltyActive = now < state.player.state.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
@@ -4859,11 +4857,12 @@ function updatePlayer(now) {
   // omits the override.
   const playerSprintSpeed = state.player.unit.sprintSpeed ?? BOOST_MOVE_SPEED;
   const playerWalkSpeed = state.player.unit.walkSpeed ?? WALK_SPEED;
-  const baseSpeed = useSprint ? playerSprintSpeed : (recoveringFromDash ? 4.55 : playerWalkSpeed);
+  const baseSpeed = useSprint ? playerSprintSpeed : playerWalkSpeed;   // (no slow walk after a sprint, as the sim's applyInput — user 2026-11-04)
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < state.player.state.hitStunUntil;
   const hitStunScale = hitStunned ? state.player.state.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
+  const lastVX = state.player.body.velocity.x, lastVZ = state.player.body.velocity.z;   // (the velocity the frame began with: a jump banks from it, as the sim's applyInput and a bot's jump)
   if (!inStep) {
     state.player.body.velocity.x = canInputMove && !planted && !reloadHeld ? move.x * speed * hitStunScale : 0;
     state.player.body.velocity.z = canInputMove && !planted && !reloadHeld ? move.z * speed * hitStunScale : 0;
@@ -4922,7 +4921,7 @@ function updatePlayer(now) {
     // next frame while her body is still within 0.15 of the ground at high
     // frame rates. Irrelevant for units with real cooldowns.
     state.player.state.jumpCooldownUntil = now + Math.max(jumpCooldownMs, 250);
-    inheritMomentum(state.player, 70);
+    inheritMomentum(state.player, 70, { x: lastVX, z: lastVZ });
     // FLIGHT sprint-carry (Aris): jumping within 400 ms of sprinting seeds
     // the jump's momentum from the remembered sprint velocity instead of the
     // now-walking one — a hop right after a sprint glides visibly farther.
@@ -4936,7 +4935,6 @@ function updatePlayer(now) {
     state.player.state.antiMeleeUntil = now + 260;
     inheritMomentum(state.player, MOMENTUM_STANDARD * 1.5);
     action = 'dash';
-    triggerDashDefense(now);
   }
 
   if (input.stepTap) {
@@ -9986,10 +9984,6 @@ function clearIncomingHoming(mech, now) {
   }
 }
 
-function triggerDashDefense(now) {
-  state.player.state.dashRecoverUntil = now + 180;
-}
-
 function PhaserLikeBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -10062,10 +10056,10 @@ function clearMenus() {
   document.querySelectorAll('.menu').forEach((menu) => menu.remove());
 }
 
-function inheritMomentum(mech, momentumValue = MOMENTUM_STANDARD) {
+function inheritMomentum(mech, momentumValue = MOMENTUM_STANDARD, from = mech.body.velocity) {   // (from: as the sim's movement.js)
   const factor = momentumValue / MOMENTUM_STANDARD;
-  mech.state.momentumVX = mech.body.velocity.x * factor;
-  mech.state.momentumVZ = mech.body.velocity.z * factor;
+  mech.state.momentumVX = from.x * factor;
+  mech.state.momentumVZ = from.z * factor;
 }
 
 function applyMomentum(mech, { suspend = false } = {}) {

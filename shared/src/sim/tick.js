@@ -162,7 +162,6 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   if (dirReleased || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
   const boostActive = !planted && !reloadHeld && (input.boost || sprintLocked);   // (no dash out of a plant, nor out of a held reload)
 
-  const recoveringFromDash = now < fighter.dashRecoverUntil;
   const hasBoost = fighter.boost > 0;
   const emptyPenaltyActive = now < fighter.emptyRecoverUntil;
   const canDash = hasBoost && !emptyPenaltyActive;
@@ -180,13 +179,14 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // and matches the client's offline computation in updatePlayer.
   const sprintSpeed = fighter.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
   const walkSpeed = fighter.unit?.walkSpeed ?? WALK_SPEED;
-  const baseSpeed = useSprint ? sprintSpeed : (recoveringFromDash ? 4.55 : walkSpeed);
+  const baseSpeed = useSprint ? sprintSpeed : walkSpeed;   // (a sprint's end walks on at the walk speed, as a bot's does — the 180 ms walk at 4.55 after it went, user 2026-11-04, "make player unit aligned with BOT")
   const speed = (!hasBoost || emptyPenaltyActive) ? Math.min(baseSpeed, 7.5) : baseSpeed;
   const hitStunned = now < fighter.hitStunUntil;
   const hitStunScale = hitStunned ? fighter.hitStunScale : 1;
   const canInputMove = !emptyPenaltyActive;
 
   const inStep = now <= fighter.stepUntil;
+  const lastVX = fighter.vel.x, lastVZ = fighter.vel.z;   // (the velocity the tick began with: a jump banks from it, as a bot's does — actions.js tryStartJump)
   if (!inStep) {
     fighter.vel.x = canInputMove && !planted && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
     fighter.vel.z = canInputMove && !planted && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
@@ -200,7 +200,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   } else if (fighter.stepUntil > 0) {
     // Step ended this frame — let tickStep handle the queued momentum.
     tickStep(fighter, now, obstacles);
-  } else if (input.jump && canInputMove && tryStartJump(fighter, now)) {
+  } else if (input.jump && canInputMove && tryStartJump(fighter, now, { x: lastVX, z: lastVZ })) {
     // FLIGHT sprint-carry (Aris): jumping within 400 ms of sprinting seeds
     // the jump's momentum from the remembered sprint velocity instead of
     // the now-walking one — a hop right after a sprint glides farther.
