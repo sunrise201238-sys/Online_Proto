@@ -12,10 +12,12 @@
 // stood against the car. A plan's share inside the grown boxes is exact (the rectangles' edges split it into cells). Each box's top
 // must lie in the band, so a run again over the output takes out the boxes it put in and puts them back as they were. The transform: scale,cx,cz as the client's GLB_MAPS line has them (arena = (model - c) * scale), or `-` for
 // the input's own `transform` (a generator's json; the installed file has none).
-// usage: node data_boxes.mjs <in.json> <scale,cx,cz|-> "<x0,x1,z0,z1,top;...>" <grow> <h0,h1> <out.json>
+// A box on a raised floor takes a sixth number, its base over the street (x0,x1,z0,z1,top,base — Town's car on the deck, 2026-11-04):
+// it stands from there, and an entry under that base is never "hidden" in it.
+// usage: node data_boxes.mjs <in.json> <scale,cx,cz|-> "<x0,x1,z0,z1,top[,base];...>" <grow> <h0,h1> <out.json>
 import { readFileSync, writeFileSync } from 'node:fs';
 const [inF, tS, boxesS, growS, bandS, outF] = process.argv.slice(2);
-if (!outF) { console.error('usage: node data_boxes.mjs <in.json> <scale,cx,cz|-> "<x0,x1,z0,z1,top;...>" <grow> <h0,h1> <out.json>'); process.exit(2); }
+if (!outF) { console.error('usage: node data_boxes.mjs <in.json> <scale,cx,cz|-> "<x0,x1,z0,z1,top[,base];...>" <grow> <h0,h1> <out.json>'); process.exit(2); }
 // numbers from a comma list: n of them, none blank (Number('') is 0 and would pass as one)
 const nums = (str, n, what) => { const t = String(str).split(',').map((x) => x.trim()); const v = t.map(Number);
   if (t.length !== n || t.some((x) => x === '') || v.some((x) => !Number.isFinite(x))) throw new Error(`${what}: ${n} number${n === 1 ? '' : 's'} — ${str}`); return v; };
@@ -25,9 +27,9 @@ if (!T || ![T.scale, T.cx, T.cz].every(Number.isFinite)) throw new Error('the tr
 const s = T.scale, grow = nums(growS, 1, 'grow (metres)')[0] * s; const [h0, h1] = nums(bandS, 2, 'the band h0,h1').map((v) => v * s);
 if (!(grow >= 0) || !(h1 > h0)) throw new Error('grow >= 0 and h0 < h1');
 const du = (v) => Math.round(v * 100) / 100;
-const NEW = boxesS.split(';').map((b) => b.trim()).filter(Boolean).map((b) => { const v = nums(b, 5, 'a box x0,x1,z0,z1,top');
-  if (!(v[1] > v[0] && v[3] > v[2] && v[4] > 0)) throw new Error(`a box: x0 < x1, z0 < z1, top > 0 — ${b}`);
-  const o = { minX: du((v[0] - T.cx) * s), maxX: du((v[1] - T.cx) * s), minZ: du((v[2] - T.cz) * s), maxZ: du((v[3] - T.cz) * s), minY: 0, maxY: du(v[4] * s), topBuffer: 0.8 };
+const NEW = boxesS.split(';').map((b) => b.trim()).filter(Boolean).map((b) => { const v = nums(b, b.split(',').length === 6 ? 6 : 5, 'a box x0,x1,z0,z1,top[,base]'); const base = v[5] ?? 0;
+  if (!(v[1] > v[0] && v[3] > v[2] && v[4] > base && base >= 0)) throw new Error(`a box: x0 < x1, z0 < z1, 0 <= base < top — ${b}`);
+  const o = { minX: du((v[0] - T.cx) * s), maxX: du((v[1] - T.cx) * s), minZ: du((v[2] - T.cz) * s), maxZ: du((v[3] - T.cz) * s), minY: du(base * s), maxY: du(v[4] * s), topBuffer: 0.8 };
   if (o.maxY < h0 || o.maxY > h1) throw new Error(`a box's top outside the band (a run over the output would keep its old lid): ${b}`); return o; });
 if (!NEW.length) throw new Error('no boxes');
 const GROWN = NEW.map((b) => ({ minX: b.minX - grow, maxX: b.maxX + grow, minZ: b.minZ - grow, maxZ: b.maxZ + grow }));
@@ -42,7 +44,7 @@ const share = (e) => { const w = e.maxX - e.minX, d = e.maxZ - e.minZ;
   return a / (w * d); };
 const topOf = (e) => (e.type === 'plane' ? Math.max(e.y0, e.y0 + e.gx * (e.maxX - e.minX), e.y0 + e.gz * (e.maxZ - e.minZ), e.y0 + e.gx * (e.maxX - e.minX) + e.gz * (e.maxZ - e.minZ))
   : e.type === 'flat' ? e.top : e.type ? (e.maxTop ?? e.top) : e.maxY);   // (another kind of surface by its maxTop)
-const hidden = (e) => NEW.some((b) => e.minX >= b.minX && e.maxX <= b.maxX && e.minZ >= b.minZ && e.maxZ <= b.maxZ && topOf(e) <= b.maxY + 1e-6);
+const hidden = (e) => NEW.some((b) => e.minX >= b.minX && e.maxX <= b.maxX && e.minZ >= b.minZ && e.maxZ <= b.maxZ && topOf(e) <= b.maxY + 1e-6 && (b.minY <= 0 || topOf(e) >= b.minY - 1e-6));
 const out = (e) => { const t = topOf(e); return (t >= h0 && t <= h1 && share(e) >= 0.5) || hidden(e); };
 const tally = { box: 0, flat: 0, plane: 0 };
 const obstacles = D.obstacles.filter((e) => { if (!out(e)) return true; tally.box += 1; return false; });
@@ -50,4 +52,4 @@ const surfaces = D.surfaces.filter((e) => { if (!out(e)) return true; tally[e.ty
 for (const b of NEW) { obstacles.push(b); surfaces.push({ minX: du(b.minX - 0.08), maxX: du(b.maxX + 0.08), minZ: du(b.minZ - 0.08), maxZ: du(b.maxZ + 0.08), maxTop: b.maxY, type: 'flat', top: b.maxY, lid: 1 }); }
 writeFileSync(outF, JSON.stringify({ ...D, obstacles, surfaces }));
 console.log(`out: ${tally.box} boxes, ${tally.flat} floors, ${tally.plane} slopes; in: ${NEW.length} boxes with their lids -> ${obstacles.length} boxes, ${surfaces.length} surfaces, ${outF}`);
-for (const b of NEW) console.log(`  box x ${b.minX}..${b.maxX} z ${b.minZ}..${b.maxZ} y 0..${b.maxY} (units)`);
+for (const b of NEW) console.log(`  box x ${b.minX}..${b.maxX} z ${b.minZ}..${b.maxZ} y ${b.minY}..${b.maxY} (units)`);
