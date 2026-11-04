@@ -743,6 +743,9 @@ export const JUMP_RISE_MIN = SURFACE_STEP_HEIGHT + 0.1;
 export const BOOST_MOVE_SPEED = 11.76;   // unit.sprintSpeed default
 export const WALK_SPEED = 16;            // unit.walkSpeed default
 export const MOMENTUM_STANDARD = 100;
+// The ladders' climb (ladder.js), units per second: the sprint's steady speed — its base plus the 1.5 times of it the dash
+// banks as momentum every tick (29.4; user 2026-11-05, "29.4 for climbing speed"), the same for every unit, every leg.
+export const LADDER_CLIMB_SPEED = BOOST_MOVE_SPEED * 2.5;
 
 // Step (dodge) tunables.
 export const STEP_DISTANCE = 9.2;

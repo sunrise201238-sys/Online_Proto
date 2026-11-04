@@ -79,6 +79,7 @@ export function pickBotTargetId(matchState, fighter) {
 export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
+  if (me.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderBotStep rides it; the brain sleeps: no shot, no dodge, no plan)
   // Mark bot control for shared helpers that behave differently for bots
   // (tryStartJump floors zero-cooldown jumps at 1.5 s for bots so the perch
   // reflex can't bunny-hop Aris — bots play flight units grounded).
@@ -158,6 +159,8 @@ export function tickBot(matchState, botId, now) {
 //   unslowed speed, and the stun did not reach that part of a sprinting bot's speed — online always, offline since b1104d;
 //   before b1104d the offline host slowed the summed velocity, as a player's (user 2026-11-04).
 export function botBodyRules(vel, me, unit, now) {
+  //   The ladder (ladder.js): a climbing bot's body is the ladder's — whatever the brain asked for this tick is thrown away.
+  if (me.ladder != null) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; me.action = 'climb'; return; }
   if (reloadHolds(unit, me, now)) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }
   const k = hitStunMoveScale(me, now);
   vel.x *= k; vel.z *= k;

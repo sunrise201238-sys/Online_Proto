@@ -41,6 +41,7 @@ import { createProjectile, nextProjectileId } from './state.js';
 export function applyHitStun(target, unit, ms, scale, now) {
   target.lastHitAt = now;   // (the hit itself, stun or no stun: the bot brains read it as "I was hit" — user 2026-10-23, Kurumi's Defense never fired)
   if (unit?.stunImmune) return false;
+  if (target.ladder != null) return false;   // (a climber takes the damage, never the stun — ladder.js; user 2026-11-05)
   if (now >= target.hitStunUntil || scale < target.hitStunScale) { target.hitStunScale = scale; target.hitStunUntil = now + ms; return true; }
   return false;
 }

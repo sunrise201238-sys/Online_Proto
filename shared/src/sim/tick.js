@@ -27,6 +27,7 @@ import {
   resolveUnitObstacleCollisions,
   voidUnder
 } from './physics.js';
+import { onLadder, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick } from './ladder.js';
 import {
   tickBoost,
   applyMomentum,
@@ -106,6 +107,13 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     fighter.action = 'shoot';
     return;
   }
+  // THE LADDER (ladder.js; user 2026-11-05): a body on one takes no movement from here — the stick says up, down or hold,
+  // the jump lets go. (A charge or a beam above holds the body first: a charging unit cannot mount, as a mounting one cannot
+  // charge — attemptFire refuses a climber.) The jump button's latch: the press that mounted or let go is spent until the
+  // button is let go, so it neither jumps nor remounts the same press. Mirrored in the client's updatePlayer.
+  const ladders = getArena(matchState.mapKey).ladders ?? [];
+  if (onLadder(fighter)) { ladderHumanInput(fighter, fighter.pos, fighter.vel, input, ladders); return; }
+  if (fighter.ladderJumpLatch) { if (input.jump) input = { ...input, jump: false }; else fighter.ladderJumpLatch = undefined; }
 
   // Honour a one-tick target switch before resolving opp so the very next
   // shot already lands on the new target.
@@ -191,6 +199,9 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     fighter.vel.x = canInputMove && !planted && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
     fighter.vel.z = canInputMove && !planted && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
   }
+  // The jump button at a ladder's end mounts it — no jump, nothing else this tick (ladder.js ladderTryMount: the foot zone
+  // or the exit's; the body on the ground, out of a dodge).
+  if (!inStep && fighter.stepUntil <= 0 && input.jump && canInputMove && fighter.grounded && ladderTryMount(fighter, fighter.pos, fighter.vel, ladders)) return;
 
   let action = 'idle';
 
@@ -329,7 +340,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 1. Per-fighter pre-tick (ammo, spread bloom recovery, sniper charge timer).
   for (const f of fighters) {
     tickAmmo(f, now);
-    tickStillness(f, now, Math.hypot(f.vel.x, f.vel.z), !f.airborne, f.action === 'dash');   // last tick's motion — a 200 ms dwell makes the lag moot; a sprint, even in place, is not still (user 2026-11-03; action rides every snapshot, so the prediction agrees)
+    tickStillness(f, now, Math.hypot(f.vel.x, f.vel.z), !f.airborne && !onLadder(f), f.action === 'dash');   // last tick's motion — a 200 ms dwell makes the lag moot; a sprint, even in place, is not still (user 2026-11-03; action rides every snapshot, so the prediction agrees)
     tickBloom(f, now, dt);
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null, arena.obstacles);
   }
@@ -348,6 +359,8 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   //        which runs updateBoost every tick.
   for (const f of fighters) {
     if (botSet.has(f.id)) {
+      // (the ladder, ladder.js: a bot's goal mounts it, and on the ladder its body is the ladder's — no momentum, no gauge)
+      if (ladderBotStep(f, f.pos, f.vel, arena.ladders ?? [])) continue;
       applyMomentum(f, { suspend: f.action === 'step' });
       tickBoost(f, now, f.action, arena.surfaces);
       continue;
@@ -358,6 +371,7 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 3. Soft-collide repulsion across every fighter pair.
   for (let i = 0; i < fighters.length; i += 1) {
     for (let j = i + 1; j < fighters.length; j += 1) {
+      if (onLadder(fighters[i]) || onLadder(fighters[j])) continue;   // (a climber is neither pushed nor pushes — ladder.js)
       applyRepulsion(fighters[i], fighters[j], now);
     }
   }
@@ -377,18 +391,19 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   //    events, off the fighter, never in a snapshot.
   const walls = matchState.walls ?? (matchState.walls = {});
   for (const { f, pos } of prevPositions) {
-    walls[f.id] = resolveUnitObstacleCollisions(f, pos, arena.obstacles);
+    walls[f.id] = onLadder(f) ? null : resolveUnitObstacleCollisions(f, pos, arena.obstacles);   // (the ladder carries its climber through the lip's boxes — ladder.js)
   }
   // THE VOID'S EDGE (physics.js voidUnder, 2026-10-29): a grounded body that stepped off a cellar's floor over nothing —
   // deep under the street, no surface beneath — is held at the edge like a wall holds it: the move undone, the
   // velocity dropped. A body already over a void (it jumped there) moves freely, so it can walk back onto a floor.
   for (const { f, pos } of prevPositions) {
-    if (f.airborne) continue;
+    if (f.airborne || onLadder(f)) continue;
     if (!voidUnder(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y)) continue;
     if (voidUnder(pos.x, pos.z, arena.surfaces, pos.y - GROUND_BASE_Y)) continue;
     f.pos.x = pos.x; f.pos.z = pos.z; f.vel.x = 0; f.vel.z = 0; f.momentumVX = 0; f.momentumVZ = 0;
   }
-  for (const f of fighters) integrateVertical(f, arena.surfaces, dt, arena.ceil ?? Infinity);
+  // (a climber's step is the ladder's — ladder.js ladderTick: the legs and the climb, LADDER_CLIMB_SPEED times dt, no gravity)
+  for (const f of fighters) { if (onLadder(f)) ladderTick(f, f.pos, f.vel, arena.ladders ?? [], dt); else integrateVertical(f, arena.surfaces, dt, arena.ceil ?? Infinity); }
 
   // 6. Tiny-velocity damping (replicates the offline build's "stops below
   //    0.14 vel" behavior).

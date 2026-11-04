@@ -573,6 +573,8 @@ body.pseudo-fullscreen #app {
 /* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own bar; user 2026-10-19 */
 .touch-hud.hud-anomaly .enemy-health, .touch-hud.hud-anomaly .ally-health, .touch-hud.hud-anomaly .enemy2-health { display: none; }
 
+/* the ladder (ladder.js; user 2026-11-05): Target / Fire / Dodge / Sprint hidden while the player climbs — main.js updateHud sets hud-climb; the jump button stays, it is the ladder's (let go) */
+.hud-climb .btn-shoot, .hud-climb .btn-target, .hud-climb .btn-step, .hud-climb .btn-boost { visibility: hidden; }
 /* (2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health) */
 .unit-profile-popup .unit-note { position: absolute; left: 10px; bottom: 7px; max-width: 108px; font-size: 9px; line-height: 11px; font-weight: 700; color: #ffd76a; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
 .unit-profile-popup .map-note { max-width: 244px; }   /* (a map's note runs under its 260 px picture, one line, user 2026-10-29) */

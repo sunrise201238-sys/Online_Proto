@@ -51,6 +51,7 @@ import {
   reloadHolds,
   applyHitStun,
   getArena,
+  ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
@@ -1659,6 +1660,7 @@ const MODEL_CLIPS_DEFAULT = {
   reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
   hit: null,
   death: { name: 'Vital_Death', speed: 1, once: true },
+  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in four files; the rest borrow Kurumi's (borrowClimbClip)
 };
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
@@ -1727,6 +1729,7 @@ const UNIT_MODELS = {
       reload: { name: '01_Normal_Attack_Delay', speed: 1, fit: 'reload', once: true },
       hit: null,
       death: { name: '01_Vital_Death', speed: 1, once: true },
+      climb: { name: 'Vital_Retreat', speed: 2.5 },
     },
   },
   // (Aris's form, 2026-10-10: a flight unit. Standing is Formation_Idle; walking on the
@@ -1747,6 +1750,7 @@ const UNIT_MODELS = {
       reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
       hit: null,
       death: { name: 'Vital_Death', speed: 1, once: true },
+      climb: { name: 'Vital_Retreat', speed: 2.5 },
     },
   },
   // (Kei's form, 2026-10-10: the default map; no Move_Jump in her file — the dodge and the
@@ -1889,6 +1893,7 @@ function makeUnitModel(unitData, isOwnUnit) {
     for (const [key, c] of Object.entries(rig.cfg.clips)) {
       if (!c) continue;
       const clip = THREE.AnimationClip.findByName(gltf.animations, c.name);
+      if (!clip && key === 'climb') { borrowClimbClip(rig, inst, c); continue; }   // (twelve of the sixteen files lack Vital_Retreat: Kurumi's, from models/climb_clip.json)
       if (!clip) { console.warn('unit model: clip not found', unitData.model, c.name); continue; }
       const action = rig.mixer.clipAction(clip);
       // Sniper category (sniperCharge): the firing clip is ONE cycle per charge
@@ -1904,6 +1909,22 @@ function makeUnitModel(unitData, isOwnUnit) {
     rig.ready = true;
   });
   return holder;
+}
+
+// THE CLIMB CLIP (ladder.js; user 2026-11-05, "Use Vital_Retreat motion for every character"): four unit files carry
+// Vital_Retreat (Kurumi, Rabu, Subaru, Yuuka, the full motion sets); the other twelve borrow Kurumi's, which
+// shared/tools/anim/clip_extract.mjs wrote to models/climb_clip.json (its root pinned in plan), fetched once and bound by bone
+// name — the Biped skeletons share their names; a track of a bone the rig lacks is left out.
+let _climbClipJson = null;
+function loadClimbClip() { return _climbClipJson ?? (_climbClipJson = fetch(`${import.meta.env.BASE_URL}models/climb_clip.json`).then((r) => r.json())); }
+function borrowClimbClip(rig, inst, cfg) {
+  loadClimbClip().then((json) => {
+    const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
+    // (the rotations alone: a bone's rest offset is the rig's own — Kurumi's translations, in her file's units, fold or fling another rig's mesh)
+    const clip = THREE.AnimationClip.parse({ ...json, tracks: json.tracks.filter((t) => t.type === 'quaternion' && names.has(t.name.split('.')[0])) });
+    if (!clip.tracks.length || !rig.mixer) return;
+    rig.actions.climb = { action: rig.mixer.clipAction(clip), cfg, dur: clip.duration };
+  }).catch((e) => console.warn('climb clip', e));
 }
 
 function nearestHostileOf(m) {
@@ -1956,6 +1977,7 @@ function updateUnitModelState(m, rig, dt, now) {
 
   let want = 'stand';
   if (st.hp <= 0) want = 'death';
+  else if (st.ladder != null) want = 'climb';   // the ladder (ladder.js): the climb clip
   // A flight unit (Aris) in level flight — airborne and sprinting — shows its
   // flying clip (the billboard's 'fly' rule); any other air time is the jump.
   else if (st.airborne && sprinting && m.unit?.flight && rig.actions.fly) want = 'fly';
@@ -2034,6 +2056,7 @@ function updateUnitModelState(m, rig, dt, now) {
   }
   if (tgt) { hx = tgt.root.position.x - px; hz = tgt.root.position.z - pz; have = Math.hypot(hx, hz) > 0.5; }
   if (!have && moving) { hx = vx; hz = vz; have = true; }
+  if (st.ladder != null && arenaLadders[st.ladder]) { const L = arenaLadders[st.ladder]; hx = Math.sin(L.yaw); hz = Math.cos(L.yaw); have = true; }   // (a climber faces the rungs — ladder.js)
   if (have) {
     const target = Math.atan2(hx, hz);
     let d = target - rig.yaw;
@@ -4687,7 +4710,7 @@ function applyRepulsion(now) {
   // checked so allies don't clip into each other or stack on a target.
   // Dead fighters are excluded — they're invisible and shouldn't shove
   // live mechs around.
-  const fighters = getAllFighters().filter((m) => m.state.hp > 0);
+  const fighters = getAllFighters().filter((m) => m.state.hp > 0 && m.state.ladder == null);   // (a climber neither pushes nor is pushed — ladder.js)
   for (let i = 0; i < fighters.length; i += 1) {
     for (let j = i + 1; j < fighters.length; j += 1) {
       const a = fighters[i];
@@ -4806,6 +4829,19 @@ function updatePlayer(now) {
     updateBoost(state.player, now, 'shoot');
     return;
   }
+  // THE LADDER (ladder.js, the sim's applyInput mirrored; user 2026-11-05): on one the stick says up, down or hold and the
+  // jump lets go — nothing else of the input runs. The jump button's LATCH: the press that mounted or let go is spent until the
+  // button is let go (jumpPress below stands for input.jump from here), so it neither jumps nor remounts; the frame loop's
+  // 16 ms ladder clock moves the body (updateTransforms).
+  if (state.player.state.ladder != null) {
+    // (the stick in the world's frame, as the online frame carries it — the camera's forward, here the ladder's facing: W climbs, S descends)
+    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); const rgt = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const mv = fwd.clone().multiplyScalar(-input.y).add(rgt.multiplyScalar(input.x));
+    ladderHumanInput(state.player.state, state.player.body.position, state.player.body.velocity, { jump: input.jump, moveX: mv.x, moveZ: mv.z }, arenaLadders);
+    state.player.grounded = false; return;
+  }
+  const jumpPress = !!input.jump && !state.player.state.ladderJumpLatch;
+  if (!input.jump) state.player.state.ladderJumpLatch = undefined;
   const p = state.player.root.position;
   const e = state.enemy.root.position;
   const stepState = state.player.state;
@@ -4829,7 +4865,7 @@ function updatePlayer(now) {
   const dirReleased = !hasDirInput && now - input.dirNeutralSince >= SPRINT_LOCK_RELEASE_GRACE_MS;
   // Jump breaks the sprint lock — EXCEPT while a flight unit is airborne:
   // there, held jump is the climb verb and must coexist with locked sprint.
-  const jumpBreaksLock = input.jump && !(state.player.unit.flight && state.player.state.airborne);
+  const jumpBreaksLock = jumpPress && !(state.player.unit.flight && state.player.state.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
   input.boost = !planted && !reloadHeld && (input.boostHeld || input.sprintLocked);   // (no dash out of a plant, nor out of a held reload)
 
@@ -4867,6 +4903,8 @@ function updatePlayer(now) {
     state.player.body.velocity.x = canInputMove && !planted && !reloadHeld ? move.x * speed * hitStunScale : 0;
     state.player.body.velocity.z = canInputMove && !planted && !reloadHeld ? move.z * speed * hitStunScale : 0;
   }
+  // The jump button at a ladder's end mounts it — no jump, nothing else this frame (ladder.js ladderTryMount, as the sim's applyInput).
+  if (!inStep && stepState.stepUntil <= 0 && jumpPress && canInputMove && state.player.grounded && ladderTryMount(state.player.state, state.player.body.position, state.player.body.velocity, arenaLadders)) { state.player.grounded = false; return; }
 
   let action = 'idle';
   if (inStep) {
@@ -4898,7 +4936,7 @@ function updatePlayer(now) {
       stepState.queuedMomentumVZ = 0;
     }
   } else if (
-    input.jump
+    jumpPress
     && canInputMove
     && stepState.boost >= (state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST)
     && (state.player.grounded || state.player.body.position.y <= getGroundLevelY(state.player) + 0.15)
@@ -4986,7 +5024,7 @@ function updatePlayer(now) {
     // jump impulse — same boost cost and 250 ms debounce as the ground pop.
     // Holding past the pop settles into the sustained climb below; the edge
     // detection means holding never re-pops on its own.
-    const jumpTapped = input.jump && !st.prevJumpHeld;
+    const jumpTapped = jumpPress && !st.prevJumpHeld;
     st.prevJumpHeld = input.jump;
     const airPopCost = state.player.unit.airJumpBoostCost
       ?? state.player.unit.jumpBoostCost ?? JUMP_BOOST_COST;
@@ -4998,7 +5036,7 @@ function updatePlayer(now) {
       st.jumpVelocity = state.player.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
       st.jumpCooldownUntil = now + 250;
     }
-    st.flightClimb = flying && input.jump && canInputMove && st.boost > 0;
+    st.flightClimb = flying && jumpPress && canInputMove && st.boost > 0;
     // Fresh step check (NOT the `inStep` const from the top of the frame):
     // a dodge that STARTED this frame must hold altitude from its first tick.
     st.flightLevel = flying && !st.flightClimb && st.boost > 0
@@ -5340,6 +5378,7 @@ function botTickStep(mech, now) {
 function updateEnemy(now) {
   const mech = state.enemy, eState = mech.state;
   if (!ensureOfflineNavGrid()) return;   // (the grid file is still on its way: the bot stands this frame — see ensureOfflineNavGrid)
+  if (eState.ladder != null) { ladderBotStep(eState, mech.body.position, mech.body.velocity, arenaLadders); mech.grounded = false; return; }   // (on a ladder the body is the ladder's, the brain sleeps — the sim's tickBot and tickMatch; ladder.js)
   const myTeam = getTeamOf(mech);
   const enemies = [];
   for (const f of (_botTrueFighters ?? getAllFighters())) {
@@ -5388,6 +5427,7 @@ function updateEnemy(now) {
   // the brain carried the sprint's momentum through its lerp offline where the server held it (user 2026-11-04, "everything
   // online should be identical to offline").
   botBodyRules(mech.body.velocity, eState, mech.unit, now);
+  if (ladderBotStep(eState, mech.body.position, mech.body.velocity, arenaLadders)) { mech.grounded = false; return; }   // (the brain's goal mounts it this frame: no momentum, no gauge — the sim's bot branch; ladder.js)
   applyMomentum(mech, { suspend: ran === 'stepping' });
   if (ran !== 'stepping') updateBoost(mech, now, eState.action);   // (the step's own update ran in botTickStep)
 }
@@ -5487,7 +5527,7 @@ function updateLocksAndReticle() {
   // (the anomaly rules: no lock bracket; free pov: the crosshair instead — the PLAYER'S free pov while the player is the live
   // viewer, the WATCHED unit's own free aim while spectating; the spectator's own switch is ignored, user 2026-10-30)
   const freeViewer = freePovOwner() && viewer === state.player ? state.freePov : !!viewer.state.freeAim;
-  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !freeViewer;
+  if (state.reticle) state.reticle.visible = !dioramaActive() && !anomalyRules() && !freeViewer && viewer.state.ladder == null;   // (no lock icon while the viewer climbs — ladder.js)
   // Reticle / lock evaluation is always against the player's CURRENT target,
   // not necessarily state.enemy. In 2v2 the player can flip between enemies
   // with the target switch button; while spectating, updateCamera mirrors
@@ -5597,10 +5637,11 @@ function hideAllyEdgeArrow() {
 
 // Enemy counterpart to the ally edge arrow — same overlay, red-orange fill so
 // it reads as a threat. Points toward the not-locked enemy when it's off-frame.
-function ensureEnemyEdgeArrow() {
-  if (state.enemyEdgeArrow && state.enemyEdgeArrow.isConnected) return state.enemyEdgeArrow;
+function ensureEnemyEdgeArrow(i = 0) {   // (i: one arrow per foe while the viewer climbs — ladder.js; the first is the one of old)
+  const list = state.enemyEdgeArrows ?? (state.enemyEdgeArrows = []);
+  if (list[i] && list[i].isConnected) return list[i];
   const el = document.createElement('div');
-  el.id = 'enemy-edge-arrow';
+  el.id = i === 0 ? 'enemy-edge-arrow' : `enemy-edge-arrow-${i}`;
   el.style.cssText = [
     'position:fixed', 'left:0', 'top:0', 'width:34px', 'height:34px',
     'pointer-events:none', 'z-index:35', 'display:none', 'will-change:transform',
@@ -5616,7 +5657,7 @@ function ensureEnemyEdgeArrow() {
     + '<path d="M16 3 L28 27 L16 21 L4 27 Z" fill="#ff6a2c" stroke="#0b1622" '
     + 'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   document.body.appendChild(el);
-  state.enemyEdgeArrow = el;
+  list[i] = el; if (i === 0) state.enemyEdgeArrow = el;
   return el;
 }
 
@@ -5631,9 +5672,8 @@ function getArrowGlintUrl(isBeam) {
   return _arrowGlintUrl[key];
 }
 
-function hideEnemyEdgeArrow() {
-  if (state.enemyEdgeArrow) state.enemyEdgeArrow.style.display = 'none';
-}
+function hideEnemyEdgeArrows(from = 0) { const list = state.enemyEdgeArrows ?? []; for (let i = from; i < list.length; i += 1) if (list[i]) list[i].style.display = 'none'; }
+function hideEnemyEdgeArrow() { hideEnemyEdgeArrows(0); }
 
 // Friendly-unit indicator, refreshed once per frame from both the offline and
 // online render paths. Two complementary pieces:
@@ -5782,19 +5822,16 @@ function updateEnemyArrow() {
   // Diorama POC: parked for the same reason as updateAllyArrow.
   if (dioramaActive() || anomalyRules()) {
     if (state.enemyArrow) state.enemyArrow.visible = false;
-    hideEnemyEdgeArrow();
+    hideEnemyEdgeArrows();
     return;
   }
-  const foe = getUnlockedEnemy(cameraFocusMech());
+  const viewer = cameraFocusMech();
+  // The foes the arrows ride: the NOT-locked enemy (2v2) — and while the viewer climbs a ladder, every live enemy, the
+  // locked one among them (ladder.js; user 2026-11-05: the lock icon is off meanwhile, "the currently locking enemy will
+  // become one of the edge indicators"; the glint on each as ever).
+  const foes = viewer && viewer.state.ladder != null ? getEnemiesOf(viewer).filter((e) => e && e.state.hp > 0) : [getUnlockedEnemy(viewer)].filter(Boolean);
+  const foe = foes[0] ?? null;
   const active = !!foe;
-
-  // Sniper-charge glint on the arrow: shows whenever the tracked (unlocked)
-  // enemy is a sniper mid-charge or Kei mid-sweep — using that unit's OWN
-  // glint art (Aru's flash for Aru, Kei's shard glint for Kei). Keeps the
-  // blind-side wind-up visible while the camera and lock are busy elsewhere.
-  const arrowGlint = active
-    && (!!foe.state.sniperChargeTarget || !!foe.chargedBeamVisual);
-  const foeGlintBeam = active && !!foe.unit?.beam;
 
   // --- 1. In-world floating chevron (self-culls when off-frustum). ---
   // Hidden while OVERHEAD_TEAM_CHEVRONS is off (owner 2026-09-19): in 2v2 it
@@ -5816,64 +5853,70 @@ function updateEnemyArrow() {
     }
   }
 
-  // --- 2. Screen-edge direction arrow (off-frame case). ---
-  if (!active) { hideEnemyEdgeArrow(); return; }
-  const edge = ensureEnemyEdgeArrow();
-
+  // --- 2. Screen-edge direction arrows (off-frame case), one per foe. ---
+  if (!active) { hideEnemyEdgeArrows(); return; }
   // Refresh the composed camera matrices before projecting (updateCamera() only
   // set position/quaternion this frame).
   camera.updateMatrixWorld();
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
-
-  // Anchor on the enemy's torso so the on/off-screen decision matches where the
-  // player perceives the unit.
-  _enemyArrowNdc.set(foe.root.position.x, foe.root.position.y + 2.0, foe.root.position.z);
-  const camZ = _enemyArrowCam.copy(_enemyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
-  const inFront = camZ < 0;        // camera looks down -z in its own space
-  _enemyArrowNdc.project(camera);  // -> NDC; x,y in [-1,1] means on screen
-  const onScreen = inFront
-    && Math.abs(_enemyArrowNdc.x) <= 1
-    && Math.abs(_enemyArrowNdc.y) <= 1;
-
-  if (onScreen) { edge.style.display = 'none'; return; }
-
-  // Direction toward the enemy in NDC (y up). project() mirrors points behind
-  // the camera, so flip those back to the true bearing.
-  let dx = _enemyArrowNdc.x;
-  let dy = _enemyArrowNdc.y;
-  if (!inFront) { dx = -dx; dy = -dy; }
-  if (dx === 0 && dy === 0) dy = -1;
-
-  // Slide that direction onto an inset screen rectangle (touch the nearest edge).
-  const inset = 0.82;
-  const k = inset / Math.max(Math.abs(dx), Math.abs(dy));
-  const ex = dx * k;
-  const ey = dy * k;
   const w = renderer.domElement.clientWidth;
   const h = renderer.domElement.clientHeight;
-  const sx = (ex * 0.5 + 0.5) * w;
-  const sy = (-ey * 0.5 + 0.5) * h;   // NDC y up -> screen y down
+  for (let i = 0; i < foes.length; i += 1) {
+    const f = foes[i];
+    const edge = ensureEnemyEdgeArrow(i);
+    // Sniper-charge glint on the arrow: shows whenever this enemy is a sniper mid-charge or Kei mid-sweep — using that
+    // unit's OWN glint art (Aru's flash for Aru, Kei's shard glint for Kei). Keeps the blind-side wind-up visible while the
+    // camera and lock are busy elsewhere.
+    const arrowGlint = !!f.state.sniperChargeTarget || !!f.chargedBeamVisual;
+    const foeGlintBeam = !!f.unit?.beam;
+    // Anchor on the enemy's torso so the on/off-screen decision matches where the
+    // player perceives the unit.
+    _enemyArrowNdc.set(f.root.position.x, f.root.position.y + 2.0, f.root.position.z);
+    const camZ = _enemyArrowCam.copy(_enemyArrowNdc).applyMatrix4(camera.matrixWorldInverse).z;
+    const inFront = camZ < 0;        // camera looks down -z in its own space
+    _enemyArrowNdc.project(camera);  // -> NDC; x,y in [-1,1] means on screen
+    const onScreen = inFront
+      && Math.abs(_enemyArrowNdc.x) <= 1
+      && Math.abs(_enemyArrowNdc.y) <= 1;
+    if (onScreen) { edge.style.display = 'none'; continue; }
 
-  // Glyph points up by default; rotate to face the enemy.
-  const rot = Math.atan2(-dy, dx) + Math.PI / 2;
+    // Direction toward the enemy in NDC (y up). project() mirrors points behind
+    // the camera, so flip those back to the true bearing.
+    let dx = _enemyArrowNdc.x;
+    let dy = _enemyArrowNdc.y;
+    if (!inFront) { dx = -dx; dy = -dy; }
+    if (dx === 0 && dy === 0) dy = -1;
 
-  edge.style.display = 'block';
-  edge.style.left = `${sx}px`;
-  edge.style.top = `${sy}px`;
-  edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
-  // Glint on the edge arrow while the tracked sniper is charging — the
-  // unit's own glint art (Aru's / Kei's), shown as-is, no animation.
-  const halo = edge.firstElementChild;
-  if (halo && halo.hasAttribute('data-glint')) {
-    halo.style.display = arrowGlint ? 'block' : 'none';
-    if (arrowGlint) {
-      const variant = foeGlintBeam ? 'beam' : 'std';
-      if (halo.dataset.variant !== variant) {
-        halo.dataset.variant = variant;
-        halo.style.backgroundImage = `url(${getArrowGlintUrl(foeGlintBeam)})`;
+    // Slide that direction onto an inset screen rectangle (touch the nearest edge).
+    const inset = 0.82;
+    const k = inset / Math.max(Math.abs(dx), Math.abs(dy));
+    const ex = dx * k;
+    const ey = dy * k;
+    const sx = (ex * 0.5 + 0.5) * w;
+    const sy = (-ey * 0.5 + 0.5) * h;   // NDC y up -> screen y down
+
+    // Glyph points up by default; rotate to face the enemy.
+    const rot = Math.atan2(-dy, dx) + Math.PI / 2;
+
+    edge.style.display = 'block';
+    edge.style.left = `${sx}px`;
+    edge.style.top = `${sy}px`;
+    edge.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+    // Glint on the edge arrow while the tracked sniper is charging — the
+    // unit's own glint art (Aru's / Kei's), shown as-is, no animation.
+    const halo = edge.firstElementChild;
+    if (halo && halo.hasAttribute('data-glint')) {
+      halo.style.display = arrowGlint ? 'block' : 'none';
+      if (arrowGlint) {
+        const variant = foeGlintBeam ? 'beam' : 'std';
+        if (halo.dataset.variant !== variant) {
+          halo.dataset.variant = variant;
+          halo.style.backgroundImage = `url(${getArrowGlintUrl(foeGlintBeam)})`;
+        }
       }
     }
   }
+  hideEnemyEdgeArrows(foes.length);   // the arrows beyond the foes
 }
 
 function updateTransforms(dt) {
@@ -5883,7 +5926,12 @@ function updateTransforms(dt) {
     m.root.visible = m.state.hp > 0;
     const groundY = getGroundLevelY(m);
 
-    if (m.state.airborne) {
+    if (m.state.ladder != null) {
+      // THE LADDER (ladder.js, the sim's tickMatch): the climb on a 16 ms clock of its own — the same ticks as the server's,
+      // whatever the frame rate — in place of gravity and the ground: the legs and the climb at LADDER_CLIMB_SPEED.
+      const ticks = stepBoostTicks(m.state, 'ladderClock', performance.now());
+      for (let i = 0; i < ticks && m.state.ladder != null; i += 1) ladderTick(m.state, m.body.position, m.body.velocity, arenaLadders, SIM_TICK_DT);
+    } else if (m.state.airborne) {
       if (m.state.flightClimb) {
         // FLIGHT (Aris): pop-then-climb — gravity erodes the jump impulse
         // down to the sprint-speed sustained climb and the thruster holds it
@@ -5923,11 +5971,11 @@ function updateTransforms(dt) {
       m.body.position.y = groundY;
       m.body.velocity.y = 0;
     }
-    if (!m.state.airborne) m.state.floorY = groundY;   // (the floor it stands on: what the next landing is measured against)
+    if (!m.state.airborne && m.state.ladder == null) m.state.floorY = groundY;   // (the floor it stands on: what the next landing is measured against)
 
     m.body.linearFactor.set(1, 0, 1);
     m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
-    m.grounded = !m.state.airborne;
+    m.grounded = !m.state.airborne && m.state.ladder == null;   // (a climber is neither grounded nor airborne — ladder.js)
   });
   const pToE = new THREE.Vector3().subVectors(state.enemy.root.position, state.player.root.position).normalize();
   if (state.freePov && freePovOwner() && !dioramaActive()) {
@@ -6110,6 +6158,15 @@ function updateCamera() {
     updateDioramaCamera();
     return;
   }
+  // THE LADDER (ladder.js; user 2026-11-05): the climber's camera is the chase camera from its back, along the ladder's facing;
+  // the lock camera and the free pov wait until it is off (the free pov comes back as it was — its switch is untouched).
+  if (cam === state.player && cam.state.ladder != null && arenaLadders[cam.state.ladder]) {
+    const L = arenaLadders[cam.state.ladder]; const p = cam.root.position; const nx = Math.sin(L.yaw), nz = Math.cos(L.yaw);
+    camera.position.lerp(new THREE.Vector3(p.x - nx * 13, p.y + 6.8, p.z - nz * 13), 0.16);
+    camera.lookAt(new THREE.Vector3(p.x + nx * 4, p.y + 2.2, p.z + nz * 4));
+    camera.fov = THREE.MathUtils.lerp(camera.fov, 60, 0.16); camera.updateProjectionMatrix();
+    return;
+  }
   if (state.freePov && freePovOwner() && cam === state.player) { updateFreePovCamera(cam); return; }   // FREE POV (user 2026-10-30): the owner's own rig; a spectator keeps the chase view of the watched unit
   const p = cam.root.position;
   const e = tgt.root.position;
@@ -6168,6 +6225,8 @@ function updateHud(now = performance.now()) {
   // gauge and the remaining-units icons stay.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' corner bars hide)
+  // (the ladder, ladder.js; user 2026-11-05: Target / Fire / Dodge / Sprint hidden while the player climbs — style.css .hud-climb; a spectator keeps them)
+  if (state.hud) state.hud.classList.toggle('hud-climb', state.player?.state?.ladder != null && !state.spectatorActive && !playerIsBotDriven() && !(state.online && state.online.myPlayerId === 'spectator'));
   // (a unit's corner bar is as long as its HP: the track's CSS width is 180px times --hp-scale; the fullscreen button
   // docked right of the LEFT bar follows whichever unit's bar that is — the player's offline, slot p1's online)
   const fills = [[hudRefs.hp, state.player], [hudRefs.enemyHp, state.enemy], [hudRefs.allyHp, state.ally], [hudRefs.enemy2Hp, state.enemy2]];
@@ -6851,6 +6910,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
   s.freeAim = !!fighter.freeAim;                         // free pov (user 2026-10-30): the glint warns everyone, the unit faces its aim
   s.yaw = fighter.yaw;
+  s.ladder = fighter.ladder; s.ladderDir = fighter.ladderDir; s.ladderLeg = fighter.ladderLeg;   // the ladder (ladder.js): the pose, the facing, the camera and the HUD read them
   s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
@@ -10074,6 +10134,7 @@ function applyMomentum(mech, { suspend = false } = {}) {
 
 
 const arenaSurfaces = [];
+const arenaLadders = [];   // the map's ladders (ladder.js): the shared arena's rows, filled with the lists above by buildGlbArena
 // (what splitFadeParts makes for one arena — its copies of the model's geometry, the parts cut from them, the cloned
 // materials — disposed with the arena. The model's own geometry and materials are the cache's, shared by every instance,
 // and stay: without this, each match left its ~750 part geometries on the GPU, and the map loads slowed round by round,
@@ -10226,6 +10287,7 @@ function clearArenaDecor() {
   }
   arenaObstacles.length = 0;
   arenaSurfaces.length = 0;
+  arenaLadders.length = 0;
 }
 
 function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, invisible, noProjectile }) {
@@ -10626,6 +10688,7 @@ function buildGlbArena(mapKey) {
   addBoundaryIndicator(halfX, halfZ, cfg.ceilY, cfg.edge !== false, open ?? [], false);   // (the red edge line only, except on the open sides; none where the map's data says `edge: false`)
   for (const o of shared.obstacles) arenaObstacles.push({ ...o });   // collision only: the model is the visual
   for (const s of shared.surfaces) arenaSurfaces.push(s);           // the raised floors (stairs, porches, pavements)
+  for (const L of shared.ladders ?? []) arenaLadders.push(L);        // the ladders (ladder.js), the rule's records
   const group = new THREE.Group();
   group.scale.setScalar(cfg.scale);
   group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);
@@ -11265,7 +11328,7 @@ function updateFreePovCamera(cam) {
 function updateCrosshair() {
   const ch = state.hud?.querySelector('#crosshair');
   const inMatch = state.running || !!state.sdIntro;
-  const live = state.freePov && freePovAllowed() && inMatch;
+  const live = state.freePov && freePovAllowed() && inMatch && state.player.state.ladder == null;   // (the climb's camera is the chase camera: no crosshair meanwhile — ladder.js)
   state.hud?.classList.toggle('free-pov-live', !!live);
   const viewer = live ? null : cameraFocusMech();
   const spectated = viewer && !(freePovOwner() && viewer === state.player) && viewer.state.freeAim && viewer.state.hp > 0 && viewer.state.aimYaw != null && inMatch && !dioramaActive() ? viewer : null;   // (an online spectator's state.player is the watched p1)
@@ -17484,7 +17547,7 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne, m.state.action === 'dash');   // (a sprint in place is not still: mirrors the shared tick, user 2026-11-03)
+        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne && m.state.ladder == null, m.state.action === 'dash');   // (a sprint in place is not still: mirrors the shared tick, user 2026-11-03)
         tickBloomOffline(m, now);
         tickSniperCharge(m, now,
           (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);
@@ -17522,11 +17585,11 @@ function animate() {
         m, x: m.body.position.x, y: m.body.position.y, z: m.body.position.z
       }));
       world.step(1 / 60, dt, 3);
-      prevPositions.forEach(({ m, x, y, z }) => { m.wallTouch = resolveUnitObstacleCollisions(m, { x, y, z }); });   // (the wall note for the Sudden Death brain: host.wall next frame)
+      prevPositions.forEach(({ m, x, y, z }) => { m.wallTouch = m.state.ladder != null ? null : resolveUnitObstacleCollisions(m, { x, y, z }); });   // (the ladder carries its climber through the lip's boxes — ladder.js)   // (the wall note for the Sudden Death brain: host.wall next frame)
       // THE VOID'S EDGE (mirrors tick.js): a grounded body that stepped off a cellar's floor over nothing is held at the edge
       prevPositions.forEach(({ m, x, y, z }) => {
         const p = m.body.position;
-        if (m.state.airborne || !voidUnder(p.x, p.z, p.y - GROUND_BASE_Y) || voidUnder(x, z, y - GROUND_BASE_Y)) return;
+        if (m.state.airborne || m.state.ladder != null || !voidUnder(p.x, p.z, p.y - GROUND_BASE_Y) || voidUnder(x, z, y - GROUND_BASE_Y)) return;
         p.x = x; p.z = z; m.body.velocity.x = 0; m.body.velocity.z = 0; m.state.momentumVX = 0; m.state.momentumVZ = 0;
       });
 

@@ -77,6 +77,15 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     floorY: 0,
     landedOnLid: false,
     plantUntil: 0,
+    // The ladder (ladder.js): the arena record's index while on one, the way (+1 up from the foot, -1 down from the exit),
+    // the leg ('enter' onto the line, 'climb', 'exit' onto the platform), this tick's intent, and the jump button's latch;
+    // a bot's goal (+1 / -1) while its brain has it take one. Undefined off a ladder: nothing rides the snapshot then.
+    ladder: undefined,
+    ladderDir: undefined,
+    ladderLeg: undefined,
+    ladderIntent: undefined,
+    ladderJumpLatch: undefined,
+    botLadderGoal: undefined,
 
     // Dash.
     antiMeleeUntil: 0,

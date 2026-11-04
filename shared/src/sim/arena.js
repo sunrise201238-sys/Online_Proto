@@ -4,6 +4,7 @@
 
 import { GROUND_BASE_Y } from './constants.js';
 import { obstaclesNearPoint } from './physics.js';   // (markFloorTops: the surfaces near a box, 2026-10-25)
+import { ladderRow } from './ladder.js';   // (ARENA_LADDERS: the rows in the model's metres)
 
 // Each obstacle is an axis-aligned bounding box (AABB) used for unit and
 // projectile collision. Optional flags:
@@ -10291,6 +10292,47 @@ const GENERATED_ARENA_COLLISION_DATA = {
   }
 };
 
+// THE LADDERS (ladder.js; user 2026-11-04/05), hand-set rows by map as the spawns are — the collision data is not touched for
+// them, the rule carries the body. Each row in the model's metres through ladderRow (the client's GLB_MAPS scale and centre):
+// x, z the climb line — a body's width (0.46 m) off the rungs' face, where the body hangs; yaw the facing into the wall; w the
+// grab width; y0, y1 the feet at the foot and at the top of the climb (the lip the body is carried over); ex, ez, ey the EXIT,
+// where the body stands on the platform the ladder serves (the connecting side — Compound's north catwalk, the one that goes
+// on; the south one is an island). Read off the models by shared/tools/maps/scan_ladders (the rungs and rails), the floors by
+// the data (ladder.test.js checks every row: the foot and the exit stand on their floors, clear of the boxes).
+//   Compound (b1105a): the hall's east wall's ladder, Object_90 — model x -20.49 z -11.67, 16 rungs 0.05..6.61 m, 0.59 m wide —
+//   up through the hatch between the two catwalks at 6.89..6.91 m, the exit on the north catwalk.
+//   District (b1105a): the two towers' ladders, 0.56 m rung pitch — eight tall ones on the towers' north (z 26.37) and south
+//   (z 42.97) faces from the sidewalk (0.01 m) to the parapet's top (45.37 m), at x -53.33 / -36.67 (the west tower) and
+//   -23.37 / -6.71 (the east tower); two short ones on the towers' inner faces at z 34.68, from the bridge roof between them
+//   (40.75 m) to the parapet's top. The roofs are at 44.67 m behind a 0.70 m parapet, so every exit lies over it on the roof,
+//   clear of the corner pilasters (1 x 1.55 m, the tall ladders hang beside them); along each tower's inner wall a 2.1 m
+//   wide ramp runs from the roof down to an inner floor at 40.61 m (the data's planes), and the short ladders' exits stand on
+//   it, at 42.32 m; three corners (T2 the west tower's north-east, T3 and T7 the east tower's north-west and south-west) have
+//   the ramp's low end behind the parapet, and their exits go on past it to the slab. The two ladders under the street
+//   (z 23.95, -18.2 to -9.3 m) are left out (user 2026-11-05).
+const ARENA_LADDERS = (() => {
+  const C = (m) => ladderRow(4, 0, 1.34, m);          // Compound: GLB_MAPS scale 4, cx 0, cz 1.34
+  const D = (m) => ladderRow(4, -25.75, 35.45, m);    // District: scale 4, cx -25.75, cz 35.45
+  const H = Math.PI / 2;
+  return {
+    compound: [
+      C({ name: 'C1 hall east wall', x: -21.0, z: -11.64, yaw: H, w: 1.0, y0: 0, y1: 6.92, ex: -21.0, ez: -13.3, ey: 6.91 }),
+    ],
+    district: [
+      D({ name: 'T1 west tower north', x: -53.33, z: 25.87, yaw: 0, w: 1.2, y0: 0.01, y1: 45.37, ex: -52.3, ez: 28.4, ey: 44.67 }),
+      D({ name: 'T2 west tower north-east', x: -36.67, z: 25.87, yaw: 0, w: 1.2, y0: 0.01, y1: 45.37, ex: -39.3, ez: 28.4, ey: 44.67 }),
+      D({ name: 'T3 east tower north-west', x: -23.37, z: 25.87, yaw: 0, w: 1.2, y0: 0.01, y1: 45.37, ex: -20.75, ez: 28.4, ey: 44.67 }),
+      D({ name: 'T4 east tower north', x: -6.71, z: 25.87, yaw: 0, w: 1.2, y0: 0.01, y1: 45.37, ex: -7.7, ez: 28.4, ey: 44.67 }),
+      D({ name: 'T5 west tower south', x: -53.33, z: 43.48, yaw: Math.PI, w: 1.2, y0: 0.01, y1: 45.37, ex: -52.3, ez: 40.9, ey: 44.67 }),
+      D({ name: 'T6 west tower south-east', x: -36.67, z: 43.48, yaw: Math.PI, w: 1.2, y0: 0.01, y1: 45.37, ex: -37.3, ez: 40.9, ey: 44.67 }),
+      D({ name: 'T7 east tower south-west', x: -23.37, z: 43.48, yaw: Math.PI, w: 1.2, y0: 0.01, y1: 45.37, ex: -20.75, ez: 40.9, ey: 44.67 }),
+      D({ name: 'T8 east tower south', x: -6.71, z: 43.48, yaw: Math.PI, w: 1.2, y0: 0.01, y1: 45.37, ex: -7.7, ez: 40.9, ey: 44.67 }),
+      D({ name: 'S1 west tower east face', x: -35.63, z: 34.68, yaw: -H, w: 1.2, y0: 40.75, y1: 45.37, ex: -37.3, ez: 34.68, ey: 42.32 }),
+      D({ name: 'S2 east tower west face', x: -24.41, z: 34.68, yaw: H, w: 1.2, y0: 40.75, y1: 45.37, ex: -22.75, ez: 34.68, ey: 42.32 }),
+    ],
+  };
+})();
+
 const ARENA_SPAWNS = {
   // Streets: diagonal corner spawns (user 2026-08-06; old values ±108, 0) —
   // 8u clear of the boundary walls (x ±126, z ±90) and the corner towers.
@@ -10430,6 +10472,7 @@ function buildGeneratedArena(mapKey) {
     obstacles: [...makeBoundaryObstacles(mapKey), ...data.obstacles],
     surfaces: data.surfaces.map(materializeSurface),
     spawns: ARENA_SPAWNS[mapKey],
+    ladders: ARENA_LADDERS[mapKey] ?? [],   // the map's ladders (ladder.js), hand-set rows as the spawns are
     ceil: MAP_BOUNDARY[mapKey]?.ceil   // the map's ceiling (units over the street) where it has one: the cap on every body's feet (movement.js)
   };
 }
@@ -10525,6 +10568,7 @@ export function getArena(mapKey) {
 export function getArenaObstacles(mapKey) { return getArena(mapKey).obstacles; }
 export function getArenaSurfaces(mapKey) { return getArena(mapKey).surfaces; }
 export function getArenaSpawns(mapKey) { return getArena(mapKey).spawns; }
+export function getArenaLadders(mapKey) { return getArena(mapKey).ladders ?? []; }
 // Modelled maps (client buildGlbArena): the play extent, and the collision data's own boxes without
 // the runtime perimeter — the offline client raises its own perimeter (addBoundaryIndicator).
 export function getArenaBounds(mapKey) { return MAP_BOUNDARY[mapKey] ?? { halfX: 138, halfZ: 138 }; }

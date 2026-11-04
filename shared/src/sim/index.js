@@ -4,7 +4,8 @@
 export * from './constants.js';
 export * from './math.js';
 export * from './state.js';
-export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
+export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaLadders, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
+export { onLadder, ladderAt, ladderFootZone, ladderTopZone, ladderMount, ladderRelease, ladderIntentOf, ladderJumpPress, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick, ladderNormal, ladderRow, LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_TOP_RADIUS } from './ladder.js';
 export {
   segmentHitsObstacle,
   unitOverlapsObstacle,
