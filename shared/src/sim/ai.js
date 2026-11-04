@@ -8,7 +8,7 @@
 
 import { attemptFire, tryStartJump, tryStartStep, tickStep, reloadHolds } from './actions.js';
 import { getArena } from './arena.js';
-import { buildNavGrid, deserializeNavGrid, navDataSignature } from './navgrid.js';
+import { buildNavGrid, deserializeNavGrid, navDataSignature, attachLadderLinks } from './navgrid.js';
 import { inheritMomentum, hitStunMoveScale } from './movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from './constants.js';
 import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain.js';
@@ -27,7 +27,7 @@ const navGridCache = new WeakMap();
 export function navGridFor(arena) {
   let grid = navGridCache.get(arena);
   if (!grid) {
-    grid = buildNavGrid(arena.obstacles, arena.surfaces);
+    grid = attachLadderLinks(buildNavGrid(arena.obstacles, arena.surfaces), arena.ladders ?? []);   // (the ladders' links on the grid — navgrid.js attachLadderLinks; the offline client's ensureOfflineNavGrid does the same)
     navGridCache.set(arena, grid);
   }
   return grid;
@@ -38,7 +38,7 @@ export function registerNavGridData(arena, bytes) {
   if (navGridCache.has(arena)) return true;
   const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces));
   if (!grid) return false;
-  navGridCache.set(arena, grid);
+  navGridCache.set(arena, attachLadderLinks(grid, arena.ladders ?? []));
   return true;
 }
 export function hasNavGrid(arena) { return navGridCache.has(arena); }

@@ -1,4 +1,4 @@
-// FROZEN at b1104g for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1105b for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104g_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1105b_ref.js';
 import { hitStunMoveScale } from '../src/sim/movement.js';
 
 // --- Bot tactical-sprint tunables ---
@@ -529,6 +529,11 @@ function botTryJumpSurvival(host) {
 
 export function nbBrainTick(host) {
   const { now, me, pos, vel, grounded, unit, opp, enemies, obstacles, surfaces, grid, eyeUp, muzzleUp, mode, sd } = host;
+  // THE LADDER'S GOAL (ladder.js botLadderGoal; b1105b): a goal lives one tick — the Maze follower below sets it on the tick it
+  // walks the bot at a ladder's end, and nothing else renews it, so a bot that dropped its route, or was taken by Defense,
+  // passes a ladder's foot without mounting (ladderBotStep mounts on the goal alone). Under a standing move order the command
+  // driver owns the goal the same way (command.js tickCommandDriver, the offline applyMoveOrder) and this clears nothing.
+  if (!(host.cmd && host.cmd.move)) me.botLadderGoal = undefined;
   // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
   // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
   // as the gauge's volume and refill are (movement.js); the costs are not.
@@ -1267,7 +1272,8 @@ export function nbBrainTick(host) {
     for (let i = 0; i < path.length; i += 1) {
       const seg = path[i];
       const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
-      const steps = Math.max(1, Math.ceil(segLen / 6));
+      // (a ladder's leg is the climb, not a walk: no sample along it — its landing alone is tried, and kept whole as the cut)
+      const steps = seg.ladder != null ? 1 : Math.max(1, Math.ceil(segLen / 6));
       for (let s = 1; s <= steps; s += 1) {
         const px = prev.x + ((seg.x - prev.x) * s) / steps;
         const pz = prev.z + ((seg.z - prev.z) * s) / steps;
@@ -1282,7 +1288,7 @@ export function nbBrainTick(host) {
           // Carry the sample's floor: smoothPath's same-floor gate reads
           // (y ?? 0), so a y-less cut point on a deck froze the final leg
           // out of smoothing (review 2026-08-13).
-          cut.push({ x: px, z: pz, y: fy });
+          cut.push(seg.ladder != null ? seg : { x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -1325,7 +1331,7 @@ export function nbBrainTick(host) {
     if (host.searchSlot()) {
       const dl = host.deadline();
       const walk = () => {
-        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK });
+        const r = findPathOnGrid(grid, pos.x, pos.z, opp.pos.x, opp.pos.z, myFloorY, oppFloorY, obstacles, { job: rec.walkJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK, ladders: true });   // (ladders: the travel's searches climb — navgrid.js THE LADDERS)
         if (r && r.pending) return;
         rec.walkJob = null;
         let p = r;
@@ -1338,7 +1344,7 @@ export function nbBrainTick(host) {
           grid, pos.x, pos.z, myFloorY,
           opp.pos.x, opp.pos.z, opp.pos.y + eyeUp,
           lowerRange, upperRange, obstacles, oppFloorY,
-          { job: rec.fireJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK }
+          { job: rec.fireJob, deadline: dl, popsPerCall: dl ? Infinity : BOT_SEARCH_POPS_PER_TICK, ladders: true }
         );
         if (r && r.pending) return;
         rec.fireJob = null; rec.fireDone = true;
@@ -1758,7 +1764,10 @@ export function nbBrainTick(host) {
       // (rate-limited) when the target wanders off the planned goal.
       // Avoidance stays blended in for dynamic wiggle room.
       let wp = nav.path[nav.idx];
+      // (a ladder's landing is reached by the climb — a bot under it, however near in the plan, has the ladder to ride first)
+      const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? myFloorY) - myFloorY) >= BOT_SAME_FLOOR_RISE;
       while (nav.idx < nav.path.length - 1
+          && !ladderAhead(wp)
           && Math.hypot(wp.x - pos.x, wp.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
@@ -1784,7 +1793,12 @@ export function nbBrainTick(host) {
         jumpDirZ = jdz / jln;
         if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'maze-route'; }
       }
-      let tx = wp.x - pos.x, tz = wp.z - pos.z;
+      // THE LADDER (ladder.js, b1105b): the waypoint ahead is a ladder's landing on another floor — the goal is set (the body
+      // mounts in the zone, ladderBotStep; the brain sleeps for the ride and wakes standing on the landing, where the waypoint
+      // is reached) and the legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit).
+      const ladderLeg = ladderAhead(wp);
+      if (ladderLeg) me.botLadderGoal = wp.climb;
+      let tx = (ladderLeg ? wp.mx : wp.x) - pos.x, tz = (ladderLeg ? wp.mz : wp.z) - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.3;
       tz = tz / wl + avoid.rz * 0.3;

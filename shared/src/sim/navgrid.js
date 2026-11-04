@@ -29,6 +29,7 @@ import {
   walkFloorTo, surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
   groundHeightAt, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
 import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, NAV_FILE_EXT } from './constants.js';
+import { ladderGrabPoint } from './ladder.js';
 
 const CELL = 4;
 // Max floor rise between adjacent samples: the sim's step plus slack for float
@@ -596,14 +597,74 @@ function forEachWalkNeighbor(grid, node, visit) {
   for (let k = walkStart[node], e = walkStart[node + 1]; k < e; k += 1) visit(walkAdj[k]);
 }
 // Walk neighbours + jump-links, with the traversal cost of each.
-function forEachNeighbor(grid, node, visit) {
+function forEachNeighbor(grid, node, visit, ladders = false) {
   forEachWalkNeighbor(grid, node, (nb) => visit(nb, 1));
   const { linkStart, linkAdj } = grid;
   for (let k = linkStart[node], e = linkStart[node + 1]; k < e; k += 1) visit(linkAdj[k], JUMP_LINK_COST);
+  // (THE LADDERS, below: a search that asked for them climbs — the link rides along so the path builder can flag its landing)
+  if (ladders && grid.ladderAdj) { const ls = grid.ladderAdj.get(node); if (ls) for (let k = 0; k < ls.length; k += 1) { const l = grid.ladderLinks[ls[k]]; visit(l.to, l.cost, l); } }
 }
 // Does a WALK edge join a to b? The path builders flag the node a jump link leads to (`jump`): the follower
 // vaults toward that waypoint, and toward no other — a slope or a kerb's ramp the body walks is a walk edge.
 function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, (nb) => { if (nb === b) yes = true; }); return yes; }
+
+// THE LADDERS ON THE GRID (b1105b, user 2026-11-05, "I want BOT climb the whole ladder once they decide to climb it"; the rule is
+// ladder.js). A ladder is a LINK between two nodes, attached to the grid after it is built or read back (attachLadderLinks — the
+// grid files do not change; the ladder rows are code, arena.js ARENA_LADDERS): the node at the ladder's grab point on the foot's
+// floor and the node at its exit on the platform's, joined both ways — up (the climb) and down (the climb down; a drop link,
+// where the builder found one, costs JUMP_LINK_COST and wins, so a bot jumps off where there is an edge to jump off and climbs
+// down only where there is none — user: "有邊可跳就跳下，沒有才爬下"). The cost is the climb's length in cells: the climb runs at
+// the sprint's steady speed (LADDER_CLIMB_SPEED) and a walk edge is one cell at that speed too, so a ladder is taken when it is
+// the quicker way up and left alone when the stairs are. A search takes the ladders only when ASKED (opts.ladders): the plain
+// brain's route and firing-spot searches (its travel, Pursue / Maze) and the command layer's orders ask; the hide-spot search
+// (Defense, the Hide stance) and the Sudden Death brain never do (user: "I don't want BOT to use ladder in Defense related
+// reactions"; "SD bots: no ladders").
+//   The waypoint a ladder link leads to is the LANDING — the exit point (up) or the foot of the climb line (down), on its floor —
+//   flagged with the ladder's index (`ladder`), the direction (`climb`: +1 up, -1 down) and the point to walk to before the mount
+//   (`mx`, `mz`: the grab point in front of the foot, or the exit). A follower heading for such a waypoint from the other floor
+//   sets the bot's goal (botLadderGoal) and walks to that point; ladderBotStep mounts the body in the zone, the ride is the
+//   rule's, and the release stands the body on the landing, where the waypoint is reached. Never `jump`; never a chord across it.
+export const LADDER_LINK_REACH = 6;   // (units: the farthest a ladder's end may lie from the node that stands for it — 1.5 cells)
+function nodeNear(grid, x, z, floorY, reach = LADDER_LINK_REACH) {
+  const { cols, rows, cell, minX, minZ, cellStart, floor, posX, posZ } = grid;
+  const c0 = Math.floor((x - minX) / cell), r0 = Math.floor((z - minZ) / cell);
+  let best = -1, bestD = reach;
+  for (let r = r0 - 2; r <= r0 + 2; r += 1) {
+    for (let c = c0 - 2; c <= c0 + 2; c += 1) {
+      if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+      const i = r * cols + c;
+      for (let node = cellStart[i], e = cellStart[i + 1]; node < e; node += 1) {
+        if (Math.abs(floor[node] - floorY) > 2) continue;
+        const d = Math.hypot(posX[node] - x, posZ[node] - z);
+        if (d < bestD) { bestD = d; best = node; }
+      }
+    }
+  }
+  return best;
+}
+export function attachLadderLinks(grid, ladders) {
+  if (!grid || grid.ladderAdj) return grid;   // (once per grid object: the server's cache and the client hold one grid per arena)
+  const adj = new Map(), links = [];
+  const add = (from, to, rec) => { if (!adj.has(from)) adj.set(from, []); adj.get(from).push(links.length); links.push({ index: links.length, from, to, ...rec }); };
+  for (let k = 0; k < (ladders?.length ?? 0); k += 1) {
+    const L = ladders[k];
+    const grab = ladderGrabPoint(L);
+    const foot = nodeNear(grid, grab.x, grab.z, L.y0), top = nodeNear(grid, L.ex, L.ez, L.ey);
+    if (foot < 0 || top < 0 || foot === top) continue;
+    const cost = (Math.abs(L.y1 - L.y0) + Math.hypot(L.ex - L.x, L.ez - L.z, L.ey - L.y1) + Math.hypot(grab.x - L.x, grab.z - L.z)) / CELL;
+    add(foot, top, { ladder: k, climb: 1, cost, mx: grab.x, mz: grab.z, x: L.ex, z: L.ez, y: L.ey });
+    add(top, foot, { ladder: k, climb: -1, cost, mx: L.ex, mz: L.ez, x: L.x, z: L.z, y: L.y0 });
+  }
+  grid.ladderAdj = adj; grid.ladderLinks = links; grid.ladders = ladders ?? [];
+  return grid;
+}
+// A route's waypoint for node i reached from node p: the landing of the ladder link the search took (`via`, its index), flagged;
+// else the node's point, flagged `jump` when no walk edge joins them (a jump or drop link).
+function routePoint(grid, p, i, via) {
+  const l = via >= 0 ? grid.ladderLinks[via] : null;
+  if (l) return { x: l.x, z: l.z, y: l.y, jump: false, ladder: l.ladder, climb: l.climb, mx: l.mx, mz: l.mz };
+  return { x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: grid.floor[i], jump: p !== -1 && !isWalkEdge(grid, p, i) };
+}
 
 // (a node's point: where its body stands — the cell's centre, or a quarter cell beside it; see standAt)
 const nodeCenterX = (grid, node) => grid.posX[node];
@@ -691,15 +752,17 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
   const parent = resume ? st.parent : new Int32Array(size).fill(-1);
   const closed = resume ? st.closed : new Uint8Array(size);
   const heap = resume ? st.heap : createMinHeap();
+  const ladders = !!opts.ladders;   // (THE LADDERS: asked for, the links are walked and `via` notes the one a node was reached by)
+  const via = ladders ? (resume ? st.via : new Int32Array(size).fill(-1)) : null;
   let guard = resume ? st.guard : 0;
   if (!resume) { g[start] = 0; heap.push(h(start), start); }
   let found = false;
   let callPops = 0;   // (a call always makes 32 pops of progress before it may park: a deadline already past must not stall the search for good)
   while (heap.size()) {
     // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
-    if (job && callPops >= popsPerCall) { job.state = { start, goal, g, parent, closed, heap, guard }; return { pending: true }; }   // (THE SLICE, see below)
+    if (job && callPops >= popsPerCall) { job.state = { start, goal, g, parent, closed, heap, guard, via }; return { pending: true }; }   // (THE SLICE, see below)
     if (deadline && callPops >= 32 && (guard & 31) === 0 && performance.now() > deadline) {
-      if (job) { job.state = { start, goal, g, parent, closed, heap, guard }; return { pending: true }; }
+      if (job) { job.state = { start, goal, g, parent, closed, heap, guard, via }; return { pending: true }; }
       break;
     }
     if (++guard > maxPops) break;
@@ -708,7 +771,7 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
     if (closed[cur]) continue;
     closed[cur] = 1;
     if (cur === goal) { found = true; break; }
-    forEachNeighbor(grid, cur, (nb, cost) => {
+    forEachNeighbor(grid, cur, (nb, cost, link) => {
       if (closed[nb]) return;
       // WALL-CLEARANCE PENALTY: entering a node whose body barely fits costs
       // extra, so A* buys its way off wall RUNS (>= 2 tight nodes) and down
@@ -720,18 +783,17 @@ export function findPathOnGrid(grid, sx, sz, tx, tz, startFloor = null, goalFloo
       if (ng < g[nb]) {
         g[nb] = ng;
         parent[nb] = cur;
+        if (via) via[nb] = link ? link.index : -1;
         heap.push(ng + h(nb), nb);
       }
-    });
+    }, ladders);
   }
   if (job) job.state = null;
   if (opts.stats) opts.stats.pops = guard;   // (a probe's reading of the search's cost)
   if (!found) return null;
 
   const pts = [];
-  for (let i = goal; i !== -1; i = parent[i]) {
-    pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
-  }
+  for (let i = goal; i !== -1; i = parent[i]) pts.push(routePoint(grid, parent[i], i, via ? via[i] : -1));
   pts.reverse();
   return collapseWaypoints(pts);
 }
@@ -744,7 +806,7 @@ function collapseWaypoints(pts) {
   const out = [pts[0]];
   for (let k = 1; k < pts.length - 1; k += 1) {
     const a = out[out.length - 1], b = pts[k], c2 = pts[k + 1];
-    const floorJump = !!(b.jump || c2.jump);
+    const floorJump = !!(b.jump || c2.jump || b.ladder != null || c2.ladder != null);   // (nor across a ladder's landing)
     const cross = (b.x - a.x) * (c2.z - b.z) - (b.z - a.z) * (c2.x - b.x);
     if (!floorJump && Math.abs(cross) < 1e-6) continue;
     out.push(b);
@@ -813,7 +875,7 @@ export function smoothPath(grid, path, obstacles) {
     let best = a + 1;
     const bMax = Math.min(path.length, a + 13);
     for (let b = a + 2; b < bMax; b += 1) {
-      if (path[b].jump) break;   // (never a chord across a jump link)
+      if (path[b].jump || path[b].ladder != null) break;   // (never a chord across a jump link, nor a ladder's landing)
       if (Math.abs((path[b].y ?? 0) - (path[a].y ?? 0)) > 0.5) break;
       if (!clearLeg(path[a], path[b])) break;
       best = b;
@@ -875,14 +937,16 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
   // Two passes: firing nodes ON THE TARGET'S FLOOR first, anywhere second. A short-range bot facing an edge-camper on a
   // Station platform can "see" the target from a ground peephole over the 4-high edge wall — accepting that first meant
   // its paths never contained a climb, and it ground the wall forever instead of jumping up to fight properly.
+  const ladders = !!opts.ladders;   // (THE LADDERS, findPathOnGrid: asked for, the links are walked and `via` notes the one taken)
   const run = (sameFloorOnly, parked) => {
-    let parent, g, closed, heap, pops;
-    if (parked) { ({ parent, g, closed, heap, pops } = parked); }
+    let parent, g, closed, heap, pops, via;
+    if (parked) { ({ parent, g, closed, heap, pops, via } = parked); }
     else {
       parent = new Int32Array(size).fill(-2); // -2 unvisited, -1 root
       g = new Float64Array(size).fill(Infinity);
       closed = new Uint8Array(size);
       heap = createMinHeap();
+      via = ladders ? new Int32Array(size).fill(-1) : null;
       pops = 0;
       parent[start] = -1;
       g[start] = 0;
@@ -892,9 +956,9 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
     let callPops = 0;   // (a call always makes 32 pops of progress before it may park — a deadline already past must not stall the search for good)
     while (heap.size()) {
       // (the park happens BEFORE a pop, the open set untouched, so the resumed search is the unbudgeted one step for step)
-      if (job && callPops >= popsPerCall) return { parked: { parent, g, closed, heap, pops } };   // (THE SLICE, as findPathOnGrid's)
+      if (job && callPops >= popsPerCall) return { parked: { parent, g, closed, heap, pops, via } };   // (THE SLICE, as findPathOnGrid's)
       if (deadline && callPops >= 32 && (pops & 31) === 0 && performance.now() > deadline) {
-        if (job) return { parked: { parent, g, closed, heap, pops } };
+        if (job) return { parked: { parent, g, closed, heap, pops, via } };
         break;
       }
       if (++pops > maxPops) break;
@@ -911,18 +975,16 @@ export function findFiringPath(grid, sx, sz, startFloor, tx, tz, targetEyeY, min
         || targetFloor == null
         || Math.abs(floor[cur] - targetFloor) <= 2;
       if (cur !== start && floorOk && d >= minD && d <= maxD && sees(cur)) { goal = cur; break; }
-      forEachNeighbor(grid, cur, (nb, cost) => {
+      forEachNeighbor(grid, cur, (nb, cost, link) => {
         if (closed[nb]) return;
         const ng = g[cur] + cost + (clearGrade ? TIGHT_COST[clearGrade[nb]] : 0);
-        if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; heap.push(ng + hOf(nb), nb); }
-      });
+        if (ng < g[nb]) { g[nb] = ng; parent[nb] = cur; if (via) via[nb] = link ? link.index : -1; heap.push(ng + hOf(nb), nb); }
+      }, ladders);
     }
     if (opts.stats) opts.stats.pops = (opts.stats.pops ?? 0) + pops;   // (a probe's reading of the search's cost)
     if (goal < 0) return { none: true };
     const pts = [];
-    for (let i = goal; i !== -1; i = parent[i]) {
-      pts.push({ x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: floor[i], jump: parent[i] !== -1 && !isWalkEdge(grid, parent[i], i) });
-    }
+    for (let i = goal; i !== -1; i = parent[i]) pts.push(routePoint(grid, parent[i], i, via ? via[i] : -1));
     pts.reverse();
     return { path: collapseWaypoints(pts) };
   };

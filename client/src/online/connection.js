@@ -229,9 +229,9 @@ export function createConnection() {
     // state itself arrives via the team-scoped snapshot `commands` block.
     // `slot` (optional) targets a commandable BOT teammate instead of the
     // sender's own unit (owner 2026-08-22); omitted = own unit.
-    sendOrderMove: (x, z, floorY, slot) => {
+    sendOrderMove: (x, z, floorY, slot, noLadder = false) => {
       if (!connected) return;
-      socket.emit('order:move', { x, z, floorY, slot });
+      socket.emit('order:move', { x, z, floorY, slot, noLadder });   // (noLadder: the hold-cycled way without a ladder — main.js dioramaGestureFrame)
     },
     sendOrderLock: (target, slot) => {
       if (!connected) return;

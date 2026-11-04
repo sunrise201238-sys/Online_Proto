@@ -26,7 +26,11 @@ import { GROUND_BASE_Y, LADDER_CLIMB_SPEED, SURFACE_STEP_HEIGHT } from './consta
 
 export const LADDER_GRAB_FRONT = 2.0;   // units in front of the climb line a body stands to mount (0.5 m)
 export const LADDER_GRAB_BACK = 0.6;    // and behind it (toward the wall)
-export const LADDER_TOP_RADIUS = 4.0;   // units around the exit a body stands to mount from the top (1 m)
+export const LADDER_TOP_RADIUS = 4.0;
+// The point a bot walks to before it mounts from the foot: the middle of the foot zone, LADDER_GRAB_MID in front of the climb
+// line (the route grid's ladder links name it — navgrid.js attachLadderLinks; a follower heads for it with the goal set).
+export const LADDER_GRAB_MID = (LADDER_GRAB_FRONT - LADDER_GRAB_BACK) / 2;
+export function ladderGrabPoint(L) { const n = ladderNormal(L); return { x: L.x - n.x * LADDER_GRAB_MID, z: L.z - n.z * LADDER_GRAB_MID }; }   // units around the exit a body stands to mount from the top (1 m)
 
 const G = GROUND_BASE_Y;
 

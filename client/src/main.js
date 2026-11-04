@@ -16,6 +16,7 @@ import {
   PROJECTILE_MUZZLE_Y_OFFSET as SIM_MUZZLE_Y_OFFSET,
   buildNavGrid,
   findPathOnGrid,
+  attachLadderLinks,
   smoothPath,
   mateSpawnFor,
   CMD_TRAVEL_BOOST_FLOOR,
@@ -10666,13 +10667,13 @@ function ensureOfflineNavGrid() {
   const t0 = performance.now();
   if (rec && rec.bytes) {
     const g = deserializeNavGrid(rec.bytes, arenaSurfaces, navDataSignature(arenaObstacles, arenaSurfaces));
-    if (g) { offlineNavGrid = g; console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
+    if (g) { offlineNavGrid = attachLadderLinks(g, arenaLadders); console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
     console.warn(`[nav] ${state.mapKey}: grid file refused (other collision data: ${arenaObstacles.length} boxes / ${arenaSurfaces.length} floors here) — building`);
     rec.bytes = null; rec.failed = true;
   } else if (rec && !rec.failed && performance.now() - rec.startedAt < NAV_DATA_WAIT_MS) {
     return null;   // (the file is on its way)
   }
-  offlineNavGrid = buildNavGrid(arenaObstacles, arenaSurfaces);
+  offlineNavGrid = attachLadderLinks(buildNavGrid(arenaObstacles, arenaSurfaces), arenaLadders);   // (the ladders' links on the grid — navgrid.js attachLadderLinks, as the server's navGridFor)
   console.log(`[nav] ${state.mapKey}: grid built, ${(performance.now() - t0).toFixed(0)} ms`);
   return offlineNavGrid;
 }
@@ -11851,7 +11852,7 @@ function dioramaLayerStackAt(x, z) {
   return layers.sort((a, b) => a - b);
 }
 
-function computeOrderPath(m, tx, tz, targetFloorY) {
+function computeOrderPath(m, tx, tz, targetFloorY, noLadder = false) {   // (noLadder: the way without a ladder — the hold-cycled pick; navgrid.js THE LADDERS)
   if (!ensureOfflineNavGrid() || !m || m.state.hp <= 0) return null;
   // COMMAND-layer strictness: the shared pathfinder clamps ANY goal into the
   // grid and snaps up to 3 cells onto walkable — right for bot self-routing,
@@ -11864,7 +11865,7 @@ function computeOrderPath(m, tx, tz, targetFloorY) {
   if (Math.abs(tx) > b.halfX + 2 || Math.abs(tz) > b.halfZ + 2) return null;
   const pos = m.body.position;
   const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
-  let path = findPathOnGrid(offlineNavGrid, pos.x, pos.z, tx, tz, myFloorY, targetFloorY, arenaObstacles);
+  let path = findPathOnGrid(offlineNavGrid, pos.x, pos.z, tx, tz, myFloorY, targetFloorY, arenaObstacles, { ladders: !noLadder });
   if (!path || path.length < 2) return null;
   const end = path[path.length - 1];
   if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return null;
@@ -11873,13 +11874,13 @@ function computeOrderPath(m, tx, tz, targetFloorY) {
   return path;
 }
 
-function issueMoveOrder(slot, tx, tz, targetFloorY, path) {
+function issueMoveOrder(slot, tx, tz, targetFloorY, path, noLadder = false) {
   const m = state[slot];
   if (!m || m.state.hp <= 0) return;
   m.cmdHide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
   m.cmdHideAuto = false;
   m.cmdMove = {
-    x: tx, z: tz, y: targetFloorY,
+    x: tx, z: tz, y: targetFloorY, noLadder,
     path, idx: 0,
     phase: 'travel',
     anchorUntil: 0,
@@ -11918,6 +11919,8 @@ function applyMoveOrder(m, now) {
   const mv = m?.cmdMove;
   if (!mv) return;
   if (m.state.hp <= 0) { m.cmdMove = null; return; }
+  if (m.state.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderTick; the order goes on from the landing)
+  m.state.botLadderGoal = undefined;    // (the goal is this frame's: set below on a ladder leg of the route, else none — command.js, nbrain.js)
   if (botReflexActive(m, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex may have moved the unit far off the route.
@@ -11948,27 +11951,35 @@ function applyMoveOrder(m, now) {
       if (mv.reflexHeld || now >= mv.replanAt) {
         mv.reflexHeld = false;
         mv.replanAt = now + CMD_REPLAN_MS;
-        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y, mv.noLadder);
         if (fresh) { mv.path = fresh; mv.idx = 0; }
       }
     }
+    const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
+    // THE LADDER (ladder.js, b1105b): a waypoint that is a ladder's landing on another floor is reached by the climb — the
+    // walk's advance stops at it, the goal is set (ladderBotStep mounts the body in the zone; the ride is the rule's) and the
+    // legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit). No route jump at it.
+    // Mirrors the shared tickCommandDriver.
+    const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? 0) - myFloorY) > 2;
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
+      && !ladderAhead(wp)
       && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 3) {
       mv.idx += 1;
       wp = mv.path[mv.idx];
     }
-    const gx = wp ? wp.x : mv.x;
-    const gz = wp ? wp.z : mv.z;
+    const ladderLeg = !!wp && ladderAhead(wp);
+    if (ladderLeg) m.state.botLadderGoal = wp.climb;
+    const gx = wp ? (ladderLeg ? wp.mx : wp.x) : mv.x;
+    const gz = wp ? (ladderLeg ? wp.mz : wp.z) : mv.z;
     const dx = gx - pos.x;
     const dz = gz - pos.z;
     const l = Math.hypot(dx, dz) || 1;
-    const myFloorY = groundHeightAt(pos.x, pos.z, pos.y - GROUND_BASE_Y);
     // ROUTE JUMP (owner 2026-08-22): the upcoming waypoint sits on a ledge
     // above the current floor — the path crossed a jump-link. Vault toward
     // it once close enough, funded at the MANDATED tier (60).
     const wpY = wp ? (wp.y ?? 0) : mv.y;
-    if (grounded && wpY - myFloorY > 1.7 && l < 7) {
+    if (grounded && !ladderLeg && wpY - myFloorY > 1.7 && l < 7) {
       cmdTryStartJump(m, now);
     }
     if (m.state.airborne || !m.grounded) {
@@ -11986,7 +11997,7 @@ function applyMoveOrder(m, now) {
     // ledge unable to afford the hop.
     let jumpAhead = false;
     for (let k = mv.idx; k < mv.path.length; k += 1) {
-      if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+      if (mv.path[k].ladder == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
     const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District and Compound 5)
     // DASH to the assigned area in LATCHED segments — same sprint math as
@@ -12044,7 +12055,7 @@ function applyMoveOrder(m, now) {
       if (mv.reflexHeld || now >= (mv.replanAt ?? 0)) {
         mv.reflexHeld = false;
         mv.replanAt = now + CMD_REPLAN_MS;
-        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y);
+        const fresh = computeOrderPath(m, mv.x, mv.z, mv.y, mv.noLadder);
         if (fresh) {
           mv.path = fresh;
           mv.idx = 0;
@@ -12308,11 +12319,14 @@ function ensureDioramaLayer() {
   const dragCircle = svgNode('path', { fill: 'rgba(238, 244, 255, 0.07)', stroke: '#eef4ff', 'stroke-width': '1.6', 'pointer-events': 'none' });
   const dragPath = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.4', 'stroke-dasharray': '5 4', 'pointer-events': 'none' });
   const dragDrop = svgNode('path', { fill: 'none', stroke: '#eef4ff', 'stroke-width': '1.2', 'stroke-dasharray': '2 3', 'pointer-events': 'none' });
+  // (the route's ladder legs, drawn over the dashed preview: solid, amber — the player sees the climb the order will make; ladder.js)
+  const dragLadder = svgNode('path', { fill: 'none', stroke: '#ffcf5a', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'pointer-events': 'none' });
   svg.appendChild(dragCasing);
   svg.appendChild(dragCircle);
   svg.appendChild(dragPath);
+  svg.appendChild(dragLadder);
   svg.appendChild(dragDrop);
-  diorama.dragEls = { casing: dragCasing, circle: dragCircle, path: dragPath, drop: dragDrop };
+  diorama.dragEls = { casing: dragCasing, circle: dragCircle, path: dragPath, ladder: dragLadder, drop: dragDrop };
   app.appendChild(layer);
   // COMMAND MODE: the layer owns every pointer (markers are hit-tested
   // manually against els.box, so no per-element listeners are needed).
@@ -12540,7 +12554,7 @@ function dioramaUpdateDragTarget(x, y) {
   drag.layerIdx = li;
   const nowT = performance.now();
   if (nowT - drag.pathAt > 120 || Math.hypot(drag.x - drag.pathX, drag.z - drag.pathZ) > 2) {
-    drag.path = computeOrderPath(state[drag.slot], drag.x, drag.z, drag.y);
+    drag.path = computeOrderPath(state[drag.slot], drag.x, drag.z, drag.y, drag.noLadder);
     drag.valid = !!drag.path;
     drag.pathAt = nowT;
     drag.pathX = drag.x;
@@ -12554,7 +12568,7 @@ function dioramaUpdateDragTarget(x, y) {
       for (let k = 0; k < stack.length; k += 1) {
         if (k === li) continue;
         const alt = dioramaGroundPoint(x, y, stack[k]) ?? probe;
-        const path = computeOrderPath(state[drag.slot], alt.x, alt.z, stack[k]);
+        const path = computeOrderPath(state[drag.slot], alt.x, alt.z, stack[k], drag.noLadder);
         if (path) {
           drag.x = alt.x;
           drag.z = alt.z;
@@ -12632,7 +12646,7 @@ function onDioPointerDown(e) {
     diorama.drag = {
       slot: diorama.sel, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
       path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: true,
-      userLayer: false   // becomes true once the player hold-cycles a layer
+      userLayer: false, noLadder: false   // userLayer: true once the player hold-cycles a layer; noLadder: the hold picked the way without a ladder
     };
     dioramaUpdateDragTarget(e.clientX, e.clientY);
   }
@@ -12688,7 +12702,7 @@ function onDioPointerMove(e) {
       diorama.drag = {
         slot: g.slot, x: 0, z: 0, y: 0, layerPref: 0, layers: 1, layerIdx: 0,
         path: null, valid: false, pathAt: 0, pathX: 1e9, pathZ: 1e9, tapMode: false,
-        userLayer: false   // becomes true once the player hold-cycles a layer
+        userLayer: false, noLadder: false   // userLayer: true once the player hold-cycles a layer; noLadder: the hold picked the way without a ladder
       };
     }
   }
@@ -12740,9 +12754,9 @@ function onDioPointerUp(e) {
         // round trip), and a 'rate' denial gets its own red note — a ring
         // release has no lingering glow to signal "didn't land".
         diorama.pendingOrder = { kind: 'move', px: e.clientX, py: e.clientY, ring: g.kind === 'ring' };
-        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
+        state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot), drag.noLadder);
       } else {
-        issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+        issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path, drag.noLadder);
       }
       // A ring drag re-issued the order (fresh 40 s window by construction —
       // setMoveOrder starts a new anchor). Any drag counts, even one released
@@ -12847,9 +12861,9 @@ function onDioPointerUp(e) {
           // Glow stays until the server acks (processOrderResults): ok
           // drops it (one-shot), a deny shows the red note and keeps it.
           diorama.pendingOrder = { kind: 'move', px: e.clientX, py: e.clientY };
-          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot));
+          state.online.conn?.sendOrderMove(drag.x, drag.z, drag.y, onlineServerIdOf(drag.slot), drag.noLadder);
         } else {
-          issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path);
+          issueMoveOrder(drag.slot, drag.x, drag.z, drag.y, drag.path, drag.noLadder);
           diorama.sel = null;   // one-shot: the glow drops once the command lands
         }
       } else {
@@ -12895,9 +12909,22 @@ function dioramaGestureFrame() {
     g.stillY = p.y;
     g.stillAt = performance.now();
   } else if (performance.now() - g.stillAt > DIO_LONGPRESS_MS) {
-    if ((drag.layers ?? 1) > 1) {
-      drag.layerPref = (drag.layerIdx + 1) % drag.layers;
-      drag.userLayer = true;   // hand-picked: auto-advance backs off
+    // THE WAY WITHOUT A LADDER (ladder.js, b1105b; user: "there should also be a ladder-free route (if available) as alternative
+    // choice ... once player holds long enough"): a pick whose route climbs a ladder offers, on the next hold, the same spot by
+    // a route without one, when there is one — the hold after goes on to the next layer, ladders allowed again. The order
+    // carries the choice (noLadder: issueMoveOrder / sendOrderMove), so its replans plan the same way.
+    const viaLadder = !drag.noLadder && drag.valid && !!drag.path && drag.path.some((w) => w.ladder != null);
+    const alt = viaLadder ? computeOrderPath(state[drag.slot], drag.x, drag.z, drag.y, true) : null;
+    if (alt) {
+      drag.noLadder = true;
+      drag.userLayer = true;
+      drag.path = alt; drag.valid = true; drag.pathAt = performance.now(); drag.pathX = drag.x; drag.pathZ = drag.z;
+    } else {
+      drag.noLadder = false;
+      if ((drag.layers ?? 1) > 1) {
+        drag.layerPref = (drag.layerIdx + 1) % drag.layers;
+        drag.userLayer = true;   // hand-picked: auto-advance backs off
+      }
       dioramaUpdateDragTarget(p.x, p.y);
     }
     g.stillAt = performance.now();   // re-arm for the next cycle
@@ -13459,6 +13486,7 @@ function updateDioramaDragVisuals() {
     de.casing.style.display = 'none';
     de.circle.style.display = 'none';
     de.path.style.display = 'none';
+    de.ladder.style.display = 'none';
     de.drop.style.display = 'none';
     return;
   }
@@ -13475,8 +13503,13 @@ function updateDioramaDragVisuals() {
     de.path.setAttribute('d', dioPolylineSvgPath(drag.path));
     de.path.setAttribute('stroke', color);
     de.path.style.display = '';
+    // (each ladder leg — the waypoint before the landing to the landing — as its own solid amber stroke)
+    let legs = '';
+    for (let k = 1; k < drag.path.length; k += 1) if (drag.path[k].ladder != null) legs += dioPolylineSvgPath([drag.path[k - 1], drag.path[k]]) + ' ';
+    if (legs) { de.ladder.setAttribute('d', legs); de.ladder.style.display = ''; } else de.ladder.style.display = 'none';
   } else {
     de.path.style.display = 'none';
+    de.ladder.style.display = 'none';
   }
   if (drag.y > 1) {
     _dioProj.set(drag.x, drag.y + 0.3, drag.z).project(camera);

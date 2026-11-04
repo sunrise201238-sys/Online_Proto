@@ -36,7 +36,11 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // "Fix it then"); the seven matches played equal to the b1104c references before the change.
 // Re-frozen at b1104g (2026-11-04): a bot's jump goes off at the speed it moves at that tick, as a player's (user: "make BOT
 // aligned with player unit"); the seven matches played equal to the b1104e references before the change.
-import { tickBot as tickOld } from './ai_b1104g_ref.js';
+// Re-frozen at b1105b (2026-11-05): the bots take the ladders (ladder.js; navgrid.js THE LADDERS — the plain brain's route and firing
+// searches ask for the ladder links, its Maze follower sets the ladder's goal and heads for the grab point; the goal is cleared
+// at the top of every brain tick without a standing order); none of the seven maps has a ladder, and the seven matches played
+// equal to the b1104g references before the change.
+import { tickBot as tickOld } from './ai_b1105b_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

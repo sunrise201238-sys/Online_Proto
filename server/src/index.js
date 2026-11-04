@@ -672,10 +672,11 @@ io.on('connection', (socket) => {
     const x = Number(data?.x);
     const z = Number(data?.z);
     const floorY = Number(data?.floorY ?? 0);
+    const noLadder = !!data?.noLadder;   // (the way without a ladder, hold-cycled to by the player — command.js setMoveOrder, ladder.js)
     // A landed move order releases a hide stance (owner 2026-09-26) — the
     // setter clears the flag; the echo carries hide:false next tick.
-    const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY);
-    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, reason: ok ? null : 'unreachable' });
+    const ok = setMoveOrder(ctx.lb.match, ctx.slot, x, z, floorY, { noLadder });
+    socket.emit('order:result', { kind: 'move', ok, x, z, floorY, noLadder, reason: ok ? null : 'unreachable' });
   });
 
   socket.on('order:lock', (data) => {

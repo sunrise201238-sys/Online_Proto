@@ -112,17 +112,20 @@ export function clearMoveOrder(matchState, slot) {
 // orders, so routes whose real endpoint isn't essentially the ordered spot
 // are REJECTED (that's what makes "Area is not available" fire, and what
 // keeps a unit from shoving a wall toward an unreachable raw target).
-export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
+// `opts.noLadder` (b1105b): the route without a ladder — the player's hold-cycled alternative (ladder.js; navgrid.js THE LADDERS);
+// kept on the order, so every replan plans the same way.
+export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0, opts = {}) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
   if (!Number.isFinite(tx) || !Number.isFinite(tz) || !Number.isFinite(targetFloorY)) return false;
-  const path = computeCommandPath(matchState, f, tx, tz, targetFloorY);
+  const noLadder = !!opts.noLadder;
+  const path = computeCommandPath(matchState, f, tx, tz, targetFloorY, noLadder);
   if (!path) return false;
   const cmd = commandsFor(matchState, slot);
   cmd.hide = false;   // a landed move order releases the hide stance (owner 2026-09-26)
   cmd.hideAuto = false;
   cmd.move = {
-    x: tx, z: tz, y: targetFloorY,
+    x: tx, z: tz, y: targetFloorY, noLadder,
     path, idx: 0,
     phase: 'travel',
     anchorUntil: 0,
@@ -137,12 +140,12 @@ export function setMoveOrder(matchState, slot, tx, tz, targetFloorY = 0) {
 // Order-strict pathfind from the fighter's CURRENT position to the ordered
 // point — used by setMoveOrder and by every in-travel replan, so a refresh
 // can never accept a route the original order would have rejected.
-function computeCommandPath(matchState, f, tx, tz, targetFloorY) {
+function computeCommandPath(matchState, f, tx, tz, targetFloorY, noLadder = false) {
   const arena = getArena(matchState.mapKey);
   if (!arena) return null;
   const grid = navGridFor(arena);
   const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
-  let path = findPathOnGrid(grid, f.pos.x, f.pos.z, tx, tz, myFloorY, targetFloorY, arena.obstacles);
+  let path = findPathOnGrid(grid, f.pos.x, f.pos.z, tx, tz, myFloorY, targetFloorY, arena.obstacles, { ladders: !noLadder });   // (an order climbs the ladders unless the player picked the way without — navgrid.js THE LADDERS)
   if (!path || path.length < 2) return null;
   const end = path[path.length - 1];
   if (Math.hypot(end.x - tx, end.z - tz) > CMD_ORDER_SNAP_TOLERANCE) return null;
@@ -236,6 +239,8 @@ export function tickCommandDriver(matchState, slot, now) {
   if (!mv) return;
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; cmd.hideAuto = false; return; }
+  if (f.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderTick; the order goes on from the landing)
+  f.botLadderGoal = undefined;    // (the goal is this tick's: set below on a ladder leg of the route, else none — nbrain.js, THE LADDER'S GOAL)
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex (Defense escape, cover hide) may have moved
@@ -266,23 +271,31 @@ export function tickCommandDriver(matchState, slot, now) {
       if (mv.reflexHeld || now >= mv.replanAt) {
         mv.reflexHeld = false;
         mv.replanAt = now + CMD_REPLAN_MS;
-        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y);
+        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y, mv.noLadder);
         if (fresh) { mv.path = fresh; mv.idx = 0; }
       }
     }
+    const arena = getArena(matchState.mapKey);
+    const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
+    // THE LADDER (ladder.js, b1105b): a waypoint that is a ladder's landing on another floor is reached by the climb — the
+    // walk's advance stops at it, the goal is set (ladderBotStep mounts the body in the zone; the ride is the rule's) and the
+    // legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit). No route jump at it.
+    // Mirrors the offline applyMoveOrder.
+    const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? 0) - myFloorY) > 2;
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
+      && !ladderAhead(wp)
       && Math.hypot(wp.x - f.pos.x, wp.z - f.pos.z) < 3) {
       mv.idx += 1;
       wp = mv.path[mv.idx];
     }
-    const gx = wp ? wp.x : mv.x;
-    const gz = wp ? wp.z : mv.z;
+    const ladderLeg = !!wp && ladderAhead(wp);
+    if (ladderLeg) f.botLadderGoal = wp.climb;
+    const gx = wp ? (ladderLeg ? wp.mx : wp.x) : mv.x;
+    const gz = wp ? (ladderLeg ? wp.mz : wp.z) : mv.z;
     const dx = gx - f.pos.x;
     const dz = gz - f.pos.z;
     const l = Math.hypot(dx, dz) || 1;
-    const arena = getArena(matchState.mapKey);
-    const myFloorY = groundHeightAt(f.pos.x, f.pos.z, arena.surfaces, f.pos.y - GROUND_BASE_Y);
     // ROUTE JUMP (owner 2026-08-22): the upcoming waypoint sits on a ledge
     // above the current floor — the path crossed a jump-link. Vault toward
     // it once close enough, funded at the MANDATED tier (60; the player's
@@ -290,7 +303,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // discretionary reserve, which the 50<->125 dash-latch cycle can't
     // reach). tryStartJump paces retries via the bot 1.5 s cooldown floor.
     const wpY = wp ? (wp.y ?? 0) : mv.y;
-    if (grounded && wpY - myFloorY > 1.7 && l < 7
+    if (grounded && !ladderLeg && wpY - myFloorY > 1.7 && l < 7
       && f.boost >= MANDATED_JUMP_MIN_BOOST * (f.boostScale ?? DEFAULT_BOOST_SCALE)) {   // (the map's boost scale, state.js: District and Compound 5 — the tiers with the gauge)
       tryStartJump(f, now);
     }
@@ -312,7 +325,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // walk-and-bank rule, sized for the command economy).
     let jumpAhead = false;
     for (let k = mv.idx; k < mv.path.length; k += 1) {
-      if (((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+      if (mv.path[k].ladder == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
     }
     const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : CMD_TRAVEL_BOOST_FLOOR) * (f.boostScale ?? DEFAULT_BOOST_SCALE);
     // Latched dash segments. The drop check is PREDICTIVE (boost must
@@ -368,7 +381,7 @@ export function tickCommandDriver(matchState, slot, now) {
       if (mv.reflexHeld || now >= (mv.replanAt ?? 0)) {
         mv.reflexHeld = false;
         mv.replanAt = now + CMD_REPLAN_MS;
-        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y);
+        const fresh = computeCommandPath(matchState, f, mv.x, mv.z, mv.y, mv.noLadder);
         if (fresh) {
           mv.path = fresh;
           mv.idx = 0;
