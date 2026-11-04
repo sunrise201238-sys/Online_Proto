@@ -1650,6 +1650,11 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // ============================================================================
 // The owner's motion map (Saori's form, 2026-10-10); every character whose
 // clips carry the same names uses it as is.
+// THE CLIMB CLIP IS A RETREAT (user 2026-11-05, "player should only see their back"): Vital_Retreat turns the body about —
+// played on a rig facing the rungs, the face looked out at the climb camera, in the four files that have the clip and in
+// the twelve that borrow Kurumi's alike. So a climber's HOLDER faces away from the rungs, and the clip's turned body faces
+// them; the sim's yaw (ladder.js: the ladder's facing, into the wall) is untouched. Set false for a clip that climbs facing forward.
+const CLIMB_CLIP_TURNED = true;
 const MODEL_CLIPS_DEFAULT = {
   stand: { name: 'Normal_Idle', speed: 1 },
   walk: { name: 'Move_Ing', speed: 0.5 },
@@ -1661,7 +1666,7 @@ const MODEL_CLIPS_DEFAULT = {
   reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
   hit: null,
   death: { name: 'Vital_Death', speed: 1, once: true },
-  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in four files; the rest borrow Kurumi's (borrowClimbClip)
+  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in four files; the rest borrow Kurumi's (borrowClimbClip); the body is turned about in it — CLIMB_CLIP_TURNED
 };
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
@@ -2057,7 +2062,7 @@ function updateUnitModelState(m, rig, dt, now) {
   }
   if (tgt) { hx = tgt.root.position.x - px; hz = tgt.root.position.z - pz; have = Math.hypot(hx, hz) > 0.5; }
   if (!have && moving) { hx = vx; hz = vz; have = true; }
-  if (st.ladder != null && arenaLadders[st.ladder]) { const L = arenaLadders[st.ladder]; hx = Math.sin(L.yaw); hz = Math.cos(L.yaw); have = true; }   // (a climber faces the rungs — ladder.js)
+  if (st.ladder != null && arenaLadders[st.ladder]) { const L = arenaLadders[st.ladder]; const k = CLIMB_CLIP_TURNED ? -1 : 1; hx = k * Math.sin(L.yaw); hz = k * Math.cos(L.yaw); have = true; }   // (a climber faces the rungs — ladder.js; the clip's turned body does, so the holder faces away: CLIMB_CLIP_TURNED)
   if (have) {
     const target = Math.atan2(hx, hz);
     let d = target - rig.yaw;
