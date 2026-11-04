@@ -27,7 +27,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import { tickBot as tickNew } from '../src/sim/ai.js';
-import { tickBot as tickOld } from './ai_b1102o_ref.js';
+// Re-frozen at b1104b (2026-11-04): the escape sprint latch — Defense, the Hide stance and the cover move run the gauge down
+// to the 8 floor, then walk until it is back over 50 (user: "I want to make it this way. Can you do it in an integrated style?");
+// the seven matches played equal to the b1102o references before the change.
+import { tickBot as tickOld } from './ai_b1104b_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

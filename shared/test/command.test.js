@@ -266,7 +266,7 @@ test('hide order: clearing the order (Fight) resumes normal movement within 2 s 
   assert.ok(movingAtMs != null, 'the unit stayed frozen after Fight');
   const f = m.fighters.p1;
   for (const k of ['botHidePath', 'botHidePathIdx', 'botHideGoal', 'botHideSearchAt', 'botHideSearchStage', 'botHideFailedAt',
-    'botHideHold', 'botHideDashArmed', 'botHideTier', 'botHideMoveAnchor', 'botHideAnchor', 'botHideDriftX', 'botHideDriftZ', 'botHideDriftUntil']) {
+    'botHideHold', 'botHideTier', 'botHideMoveAnchor', 'botHideAnchor', 'botHideDriftX', 'botHideDriftZ', 'botHideDriftUntil']) {
     assert.equal(f[k], null, `${k} nulled on clear`);
   }
 });

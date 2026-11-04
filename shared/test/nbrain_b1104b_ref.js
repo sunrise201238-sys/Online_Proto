@@ -1,4 +1,4 @@
-// FROZEN at b1102o for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1104b for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -37,9 +37,9 @@
 import { between } from '../src/sim/math.js';
 import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
-import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, CMD_TRAVEL_BOOST_FLOOR, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1102o_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104b_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -47,10 +47,16 @@ import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1102o_ref.js';
 // running whole in one tick now that the cap covers a map's every route (navgrid.js, THE CAP: District's longest 41,000).
 const BOT_SEARCH_POPS_PER_TICK = 3000;
 const BOT_SPRINT_MIN_BOOST = 8;
+// ESCAPE SPRINT ARM (user 2026-11-04, b1104b): an escape sprint — Defense escaping live fire, the Hide stance's route dash,
+// the cover move's — runs the gauge down to BOT_SPRINT_MIN_BOOST, then the bot walks on until the gauge is back over this
+// and sprints again (botEscapeSprint). It was the Hide stance's rule alone (owner 2026-09-26); Defense and the cover move
+// sprinted again the moment the gauge cleared the floor.
+const BOT_ESCAPE_SPRINT_ARM = 50;
 // Strategic reserve: bots never VOLUNTARILY spend below this — one knob
 // gating every travel decision (sprint dispatch, Pursue hysteresis, Maze
-// cruise/jump funding, the anti-glint dodge). The sole exception is
-// Defense: escaping live fire may burn down to BOT_SPRINT_MIN_BOOST.
+// cruise/jump funding, the anti-glint dodge). The exception is the escape
+// sprints (Defense, the Hide stance, the cover move): they may burn down to
+// BOT_SPRINT_MIN_BOOST, then wait for BOT_ESCAPE_SPRINT_ARM.
 // This is purely a bot DECISION threshold — the stamina MECHANICS
 // (costs, drain, regen, caps, empty-recovery) stay identical to the
 // human player's.
@@ -62,6 +68,13 @@ function botTravelSprint(me) {
   if (me.boost >= BOT_BOOST_RESERVE * k) me.botPursueSprinting = true;
   else if (me.boost <= BOT_TRAVEL_SPRINT_FLOOR * k) me.botPursueSprinting = false;
   return !!me.botPursueSprinting;
+}
+// Escape sprint latch (Defense, the Hide stance, the cover move): arm over BOT_ESCAPE_SPRINT_ARM, release at the hard floor.
+function botEscapeSprint(me) {
+  const k = me.boostScale ?? DEFAULT_BOOST_SCALE;
+  if (me.botEscapeSprintArmed) { if (me.boost <= BOT_SPRINT_MIN_BOOST * k) me.botEscapeSprintArmed = false; }
+  else if (me.boost > BOT_ESCAPE_SPRINT_ARM * k) me.botEscapeSprintArmed = true;
+  return !!me.botEscapeSprintArmed;
 }
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
@@ -162,7 +175,7 @@ const BOT_HIDE_SLIP_GAIN = 6;
 // yet and skips that tier), then the nearest such cover anywhere; no cover
 // -> the reload is spent on the order's legs (a hit then runs Defense as
 // usual) and no retry for BOT_HIDE_FAIL_RETRY_MS. Sprints like Defense to
-// the cover (down to the 8 floor, no arming), paces once hidden, and ends
+// the cover (the escape latch: down to 8, a walk until over 50), paces once hidden, and ends
 // with the reload. No badge; the move order stands throughout and the
 // driver resumes it after (commandReflexActive yields to botCH). A fresh
 // HIT under a move order runs plain Defense (2026-09-27: the hit-triggered
@@ -181,7 +194,6 @@ export function resetBotHideFields(f) {
   f.botHideSearchStage = null;
   f.botHideFailedAt = null;
   f.botHideHold = null;
-  f.botHideDashArmed = null;
   f.botHideTier = null;
   f.botHideMoveAnchor = null;
   f.botHideAnchor = null;
@@ -224,6 +236,10 @@ const BOT_PERCH_MIN_WIDTH = 6;
 // AND its statue-escape replay: the two must stay identical or the replay's
 // waypoint comparison silently stops matching. 
 const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
+// SAME FLOOR: two heights (a body's floor, a waypoint's, the enemy's) under this apart are one floor — a kerb, a step, a
+// slab's rise; more is another storey, and a distance measured in the plan (x, z) alone says nothing about reaching it. The
+// vertical stack, the regained sight, the in-band arrival and the final waypoint all ask it (2026-11-03, b1102s).
+const BOT_SAME_FLOOR_RISE = 2.5;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -499,7 +515,7 @@ function botTryJump(host) {
 // move, and Defense's own sprint drains below the 250 travel reserve within
 // a few ticks — reserve-gated funding made the hop nearly unaffordable in
 // practice. Same doctrine as the two existing survival exemptions (Defense
-// sprints to the hard floor, the anti-glint dodge pays raw step cost).
+// sprints to the hard floor — then waits for the escape arm — the anti-glint dodge pays raw step cost).
 // Owner 2026-08-22: the gate is the flat MANDATED tier (60 — shared with
 // commanded-travel route jumps, was cost+sprint-floor 56). Discretionary
 // jumps (pursue perch, elevation aids) keep the reserve gate — bots still
@@ -1042,17 +1058,10 @@ export function nbBrainTick(host) {
       tx = tx / wl + avoid.rx * 0.6;
       tz = tz / wl + avoid.rz * 0.6;
       const tl = Math.hypot(tx, tz) || 1;
-      // Latched sprint (owner 2026-09-26): arm above CMD_TRAVEL_BOOST_FLOOR
-      // (50), spend down to BOT_SPRINT_MIN_BOOST (8), walk until re-armed.
-      // The dispatch funds it at the 8 floor (its own tier below).
-      if (me.botHideDashArmed) {
-        if (me.boost <= BOT_SPRINT_MIN_BOOST * kB) me.botHideDashArmed = false;
-      } else if (me.boost > CMD_TRAVEL_BOOST_FLOOR * kB) {
-        me.botHideDashArmed = true;
-      }
+      // The route is run at a dash, the stance's and the cover move's alike: the escape sprint latch paces it (the
+      // dispatch's escape tier, botEscapeSprint — down to the 8 floor, then a walk until the gauge is back over 50).
       me.botHideHold = false;
-      // The COVER HIDE sprints like Defense: no arming, the 8 floor only.
-      coverMove = { hold: false, hide: true, dash: hideMode === 'cover' ? true : !!me.botHideDashArmed, mx: tx / tl, mz: tz / tl };
+      coverMove = { hold: false, hide: true, dash: true, mx: tx / tl, mz: tz / tl };
       if (!me.botHideMoveAnchor
           || Math.hypot(pos.x - me.botHideMoveAnchor.x, pos.z - me.botHideMoveAnchor.z) > 1) {
         me.botHideMoveAnchor = { x: pos.x, z: pos.z, at: now };
@@ -1408,7 +1417,7 @@ export function nbBrainTick(host) {
     const losReacquired = playerHasLoS && me.botMazeLosBlockedAtEntry
       && (inBandDist
         || (walkTowardClear(Math.min(dist, 50))
-          && Math.abs(oppFloorY - myFloorY) < 2.5));
+          && Math.abs(oppFloorY - myFloorY) < BOT_SAME_FLOOR_RISE));
     const visibleEntryDone = !me.botMazeLosBlockedAtEntry
       && (now - (me.botStateEnteredAt ?? now)) > 3000;
     if (losReacquired || visibleEntryDone) {
@@ -1623,7 +1632,7 @@ export function nbBrainTick(host) {
     // reversal every ~0.4 s, no net progress). Backing off does nothing
     // about a vertical gap, so suppress the retreat and let the router (now
     // multi-layer) take the bot to the other level.
-    const stackedVertically = Math.abs(oppFloorY - myFloorY) > 2.5;
+    const stackedVertically = Math.abs(oppFloorY - myFloorY) > BOT_SAME_FLOOR_RISE;
     const tooClose = dist < lowerRange && !stackedVertically;
     // Range discipline is unconditional outside Defense (the old LoS-gated
     // hold made the bot give up its range advantage to keep a peek — a
@@ -1683,7 +1692,7 @@ export function nbBrainTick(host) {
     // from the tracks below, which dropped every climb path and ground the
     // bot into the edge wall forever.
     if (playerHasLoS && dist <= optimalRange
-        && Math.abs(oppFloorY - myFloorY) < 2.5) {
+        && Math.abs(oppFloorY - myFloorY) < BOT_SAME_FLOOR_RISE) {
       const goalWp = nav && nav.path[nav.path.length - 1];
       const goalCloser = goalWp
         && Math.hypot(opp.pos.x - goalWp.x, opp.pos.z - goalWp.z) < dist - 4;
@@ -1699,9 +1708,17 @@ export function nbBrainTick(host) {
     // trigger every 2 s, which keeps re-selecting maze and STARVES the
     // exit branch forever (the Plain Field never-orbits bug). The minimal
     // fallback covers the remaining ticks until the exit fires.
+    // Reached means on the destination's floor as well as near it in the
+    // plan (BOT_SAME_FLOOR_RISE): a route up a stair to a firing spot on the
+    // floor above passes right under that spot, and read in the plan alone
+    // the bot had arrived there, dropped the route and beelined back under
+    // its enemy, again and again — then re-planned every tick on the spot
+    // (Compound's big building, its enemy on the second floor; user
+    // 2026-11-03, "the unit cannot break through a back and forth loop").
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
-      if (Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
+      const onItsFloor = lastWp.y == null || Math.abs(lastWp.y - myFloorY) < BOT_SAME_FLOOR_RISE;
+      if (onItsFloor && Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
         // Arrived — but if the trip did NOT buy sight of the target, dropping
         // to the pathless fallback sends the bot beelining back where it came
         // from (the Streets under-bridge out-and-back loop). Ask for a fresh
@@ -2036,15 +2053,14 @@ export function nbBrainTick(host) {
   // the launch aim so the arc lands where it was committed.
   const botSprintBase = unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
   const botWalkSpeed = unit?.walkSpeed ?? WALK_SPEED;
-  // Sprint funding tiers: Defense (escaping live fire) may spend down to the
-  // hard floor; the HIDE stance's latched route sprint (owner 2026-09-26) is
-  // funded down to the hard floor too — the latch itself (arm > 50, drop
-  // <= 8) paces it; every other state (Pursue / Maze travel) stops at the
-  // travel floor — the latch above arms them only from a full tank.
-  const botSprintFloor = me.botState === 'defense' ? BOT_SPRINT_MIN_BOOST * kB
-    : (coverMove && coverMove.hide) ? BOT_SPRINT_MIN_BOOST * kB
-    : BOT_TRAVEL_SPRINT_FLOOR * kB;
-  const botCanSprint = me.boost >= botSprintFloor && now >= me.emptyRecoverUntil;
+  // Sprint funding — a latch for each kind of sprint. The escape sprints (Defense escaping live fire, the Hide stance's and
+  // the cover move's route dash) run down to the hard floor, then walk until the gauge is back over BOT_ESCAPE_SPRINT_ARM
+  // (botEscapeSprint, read every tick: one gauge, one latch, whichever escape runs — user 2026-11-04); every other state
+  // (Pursue / Maze travel) stops at the travel floor, its latch (botTravelSprint) arming it only from a full tank. A sprint
+  // the latch refuses is a walk at the same heading (below): the unit moves on while the gauge refills.
+  const escapeSprintArmed = botEscapeSprint(me);
+  const escaping = me.botState === 'defense' || !!(coverMove && coverMove.hide);
+  const botCanSprint = (escaping ? escapeSprintArmed : me.boost >= BOT_TRAVEL_SPRINT_FLOOR * kB) && now >= me.emptyRecoverUntil;
 
   if (sdStepping) {
     // (the dodge's lerp owns the body this tick: no velocity, no action from the brain)
