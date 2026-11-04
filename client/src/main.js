@@ -1666,7 +1666,7 @@ const MODEL_CLIPS_DEFAULT = {
   reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
   hit: null,
   death: { name: 'Vital_Death', speed: 1, once: true },
-  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in four files; the rest borrow Kurumi's (borrowClimbClip); the body is turned about in it — CLIMB_CLIP_TURNED
+  climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in eight files (Kurumi, Rabu, Subaru, Yuuka; Aris, Aru, Fubuki, Kei since their new files, the same day); the rest borrow Kurumi's (borrowClimbClip); the body is turned about in it — CLIMB_CLIP_TURNED
 };
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
