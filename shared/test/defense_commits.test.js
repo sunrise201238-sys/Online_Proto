@@ -1,7 +1,8 @@
-// Defense's commits by trigger (nbrain.js BOT_DEFENSE_*_MS; user 2026-11-01, "change these three to 1,500 ms (keep their
-// categories)"): a hit commits 1,500 ms, a hit while the locked enemy's sniper charges commits 1,500 ms, and the anti-glint
-// dodge's follow-through runs 1,500 ms past the step's end. One hit's whole Defense is the hit's 350 ms evade window — every tick
-// of it re-arms the commit — and then the commit: about 1.85 s on open ground. And all three runs stay across the line the whole
+// Defense's commits by trigger (nbrain.js BOT_DEFENSE_*_MS; user 2026-11-04, "Change these four from 1500ms to 1000ms." — 1,500 ms
+// from 2026-11-01, "change these three to 1,500 ms (keep their categories)"): a hit commits 1,000 ms, a hit while the locked
+// enemy's sniper charges commits 1,000 ms, and the anti-glint dodge's follow-through runs 1,000 ms past the step's end. One hit's
+// whole Defense is the hit's 350 ms evade window — every tick of it re-arms the commit — and then the commit: about 1.35 s on open
+// ground. And all three runs stay across the line the whole
 // way (user 2026-11-01, "all staying vertical"): the bot circles the enemy at the distance it had, every step within a few degrees
 // of the perpendicular, instead of a straight line that drifts 28-34 degrees off and some 14 u out. Plain Field, the bot 120 u
 // from a still enemy.
@@ -25,28 +26,28 @@ function duel() {
   return { m, p1, p2, tick };
 }
 
-test('Defense commit: a hit commits 1,500 ms, and one hit\'s whole Defense is the 350 ms evade window and then the commit', () => withDrain(() => {
+test('Defense commit: a hit commits 1,000 ms, and one hit\'s whole Defense is the 350 ms evade window and then the commit', () => withDrain(() => {
   const { p1, tick } = duel();
   let hitAt = null;
   tick((now) => { hitAt = now; p1.lastHitAt = now; });
   assert.equal(p1.botState, 'defense', 'the hit starts Defense');
-  assert.equal(p1.botDefenseUntil - hitAt, 1500, 'the commit at the hit');
+  assert.equal(p1.botDefenseUntil - hitAt, 1000, 'the commit at the hit');
   let end = null;
   for (let i = 0; i < 300 && end == null; i += 1) { const now = tick(); if (p1.botState !== 'defense') end = now; }
   assert.ok(end != null, 'Defense ends');
   const ran = end - hitAt;
-  assert.ok(ran >= 350 + 1500 - 2 * TICK_RATE_MS && ran <= 350 + 1500 + 2 * TICK_RATE_MS, `one hit's Defense ${ran} ms (the window, then the commit)`);
+  assert.ok(ran >= 350 + 1000 - 2 * TICK_RATE_MS && ran <= 350 + 1000 + 2 * TICK_RATE_MS, `one hit's Defense ${ran} ms (the window, then the commit)`);
 }));
 
-test('Defense commit: a hit while the locked enemy\'s sniper charges at the bot commits 1,500 ms', () => withDrain(() => {
+test('Defense commit: a hit while the locked enemy\'s sniper charges at the bot commits 1,000 ms', () => withDrain(() => {
   const { p1, p2, tick } = duel();
   let hitAt = null;
   tick((now) => { hitAt = now; p2.sniperChargeTargetId = 'p1'; p2.sniperChargeUntil = now + 3000; p1.lastHitAt = now; });
   assert.equal(p1.botState, 'defense', 'the hit starts Defense');
-  assert.equal(p1.botDefenseUntil - hitAt, 1500, 'the sniper-charge commit at the hit');
+  assert.equal(p1.botDefenseUntil - hitAt, 1000, 'the sniper-charge commit at the hit');
 }));
 
-test('Defense commit: the anti-glint dodge\'s follow-through runs 1,500 ms past the step\'s end', () => withDrain(() => {
+test('Defense commit: the anti-glint dodge\'s follow-through runs 1,000 ms past the step\'s end', () => withDrain(() => {
   const { p1, p2, tick } = duel();
   let stepped = false;
   for (let i = 0; i < 200 && !stepped; i += 1) {
@@ -56,7 +57,7 @@ test('Defense commit: the anti-glint dodge\'s follow-through runs 1,500 ms past 
   }
   assert.ok(stepped, 'the bot dodged the glint');
   assert.equal(p1.botState, 'defense', 'the dodge hands over to Defense');
-  assert.equal(p1.botDefenseUntil - p1.stepUntil, 1500, 'the follow-through past the step');
+  assert.equal(p1.botDefenseUntil - p1.stepUntil, 1000, 'the follow-through past the step');
 }));
 
 // The run's geometry: from its start (the hit, or the dodge's step end) to its end, every step's angle off the perpendicular of the

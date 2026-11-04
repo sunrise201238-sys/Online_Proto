@@ -1,4 +1,4 @@
-// FROZEN at b1104b for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1104c for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104b_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104c_ref.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -79,19 +79,20 @@ function botEscapeSprint(me) {
 // A fresh hit forces an evade for this long (so taking damage always provokes a
 // relocate, even if the shot landed at the edge of the fire window).
 const BOT_HIT_EVADE_MS = 350;
-// DEFENSE'S COMMITS, by trigger (user 2026-11-01, "change these three to 1,500 ms (keep their categories)"): how long the
+// DEFENSE'S COMMITS, by trigger (user 2026-11-04, "Change these four from 1500ms to 1000ms."; 1,500 ms from 2026-11-01, user:
+// "change these three to 1,500 ms (keep their categories)"): how long the
 // escape sprint across the locked target's line runs at least — after a hit (350 ms until then), after a hit while the locked
 // enemy's sniper charges (600 ms), and on after the anti-glint dodge's step (520 ms). Every tick of the hit's evade window above
-// re-arms the commit, so one hit's Defense runs that window and then the commit, about 1.84 s on open ground. The whole run stays
+// re-arms the commit, so one hit's Defense runs that window and then the commit, about 1.35 s on open ground. The whole run stays
 // across the line (the movement branch's every-tick perpendicular, user 2026-11-01 "all staying vertical"): the bot circles its
 // reference enemy at the distance it had. Reaching cover still ends it early (the tuck, the peek). The dodge's follow-through runs
 // with the Sudden Death brain on too: its legs are the plain Defense's for the step and the commit.
 // The stuck-triggered commit is vestigial: a stuck bot goes to the Maze (since 2026-08-08), and Defense is entered only under
 // fire, where the hit's commit replaces the stuck one on its first tick.
-const BOT_DEFENSE_HIT_MS = 1500;
-const BOT_DEFENSE_SNIPER_MS = 1500;
-const BOT_DEFENSE_STUCK_MS = 1500;
-const BOT_DEFENSE_DODGE_FOLLOW_MS = 1500;
+const BOT_DEFENSE_HIT_MS = 1000;
+const BOT_DEFENSE_SNIPER_MS = 1000;
+const BOT_DEFENSE_STUCK_MS = 1000;
+const BOT_DEFENSE_DODGE_FOLLOW_MS = 1000;
 // Anti-sniper humanization: the bot rolls its reaction PER CHARGE  — a defensive mixed strategy against the sniper's
 // own 50/50 snap/hold coin flip. The slow roll is charger-aware:
 //   ANTI-ARU (bullet snipers): 50% react at 400 ms (i-frames ~400-712 cover
