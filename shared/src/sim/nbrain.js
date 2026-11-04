@@ -2067,8 +2067,14 @@ export function nbBrainTick(host) {
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    vel.x = jumpDirX * botSprintBase;
-    vel.z = jumpDirZ * botSprintBase;
+    // The launch at the speed the bot moves at this tick, as a player's jump (user 2026-11-04, "make BOT aligned with player
+    // unit"): a player's jump tick moves at its input's speed — the sprint's base when it sprints, the walk when it walks (tick.js
+    // applyInput) — and the carry tryStartJump banked (0.7 of the speed the tick began with) comes on top. The bot launched at
+    // the sprint's base whatever it was doing, so its jump from a walk or from a standstill went off slower than a player's.
+    // (A bot's jump always has a direction: its jump from a standstill is a player's with a direction held, at the walk.)
+    const launch = wantSprint && botCanSprint ? botSprintBase : botWalkSpeed;
+    vel.x = jumpDirX * launch;
+    vel.z = jumpDirZ * launch;
     me.action = 'jump';
   } else if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
     const ax = me.botAirSteerX ?? mx;

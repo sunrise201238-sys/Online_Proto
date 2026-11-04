@@ -1,4 +1,4 @@
-// FROZEN at b1104e for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1104g for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -39,7 +39,7 @@ import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentB
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104e_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1104g_ref.js';
 import { hitStunMoveScale } from '../src/sim/movement.js';
 
 // --- Bot tactical-sprint tunables ---
@@ -2070,8 +2070,14 @@ export function nbBrainTick(host) {
     me.botAirSteerX = jumpDirX;
     me.botAirSteerZ = jumpDirZ;
     me.botAirSteerUntil = now + BOT_AIR_STEER_MS;
-    vel.x = jumpDirX * botSprintBase;
-    vel.z = jumpDirZ * botSprintBase;
+    // The launch at the speed the bot moves at this tick, as a player's jump (user 2026-11-04, "make BOT aligned with player
+    // unit"): a player's jump tick moves at its input's speed — the sprint's base when it sprints, the walk when it walks (tick.js
+    // applyInput) — and the carry tryStartJump banked (0.7 of the speed the tick began with) comes on top. The bot launched at
+    // the sprint's base whatever it was doing, so its jump from a walk or from a standstill went off slower than a player's.
+    // (A bot's jump always has a direction: its jump from a standstill is a player's with a direction held, at the walk.)
+    const launch = wantSprint && botCanSprint ? botSprintBase : botWalkSpeed;
+    vel.x = jumpDirX * launch;
+    vel.z = jumpDirZ * launch;
     me.action = 'jump';
   } else if (me.airborne && (me.botAirSteerUntil ?? 0) > now) {
     const ax = me.botAirSteerX ?? mx;

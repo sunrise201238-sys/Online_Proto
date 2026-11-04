@@ -34,7 +34,9 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // the seven matches played equal to the b1104b references before the change.
 // Re-frozen at b1104e (2026-11-04): a stunned bot's sprint banks its momentum at the stun's move-scale, as a player's (user:
 // "Fix it then"); the seven matches played equal to the b1104c references before the change.
-import { tickBot as tickOld } from './ai_b1104e_ref.js';
+// Re-frozen at b1104g (2026-11-04): a bot's jump goes off at the speed it moves at that tick, as a player's (user: "make BOT
+// aligned with player unit"); the seven matches played equal to the b1104e references before the change.
+import { tickBot as tickOld } from './ai_b1104g_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
