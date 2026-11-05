@@ -49,7 +49,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    fallen one greyed. Yours top-left, the enemy's mirrored top-right; in 2v2 the ally's and the second enemy's under
    them, smaller. The anchor classes (health / enemy-health / ally-health / enemy2-health) are the slots' names offline
    and the server slots' online (main.js setupHUD), which sets --c to the slot's colour there. */
-.hp-chip { position: absolute; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 18px 0 5px; box-sizing: border-box; border-radius: 999px; background: rgba(27, 27, 47, 0.9); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; font-family: var(--font-ui); --c: var(--lime); }   /* (18 px on the bar's far side: the knob, 8 px past the track at full HP, stays 10 px inside the rim — user b1105x: "the HP bar should stay well inside the box") */
+.hp-chip { position: absolute; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 18px 0 5px; box-sizing: border-box; border-radius: 999px; background: rgba(27, 27, 47, 0.9); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; font-family: var(--font-ui); --c: var(--lime); z-index: 1; }   /* (18 px on the bar's far side: the knob, 8 px past the track at full HP, stays 10 px inside the rim — user b1105x: "the HP bar should stay well inside the box") */
 /* (the chips' tilt stays — b1105y levelled them on a misread of "still tilted", which meant the faces; back in b1105z) */
 .hp-chip.health { top: 10px; left: 12px; --c: var(--lime); transform: rotate(-1.5deg); }
 .hp-chip.enemy-health { top: 10px; right: 12px; --c: var(--magenta); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1.5deg); }
@@ -74,8 +74,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    marker; a box no longer grows and shrinks with its own content.  Border-box: 5 + 40 + 8 + bar + 18 + 2 x 3 = 77 + bar;
    Trio adds the 8 px gap and the 97 px reserve block (12 + 8 + 5 + 34 + 4 + 34).  Both rows share one cap (112 / 128 until
    b1105ak made the rows differ by 16 px at 721–900 px). */
-.hp-chip { width: calc(77px + 150px * var(--hp-max, 1)); max-width: calc(50vw - 128px); }
-.touch-hud.hud-trio .hp-chip { width: calc(182px + 150px * var(--hp-max, 1)); }
+.hp-chip { width: calc(182px + 150px * var(--hp-max, 1)); max-width: calc(50vw - 128px); }
+/* (b1105ay; user: "make the hp bar and box longer in duel modes") a Duel chip is as long as a Trio chip and its bar takes the
+   reserve block's 105 px: 255 px at full scale */
+.touch-hud:not(.hud-trio) .chip-bar { width: calc(150px * var(--hp-scale, 1) + 105px); }
 .chip-col { flex: 1 1 auto; }   /* (fills the fixed box; the bar keeps its own length inside, the name wraps at the box) */
 .enemy-health .chip-col, .enemy2-health .chip-col { align-items: flex-end; }
 /* (b1105ai, user: "if one of YOU / ALLY / ENEMY and the unit name must be omitted for the space, omit the side word") the name
@@ -118,8 +120,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 /* Spectator: the WATCHED chip — the camera's unit while spectating, by the Practice toggle or because the player is
    out — wears a thick yellow ring inside an ink line and a wide halo that pulses yellow / white (b1105s; user: the
    white glow "is not obvious enough"), and a WATCHING tag under it. */
-.touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink); }   /* (b1105at; user: "no need the whole hp bar glowing effect for spectator anymore; the watching edge alone is enough" — the yellow edge and the tag stay; the 18 px glow and its pulse are gone) */
-.touch-hud .spec-watched::after { content: 'WATCHING'; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }
+.touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink); z-index: 0; }   /* (b1105at; user: "no need the whole hp bar glowing effect for spectator anymore; the watching edge alone is enough" — the yellow edge and the tag stay; the 18 px glow and its pulse are gone. z-index 0 under the other chips' 1, b1105ax; user: "make the yellow watching edge always the one being covered by others when overlapping" — online the chips' DOM order follows the server slots, so which chip painted over which varied) */
+.touch-hud .spec-watched::after { content: 'WATCHING'; position: absolute; left: 50%; top: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }   /* (top since b1105ay; user: "move the watching text box from the lower edge of the hp box to the upper edge") */
 /* THE BOOST STICKER (b1105w, the design canvas's round 5 — the sample's yellow ammo chip; the 10 px bar until then):
    level, at the bottom centre — the word, the gauge with a white knob (--bw on the track, updateHud), no number. The
    fill is the SPRINT button's magenta at every level (user b1105x: "shouldn't be black"); overheating does not tint it
@@ -1067,7 +1069,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
 .menu .end-you .end-row-second { --rc: var(--cyan); }
 .menu .end-foe .end-row-second { --rc: var(--yellow); }
-.menu .end-w { flex: 0 0 48px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); }
+.menu .end-w { flex: 0 0 48px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); white-space: nowrap; }   /* (nowrap, b1105ax: SLOT 2 broke into two lines on the user's phone) */
 .menu .end-units { display: flex; gap: 12px; }
 .menu .end-u { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }
 .menu .end-fw { position: relative; display: block; width: 46px; height: 46px; }
@@ -1104,8 +1106,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    width's say: the user's page is 600 px wide, b1105an — 10vw gave 60 there), so the cluster's top (3 x 20vh + two gaps + 12
    from the bottom) stays under the second row on any height from 300 px ---- */
 @media (max-width: 720px) {
-  .hp-chip { height: 34px; gap: 5px; padding: 0 10px 0 3px; width: calc(50px + 90px * var(--hp-max, 1)); max-width: calc(50vw - 48px); }   /* (border-box: 3 + 26 + 5 + bar + 10 + 6) */
-  .touch-hud.hud-trio .hp-chip { width: calc(116px + 90px * var(--hp-max, 1)); }   /* (+ the 5 px gap and the 61 px reserve block: 9 + 6 + 3 + 20 + 3 + 20) */
+  .hp-chip { height: 34px; gap: 5px; padding: 0 10px 0 3px; width: calc(116px + 90px * var(--hp-max, 1)); max-width: calc(50vw - 48px); }   /* (border-box: 3 + 26 + 5 + bar + 5 + the 61 px reserve block (9 + 6 + 3 + 20 + 3 + 20) + 10 + 6; a Duel chip is as long, b1105ay, its bar taking the block's 66 px) */
+  .touch-hud:not(.hud-trio) .chip-bar { width: calc(90px * var(--hp-scale, 1) + 66px); }
   .hp-chip.enemy-health, .hp-chip.enemy2-health { padding: 0 3px 0 10px; }
   .hp-chip.health, .hp-chip.enemy-health { top: 8px; }
   .hp-chip.ally-health, .hp-chip.enemy2-health { top: 48px; }
@@ -1128,7 +1130,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 3px 0 0; }
   .chip-next { border-top-width: 4px; border-bottom-width: 4px; border-left-width: 6px; margin-right: 3px; }
   .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 6px; margin: 0 0 0 3px; }
-  .touch-hud .spec-watched::after, .hp-chip.down::after { bottom: -8px; font-size: 7px; }
+  .hp-chip.down::after { bottom: -8px; font-size: 7px; }
+  .touch-hud .spec-watched::after { top: -8px; font-size: 7px; }   /* (the row starts 8 px down: the tag ends at the screen's edge) */
   /* (b1105aq; user: "the in game buttons can be bigger. they can use the marked space" — the room under the chip rows, down to
      the bottom; b1105au: "the button group should not go bigger in 1v1 and smaller in 2v2. use the 2v2 button size. and move
      the button group a bit to the left, slightly") as big as the room under TWO chip rows allows, in every mode: three buttons

@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105aw 11-05';
+const CLIENT_BUILD_TAG = 'b1105ay 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10458,8 +10458,13 @@ function fitEndPage(menu) {
     grid.style.flexWrap = '';
     const h = Math.min(menu.clientHeight, window.innerHeight || Infinity);
     const zH = fits && h >= menu.clientHeight ? 1 : (h - rest - 2) / gridH;
-    const z = Math.min(1, (menu.clientWidth - 32) / 804, zH);
-    grid.style.zoom = z < 0.995 ? z.toFixed(3) : '';
+    // (b1105ax; user: "the two teams box and the map memo are still not on the same line") 8 px to spare on the width — at
+    // exactly the row's width the user's browser wrapped it — and a look afterwards: still wrapped, a touch smaller, up to four times
+    let z = Math.min(1, (menu.clientWidth - 40) / 804, zH);
+    const apply = () => { grid.style.zoom = z < 0.995 ? z.toFixed(3) : ''; };
+    apply();
+    const wrapped = () => { const a = grid.querySelector('.end-team.end-you')?.getBoundingClientRect(), b = grid.querySelector('.end-team.end-foe')?.getBoundingClientRect(); return !!(a && b) && Math.abs(a.top - b.top) > 4; };
+    for (let i = 0; i < 4 && z > 0.3 && wrapped(); i++) { z *= 0.985; apply(); }
   };
   fit();
   const onResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onResize); return; } fit(); };
