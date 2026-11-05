@@ -7092,7 +7092,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105aj 11-05';
+const CLIENT_BUILD_TAG = 'b1105ak 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9893,6 +9893,7 @@ function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack
     <div class="picker-body"><div class="picker-side picker-folder" data-empty="Tap a unit"><div class="picker-side-empty">Tap a unit</div></div><div class="picker-main">${unitGridHTML(unitEntries)}</div></div>`;
   app.appendChild(menu);
   wirePickerBack(menu, onBack);
+  fitPickerMenu(menu);
   wireUnitFilters(menu);
   wireUnitGrid(menu, (key) => {
     clearMenus();
@@ -9901,6 +9902,20 @@ function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack
 }
 // onPick (b1105m): the lobby's map card passes one — the pick is kept and the caller gets the page back; without it the
 // match starts on the pick, as the chain's last page did until b1105l (the fallback of startFromMap).
+// (b1105ak, user: "the layout in selection menus are also deformed") a landscape screen narrower than the pickers' page
+// (812 px: the side card and the grid's six columns) keeps the desktop arrangement and ZOOMS the page's two rows to fit,
+// as the lobby does (showSelectMenu); the card that floats over the grid is for portrait phones alone (style.css)
+function fitPickerMenu(menu) {
+  const fit = () => {
+    const portrait = window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches;
+    const z = portrait ? 1 : Math.min(1, (menu.clientWidth - 32) / 812);
+    const v = z < 0.995 ? z.toFixed(3) : '';
+    for (const el of menu.querySelectorAll('.picker-top, .picker-body')) el.style.zoom = v;
+  };
+  fit();
+  const onResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onResize); return; } fit(); };
+  window.addEventListener('resize', onResize);
+}
 function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   state.allRandomFill = false;   // the All Random chain ends here
   const mapEntries = Object.entries(MAP_DATA);
@@ -9910,6 +9925,7 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
     <div class="picker-body"><div class="picker-side picker-memo" data-empty="Tap a map"><div class="picker-side-empty">Tap a map</div></div><div class="picker-main">${mapGridHTML(mapEntries)}</div></div>`;
   app.appendChild(mapMenu);
   wirePickerBack(mapMenu, onBack);
+  fitPickerMenu(mapMenu);
   wireMapGrid(mapMenu, (key) => {
     state.mapKey = key;
     if (onPick) { clearMenus(); onPick(); } else startMatch();

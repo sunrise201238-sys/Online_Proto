@@ -1034,7 +1034,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .unit-card.selecting::after { content: 'PICK!'; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%) rotate(-6deg); padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; font-weight: 800; white-space: nowrap; }
 /* the floating card keeps its old shape: the head and the range rows are the side card's alone */
 .unit-profile-popup .profile-head, .unit-profile-popup .profile-range { display: none; }
-@media (max-width: 760px) {
+/* (b1105ak) PORTRAIT phones alone: a landscape screen keeps the side card and the grid, zoomed to fit (main.js fitPickerMenu) */
+@media (max-width: 760px) and (orientation: portrait) {
   .menu .picker-body { flex-direction: column; align-items: center; }
   .menu .picker-side:not(.has-card) { display: none; }
   /* a portrait phone: the card floats over the grid, as the old popup did; a tap outside it (the menu) dismisses it */
