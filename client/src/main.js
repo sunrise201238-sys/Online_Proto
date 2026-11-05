@@ -2685,6 +2685,7 @@ function setupHUD() {
   // In-match, the fullscreen button docks right of the left chip (a ResizeObserver below keeps --left-chip-right at
   // its right edge); menus restore its top-left home.
   document.getElementById('fullscreen-btn')?.classList.add('in-match');
+  document.documentElement.classList.toggle('hud-rows-2', state.mode === '2v2');   // (b1105ar: the narrow tier puts the button under the left chips — two rows in 2v2, style.css)
   hud.innerHTML = `
     ${hpChipHTML('health', 'health-fill')}
     ${hpChipHTML('enemy-health', 'enemy-health-fill')}
@@ -7105,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105aq 11-05';
+const CLIENT_BUILD_TAG = 'b1105ar 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9000,7 +9001,7 @@ function showSelectMenu() {
   state.allRandomFill = false;
   // Outside gameplay the fullscreen button returns to its top-left home.
   document.getElementById('fullscreen-btn')?.classList.remove('in-match');
-  document.documentElement.classList.remove('hud-range');
+  document.documentElement.classList.remove('hud-range', 'hud-rows-2');
   teardownHud();
   renderer.domElement.style.pointerEvents = 'none';
 

@@ -1117,7 +1117,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .hp-chip.ally-health { left: 12px; }
   .hp-chip.enemy2-health { right: 12px; }
   .pause-btn { top: 10px; padding: 6px 10px; font-size: 13px; }
-  .fullscreen-btn.in-match { top: 52px; left: calc(50% - 13px); }   /* (under PAUSE, in the middle — between the second row's chips in 2v2) */
+  .fullscreen-btn.in-match { top: 54px; left: 16px; }   /* (b1105ar; user: "move the full screen button to around here" — under the LEFT chips' last row, at their left end; it sat under PAUSE in the middle since b1105ai. The button is not inside .touch-hud, so the two-row case is a class on <html>, set by setupHUD) */
+  html.hud-rows-2 .fullscreen-btn.in-match { top: 94px; }
   .chip-nm { max-height: 11px; gap: 3px 5px; }
   .chip-face { width: 26px; height: 26px; border-width: 2px; }
   .chip-col { gap: 2px; }
