@@ -8,7 +8,8 @@ import * as C from '../src/sim/constants.js';
 import {
   createMatchState, tickMatch, emptyInput, getArena, getArenaLadders, buildSnapshotFor,
   groundHeightAt, unitOverlapsObstacle, applyHitStun, attemptFire, tryStartStep, ladderNormal, ladderAt, ladderFootZone,
-  LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_APPROACH_FRONT, LADDER_PRESS_MS
+  ladderTangent, ladderColumnAt, ladderExitAt, ladderOffsetAt,
+  LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_APPROACH_FRONT, LADDER_PRESS_MS, LADDER_SPAN_END
 } from '../src/sim/index.js';
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
@@ -19,19 +20,25 @@ test('every ladder row stands on its floors: the foot, the exit, clear of the bo
     const a = getArena(mapKey); const ladders = getArenaLadders(mapKey);
     assert.ok(ladders.length > 0, `${mapKey} has ladders`);
     for (const L of ladders) {
-      const foot = groundHeightAt(L.x, L.z, a.surfaces, L.y0 + 0.1);
-      assert.ok(Math.abs(foot - L.y0) < 0.3, `${mapKey} ${L.name}: the foot's floor ${foot.toFixed(2)} vs y0 ${L.y0.toFixed(2)}`);
-      assert.ok(!unitOverlapsObstacle(L.x, L.y0 + G, L.z, a.obstacles), `${mapKey} ${L.name}: the foot stands clear of the boxes`);
-      const top = groundHeightAt(L.ex, L.ez, a.surfaces, L.ey + 0.1);
-      assert.ok(Math.abs(top - L.ey) < 0.3, `${mapKey} ${L.name}: the exit's floor ${top.toFixed(2)} vs ey ${L.ey.toFixed(2)}`);
-      assert.ok(!unitOverlapsObstacle(L.ex, L.ey + G, L.ez, a.obstacles), `${mapKey} ${L.name}: the exit stands clear of the boxes`);
+      // (a wall — THE WALLS, `span` — is read at its ends and its middle, and every metre along it for the floors)
+      const h = L.span ? Math.max(0, L.w / 2 - LADDER_SPAN_END) : 0; const offsets = L.span ? [-h, 0, h] : [0];
+      for (const s of offsets) {
+        const c = ladderColumnAt(L, s), e = ladderExitAt(L, s); const tag = `${mapKey} ${L.name}${L.span ? ` at ${(s / 4).toFixed(1)} m` : ''}`;
+        const foot = groundHeightAt(c.x, c.z, a.surfaces, L.y0 + 0.1);
+        assert.ok(Math.abs(foot - L.y0) < 0.3, `${tag}: the foot's floor ${foot.toFixed(2)} vs y0 ${L.y0.toFixed(2)}`);
+        assert.ok(!unitOverlapsObstacle(c.x, L.y0 + G, c.z, a.obstacles), `${tag}: the foot stands clear of the boxes`);
+        const top = groundHeightAt(e.x, e.z, a.surfaces, L.ey + 0.1);
+        assert.ok(Math.abs(top - L.ey) < 0.3, `${tag}: the exit's floor ${top.toFixed(2)} vs ey ${L.ey.toFixed(2)}`);
+        assert.ok(!unitOverlapsObstacle(e.x, L.ey + G, e.z, a.obstacles), `${tag}: the exit stands clear of the boxes`);
+        // the column the body rides, clear of the boxes from the foot to the lip
+        for (let feet = L.y0; feet <= L.y1; feet += 2) assert.ok(!unitOverlapsObstacle(c.x, feet + G, c.z, a.obstacles), `${tag}: the column clear at feet ${feet.toFixed(1)}`);
+        // the exit is no foot zone of this ladder and the foot no top zone (the ends tell apart); a wall has no top zone at all
+        const at = ladderAt(ladders, { x: e.x, y: L.ey + G, z: e.z }); assert.equal(at?.end, L.span ? undefined : 'top', `${tag}: the exit ${L.span ? 'mounts nothing (a wall)' : 'mounts from the top'}`);
+        const n = ladderNormal(L); const footAt = ladderAt(ladders, { x: c.x - n.x * 1.0, y: L.y0 + G, z: c.z - n.z * 1.0 }); assert.equal(footAt?.end, 'foot', `${tag}: in front of the line mounts from the foot`);
+      }
+      if (L.span) { const t = ladderTangent(L); for (let s = -h; s <= h; s += 4) { const c = ladderColumnAt(L, s), e = ladderExitAt(L, s); assert.ok(Math.abs(groundHeightAt(c.x, c.z, a.surfaces, L.y0 + 0.1) - L.y0) < 0.3 && Math.abs(groundHeightAt(e.x, e.z, a.surfaces, L.ey + 0.1) - L.ey) < 0.3 && !unitOverlapsObstacle(c.x, L.y0 + G, c.z, a.obstacles) && !unitOverlapsObstacle(e.x, L.ey + G, e.z, a.obstacles), `${mapKey} ${L.name}: the foot and the exit along the wall, at ${(s / 4).toFixed(1)} m (${(c.x / 4 + 0).toFixed(1)}, ${(c.z / 4).toFixed(1)})`); void t; } }
       assert.ok(L.y1 >= L.ey - 1e-6, `${mapKey} ${L.name}: the lip at or over the exit`);
       assert.ok(L.y1 > L.y0 + 4, `${mapKey} ${L.name}: a climb of more than a metre`);
-      // the column the body rides, clear of the boxes from the foot to the lip
-      for (let feet = L.y0; feet <= L.y1; feet += 2) assert.ok(!unitOverlapsObstacle(L.x, feet + G, L.z, a.obstacles), `${mapKey} ${L.name}: the column clear at feet ${feet.toFixed(1)}`);
-      // the exit is no foot zone of this ladder and the foot no top zone (the ends tell apart)
-      const at = ladderAt(ladders, { x: L.ex, y: L.ey + G, z: L.ez }); assert.equal(at?.end, 'top', `${mapKey} ${L.name}: the exit mounts from the top`);
-      const n = ladderNormal(L); const footAt = ladderAt(ladders, { x: L.x - n.x * 1.0, y: L.y0 + G, z: L.z - n.z * 1.0 }); assert.equal(footAt?.end, 'foot', `${mapKey} ${L.name}: in front of the line mounts from the foot`);
     }
   }
 });
@@ -142,13 +149,14 @@ test('the snapshot carries the ladder fields while climbing and nothing of them 
   let now = 2000; now = step(m, now, {});
   assert.ok(!JSON.stringify(buildSnapshotFor(m, f.team)).includes('"ladder'), 'nothing off a ladder');
   now = step(m, now, { jump: true });
-  const s = JSON.stringify(buildSnapshotFor(m, null)); assert.ok(s.includes('"ladder":0') && s.includes('"ladderLeg":"enter"'), s.slice(0, 200));
+  const s = JSON.stringify(buildSnapshotFor(m, null)); assert.ok(s.includes('"ladder":0') && s.includes('"ladderLeg":"enter"') && s.includes('"ladderS":0'), s.slice(0, 200));
 }));
 
 test('District: every ladder is climbed from its foot to its exit, and descended from its exit to its foot, by the rule', () => withGauge(() => {
   const ladders = getArenaLadders('district');
   for (const L of ladders) {
     const n = ladderNormal(L); const i = ladders.indexOf(L);
+    if (L.span) continue;   // (the walls: the test below)
     { const { m, f } = matchAt('district', L.x - n.x * 1.2, L.y0, L.z - n.z * 1.2); let now = 2000;
       now = step(m, now, { jump: true }); assert.equal(f.ladder, i, `${L.name}: mounts at the foot`);
       let t = 0; while (f.ladder != null && t < 1200) { now = step(m, now, toward(L)); t += 1; }
@@ -160,6 +168,37 @@ test('District: every ladder is climbed from its foot to its exit, and descended
       assert.ok(f.ladder == null && f.grounded && Math.abs(f.pos.y - (L.y0 + G)) < 1e-6, `${L.name}: stands at the foot after ${t} ticks`);
       now = step(m, now, {}); assert.ok(Math.abs(f.pos.y - (L.y0 + G)) < 0.3 && f.grounded, `${L.name}: the foot's floor holds`); }
   }
+}));
+
+// THE WALLS (b1105j): climbed at any point along the run — the body's offset kept, the column and the exit moved along by it,
+// the offset clamped inside the ends; a press at the top is a jump (no top zone); the stick away climbs back down to the foot.
+test('District: a wall is climbed where the body stands, onto the floor straight behind; its top mounts nothing', () => withGauge(() => {
+  const ladders = getArenaLadders('district');
+  const walls = ladders.filter((L) => L.span); assert.equal(walls.length, 5, 'the platform wall and the four terrace walls');
+  for (const L of walls) {
+    const i = ladders.indexOf(L); const n = ladderNormal(L), t = ladderTangent(L); const h = L.w / 2 - LADDER_SPAN_END;
+    for (const s of [0, -h * 0.6, h * 0.95]) {
+      const c = ladderColumnAt(L, s), e = ladderExitAt(L, s);
+      const { m, f } = matchAt('district', c.x - n.x * 1.2, L.y0, c.z - n.z * 1.2); let now = 2000;
+      now = step(m, now, { jump: true }); assert.equal(f.ladder, i, `${L.name}: mounts at ${(s / 4).toFixed(1)} m along`);
+      assert.ok(Math.abs(f.ladderS - s) < 1e-6, `${L.name}: the offset kept (${f.ladderS} for ${s})`);
+      let ticks = 0; while (f.ladder != null && ticks < 1200) { now = step(m, now, toward(L)); ticks += 1; if (f.ladderLeg === 'climb') assert.ok(Math.abs(f.pos.x - c.x) < 1e-6 && Math.abs(f.pos.z - c.z) < 1e-6, `${L.name}: the column at the offset`); }
+      assert.ok(f.ladder == null && f.grounded && Math.abs(f.pos.x - e.x) < 1e-6 && Math.abs(f.pos.z - e.z) < 1e-6 && Math.abs(f.pos.y - (L.ey + G)) < 1e-6, `${L.name}: stands on the exit straight behind (${(f.pos.x / 4).toFixed(2)}, ${(f.pos.z / 4).toFixed(2)}) after ${ticks} ticks`);
+      now = step(m, now, {}); assert.ok(f.grounded && Math.abs(f.pos.y - (L.ey + G)) < 0.3, `${L.name}: the floor above holds`);
+      // at the top a press is a jump, never a mount
+      now = step(m, now, { jump: true }); assert.equal(f.ladder, undefined, `${L.name}: no mount from the top`); assert.equal(f.airborne, true, `${L.name}: the press jumped`);
+    }
+    // past the end: the offset is clamped inside the wall
+    { const over = h + LADDER_GRAB_SIDE * 0.5; const c = ladderColumnAt(L, over); const { m, f } = matchAt('district', c.x - n.x * 1.2, L.y0, c.z - n.z * 1.2); let now = 2000;
+      now = step(m, now, { jump: true }); assert.equal(f.ladder, i); assert.ok(Math.abs(f.ladderS - h) < 1e-6, `${L.name}: clamped to the end (${f.ladderS} vs ${h})`); void t; }
+    // the stick away from the wall climbs back down and stands at the foot
+    { const c = ladderColumnAt(L, 0); const { m, f } = matchAt('district', c.x - n.x * 1.2, L.y0, c.z - n.z * 1.2); let now = 2000;
+      now = step(m, now, { jump: true }); for (let k = 0; k < 20; k += 1) now = step(m, now, toward(L));
+      assert.equal(f.ladderLeg, 'climb'); let k = 0; while (f.ladder != null && k < 400) { now = step(m, now, toward(L, -1)); k += 1; }
+      assert.ok(f.ladder == null && f.grounded && Math.abs(f.pos.y - (L.y0 + G)) < 1e-6, `${L.name}: back at the foot`); }
+  }
+  // the offset a body takes: along the wall, clamped; a ladder's is 0
+  const W = walls[0]; const tW = ladderTangent(W); assert.ok(Math.abs(ladderOffsetAt(W, { x: W.x + tW.x * 10, z: W.z + tW.z * 10 }) - 10) < 1e-9); assert.equal(ladderOffsetAt(ladders[0], { x: ladders[0].x + 3, z: ladders[0].z }), 0);
 }));
 
 // THE RUSH (b1105g, user: "very hard to trigger ... I have to stop sprinting and direction input, then press jump at very precise

@@ -10309,7 +10309,7 @@ const GENERATED_ARENA_COLLISION_DATA = {
 //   wide ramp runs from the roof down to an inner floor at 40.61 m (the data's planes), and the short ladders' exits stand on
 //   it, at 42.32 m; three corners (T2 the west tower's north-east, T3 and T7 the east tower's north-west and south-west) have
 //   the ramp's low end behind the parapet, and their exits go on past it to the slab. The two ladders under the street
-//   (z 23.95, -18.2 to -9.3 m) are left out (user 2026-11-05).
+//   (z 23.95, -18.2 to -9.3 m) came in on 2026-11-05 (U1, U2 below; left out that morning), and the five WALLS (W1..W5, below).
 const ARENA_LADDERS = (() => {
   const C = (m) => ladderRow(4, 0, 1.34, m);          // Compound: GLB_MAPS scale 4, cx 0, cz 1.34
   const D = (m) => ladderRow(4, -25.75, 35.45, m);    // District: scale 4, cx -25.75, cz 35.45
@@ -10329,6 +10329,23 @@ const ARENA_LADDERS = (() => {
       D({ name: 'T8 east tower south', x: -6.71, z: 43.48, yaw: Math.PI, w: 1.2, y0: 0.01, y1: 45.37, ex: -7.7, ez: 40.9, ey: 44.67 }),
       D({ name: 'S1 west tower east face', x: -35.63, z: 34.68, yaw: -H, w: 1.2, y0: 40.75, y1: 45.37, ex: -37.3, ez: 34.68, ey: 42.32 }),
       D({ name: 'S2 east tower west face', x: -24.41, z: 34.68, yaw: H, w: 1.2, y0: 40.75, y1: 45.37, ex: -22.75, ez: 34.68, ey: 42.32 }),
+      // (the two under the street, user 2026-11-05 "Add these two ladders": the pit's south wall at z 23.95, 15 rungs from -17.55 to
+      //  -9.71 m, the rails -18.16..-9.31 — scan_ladders.mjs; the pit floor -18.16, the exit on the -9.30 floor behind the wall)
+      D({ name: 'U1 pit ladder west', x: -55.47, z: 23.43, yaw: 0, w: 0.91, y0: -18.16, y1: -9.29, ex: -55.47, ez: 24.63, ey: -9.30 }),
+      D({ name: 'U2 pit ladder east', x: -47.91, z: 23.43, yaw: 0, w: 0.91, y0: -18.16, y1: -9.29, ex: -47.91, ez: 24.63, ey: -9.30 }),
+      // THE WALLS (ladder.js, b1105j; user 2026-11-05, "It's a wall of the train's passenger home platform ... let unit be able to
+      //  climb back, or they'll stuck forever"; "Make these climbable as well"): span records — the whole face, climbed at any point
+      //  along it, up only, nothing drawn. W1 the west platform's wall over the track bed: the box 27.39..28.33 (top -9.21), its east
+      //  face climbed from the bed (-11.42) onto the platform (-9.30) — the foot and the exit on their floors and clear along all
+      //  202 m (span_probe.mjs). The terraces on the long hall's west side, two tiers of two walls with a 7 m gap between (the gap's
+      //  own things left alone): tier 1 the face x -63.20 (top -16.11), from the pit floor -18.16 onto the terrace -15.40; tier 2
+      //  the face x -77.63 (top -13.00), from -15.40 onto -12.39. The width is the wall's run less 0.3 m at each end; the line a
+      //  body's width off the face as every ladder's; the exit 1.1 m behind the face on the floor above.
+      D({ name: 'W1 platform wall', span: true, x: 28.79, z: 47.65, yaw: -H, w: 202.0, y0: -11.42, y1: -9.21, ex: 26.79, ez: 47.65, ey: -9.30 }),
+      D({ name: 'W2 terrace 1 north', span: true, x: -62.74, z: -52.75, yaw: -H, w: 6.7, y0: -18.16, y1: -15.40, ex: -64.3, ez: -52.75, ey: -15.40 }),
+      D({ name: 'W3 terrace 1 south', span: true, x: -62.74, z: -38.54, yaw: -H, w: 6.3, y0: -18.16, y1: -15.40, ex: -64.3, ez: -38.54, ey: -15.40 }),
+      D({ name: 'W4 terrace 2 north', span: true, x: -77.17, z: -52.75, yaw: -H, w: 6.7, y0: -15.40, y1: -12.39, ex: -78.5, ez: -52.75, ey: -12.39 }),
+      D({ name: 'W5 terrace 2 south', span: true, x: -77.17, z: -38.6, yaw: -H, w: 6.7, y0: -15.40, y1: -12.39, ex: -78.5, ez: -38.6, ey: -12.39 }),
     ],
   };
 })();

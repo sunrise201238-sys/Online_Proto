@@ -14,9 +14,9 @@ const { buildNavGrid, serializeNavGrid, navDataSignature, navDataFile } = await 
 for (const mapKey of maps) {
   const arena = getArena(mapKey);
   const t0 = performance.now();
-  const grid = buildNavGrid(arena.obstacles, arena.surfaces);
+  const grid = buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []);
   const built = performance.now() - t0;
-  const bytes = serializeNavGrid(grid, navDataSignature(arena.obstacles, arena.surfaces));
+  const bytes = serializeNavGrid(grid, navDataSignature(arena.obstacles, arena.surfaces, arena.ladders ?? []));
   const out = path.join(path.resolve(root), 'client/public', navDataFile(mapKey));
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, bytes);

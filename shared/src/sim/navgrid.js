@@ -29,7 +29,7 @@ import {
   walkFloorTo, surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
   groundHeightAt, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
 import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, NAV_FILE_EXT } from './constants.js';
-import { ladderGrabPoint } from './ladder.js';
+import { ladderGrabPoint, ladderColumnAt, ladderExitAt, LADDER_SPAN_END, LADDER_SPAN_LINK_STEP } from './ladder.js';
 
 const CELL = 4;
 // Max floor rise between adjacent samples: the sim's step plus slack for float
@@ -46,6 +46,15 @@ const SNAP_RADIUS = 3; // cells searched around a blocked path endpoint
 // cell. LAYER_CAP bounds the arrays on pathological geometry; no shipped map
 // needs more than 2.
 const LAYER_MIN_GAP = 2.0;
+// THE HEADROOM (2026-11-05, with the ways-in prune below): a level whose next floor lies less than a body's height over it
+// is no level — a sheet a body could not stand under without the sheet through its chest. A big slab carries no box (the
+// collision reader: a block of 200 m² or more is its top alone), so the space inside one, over the floor it sits on,
+// "fits" a body; such levels were sealed voids the prune dropped, until the ways-in rule could reach them over a hop from
+// the floor beside (District's station hall: 6,600 of the 20,900 nodes the rule revived lay inside the slabs standing on
+// the hall floor, 0.65 m under their tops; Town 1,100 of 1,900). The body's top is GROUND_BASE_Y + 2 over its feet
+// (physics.js boxHoldsAt: a box holds a body whose centre is within 2 units under it) — 1.1 m; a gap of 1.1 to 1.8 m
+// stays a level, as the sim stands a body there. The shipped grids lose the few such nodes under their own thin sheets.
+const BODY_HEADROOM = GROUND_BASE_Y + 2;
 const LAYER_CAP = 16;   // (8 until the second day: the tallest building's column stands fifteen levels, floors every 4 m to its roof, so with eight kept the upper storeys and the roof were no part of the grid and a bot never followed a player up — "enemy BOT cannot find me; it's lingering at the ground floor"; the file holds nodes and edges as lists now, so the layers cost memory, not the download. 4 until 2026-10-29: District's car park stacks four decks and their ramps, its stairwells six flights, and under its north-east quarter the street, the station's tunnel and three cellar levels stand in one column; the grid's arrays grow with the square of the layers a map needs, so the cap stays as small as the maps allow)
 
 // ===== WALL CLEARANCE (2026-08-08) =====================================
@@ -95,7 +104,7 @@ const JUMP_LINK_COST = 2.5;
 // lowered by this margin so the sight it was chosen for survives the slack.
 const FIRING_SIGHT_MARGIN = 0.8;
 
-export function buildNavGrid(obstacles, surfaces) {
+export function buildNavGrid(obstacles, surfaces, ladders = []) {
   // Grid bounds = obstacle bounding box. Boundary walls are obstacles in
   // both sims, so this always covers the full play area.
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -175,6 +184,7 @@ export function buildNavGrid(obstacles, surfaces) {
       for (let k = 0; k < hs.length; k += 1) {
         const above = k + 1 < hs.length ? hs[k + 1] : null;
         if (above != null && above - hs[k] < LAYER_MIN_GAP) continue;   // stepped up onto the level above
+        if (above != null && above - hs[k] < BODY_HEADROOM) continue;   // THE HEADROOM: the level above through the body
         const at = standAt(x, z, hs[k]); if (!at) continue;
         keep.push(hs[k]); keepPos.push(at);
       }
@@ -298,7 +308,7 @@ export function buildNavGrid(obstacles, surfaces) {
     }
   }
 
-  // --- Prune sealed voids ---
+  // --- Prune sealed voids (run below, after the links: pruneSealedVoids) ---
   // The space inside a SOLID raised platform fits a body and connects to its
   // neighbours, so it builds a tidy little component that no unit can ever
   // enter (Station's platform interiors: 3400 such nodes; Lobby's
@@ -306,7 +316,13 @@ export function buildNavGrid(obstacles, surfaces) {
   // touches a node with nothing overhead is sealed inside geometry. A
   // genuine underpass always reaches out to open ground (Streets' road runs
   // out from under the bridge), so it survives.
-  {
+  // THE WAYS IN (2026-11-05, user, District: "BOT does not know the area over this area, let them know" — a raised floor
+  // under the street a body jumps up onto, and the pit the two ladders climb out of, 25 m by 24 m with no node at all): a
+  // covered component that a TWO-WAY jump link or a LADDER joins to an open one is open too — a body gets in and out —
+  // and the openness is passed on until nothing changes. A drop link alone opens nothing: a pit a body falls into and
+  // cannot leave is a place no route should enter. So the links are built first (the link pass below reads the walk
+  // components as before; nothing of it changed) and the prune reads them.
+  const pruneSealedVoids = () => {
     const open = new Map();
     for (let node = 0; node < size; node += 1) {
       if (!walk[node] || comp[node] < 0) continue;
@@ -314,8 +330,19 @@ export function buildNavGrid(obstacles, surfaces) {
       if (!covered) open.set(comp[node], true);
       else if (!open.has(comp[node])) open.set(comp[node], false);
     }
+    // the ways in: the two-way links and the ladders' ends, as pairs of components
+    const pairs = [];
+    for (const [a, tos] of grid.jumpAdj) for (const b of tos) { const back = grid.jumpAdj.get(b); if (back && back.includes(a) && a < b) pairs.push([comp[a], comp[b]]); }
+    for (let k = 0; k < (ladders?.length ?? 0); k += 1) {
+      const L = ladders[k]; const grab = ladderGrabPoint(L);
+      const foot = denseNodeNear(grab.x, grab.z, L.y0), top = denseNodeNear(L.ex, L.ez, L.ey);
+      if (foot >= 0 && top >= 0) pairs.push([comp[foot], comp[top]]);
+    }
+    let changed = true;
+    while (changed) { changed = false; for (const [a, b] of pairs) { if (a < 0 || b < 0) continue; const oa = open.get(a) === true, ob = open.get(b) === true; if (oa !== ob) { open.set(a, true); open.set(b, true); changed = true; } } }
+    let dropped = 0;
     for (let node = 0; node < size; node += 1) {
-      if (walk[node] && open.get(comp[node]) === false) { walk[node] = 0; comp[node] = -1; }
+      if (walk[node] && open.get(comp[node]) === false) { walk[node] = 0; comp[node] = -1; dropped += 1; }
     }
     // Drop edges that now touch a pruned node.
     for (let i = 0; i < n; i += 1) {
@@ -328,16 +355,34 @@ export function buildNavGrid(obstacles, surfaces) {
         }
       }
     }
-  }
-
-  // --- Clearance grading (survivors only; see the note at node creation) ---
-  for (let node = 0; node < size; node += 1) {
-    if (!walk[node]) continue;
-    const x = posX[node], z = posZ[node];
-    const y = floor[node] + GROUND_BASE_Y;
-    clearGrade[node] = !unitOverlapsObstacle(x, y, z, obstacles, CLEAR_WIDE) ? 2
-      : (!unitOverlapsObstacle(x, y, z, obstacles, CLEAR_MID) ? 1 : 0);
-  }
+    // And the links that touch one (the counts with them: a two-way link counted once, a drop once).
+    if (dropped) {
+      let jumps = 0, drops = 0;
+      for (const [a, tos] of [...grid.jumpAdj]) {
+        if (!walk[a]) { grid.jumpAdj.delete(a); continue; }
+        const kept = tos.filter((b) => walk[b]); if (kept.length) grid.jumpAdj.set(a, kept); else grid.jumpAdj.delete(a);
+      }
+      for (const [a, tos] of grid.jumpAdj) for (const b of tos) { const back = grid.jumpAdj.get(b); if (back && back.includes(a)) { if (a < b) jumps += 1; } else drops += 1; }
+      grid.jumpLinkCount = jumps; grid.dropLinkCount = drops;
+    }
+  };
+  // (the dense form's node nearest a point on a floor, within 1.5 cells — the ladders' ends, as attachLadderLinks finds them on the list form)
+  const denseNodeNear = (x, z, floorY) => {
+    const c0 = Math.floor((x - minX) / CELL), r0 = Math.floor((z - minZ) / CELL); let best = -1, bestD = 6;
+    for (let r = r0 - 2; r <= r0 + 2; r += 1) for (let c = c0 - 2; c <= c0 + 2; c += 1) { if (r < 0 || c < 0 || r >= rows || c >= cols) continue; const i = r * cols + c;
+      for (let l = 0; l < layers; l += 1) { const node = l * n + i; if (!walk[node] || Math.abs(floor[node] - floorY) > 2) continue; const d = Math.hypot(posX[node] - x, posZ[node] - z); if (d < bestD) { bestD = d; best = node; } } }
+    return best;
+  };
+  // --- Clearance grading (survivors only; see the note at node creation) — run after the prune, below ---
+  const gradeClearance = () => {
+    for (let node = 0; node < size; node += 1) {
+      if (!walk[node]) continue;
+      const x = posX[node], z = posZ[node];
+      const y = floor[node] + GROUND_BASE_Y;
+      clearGrade[node] = !unitOverlapsObstacle(x, y, z, obstacles, CLEAR_WIDE) ? 2
+        : (!unitOverlapsObstacle(x, y, z, obstacles, CLEAR_MID) ? 1 : 0);
+    }
+  };
 
   // ===== Jump-links =====
   // Bridge WALK-DISCONNECTED islands (Station's 4 m platforms) with jump
@@ -529,6 +574,8 @@ export function buildNavGrid(obstacles, surfaces) {
       }
     }
   }
+  pruneSealedVoids();
+  gradeClearance();
   return compactNavGrid(grid);
 }
 // THE NODES AS A LIST (2026-10-29, the second day): the grid the searches read keeps only its walkable nodes — numbered
@@ -624,6 +671,8 @@ function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, 
 //   (`mx`, `mz`: the grab point in front of the foot, or the exit). A follower heading for such a waypoint from the other floor
 //   sets the bot's goal (botLadderGoal) and walks to that point; ladderBotStep mounts the body in the zone, the ride is the
 //   rule's, and the release stands the body on the landing, where the waypoint is reached. Never `jump`; never a chord across it.
+//   A WALL (ladder.js THE WALLS, `span`) is linked at points along its run, 8 m apart, up only: the mount reads the body's own
+//   place along the wall, so the landing of each link is the exit straight behind its point.
 export const LADDER_LINK_REACH = 6;   // (units: the farthest a ladder's end may lie from the node that stands for it — 1.5 cells)
 function nodeNear(grid, x, z, floorY, reach = LADDER_LINK_REACH) {
   const { cols, rows, cell, minX, minZ, cellStart, floor, posX, posZ } = grid;
@@ -648,12 +697,18 @@ export function attachLadderLinks(grid, ladders) {
   const add = (from, to, rec) => { if (!adj.has(from)) adj.set(from, []); adj.get(from).push(links.length); links.push({ index: links.length, from, to, ...rec }); };
   for (let k = 0; k < (ladders?.length ?? 0); k += 1) {
     const L = ladders[k];
-    const grab = ladderGrabPoint(L);
-    const foot = nodeNear(grid, grab.x, grab.z, L.y0), top = nodeNear(grid, L.ex, L.ez, L.ey);
-    if (foot < 0 || top < 0 || foot === top) continue;
-    const cost = (Math.abs(L.y1 - L.y0) + Math.hypot(L.ex - L.x, L.ez - L.z, L.ey - L.y1) + Math.hypot(grab.x - L.x, grab.z - L.z)) / CELL;
-    add(foot, top, { ladder: k, climb: 1, cost, mx: grab.x, mz: grab.z, x: L.ex, z: L.ez, y: L.ey });
-    add(top, foot, { ladder: k, climb: -1, cost, mx: L.ex, mz: L.ez, x: L.x, z: L.z, y: L.y0 });
+    // THE WALLS (ladder.js, b1105j): a span is linked at points along it, LADDER_SPAN_LINK_STEP apart, from end to end
+    // (LADDER_SPAN_END inside), UP only — a wall has no top zone, and the way down off a platform's edge is the drop link.
+    const offsets = [0];
+    if (L.span) { const h = Math.max(0, L.w / 2 - LADDER_SPAN_END); const n = Math.max(1, Math.round((2 * h) / LADDER_SPAN_LINK_STEP) + 1); offsets.length = 0; for (let i = 0; i < n; i += 1) offsets.push(n === 1 ? 0 : -h + (2 * h * i) / (n - 1)); }
+    for (const s of offsets) {
+      const grab = ladderGrabPoint(L, s), col = ladderColumnAt(L, s), ex = ladderExitAt(L, s);
+      const foot = nodeNear(grid, grab.x, grab.z, L.y0), top = nodeNear(grid, ex.x, ex.z, L.ey);
+      if (foot < 0 || top < 0 || foot === top) continue;
+      const cost = (Math.abs(L.y1 - L.y0) + Math.hypot(ex.x - col.x, ex.z - col.z, L.ey - L.y1) + Math.hypot(grab.x - col.x, grab.z - col.z)) / CELL;
+      add(foot, top, { ladder: k, climb: 1, cost, mx: grab.x, mz: grab.z, x: ex.x, z: ex.z, y: L.ey });
+      if (!L.span) add(top, foot, { ladder: k, climb: -1, cost, mx: ex.x, mz: ex.z, x: col.x, z: col.z, y: L.y0 });
+    }
   }
   grid.ladderAdj = adj; grid.ladderLinks = links; grid.ladders = ladders ?? [];
   return grid;
@@ -1383,12 +1438,12 @@ export function findHiddenSpot(grid, sx, sz, startFloor, eyes, obstacles, opts =
 // boot, the offline match-start stall). A read-back grid is the built grid to the byte (shared/test/navdata.test.js
 // rebuilds every shipped file and compares), so routes do not change.
 // SAFETY: the file carries a signature of the collision data it was built from (navDataSignature — every box's and
-// floor's fields), and the loader refuses a file whose signature is not the arena's: a regenerated map or a boundary
+// floor's fields, and the ladders' rows since 2026-11-05), and the loader refuses a file whose signature is not the arena's: a regenerated map or a boundary
 // change falls back to building, never to a stale grid. A change to the BUILDER itself is not caught by the signature;
 // it is caught by the test, which fails until the files are regenerated.
 export const NAV_DATA_VERSION = 4;
 export const navDataFile = (mapKey) => `maps/${mapKey}_nav${NAV_FILE_EXT}`;
-export function navDataSignature(obstacles, surfaces) {
+export function navDataSignature(obstacles, surfaces, ladders = []) {
   let h = 0x811c9dc5;
   const mix = (s) => { for (let i = 0; i < s.length; i += 1) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } };
   const one = (o) => {
@@ -1399,6 +1454,7 @@ export function navDataSignature(obstacles, surfaces) {
   };
   mix(`o${obstacles.length}:`); for (let i = 0; i < obstacles.length; i += 1) mix(one(obstacles[i]));
   mix(`s${surfaces.length}:`); for (let i = 0; i < surfaces.length; i += 1) mix(one(surfaces[i]));
+  mix(`l${ladders.length}:`); for (let i = 0; i < ladders.length; i += 1) mix(one(ladders[i]));   // (the ladders open covered places to the prune: a row changed is a grid changed)
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 // THE FILE (version 4, 2026-10-29, the second day): the list form (compactNavGrid) verbatim — the arrays the searches

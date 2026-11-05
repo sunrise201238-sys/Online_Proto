@@ -273,3 +273,19 @@ two trailers by the fence). The route grid file regenerated with it.
 `navgrid_build.mjs <tree root> <mapKey>...` builds each map's nav grid and writes it as `client/public/maps/<mapKey>_nav<NAV_FILE_EXT>` (the extension from `shared/src/sim/constants.js`: `.nav` on the release lines, `.wasm` on the PT site). The server's warm-up and the client read the file instead of building the grid. Re-run it after any change to a map's collision data (the file carries the data's signature and is refused otherwise) or to the grid builder (`shared/test/navdata.test.js` compares every shipped file to a fresh build and fails until the files are regenerated). Shipped: town, compound, dust, warehouse, spacecraft, hospital, district — the concept maps build in under 150 ms and ship none. The file (version 4, 2026-10-29) is the grid's list form verbatim — the walkable nodes numbered by cell then by level, each node's cell, floor, point and clearance, the walk and link neighbours as runs in two arrays (`navgrid.js`, THE NODES AS A LIST) — and is read back by copying the arrays: District's 3 MB loads in a millisecond. Version 3 the same morning listed the dense form's nodes and filled its arrays back in at load (a map of many levels — District, sixteen layers over 54,000 cells — has tens of MB of them, nearly all empty), and version 2 was those arrays verbatim.
 
     node shared/tools/maps/navgrid_build.mjs . town compound dust warehouse spacecraft hospital district
+
+## Editing a served model by hand (2026-11-05)
+
+Two small tools for the model file itself, written for District's hidden doors (the data is `client/public/maps/<key>_data.json`,
+hand-edited for the stair planes, the two door boxes' bottoms, the six posts removed and the second floor's balcony strip —
+each change is in the main README's District paragraph, b1105i/j):
+
+- `glb_piece_clone.mjs <in.glb> <out.glb> <node,node,...> x0 x1 z0 z1 y0 y1 '<placements json>'` — copies the triangles of the
+  named nodes that lie inside the window (model metres) into a new node per placement, turned about y and moved so the piece's
+  min corner lands where asked. The pillar plaque (#3442) became the lintel over each hidden door this way.
+- `glb_add_boxes.mjs <in.glb> <out.glb> '<[{name,min,max,color}] json>'` — adds plain flat-coloured boxes (one node each,
+  one material per colour). The dark door-edge frames on both faces of each hidden door are twelve such boxes.
+
+Both take model metres; the served copy of District sits 0.55 m lower than its collision data (GLB_MAPS `ground: 0.55`), so a
+height read off a box becomes `+0.55` in the model. The served file is `maps/district.glb` here and `maps/district.wasm` on the
+playtest site (the hosting's extension), the same bytes.

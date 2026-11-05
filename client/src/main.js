@@ -6925,7 +6925,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
   s.freeAim = !!fighter.freeAim;                         // free pov (user 2026-10-30): the glint warns everyone, the unit faces its aim
   s.yaw = fighter.yaw;
-  s.ladder = fighter.ladder; s.ladderDir = fighter.ladderDir; s.ladderLeg = fighter.ladderLeg;   // the ladder (ladder.js): the pose, the facing, the camera and the HUD read them
+  s.ladder = fighter.ladder; s.ladderDir = fighter.ladderDir; s.ladderLeg = fighter.ladderLeg; s.ladderS = fighter.ladderS;   // the ladder (ladder.js): the pose, the facing, the camera and the HUD read them
   s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
@@ -10680,14 +10680,14 @@ function ensureOfflineNavGrid() {
   const rec = _navData[state.mapKey];
   const t0 = performance.now();
   if (rec && rec.bytes) {
-    const g = deserializeNavGrid(rec.bytes, arenaSurfaces, navDataSignature(arenaObstacles, arenaSurfaces));
+    const g = deserializeNavGrid(rec.bytes, arenaSurfaces, navDataSignature(arenaObstacles, arenaSurfaces, arenaLadders));
     if (g) { offlineNavGrid = attachLadderLinks(g, arenaLadders); console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
     console.warn(`[nav] ${state.mapKey}: grid file refused (other collision data: ${arenaObstacles.length} boxes / ${arenaSurfaces.length} floors here) — building`);
     rec.bytes = null; rec.failed = true;
   } else if (rec && !rec.failed && performance.now() - rec.startedAt < NAV_DATA_WAIT_MS) {
     return null;   // (the file is on its way)
   }
-  offlineNavGrid = attachLadderLinks(buildNavGrid(arenaObstacles, arenaSurfaces), arenaLadders);   // (the ladders' links on the grid — navgrid.js attachLadderLinks, as the server's navGridFor)
+  offlineNavGrid = attachLadderLinks(buildNavGrid(arenaObstacles, arenaSurfaces, arenaLadders), arenaLadders);   // (the ladders' links on the grid — navgrid.js attachLadderLinks, as the server's navGridFor)
   console.log(`[nav] ${state.mapKey}: grid built, ${(performance.now() - t0).toFixed(0)} ms`);
   return offlineNavGrid;
 }

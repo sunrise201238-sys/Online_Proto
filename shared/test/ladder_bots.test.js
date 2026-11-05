@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as C from '../src/sim/constants.js';
 import {
   createMatchState, tickMatch, emptyInput, getArena, findPathOnGrid, findHiddenSpot, groundHeightAt,
-  setMoveOrder, tickCommandDriver, getCommands, ladderFootZone, ladderTopZone, ladderGrabPoint, BOT_LOS_EYE_HEIGHT
+  setMoveOrder, tickCommandDriver, getCommands, ladderFootZone, ladderTopZone, ladderGrabPoint, ladderNormal, ladderExitAt, ladderOffsetAt, BOT_LOS_EYE_HEIGHT
 } from '../src/sim/index.js';
 import { tickBot, navGridFor, registerNavGridData } from '../src/sim/ai.js';
 import { navDataFile, LADDER_LINK_REACH } from '../src/sim/navgrid.js';
@@ -34,11 +34,26 @@ const T1 = { foot: { x: -111.4, z: -57.4 }, roof: { x: -75.4, z: -1.4, y: 178.68
 // Compound's C1: the hall floor by it, and the catwalk's exit.
 const C1 = { hall: { x: -85.7, z: -42.4 }, exit: { x: -82.7, z: -58.4, y: 27.64 } };
 
-test('every ladder is a link both ways between the node at its grab point and the node at its exit', () => {
+test('every ladder is a link both ways between the node at its grab point and the node at its exit; a wall is linked along its run, up only', () => {
   for (const mapKey of ['compound', 'district']) {
     const arena = getArena(mapKey), grid = gridFor(mapKey);
-    assert.equal(grid.ladderLinks.length, 2 * arena.ladders.length, `${mapKey}: two links per ladder`);
+    const ladders = arena.ladders.filter((L) => !L.span), walls = arena.ladders.filter((L) => L.span);
+    const wallLinks = grid.ladderLinks.filter((l) => arena.ladders[l.ladder].span);
+    assert.equal(grid.ladderLinks.length - wallLinks.length, 2 * ladders.length, `${mapKey}: two links per ladder`);
+    walls.forEach((L) => {
+      const k = arena.ladders.indexOf(L); const links = wallLinks.filter((l) => l.ladder === k); const n = ladderNormal(L);
+      assert.ok(links.length >= (L.w > 100 ? 20 : 2), `${L.name}: linked along its run (${links.length})`);
+      for (const l of links) {
+        assert.equal(l.climb, 1, `${L.name}: up only`);
+        assert.ok(ladderFootZone(L, { x: l.mx, y: L.y0 + G, z: l.mz }), `${L.name}: the mount point in the foot zone`);
+        const s = ladderOffsetAt(L, { x: l.mx, z: l.mz }); const e = ladderExitAt(L, s);
+        assert.ok(Math.hypot(l.x - e.x, l.z - e.z) < 1e-6 && l.y === L.ey, `${L.name}: the landing is the exit straight behind the mount point`);
+        assert.ok(Math.abs(grid.floor[l.from] - L.y0) <= 2 && Math.abs(grid.floor[l.to] - L.ey) <= 2, `${L.name}: the nodes on the floors`);
+        assert.ok(Math.abs((l.mx - L.x) * n.x + (l.mz - L.z) * n.z + 1) < 1e-6, `${L.name}: the mount point a metre in front of the line`);
+      }
+    });
     arena.ladders.forEach((L, k) => {
+      if (L.span) return;
       const up = grid.ladderLinks.find((l) => l.ladder === k && l.climb > 0), down = grid.ladderLinks.find((l) => l.ladder === k && l.climb < 0);
       assert.ok(up && down, `${L.name}: both ways`);
       assert.equal(up.from, down.to); assert.equal(up.to, down.from);
@@ -99,6 +114,39 @@ test('Compound: the hall to the catwalk by C1, the hatch dropped on the way back
   const sw = ladderWps(s);
   assert.equal(sw.length, 1); assert.equal(sw[0].ladder, 8); assert.equal(sw[0].climb, 1);
 });
+
+// THE WALLS (b1105j): a route from the track bed onto the platform climbs the platform wall where it stands; a bot on the bed
+// with its enemy up on the platform climbs it and walks on; the way down is the drop off the edge, never a climb.
+const BED = { x: (30.5 + 25.75) * 4, z: (100 - 35.45) * 4, y: -11.42 * 4 }, PLATFORM = { x: (23 + 25.75) * 4, z: (100 - 35.45) * 4, y: -9.30 * 4 };   // (the platform at x 23: the floor runs x 19..27 here, a pillar's bay west of it)
+test('the platform wall: a route from the track bed climbs it where it stands; the way down is the drop', () => {
+  const arena = getArena('district'), grid = gridFor('district');
+  const W1 = arena.ladders.findIndex((L) => L.span && /platform/.test(L.name)); assert.ok(W1 >= 0);
+  const up = findPathOnGrid(grid, BED.x, BED.z, PLATFORM.x, PLATFORM.z, BED.y, PLATFORM.y, arena.obstacles, { ladders: true });
+  assert.ok(up && up.length > 1, 'a route up');
+  const lw = ladderWps(up); assert.equal(lw.length, 1); assert.equal(lw[0].ladder, W1); assert.equal(lw[0].climb, 1);
+  assert.ok(Math.abs(lw[0].z - BED.z) < 40, `the climb is near where the bot stands, not at the wall's middle (z ${(lw[0].z / 4 + 35.45).toFixed(1)} m)`);
+  const plain = findPathOnGrid(grid, BED.x, BED.z, PLATFORM.x, PLATFORM.z, BED.y, PLATFORM.y, arena.obstacles);
+  assert.ok(!plain || plain.length > up.length, 'without the wall the way is longer, or none');
+  const down = findPathOnGrid(grid, PLATFORM.x, PLATFORM.z, BED.x, BED.z, PLATFORM.y, BED.y, arena.obstacles, { ladders: true });
+  assert.ok(down && down.some((w) => w.jump) && ladderWps(down).length === 0, 'down is the drop off the edge');
+});
+test('a bot on the track bed with its enemy on the platform climbs the wall and stands on the platform', () => withGauge(() => {
+  gridFor('district');
+  const m = createMatchState({ mapKey: 'district', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
+  const p1 = m.fighters.p1, p2 = m.fighters.p2; const put = (f, at) => { f.pos.x = at.x; f.pos.z = at.z; f.pos.y = at.y + G; f.floorY = f.pos.y; f.vel.x = 0; f.vel.z = 0; f.grounded = true; f.airborne = false; };
+  put(p1, BED); put(p2, { x: PLATFORM.x - 12, z: PLATFORM.z, y: PLATFORM.y }); p2.hp = 100000;
+  for (const f of Object.values(m.fighters)) f.invulnerableUntil = 0;
+  const arena = getArena('district'); const W1 = arena.ladders.findIndex((L) => L.span && /platform/.test(L.name));
+  const inputs = { p1: emptyInput(), p2: emptyInput() };
+  let now = 1000, mounted = null, released = null;
+  for (let i = 0; i < 60 * 30; i += 1) {
+    now += MS; p1.targetId = 'p2'; tickBot(m, 'p1', now); tickMatch(m, inputs, now, DT, ['p1']);
+    if (p1.ladder != null && mounted == null) mounted = { ladder: p1.ladder, s: p1.ladderS, z: p1.pos.z };
+    if (mounted && p1.ladder == null && released == null) { released = { y: feetY(p1), x: p1.pos.x, airborne: p1.airborne }; break; }
+  }
+  assert.ok(mounted && mounted.ladder === W1, `the bot mounted the platform wall: ${JSON.stringify(mounted)}`);
+  assert.ok(released && !released.airborne && Math.abs(released.y - PLATFORM.y) < 0.5 && released.x < 28.33 * 4 - 25.75 * 4 + 1e-6 + 300, `released standing on the platform: ${JSON.stringify(released)}`);
+}));
 
 // A match on District with p1 driven as the server drives a bot (tickBot, then the sim's bot branch), p2 a still human.
 function districtMatch(p1At, p2At) {

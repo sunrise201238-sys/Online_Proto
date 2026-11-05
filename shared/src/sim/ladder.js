@@ -22,6 +22,17 @@
 //   no momentum, no stun (a hit does its damage, applyHitStun skips a climber; a stun running at the mount is dropped), no
 //   boost drained or refilled (tickBoost is not run), no firing, dodging or sprinting (actions.js refuses them). Dying on the
 //   ladder lets go (the body, hidden as every dead body is, drops).
+// THE WALLS (b1105j, user 2026-11-05: "It's a wall of the train's passenger home platform ... let unit be able to climb back, or
+// they'll stuck forever"; "Make these climbable as well"): a record with `span: true` is a whole wall face a body climbs at ANY
+// point along it — District's platform wall over the track bed (202 m) and the four retaining walls of the terraces under the
+// street. The row is the same row: the climb line's CENTRE, the facing into the wall, the width now the wall's whole run, the feet
+// at the foot and at the top, the exit for the centre. The mount keeps where along the wall the body took it (st.ladderS, the
+// lateral offset along the wall, clamped LADDER_SPAN_END inside the ends — ladderOffsetAt): the column is the centre moved along
+// the wall by it and so is the exit (ladderColumnAt, ladderExitAt), so a body climbs straight up where it stood and steps off the
+// top straight behind. UP ONLY (user, confirmed): a wall has no top zone — a press on the platform's edge or the terrace is a jump
+// as ever, so no one is caught by a 200 m wall top; on the wall the stick away from it climbs back down, as on a ladder. Nothing
+// is drawn on the wall (user: the face stays as it is). The bots' grid links such a wall every LADDER_SPAN_LINK_STEP along it, up
+// only (navgrid.js attachLadderLinks); a ladder's st.ladderS is 0 and every form above is the ladder's own.
 import { GROUND_BASE_Y, LADDER_CLIMB_SPEED, SURFACE_STEP_HEIGHT } from './constants.js';
 
 // THE ZONE (b1105g, user: "the climbing is very hard to trigger ... I have to stop sprinting and direction input, then press jump at
@@ -42,7 +53,19 @@ export const LADDER_APPROACH_SPEED = 2.0;    // units/s toward the wall, at the 
 // The point a bot walks to before it mounts from the foot: the middle of the foot zone, LADDER_GRAB_MID in front of the climb
 // line (the route grid's ladder links name it — navgrid.js attachLadderLinks; a follower heads for it with the goal set).
 export const LADDER_GRAB_MID = (LADDER_GRAB_FRONT - LADDER_GRAB_BACK) / 2;
-export function ladderGrabPoint(L) { const n = ladderNormal(L); return { x: L.x - n.x * LADDER_GRAB_MID, z: L.z - n.z * LADDER_GRAB_MID }; }   // units around the exit a body stands to mount from the top (1 m)
+export function ladderGrabPoint(L, s = 0) { const n = ladderNormal(L); const c = ladderColumnAt(L, s); return { x: c.x - n.x * LADDER_GRAB_MID, z: c.z - n.z * LADDER_GRAB_MID }; }
+// THE WALLS (above): along the wall — the `s` axis of the zones (s = dx·t.x + dz·t.z) — a body's offset at the mount, clamped
+// inside the span's ends; the column and the exit moved along by it (a ladder's offset is 0: its own column and exit).
+export const LADDER_SPAN_END = 2.0;          // units inside a wall's ends the column keeps (0.5 m)
+export const LADDER_SPAN_LINK_STEP = 32;     // units between the grid's links along a wall (8 m; navgrid.js attachLadderLinks)
+export function ladderTangent(L) { const n = ladderNormal(L); return { x: -n.z, z: n.x }; }
+export function ladderOffsetAt(L, pos) {
+  if (!L.span) return 0;
+  const t = ladderTangent(L); const s = (pos.x - L.x) * t.x + (pos.z - L.z) * t.z; const h = Math.max(0, L.w / 2 - LADDER_SPAN_END);
+  return Math.max(-h, Math.min(h, s));
+}
+export function ladderColumnAt(L, s) { const t = ladderTangent(L); return { x: L.x + t.x * s, z: L.z + t.z * s }; }
+export function ladderExitAt(L, s) { const t = ladderTangent(L); return { x: L.ex + t.x * s, z: L.ez + t.z * s }; }
 
 const G = GROUND_BASE_Y;
 
@@ -58,6 +81,7 @@ export function ladderFootZone(L, pos) {
 }
 // The top zone: the feet within a step of the exit's floor, the body within LADDER_TOP_RADIUS of the exit.
 export function ladderTopZone(L, pos) {
+  if (L.span) return false;   // (THE WALLS: up only — a wall has no top zone)
   if (Math.abs(pos.y - G - L.ey) > SURFACE_STEP_HEIGHT) return false;
   return Math.hypot(pos.x - L.ex, pos.z - L.ez) <= LADDER_TOP_RADIUS;
 }
@@ -74,8 +98,9 @@ export function ladderAt(ladders, pos) {
 function clearMotion(st, vel) { vel.x = 0; vel.z = 0; st.momentumVX = 0; st.momentumVZ = 0; st.queuedMomentumVX = 0; st.queuedMomentumVZ = 0; }
 
 // Onto the ladder at one end: the enter leg slides the body onto the line, then it climbs toward the other end.
-export function ladderMount(st, vel, ladders, index, end) {
+export function ladderMount(st, pos, vel, ladders, index, end) {
   st.ladder = index; st.ladderDir = end === 'foot' ? 1 : -1; st.ladderLeg = 'enter'; st.ladderIntent = st.ladderDir; st.ladderArmUntil = undefined;
+  st.ladderS = ladderOffsetAt(ladders[index], pos);   // (THE WALLS: where along the wall; 0 on a ladder)
   clearMotion(st, vel);
   st.airborne = false; st.grounded = false; st.jumpVelocity = 0; st.action = 'climb';
   st.hitStunUntil = 0; st.plantUntil = 0; st.landedOnLid = false;
@@ -89,7 +114,7 @@ export function ladderRelease(st, pos, vel, how) {
   if (how === 'stand') { st.airborne = false; st.grounded = true; st.floorY = pos.y; }
   else { st.airborne = true; st.grounded = false; st.jumpVelocity = 0; }
   st.action = 'idle';
-  st.ladder = undefined; st.ladderDir = undefined; st.ladderLeg = undefined; st.ladderIntent = undefined; st.ladderClock = undefined;
+  st.ladder = undefined; st.ladderDir = undefined; st.ladderLeg = undefined; st.ladderIntent = undefined; st.ladderClock = undefined; st.ladderS = undefined;
   if (st.botLadderGoal) st.botLadderGoal = undefined;
 }
 
@@ -115,7 +140,7 @@ export function ladderHumanInput(st, pos, vel, input, ladders) {
 // A human's jump press on the ground: at a ladder's end it mounts (true) — the caller then makes no jump.
 export function ladderTryMount(st, pos, vel, ladders) {
   const at = ladderAt(ladders, pos); if (!at) return false;
-  ladderMount(st, vel, ladders, at.index, at.end); return true;
+  ladderMount(st, pos, vel, ladders, at.index, at.end); return true;
 }
 // Running at a ladder's foot (THE APPROACH above: on the foot's floor, in front of the zone within LADDER_APPROACH_FRONT, inside
 // the grab width, the body moving toward the wall at LADDER_APPROACH_SPEED or more): its index, or null.
@@ -150,7 +175,7 @@ export function ladderBotStep(st, pos, vel, ladders) {
     if (!st.botLadderGoal || st.airborne) return false;
     const at = ladderAt(ladders, pos);
     if (!at || (st.botLadderGoal > 0) !== (at.end === 'foot')) return false;
-    ladderMount(st, vel, ladders, at.index, at.end);
+    ladderMount(st, pos, vel, ladders, at.index, at.end);
   }
   st.ladderIntent = st.ladderDir; clearMotion(st, vel); st.action = 'climb'; st.yaw = ladders[st.ladder].yaw;
   return true;
@@ -167,19 +192,20 @@ export function ladderTick(st, pos, vel, ladders, dt) {
   const L = ladders[st.ladder];
   if (!L || st.hp <= 0) { ladderRelease(st, pos, vel, 'drop'); return; }
   const step = LADDER_CLIMB_SPEED * dt;
+  const col = ladderColumnAt(L, st.ladderS ?? 0), ex = ladderExitAt(L, st.ladderS ?? 0);   // (THE WALLS: at the offset; a ladder's own at 0)
   if (st.ladderLeg === 'enter') {
-    if (moveToward(pos, L.x, (st.ladderDir > 0 ? L.y0 : L.y1) + G, L.z, step)) st.ladderLeg = 'climb';
+    if (moveToward(pos, col.x, (st.ladderDir > 0 ? L.y0 : L.y1) + G, col.z, step)) st.ladderLeg = 'climb';
   } else if (st.ladderLeg === 'climb') {
-    pos.x = L.x; pos.z = L.z;
+    pos.x = col.x; pos.z = col.z;
     const intent = st.ladderIntent ?? 0;
     if (intent > 0) { pos.y = Math.min(L.y1 + G, pos.y + step); if (pos.y >= L.y1 + G - 1e-9) st.ladderLeg = 'exit'; }
     else if (intent < 0) { pos.y = Math.max(L.y0 + G, pos.y - step); if (pos.y <= L.y0 + G + 1e-9) { ladderRelease(st, pos, vel, 'stand'); return; } }
-  } else if (moveToward(pos, L.ex, L.ey + G, L.ez, step)) { ladderRelease(st, pos, vel, 'stand'); return; }
+  } else if (moveToward(pos, ex.x, L.ey + G, ex.z, step)) { ladderRelease(st, pos, vel, 'stand'); return; }
   clearMotion(st, vel); vel.y = 0; st.action = 'climb'; st.airborne = false; st.grounded = false;
 }
 
 // A record in model metres to arena units, for the rows in arena.js: scale and the model's centre as the client's GLB_MAPS line
 // has them; the heights over the street.
 export function ladderRow(s, cx, cz, m) {
-  return { x: (m.x - cx) * s, z: (m.z - cz) * s, yaw: m.yaw, w: m.w * s, y0: m.y0 * s, y1: m.y1 * s, ex: (m.ex - cx) * s, ez: (m.ez - cz) * s, ey: m.ey * s, name: m.name };
+  return { x: (m.x - cx) * s, z: (m.z - cz) * s, yaw: m.yaw, w: m.w * s, y0: m.y0 * s, y1: m.y1 * s, ex: (m.ex - cx) * s, ez: (m.ez - cz) * s, ey: m.ey * s, name: m.name, ...(m.span ? { span: true } : {}) };
 }

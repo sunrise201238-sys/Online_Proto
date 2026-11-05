@@ -83,6 +83,7 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     ladder: undefined,
     ladderDir: undefined,
     ladderLeg: undefined,
+    ladderS: undefined,          // (THE WALLS, ladder.js: where along a wall the body climbs — its lateral offset; 0 on a ladder)
     ladderIntent: undefined,
     ladderJumpLatch: undefined,
     ladderArmUntil: undefined,   // (a jump press kept for the ladder ahead — ladder.js THE APPROACH)

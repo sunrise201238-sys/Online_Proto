@@ -5,7 +5,7 @@ export * from './constants.js';
 export * from './math.js';
 export * from './state.js';
 export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaLadders, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
-export { onLadder, ladderAt, ladderFootZone, ladderTopZone, ladderMount, ladderRelease, ladderIntentOf, ladderJumpPress, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick, ladderNormal, ladderRow, ladderGrabPoint, ladderApproach, ladderPress, LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_GRAB_MID, LADDER_APPROACH_FRONT, LADDER_PRESS_MS } from './ladder.js';
+export { onLadder, ladderAt, ladderFootZone, ladderTopZone, ladderMount, ladderRelease, ladderIntentOf, ladderJumpPress, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick, ladderNormal, ladderRow, ladderGrabPoint, ladderTangent, ladderOffsetAt, ladderColumnAt, ladderExitAt, LADDER_SPAN_END, LADDER_SPAN_LINK_STEP, ladderApproach, ladderPress, LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_GRAB_MID, LADDER_APPROACH_FRONT, LADDER_PRESS_MS } from './ladder.js';
 export {
   segmentHitsObstacle,
   unitOverlapsObstacle,

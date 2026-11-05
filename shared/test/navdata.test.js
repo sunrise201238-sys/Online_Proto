@@ -24,8 +24,8 @@ function sameGrid(a, b) {
 
 test('a grid written out and read back is the built grid (Station: layers and jump links)', () => {
   const arena = getArena('station');
-  const grid = buildNavGrid(arena.obstacles, arena.surfaces);
-  const sig = navDataSignature(arena.obstacles, arena.surfaces);
+  const grid = buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []);
+  const sig = navDataSignature(arena.obstacles, arena.surfaces, arena.ladders ?? []);
   const bytes = serializeNavGrid(grid, sig);
   const back = deserializeNavGrid(bytes, arena.surfaces, sig);
   assert.ok(back, 'read back failed'); sameGrid(grid, back);
@@ -45,10 +45,10 @@ const shipped = Object.keys(MAP_DATA).filter((k) => existsSync(path.join(PUBLIC,
 for (const mapKey of shipped) {
   test(`the shipped grid file of ${mapKey} is a fresh build of its map`, () => {
     const arena = getArena(mapKey);
-    const sig = navDataSignature(arena.obstacles, arena.surfaces);
+    const sig = navDataSignature(arena.obstacles, arena.surfaces, arena.ladders ?? []);
     const back = deserializeNavGrid(new Uint8Array(readFileSync(path.join(PUBLIC, navDataFile(mapKey)))), arena.surfaces, sig);
     assert.ok(back, `${navDataFile(mapKey)} was refused: built from other collision data — re-run shared/tools/maps/navgrid_build.mjs`);
-    sameGrid(buildNavGrid(arena.obstacles, arena.surfaces), back);
+    sameGrid(buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []), back);
   });
 }
 test('the grid files present are listed', () => { assert.ok(Array.isArray(shipped)); console.log('  grid files shipped:', shipped.join(', ') || '(none)'); });

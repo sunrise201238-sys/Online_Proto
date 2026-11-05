@@ -30,7 +30,7 @@ const navGridCache = new WeakMap();
 export function navGridFor(arena) {
   let grid = navGridCache.get(arena);
   if (!grid) {
-    grid = attachLadderLinks(buildNavGrid(arena.obstacles, arena.surfaces), arena.ladders ?? []);   // (the ladders' links on the grid — navgrid.js attachLadderLinks; the offline client's ensureOfflineNavGrid does the same)
+    grid = attachLadderLinks(buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []), arena.ladders ?? []);   // (the ladders' links on the grid — navgrid.js attachLadderLinks; the offline client's ensureOfflineNavGrid does the same)
     navGridCache.set(arena, grid);
   }
   return grid;
@@ -39,7 +39,7 @@ export function navGridFor(arena) {
 // collision data's — then navGridFor hands it out instead of building. False when the bytes are not this map's grid.
 export function registerNavGridData(arena, bytes) {
   if (navGridCache.has(arena)) return true;
-  const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces));
+  const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces, arena.ladders ?? []));
   if (!grid) return false;
   navGridCache.set(arena, attachLadderLinks(grid, arena.ladders ?? []));
   return true;
