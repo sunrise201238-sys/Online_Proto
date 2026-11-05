@@ -85,6 +85,7 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     ladderLeg: undefined,
     ladderIntent: undefined,
     ladderJumpLatch: undefined,
+    ladderArmUntil: undefined,   // (a jump press kept for the ladder ahead — ladder.js THE APPROACH)
     botLadderGoal: undefined,
 
     // Dash.

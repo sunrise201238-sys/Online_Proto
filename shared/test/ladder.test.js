@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import * as C from '../src/sim/constants.js';
 import {
   createMatchState, tickMatch, emptyInput, getArena, getArenaLadders, buildSnapshotFor,
-  groundHeightAt, unitOverlapsObstacle, applyHitStun, attemptFire, tryStartStep, ladderNormal, ladderAt,
-  LADDER_GRAB_FRONT, LADDER_TOP_RADIUS
+  groundHeightAt, unitOverlapsObstacle, applyHitStun, attemptFire, tryStartStep, ladderNormal, ladderAt, ladderFootZone,
+  LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_APPROACH_FRONT, LADDER_PRESS_MS
 } from '../src/sim/index.js';
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
@@ -162,12 +162,63 @@ test('District: every ladder is climbed from its foot to its exit, and descended
   }
 }));
 
+// THE RUSH (b1105g, user: "very hard to trigger ... I have to stop sprinting and direction input, then press jump at very precise
+// spot"): a body run at the ladder is stopped by the wall behind the line, and the press there mounts; a press while running at
+// the foot from under 2.5 m is kept and mounts the body as it arrives, no jump; a press farther out, or running past, jumps.
+for (const [mapKey, idx] of [['compound', 0], ['district', 0]]) {
+  test(`${mapKey}: pressed on the wall the press mounts; a press on the run at the ladder is kept and mounts on arrival; farther out it jumps`, () => withGauge(() => {
+    const L = getArenaLadders(mapKey)[idx]; const n = ladderNormal(L);
+    const inFront = (k) => ({ x: L.x - n.x * k, z: L.z - n.z * k });
+    // (a) walked into the wall from the grab point: the body stops behind the line, inside the zone; the press mounts
+    {
+      const p = inFront(1); const { m, f } = matchAt(mapKey, p.x, L.y0, p.z); let now = 1000;
+      for (let i = 0; i < 40; i += 1) now = step(m, now, toward(L));
+      const d = (f.pos.x - L.x) * n.x + (f.pos.z - L.z) * n.z;
+      assert.ok(d > 0.5 && d < LADDER_GRAB_BACK, `${mapKey}: the wall stops the body behind the line (d ${d.toFixed(2)})`);
+      assert.ok(ladderFootZone(L, f.pos), 'and that is inside the zone');
+      now = step(m, now, { ...toward(L), jump: true });
+      assert.equal(f.ladder, idx, 'the press on the wall mounts');
+    }
+    // (b) a press on the run from 7 u out (1.75 m; the zone begins at 4 u): no jump, the run goes on, the mount on arrival
+    for (const sprint of [false, true]) {
+      const p = inFront(7); const { m, f } = matchAt(mapKey, p.x, L.y0, p.z); let now = 1000;
+      now = step(m, now, { ...toward(L), boost: sprint, jump: true });
+      assert.equal(f.airborne, false, 'no jump went off'); assert.equal(f.ladder, undefined, 'not mounted yet'); assert.ok(f.ladderArmUntil > now - MS, 'the press is kept');
+      let mountedAt = null;
+      for (let i = 0; i < 40 && mountedAt == null; i += 1) { now = step(m, now, { ...toward(L), boost: sprint }); assert.equal(f.airborne, false, 'still no jump'); if (f.ladder != null) mountedAt = now; }
+      assert.ok(mountedAt != null && mountedAt - 1000 <= LADDER_PRESS_MS + MS, `${sprint ? 'sprinting' : 'walking'}: mounted on arrival (${mountedAt == null ? 'never' : `${mountedAt - 1000} ms`})`);
+      assert.equal(f.ladderArmUntil, undefined, 'the kept press spent');
+    }
+    // (c) a press farther out than the approach (3.5 m): the jump as ever, no mount
+    {
+      const p = inFront(LADDER_APPROACH_FRONT + 4); const { m, f } = matchAt(mapKey, p.x, L.y0, p.z); let now = 1000;
+      now = step(m, now, { ...toward(L), boost: true, jump: true });
+      assert.equal(f.airborne, true, 'the jump went off'); assert.equal(f.ladderArmUntil, undefined, 'nothing kept');
+    }
+    // (d) a press running PAST the foot (along the wall, 1.5 m out): the jump as ever
+    {
+      const p = inFront(6); const { m, f } = matchAt(mapKey, p.x, L.y0, p.z); let now = 1000;
+      now = step(m, now, { moveX: -n.z, moveZ: n.x, boost: true, jump: true });
+      assert.equal(f.airborne, true, 'the jump went off'); assert.equal(f.ladderArmUntil, undefined, 'nothing kept');
+    }
+    // (e) a kept press not arriving (the run turns away): spent after LADDER_PRESS_MS, no mount later
+    {
+      const p = inFront(8); const { m, f } = matchAt(mapKey, p.x, L.y0, p.z); let now = 1000;
+      now = step(m, now, { ...toward(L), jump: true }); assert.ok(f.ladderArmUntil != null);
+      for (let i = 0; i < LADDER_PRESS_MS / MS + 2; i += 1) now = step(m, now, toward(L, -1));
+      assert.equal(f.ladderArmUntil, undefined, 'the kept press ran out'); assert.equal(f.ladder, undefined);
+    }
+  }));
+}
+
 test('the zones: the foot zone is in front of the line and no deeper than a step off the floor; the top zone a metre round the exit', () => {
   const L = getArenaLadders('compound')[0]; const n = ladderNormal(L);
   const at = (x, feet, z) => ladderAt([L], { x, y: feet + G, z });
   assert.equal(at(L.x - n.x * (LADDER_GRAB_FRONT - 0.1), L.y0, L.z - n.z * (LADDER_GRAB_FRONT - 0.1))?.end, 'foot');
   assert.equal(at(L.x - n.x * (LADDER_GRAB_FRONT + 0.3), L.y0, L.z - n.z * (LADDER_GRAB_FRONT + 0.3)), null, 'too far out');
-  assert.equal(at(L.x - n.x * 1 - n.z * (L.w / 2 + 0.2), L.y0, L.z - n.z * 1 + n.x * (L.w / 2 + 0.2)), null, 'beside the ladder');
+  assert.equal(at(L.x - n.x * 1 - n.z * (L.w / 2 + LADDER_GRAB_SIDE - 0.1), L.y0, L.z - n.z * 1 + n.x * (L.w / 2 + LADDER_GRAB_SIDE - 0.1))?.end, 'foot', 'half a metre beside the width still mounts');
+  assert.equal(at(L.x - n.x * 1 - n.z * (L.w / 2 + LADDER_GRAB_SIDE + 0.2), L.y0, L.z - n.z * 1 + n.x * (L.w / 2 + LADDER_GRAB_SIDE + 0.2)), null, 'beside the ladder');
+  assert.equal(at(L.x + n.x * (LADDER_GRAB_BACK - 0.1), L.y0, L.z + n.z * (LADDER_GRAB_BACK - 0.1))?.end, 'foot', 'behind the line, toward the wall');
   assert.equal(at(L.x - n.x * 1, L.y0 + C.SURFACE_STEP_HEIGHT + 0.5, L.z - n.z * 1), null, 'in the air');
   assert.equal(at(L.ex + LADDER_TOP_RADIUS - 0.1, L.ey, L.ez)?.end, 'top');
   assert.equal(at(L.ex + LADDER_TOP_RADIUS + 0.3, L.ey, L.ez), null);

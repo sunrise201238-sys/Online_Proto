@@ -24,9 +24,21 @@
 //   ladder lets go (the body, hidden as every dead body is, drops).
 import { GROUND_BASE_Y, LADDER_CLIMB_SPEED, SURFACE_STEP_HEIGHT } from './constants.js';
 
-export const LADDER_GRAB_FRONT = 2.0;   // units in front of the climb line a body stands to mount (0.5 m)
-export const LADDER_GRAB_BACK = 0.6;    // and behind it (toward the wall)
+// THE ZONE (b1105g, user: "the climbing is very hard to trigger ... I have to stop sprinting and direction input, then press jump at
+// very precise spot"): the climb line is a body's width off the RUNGS, and the wall is behind them — a body running at the ladder
+// is stopped by the wall 0.7–0.8 u BEHIND the line (measured on every ladder), where the old zone (0.6 behind) did not reach,
+// so the press worked only a step back from the wall. The zone now runs a metre out to 2 u behind the line (the wall stops a body
+// before that) and half a metre beside the grab width on either side — a rush at the ladder lands a little off its line.
+export const LADDER_GRAB_FRONT = 4.0;   // units in front of the climb line a body stands to mount (1 m)
+export const LADDER_GRAB_BACK = 2.0;    // and behind it, toward the wall
+export const LADDER_GRAB_SIDE = 2.0;    // and beside the grab width, either side (0.5 m)
 export const LADDER_TOP_RADIUS = 4.0;
+// THE APPROACH (b1105g): a jump press while running AT a ladder's foot — up to LADDER_APPROACH_FRONT in front of the line, inside
+// the grab width, the body moving toward the wall — is the ladder's: kept LADDER_PRESS_MS (ladderArmUntil) and spent on the
+// mount the moment the body enters the zone; no jump goes off (a kept press that never arrives runs out, and nothing happens). A press running past the ladder, or away from it, jumps as ever.
+export const LADDER_APPROACH_FRONT = 10.0;   // units in front of the line (2.5 m)
+export const LADDER_PRESS_MS = 600;   // (a sprint from 2.5 m arrives in 0.35 s, a walk in 0.85 s: the press waits long enough for most of a walk too)
+export const LADDER_APPROACH_SPEED = 2.0;    // units/s toward the wall, at the least
 // The point a bot walks to before it mounts from the foot: the middle of the foot zone, LADDER_GRAB_MID in front of the climb
 // line (the route grid's ladder links name it — navgrid.js attachLadderLinks; a follower heads for it with the goal set).
 export const LADDER_GRAB_MID = (LADDER_GRAB_FRONT - LADDER_GRAB_BACK) / 2;
@@ -42,7 +54,7 @@ export function ladderFootZone(L, pos) {
   if (Math.abs(pos.y - G - L.y0) > SURFACE_STEP_HEIGHT) return false;
   const n = ladderNormal(L); const dx = pos.x - L.x, dz = pos.z - L.z;
   const d = dx * n.x + dz * n.z, s = -dx * n.z + dz * n.x;
-  return d >= -LADDER_GRAB_FRONT && d <= LADDER_GRAB_BACK && Math.abs(s) <= L.w / 2;
+  return d >= -LADDER_GRAB_FRONT && d <= LADDER_GRAB_BACK && Math.abs(s) <= L.w / 2 + LADDER_GRAB_SIDE;
 }
 // The top zone: the feet within a step of the exit's floor, the body within LADDER_TOP_RADIUS of the exit.
 export function ladderTopZone(L, pos) {
@@ -63,7 +75,7 @@ function clearMotion(st, vel) { vel.x = 0; vel.z = 0; st.momentumVX = 0; st.mome
 
 // Onto the ladder at one end: the enter leg slides the body onto the line, then it climbs toward the other end.
 export function ladderMount(st, vel, ladders, index, end) {
-  st.ladder = index; st.ladderDir = end === 'foot' ? 1 : -1; st.ladderLeg = 'enter'; st.ladderIntent = st.ladderDir;
+  st.ladder = index; st.ladderDir = end === 'foot' ? 1 : -1; st.ladderLeg = 'enter'; st.ladderIntent = st.ladderDir; st.ladderArmUntil = undefined;
   clearMotion(st, vel);
   st.airborne = false; st.grounded = false; st.jumpVelocity = 0; st.action = 'climb';
   st.hitStunUntil = 0; st.plantUntil = 0; st.landedOnLid = false;
@@ -104,6 +116,32 @@ export function ladderHumanInput(st, pos, vel, input, ladders) {
 export function ladderTryMount(st, pos, vel, ladders) {
   const at = ladderAt(ladders, pos); if (!at) return false;
   ladderMount(st, vel, ladders, at.index, at.end); return true;
+}
+// Running at a ladder's foot (THE APPROACH above: on the foot's floor, in front of the zone within LADDER_APPROACH_FRONT, inside
+// the grab width, the body moving toward the wall at LADDER_APPROACH_SPEED or more): its index, or null.
+export function ladderApproach(ladders, pos, vel) {
+  for (let i = 0; i < ladders.length; i += 1) {
+    const L = ladders[i];
+    if (Math.abs(pos.y - G - L.y0) > SURFACE_STEP_HEIGHT) continue;
+    const n = ladderNormal(L); const dx = pos.x - L.x, dz = pos.z - L.z;
+    const d = dx * n.x + dz * n.z, s = -dx * n.z + dz * n.x;
+    if (d < -LADDER_APPROACH_FRONT || d > -LADDER_GRAB_FRONT || Math.abs(s) > L.w / 2 + LADDER_GRAB_SIDE) continue;
+    if (vel.x * n.x + vel.z * n.z < LADDER_APPROACH_SPEED) continue;
+    return i;
+  }
+  return null;
+}
+// The jump button on the ground, every tick (tick.js applyInput, the client's updatePlayer; `vel` the tick's intended motion):
+// 'mount' when the press — or one kept from the approach — mounts the body here (nothing else this tick); 'kept' when the press is
+// taken for the ladder ahead (no jump; the run goes on); null when the press is no ladder's (a jump, as ever).
+export function ladderPress(st, pos, vel, ladders, now, pressed) {
+  if (pressed && ladderTryMount(st, pos, vel, ladders)) return 'mount';
+  if (st.ladderArmUntil != null) {
+    if (now < st.ladderArmUntil && ladderTryMount(st, pos, vel, ladders)) return 'mount';
+    if (now >= st.ladderArmUntil) st.ladderArmUntil = undefined;
+  }
+  if (pressed && ladderApproach(ladders, pos, vel) != null) { st.ladderArmUntil = now + LADDER_PRESS_MS; return 'kept'; }
+  return null;
 }
 // A bot, every tick: its goal mounts it at the matching end, and on the ladder it rides to the other end whatever its brain
 // says (the brain's velocity is thrown away). True while the bot is on a ladder.

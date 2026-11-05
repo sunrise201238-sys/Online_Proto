@@ -27,7 +27,7 @@ import {
   resolveUnitObstacleCollisions,
   voidUnder
 } from './physics.js';
-import { onLadder, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick } from './ladder.js';
+import { onLadder, ladderHumanInput, ladderPress, ladderBotStep, ladderTick } from './ladder.js';
 import {
   tickBoost,
   applyMomentum,
@@ -199,9 +199,14 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
     fighter.vel.x = canInputMove && !planted && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
     fighter.vel.z = canInputMove && !planted && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
   }
-  // The jump button at a ladder's end mounts it — no jump, nothing else this tick (ladder.js ladderTryMount: the foot zone
-  // or the exit's; the body on the ground, out of a dodge).
-  if (!inStep && fighter.stepUntil <= 0 && input.jump && canInputMove && fighter.grounded && ladderTryMount(fighter, fighter.pos, fighter.vel, ladders)) return;
+  // The jump button at a ladder (ladder.js ladderPress; the body on the ground, out of a dodge): at an end it mounts — no jump,
+  // nothing else this tick; running at a foot it is kept for the mount ahead — no jump, the run goes on; a kept press mounts the
+  // body as it arrives (THE APPROACH, b1105g).
+  if (!inStep && fighter.stepUntil <= 0 && canInputMove && fighter.grounded) {
+    const lp = ladderPress(fighter, fighter.pos, fighter.vel, ladders, now, !!input.jump);
+    if (lp === 'mount') return;
+    if (lp === 'kept') input = { ...input, jump: false };
+  }
 
   let action = 'idle';
 

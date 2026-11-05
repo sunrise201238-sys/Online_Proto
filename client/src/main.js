@@ -52,7 +52,7 @@ import {
   reloadHolds,
   applyHitStun,
   getArena,
-  ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
+  ladderHumanInput, ladderPress, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
@@ -1655,6 +1655,10 @@ function updateUnitSpriteState(m, rig, dt, now) {
 // the twelve that borrow Kurumi's alike. So a climber's HOLDER faces away from the rungs, and the clip's turned body faces
 // them; the sim's yaw (ladder.js: the ladder's facing, into the wall) is untouched. Set false for a clip that climbs facing forward.
 const CLIMB_CLIP_TURNED = true;
+// THE CLIMB CAMERA (user 2026-11-05, "move the camera a little bit farer and slightly higher for climbing" — option B of the four
+// samples shown): from the climber's back along the ladder's facing, CLIMB_CAM.back units behind and .up above the body, looking at
+// a point .lookAhead units into the wall and .lookUp above the body. (It began at 13 back, 6.8 up, 2.2 look-up, b1105a.)
+const CLIMB_CAM = { back: 19, up: 10, lookAhead: 4, lookUp: 3.0 };
 const MODEL_CLIPS_DEFAULT = {
   stand: { name: 'Normal_Idle', speed: 1 },
   walk: { name: 'Move_Ing', speed: 0.5 },
@@ -4846,7 +4850,7 @@ function updatePlayer(now) {
     ladderHumanInput(state.player.state, state.player.body.position, state.player.body.velocity, { jump: input.jump, moveX: mv.x, moveZ: mv.z }, arenaLadders);
     state.player.grounded = false; return;
   }
-  const jumpPress = !!input.jump && !state.player.state.ladderJumpLatch;
+  let jumpPress = !!input.jump && !state.player.state.ladderJumpLatch;   // (let: a press kept for a ladder ahead is spent below — ladderPress 'kept')
   if (!input.jump) state.player.state.ladderJumpLatch = undefined;
   const p = state.player.root.position;
   const e = state.enemy.root.position;
@@ -4909,8 +4913,13 @@ function updatePlayer(now) {
     state.player.body.velocity.x = canInputMove && !planted && !reloadHeld ? move.x * speed * hitStunScale : 0;
     state.player.body.velocity.z = canInputMove && !planted && !reloadHeld ? move.z * speed * hitStunScale : 0;
   }
-  // The jump button at a ladder's end mounts it — no jump, nothing else this frame (ladder.js ladderTryMount, as the sim's applyInput).
-  if (!inStep && stepState.stepUntil <= 0 && jumpPress && canInputMove && state.player.grounded && ladderTryMount(state.player.state, state.player.body.position, state.player.body.velocity, arenaLadders)) { state.player.grounded = false; return; }
+  // The jump button at a ladder (ladder.js ladderPress, as the sim's applyInput): at an end it mounts — no jump, nothing else this
+  // frame; running at a foot it is kept for the mount ahead — no jump, the run goes on; a kept press mounts the body as it arrives.
+  if (!inStep && stepState.stepUntil <= 0 && canInputMove && state.player.grounded) {
+    const lp = ladderPress(state.player.state, state.player.body.position, state.player.body.velocity, arenaLadders, now, jumpPress);
+    if (lp === 'mount') { state.player.grounded = false; return; }
+    if (lp === 'kept') jumpPress = false;
+  }
 
   let action = 'idle';
   if (inStep) {
@@ -6168,8 +6177,8 @@ function updateCamera() {
   // the lock camera and the free pov wait until it is off (the free pov comes back as it was — its switch is untouched).
   if (cam === state.player && cam.state.ladder != null && arenaLadders[cam.state.ladder]) {
     const L = arenaLadders[cam.state.ladder]; const p = cam.root.position; const nx = Math.sin(L.yaw), nz = Math.cos(L.yaw);
-    camera.position.lerp(new THREE.Vector3(p.x - nx * 13, p.y + 6.8, p.z - nz * 13), 0.16);
-    camera.lookAt(new THREE.Vector3(p.x + nx * 4, p.y + 2.2, p.z + nz * 4));
+    camera.position.lerp(new THREE.Vector3(p.x - nx * CLIMB_CAM.back, p.y + CLIMB_CAM.up, p.z - nz * CLIMB_CAM.back), 0.16);
+    camera.lookAt(new THREE.Vector3(p.x + nx * CLIMB_CAM.lookAhead, p.y + CLIMB_CAM.lookUp, p.z + nz * CLIMB_CAM.lookAhead));
     camera.fov = THREE.MathUtils.lerp(camera.fov, 60, 0.16); camera.updateProjectionMatrix();
     return;
   }
