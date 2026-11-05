@@ -838,13 +838,13 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 }
 /* the map memo: a white note with ruled lines below the picture, a red push pin through its top, a bit of tape on the
    picture's corner; it hangs a few degrees off */
-.menu .map-slot.memo { grid-column: 3; grid-row: 1; padding: 12px 10px 8px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2.5deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 164px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
+.menu .map-slot.memo { grid-column: 3; grid-row: 1; padding: 12px 10px 8px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: translateY(-8px) rotate(2.5deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 164px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }   /* (translateY -8, b1105as; user: "i'd call that overlap at the GO button. move the memo a bit up" — the paper rides 8 px above its grid cell, a look only: the rows, the folder and the GO row stay where they are, so the paper's tilted corner ends 23 px over GO and its shadow 16) */
 /* (b1105an; user: "both the file and the memo can afford to be slightly higher (longer), especially the memo shouldn't shrink
    itself when the mode is 1v1 and block the dice") the paper's own height is 235 — its lines end at 199 and the die's 41 px
    zone began at 194 — and the row only grew in 2v2 (245); at 266 the die sits 26 px under the lines in every mode, the paper
    is the same height whatever the mode, and the folder beside it (the same rows) grows as much */
 .menu .map-slot.memo { min-height: 266px; }
-.menu .map-slot.memo:active { transform: rotate(2.5deg) translate(2px, 2px); box-shadow: 3px 4px 0 rgba(27, 27, 47, 0.92); }
+.menu .map-slot.memo:active { transform: translateY(-8px) rotate(2.5deg) translate(2px, 2px); box-shadow: 3px 4px 0 rgba(27, 27, 47, 0.92); }
 /* the memo hangs from a strip of the yellow tape over its top edge, centred (b1105u; user: "remove the red pin, move the
    yellow memo tape to the position") — the same strip on the picker's memo and the floating one (.memo-tape-top) */
 .memo-tape, .memo-tape-top { position: absolute; left: 50%; top: -9px; width: 84px; height: 20px; margin-left: -42px; background: rgba(255, 228, 92, 0.82) linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%); transform: rotate(-5deg); clip-path: polygon(2% 0, 98% 3%, 100% 22%, 97% 40%, 100% 60%, 98% 80%, 100% 100%, 1% 97%, 0 78%, 3% 58%, 0 38%, 2% 18%); box-shadow: 0 1px 2px rgba(27, 27, 47, 0.22); z-index: 3; pointer-events: none; }
@@ -862,7 +862,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .memo .memo-dice .btn-icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .menu .memo .memo-dice .btn-icon .pip { fill: currentColor; stroke: none; }
 .menu .memo .memo-dice:active { transform: rotate(-6deg) translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-.menu .map-slot.memo:has(.memo-dice:active) { transform: rotate(2.5deg); box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); }
+.menu .map-slot.memo:has(.memo-dice:active) { transform: translateY(-8px) rotate(2.5deg); box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); }
 .menu .memo .memo-dice.rolled { animation: memo-dice-roll 0.5s ease-out; }
 @keyframes memo-dice-roll { 0% { transform: rotate(-6deg) scale(1); } 35% { transform: rotate(174deg) scale(1.18); } 70% { transform: rotate(354deg) scale(0.96); } 100% { transform: rotate(354deg) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .menu .memo .memo-dice.rolled { animation: none; } }
