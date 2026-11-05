@@ -57,8 +57,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    ally's and the second enemy's chips are the first row's size, 10 px further in, on a second row 86 px down: 22 px
    under the first row's box — room for a WATCHING / DOWN tag hanging 9 px under a first-row chip, a second-row chip's
    7 px ring and the tilts (±4 px at a 290 px chip's ends) without a touch */
-.hp-chip.ally-health { top: 86px; left: 22px; --c: var(--cyan); transform: rotate(-1deg); }
-.hp-chip.enemy2-health { top: 86px; right: 22px; --c: var(--yellow); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
+.hp-chip.ally-health { top: 86px; left: 108px; --c: var(--cyan); transform: rotate(-1deg); }
+.hp-chip.enemy2-health { top: 86px; right: 108px; --c: var(--yellow); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
+/* (b1105ah) the second row steps IN by 108 px and is a little narrower: at 844 × 390 the DODGE button's top (126 px) reaches
+   into the row's band (86–140), so the second enemy's chip must end before the thumb cluster (its left edge 100 px from
+   the right); the ally's chip steps in the same so the row reads as one stagger. The narrow screens below put both
+   back at 22 px — there the cluster is a size down and starts under the row. */
+.hp-chip.ally-health, .hp-chip.enemy2-health { max-width: calc(50vw - 128px); }
 .chip-face { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c); box-sizing: border-box; background: #2a2a44; }
 .chip-face img, .chip-res-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
 .chip-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -67,9 +72,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    56 px), then the name is cut with an ellipsis; the face and the reserve keep their size */
 .hp-chip { max-width: calc(50vw - 112px); }
 .enemy-health .chip-col, .enemy2-health .chip-col { align-items: flex-end; }
-.chip-nm { display: flex; align-items: baseline; gap: 6px; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
+/* (b1105ai, user: "if one of YOU / ALLY / ENEMY and the unit name must be omitted for the space, omit the side word") the name
+   line wraps: when the side word does not fit beside the name it drops to a second line, which the line's height clips
+   — the name stays whole, the word goes; nothing is cut mid-word */
+.chip-nm { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; line-height: 1; white-space: nowrap; max-width: 100%; max-height: 15px; overflow: hidden; }
 .enemy-health .chip-nm, .enemy2-health .chip-nm { flex-direction: row-reverse; }
-.chip-name { font-family: var(--font-display); font-weight: 400; font-size: 15px; text-transform: uppercase; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chip-name { flex: 0 0 auto; font-family: var(--font-display); font-weight: 400; font-size: 15px; text-transform: uppercase; }
 .chip-side { flex: 0 0 auto; font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--c); }
 .chip-side:empty { display: none; }   /* (no side word for a spectator — the Practice toggle, an online spectator) */
 .chip-bar { position: relative; width: calc(150px * var(--hp-scale, 1)); max-width: 100%; min-width: 56px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.22); }
@@ -281,7 +289,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    PAUSE pill. Menus keep the original top-left spot. */
 .fullscreen-btn.in-match {
   top: 10px;
-  left: min(var(--left-chip-right, 270px), calc(50% - 96px));   /* (b1105ag: and never past PAUSE's left edge less itself and a gap, on a narrow screen) */
+  left: min(var(--left-chip-right, 270px), calc(50% - 80px));   /* (b1105ag–ai: 16 px off the chip's edge, clear of its ring; and never past PAUSE's left edge less itself and a gap) */
 }
 
 /* Pseudo-fullscreen mode. Toggle adds .pseudo-fullscreen to <body>;
@@ -791,7 +799,7 @@ body.pseudo-fullscreen #app {
 /* (b1105t; user: "file folder style" for the character box, "memo-pinned-on-the-wall style" for the map) the grid is
    two rows: the LINE-UP FOLDER on the left spans both — a manila folder with its tab, holding your card and the enemy's
    slip as two sheets — the option rows and the map MEMO fill the first row, the foot's buttons the second under them */
-.menu .lobby-grid { display: grid; grid-template-columns: 236px minmax(250px, 1fr) 208px; grid-template-rows: auto auto; gap: 8px 14px; align-items: stretch; width: 100%; max-width: 860px; }
+.menu .lobby-grid { display: grid; grid-template-columns: 236px minmax(320px, 1fr) 208px; grid-template-rows: auto auto; gap: 8px 14px; align-items: stretch; width: 100%; max-width: 860px; }
 .menu .lobby-mid { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; min-width: 0; }
 .menu .lobby-folder { grid-column: 1; grid-row: 1 / 3; position: relative; margin-top: 20px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; background: var(--manila); border: 4px solid var(--ink); border-radius: 0 14px 14px 14px; box-shadow: 7px 7px 0 var(--ink); }   /* (gap 12: the slip's Change sticker, 9 px over its top edge, stays clear of the sheet above — user b1105v: "so the ally box and enemy box do not overlap") */
 .menu .lobby-folder::before { content: 'LINE-UP'; position: absolute; left: 12px; top: -24px; width: 110px; height: 28px; box-sizing: border-box; padding-bottom: 4px; background: var(--manila); border: 4px solid var(--ink); border-bottom: 0; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink); }   /* (the tab, 24 px tall — user b1105u: "slightly shorten"; it reaches 4 px into the folder and covers the border under it) */
@@ -1080,3 +1088,37 @@ body.pseudo-fullscreen #app {
 .memo-crayon { position: absolute; left: 11px; top: 197px; display: inline-block; font-family: var(--font-crayon); font-weight: 400; font-size: 17px; line-height: 1; letter-spacing: 0.02em; color: #E0382C; white-space: nowrap; transform: rotate(-4deg); transform-origin: 0 50%; mix-blend-mode: multiply; filter: url(#crayon); -webkit-text-stroke: 0.35px rgba(224, 56, 44, 0.9); pointer-events: none; z-index: 1; }
 .menu .end-memo .memo-crayon-end { top: 170px; }
 .memo-crayon-flow { position: static; margin: 2px 0 0 2px; align-self: flex-start; }
+
+/* ---- a narrow landscape screen (b1105ah; the user's phone, about 640 × 342 CSS px): the chips in a smaller cut — 46 px,
+   a 34 px face, a 120 px bar, 26 px reserve faces, the second row 72 px down — a Trio chip drops its side word (the
+   colour and the corner say the side; the name stays whole), the thumb buttons and the stick a size down so the
+   second row of chips clears DODGE ---- */
+@media (max-width: 720px) {
+  .hp-chip { height: 46px; gap: 6px; padding: 0 14px 0 4px; }
+  .hp-chip.enemy-health, .hp-chip.enemy2-health { padding: 0 4px 0 14px; }
+  /* (b1105ai) PAUSE a size down and the fullscreen button at its RIGHT: the left chip may run to 58 px short of the middle,
+     the right one stops before the button; the second row sits under all that and may run to 34 px short of the middle */
+  .pause-btn { top: 14px; padding: 6px 10px; font-size: 13px; }
+  .fullscreen-btn.in-match { top: 54px; left: calc(50% - 13px); }   /* (under PAUSE, in the middle — between the second row's chips in 2v2) */
+  .hp-chip.health, .hp-chip.enemy-health { max-width: calc(50vw - 58px); }
+  .hp-chip.ally-health, .hp-chip.enemy2-health { top: 70px; max-width: calc(50vw - 44px); }
+  .hp-chip.ally-health { left: 22px; }
+  .hp-chip.enemy2-health { right: 22px; }
+  .chip-nm { max-height: 13px; }
+  .chip-face { width: 34px; height: 34px; }
+  .chip-col { gap: 3px; }
+  .chip-name { font-size: 13px; }
+  .chip-side { font-size: 8px; }
+  .chip-bar { width: calc(120px * var(--hp-scale, 1)); height: 8px; }
+  .chip-knob { top: -3px; width: 14px; height: 14px; left: calc(var(--w, 100%) - 7px); }
+  .enemy-health .chip-knob, .enemy2-health .chip-knob { left: auto; right: calc(var(--w, 100%) - 7px); }
+  .chip-res { padding-left: 12px; }
+  .enemy-health .chip-res, .enemy2-health .chip-res { padding: 0 12px 0 0; }
+  .chip-res-face { width: 26px; height: 26px; margin-left: 3px; }
+  .enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 3px 0 0; }
+  .chip-next { border-top-width: 5px; border-bottom-width: 5px; border-left-width: 7px; margin-right: 4px; }
+  .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 7px; margin: 0 0 0 4px; }
+  .touch-hud .spec-watched::after, .hp-chip.down::after { bottom: -8px; font-size: 7px; }
+  .buttons { --btn-size: clamp(56px, 8vw, 84px); --btn-gap: clamp(8px, 1.2vw, 14px); }
+  .joy { width: 120px; height: 120px; }
+}
