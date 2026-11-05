@@ -6279,6 +6279,11 @@ function updateHud(now = performance.now()) {
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
+  // (b1105aj, user: "no need hp bars in shooting range") the Shooting Range shows no HP chips — nothing is at stake on the
+  // practice map — and the fullscreen button keeps its corner there (style.css .hud-range)
+  const onRange = state.mapKey === 'range';
+  if (state.hud) state.hud.classList.toggle('hud-range', onRange);
+  document.documentElement.classList.toggle('hud-range', onRange);
   // (the ladder, ladder.js; user 2026-11-05: Target / Fire / Dodge / Sprint hidden while the player climbs — style.css .hud-climb; a spectator keeps them)
   if (state.hud) state.hud.classList.toggle('hud-climb', state.player?.state?.ladder != null && !state.spectatorActive && !playerIsBotDriven() && !(state.online && state.online.myPlayerId === 'spectator'));
   // THE HP CHIPS (b1105w): each slot's chip — the unit on the field, the side word, the bar (as long as the unit's HP:
@@ -7087,7 +7092,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ai 11-05';
+const CLIENT_BUILD_TAG = 'b1105aj 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8982,6 +8987,7 @@ function showSelectMenu() {
   state.allRandomFill = false;
   // Outside gameplay the fullscreen button returns to its top-left home.
   document.getElementById('fullscreen-btn')?.classList.remove('in-match');
+  document.documentElement.classList.remove('hud-range');
   teardownHud();
   renderer.domElement.style.pointerEvents = 'none';
 

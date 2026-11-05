@@ -749,6 +749,10 @@ body.pseudo-fullscreen #app {
 
 /* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own chip; user 2026-10-19 */
 .touch-hud.hud-anomaly .enemy-health, .touch-hud.hud-anomaly .ally-health, .touch-hud.hud-anomaly .enemy2-health { display: none; }
+/* (b1105aj, user: "no need hp bars in shooting range") the Shooting Range shows no HP chips; the fullscreen button sits where
+   the left chip would start (main.js updateHud sets hud-range on the HUD and on <html>) */
+.touch-hud.hud-range .hp-chip { display: none; }
+html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 
 /* the ladder (ladder.js; user 2026-11-05): Target / Fire / Dodge / Sprint hidden while the player climbs — main.js updateHud sets hud-climb; the jump button stays, it is the ladder's (let go) */
 .hud-climb .btn-shoot, .hud-climb .btn-target, .hud-climb .btn-step, .hud-climb .btn-boost { visibility: hidden; }
