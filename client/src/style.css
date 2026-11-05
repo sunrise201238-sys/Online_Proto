@@ -1,53 +1,111 @@
-:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+/* ===== THE SPLAT SKIN (PT, b1105l, 2026-11-05) =====
+   The user's pick of seven directions on the "GunVS UI Rework Samples" design canvas: direction F "Splat", after
+   Splatoon and Jet Set Radio — a cream ground with ink blobs, white stickers with a thick ink border and a hard
+   shadow, chunky pills, everything a degree or two off square, Titan One for titles and big numbers, Rubik for the
+   rest. The menus are opaque (user 2026-11-05: "照 F 用不透明奶油底", the cream covers the 3D behind); the match HUD
+   keeps dark readable chips over the view; the crosshair is untouched (the CS classic, user 2026-11-02). The two fonts
+   are bundled from src/fonts (SIL Open Font License, the OFL texts beside them) so the PWA has them offline. Every
+   size the JS mirrors is unchanged: the corner bars' 180 px and --hp-scale (the fullscreen button docks by them), the
+   thumb buttons' --btn-size / --btn-gap, the dio cards' 180x68 and 132x52, the joystick's 140 and its 56 stick (the
+   JS reads their boxes, so borders sit inside them: box-sizing border-box). */
+@font-face { font-family: 'Rubik'; font-style: normal; font-weight: 300 900; font-display: swap; src: url('./fonts/Rubik-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Rubik'; font-style: normal; font-weight: 300 900; font-display: swap; src: url('./fonts/Rubik-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Titan One'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/TitanOne-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Titan One'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/TitanOne-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+:root {
+  color-scheme: light;
+  font-family: Rubik, system-ui, sans-serif;
+  /* the skin's ink and inks */
+  --ink: #1B1B2F;
+  --cream: #FFF4DC;
+  --paper: #FFFFFF;
+  --lime: #C6F24A;
+  --magenta: #FF3EA5;
+  --cyan: #3EE0FF;
+  --yellow: #FFE45C;
+  --lavender: #C9B2FF;   /* (b1105r: the rifles' class colour — user: "rifle and AR are not the same category") */
+  --red: #FF4F4F;        /* (b1105s: the stick's knob — user: "change joycon green to red") */
+  --manila: #F6D27A;     /* (b1105t: the file folders that hold the unit cards — user: "file folder style") */
+  --muted: #5A5A74;
+  --font-ui: Rubik, system-ui, sans-serif;
+  --font-display: 'Titan One', 'Arial Black', Impact, sans-serif;
+  /* a sticker title's ink outline: eight 2 px shadows round the glyphs, then the colour drop */
+  --sticker-stroke: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 2px 2px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink);
+}
 html, body { margin: 0; overflow: hidden; background: #06090f; touch-action: none !important; }
 #app { width: 100vw; height: 100vh; position: relative; touch-action: none !important; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none !important; }
 
+/* ---- the match HUD: dark chips with a white rim over the 3D, the fills in the skin's inks ---- */
 .touch-hud { position: absolute; inset: 0; pointer-events: none; }
-.health { position: absolute; top: 14px; left: 16px; width: calc(180px * var(--hp-scale, 1)); height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
-#health-fill { width: 100%; height: 100%; background: #7ec5ff; }
-.enemy-health { position: absolute; top: 14px; right: 16px; width: calc(180px * var(--hp-scale, 1)); height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
-#enemy-health-fill { width: 100%; height: 100%; background: #ff6d8f; }
-/* 2v2 ally + enemy 2 HP bars — stacked directly under the primary bars,
-   same width / height as the primary so all four read at equal weight. */
-.ally-health { position: absolute; top: 30px; left: 16px; width: calc(180px * var(--hp-scale, 1)); height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
-#ally-health-fill { width: 100%; height: 100%; background: #86f7c2; }
-.enemy2-health { position: absolute; top: 30px; right: 16px; width: calc(180px * var(--hp-scale, 1)); height: 10px; background: rgba(12, 18, 28, 0.6); border-radius: 999px; overflow: hidden; }
-#enemy2-health-fill { width: 100%; height: 100%; background: #ff9d5a; }
-/* Trio: remaining-units dots under each side's HP stack (empty in SD). */
-/* Remaining-units weapon icons: tucked right under the HP bars. 1v1 — the
-   single bar ends at y=24, icons start at 27; 2v2 — the ally/enemy2 bars end
-   at y=40, so the block drops to 43 to stay clear of them. One .trio-line per
-   team member (player's row above the ally's; enemy side mirrored). */
-.trio-count { position: absolute; top: 27px; white-space: nowrap; opacity: 0.9; }
-.trio-count.trio-count-2v2 { top: 43px; }
-/* Spectator: WHITE glow rim on the corner bar of the WATCHED unit — a crisp
-   1px white ring plus a wide soft halo (ported from the demo line). */
-.touch-hud .spec-watched { box-shadow: 0 0 0 1px #ffffff, 0 0 12px 4px rgba(255, 255, 255, 0.95); }
-/* ONLINE absolute HUD (2026-08-22): bars sit by SERVER SLOT in slot colors,
-   so position no longer says "this one is you" — the viewer's own bar wears
-   this thinner white rim instead (the spectate rim's quieter sibling). */
-.touch-hud .self-bar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85), 0 0 8px 2px rgba(255, 255, 255, 0.45); }
-.trio-count-own { left: 16px; }
-.trio-count-enemy { right: 16px; text-align: right; }
-.trio-count .trio-line { height: 13px; line-height: 13px; margin-bottom: 2px; }
-.trio-count .trio-weapon-icon { height: 11px; width: auto; margin-right: 4px; vertical-align: middle; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
-.trio-count-enemy .trio-weapon-icon { margin-right: 0; margin-left: 4px; }
-/* In-play marker (Trio): thin glowing golden bar left of each line's first
-   icon — the member's currently fielded weapon. Sits 2px from the icon
-   (slightly tighter than the 4px inter-icon gap). */
-.trio-count .trio-inplay-bar { display: inline-block; width: 2px; height: 11px; margin-right: 2px; vertical-align: middle; background: #ffd76a; border-radius: 1px; box-shadow: 0 0 4px 1px rgba(255, 215, 106, 0.85); }
-.trio-count-enemy .trio-inplay-bar + .trio-weapon-icon { margin-left: 2px; }
-.trio-count-enemy .trio-inplay-bar { margin-right: 0; }
-/* Boost gauge, framed like the overhead HP bar (owner 2026-10-10, sample 5):
-   10px tall (the corner HP bars' height), a 3px dark outline in the bar
-   ink, the track a 92% navy veil over the gauge green, the fill inset 2px
-   with rounded ends. The fill stays green when overheated (owner: no orange). */
-.boost { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 38vw; max-width: 340px; height: 10px; background: linear-gradient(rgba(11, 17, 25, 0.92), rgba(11, 17, 25, 0.92)), #90ff63; border-radius: 999px; box-shadow: 0 0 0 3px #0b1622; overflow: hidden; }
-#boost-fill { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(100% - 4px); background: #90ff63; border-radius: 999px; }
+/* THE HP CHIPS (b1105w, the design canvas's round 5; the 10 px corner bars until then): an ink pill with a 3 px white
+   rim and a 2 px ink outline, the portrait of the unit on the field in a ring of the side's colour (--c), the name
+   (Titan One, uppercase), the side word in the colour, the bar — as long as the unit's HP (--hp-scale) — with a round
+   end at the fill's head (--w, set by updateHud); in Trio the roster's other units at the far end as small faces, a
+   fallen one greyed. Yours top-left, the enemy's mirrored top-right; in 2v2 the ally's and the second enemy's under
+   them, smaller. The anchor classes (health / enemy-health / ally-health / enemy2-health) are the slots' names offline
+   and the server slots' online (main.js setupHUD), which sets --c to the slot's colour there. */
+.hp-chip { position: absolute; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 18px 0 5px; box-sizing: border-box; border-radius: 999px; background: rgba(27, 27, 47, 0.9); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; font-family: var(--font-ui); --c: var(--lime); }   /* (18 px on the bar's far side: the knob, 8 px past the track at full HP, stays 10 px inside the rim — user b1105x: "the HP bar should stay well inside the box") */
+/* (the chips' tilt stays — b1105y levelled them on a misread of "still tilted", which meant the faces; back in b1105z) */
+.hp-chip.health { top: 10px; left: 12px; --c: var(--lime); transform: rotate(-1.5deg); }
+.hp-chip.enemy-health { top: 10px; right: 12px; --c: var(--magenta); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1.5deg); }
+/* (b1105ab, user: "no overlapping for HP boxes; make all HP boxes same size — the current bigger one as standard") the
+   ally's and the second enemy's chips are the first row's size, 10 px further in, on a second row 86 px down: 22 px
+   under the first row's box — room for a WATCHING / DOWN tag hanging 9 px under a first-row chip, a second-row chip's
+   7 px ring and the tilts (±4 px at a 290 px chip's ends) without a touch */
+.hp-chip.ally-health { top: 86px; left: 22px; --c: var(--cyan); transform: rotate(-1deg); }
+.hp-chip.enemy2-health { top: 86px; right: 22px; --c: var(--yellow); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
+.chip-face { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c); box-sizing: border-box; background: #2a2a44; }
+.chip-face img, .chip-res-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
+.chip-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.enemy-health .chip-col, .enemy2-health .chip-col { align-items: flex-end; }
+.chip-nm { display: flex; align-items: baseline; gap: 6px; line-height: 1; white-space: nowrap; }
+.enemy-health .chip-nm, .enemy2-health .chip-nm { flex-direction: row-reverse; }
+.chip-name { font-family: var(--font-display); font-weight: 400; font-size: 15px; text-transform: uppercase; }
+.chip-side { font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--c); }
+.chip-side:empty { display: none; }   /* (no side word for a spectator — the Practice toggle, an online spectator) */
+.chip-bar { position: relative; width: calc(150px * var(--hp-scale, 1)); height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.22); }
+.chip-fill { display: block; height: 100%; width: var(--w, 100%); border-radius: 5px; background: var(--c); }
+.enemy-health .chip-fill, .enemy2-health .chip-fill { margin-left: auto; }
+.chip-knob { position: absolute; top: -3px; left: calc(var(--w, 100%) - 8px); width: 16px; height: 16px; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); box-sizing: border-box; }
+.enemy-health .chip-knob, .enemy2-health .chip-knob { left: auto; right: calc(var(--w, 100%) - 8px); }
+.chip-res { display: flex; align-items: center; padding-left: 12px; }   /* (12 px from the track's end: clear of the knob at full HP) */
+.enemy-health .chip-res, .enemy2-health .chip-res { flex-direction: row-reverse; padding: 0 12px 0 0; }
+.chip-res:empty { display: none; }
+.chip-res-face { position: relative; flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.9); box-sizing: border-box; background: #2a2a44; margin-left: -7px; }
+.chip-res-face:first-child { margin-left: 0; }
+.enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 -7px 0 0; }
+.enemy-health .chip-res-face:first-child, .enemy2-health .chip-res-face:first-child { margin: 0; }
+.chip-res-face.out { opacity: 0.4; filter: grayscale(1); }   /* (a fallen roster unit) */
+/* (the second row's chips were a smaller kind until b1105ab — the user: all four one size, the bigger as standard) */
+/* a slot out for good: the chip dims, its bar empties, a DOWN tag under it */
+.hp-chip.down { opacity: 0.6; }
+.hp-chip.down .chip-face img { filter: grayscale(1); }
+.hp-chip.down .chip-fill, .hp-chip.down .chip-knob { display: none; }
+.hp-chip.down::after { content: 'DOWN'; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--ink); color: #ffffff; border: 2px solid #ffffff; font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }
+/* Spectator: the WATCHED chip — the camera's unit while spectating, by the Practice toggle or because the player is
+   out — wears a thick yellow ring inside an ink line and a wide halo that pulses yellow / white (b1105s; user: the
+   white glow "is not obvious enough"), and a WATCHING tag under it. */
+.touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink), 0 0 18px 8px rgba(255, 228, 92, 0.9); animation: spec-pulse 1.1s ease-in-out infinite; }
+.touch-hud .spec-watched::after { content: 'WATCHING'; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }
+@keyframes spec-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink), 0 0 18px 8px rgba(255, 228, 92, 0.9); }
+  50% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px #ffffff, 0 0 0 7px var(--ink), 0 0 28px 14px rgba(255, 255, 255, 0.95); }
+}
+@media (prefers-reduced-motion: reduce) { .touch-hud .spec-watched { animation: none; } }
+/* THE BOOST STICKER (b1105w, the design canvas's round 5 — the sample's yellow ammo chip; the 10 px bar until then):
+   level, at the bottom centre — the word, the gauge with a white knob (--bw on the track, updateHud), no number. The
+   fill is the SPRINT button's magenta at every level (user b1105x: "shouldn't be black"); overheating does not tint it
+   (owner 2026-10-10). */
+.boost { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); height: 36px; padding: 0 14px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; background: var(--yellow); color: var(--ink); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 3px 3px 0 var(--ink); }
+.boost-word { font-family: var(--font-display); font-weight: 400; font-size: 14px; line-height: 1; letter-spacing: 0.02em; }
+.boost-track { position: relative; width: min(170px, 30vw); height: 12px; border-radius: 6px; background: rgba(27, 27, 47, 0.18); border: 2px solid var(--ink); box-sizing: border-box; }
+#boost-fill { position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% * var(--bw, 1)); border-radius: 4px; background: var(--magenta); }
+.boost-knob { position: absolute; top: -6px; left: calc(100% * var(--bw, 1) - 9px); width: 18px; height: 18px; border-radius: 50%; background: var(--paper); border: 3px solid var(--ink); box-sizing: border-box; }
 
-.joy { position: absolute; left: 28px; bottom: 28px; width: 140px; height: 140px; border-radius: 50%; background: rgba(160, 200, 220, 0.15); pointer-events: auto; }
-.stick { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin-left: -28px; margin-top: -28px; border-radius: 50%; background: rgba(240, 252, 255, 0.35); }
+.joy { position: absolute; left: 28px; bottom: 28px; width: 140px; height: 140px; box-sizing: border-box; border-radius: 50%; background: rgba(27, 27, 47, 0.22); border: 4px solid rgba(255, 255, 255, 0.92); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); pointer-events: auto; }
+.stick { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; box-sizing: border-box; margin-left: -28px; margin-top: -28px; border-radius: 50%; background: var(--red); border: 3px solid var(--ink); }   /* (b1105s: red; the lime went to JUMP) */
 
 .buttons {
   --btn-size: clamp(72px, 8vw, 84px);
@@ -61,35 +119,46 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
      empty cells must not eat taps (diorama tap-to-lock reaches under them). */
   pointer-events: none;
 }
+/* The thumb buttons: white stickers with the ink border and a hard shadow, each a degree or two off square; the
+   colours tell them apart at a glance — SPRINT magenta, DODGE cyan, TARGET yellow, JUMP and FIRE white. */
 .buttons button {
   position: absolute;
   pointer-events: auto;
   width: var(--btn-size);
   height: var(--btn-size);
-  border: 2px solid rgba(176, 231, 255, 0.78);
+  box-sizing: border-box;
+  border: 3px solid var(--ink);
   border-radius: 50%;
-  color: #dcf9ff;
-  background: rgba(45, 72, 93, 0.35);
-  font-weight: 700;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: clamp(11px, 1.5vw, 13px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
 }
-.buttons .btn-boost { right: 0; bottom: 0; }
-.buttons .btn-jump { right: 0; bottom: calc(var(--btn-size) + var(--btn-gap)); }
-.buttons .btn-step { right: 0; bottom: calc((var(--btn-size) + var(--btn-gap)) * 2); }
-.buttons .btn-shoot { right: calc(var(--btn-size) + var(--btn-gap)); bottom: 0; position: absolute; overflow: visible; }
-.buttons .btn-shoot.empty { background: rgba(15, 23, 35, 0.55); border-color: rgba(176, 231, 255, 0.4); }
+.buttons button:active { transform: translate(2px, 2px) rotate(var(--tilt, 0deg)); box-shadow: 2px 2px 0 var(--ink); }
+.buttons .btn-boost { right: 0; bottom: 0; --tilt: -3deg; transform: rotate(-3deg); background: var(--magenta); color: #ffffff; }
+.buttons .btn-jump { right: 0; bottom: calc(var(--btn-size) + var(--btn-gap)); --tilt: 3deg; transform: rotate(3deg); background: var(--lime); }   /* (b1105s: the stick's old lime — user) */
+.buttons .btn-step { right: 0; bottom: calc((var(--btn-size) + var(--btn-gap)) * 2); --tilt: -2deg; transform: rotate(-2deg); background: var(--cyan); }
+.buttons .btn-shoot { right: calc(var(--btn-size) + var(--btn-gap)); bottom: 0; position: absolute; overflow: visible; --tilt: 2deg; transform: rotate(2deg); }
+.buttons .btn-shoot.empty { background: rgba(255, 255, 255, 0.55); border-color: rgba(27, 27, 47, 0.55); box-shadow: 4px 4px 0 rgba(27, 27, 47, 0.55); }
 .buttons .btn-shoot .ammo-count {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 400;
   font-size: clamp(22px, 3vw, 30px);
-  font-weight: 800;
-  color: rgba(220, 249, 255, 0.45);
+  color: var(--ink);
   pointer-events: none;
   letter-spacing: 0.5px;
 }
-.buttons .btn-shoot.empty .ammo-count { color: rgba(220, 249, 255, 0.28); }
+.buttons .btn-shoot.empty .ammo-count { color: rgba(27, 27, 47, 0.4); }
 .buttons .btn-shoot .fire-logo {
   position: absolute;
   inset: 0;
@@ -97,10 +166,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   height: 100%;
   pointer-events: none;
   fill: none;
-  stroke: rgba(190, 240, 255, 0.30);
+  stroke: rgba(27, 27, 47, 0.22);
   stroke-width: 4.5;
 }
-.buttons .btn-shoot.empty .fire-logo { stroke: rgba(190, 240, 255, 0.18); }
+.buttons .btn-shoot.empty .fire-logo { stroke: rgba(27, 27, 47, 0.12); }
 .buttons .btn-shoot .reload-ring {
   position: absolute;
   top: -4px;
@@ -115,8 +184,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .buttons .btn-shoot.reloading .reload-ring { opacity: 1; }
 .buttons .btn-shoot .reload-ring circle {
   fill: none;
-  stroke: rgba(180, 250, 255, 0.95);
-  stroke-width: 5;
+  stroke: var(--lime);
+  stroke-width: 6;
   stroke-linecap: butt;
   stroke-dasharray: 289.03;
   stroke-dashoffset: 289.03;
@@ -125,10 +194,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .buttons .btn-target {
   right: calc(var(--btn-size) + var(--btn-gap));
   bottom: calc(var(--btn-size) + var(--btn-gap));
-  font-size: clamp(11px, 1.4vw, 14px);
-  letter-spacing: 1px;
-  background: rgba(45, 72, 110, 0.45);
-  border-color: rgba(170, 200, 255, 0.75);
+  font-size: clamp(11px, 1.4vw, 13px);
+  letter-spacing: 0.06em;
+  background: var(--yellow);
+  --tilt: -2deg;
+  transform: rotate(-2deg);
 }
 .pause-btn {
   position: absolute;
@@ -136,13 +206,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   left: 50%;
   z-index: 40;
   pointer-events: auto;
-  transform: translateX(-50%);
-  border: 2px solid rgba(180, 220, 255, 0.8);
-  background: rgba(10, 20, 34, 0.7);
-  color: #d7f5ff;
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-weight: 700;
+  transform: translateX(-50%) rotate(-2deg);
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 7px 16px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  box-shadow: 3px 3px 0 var(--ink);
 }
 
 /* Persistent fullscreen-toggle button. Top-left, sits below the player
@@ -159,10 +233,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   z-index: 200;
   width: 26px;
   height: 26px;
+  box-sizing: border-box;
   border-radius: 50%;
-  border: 1.5px solid rgba(180, 220, 255, 0.55);
-  background: rgba(10, 20, 34, 0.55);
-  color: #d7f5ff;
+  border: 2px solid var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -172,16 +248,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   touch-action: manipulation;
 }
 .fullscreen-btn:active {
-  background: rgba(40, 60, 90, 0.7);
-  border-color: rgba(180, 220, 255, 0.85);
+  background: var(--yellow);
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
 }
-/* In-match: the FS button leaves the top-left (where it overlapped the Trio
-   weapon rows) and docks just RIGHT of the player HP bar (left:16 + 180 wide
-   + 8px gap), top-aligned with it. Same spot online and offline — it doesn't
-   depend on the PAUSE pill. Menus keep the original top-left spot. */
+/* In-match: the FS button leaves the top-left and docks just RIGHT of the left HP chip, top-aligned with it (b1105w:
+   --left-chip-right is the chip's right edge plus 10 px, kept by a ResizeObserver in main.js setupHUD — the chip is as
+   wide as its name, its HP-scaled bar and its Trio faces). Same spot online and offline — it doesn't depend on the
+   PAUSE pill. Menus keep the original top-left spot. */
 .fullscreen-btn.in-match {
-  top: 14px;
-  left: calc(16px + 180px * var(--left-hp-scale, 1) + 8px);   /* (right of the left corner bar, however long that unit's bar is) */
+  top: 10px;
+  left: var(--left-chip-right, 270px);
 }
 
 /* Pseudo-fullscreen mode. Toggle adds .pseudo-fullscreen to <body>;
@@ -194,31 +271,52 @@ body.pseudo-fullscreen #app {
   height: 100dvh;
 }
 
-.menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); box-sizing: border-box; background: rgba(5, 8, 14, 0.78); z-index: 100; pointer-events: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y !important; }
+/* ---- the menus: an opaque cream sheet with three ink blobs and a few drips (an inline SVG, scaled to cover the
+   sheet and pinned to it while the content scrolls), sticker titles, chunky pills ---- */
+.menu {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); box-sizing: border-box;
+  background: var(--cream) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 500'%3E%3Cpath fill='%23C6F24A' d='M -110 100 C -90 -10 60 -70 190 -30 C 300 5 330 110 280 180 C 230 250 90 270 0 240 C -70 215 -125 170 -110 100 Z'/%3E%3Cpath fill='%23FF3EA5' d='M 700 440 C 720 330 880 290 1000 330 C 1110 365 1160 470 1120 560 C 1080 640 920 660 820 620 C 740 588 685 520 700 440 Z'/%3E%3Cpath fill='%233EE0FF' d='M 610 20 C 640 -60 760 -80 830 -40 C 890 -5 870 70 800 90 C 730 108 650 90 620 60 C 605 45 600 35 610 20 Z'/%3E%3Ccircle fill='%23C6F24A' cx='300' cy='250' r='10'/%3E%3Ccircle fill='%23C6F24A' cx='318' cy='282' r='6'/%3E%3Ccircle fill='%23FF3EA5' cx='560' cy='120' r='8'/%3E%3Ccircle fill='%233EE0FF' cx='470' cy='95' r='6'/%3E%3Ccircle fill='%23C6F24A' cx='120' cy='330' r='7'/%3E%3Ccircle fill='%23FF3EA5' cx='700' cy='300' r='9'/%3E%3C/svg%3E") center / cover no-repeat;
+  color: var(--ink); font-family: var(--font-ui); z-index: 100; pointer-events: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y !important;
+}
 .menu::before, .menu::after { content: ''; flex: 1 1 0; min-height: 0; }
 .menu > * { flex: 0 0 auto; }
-.menu h2 { margin: 0 0 8px; color: #d7f6ff; }
-.menu button { width: 260px; padding: 14px 10px; border-radius: 10px; border: 1px solid #4c6176; background: #1a2634; color: #e5fbff; }
-.menu .online-play-btn { background: #1a4a32; border-color: #4ec07a; color: #c8ffe0; margin-bottom: 4px; font-weight: 700; }
-.menu .online-debug-btn { background: #1a3a3a; border-color: #4ca0a0; color: #b8fefe; margin-bottom: 8px; }
-.menu .online-leave-btn { background: #2a1a1a; border-color: #6c4040; color: #ffc8c8; margin-top: 12px; }
-.menu .menu-divider { color: #6b7d92; font-size: 13px; letter-spacing: 1px; margin: 8px 0 4px; }
-.menu button:disabled { opacity: 0.4; cursor: not-allowed; }
-.menu .guide-btn { background: #1a3445; border-color: #4a809a; color: #c0e8ff; margin-top: 22px; }
-.menu .mode-chip { display: flex; gap: 6px; margin: 0 0 6px; }
-.menu .mode-chip button { width: 90px; padding: 8px 0; border-radius: 18px; border: 1px solid #3a5566; background: #0e1822; color: #9bb8c8; font-weight: 600; font-size: 13px; letter-spacing: 1px; }
-.menu .mode-chip button.mode-active { background: #1a3a52; border-color: #6ab0d4; color: #d7f6ff; }
+/* a sticker title: white Titan One with the ink outline and a magenta drop, a touch off square */
+.menu h2 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.15; letter-spacing: 0.02em; color: #ffffff; text-align: center; text-shadow: var(--sticker-stroke), 4px 4px 0 var(--magenta); transform: rotate(-2deg); }
+.menu h2.lobby-title { font-size: clamp(30px, 4.4vw, 42px); text-shadow: var(--sticker-stroke), 6px 6px 0 var(--magenta); }
+.menu button { width: 260px; padding: 12px 10px; box-sizing: border-box; border-radius: 999px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-weight: 800; font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; transition: transform 0.08s ease, box-shadow 0.08s ease; }
+.menu button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.menu button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.menu .menu-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.menu .menu-row button { width: auto; min-width: 150px; }
+.menu .online-play-btn { width: 280px; background: var(--magenta); border-color: var(--ink); color: #ffffff; font-family: var(--font-display); font-weight: 400; font-size: 18px; letter-spacing: 0.02em; transform: rotate(-1deg); box-shadow: 4px 4px 0 var(--ink); margin-bottom: 2px; }
+.menu .online-play-btn:active { transform: rotate(-1deg) translate(2px, 2px); }
+.menu .online-debug-btn { background: var(--paper); color: var(--ink); font-size: 12px; margin-bottom: 0; }
+.menu .online-leave-btn { background: var(--paper); border-color: var(--ink); color: var(--magenta); margin-top: 12px; }
+/* a divider is an ink chip now: the section's name, uppercase, a degree off */
+.menu .menu-divider { display: inline-block; padding: 5px 12px; border-radius: 8px; background: var(--ink); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; transform: rotate(-1.5deg); margin: 6px 0 0; max-width: 92vw; text-align: center; }
+.menu .guide-btn { background: var(--yellow); border-color: var(--ink); color: var(--ink); margin-top: 0; }
+/* the option chips: white pills, the chosen one magenta with the hard shadow; alternate tilts down the row */
+.menu .mode-chip { display: flex; gap: 8px; margin: 0; flex-wrap: wrap; justify-content: center; }
+.menu .mode-chip button { width: auto; min-width: 92px; padding: 9px 14px; border-radius: 999px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; box-shadow: none; transform: rotate(1deg); }
+.menu .mode-chip button:nth-child(even) { transform: rotate(-1.2deg); }
+.menu .mode-chip button.mode-active { background: var(--magenta); border-color: var(--ink); color: #ffffff; font-weight: 800; box-shadow: 3px 3px 0 var(--ink); }
+/* the lobby's four labelled rows (Play as / Teams / Roster / Rules), two to a line where the width allows */
+.menu .opt-groups { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; max-width: 820px; }
+.menu .opt-row { display: flex; align-items: center; gap: 8px; }
+.menu .opt-label { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #ffffff; background: var(--ink); padding: 5px 8px; border-radius: 8px; transform: rotate(-2deg); white-space: nowrap; }
 
 .guide-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(27, 27, 47, 0.6);
   z-index: 300;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y !important;
   pointer-events: auto;
+  font-family: var(--font-ui);
 }
 .guide-overlay-inner {
   min-height: 100%;
@@ -229,43 +327,49 @@ body.pseudo-fullscreen #app {
   box-sizing: border-box;
 }
 .guide-card {
-  background: #0e1722;
-  border: 1px solid #4c6176;
-  border-radius: 12px;
+  background: var(--cream);
+  border: 4px solid var(--ink);
+  border-radius: 18px;
   max-width: 520px;
   width: 100%;
-  color: #e5fbff;
-  box-shadow: 0 6px 32px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+  box-shadow: 8px 8px 0 var(--ink);
 }
 .guide-card-header {
   position: sticky;
   top: 0;
-  background: #0e1722;
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
+  background: var(--cream);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid #2a3848;
+  border-bottom: 3px solid var(--ink);
   z-index: 1;
 }
 .guide-card-header h3 {
   margin: 0;
-  color: #d7f6ff;
-  font-size: 18px;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  text-shadow: var(--sticker-stroke), 3px 3px 0 var(--cyan);
+  transform: rotate(-2deg);
 }
 .guide-close-btn {
-  background: transparent;
-  border: 1px solid #4c6176;
-  color: #c8d8e5;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  color: var(--ink);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   font-size: 18px;
+  font-weight: 800;
   line-height: 1;
   cursor: pointer;
   padding: 0;
+  box-shadow: 2px 2px 0 var(--ink);
 }
 .guide-card-body {
   padding: 16px 20px 22px;
@@ -273,8 +377,8 @@ body.pseudo-fullscreen #app {
   font-size: 14px;
 }
 .guide-card-body p { margin: 0 0 10px; }
-.guide-card-body .guide-tagline { color: #a0c0d0; margin-bottom: 18px; }
-.guide-card-body h4 { color: #c0e8ff; margin: 18px 0 8px; font-size: 15px; }
+.guide-card-body .guide-tagline { color: var(--muted); margin-bottom: 18px; }
+.guide-card-body h4 { color: var(--ink); margin: 18px 0 8px; font-size: 15px; font-weight: 800; display: inline-block; padding: 2px 8px; border-radius: 8px; background: var(--lime); border: 2px solid var(--ink); transform: rotate(-1deg); }
 .guide-card-body h4:first-child { margin-top: 0; }
 .guide-card-body ul { margin: 0 0 10px; padding-left: 22px; }
 .guide-card-body li { margin: 4px 0; }
@@ -286,44 +390,48 @@ body.pseudo-fullscreen #app {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 8, 14, 0.65);
-  color: #d7f6ff;
+  background: rgba(27, 27, 47, 0.55);
+  color: var(--ink);
+  font-family: var(--font-ui);
   font-size: 18px;
+  font-weight: 800;
   z-index: 90;
   pointer-events: none;
 }
 .online-overlay .msg {
-  background: rgba(20, 30, 44, 0.85);
-  padding: 18px 28px;
-  border: 1px solid #4c6176;
-  border-radius: 10px;
+  background: var(--paper);
+  padding: 16px 26px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 5px 5px 0 var(--ink);
+  transform: rotate(-1.5deg);
 }
 
 /* 2v2 online roster on the lobby screen — grouped by team. Team A on top,
-   Team B below, each with its own header. */
-.menu .online-roster { display: flex; flex-direction: column; gap: 10px; width: 280px; padding: 10px; background: rgba(20, 30, 44, 0.5); border-radius: 8px; color: #d7f6ff; font-size: 13px; box-sizing: border-box; }
-.menu .online-roster .roster-team-group { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 6px; }
-.menu .online-roster .roster-team-group.roster-team-A { background: rgba(98, 215, 255, 0.06); border-left: 3px solid #62d7ff; }
-.menu .online-roster .roster-team-group.roster-team-B { background: rgba(255, 122, 213, 0.06); border-left: 3px solid #ff7ad5; }
-.menu .online-roster .roster-team-header { color: #c0e8ff; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; }
-.menu .online-roster .roster-team-group.roster-team-B .roster-team-header { color: #ffb8e5; }
+   Team B below, each with its own header. The teams keep their colours — A cyan, B magenta — the skin's own inks. */
+.menu .online-roster { display: flex; flex-direction: column; gap: 10px; width: 300px; padding: 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--ink); color: var(--ink); font-size: 13px; box-sizing: border-box; }
+.menu .online-roster .roster-team-group { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; }
+.menu .online-roster .roster-team-group.roster-team-A { background: rgba(62, 224, 255, 0.18); border-left: 4px solid var(--cyan); }
+.menu .online-roster .roster-team-group.roster-team-B { background: rgba(255, 62, 165, 0.14); border-left: 4px solid var(--magenta); }
+.menu .online-roster .roster-team-header { color: var(--ink); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; margin-bottom: 2px; text-transform: uppercase; }
+.menu .online-roster .roster-team-group.roster-team-B .roster-team-header { color: var(--ink); }
 .menu .online-roster .roster-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; }
-.menu .online-roster .roster-slot { width: 22px; color: #8eb6c8; font-weight: 700; font-size: 11px; }
-.menu .online-roster .roster-status { flex: 1; text-align: right; color: #e5fbff; }
-.menu .online-roster .roster-join { width: auto; padding: 4px 12px; font-size: 11px; border-radius: 12px; border: 1px solid #4a809a; background: #1a3445; color: #c0e8ff; letter-spacing: 1px; margin-left: 6px; }
-.menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 6px 10px; background: rgba(20, 30, 44, 0.4); border-radius: 8px; color: #d7f6ff; font-size: 12px; box-sizing: border-box; }
-.menu .online-status .lbl { color: #8eb6c8; margin-right: 4px; }
-.menu .online-status .val { color: #e5fbff; }
+.menu .online-roster .roster-slot { width: 22px; color: var(--muted); font-weight: 800; font-size: 11px; }
+.menu .online-roster .roster-status { flex: 1; text-align: right; color: var(--ink); font-weight: 700; }
+.menu .online-roster .roster-join { width: auto; padding: 4px 12px; font-size: 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--lime); color: var(--ink); letter-spacing: 0.04em; margin-left: 6px; box-shadow: 2px 2px 0 var(--ink); }
+.menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 8px 12px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; color: var(--ink); font-size: 12px; box-sizing: border-box; }
+.menu .online-status .lbl { color: var(--muted); margin-right: 4px; font-weight: 700; }
+.menu .online-status .val { color: var(--ink); font-weight: 700; }
 
 .online-debug-panel { gap: 10px; }
-.online-debug-panel .online-status { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 520px; padding: 12px; background: rgba(20, 30, 44, 0.6); border-radius: 8px; color: #d7f6ff; font-size: 14px; box-sizing: border-box; }
-.online-debug-panel .online-status .lbl { display: inline-block; width: 90px; color: #8eb6c8; }
-.online-debug-panel .online-status .val { color: #e5fbff; word-break: break-all; }
-.online-debug-panel .online-status [data-bind="status"][data-state="ok"] { color: #90ff63; }
-.online-debug-panel .online-status [data-bind="status"][data-state="off"] { color: #ff8f8f; }
+.online-debug-panel .online-status { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 520px; padding: 12px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; color: var(--ink); font-size: 14px; box-sizing: border-box; }
+.online-debug-panel .online-status .lbl { display: inline-block; width: 90px; color: var(--muted); font-weight: 700; }
+.online-debug-panel .online-status .val { color: var(--ink); word-break: break-all; }
+.online-debug-panel .online-status [data-bind="status"][data-state="ok"] { color: #2F8F2F; }
+.online-debug-panel .online-status [data-bind="status"][data-state="off"] { color: var(--magenta); }
 .online-debug-panel .online-events { width: 100%; max-width: 520px; box-sizing: border-box; }
-.online-debug-panel .online-events .lbl { color: #8eb6c8; font-size: 13px; margin-bottom: 4px; }
-.online-debug-panel .online-events pre { background: rgba(8, 12, 18, 0.85); color: #c8e8f4; font-size: 11px; line-height: 1.4; padding: 10px; border-radius: 6px; border: 1px solid #2a3a4c; max-height: 220px; overflow-y: auto; margin: 0; white-space: pre-wrap; word-break: break-all; }
+.online-debug-panel .online-events .lbl { color: var(--muted); font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.online-debug-panel .online-events pre { background: var(--ink); color: #e8ecf5; font-size: 11px; line-height: 1.4; padding: 10px; border-radius: 10px; border: 3px solid var(--ink); max-height: 220px; overflow-y: auto; margin: 0; white-space: pre-wrap; word-break: break-all; }
 
 .speed-lines {
   position: absolute;
@@ -332,51 +440,89 @@ body.pseudo-fullscreen #app {
   opacity: 0;
   transition: opacity 80ms linear;
   background:
-    linear-gradient(100deg, rgba(120, 220, 255, 0.28), transparent 32%) left/18% 100% no-repeat,
-    linear-gradient(260deg, rgba(120, 220, 255, 0.28), transparent 32%) right/18% 100% no-repeat;
+    linear-gradient(100deg, rgba(198, 242, 74, 0.3), transparent 32%) left/18% 100% no-repeat,
+    linear-gradient(260deg, rgba(198, 242, 74, 0.3), transparent 32%) right/18% 100% no-repeat;
 }
 
-/* Unit thumbnail picker (shared by offline + online unit selection) */
-.menu .unit-grid { display: grid; grid-template-columns: repeat(4, 132px); gap: 12px; justify-content: center; margin: 4px 0 6px; touch-action: pan-y; }
-.menu .unit-card { width: 132px; padding: 8px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 12px; border: 2px solid #3a5566; background: #131e2a; color: #e5fbff; cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease; }
-.menu .unit-card:hover { border-color: #5a7d96; }
-.menu .unit-card .unit-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #0b1119; pointer-events: none; }
-.menu .unit-card .unit-label { font-size: 13px; line-height: 1.35; font-weight: 600; text-align: center; pointer-events: none; }
-.menu .unit-card.selecting { border-color: #6ab8ff; box-shadow: 0 0 0 2px rgba(106, 184, 255, 0.55), 0 0 18px 3px rgba(106, 184, 255, 0.7); }
+/* ---- the pickers (shared by the offline and online unit and map selection): sticker tiles, 84 px square-ish for
+   the units (seven to a row on a landscape phone, the game's 17 and the two Random cards in three rows), 124 px
+   polaroids for the maps; each tile a degree or two off square in a repeating pattern of four ---- */
+.menu .unit-grid { display: grid; grid-template-columns: repeat(auto-fill, 84px); justify-content: center; gap: 14px 8px; width: 100%; max-width: 660px; margin: 6px 0 4px; padding: 8px 0 10px; touch-action: pan-y; }
+.menu .unit-card { position: relative; width: 84px; height: 98px; box-sizing: border-box; padding: 6px 4px 4px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 14px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; transition: transform 0.1s ease, box-shadow 0.1s ease; transform: rotate(var(--tilt, 0deg)); }
+.menu .unit-card:nth-child(4n+1) { --tilt: -2deg; }
+.menu .unit-card:nth-child(4n+2) { --tilt: 1.5deg; }
+.menu .unit-card:nth-child(4n+3) { --tilt: -1deg; }
+.menu .unit-card:nth-child(4n) { --tilt: 2deg; }
+.menu .unit-card:hover { box-shadow: 4px 4px 0 var(--ink); }
+.menu .unit-card .unit-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; background: var(--class-color, #E7E9EE); pointer-events: none; }
+.menu .unit-card .unit-label { font-size: 11px; line-height: 1.15; font-weight: 800; text-align: center; pointer-events: none; max-width: 76px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the weapon-class tag on a unit tile's corner, and the tile's colour: AR and RF (rifle) cyan, SMG lime, SG yellow,
+   MG magenta, SR (sniper rifle) ink — set by data-class (unitGridHTML) */
+.menu .unit-card .unit-tag { position: absolute; top: -9px; right: -7px; padding: 2px 6px; border-radius: 999px; border: 2px solid var(--ink); background: var(--class-color, #E7E9EE); color: var(--class-ink, var(--ink)); font-size: 9px; line-height: 1; font-weight: 800; pointer-events: none; }
+.menu [data-class="AR"] { --class-color: var(--cyan); }
+.menu [data-class="RF"] { --class-color: var(--lavender); }   /* (b1105r: its own colour, no longer AR's) */
+.menu [data-class="SMG"] { --class-color: var(--lime); }
+.menu [data-class="SG"] { --class-color: var(--yellow); }
+.menu [data-class="MG"] { --class-color: var(--magenta); --class-ink: #ffffff; }
+.menu [data-class="SR"] { --class-color: var(--ink); --class-ink: #ffffff; }   /* (the tiles, the lobby's unit card and the picker's side card alike; SR — sniper rifle — was SN until b1105t, user) */
+.menu .unit-card.selecting { border-color: var(--magenta); border-width: 4px; padding: 5px 3px 3px; box-shadow: 4px 4px 0 var(--ink), 0 0 0 3px #ffffff; transform: rotate(var(--tilt, 0deg)) scale(1.06); z-index: 2; }
 
-.unit-profile-popup { position: fixed; z-index: 300; display: flex; gap: 6px; align-items: stretch; padding: 6px; border-radius: 12px; border: 2px solid #6ab8ff; background: rgba(10, 16, 26, 0.96); box-shadow: 0 0 22px 5px rgba(106, 184, 255, 0.5); cursor: pointer; }
+/* the profile card (the two-tap pickers' preview, units AND maps): a white sticker with the ink border, the hard
+   shadow and a lime "tap to confirm" tag hanging off its bottom — the card itself is the confirm target */
+.unit-profile-popup { position: fixed; z-index: 300; display: flex; gap: 8px; align-items: stretch; padding: 8px; border-radius: 0 14px 14px 14px; border: 4px solid var(--ink); background: var(--manila); color: var(--ink); font-family: var(--font-ui); box-shadow: 7px 7px 0 var(--ink); cursor: pointer; transform: rotate(-2deg); }
+/* (b1105t) the floating card — the online pickers' — is a folder too: the tab, the white sheet inside; a map's is the memo */
+.unit-profile-popup::before { content: 'UNIT FILE'; position: absolute; left: 12px; top: -26px; width: 110px; height: 30px; box-sizing: border-box; padding-bottom: 4px; background: var(--manila); border: 4px solid var(--ink); border-bottom: 0; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink); }
+.unit-profile-popup .sheet { position: relative; display: flex; gap: 8px; align-items: stretch; padding: 8px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; }
+.unit-profile-popup.pp-memo { border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 150px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
+.unit-profile-popup.pp-memo::before { content: ''; left: 50%; top: -9px; width: 84px; height: 20px; margin-left: -42px; padding: 0; border: 0; border-radius: 0; background: rgba(255, 228, 92, 0.82) linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%); transform: rotate(-5deg); clip-path: polygon(2% 0, 98% 3%, 100% 22%, 97% 40%, 100% 60%, 98% 80%, 100% 100%, 1% 97%, 0 78%, 3% 58%, 0 38%, 2% 18%); box-shadow: 0 1px 2px rgba(27, 27, 47, 0.22); }   /* (the memo's tape, b1105u) */
+.unit-profile-popup.pp-memo .sheet { background: none; border: 0; padding: 0; }
+.unit-profile-popup::after { content: 'TAP TO CONFIRM'; position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%) rotate(-3deg); padding: 5px 12px; border-radius: 999px; border: 3px solid var(--ink); background: var(--lime); color: var(--ink); font-size: 11px; line-height: 1; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
 /* Map picker: landscape-cropped thumbs on the cards; the preview popup shows
    one big 3/4 aerial shot (maps/<id>.png), no text. */
-.menu .map-card .map-thumb { width: 104px; height: 66px; object-fit: cover; }
-.menu .map-card[disabled] { opacity: 0.45; cursor: default; }
-.unit-profile-popup .map-face { width: 260px; max-width: 62vw; }
-.unit-profile-popup .profile-face { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 8px; align-self: center; }
+.menu .map-grid { grid-template-columns: repeat(auto-fill, 124px); gap: 14px 10px; }
+.menu .map-card { width: 124px; height: auto; min-height: 96px; padding: 5px 5px 5px; border-radius: 10px; }   /* (auto: a two-line name — Backrooms (Anomaly), "(offline only)" — grows its card instead of clipping) */
+.menu .map-card .map-thumb { width: 108px; height: 58px; object-fit: cover; border-radius: 4px; background: #E7E9EE; }
+.menu .map-card .unit-label { white-space: normal; max-width: 112px; font-size: 10.5px; line-height: 1.1; }
+.menu .map-card[disabled] { opacity: 0.45; cursor: default; box-shadow: none; }
+/* the map tabs (b1105l): Scene Maps | Concept Maps, as the game already divides them; the open tab's grid shows, the
+   other hides, and its Random card still rolls its own tab alone (wireMapGrid) */
+.menu .map-tabs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 4px 0 0; }
+.menu .map-tabs button { width: auto; padding: 8px 14px; font-size: 12px; box-shadow: none; transform: rotate(1deg); }
+.menu .map-tabs button:nth-child(even) { transform: rotate(-1.2deg); }
+.menu .map-tabs button.tab-active { background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); }
+.menu .map-section { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.menu .map-section[hidden] { display: none; }
+/* the map picker's two offline toggles (Dummy, Spectator) as pills */
+.menu .menu-toggles { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 2px 0; }
+.menu .toggle-chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; cursor: pointer; }
+.menu .toggle-chip input { width: 16px; height: 16px; margin: 0; accent-color: var(--magenta); }
+.unit-profile-popup .map-face { width: 260px; max-width: 62vw; border-radius: 10px; }
+.unit-profile-popup .profile-face { display: block; width: 110px; max-width: 21vw; height: auto; border-radius: 12px; align-self: center; background: #E9F7B5; }
 /* Side card: weapon render + real-world weapon name beside the portrait. */
-.unit-profile-popup .weapon-panel { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: #0b1119; border: 1px solid #2c4356; border-radius: 8px; padding: 6px; }
-.unit-profile-popup .weapon-name { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd76a; text-align: center; border-bottom: 1px solid #274058; padding-bottom: 4px; }
-.unit-profile-popup .weapon-panel img { display: block; width: 100%; height: auto; }
-/* Random card: light-gray mystery thumbnail + popup face, gray question mark.
-   The thumb inherits the grid's sizing from .unit-thumb / .map-thumb.
-   All Random uses the same shapes in a light golden tone. */
-.menu .unit-card .random-thumb { display: flex; align-items: center; justify-content: center; background: #cfd4d9; color: #7a838a; font-size: 30px; font-weight: 800; }
-.unit-profile-popup .random-face { display: flex; align-items: center; justify-content: center; width: 110px; max-width: 21vw; height: 140px; border-radius: 8px; background: #cfd4d9; color: #7a838a; font-size: 64px; font-weight: 800; }
-.unit-profile-popup .random-face-wide { width: 260px; max-width: 62vw; height: 160px; }
-.menu .unit-card .random-thumb.all-random { background: #ecdda6; color: #9a7f2e; }
-.unit-profile-popup .random-face.all-random { background: #ecdda6; color: #9a7f2e; }
+.profile-body .weapon-panel { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 132px; max-width: 25vw; background: var(--cream); border: 2px solid var(--ink); border-radius: 12px; padding: 6px; box-sizing: content-box; }
+.profile-body .weapon-name { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 4px; }
+.profile-body .weapon-panel img { display: block; width: 100%; height: auto; }
+/* Random card: a yellow mystery tile with a question mark; All Random the same in magenta (the picker's golden theme
+   until b1105l). The thumb inherits the grid's sizing from .unit-thumb / .map-thumb. */
+.menu .unit-card .random-thumb { display: flex; align-items: center; justify-content: center; background: var(--yellow); color: var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 30px; }
+.profile-body .random-face { display: flex; align-items: center; justify-content: center; width: 110px; max-width: 21vw; height: 140px; border-radius: 12px; background: var(--yellow); color: var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 64px; }
+.profile-body .random-face-wide { width: 260px; max-width: 62vw; height: 160px; }
+.menu .unit-card .random-thumb.all-random { background: var(--magenta); color: #ffffff; }
+.profile-body .random-face.all-random { background: var(--magenta); color: #ffffff; }
 /* ---- profile popup weapon stats (2026-09-22, owner pick "C" from three
    in-game samples): a 3x2 cell grid under the gun render inside the weapon
    panel, split from it by the panel's own divider line — uppercase 8px
-   labels over white bold 11px tabular values, the 30px spread picture in
+   labels over bold 11px tabular values, the 30px spread picture in
    the last cell. Same sizes on phones (checked at 390px: nothing wraps). ---- */
-.unit-profile-popup .weapon-panel.weapon-panel-stats { justify-content: flex-start; }
-.unit-profile-popup .weapon-panel .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; border-top: 1px solid #274058; padding-top: 5px; }
-.unit-profile-popup .stats-grid .stat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.unit-profile-popup .stats-grid .stat-cell .stat-label { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; color: #a8c2d8; white-space: nowrap; }
-.unit-profile-popup .stats-grid .stat-cell .stat-value { font-size: 11px; line-height: 13px; font-weight: 700; color: #ffffff; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.unit-profile-popup .stats-grid .stat-cell .stat-scatter { width: 30px; height: 30px; }
-.unit-profile-popup .stats-grid .stat-cell .stat-value.stat-tight { font-size: 9.5px; }   /* 50/35/20 */
+.profile-body .weapon-panel.weapon-panel-stats { justify-content: flex-start; }
+.profile-body .weapon-panel .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; border-top: 2px dashed rgba(27, 27, 47, 0.35); padding-top: 5px; }
+.profile-body .stats-grid .stat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.profile-body .stats-grid .stat-cell .stat-label { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.profile-body .stats-grid .stat-cell .stat-value { font-size: 11px; line-height: 13px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-body .stats-grid .stat-cell .stat-scatter { width: 30px; height: 30px; border-radius: 6px; background: var(--paper); border: 1px solid rgba(27, 27, 47, 0.3); }
+.profile-body .stats-grid .stat-cell .stat-value.stat-tight { font-size: 9.5px; }   /* 50/35/20 */
 @media (max-width: 600px) {
-  .unit-profile-popup .weapon-panel .stats-grid { gap: 4px 4px; }   /* 360px phones: the panel's 90px inner width takes 36 + 50 + 4 */
+  .profile-body .weapon-panel .stats-grid { gap: 4px 4px; }   /* 360px phones: the panel's 90px inner width takes 36 + 50 + 4 */
 }
 /* ---------------------------------------------------------------------------
    DIORAMA VIEW (POC) — thin-line annotation layer (see DIORAMA_PLAN.md).
@@ -384,33 +530,35 @@ body.pseudo-fullscreen #app {
    pointer-events:all) are tappable, so the joystick/buttons keep working.
    z-index 20 sits above the canvas; .touch-hud is lifted to 25 so gauges and
    buttons stay on top of leader lines/cards. Edge arrows (35), menus (100+)
-   keep their existing layers. */
+   keep their existing layers. The cards wear the skin's ink and white rim since b1105l; their boxes are the JS's. */
 .touch-hud { z-index: 25; }
 .dio-layer { position: fixed; inset: 0; z-index: 20; pointer-events: auto; touch-action: none; }
 .dio-layer > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dio-card {
   position: absolute; left: 0; top: 0; width: 180px; height: 68px; box-sizing: border-box;
-  padding: 6px 9px 7px; border: 1px solid #6a7898; border-radius: 2px;
-  background: rgba(7, 11, 18, 0.72); backdrop-filter: blur(2px);
-  color: #dfe7f5; pointer-events: none; will-change: transform;
+  padding: 6px 9px 7px; border: 2px solid #ffffff; border-radius: 10px;
+  background: rgba(27, 27, 47, 0.86); box-shadow: 0 0 0 1.5px var(--ink);
+  color: #ffffff; font-family: var(--font-ui); pointer-events: none; will-change: transform;
 }
-.dio-card .dio-name { font-size: 10px; letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; }
+.dio-card .dio-name { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; opacity: 0.95; white-space: nowrap; overflow: hidden; }
 /* Vertical rhythm (owner 2026-09-26): the 22 px portrait grew the name row
    and pushed the command icons ~6 px below the card's bottom border. The
    margins tightened (bar 7->5, boost 3->2, status 4->2) and the icons
    shrank to 14x12 (dioCmdIconCardMarkup) so the row sits fully inside:
    22 + (5+9) + (2+5) + (2+12) = 57 of the 60 px between the top padding
    edge and the bottom border (~3 px clearance). Card size unchanged. */
-.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 2px; min-height: 12px; color: #ffcf6b; white-space: nowrap; }
-.dio-card .dio-bar { height: 9px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.35); }
-.dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: #7effbd; transition: width 0.15s linear; }
-/* Stamina (boost) gauge — thinner amber twin under the HP bar (2.1c). */
-.dio-card .dio-boost { height: 5px; margin-top: 2px; border-radius: 2px; overflow: hidden; background: rgba(10, 16, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(120, 140, 170, 0.28); }
-.dio-card .dio-boost i { display: block; height: 100%; width: 100%; background: #ffc94d; transition: width 0.15s linear; }
+.dio-card .dio-status { font-size: 9.5px; letter-spacing: 0.2em; margin-top: 2px; min-height: 12px; color: var(--yellow); white-space: nowrap; }
+.dio-card .dio-bar { height: 9px; margin-top: 5px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.dio-card .dio-bar i { display: block; height: 100%; width: 100%; background: var(--lime); border-radius: 999px; transition: width 0.15s linear; }
+/* Stamina (boost) gauge — thinner twin under the HP bar (2.1c); white since b1105ac: the cards wear the HP chips'
+   colours now and ENEMY 2's is the yellow the gauge used to be — two yellow bars on one card read as one */
+.dio-card .dio-boost { height: 5px; margin-top: 2px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+.dio-card .dio-boost i { display: block; height: 100%; width: 100%; background: rgba(255, 255, 255, 0.85); border-radius: 999px; transition: width 0.15s linear; }
 #dio-toast {
-  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
-  padding: 10px 22px; border: 1px solid rgba(223, 231, 245, 0.55); border-radius: 3px;
-  background: rgba(7, 11, 18, 0.78); color: #eef4ff; font-size: 13px; letter-spacing: 0.22em;
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%) rotate(-1.5deg);
+  padding: 10px 22px; border: 3px solid var(--ink); border-radius: 12px;
+  background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 13px; font-weight: 800; letter-spacing: 0.12em;
+  box-shadow: 4px 4px 0 var(--ink);
   opacity: 0; transition: opacity 0.25s ease; pointer-events: none; z-index: 95;
 }
 #dio-toast.show { opacity: 1; }
@@ -419,11 +567,11 @@ body.pseudo-fullscreen #app {
 /* Diorama round 2: role + weapon silhouette on one card line (invert flips
    the dark weapon art to white on the dark card, same trick as trio tags). */
 .dio-card .dio-name { display: flex; align-items: center; gap: 6px; }
-.dio-card .dio-weapon { height: 22px; width: 22px; object-fit: cover; border-radius: 4px; background: #0b1119; opacity: 1; }  /* BA: character portrait thumbnail (no silhouette filter) */
+.dio-card .dio-weapon { height: 22px; width: 22px; object-fit: cover; border-radius: 6px; background: #ffffff; opacity: 1; }  /* BA: character portrait thumbnail (no silhouette filter) */
 /* Compact cards for small screens (phones) — JS mirrors these numbers
    (updateDioramaHud: cardW/cardH 132x44 when min(W,H) < 500). */
 .dio-layer.dio-compact .dio-card { width: 132px; height: 52px; padding: 4px 7px 5px; }
-.dio-layer.dio-compact .dio-card .dio-name { font-size: 8.5px; letter-spacing: 0.1em; gap: 4px; }
+.dio-layer.dio-compact .dio-card .dio-name { font-size: 8.5px; letter-spacing: 0.08em; gap: 4px; }
 .dio-layer.dio-compact .dio-card .dio-weapon { height: 16px; width: 16px; }
 .dio-layer.dio-compact .dio-card .dio-bar { height: 6px; margin-top: 4px; }
 .dio-layer.dio-compact .dio-card .dio-boost { height: 4px; margin-top: 1px; }
@@ -446,8 +594,8 @@ body.pseudo-fullscreen #app {
    matching pulsing halo strokes (.dio-selglow). */
 .dio-card.dio-sel { animation: dio-sel-card 1.1s ease-in-out infinite alternate; }
 @keyframes dio-sel-card {
-  from { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(7, 11, 18, 0.85), 0 0 9px 2px var(--dio-sel); }
-  to   { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(7, 11, 18, 0.85), 0 0 18px 6px var(--dio-sel); }
+  from { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(27, 27, 47, 0.85), 0 0 9px 2px var(--dio-sel); }
+  to   { box-shadow: 0 0 0 2px var(--dio-sel), 0 0 0 3.5px rgba(27, 27, 47, 0.85), 0 0 18px 6px var(--dio-sel); }
 }
 .dio-selglow { animation: dio-sel-stroke 1.1s ease-in-out infinite alternate; }
 @keyframes dio-sel-stroke {
@@ -462,13 +610,13 @@ body.pseudo-fullscreen #app {
 .dio-deny { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 30; }
 .dio-deny .dio-deny-ring {
   position: absolute; left: -26px; top: -26px; width: 52px; height: 52px;
-  border: 2px solid rgba(255, 77, 94, 0.95); border-radius: 50%;
+  border: 3px solid var(--magenta); border-radius: 50%;
   animation: dio-deny-ring 0.85s ease-out forwards;
 }
 .dio-deny .dio-deny-text {
   position: absolute; left: 0; top: -46px; transform: translateX(-50%);
-  color: #ff4d5e; font-size: 11px; letter-spacing: 0.18em; white-space: nowrap;
-  text-shadow: 0 0 6px rgba(7, 11, 18, 0.95), 0 1px 2px rgba(7, 11, 18, 0.95);
+  color: var(--magenta); font-family: var(--font-ui); font-weight: 800; font-size: 11px; letter-spacing: 0.14em; white-space: nowrap;
+  text-shadow: 0 0 6px rgba(27, 27, 47, 0.95), 0 1px 2px rgba(27, 27, 47, 0.95);
   animation: dio-deny-text 0.85s ease-out forwards;
 }
 @keyframes dio-deny-ring {
@@ -492,17 +640,16 @@ body.pseudo-fullscreen #app {
 .dio-stance-btn {
   position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(255, 210, 87, 0.7); border-radius: 50%;
-  background: rgba(7, 11, 18, 0.8); color: #ffd257;
-  filter: drop-shadow(0 0 3px rgba(255, 210, 87, 0.9));
+  border: 2px solid var(--ink); border-radius: 50%;
+  background: var(--yellow); color: var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
   transition: transform 0.08s ease, background-color 0.08s ease;
   animation: dio-stance-in 0.14s ease-out;
 }
 .dio-stance-btn svg { display: block; width: 18px; height: 18px; }
-.dio-stance-btn.on { border-color: #ffd257; box-shadow: 0 0 0 2px rgba(255, 210, 87, 0.35) inset; }
+.dio-stance-btn.on { background: var(--lime); }
 .dio-stance-btn.hot {
-  background: rgba(255, 210, 87, 0.28); border-color: #ffd257; transform: scale(1.15);
-  box-shadow: 0 0 10px 2px rgba(255, 210, 87, 0.55);
+  background: var(--magenta); color: #ffffff; transform: scale(1.15);
 }
 @keyframes dio-stance-in {
   from { opacity: 0; transform: scale(0.6); }
@@ -510,12 +657,12 @@ body.pseudo-fullscreen #app {
 }
 
 /* Online queue room: teammate Classic|Command tag (team-scoped server-side). */
-.roster-viewtag { color: #ffd257; font-size: 0.85em; letter-spacing: 0.08em; }
+.roster-viewtag { color: var(--magenta); font-size: 0.85em; letter-spacing: 0.08em; font-weight: 800; }
 
 /* ===== Sudden Death (prototype) ===== */
-.menu .rules-chip button { width: 120px; }
-.menu .rules-chip button.sd-active { background: #4a1420; border-color: #ff4d6d; color: #ffd7de; }
-.menu .sd-rules-tag { color: #ff6b85; font-weight: 700; letter-spacing: 2px; }
+.menu .rules-chip button { width: auto; }
+.menu .rules-chip button.sd-active { background: var(--ink); border-color: var(--ink); color: var(--yellow); }
+.menu .sd-rules-tag { color: var(--yellow); font-weight: 800; letter-spacing: 0.1em; }
 
 /* Start banner: a full-width band across the middle of the screen. Three
    flashes in and out over 2.3 s, then gone. z-index 150: above the HUD
@@ -559,24 +706,18 @@ body.pseudo-fullscreen #app {
 .sd-banner.style-d .sd-sub { color: #b4001e; }
 .sd-banner.hold.style-d .sd-title { animation: none; letter-spacing: 0.3em; }
 @keyframes sdSpread { 0% { letter-spacing: 0.08em; } 100% { letter-spacing: 0.42em; } }
-/* SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the HP bars hide; the boost gauge and the remaining-units icons stay. */
-.touch-hud.sd-hud .health, .touch-hud.sd-hud .enemy-health, .touch-hud.sd-hud .ally-health, .touch-hud.sd-hud .enemy2-health { display: none; }
-/* (owner 2026-10-07, "since there is no HP bar in SD mode, move the weapons
-   indicator higher"): the weapon-icon rows take the bars' place at the top,
-   1v1 and 2v2 alike. */
-.touch-hud.sd-hud .trio-count, .touch-hud.sd-hud .trio-count.trio-count-2v2 { top: 14px; }
-/* SPECTATOR (owner 2026-10-07): the WATCHED unit's weapon icon glows white —
-   the corner-bar rim's sibling, and the only marker in Sudden Death where
-   the bars hide. */
-.touch-hud .trio-line.spec-watched-icon .trio-weapon-icon { filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(255, 255, 255, 0.95)); }
+/* SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide; the portrait, the
+   name, the Trio faces and the boost sticker stay (b1105w; the bars themselves hid until then). */
+.touch-hud.sd-hud .chip-bar { display: none; }
 
-/* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own bar; user 2026-10-19 */
+/* the anomaly rules (GLB_MAPS anomaly — Backrooms (Anomaly)): only the player's own chip; user 2026-10-19 */
 .touch-hud.hud-anomaly .enemy-health, .touch-hud.hud-anomaly .ally-health, .touch-hud.hud-anomaly .enemy2-health { display: none; }
 
 /* the ladder (ladder.js; user 2026-11-05): Target / Fire / Dodge / Sprint hidden while the player climbs — main.js updateHud sets hud-climb; the jump button stays, it is the ladder's (let go) */
 .hud-climb .btn-shoot, .hud-climb .btn-target, .hud-climb .btn-step, .hud-climb .btn-boost { visibility: hidden; }
-/* (2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health) */
-.unit-profile-popup .unit-note { position: absolute; left: 10px; bottom: 7px; max-width: 108px; font-size: 9px; line-height: 11px; font-weight: 700; color: #ffd76a; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
+/* (PT, 2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health); a yellow tag since b1105l */
+.profile-body .unit-note { padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--yellow); font-size: 9px; line-height: 11px; font-weight: 800; color: var(--ink); pointer-events: none; }
+.unit-profile-popup .unit-note { position: absolute; left: 12px; bottom: 12px; max-width: 108px; }
 .unit-profile-popup .map-note { max-width: 244px; }   /* (a map's note runs under its 260 px picture, one line, user 2026-10-29) */
 
 /* FREE POV (user 2026-10-30): the crosshair at the screen centre — Counter-Strike's classic since 2026-11-02 (the user's
@@ -592,7 +733,7 @@ body.pseudo-fullscreen #app {
    whole and the four lines sit evenly about the centre at any pixel ratio, and their values below are only fallbacks
    that never paint (the sizes live in FREE_POV; the colours live here). The player's own LIVE free pov
    (.free-pov-live) hides the TARGET button — no lock to switch; a spectator keeps it to change the watched unit
-   (user 2026-10-30). */
+   (user 2026-10-30). Untouched by the Splat skin (user 2026-11-05: "準星：維持現在調好的 CS 十字"). */
 .touch-hud.free-pov-live .btn-target { display: none; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --ch-size: 12px; --ch-color: rgba(126, 255, 189, 0.95); --ch-gap: calc(var(--ch-size) / 2); --ch-len: 8px; --ch-th: 2px; --ch-edge: 1px; }
 .crosshair i { position: absolute; display: block; background: var(--ch-color); box-shadow: 0 0 0 var(--ch-edge) rgba(0, 0, 0, 0.78); }
@@ -600,3 +741,302 @@ body.pseudo-fullscreen #app {
 .crosshair .ch-r { width: var(--ch-len); height: var(--ch-th); left: var(--ch-gap); top: calc(var(--ch-th) / -2); }
 .crosshair .ch-t { width: var(--ch-th); height: var(--ch-len); left: calc(var(--ch-th) / -2); top: calc(-1 * (var(--ch-gap) + var(--ch-len))); }
 .crosshair .ch-b { width: var(--ch-th); height: var(--ch-len); left: calc(var(--ch-th) / -2); top: var(--ch-gap); }
+
+/* ---- the thumb buttons' arrows (b1105m): a stroke icon over a small word, in the button's own colour ---- */
+.buttons button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.buttons .btn-icon { width: 28px; height: 28px; display: block; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.buttons .btn-label { font-size: 10px; letter-spacing: 0.06em; pointer-events: none; }
+
+/* ---- THE LOBBY (b1105m): the design canvas's F lobby — your card left, the option rows in the middle, the map's
+   card right, the enemy chip / All random / Online / GO!! along the foot (b1105q) ---- */
+/* (the sizes are a landscape phone's budget: 390 px tall holds the head, the cards and the foot without scrolling —
+   12 + 36 + 8 + 216 + 8 + 50 + 12) */
+.menu.lobby { gap: 8px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.menu .lobby-head { position: relative; width: 100%; max-width: 860px; min-height: 36px; display: flex; align-items: center; justify-content: center; }
+.menu .lobby-head h2 { margin: 0; }
+.menu .lobby-head h2.lobby-title { font-size: clamp(26px, 3.6vw, 36px); text-shadow: var(--sticker-stroke), 5px 5px 0 var(--magenta); }
+/* the guide's "?" in the sheet's own top-right corner (b1105p; user: "the real up right corner"), the round sticker
+   of the first pass — a direct child of the sheet, so it sits at the corner whatever the width of the centred rows */
+.menu .lobby-corner-btn { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 40px; height: 40px; padding: 0; border-radius: 50%; font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1; transform: rotate(4deg); z-index: 2; }
+.menu .lobby-corner-btn:active { transform: rotate(4deg) translate(2px, 2px); }
+/* (b1105t; user: "file folder style" for the character box, "memo-pinned-on-the-wall style" for the map) the grid is
+   two rows: the LINE-UP FOLDER on the left spans both — a manila folder with its tab, holding your card and the enemy's
+   slip as two sheets — the option rows and the map MEMO fill the first row, the foot's buttons the second under them */
+.menu .lobby-grid { display: grid; grid-template-columns: 236px minmax(250px, 1fr) 208px; grid-template-rows: auto auto; gap: 8px 14px; align-items: stretch; width: 100%; max-width: 860px; }
+.menu .lobby-mid { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; min-width: 0; }
+.menu .lobby-folder { grid-column: 1; grid-row: 1 / 3; position: relative; margin-top: 20px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; background: var(--manila); border: 4px solid var(--ink); border-radius: 0 14px 14px 14px; box-shadow: 7px 7px 0 var(--ink); }   /* (gap 12: the slip's Change sticker, 9 px over its top edge, stays clear of the sheet above — user b1105v: "so the ally box and enemy box do not overlap") */
+.menu .lobby-folder::before { content: 'LINE-UP'; position: absolute; left: 12px; top: -24px; width: 110px; height: 28px; box-sizing: border-box; padding-bottom: 4px; background: var(--manila); border: 4px solid var(--ink); border-bottom: 0; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink); }   /* (the tab, 24 px tall — user b1105u: "slightly shorten"; it reaches 4 px into the folder and covers the border under it) */
+.menu .lobby-folder .rows-2 { height: 104px; }   /* (the 2v2 Trio rows a little shorter: the folder, its two sheets and the foot must share 390 px) */
+.menu .lobby-folder::after { content: ''; position: absolute; right: -4px; top: 112px; width: 14px; height: 40px; background: var(--cream); border: 4px solid var(--ink); border-right: 0; border-radius: 20px 0 0 20px; }   /* (the thumb notch) */
+.menu .lobby-folder .slot-card.unit-slot { min-height: 182px; padding: 8px; border-width: 3px; border-radius: 12px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(-1.5deg); }
+.menu .lobby-folder .slot-card.unit-slot:active { transform: rotate(-1.5deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.menu .lobby-folder .unit-slot .slot-tag { left: auto; right: 10px; transform: rotate(4deg); }   /* (the sticker on the sheet's right: the folder's tab sits over its left) */
+.menu .lobby-folder .enemy-chip { position: relative; flex: 0 0 auto; width: 100%; min-width: 0; height: auto; min-height: 46px; gap: 0; padding: 0; align-items: stretch; border-width: 3px; border-radius: 10px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(1deg); overflow: visible; }   /* (overflow visible: the Change sticker sits on the slip's corner; the strip clips itself) */
+.menu .lobby-folder .enemy-chip:active { transform: rotate(1deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.menu .lobby-folder .enemy-chip .chip-strip { height: auto; min-height: 40px; align-self: stretch; border-radius: 7px 0 0 7px; overflow: hidden; }
+.menu .lobby-folder .enemy-chip .chip-strip .pane-row { height: auto; min-height: 40px; }
+.menu .lobby-folder .enemy-chip:has(.chip-stack) { min-height: 58px; }
+.menu .lobby-folder .enemy-chip:has(.chip-stack) .chip-strip { min-height: 52px; }
+.menu .lobby-folder .enemy-chip:has(.chip-stack) .chip-strip .pane-row { min-height: 0; }
+.menu .lobby-folder .enemy-chip .chip-text { align-self: center; padding: 3px 8px; }
+.menu .lobby-folder .enemy-chip .chip-text b:first-child { padding-right: 40px; }   /* (the first line stops short of the ENEMY sticker on the slip's top-right corner) */
+.menu .lobby-folder .enemy-chip .chip-text.chip-two b, .menu .lobby-folder .enemy-chip .chip-text.chip-trio b { font-family: var(--font-ui); font-weight: 800; font-size: 10.5px; line-height: 1.1; }
+.menu .lobby-folder .enemy-chip .chip-text.chip-two b:first-child { padding-right: 62px; }   /* (ENEMY TEAM is the wider sticker) */
+.menu .lobby-folder .chip-strip.chip-stack .slot-pane { flex-basis: 24px; }
+.menu .lobby-folder .enemy-chip .chip-change { position: absolute; right: -6px; top: -9px; bottom: auto; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; box-shadow: 2px 2px 0 var(--ink); transform: rotate(3deg); }   /* (Change / Pick as a sticker on the slip's top-right corner) */
+/* a screen with the room (desktop, portrait): the folder a little longer — the sheet taller and the two further apart
+   (after the rules above: same specificity, so the order decides) */
+@media (min-height: 440px) {
+  .menu .lobby-folder { gap: 16px; }
+  .menu .lobby-folder .slot-card.unit-slot { min-height: 208px; }
+  .menu .lobby-folder .unit-slot .slot-art:not(.slot-art-trio) { height: 118px; }
+  .menu .lobby-folder .rows-2 { height: 114px; }
+}
+/* the map memo: a white note with ruled lines below the picture, a red push pin through its top, a bit of tape on the
+   picture's corner; it hangs a few degrees off */
+.menu .map-slot.memo { grid-column: 3; grid-row: 1; padding: 12px 10px 8px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2.5deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 164px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
+.menu .map-slot.memo:active { transform: rotate(2.5deg) translate(2px, 2px); box-shadow: 3px 4px 0 rgba(27, 27, 47, 0.92); }
+/* the memo hangs from a strip of the yellow tape over its top edge, centred (b1105u; user: "remove the red pin, move the
+   yellow memo tape to the position") — the same strip on the picker's memo and the floating one (.memo-tape-top) */
+.memo-tape, .memo-tape-top { position: absolute; left: 50%; top: -9px; width: 84px; height: 20px; margin-left: -42px; background: rgba(255, 228, 92, 0.82) linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%); transform: rotate(-5deg); clip-path: polygon(2% 0, 98% 3%, 100% 22%, 97% 40%, 100% 60%, 98% 80%, 100% 100%, 1% 97%, 0 78%, 3% 58%, 0 38%, 2% 18%); box-shadow: 0 1px 2px rgba(27, 27, 47, 0.22); z-index: 3; pointer-events: none; }
+.menu .pip-map { display: inline-block; margin-right: 5px; padding: 0 4px; border-radius: 5px; background: var(--cyan); color: var(--ink); font-style: normal; font-size: 8px; font-weight: 800; letter-spacing: 0.06em; vertical-align: 1px; }
+.menu .memo .slot-art-map { border-radius: 0; border: 3px solid var(--ink); box-sizing: border-box; }
+.menu .memo .slot-name, .menu .memo .slot-sub { position: relative; }
+.menu .memo .slot-name { padding-right: 56px; }   /* (the Change word sits on the name's line, at the right) */
+.menu .memo .slot-sub { padding-right: 0; }
+.menu .memo .slot-change { bottom: auto; top: 157px; }
+/* the memo's die (b1105aa; user: "a random map dice at the bottom right of the map memo paper … picks randomly from both
+   scene map and concept map pool"): the All random button's die as a magenta sticker on the ruled lines; it rolls on a
+   tap (main.js rollLobbyMap) and the paper stays put while it is pressed; 5 px up: its top clears the size line's
+   single line (ends 188 px down) on the 230 px memo of the landscape phone */
+.menu .memo .memo-dice { position: absolute; right: 9px; bottom: 5px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
+.menu .memo .memo-dice .btn-icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
+.menu .memo .memo-dice .btn-icon .pip { fill: currentColor; stroke: none; }
+.menu .memo .memo-dice:active { transform: rotate(-6deg) translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.menu .map-slot.memo:has(.memo-dice:active) { transform: rotate(2.5deg); box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); }
+.menu .memo .memo-dice.rolled { animation: memo-dice-roll 0.5s ease-out; }
+@keyframes memo-dice-roll { 0% { transform: rotate(-6deg) scale(1); } 35% { transform: rotate(174deg) scale(1.18); } 70% { transform: rotate(354deg) scale(0.96); } 100% { transform: rotate(354deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .menu .memo .memo-dice.rolled { animation: none; } }
+/* (b1105o, user: the rows were too short and too close) five rows of 38 px with 10 px between: 230 px, the cards' height */
+.menu.lobby .opt-groups { flex-direction: column; flex-wrap: nowrap; gap: 10px; max-width: none; }
+.menu.lobby .opt-row { justify-content: flex-start; gap: 10px; }
+.menu.lobby .opt-label { width: 68px; box-sizing: border-box; text-align: center; flex: 0 0 auto; font-size: 10.5px; padding: 5px 5px; }   /* (68: PRACTICE, the longest label, whole) */
+.menu.lobby .mode-chip { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; gap: 10px; }
+.menu.lobby .mode-chip button { flex: 1 1 0; min-width: 0; padding: 8px 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the Practice row's two toggles light yellow, not magenta: each is on or off alone, not one of a set */
+.menu.lobby .practice-chip button.mode-active { background: var(--yellow); color: var(--ink); }
+.menu .slot-card { position: relative; width: auto; min-height: 216px; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: left; border-radius: 18px; border: 4px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 7px 7px 0 var(--ink); font-family: var(--font-ui); font-weight: 700; cursor: pointer; overflow: visible; }
+.menu .unit-slot { transform: rotate(-2deg); }
+.menu .map-slot { transform: rotate(2deg); }
+.menu .unit-slot:active { transform: rotate(-2deg) translate(2px, 2px); box-shadow: 4px 4px 0 var(--ink); }
+.menu .map-slot:active { transform: rotate(2deg) translate(2px, 2px); box-shadow: 4px 4px 0 var(--ink); }
+.menu .slot-tag { position: absolute; top: -14px; left: 12px; padding: 5px 10px; border-radius: 999px; border: 3px solid var(--ink); background: var(--lime); color: var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; transform: rotate(-4deg); box-shadow: 2px 2px 0 var(--ink); z-index: 1; white-space: nowrap; }
+.menu .unit-slot .slot-tag { left: 34px; }   /* (clear of the fullscreen button at the sheet's top-left) */
+.menu .slot-art { display: block; height: 108px; border-radius: 12px; overflow: hidden; background: var(--class-color, #E9F7B5); }
+.menu .slot-art img { width: 100%; height: 100%; object-fit: cover; display: block; }   /* (the square thumbnail; where its band sits: .face-box below) */
+/* the map's card shows its whole square picture (b1105q; user: "the full uncropped image"), letterboxed on ink */
+.menu .slot-art-map { height: 134px; background: var(--ink); }   /* (134: the name and the size line clear the Change word in a 220 px card) */
+.menu .slot-art-map img { object-fit: contain; object-position: center; }
+.menu .slot-art.slot-empty { display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 400; font-size: 56px; background: var(--yellow); border: 3px dashed var(--ink); box-sizing: border-box; }
+/* the roster art (b1105o, the user's sketch): slanted panels side by side, each its unit's class colour with the
+   thumbnail, the slashes between them the ink showing through 3 px gaps. b1105q: every panel is a flex item of its
+   row, overlapping its neighbour by 15 px and clipped to a parallelogram whose slanted edges run 18 px, so the face
+   is centred in the panel's own box (user: "the face should be in the middle"); a 2v2 Duel is one row split left /
+   right (panes-2), a Trio a row of three per slot (two rows in 2v2) */
+.menu .slot-art-trio { display: flex; flex-direction: column; gap: 3px; background: var(--ink); }
+.menu .slot-art-trio.rows-2 { height: 124px; }
+.menu .pane-row { display: flex; align-items: stretch; flex: 1 1 0; min-height: 0; }
+.menu .slot-pane { position: relative; flex: 1 1 0; min-width: 0; margin-left: -15px; display: flex; align-items: center; justify-content: center; background: var(--class-color, #E7E9EE); overflow: hidden; clip-path: polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%); }
+.menu .slot-pane:first-child { margin-left: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); }
+.menu .slot-pane:last-child { clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%); }
+.menu .slot-pane:only-child { clip-path: none; }
+.menu .slot-pane img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.menu .slot-pane-empty { background: var(--yellow); }
+.menu .slot-pane i { font-style: normal; font-family: var(--font-display); font-size: 34px; line-height: 1; color: var(--ink); }
+.menu .rows-2 .slot-pane i { font-size: 26px; }
+/* face placement (b1105r; user: the eyes higher on a single character, Fubuki's crop "a bit more to the right"): a
+   face-box is a size container; --fx / --fy (main.js UNIT_FACE — the face centre's x and the eye line's y as
+   fractions of the square thumbnail, 0.5 / 0.62 unless set) put that point at the box's horizontal centre and at
+   44% of its height. A tall box crops the sides and a wide box the top and bottom: on the other axis the inner max()
+   is positive and the min() makes it 0, so the picture always covers the box. (Browsers without container units
+   leave the picture centred.) */
+.menu .face-box { container-type: size; }
+.menu .face-box > img { object-position: min(0px, max(calc(100cqw - 100cqh), calc(50cqw - var(--fx, 0.5) * 100cqh))) min(0px, max(calc(100cqh - 100cqw), calc(44cqh - var(--fy, 0.62) * 100cqw))); }
+.menu .slot-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.menu .slot-name { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .slot-name-trio { font-size: 14px; letter-spacing: 0.01em; white-space: normal; }   /* (one roster's three names may take two lines — never a cut name) */
+.menu .slot-card-pair .slot-name-trio { white-space: nowrap; font-family: var(--font-ui); font-weight: 800; font-size: 11.5px; letter-spacing: 0; }   /* (a 2v2 card lists two rosters: the narrower face on one line each) */
+.menu .slot-name-trio em { display: inline-block; margin-right: 6px; vertical-align: 2px; font-style: normal; font-family: var(--font-ui); font-weight: 800; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }   /* (the slot's name before its units when a card holds two slots: YOU / ALLY, ENEMY / ENEMY 2) */
+.menu .slot-sub { font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1.2; padding-right: 52px; }   /* (the line never runs under the Change word at the card's bottom-right; it wraps instead) */
+.menu .slot-change { position: absolute; right: 12px; bottom: 12px; font-size: 12px; font-weight: 800; color: var(--magenta); }
+.menu .lobby-foot { grid-column: 2 / 4; grid-row: 2; width: auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: nowrap; margin-top: 0; }
+/* the enemy chip (b1105q; user: the enemy and the map swap places): the enemy side at the foot's left — a strip of
+   its units' faces (small slanted panels, one row per slot), the names with ENEMY / ENEMY 2 pips before them, Pick /
+   Change; the whole chip runs the enemy's pickers. It yields width first (ellipsis on the names) so the three buttons
+   on its right never wrap on a landscape phone. */
+.menu .enemy-chip { flex: 0 1 auto; min-width: 160px; width: auto; height: 50px; padding: 0 12px 0 0; display: flex; align-items: center; gap: 8px; border: 4px solid var(--ink); border-radius: 14px; background: var(--paper); color: var(--ink); box-shadow: 5px 5px 0 var(--ink); transform: rotate(-1deg); font-family: var(--font-ui); font-weight: 700; text-align: left; overflow: hidden; cursor: pointer; }
+.menu .enemy-chip:active { transform: rotate(-1deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.menu .chip-strip { flex: 0 0 auto; display: flex; align-items: stretch; height: 42px; background: var(--ink); border-right: 3px solid var(--ink); }
+.menu .chip-strip .chip-slot { display: flex; }
+.menu .chip-strip .chip-slot + .chip-slot { margin-left: 4px; }
+.menu .chip-strip .pane-row { flex: 0 0 auto; height: 42px; }
+.menu .chip-strip .slot-pane { flex: 0 0 30px; margin-left: -5px; clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.menu .chip-strip .slot-pane:first-child { margin-left: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.menu .chip-strip .slot-pane:last-child { clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%); }
+.menu .chip-strip .slot-pane:only-child { flex-basis: 42px; clip-path: none; }   /* (square: the face-box crops nothing) */
+.menu .chip-strip .slot-pane i { font-size: 20px; }
+/* 2v2 Trio: the two rosters' rows stacked, as the card's two rows and the chip's two name lines (six faces side by
+   side left the names no room) */
+.menu .chip-strip.chip-stack { flex-direction: column; }
+.menu .chip-strip.chip-stack .chip-slot { flex: 1 1 0; min-height: 0; }   /* (each row takes half the strip's height — the panels are size containers and have none of their own) */
+.menu .chip-strip.chip-stack .chip-slot + .chip-slot { margin-left: 0; margin-top: 3px; }
+.menu .chip-strip.chip-stack .pane-row { flex: 1 1 0; height: auto; min-height: 0; }
+.menu .chip-strip.chip-stack .slot-pane { flex-basis: 36px; clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); margin-left: -2px; }
+.menu .chip-strip.chip-stack .slot-pane:first-child { margin-left: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+.menu .chip-strip.chip-stack .slot-pane:last-child { clip-path: polygon(5px 0, 100% 0, 100% 100%, 0 100%); }
+.menu .chip-strip.chip-stack .slot-pane i { font-size: 14px; }
+.menu .chip-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.menu .chip-text b { font-family: var(--font-display); font-weight: 400; font-size: 15px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .chip-text.chip-two b { font-family: var(--font-ui); font-weight: 800; font-size: 11px; line-height: 1.2; }   /* (2v2: a line per slot, the narrower face) */
+.menu .chip-text b i { display: inline-block; margin-right: 5px; padding: 0 4px; border-radius: 5px; background: var(--magenta); color: #ffffff; font-style: normal; font-family: var(--font-ui); font-size: 8px; font-weight: 800; letter-spacing: 0.06em; vertical-align: 2px; }   /* (the ENEMY / ENEMY 2 pips) */
+.menu .chip-text small { font-size: 10px; font-weight: 700; color: var(--muted); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .chip-change { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: var(--magenta); }
+.menu .lobby-foot-btns { flex: 0 0 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 10px; margin-left: auto; }
+/* the dice button carries its words (b1105n): a lone "?" read as the guide. (b1105q: Random unit is gone — user — All random stays) */
+.menu .lobby-allrandom { width: auto; height: 42px; padding: 0 11px; display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; background: var(--magenta); color: #ffffff; transform: rotate(-2deg); }
+.menu .lobby-allrandom .btn-icon + .btn-icon { margin-left: -10px; }
+.menu .lobby-foot .btn-icon { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; }
+.menu .lobby-foot .btn-icon .pip { fill: currentColor; stroke: none; }
+/* ONLINE beside GO!! (b1105o): a white sticker of GO!!'s height, "vs player" small under the word */
+.menu .online-btn { width: auto; height: 50px; padding: 0 20px; border: 4px solid var(--ink); border-radius: 999px; background: var(--paper); color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-family: var(--font-display); font-weight: 400; font-size: 18px; line-height: 1; box-shadow: 5px 5px 0 var(--ink); transform: rotate(1.5deg); }
+.menu .online-btn small { font-family: var(--font-ui); font-weight: 800; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.menu .online-btn:active { transform: rotate(1.5deg) translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
+.menu .go-btn { width: 150px; height: 50px; padding: 0; border: 4px solid var(--ink); border-radius: 999px; background: var(--lime); color: var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1; box-shadow: 6px 6px 0 var(--ink); transform: rotate(-2deg); }
+.menu .go-btn:active { transform: rotate(-2deg) translate(3px, 3px); box-shadow: 3px 3px 0 var(--ink); }
+@media (max-width: 760px) {
+  .menu .lobby-grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; }
+  .menu .lobby-mid { grid-column: 1 / -1; grid-row: 1; }
+  .menu .lobby-folder { grid-column: 1; grid-row: 2; }
+  .menu .map-slot.memo { grid-column: 2; grid-row: 2; }
+  .menu .lobby-folder .enemy-chip { flex-wrap: wrap; }   /* (a narrow folder: the names go under the faces) */
+  .menu .lobby-foot { grid-column: 1 / -1; grid-row: 3; flex-wrap: wrap; justify-content: center; }
+  .menu .lobby-foot-btns { flex: 1 1 100%; width: 100%; flex-wrap: wrap; justify-content: center; margin-left: 0; }   /* (the row's own width, so the buttons wrap inside it instead of running off the sheet) */
+}
+
+/* ---- THE ONLINE CONNECT PAGE (b1105p): the page the Online button leads to while the socket opens — the status
+   chip, a word on the sleeping server, Server Boot-up (the debug panel), Leave ---- */
+.menu.online-connect { justify-content: center; gap: 10px; }
+.menu.online-connect .online-note { max-width: 360px; margin: 0 0 6px; font-size: 12px; font-weight: 700; line-height: 1.45; color: var(--muted); text-align: center; }
+.menu.online-connect .menu-divider { animation: connect-blink 1.6s ease-in-out infinite; }
+@keyframes connect-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .menu.online-connect .menu-divider { animation: none; } }
+
+/* ---- THE PICKERS' PAGE (b1105m): a back arrow and the title on one row (the unit picker's class filters beside
+   them), the preview card on the left, the grid on the right; the card is the confirm target, with a CONFIRM! button ---- */
+.menu.picker { gap: 8px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.menu .picker-top { width: 100%; max-width: 860px; box-sizing: border-box; padding-left: 40px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 40px; }   /* (padding-left: the back arrow clears the fullscreen button) */
+.menu .picker-top h2 { margin: 0; font-size: clamp(20px, 2.6vw, 26px); }
+.menu .picker-top .menu-divider { margin: 0; }
+.menu .back-btn { width: 40px; height: 40px; flex: 0 0 auto; padding: 0; border-radius: 50%; font-size: 18px; line-height: 1; }
+.menu .picker-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.menu .picker-filters button { width: auto; min-width: 0; padding: 7px 12px; font-size: 11px; box-shadow: none; transform: rotate(1deg); }
+.menu .picker-filters button:nth-child(even) { transform: rotate(-1.2deg); }
+.menu .picker-filters button.mode-active { background: var(--ink); color: #ffffff; }
+.menu .picker-body { display: flex; align-items: flex-start; gap: 16px; width: 100%; max-width: 860px; }
+.menu .picker-side { position: sticky; top: 0; flex: 0 0 236px; min-height: 120px; box-sizing: border-box; border-radius: 18px; border: 4px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--ink); transform: rotate(-2deg); display: flex; flex-direction: column; margin-top: 6px; }
+.menu .picker-side:not(.has-card) { border-style: dashed; background: rgba(255, 255, 255, 0.6); box-shadow: none; align-items: center; justify-content: center; min-height: 200px; }
+/* (b1105t; user: the folder and the memo "to all character cards and map cards") the unit picker's side is a FOLDER —
+   manila, its tab reading UNIT FILE, the card a white sheet inside with a paper clip — and the map picker's side a
+   MEMO: a white note with ruled lines under the picture, a red push pin through its top, a bit of tape (the b1105r
+   tape) on the picture's corner */
+.menu .picker-folder { margin-top: 28px; background: var(--manila); border-radius: 0 14px 14px 14px; }
+.menu .picker-folder::before { content: 'UNIT FILE'; position: absolute; left: 12px; top: -26px; width: 110px; height: 30px; box-sizing: border-box; padding-bottom: 4px; background: var(--manila); border: 4px solid var(--ink); border-bottom: 0; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink); z-index: 2; }
+.menu .picker-folder:not(.has-card) { background: rgba(246, 210, 122, 0.5); border-style: dashed; }
+.menu .picker-folder:not(.has-card)::before { border-style: dashed; border-bottom: 0; }
+.menu .picker-folder .picker-card { position: relative; margin: 8px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(0.8deg); }
+.paper-clip { position: absolute; right: 14px; top: -14px; width: 22px; height: 46px; transform: rotate(12deg); z-index: 2; pointer-events: none; }
+.menu .picker-memo { margin-top: 10px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 172px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
+.menu .picker-memo:not(.has-card) { background: rgba(255, 255, 255, 0.6); }
+.menu .picker-memo .picker-card { padding: 12px 10px 8px; position: relative; }
+.menu .picker-memo .map-face { height: 148px; border: 3px solid var(--ink); box-sizing: border-box; }   /* (148: a map with two tag lines and a note still ends with CONFIRM! inside a 390 px screen) */
+.menu .picker-memo.has-card::after { content: ''; position: absolute; left: 50%; top: -9px; width: 84px; height: 20px; margin-left: -42px; background: rgba(255, 228, 92, 0.82) linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%); transform: rotate(-5deg); clip-path: polygon(2% 0, 98% 3%, 100% 22%, 97% 40%, 100% 60%, 98% 80%, 100% 100%, 1% 97%, 0 78%, 3% 58%, 0 38%, 2% 18%); box-shadow: 0 1px 2px rgba(27, 27, 47, 0.22); z-index: 3; pointer-events: none; }   /* (the tape over the top edge, centred — b1105u, no pin) */
+.menu .picker-side-empty { font-size: 13px; font-weight: 800; color: var(--muted); text-align: center; padding: 16px; }
+.menu .picker-main { flex: 1 1 auto; width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; }   /* (width 100%: in the portrait column the grid would otherwise shrink to one tile) */
+.menu .picker-main .unit-grid { max-width: none; margin: 0; padding: 8px 4px 12px; }
+/* (the card is short on purpose: a landscape phone's 390 px holds the top row and the whole card, CONFIRM! included) */
+.menu .picker-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; cursor: pointer; }
+.menu .picker-card .profile-face { width: 100%; height: 100px; max-width: none; object-fit: cover; border-radius: 12px; background: var(--class-color, #E9F7B5); display: block; }   /* (the square thumbnail's eye band, as the lobby card's; its place: the face-box around it) */
+.menu .picker-card .profile-face-box { display: block; width: 100%; height: 100px; border-radius: 12px; overflow: hidden; background: var(--class-color, #E9F7B5); }
+.menu .picker-card .profile-face-box .profile-face { height: 100%; border-radius: 0; }
+.menu .picker-card .map-face { height: 164px; background: var(--ink); object-fit: contain; object-position: center; }   /* (b1105s; user: the whole square picture, as the lobby's map card — letterboxed on ink; portrait gives it a square box) */
+.menu .picker-card .random-face { width: 100%; max-width: none; height: 80px; font-size: 40px; }
+.menu .picker-card .profile-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
+.menu .picker-card .profile-name { font-family: var(--font-display); font-weight: 400; font-size: 22px; line-height: 1.05; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.menu .picker-card .profile-class { padding: 4px 9px; border-radius: 999px; background: var(--class-color, var(--yellow)); color: var(--class-ink, var(--ink)); font-size: 9px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.menu .picker-card .profile-sub { width: 100%; font-size: 11px; font-weight: 700; color: var(--muted); }
+.menu .picker-card .profile-tags { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.menu .picker-card .profile-tags span { padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--lime); font-size: 9px; font-weight: 800; letter-spacing: 0.04em; }
+.menu .picker-card .profile-tags span.tag-ink { background: var(--ink); color: #ffffff; }
+.menu .picker-card .profile-range { display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: var(--muted); }
+.menu .picker-card .profile-range b { display: flex; gap: 3px; }
+.menu .picker-card .profile-range i { width: 14px; height: 10px; border-radius: 4px; border: 2px solid var(--ink); box-sizing: border-box; background: var(--paper); }
+.menu .picker-card .profile-range i.on { background: var(--class-color, var(--magenta)); }
+.menu .picker-card .weapon-panel { width: auto; max-width: none; gap: 4px; }
+.menu .picker-card .weapon-panel > img { display: none; }   /* (the gun render stays on the floating card; here the name and the six stats are the panel — the spread picture inside the grid stays) */
+.menu .picker-card .weapon-panel .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 3px 4px; border-top: 0; padding-top: 0; }
+.menu .picker-card .unit-note { align-self: flex-start; max-width: 100%; }
+.menu .picker-confirm { width: 100%; height: 34px; padding: 0; margin-top: 2px; background: var(--lime); font-family: var(--font-display); font-weight: 400; font-size: 16px; }
+.menu .picker-card .profile-name { font-size: 20px; }
+.menu .unit-card[hidden] { display: none; }
+.menu .unit-card.selecting::after { content: 'PICK!'; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%) rotate(-6deg); padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; font-weight: 800; white-space: nowrap; }
+/* the floating card keeps its old shape: the head and the range rows are the side card's alone */
+.unit-profile-popup .profile-head, .unit-profile-popup .profile-range { display: none; }
+@media (max-width: 760px) {
+  .menu .picker-body { flex-direction: column; align-items: center; }
+  .menu .picker-side:not(.has-card) { display: none; }
+  /* a portrait phone: the card floats over the grid, as the old popup did; a tap outside it (the menu) dismisses it */
+  .menu .picker-side.has-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-2deg); width: min(92vw, 340px); overflow: visible; z-index: 300; margin: 0; }
+  .menu .picker-side.has-card .picker-card { max-height: 92vh; overflow-y: auto; box-sizing: border-box; }   /* (the card's inside scrolls when it must, so the memo tape can hang over the top edge as in landscape — b1105s, user: "the tape shouldn't be cropped on the top") */
+  .menu .picker-card .map-face { height: auto; aspect-ratio: 1 / 1; }
+}
+
+/* ---- the end-of-match page (b1105ac; the design canvas's round 6, End_F / End_F_2v2 — main.js showEndPage): the
+   verdict as the sticker title; a roster panel each side — the HUD chip's ink and white rim as a card, TEAM 1 (the
+   viewer's side) / TEAM 2 tags, the WINNER sticker on the side that won — with a row per slot: the slot's word and its
+   roster's units in the HUD's round frames with their names, a fallen unit greyed with a slash, the one standing with
+   a dot; the map's memo in the middle (the lobby's — the tape, the ruled lines, the picture and the name alone);
+   Select Unit (Leave online) and REMATCH below. The sheet centres it; portrait wraps the three and scrolls. ---- */
+.menu.end-page { gap: 10px; }
+.menu .end-title { margin: 0 0 2px; }
+.menu .end-grid { display: flex; align-items: flex-start; justify-content: center; gap: 22px; flex-wrap: wrap; max-width: 880px; }
+.menu .end-team { position: relative; width: 280px; box-sizing: border-box; margin-top: 12px; padding: 16px 16px 12px; border-radius: 18px; background: rgba(27, 27, 47, 0.92); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; display: flex; flex-direction: column; gap: 10px; }
+.menu .end-team.end-you { --c: var(--lime); transform: rotate(-1.5deg); }
+.menu .end-team.end-foe { --c: var(--magenta); transform: rotate(1.5deg); }
+.menu .end-tag, .menu .end-verdict { position: absolute; top: -14px; padding: 4px 10px; border-radius: 999px; border: 3px solid var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
+.menu .end-tag { left: 14px; background: var(--c); color: var(--ink); transform: rotate(-4deg); }
+.menu .end-foe .end-tag { left: auto; right: 14px; color: #ffffff; transform: rotate(4deg); }
+.menu .end-verdict { right: 14px; background: var(--yellow); color: var(--ink); transform: rotate(4deg); }
+.menu .end-foe .end-verdict { right: auto; left: 14px; transform: rotate(-4deg); }
+.menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
+.menu .end-you .end-row-second { --rc: var(--cyan); }
+.menu .end-foe .end-row-second { --rc: var(--yellow); }
+.menu .end-w { flex: 0 0 48px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); }
+.menu .end-units { display: flex; gap: 12px; }
+.menu .end-u { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }
+.menu .end-fw { position: relative; display: block; width: 46px; height: 46px; }
+.menu .end-f { position: relative; display: block; width: 46px; height: 46px; border-radius: 50%; overflow: hidden; border: 3px solid var(--rc); box-sizing: border-box; background: #2a2a44; }
+.menu .end-f img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (main.js chipFaceImg's inline transform centres the face, as in the HUD's frames) */
+.menu .end-u b { font-family: var(--font-display); font-weight: 400; font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; }
+.menu .end-u.out .end-f { border-color: rgba(255, 255, 255, 0.35); }
+.menu .end-u.out .end-f img { filter: grayscale(1); opacity: 0.45; }
+.menu .end-u.out b { color: rgba(255, 255, 255, 0.5); }
+.menu .end-u.out .end-f::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 46%, rgba(255, 255, 255, 0.55) 47%, rgba(255, 255, 255, 0.55) 53%, transparent 54%); }
+.menu .end-std { position: absolute; right: -4px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; background: var(--rc); border: 2px solid var(--ink); box-sizing: border-box; }   /* (outside the clipped frame, on its wrapper) */
+.menu .end-memo { position: relative; width: 200px; height: 196px; box-sizing: border-box; margin-top: 10px; padding: 12px 10px 8px; color: var(--ink); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 150px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); border: 3px solid var(--ink); border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2deg); }
+.menu .end-photo { display: block; height: 122px; background: var(--ink); border: 3px solid var(--ink); box-sizing: border-box; }
+.menu .end-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.menu .end-map { display: block; margin-top: 8px; font-family: var(--font-display); font-weight: 400; font-size: 22px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .end-foot { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+.menu .end-select { width: auto; height: 50px; padding: 0 24px; margin: 0; border-width: 4px; font-size: 14px; box-shadow: 5px 5px 0 var(--ink); transform: rotate(1.5deg); }
+.menu .end-select:active { transform: rotate(1.5deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.menu .end-go { width: 170px; font-size: 24px; }

@@ -831,7 +831,7 @@ const state = {
   enemyUnitKey: 'unit2',
   allyUnitKey: 'unit1',         // 2v2: your bot ally's unit
   enemy2UnitKey: 'unit2',       // 2v2: second enemy bot's unit
-  mapKey: 'arena1',
+  mapKey: 'town',               // (the lobby's map card at a site open — Town, user 2026-11-05; Plain Field until b1105n)
   player: null,
   enemy: null,
   ally: null,                   // 2v2: your bot ally mech (null in 1v1)
@@ -2662,6 +2662,14 @@ function teardownHud() {
   input.dirNeutralSince = 0;
 }
 
+// The thumb buttons' arrows (b1105m): one stroke path each, drawn in the button's own colour (style.css .btn-icon).
+const HUD_BTN_ICON = {
+  jump: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+  step: '<path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M4 6v12"/>',
+  boost: '<path d="M3 12h7"/><path d="M5 7h5"/><path d="M5 17h5"/><path d="M13 5l8 7-8 7"/>',
+  target: '<circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'
+};
+const hudBtnIcon = (k) => `<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">${HUD_BTN_ICON[k] || ''}</svg>`;
 function setupHUD() {
   teardownHud();
   // Window-level joystick listeners below register against this controller's
@@ -2670,19 +2678,18 @@ function setupHUD() {
   state.hudAbort = hudAbort;
   const hud = document.createElement('div');
   hud.className = 'touch-hud';
-  const teamBarsHtml = state.mode === '2v2' ? `
-    <div class="ally-health"><div id="ally-health-fill"></div></div>
-    <div class="enemy2-health"><div id="enemy2-health-fill"></div></div>` : '';
-  // In-match, the fullscreen button docks left of the PAUSE pill so it never
-  // covers the Trio weapon rows; menus restore its top-left home.
+  // THE HP CHIPS (b1105w, the design canvas's round 5): one chip per slot — yours top-left, the enemy's top-right, the
+  // ally's and the second enemy's smaller under them in 2v2 (anchored by server slot online, below). The fills keep
+  // their ids: hudRefs and the online anchoring read them.
+  const teamChipsHtml = state.mode === '2v2' ? `${hpChipHTML('ally-health', 'ally-health-fill')}${hpChipHTML('enemy2-health', 'enemy2-health-fill')}` : '';
+  // In-match, the fullscreen button docks right of the left chip (a ResizeObserver below keeps --left-chip-right at
+  // its right edge); menus restore its top-left home.
   document.getElementById('fullscreen-btn')?.classList.add('in-match');
   hud.innerHTML = `
-    <div class="health"><div id="health-fill"></div></div>
-    <div class="enemy-health"><div id="enemy-health-fill"></div></div>
-    <div class="trio-count trio-count-own${state.mode === '2v2' ? ' trio-count-2v2' : ''}" id="trio-own"></div>
-    <div class="trio-count trio-count-enemy${state.mode === '2v2' ? ' trio-count-2v2' : ''}" id="trio-enemy"></div>
-    ${teamBarsHtml}
-    <div class="boost"><div id="boost-fill"></div></div>
+    ${hpChipHTML('health', 'health-fill')}
+    ${hpChipHTML('enemy-health', 'enemy-health-fill')}
+    ${teamChipsHtml}
+    <div class="boost"><span class="boost-word">BOOST</span><span class="boost-track"><span id="boost-fill"></span><span class="boost-knob"></span></span></div>
     <div class="joy" id="joy"><div class="stick"></div></div>
     <div class="buttons" id="buttons"></div>
     <div class="speed-lines" id="speed-lines"></div>
@@ -2691,11 +2698,10 @@ function setupHUD() {
   `;
   app.appendChild(hud);
 
-  // ONLINE ABSOLUTE HUD (owner 2026-08-22): corner bars anchor by SERVER
-  // SLOT — left column team A (p1 top / p3 bottom), right column team B
-  // (p2 top / p4 bottom) — identical for every viewer, each fill tinted its
-  // slot color. The viewer's own bar wears a thin white rim, since position
-  // no longer says "this one is you". Offline keeps the role layout.
+  // ONLINE ABSOLUTE HUD (owner 2026-08-22): the chips anchor by SERVER SLOT — left column team A (p1 top / p3
+  // bottom), right column team B (p2 top / p4 bottom) — identical for every viewer, each chip in its slot colour (the
+  // ring, the word, the bar). The side word says which one is you (b1105w; a thin white rim did until then).
+  // Offline keeps the role layout.
   if (state.online?.slotMap) {
     const sm = state.online.slotMap;
     const ANCHOR_OF = { p1: 'health', p3: 'ally-health', p2: 'enemy-health', p4: 'enemy2-health' };
@@ -2708,12 +2714,26 @@ function setupHUD() {
     for (const [role, sid, fillSel] of roleBars) {
       const fill = hud.querySelector(fillSel);
       if (!fill || !sid || !ANCHOR_OF[sid]) continue;
-      fill.parentElement.className = ANCHOR_OF[sid];
-      fill.style.background = SLOT_HUD_COLORS[sid];
-      if (role === 'player' && ONLINE_SLOT_IDS.includes(state.online.myPlayerId)) {
-        fill.parentElement.classList.add('self-bar');
-      }
+      const chip = fill.closest('.hp-chip');
+      chip.classList.remove('health', 'enemy-health', 'ally-health', 'enemy2-health');
+      chip.classList.add(ANCHOR_OF[sid]);
+      chip.style.setProperty('--c', SLOT_HUD_COLORS[sid]);
+      if (role === 'player' && ONLINE_SLOT_IDS.includes(state.online.myPlayerId)) chip.classList.add('self-bar');
     }
+  }
+  // The fullscreen button docks right of the LEFT chip, however wide that chip is (the unit's name, its HP-scaled
+  // bar, the Trio faces): --left-chip-right follows the chip's right edge.
+  const leftChip = hud.querySelector('.hp-chip.health');
+  if (leftChip && typeof ResizeObserver !== 'undefined') {
+    const dock = () => {
+      const r = leftChip.getBoundingClientRect();
+      const base = app.getBoundingClientRect().left;
+      document.documentElement.style.setProperty('--left-chip-right', `${Math.round(r.right - base) + 10}px`);
+    };
+    const ro = new ResizeObserver(dock);
+    ro.observe(leftChip);
+    hudAbort.signal.addEventListener('abort', () => ro.disconnect());
+    dock();
   }
 
   ['boost', 'shoot', 'step', 'jump'].forEach((action) => {
@@ -2731,7 +2751,10 @@ function setupHUD() {
         + '</svg>'
         + '<span class="ammo-count"></span>';
     } else {
-      b.textContent = action === 'boost' ? 'SPRINT' : (action === 'step' ? 'DODGE' : action.toUpperCase());
+      // (b1105m, the design canvas's HUD — user: "i especially love those buttons and the simple arrows inside"): an
+      // arrow over the word — JUMP up, DODGE a sidestep from a wall, SPRINT a dash with its speed lines
+      const label = action === 'boost' ? 'SPRINT' : (action === 'step' ? 'DODGE' : action.toUpperCase());
+      b.innerHTML = `${hudBtnIcon(action)}<span class="btn-label">${label}</span>`;
     }
     hud.querySelector('#buttons').appendChild(b);
   });
@@ -2742,7 +2765,7 @@ function setupHUD() {
     const tb = document.createElement('button');
     tb.dataset.k = 'target';
     tb.className = 'btn-target';
-    tb.textContent = 'TARGET';
+    tb.innerHTML = `${hudBtnIcon('target')}<span class="btn-label">TARGET</span>`;
     hud.querySelector('#buttons').appendChild(tb);
     tb.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -2836,11 +2859,10 @@ function setupHUD() {
     allyHp: hud.querySelector('#ally-health-fill'),       // 2v2 only, null in 1v1
     enemy2Hp: hud.querySelector('#enemy2-health-fill'),   // 2v2 only, null in 1v1
     boost: hud.querySelector('#boost-fill'),
+    boostTrack: hud.querySelector('.boost-track'),    // the BOOST sticker's track (b1105w): --bw, the fill's and the knob's fraction
     shootBtn: hud.querySelector('.btn-shoot'),
     ammoCount: hud.querySelector('.btn-shoot .ammo-count'),
-    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle'),
-    trioOwn: hud.querySelector('#trio-own'),        // remaining-units weapon icons (Trio + Duel)
-    trioEnemy: hud.querySelector('#trio-enemy')
+    reloadRing: hud.querySelector('.btn-shoot .reload-ring circle')
   };
 }
 
@@ -6198,31 +6220,50 @@ function updateCamera() {
   camera.updateProjectionMatrix();
 }
 
-// Rebuild a Trio weapon-icon block only when its unit lists actually changed —
-// the per-frame path is a single string compare against the cached signature.
-// `lines` is one key-array per team member (own side: player then ally;
-// enemy side: enemy then enemy2) — each renders as its own row so teammates'
-// weapons never share a line. `markInPlay` (Trio only) prefixes each line's
-// FIRST icon — the member's currently fielded weapon — with a small glowing
-// golden bar; Duel skips it (a one-icon line needs no marker).
-// `slots` (offline) names the camera slot each line belongs to — the
-// spectator glow (updateHud) finds the WATCHED unit's row by it.
-function renderTrioIconRow(el, lines, sigField, markInPlay = false, slots = null) {
-  const sig = (lines ? lines.map((l) => l.join('|')).join('/') : '') + (markInPlay ? '!' : '') + (slots ? slots.join(',') : '');
-  if (hudRefs[sigField] === sig) return;
-  hudRefs[sigField] = sig;
-  el.innerHTML = lines
-    ? lines
-      .map((l, i) => ({ l, slot: slots?.[i] }))
-      .filter(({ l }) => l.length)
-      .map(({ l, slot }) => `<div class="trio-line"${slot ? ` data-slot="${slot}"` : ''}>${markInPlay ? '<span class="trio-inplay-bar"></span>' : ''}${l.map((k) => {
-        const u = UNIT_DATA[k];
-        return u
-          ? `<img class="trio-weapon-icon" src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="${u.char ?? k}" draggable="false" />`
-          : '';
-      }).join('')}</div>`)
-      .join('')
-    : '';
+// THE HP CHIPS (b1105w, the design canvas's round 5; the corner bars and the Trio weapon-icon rows until then). A
+// chip: the portrait of the unit on the field in a ring of the side's colour, its name, the side word, the bar with
+// its round end, and — in Trio — the roster's other units at the far end as small faces, a fallen one greyed (user:
+// "fit in the remaining unit hint for trio mode"). hpChipHTML builds the shell once (setupHUD); renderHpChip fills
+// it, rebuilding the DOM only when its signature (the unit, the word, the reserve) changes — the bar moves by the
+// --w custom property every frame (updateHud).
+const HUD_SIDE_WORD = { player: 'YOU', ally: 'ALLY', enemy: 'ENEMY', enemy2: 'ENEMY 2' };
+function hpChipHTML(anchor, fillId) {
+  return `<div class="hp-chip ${anchor}"><span class="chip-face"></span><span class="chip-col"><span class="chip-nm"><b class="chip-name"></b><i class="chip-side"></i></span><span class="chip-bar"><span id="${fillId}" class="chip-fill"></span><span class="chip-knob"></span></span></span><span class="chip-res"></span></div>`;
+}
+// a unit's face for a round frame (b1105z): the square thumbnail fills the frame, and an inline transform — plain
+// numbers, no CSS maths — moves the unit's face point (UNIT_FACE) to the frame's centre and scales by 1.3; the
+// translate is clamped to ±15% (what a 1.3 scale leaves to shift) so the picture always covers the frame
+const FACE_SCALE = 1.3;
+function faceTransform(u) {
+  const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62];
+  const lim = (FACE_SCALE - 1) * 50;
+  const tx = Math.max(-lim, Math.min(lim, (0.5 - x) * FACE_SCALE * 100));
+  const ty = Math.max(-lim, Math.min(lim, (0.5 - y) * FACE_SCALE * 100));
+  return `transform:translate(${tx.toFixed(1)}%,${ty.toFixed(1)}%) scale(${FACE_SCALE})`;
+}
+function chipFaceImg(u) {
+  if (!u) return '';
+  return `<img src="${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png" alt="${u.char || ''}" draggable="false" style="${faceTransform(u)}">`;
+}
+function renderHpChip(chip, m, role, noSideWords) {
+  const u = m.unit;
+  // the roster: offline the lobby's (keys) with the slot's cursor; online the snapshot-mirrored fields
+  const roster = state.online ? (m.state.roster || null) : (state.trioRosters?.[role] || null);
+  const idx = state.online ? (m.state.rosterIdx ?? 0) : (state.rosterIdx?.[role] ?? 0);
+  // the reserve's order (b1105ac, user: "the next-up unit should be placed at the uncovered position"): the faces
+  // overlap and the LAST one drawn lies on top at the chip's outer end — so the fallen come first (inner, under), then
+  // the upcoming from the farthest to the NEXT-UP, which ends outermost and whole
+  const out = roster ? roster.filter((_, i) => i < idx).map((k) => `${k}:out`) : [];
+  const up = roster ? roster.filter((_, i) => i > idx).reverse().map((k) => `${k}:`) : [];
+  const res = [...out, ...up];
+  const side = noSideWords ? '' : (HUD_SIDE_WORD[role] || '');
+  const sig = `${u.spriteKey}|${side}|${res.join(',')}`;
+  if (chip.dataset.sig === sig) return;
+  chip.dataset.sig = sig;
+  chip.querySelector('.chip-face').innerHTML = chipFaceImg(u);
+  chip.querySelector('.chip-name').textContent = u.char || u.name;
+  chip.querySelector('.chip-side').textContent = side;
+  chip.querySelector('.chip-res').innerHTML = res.map((r) => { const [k, cls] = r.split(':'); return `<span class="chip-res-face${cls ? ` ${cls}` : ''}">${chipFaceImg(UNIT_DATA[k])}</span>`; }).join('');
 }
 
 function updateHud(now = performance.now()) {
@@ -6233,96 +6274,50 @@ function updateHud(now = performance.now()) {
   // Date.now(), which would be off by the client↔server wall-clock skew.
   // HUD bars normalize against each fighter's own per-unit caps so a
   // higher-HP / higher-boost character's bar still reads full at full state.
-  const playerHpMax = mechMaxHp(state.player);
-  const enemyHpMax = mechMaxHp(state.enemy);
-  // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at
-  // 1 HP — the HP bars (own, enemy, the 2v2 team bars) hide; the boost
-  // gauge and the remaining-units icons stay.
+  // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide (style.css
+  // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
-  if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' corner bars hide)
+  if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
   // (the ladder, ladder.js; user 2026-11-05: Target / Fire / Dodge / Sprint hidden while the player climbs — style.css .hud-climb; a spectator keeps them)
   if (state.hud) state.hud.classList.toggle('hud-climb', state.player?.state?.ladder != null && !state.spectatorActive && !playerIsBotDriven() && !(state.online && state.online.myPlayerId === 'spectator'));
-  // (a unit's corner bar is as long as its HP: the track's CSS width is 180px times --hp-scale; the fullscreen button
-  // docked right of the LEFT bar follows whichever unit's bar that is — the player's offline, slot p1's online)
-  const fills = [[hudRefs.hp, state.player], [hudRefs.enemyHp, state.enemy], [hudRefs.allyHp, state.ally], [hudRefs.enemy2Hp, state.enemy2]];
-  for (const [fill, m] of fills) { if (!fill || !m) continue; const s = String(hpBarScale(m)); if (fill.parentElement.style.getPropertyValue('--hp-scale') !== s) fill.parentElement.style.setProperty('--hp-scale', s); if (fill.parentElement.classList.contains('health') && document.documentElement.style.getPropertyValue('--left-hp-scale') !== s) document.documentElement.style.setProperty('--left-hp-scale', s); }
-  hudRefs.hp.style.width = `${(state.player.state.hp / playerHpMax) * 100}%`;
-  hudRefs.enemyHp.style.width = `${(state.enemy.state.hp / enemyHpMax) * 100}%`;
-  if (hudRefs.allyHp && state.ally) {
-    const allyHpMax = mechMaxHp(state.ally);
-    hudRefs.allyHp.style.width = `${(state.ally.state.hp / allyHpMax) * 100}%`;
+  // THE HP CHIPS (b1105w): each slot's chip — the unit on the field, the side word, the bar (as long as the unit's HP:
+  // --hp-scale), the Trio reserve (renderHpChip rebuilds the DOM only when those change; the bar and the classes move
+  // every frame).
+  //   - no side words while the viewer is a spectator: the Practice toggle (a bot drives the player's slot) or an
+  //     online spectator — nobody there is "you" (user: "if it's spectator mode, remove you/ally/enemy/enemy 2 text;
+  //     if the spectator mode is triggered by player dying, then these text remains");
+  //   - the WATCHED chip — the camera's unit while spectating, by the toggle or because the player is out — wears
+  //     the yellow ring and a WATCHING tag (style.css .spec-watched); a slot out for good dims with a DOWN tag.
+  const focus = cameraFocusMech() ?? state.player;
+  const onlineSpectator = !!(state.online && state.online.myPlayerId === 'spectator');
+  const noSideWords = state.spectatorActive || onlineSpectator;
+  const playerOut = !!state.player && state.player.state.hp <= 0;
+  // (b1105ab, user: "no need WATCHING and glowing HP bar effect in command mode") Command mode's camera is the
+  // tabletop — no unit is the watched one: no ring, no tag, whatever drives the player's slot
+  const watching = !dioramaActive() && (state.spectatorActive || onlineSpectator || (playerOut && focus !== state.player));
+  for (const [role, fill] of [['player', hudRefs.hp], ['enemy', hudRefs.enemyHp], ['ally', hudRefs.allyHp], ['enemy2', hudRefs.enemy2Hp]]) {
+    const m = state[role];
+    const chip = fill?.closest('.hp-chip');
+    if (!chip || !m) continue;
+    renderHpChip(chip, m, role, noSideWords);
+    const sc = String(hpBarScale(m));
+    if (chip.style.getPropertyValue('--hp-scale') !== sc) chip.style.setProperty('--hp-scale', sc);
+    const w = `${Math.max(0, Math.min(100, (m.state.hp / mechMaxHp(m)) * 100)).toFixed(1)}%`;
+    if (chip.style.getPropertyValue('--w') !== w) chip.style.setProperty('--w', w);
+    chip.classList.toggle('spec-watched', watching && m === focus);
+    const remaining = state.online ? mechSlotRemaining(m) : trioSlotRemaining(role);
+    chip.classList.toggle('down', m.state.hp <= 0 && remaining === 0);
   }
-  if (hudRefs.enemy2Hp && state.enemy2) {
-    const enemy2HpMax = mechMaxHp(state.enemy2);
-    hudRefs.enemy2Hp.style.width = `${(state.enemy2.state.hp / enemy2HpMax) * 100}%`;
-  }
-  // Spectator (ported from the demo line 2026-08-06): a white glow rim on
-  // the corner bar of the WATCHED unit, so the spectator can tell which
-  // roster row they're riding. Follows TARGET cycling per frame;
-  // classList.toggle is a no-op when unchanged.
-  if (state.spectatorActive) {
-    const barFills = { player: hudRefs.hp, enemy: hudRefs.enemyHp, ally: hudRefs.allyHp, enemy2: hudRefs.enemy2Hp };
-    for (const [slot, fill] of Object.entries(barFills)) {
-      fill?.parentElement?.classList.toggle('spec-watched', slot === state.spectateSlot);
-    }
-  }
-  // The boost bar and ammo readout below follow the unit the CAMERA frames:
-  // the player while alive, the WATCHED unit in Spectator mode (cycling with
-  // TARGET), and the ally once the player is out for good (owner 2026-09-29:
-  // that last case used to keep reading the dead player's frozen gauge and
-  // magazine while the camera sat on the ally).
-  const shown = cameraFocusMech() ?? state.player;
+  // The boost sticker and the ammo readout below follow the unit the CAMERA frames: the player while alive, the
+  // WATCHED unit in Spectator mode (cycling with TARGET), and the ally once the player is out for good (owner
+  // 2026-09-29: that last case used to keep reading the dead player's frozen gauge and magazine while the camera
+  // sat on the ally).
+  const shown = focus;
   const shownBoostMax = (shown.unit.boostCap ?? BOOST_CAP) * (shown.state.boostScale ?? boostScaleOf(state.mapKey));   // (the unit's boost scale, the map's: District and Compound 5)
-  // (the fill is inset 2px in its track — see .boost in style.css; overheating no longer tints it orange, owner 2026-10-10)
-  hudRefs.boost.style.width = `calc((100% - 4px) * ${Math.max(0, Math.min(1, shown.state.boost / shownBoostMax))})`;
-  // Remaining-units row under each side's HP bar — one small weapon render
-  // per unit left (current fielded unit first), one line per team member.
-  // Trio shows the whole living roster; Duel shows the single unit while it
-  // lives. Offline reads the local rosters/keys; online reads the
-  // snapshot-mirrored roster fields (or the mech's built unitKey in Duel).
-  // The Shooting Range keeps its HUD icon-free.
-  // Perf: the row's DOM is rebuilt ONLY when the unit list changes (deaths/
-  // respawns — a handful per match); every other frame is one cached string
-  // compare, so this costs no more than the old text dots did.
-  if (hudRefs.trioOwn && hudRefs.trioEnemy) {
-    let own = null;
-    let foe = null;
-    let trioMode = false;
-    let ownSlots = null;
-    let foeSlots = null;
-    if (!state.online && state.mapKey !== 'range') {
-      own = [trioRemainingUnitKeys('player')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('ally')] : []);
-      foe = [trioRemainingUnitKeys('enemy')].concat(state.mode === '2v2' ? [trioRemainingUnitKeys('enemy2')] : []);
-      ownSlots = ['player', 'ally'];
-      foeSlots = ['enemy', 'enemy2'];
-      trioMode = !!(state.mainMode === 'trio' && state.trioRosters);
-    } else if (state.online) {
-      // ABSOLUTE columns (owner 2026-08-22): left = team A in slot order
-      // (p1, p3), right = team B (p2, p4) — matching the re-anchored bars,
-      // identical for every viewer.
-      const sm = state.online.slotMap;
-      const mechOfSlot = (id) => !sm ? null
-        : id === sm.cameraId ? state.player
-          : id === sm.allyId ? state.ally
-            : id === sm.enemyId ? state.enemy
-              : id === sm.enemy2Id ? state.enemy2 : null;
-      own = [mechRemainingUnitKeys(mechOfSlot('p1'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p3'))] : []);
-      foe = [mechRemainingUnitKeys(mechOfSlot('p2'))].concat(state.mode === '2v2' ? [mechRemainingUnitKeys(mechOfSlot('p4'))] : []);
-      trioMode = !!state.player?.state.roster;
-    }
-    renderTrioIconRow(hudRefs.trioOwn, own, 'trioOwnSig', trioMode, ownSlots);
-    renderTrioIconRow(hudRefs.trioEnemy, foe, 'trioEnemySig', trioMode, foeSlots);
-    // SPECTATOR (owner 2026-10-07, "make the weapon icon glow for the
-    // spectating character"): the WATCHED unit's weapon-icon row glows white
-    // — in Sudden Death the HP bars (and their rim) are hidden, so this is
-    // the only marker of the slot being ridden. Follows TARGET cycling per
-    // frame; a row rebuild drops the class and the next frame puts it back.
-    if (state.spectatorActive) {
-      for (const line of [...hudRefs.trioOwn.querySelectorAll('.trio-line'), ...hudRefs.trioEnemy.querySelectorAll('.trio-line')]) {
-        line.classList.toggle('spec-watched-icon', line.dataset.slot === state.spectateSlot);
-      }
-    }
-  }
+  // (b1105w: the yellow BOOST sticker — the magenta fill and the knob follow --bw on the track. Overheating does not
+  // tint it, owner 2026-10-10.)
+  const bw = Math.max(0, Math.min(1, shown.state.boost / shownBoostMax)).toFixed(3);
+  if (hudRefs.boostTrack.style.getPropertyValue('--bw') !== bw) hudRefs.boostTrack.style.setProperty('--bw', bw);
   if (state.speedLines) state.speedLines.style.opacity = '0';
 
   const u = shown.unit;
@@ -6812,7 +6807,30 @@ function startOnlineMatch() {
 
   state.phase = 'online';
   state.running = false;
-  showOnlineOverlay('Connecting…');
+  showOnlineConnectPage();
+}
+
+// The online page while connecting (b1105p; user: the Online button should lead to the page that deals with the
+// server): the "Connecting…" overlay it replaces had no way out and no way to wake a sleeping server — Server Boot-up
+// sat on the main menu until b1105o. A status line, Server Boot-up (the debug panel, as before), Leave; the online
+// lobby's own pages take over the moment the connection is up (renderOnlineUi).
+function showOnlineConnectPage() {
+  const menu = document.createElement('div');
+  menu.className = 'menu online-connect';
+  menu.innerHTML = `<h2>Online</h2>
+    <div class="menu-divider">Connecting to the server…</div>
+    <p class="online-note">A sleeping server takes a minute to wake. If this page stays, boot it below, then leave and come back.</p>
+    <button data-online-debug class="online-debug-btn">Server Boot-up</button>
+    <button data-leave class="online-leave-btn">Leave</button>`;
+  app.appendChild(menu);
+  menu.querySelector('button[data-online-debug]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    import('./online/debugPanel.js').then(({ showOnlineDebugPanel }) => { showOnlineDebugPanel(app); });
+  });
+  menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    showSelectMenu();   // (cleanupMatch closes the socket)
+  });
 }
 
 // (an empty frame — sent and predicted during a Sudden Death start hold,
@@ -7068,7 +7086,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1024w';
+const CLIENT_BUILD_TAG = 'b1105ac 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7523,27 +7541,27 @@ function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
   // winnerId is either a slot id ('p1'/'p2' for 1v1) OR a team letter
   // ('A'/'B' for 2v2). Detect by string content.
   const isTeamWinner = winnerId === 'A' || winnerId === 'B';
-  const myTeam = ONLINE_SLOT_IDS.includes(myPlayerId) ? teamOfSlot(myPlayerId) : null;
-  const win = isTeamWinner ? (winnerId === myTeam) : (winnerId === myPlayerId);
+  const mySlot = ONLINE_SLOT_IDS.includes(myPlayerId);
   const tie = winnerId == null;
+  const winnerTeam = tie ? null : (isTeamWinner ? winnerId : teamOfSlot(winnerId));
+  // (b1105ac) the end page's left panel is the viewer's side — the player's team, or the camera slot's team for a
+  // spectator — and "TEAM 1" names that panel, so a spectator's verdict reads by the panels, not the server's letters
+  const leftTeam = mySlot ? teamOfSlot(myPlayerId) : teamOfSlot(state.online?.slotMap?.cameraId || 'p1');
+  const win = !tie && winnerTeam === leftTeam;
   const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
   const oppReady = rematchRequested?.[oppId] === true;
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `
-    <h2>${tie ? 'MATCH ENDED' : (win ? 'YOU WIN' : 'YOU LOSE')}</h2>
-    ${oppReady ? '<div class="menu-divider">Opponent wants a rematch</div>' : ''}
-    <button id="online-rematch">Rematch</button>
-    <button id="online-leave" class="online-leave-btn">Leave</button>
-  `;
-  app.appendChild(menu);
-  menu.querySelector('#online-rematch').addEventListener('pointerdown', (e) => {
+  const title = tie ? 'MATCH ENDED' : (mySlot ? (win ? 'YOU WIN' : 'YOU LOSE') : (win ? 'TEAM 1 WINS' : 'TEAM 2 WINS'));
+  const menu = showEndPage({
+    title, note: oppReady ? 'Opponent wants a rematch' : '', winner: tie ? null : (win ? 'you' : 'foe'), spectator: !mySlot,
+    buttons: '<button data-leave class="online-leave-btn end-select">Leave</button><button data-rematch class="go-btn end-go">REMATCH</button>'
+  });
+  menu.querySelector('[data-rematch]').addEventListener('click', (e) => {
     e.preventDefault();
     state.online.conn.requestRematch();
     // Server's lobby:config will echo back our request; refreshEndMenuIfStale
     // sees rematchRequested[me]=true and switches to the overlay.
   });
-  menu.querySelector('#online-leave').addEventListener('pointerdown', (e) => {
+  menu.querySelector('[data-leave]').addEventListener('click', (e) => {
     e.preventDefault();
     showSelectMenu();
   });
@@ -7791,7 +7809,7 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
 
   switch (phase) {
     case 'connecting':
-      showOnlineOverlay('Connecting…');
+      showOnlineConnectPage();   // (b1105p: the page with Server Boot-up and Leave, not the bare overlay)
       break;
     case 'pick-mode':
       showOnlineModePicker(onl);
@@ -8959,34 +8977,69 @@ function showSelectMenu() {
   teardownHud();
   renderer.domElement.style.pointerEvents = 'none';
 
-  const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
+  if (!MAP_DATA[state.mapKey]) state.mapKey = 'town';   // (the lobby's map card always names a map)
 
+  // THE LOBBY (PT, b1105m, 2026-11-05; the design canvas's F lobby — user: "i want that layout previously shown in
+  // the artifact"): your unit's card on the left, the option rows in the middle (Play as / Teams / Roster / Rules /
+  // Practice), the map's card on the right, the guide's "?" at the top-right, and along the foot Server on the left
+  // and, on the right, a Random unit die, All random · GO (everything rolled, the match at once), ONLINE (the online
+  // lobby) and GO!!. The cards open the pickers (showUnitPicker / pickUnits, showMapPicker) and come back here; GO!!
+  // fills whatever is still missing — your roster if it is short, then the bot pickers as ever — and starts on the
+  // card's map (startFromLobby). Until b1105l the lobby WAS the first unit picker and the map picker was the chain's
+  // last page. (b1105n–o, the user's notes: the dice carry their words — a lone "?" read as the guide; the toggles are
+  // the Practice row; the Where row and a Bots row came and went — Online is a button, All random goes straight in.)
   const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `<h2>Select Your Unit</h2>
-    <div class="menu-divider">— Offline —</div>
-    <div class="mode-chip main-mode-chip">
-      <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Duel</button>
-      <button data-main-mode="trio" class="${state.mainMode === 'trio' ? 'mode-active' : ''}">Trio</button>
+  menu.className = 'menu lobby';
+  menu.innerHTML = `
+    <button data-guide class="lobby-corner-btn" title="Guide" aria-label="Guide">?</button>
+    <div class="lobby-head"><h2 class="lobby-title">GunVS</h2></div>
+    <div class="lobby-grid">
+      <div class="lobby-folder">
+        <button type="button" class="slot-card unit-slot" data-slot="unit"></button>
+        <button type="button" class="enemy-chip" data-slot="enemy" title="The enemy side"></button>
+      </div>
+      <div class="lobby-mid">
+        <div class="opt-groups">
+          <div class="opt-row"><span class="opt-label">Play as</span><div class="mode-chip view-mode-chip">
+            <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Shooter</button>
+            <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
+          </div></div>
+          <div class="opt-row"><span class="opt-label">Teams</span><div class="mode-chip">
+            <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
+            <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
+          </div></div>
+          <div class="opt-row"><span class="opt-label">Roster</span><div class="mode-chip main-mode-chip">
+            <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Duel</button>
+            <button data-main-mode="trio" class="${state.mainMode === 'trio' ? 'mode-active' : ''}">Trio</button>
+          </div></div>
+          <div class="opt-row"><span class="opt-label">Rules</span><div class="mode-chip rules-chip">
+            <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Health Point</button>
+            <button data-rules="sd" class="${state.suddenDeath ? 'mode-active sd-active' : ''}">Sudden Death</button>
+          </div></div>
+          <div class="opt-row"><span class="opt-label">Practice</span><div class="mode-chip practice-chip">
+            <button data-practice="dummy" title="The bots' projectiles do no damage">Dummy bots</button>
+            <button data-practice="spectator" title="A bot plays your unit, you watch">Spectator</button>
+          </div></div>
+        </div>
+      </div>
+      <button type="button" class="slot-card map-slot memo" data-slot="map"></button>
+    <div class="lobby-foot">
+      <div class="lobby-foot-btns">
+        <button data-all-random class="lobby-allrandom" title="Roll your unit and every bot's">${LOBBY_DIE_ICON}${LOBBY_DIE_ICON}All random</button>
+        <button data-online class="online-btn" title="The online page: vs a player">Online<small>vs player</small></button>
+        <button data-go class="go-btn" title="vs bots, on this map">GO!!</button>
+      </div>
     </div>
-    <div class="mode-chip">
-      <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
-      <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
-    </div>
-    <div class="mode-chip view-mode-chip">
-      <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Shooter</button>
-      <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
-    </div>
-    <div class="mode-chip rules-chip">
-      <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Health Point</button>
-      <button data-rules="sd" class="${state.suddenDeath ? 'mode-active sd-active' : ''}">Sudden Death</button>
-    </div>
-    ${unitGridHTML(unitEntries)}
-    <div class="menu-divider">— Online —</div>
-    <button data-online-play class="online-play-btn">Online (vs Player)</button>
-    <button data-online-debug class="online-debug-btn">Server Boot-up</button>
-    <button data-guide class="guide-btn">Guide</button>`;
+    </div>`;
   app.appendChild(menu);
+  renderLobbySlots(menu);
+  const refresh = () => renderLobbySlots(menu);
+  // the Practice row reads the state
+  const syncChips = () => {
+    menu.querySelector('.practice-chip button[data-practice="dummy"]').classList.toggle('mode-active', !!state.dummyMode);
+    menu.querySelector('.practice-chip button[data-practice="spectator"]').classList.toggle('mode-active', !!state.spectatorMode);
+  };
+  syncChips();
 
   menu.querySelectorAll('.mode-chip button[data-mode]').forEach((btn) => {
     btn.addEventListener('pointerdown', (e) => {
@@ -8994,6 +9047,7 @@ function showSelectMenu() {
       state.mode = btn.dataset.mode;
       menu.querySelectorAll('.mode-chip button[data-mode]').forEach((b) => b.classList.remove('mode-active'));
       btn.classList.add('mode-active');
+      refresh();
     });
   });
   menu.querySelectorAll('.main-mode-chip button[data-main-mode]').forEach((btn) => {
@@ -9002,6 +9056,7 @@ function showSelectMenu() {
       state.mainMode = btn.dataset.mainMode;
       menu.querySelectorAll('.main-mode-chip button[data-main-mode]').forEach((b) => b.classList.remove('mode-active'));
       btn.classList.add('mode-active');
+      refresh();
     });
   });
   // Rules chip: Normal (shown as "Health Point", owner 2026-10-10) | Sudden Death (everyone at 1 HP, SD bot brain). A
@@ -9014,6 +9069,7 @@ function showSelectMenu() {
       menu.querySelectorAll('.rules-chip button[data-rules]').forEach((b) => b.classList.remove('mode-active', 'sd-active'));
       btn.classList.add('mode-active');
       if (state.suddenDeath) btn.classList.add('sd-active');
+      refresh();
     });
   });
   // View chip: Classic (shown as "Shooter", owner 2026-10-10; direct control) vs Command (diorama). Session-only
@@ -9024,18 +9080,21 @@ function showSelectMenu() {
       toggleDiorama(btn.dataset.view === 'command');
       menu.querySelectorAll('.view-mode-chip button[data-view]').forEach((b) => b.classList.remove('mode-active'));
       btn.classList.add('mode-active');
+      refresh();
     });
   });
-
-  menu.querySelector('button[data-online-play]').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
+  // ONLINE hands over to the online lobby (the "Online (vs Player)" button until b1105l, a Where row in b1105m–n).
+  menu.querySelector('button[data-online]').addEventListener('click', (e) => {
+    e.preventDefault();
     startOnlineMatch();
   });
-
-  menu.querySelector('button[data-online-debug]').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    import('./online/debugPanel.js').then(({ showOnlineDebugPanel }) => {
-      showOnlineDebugPanel(app);
+  // Practice chips: the two offline toggles (they were checkboxes on the map picker's page until b1105l); each on or off alone.
+  menu.querySelectorAll('.practice-chip button[data-practice]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (btn.dataset.practice === 'dummy') state.dummyMode = !state.dummyMode;
+      else state.spectatorMode = !state.spectatorMode;
+      syncChips();
     });
   });
 
@@ -9044,33 +9103,206 @@ function showSelectMenu() {
     showGuidePopup();
   });
 
-  wireUnitGrid(menu, (key) => {
-    clearMenus();
-    if (state.mainMode === 'trio') {
-      pickUnits('Select Your Unit', 3, (arr) => {
-        assignRoster('player', arr);
-        proceedAfterPlayerPick();
-      }, [key]);
-    } else {
-      assignRoster('player', [key]);
-      proceedAfterPlayerPick();
+  // The cards and the foot act on CLICK, as the pickers' tiles do: a scroll that starts on them must not fire them.
+  menu.querySelector('.unit-slot').addEventListener('click', (e) => { e.preventDefault(); changeSide('you'); });
+  menu.querySelector('.enemy-chip').addEventListener('click', (e) => { e.preventDefault(); changeSide('enemy'); });
+  menu.querySelector('.map-slot').addEventListener('click', (e) => {
+    e.preventDefault();
+    // the memo's die (b1105aa): a random map from both pools onto the memo — the picker stays shut; the fresh die
+    // (refresh rebuilds the memo) plays its roll
+    if (e.target.closest('.memo-dice')) {
+      rollLobbyMap();
+      refresh();
+      menu.querySelector('.memo-dice')?.classList.add('rolled');
+      return;
     }
-  }, () => [], () => {
-    // All Random from the very first pick: arm the flag, then let the normal
-    // chain run — every picker in it auto-fills and the flow lands straight
-    // on the map screen.
     clearMenus();
-    state.allRandomFill = true;
-    if (state.mainMode === 'trio') {
-      pickUnits('Select Your Unit', 3, (arr) => {
-        assignRoster('player', arr);
-        proceedAfterPlayerPick();
-      });
-    } else {
-      assignRoster('player', [rollRandomUnit([])]);
-      proceedAfterPlayerPick();
-    }
+    showMapPicker(() => showSelectMenu());
   });
+  // All random: every slot of both cards rolled — you (your Trio roster), the ally in 2v2, the enemies — shown on the
+  // cards; GO!! then starts with nothing left to ask (b1105p: it started the match by itself in b1105o — user: "All
+  // random is fine, All random+Go is not ideal")
+  menu.querySelector('button[data-all-random]').addEventListener('click', (e) => {
+    e.preventDefault();
+    const need = trioPickCount();
+    for (const s of [...lobbySideSlots('you'), ...lobbySideSlots('enemy')]) assignRoster(s, rollRoster(need));
+    refresh();
+  });
+  menu.querySelector('button[data-go]').addEventListener('click', (e) => {
+    e.preventDefault();
+    startFromLobby();
+  });
+}
+
+// the dice on the lobby's Random buttons (b1105n): a lone "?" read as the guide
+const LOBBY_DIE_ICON = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle class="pip" cx="8.5" cy="8.5" r="1.6"/><circle class="pip" cx="15.5" cy="8.5" r="1.6"/><circle class="pip" cx="12" cy="12" r="1.6"/><circle class="pip" cx="8.5" cy="15.5" r="1.6"/><circle class="pip" cx="15.5" cy="15.5" r="1.6"/></svg>';
+// The lobby's four unit slots (b1105p): your card holds you (and the ally in 2v2), the enemy card the enemy (and the
+// second in 2v2). A slot's roster is its Trio roster when there is one, else its single unit key, cut to what the
+// Roster chip wants now (Duel after a Trio session keeps the roster's opener; Trio after Duel shows one of three).
+const LOBBY_SLOTS = {
+  player: { key: 'playerUnitKey', title: 'Select Your Unit', label: 'You' },
+  ally: { key: 'allyUnitKey', title: 'Select Ally Unit', label: 'Ally' },
+  enemy: { key: 'enemyUnitKey', title: 'Select Enemy Unit', label: 'Enemy' },
+  enemy2: { key: 'enemy2UnitKey', title: 'Select Enemy 2 Unit', label: 'Enemy 2' }
+};
+function lobbyRoster(slot) {
+  const need = trioPickCount();
+  const single = state[LOBBY_SLOTS[slot].key];
+  const r = state.trioRosters?.[slot]?.length ? state.trioRosters[slot] : (single ? [single] : []);
+  return r.filter((k) => UNIT_DATA[k] && !UNIT_DATA[k].hidden).slice(0, need);
+}
+function lobbyPlayerRoster() { return lobbyRoster('player'); }
+function lobbySideSlots(side) {
+  return side === 'you' ? (state.mode === '2v2' ? ['player', 'ally'] : ['player']) : (state.mode === '2v2' ? ['enemy', 'enemy2'] : ['enemy']);
+}
+function rollRoster(count) { const acc = []; while (acc.length < count) acc.push(rollRandomUnit(acc)); return acc; }
+// A card's Pick / Change: the pickers for its slots in turn — the missing picks alone while something is missing, the
+// whole roster(s) afresh otherwise — then back to the lobby. An All Random card tapped along the way fills the rest
+// of this card (pickUnits's flag), nothing beyond it.
+function changeSide(side) {
+  clearMenus();
+  const need = trioPickCount();
+  const slots = lobbySideSlots(side);
+  const anyMissing = slots.some((s) => lobbyRoster(s).length < need);
+  const run = (i) => {
+    if (i >= slots.length) { state.allRandomFill = false; showSelectMenu(); return; }
+    const s = slots[i];
+    pickUnits(LOBBY_SLOTS[s].title, need, (arr) => { assignRoster(s, arr); run(i + 1); }, anyMissing ? [...lobbyRoster(s)] : []);
+  };
+  run(0);
+}
+// The range pips of a unit's card: five dots read off the lock range — the shotguns' 40 and the SMGs' 50 two, the
+// rifles' 56 three, the machine guns' 80 four, the sniper rifles' 120 five (a relative reading, not metres).
+function unitRangePips(u) { const r = u.lockRange ?? 56; return r <= 50 ? 2 : r <= 60 ? 3 : r <= 90 ? 4 : 5; }
+// A map card's size line, from the map's boundary half extents (4 units per metre: the full width is 2 × halfX
+// units) — getArenaBounds reads the boundary table alone; getArena would throw for a modelled map whose data is not
+// loaded yet, and the lobby shows before any is.
+function mapSizeText(key) {
+  try {
+    const b = getArenaBounds(key);
+    return b?.halfX && b?.halfZ ? `${Math.round(b.halfX / 2)} × ${Math.round(b.halfZ / 2)} m` : '';   // (no-break spaces: the size never wraps inside itself)
+  } catch { return ''; }
+}
+function mapSectionName(key) { return MAP_SECTIONS[0].has(key) ? 'Scene map' : 'Concept map'; }
+// A row of slanted panels for one slot's roster (b1105o, the user's sketch): one panel a unit on its class colour
+// with the face-centred thumbnail, a slot still to pick a yellow "?" panel; the slashes between them are the ink
+// behind showing through (style.css .pane-row / .slot-pane).
+function paneRowHTML(roster, need) {
+  const n = Math.max(1, need);
+  const panes = Array.from({ length: n }, (_, i) => {
+    const u = roster[i] ? UNIT_DATA[roster[i]] : null;
+    return u
+      ? `<span class="slot-pane face-box" data-class="${unitClassTag(u)}" ${faceStyle(u)}><img src="${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png" alt="${u.char || ''}" draggable="false"></span>`
+      : '<span class="slot-pane slot-pane-empty"><i>?</i></span>';
+  }).join('');
+  return `<span class="pane-row panes-${n}">${panes}</span>`;
+}
+// A side's card (b1105p): yours, on the lobby's left (the enemy's side is the foot's chip since b1105q). One unit
+// (Duel 1v1) is the plain card — the thumbnail, the name, the class and the weapon; a 2v2 Duel one row split left /
+// right (you | ally); a Trio a row of three per slot (two rows in 2v2); a line of names per slot under them, with
+// "n more to pick" while a roster is short.
+function renderTeamCard(card, side) {
+  const need = trioPickCount();
+  const slots = lobbySideSlots(side);
+  const rosters = slots.map((s) => lobbyRoster(s));
+  const missing = rosters.reduce((m, r) => m + (need - r.length), 0);
+  const single = slots.length === 1 && need === 1;
+  const lead = rosters[0][0] ? UNIT_DATA[rosters[0][0]] : null;
+  const tag = side === 'you'
+    ? (slots.length > 1 ? 'YOUR TEAM' : (need > 1 ? 'YOUR TRIO' : 'YOUR UNIT'))
+    : (slots.length > 1 ? 'ENEMY TEAM' : (need > 1 ? 'ENEMY TRIO' : 'ENEMY'));
+  card.dataset.class = single && lead ? unitClassTag(lead) : '';
+  card.classList.toggle('slot-card-pair', slots.length > 1);
+  let art, text;
+  if (single) {
+    const weaponClass = lead ? (lead.name.split('/')[1] || '').trim() : '';
+    art = lead
+      ? `<span class="slot-art face-box" ${faceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`
+      : '<span class="slot-art slot-empty">?</span>';
+    text = lead
+      ? `<b class="slot-name">${lead.char || lead.name}</b><small class="slot-sub">${weaponClass}${lead.weapon ? ` · ${lead.weapon}` : ''}</small>`
+      : '<b class="slot-name">Pick a unit</b><small class="slot-sub">tap to choose</small>';
+  } else {
+    art = need === 1
+      ? `<span class="slot-art slot-art-trio">${paneRowHTML(rosters.map((r) => r[0]), slots.length)}</span>`   // (2v2 Duel: you | ally, one row — user b1105q)
+      : `<span class="slot-art slot-art-trio rows-${slots.length}">${rosters.map((r) => paneRowHTML(r, need)).join('')}</span>`;
+    const sep = slots.length > 1 ? ' · ' : ' · ';   // (thin spaces on a 2v2 card: two rosters on one line each)
+    const lines = slots.map((s, i) => `<b class="slot-name slot-name-trio">${slots.length > 1 ? `<em>${LOBBY_SLOTS[s].label}</em>` : ''}${Array.from({ length: need }, (_, j) => (rosters[i][j] ? (UNIT_DATA[rosters[i][j]].char || rosters[i][j]) : '—')).join(sep)}</b>`).join('');
+    text = `${lines}<small class="slot-sub">${missing ? `${missing} more to pick` : (need > 1 ? (slots.length > 1 ? 'three each, in turn' : 'the three take the field in turn') : (side === 'you' ? 'you and your bot ally' : 'the two bots against you'))}</small>`;
+  }
+  card.innerHTML = `<span class="slot-tag slot-tag-${side === 'you' ? 'unit' : 'enemy'}">${tag}</span>${art}<span class="slot-text">${text}</span><span class="slot-change">${missing ? 'Pick' : 'Change'}</span>`;
+}
+// The enemy chip at the foot's left (b1105q; user: the enemy and the map swap places): a strip of the enemy side's
+// faces — a small row of slanted panels per slot — then the names with an ENEMY / ENEMY 2 pip before each slot's,
+// then Pick / Change. One unit (Duel 1v1) reads name over class · weapon; a Trio its three names over "n more to
+// pick"; 2v2 a line per slot.
+function renderEnemyChip(chip) {
+  const need = trioPickCount();
+  const slots = lobbySideSlots('enemy');
+  const rosters = slots.map((s) => lobbyRoster(s));
+  const missing = rosters.reduce((m, r) => m + (need - r.length), 0);
+  const name = (k) => (k ? (UNIT_DATA[k].char || k) : '—');
+  const names = (r, sep) => Array.from({ length: need }, (_, j) => name(r[j])).join(sep);
+  const strip = rosters.map((r) => `<span class="chip-slot">${paneRowHTML(r, need)}</span>`).join('');
+  const stack = slots.length > 1 && need > 1;   // (2v2 Trio: the two rows stacked, style.css .chip-stack)
+  // (b1105v, user: no ENEMY pip in the text, the corner sticker reads ENEMY instead of Change) the sticker names the
+  // side as the sheet's does — ENEMY / ENEMY TRIO / ENEMY TEAM; a short roster says so in the small line
+  const tag = slots.length > 1 ? 'ENEMY TEAM' : (need > 1 ? 'ENEMY TRIO' : 'ENEMY');
+  let text;
+  if (slots.length === 1 && need === 1) {
+    const u = rosters[0][0] ? UNIT_DATA[rosters[0][0]] : null;
+    const weaponClass = u ? (u.name.split('/')[1] || '').trim() : '';
+    text = `<span class="chip-text"><b>${u ? (u.char || u.name) : 'Pick an enemy'}</b><small>${u ? `${weaponClass}${u.weapon ? ` · ${u.weapon}` : ''}` : 'tap to choose'}</small></span>`;
+  } else if (slots.length === 1) {
+    text = `<span class="chip-text chip-trio"><b>${names(rosters[0], ' · ')}</b><small>${missing ? `${missing} more to pick` : 'the three take the field in turn'}</small></span>`;
+  } else if (need === 1) {
+    text = `<span class="chip-text"><b>${name(rosters[0][0])} · ${name(rosters[1][0])}</b><small>${missing ? `${missing} more to pick` : 'the two bots against you'}</small></span>`;
+  } else {
+    text = `<span class="chip-text chip-two">${slots.map((s, i) => `<b>${names(rosters[i], ' · ')}</b>`).join('')}<small>${missing ? `${missing} more to pick` : 'three each, in turn'}</small></span>`;
+  }
+  chip.innerHTML = `<span class="chip-strip${stack ? ' chip-stack' : ''}">${strip}</span>${text}<span class="chip-change">${tag}</span>`;
+}
+// The lobby's two cards and its enemy chip, from the state — called at the lobby's build and after every chip.
+function renderLobbySlots(menu) {
+  renderTeamCard(menu.querySelector('.unit-slot'), 'you');
+  renderEnemyChip(menu.querySelector('.enemy-chip'));
+  const m = MAP_DATA[state.mapKey];
+  const size = mapSizeText(state.mapKey);
+  // (the map's whole square picture, letterboxed — user b1105q: "the full uncropped image"; MAP_DATA.thumb is the picker's wide tile's business)
+  // (b1105t: a memo pinned to the wall — the pin and the ruled lines are style.css .memo; the tape sits on the picture's corner)
+  menu.querySelector('.map-slot').innerHTML = `<span class="slot-art slot-art-map"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m.name}" draggable="false"></span><span class="memo-tape"></span>
+    <span class="slot-text"><b class="slot-name">${m.name}</b><small class="slot-sub"><i class="pip-map">MAP</i>${mapSectionName(state.mapKey).replace(' map', '')}${size ? ` · ${size}` : ''}${m.cardNote ? ' · more stamina' : ''}</small></span>
+    <span class="slot-change">Change</span>
+    <span class="memo-dice" role="button" aria-label="Random map" title="A random map — scene or concept">${LOBBY_DIE_ICON}</span>`;
+}
+// The memo's die (b1105aa; user: "a random map dice at the bottom right of the map memo paper that picks randomly from
+// both scene map and concept map pool"): one draw over every map of both tabs together — the scene maps and the concept
+// maps in one pool — but the maps the table marks noRandom (Plain Field, District, the Backrooms, the Shooting Range:
+// manual picks, as on the picker's Random cards) and the map already on the memo (a roll always lands somewhere new).
+function rollLobbyMap() {
+  const pool = Object.keys(MAP_DATA).filter((k) => !MAP_DATA[k].noRandom);
+  const fresh = pool.filter((k) => k !== state.mapKey);
+  const from = fresh.length ? fresh : pool;
+  state.mapKey = from[Math.floor(Math.random() * from.length)];
+}
+// GO!! — fill what the lobby still lacks, slot by slot (you, the ally in 2v2, the enemy, the second enemy in 2v2:
+// the pickers for the missing picks alone — nothing when every card is full), then the match on the map chip's map
+// (startFromMap: no map page). An All Random card tapped along the way rolls the rest (pickUnits's flag).
+function startFromLobby() {
+  clearMenus();
+  const need = trioPickCount();
+  const slots = [...lobbySideSlots('you'), ...lobbySideSlots('enemy')];
+  const run = (i) => {
+    if (i >= slots.length) { startFromMap(); return; }
+    const s = slots[i];
+    pickUnits(LOBBY_SLOTS[s].title, need, (arr) => { assignRoster(s, arr); run(i + 1); }, [...lobbyRoster(s)]);
+  };
+  run(0);
+}
+// The chain's last step: the lobby's map (the map picker only if, somehow, none is set).
+function startFromMap() {
+  state.allRandomFill = false;   // the All Random chain ends here
+  if (MAP_DATA[state.mapKey]) startMatch(); else showMapPicker();
 }
 
 // Trio roster collection: run the standard unit picker `count` times in a row
@@ -9135,10 +9367,10 @@ function proceedToEnemyPick() {
     if (state.mode === '2v2') {
       pickUnits('Select Enemy 2 Unit', trioPickCount(), (arr2) => {
         assignRoster('enemy2', arr2);
-        showMapPicker();
+        startFromMap();
       });
     } else {
-      showMapPicker();
+      startFromMap();
     }
   });
 }
@@ -9158,11 +9390,28 @@ function removeProfilePopup() {
 // floating card next to `card`, wires the click-to-confirm (click-based so a
 // scroll that starts on the popup can't confirm), and keeps it repositioned
 // as its images load. Callers only supply the inner markup.
-function spawnProfilePopup(card, innerHTML, onConfirm) {
+function spawnProfilePopup(card, innerHTML, onConfirm, kind = 'unit') {
   removeProfilePopup();
+  // The picker's side card (b1105m, the design canvas's pickers): when the menu has a `.picker-side`, the preview
+  // fills it — the tile's class colour with it — and a CONFIRM! button is added under the content; tapping the card
+  // confirms, as tapping the floating one did. Menus without one (the online pickers) keep the floating card.
+  // (b1105t) `kind`: 'unit' — the card is a sheet in a file folder; 'map' — a memo pinned to the wall (style.css).
+  const side = card.closest('.menu')?.querySelector('.picker-side');
+  if (side) {
+    side.dataset.class = card.dataset.class || '';
+    side.innerHTML = `<div class="picker-card profile-body">${innerHTML}<button type="button" class="picker-confirm">CONFIRM!</button></div>`;
+    side.classList.add('has-card');
+    side.querySelector('.picker-card').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onConfirm) onConfirm();
+    });
+    _activeProfilePopup = { remove() { side.innerHTML = `<div class="picker-side-empty">${side.dataset.empty || 'Tap a unit'}</div>`; side.classList.remove('has-card'); side.dataset.class = ''; } };
+    return;
+  }
   const popup = document.createElement('div');
-  popup.className = 'unit-profile-popup';
-  popup.innerHTML = innerHTML;
+  popup.className = `unit-profile-popup profile-body ${kind === 'map' ? 'pp-memo' : 'pp-folder'}`;
+  popup.innerHTML = `<div class="sheet">${innerHTML}</div>`;   // (the white sheet inside the folder; a memo's is bare)
   document.body.appendChild(popup);
   _activeProfilePopup = popup;
   popup.addEventListener('click', (e) => {
@@ -9316,18 +9565,39 @@ function showProfilePopup(card, unit, onConfirm) {
         <div class="stats-grid">${profileStatGridHTML(unit)}</div>
       </div>`
     : '';
+  // (b1105m) the head — the name and the class pill — and the range pips are the picker's side card's; the floating
+  // card hides them (style.css), its shape unchanged
+  const weaponClass = (unit.name.split('/')[1] || '').trim();
+  const pips = unitRangePips(unit);
+  const head = `<div class="profile-head"><b class="profile-name">${char || unit.name}</b><span class="profile-class">${weaponClass}</span></div>
+    <div class="profile-range"><span>RANGE</span><b>${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= pips ? 'on' : ''}"></i>`).join('')}</b></div>`;
+  // (b1105n, user: "the unit photo images must be eyes focused") the side card's wide, short art box shows the square
+  // thumbnail — the face-centred crop the tiles use — where the full profile art, cut to a band, lost the eyes; the
+  // floating card keeps the full art as before
+  const sideCard = !!card.closest('.menu')?.querySelector('.picker-side');
+  const face = `${import.meta.env.BASE_URL}units/${spriteKey}_profile${sideCard ? '_thumbnail' : ''}.png`;
+  const faceImg = `<img class="profile-face" src="${face}" alt="${char || ''}" draggable="false" />`;
+  // (b1105t) the paper clip on the sheet's top-right corner — the card is a sheet in a file folder (style.css)
+  const clip = '<svg class="paper-clip" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg>';
   spawnProfilePopup(card,
-    `<img class="profile-face" src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false" />${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (a unit's cardNote, one line at the card's bottom-left under the art; 2026-10-24)
+    // (b1105r: the side card's band sits where the unit's face is — the face-box, as the lobby's cards)
+    `${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
     onConfirm);
 }
 
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
-// __mapPhoto dev hook), no text — the map-picker twin of the unit popup.
+// __mapPhoto dev hook), no text — the map-picker twin of the unit popup. (b1105m: the side card adds the map's head
+// — its name, its section and size, and its tags: the stamina note, "manual pick only" for a noRandom map, "offline
+// only" — hidden on the floating card.)
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
-  const note = MAP_DATA[mapId]?.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's and Compound's stamina, user 2026-10-29 (Blockade's too from 2026-11-01 until 2026-11-03); off for part of 2026-11-01 while every map had their boost, back with the maps' own the same day)
+  const m = MAP_DATA[mapId] ?? {};
+  const note = m.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's and Compound's stamina, user 2026-10-29 (Blockade's too from 2026-11-01 until 2026-11-03); off for part of 2026-11-01 while every map had their boost, back with the maps' own the same day)
+  const size = mapSizeText(mapId);
+  const tags = [m.noRandom ? '<span class="tag-ink">MANUAL PICK ONLY</span>' : '', m.offlineOnly ? '<span class="tag-ink">OFFLINE ONLY</span>' : ''].join('');
+  const head = `<div class="profile-head"><b class="profile-name">${mapName}</b><span class="profile-sub">${mapSectionName(mapId)}${size ? ` · ${size}` : ''}</span>${tags ? `<span class="profile-tags">${tags}</span>` : ''}</div>`;
   spawnProfilePopup(card,
-    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
-    onConfirm);
+    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${head}${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
+    onConfirm, 'map');
 }
 
 // Random-card preview: a light-gray mystery face with a question mark — the
@@ -9335,8 +9605,9 @@ function showMapProfilePopup(card, mapId, mapName, onConfirm) {
 // popup's landscape proportions; `gold` is the All Random golden theme.
 function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
   spawnProfilePopup(card,
-    `<div class="random-face${wide ? ' random-face-wide' : ''}${gold ? ' all-random' : ''}">?</div>`,
-    onConfirm);
+    `<div class="random-face${wide ? ' random-face-wide' : ''}${gold ? ' all-random' : ''}">?</div>
+     <div class="profile-head"><b class="profile-name">${gold ? 'All Random' : 'Random'}</b><span class="profile-sub">${gold ? 'every slot rolled for you' : 'rolled when you confirm'}</span></div>`,
+    onConfirm, wide ? 'map' : 'unit');
 }
 // Selection-grid display order: weapon categories grouped, four to a row —
 // AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
@@ -9374,15 +9645,31 @@ function rollRandomUnit(excluded, pool = randomUnitPool()) {
   return from[Math.floor(Math.random() * from.length)];
 }
 
+// The Splat skin (PT, b1105l): a unit tile shows the character's name and a weapon-class tag on its corner (the class
+// word after the "/" in unit.name, abbreviated), and the tile is coloured by that class (style.css, data-class) —
+// the two-line "Char / Weapon" label of the 132 px cards does not fit the 84 px sticker.
+const UNIT_CLASS_TAG = { 'Assault Rifle': 'AR', 'Rifle': 'RF', 'Submachine Gun': 'SMG', 'Shotgun': 'SG', 'Machine Gun': 'MG', 'Sniper Rifle': 'SR' };   // (SR was SN until b1105t — user)
+function unitClassTag(u) {
+  const weapon = (u.name.split('/')[1] || '').trim();
+  return UNIT_CLASS_TAG[weapon] || weapon.slice(0, 3).toUpperCase();
+}
+// Where the face is in a unit's square thumbnail (b1105r; user: the eyes "higher" on a single character, Fubuki's crop
+// "a bit more to the right"): the face centre's x and the eye line's y as fractions of the picture, read off a
+// contact sheet of the thumbnails with a 10% grid (ui/face_sheet.mjs); 0.5 / 0.62 for the rest. style.css .face-box
+// puts that point at a box's horizontal centre and at 44% of its height, whichever way the box crops the picture.
+const UNIT_FACE = { fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
+    const tag = unitClassTag(u);
     const thumb = `${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png`;
-    return `<button class="unit-card" data-unit-card="${id}">
+    return `<button class="unit-card" data-unit-card="${id}" data-class="${tag}" title="${u.char || id} — ${weapon}">
       <img class="unit-thumb" src="${thumb}" alt="${u.char || id}" draggable="false" />
-      <span class="unit-label">${u.char || u.name}<br>${weapon}</span>
+      <span class="unit-label">${u.char || u.name}</span>
+      <span class="unit-tag">${tag}</span>
     </button>`;
   }).join('')}<button class="unit-card" data-unit-card="${RANDOM_PICK_KEY}">
       <span class="unit-thumb random-thumb">?</span>
@@ -9460,11 +9747,15 @@ function wireUnitGrid(menu, onPick, getExcluded = () => [], onAllRandom = null) 
 // modelled scenes, those with a model in GLB_MAPS (Town, Spacecraft) — over CONCEPT MAPS, the hand-made arenas. Each
 // section carries a Random card of its own, which rolls among that section's enabled cards alone (wireMapGrid).
 const MAP_SECTIONS = [{ title: 'Scene Maps', has: (id) => id in GLB_MAPS }, { title: 'Concept Maps', has: (id) => !(id in GLB_MAPS) }];
+// The Splat skin (PT, b1105l): the two sections are TABS (Scene Maps | Concept Maps, each with its count) over one
+// visible grid at a time — a landscape phone shows a whole tab without scrolling; the dividers that stacked the two
+// grids are gone. The tabs are wired in wireMapGrid; a single section (none today) gets no tab bar.
 function mapGridHTML(mapEntries, disabled = new Set()) {
-  return MAP_SECTIONS.map((sec) => {
-    const entries = mapEntries.filter(([id]) => sec.has(id));
-    if (!entries.length) return '';
-    return `<div class="menu-divider">— ${sec.title} —</div><div class="unit-grid map-grid">${entries.map(([id, m]) => {
+  const sections = MAP_SECTIONS.map((sec) => ({ sec, entries: mapEntries.filter(([id]) => sec.has(id)) })).filter((s) => s.entries.length);
+  const tabs = sections.length > 1
+    ? `<div class="map-tabs">${sections.map((s, i) => `<button type="button" data-map-tab="${i}" class="${i === 0 ? 'tab-active' : ''}">${s.sec.title} · ${s.entries.length}</button>`).join('')}</div>`
+    : '';
+  return tabs + sections.map(({ entries }, i) => `<div class="map-section" data-map-section="${i}"${i === 0 ? '' : ' hidden'}><div class="unit-grid map-grid">${entries.map(([id, m]) => {
       const off = disabled.has(id);
       return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
       <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false"${m.thumb ? ` style="object-position:${m.thumb}"` : ''} />
@@ -9473,8 +9764,7 @@ function mapGridHTML(mapEntries, disabled = new Set()) {
     }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
       <span class="unit-thumb map-thumb random-thumb">?</span>
       <span class="unit-label">Random</span>
-    </button></div>`;
-  }).join('');
+    </button></div></div>`).join('');
 }
 function wireMapGrid(menu, onPick) {
   const grids = [...menu.querySelectorAll('.map-grid')];
@@ -9485,6 +9775,17 @@ function wireMapGrid(menu, onPick) {
     for (const grid of grids) grid.querySelectorAll('.map-card.selecting').forEach((c) => c.classList.remove('selecting'));
     removeProfilePopup();
   };
+  // the tabs (b1105l): show the tapped tab's section, hide the others, drop any open preview
+  const tabs = [...menu.querySelectorAll('.map-tabs button[data-map-tab]')];
+  for (const tab of tabs) {
+    tab.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearPending();
+      for (const t of tabs) t.classList.toggle('tab-active', t === tab);
+      menu.querySelectorAll('.map-section').forEach((s) => { s.hidden = s.dataset.mapSection !== tab.dataset.mapTab; });
+    });
+  }
   // Random map: uniform over the ENABLED cards of the Random card's own section, minus the maps the map table marks
   // noRandom — the Shooting Range (a practice map, never a random battleground; absent online, excluded offline) and
   // Plain Field (a manual pick only).
@@ -9515,50 +9816,68 @@ function wireMapGrid(menu, onPick) {
   menu.addEventListener('click', () => { if (pendingKey) clearPending(); });
 }
 
-function showUnitPicker(title, onPick, excluded = [], onAllRandom = null) {
+// The pickers' page (b1105m, the design canvas's pickers): a back arrow and the title on one row (the unit picker's
+// class filter chips beside them), then the preview card on the left and the grid on the right (`.picker-body`;
+// spawnProfilePopup fills the card). Back leaves the flow for the lobby. The offline pickers; the online ones keep
+// their own pages and the floating card.
+const UNIT_FILTERS = [['ALL', 'All'], ['AR', 'AR'], ['RF', 'Rifle'], ['SMG', 'SMG'], ['SG', 'SG'], ['MG', 'MG'], ['SR', 'Sniper']];   // (b1105r: the rifles their own chip — user: "rifle and AR are not the same category")
+function pickerTopHTML(title, extra = '') {
+  return `<div class="picker-top"><button type="button" class="back-btn" data-back aria-label="Back">&#8592;</button><h2>${title}</h2>${extra}</div>`;
+}
+function wirePickerBack(menu, onBack) {
+  menu.querySelector('button[data-back]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearMenus();
+    onBack();
+  });
+}
+// the class filter: a chip hides every tile of another class; the Random cards always show
+function wireUnitFilters(menu) {
+  const chips = [...menu.querySelectorAll('.picker-filters button[data-filter]')];
+  const grid = menu.querySelector('.unit-grid');
+  if (!chips.length || !grid) return;
+  for (const chip of chips) {
+    chip.addEventListener('click', (e) => {
+      e.preventDefault();
+      const f = chip.dataset.filter;
+      for (const c of chips) c.classList.toggle('mode-active', c === chip);
+      grid.querySelectorAll('.unit-card[data-class]').forEach((card) => {
+        const cls = card.dataset.class;
+        card.hidden = !(f === 'ALL' || cls === f);
+      });
+    });
+  }
+}
+function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack = () => showSelectMenu()) {
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
   const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `<h2>${title}</h2>${unitGridHTML(unitEntries)}`;
+  menu.className = 'menu picker';
+  const filters = `<div class="picker-filters">${UNIT_FILTERS.map(([k, label], i) => `<button type="button" data-filter="${k}" class="${i === 0 ? 'mode-active' : ''}">${label}</button>`).join('')}</div>`;
+  menu.innerHTML = `${pickerTopHTML(title, filters)}
+    <div class="picker-body"><div class="picker-side picker-folder" data-empty="Tap a unit"><div class="picker-side-empty">Tap a unit</div></div><div class="picker-main">${unitGridHTML(unitEntries)}</div></div>`;
   app.appendChild(menu);
+  wirePickerBack(menu, onBack);
+  wireUnitFilters(menu);
   wireUnitGrid(menu, (key) => {
     clearMenus();
     onPick(key);
   }, () => excluded, onAllRandom);
 }
-function showMapPicker() {
+// onPick (b1105m): the lobby's map card passes one — the pick is kept and the caller gets the page back; without it the
+// match starts on the pick, as the chain's last page did until b1105l (the fallback of startFromMap).
+function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   state.allRandomFill = false;   // the All Random chain ends here
   const mapEntries = Object.entries(MAP_DATA);
   const mapMenu = document.createElement('div');
-  mapMenu.className = 'menu';
-  mapMenu.innerHTML = `<h2>Select Map</h2>
-    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:10px auto 14px;">
-      <label style="display:flex;align-items:center;gap:8px;color:#d8fcff;">
-        <input type="checkbox" id="dummy-mode-toggle" />
-        Dummy (BOT projectile damage = 0)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;color:#d8fcff;">
-        <input type="checkbox" id="spectator-mode-toggle" />
-        Spectator (BOT plays your unit)
-      </label>
-    </div>
-    ${state.suddenDeath ? '<div class="menu-divider sd-rules-tag">Rules: SUDDEN DEATH — everyone at 1 HP</div>' : ''}
-    ${mapGridHTML(mapEntries)}`;
+  mapMenu.className = 'menu picker';
+  mapMenu.innerHTML = `${pickerTopHTML('Select Map', state.suddenDeath ? '<div class="menu-divider sd-rules-tag">Rules: SUDDEN DEATH — everyone at 1 HP</div>' : '')}
+    <div class="picker-body"><div class="picker-side picker-memo" data-empty="Tap a map"><div class="picker-side-empty">Tap a map</div></div><div class="picker-main">${mapGridHTML(mapEntries)}</div></div>`;
   app.appendChild(mapMenu);
-  const dummyModeToggle = mapMenu.querySelector('#dummy-mode-toggle');
-  dummyModeToggle.checked = !!state.dummyMode;
-  dummyModeToggle.addEventListener('change', () => {
-    state.dummyMode = dummyModeToggle.checked;
-  });
-  const spectatorModeToggle = mapMenu.querySelector('#spectator-mode-toggle');
-  spectatorModeToggle.checked = !!state.spectatorMode;
-  spectatorModeToggle.addEventListener('change', () => {
-    state.spectatorMode = spectatorModeToggle.checked;
-  });
-
+  wirePickerBack(mapMenu, onBack);
   wireMapGrid(mapMenu, (key) => {
     state.mapKey = key;
-    startMatch();
+    if (onPick) { clearMenus(); onPick(); } else startMatch();
   });
 }
 
@@ -9849,13 +10168,14 @@ document.addEventListener('click', (e) => {
 
 setupRootTouchAction();
 setupFullscreenToggle();
-showSelectMenu();
 // (the frame clock is declared here, ahead of the first frame — it used to
 // sit next to animate() far below, so the first call threw on the
 // uninitialised const and the loop's catch logged a render error on every
 // page load; the frame was skipped and the next one ran normally)
 const clock = new THREE.Clock();
-animate();
+// (b1105m) the first lobby and the first frame run at the END of this module — see its last lines: the lobby's map
+// card reads GLB_MAPS and the frame's updateMapRoof reads it too, and both are declared far below this spot, so the
+// first frame threw on the uninitialised const here (the loop's catch logged a render error on every page load)
 
 // ---------------------------------------------------------------------------
 // Trio mode (offline): a dead unit is replaced by the next entry of its
@@ -10010,26 +10330,58 @@ function showEndMenu(win) {
 
   // Spectator: the human wasn't playing — announce the winning side instead
   // of a personal verdict. Team 1 = the player's picked side (left/blue).
-  const title = state.spectatorActive
+  const spectator = !!state.spectatorActive;
+  const title = spectator
     ? (win ? 'TEAM 1 WINS' : 'TEAM 2 WINS')
     : (win ? 'YOU WIN' : 'YOU LOSE');
-  const menu = document.createElement('div');
-  menu.className = 'menu';
-  menu.innerHTML = `
-    <h2>${title}</h2>
-    <button id="rematch">Rematch</button>
-    <button id="select">Select Unit</button>
-  `;
-  app.appendChild(menu);
-
-  menu.querySelector('#rematch').addEventListener('pointerdown', (event) => {
+  const menu = showEndPage({ title, winner: win ? 'you' : 'foe', spectator, buttons: '<button data-select class="end-select">Select Unit</button><button data-rematch class="go-btn end-go">REMATCH</button>' });
+  // (click, as the lobby's cards: a scroll that starts on a button in portrait must not fire it)
+  menu.querySelector('[data-rematch]').addEventListener('click', (event) => {
     event.preventDefault();
     startMatch();
   });
-  menu.querySelector('#select').addEventListener('pointerdown', (event) => {
+  menu.querySelector('[data-select]').addEventListener('click', (event) => {
     event.preventDefault();
     showSelectMenu();
   });
+}
+
+// THE END-OF-MATCH PAGE (b1105ac; the design canvas's round 6, End_F / End_F_2v2, built on the user's "implement the
+// ending screen in PT"): the verdict as the sticker title; a roster panel each side — the HUD chip's ink and white
+// rim as a card, TEAM 1 (the viewer's side, left) / TEAM 2, the WINNER sticker on the side that won — with a row per
+// slot: the slot's word (YOU / ALLY, ENEMY / ENEMY 2; SLOT 1 / SLOT 2 for a spectator, who is nobody's "you") and
+// the slot's roster in the HUD's round frames with the names — a fallen unit greyed with a slash, the unit on the
+// field alive with the dot, a reserve unit (never fielded) plain; the map's memo in the middle (the picture and the
+// name, no info line — user); the buttons below. Offline and online share it (showEndMenu / showOnlineEndMenu).
+const END_SLOT_WORD = { player: 'YOU', ally: 'ALLY', enemy: 'ENEMY', enemy2: 'ENEMY 2' };
+// a slot's units at the end: Trio from the roster and its cursor (offline: state.trioRosters / rosterIdx; online: the
+// snapshot's roster fields), Duel the one unit — 'out' / 'std' (standing) / 'res' (in reserve)
+function endRowUnits(role) {
+  const m = state[role];
+  if (!m) return null;
+  const roster = state.online ? (m.state.roster || null) : (state.trioRosters?.[role] || null);
+  const idx = state.online ? (m.state.rosterIdx ?? 0) : (state.rosterIdx?.[role] ?? 0);
+  const alive = m.state.hp > 0;
+  if (!roster) return [{ u: m.unit, st: alive ? 'std' : 'out' }];
+  return roster.map((k, i) => ({ u: UNIT_DATA[k] || m.unit, st: i < idx ? 'out' : (i === idx ? (alive ? 'std' : 'out') : 'res') }));
+}
+function endTeamHTML(side, tag, roles, spectator, winner) {
+  const rows = roles.map((role, i) => ({ word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role) })).filter((r) => r.units);
+  return `<div class="end-team end-${side}"><span class="end-tag">${tag}</span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div></div>`).join('')}</div>`;
+}
+// winner: 'you' (the left panel's side) | 'foe' | null (a tie); note: a chip under the title (online: the opponent's
+// rematch wish); buttons: the foot's markup — the caller wires them
+function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '' }) {
+  const menu = document.createElement('div');
+  menu.className = 'menu end-page';
+  const m = MAP_DATA[state.mapKey];
+  menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
+    <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you')}
+      <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${m?.name || ''}</b></div>
+      ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe')}</div>
+    <div class="end-foot">${buttons}</div>`;
+  app.appendChild(menu);
+  return menu;
 }
 
 function triggerEnemyEvasion(now) {
@@ -10106,7 +10458,8 @@ function showPauseMenu() {
   // Offline: the diorama view toggle lives here so touch devices can reach
   // it too (V key remains the desktop shortcut).
   const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Shooter'}</button>`;
-  menu.innerHTML = `<h2>Paused</h2><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
+  // (the build tag under the title, so the build can be read in the game — the user asked 2026-10-24, on the PT site first)
+  menu.innerHTML = `<h2>Paused</h2><div style="margin:-6px 0 8px;font:12px monospace;opacity:.7">build ${CLIENT_BUILD_TAG}</div><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -12271,13 +12624,15 @@ function renderDiorama() {
 // LOS-blocked enemies render ghosted using the same bullet-line test the
 // bots' fire gate uses, so "looks unhittable" always equals "is unhittable".
 
+// (b1105ac, user: "use the HP bar color as base, make the color of command card aligned") the offline palette is the
+// HP chips' — lime YOU, cyan ALLY, magenta ENEMY, yellow ENEMY 2 (style.css .hp-chip.*) — so a card, its marker, its
+// line and its chip share one colour; the blue / mint / pink / orange set lives on as the online slot palette below,
+// which the online chips wear too.
 const DIO_SLOT_META = {
-  player: { color: '#62d7ff', label: 'YOU', selectable: false },
-  ally: { color: '#86f7c2', label: 'ALLY', selectable: false },
-  enemy: { color: '#ff7ad5', label: 'ENEMY 1', selectable: true },
-  // Orange — matches enemy2's corner HP bar (#ff9d5a); the old rose pink
-  // was too close to enemy 1's pink to tell apart at diorama distance.
-  enemy2: { color: '#ff9d5a', label: 'ENEMY 2', selectable: true }
+  player: { color: '#C6F24A', label: 'YOU', selectable: false },
+  ally: { color: '#3EE0FF', label: 'ALLY', selectable: false },
+  enemy: { color: '#FF3EA5', label: 'ENEMY 1', selectable: true },
+  enemy2: { color: '#FFE45C', label: 'ENEMY 2', selectable: true }
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
 // ONLINE identity colors (owner 2026-08-22): HUD surfaces follow the unit's
@@ -17721,3 +18076,10 @@ function animate() {
   }
   requestAnimationFrame(animate);
 }
+
+// The first lobby and the first frame (b1105m; they ran mid-module, by setupFullscreenToggle, until then): at the
+// module's end every const above stands — the module has no top-level await — so the lobby's map card and the first
+// frame's updateMapRoof read GLB_MAPS initialised, where the first frame used to throw on it and log a render error on
+// every page load.
+showSelectMenu();
+animate();
