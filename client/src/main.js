@@ -809,7 +809,7 @@ const MAP_DATA = {
   spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   district: { name: 'District', cardNote: 'Unit has more stamina in this map.', noRandom: true },   // (noRandom, user 2026-10-30: "too much of a special map" — a manual pick only, offline and online; the host's Random card rolls the scene maps without it)   // (cardNote: the map's own note on its info card, as a unit's — District's boost scale, user 2026-10-29)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
-  backrooms_anomaly: { name: 'Backrooms (Anomaly)', noRandom: true, thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
+  backrooms_anomaly: { name: 'Backrooms (Anomaly)', shortName: 'Backrooms', crayon: 'Anomaly!', noRandom: true, thumb: 'top' },   // (shortName / crayon: the memos read Backrooms with a red crayon Anomaly!, b1105af)   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
   range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
 };
 
@@ -7087,7 +7087,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ae 11-05';
+const CLIENT_BUILD_TAG = 'b1105af 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9192,6 +9192,14 @@ function mapSizeText(key) {
   } catch { return ''; }
 }
 function mapSectionName(key) { return MAP_SECTIONS[0].has(key) ? 'Scene map' : 'Concept map'; }
+// The memo's name and its crayon mark (b1105af; the design canvas's round 7, style B — user: "remove the little text
+// more stamina in the card, then add a red crayon written style text 'More Stamina!'"; "make the name displayed as
+// 'Backrooms' only, then add … 'Anomaly!'"): a map may carry a shortName for the memos and a crayon line; a map with
+// a cardNote (District, Compound — the stamina) wears "More Stamina!" unless its own crayon says otherwise. The mark's
+// look is style.css .memo-crayon (Permanent Marker, red wax, the #crayon filter the page carries).
+function mapShortName(m) { return m?.shortName || m?.name || ''; }
+function mapCrayon(m) { return m?.crayon ?? (m?.cardNote ? 'More Stamina!' : ''); }
+function crayonHTML(m, cls = '') { const t = mapCrayon(m); return t ? `<span class="memo-crayon${cls ? ` ${cls}` : ''}">${t}</span>` : ''; }
 // A row of slanted panels for one slot's roster (b1105o, the user's sketch): one panel a unit on its class colour
 // with the face-centred thumbnail, a slot still to pick a yellow "?" panel; the slashes between them are the ink
 // behind showing through (style.css .pane-row / .slot-pane).
@@ -9279,8 +9287,8 @@ function renderLobbySlots(menu) {
   // (the map's whole square picture, letterboxed — user b1105q: "the full uncropped image"; MAP_DATA.thumb is the picker's wide tile's business)
   // (b1105t: a memo pinned to the wall — the pin and the ruled lines are style.css .memo; the tape sits on the picture's corner)
   menu.querySelector('.map-slot').innerHTML = `<span class="slot-art slot-art-map"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m.name}" draggable="false"></span><span class="memo-tape"></span>
-    <span class="slot-text"><b class="slot-name">${m.name}</b><small class="slot-sub"><i class="pip-map">MAP</i>${mapSectionName(state.mapKey).replace(' map', '')}${size ? ` · ${size}` : ''}${m.cardNote ? ' · more stamina' : ''}</small></span>
-    <span class="slot-change">Change</span>
+    <span class="slot-text"><b class="slot-name">${mapShortName(m)}</b><small class="slot-sub"><i class="pip-map">MAP</i>${mapSectionName(state.mapKey).replace(' map', '')}${size ? ` · ${size}` : ''}</small></span>
+    <span class="slot-change">Change</span>${crayonHTML(m)}
     <span class="memo-dice" role="button" aria-label="Random map" title="A random map — scene or concept">${LOBBY_DIE_ICON}</span>`;
 }
 // The memo's die (b1105aa; user: "a random map dice at the bottom right of the map memo paper that picks randomly from
@@ -9599,12 +9607,12 @@ function showProfilePopup(card, unit, onConfirm) {
 // only" — hidden on the floating card.)
 function showMapProfilePopup(card, mapId, mapName, onConfirm) {
   const m = MAP_DATA[mapId] ?? {};
-  const note = m.cardNote;   // (a map's cardNote, as a unit's: one line at the card's bottom-left under the picture — District's and Compound's stamina, user 2026-10-29 (Blockade's too from 2026-11-01 until 2026-11-03); off for part of 2026-11-01 while every map had their boost, back with the maps' own the same day)
+  // (b1105af: the cardNote's line under the picture gave way to the crayon mark — crayonHTML, after the head)
   const size = mapSizeText(mapId);
   const tags = [m.noRandom ? '<span class="tag-ink">MANUAL PICK ONLY</span>' : '', m.offlineOnly ? '<span class="tag-ink">OFFLINE ONLY</span>' : ''].join('');
-  const head = `<div class="profile-head"><b class="profile-name">${mapName}</b><span class="profile-sub">${mapSectionName(mapId)}${size ? ` · ${size}` : ''}</span>${tags ? `<span class="profile-tags">${tags}</span>` : ''}</div>`;
+  const head = `<div class="profile-head"><b class="profile-name">${mapShortName(m) || mapName}</b><span class="profile-sub">${mapSectionName(mapId)}${size ? ` · ${size}` : ''}</span>${tags ? `<span class="profile-tags">${tags}</span>` : ''}</div>`;
   spawnProfilePopup(card,
-    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${head}${note ? `<div class="unit-note map-note">${note}</div>` : ''}`,
+    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${head}${crayonHTML(m, 'memo-crayon-flow')}`,
     onConfirm, 'map');
 }
 
@@ -10393,7 +10401,7 @@ function showEndPage({ title, note = '', winner = null, spectator = false, butto
   const m = MAP_DATA[state.mapKey];
   menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
     <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam)}
-      <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${m?.name || ''}</b></div>
+      <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${mapShortName(m)}</b>${crayonHTML(m, 'memo-crayon-end')}</div>
       ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam)}</div>
     <div class="end-foot">${buttons}</div>`;
   app.appendChild(menu);
@@ -18099,5 +18107,7 @@ function animate() {
 // module's end every const above stands — the module has no top-level await — so the lobby's map card and the first
 // frame's updateMapRoof read GLB_MAPS initialised, where the first frame used to throw on it and log a render error on
 // every page load.
+// the crayon marks' rough edge (b1105af, style.css .memo-crayon): one SVG filter for the whole page, before the first lobby
+if (!document.getElementById('crayon')) document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="crayon" x="-6%" y="-12%" width="112%" height="124%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/></filter></svg>');
 showSelectMenu();
 animate();
