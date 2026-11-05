@@ -6259,12 +6259,13 @@ function renderHpChip(chip, m, role, noSideWords) {
   const res = [...up, ...out];
   const side = noSideWords ? '' : (HUD_SIDE_WORD[role] || '');
   const sig = `${u.spriteKey}|${side}|${res.join(',')}`;
-  if (chip.dataset.sig === sig) return;
+  if (chip.dataset.sig === sig) return roster;
   chip.dataset.sig = sig;
   chip.querySelector('.chip-face').innerHTML = chipFaceImg(u);
   chip.querySelector('.chip-name').textContent = u.char || u.name;
   chip.querySelector('.chip-side').textContent = side;
   chip.querySelector('.chip-res').innerHTML = (up.length ? '<span class="chip-next" aria-hidden="true"></span>' : '') + res.map((r) => { const [k, cls] = r.split(':'); return `<span class="chip-res-face${cls ? ` ${cls}` : ''}">${chipFaceImg(UNIT_DATA[k])}</span>`; }).join('');
+  return roster;
 }
 
 function updateHud(now = performance.now()) {
@@ -6301,11 +6302,18 @@ function updateHud(now = performance.now()) {
   // (b1105ab, user: "no need WATCHING and glowing HP bar effect in command mode") Command mode's camera is the
   // tabletop — no unit is the watched one: no ring, no tag, whatever drives the player's slot
   const watching = !dioramaActive() && (state.spectatorActive || onlineSpectator || (playerOut && focus !== state.player));
+  // (b1105al; user: "HP boxes sizes not aligned") every chip is ONE width (style.css .hp-chip): the match's longest bar
+  // (--hp-max — the slots' units and, in Trio, their reserves, so a 120 HP unit coming in later moves nothing) and, in
+  // Trio, the room for the reserve block (.hud-trio) size them all alike
+  let anyRoster = false;
+  let hpMax = 1;
   for (const [role, fill] of [['player', hudRefs.hp], ['enemy', hudRefs.enemyHp], ['ally', hudRefs.allyHp], ['enemy2', hudRefs.enemy2Hp]]) {
     const m = state[role];
     const chip = fill?.closest('.hp-chip');
     if (!chip || !m) continue;
-    renderHpChip(chip, m, role, noSideWords);
+    const roster = renderHpChip(chip, m, role, noSideWords);
+    if (roster) { anyRoster = true; for (const k of roster) hpMax = Math.max(hpMax, (UNIT_DATA[k]?.hp ?? MAX_HP) / MAX_HP); }
+    hpMax = Math.max(hpMax, hpBarScale(m));
     const sc = String(hpBarScale(m));
     if (chip.style.getPropertyValue('--hp-scale') !== sc) chip.style.setProperty('--hp-scale', sc);
     const w = `${Math.max(0, Math.min(100, (m.state.hp / mechMaxHp(m)) * 100)).toFixed(1)}%`;
@@ -6313,6 +6321,11 @@ function updateHud(now = performance.now()) {
     chip.classList.toggle('spec-watched', watching && m === focus);
     const remaining = state.online ? mechSlotRemaining(m) : trioSlotRemaining(role);
     chip.classList.toggle('down', m.state.hp <= 0 && remaining === 0);
+  }
+  if (state.hud) {
+    state.hud.classList.toggle('hud-trio', anyRoster);
+    const hm = String(hpMax);
+    if (state.hud.style.getPropertyValue('--hp-max') !== hm) state.hud.style.setProperty('--hp-max', hm);
   }
   // The boost sticker and the ammo readout below follow the unit the CAMERA frames: the player while alive, the
   // WATCHED unit in Spectator mode (cycling with TARGET), and the ally once the player is out for good (owner
@@ -7092,7 +7105,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ak 11-05';
+const CLIENT_BUILD_TAG = 'b1105al 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9902,19 +9915,50 @@ function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack
 }
 // onPick (b1105m): the lobby's map card passes one — the pick is kept and the caller gets the page back; without it the
 // match starts on the pick, as the chain's last page did until b1105l (the fallback of startFromMap).
-// (b1105ak, user: "the layout in selection menus are also deformed") a landscape screen narrower than the pickers' page
-// (812 px: the side card and the grid's six columns) keeps the desktop arrangement and ZOOMS the page's two rows to fit,
-// as the lobby does (showSelectMenu); the card that floats over the grid is for portrait phones alone (style.css)
+// (b1105ak, user: "the layout in selection menus are also deformed"; b1105al: "make the file and memo paper uncropped") a
+// landscape screen narrower than the pickers' page (812 px: the side card and the grid's six columns) keeps the desktop
+// arrangement and ZOOMS the page's two rows to fit — the width, as the lobby does (showSelectMenu), AND the height: the
+// header row plus the side card (the unit file, the map memo) must stand inside the screen, so the card is never cut.
+// A card's height is assumed (378 / 341: its layout height at zoom 1, the top margin that makes room for the folder tab
+// or the memo tape, and the tilt) until one is shown, so the zoom holds steady across the first tap; a taller card seen
+// is kept.  The card that floats over the grid is for
+// portrait phones alone (style.css).
 function fitPickerMenu(menu) {
+  const PAGE_W = 812;
+  const CARD_H = menu.querySelector('.map-grid') ? 341 : 378;
+  const side = menu.querySelector('.picker-side');
+  let cardSeen = 0;
   const fit = () => {
+    const rows = [...menu.querySelectorAll('.picker-top, .picker-body')];
     const portrait = window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches;
-    const z = portrait ? 1 : Math.min(1, (menu.clientWidth - 32) / 812);
+    let z = 1;
+    if (!portrait) {
+      // measured at the width fit (the header is one line there, as at 844 px) — layout only, nothing paints in between;
+      // offsetHeight is the unzoomed (layout) height
+      const zw = Math.min(1, (menu.clientWidth - 32) / PAGE_W);
+      const zq = zw < 0.995 ? Number(zw.toFixed(3)) : 1;
+      for (const el of rows) el.style.zoom = zq < 1 ? String(zq) : '';
+      const top = rows[0]?.offsetHeight || 0;
+      if (side?.classList.contains('has-card')) cardSeen = Math.max(cardSeen, side.offsetHeight + (parseFloat(getComputedStyle(side).marginTop) || 0) + 6);   // (+ the top margin that makes room for the folder tab or the memo tape, and what the 2° tilt adds at the bottom)
+      const card = Math.max(cardSeen, CARD_H);   // (never under the assumption: the zoom does not grow at a tap)
+      const cs = getComputedStyle(menu);
+      const gap = parseFloat(cs.rowGap) || 0;
+      // the menu's flex gap sits before the header as well (its ::before spacer is an item); the sheet may scroll by its
+      // bottom padding and the grid's overrun — the CARD must stand whole, 4 px to spare
+      const free = menu.clientHeight - parseFloat(cs.paddingTop) - 2 * gap - 4;
+      z = Math.min(zq, free / (top + card));
+    }
     const v = z < 0.995 ? z.toFixed(3) : '';
-    for (const el of menu.querySelectorAll('.picker-top, .picker-body')) el.style.zoom = v;
+    for (const el of rows) el.style.zoom = v;
   };
   fit();
   const onResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onResize); return; } fit(); };
   window.addEventListener('resize', onResize);
+  // the card appearing (or changing) under a tap refits — the side is one element for the menu's life
+  if (side && typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => { if (menu.isConnected) fit(); else ro.disconnect(); });
+    ro.observe(side);
+  }
 }
 function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   state.allRandomFill = false;   // the All Random chain ends here

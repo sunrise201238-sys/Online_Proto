@@ -63,14 +63,20 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    into the row's band (86–140), so the second enemy's chip must end before the thumb cluster (its left edge 100 px from
    the right); the ally's chip steps in the same so the row reads as one stagger. The narrow screens below put both
    back at 22 px — there the cluster is a size down and starts under the row. */
-.hp-chip.ally-health, .hp-chip.enemy2-health { max-width: calc(50vw - 128px); }
 .chip-face { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c); box-sizing: border-box; background: #2a2a44; }
 .chip-face img, .chip-res-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
 .chip-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 /* (b1105ag, user: "the mobile end layout is off, too much overlapping in game" — a landscape phone 640 px wide) a chip
    never passes its half of the screen less PAUSE, the fullscreen button and the margins: the bar gives first (down to
    56 px), then the name is cut with an ellipsis; the face and the reserve keep their size */
-.hp-chip { max-width: calc(50vw - 112px); }
+/* (b1105al; user: "HP boxes sizes not aligned") every chip is the SAME width — room for the face, the match's longest bar
+   (--hp-max, set by updateHud: the slots' units and their reserves) and, in Trio (.hud-trio), the two reserve faces and the
+   marker; a box no longer grows and shrinks with its own content.  Border-box: 5 + 40 + 8 + bar + 18 + 2 x 3 = 77 + bar;
+   Trio adds the 8 px gap and the 97 px reserve block (12 + 8 + 5 + 34 + 4 + 34).  Both rows share one cap (112 / 128 until
+   b1105ak made the rows differ by 16 px at 721–900 px). */
+.hp-chip { width: calc(77px + 150px * var(--hp-max, 1)); max-width: calc(50vw - 128px); }
+.touch-hud.hud-trio .hp-chip { width: calc(182px + 150px * var(--hp-max, 1)); }
+.chip-col { flex: 1 1 auto; }   /* (fills the fixed box; the bar keeps its own length inside, the name wraps at the box) */
 .enemy-health .chip-col, .enemy2-health .chip-col { align-items: flex-end; }
 /* (b1105ai, user: "if one of YOU / ALLY / ENEMY and the unit name must be omitted for the space, omit the side word") the name
    line wraps: when the side word does not fit beside the name it drops to a second line, which the line's height clips
@@ -1094,36 +1100,36 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-memo .memo-crayon-end { top: 170px; }
 .memo-crayon-flow { position: static; margin: 2px 0 0 2px; align-self: flex-start; }
 
-/* ---- a narrow landscape screen (b1105ah; the user's phone, about 640 × 342 CSS px): the chips in a smaller cut — 46 px,
-   a 34 px face, a 120 px bar, 26 px reserve faces, the second row 72 px down — a Trio chip drops its side word (the
-   colour and the corner say the side; the name stays whole), the thumb buttons and the stick a size down so the
-   second row of chips clears DODGE ---- */
+/* ---- a narrow landscape screen (b1105ah; b1105al, user: "hp boxes too big. buttons way too small. HP boxes sizes not
+   aligned. i can afford smaller hp boxes" — the phone is about 709 x 327 CSS px): the chips in a SMALL cut — 34 px, a
+   26 px face, a 90 px bar, 20 px reserve faces, every chip one width, the two rows flush at 12 px and 6 px apart (top 8
+   and 48, done by 82) — and the thumb buttons a size UP: as big as a fifth of the screen's height allows, so the
+   cluster's top (3 x 20vh + two gaps + 12 from the bottom) stays under the second row on any height from 300 px ---- */
 @media (max-width: 720px) {
-  .hp-chip { height: 46px; gap: 6px; padding: 0 14px 0 4px; }
-  .hp-chip.enemy-health, .hp-chip.enemy2-health { padding: 0 4px 0 14px; }
-  /* (b1105ai) PAUSE a size down and the fullscreen button at its RIGHT: the left chip may run to 58 px short of the middle,
-     the right one stops before the button; the second row sits under all that and may run to 34 px short of the middle */
-  .pause-btn { top: 14px; padding: 6px 10px; font-size: 13px; }
-  .fullscreen-btn.in-match { top: 54px; left: calc(50% - 13px); }   /* (under PAUSE, in the middle — between the second row's chips in 2v2) */
-  .hp-chip.health, .hp-chip.enemy-health { max-width: calc(50vw - 58px); }
-  .hp-chip.ally-health, .hp-chip.enemy2-health { top: 70px; max-width: calc(50vw - 44px); }
-  .hp-chip.ally-health { left: 22px; }
-  .hp-chip.enemy2-health { right: 22px; }
-  .chip-nm { max-height: 13px; }
-  .chip-face { width: 34px; height: 34px; }
-  .chip-col { gap: 3px; }
-  .chip-name { font-size: 13px; }
-  .chip-side { font-size: 8px; }
-  .chip-bar { width: calc(120px * var(--hp-scale, 1)); height: 8px; }
-  .chip-knob { top: -3px; width: 14px; height: 14px; left: calc(var(--w, 100%) - 7px); }
-  .enemy-health .chip-knob, .enemy2-health .chip-knob { left: auto; right: calc(var(--w, 100%) - 7px); }
-  .chip-res { padding-left: 12px; }
-  .enemy-health .chip-res, .enemy2-health .chip-res { padding: 0 12px 0 0; }
-  .chip-res-face { width: 26px; height: 26px; margin-left: 3px; }
+  .hp-chip { height: 34px; gap: 5px; padding: 0 10px 0 3px; width: calc(50px + 90px * var(--hp-max, 1)); max-width: calc(50vw - 48px); }   /* (border-box: 3 + 26 + 5 + bar + 10 + 6) */
+  .touch-hud.hud-trio .hp-chip { width: calc(116px + 90px * var(--hp-max, 1)); }   /* (+ the 5 px gap and the 61 px reserve block: 9 + 6 + 3 + 20 + 3 + 20) */
+  .hp-chip.enemy-health, .hp-chip.enemy2-health { padding: 0 3px 0 10px; }
+  .hp-chip.health, .hp-chip.enemy-health { top: 8px; }
+  .hp-chip.ally-health, .hp-chip.enemy2-health { top: 48px; }
+  .hp-chip.ally-health { left: 12px; }
+  .hp-chip.enemy2-health { right: 12px; }
+  .pause-btn { top: 10px; padding: 6px 10px; font-size: 13px; }
+  .fullscreen-btn.in-match { top: 52px; left: calc(50% - 13px); }   /* (under PAUSE, in the middle — between the second row's chips in 2v2) */
+  .chip-nm { max-height: 11px; gap: 3px 5px; }
+  .chip-face { width: 26px; height: 26px; border-width: 2px; }
+  .chip-col { gap: 2px; }
+  .chip-name { font-size: 11px; }
+  .chip-side { font-size: 7px; }
+  .chip-bar { width: calc(90px * var(--hp-scale, 1)); height: 6px; min-width: 40px; }
+  .chip-knob { top: -2.5px; width: 11px; height: 11px; left: calc(var(--w, 100%) - 5.5px); border-width: 1.5px; }
+  .enemy-health .chip-knob, .enemy2-health .chip-knob { left: auto; right: calc(var(--w, 100%) - 5.5px); }
+  .chip-res { padding-left: 9px; }
+  .enemy-health .chip-res, .enemy2-health .chip-res { padding: 0 9px 0 0; }
+  .chip-res-face { width: 20px; height: 20px; margin-left: 3px; border-width: 1.5px; }
   .enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 3px 0 0; }
-  .chip-next { border-top-width: 5px; border-bottom-width: 5px; border-left-width: 7px; margin-right: 4px; }
-  .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 7px; margin: 0 0 0 4px; }
+  .chip-next { border-top-width: 4px; border-bottom-width: 4px; border-left-width: 6px; margin-right: 3px; }
+  .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 6px; margin: 0 0 0 3px; }
   .touch-hud .spec-watched::after, .hp-chip.down::after { bottom: -8px; font-size: 7px; }
-  .buttons { --btn-size: clamp(56px, 8vw, 84px); --btn-gap: clamp(8px, 1.2vw, 14px); }
+  .buttons { --btn-size: clamp(56px, min(10vw, 20vh), 84px); --btn-gap: clamp(8px, 1.2vw, 14px); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
 }
