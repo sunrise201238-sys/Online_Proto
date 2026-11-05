@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105av 11-05';
+const CLIENT_BUILD_TAG = 'b1105aw 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9287,14 +9287,15 @@ function renderTeamCard(card, side) {
       : `<span class="slot-art slot-art-trio rows-${slots.length}">${rosters.map((r) => paneRowHTML(r, need)).join('')}</span>`;
     const sep = slots.length > 1 ? ' · ' : ' · ';   // (thin spaces on a 2v2 card: two rosters on one line each)
     const lines = slots.map((s, i) => `<b class="slot-name slot-name-trio">${slots.length > 1 ? `<em>${LOBBY_SLOTS[s].label}</em>` : ''}${Array.from({ length: need }, (_, j) => (rosters[i][j] ? (UNIT_DATA[rosters[i][j]].char || rosters[i][j]) : '—')).join(sep)}</b>`).join('');
-    text = `${lines}<small class="slot-sub">${missing ? `${missing} more to pick` : (need > 1 ? (slots.length > 1 ? 'three each, in turn' : 'the three take the field in turn') : (side === 'you' ? 'you and your bot ally' : 'the two bots against you'))}</small>`;
+    // (b1105aw; user: "remove the 'the three take the field in turn' text globally") a full Trio roster carries no small line
+    text = `${lines}${missing ? `<small class="slot-sub">${missing} more to pick</small>` : (need > 1 ? '' : `<small class="slot-sub">${side === 'you' ? 'you and your bot ally' : 'the two bots against you'}</small>`)}`;
   }
   card.innerHTML = `<span class="slot-tag slot-tag-${side === 'you' ? 'unit' : 'enemy'}">${tag}</span>${art}<span class="slot-text">${text}</span><span class="slot-change">${missing ? 'Pick' : 'Change'}</span>`;
 }
 // The enemy chip at the foot's left (b1105q; user: the enemy and the map swap places): a strip of the enemy side's
 // faces — a small row of slanted panels per slot — then the names with an ENEMY / ENEMY 2 pip before each slot's,
 // then Pick / Change. One unit (Duel 1v1) reads name over class · weapon; a Trio its three names over "n more to
-// pick"; 2v2 a line per slot.
+// pick" while picks are missing (nothing under a full roster since b1105aw); 2v2 a line per slot.
 function renderEnemyChip(chip) {
   const need = trioPickCount();
   const slots = lobbySideSlots('enemy');
@@ -9313,11 +9314,11 @@ function renderEnemyChip(chip) {
     const weaponClass = u ? (u.name.split('/')[1] || '').trim() : '';
     text = `<span class="chip-text"><b>${u ? (u.char || u.name) : 'Pick an enemy'}</b><small>${u ? `${weaponClass}${u.weapon ? ` · ${u.weapon}` : ''}` : 'tap to choose'}</small></span>`;
   } else if (slots.length === 1) {
-    text = `<span class="chip-text chip-trio"><b>${names(rosters[0], ' · ')}</b><small>${missing ? `${missing} more to pick` : 'the three take the field in turn'}</small></span>`;
+    text = `<span class="chip-text chip-trio"><b>${names(rosters[0], ' · ')}</b>${missing ? `<small>${missing} more to pick</small>` : ''}</span>`;   // (b1105aw: no "in turn" line under a full roster)
   } else if (need === 1) {
     text = `<span class="chip-text"><b>${name(rosters[0][0])} · ${name(rosters[1][0])}</b><small>${missing ? `${missing} more to pick` : 'the two bots against you'}</small></span>`;
   } else {
-    text = `<span class="chip-text chip-two">${slots.map((s, i) => `<b>${names(rosters[i], ' · ')}</b>`).join('')}<small>${missing ? `${missing} more to pick` : 'three each, in turn'}</small></span>`;
+    text = `<span class="chip-text chip-two">${slots.map((s, i) => `<b>${names(rosters[i], ' · ')}</b>`).join('')}${missing ? `<small>${missing} more to pick</small>` : ''}</span>`;
   }
   chip.innerHTML = `<span class="chip-strip${stack ? ' chip-stack' : ''}">${strip}</span>${text}<span class="chip-change">${tag}</span>`;
 }

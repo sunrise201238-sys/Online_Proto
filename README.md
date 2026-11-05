@@ -113,6 +113,8 @@ Both offline and online pickers carry them:
 
 **The memo die higher still, and a few px left** (b1105av, 2026-11-05; user: "i was asking to move the DICE up! and may be few pixels to the left, too") — the die sits 18 px off the paper's bottom and 14 px off its right edge (5 / 9 until b1105at, 13 / 9 in b1105au), 18–22 px under the lines and clear of the crayon note on District, Compound and Backrooms (Anomaly). The paper itself has not moved since b1105as. Verified headless at 600 × 310 and 1280 × 720 on Town and Compound.
 
+**No "in turn" line under a full Trio roster** (b1105aw, 2026-11-05; user: "remove the 'the three take the field in turn' text globally") — the lobby's unit card and the enemy slip carried "the three take the field in turn" (1v1 Trio) or "three each, in turn" (2v2 Trio) once every pick was made; both are gone, and no small line is rendered in their place. "n more to pick" stays while picks are missing, and the Duel lines (class · weapon, "you and your bot ally", "the two bots against you") are as they were. Verified headless at 600 × 310: 1v1 Trio and 2v2 Trio read "2 more to pick" before All random and no small line after it, on the card and on the slip alike.
+
 ## Sudden Death
 
 Picked as the **rules mode** beside the view mode (**Health Point** is the normal game; the two were named Normal / Classic until 2026-10-10). Everyone fights at **1 HP** — one landed round decides — and Trio respawns arrive at 1 HP too. The two snipers (Aru, Kei) are out of the pickers and the Random cards. The match opens on a full-width **SUDDEN DEATH** banner with the simulation frozen behind it; the 3 s spawn immunity and every bot slot's 650 ms first-shot delay count from the banner's end (the server holds the same way online).
