@@ -7105,7 +7105,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105al 11-05';
+const CLIENT_BUILD_TAG = 'b1105am 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9915,38 +9915,30 @@ function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack
 }
 // onPick (b1105m): the lobby's map card passes one — the pick is kept and the caller gets the page back; without it the
 // match starts on the pick, as the chain's last page did until b1105l (the fallback of startFromMap).
-// (b1105ak, user: "the layout in selection menus are also deformed"; b1105al: "make the file and memo paper uncropped") a
-// landscape screen narrower than the pickers' page (812 px: the side card and the grid's six columns) keeps the desktop
-// arrangement and ZOOMS the page's two rows to fit — the width, as the lobby does (showSelectMenu), AND the height: the
-// header row plus the side card (the unit file, the map memo) must stand inside the screen, so the card is never cut.
-// A card's height is assumed (378 / 341: its layout height at zoom 1, the top margin that makes room for the folder tab
-// or the memo tape, and the tilt) until one is shown, so the zoom holds steady across the first tap; a taller card seen
-// is kept.  The card that floats over the grid is for
-// portrait phones alone (style.css).
+// (b1105ak, user: "the layout in selection menus are also deformed"; b1105al–am: "make the file and memo paper uncropped",
+// "just a little bit smaller so the whole file can be displayed") a landscape screen narrower than the pickers' page
+// (812 px: the side card and the grid's six columns) keeps the desktop arrangement and ZOOMS the page's two rows to fit
+// — the width, as the lobby does (showSelectMenu), AND the height: the header row (40 px, its back button) plus the side
+// card (the unit file 378 px, the map memo 341 px: the card at zoom 1 with the top margin that makes room for the folder
+// tab or the memo tape, and the 2° tilt) must stand inside the screen with 12 px to spare, so the card is never cut.
+// Plain numbers on purpose (b1105am): the b1105al fit read the zoomed rows' offsetHeight, and on the user's phone the
+// file's bottom still came out cut by about 9 px (what such a reading means under zoom differs between browsers);
+// nothing zoomed is measured now, and the visible height (innerHeight) counts when it is less than the menu's.  The
+// card that floats over the grid is for portrait phones alone (style.css).
 function fitPickerMenu(menu) {
   const PAGE_W = 812;
+  const TOP_H = 40;
   const CARD_H = menu.querySelector('.map-grid') ? 341 : 378;
-  const side = menu.querySelector('.picker-side');
-  let cardSeen = 0;
   const fit = () => {
-    const rows = [...menu.querySelectorAll('.picker-top, .picker-body')];
+    const rows = menu.querySelectorAll('.picker-top, .picker-body');
     const portrait = window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches;
     let z = 1;
     if (!portrait) {
-      // measured at the width fit (the header is one line there, as at 844 px) — layout only, nothing paints in between;
-      // offsetHeight is the unzoomed (layout) height
-      const zw = Math.min(1, (menu.clientWidth - 32) / PAGE_W);
-      const zq = zw < 0.995 ? Number(zw.toFixed(3)) : 1;
-      for (const el of rows) el.style.zoom = zq < 1 ? String(zq) : '';
-      const top = rows[0]?.offsetHeight || 0;
-      if (side?.classList.contains('has-card')) cardSeen = Math.max(cardSeen, side.offsetHeight + (parseFloat(getComputedStyle(side).marginTop) || 0) + 6);   // (+ the top margin that makes room for the folder tab or the memo tape, and what the 2° tilt adds at the bottom)
-      const card = Math.max(cardSeen, CARD_H);   // (never under the assumption: the zoom does not grow at a tap)
       const cs = getComputedStyle(menu);
-      const gap = parseFloat(cs.rowGap) || 0;
-      // the menu's flex gap sits before the header as well (its ::before spacer is an item); the sheet may scroll by its
-      // bottom padding and the grid's overrun — the CARD must stand whole, 4 px to spare
-      const free = menu.clientHeight - parseFloat(cs.paddingTop) - 2 * gap - 4;
-      z = Math.min(zq, free / (top + card));
+      const gap = parseFloat(cs.rowGap) || 0;   // (the menu's flex gap sits before the header too: its ::before spacer is an item)
+      const h = Math.min(menu.clientHeight, window.innerHeight || Infinity);
+      const free = h - (parseFloat(cs.paddingTop) || 0) - 2 * gap - 12;
+      z = Math.min(1, (menu.clientWidth - 32) / PAGE_W, free / (TOP_H + CARD_H));
     }
     const v = z < 0.995 ? z.toFixed(3) : '';
     for (const el of rows) el.style.zoom = v;
@@ -9954,11 +9946,6 @@ function fitPickerMenu(menu) {
   fit();
   const onResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onResize); return; } fit(); };
   window.addEventListener('resize', onResize);
-  // the card appearing (or changing) under a tap refits — the side is one element for the menu's life
-  if (side && typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => { if (menu.isConnected) fit(); else ro.disconnect(); });
-    ro.observe(side);
-  }
 }
 function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   state.allRandomFill = false;   // the All Random chain ends here

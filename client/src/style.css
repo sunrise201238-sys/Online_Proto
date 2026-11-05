@@ -256,17 +256,14 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   box-shadow: 3px 3px 0 var(--ink);
 }
 
-/* Persistent fullscreen-toggle button. Top-left, sits below the player
-   health bar (top:14px + 10px tall) with a small gap. Moved from the
-   top-right because on shorter mobile screens (landscape phones) the
-   right-side action-button cluster extends up high enough that the
-   top step button collides with the FS button — the left column is
-   clean above the joystick (which lives bottom-left).
+/* Persistent fullscreen-toggle button. In MENUS it sits in the top-left corner (b1105am, user: "the full screen button
+   should be in the up left corner" — it used to hang 36 px down), inside the safe area; the pickers' header row keeps a
+   40 px left padding so its back arrow clears it. In a match it moves (.in-match below).
    z-index 200 so it's above .menu (100) and .online-overlay (90). */
 .fullscreen-btn {
   position: absolute;
-  top: max(36px, calc(env(safe-area-inset-top) + 28px));
-  left: max(16px, env(safe-area-inset-left));
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
   z-index: 200;
   width: 26px;
   height: 26px;
