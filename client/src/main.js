@@ -7086,7 +7086,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ac 11-05';
+const CLIENT_BUILD_TAG = 'b1105ad 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7551,8 +7551,10 @@ function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
   const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
   const oppReady = rematchRequested?.[oppId] === true;
   const title = tie ? 'MATCH ENDED' : (mySlot ? (win ? 'YOU WIN' : 'YOU LOSE') : (win ? 'TEAM 1 WINS' : 'TEAM 2 WINS'));
+  // (b1105ad) a knockout leaves the losing team's every unit out — the page says so whatever the last snapshot holds
+  const outTeam = (!tie && state.online?.conn?.getLastMatchEnd?.()?.reason === 'ko') ? (winnerTeam === 'A' ? 'B' : 'A') : null;
   const menu = showEndPage({
-    title, note: oppReady ? 'Opponent wants a rematch' : '', winner: tie ? null : (win ? 'you' : 'foe'), spectator: !mySlot,
+    title, note: oppReady ? 'Opponent wants a rematch' : '', winner: tie ? null : (win ? 'you' : 'foe'), spectator: !mySlot, outTeam,
     buttons: '<button data-leave class="online-leave-btn end-select">Leave</button><button data-rematch class="go-btn end-go">REMATCH</button>'
   });
   menu.querySelector('[data-rematch]').addEventListener('click', (e) => {
@@ -8174,7 +8176,10 @@ function showOnlineWaitingOpp(onl, conn) {
     const isMe = s === myId;
     const isOccupied = occupied.has(s);
     const slotCfg = cfg?.config?.[s] ?? {};
-    const unitName = trio ? rosterLines(s, false) : (slotCfg.unitKey ? UNIT_DATA[slotCfg.unitKey]?.name : null);
+    // (b1105ad, user: "show the user's unit as unit name instead of number") a player's units read by character name,
+    // as the bots' do — "Saori", not "Unit 1 / Assault Rifle"
+    const charOf = (k) => UNIT_DATA[k]?.char || UNIT_DATA[k]?.name || k;
+    const unitName = trio ? rosterLines(s, true) : (slotCfg.unitKey ? charOf(slotCfg.unitKey) : null);
     const sep = trio ? '<br>' : ' ';   // Trio rosters stack under the label, one unit per line
     let statusHtml;
     const viewTag = slotCfg.viewMode === 'command' ? ' <span class="roster-viewtag">[CMD]</span>' : '';
@@ -8195,7 +8200,9 @@ function showOnlineWaitingOpp(onl, conn) {
         ? `(BOT)<br>${rosterLines(s, true) ?? UNIT_DATA[botUnitKey]?.char ?? 'Saori'}`
         : `${UNIT_DATA[botUnitKey]?.char || 'Saori'} (BOT)`;
       if (isHost) {
-        statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}">${botLabel} — tap to change</span>`;
+        // (b1105ad, user: "move the 'tap to change' to the left so the unit names can be aligned on the right side")
+        // the hint sits left of the names, which keep the column's right edge (style.css .roster-bot-pick)
+        statusHtml = `<span class="roster-status roster-bot-pick" data-pick-bot-slot="${s}"><i class="roster-hint">tap to change</i><span class="roster-names">${botLabel}</span></span>`;
       } else {
         const joinBtn = mode === '2v2' ? `<button class="roster-join" data-join-slot="${s}">Join</button>` : '';
         statusHtml = `<span class="roster-status">${botLabel}</span>${joinBtn}`;
@@ -8992,7 +8999,7 @@ function showSelectMenu() {
   menu.className = 'menu lobby';
   menu.innerHTML = `
     <button data-guide class="lobby-corner-btn" title="Guide" aria-label="Guide">?</button>
-    <div class="lobby-head"><h2 class="lobby-title">GunVS</h2></div>
+    <div class="lobby-head"><h2 class="lobby-title">ArchiveVS</h2></div>
     <div class="lobby-grid">
       <div class="lobby-folder">
         <button type="button" class="slot-card unit-slot" data-slot="unit"></button>
@@ -9892,7 +9899,7 @@ function showGuidePopup() {
           <button class="guide-close-btn" aria-label="Close">×</button>
         </div>
         <div class="guide-card-body">
-          <p>Gun VS Gun — A fast-paced duel gunfight.</p>
+          <p>ArchiveVS — A fast-paced duel gunfight.</p>
           <p class="guide-tagline">No aiming problem — resource management is the key.</p>
 
           <h4>Controls</h4>
@@ -10356,29 +10363,37 @@ function showEndMenu(win) {
 const END_SLOT_WORD = { player: 'YOU', ally: 'ALLY', enemy: 'ENEMY', enemy2: 'ENEMY 2' };
 // a slot's units at the end: Trio from the roster and its cursor (offline: state.trioRosters / rosterIdx; online: the
 // snapshot's roster fields), Duel the one unit — 'out' / 'std' (standing) / 'res' (in reserve)
-function endRowUnits(role) {
+// outTeam (online, b1105ad): the team the knockout ended — every unit of its slots is out, whatever the data says
+function endRowUnits(role, outTeam = null) {
   const m = state[role];
   if (!m) return null;
-  const roster = state.online ? (m.state.roster || null) : (state.trioRosters?.[role] || null);
-  const idx = state.online ? (m.state.rosterIdx ?? 0) : (state.rosterIdx?.[role] ?? 0);
-  const alive = m.state.hp > 0;
+  // Online the freshest state is the LAST SNAPSHOT: the server sends the final tick's snapshot before match:end, but
+  // the mechs' mirror runs in the playing frames alone and the frame that turns the page over mirrors nothing — so the
+  // mechs sat a tick behind and the last unit killed showed alive (user 2026-11-05, an online 2v2 Trio)
+  const sid = state.online ? onlineServerIdOf(role) : null;
+  const f = (sid && state.online.conn?.getLatestSnapshot?.()?.fighters?.[sid]) || null;
+  const src = f ?? m.state;
+  const roster = state.online ? (src.roster || null) : (state.trioRosters?.[role] || null);
+  const idx = state.online ? (src.rosterIdx ?? 0) : (state.rosterIdx?.[role] ?? 0);
+  const teamOut = !!outTeam && (sid ? teamOfSlot(sid) : m.state.team) === outTeam;
+  const alive = src.hp > 0 && !teamOut;
   if (!roster) return [{ u: m.unit, st: alive ? 'std' : 'out' }];
-  return roster.map((k, i) => ({ u: UNIT_DATA[k] || m.unit, st: i < idx ? 'out' : (i === idx ? (alive ? 'std' : 'out') : 'res') }));
+  return roster.map((k, i) => ({ u: UNIT_DATA[k] || m.unit, st: (teamOut || i < idx) ? 'out' : (i === idx ? (alive ? 'std' : 'out') : 'res') }));
 }
-function endTeamHTML(side, tag, roles, spectator, winner) {
-  const rows = roles.map((role, i) => ({ word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role) })).filter((r) => r.units);
+function endTeamHTML(side, tag, roles, spectator, winner, outTeam = null) {
+  const rows = roles.map((role, i) => ({ word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role, outTeam) })).filter((r) => r.units);
   return `<div class="end-team end-${side}"><span class="end-tag">${tag}</span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div></div>`).join('')}</div>`;
 }
 // winner: 'you' (the left panel's side) | 'foe' | null (a tie); note: a chip under the title (online: the opponent's
 // rematch wish); buttons: the foot's markup — the caller wires them
-function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '' }) {
+function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '', outTeam = null }) {
   const menu = document.createElement('div');
   menu.className = 'menu end-page';
   const m = MAP_DATA[state.mapKey];
   menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
-    <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you')}
+    <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam)}
       <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${m?.name || ''}</b></div>
-      ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe')}</div>
+      ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam)}</div>
     <div class="end-foot">${buttons}</div>`;
   app.appendChild(menu);
   return menu;
@@ -13798,7 +13813,9 @@ function updateDioramaHud() {
       }
     }
     const charName = m.unit.char ?? wkey;
-    const role = DIO_SLOT_META[c.slot].label + (els.weaponFailed && charName ? ` · ${charName}` : '');
+    // (b1105ad, user: "in command mode, change the YOU / ENEMY 1 / ALLY / ENEMY 2 to unit name as in HP box") the card
+    // names the unit, as its HP chip does; the side is the card's colour (the chip's), the label the fallback
+    const role = charName || DIO_SLOT_META[c.slot].label;
     if (els.roleEl.textContent !== role) els.roleEl.textContent = role;
     // HP reads as the bar alone (owner call — no numbers); NO SIGHT moves to
     // its own status line under it.

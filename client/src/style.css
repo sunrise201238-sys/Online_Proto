@@ -73,9 +73,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .chip-res { display: flex; align-items: center; padding-left: 12px; }   /* (12 px from the track's end: clear of the knob at full HP) */
 .enemy-health .chip-res, .enemy2-health .chip-res { flex-direction: row-reverse; padding: 0 12px 0 0; }
 .chip-res:empty { display: none; }
-.chip-res-face { position: relative; flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.9); box-sizing: border-box; background: #2a2a44; margin-left: -7px; }
+/* (b1105ad, user: "the next-ups thumbnails bigger without overlapping with others or changing other existing layouts")
+   34 px faces side by side, 4 px apart — inside the 48 px chip as before; the chip alone grows, by its own width */
+.chip-res-face { position: relative; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.9); box-sizing: border-box; background: #2a2a44; margin-left: 4px; }
 .chip-res-face:first-child { margin-left: 0; }
-.enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 -7px 0 0; }
+.enemy-health .chip-res-face, .enemy2-health .chip-res-face { margin: 0 4px 0 0; }
 .enemy-health .chip-res-face:first-child, .enemy2-health .chip-res-face:first-child { margin: 0; }
 .chip-res-face.out { opacity: 0.4; filter: grayscale(1); }   /* (a fallen roster unit) */
 /* (the second row's chips were a smaller kind until b1105ab — the user: all four one size, the bigger as standard) */
@@ -418,6 +420,11 @@ body.pseudo-fullscreen #app {
 .menu .online-roster .roster-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; }
 .menu .online-roster .roster-slot { width: 22px; color: var(--muted); font-weight: 800; font-size: 11px; }
 .menu .online-roster .roster-status { flex: 1; text-align: right; color: var(--ink); font-weight: 700; }
+/* a bot slot the host may change (b1105ad, user: "move the 'tap to change' to the left so the unit names can be aligned
+   on the right side"): the hint at the left, the names at the column's right edge with the other rows' */
+.menu .online-roster .roster-bot-pick { display: flex; align-items: center; justify-content: flex-end; gap: 10px; cursor: pointer; }
+.menu .online-roster .roster-hint { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: var(--magenta); white-space: nowrap; }
+.menu .online-roster .roster-names { text-align: right; }
 .menu .online-roster .roster-join { width: auto; padding: 4px 12px; font-size: 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--lime); color: var(--ink); letter-spacing: 0.04em; margin-left: 6px; box-shadow: 2px 2px 0 var(--ink); }
 .menu .online-status { display: flex; flex-direction: column; gap: 4px; width: 260px; padding: 8px 12px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; color: var(--ink); font-size: 12px; box-sizing: border-box; }
 .menu .online-status .lbl { color: var(--muted); margin-right: 4px; font-weight: 700; }
@@ -541,6 +548,7 @@ body.pseudo-fullscreen #app {
   color: #ffffff; font-family: var(--font-ui); pointer-events: none; will-change: transform;
 }
 .dio-card .dio-name { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; opacity: 0.95; white-space: nowrap; overflow: hidden; }
+.dio-card .dio-role { text-transform: uppercase; }   /* (b1105ad: the unit's name, in the HP chip's capitals) */
 /* Vertical rhythm (owner 2026-09-26): the 22 px portrait grew the name row
    and pushed the command icons ~6 px below the card's bottom border. The
    margins tightened (bar 7->5, boost 3->2, status 4->2) and the icons
