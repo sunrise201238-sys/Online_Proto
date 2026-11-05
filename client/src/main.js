@@ -6250,12 +6250,13 @@ function renderHpChip(chip, m, role, noSideWords) {
   // the roster: offline the lobby's (keys) with the slot's cursor; online the snapshot-mirrored fields
   const roster = state.online ? (m.state.roster || null) : (state.trioRosters?.[role] || null);
   const idx = state.online ? (m.state.rosterIdx ?? 0) : (state.rosterIdx?.[role] ?? 0);
-  // the reserve's order (b1105ac, user: "the next-up unit should be placed at the uncovered position"): the faces
-  // overlap and the LAST one drawn lies on top at the chip's outer end — so the fallen come first (inner, under), then
-  // the upcoming from the farthest to the NEXT-UP, which ends outermost and whole
+  // the reserve's order (b1105ae; user: "add a little glowing bar or triangle at the marked areas so user will know the
+  // one next to it is the next unit" — b1105ac had put the next-up outermost while the faces overlapped; they stand
+  // apart since b1105ad): the upcoming in roster order, the NEXT-UP first, right after the track and the marker
+  // (.chip-next, a glowing triangle pointing at it), the fallen last; no marker when nothing is left to come
+  const up = roster ? roster.filter((_, i) => i > idx).map((k) => `${k}:`) : [];
   const out = roster ? roster.filter((_, i) => i < idx).map((k) => `${k}:out`) : [];
-  const up = roster ? roster.filter((_, i) => i > idx).reverse().map((k) => `${k}:`) : [];
-  const res = [...out, ...up];
+  const res = [...up, ...out];
   const side = noSideWords ? '' : (HUD_SIDE_WORD[role] || '');
   const sig = `${u.spriteKey}|${side}|${res.join(',')}`;
   if (chip.dataset.sig === sig) return;
@@ -6263,7 +6264,7 @@ function renderHpChip(chip, m, role, noSideWords) {
   chip.querySelector('.chip-face').innerHTML = chipFaceImg(u);
   chip.querySelector('.chip-name').textContent = u.char || u.name;
   chip.querySelector('.chip-side').textContent = side;
-  chip.querySelector('.chip-res').innerHTML = res.map((r) => { const [k, cls] = r.split(':'); return `<span class="chip-res-face${cls ? ` ${cls}` : ''}">${chipFaceImg(UNIT_DATA[k])}</span>`; }).join('');
+  chip.querySelector('.chip-res').innerHTML = (up.length ? '<span class="chip-next" aria-hidden="true"></span>' : '') + res.map((r) => { const [k, cls] = r.split(':'); return `<span class="chip-res-face${cls ? ` ${cls}` : ''}">${chipFaceImg(UNIT_DATA[k])}</span>`; }).join('');
 }
 
 function updateHud(now = performance.now()) {
@@ -7086,7 +7087,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ad 11-05';
+const CLIENT_BUILD_TAG = 'b1105ae 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
