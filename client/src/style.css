@@ -62,13 +62,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .chip-face { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c); box-sizing: border-box; background: #2a2a44; }
 .chip-face img, .chip-res-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
 .chip-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+/* (b1105ag, user: "the mobile end layout is off, too much overlapping in game" — a landscape phone 640 px wide) a chip
+   never passes its half of the screen less PAUSE, the fullscreen button and the margins: the bar gives first (down to
+   56 px), then the name is cut with an ellipsis; the face and the reserve keep their size */
+.hp-chip { max-width: calc(50vw - 112px); }
 .enemy-health .chip-col, .enemy2-health .chip-col { align-items: flex-end; }
-.chip-nm { display: flex; align-items: baseline; gap: 6px; line-height: 1; white-space: nowrap; }
+.chip-nm { display: flex; align-items: baseline; gap: 6px; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
 .enemy-health .chip-nm, .enemy2-health .chip-nm { flex-direction: row-reverse; }
-.chip-name { font-family: var(--font-display); font-weight: 400; font-size: 15px; text-transform: uppercase; }
-.chip-side { font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--c); }
+.chip-name { font-family: var(--font-display); font-weight: 400; font-size: 15px; text-transform: uppercase; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chip-side { flex: 0 0 auto; font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--c); }
 .chip-side:empty { display: none; }   /* (no side word for a spectator — the Practice toggle, an online spectator) */
-.chip-bar { position: relative; width: calc(150px * var(--hp-scale, 1)); height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.22); }
+.chip-bar { position: relative; width: calc(150px * var(--hp-scale, 1)); max-width: 100%; min-width: 56px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.22); }
 .chip-fill { display: block; height: 100%; width: var(--w, 100%); border-radius: 5px; background: var(--c); }
 .enemy-health .chip-fill, .enemy2-health .chip-fill { margin-left: auto; }
 .chip-knob { position: absolute; top: -3px; left: calc(var(--w, 100%) - 8px); width: 16px; height: 16px; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); box-sizing: border-box; }
@@ -116,6 +120,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .boost-track { position: relative; width: min(170px, 30vw); height: 12px; border-radius: 6px; background: rgba(27, 27, 47, 0.18); border: 2px solid var(--ink); box-sizing: border-box; }
 #boost-fill { position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% * var(--bw, 1)); border-radius: 4px; background: var(--magenta); }
 .boost-knob { position: absolute; top: -6px; left: calc(100% * var(--bw, 1) - 9px); width: 18px; height: 18px; border-radius: 50%; background: var(--paper); border: 3px solid var(--ink); box-sizing: border-box; }
+/* (b1105ag) a narrow landscape screen: a shorter sticker, clear of the stick and the ammo dial */
+@media (max-width: 720px) {
+  .boost { bottom: 12px; height: 32px; padding: 0 10px; gap: 8px; }
+  .boost-word { font-size: 12px; }
+  .boost-track { width: min(150px, 22vw); }
+}
 
 .joy { position: absolute; left: 28px; bottom: 28px; width: 140px; height: 140px; box-sizing: border-box; border-radius: 50%; background: rgba(27, 27, 47, 0.22); border: 4px solid rgba(255, 255, 255, 0.92); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); pointer-events: auto; }
 .stick { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; box-sizing: border-box; margin-left: -28px; margin-top: -28px; border-radius: 50%; background: var(--red); border: 3px solid var(--ink); }   /* (b1105s: red; the lime went to JUMP) */
@@ -271,7 +281,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    PAUSE pill. Menus keep the original top-left spot. */
 .fullscreen-btn.in-match {
   top: 10px;
-  left: var(--left-chip-right, 270px);
+  left: min(var(--left-chip-right, 270px), calc(50% - 96px));   /* (b1105ag: and never past PAUSE's left edge less itself and a gap, on a narrow screen) */
 }
 
 /* Pseudo-fullscreen mode. Toggle adds .pseudo-fullscreen to <body>;
@@ -932,7 +942,9 @@ body.pseudo-fullscreen #app {
 .menu .online-btn:active { transform: rotate(1.5deg) translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
 .menu .go-btn { width: 150px; height: 50px; padding: 0; border: 4px solid var(--ink); border-radius: 999px; background: var(--lime); color: var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1; box-shadow: 6px 6px 0 var(--ink); transform: rotate(-2deg); }
 .menu .go-btn:active { transform: rotate(-2deg) translate(3px, 3px); box-shadow: 3px 3px 0 var(--ink); }
-@media (max-width: 760px) {
+/* (b1105ag, user: "i want the main menu layout same as desktop end") the wrap is for PORTRAIT phones alone; a landscape
+   phone narrower than the three columns keeps the desktop layout and main.js zooms the grid to fit (showSelectMenu) */
+@media (max-width: 760px) and (orientation: portrait) {
   .menu .lobby-grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; }
   .menu .lobby-mid { grid-column: 1 / -1; grid-row: 1; }
   .menu .lobby-folder { grid-column: 1; grid-row: 2; }

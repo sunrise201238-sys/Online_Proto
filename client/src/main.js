@@ -7087,7 +7087,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105af 11-05';
+const CLIENT_BUILD_TAG = 'b1105ag 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9041,6 +9041,19 @@ function showSelectMenu() {
     </div>`;
   app.appendChild(menu);
   renderLobbySlots(menu);
+  // (b1105ag, user: "i want the main menu layout same as desktop end") a landscape screen narrower than the three
+  // columns (722 px, plus the sheet's 32) keeps the desktop layout and ZOOMS the grid to fit — the user's phone is
+  // about 640 CSS px wide in landscape; the wrap (style.css) is for portrait alone, where the zoom stays off
+  const fitLobby = () => {
+    const grid = menu.querySelector('.lobby-grid');
+    if (!grid) return;
+    const portrait = window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches;
+    const z = portrait ? 1 : Math.min(1, (menu.clientWidth - 32) / 722);
+    grid.style.zoom = z < 0.995 ? z.toFixed(3) : '';
+  };
+  fitLobby();
+  const onLobbyResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onLobbyResize); return; } fitLobby(); };
+  window.addEventListener('resize', onLobbyResize);
   const refresh = () => renderLobbySlots(menu);
   // the Practice row reads the state
   const syncChips = () => {
