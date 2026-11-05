@@ -118,13 +118,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 /* Spectator: the WATCHED chip — the camera's unit while spectating, by the Practice toggle or because the player is
    out — wears a thick yellow ring inside an ink line and a wide halo that pulses yellow / white (b1105s; user: the
    white glow "is not obvious enough"), and a WATCHING tag under it. */
-.touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink), 0 0 18px 8px rgba(255, 228, 92, 0.9); animation: spec-pulse 1.1s ease-in-out infinite; }
+.touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink); }   /* (b1105at; user: "no need the whole hp bar glowing effect for spectator anymore; the watching edge alone is enough" — the yellow edge and the tag stay; the 18 px glow and its pulse are gone) */
 .touch-hud .spec-watched::after { content: 'WATCHING'; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }
-@keyframes spec-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink), 0 0 18px 8px rgba(255, 228, 92, 0.9); }
-  50% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px #ffffff, 0 0 0 7px var(--ink), 0 0 28px 14px rgba(255, 255, 255, 0.95); }
-}
-@media (prefers-reduced-motion: reduce) { .touch-hud .spec-watched { animation: none; } }
 /* THE BOOST STICKER (b1105w, the design canvas's round 5 — the sample's yellow ammo chip; the 10 px bar until then):
    level, at the bottom centre — the word, the gauge with a white knob (--bw on the track, updateHud), no number. The
    fill is the SPRINT button's magenta at every level (user b1105x: "shouldn't be black"); overheating does not tint it

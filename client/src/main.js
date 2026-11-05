@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105as 11-05';
+const CLIENT_BUILD_TAG = 'b1105at 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10439,6 +10439,32 @@ function showEndMenu(win) {
   });
 }
 
+// (b1105at; user: "the ending screen is out of format on mobile end") a landscape screen narrower than the end page's row
+// (804 px: two 280 px team panels, the 200 px memo and two 22 px gaps) ZOOMS the row to fit — the width, and the height
+// left under the title and over the buttons (the buttons stay full size: they are to be tapped).  Measured UNZOOMED and
+// UNWRAPPED (the row wraps on a narrow menu at zoom 1; zoomed it stands in one line; nothing zoomed is read — what a zoomed
+// box reports differs between browsers).  Portrait keeps the wrapped, scrolling page.
+function fitEndPage(menu) {
+  const fit = () => {
+    const grid = menu.querySelector('.end-grid');
+    if (!grid) return;
+    grid.style.zoom = '';
+    if (window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches) return;
+    grid.style.flexWrap = 'nowrap';
+    const gridH = grid.offsetHeight || 1;
+    const fits = menu.scrollHeight <= menu.clientHeight + 1;
+    const rest = Math.max(0, menu.scrollHeight - gridH);
+    grid.style.flexWrap = '';
+    const h = Math.min(menu.clientHeight, window.innerHeight || Infinity);
+    const zH = fits && h >= menu.clientHeight ? 1 : (h - rest - 2) / gridH;
+    const z = Math.min(1, (menu.clientWidth - 32) / 804, zH);
+    grid.style.zoom = z < 0.995 ? z.toFixed(3) : '';
+  };
+  fit();
+  const onResize = () => { if (!menu.isConnected) { window.removeEventListener('resize', onResize); return; } fit(); };
+  window.addEventListener('resize', onResize);
+}
+
 // THE END-OF-MATCH PAGE (b1105ac; the design canvas's round 6, End_F / End_F_2v2, built on the user's "implement the
 // ending screen in PT"): the verdict as the sticker title; a roster panel each side — the HUD chip's ink and white
 // rim as a card, TEAM 1 (the viewer's side, left) / TEAM 2, the WINNER sticker on the side that won — with a row per
@@ -10482,6 +10508,10 @@ function showEndPage({ title, note = '', winner = null, spectator = false, butto
       ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam)}</div>
     <div class="end-foot">${buttons}</div>`;
   app.appendChild(menu);
+  // (b1105at) a menu: the fullscreen button takes its corner, and the narrow tier's HUD marks come off (the match is over)
+  document.getElementById('fullscreen-btn')?.classList.remove('in-match');
+  document.documentElement.classList.remove('hud-range', 'hud-rows-2');
+  fitEndPage(menu);
   return menu;
 }
 
