@@ -839,6 +839,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 /* the map memo: a white note with ruled lines below the picture, a red push pin through its top, a bit of tape on the
    picture's corner; it hangs a few degrees off */
 .menu .map-slot.memo { grid-column: 3; grid-row: 1; padding: 12px 10px 8px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2.5deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 164px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
+/* (b1105an; user: "both the file and the memo can afford to be slightly higher (longer), especially the memo shouldn't shrink
+   itself when the mode is 1v1 and block the dice") the paper's own height is 235 — its lines end at 199 and the die's 41 px
+   zone began at 194 — and the row only grew in 2v2 (245); at 266 the die sits 26 px under the lines in every mode, the paper
+   is the same height whatever the mode, and the folder beside it (the same rows) grows as much */
+.menu .map-slot.memo { min-height: 266px; }
 .menu .map-slot.memo:active { transform: rotate(2.5deg) translate(2px, 2px); box-shadow: 3px 4px 0 rgba(27, 27, 47, 0.92); }
 /* the memo hangs from a strip of the yellow tape over its top edge, centred (b1105u; user: "remove the red pin, move the
    yellow memo tape to the position") — the same strip on the picker's memo and the floating one (.memo-tape-top) */
@@ -864,7 +869,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 /* (b1105o, user: the rows were too short and too close) five rows of 38 px with 10 px between: 230 px, the cards' height */
 .menu.lobby .opt-groups { flex-direction: column; flex-wrap: nowrap; gap: 10px; max-width: none; }
 .menu.lobby .opt-row { justify-content: flex-start; gap: 10px; }
-.menu.lobby .opt-label { width: 68px; box-sizing: border-box; text-align: center; flex: 0 0 auto; font-size: 10.5px; padding: 5px 5px; }   /* (68: PRACTICE, the longest label, whole) */
+.menu.lobby .opt-label { width: 72px; box-sizing: border-box; text-align: center; flex: 0 0 auto; font-size: 10.5px; letter-spacing: 0.04em; padding: 5px 5px; }   /* (72 and a tighter tracking, b1105an: PRACTICE, the longest label, whole with a tenth to spare — the user's phone draws text a little wider than this Chromium does and spilt its E past the 68 px pill) */
 .menu.lobby .mode-chip { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; gap: 10px; }
 .menu.lobby .mode-chip button { flex: 1 1 0; min-width: 0; padding: 8px 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* the Practice row's two toggles light yellow, not magenta: each is on or off alone, not one of a set */
@@ -1100,8 +1105,9 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 /* ---- a narrow landscape screen (b1105ah; b1105al, user: "hp boxes too big. buttons way too small. HP boxes sizes not
    aligned. i can afford smaller hp boxes" — the phone is about 709 x 327 CSS px): the chips in a SMALL cut — 34 px, a
    26 px face, a 90 px bar, 20 px reserve faces, every chip one width, the two rows flush at 12 px and 6 px apart (top 8
-   and 48, done by 82) — and the thumb buttons a size UP: as big as a fifth of the screen's height allows, so the
-   cluster's top (3 x 20vh + two gaps + 12 from the bottom) stays under the second row on any height from 300 px ---- */
+   and 48, done by 82) — and the thumb buttons a size UP: as big as a fifth of the screen's height allows (12vw is the
+   width's say: the user's page is 600 px wide, b1105an — 10vw gave 60 there), so the cluster's top (3 x 20vh + two gaps + 12
+   from the bottom) stays under the second row on any height from 300 px ---- */
 @media (max-width: 720px) {
   .hp-chip { height: 34px; gap: 5px; padding: 0 10px 0 3px; width: calc(50px + 90px * var(--hp-max, 1)); max-width: calc(50vw - 48px); }   /* (border-box: 3 + 26 + 5 + bar + 10 + 6) */
   .touch-hud.hud-trio .hp-chip { width: calc(116px + 90px * var(--hp-max, 1)); }   /* (+ the 5 px gap and the 61 px reserve block: 9 + 6 + 3 + 20 + 3 + 20) */
@@ -1127,6 +1133,6 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .chip-next { border-top-width: 4px; border-bottom-width: 4px; border-left-width: 6px; margin-right: 3px; }
   .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 6px; margin: 0 0 0 3px; }
   .touch-hud .spec-watched::after, .hp-chip.down::after { bottom: -8px; font-size: 7px; }
-  .buttons { --btn-size: clamp(56px, min(10vw, 20vh), 84px); --btn-gap: clamp(8px, 1.2vw, 14px); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .buttons { --btn-size: clamp(56px, min(12vw, 20vh), 84px); --btn-gap: clamp(8px, 1.2vw, 14px); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
 }

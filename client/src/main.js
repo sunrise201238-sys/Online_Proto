@@ -7105,7 +7105,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105am 11-05';
+const CLIENT_BUILD_TAG = 'b1105an 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9067,7 +9067,17 @@ function showSelectMenu() {
     const grid = menu.querySelector('.lobby-grid');
     if (!grid) return;
     const portrait = window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches;
-    const z = portrait ? 1 : Math.min(1, (menu.clientWidth - 32) / 792);   // (792: the columns' least — 236 + 320 + 208 and two 14 px gaps — at which every option pill still holds its words)
+    grid.style.zoom = '';
+    if (portrait) return;
+    // (b1105an) the HEIGHT has a say as well — the memo's 266 px floor would overrun a short, wide screen: measured UNZOOMED
+    // (the grid's tracks are fixed widths, so its height does not depend on the menu's width, and nothing zoomed is read —
+    // what a zoomed box reports differs between browsers); the rest of the sheet (the title, the paddings, the gaps) is
+    // what the menu scrolls beyond the grid at zoom 1 — on a screen where nothing overflows the height asks for no zoom
+    const gridH = grid.offsetHeight || 1;
+    const fits = menu.scrollHeight <= menu.clientHeight + 1;
+    const h = Math.min(menu.clientHeight, window.innerHeight || Infinity);
+    const zH = fits && h >= menu.clientHeight ? 1 : (h - Math.max(0, menu.scrollHeight - gridH) - 2) / gridH;
+    const z = Math.min(1, (menu.clientWidth - 32) / 792, zH);   // (792: the columns' least — 236 + 320 + 208 and two 14 px gaps — at which every option pill still holds its words)
     grid.style.zoom = z < 0.995 ? z.toFixed(3) : '';
   };
   fitLobby();
