@@ -2677,7 +2677,7 @@ function setupHUD() {
   const hudAbort = new AbortController();
   state.hudAbort = hudAbort;
   const hud = document.createElement('div');
-  hud.className = state.mode === '2v2' ? 'touch-hud hud-rows-2' : 'touch-hud';   // (b1105aq: two chip rows in 2v2 — the narrow tier sizes the thumb buttons by the room under them, style.css --hud-rows)
+  hud.className = 'touch-hud';
   // THE HP CHIPS (b1105w, the design canvas's round 5): one chip per slot — yours top-left, the enemy's top-right, the
   // ally's and the second enemy's smaller under them in 2v2 (anchored by server slot online, below). The fills keep
   // their ids: hudRefs and the online anchoring read them.
@@ -2685,7 +2685,7 @@ function setupHUD() {
   // In-match, the fullscreen button docks right of the left chip (a ResizeObserver below keeps --left-chip-right at
   // its right edge); menus restore its top-left home.
   document.getElementById('fullscreen-btn')?.classList.add('in-match');
-  document.documentElement.classList.toggle('hud-rows-2', state.mode === '2v2');   // (b1105ar: the narrow tier puts the button under the left chips — two rows in 2v2, style.css)
+  document.documentElement.classList.toggle('hud-rows-2', state.mode === '2v2');   // (b1105ar: the narrow tier puts the fullscreen button under the left chips — two rows in 2v2, style.css)
   hud.innerHTML = `
     ${hpChipHTML('health', 'health-fill')}
     ${hpChipHTML('enemy-health', 'enemy-health-fill')}
@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105at 11-05';
+const CLIENT_BUILD_TAG = 'b1105au 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

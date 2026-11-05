@@ -853,7 +853,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    scene map and concept map pool"): the All random button's die as a magenta sticker on the ruled lines; it rolls on a
    tap (main.js rollLobbyMap) and the paper stays put while it is pressed; 5 px up: its top clears the size line's
    single line (ends 188 px down) on the 230 px memo of the landscape phone */
-.menu .memo .memo-dice { position: absolute; right: 9px; bottom: 5px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
+.menu .memo .memo-dice { position: absolute; right: 9px; bottom: 13px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
 .menu .memo .memo-dice .btn-icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .menu .memo .memo-dice .btn-icon .pip { fill: currentColor; stroke: none; }
 .menu .memo .memo-dice:active { transform: rotate(-6deg) translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
@@ -1112,7 +1112,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .hp-chip.ally-health { left: 12px; }
   .hp-chip.enemy2-health { right: 12px; }
   .pause-btn { top: 10px; padding: 6px 10px; font-size: 13px; }
-  .fullscreen-btn.in-match { top: 54px; left: 16px; }   /* (b1105ar; user: "move the full screen button to around here" — under the LEFT chips' last row, at their left end; it sat under PAUSE in the middle since b1105ai. The button is not inside .touch-hud, so the two-row case is a class on <html>, set by setupHUD) */
+  .fullscreen-btn.in-match { top: 54px; left: 16px; }   /* (b1105ar; user: "move the full screen button to around here" — under the LEFT chips' last row, at their left end; it sat under PAUSE in the middle since b1105ai. The two-row case is a class on <html>, set by setupHUD) */
   html.hud-rows-2 .fullscreen-btn.in-match { top: 94px; }
   .chip-nm { max-height: 11px; gap: 3px 5px; }
   .chip-face { width: 26px; height: 26px; border-width: 2px; }
@@ -1130,12 +1130,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .enemy-health .chip-next, .enemy2-health .chip-next { border-left: 0; border-right-width: 6px; margin: 0 0 0 3px; }
   .touch-hud .spec-watched::after, .hp-chip.down::after { bottom: -8px; font-size: 7px; }
   /* (b1105aq; user: "the in game buttons can be bigger. they can use the marked space" — the room under the chip rows, down to
-     the bottom) as big as that room allows: three buttons and two gaps between a line 6 px under the chips' last row — one
-     row in 1v1 (done by 44 px, the line at 50); two in 2v2 (84, the line at 90: .hud-rows-2, setupHUD) — and 12 px off the
-     bottom; never wider than 13vw (the ammo dial must clear the BOOST sticker) nor the 84 px of the big tier.  On the
-     user's 600 x 310 page: 77 px in 1v1, 64 in 2v2 (56 until b1105am, 65 / 60 in b1105an–ap) */
-  .touch-hud { --hud-rows: 50px; }
-  .touch-hud.hud-rows-2 { --hud-rows: 90px; }
-  .buttons { --btn-gap: clamp(8px, 1.2vw, 14px); --btn-size: clamp(56px, min(13vw, calc((100vh - var(--hud-rows, 50px) - 12px - 2 * var(--btn-gap)) / 3)), 84px); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
+     the bottom; b1105au: "the button group should not go bigger in 1v1 and smaller in 2v2. use the 2v2 button size. and move
+     the button group a bit to the left, slightly") as big as the room under TWO chip rows allows, in every mode: three buttons
+     and two gaps between the 90 px line (the second row ends at 84) and 12 px off the bottom; never wider than 13vw (the ammo
+     dial must clear the BOOST sticker) nor the 84 px of the big tier.  On the user's 600 x 310 page: 64 px (56 until b1105am).
+     22 px off the right edge (12 until b1105at), the thumb's reach and the screen's rounded corner */
+  .buttons { --btn-gap: clamp(8px, 1.2vw, 14px); --btn-size: clamp(56px, min(13vw, calc((100vh - 90px - 12px - 2 * var(--btn-gap)) / 3)), 84px); right: max(22px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
 }
