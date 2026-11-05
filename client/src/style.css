@@ -853,7 +853,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    scene map and concept map pool"): the All random button's die as a magenta sticker on the ruled lines; it rolls on a
    tap (main.js rollLobbyMap) and the paper stays put while it is pressed; 5 px up: its top clears the size line's
    single line (ends 188 px down) on the 230 px memo of the landscape phone */
-.menu .memo .memo-dice { position: absolute; right: 9px; bottom: 13px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
+.menu .memo .memo-dice { position: absolute; right: 14px; bottom: 18px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
 .menu .memo .memo-dice .btn-icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .menu .memo .memo-dice .btn-icon .pip { fill: currentColor; stroke: none; }
 .menu .memo .memo-dice:active { transform: rotate(-6deg) translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
