@@ -7105,7 +7105,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105an 11-05';
+const CLIENT_BUILD_TAG = 'b1105ap 11-05';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9077,7 +9077,7 @@ function showSelectMenu() {
     const fits = menu.scrollHeight <= menu.clientHeight + 1;
     const h = Math.min(menu.clientHeight, window.innerHeight || Infinity);
     const zH = fits && h >= menu.clientHeight ? 1 : (h - Math.max(0, menu.scrollHeight - gridH) - 2) / gridH;
-    const z = Math.min(1, (menu.clientWidth - 32) / 792, zH);   // (792: the columns' least — 236 + 320 + 208 and two 14 px gaps — at which every option pill still holds its words)
+    const z = Math.min(1, (menu.clientWidth - 32) / 804, zH);   // (804: the columns' least — 236 + 332 + 208 and two 14 px gaps — at which every option pill holds its words with room; 332 since b1105ao: at 320 Sudden Death had 2 px to spare and the 72 px label took 4)
     grid.style.zoom = z < 0.995 ? z.toFixed(3) : '';
   };
   fitLobby();
