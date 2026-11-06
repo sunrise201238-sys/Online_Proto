@@ -1106,7 +1106,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    from the bottom) stays under the second row on any height from 300 px ---- */
 @media (max-width: 720px) {
   .hp-chip { height: 34px; gap: 5px; padding: 0 10px 0 3px; width: calc(116px + 90px * var(--hp-max, 1)); max-width: calc(50vw - 48px); }   /* (border-box: 3 + 26 + 5 + bar + 5 + the 61 px reserve block (9 + 6 + 3 + 20 + 3 + 20) + 10 + 6; a Duel chip is as long, b1105ay, its bar taking the block's 66 px) */
-  .touch-hud:not(.hud-trio) .chip-bar { width: calc(90px * var(--hp-scale, 1) + 66px); }
+  .touch-hud:not(.hud-trio) .chip-bar { width: calc(90px * var(--hp-scale, 1) + 54px); }   /* (54 of the block's 66 since b1105ba; user: "the hp bar is overlapping with the hp box in Duel" — the knob, 5.5 px past the track at full HP, ended 4.5 px short of the rim; it keeps 16 px now, as the big tier's 10) */
   .hp-chip.enemy-health, .hp-chip.enemy2-health { padding: 0 3px 0 10px; }
   .hp-chip.health, .hp-chip.enemy-health { top: 8px; }
   .hp-chip.ally-health, .hp-chip.enemy2-health { top: 48px; }
