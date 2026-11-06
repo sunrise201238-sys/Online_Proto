@@ -1085,17 +1085,18 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-team.end-foe { --c: var(--magenta); transform: rotate(1.5deg); }
 .menu .end-tag, .menu .end-verdict { position: absolute; top: -14px; padding: 4px 10px; border-radius: 999px; border: 3px solid var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
 /* (b1105bf; user: "use option B for the 'Team 1/Team 2' in ending screen" — design round 9) TEAM 1 / TEAM 2 AS A STICKY FLAG: a flat memo
-   index flag of the side's colour, square corners, no rim, standing up from the panel's top edge; its top-right corner folded back (the
-   ink at 28 % over the colour), a thin crease where it meets the panel, a soft shadow in place of the hard one. The flag's shape lives on
-   ::before (clipped), the fold on ::after, so that the drop shadow on the element itself follows the cut shape. WINNER stays the pill. */
-.menu .end-tag { left: 14px; top: -19px; height: 27px; padding: 0 14px 0 12px; display: inline-flex; align-items: center; border: 0; border-radius: 0; box-shadow: none; background: transparent; color: var(--ink); transform: rotate(-2deg); transform-origin: 50% 100%; }
-/* (b1105bg; user: "the upper part of Team 1 in ending screen is not obvious enough, as if it merged into the background" — the lime
-   flag over the page's lime blob) the flag wears a thin ink rim, 1.5 px — half the pill's — that follows its cut corner: the shape
-   sits on an <i> inside the tag (the colour, the crease and the cut on its ::before, the fold on its ::after) and the rim is four
-   hard drop shadows on that <i>, so that the letters stay rimless; the soft shadow comes last. Both flags, so they match. */
-.menu .end-tag i { position: absolute; inset: 0; z-index: -1; filter: drop-shadow(1px 0 0 var(--ink)) drop-shadow(-1px 0 0 var(--ink)) drop-shadow(0 1px 0 var(--ink)) drop-shadow(0 -1px 0 var(--ink)); }   /* (b1105bi; user: "remove the shades outside the box ... slightly thinner the black edge" → sample B) the rim 1 px, not 1.5; the soft shadow gone */
-.menu .end-tag i::before { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(27, 27, 47, 0.18), rgba(27, 27, 47, 0.18)) 0 calc(100% - 7px) / 100% 1px no-repeat, var(--c); border-radius: 3px 0 0 0; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
-.menu .end-tag i::after { content: ''; position: absolute; right: 0; top: 0; width: 0; height: 0; border-style: solid; border-width: 10px 0 0 10px; border-color: transparent transparent transparent rgba(27, 27, 47, 0.28); }   /* (b1105bi) the flap is the LEFT border of a 10 x 10 corner box — the triangle the cut keeps, inside the flag; until now it was the bottom border, the other diagonal, half of it poking out of the cut (the user's "shade outside the box") */
+   index flag of the side's colour, square corners, no rim, standing up from the panel's top edge; its top-right corner folded back, a thin
+   crease where it meets the panel. (b1105bg–bi: a thin ink rim, the flap inside the cut, no soft shadow — the user's picks.)
+   (b1105bj; the user's Safari drew the flag without its rim and with the flap adrift: the rim was four hard drop-shadow filters and the cut a
+   clip-path on a negative-z pseudo-element, which WebKit renders otherwise) THE FLAG AS ONE SVG: the body with its 1 px ink stroke and the
+   cut corner, the crease and the flap inside the cut, drawn once in a 72 x 27 picture (main.js END_FLAG_SVG); the word sits on top. No
+   filter, no clip-path, no negative z-index — the same picture on every engine. The tag is 72 px wide, fixed: TEAM 1 / TEAM 2 run 44–48 px. */
+.menu .end-tag { left: 14px; top: -19px; width: 72px; height: 27px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 0; box-shadow: none; background: transparent; color: var(--ink); transform: rotate(-2deg); transform-origin: 50% 100%; }
+.menu .end-tag .flag-svg { position: absolute; left: 0; top: 0; width: 72px; height: 27px; overflow: visible; display: block; }
+.menu .end-tag .flag-body { fill: var(--c); stroke: var(--ink); stroke-width: 1; stroke-linejoin: miter; }
+.menu .end-tag .flag-crease { fill: none; stroke: rgba(27, 27, 47, 0.18); stroke-width: 1; }
+.menu .end-tag .flag-fold { fill: rgba(27, 27, 47, 0.28); }
+.menu .end-tag .end-tag-text { position: relative; }
 .menu .end-foe .end-tag { left: auto; right: 14px; color: #ffffff; transform: rotate(2deg); }
 .menu .end-verdict { right: 14px; background: var(--yellow); color: var(--ink); transform: rotate(4deg); }
 .menu .end-foe .end-verdict { right: auto; left: 14px; transform: rotate(-4deg); }
