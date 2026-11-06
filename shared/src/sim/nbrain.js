@@ -125,7 +125,7 @@ const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nud
 // search in navgrid.js shares the bot's eye rule.)
 // RELOAD HIDE (the 2026-08-08 cover reload, re-based on the Hide stance by
 // the owner 2026-09-26): units with a MANUAL reload at least MIN_MS long
-// (Hina's 7 s drum, Koyuki's 5 s) spend the famine in the Hide stance —
+// (Hina's and Koyuki's 5 s; Hina's was 7 s until 2026-11-06) spend the famine in the Hide stance —
 // entered the tick the reload starts, left the tick it completes — with
 // every Hide rule (hidden from every enemy, pace, slip, no Defense, fire
 // back only from where it stands). Auto and per-shell reloaders are

@@ -199,9 +199,9 @@ export const UNIT_DATA = {
     bloomRecoverPerSec: 0.03,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
-    magCapacity: 250,
-    botFireCap: 250,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
-    reloadMs: 7000,
+    magCapacity: 100,          // user 2026-11-06: 100 rounds (250 until then)
+    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06)
+    reloadMs: 5000,            // user 2026-11-06: 5 s (7 s until then)
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
   },
