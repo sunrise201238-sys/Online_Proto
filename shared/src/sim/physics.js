@@ -575,7 +575,8 @@ export function getGroundLevelY(fighter, surfaces) {
 // ramp height are linear along the ray, so checking the clipped interval's
 // endpoints is exact). FLAT elevated decks stand on open pillars, so only
 // CROSSING the deck plane blocks — two units both under the bridge keep their
-// sight lines. 0.4 epsilon forgives grazes at lips.
+// sight lines; a plane marked `deck` (a slope in such a deck) is read the same way.
+// 0.4 epsilon forgives grazes at lips.
 // Lives here (moved out of ai.js, 2026-08-14) so the BOT's sight test and the
 // PLANNER's firing-position search share one rule: findFiringPath used to
 // ignore surfaces entirely and certified firing cells whose line ran straight
@@ -603,6 +604,10 @@ export function sightHitsSurface(p0, p1, s) {
   if (s.type === 'ramp' || s.type === 'plane') {
     const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
     const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
+    // A slope the data marks `deck` is part of an ELEVATED deck on an open frame (Blockade's deck joints, b1105bk: the
+    // old decks' last metre sloped down to floor B): it is a flat deck's kin, so only crossing it blocks — sight under it
+    // passes, as under the flat deck beside it.
+    if (s.deck) return (yA > hA + EPS && yB < hB - EPS) || (yA < hA - EPS && yB > hB + EPS);
     return yA < hA - EPS || yB < hB - EPS;
   }
   const top = s.top ?? s.maxTop;

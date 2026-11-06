@@ -10475,8 +10475,9 @@ function materializeSurface(surface) {
   if (surface.type === 'plane') {
     // a sloped floor in any direction: y0 at the rectangle's (minX, minZ) corner, gx and gz the rise per unit
     // along x and z (the glTF maps' slopes; the axis ramp above is the case of one axis)
-    const { minX, maxX, minZ, maxZ, maxTop, y0, gx, gz } = surface;
-    return { minX, maxX, minZ, maxZ, maxTop, type: 'plane', y0, gx, gz, heightAt(x, z) { return y0 + gx * (x - minX) + gz * (z - minZ); } };
+    // (deck: the slope is part of an elevated deck on an open frame — physics.js sightHitsSurface lets sight pass under it)
+    const { minX, maxX, minZ, maxZ, maxTop, y0, gx, gz, deck } = surface;
+    return { minX, maxX, minZ, maxZ, maxTop, type: 'plane', y0, gx, gz, ...(deck ? { deck: true } : {}), heightAt(x, z) { return y0 + gx * (x - minX) + gz * (z - minZ); } };
   }
   const { minX, maxX, minZ, maxZ, maxTop, top, type, lid } = surface;
   return { minX, maxX, minZ, maxZ, maxTop, type, lid, heightAt: () => top };   // (lid kept: the generator marks a thing's own top — a crate's — where every other surface, 'flat' or 'plane', is a floor a body walks; the client's fade keeps floors out of its things by this)
