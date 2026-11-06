@@ -818,7 +818,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .lobby-folder::after { content: ''; position: absolute; right: -4px; top: 112px; width: 14px; height: 40px; background: var(--cream); border: 4px solid var(--ink); border-right: 0; border-radius: 20px 0 0 20px; }   /* (the thumb notch) */
 .menu .lobby-folder .slot-card.unit-slot { min-height: 182px; padding: 8px; border-width: 3px; border-radius: 12px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(-1.5deg); }
 .menu .lobby-folder .slot-card.unit-slot:active { transform: rotate(-1.5deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
-.menu .lobby-folder .unit-slot .slot-tag { left: auto; right: 10px; transform: rotate(4deg); }   /* (the sticker on the sheet's right: the folder's tab sits over its left) */
+/* (b1105bf; user: "For this 'Your Unit/Enemy/Your Trio/Enemy Trio' box. Make them a tape or memo bookmark style. Their colors stay
+   the same" — design round 9, the user's pick A) THE SIDE STICKERS AS WASHI TAPE: a strip of the side's colour, slightly see-through
+   (the sheet's rim and the manila show through it), torn ends (the clip path), the word printed on it; it straddles the sheet's top edge
+   where the pill sat, tilted as the pill was. The pill's rim and hard shadow go; the memo's yellow tape (.memo-tape) is the same recipe. */
+.menu .lobby-folder .unit-slot .slot-tag { left: auto; right: 2px; top: -12px; height: 25px; padding: 0 12px; display: inline-flex; align-items: center; border: 0; border-radius: 0; box-shadow: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 60%), rgba(198, 242, 74, 0.86); font-size: 10.5px; letter-spacing: 0.08em; transform: rotate(4deg); clip-path: polygon(0 10%, 2.5% 0, 97.5% 3%, 100% 15%, 98% 33%, 100% 50%, 97.5% 68%, 100% 86%, 97% 100%, 3% 97%, 0 82%, 2% 64%, 0 46%, 2.5% 28%); }   /* (rgba(198, 242, 74) is --lime) */
 .menu .lobby-folder .enemy-chip { position: relative; flex: 0 0 auto; width: 100%; min-width: 0; height: auto; min-height: 46px; gap: 0; padding: 0; align-items: stretch; border-width: 3px; border-radius: 10px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(1deg); overflow: visible; }   /* (overflow visible: the Change sticker sits on the slip's corner; the strip clips itself) */
 .menu .lobby-folder .enemy-chip:active { transform: rotate(1deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
 .menu .lobby-folder .enemy-chip .chip-strip { height: auto; min-height: 40px; align-self: stretch; border-radius: 7px 0 0 7px; overflow: hidden; }
@@ -829,7 +833,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .lobby-folder .enemy-chip .chip-text { align-self: center; padding: 12px 8px 3px; }   /* (12 on top since b1105az: the ENEMY sticker hangs 9 px into the slip's top-right corner — the first line starts under it instead of running into it, and no line is held short of it any more) */
 .menu .lobby-folder .enemy-chip .chip-text.chip-two b, .menu .lobby-folder .enemy-chip .chip-text.chip-trio b { font-family: var(--font-ui); font-weight: 800; font-size: 10.5px; line-height: 1.1; white-space: normal; overflow: visible; text-overflow: clip; }   /* (b1105az: a long roster wraps on the slip instead of ending in "…"; the slip grows) */
 .menu .lobby-folder .chip-strip.chip-stack .slot-pane { flex-basis: 24px; }
-.menu .lobby-folder .enemy-chip .chip-change { position: absolute; right: -6px; top: -15px; bottom: auto; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; box-shadow: 2px 2px 0 var(--ink); transform: rotate(3deg); }   /* (Change / Pick as a sticker on the slip's top-right corner) */   /* (top -15 since b1105az: the sticker's lower corner stays over the slip's rim, above its first line of names) */
+.menu .lobby-folder .enemy-chip .chip-change { position: absolute; right: -8px; top: -16px; bottom: auto; height: 21px; padding: 0 11px; display: inline-flex; align-items: center; border: 0; border-radius: 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 60%), rgba(255, 62, 165, 0.88); color: #ffffff; font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; line-height: 1; white-space: nowrap; box-shadow: none; transform: rotate(3deg); clip-path: polygon(0 10%, 2.5% 0, 97.5% 3%, 100% 15%, 98% 33%, 100% 50%, 97.5% 68%, 100% 86%, 97% 100%, 3% 97%, 0 82%, 2% 64%, 0 46%, 2.5% 28%); }   /* (b1105bf: the ENEMY sticker as the same tape, magenta — rgba(255, 62, 165) is --magenta; its foot 5 px into the slip, the names start 12 px down — the pill's band since b1105az) */   /* (Change / Pick as a sticker on the slip's top-right corner) */   /* (top -15 since b1105az: the sticker's lower corner stays over the slip's rim, above its first line of names) */
 /* a screen with the room (desktop, portrait): the folder a little longer — the sheet taller and the two further apart
    (after the rules above: same specificity, so the order decides) */
 @media (min-height: 440px) {
@@ -1080,8 +1084,14 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-team.end-you { --c: var(--lime); transform: rotate(-1.5deg); }
 .menu .end-team.end-foe { --c: var(--magenta); transform: rotate(1.5deg); }
 .menu .end-tag, .menu .end-verdict { position: absolute; top: -14px; padding: 4px 10px; border-radius: 999px; border: 3px solid var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
-.menu .end-tag { left: 14px; background: var(--c); color: var(--ink); transform: rotate(-4deg); }
-.menu .end-foe .end-tag { left: auto; right: 14px; color: #ffffff; transform: rotate(4deg); }
+/* (b1105bf; user: "use option B for the 'Team 1/Team 2' in ending screen" — design round 9) TEAM 1 / TEAM 2 AS A STICKY FLAG: a flat memo
+   index flag of the side's colour, square corners, no rim, standing up from the panel's top edge; its top-right corner folded back (the
+   ink at 28 % over the colour), a thin crease where it meets the panel, a soft shadow in place of the hard one. The flag's shape lives on
+   ::before (clipped), the fold on ::after, so that the drop shadow on the element itself follows the cut shape. WINNER stays the pill. */
+.menu .end-tag { left: 14px; top: -19px; height: 27px; padding: 0 14px 0 12px; display: inline-flex; align-items: center; border: 0; border-radius: 0; box-shadow: none; background: transparent; color: var(--ink); transform: rotate(-2deg); transform-origin: 50% 100%; filter: drop-shadow(1px 2px 1px rgba(27, 27, 47, 0.28)); }
+.menu .end-tag::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(rgba(27, 27, 47, 0.18), rgba(27, 27, 47, 0.18)) 0 calc(100% - 7px) / 100% 1px no-repeat, var(--c); border-radius: 3px 0 0 0; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
+.menu .end-tag::after { content: ''; position: absolute; right: 0; top: 0; width: 0; height: 0; border-style: solid; border-width: 0 0 10px 10px; border-color: transparent transparent rgba(27, 27, 47, 0.28) transparent; }
+.menu .end-foe .end-tag { left: auto; right: 14px; color: #ffffff; transform: rotate(2deg); }
 .menu .end-verdict { right: 14px; background: var(--yellow); color: var(--ink); transform: rotate(4deg); }
 .menu .end-foe .end-verdict { right: auto; left: 14px; transform: rotate(-4deg); }
 .menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
