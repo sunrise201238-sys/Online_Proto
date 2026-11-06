@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bf 11-06';
+const CLIENT_BUILD_TAG = 'b1105bg 11-06';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10520,7 +10520,7 @@ function endRowUnits(role, outTeam = null) {
 }
 function endTeamHTML(side, tag, roles, spectator, winner, outTeam = null) {
   const rows = roles.map((role, i) => ({ word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role, outTeam) })).filter((r) => r.units);
-  return `<div class="end-team end-${side}"><span class="end-tag">${tag}</span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div></div>`).join('')}</div>`;
+  return `<div class="end-team end-${side}"><span class="end-tag"><i></i>${tag}</span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div></div>`).join('')}</div>`;
 }
 // winner: 'you' (the left panel's side) | 'foe' | null (a tie); note: a chip under the title (online: the opponent's
 // rematch wish); buttons: the foot's markup — the caller wires them
