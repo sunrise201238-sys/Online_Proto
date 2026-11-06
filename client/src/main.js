@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bb 11-06';
+const CLIENT_BUILD_TAG = 'b1105be 11-06';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9637,12 +9637,32 @@ function showProfilePopup(card, unit, onConfirm) {
   const sideCard = !!card.closest('.menu')?.querySelector('.picker-side');
   const face = `${import.meta.env.BASE_URL}units/${spriteKey}_profile${sideCard ? '_thumbnail' : ''}.png`;
   const faceImg = `<img class="profile-face" src="${face}" alt="${char || ''}" draggable="false" />`;
-  // (b1105t) the paper clip on the sheet's top-right corner — the card is a sheet in a file folder (style.css)
-  const clip = '<svg class="paper-clip" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg>';
+  // (b1105t) the paper clip on the sheet's top-right corner — the card is a sheet in a file folder (style.css); with the
+  // weapon print (b1105bd, the side card alone) it moves to the print's corner (.clip-corner)
+  const print = sideCard ? weaponPrintHTML(spriteKey) : '';
+  const clip = '<svg class="paper-clip' + (print ? ' clip-corner' : '') + '" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg>';
   spawnProfilePopup(card,
     // (b1105r: the side card's band sits where the unit's face is — the face-box, as the lobby's cards)
-    `${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
+    `${print}${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
     onConfirm);
+}
+
+// (b1105bd; user: "at that paper clip, include a photo of that unit's weapon ... make sure the weapon image is as big as possible
+// as long as it's not cropped or deformed" — design round 8b) THE WEAPON PRINT: the renders (weapons/<spriteKey>.png, all
+// 958 x 246) carry wide empty margins — the gun itself is this box of each, measured once (left, top, width, height, alpha > 8);
+// the print's window is 102 x 54 (style.css .weapon-print: 112 x 64 less the rim and the matte) and the picture is scaled so the
+// gun spans the window's whole width (or height, for a stubby one) and sits centred — plain pixel numbers on the <img>, as the
+// HUD's faces are placed (chipFaceImg)
+const WEAPON_BOX = { aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
+const WEAPON_RENDER = [958, 246];
+const PRINT_WINDOW = [102, 54];
+function weaponPrintHTML(spriteKey) {
+  const box = WEAPON_BOX[spriteKey];
+  if (!box) return '';
+  const [bx, by, bw, bh] = box; const [W, H] = WEAPON_RENDER; const [ww, wh] = PRINT_WINDOW;
+  const s = Math.min(ww / bw, wh / bh);
+  const left = ww / 2 - (bx + bw / 2) * s, top = wh / 2 - (by + bh / 2) * s;
+  return `<span class="weapon-print" aria-hidden="true"><span class="print-sheet"><span class="print-ground"><img src="${import.meta.env.BASE_URL}weapons/${spriteKey}.png" alt="" draggable="false" style="width:${(W * s).toFixed(1)}px;height:${(H * s).toFixed(1)}px;left:${left.toFixed(1)}px;top:${top.toFixed(1)}px"></span></span><i class="print-curl"></i></span>`;
 }
 
 // Map preview popup: ONE 3/4 aerial shot (maps/<id>.png, captured with the
@@ -10744,7 +10764,17 @@ function updateWallFade() {
     }
     const target = blocking ? (mesh.userData.fadeAlpha ?? 0.25) : 1;   // (how far a blocking thing fades: a quarter, or the map's own number — Warehouse, crowded with containers, a tenth; user 2026-10-22)
     mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
-    mesh.material.transparent = !!mesh.userData.fadeBox.ownTransparent || mesh.material.opacity < 0.995;   // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
+    // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
+    // (b1105be; user: "the transparent effect in concept maps seems to be gone, try to bring them back") the flip must
+    // RECOMPILE: three.js bakes `transparent` into the shader (an opaque material's program forces alpha 1 — its OPAQUE
+    // define) and re-picks a material's program only on needsUpdate; flipped bare, a fading box kept its opaque program and
+    // drew SOLID at opacity 0.25 — every box fade, the concept maps' boxes and the modelled maps' merged fade copies alike,
+    // since the flip came in (9f9dabe, Oct 23). Flips happen only at a fade's two ends; each program compiles once, cached.
+    // A fresh box stays transparent through its first two passes (fadeWarm, registerWallFade), so that its blended program
+    // compiles with the match's first frame — the intro — and not as a hitch at its first fade.
+    const want = !!mesh.userData.fadeBox.ownTransparent || mesh.material.opacity < 0.995;
+    if (mesh.userData.fadeWarm > 0) mesh.userData.fadeWarm--;
+    else if (mesh.material.transparent !== want) { mesh.material.transparent = want; mesh.material.needsUpdate = true; }
     // Depth-toggled groups (Station's trains): write depth while solid
     // (self-occluding — no seeing the car's inside structure), stop while
     // faded (no depth = the own-unit X-ray can't patch onto the ghost).
@@ -10766,6 +10796,7 @@ function updateWallFade() {
 function registerWallFade(mesh, box) {
   box.ownTransparent = mesh.material.transparent;   // (a material transparent in its own right — a glass, a masked fence — stays so)
   mesh.material.transparent = true;
+  mesh.userData.fadeWarm = 2;   // (b1105be: the first two fade passes leave it transparent — its blended shader compiles with the first frame; see updateWallFade)
   mesh.userData.fadeBox = box;
   if (box.fadeGroup) mesh.userData.fadeGroup = box.fadeGroup;
   if (box.fadeAlpha != null) mesh.userData.fadeAlpha = box.fadeAlpha;   // (`box.fadeAlpha` (optional): the opacity it fades to instead of a quarter)

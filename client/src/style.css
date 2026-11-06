@@ -59,6 +59,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    7 px ring and the tilts (±4 px at a 290 px chip's ends) without a touch */
 .hp-chip.ally-health { top: 86px; left: 108px; --c: var(--cyan); transform: rotate(-1deg); }
 .hp-chip.enemy2-health { top: 86px; right: 108px; --c: var(--yellow); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
+/* (b1105bc; user: "move the lower hp boxes nearer to the left/right; they are too horizontally distant away from the above hp boxes" —
+   on a desktop the second row stands flush under the first, 12 px in like it; the 108 px stagger (b1105ag) stays below 1100 px, where
+   a landscape phone's or tablet's thumb buttons reach up beside the second row) */
+@media (min-width: 1100px) {
+  .hp-chip.ally-health { left: 12px; }
+  .hp-chip.enemy2-health { right: 12px; }
+}
 /* (b1105ah) the second row steps IN by 108 px and is a little narrower: at 844 × 390 the DODGE button's top (126 px) reaches
    into the row's band (86–140), so the second enemy's chip must end before the thumb cluster (its left edge 100 px from
    the right); the ally's chip steps in the same so the row reads as one stagger. The narrow screens below put both
@@ -1002,6 +1009,18 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .picker-folder:not(.has-card)::before { border-style: dashed; border-bottom: 0; }
 .menu .picker-folder .picker-card { position: relative; margin: 8px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(0.8deg); }
 .paper-clip { position: absolute; right: 14px; top: -14px; width: 22px; height: 46px; transform: rotate(12deg); z-index: 2; pointer-events: none; }
+/* (b1105bd; user: "at that paper clip, include a photo of that unit's weapon, i also want a corner flip effect of that photo" —
+   design rounds 8 and 8b, option A with the corner clip) THE WEAPON PRINT on the unit file: a 112 x 64 print — a white matte,
+   the ink rim — held by the paper clip at the sheet's top-right corner, over the folder's edge, 6° off; the gun's render on a
+   pale wash of the class colour, scaled so the gun ITSELF spans the window (main.js weaponPrintHTML: the renders' empty margins
+   measured once, WEAPON_BOX — nothing cut, nothing stretched); its free corner, bottom-left, is curled — cut off the print, the
+   folded-over back showing */
+.menu .weapon-print { position: absolute; right: -12px; top: -36px; width: 112px; height: 64px; box-sizing: border-box; z-index: 2; transform: rotate(6deg); transform-origin: 80% 20%; pointer-events: none; --fold: 18px; }
+.menu .weapon-print .print-sheet { position: absolute; inset: 0; background: var(--paper); border: 2px solid var(--ink); border-radius: 3px; box-shadow: 2px 3px 0 rgba(27, 27, 47, 0.9); padding: 3px; box-sizing: border-box; clip-path: polygon(0 0, 100% 0, 100% 100%, var(--fold) 100%, 0 calc(100% - var(--fold))); }
+.menu .weapon-print .print-ground { position: absolute; inset: 3px; overflow: hidden; background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.5)), var(--class-color, var(--yellow)); }
+.menu .weapon-print .print-ground img { position: absolute; display: block; max-width: none; filter: drop-shadow(0 2px 1px rgba(27, 27, 47, 0.25)); }
+.menu .weapon-print .print-curl { position: absolute; left: 0; bottom: 0; width: var(--fold); height: var(--fold); background: linear-gradient(45deg, transparent 48%, var(--ink) 48% 55%, #f4f4f4 55%, #d8d8de 80%, #bdbdc6); border-bottom-left-radius: 2px; box-shadow: -1px 1px 2px rgba(27, 27, 47, 0.25); }
+.paper-clip.clip-corner { right: -24px; top: -58px; transform: rotate(48deg); z-index: 3; }   /* (with a print: the clip pinches the print's top-right corner, half of it off the print — over the blank corner above the barrel) */
 .menu .picker-memo { margin-top: 10px; border-width: 3px; border-radius: 3px; box-shadow: 5px 7px 0 rgba(27, 27, 47, 0.92); transform: rotate(2deg); background: linear-gradient(var(--paper), var(--paper)) 0 0 / 100% 172px no-repeat, repeating-linear-gradient(180deg, transparent 0 16px, rgba(62, 224, 255, 0.5) 16px 17px) var(--paper); }
 .menu .picker-memo:not(.has-card) { background: rgba(255, 255, 255, 0.6); }
 .menu .picker-memo .picker-card { padding: 12px 10px 8px; position: relative; }
