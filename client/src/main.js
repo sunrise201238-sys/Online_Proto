@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ba 11-06';
+const CLIENT_BUILD_TAG = 'b1105bb 11-06';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10441,7 +10441,7 @@ function showEndMenu(win) {
 }
 
 // (b1105at; user: "the ending screen is out of format on mobile end") a landscape screen narrower than the end page's row
-// (804 px: two 280 px team panels, the 200 px memo and two 22 px gaps) ZOOMS the row to fit — the width, and the height
+// (844 px: two 300 px team panels, the 200 px memo and two 22 px gaps) ZOOMS the row to fit — the width, and the height
 // left under the title and over the buttons (the buttons stay full size: they are to be tapped).  Measured UNZOOMED and
 // UNWRAPPED (the row wraps on a narrow menu at zoom 1; zoomed it stands in one line; nothing zoomed is read — what a zoomed
 // box reports differs between browsers).  Portrait keeps the wrapped, scrolling page.
@@ -10460,7 +10460,7 @@ function fitEndPage(menu) {
     const zH = fits && h >= menu.clientHeight ? 1 : (h - rest - 2) / gridH;
     // (b1105ax; user: "the two teams box and the map memo are still not on the same line") 8 px to spare on the width — at
     // exactly the row's width the user's browser wrapped it — and a look afterwards: still wrapped, a touch smaller, up to four times
-    let z = Math.min(1, (menu.clientWidth - 40) / 804, zH);
+    let z = Math.min(1, (menu.clientWidth - 40) / 844, zH);   // (844 since b1105bb: two 300 px panels, the 200 px memo, two 22 px gaps)
     const apply = () => { grid.style.zoom = z < 0.995 ? z.toFixed(3) : ''; };
     apply();
     const wrapped = () => { const a = grid.querySelector('.end-team.end-you')?.getBoundingClientRect(), b = grid.querySelector('.end-team.end-foe')?.getBoundingClientRect(); return !!(a && b) && Math.abs(a.top - b.top) > 4; };

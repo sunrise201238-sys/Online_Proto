@@ -1057,7 +1057,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu.end-page { gap: 10px; }
 .menu .end-title { margin: 0 0 2px; }
 .menu .end-grid { display: flex; align-items: flex-start; justify-content: center; gap: 22px; flex-wrap: wrap; max-width: 880px; }
-.menu .end-team { position: relative; width: 280px; box-sizing: border-box; margin-top: 12px; padding: 16px 16px 12px; border-radius: 18px; background: rgba(27, 27, 47, 0.92); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; display: flex; flex-direction: column; gap: 10px; }
+.menu .end-team { position: relative; width: 300px; box-sizing: border-box; margin-top: 12px; padding: 16px 16px 12px; border-radius: 18px; background: rgba(27, 27, 47, 0.92); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; display: flex; flex-direction: column; gap: 10px; }
 .menu .end-team.end-you { --c: var(--lime); transform: rotate(-1.5deg); }
 .menu .end-team.end-foe { --c: var(--magenta); transform: rotate(1.5deg); }
 .menu .end-tag, .menu .end-verdict { position: absolute; top: -14px; padding: 4px 10px; border-radius: 999px; border: 3px solid var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
@@ -1068,7 +1068,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
 .menu .end-you .end-row-second { --rc: var(--cyan); }
 .menu .end-foe .end-row-second { --rc: var(--yellow); }
-.menu .end-w { flex: 0 0 48px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); white-space: nowrap; }   /* (nowrap, b1105ax: SLOT 2 broke into two lines on the user's phone) */
+.menu .end-w { flex: 0 0 56px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); white-space: nowrap; }   /* (nowrap, b1105ax: SLOT 2 broke into two lines on the user's phone. 56 since b1105bb; user: "the thumbnail and names are not aligned at the left" — ENEMY 2 ran past the 48 px column, which then grew and pushed its row's units right; and the panel is 300 wide (280), so a row — 56 + 12 + three 52 px units and two 12 px gaps = 248 — ends 14 px short of the padding instead of on it: "too close to the box edge, even overlapping") */
 .menu .end-units { display: flex; gap: 12px; }
 .menu .end-u { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }
 .menu .end-fw { position: relative; display: block; width: 46px; height: 46px; }
