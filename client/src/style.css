@@ -819,12 +819,10 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .lobby-folder .enemy-chip:has(.chip-stack) { min-height: 58px; }
 .menu .lobby-folder .enemy-chip:has(.chip-stack) .chip-strip { min-height: 52px; }
 .menu .lobby-folder .enemy-chip:has(.chip-stack) .chip-strip .pane-row { min-height: 0; }
-.menu .lobby-folder .enemy-chip .chip-text { align-self: center; padding: 3px 8px; }
-.menu .lobby-folder .enemy-chip .chip-text b:first-child { padding-right: 40px; }   /* (the first line stops short of the ENEMY sticker on the slip's top-right corner) */
-.menu .lobby-folder .enemy-chip .chip-text.chip-two b, .menu .lobby-folder .enemy-chip .chip-text.chip-trio b { font-family: var(--font-ui); font-weight: 800; font-size: 10.5px; line-height: 1.1; }
-.menu .lobby-folder .enemy-chip .chip-text.chip-two b:first-child { padding-right: 62px; }   /* (ENEMY TEAM is the wider sticker) */
+.menu .lobby-folder .enemy-chip .chip-text { align-self: center; padding: 12px 8px 3px; }   /* (12 on top since b1105az: the ENEMY sticker hangs 9 px into the slip's top-right corner — the first line starts under it instead of running into it, and no line is held short of it any more) */
+.menu .lobby-folder .enemy-chip .chip-text.chip-two b, .menu .lobby-folder .enemy-chip .chip-text.chip-trio b { font-family: var(--font-ui); font-weight: 800; font-size: 10.5px; line-height: 1.1; white-space: normal; overflow: visible; text-overflow: clip; }   /* (b1105az: a long roster wraps on the slip instead of ending in "…"; the slip grows) */
 .menu .lobby-folder .chip-strip.chip-stack .slot-pane { flex-basis: 24px; }
-.menu .lobby-folder .enemy-chip .chip-change { position: absolute; right: -6px; top: -9px; bottom: auto; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; box-shadow: 2px 2px 0 var(--ink); transform: rotate(3deg); }   /* (Change / Pick as a sticker on the slip's top-right corner) */
+.menu .lobby-folder .enemy-chip .chip-change { position: absolute; right: -6px; top: -15px; bottom: auto; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--magenta); color: #ffffff; font-size: 10px; line-height: 1; box-shadow: 2px 2px 0 var(--ink); transform: rotate(3deg); }   /* (Change / Pick as a sticker on the slip's top-right corner) */   /* (top -15 since b1105az: the sticker's lower corner stays over the slip's rim, above its first line of names) */
 /* a screen with the room (desktop, portrait): the folder a little longer — the sheet taller and the two further apart
    (after the rules above: same specificity, so the order decides) */
 @media (min-height: 440px) {
@@ -911,7 +909,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .slot-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .menu .slot-name { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu .slot-name-trio { font-size: 14px; letter-spacing: 0.01em; white-space: normal; }   /* (one roster's three names may take two lines — never a cut name) */
-.menu .slot-card-pair .slot-name-trio { white-space: nowrap; font-family: var(--font-ui); font-weight: 800; font-size: 11.5px; letter-spacing: 0; }   /* (a 2v2 card lists two rosters: the narrower face on one line each) */
+.menu .slot-card-pair .slot-name-trio { white-space: normal; font-family: var(--font-ui); font-weight: 800; font-size: 11.5px; letter-spacing: 0; }   /* (a 2v2 card lists two rosters in the narrower face; a long roster takes two lines — never a cut name, b1105az: the user's standing rule, no "…") */
+.menu .slot-text:has(.slot-name-trio) { padding-bottom: 26px; }   /* (b1105az: a Trio card's last line stays above the Change word at the card's bottom-right — 12 px up, 14 tall — when a roster wraps; the card's floor height hides the padding otherwise) */
 .menu .slot-name-trio em { display: inline-block; margin-right: 6px; vertical-align: 2px; font-style: normal; font-family: var(--font-ui); font-weight: 800; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }   /* (the slot's name before its units when a card holds two slots: YOU / ALLY, ENEMY / ENEMY 2) */
 .menu .slot-sub { font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1.2; padding-right: 52px; }   /* (the line never runs under the Change word at the card's bottom-right; it wraps instead) */
 .menu .slot-change { position: absolute; right: 12px; bottom: 12px; font-size: 12px; font-weight: 800; color: var(--magenta); }
