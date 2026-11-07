@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bo 11-06';
+const CLIENT_BUILD_TAG = 'b1105bp 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9008,8 +9008,9 @@ function showSelectMenu() {
   if (!MAP_DATA[state.mapKey]) state.mapKey = 'town';   // (the lobby's map card always names a map)
 
   // THE LOBBY (PT, b1105m, 2026-11-05; the design canvas's F lobby — user: "i want that layout previously shown in
-  // the artifact"): your unit's card on the left, the option rows in the middle (Play as / Teams / Roster / Rules /
-  // Practice), the map's card on the right, the guide's "?" at the top-right, and along the foot Server on the left
+  // the artifact"): your unit's card on the left, the option rows in the middle (since b1105bp in three groups, Teams /
+  // Roster, Play as / Rules, Practice, a red crayon line between them; Play as / Teams / Roster / Rules / Practice until
+  // then), the map's card on the right, the guide's "?" at the top-right, and along the foot Server on the left
   // and, on the right, a Random unit die, All random · GO (everything rolled, the match at once), ONLINE (the online
   // lobby) and GO!!. The cards open the pickers (showUnitPicker / pickUnits, showMapPicker) and come back here; GO!!
   // fills whatever is still missing — your roster if it is short, then the bot pickers as ever — and starts on the
@@ -9028,10 +9029,6 @@ function showSelectMenu() {
       </div>
       <div class="lobby-mid">
         <div class="opt-groups">
-          <div class="opt-row"><span class="opt-label">Play as</span><div class="mode-chip view-mode-chip">
-            <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Shooter</button>
-            <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
-          </div></div>
           <div class="opt-row"><span class="opt-label">Teams</span><div class="mode-chip">
             <button data-mode="1v1" class="${state.mode === '1v1' ? 'mode-active' : ''}">1v1</button>
             <button data-mode="2v2" class="${state.mode === '2v2' ? 'mode-active' : ''}">2v2</button>
@@ -9040,10 +9037,16 @@ function showSelectMenu() {
             <button data-main-mode="sd" class="${state.mainMode === 'sd' ? 'mode-active' : ''}">Duel</button>
             <button data-main-mode="trio" class="${state.mainMode === 'trio' ? 'mode-active' : ''}">Trio</button>
           </div></div>
+          ${lobbyCrayonLine(7, -0.6)}
+          <div class="opt-row"><span class="opt-label">Play as</span><div class="mode-chip view-mode-chip">
+            <button data-view="classic" class="${diorama.enabled ? '' : 'mode-active'}">Shooter</button>
+            <button data-view="command" class="${diorama.enabled ? 'mode-active' : ''}">Command</button>
+          </div></div>
           <div class="opt-row"><span class="opt-label">Rules</span><div class="mode-chip rules-chip">
             <button data-rules="normal" class="${state.suddenDeath ? '' : 'mode-active'}">Health Point</button>
             <button data-rules="sd" class="${state.suddenDeath ? 'mode-active sd-active' : ''}">Sudden Death</button>
           </div></div>
+          ${lobbyCrayonLine(23, 0.5)}
           <div class="opt-row"><span class="opt-label">Practice</span><div class="mode-chip practice-chip">
             <button data-practice="dummy" title="The bots' projectiles do no damage">Dummy bots</button>
             <button data-practice="spectator" title="A bot plays your unit, you watch">Spectator</button>
@@ -9187,6 +9190,24 @@ function showSelectMenu() {
 
 // the dice on the lobby's Random buttons (b1105n): a lone "?" read as the guide
 const LOBBY_DIE_ICON = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle class="pip" cx="8.5" cy="8.5" r="1.6"/><circle class="pip" cx="15.5" cy="8.5" r="1.6"/><circle class="pip" cx="12" cy="12" r="1.6"/><circle class="pip" cx="8.5" cy="15.5" r="1.6"/><circle class="pip" cx="15.5" cy="15.5" r="1.6"/></svg>';
+// The red crayon line between the lobby's option groups (PT b1105bp, 2026-11-07; the design canvas's round 10b, style G —
+// user: "Style G"): one unbroken stroke drawn as a filled outline along a slow hand wobble, its width breathing a little
+// and thinning where the crayon lands and lifts. Drawn on a 388 x 12 box, the column's width at desktop; the SVG stretches
+// to the column (332 px at the least, the whole width in portrait) and keeps its 12 px height. The memos' red (#E0382C);
+// the grain and the rough edge come from the page's #crayon-line filter. `seed` gives each line its own wobble.
+function lobbyCrayonLine(seed, tilt) {
+  const W = 388, H = 12, CY = 6, X0 = 2, X1 = W - 2, N = X1 - X0;
+  const wob = (x) => 0.5 * Math.sin(x / 53 + seed) + 0.3 * Math.sin(x / 21 + 2 * seed);
+  const cap = (t) => { const e = Math.min(t, 1 - t) / 0.05; return e >= 1 ? 1 : Math.sqrt(Math.max(0, e * (2 - e))); };
+  const top = [], bot = [];
+  for (let i = 0; i <= N; i += 1) {
+    const t = i / N, x = X0 + (X1 - X0) * t, y = CY + wob(x) * 1.15;
+    const h = 4.3 * (0.88 + 0.12 * Math.sin(t * 12.6 + seed)) * cap(t) / 2;
+    top.push(`${x.toFixed(1)} ${(y - h).toFixed(2)}`); bot.push(`${x.toFixed(1)} ${(y + h).toFixed(2)}`);
+  }
+  return `<svg class="opt-sep" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="transform: rotate(${tilt}deg)">`
+    + `<path d="M${top.join(' L')} L${bot.reverse().join(' L')}Z" fill="#E0382C" filter="url(#crayon-line)"/></svg>`;
+}
 // The lobby's four unit slots (b1105p): your card holds you (and the ally in 2v2), the enemy card the enemy (and the
 // second in 2v2). A slot's roster is its Trio roster when there is one, else its single unit key, cut to what the
 // Roster chip wants now (Duel after a Trio session keeps the roster's opener; Trio after Duel shows one of three).
@@ -18256,7 +18277,10 @@ function animate() {
 // module's end every const above stands — the module has no top-level await — so the lobby's map card and the first
 // frame's updateMapRoof read GLB_MAPS initialised, where the first frame used to throw on it and log a render error on
 // every page load.
-// the crayon marks' rough edge (b1105af, style.css .memo-crayon): one SVG filter for the whole page, before the first lobby
-if (!document.getElementById('crayon')) document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="crayon" x="-6%" y="-12%" width="112%" height="124%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/></filter></svg>');
+// the crayon marks' rough edge (b1105af, style.css .memo-crayon): one SVG filter for the whole page, before the first lobby;
+// and (b1105bp) the lobby's crayon LINE's wax (lobbyCrayonLine): a fine noise streaked along the stroke, slow across x and
+// quick across y, thresholded into the alpha so the paper's grain shows through, then the edge roughened
+if (!document.getElementById('crayon')) document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="crayon" x="-6%" y="-12%" width="112%" height="124%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/></filter>'
+  + '<filter id="crayon-line" x="-3%" y="-60%" width="106%" height="220%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.42 1.5" numOctaves="2" seed="4" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -4.4 0 0 0 3.4" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in" result="s"/><feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="1" seed="12" result="n"/><feDisplacementMap in="s" in2="n" scale="1.8" xChannelSelector="R" yChannelSelector="G"/></filter></svg>');
 showSelectMenu();
 animate();

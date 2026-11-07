@@ -872,8 +872,16 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .memo .memo-dice.rolled { animation: memo-dice-roll 0.5s ease-out; }
 @keyframes memo-dice-roll { 0% { transform: rotate(-6deg) scale(1); } 35% { transform: rotate(174deg) scale(1.18); } 70% { transform: rotate(354deg) scale(0.96); } 100% { transform: rotate(354deg) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .menu .memo .memo-dice.rolled { animation: none; } }
-/* (b1105o, user: the rows were too short and too close) five rows of 38 px with 10 px between: 230 px, the cards' height */
+/* (b1105o, user: the rows were too short and too close) five rows of 38 px with 10 px between: 230 px, the cards' height.
+   (b1105bp, 2026-11-07, the design canvas's round 10b, style G — user: "make the menu order as TEAMS>ROSTER>PLAY AS>RULES>
+   PRACTICE", "slightly add a gap" between the three groups, a red crayon line between each, "make the options buttons
+   untilted also") the rows in three groups, Teams · Roster, Play as · Rules, Practice: 10 px apart inside a group and 22
+   between, the crayon line (main.js lobbyCrayonLine, 12 px tall, 5 px into each 10 px gap) in the middle; the column is 254
+   px now, still under the map memo's 275, so nothing else moves. The option pills stand straight in the lobby (the menus'
+   1° / −1.2° tilt elsewhere is as it was). */
 .menu.lobby .opt-groups { flex-direction: column; flex-wrap: nowrap; gap: 10px; max-width: none; }
+.menu.lobby .opt-sep { display: block; flex: 0 0 auto; width: 100%; height: 12px; margin: -5px 0; overflow: visible; mix-blend-mode: multiply; pointer-events: none; }
+.menu.lobby .mode-chip button, .menu.lobby .mode-chip button:nth-child(even) { transform: none; }
 .menu.lobby .opt-row { justify-content: flex-start; gap: 10px; }
 .menu.lobby .opt-label { min-width: 72px; box-sizing: border-box; text-align: center; flex: 0 0 auto; font-size: 10px; letter-spacing: 0.03em; padding: 5px 5px; }   /* (b1105an–ao: the user's phone draws this label a tenth wider than this Chromium does and spilt PRACTICE's E past the old 68 px pill — a 72 px floor, a 10 px face and a tighter tracking leave the longest label 8 px to spare, and a wider text widens its own pill instead of spilling) */
 .menu.lobby .mode-chip { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; gap: 10px; }
