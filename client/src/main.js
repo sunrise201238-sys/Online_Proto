@@ -792,7 +792,7 @@ for (const unit of Object.values(UNIT_DATA)) {
 
 const MAP_DATA = {
   arena1: { name: 'Plain Field', noRandom: true },   // (a manual pick only: no Random card rolls it)
-  arena2: { name: 'Streets' },
+  arena2: { name: 'Streets', thumb: 'top' },   // (thumb, b1105cb: the upper part, the buildings and the bridge — user "crop the upper part for \"Street\" thumbnail as well")
   factory: { name: 'Factory' },
   factory2: { name: 'Scrapyard' },   // scrapyard retheme of the Factory 2 layout (2026-08-13); key stays 'factory2'
   square: { name: 'Square' },
@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ca 11-07';
+const CLIENT_BUILD_TAG = 'b1105cb 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
