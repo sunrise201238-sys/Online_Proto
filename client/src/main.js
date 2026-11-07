@@ -805,7 +805,7 @@ const MAP_DATA = {
   compound: { name: 'Compound', cardNote: 'Unit has more stamina in this map.' },   // (cardNote: the boost scale, as District's — user 2026-10-30)   // Cut from the cs_compound glTF (2026-10-24, README: Maps): a fenced compound in a field — the yard with its buildings, the road through it, the loading strip to the west; the sheds and grass beyond the fences stand as background.
   dust: { name: 'Dust' },   // Cut from the Dust2-short glTF (2026-10-19, README: Maps): the middle of the map — the site, the pit, the roofed hall, the yards.
   warehouse: { name: 'Warehouse', thumb: 'top' },   // Cut from the Map 79 (Void) glTF (2026-10-22, README: Maps): the container cluster at the middle of its empty plain and a copy of it turned 180°, set end to end, 38 by 62 m.
-  hospital: { name: 'Hospital', thumb: 'top' },   // (the card: the user's own photo of a ward, 2026-10-29 — the picker's wide thumb its upper part, the open door and the desk)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
+  hospital: { name: 'Hospital' },   // (the card: the user's own photo down the corridor, 2026-11-07, its wide thumb the middle as every card's — user: "Every map images are to be cropped in the middle for thumbnails"; a ward's photo before, 2026-10-29, thumbed at the top)   // Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   spacecraft: { name: 'Spacecraft', thumb: 'bottom' },   // (thumb: which part of the card's picture the picker's wide thumb shows — 'top' | 'bottom', the centre otherwise; the profile shows the whole picture. User 2026-10-24.)   // Cut from the Among Us Skeld glTF (2026-10-19, README: Maps): the whole ship.
   district: { name: 'District', cardNote: 'Unit has more stamina in this map.', noRandom: true },   // (noRandom, user 2026-10-30: "too much of a special map" — a manual pick only, offline and online; the host's Random card rolls the scene maps without it)   // (cardNote: the map's own note on its info card, as a unit's — District's boost scale, user 2026-10-29)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bx 11-07';
+const CLIENT_BUILD_TAG = 'b1105by 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
