@@ -45,7 +45,10 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // already longer than 110, then ignore this rule", PT first, then "implement in 9.5"); play altered by design. Against the b1105b
 // references one of the two matches with a shotgun in them parted (station unit2 vs unit4); the other (arena1 unit1 vs unit2) and the
 // five without one played equal.
-import { tickBot as tickOld } from './ai_b1105br_ref.js';
+// Re-frozen at b1105bt (2026-11-07): a unit under a move order runs its four Defense commits 300 ms (nbrain.js BOT_DEFENSE_CMD_MOVE_MS; user:
+// "change these 4 durations from 1sec to 0.3sec for that assigned unit"); none of the seven matches carries an order, and they played equal to the
+// b1105br references after the change.
+import { tickBot as tickOld } from './ai_b1105bt_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

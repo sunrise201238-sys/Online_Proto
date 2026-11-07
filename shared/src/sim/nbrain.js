@@ -91,6 +91,14 @@ const BOT_DEFENSE_HIT_MS = 1000;
 const BOT_DEFENSE_SNIPER_MS = 1000;
 const BOT_DEFENSE_STUCK_MS = 1000;
 const BOT_DEFENSE_DODGE_FOLLOW_MS = 1000;
+// THE ORDERED UNIT'S SHORT DEFENSE (b1105bt, 2026-11-07; user: "In command mode, when a unit is given an assigned location, change these
+// 4 durations from 1sec to 0.3sec for that assigned unit", then "Both" (the way there and the 40 s guard) and "No. Keep SD brain
+// untouched"): while a unit holds a move order (command.js setMoveOrder, its travel and its anchor alike) the four commits above run
+// BOT_DEFENSE_CMD_MOVE_MS, so the escape across the line hands the frame back to the order sooner (the command driver waits out a
+// Defense: command.js commandReflexActive). A lock-only order, a unit without orders and Sudden Death keep them as they are. Assessed
+// before the build (a Command unit ordered to the enemy's spawn under an unkillable machine gun, 8 runs a map): the time in Defense
+// 20 to 40% shorter, the units that arrived there sooner (21 to 13 s, 25 to 17 s), more damage taken on the way.
+const BOT_DEFENSE_CMD_MOVE_MS = 300;
 // Anti-sniper humanization: the bot rolls its reaction PER CHARGE  — a defensive mixed strategy against the sniper's
 // own 50/50 snap/hold coin flip. The slow roll is charger-aware:
 //   ANTI-ARU (bullet snipers): 50% react at 400 ms (i-frames ~400-712 cover
@@ -537,6 +545,8 @@ function botTryJumpSurvival(host) {
 
 export function nbBrainTick(host) {
   const { now, me, pos, vel, grounded, unit, opp, enemies, obstacles, surfaces, grid, eyeUp, muzzleUp, mode, sd } = host;
+  // (b1105bt) a Defense commit under a move order runs BOT_DEFENSE_CMD_MOVE_MS, outside Sudden Death
+  const defMs = (ms) => ((!sd && host.cmd && host.cmd.move) ? BOT_DEFENSE_CMD_MOVE_MS : ms);
   // THE LADDER'S GOAL (ladder.js botLadderGoal; b1105b): a goal lives one tick — the Maze follower below sets it on the tick it
   // walks the bot at a ladder's end, and nothing else renews it, so a bot that dropped its route, or was taken by Defense,
   // passes a ladder's foot without mounting (ladderBotStep mounts on the goal alone). Under a standing move order the command
@@ -658,7 +668,7 @@ export function nbBrainTick(host) {
         me.botStateEnteredAt = now;
         me.botDefenseDirX = sdx; me.botDefenseDirZ = sdz;
         me.botDefenseDirAt = now;
-        me.botDefenseUntil = me.stepUntil + BOT_DEFENSE_DODGE_FOLLOW_MS;
+        me.botDefenseUntil = me.stepUntil + defMs(BOT_DEFENSE_DODGE_FOLLOW_MS);
         me.botDefenseRefId = glintAtk ? glintAtk.id : opp.id;   // (the follow-through stays across this enemy's line: the movement branch)
         me.botDefenseRefLife = (glintAtk ?? opp).invulnerableUntil;   // (this life of it: a respawn stamps a new one)
         me.botDefenseInCover = false;
@@ -1556,7 +1566,7 @@ export function nbBrainTick(host) {
       me.botDefenseRefLife = opp.invulnerableUntil;
       // A hit runs BOT_DEFENSE_HIT_MS, under the locked sniper's charge BOT_DEFENSE_SNIPER_MS (1,500 ms each since 2026-11-01); the
       // stuck branch is vestigial (BOT_DEFENSE_STUCK_MS: an entry here is a hit's, and the hit's commit replaces it below).
-      me.botDefenseUntil = now + (stuckTriggered ? BOT_DEFENSE_STUCK_MS : (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS));
+      me.botDefenseUntil = now + defMs(stuckTriggered ? BOT_DEFENSE_STUCK_MS : (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS));
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefenseCoverBroken = false;
@@ -1590,7 +1600,7 @@ export function nbBrainTick(host) {
       me.botDefenseDirAt = now;
       me.botDefenseRefId = opp.id;
       me.botDefenseRefLife = opp.invulnerableUntil;
-      me.botDefenseUntil = now + (sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
+      me.botDefenseUntil = now + defMs(sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
       me.botDefenseInCover = false;
       me.botDefenseCoverAt = 0;
       me.botDefenseCoverBroken = false;
@@ -1606,7 +1616,7 @@ export function nbBrainTick(host) {
       me.botDefenseInCover = false;
       me.botDefenseCoverBroken = true;
     }
-    const minDur = sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS;
+    const minDur = defMs(sniperCharging ? BOT_DEFENSE_SNIPER_MS : BOT_DEFENSE_HIT_MS);
     if ((me.botDefenseUntil ?? 0) < now + minDur) {
       me.botDefenseUntil = now + minDur;
     }
