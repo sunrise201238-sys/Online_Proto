@@ -810,7 +810,7 @@ const MAP_DATA = {
   district: { name: 'District', cardNote: 'Unit has more stamina in this map.', noRandom: true },   // (noRandom, user 2026-10-30: "too much of a special map" — a manual pick only, offline and online; the host's Random card rolls the scene maps without it)   // (cardNote: the map's own note on its info card, as a unit's — District's boost scale, user 2026-10-29)   // Cut from the Jujutsu Shenanigans map glTF (2026-10-29, README: Maps): a walled city block — streets on a grid, the square at the middle, buildings of two to fifteen storeys, a plaza of dead trees; the posters and the doll the model carried left out (user 2026-10-29).
   backrooms: { name: 'Backrooms', thumb: 'top' },   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors; the usual HUD and rules.
   backrooms_anomaly: { name: 'Backrooms (Anomaly)', shortName: 'Backrooms', crayon: 'Anomaly!', noRandom: true, thumb: 'top' },   // (shortName / crayon: the memos read Backrooms with a red crayon Anomaly!, b1105af)   // Cut from the Original Backrooms glTF (2026-10-19, README: Maps): the whole hall, indoors, under the anomaly rules. No Random card rolls it.
-  range: { name: 'Shooting Range', noRandom: true, offlineOnly: true }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
+  range: { name: 'Shooting Range', noRandom: true, offlineOnly: true, thumb: 'top' }   // offline-only practice range (hidden online: `offlineOnly`); listed last; no Random card rolls it
 };
 
 const state = {
@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bz 11-07';
+const CLIENT_BUILD_TAG = 'b1105ca 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
