@@ -180,7 +180,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   text-transform: uppercase;
   padding: 0;
 }
-.buttons button:active { transform: translate(2px, 2px) rotate(var(--tilt, 0deg)); box-shadow: 2px 2px 0 var(--ink); }
+.buttons button:active, .buttons button.is-down { transform: translate(2px, 2px) rotate(var(--tilt, 0deg)); box-shadow: 2px 2px 0 var(--ink); }   /* (.is-down, b1105cd: each touch's own button — :active is one element per page, and a held stick took it) */
 .buttons .btn-boost { right: 0; bottom: 0; --tilt: -3deg; transform: rotate(-3deg); background: var(--magenta); color: #ffffff; }
 .buttons .btn-jump { right: 0; bottom: calc(var(--btn-size) + var(--btn-gap)); --tilt: 3deg; transform: rotate(3deg); background: var(--lime); }   /* (b1105s: the stick's old lime — user) */
 .buttons .btn-step { right: 0; bottom: calc((var(--btn-size) + var(--btn-gap)) * 2); --tilt: -2deg; transform: rotate(-2deg); background: var(--cyan); }

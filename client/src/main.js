@@ -2806,7 +2806,9 @@ function setupHUD() {
     applyStick(e.clientX, e.clientY);
   }, { signal: hudAbort.signal });
 
-  window.addEventListener('pointerup', (e) => {
+  // (the stick's finger lifted, or its touch cancelled by the system — a call, a swipe in from the screen's edge — b1105cd, user
+  // 2026-11-07: a cancelled touch sent no pointerup, so the stick stayed deflected and the unit walked on until the next touch)
+  const joyRelease = (e) => {
     if (pointerId !== e.pointerId) return;
     pointerId = null;
     touchSteeringActive = false;
@@ -2816,7 +2818,9 @@ function setupHUD() {
     input.boost = false;
     input.boostHeld = false;
     stick.style.transform = 'translate(0px,0px)';
-  }, { signal: hudAbort.signal });
+  };
+  window.addEventListener('pointerup', joyRelease, { signal: hudAbort.signal });
+  window.addEventListener('pointercancel', joyRelease, { signal: hudAbort.signal });
   setupFreePovPointer(hudAbort.signal);   // FREE POV (user 2026-10-30): the mouse, the screen swipe, the double-tap
 
   hud.querySelectorAll('button').forEach((btn) => {
@@ -2837,14 +2841,24 @@ function setupHUD() {
         input.boostHeld = true;
         input.boost = true;
       } else input[k] = true;
+      // THE PRESSED LOOK BY HAND (b1105cd, user 2026-11-07: "when the joycon is being held, other buttons on the right side
+      // (Target/Fire/Dodge/Sprint/Jump) do not show the pushed down effect"): :active is one element per page, and the finger
+      // on the stick holds it, so a second finger's button stayed up though its input went through. Each touch now marks its
+      // own button; a mouse keeps :active (no implicit capture, a release off the button would leave the mark).
+      if (e.pointerType !== 'mouse') btn.classList.add('is-down');
     });
-    btn.addEventListener('pointerup', () => {
+    // (the finger lifted, or its touch cancelled by the system: a cancel sent no pointerup and the input stayed held, the gun
+    // firing on until the button's next release — b1105cd)
+    const release = () => {
       if (k === 'shoot') input.shootHold = false;
       else if (k === 'boost') {
         input.boostHeld = false;
         if (!input.sprintLocked) input.boost = false;
       } else input[k] = false;
-    });
+      btn.classList.remove('is-down');
+    };
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
   });
 
   hud.querySelector('#pause-btn').addEventListener('pointerdown', (event) => {
@@ -7106,7 +7120,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cc 11-07';
+const CLIENT_BUILD_TAG = 'b1105cd 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
