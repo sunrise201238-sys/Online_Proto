@@ -41,7 +41,9 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // whose jump launch changed by design (nb_equiv.test.js); the seven matches played equal before the change.
 // Re-frozen at b1105b (2026-11-05) with the plain brain's references (the bots on the ladders): the Sudden Death brain is
 // unchanged — its searches do not ask for the ladder links — and its matches played equal to the b1104g references before the change.
-import { tickBot as tickOld } from './ai_b1105b_ref.js';
+// Re-frozen at b1105br (2026-11-07) with the plain brain's references (the band on an enemy shotgun, nb_equiv.test.js): the rule
+// stands down in Sudden Death, and the seven matches played equal to the b1105b references after the change.
+import { tickBot as tickOld } from './ai_b1105br_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

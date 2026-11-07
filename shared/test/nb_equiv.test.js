@@ -40,7 +40,12 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // searches ask for the ladder links, its Maze follower sets the ladder's goal and heads for the grab point; the goal is cleared
 // at the top of every brain tick without a standing order); none of the seven maps has a ladder, and the seven matches played
 // equal to the b1104g references before the change.
-import { tickBot as tickOld } from './ai_b1105b_ref.js';
+// Re-frozen at b1105br (2026-11-07): a bot whose target is an enemy shotgun fights on a band centred on 110, a longer band of its own
+// kept, a shotgun bot keeping its own (nbrain.js BOT_SHOTGUN_ENGAGE_RANGE; user: "change the engage range to 110, if the engage range is
+// already longer than 110, then ignore this rule", PT first, then "implement in 9.5"); play altered by design. Against the b1105b
+// references one of the two matches with a shotgun in them parted (station unit2 vs unit4); the other (arena1 unit1 vs unit2) and the
+// five without one played equal.
+import { tickBot as tickOld } from './ai_b1105br_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

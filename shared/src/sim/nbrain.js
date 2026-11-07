@@ -131,6 +131,17 @@ const BOT_STUCK_MEMORY_WEIGHT = 0.7;  // below the ~0.85 pursuit pull, so it nud
 // back only from where it stands). Auto and per-shell reloaders are
 // excluded by design. See the hideOrdered read in tickBot.
 const BOT_RELOAD_HIDE_MIN_MS = 3000;
+// THE SHOTGUN KEPT AT ARM'S LENGTH (b1105br, 2026-11-07, PT first and then 9.5; user: "if there's a SG unit in play (on the field) on enemy site, all
+// friendly unit locking on SG unit get +40 engage range", "Effect does not stack up or inherit", "Effect does not apply on SG units
+// themselves", then "change the engage range to 110, if the engage range is already longer than 110, then ignore this rule"): a bot
+// whose target is an enemy shotgun fights on a band centred on 110 (103 to 117), outside the shotguns' 100 reach (pelletRange), where
+// its own lock range is shorter; the snipers' 120 stays. The plain brain only, both modes (in 2v2 every band but the shotguns' is 70
+// or less, so all go to 110). Assessed before the build on the bot-vs-bot round robin (16 units, seven maps, 3,360 duels, the same
+// seeds): the shotguns' mean win rate 59.7% to 53.1%, against the rifles and the assault rifles 69.8% to 54.6%, the machine guns
+// 36.0% to 23.5%, the SMGs and the snipers as they were; the duels against a shotgun 3 to 7 s longer; the brain's time a tick no longer.
+const BOT_SHOTGUN_ENGAGE_RANGE = 110;
+// a shotgun is told by its weapon class, the name's second half (Unit 2 / Shotgun), as the picker's class tags read it
+const isShotgunUnit = (u) => /\/\s*Shotgun\b/.test(u?.name || '');
 // HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
 // tickBot): a hidden-spot search runs at most every SEARCH_MS per unit (and
 // once per tick per match), a search that found nothing at all retries
@@ -683,9 +694,15 @@ export function nbBrainTick(host) {
   // compressed 50–70 team-synergy table (long locks let a teammate die
   // alone at the front). Units without the field (hidden ones) and every
   // other mode keep lockRange.
-  const lockRange = (mode === '2v2' && unit?.lockRange2v2)
+  const ownLockRange = (mode === '2v2' && unit?.lockRange2v2)
     ? unit.lockRange2v2
     : (unit?.lockRange ?? 50);
+  // THE SHOTGUN KEPT AT ARM'S LENGTH (b1105br): while the CURRENT target is an enemy shotgun the band centres on
+  // BOT_SHOTGUN_ENGAGE_RANGE instead — a longer band of the bot's own stays as it is, a shotgun bot keeps its own, and the
+  // Sudden Death brain is untouched (sd). Read off the target every tick, so it never adds up and never outlives the lock.
+  const lockRange = (!sd && isShotgunUnit(opp?.unit) && !isShotgunUnit(unit))
+    ? Math.max(ownLockRange, BOT_SHOTGUN_ENGAGE_RANGE)
+    : ownLockRange;
   const upperRange = lockRange + 7;
   const optimalRange = Math.max(10, lockRange);
   const lowerRange = Math.max(6, lockRange - 7);
