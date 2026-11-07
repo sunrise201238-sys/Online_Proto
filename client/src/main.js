@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bt 11-07';
+const CLIENT_BUILD_TAG = 'b1105bv 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11176,9 +11176,9 @@ function applyMapAmbience(mapKey) {
 // mesh with its walls — updateMapRoof); `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
 // rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
 const GLB_MAPS = {
-  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false },   // (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
+  town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false, cmdClear: false },   // (`cmdClear: false`, b1105bv: Town keeps its whole model in command mode, user 2026-11-07 "Town does not need this treatment") (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
   district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
-  blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, fadeForce: ['Node_78_78_copy_w8', 'Node_79_79_copy_w8', 'Node_78_78_copy_w16', 'Node_79_79_copy_w16', 'Node_76_76_copy_n8', 'Node_77_77_copy_n8', 'Node_78_78_copy_n8', 'Node_79_79_copy_n8', 'Node_205_205_cw'] },   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick. b1105bk, fadeForce: the scaffold edits' decks — the extension's frame and grating (_w8), the two b1102h decks' (_w16, _n8) — and the catwalk's grating (Node_205_205_cw) are fade things whatever fadeNodes' tallness rule makes of them: the solid reading's floor strips at 5.30 m under those decks are "the floor at their foot", so they stood 0.47 m under fadeTall and never faded, while the deck they were copied from fades to a tenth beside them; a unit under the extension deck showed only through the grating texture's holes)
+  blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, fadeForce: ['Node_78_78_copy_w8', 'Node_79_79_copy_w8', 'Node_78_78_copy_w16', 'Node_79_79_copy_w16', 'Node_76_76_copy_n8', 'Node_77_77_copy_n8', 'Node_78_78_copy_n8', 'Node_79_79_copy_n8', 'Node_205_205_cw'], cmdClear: ['Node_86_86', 'Node_32_32', 'Node_195_195', 'Node_37_37', 'Node_92_92', 'Node_85_85', 'Node_26_26', 'Node_151_151', 'Node_152_152', 'Node_31_31', 'Node_36_36', 'Node_84_84', 'Node_149_149', 'Node_125_125', 'Node_141_141', 'Node_184_184', 'Node_150_150', 'Node_194_194', 'Node_95_95', 'Node_28_28', 'Node_89_89', 'Node_142_142', 'Node_147_147', 'Node_183_183', 'Node_139_139', 'Node_201_201', 'Node_148_148', 'Node_102_102', 'Node_109_109', 'Node_88_88', 'Node_235_235', 'Node_30_30', 'Node_35_35', 'Node_83_83', 'Node_91_91', 'Node_197_197', 'Node_140_140', 'Node_145_145', 'Node_137_137', 'Node_199_199', 'Node_146_146', 'Node_198_198', 'Node_96_96', 'Node_101_101', 'Node_99_99', 'Node_138_138', 'Node_98_98', 'Node_120_120', 'Node_118_118', 'Node_119_119', 'Node_121_121', 'Node_45_45', 'Node_196_196', 'Node_224_224', 'Node_225_225', 'Node_124_124'] },   // (cmdClear, b1105bu: the tower parts starting 12 m or more over the street, hidden in command mode)   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick. b1105bk, fadeForce: the scaffold edits' decks — the extension's frame and grating (_w8), the two b1102h decks' (_w16, _n8) — and the catwalk's grating (Node_205_205_cw) are fade things whatever fadeNodes' tallness rule makes of them: the solid reading's floor strips at 5.30 m under those decks are "the floor at their foot", so they stood 0.47 m under fadeTall and never faded, while the deck they were copied from fades to a tenth beside them; a unit under the extension deck showed only through the grating texture's holes)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, edge: false, cmdDark: true },   // (the shooter view's tone the daylight one, as Warehouse's — user 2026-11-01; Factory's night tone from 2026-10-19 to then. Command mode stays black: cmdDark)
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
@@ -11220,7 +11220,42 @@ function splitLong(geo, matrixWorld, maxLen) {
 const cmdCeilPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); let cmdCeilOn = false;
 function applyCmdCeil(on) { cmdCeilOn = on; if (on) renderer.localClippingEnabled = true; for (const g of arenaDecor) g.traverse((o) => { if (o.isMesh) o.material.clippingPlanes = on ? [cmdCeilPlane] : null; }); }
 function updateMapRoof() { const hide = dioramaActive(); for (const g of arenaDecor) for (const o of g.userData?.roof ?? []) o.visible = !hide;   // (every frame: the mode may flip while the model is still loading)
-  const cfg = GLB_MAPS[state.mapKey]; const cut = !!(hide && cfg?.cmdCeil != null); if (cut) cmdCeilPlane.constant = cfg.cmdCeil * cfg.scale; if (cut !== cmdCeilOn) applyCmdCeil(cut); }
+  const cfg = GLB_MAPS[state.mapKey]; const cut = !!(hide && cfg?.cmdCeil != null); if (cut) cmdCeilPlane.constant = cfg.cmdCeil * cfg.scale; if (cut !== cmdCeilOn) applyCmdCeil(cut); updateCmdClear(); }
+// COMMAND MODE'S CLEAR VIEW (b1105bu, 2026-11-07, PT and 9.5; user: "Currently there are some maps where items outside the map blocking player's site in
+// command mode (Blockade, Dust etc.). I want those objects be temporarily hidden in command mode", then "自動規則加手動清單" and "implement in PT
+// first"): in command mode the model's parts that stand in the tabletop view go, and come back in Shooter. By rule, every mesh lying wholly
+// outside the collision area (the boxes' extents) and rising more than 2 m (8 u) over the street, Dust's skyline; by hand, the meshes under
+// the nodes a map lists in `cmdClear`, Blockade's tower parts starting 12 m or more over the street (its collision boxes span the whole model,
+// so no part of it is outside them). Visibility alone, set on the change and restored as it was: the collision, the bots and the shots never
+// see it. The list is made once a map's boxes are in (cmdClearList), and a model that lands while the mode is on takes it at once.
+// Modelled maps only (a group built by buildGlbArena carries cmdClearNodes once its model is in). A map whose GLB_MAPS entry
+// says `cmdClear: false` is left out, rule and list alike (b1105bv: Town, user 2026-11-07
+// "Town does not need this treatment"). Its own key, cmdClear: `userData.cmdHide` is the older flag on the built maps' airborne dressing
+// (applyDioramaDressing), which hides whatever in arenaDecor carries it.
+function cmdClearList(g) {
+  if (g.userData.cmdClear) return g.userData.cmdClear;
+  if (!arenaObstacles.length) return null;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const o of arenaObstacles) { if (o.minX < x0) x0 = o.minX; if (o.maxX > x1) x1 = o.maxX; if (o.minZ < z0) z0 = o.minZ; if (o.maxZ > z1) z1 = o.maxZ; }
+  const list = [...g.userData.cmdClearNodes]; const seen = new Set(list); const box = new THREE.Box3();
+  g.updateMatrixWorld(true);
+  g.traverse((o) => {
+    if (!o.isMesh || seen.has(o)) return;
+    box.setFromObject(o);
+    if ((box.max.x < x0 || box.min.x > x1 || box.max.z < z0 || box.min.z > z1) && box.max.y - GROUND_BASE_Y > 8) { list.push(o); seen.add(o); }
+  });
+  g.userData.cmdClear = list;
+  return list;
+}
+function updateCmdClear() {
+  const want = dioramaActive();
+  for (const g of arenaDecor) {
+    if (!g.userData?.cmdClearNodes || g.userData.cmdClearOn === want) continue;
+    const list = cmdClearList(g); if (!list) continue;
+    for (const o of list) { if (want) { o.userData.cmdPrevVisible = o.visible; o.visible = false; } else { o.visible = o.userData.cmdPrevVisible ?? true; } }
+    g.userData.cmdClearOn = want;
+  }
+}
 function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaActive(); }   // (a boolean: classList.toggle(name, undefined) flips the class every frame)
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
@@ -11344,6 +11379,8 @@ function buildGlbArena(mapKey) {
     group.add(inst);
     splitFadeParts(inst, group, cfg, halfX, halfZ);
     group.userData.roof = []; if (cfg.roof) inst.traverse((o) => { if (o.isMesh && underNodes(o, cfg.roof, inst)) group.userData.roof.push(o); });
+    if (cfg.cmdClear !== false) { group.userData.cmdClearNodes = []; if (cfg.cmdClear) inst.traverse((o) => { if (o.isMesh && underNodes(o, cfg.cmdClear, inst)) group.userData.cmdClearNodes.push(o); }); }   // (b1105bu: updateCmdClear; `cmdClear: false` leaves the map out, b1105bv)
+    group.userData.cmdClear = null; group.userData.cmdClearOn = false;
     cmdCeilOn = false; updateMapRoof();   // (the new meshes take the ceiling cut if the mode is on)
   });
 }
