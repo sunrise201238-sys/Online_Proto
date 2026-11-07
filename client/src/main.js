@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bw 11-07';
+const CLIENT_BUILD_TAG = 'b1105bx 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9190,23 +9190,32 @@ function showSelectMenu() {
 
 // the dice on the lobby's Random buttons (b1105n): a lone "?" read as the guide
 const LOBBY_DIE_ICON = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle class="pip" cx="8.5" cy="8.5" r="1.6"/><circle class="pip" cx="15.5" cy="8.5" r="1.6"/><circle class="pip" cx="12" cy="12" r="1.6"/><circle class="pip" cx="8.5" cy="15.5" r="1.6"/><circle class="pip" cx="15.5" cy="15.5" r="1.6"/></svg>';
-// The red crayon line between the lobby's option groups (PT b1105bp, 2026-11-07; the design canvas's round 10b, style G —
-// user: "Style G"): one unbroken stroke drawn as a filled outline along a slow hand wobble, its width breathing a little
-// and thinning where the crayon lands and lifts. Drawn on a 388 x 12 box, the column's width at desktop; the SVG stretches
-// to the column (332 px at the least, the whole width in portrait) and keeps its 12 px height. The memos' red (#E0382C);
-// the grain and the rough edge come from the page's #crayon-line filter. `seed` gives each line its own wobble.
+// The red crayon line between the lobby's option groups (PT and 9.5; b1105bp drew the design canvas's round 10b style G, one
+// unbroken stroke — user "Style G" — and b1105bx, 2026-11-07, its style E — user: "change the red line style from current
+// "G" to "E". Apply to PT and 9.5."): an even dashed line, 24 px dashes 9 px apart along the slow hand wobble, each dash a
+// filled outline of a 3.9 px stroke (a hair thicker or thinner, a fifth of a pixel up or down, from the seeded draw) whose
+// ends thin as the crayon lands and lifts, the round over its first and last 28%. The canvas's own generator (seps2.py
+// dashes_e) with a seeded draw of JS's own in place of Python's. Drawn on a 388 x 12 box, the column's width at desktop;
+// the SVG stretches to the column (332 px at the least, the whole width in portrait), the dashes and the gaps with it,
+// and keeps its 12 px height. The memos' red (#E0382C); the grain and the rough edge come from the page's #crayon-line
+// filter. `seed` gives each line its own wobble and its own draw.
 function lobbyCrayonLine(seed, tilt) {
-  const W = 388, H = 12, CY = 6, X0 = 2, X1 = W - 2, N = X1 - X0;
+  const W = 388, H = 12, CY = 6, DASH = 24, GAP = 9;
   const wob = (x) => 0.5 * Math.sin(x / 53 + seed) + 0.3 * Math.sin(x / 21 + 2 * seed);
-  const cap = (t) => { const e = Math.min(t, 1 - t) / 0.05; return e >= 1 ? 1 : Math.sqrt(Math.max(0, e * (2 - e))); };
-  const top = [], bot = [];
-  for (let i = 0; i <= N; i += 1) {
-    const t = i / N, x = X0 + (X1 - X0) * t, y = CY + wob(x) * 1.15;
-    const h = 4.3 * (0.88 + 0.12 * Math.sin(t * 12.6 + seed)) * cap(t) / 2;
-    top.push(`${x.toFixed(1)} ${(y - h).toFixed(2)}`); bot.push(`${x.toFixed(1)} ${(y + h).toFixed(2)}`);
+  const cap = (t) => { const e = Math.min(t, 1 - t) / 0.28; return e >= 1 ? 1 : Math.sqrt(Math.max(0, e * (2 - e))); };
+  let r = (seed * 2654435761) >>> 0; const rnd = () => { r = (r + 0x6D2B79F5) >>> 0; let q = Math.imul(r ^ (r >>> 15), 1 | r); q = (q + Math.imul(q ^ (q >>> 7), 61 | q)) ^ q; return ((q ^ (q >>> 14)) >>> 0) / 4294967296; };
+  const d = [];
+  for (let x = 2; x < W - 12; x += DASH + GAP) {
+    const L = Math.min(DASH, W - 2 - x), w = 3.9 * (0.95 + 0.1 * rnd()), j = -0.2 + 0.4 * rnd();
+    const n = Math.max(6, Math.floor(L / 1.5)), top = [], bot = [];
+    for (let i = 0; i <= n; i += 1) {
+      const t = i / n, xx = x + L * t, y = CY + wob(xx) + j, h = w * cap(t) / 2;
+      top.push(`${xx.toFixed(1)} ${(y - h).toFixed(2)}`); bot.push(`${xx.toFixed(1)} ${(y + h).toFixed(2)}`);
+    }
+    d.push(`M${top.join(' L')} L${bot.reverse().join(' L')}Z`);
   }
   return `<svg class="opt-sep" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="transform: rotate(${tilt}deg)">`
-    + `<path d="M${top.join(' L')} L${bot.reverse().join(' L')}Z" fill="#E0382C" filter="url(#crayon-line)"/></svg>`;
+    + `<path d="${d.join(' ')}" fill="#E0382C" filter="url(#crayon-line)"/></svg>`;
 }
 // The lobby's four unit slots (b1105p): your card holds you (and the ally in 2v2), the enemy card the enemy (and the
 // second in 2v2). A slot's roster is its Trio roster when there is one, else its single unit key, cut to what the
