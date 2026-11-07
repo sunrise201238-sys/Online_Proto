@@ -421,6 +421,9 @@ body.pseudo-fullscreen #app {
 .guide-card-body ul { margin: 0 0 10px; padding-left: 22px; }
 .guide-card-body li { margin: 4px 0; }
 .guide-card-body .guide-list-gap { height: 10px; }
+/* (b1105bs, user 2026-11-07: "Some yellow text needs their text color changed") the guide's key lines read in ink over a yellow
+   highlighter stroke, where the yellow text itself was hard to read on the white card */
+.guide-card-body .guide-hl { color: var(--ink); background: linear-gradient(transparent 52%, var(--yellow) 52%, var(--yellow) 92%, transparent 92%); padding: 0 2px; }
 
 .online-overlay {
   position: absolute;

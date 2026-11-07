@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105br 11-07';
+const CLIENT_BUILD_TAG = 'b1105bs 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10083,39 +10083,63 @@ function showGuidePopup() {
           <button class="guide-close-btn" aria-label="Close">×</button>
         </div>
         <div class="guide-card-body">
-          <p>ArchiveVS — A fast-paced duel gunfight.</p>
-          <p class="guide-tagline">No aiming problem — resource management is the key.</p>
+          <p>ArchiveVS is a fast gunfight between anime units.</p>
+          <p class="guide-tagline">Aiming is automatic. You win by timing: when to sprint, when to dodge and when to hide.</p>
+
+          <h4>How to win</h4>
+          <ul>
+            <li>Bring the enemy's HP to zero before they do it to you.</li>
+            <li><strong>Health Point</strong> rules: every unit has 100 HP, Kurumi has 120. <strong>Sudden Death</strong>: everyone has 1 HP, so one hit wins.</li>
+            <li><strong>Duel</strong>: one unit each. <strong>Trio</strong>: three units each, in the order you pick them. When one falls, the next one starts at the spawn point and can't be hurt for 3 seconds.</li>
+          </ul>
+
+          <h4>Main menu</h4>
+          <ul>
+            <li>Tap your unit card to change units, and the map card to change maps. In the unit list, tap the photo on the card to see the full picture.</li>
+            <li><strong>Teams</strong>: 1v1, or 2v2 with a bot teammate. <strong>Roster</strong>: Duel or Trio.</li>
+            <li><strong>Play as</strong>: Shooter, you control your unit. Command, your unit fights by itself and you give orders.</li>
+            <li><strong>Rules</strong>: Health Point or Sudden Death.</li>
+            <li><strong>Practice</strong>: Dummy bots, their shots do no damage. Spectator, a bot plays your unit and you watch.</li>
+            <li><strong>All random</strong> picks everything and starts. <strong>Online</strong> plays against a person. <strong>GO!!</strong> starts against bots.</li>
+          </ul>
 
           <h4>Controls</h4>
           <ul>
-            <li>Mobile — On-screen buttons.</li>
-            <li>PC — WASD move · J fire · K sprint · L dodge · Space jump · U target switch.</li>
+            <li>Phone: the stick on the left moves you. The buttons fire, sprint, dodge, jump and switch target.</li>
+            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or E · Shooter or Command V · free camera I.</li>
           </ul>
 
-          <h4>Game Mechanics</h4>
+          <h4>Fighting</h4>
           <ul>
-            <li>Your character auto-locks on the enemy.</li>
-            <li>Sprint and dodge help you avoid hits, but both cost stamina.</li>
-            <li>Stamina has a cap and needs time to refill.</li>
-            <li>Use cover for safe recovery and pick the best angle for your weapon.</li>
-          </ul>
-          <div class="guide-list-gap"></div>
-          <ul>
-            <li><strong style="color: #ffe14d;">Double-tap sprint to lock it on</strong> — handy on mobile. Mind the drain.</li>
-            <li><strong>Character can't be hit during a dodge.</strong></li>
-            <li>Sniper has a forced aim time. Sprint can cancel the aim and fire faster (costs stamina).</li>
+            <li>Your unit locks on to an enemy by itself. When the enemy is close enough, the lock turns red and your shots follow them. From farther away, shots fly straight and miss more.</li>
+            <li>Holding fire makes your shots spread wider. Short bursts stay accurate, and a short pause brings the spread back.</li>
+            <li>When the magazine is empty you reload by yourself. Some shotguns load one shell at a time.</li>
+            <li>Getting hit slows you down for a moment.</li>
+            <li>Sprint, dodge and jump use stamina. Stamina has a limit and refills over time.</li>
+            <li><strong class="guide-hl">Double-tap sprint to keep sprinting</strong>, handy on a phone. It keeps using stamina.</li>
+            <li><strong class="guide-hl">You can't be hit while dodging.</strong></li>
+            <li>Walls and boxes stop bullets. Hide behind them to refill stamina safely, and fight from the distance your gun likes.</li>
           </ul>
 
-          <h4>Command Mode</h4>
+          <h4>Weapon types</h4>
           <ul>
-            <li>Pick <strong>Shooter</strong> or <strong>Command</strong> in the menu. Online you pick in the queue room — locked once the match starts; offline V or the pause menu toggles mid-match.</li>
-            <li>In Command, your unit fights on its own — you give orders from a tabletop view.</li>
-            <li><strong>Move order</strong> — tap your unit, then tap the map (or drag from the unit). It fights its way there, then guards the spot for 40 s. Hold the tap to pick upper / lower floors.</li>
-            <li><strong>Force lock</strong> — tap your unit, then an enemy. The lock holds until either side dies; tap the same enemy again to cancel.</li>
+            <li><strong>AR</strong>, assault rifle: good at middle distance.</li>
+            <li><strong>RF</strong>, rifle: strong single shots, slower to fire.</li>
+            <li><strong>SMG</strong>: very fast fire, best up close.</li>
+            <li><strong>SG</strong>, shotgun: huge damage up close, weak far away.</li>
+            <li><strong>MG</strong>, machine gun: big magazine and long sprays, but walks slowly.</li>
+            <li><strong>SR</strong>, sniper: hits from far away. Each shot needs a short aim first. Sprinting stops the aim and fires sooner, but costs stamina.</li>
+          </ul>
+
+          <h4>Command mode</h4>
+          <ul>
+            <li>Your unit fights by itself and you give orders from a view above the table. Offline, press V or use the pause menu to switch during a match. Online, you choose in the waiting room, and it can't change once the match starts.</li>
+            <li><strong>Move</strong>: tap your unit, then tap a spot, or drag from the unit. It fights its way there and guards the spot for 40 seconds. Hold the tap to choose an upper or lower floor.</li>
+            <li><strong>Attack one enemy</strong>: tap your unit, then the enemy. It sticks to that enemy until one of them falls. Tap the same enemy again to cancel.</li>
+            <li><strong>Hide</strong>: tap your unit, then the shield above its card. It stays out of the enemies' sight and only shoots back from cover. Double-tap the unit or give a new order to stop.</li>
             <li>Double-tap your unit to cancel all its orders.</li>
-            <li>Select your unit (tap its marker or card) and a shield appears above its card — tap the shield = <strong>Hide</strong>: the unit slips out of every enemy's sight, keeps pacing its cover as they move and only fires back from there. Double-tap the unit, or give it any move / lock order, to release it.</li>
-            <li>With nothing selected: drag the area ring to move that order (the 40 s restarts) · double-tap the ring to remove it · tap a pinned enemy to drop your locks on it.</li>
-            <li>Camera — drag to pan · pinch / wheel to zoom · two-finger twist, right-drag or Q / E to rotate.</li>
+            <li>With nothing selected: drag the area ring to move it, double-tap the ring to remove it, and tap a marked enemy to drop the attack order on it.</li>
+            <li>Camera: drag to move, pinch or the mouse wheel to zoom, and a two-finger twist, right-drag or Q and E to turn.</li>
           </ul>
         </div>
       </div>
