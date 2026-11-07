@@ -7106,7 +7106,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105bp 11-07';
+const CLIENT_BUILD_TAG = 'b1105bq 11-07';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9666,6 +9666,62 @@ function showProfilePopup(card, unit, onConfirm) {
     // (b1105r: the side card's band sits where the unit's face is — the face-box, as the lobby's cards)
     `${print}${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
     onConfirm);
+  // (b1105bq) the side card's photo band opens the full picture (showFullPicture); the tap stops here, so it neither confirms
+  // the pick nor reaches the menu's cancel
+  if (sideCard) {
+    const menu = card.closest('.menu');
+    const band = menu?.querySelector('.picker-side .profile-face-box');
+    if (band) {
+      band.title = 'Show the full picture';
+      band.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showFullPicture(menu, unit, card.dataset.class || ''); });
+    }
+  }
+}
+
+// THE FULL PICTURE (PT b1105bq, 2026-11-07; the design canvas's round 11 / 11b, A2 — user: "when user taps on the character
+// profile image shown in the file, make it show a pop-up of the character's full image. in a stacked photo style", then "style
+// A. But change the tape to smth stationery stuff; like a paper clip or smth" and "Type A2"): three instant photos stacked over
+// the dimmed picker, the unit's whole profile art (units/<spriteKey>_profile.png, the full body, where the band shows the
+// thumbnail's face crop) on the top one over the unit's class colour, the name in marker on its foot and the weapon beside it,
+// a black binder clip on the top edge. The stack is drawn at its design size (a print 228 x 282) and scaled to the screen by
+// --fit, 0.5 to 1.35. Any tap closes it, the round x included; taps inside stop at the pop-up (no confirm, no cancel).
+const BINDER_CLIP_SVG = '<svg class="binder-clip" viewBox="0 0 66 60" fill="none" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
+  + '<path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#C9CDD8" stroke-width="2.6"/>'
+  + '<path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#E4E7EF" stroke-width="2.6"/>'
+  + '<rect x="6" y="30" width="54" height="25" rx="4" fill="#1B1B2F"/><path d="M10 35 H56" stroke="#4A4A66" stroke-width="2.4"/>'
+  + '<circle cx="15" cy="34" r="2.6" fill="#C9CDD8"/><circle cx="51" cy="34" r="2.6" fill="#C9CDD8"/></svg>';
+function showFullPicture(menu, unit, cls) {
+  if (!menu) return;
+  menu.querySelector('.photo-pop')?.remove();
+  const { spriteKey, char, weapon } = unit;
+  const weaponClass = (unit.name.split('/')[1] || '').trim();
+  const pop = document.createElement('div');
+  pop.className = 'photo-pop';
+  pop.dataset.class = cls;
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', `${char || unit.name}, the full picture`);
+  pop.innerHTML = `<div class="photo-stack">
+      <div class="pol pol-back1"><span class="pol-photo"></span></div>
+      <div class="pol pol-back2"><span class="pol-photo"></span></div>
+      <div class="pol pol-top">
+        <span class="pol-photo pol-ground"><img src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false"></span>
+        <span class="pol-name">${char || ''}</span><span class="pol-sub">${[weapon, weaponClass].filter(Boolean).join(' · ')}</span>
+        ${BINDER_CLIP_SVG}
+      </div>
+      <button type="button" class="photo-pop-x" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1B1B2F" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="photo-pop-hint">Tap anywhere to close</div>`;
+  const fit = () => {
+    if (!pop.isConnected) { window.removeEventListener('resize', fit); return; }
+    const s = Math.min(1.35, (window.innerHeight - 70) / 330, (window.innerWidth - 32) / 300);
+    pop.style.setProperty('--fit', Math.max(0.5, s).toFixed(3));
+  };
+  const close = (e) => { e.preventDefault(); e.stopPropagation(); window.removeEventListener('resize', fit); pop.remove(); };
+  pop.addEventListener('click', close);
+  pop.addEventListener('pointerdown', (e) => e.stopPropagation());
+  menu.appendChild(pop);
+  fit();
+  window.addEventListener('resize', fit);
 }
 
 // (b1105bd; user: "at that paper clip, include a photo of that unit's weapon ... make sure the weapon image is as big as possible
