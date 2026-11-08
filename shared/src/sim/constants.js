@@ -669,6 +669,41 @@ export const UNIT_DATA = {
     reloadMs: 2000,            // user 2026-10-23 (the SDASS: 1.2 s a shell)
     autoReload: false,         // user 2026-10-23: a box magazine, reloaded as one when empty — the only shotgun on the magazine rule
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit19: {
+    id: 'unit19',
+    name: 'Unit 19 / Sniper Rifle',   // (Hiyori, PT b1105cy: Aru's stats, NTW-20, a magazine of 3, 60/40/20 since b1105da)
+
+    // Pilot stats
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 120,
+    lockRange2v2: 70,
+    projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 60,
+    // Distance-tiered damage (locked at fire time): closer than nearDist →
+    // near, between nearDist and midDist → mid, beyond midDist → full damage.
+    // Also drives the laser-sight tiers (client visual).
+    rangeDamage: { nearDist: 15, midDist: 50, near: 20, mid: 40 },   // (b1105da, user 2026-11-08: "Change Hiyori damage scale from 60/40/25 to 60/40/20")
+    magCapacity: 3,
+    reloadMs: 2500,
+    autoReload: false,
+    sniperCharge: true,
+    chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 

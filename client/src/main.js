@@ -780,6 +780,43 @@ const UNIT_DATA = {
     reloadMs: 2000,            // user 2026-10-23 (the SDASS: 1.2 s a shell)
     autoReload: false,         // user 2026-10-23: a box magazine, reloaded as one when empty — the only shotgun on the magazine rule
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit19: {
+    name: 'Unit 19 / Sniper Rifle',   // (PT b1105cy, user 2026-11-08: "Add unit \"Hiyori\" into PT. Give her Aru stats with below differences" — NTW-20, a magazine of 3, 60/40/20 since b1105da; no hitbox change)
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'hiyori', char: 'Hiyori', weapon: 'NTW-20', accent: 0xff7a8a,   // (Aru's accent: the stand-in picture's alone, never drawn for a modelled unit)
+    model: 'hiyori',   // 3D character (UNIT_MODELS hiyori: the user's Hiyori without her case, the swimsuit's battle motions, Saori's jump, Fubuki's dodge)
+
+    // Pilot stats
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,            // owner 2026-09-24 (was 16)
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec
+    lockRange: 120,
+    lockRange2v2: 70,
+    projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
+    firePerMinute: 60,         // = 1000 ms cooldown (exact)
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    damage: 60,   // (user: 60/40/20 — far, mid, near; 25 near until b1105da)
+    // Distance-tiered damage (locked at fire time): closer than nearDist →
+    // near, between nearDist and midDist → mid, beyond midDist → full damage.
+    // Also drives the laser-sight tiers (client visual).
+    rangeDamage: { nearDist: 15, midDist: 50, near: 20, mid: 40 },   // (b1105da, user 2026-11-08: "Change Hiyori damage scale from 60/40/25 to 60/40/20")
+    magCapacity: 3,
+    reloadMs: 2500,
+    autoReload: false,
+    sniperCharge: true,
+    chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
@@ -1801,6 +1838,15 @@ const UNIT_MODELS = {
     stand: { name: 'Formation_Idle', speed: 1 },
     dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
+  // (Hiyori, PT b1105cy, user 2026-11-08: the user's Hiyori without her backpack case, Formation_Idle of her own, the swimsuit
+  // Hiyori's battle motions, Saori's jump, Fubuki's dodge — models/hiyori, built by the Hiyori GLB work of that day; she stands in
+  // Normal_Idle, holding the gun, user: "Normal_Idle"; `cooldown`: her fire cooldown's clip — updateUnitModelState)
+  // (b1105cz, user: "Her hair seems off in game": the model rebuilt — her hair follows her Formation_Idle alone, never the swimsuit's hair
+  // bones, which a letter-case match had married to hers; a new file name, so no browser keeps the old one)
+  hiyori: { file: 'models/hiyori_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_Jump', speed: 1, once: true },
+    cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
 const BORROWED_EXIT_S = 0.15;       // (b1105ch: a cutting model's body eased out of a borrowed clip over this, its gear still cut)
@@ -2017,7 +2063,7 @@ function updateUnitModelState(m, rig, dt, now) {
   const lf = st.lastFireAt || 0;
   if (lf !== rig.lastFireSeen) {
     rig.lastFireSeen = lf;
-    if (lf > 0) rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS;
+    if (lf > 0) { rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS; rig.coolUntil = now + (m.unit?.fireCooldownMs ?? 1000); }   // (coolUntil: a cooldown clip's span — b1105cy)
   }
   const charging = !!st.sniperChargeTarget;
   // A sniper's charge began this frame: its firing clip restarts from the first
@@ -2026,6 +2072,13 @@ function updateUnitModelState(m, rig, dt, now) {
   const chargeStart = charging && !rig.chargingSeen;
   rig.chargingSeen = charging;
   const firing = now < rig.fireUntil || charging || st.chargedBeamUntil > now;
+  // THE COOLDOWN CLIP (PT b1105cy, user 2026-11-08, Hiyori: "Play \"Normal_Attack_Delay\" during her 1sec cooldown after shot. Make the
+  // motion match the cooldown time in single full motion cycle. If she is reloading, play normal reload instead."; "Keep playing
+  // Normal_Attack_Delay if walking", a dodge, a jump or a sprint still cutting it): a unit whose clips name a `cooldown` plays it from
+  // the shot to the end of its fire cooldown, fitted to it once (fit 'cooldown'), over walking and standing, under the reload.
+  // (an emptied magazine is the reload's: the shot that empties it frames a moment before the reload starts — no one-frame cooldown clip)
+  const cooling = !!rig.actions.cooldown && !charging && now < (rig.coolUntil || 0)
+    && !(m.unit?.magCapacity != null && !m.unit.autoReload && (st.ammo ?? 1) <= 0);
   const stepping = st.action === 'step' || now < (st.stepUntil || 0);
   const sprinting = st.action === 'dash';
   // Reloading: a magazine gun while its reload runs; a shell-by-shell gun
@@ -2056,6 +2109,7 @@ function updateUnitModelState(m, rig, dt, now) {
   else if (stepping) want = 'dodge';
   else if (st.airborne) want = 'jump';
   else if (sprinting) want = (firing && rig.actions.sprintShoot) ? 'sprintShoot' : 'sprint';
+  else if (cooling && !reloading) want = 'cooldown';   // (Hiyori's fire cooldown, b1105cy)
   else if (firing && !(reloading && !m.unit?.autoReload)) want = 'shoot';   // (a magazine gun mid-reload cannot be firing; a shotgun's shot shows before its next shell)
   else if (reloading && rig.actions.reload) want = 'reload';
   else if (moving) want = 'walk';
@@ -2075,6 +2129,7 @@ function updateUnitModelState(m, rig, dt, now) {
     if (entry.cfg.fit === 'step') rate *= entry.dur / (Math.max(50, m.unit?.stepDurationMs ?? STEP_DURATION_MS) / 1000);
     else if (entry.cfg.fit === 'reload') rate *= entry.dur / (Math.max(100, m.unit?.reloadMs ?? 1500) / 1000);
     else if (entry.cfg.fit === 'charge') rate *= entry.dur / (Math.max(100, m.unit?.chargeMs ?? 1000) / 1000);
+    else if (entry.cfg.fit === 'cooldown') rate *= entry.dur / (Math.max(100, m.unit?.fireCooldownMs ?? 1000) / 1000);   // (one cycle across the fire cooldown, b1105cy)
     const prev = rig.currentAction;
     const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
     // THE WAY OUT OF A BORROWED CLIP (b1105ch, PT and 9.5, user 2026-11-08: "there is a sudden flick between the last moment of
@@ -7222,7 +7277,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cx 11-08';
+const CLIENT_BUILD_TAG = 'b1105da 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9872,7 +9927,7 @@ function showFullPicture(menu, unit, cls) {
 // the print's window is 102 x 54 (style.css .weapon-print: 112 x 64 less the rim and the matte) and the picture is scaled so the
 // gun spans the window's whole width (or height, for a stubby one) and sits centred — plain pixel numbers on the <img>, as the
 // HUD's faces are placed (chipFaceImg)
-const WEAPON_BOX = { aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
+const WEAPON_BOX = { hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
 const WEAPON_RENDER = [958, 246];
 const PRINT_WINDOW = [102, 54];
 function weaponPrintHTML(spriteKey) {
@@ -9956,7 +10011,7 @@ function unitClassTag(u) {
 // "a bit more to the right"): the face centre's x and the eye line's y as fractions of the picture, read off a
 // contact sheet of the thumbnails with a 10% grid (ui/face_sheet.mjs); 0.5 / 0.62 for the rest. style.css .face-box
 // puts that point at a box's horizontal centre and at 44% of its height, whichever way the box crops the picture.
-const UNIT_FACE = { fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+const UNIT_FACE = { hiyori: [0.56, 0.47], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
