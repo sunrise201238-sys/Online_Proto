@@ -7347,7 +7347,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dh 11-08';
+const CLIENT_BUILD_TAG = 'b1105di 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10033,13 +10033,17 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
      <div class="profile-head"><b class="profile-name">${gold ? 'All Random' : 'Random'}</b><span class="profile-sub">${gold ? 'every slot rolled for you' : 'rolled when you confirm'}</span></div>`,
     onConfirm, wide ? 'map' : 'unit');
 }
-// Selection-grid display order: weapon categories grouped, four to a row —
-// AR AR SMG SMG / SG SG MG MG / Rifle Rifle Sniper Sniper. Units missing
-// from this list (future additions) sort to the end in UNIT_DATA order.
+// Selection-grid display order: the weapon categories grouped, in the grid's own order (AR, SMG, SG, MG, Rifle, Sniper), each
+// group's first units as before and its later ones after them (PT b1105di, user 2026-11-08: "Time to reorder the unit cards. I want
+// to group them by categories. Keep current layout": the newer units had sorted to the end; the grid itself is unchanged).
+// Units missing from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
-  'unit1', 'unit9', 'unit4', 'unit13',   // Saori  Asuna  Atsuko Marina (Mika's old slot — unit8 hidden)
-  'unit2', 'unit11', 'unit12', 'unit5',  // Hoshino Haruka Koyuki Hina
-  'unit10', 'unit7', 'unit3', 'unit6'    // Fubuki Aris   Aru    Kei
+  'unit1', 'unit9', 'unit14',              // AR:     Saori   Asuna   Subaru
+  'unit4', 'unit13', 'unit15', 'unit17',   // SMG:    Atsuko  Marina  Yuuka  Kurumi   (Mika, unit8, hidden)
+  'unit2', 'unit11', 'unit18',             // SG:     Hoshino Haruka  Rabu
+  'unit12', 'unit5',                       // MG:     Koyuki  Hina
+  'unit10', 'unit7', 'unit20',             // Rifle:  Fubuki  Aris    Iori
+  'unit3', 'unit6', 'unit19'               // Sniper: Aru     Kei     Hiyori
 ];
 
 // Grid markup for Object.entries(UNIT_DATA). Label is "Char<br>Weapon" where
