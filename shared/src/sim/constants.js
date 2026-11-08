@@ -399,7 +399,7 @@ export const UNIT_DATA = {
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     bulletTrail: true,         // client visual only: keeps the smoky bullet trail (the autos have none since 2026-10-14). Here because the online renderer reads this copy of the unit data; the sim ignores it
-    damage: 13,               // owner 2026-09-22 (was 10): 8 rounds to a full-HP kill instead of 10
+    damage: 10,               // (PT b1105dd, user 2026-11-08: "change Fubuki's damage from 13 to 10"; 13 since 2026-09-22): 10 rounds to a full-HP kill
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
@@ -703,6 +703,46 @@ export const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit20: {
+    id: 'unit20',
+    name: 'Unit 20 / Rifle',   // (PT b1105dd, user 2026-11-08: "Name: Iori / Weapon Name: KAR98K / Category: Rifle / mag size: 5 / Reload speed: 2sec / damage: 13 / walk speed: 12. Give her a forced cool down per shot like sniper class, 0.5sec ... Give her same accuracy and bloom effect as Fubuki"; "same bullet spindle and trace effect as Fubuki"; everything else is Fubuki's)
+
+    // Pilot stats (Fubuki's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
+    // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
+    lockRange: 56,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
+                               // the cooldown time from 0.5sec to 0.75sec")
+    forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
+    spreadCount: 1,
+    spreadAngle: 0.02,         // Fubuki's accuracy
+    bloomPerShot: 0.10,        // Fubuki's bloom
+    bloomCap: 0.30,
+    bloomRecoverPerSec: 0.17,
+    bloomRecoverDelayMs: 0,
+    botSuppressBurst: 1,
+    botGateWidth: 3.2,
+    bulletTrail: true,         // Fubuki's smoky trail (both unit-data copies, as hers; its width: BULLET_TRAIL_THICK_BY_NAME in main.js)
+    damage: 13,
+    magCapacity: 5,
+    botFireCap: 5,             // bot: shots per trigger pull = full mag
+    reloadMs: 2000,
+    autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   }
 };

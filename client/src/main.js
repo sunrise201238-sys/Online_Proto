@@ -500,7 +500,7 @@ const UNIT_DATA = {
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     bulletTrail: true,         // keeps the smoky bullet trail (owner 2026-10-14: the autos lose theirs). Also set in shared constants.js — the online renderer reads the shared unit data (2026-10-15)
-    damage: 13,               // owner 2026-09-22 (was 10): 8 rounds to a full-HP kill instead of 10
+    damage: 10,               // (PT b1105dd, user 2026-11-08: "change Fubuki's damage from 13 to 10"; 13 since 2026-09-22): 10 rounds to a full-HP kill
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
@@ -816,6 +816,48 @@ const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
+    stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit20: {
+    name: 'Unit 20 / Rifle',   // (PT b1105dd, user 2026-11-08: "Name: Iori / Weapon Name: KAR98K / Category: Rifle / mag size: 5 / Reload speed: 2sec / damage: 13 / walk speed: 12. Give her a forced cool down per shot like sniper class, 0.5sec ... Give her same accuracy and bloom effect as Fubuki"; "same bullet spindle and trace effect as Fubuki"; everything else is Fubuki's)
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'iori', char: 'Iori', weapon: 'KAR98K', accent: 0x6f86b8,   // (Fubuki's accent: the stand-in picture's alone, never drawn for a modelled unit)
+    model: 'iori',   // 3D character (UNIT_MODELS iori: the user's Iori with her own battle motions, Saori's jump, Subaru's jump as her dodge)
+
+    // Pilot stats (Fubuki's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
+    // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
+    lockRange: 56,
+    lockRange2v2: 65,
+    projectileSpeed: 600,
+    firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
+                               // the cooldown time from 0.5sec to 0.75sec")
+    forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
+    spreadCount: 1,
+    spreadAngle: 0.02,         // Fubuki's accuracy
+    bloomPerShot: 0.10,        // Fubuki's bloom
+    bloomCap: 0.30,
+    bloomRecoverPerSec: 0.17,
+    bloomRecoverDelayMs: 0,
+    botSuppressBurst: 1,
+    botGateWidth: 3.2,
+    bulletTrail: true,         // Fubuki's smoky trail (both unit-data copies, as hers; its width: BULLET_TRAIL_THICK_BY_NAME in main.js)
+    damage: 13,
+    magCapacity: 5,
+    botFireCap: 5,             // bot: shots per trigger pull = full mag
+    reloadMs: 2000,
+    autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
   }
 };
@@ -1847,6 +1889,15 @@ const UNIT_MODELS = {
     dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', speed: 1, once: true },
     cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
+  // Iori's battle motions (PT b1105dd, user 2026-11-08: "Stand: Normal_Idle / Walk/Sprint: Move_Ing / Fire: Normal_Attack_Ing / Jump: Saori's
+  // jump motion / Dodge: Subaru's jump motion / Cooldown: Normal_Attack_Delay / Reload: Normal_Reload"; the defaults name the first four and
+  // the reload): her file has no Move_Jump, so the borrowed jump (Saori's) and the borrowed dodge (Subaru's Move_Jump, which is her jump and
+  // her dodge, subaru_dodge_clip.json) pose the rest from her Kneel_Attack_Start, as Fubuki's jump does; `cooldown`: her 0.75 s fire cooldown's
+  // clip (updateUnitModelState), over walking and standing, cut by a sprint, a jump or a dodge (user: "not shown during sprint/jump/dodge")
+  iori: { file: 'models/iori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true },
+    cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
 const BORROWED_EXIT_S = 0.15;       // (b1105ch: a cutting model's body eased out of a borrowed clip over this, its gear still cut)
@@ -2063,7 +2114,7 @@ function updateUnitModelState(m, rig, dt, now) {
   const lf = st.lastFireAt || 0;
   if (lf !== rig.lastFireSeen) {
     rig.lastFireSeen = lf;
-    if (lf > 0) { rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS; rig.coolUntil = now + (m.unit?.fireCooldownMs ?? 1000); }   // (coolUntil: a cooldown clip's span — b1105cy)
+    if (lf > 0) { rig.fireUntil = now + SPRITE_SHOOT_HOLD_MS; rig.coolUntil = now + (m.unit?.fireCooldownMs ?? 1000); rig.coolShot = true; }   // (coolUntil: a cooldown clip's span — b1105cy)
   }
   const charging = !!st.sniperChargeTarget;
   // A sniper's charge began this frame: its firing clip restarts from the first
@@ -2124,7 +2175,12 @@ function updateUnitModelState(m, rig, dt, now) {
   }
   if (!rig.actions[want]) want = 'stand';
   const entry = rig.actions[want];
-  if (entry && (want !== rig.current || (chargeStart && want === 'shoot'))) {
+  // EVERY SHOT'S COOLDOWN FROM ITS FIRST FRAME (PT b1105de, user 2026-11-08, Iori: "Match the cooldown motion to the cooldown time in
+  // one full motion cycle"): a shot fired while the cooldown clip still shows, her next round straight off the last one's cooldown,
+  // restarts it, so each cooldown plays the clip once across its whole span; it used to play the first one and hold its end.
+  const coolRestart = !!rig.coolShot && want === 'cooldown';
+  rig.coolShot = false;
+  if (entry && (want !== rig.current || (chargeStart && want === 'shoot') || coolRestart)) {
     let rate = entry.cfg.speed ?? 1;
     if (entry.cfg.fit === 'step') rate *= entry.dur / (Math.max(50, m.unit?.stepDurationMs ?? STEP_DURATION_MS) / 1000);
     else if (entry.cfg.fit === 'reload') rate *= entry.dur / (Math.max(100, m.unit?.reloadMs ?? 1500) / 1000);
@@ -3100,6 +3156,7 @@ const BULLET_TRAIL_RADIUS_RIFLE = 0.06;    // Fubuki (demo line: M14 / SVD)
 const BULLET_TRAIL_RADIUS_SNIPER = 0.10;   // Aru / PSG1 — deliberately the fatter one (demo line: PSG1)
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
   [UNIT_DATA.unit10?.name, BULLET_TRAIL_RADIUS_RIFLE],    // Fubuki / Ruger Mini-14
+  [UNIT_DATA.unit20?.name, BULLET_TRAIL_RADIUS_RIFLE],    // Iori / KAR98K: Fubuki's trail (PT b1105dd, user: "same bullet spindle and trace effect as Fubuki")
   [UNIT_DATA.unit3?.name, BULLET_TRAIL_RADIUS_SNIPER]     // Aru / PSG1
 ].filter(([name]) => name));
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
@@ -6533,8 +6590,9 @@ function updateHud(now = performance.now()) {
       if (s.ammo === 0 && s.reloadingUntil > 0) {
         progress = THREE.MathUtils.clamp(1 - (s.reloadingUntil - now) / u.reloadMs, 0, 1);
         showRing = true;
-      } else if (u.sniperCharge && s.lastFireAt > 0 && s.ammo > 0) {
-        // Sniper between-shot cooldown — same fire-button ring effect as reload.
+      } else if ((u.sniperCharge || u.forcedCooldown) && s.lastFireAt > 0 && s.ammo > 0) {
+        // Sniper between-shot cooldown — same fire-button ring effect as reload. (And a unit flagged forcedCooldown, Iori:
+        // PT b1105de, user 2026-11-08: "show the cooldown edge at the fire button like snipers".)
         const sinceShot = now - s.lastFireAt;
         if (sinceShot < u.fireCooldownMs) {
           progress = THREE.MathUtils.clamp(sinceShot / u.fireCooldownMs, 0, 1);
@@ -7289,7 +7347,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105df 11-08';
+const CLIENT_BUILD_TAG = 'b1105dg 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9939,7 +9997,7 @@ function showFullPicture(menu, unit, cls) {
 // the print's window is 102 x 54 (style.css .weapon-print: 112 x 64 less the rim and the matte) and the picture is scaled so the
 // gun spans the window's whole width (or height, for a stubby one) and sits centred — plain pixel numbers on the <img>, as the
 // HUD's faces are placed (chipFaceImg)
-const WEAPON_BOX = { hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
+const WEAPON_BOX = { iori: [75, 36, 822, 180], hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
 const WEAPON_RENDER = [958, 246];
 const PRINT_WINDOW = [102, 54];
 function weaponPrintHTML(spriteKey) {
@@ -10023,7 +10081,7 @@ function unitClassTag(u) {
 // "a bit more to the right"): the face centre's x and the eye line's y as fractions of the picture, read off a
 // contact sheet of the thumbnails with a 10% grid (ui/face_sheet.mjs); 0.5 / 0.62 for the rest. style.css .face-box
 // puts that point at a box's horizontal centre and at 44% of its height, whichever way the box crops the picture.
-const UNIT_FACE = { hiyori: [0.56, 0.47], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+const UNIT_FACE = { iori: [0.51, 0.57], hiyori: [0.56, 0.47], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
