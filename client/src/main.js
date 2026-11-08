@@ -5827,7 +5827,9 @@ function ensureAllyEdgeArrow() {
   ].join(';');
   // Glint halo (hidden by default): pulses while the teammate sniper is
   // mid-charge, using their own glint art (set per-frame in updateAllyArrow).
-  el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+  // Drawn ON TOP of the chevron (z-index 1; b1105dc, user 2026-11-08: "the sniper glint ... is shown beneath the
+  // triangle. Make them shown above the triangle"); the chevron used to cover its middle.
+  el.innerHTML = '<div data-glint style="position:absolute; z-index:1; left:-12px; top:-12px; width:58px; height:58px;'
     + 'background-position:center; background-repeat:no-repeat; background-size:contain;'
     + 'display:none;"></div>'
     + '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
@@ -5856,8 +5858,9 @@ function ensureEnemyEdgeArrow(i = 0) {   // (i: one arrow per foe while the view
   ].join(';');
   // Glint halo (hidden by default): pulses while the tracked enemy is a
   // sniper mid-charge — the off-screen telegraph. Uses the unit's own glint
-  // art (set per-frame in updateEnemyArrow). Overlaps the chevron by design.
-  el.innerHTML = '<div data-glint style="position:absolute; left:-12px; top:-12px; width:58px; height:58px;'
+  // art (set per-frame in updateEnemyArrow). Overlaps the chevron by design, and is drawn ON TOP of it (z-index 1;
+  // b1105dc, user 2026-11-08: "Make them shown above the triangle" — Aru's flash and Kei's shard alike).
+  el.innerHTML = '<div data-glint style="position:absolute; z-index:1; left:-12px; top:-12px; width:58px; height:58px;'
     + 'background-position:center; background-repeat:no-repeat; background-size:contain;'
     + 'display:none;"></div>'
     + '<svg viewBox="0 0 32 32" width="100%" height="100%" style="position:relative;">'
@@ -7277,7 +7280,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105db 11-08';
+const CLIENT_BUILD_TAG = 'b1105dc 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
