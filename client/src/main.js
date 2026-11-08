@@ -7347,7 +7347,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dg 11-08';
+const CLIENT_BUILD_TAG = 'b1105dh 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10081,7 +10081,10 @@ function unitClassTag(u) {
 // "a bit more to the right"): the face centre's x and the eye line's y as fractions of the picture, read off a
 // contact sheet of the thumbnails with a 10% grid (ui/face_sheet.mjs); 0.5 / 0.62 for the rest. style.css .face-box
 // puts that point at a box's horizontal centre and at 44% of its height, whichever way the box crops the picture.
-const UNIT_FACE = { iori: [0.51, 0.57], hiyori: [0.56, 0.47], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+// (Hiyori's row, PT b1105dh, user 2026-11-08: "Hiyori's preview image here is bigger than others": her thumbnail, a 323 px square of
+// her profile at full size, framed her face a third larger than the rest; it is now the profile's 367 px square around the same
+// face, 0.88 of the old size by the eye-to-mouth height, 8.5% of the picture against the others' 7.6%, the face at 0.50 / 0.60)
+const UNIT_FACE = { iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
