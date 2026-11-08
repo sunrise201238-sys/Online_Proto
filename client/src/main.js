@@ -898,6 +898,45 @@ const UNIT_DATA = {
     autoReload: false,
     crouchHit: ['Normal_Attack_ReadyStart', 'Normal_Attack_Ing', 'Normal_Reload'],   // (PT b1105dj, user: "Maki receives the same hitbox 2/3 height treatment like Asuna/Aru for her Normal_Attack_ReadyStart, Normal_Attack_Ing, Normal_Reload motions. BOT and player's angled pov wouldn't notice it as well": hitCapsule)
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit22: {
+    name: 'Unit 22 / Assault Rifle',   // (b1105dn, PT then 9.5, user 2026-11-08: "Next up. Add another unit. Character name: Minori / Category: Assault Rifle / Weapon Name: AKM ... Apply Saori's stats to Minori.")
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'minori', char: 'Minori', weapon: 'AKM', accent: 0x3a4a78,   // (Saori's accent: the stand-in picture's alone, never drawn for a modelled unit)
+    model: 'minori',   // 3D character (UNIT_MODELS minori: the user's Minori from her bind pose with her AKM, Saori's motions)
+
+    // Pilot stats (Saori's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: the user's AKM numbers for the damage, the rate and the bloom (b1105ds, PT then 9.5, user 2026-11-08: "Apply these AKM
+    // stats differences to Minori. The unmentioned stays the same with Saori M4, including the 33% hit rate gating."); the rest
+    // Saori's, the bots' rules with it (no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO)
+    lockRange: 56,
+    lockRange2v2: 60,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s, 535 real), Koyuki's rung (Saori's M4: 700, the 96 ms slot)
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.015,        // the cap from the 7th shot (Saori: 0.002)
+    bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
+    bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
+    bloomRecoverDelayMs: 200,
+    damage: 5,                // 20 rounds to a full-HP kill (Saori: 4, 25)
+    magCapacity: 30,
+    botFireCap: 30,          // bot: shots per trigger pull = full mag
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
@@ -1946,6 +1985,13 @@ const UNIT_MODELS = {
     shootStart: { name: 'Normal_Attack_ReadyStart', speed: 1, once: true },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Normal_Attack_Start', speed: 1, once: true } } },
+  // Minori (b1105dn, PT then 9.5, user 2026-11-08: "Extract her model from bind pose; no need the accessories, except gun. Apply every Saori's
+  // motion to Minori."): her file is the user's model from its bind pose without the skill props (cone, megaphone, flag, crate,
+  // barricades, placard), her AKM kept, and Saori's seven battle clips by bone name in place of her own (none battle-ready) — what
+  // they leave still (hair, scarf, hood, helmet, coat tails) stays as the bind pose; her map is Saori's, Subaru's dodge on her
+  // Move_Jump included
+  minori: { file: 'models/minori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
 const BORROWED_EXIT_S = 0.15;       // (b1105ch: a cutting model's body eased out of a borrowed clip over this, its gear still cut)
@@ -2384,14 +2430,14 @@ const UNIT_BAR_TEX_H = UNIT_BAR_THUMB + 2 * UNIT_BAR_PAD;                       
 const UNIT_BAR_PILL_X = UNIT_BAR_PAD + UNIT_BAR_THUMB + UNIT_BAR_THUMB_GAP;                                  // 58
 const UNIT_BAR_PILL_Y = UNIT_BAR_PAD + (UNIT_BAR_THUMB - UNIT_BAR_PILL_H) / 2;                                // 20: pill centred on the portrait
 const UNIT_BAR_WORLD_W = 2.42;                      // world width of the PILL at k = 1 (every other length scales off it: 2.42 / 160 world per texel)
-// Picker thumbnails (units/<spriteKey>_profile_thumbnail.png), one Image per
-// unit, shared by every bar of that unit; a bar repaints once its image lands.
+// Picker thumbnails (units/<spriteKey>_profile_thumbnail.png, or the unit's second picture — UNIT_ALT_THUMB, b1105dq), one
+// Image per unit, shared by every bar of that unit; a bar repaints once its image lands.
 const _unitThumbImages = {};
 function unitThumbImage(spriteKey) {
   if (!spriteKey) return null;
   if (!_unitThumbImages[spriteKey]) {
     const img = new Image();
-    img.src = `${import.meta.env.BASE_URL}units/${spriteKey}_profile_thumbnail.png`;
+    img.src = thumbFile(spriteKey);
     _unitThumbImages[spriteKey] = img;
   }
   return _unitThumbImages[spriteKey];
@@ -6531,7 +6577,7 @@ function hpChipHTML(anchor, fillId) {
 // translate is clamped to ±15% (what a 1.3 scale leaves to shift) so the picture always covers the frame
 const FACE_SCALE = 1.3;
 function faceTransform(u) {
-  const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62];
+  const [x, y] = UNIT_ALT_THUMB[u?.spriteKey]?.face || UNIT_FACE[u?.spriteKey] || [0.5, 0.62];   // (the second picture's own face point, as chipFaceImg shows that picture — b1105dq)
   const lim = (FACE_SCALE - 1) * 50;
   const tx = Math.max(-lim, Math.min(lim, (0.5 - x) * FACE_SCALE * 100));
   const ty = Math.max(-lim, Math.min(lim, (0.5 - y) * FACE_SCALE * 100));
@@ -6539,7 +6585,7 @@ function faceTransform(u) {
 }
 function chipFaceImg(u) {
   if (!u) return '';
-  return `<img src="${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png" alt="${u.char || ''}" draggable="false" style="${faceTransform(u)}">`;
+  return `<img src="${thumbFile(u.spriteKey)}" alt="${u.char || ''}" draggable="false" style="${faceTransform(u)}">`;
 }
 function renderHpChip(chip, m, role, noSideWords) {
   const u = m.unit;
@@ -7404,7 +7450,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dm 11-08';
+const CLIENT_BUILD_TAG = 'b1105ds 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9595,8 +9641,9 @@ function paneRowHTML(roster, need) {
   const n = Math.max(1, need);
   const panes = Array.from({ length: n }, (_, i) => {
     const u = roster[i] ? UNIT_DATA[roster[i]] : null;
+    const alt = u && UNIT_ALT_THUMB[u.spriteKey];   // (a unit's second picture and its face point — UNIT_ALT_THUMB, b1105dr)
     return u
-      ? `<span class="slot-pane face-box" data-class="${unitClassTag(u)}" ${faceStyle(u)}><img src="${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png" alt="${u.char || ''}" draggable="false"></span>`
+      ? `<span class="slot-pane face-box" data-class="${unitClassTag(u)}" ${alt ? `style="--fx:${alt.face[0]};--fy:${alt.face[1]}"` : faceStyle(u)}><img src="${thumbFile(u.spriteKey)}" alt="${u.char || ''}" draggable="false"></span>`
       : '<span class="slot-pane slot-pane-empty"><i>?</i></span>';
   }).join('');
   return `<span class="pane-row panes-${n}">${panes}</span>`;
@@ -10054,7 +10101,7 @@ function showFullPicture(menu, unit, cls) {
 // the print's window is 102 x 54 (style.css .weapon-print: 112 x 64 less the rim and the matte) and the picture is scaled so the
 // gun spans the window's whole width (or height, for a stubby one) and sits centred — plain pixel numbers on the <img>, as the
 // HUD's faces are placed (chipFaceImg)
-const WEAPON_BOX = { maki: [131, 14, 709, 216], iori: [75, 36, 822, 180], hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
+const WEAPON_BOX = { minori: [236, 22, 553, 203], maki: [131, 14, 709, 216], iori: [75, 36, 822, 180], hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
 const WEAPON_RENDER = [958, 246];
 const PRINT_WINDOW = [102, 54];
 function weaponPrintHTML(spriteKey) {
@@ -10095,7 +10142,7 @@ function showRandomProfilePopup(card, wide, onConfirm, gold = false) {
 // to group them by categories. Keep current layout": the newer units had sorted to the end; the grid itself is unchanged).
 // Units missing from this list (future additions) sort to the end in UNIT_DATA order.
 const UNIT_GRID_ORDER = [
-  'unit1', 'unit9', 'unit14',              // AR:     Saori   Asuna   Subaru
+  'unit1', 'unit9', 'unit14', 'unit22',    // AR:     Saori   Asuna   Subaru  Minori
   'unit4', 'unit13', 'unit15', 'unit17',   // SMG:    Atsuko  Marina  Yuuka  Kurumi   (Mika, unit8, hidden)
   'unit2', 'unit11', 'unit18',             // SG:     Hoshino Haruka  Rabu
   'unit12', 'unit5', 'unit21',            // MG:     Koyuki  Hina    Maki
@@ -10145,15 +10192,30 @@ function unitClassTag(u) {
 // (Hiyori's row, PT b1105dh, user 2026-11-08: "Hiyori's preview image here is bigger than others": her thumbnail, a 323 px square of
 // her profile at full size, framed her face a third larger than the rest; it is now the profile's 367 px square around the same
 // face, 0.88 of the old size by the eye-to-mouth height, 8.5% of the picture against the others' 7.6%, the face at 0.50 / 0.60)
-const UNIT_FACE = { maki: [0.50, 0.60], iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+// (Minori, b1105dn: the given thumbnail, the profile's 342 px square at (101, 9), framed her face at 8.6%; it is the profile's
+// 389 px square around the same face, 0.88 of the size, the face at 0.50 / 0.60 — what the side card in the profile folder and the
+// 1v1 Duel's lobby card show; the picker's grid, the line-up's panes and every in-game portrait take UNIT_ALT_THUMB below)
+const UNIT_FACE = { minori: [0.50, 0.60], maki: [0.50, 0.60], iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
+// A unit's second picture, by spriteKey: the picker grid's tile, the lobby line-up's slanted panes (paneRowHTML: the Trio rows, a
+// 2v2 Duel's row, the foot's chip) and every in-game portrait (the HP chips and their Trio reserve, the bars over the units,
+// command mode's cards, the round's end screen) show it; the side card in the profile folder and the 1v1 Duel's lobby card keep
+// units/<key>_profile_thumbnail.png. `face`: its face point for the round frames (faceTransform) and the panes.
+// (b1105do, PT then 9.5, user 2026-11-08: "update Minori's thumbnail" with a new picture, then "the one in the file stays the same. I just
+// want to update the thumbnail": the grid's tile alone. b1105dp, "Still seems a bit off. Try this, thumbnail only.": that
+// picture, as given, under a new name so no browser keeps the b1105do one — her profile's 342 px square at (100, 0), the face
+// centre at 0.50, the eye line at 0.525. b1105dq, "use this version of minori thumbnail for her in-game thumbnails as well")
+// b1105dr, user: "Her photo in trio line up seems a bit small", then, shown the panes with this picture and with a 324 px crop
+// of it, "Use in-game v2 instead": the line-up's panes take it too — her face about 1.13 times the profile thumbnail's there)
+const UNIT_ALT_THUMB = { minori: { file: 'minori_grid_thumbnail_v2.png', face: [0.50, 0.525] } };
+function thumbFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_ALT_THUMB[spriteKey]?.file ?? `${spriteKey}_profile_thumbnail.png`}`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
   return `<div class="unit-grid">${unitEntries.map(([id, u]) => {
     const weapon = (u.name.split('/')[1] || u.name).trim();
     const tag = unitClassTag(u);
-    const thumb = `${import.meta.env.BASE_URL}units/${u.spriteKey}_profile_thumbnail.png`;
+    const thumb = thumbFile(u.spriteKey);
     return `<button class="unit-card" data-unit-card="${id}" data-class="${tag}" title="${u.char || id} — ${weapon}">
       <img class="unit-thumb" src="${thumb}" alt="${u.char || id}" draggable="false" />
       <span class="unit-label">${u.char || u.name}</span>
@@ -14435,7 +14497,7 @@ function updateDioramaHud() {
       els.weaponFailed = false;
       if (wkey) {
         els.weaponImg.style.display = '';
-        els.weaponImg.src = `${import.meta.env.BASE_URL}units/${wkey}_profile_thumbnail.png`;
+        els.weaponImg.src = thumbFile(wkey);   // (or the unit's second picture, UNIT_ALT_THUMB — b1105dq)
       } else {
         els.weaponImg.style.display = 'none';
       }

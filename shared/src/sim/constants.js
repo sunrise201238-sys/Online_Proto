@@ -781,6 +781,43 @@ export const UNIT_DATA = {
     autoReload: false,
     crouchHit: ['Normal_Attack_ReadyStart', 'Normal_Attack_Ing', 'Normal_Reload'],   // (9.5 b1105dj: her crouched hit capsule online too — history.js hitCapOf reads her firing, the opening and the loop alike, and her reload)
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit22: {
+    id: 'unit22',
+    name: 'Unit 22 / Assault Rifle',   // (b1105dn, PT then 9.5, user 2026-11-08: "Next up. Add another unit. Character name: Minori / Category: Assault Rifle / Weapon Name: AKM ... Apply Saori's stats to Minori.")
+
+    // Pilot stats (Saori's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 12,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: the user's AKM numbers for the damage, the rate and the bloom (b1105ds, PT then 9.5, user 2026-11-08: "Apply these AKM
+    // stats differences to Minori. The unmentioned stays the same with Saori M4, including the 33% hit rate gating."); the rest
+    // Saori's, the bots' rules with it (no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO)
+    lockRange: 56,
+    lockRange2v2: 60,
+    projectileSpeed: 600,
+    firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s, 535 real), Koyuki's rung (Saori's M4: 700, the 96 ms slot)
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.015,        // the cap from the 7th shot (Saori: 0.002)
+    bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
+    bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
+    bloomRecoverDelayMs: 200,
+    damage: 5,                // 20 rounds to a full-HP kill (Saori: 4, 25)
+    magCapacity: 30,
+    botFireCap: 30,          // bot: shots per trigger pull = full mag
+    reloadMs: 1500,
+    autoReload: false,
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
