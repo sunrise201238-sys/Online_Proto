@@ -48,7 +48,7 @@ export function applyHitStun(target, unit, ms, scale, now) {
 
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
-import { bodyAt } from './history.js';
+import { bodyAt, hitCapAt } from './history.js';
 
 // SHARED SPREAD SEED (owner 2026-10-15, "implement seed"): the direction a
 // round takes inside its cone is no longer Math.random() but a stream keyed
@@ -315,10 +315,12 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
         z: prevPos.z - (p.vel.z / spd) * prevBody
       };
     }
-    const nearest = closestPointOnSegment(segStart, p.pos, hitCenter);
-    const dx = nearest.x - hitCenter.x;
-    const dy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
-    const dz = nearest.z - hitCenter.z;
+    const hcap = hitCapAt(body, vt);   // (crouchHit, b1105ct: the crouched capsule, as the client's hitCapsule; the homing keeps hitCenter)
+    const capC = { x: hitCenter.x, y: hitCenter.y + hcap[0], z: hitCenter.z };
+    const nearest = closestPointOnSegment(segStart, p.pos, capC);
+    const dx = nearest.x - capC.x;
+    const dy = Math.max(0, Math.abs(nearest.y - capC.y) - hcap[1]);
+    const dz = nearest.z - capC.z;
     // Spawn protection / step (dodge) immunity / friendly-fire (2v2) / dead
     // target: the round passes through in each of these cases.
     const owner = matchState.fighters[p.ownerId];
@@ -397,9 +399,9 @@ function retargetFreeAim(matchState, p, dt, now) {
   for (const f of Object.values(matchState.fighters)) {
     if (f.hp <= 0 || f.id === p.ownerId || (owner?.team && f.team === owner.team)) continue;
     const body = bodyAt(matchState, f, p.lagMs || 0, now);
-    const hc = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
+    const fcap = hitCapAt(body, now - (p.lagMs || 0)); const hc = { x: body.pos.x, y: body.pos.y + 2.35 + fcap[0], z: body.pos.z };   // (crouchHit, b1105ct)
     const n = closestPointOnSegment(a, b, hc);
-    const dx = n.x - hc.x, dy = Math.max(0, Math.abs(n.y - hc.y) - HIT_HALF_HEIGHT), dz = n.z - hc.z;
+    const dx = n.x - hc.x, dy = Math.max(0, Math.abs(n.y - hc.y) - fcap[1]), dz = n.z - hc.z;
     const d = dx * dx + dy * dy + dz * dz;
     if (d < bestD) { bestD = d; best = f; }
   }
@@ -540,6 +542,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   // Each alive pellet flies its own swept segment this tick: target-capsule
   // test first (clipping the wall sweep to the hit point, like the single-
   // projectile path), then walls, then surfaces. Deaths clear its mask bit.
+  const pcap = hitCapAt(body, vt); const pcapC = { x: hitCenter.x, y: hitCenter.y + pcap[0], z: hitCenter.z };   // (crouchHit, b1105ct)
   let pelletsHit = 0;
   for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
     if (!(p.pelletMask & (1 << k))) continue;
@@ -549,10 +552,10 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
     let hitThis = false;
     let sweepEnd = b;
     if (targetable) {
-      const nearest = closestPointOnSegment(a, b, hitCenter);
-      const hdx = nearest.x - hitCenter.x;
-      const hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - HIT_HALF_HEIGHT);
-      const hdz = nearest.z - hitCenter.z;
+      const nearest = closestPointOnSegment(a, b, pcapC);
+      const hdx = nearest.x - pcapC.x;
+      const hdy = Math.max(0, Math.abs(nearest.y - pcapC.y) - pcap[1]);
+      const hdz = nearest.z - pcapC.z;
       if (hdx * hdx + hdy * hdy + hdz * hdz < HIT_RADIUS_NORMAL * HIT_RADIUS_NORMAL) {
         hitThis = true;
         sweepEnd = nearest;
@@ -688,9 +691,9 @@ export function tickBeams(matchState, now, damageScaler = null) {
       const body = bodyAt(matchState, f, b.lagMs || 0, now);
       if (vt < body.invulnerableUntil) continue;             // spawn protection
       if (vt <= body.stepUntil) continue;                    // dodge i-frames
-      const hc = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
+      const bcap = hitCapAt(body, vt); const hc = { x: body.pos.x, y: body.pos.y + 2.35 + bcap[0], z: body.pos.z };   // (crouchHit, b1105ct)
       const near = closestPointOnSegment(bA, bB, hc);
-      const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - bcap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       const damage = damageScaler ? damageScaler(b) : b.damage;
@@ -851,9 +854,9 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       if (f.team && t.team && f.team === t.team) continue;
       const body = bodyAt(matchState, t, lagMs, now);
       if (vt < body.invulnerableUntil || vt <= body.stepUntil) continue;
-      const hc = { x: body.pos.x, y: body.pos.y + 2.35, z: body.pos.z };
+      const ccap = hitCapAt(body, vt); const hc = { x: body.pos.x, y: body.pos.y + 2.35 + ccap[0], z: body.pos.z };   // (crouchHit, b1105ct)
       const near = closestPointOnSegment(cA, cB, hc);
-      const vdy = Math.max(0, Math.abs(near.y - hc.y) - HIT_HALF_HEIGHT);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - ccap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.

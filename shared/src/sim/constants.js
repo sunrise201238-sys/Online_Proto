@@ -99,6 +99,7 @@ export const UNIT_DATA = {
   unit3: {
     id: 'unit3',
     name: 'Unit 3 / Sniper Rifle',
+    crouchHit: ['Normal_Attack_Ing', 'Normal_Reload'],   // (b1105ct: her crouched hit capsule online too — history.js hitCapOf)
 
     // Pilot stats
     hp: 100,
@@ -331,6 +332,7 @@ export const UNIT_DATA = {
   unit9: {
     id: 'unit9',
     name: 'Unit 9 / Assault Rifle',
+    crouchHit: ['Normal_Attack_Ing', 'Normal_Reload'],   // (b1105ct: her crouched hit capsule online too — history.js hitCapOf)
 
     // Pilot stats
     hp: 100,

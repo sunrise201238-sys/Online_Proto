@@ -7203,7 +7203,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cs 11-08';
+const CLIENT_BUILD_TAG = 'b1105ct 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7344,8 +7344,8 @@ function advanceOwnShots(now) {
 // plays one of them (its rig's current clip), a hit capsule two thirds as tall with its bottom where it was (b1105co, user: "1/2
 // height is too much. make it 2/3 instead"; b1105cn had half) — the same 1.6 u radius, 4.27 u tall in all where the standing one
 // is 6.4, its straight side 1.07 u, its centre 1.07 u lower. [y offset of the centre from the root, half height of the straight side]. Every hit test of this client reads it (the rounds, the pellets, the beams,
-// the free pov's, the online mirror's own-shot ring); the aim points stay where they were. The offline game's own; online the
-// server judges the hits. The bots never read it (user: "Make every BOT, including Asuna herself, not aware of her half-height HB
+// the free pov's, the online mirror's own-shot ring); the aim points stay where they were. Online the server judges the hits
+// by the same moments (shared/src/sim/history.js hitCapOf, b1105ct). The bots never read it (user: "Make every BOT, including Asuna herself, not aware of her half-height HB
 // during those 2 motions"): their sight, cover, exposure and hit-chance reasoning is the shared brains' (nbrain.js, sdbrain.js),
 // on the standing capsule as ever; only where a round truly lands changes.
 const HIT_CAP_STAND = [0, 1.6], HIT_CAP_CROUCH = [-16 / 15, 8 / 15];   // (crouched: 6.4 x 2/3 = 64/15 tall, the bottom kept at 3.2 under the centre)
