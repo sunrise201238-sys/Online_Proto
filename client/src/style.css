@@ -868,6 +868,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    tap (main.js rollLobbyMap) and the paper stays put while it is pressed; 5 px up: its top clears the size line's
    single line (ends 188 px down) on the 230 px memo of the landscape phone */
 .menu .memo .memo-dice { position: absolute; right: 14px; bottom: 18px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 10px; border: 3px solid var(--ink); background: var(--magenta); color: #ffffff; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-6deg); cursor: pointer; }
+/* (b1105cv, user 2026-11-08: "make the random map dice's detection wider in main menu. user sometimes trigger the map selection
+   menu instead of the dice itself. Keep current visual layout"): an invisible pad on the die takes the taps around it, 16 px out
+   on the left, the top and the bottom and 12 px on the right, inside the paper's edges: about 64 x 68 px where the die is 36 x 36.
+   A tap on the pad is a tap on the die (main.js .memo-dice), and it presses the die as a tap on it does. Nothing drawn changes. */
+.menu .memo .memo-dice::before { content: ''; position: absolute; top: -19px; left: -19px; right: -15px; bottom: -19px; border-radius: 12px; }
 .menu .memo .memo-dice .btn-icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .menu .memo .memo-dice .btn-icon .pip { fill: currentColor; stroke: none; }
 .menu .memo .memo-dice:active { transform: rotate(-6deg) translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
