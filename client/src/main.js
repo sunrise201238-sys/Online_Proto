@@ -1738,7 +1738,7 @@ const UNIT_MODELS = {
   // and Saori's jump, borrowClip — since b1105cl her dodge too takes Saori's jump, fitted to the dodge; her own Move_End_Normal, her dodge and jump until then, still poses the rest — her MG42 and its
   // parts, her jacket, her wings (Wing_Root at 0.65), the hair bones it scales; her clips crossfade, MODEL_FADE_S)
   hina: { file: 'models/hina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    dodge: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },   // (her jump's motion, fitted to the dodge — PT b1105cl, user 2026-11-08: "Change current PT hina's dodge to the same motion as her current jump motion"; b1105ck had Subaru's dodge)
+    dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },   // (Fubuki's dodge, borrowClip — PT and 9.5 b1105cw, user 2026-11-08: "Apply Fubuki's dodge motion to Hina"; b1105cl had Saori's jump fitted to the dodge; her own Move_End_Normal still poses her MG42, jacket and wings)
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Move_End_Normal', speed: 1, once: true } } },
   // (Koyuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Normal_Attack_Start)
   // (PT b1105cj, user 2026-11-08: "Apply Saori's jump motion and Subaru's dodge motion to Koyuki": her body takes Subaru's dodge
@@ -7203,7 +7203,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cv 11-08';
+const CLIENT_BUILD_TAG = 'b1105cw 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
