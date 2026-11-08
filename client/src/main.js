@@ -7404,7 +7404,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dj 11-08';
+const CLIENT_BUILD_TAG = 'b1105dm 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10308,7 +10308,7 @@ function wireMapGrid(menu, onPick) {
 // class filter chips beside them), then the preview card on the left and the grid on the right (`.picker-body`;
 // spawnProfilePopup fills the card). Back leaves the flow for the lobby. The offline pickers; the online ones keep
 // their own pages and the floating card.
-const UNIT_FILTERS = [['ALL', 'All'], ['AR', 'AR'], ['RF', 'Rifle'], ['SMG', 'SMG'], ['SG', 'SG'], ['MG', 'MG'], ['SR', 'Sniper']];   // (b1105r: the rifles their own chip — user: "rifle and AR are not the same category")
+const UNIT_FILTERS = [['ALL', 'All'], ['AR', 'AR'], ['SMG', 'SMG'], ['SG', 'SG'], ['MG', 'MG'], ['RF', 'Rifle'], ['SR', 'Sniper']];   // (b1105r: the rifles their own chip — user: "rifle and AR are not the same category"; b1105dm, PT then 9.5: the grid's group order, Rifle after MG — user: "Make the category selection button's order as \"ALL>AR>SMG>SG>MG>RF>SR\"")
 function pickerTopHTML(title, extra = '') {
   return `<div class="picker-top"><button type="button" class="back-btn" data-back aria-label="Back">&#8592;</button><h2>${title}</h2>${extra}</div>`;
 }

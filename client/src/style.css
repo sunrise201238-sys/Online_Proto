@@ -27,6 +27,8 @@
   --cyan: #3EE0FF;
   --yellow: #FFE45C;
   --lavender: #C9B2FF;   /* (b1105r: the rifles' class colour — user: "rifle and AR are not the same category") */
+  --teal: #14B8A6;       /* (b1105dm, PT then 9.5: the machine guns' class colour — user: "Use Teal for MG class and Oxblood for SR instead."; teal from PT's MG design canvas: OKLab 32 / 24 / 26 from Maki's red hair, Koyuki's pink and Hina's white where magenta was 14 / 25 / 35, ink tag text at 6.8:1; magenta until b1105dm, PT's cobalt of b1105dk never reached 9.5) */
+  --oxblood: #9E0008;    /* (b1105dm, PT then 9.5: the snipers' class colour, the same request; oxblood from PT's SR design canvas: Aru 13% / Kei 3% / Hiyori 3% of the outline within OKLab 20 of the card where ink was 15% / 5% / 50% (Hiyori's dark hat and case), white tag text at 8.5:1; ink until b1105dm, PT's leaf of b1105dl never reached 9.5) */
   --red: #FF4F4F;        /* (b1105s: the stick's knob — user: "change joycon green to red") */
   --manila: #F6D27A;     /* (b1105t: the file folders that hold the unit cards — user: "file folder style") */
   --muted: #5A5A74;
@@ -502,15 +504,15 @@ body.pseudo-fullscreen #app {
 .menu .unit-card:hover { box-shadow: 4px 4px 0 var(--ink); }
 .menu .unit-card .unit-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; background: var(--class-color, #E7E9EE); pointer-events: none; }
 .menu .unit-card .unit-label { font-size: 11px; line-height: 1.15; font-weight: 800; text-align: center; pointer-events: none; max-width: 76px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* the weapon-class tag on a unit tile's corner, and the tile's colour: AR and RF (rifle) cyan, SMG lime, SG yellow,
-   MG magenta, SR (sniper rifle) ink — set by data-class (unitGridHTML) */
+/* the weapon-class tag on a unit tile's corner, and the tile's colour: AR cyan, RF (rifle) lavender, SMG lime, SG yellow,
+   MG teal, SR (sniper rifle) oxblood — set by data-class (unitGridHTML) */
 .menu .unit-card .unit-tag { position: absolute; top: -9px; right: -7px; padding: 2px 6px; border-radius: 999px; border: 2px solid var(--ink); background: var(--class-color, #E7E9EE); color: var(--class-ink, var(--ink)); font-size: 9px; line-height: 1; font-weight: 800; pointer-events: none; }
 .menu [data-class="AR"] { --class-color: var(--cyan); }
 .menu [data-class="RF"] { --class-color: var(--lavender); }   /* (b1105r: its own colour, no longer AR's) */
 .menu [data-class="SMG"] { --class-color: var(--lime); }
 .menu [data-class="SG"] { --class-color: var(--yellow); }
-.menu [data-class="MG"] { --class-color: var(--magenta); --class-ink: #ffffff; }
-.menu [data-class="SR"] { --class-color: var(--ink); --class-ink: #ffffff; }   /* (the tiles, the lobby's unit card and the picker's side card alike; SR — sniper rifle — was SN until b1105t, user) */
+.menu [data-class="MG"] { --class-color: var(--teal); --class-ink: var(--ink); }   /* (magenta with white tag text until b1105dm; magenta stays the skin's own accent elsewhere) */
+.menu [data-class="SR"] { --class-color: var(--oxblood); --class-ink: #ffffff; }   /* (the tiles, the lobby's unit card and the picker's side card alike; SR — sniper rifle — was SN until b1105t, user; ink until b1105dm) */
 .menu .unit-card.selecting { border-color: var(--magenta); border-width: 4px; padding: 5px 3px 3px; box-shadow: 4px 4px 0 var(--ink), 0 0 0 3px #ffffff; transform: rotate(var(--tilt, 0deg)) scale(1.06); z-index: 2; }
 
 /* the profile card (the two-tap pickers' preview, units AND maps): a white sticker with the ink border, the hard
