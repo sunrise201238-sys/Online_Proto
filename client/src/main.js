@@ -3429,12 +3429,21 @@ function disposeProjectileMesh(mesh) {
 // the current tick instead of allowing catch-up bursts.
 const FIRE_TICK_MS = 16;
 const fireLattice = (t) => Math.floor(t / FIRE_TICK_MS) * FIRE_TICK_MS;
+// NO SHOT SOONER THAN THE COOLDOWN (b1105df, user 2026-11-08: "by spamming sprinting or firing the unit can skip/shorten the
+// cooldown. Found this on 9.5 Aru and Kei as well"): the scheduled slot is the right stamp only for a shot the trigger was
+// waiting on, frame after frame. The old rule kept the slot for any shot less than a whole cooldown late, so a late shot handed
+// its lateness to the next one: a sniper's charge, or its sprint-cancel, let the next charge start a moment after the shot, and a
+// tap after a pause let Iori's next round follow in 175 ms. Now the slot is kept only when this gate turned the shot away within
+// the last FIRE_HELD_GAP_MS (the trigger held through the cooldown, the frame merely late, the jitter the lattice is for); any
+// other shot is stamped at its own tick, the cooldown counting from it.
+const FIRE_HELD_GAP_MS = 50;   // (a frame as slow as 20 fps still counts as held)
 function fireGatePass(st, cooldownMs, now) {
   const tickNow = fireLattice(now);
-  if (tickNow - st.lastFireAt < cooldownMs) return false;
+  if (tickNow - st.lastFireAt < cooldownMs) { st.fireRefusedAt = now; return false; }
   const cdq = Math.ceil(cooldownMs / FIRE_TICK_MS) * FIRE_TICK_MS;
   const scheduled = st.lastFireAt + cdq;
-  st.lastFireAt = (tickNow - scheduled < cdq) ? scheduled : tickNow;
+  const waited = now - (st.fireRefusedAt ?? -Infinity) <= FIRE_HELD_GAP_MS;
+  st.lastFireAt = (waited && tickNow - scheduled < cdq) ? scheduled : tickNow;
   return true;
 }
 
@@ -7280,7 +7289,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dc 11-08';
+const CLIENT_BUILD_TAG = 'b1105df 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
