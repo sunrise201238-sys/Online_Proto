@@ -774,7 +774,7 @@ export const UNIT_DATA = {
     bloomCap: 0.06,
     bloomRecoverPerSec: 0.045,
     bloomRecoverDelayMs: 200,
-    damage: 5,
+    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105dj) — 23 rounds to a full-HP kill, as Koyuki
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag
     reloadMs: 5000,
@@ -812,7 +812,7 @@ export const UNIT_DATA = {
     bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
     bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
     bloomRecoverDelayMs: 200,
-    damage: 5,                // 20 rounds to a full-HP kill (Saori: 4, 25)
+    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105ds, Saori 4) — 23 rounds to a full-HP kill
     magCapacity: 30,
     botFireCap: 30,          // bot: shots per trigger pull = full mag
     reloadMs: 1500,

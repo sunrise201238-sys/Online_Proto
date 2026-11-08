@@ -891,7 +891,7 @@ const UNIT_DATA = {
     bloomCap: 0.06,
     bloomRecoverPerSec: 0.045,
     bloomRecoverDelayMs: 200,
-    damage: 5,
+    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105dj) — 23 rounds to a full-HP kill, as Koyuki
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag
     reloadMs: 5000,
@@ -931,7 +931,7 @@ const UNIT_DATA = {
     bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
     bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
     bloomRecoverDelayMs: 200,
-    damage: 5,                // 20 rounds to a full-HP kill (Saori: 4, 25)
+    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105ds, Saori 4) — 23 rounds to a full-HP kill
     magCapacity: 30,
     botFireCap: 30,          // bot: shots per trigger pull = full mag
     reloadMs: 1500,
@@ -7450,7 +7450,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ds 11-08';
+const CLIENT_BUILD_TAG = 'b1105dt 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
