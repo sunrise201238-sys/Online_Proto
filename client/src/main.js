@@ -177,6 +177,7 @@ const UNIT_DATA = {
     name: 'Unit 3 / Sniper Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'aru', char: 'Aru', weapon: 'PSG1', accent: 0xff7a8a,
+    crouchHit: ['Normal_Attack_Ing', 'Normal_Reload'],   // (PT b1105cp, user 2026-11-08: "Same treatment with Asuna": her hit capsule two thirds tall while one of these plays — hitCapsule; her charge plays Normal_Attack_Ing too)
     model: 'aru',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
@@ -429,6 +430,7 @@ const UNIT_DATA = {
     name: 'Unit 9 / Assault Rifle',
     // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
     spriteKey: 'asuna', char: 'Asuna', weapon: 'FAMAS', accent: 0x3fbde8,
+    crouchHit: ['Normal_Attack_Ing', 'Normal_Reload'],   // (PT b1105cn: her model crouches in these two clips, and her hit capsule shrinks to two thirds while one plays — hitCapsule, b1105co)
     model: 'asuna',   // 3D character (UNIT_MODELS) in place of the billboard (owner 2026-10-10)
 
     // Pilot stats
@@ -1676,15 +1678,21 @@ const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
   // (Saori's form, 2026-10-10: the default map. Owner 2026-10-15: the dodge is Move_Jump, her jump
   // clip, fitted to the step — it had been Move_End_Normal since the 10-10 evening)
+  // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
   saori: { file: 'models/saori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    dodge: { name: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Asuna's form, 2026-10-10: standing is Formation_Idle; the rest as the default map. Owner
   // 2026-10-15: the dodge is Move_Jump, her jump clip, fitted to the step — it had been her EX clip, Exs)
+  // (PT b1105cm, user 2026-11-08: "Apply Subaru's dodge motion to Asuna": her body takes Subaru's dodge, borrowClip; her own
+  // Move_Jump, her dodge until then and still her jump, poses the rest — hair, skirt, gun; her clips crossfade, MODEL_FADE_S)
   asuna: { file: 'models/asuna', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     stand: { name: 'Formation_Idle', speed: 1 },
-    dodge: { name: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Atsuko's form, 2026-10-10: the default map as is)
-  atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (PT b1105cq, user 2026-11-08: "Apply Subaru's dodge motion to Atsuko": her body takes Subaru's dodge, borrowClip; her own
+  // Move_Jump, her dodge until then and still her jump, poses the rest — hat, hair, skirt, gun, ribbon; her clips crossfade, MODEL_FADE_S)
+  atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Subaru's form, user 2026-10-22, a first map until the user's motion sheet: her file names its firing clips in two sets,
   // Normal01_* and Normal02_*, with no Normal_Attack_Ing / Normal_Reload — the first set is taken; the rest as the default map)
   subaru: { file: 'models/subaru', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
@@ -1692,7 +1700,9 @@ const UNIT_MODELS = {
     reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
   // (Yuuka's form, user 2026-10-22, a first map until the user's motion sheet: every default name is in her file; she also
   // carries a Stand_* set and Move_End_* clips, unused)
-  yuuka: { file: 'models/yuuka', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
+  yuuka: { file: 'models/yuuka', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Kurumi's form, the user's motion sheet of 2026-10-23: her file names its idle, move and reload clips in two sets,
   // Normal01_* / Move01_* and Normal02_* / Move02_*, and carries no Move_Jump — the formation idle stands, the first move set
   // walks, the second set's move-end clip is her dodge and her jump)
@@ -1706,23 +1716,38 @@ const UNIT_MODELS = {
     reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
   // (Rabu's form, the user's motion sheet of 2026-10-23: the formation idle stands, firing on the run keeps the firing clip,
   // the rest the default names — all in her file)
-  rabu: { file: 'models/rabu', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 }, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 } } },
+  // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
+  rabu: { file: 'models/rabu', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 }, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
-  marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 } } },
+  // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
+  marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Haruka's form, 2026-10-10: nothing changed from the default map)
-  haruka: { file: 'models/haruka', height: UNIT_SPRITE_HEIGHT, clips: MODEL_CLIPS_DEFAULT },
+  // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
+  haruka: { file: 'models/haruka', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Fubuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Kneel_Attack_Start)
+  // (PT b1105cs, user 2026-11-08: "Apply Saori's jump motion to Fubuki": her body takes Saori's jump, borrowClip; her own
+  // Kneel_Attack_Start, her jump until then and still her dodge, poses the rest — her gun, hair, skirt)
   fubuki: { file: 'models/fubuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
-    jump: { name: 'Kneel_Attack_Start', speed: 1, once: true } } },
+    jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true } } },
   // (Hina's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Move_End_Normal)
+  // (PT b1105ck, user 2026-11-08: "Apply Saori's jump motion and Subaru's dodge motion to Hina": her body takes Subaru's dodge
+  // and Saori's jump, borrowClip — since b1105cl her dodge too takes Saori's jump, fitted to the dodge; her own Move_End_Normal, her dodge and jump until then, still poses the rest — her MG42 and its
+  // parts, her jacket, her wings (Wing_Root at 0.65), the hair bones it scales; her clips crossfade, MODEL_FADE_S)
   hina: { file: 'models/hina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
-    jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
+    dodge: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },   // (her jump's motion, fitted to the dodge — PT b1105cl, user 2026-11-08: "Change current PT hina's dodge to the same motion as her current jump motion"; b1105ck had Subaru's dodge)
+    jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Move_End_Normal', speed: 1, once: true } } },
   // (Koyuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Normal_Attack_Start)
+  // (PT b1105cj, user 2026-11-08: "Apply Saori's jump motion and Subaru's dodge motion to Koyuki": her body takes Subaru's dodge
+  // and Saori's jump, borrowClip; her own Normal_Attack_Start, her dodge and jump until then, still poses the rest — it scales her
+  // spare magazines and her bomb to 0.001, which a borrowed clip alone would have left at their bind pose, full size beside her;
+  // her clips crossfade, MODEL_FADE_S, so the ways in and out blend as they always did)
   koyuki: { file: 'models/koyuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    dodge: { name: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
-    jump: { name: 'Normal_Attack_Start', speed: 1, once: true } } },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Normal_Attack_Start', speed: 1, once: true } } },
   // (Hoshino's form, 2026-10-10: the battle model's first form, "01_"; no Move_Jump in this file.
   // fade 0: her backpack sits on a different bone pose in the formation idle than in the run, and a
   // crossfade slid it across her back — the clips cut instead; owner 2026-10-10)
@@ -1755,7 +1780,7 @@ const UNIT_MODELS = {
       shoot: { name: 'Normal_Attack_Ing', speed: 1 },
       sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
       fly: { name: 'Move_Ing', speed: 1 },
-      dodge: { name: 'Move_end_Normal', speed: 1, fit: 'step', once: true },
+      dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_end_Normal', speed: 1, fit: 'step', once: true },   // (Fubuki's dodge, borrowClip — PT b1105cs, user 2026-11-08: "Apply Fubuki's dodge motion to Aris/Kei"; her own Move_end_Normal, still her jump, poses the rest)
       jump: { name: 'Move_end_Normal', speed: 1, once: true },
       reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
       hit: null,
@@ -1765,8 +1790,10 @@ const UNIT_MODELS = {
   },
   // (Kei's form, 2026-10-10: the default map; no Move_Jump in her file — the dodge and the
   // jump are Move_End_Normal. Her firing clip follows the sniper rule in makeUnitModel.)
+  // (PT b1105cs, user 2026-11-08: "Apply Fubuki's dodge motion to Aris/Kei": her body takes Fubuki's dodge, borrowClip; her own
+  // Move_End_Normal, her dodge until then and still her jump, poses the rest)
   kei: { file: 'models/kei', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
+    dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
   // (Aru's form, 2026-10-10: standing is Formation_Idle; no Move_Jump in her file — the dodge and
   // the jump are Move_End_Normal; the rest as the default map. Sniper: firing clip per makeUnitModel.)
@@ -3963,10 +3990,11 @@ function updateProjectileSystem(dt) {
         let sweepEnd = b;
         if (targetable) {
           const nearest = new THREE.Vector3();
-          new THREE.Line3(a, b).closestPointToPoint(hitCenter, true, nearest);
-          const hdx = nearest.x - hitCenter.x;
-          const hdy = Math.max(0, Math.abs(nearest.y - hitCenter.y) - 1.6);
-          const hdz = nearest.z - hitCenter.z;
+          const pcap = hitCapsule(p.target); const pc = new THREE.Vector3(hitCenter.x, hitCenter.y + pcap[0], hitCenter.z);   // (crouchHit, b1105cn)
+          new THREE.Line3(a, b).closestPointToPoint(pc, true, nearest);
+          const hdx = nearest.x - pc.x;
+          const hdy = Math.max(0, Math.abs(nearest.y - pc.y) - pcap[1]);
+          const hdz = nearest.z - pc.z;
           if (hdx * hdx + hdy * hdy + hdz * hdz < 1.6 * 1.6) {
             hitThis = true;
             sweepEnd = nearest;
@@ -4112,8 +4140,9 @@ function updateProjectileSystem(dt) {
     // billboard: free vertical travel within ±hitHalfHeight of body center, then
     // sphere falloff at hitRadius, centered on root.position. Mirrors shared/sim.
     const hitRadius = 1.6 + (p.boltRadius || 0);
-    const hitHalfHeight = 1.6;
-    const hitCenter = p.target.root.position;
+    const hcap = hitCapsule(p.target);   // (crouchHit, b1105cn: half as tall, its bottom kept)
+    const hitHalfHeight = hcap[1];
+    const hitCenter = new THREE.Vector3(p.target.root.position.x, p.target.root.position.y + hcap[0], p.target.root.position.z);
     // Laser bolts hit with their whole trailing body, not just the nose:
     // extend the swept segment backward by the body length along velocity.
     // The body GROWS OUT of the muzzle — clipped to the distance flown so
@@ -4339,9 +4368,9 @@ function updateBeamDamage(now) {
       if (b.team && st.team && b.team === st.team) continue;   // friendly fire off
       if (now < st.invulnerableUntil) continue;                // spawn protection
       if (now <= st.stepUntil) continue;                       // dodge i-frames
-      const hc = m.root.position;
+      const bcap = hitCapsule(m); const hc = new THREE.Vector3(m.root.position.x, m.root.position.y + bcap[0], m.root.position.z);   // (crouchHit, b1105cn)
       const near = beamLine.closestPointToPoint(hc, true, new THREE.Vector3());
-      const vdy = Math.max(0, Math.abs(near.y - hc.y) - 1.6);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - bcap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
       let dmg = b.damage;
@@ -4619,9 +4648,9 @@ function updateChargedBeams(now, dt) {
       if (tst.hp <= 0 || m.chargedBeamHitIds.includes(t)) continue;
       if (st.team && tst.team && st.team === tst.team) continue;
       if (now < tst.invulnerableUntil || now <= tst.stepUntil) continue;
-      const hc = t.root.position;
+      const ccap = hitCapsule(t); const hc = new THREE.Vector3(t.root.position.x, t.root.position.y + ccap[0], t.root.position.z);   // (crouchHit, b1105cn)
       const near = cBeamLine.closestPointToPoint(hc, true, new THREE.Vector3());
-      const vdy = Math.max(0, Math.abs(near.y - hc.y) - 1.6);
+      const vdy = Math.max(0, Math.abs(near.y - hc.y) - ccap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
       // The charged sweep channel hits softer than the quick beam / normal shot.
@@ -7174,7 +7203,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ci 11-08';
+const CLIENT_BUILD_TAG = 'b1105cs 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -7308,6 +7337,23 @@ function advanceOwnShots(now) {
   }
 }
 
+// THE CROUCHING HIT CAPSULE (PT b1105cn, 2026-11-08; user: "Normal_Attack_Ing, Normal_Reload: Asuna's model crouches in these
+// 2 motions. Make her hitbox half height when these 2 motions are in play; the bottom side of the hitbox stays at the same height",
+// "Just simply make her hitbox changes whenever the character is playing "Normal_Attack_Ing" and "Normal_Reload" motion", and
+// "No" to the bots and the auto-aim aiming at the crouched centre): a unit whose data lists `crouchHit` clips has, while its model
+// plays one of them (its rig's current clip), a hit capsule two thirds as tall with its bottom where it was (b1105co, user: "1/2
+// height is too much. make it 2/3 instead"; b1105cn had half) — the same 1.6 u radius, 4.27 u tall in all where the standing one
+// is 6.4, its straight side 1.07 u, its centre 1.07 u lower. [y offset of the centre from the root, half height of the straight side]. Every hit test of this client reads it (the rounds, the pellets, the beams,
+// the free pov's, the online mirror's own-shot ring); the aim points stay where they were. The offline game's own; online the
+// server judges the hits. The bots never read it (user: "Make every BOT, including Asuna herself, not aware of her half-height HB
+// during those 2 motions"): their sight, cover, exposure and hit-chance reasoning is the shared brains' (nbrain.js, sdbrain.js),
+// on the standing capsule as ever; only where a round truly lands changes.
+const HIT_CAP_STAND = [0, 1.6], HIT_CAP_CROUCH = [-16 / 15, 8 / 15];   // (crouched: 6.4 x 2/3 = 64/15 tall, the bottom kept at 3.2 under the centre)
+function hitCapsule(m) {
+  const names = m?.unit?.crouchHit; if (!names) return HIT_CAP_STAND;
+  const rig = m.modelHolder?.userData?.modelRig; const a = rig?.ready && rig.current ? rig.actions[rig.current] : null;
+  return a && names.includes(a.cfg?.name) ? HIT_CAP_CROUCH : HIT_CAP_STAND;
+}
 // Where (0..1 along prev→next) a local round meets the drawn enemy's hit
 // capsule — the sim's volume (radius 1.6, half height 1.6 about the chest,
 // 2.35 above the feet) against the mech as drawn. Visual only: the ring and
@@ -7315,13 +7361,13 @@ function advanceOwnShots(now) {
 function ownShotHitsMech(prev, next, m) {
   if (!m?.root?.visible || (m.state?.hp ?? 1) <= 0) return -1;
   const cx = m.root.position.x, cz = m.root.position.z;
-  const cy = m.root.position.y - (m.modelYOffset ?? 0) + 2.35;
+  const ocap = hitCapsule(m); const cy = m.root.position.y - (m.modelYOffset ?? 0) + 2.35 + ocap[0];   // (crouchHit, b1105cn)
   const dx = next.x - prev.x, dy = next.y - prev.y, dz = next.z - prev.z;
   const len2 = dx * dx + dy * dy + dz * dz;
   let t = len2 > 0 ? ((cx - prev.x) * dx + (cy - prev.y) * dy + (cz - prev.z) * dz) / len2 : 0;
   t = Math.max(0, Math.min(1, t));
   const ex = prev.x + dx * t - cx;
-  const ey = Math.max(0, Math.abs(prev.y + dy * t - cy) - 1.6);
+  const ey = Math.max(0, Math.abs(prev.y + dy * t - cy) - ocap[1]);
   const ez = prev.z + dz * t - cz;
   return ex * ex + ey * ey + ez * ez < 1.6 * 1.6 ? t : -1;
 }
@@ -11853,6 +11899,7 @@ if (typeof window !== 'undefined') window.__mapPhoto = mapPhoto;
 // debugging / automated preview checks (same family as __exportArenaCollision
 // and __mapPhoto). Offline client only — never used by game code.
 if (typeof window !== 'undefined') window.__gvgState = state;
+if (typeof window !== 'undefined') window.__hitCapsule = hitCapsule;   // (debug: a unit's hit capsule now, crouchHit — b1105cn)
 // (SD proto, debug only: the collision boxes, for the headless traces)
 if (typeof window !== 'undefined') window.__gvgArenaObstacles = arenaObstacles;
 if (typeof window !== 'undefined') { window.__gvgCamera = camera; window.__THREE = THREE; }   // (debug: the HUD smoke measures the Sudden Death portrait against the lock bracket)
@@ -12035,9 +12082,9 @@ function freePovRoundTarget(p, dt) {
   let best = null, bestD = Infinity;
   for (const e of getEnemiesOf(p.owner)) {
     if (!e || e.state.hp <= 0) continue;
-    const hc = e.root.position;
+    const fcap = hitCapsule(e); const hc = new THREE.Vector3(e.root.position.x, e.root.position.y + fcap[0], e.root.position.z);   // (crouchHit, b1105cn)
     seg.closestPointToPoint(hc, true, n);
-    const dx = n.x - hc.x, dy = Math.max(0, Math.abs(n.y - hc.y) - 1.6), dz = n.z - hc.z;
+    const dx = n.x - hc.x, dy = Math.max(0, Math.abs(n.y - hc.y) - fcap[1]), dz = n.z - hc.z;
     const d = dx * dx + dy * dy + dz * dz;
     if (d < bestD) { bestD = d; best = e; }
   }
@@ -12121,12 +12168,12 @@ function freePovAimPoint(o, d, enemies) {
   let onTarget = false;
   for (const e of enemies) {
     if (!e || e.state.hp <= 0) continue;
-    const hc = e.root.position;                      // (the root is the body centre the hit test uses)
+    const xcap = hitCapsule(e); const hc = { x: e.root.position.x, y: e.root.position.y + xcap[0], z: e.root.position.z };   // (the root is the body centre the hit test uses; crouchHit lowers it, b1105cn)
     const vx = hc.x - o.x, vy = hc.y - o.y, vz = hc.z - o.z;
     const t = vx * d.x + vy * d.y + vz * d.z;
     if (t <= 0 || t >= L) continue;
     const px = o.x + d.x * t, py = o.y + d.y * t, pz = o.z + d.z * t;
-    const ddx = px - hc.x, ddy = Math.max(0, Math.abs(py - hc.y) - 1.6), ddz = pz - hc.z;
+    const ddx = px - hc.x, ddy = Math.max(0, Math.abs(py - hc.y) - xcap[1]), ddz = pz - hc.z;
     if (ddx * ddx + ddy * ddy + ddz * ddz < 1.6 * 1.6) { L = t; onTarget = true; }
   }
   return { x: o.x + d.x * L, y: o.y + d.y * L, z: o.z + d.z * L, onTarget };
