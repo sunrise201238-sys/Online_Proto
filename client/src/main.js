@@ -1734,8 +1734,8 @@ const UNIT_MODELS = {
       sprint: { name: '01_Move_Ing', speed: 1 },
       shoot: { name: '01_Normal_Attack_Ing_02', speed: 1 },
       sprintShoot: { name: '01_Move_Ing', speed: 1 },
-      dodge: { name: '01_Move_End_Normal', speed: 1, fit: 'step', once: true },
-      jump: { name: '01_Move_End_Normal', speed: 1, once: true },
+      dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: '01_Move_End_Normal', speed: 1, fit: 'step', once: true },   // (Subaru's dodge, borrowClip — PT b1105ce, user 2026-11-08: "let's try to apply subaru's dodge motion to Hoshino first"; her own was 01_Move_End_Normal)
+      jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: '01_Move_End_Normal', easeIn: true, speed: 1, once: true },   // (Saori's jump, borrowClip — PT b1105ci, user 2026-11-08: "Apply Saori's jump motion to Hoshino"; her own was 01_Move_End_Normal, still her gear's)
       reload: { name: '01_Normal_Attack_Delay', speed: 1, fit: 'reload', once: true },
       hit: null,
       death: { name: '01_Vital_Death', speed: 1, once: true },
@@ -1776,6 +1776,7 @@ const UNIT_MODELS = {
     jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
+const BORROWED_EXIT_S = 0.15;       // (b1105ch: a cutting model's body eased out of a borrowed clip over this, its gear still cut)
 const MODEL_TURN_RATE = 14;         // rad/s toward the wanted heading
 const MODEL_MOVE_MIN = 1.5;         // u/s: slower than this reads as standing
 const MODEL_SNAP_U = 8;             // u in ONE frame: past this the root teleported (a rematch re-spawn, a snap), not walked
@@ -1903,6 +1904,7 @@ function makeUnitModel(unitData, isOwnUnit) {
     for (const [key, c] of Object.entries(rig.cfg.clips)) {
       if (!c) continue;
       const clip = THREE.AnimationClip.findByName(gltf.animations, c.name);
+      if (c.from) { borrowClip(rig, inst, key, c, gltf.animations); continue; }   // (another unit's clip, from its own file: borrowClip)
       if (!clip && key === 'climb') { borrowClimbClip(rig, inst, c); continue; }   // (twelve of the sixteen files lack Vital_Retreat: Kurumi's, from models/climb_clip.json)
       if (!clip) { console.warn('unit model: clip not found', unitData.model, c.name); continue; }
       const action = rig.mixer.clipAction(clip);
@@ -1935,6 +1937,39 @@ function borrowClimbClip(rig, inst, cfg) {
     if (!clip.tracks.length || !rig.mixer) return;
     rig.actions.climb = { action: rig.mixer.clipAction(clip), cfg, dur: clip.duration };
   }).catch((e) => console.warn('climb clip', e));
+}
+
+// A CLIP BORROWED FROM ANOTHER UNIT (b1105ce, PT and 9.5, user 2026-11-08: "let's try to apply subaru's dodge motion to Hoshino first"): a
+// clip entry with `from`, a file shared/tools/anim/clip_extract.mjs wrote out of another unit's glTF (Subaru's Move_Jump, her
+// dodge: models/subaru_dodge_clip.json, its root pinned in plan, its smooth-curve keys sampled at 60 Hz since b1105cf), is fetched once and bound by bone name as the climb clip is
+// (borrowClimbClip): the rotations alone, a bone the rig lacks left out — the Biped bodies share their names, the hair, the
+// skirt and the guns do not; a one-shot entry plays once and holds its last frame, as the rig's own do.
+const _borrowedClips = new Map();
+// (b1105cg, user 2026-11-08: "her accessories from "bind pose" are showing up during the dodge motion"): the borrowed clip moves
+// the Biped's body alone — its bones by name, the face, the eyes and the gun left out — and the rig's own clip named `base` moves
+// everything else, fitted to the borrowed clip's length: Hoshino's plates, shield, pistol and shells are posed (scaled into her
+// vest, onto her back) by her own clips alone, and a part no playing clip moves falls back to its bind pose, where her file lays
+// them out beside her; her hair, skirt, pockets and mouth follow her own dodge too.
+function borrowClip(rig, inst, key, cfg, anims = []) {
+  if (!_borrowedClips.has(cfg.from)) _borrowedClips.set(cfg.from, fetch(`${import.meta.env.BASE_URL}${cfg.from}`).then((r) => r.json()));
+  _borrowedClips.get(cfg.from).then((json) => {
+    const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
+    const body = (n) => /^Bip001/.test(n) && !/eye|Xtra|Weapon/i.test(n);
+    const borrowed = THREE.AnimationClip.parse({ ...json, tracks: json.tracks.filter((t) => { const n = t.name.split('.')[0]; return t.type === 'quaternion' && names.has(n) && body(n); }) });
+    if (!borrowed.tracks.length || !rig.mixer) return;
+    const driven = new Set(borrowed.tracks.map((t) => t.name.split('.')[0]));
+    const own = cfg.base ? THREE.AnimationClip.findByName(anims, cfg.base) : null;
+    const rest = own ? own.tracks.filter((t) => !driven.has(t.name.split('.')[0])).map((t) => t.clone().scale(borrowed.duration / own.duration)) : [];
+    const clip = new THREE.AnimationClip(`${borrowed.name}+${cfg.base ?? ''}`, borrowed.duration, [...borrowed.tracks, ...rest]);
+    const action = rig.mixer.clipAction(clip);
+    if (cfg.once) { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
+    // (body: what the way out eases — BORROWED_EXIT_S — every part the clip moves but the gear, the borrowed body and the parts
+    // of her own clip alike: the Biped's helper bones, the hair, the skirt; the gear — shield, plates, pistol, shells, holster,
+    // pockets, grenades — still cuts, the backpack never sliding across her back)
+    const gear = /Shield|Plate|Pistol|Bullet|Holster|Pocket|Grenade/i;
+    const eased = [...new Set(clip.tracks.map((t) => t.name.split('.')[0]))].filter((n) => !gear.test(n)).map((n) => inst.getObjectByName(n)).filter((o) => o && !o.isMesh);
+    rig.actions[key] = { action, cfg, dur: clip.duration, body: eased };
+  }).catch((e) => console.warn('borrowed clip', cfg.from, e));
 }
 
 function nearestHostileOf(m) {
@@ -2015,6 +2050,20 @@ function updateUnitModelState(m, rig, dt, now) {
     else if (entry.cfg.fit === 'charge') rate *= entry.dur / (Math.max(100, m.unit?.chargeMs ?? 1000) / 1000);
     const prev = rig.currentAction;
     const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
+    // THE WAY OUT OF A BORROWED CLIP (b1105ch, PT and 9.5, user 2026-11-08: "there is a sudden flick between the last moment of
+    // dodge motion and her normal stance when she finishes the dodge move"): a model that cuts between its clips (Hoshino's
+    // fade 0, kept so her backpack never slides across her back in a blend) cut from the borrowed dodge's last frame, Subaru's
+    // pose, to her own stance. Leaving a borrowed clip, the parts it moved but her gear are caught as they stand and eased into the
+    // new clip's pose over BORROWED_EXIT_S, after the mixer each frame; her gear still cuts (borrowClip's `body`).
+    const leaving = rig.current ? rig.actions[rig.current] : null;
+    if (fade <= 0 && leaving?.body && leaving.action === prev && prev !== entry.action) {
+      rig.poseBlend = { until: now + BORROWED_EXIT_S * 1000, bones: leaving.body.map((b) => [b, b.quaternion.clone(), b.position.clone()]) };
+    }
+    // (and the way in, for an entry that asks — `easeIn`, b1105ci: Hoshino's borrowed jump cut from her stance into Saori's first
+    // frame, 139 degrees in one frame at 60 fps; her dodge keeps its snap, a dodge being a snap)
+    if (fade <= 0 && entry.cfg.easeIn && entry.body && prev && prev !== entry.action) {
+      rig.poseBlend = { until: now + BORROWED_EXIT_S * 1000, bones: entry.body.map((b) => [b, b.quaternion.clone(), b.position.clone()]) };
+    }
     if (prev === entry.action && entry.action.loop !== THREE.LoopOnce && !(chargeStart && want === 'shoot')) {
       // The same looping clip under another key (walk / sprint / sprintShoot
       // share Move_Ing): keep its phase, only retime it — no rewind to frame 0.
@@ -2033,6 +2082,11 @@ function updateUnitModelState(m, rig, dt, now) {
     rig.currentAction = entry.action;
   }
   rig.mixer.update(dt);
+  if (rig.poseBlend) {   // (the way out of a borrowed clip: the caught pose eased into the mixer's, BORROWED_EXIT_S)
+    const w = (rig.poseBlend.until - now) / (BORROWED_EXIT_S * 1000);
+    if (w <= 0) rig.poseBlend = null;
+    else for (const [b, q, pos] of rig.poseBlend.bones) { b.quaternion.slerp(q, w); b.position.lerp(pos, w); }
+  }
 
   // Heading (world yaw): the nearest live hostile while firing or locked, else
   // the way the unit moves, else the last heading; the first frame takes the
@@ -7120,7 +7174,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cd 11-07';
+const CLIENT_BUILD_TAG = 'b1105ci 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

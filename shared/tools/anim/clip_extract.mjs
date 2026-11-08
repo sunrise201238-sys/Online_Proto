@@ -20,13 +20,32 @@ const tracks = []; let duration = 0; let rootNode = null; let rootDropped = null
 for (const ch of anim.channels) {
   const s = anim.samplers[ch.sampler]; const n = j.nodes[ch.target.node]; const [prop, type] = TYPE[ch.target.path] ?? [];
   if (!prop) continue;
-  const times = Array.from(accessor(g, s.input)); const values = Array.from(accessor(g, s.output));
+  let times = Array.from(accessor(g, s.input)); let values = Array.from(accessor(g, s.output));
+  // (CUBICSPLINE, b1105cf: each key holds an in-tangent, its value and an out-tangent; three's AnimationClip.parse has no reader
+  // for that layout, and the triplets written as plain values were read three keys to one — a tangent taken for a rotation, a
+  // quaternion of length up to 2.6 that sheared the mesh: Hoshino's borrowed dodge flickered and stretched, user 2026-11-08 "it's
+  // all flickering and distorting". The curve is sampled here instead, at 60 Hz by the glTF Hermite form, a rotation normalized,
+  // and written as plain linear keys.)
+  if (s.interpolation === 'CUBICSPLINE') {
+    const n = values.length / times.length / 3; const at = (k, part, c) => values[(3 * k + part) * n + c];
+    const oT = [], oV = []; const t0 = times[0], t1 = times[times.length - 1]; const steps = Math.max(1, Math.round((t1 - t0) * 60));
+    for (let i = 0, k = 0; i <= steps; i += 1) {
+      const t = i === steps ? t1 : t0 + (t1 - t0) * i / steps;
+      while (k < times.length - 2 && t > times[k + 1]) k += 1;
+      const dt = times.length > 1 ? times[k + 1] - times[k] : 0; const u = dt > 0 ? Math.min(1, Math.max(0, (t - times[k]) / dt)) : 0;
+      const h00 = 2 * u ** 3 - 3 * u ** 2 + 1, h10 = u ** 3 - 2 * u ** 2 + u, h01 = -2 * u ** 3 + 3 * u ** 2, h11 = u ** 3 - u ** 2;
+      const v = []; for (let c = 0; c < n; c += 1) v.push(times.length > 1 ? h00 * at(k, 1, c) + h10 * dt * at(k, 2, c) + h01 * at(k + 1, 1, c) + h11 * dt * at(k + 1, 0, c) : at(0, 1, c));
+      if (prop === 'quaternion') { const L = Math.hypot(...v) || 1; for (let c = 0; c < n; c += 1) v[c] /= L; }
+      oT.push(t); oV.push(...v);
+    }
+    times = oT; values = oV;
+  }
   duration = Math.max(duration, times[times.length - 1] ?? 0);
   if (rootNode == null) rootNode = ch.target.node;
   // (--no-root-motion: the root's sideways travel pinned to its first frame — its rise and fall kept)
   if (flags.includes('--no-root-motion') && ch.target.node === rootNode && prop === 'position') { rootDropped = n.name; for (let k = 3; k < values.length; k += 3) { values[k] = values[0]; values[k + 2] = values[2]; } }
   const track = { name: `${sanitize(n.name)}.${prop}`, type, times: times.map((t) => +t.toFixed(4)), values: values.map((v) => +v.toFixed(5)) };
-  if (s.interpolation && s.interpolation !== 'LINEAR') track.interpolation = s.interpolation === 'STEP' ? 2300 : 2302;   // InterpolateDiscrete / InterpolateSmooth
+  if (s.interpolation === 'STEP') track.interpolation = 2300;   // InterpolateDiscrete (CUBICSPLINE is sampled above into linear keys — b1105cf)
   tracks.push(track);
 }
 const clip = { name: clipName, duration: +duration.toFixed(4), tracks };
