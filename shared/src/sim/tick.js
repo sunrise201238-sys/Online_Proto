@@ -267,6 +267,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   if (input.stepTap && !inStep && canInputMove) {
     let dx = input.moveX;
     let dz = input.moveZ;
+    const byStick = Math.hypot(dx, dz) >= 0.2;   // (b1105cx: the stick chose the dodge's line)
     if (Math.hypot(dx, dz) < 0.2) {
       dx = fighter.vel.x;
       dz = fighter.vel.z;
@@ -276,7 +277,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
       dx = fighter.pos.x - opp.pos.x;
       dz = fighter.pos.z - opp.pos.z;
     }
-    if (tryStartStep(matchState, fighter, dx, dz, now, obstacles)) action = 'step';
+    if (tryStartStep(matchState, fighter, dx, dz, now, obstacles)) { action = 'step'; if (byStick) fighter.stepStick = true; }   // (b1105cx: dodge + firing + motion input faces the dodge on every client)
   }
 
   const fireAt = aim ? aimTargetOf(matchState, fighter, aim) : opp;   // (free pov: the enemy nearest the aim — the shot's intent target)

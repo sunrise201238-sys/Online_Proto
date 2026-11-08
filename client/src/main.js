@@ -2133,7 +2133,20 @@ function updateUnitModelState(m, rig, dt, now) {
   // the way it moves, not its lock — the firing override below is skipped for it (the default path turns a moving unit its
   // way and holds it when still); online, a free-aiming remote unit faces the yaw the server set (the snapshot's `yaw`).
   const freeFacing = m === state.player && state.freePov && freePovOwner() && !dioramaActive();
-  if (freeFacing && firing) { hx = Math.sin(state.aim.yaw); hz = Math.cos(state.aim.yaw); have = true; }   // (the crosshair's own yaw, not the shot's line — see updateTransforms)
+  // DODGING WHILE FIRING (b1105cr, user 2026-11-08: "When the character is doing dodge+firing+motion input. Make the character
+  // facing the dodging direction instead of facing target. Once the dodge animation is over and the character is still firing,
+  // face at the target again. Also, if "dodge+firing+motion" is airborne, the character still faces the target."; online too, b1105cx):
+  // a player's dodge on the ground whose line the stick chose faces that line while the unit fires, over its target and the
+  // free-pov crosshair alike; once the dodge ends the firing rule below turns it back. Offline the line is stamped where the dodge
+  // starts (updatePlayer: stepFaceAt); online the server flags the dodge (stepStick, while it runs) and its line comes with the
+  // snapshot (mirrorFighterToMech). A dodge with no stick, one in the air and a bot's keep the old rule; the turn keeps its rate.
+  let dfx = 0, dfz = 0;
+  if (stepping && firing && !st.airborne) {
+    if (state.online) { if (st.stepStick) { dfx = st.netStepDX || 0; dfz = st.netStepDZ || 0; } }
+    else if (st.stepFaceAt > 0 && st.stepFaceAt === st.stepStartAt) { dfx = st.stepFaceX; dfz = st.stepFaceZ; }
+  }
+  if (dfx * dfx + dfz * dfz > 1e-6) { hx = dfx; hz = dfz; have = true; }
+  else if (freeFacing && firing) { hx = Math.sin(state.aim.yaw); hz = Math.cos(state.aim.yaw); have = true; }   // (the crosshair's own yaw, not the shot's line — see updateTransforms)
   else if (!freeFacing && state.online && m.state.freeAim && m.state.yaw != null) { hx = Math.sin(m.state.yaw); hz = Math.cos(m.state.yaw); have = true; }
   let tgt = null;
   if (firing && !have && !freeFacing) {
@@ -5117,12 +5130,16 @@ function updatePlayer(now) {
     const stepU = state.player.unit;
     if (!inStep && canInputMove && now >= stepState.stepCooldownUntil && stepState.boost >= (stepU?.stepBoostCost ?? STEP_BOOST_COST)) {
       let stepDir = move.clone();
+      const stepByStick = stepDir.lengthSq() >= 0.03;   // (the stick chose the dodge's line: the model's heading reads it, b1105cr)
       if (stepDir.lengthSq() < 0.03) stepDir.set(state.player.body.velocity.x, 0, state.player.body.velocity.z);
       if (stepDir.lengthSq() < 0.03) stepDir.set(p.x - e.x, 0, p.z - e.z);
       if (stepDir.lengthSq() < 0.03) stepDir.set(1, 0, 0);
       stepDir.normalize();
 
       stepState.stepStartAt = now;
+      // (b1105cr: dodge + firing + motion input faces the dodge, updateUnitModelState): the dodge's line when the stick chose it,
+      // stamped with this dodge's start; a dodge with no stick leaves it unstamped and keeps its old heading
+      stepState.stepFaceAt = stepByStick ? now : 0; stepState.stepFaceX = stepDir.x; stepState.stepFaceZ = stepDir.z;
       stepState.stepUntil = now + (stepU?.stepDurationMs ?? STEP_DURATION_MS);
       stepState.stepCooldownUntil = now + (stepU?.stepCooldownMs ?? STEP_COOLDOWN_MS);
       stepState.stepFromX = state.player.body.position.x;
@@ -7060,6 +7077,8 @@ function mirrorFighterToMech(fighter, mech) {
   s.targetId = fighter.targetId ?? null;                 // lock target — drives the laser-sight visual
   s.freeAim = !!fighter.freeAim;                         // free pov (user 2026-10-30): the glint warns everyone, the unit faces its aim
   s.yaw = fighter.yaw;
+  // (b1105cx: a player's stick-chosen dodge, the server's flag, and that dodge's line — updateUnitModelState faces it while firing)
+  s.stepStick = !!fighter.stepStick; s.netStepDX = (fighter.stepToX ?? 0) - (fighter.stepFromX ?? 0); s.netStepDZ = (fighter.stepToZ ?? 0) - (fighter.stepFromZ ?? 0);
   s.ladder = fighter.ladder; s.ladderDir = fighter.ladderDir; s.ladderLeg = fighter.ladderLeg; s.ladderS = fighter.ladderS;   // the ladder (ladder.js): the pose, the facing, the camera and the HUD read them
   s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
@@ -7203,7 +7222,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105cw 11-08';
+const CLIENT_BUILD_TAG = 'b1105cx 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

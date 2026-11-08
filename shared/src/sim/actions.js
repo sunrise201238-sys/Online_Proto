@@ -228,6 +228,7 @@ export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
 
   fighter.stepStartAt = now;
   fighter.stepUntil = now + (u?.stepDurationMs ?? STEP_DURATION_MS);
+  fighter.stepStick = undefined;   // (b1105cx: a bot's dodge, or one with no stick; applyInput marks the player's stick dodge)
   fighter.stepCooldownUntil = now + (u?.stepCooldownMs ?? STEP_COOLDOWN_MS);
   fighter.stepFromX = fighter.pos.x;
   fighter.stepFromZ = fighter.pos.z;
@@ -251,6 +252,7 @@ export function tickStep(fighter, now, obstacles) {
     if (fighter.stepUntil > 0) {
       // Step just ended — apply queued momentum.
       fighter.stepUntil = 0;
+      fighter.stepStick = undefined;   // (b1105cx: out of the snapshot again)
       fighter.momentumVX += fighter.queuedMomentumVX;
       fighter.momentumVZ += fighter.queuedMomentumVZ;
       fighter.queuedMomentumVX = 0;

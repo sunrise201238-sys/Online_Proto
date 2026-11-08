@@ -54,6 +54,10 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     // Step (dodge).
     stepStartAt: 0,
     stepUntil: 0,
+    // (b1105cx, user 2026-11-08: dodge + firing + motion input faces the dodge, online too): true while a dodge whose line the
+    // player's stick chose runs (tick.js applyInput sets it, tryStartStep and tickStep clear it); undefined otherwise, so the
+    // snapshot leaves it out but for those 0.3 s. The clients turn the model to the dodge's line (main.js updateUnitModelState).
+    stepStick: undefined,
     stepCooldownUntil: 0,
     stepFromX: 0,
     stepFromZ: 0,
