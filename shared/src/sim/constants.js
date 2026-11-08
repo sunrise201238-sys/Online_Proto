@@ -677,7 +677,7 @@ export const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 12,            // owner 2026-09-24 (was 16)
+    walkSpeed: 10,   // (b1105db, user 2026-11-08: "Change Hiyori walking speed from 12 to 10"; the card reads Slow)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,

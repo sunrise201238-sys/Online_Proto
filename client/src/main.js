@@ -790,7 +790,7 @@ const UNIT_DATA = {
     // Pilot stats
     hp: 100,
     boostCap: 250,
-    walkSpeed: 12,            // owner 2026-09-24 (was 16)
+    walkSpeed: 10,   // (b1105db, user 2026-11-08: "Change Hiyori walking speed from 12 to 10"; the card reads Slow)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
     boostRegen: 4.59,
@@ -7277,7 +7277,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105da 11-08';
+const CLIENT_BUILD_TAG = 'b1105db 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
