@@ -859,6 +859,45 @@ const UNIT_DATA = {
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit21: {
+    name: 'Unit 21 / Machine Gun',   // (PT b1105dj, user 2026-11-08: "Add another character in PT. Name: Maki / Category: MG / Weapon Name: RM338 / Damage: 5 / Mag: 100 / RPM: 500 / Reload: 5sec / spreadAngle: 0.02 / bloomPerShot: 0.003 / bloomCap: 0.06 / bloomRecoverPerSec: 0.045/s / bloomRecoverDelayMs: 200"; everything else is Koyuki's, the machine gun nearest her)
+    // Character billboard (client visual only — see makeUnitSprite / UNIT_DATA sync note).
+    spriteKey: 'maki', char: 'Maki', weapon: 'RM338', accent: 0xff8ac8,   // (Koyuki's accent: the stand-in picture's alone, never drawn for a modelled unit)
+    model: 'maki',   // 3D character (UNIT_MODELS maki: the user's Maki, her own motions with the attack's opening, Saori's jump, Subaru's dodge)
+
+    // Pilot stats (Koyuki's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 10,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: the user's numbers; the reach, the bullet and the bots' rules are Koyuki's
+    lockRange: 80,
+    lockRange2v2: 65,
+    botGateWidth: 0,          // no bloom gate line, as the other machine guns
+    projectileSpeed: 600,
+    firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.003,
+    bloomCap: 0.06,
+    bloomRecoverPerSec: 0.045,
+    bloomRecoverDelayMs: 200,
+    damage: 5,
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag
+    reloadMs: 5000,
+    autoReload: false,
+    crouchHit: ['Normal_Attack_ReadyStart', 'Normal_Attack_Ing', 'Normal_Reload'],   // (PT b1105dj, user: "Maki receives the same hitbox 2/3 height treatment like Asuna/Aru for her Normal_Attack_ReadyStart, Normal_Attack_Ing, Normal_Reload motions. BOT and player's angled pov wouldn't notice it as well": hitCapsule)
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
@@ -1898,6 +1937,15 @@ const UNIT_MODELS = {
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true },
     cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
+  // Maki's battle motions (PT b1105dj, user 2026-11-08: "Stand: Normal_Idle / Walk/Sprint: Move_Ing / Fire: Normal_Attack_ReadyStart +
+  // Normal_Attack_Ing / Reload: Normal_Reload / Death: Vital_Death / Climb: Vital_Retreet / Jump: Saori's jump motion / Dodge: Subaru's
+  // dodge motion"; the defaults name all but the opening, the jump and the dodge, the climb's Vital_Retreat among them): `shootStart`,
+  // her attack's opening, plays once and whole at the start of every attack before Normal_Attack_Ing (updateUnitModelState); her
+  // file has no Move_Jump, so the borrowed jump and dodge pose the rest from her Normal_Attack_Start, as Koyuki's do
+  maki: { file: 'models/maki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    shootStart: { name: 'Normal_Attack_ReadyStart', speed: 1, once: true },
+    dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
+    jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Normal_Attack_Start', speed: 1, once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
 const BORROWED_EXIT_S = 0.15;       // (b1105ch: a cutting model's body eased out of a borrowed clip over this, its gear still cut)
@@ -2164,6 +2212,15 @@ function updateUnitModelState(m, rig, dt, now) {
   else if (firing && !(reloading && !m.unit?.autoReload)) want = 'shoot';   // (a magazine gun mid-reload cannot be firing; a shotgun's shot shows before its next shell)
   else if (reloading && rig.actions.reload) want = 'reload';
   else if (moving) want = 'walk';
+  // THE ATTACK'S OPENING (PT b1105dj, user 2026-11-08, Maki: "Her attack motion always starts with Normal_Attack_ReadyStart. After
+  // Normal_Attack_ReadyStart runs a full cycle, follows by Normal_Attack_Ing until firing stops"; "Normal_Attack_ReadyStart would be
+  // overwrite by sprint just like Normal_Attack_Ing"): a unit whose clips name a `shootStart` plays it, once and whole, wherever its
+  // shooting clip would begin, and the shooting clip only after it; a sprint, a dodge, a jump, a reload or the end of the firing cuts
+  // it as it cuts the shooting clip, and the next attack opens with it again.
+  if (want === 'shoot' && rig.actions.shootStart) {
+    if (rig.current === 'shootStart') { const a = rig.actions.shootStart; if (!(a.action.paused || a.action.time >= a.dur - 1e-3)) want = 'shootStart'; }
+    else if (rig.current !== 'shoot') want = 'shootStart';
+  }
   // The billboard's anti-flicker hold on the motion poses (a bot's intent can blink for a frame).
   if (want === 'sprint' || want === 'sprintShoot' || want === 'walk' || want === 'fly') {
     rig.motionPose = want;
@@ -7347,7 +7404,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105di 11-08';
+const CLIENT_BUILD_TAG = 'b1105dj 11-08';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9997,7 +10054,7 @@ function showFullPicture(menu, unit, cls) {
 // the print's window is 102 x 54 (style.css .weapon-print: 112 x 64 less the rim and the matte) and the picture is scaled so the
 // gun spans the window's whole width (or height, for a stubby one) and sits centred — plain pixel numbers on the <img>, as the
 // HUD's faces are placed (chipFaceImg)
-const WEAPON_BOX = { iori: [75, 36, 822, 180], hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
+const WEAPON_BOX = { maki: [131, 14, 709, 216], iori: [75, 36, 822, 180], hiyori: [158, 20, 712, 206], aris: [134, 26, 708, 192], aru: [118, 19, 771, 207], asuna: [175, 23, 601, 208], atsuko: [179, 21, 583, 225], fubuki: [213, 13, 544, 227], haruka: [173, 12, 641, 215], hina: [84, 14, 794, 208], hoshino: [179, 39, 572, 170], kei: [130, 18, 716, 207], koyuki: [204, 21, 669, 204], kurumi: [232, 12, 494, 222], marina: [184, 21, 637, 200], mika: [144, 29, 703, 187], rabu: [146, 14, 812 - 146, 221], saori: [248, 10, 544, 229], subaru: [150, 29, 658, 204], yuuka: [260, 22, 445, 216] };
 const WEAPON_RENDER = [958, 246];
 const PRINT_WINDOW = [102, 54];
 function weaponPrintHTML(spriteKey) {
@@ -10041,7 +10098,7 @@ const UNIT_GRID_ORDER = [
   'unit1', 'unit9', 'unit14',              // AR:     Saori   Asuna   Subaru
   'unit4', 'unit13', 'unit15', 'unit17',   // SMG:    Atsuko  Marina  Yuuka  Kurumi   (Mika, unit8, hidden)
   'unit2', 'unit11', 'unit18',             // SG:     Hoshino Haruka  Rabu
-  'unit12', 'unit5',                       // MG:     Koyuki  Hina
+  'unit12', 'unit5', 'unit21',            // MG:     Koyuki  Hina    Maki
   'unit10', 'unit7', 'unit20',             // Rifle:  Fubuki  Aris    Iori
   'unit3', 'unit6', 'unit19'               // Sniper: Aru     Kei     Hiyori
 ];
@@ -10088,7 +10145,7 @@ function unitClassTag(u) {
 // (Hiyori's row, PT b1105dh, user 2026-11-08: "Hiyori's preview image here is bigger than others": her thumbnail, a 323 px square of
 // her profile at full size, framed her face a third larger than the rest; it is now the profile's 367 px square around the same
 // face, 0.88 of the old size by the eye-to-mouth height, 8.5% of the picture against the others' 7.6%, the face at 0.50 / 0.60)
-const UNIT_FACE = { iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
+const UNIT_FACE = { maki: [0.50, 0.60], iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };

@@ -744,6 +744,43 @@ export const UNIT_DATA = {
     reloadMs: 2000,
     autoReload: false,
     stun: { ms: 100, moveScale: 0.25 }
+  },
+  unit21: {
+    id: 'unit21',
+    name: 'Unit 21 / Machine Gun',   // (PT b1105dj, user 2026-11-08: "Add another character in PT. Name: Maki / Category: MG / Weapon Name: RM338 / Damage: 5 / Mag: 100 / RPM: 500 / Reload: 5sec / spreadAngle: 0.02 / bloomPerShot: 0.003 / bloomCap: 0.06 / bloomRecoverPerSec: 0.045/s / bloomRecoverDelayMs: 200"; everything else is Koyuki's, the machine gun nearest her)
+
+    // Pilot stats (Koyuki's)
+    hp: 100,
+    boostCap: 250,
+    walkSpeed: 10,
+    sprintSpeed: 11.76,
+    boostDrain: 1.1,
+    boostRegen: 4.59,
+    jumpVelocity: 30,
+    jumpHoverMs: 300,
+    jumpCooldownMs: 1500,
+    jumpBoostCost: 48,
+
+    // Weapon spec: the user's numbers; the reach, the bullet and the bots' rules are Koyuki's
+    lockRange: 80,
+    lockRange2v2: 65,
+    botGateWidth: 0,          // no bloom gate line, as the other machine guns
+    projectileSpeed: 600,
+    firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot
+    spreadCount: 1,
+    spreadAngle: 0.02,
+    sdReach: 80,
+    bloomPerShot: 0.003,
+    bloomCap: 0.06,
+    bloomRecoverPerSec: 0.045,
+    bloomRecoverDelayMs: 200,
+    damage: 5,
+    magCapacity: 100,
+    botFireCap: 100,         // bot: shots per trigger pull = full mag
+    reloadMs: 5000,
+    autoReload: false,
+    crouchHit: ['Normal_Attack_ReadyStart', 'Normal_Attack_Ing', 'Normal_Reload'],   // (9.5 b1105dj: her crouched hit capsule online too — history.js hitCapOf reads her firing, the opening and the loop alike, and her reload)
+    stun: { ms: 100, moveScale: 0.25 }
   }
 };
 
