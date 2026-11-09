@@ -26,6 +26,7 @@
   --magenta: #FF3EA5;
   --cyan: #3EE0FF;
   --yellow: #FFE45C;
+  --orange: #FF8A2A;     /* (b1105dz, PT and 9.5, user 2026-11-09: the friendly green and the hostile yellow "too similar", then, of four samples, "Go for option A orange": ENEMY 2's colour — its HP chip, its end-screen row, its command card and marker (main.js DIO_SLOT_META) and the bar over its head. OKLab distance to YOU's lime 26, 14 under the colour-blind simulations, where the yellow was 9 and 2) */
   --lavender: #C9B2FF;   /* (b1105r: the rifles' class colour — user: "rifle and AR are not the same category") */
   --teal: #14B8A6;       /* (b1105dm, PT then 9.5: the machine guns' class colour — user: "Use Teal for MG class and Oxblood for SR instead."; teal from PT's MG design canvas: OKLab 32 / 24 / 26 from Maki's red hair, Koyuki's pink and Hina's white where magenta was 14 / 25 / 35, ink tag text at 6.8:1; magenta until b1105dm, PT's cobalt of b1105dk never reached 9.5) */
   --slate: #8A93A6;      /* (b1105du, PT and 9.5, user 2026-11-09: "oxblood is too strong as a color for weapon class background. Provide few more visual samples for SR class. Try light grey also", then, of eight samples on the picker, "Slate grey for SR class": the snipers' class colour, a mid grey leaning blue, ink tag text at 5.5:1; oxblood #9E0008 from b1105dm until then) */
@@ -60,7 +61,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    under the first row's box — room for a WATCHING / DOWN tag hanging 9 px under a first-row chip, a second-row chip's
    7 px ring and the tilts (±4 px at a 290 px chip's ends) without a touch */
 .hp-chip.ally-health { top: 86px; left: 108px; --c: var(--cyan); transform: rotate(-1deg); }
-.hp-chip.enemy2-health { top: 86px; right: 108px; --c: var(--yellow); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
+.hp-chip.enemy2-health { top: 86px; right: 108px; --c: var(--orange); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
 /* (b1105bc; user: "move the lower hp boxes nearer to the left/right; they are too horizontally distant away from the above hp boxes" —
    on a desktop the second row stands flush under the first, 12 px in like it; the 108 px stagger (b1105ag) stays below 1100 px, where
    a landscape phone's or tablet's thumb buttons reach up beside the second row) */
@@ -1145,7 +1146,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-foe .end-verdict { right: auto; left: 14px; transform: rotate(-4deg); }
 .menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
 .menu .end-you .end-row-second { --rc: var(--cyan); }
-.menu .end-foe .end-row-second { --rc: var(--yellow); }
+.menu .end-foe .end-row-second { --rc: var(--orange); }   /* (b1105dz: ENEMY 2's orange, yellow until then) */
 .menu .end-w { flex: 0 0 56px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); white-space: nowrap; }   /* (nowrap, b1105ax: SLOT 2 broke into two lines on the user's phone. 56 since b1105bb; user: "the thumbnail and names are not aligned at the left" — ENEMY 2 ran past the 48 px column, which then grew and pushed its row's units right; and the panel is 300 wide (280), so a row — 56 + 12 + three 52 px units and two 12 px gaps = 248 — ends 14 px short of the padding instead of on it: "too close to the box edge, even overlapping") */
 .menu .end-units { display: flex; gap: 12px; }
 .menu .end-u { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }

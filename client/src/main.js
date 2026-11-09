@@ -2561,8 +2561,11 @@ const _barRight = new THREE.Vector3();      // scratch: camera right (screen-hor
 const _barQuat = new THREE.Quaternion();    // scratch: the unit root's world rotation (roots turn to face the opponent)
 
 function updateMechAnimations(dt, now) {
-  // Team-relative bar presentation: cyan/orange derive from the CAMERA
-  // unit's team — the player normally, the WATCHED unit in spectator mode.
+  // The bar's ink is the unit's own HUD colour, its HP chip's and its command card's (b1105dz, PT and 9.5, user 2026-11-09: "make the
+  // HP bar in top of unit head in shooter mode show the color accordingly"): offline the role palette — lime YOU, cyan
+  // ALLY, magenta ENEMY, orange ENEMY 2 — online the unit's server-slot colour, as the online chips (dioSlotColor). Until
+  // then it was team-relative, cyan for the camera unit's side and orange-red for the other; that pair stays for a unit
+  // that holds none of the four roles. The camera unit's team still decides which hostile the lock placement serves.
   const camFocus = cameraFocusMech();
   const camTeam = getTeamOf(camFocus);
   camera.getWorldDirection(_barCamFwd);
@@ -2672,7 +2675,8 @@ function updateMechAnimations(dt, now) {
         bar.userData.thumbDrawn = true;
         bar.userData.barFrac = -1;          // portrait just landed: repaint
       }
-      const wantInk = hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY;
+      const role = m === state.player ? 'player' : m === state.ally ? 'ally' : m === state.enemy ? 'enemy' : m === state.enemy2 ? 'enemy2' : null;
+      const wantInk = role ? dioSlotColor(role) : (hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY);   // (b1105dz: the unit's own HUD colour)
       if (bar.userData.barInk !== wantInk) {
         bar.userData.barInk = wantInk;
         bar.userData.barFrac = -1;          // repaint in the new ink
@@ -7456,7 +7460,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dy 11-09';
+const CLIENT_BUILD_TAG = 'b1105dz 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13356,14 +13360,17 @@ function renderDiorama() {
 // bots' fire gate uses, so "looks unhittable" always equals "is unhittable".
 
 // (b1105ac, user: "use the HP bar color as base, make the color of command card aligned") the offline palette is the
-// HP chips' — lime YOU, cyan ALLY, magenta ENEMY, yellow ENEMY 2 (style.css .hp-chip.*) — so a card, its marker, its
+// HP chips' — lime YOU, cyan ALLY, magenta ENEMY, orange ENEMY 2 (style.css .hp-chip.*) — so a card, its marker, its
 // line and its chip share one colour; the blue / mint / pink / orange set lives on as the online slot palette below,
-// which the online chips wear too.
+// which the online chips wear too. Since b1105dz the bars over the units take them as well (updateMechAnimations), and
+// ENEMY 2 is orange, #FF8A2A (style.css --orange; user 2026-11-09: the friendly green and the hostile yellow "too
+// similar", then "Go for option A orange"): it was yellow, #FFE45C, OKLab 9 from YOU's lime, 2 under the colour-blind
+// simulations; the orange is 26, and 14.
 const DIO_SLOT_META = {
   player: { color: '#C6F24A', label: 'YOU', selectable: false },
   ally: { color: '#3EE0FF', label: 'ALLY', selectable: false },
   enemy: { color: '#FF3EA5', label: 'ENEMY 1', selectable: true },
-  enemy2: { color: '#FFE45C', label: 'ENEMY 2', selectable: true }
+  enemy2: { color: '#FF8A2A', label: 'ENEMY 2', selectable: true }
 };
 const DIO_SLOTS = ['player', 'ally', 'enemy', 'enemy2'];
 // ONLINE identity colors (owner 2026-08-22): HUD surfaces follow the unit's
