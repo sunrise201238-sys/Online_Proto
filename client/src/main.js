@@ -1055,7 +1055,7 @@ function getTeamOf(mech) {
   return mech?.state?.team ?? (mech === state.player || mech === state.ally ? 'A' : 'B');
 }
 // The role slot a fighter holds, 'player' / 'ally' / 'enemy' / 'enemy2', or null: what its HUD colour is keyed on
-// (dioSlotColor) — the bar over its head (b1105dz) and the teammate's screen-edge triangle (b1105ea).
+// (dioSlotColor) — the bar over its head (b1105dz) and the screen-edge triangles, the teammate's (b1105ea) and the enemies' (b1105eb).
 function roleOfMech(mech) {
   return mech === state.player ? 'player' : mech === state.ally ? 'ally' : mech === state.enemy ? 'enemy' : mech === state.enemy2 ? 'enemy2' : null;
 }
@@ -6028,8 +6028,8 @@ function hideAllyEdgeArrow() {
   if (state.allyEdgeArrow) state.allyEdgeArrow.style.display = 'none';
 }
 
-// Enemy counterpart to the ally edge arrow — same overlay, red-orange fill so
-// it reads as a threat. Points toward the not-locked enemy when it's off-frame.
+// Enemy counterpart to the ally edge arrow — same overlay. Points toward the not-locked enemy when it's off-frame. Its fill
+// is that enemy's own colour, set per frame in updateEnemyArrow (b1105eb); the red-orange here is only its first paint.
 function ensureEnemyEdgeArrow(i = 0) {   // (i: one arrow per foe while the viewer climbs — ladder.js; the first is the one of old)
   const list = state.enemyEdgeArrows ?? (state.enemyEdgeArrows = []);
   if (list[i] && list[i].isConnected) return list[i];
@@ -6212,7 +6212,7 @@ function getUnlockedEnemy(viewer = state.player) {
 }
 
 // Enemy counterpart to the friendly indicator (2v2 only), refreshed each frame.
-// Mirrors updateAllyArrow but rides the NOT-locked enemy and reads red-orange:
+// Mirrors updateAllyArrow but rides the NOT-locked enemy, each arrow in its enemy's own colour (b1105eb; red-orange until then):
 //   1. state.enemyArrow     — a 3D chevron above that enemy, in-frustum only.
 //   2. state.enemyEdgeArrow — a screen-edge arrow pointing at it when off-frame.
 const _enemyArrowNdc = new THREE.Vector3();
@@ -6298,6 +6298,12 @@ function updateEnemyArrow() {
     // Glyph points up by default; rotate to face the enemy.
     const rot = Math.atan2(-dy, dx) + Math.PI / 2;
 
+    // The triangle wears its enemy's own colour, that unit's chip's and bar's (b1105eb, PT and 9.5, user 2026-11-09: "the edge
+    // triangle indicator should use according color for enemy units too"): offline the role palette, online the unit's
+    // server-slot colour (dioSlotColor), as the teammate's (b1105ea). Re-read each frame: which enemy an arrow rides
+    // changes with the lock. It was a fixed red-orange, #ff6a2c.
+    const ink = dioSlotColor(roleOfMech(f) ?? 'enemy');
+    if (edge.dataset.ink !== ink) { edge.dataset.ink = ink; edge.querySelector('svg path')?.setAttribute('fill', ink); }
     edge.style.display = 'block';
     edge.style.left = `${sx}px`;
     edge.style.top = `${sy}px`;
@@ -7471,7 +7477,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ea 11-09';
+const CLIENT_BUILD_TAG = 'b1105eb 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
