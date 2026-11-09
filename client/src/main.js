@@ -7450,7 +7450,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dw 11-09';
+const CLIENT_BUILD_TAG = 'b1105dx 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10206,7 +10206,10 @@ function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; r
 // y 117, w 339, h 210": saori_card.png is that 339 x 210 cut as it is, her picture 0.79 times the size it had in this card. Before it,
 // b1105du and b1105dv moved her face point in this card alone, to 0.55 and then 0.585; their notes gave the box as 193 x 123, which
 // was its outline tilted 1.5 degrees)
-const UNIT_CARD_ART = { saori: 'saori_card.png' };
+// (b1105dx, PT and 9.5, user 2026-11-09: "I also want to recrop some other unit", Yuuka, in the same card; then, from the tool, "x 50, y 91,
+// w 429, h 266": yuuka_card.png is that 429 x 266 cut of her profile art as it is, her picture 0.86 times the size it had in this
+// card, where her thumbnail, the profile's 369 px square at (86, 0), stood at face point 0.62)
+const UNIT_CARD_ART = { saori: 'saori_card.png', yuuka: 'yuuka_card.png' };
 // A unit's second picture, by spriteKey: the picker grid's tile, the lobby line-up's slanted panes (paneRowHTML: the Trio rows, a
 // 2v2 Duel's row, the foot's chip) and every in-game portrait (the HP chips and their Trio reserve, the bars over the units,
 // command mode's cards, the round's end screen) show it; the side card in the profile folder and the 1v1 Duel's lobby card keep
