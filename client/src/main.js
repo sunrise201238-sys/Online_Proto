@@ -7450,7 +7450,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dt 11-08';
+const CLIENT_BUILD_TAG = 'b1105du 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9668,7 +9668,7 @@ function renderTeamCard(card, side) {
   if (single) {
     const weaponClass = lead ? (lead.name.split('/')[1] || '').trim() : '';
     art = lead
-      ? `<span class="slot-art face-box" ${faceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`
+      ? `<span class="slot-art face-box" ${cardFaceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`
       : '<span class="slot-art slot-empty">?</span>';
     text = lead
       ? `<b class="slot-name">${lead.char || lead.name}</b><small class="slot-sub">${weaponClass}${lead.weapon ? ` · ${lead.weapon}` : ''}</small>`
@@ -10197,6 +10197,11 @@ function unitClassTag(u) {
 // 1v1 Duel's lobby card show; the picker's grid, the line-up's panes and every in-game portrait take UNIT_ALT_THUMB below)
 const UNIT_FACE = { minori: [0.50, 0.60], maki: [0.50, 0.60], iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
+// The 1v1 line-up card's picture alone may sit its face point elsewhere (b1105du, PT and 9.5, user 2026-11-09: "Saori in this specific photo style
+// should be cropped a bit more higher. All her other photos stays the same. And the layout should be untouched", then, of four samples,
+// "A little higher": her face point at 0.55 in this card, 0.62 everywhere else — the picture 13 px lower in its 193 x 123 box)
+const UNIT_CARD_FACE = { saori: [0.50, 0.55] };
+function cardFaceStyle(u) { const f = UNIT_CARD_FACE[u?.spriteKey]; return f ? `style="--fx:${f[0]};--fy:${f[1]}"` : faceStyle(u); }
 // A unit's second picture, by spriteKey: the picker grid's tile, the lobby line-up's slanted panes (paneRowHTML: the Trio rows, a
 // 2v2 Duel's row, the foot's chip) and every in-game portrait (the HP chips and their Trio reserve, the bars over the units,
 // command mode's cards, the round's end screen) show it; the side card in the profile folder and the 1v1 Duel's lobby card keep
