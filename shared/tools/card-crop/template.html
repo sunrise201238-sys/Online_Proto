@@ -1,0 +1,294 @@
+<title>Line-up Card Crop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700;800&family=Titan+One&display=swap" rel="stylesheet">
+<style>
+/* The game's own menu skin, on purpose a single light look: cream ground, ink rims, hard shadows, Titan One and Rubik.
+   Left: the chosen unit's whole profile picture with the crop box on it. Right: the 1v1 line-up card at its real size, as a
+   computer draws it (picture 190 x 118) and as a phone in landscape draws it (190 x 108), then the numbers to send back. */
+:root {
+  color-scheme: light;
+  --cream: #FFF4DC;
+  --paper: #FFFFFF;
+  --ink: #1B1B2F;
+  --muted: #5A5A74;
+  --manila: #F6D27A;
+  --lime: #C6F24A;
+  --magenta: #FF3EA5;
+  --cyan: #3EE0FF;
+  --card-color: var(--cyan);           /* the unit's class colour, behind its picture (set per unit) */
+  --font-display: 'Titan One', 'Arial Black', Impact, sans-serif;
+  --font-body: Rubik, system-ui, sans-serif;
+  --font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+body { margin: 0; background: var(--cream); color: var(--ink); font-family: var(--font-body); }
+.page { max-width: 1040px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.1; margin: 0; text-wrap: balance; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 66ch; line-height: 1.5; font-size: 15px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 292px; gap: 24px; align-items: start; }
+@media (max-width: 760px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--paper); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.label { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* the unit switch */
+.units { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.units > .label { width: 96px; flex: 0 0 auto; }
+.units button { font-family: var(--font-display); font-weight: 400; font-size: 16px; padding: 6px 16px; }
+.units button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.units button[aria-pressed="true"]:hover { background: var(--ink); }
+
+/* the editor: the whole profile picture on the unit's class colour, the crop box over it */
+.editor { position: relative; width: 100%; max-width: 560px; align-self: center; aspect-ratio: 1; box-sizing: border-box; border: 3px solid var(--ink); border-radius: 16px; overflow: hidden; background: var(--card-color); touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.editor > img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
+.crop { position: absolute; box-sizing: border-box; outline: 2px solid #FFFFFF; box-shadow: 0 0 0 2000px rgba(27, 27, 47, 0.55); cursor: move; }
+.crop:focus-visible { outline: 3px solid var(--magenta); }
+.crop::before, .crop::after { content: ''; position: absolute; pointer-events: none; border: 0 dashed rgba(255, 255, 255, 0.7); }
+.crop::before { top: 0; bottom: 0; left: 33.333%; right: 33.333%; border-left-width: 1px; border-right-width: 1px; }
+.crop::after { left: 0; right: 0; top: 33.333%; bottom: 33.333%; border-top-width: 1px; border-bottom-width: 1px; }
+.handle { position: absolute; width: 30px; height: 30px; transform: translate(-50%, -50%); }
+.handle::after { content: ''; position: absolute; left: 8px; top: 8px; width: 14px; height: 14px; box-sizing: border-box; background: #FFFFFF; border: 2px solid var(--ink); border-radius: 3px; }
+.handle[data-h="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.handle[data-h="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.handle[data-h="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+.handle[data-h="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+
+.controls { display: flex; flex-direction: column; gap: 12px; }
+.zoom { display: grid; grid-template-columns: 96px minmax(0, 1fr) 52px; gap: 10px; align-items: center; }
+.zoom output { font: 600 13px var(--font-data); font-variant-numeric: tabular-nums; text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--ink); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row > .label { width: 96px; flex: 0 0 auto; }
+button { font: 800 13px var(--font-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; padding: 7px 12px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; }
+button:hover { background: var(--lime); }
+button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+button:focus-visible { outline: 3px solid var(--magenta); outline-offset: 2px; }
+button.primary { background: var(--lime); font-size: 15px; padding: 9px 18px; }
+.hint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 480px) { .row > .label, .units > .label { width: 100%; } .zoom { grid-template-columns: 64px minmax(0, 1fr) 48px; } }
+
+/* the right column: the line-up folder with the two cards, then the numbers */
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.folder { position: relative; margin-top: 22px; background: var(--manila); border: 4px solid var(--ink); border-radius: 0 14px 14px 14px; box-shadow: 7px 7px 0 var(--ink); padding: 8px; display: flex; flex-direction: column; gap: 10px; width: 236px; box-sizing: border-box; align-self: center; }
+.folder::before { content: 'LINE-UP'; position: absolute; left: 12px; top: -24px; width: 110px; height: 24px; box-sizing: border-box; padding-bottom: 6px; background: linear-gradient(var(--ink), var(--ink)) 50% 17px / 66px 2px no-repeat, var(--manila); border: 4px solid var(--ink); border-bottom: 0; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.where { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin: 4px 0 0 2px; }
+.where:first-of-type { margin-top: 0; }
+.card { position: relative; width: 212px; min-height: 208px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); box-shadow: 4px 4px 0 var(--ink); transform: rotate(-1.5deg); font-weight: 700; margin-top: 10px; }
+.card.short { min-height: 182px; }
+.tape { position: absolute; right: 2px; top: -12px; height: 25px; padding: 0 12px; display: inline-flex; align-items: center; background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 60%), rgba(198, 242, 74, 0.86); font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; transform: rotate(4deg); clip-path: polygon(0 10%, 2.5% 0, 97.5% 3%, 100% 15%, 98% 33%, 100% 50%, 97.5% 68%, 100% 86%, 97% 100%, 3% 97%, 0 82%, 2% 64%, 0 46%, 2.5% 28%); }
+.photo { position: relative; display: block; height: 118px; border-radius: 12px; overflow: hidden; background: var(--card-color); }
+.card.short .photo { height: 108px; }
+.photo img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; pointer-events: none; -webkit-user-drag: none; }
+.text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.name { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1.05; }
+.sub { font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1.2; padding-right: 52px; }
+.change { position: absolute; right: 12px; bottom: 12px; font-size: 12px; font-weight: 800; color: var(--magenta); }
+.numbers { display: flex; flex-direction: column; gap: 10px; }
+.readout { font: 600 14px/1.5 var(--font-data); font-variant-numeric: tabular-nums; background: var(--cream); border: 2px solid var(--ink); border-radius: 10px; padding: 8px 10px; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+.toast { min-height: 1.4em; font-size: 13px; font-weight: 600; color: var(--muted); }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Line-up Card Crop</h1>
+    <p class="lede">Choose the part of a unit's profile picture that its 1v1 line-up card shows. Drag the box to move it, drag a corner to resize it, or tap anywhere on the picture to jump there. The line-up cards show the result at the size the lobby draws it.</p>
+  </header>
+  <div class="main">
+    <section class="panel" aria-label="Crop editor">
+      <div class="units" role="group" aria-label="Unit">
+        <span class="label">Unit</span>
+        <button type="button" data-unit="saori" aria-pressed="false">Saori</button>
+        <button type="button" data-unit="yuuka" aria-pressed="false">Yuuka</button>
+      </div>
+      <div class="editor" id="editor">
+        <img id="editorImg" alt="" draggable="false">
+        <div class="crop" id="crop" tabindex="0" role="group" aria-label="Crop box. Arrow keys move it, plus and minus zoom.">
+          <span class="handle" data-h="nw"></span><span class="handle" data-h="ne"></span><span class="handle" data-h="sw"></span><span class="handle" data-h="se"></span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="zoom">
+          <label class="label" for="zoom">Zoom</label>
+          <input id="zoom" type="range" min="50" max="300" step="1" value="100">
+          <output id="zoomOut" for="zoom">100%</output>
+        </div>
+        <div class="row" role="group" aria-label="Move the crop">
+          <span class="label">Move crop</span>
+          <button type="button" data-move="0,-2">Higher</button>
+          <button type="button" data-move="0,2">Lower</button>
+          <button type="button" data-move="-2,0">Left</button>
+          <button type="button" data-move="2,0">Right</button>
+        </div>
+        <div class="row" role="group" aria-label="Start from" id="presets">
+          <span class="label">Start from</span>
+        </div>
+        <p class="hint">Zoom 100% is the size the unit has in this card in the game today. On a computer, the arrow keys move the box one pixel at a time once you click it; hold Shift for five.</p>
+      </div>
+    </section>
+    <aside class="side" aria-label="Preview at real size and the numbers">
+      <div class="folder" id="folder">
+        <div class="where">On a computer</div>
+        <div class="card">
+          <span class="tape">YOUR UNIT</span>
+          <span class="photo"><img id="cardTall" alt="" draggable="false"></span>
+          <span class="text"><b class="name" data-name></b><small class="sub" data-sub></small></span>
+          <span class="change">Change</span>
+        </div>
+        <div class="where">On a phone</div>
+        <div class="card short">
+          <span class="tape">YOUR UNIT</span>
+          <span class="photo"><img id="cardShort" alt="" draggable="false"></span>
+          <span class="text"><b class="name" data-name></b><small class="sub" data-sub></small></span>
+          <span class="change">Change</span>
+        </div>
+      </div>
+      <div class="panel numbers">
+        <div class="label" id="fileLabel"></div>
+        <div class="readout" id="readout"></div>
+        <div><button type="button" class="primary" id="copy">Copy numbers</button></div>
+        <div class="toast" id="toast" role="status"></div>
+        <p class="hint">When it looks right, copy the numbers and paste them in the chat. Only this card changes.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const BOX_W = 190, BOX_H = 118;           // the card's picture on a computer (a screen at least 440 px tall), CSS px
+  const SHORT_H = 108;                      // the same picture on a phone in landscape: the frame is cut to 108 tall, 44% of the cut above
+  const ASPECT = BOX_W / BOX_H;
+  const MIN_W = 120;
+  // Each unit: its profile picture and size, the card's text and class colour, and the crops to start from in profile px.
+  // "Now in game" is what the card shows today; zoom 100% is its width.
+  const UNITS = {
+    saori: { name: 'Saori', file: 'saori_profile.png', w: 531, h: 531, sub: 'Assault Rifle · M4', color: '#3EE0FF', img: '__IMG_SAORI__',
+      // her own cut since b1105dw; Original: her thumbnail (the profile's 268 px square at 155, 35) at face point 0.62
+      presets: [['now', 'Now in game', { x: 120, y: 117, w: 339 }], ['original', 'Original', { x: 155, y: 127.9, w: 268 }]] },
+    yuuka: { name: 'Yuuka', file: 'yuuka_profile.png', w: 532, h: 532, sub: 'Submachine Gun · MPX', color: '#C6F24A', img: '__IMG_YUUKA__',
+      // her own cut since b1105dx; Original: her thumbnail (the profile's 369 px square at 86, 0) at face point 0.62
+      presets: [['now', 'Now in game', { x: 50, y: 91, w: 429 }], ['original', 'Original', { x: 86, y: 127.9, w: 369 }]] },
+  };
+  const $ = (id) => document.getElementById(id);
+  const editor = $('editor'), editorImg = $('editorImg'), cropEl = $('crop'), zoom = $('zoom'), zoomOut = $('zoomOut'), readout = $('readout'), toast = $('toast');
+  const cardTall = $('cardTall'), cardShort = $('cardShort'), presetsRow = $('presets');
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* not kept; the page still works */ } } };
+  let key = 'yuuka', unit = UNITS[key], crop = null;
+
+  const hOf = (w) => w / ASPECT;
+  const baseW = () => unit.presets[0][2].w;
+  const maxW = () => Math.min(unit.w, unit.h * ASPECT);
+  function clamp() {
+    crop.w = Math.min(maxW(), Math.max(MIN_W, crop.w));
+    crop.x = Math.min(unit.w - crop.w, Math.max(0, crop.x));
+    crop.y = Math.min(unit.h - hOf(crop.w), Math.max(0, crop.y));
+  }
+  function placeCard(img, extraY) {
+    const s = BOX_W / crop.w;
+    img.style.width = (unit.w * s) + 'px'; img.style.height = (unit.h * s) + 'px';
+    img.style.transform = 'translate(' + (-crop.x * s) + 'px,' + (-crop.y * s + extraY) + 'px)';
+  }
+  function numbers() { return { x: Math.round(crop.x), y: Math.round(crop.y), w: Math.round(crop.w), h: Math.round(hOf(crop.w)) }; }
+  function render() {
+    clamp();
+    const k = editor.clientWidth / unit.w;
+    cropEl.style.left = (crop.x * k) + 'px';
+    cropEl.style.top = (crop.y * k) + 'px';
+    cropEl.style.width = (crop.w * k) + 'px';
+    cropEl.style.height = (hOf(crop.w) * k) + 'px';
+    placeCard(cardTall, 0);
+    placeCard(cardShort, (SHORT_H - BOX_H) * 0.44);
+    const z = Math.round(baseW() / crop.w * 100);
+    zoom.value = z; zoomOut.textContent = z + '%';
+    const n = numbers();
+    readout.textContent = 'x ' + n.x + ', y ' + n.y + ', w ' + n.w + ', h ' + n.h;
+    store.set('line-up-crop:' + key, JSON.stringify(crop));
+  }
+  function selectUnit(k) {
+    key = k; unit = UNITS[k];
+    store.set('line-up-crop:unit', k);
+    document.querySelectorAll('[data-unit]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.unit === k)));
+    document.documentElement.style.setProperty('--card-color', unit.color);
+    editor.style.aspectRatio = unit.w + ' / ' + unit.h;
+    editorImg.src = cardTall.src = cardShort.src = unit.img;
+    editorImg.alt = unit.name + "'s profile picture, " + unit.w + ' by ' + unit.h + ' pixels';
+    document.querySelectorAll('[data-name]').forEach((el) => { el.textContent = unit.name; });
+    document.querySelectorAll('[data-sub]').forEach((el) => { el.textContent = unit.sub; });
+    $('fileLabel').textContent = 'Crop in ' + unit.file;
+    presetsRow.querySelectorAll('button').forEach((b) => b.remove());
+    for (const [id, label, c] of unit.presets) {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.preset = id; b.textContent = label;
+      b.addEventListener('click', () => { crop = { ...c }; render(); });
+      presetsRow.appendChild(b);
+    }
+    zoom.min = Math.ceil(baseW() / maxW() * 100); zoom.max = Math.floor(baseW() / MIN_W * 100);
+    crop = { ...unit.presets[0][2] };
+    try { const s = JSON.parse(store.get('line-up-crop:' + k) || 'null'); if (s && [s.x, s.y, s.w].every(Number.isFinite)) crop = s; } catch (e) { /* start from the game's crop */ }
+    toast.textContent = '';
+    render();
+  }
+  function resizeAbout(w, cx, cy) {         // a new width, the point (cx, cy) in profile px stays put
+    const fx = (cx - crop.x) / crop.w, fy = (cy - crop.y) / hOf(crop.w);
+    crop.w = Math.min(maxW(), Math.max(MIN_W, w));
+    crop.x = cx - fx * crop.w; crop.y = cy - fy * hOf(crop.w);
+    render();
+  }
+  const center = () => [crop.x + crop.w / 2, crop.y + hOf(crop.w) / 2];
+  function toSrc(e) {
+    const r = editor.getBoundingClientRect(), k = editor.clientWidth / unit.w;
+    return [(e.clientX - r.left - editor.clientLeft) / k, (e.clientY - r.top - editor.clientTop) / k];
+  }
+
+  // pointer: a corner resizes about the opposite corner, the box moves, anywhere else brings the box there
+  let drag = null;
+  editor.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button > 0) return;
+    const [px, py] = toSrc(e);
+    const handle = e.target.closest('.handle');
+    if (handle) {
+      const sx = handle.dataset.h.includes('w') ? -1 : 1, sy = handle.dataset.h.includes('n') ? -1 : 1;
+      drag = { id: e.pointerId, mode: 'size', sx, sy, ax: sx < 0 ? crop.x + crop.w : crop.x, ay: sy < 0 ? crop.y + hOf(crop.w) : crop.y };
+    } else {
+      if (!e.target.closest('.crop')) { crop.x = px - crop.w / 2; crop.y = py - hOf(crop.w) / 2; render(); }
+      drag = { id: e.pointerId, mode: 'move', dx: px - crop.x, dy: py - crop.y };
+    }
+    editor.setPointerCapture(e.pointerId);
+    cropEl.focus({ preventScroll: true });
+    e.preventDefault();
+  });
+  editor.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const [px, py] = toSrc(e);
+    if (drag.mode === 'move') { crop.x = px - drag.dx; crop.y = py - drag.dy; render(); return; }
+    const { sx, sy, ax, ay } = drag;
+    const roomX = sx > 0 ? unit.w - ax : ax, roomY = (sy > 0 ? unit.h - ay : ay) * ASPECT;
+    const w = Math.min(roomX, roomY, maxW(), Math.max(MIN_W, (px - ax) * sx, (py - ay) * sy * ASPECT));
+    crop.w = w; crop.x = sx > 0 ? ax : ax - w; crop.y = sy > 0 ? ay : ay - hOf(w);
+    render();
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+  editor.addEventListener('pointerup', end); editor.addEventListener('pointercancel', end);
+  editor.addEventListener('wheel', (e) => { e.preventDefault(); const [cx, cy] = center(); resizeAbout(crop.w * Math.exp(e.deltaY * 0.0015), cx, cy); }, { passive: false });
+  cropEl.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 5 : 1;
+    const moves = { ArrowUp: [0, -step], ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
+    if (moves[e.key]) { crop.x += moves[e.key][0]; crop.y += moves[e.key][1]; render(); e.preventDefault(); return; }
+    const [cx, cy] = center();
+    if (e.key === '+' || e.key === '=') { resizeAbout(crop.w / 1.02, cx, cy); e.preventDefault(); }
+    else if (e.key === '-' || e.key === '_') { resizeAbout(crop.w * 1.02, cx, cy); e.preventDefault(); }
+  });
+  document.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => { const [dx, dy] = b.dataset.move.split(',').map(Number); crop.x += dx; crop.y += dy; render(); }));
+  document.querySelectorAll('[data-unit]').forEach((b) => b.addEventListener('click', () => selectUnit(b.dataset.unit)));
+  zoom.addEventListener('input', () => { const [cx, cy] = center(); resizeAbout(baseW() * 100 / Number(zoom.value), cx, cy); });
+  $('copy').addEventListener('click', () => {
+    const n = numbers();
+    const text = unit.name + ' card crop, ' + unit.file + ' ' + unit.w + 'x' + unit.h + ': x ' + n.x + ', y ' + n.y + ', w ' + n.w + ', h ' + n.h;
+    const done = () => { toast.textContent = 'Copied. Paste it in the chat.'; };
+    const fallback = () => { const sel = window.getSelection(), rg = document.createRange(); rg.selectNodeContents(readout); sel.removeAllRanges(); sel.addRange(rg); toast.textContent = 'This browser blocked copying. The numbers are selected: copy them by hand.'; };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+  new ResizeObserver(() => { if (crop) render(); }).observe(editor);
+  const last = store.get('line-up-crop:unit');
+  selectUnit(UNITS[last] ? last : 'yuuka');
+})();
+</script>

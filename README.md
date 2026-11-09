@@ -510,3 +510,14 @@ Prototype. Phases 0–3 from `PLAN.md` are landed in code (boot, sim extraction,
 
 - `docs/pt/`: how to rebuild the PT play-test page from 0.8.9 — the PT-only patch, the page file, the publish steps. PT never had a branch of its own.
 - `shared/tools/probe/`: the headless harness the bot and map work of b1024z8–z15 was measured with (tick cost, bot matches on Station and Factory, nav grid probes, plan renders), each with its usage line in that folder's README.
+
+## Saved here on 2026-11-09
+
+The user (2026-11-09): "Can you save this photo cropping tool to \"Testing_0.9.0_Develop-Tools\"? You can also store other develop tools (from PT or other artifact etc.) to \"Testing_0.9.0_Develop-Tools\" as well." Each folder has a README with its usage. The pages open from the file in any browser; the scripts that read a game's files take the checkout to read (the line from 0.9.5 on: this branch's own game is older).
+
+- `shared/tools/card-crop/`: **Line-up Card Crop**, the page the user framed the 1v1 lobby card's pictures with (Saori b1105dw, Yuuka b1105dx): the built page, its template and build script, a check of its "Now in game" against a built client's card, the thumbnail finder (`register.py`) and the face-point contact sheet (`face_sheet.mjs`); how a crop goes into the game and how a unit is added.
+- `shared/tools/bloom-range/`: **Bloom Range** (2026-09-22), the page the bloom numbers were tuned with — fire on the 16 ms tick against the 3.2 × 6.4 capsule, SA, the lock bracket, the sure-hit distance and the live hit rate.
+- `shared/tools/motion-maps/`: the twelve **motion map** pages (2026-10-10), one per unit, where each game motion got its model clip and speed when the 3D models came in.
+- `shared/tools/balance-sim/`: the paired bot-vs-bot harness of the Minori / Maki study (2026-11-08) — jobs, a runner on any checkout's sim (`GVG_ROOT`, `OVERRIDE`, `CAP`) and the summary — with that study's results.
+- `shared/tools/unit-model/`: how Minori's model was built from her bind pose with Saori's battle clips (`build_minori.mjs`), and the four inspectors used to read a new character's file first (rig matching, gun bone, mouths, scale).
+- The PT site's in-game testing tools (the collision view and inspector, the map scale test, the infinite boost, the map card's photo mode) are in this branch's game since 2026-10-24 (**Dev tools** above) and in the line behind `?dev=1`.

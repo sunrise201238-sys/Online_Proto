@@ -1,0 +1,517 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bloom Range</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #eaeef2;
+    --panel: #ffffff;
+    --panel-2: #f3f6f9;
+    --ink: #14202b;
+    --muted: #5b6b7a;
+    --line: #d3dae2;
+    --grid: #e2e8ee;
+    --accent: #0b86ad;
+    --accent-ink: #ffffff;
+    --hit: #1f9d55;
+    --miss: #d94f27;
+    --cap: #b57a00;
+    --stop: #8a3ffc;
+    --fire: #14202b;
+    --fire-ink: #ffffff;
+    --shadow: 0 1px 2px rgba(20, 32, 43, .08), 0 8px 24px rgba(20, 32, 43, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e141a;
+      --panel: #161f28;
+      --panel-2: #1c2732;
+      --ink: #e6edf3;
+      --muted: #8b9aaa;
+      --line: #2a3745;
+      --grid: #223040;
+      --accent: #62d7ff;
+      --accent-ink: #0e141a;
+      --hit: #4cd97b;
+      --miss: #ff6a2c;
+      --cap: #f0b429;
+      --stop: #be95ff;
+      --fire: #62d7ff;
+      --fire-ink: #0e141a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e141a;
+    --panel: #161f28;
+    --panel-2: #1c2732;
+    --ink: #e6edf3;
+    --muted: #8b9aaa;
+    --line: #2a3745;
+    --grid: #223040;
+    --accent: #62d7ff;
+    --accent-ink: #0e141a;
+    --hit: #4cd97b;
+    --miss: #ff6a2c;
+    --cap: #f0b429;
+    --stop: #be95ff;
+    --fire: #62d7ff;
+    --fire-ink: #0e141a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .app { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
+  h1 { font-family: Rajdhani, "IBM Plex Sans", sans-serif; font-weight: 700; font-size: 30px; letter-spacing: .02em; line-height: 1; margin: 0; text-wrap: balance; }
+  .sub { margin: 6px 0 0; color: var(--muted); }
+  .presets { display: flex; align-items: center; gap: 8px; }
+  select, button, input[type=number] { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  select { padding: 7px 10px; }
+  button { padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 16px; }
+  .stage, .readouts, .chart, .stats { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .stage { box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+  .stage-view { position: relative; flex: 1; min-height: 380px; }
+  .stage-view canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+  /* Two-column layout: the stage no longer stretches to the (tall) control column.
+     It is sized to the viewport and sticks to the top, so the target plane and the
+     fire button stay in view while the sliders below are scrolled (owner 2026-09-22:
+     the button used to sit ~1100 px down, past the fold, and reaching it cropped the plane). */
+  @media (min-width: 821px) {
+    .stage { position: sticky; top: 16px; align-self: start; }
+    .stage-view { flex: 0 0 auto; min-height: 0; height: clamp(320px, calc(100vh - 240px), 640px); }
+  }
+  .stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel-2); }
+  .fire {
+    font-family: Rajdhani, sans-serif; font-weight: 700; font-size: 18px; letter-spacing: .08em;
+    background: var(--fire); color: var(--fire-ink); border: none; padding: 12px 22px; border-radius: 8px;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .fire.on { box-shadow: 0 0 0 3px var(--accent); }
+  .fire:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--muted); }
+  .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .chk input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+
+  .readouts { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .big { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .tile .value.acc { color: var(--accent); }
+  .tile .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .tile .value { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: 30px; line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .unit { font-size: 13px; color: var(--muted); font-family: "IBM Plex Sans", sans-serif; font-weight: 500; margin-left: 4px; }
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; letter-spacing: .04em; color: #fff; }
+  .pill.in { background: var(--hit); }
+  .pill.out { background: var(--miss); }
+  .bloombar { position: relative; height: 10px; border-radius: 5px; background: var(--grid); overflow: hidden; }
+  .bloombar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); border-radius: 5px; }
+  .bloomlabels { display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .controls { display: grid; grid-template-columns: 1fr; gap: 9px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; }
+  .ctl label { font-size: 13px; }
+  .ctl .val { display: inline-flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
+  .ctl .val em { font-style: normal; min-width: 3.2em; }
+  .ctl input[type=number] { width: 86px; padding: 3px 6px; font-family: "IBM Plex Mono", monospace; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+  .ctl input[type=range] { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: var(--accent); }
+  .ctl .note { grid-column: 1 / -1; font-size: 11px; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
+  .ctl.bot { opacity: .45; }
+  .ctl.bot.live { opacity: 1; }
+  .ctl.off { opacity: .45; }
+  .togglerow { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+
+  .chart, .stats { grid-column: 1 / -1; }
+  .chart canvas { display: block; width: 100%; height: 200px; }
+  .chart .cap-title, .stats .cap-title { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 14px 0; }
+  .stats { padding-bottom: 12px; }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 16px; padding: 8px 14px 0; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .stat .v.warn { color: var(--miss); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 14px 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+  .legend .dash { border-top-style: dashed; }
+
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+    .stage-view { min-height: 340px; }
+    .tile .value { font-size: 24px; }
+  }
+  @media (max-width: 820px) {
+    .big { grid-template-columns: 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fire { transition: none; }
+  }
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Bloom Range</h1>
+      <p class="sub">Per-shot spread bloom on the game's 16 ms tick, against the standing 3.2 × 6.4 hit capsule. Hold fire and watch SA, the lock bracket and the sure-hit distance move. Type exact values in the boxes or drag the sliders.</p>
+    </div>
+    <div class="presets">
+      <label class="chk" for="weapon">Weapon</label>
+      <select id="weapon">
+        <option value="m4">M4 (700 RPM, mag 30)</option>
+        <option value="famas">FAMAS (900 RPM, mag 25)</option>
+        <option value="evo3">EVO3 (1100 RPM, mag 30)</option>
+        <option value="p90">P90 (900 RPM, mag 50)</option>
+        <option value="rpk">RPK (600 RPM, mag 100)</option>
+        <option value="negev">NEGEV (1100 RPM, mag 100)</option>
+        <option value="m14">M14 (180 RPM, mag 20)</option>
+        <option value="svd">SVD (180 RPM, mag 10)</option>
+      </select>
+      <button id="reset-stats" type="button">Reset stats</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="stage" aria-label="Target plane">
+      <div class="stage-view"><canvas id="plane"></canvas></div>
+      <div class="stage-foot">
+        <button id="fire" class="fire" type="button">HOLD TO FIRE</button>
+        <span class="hint">or hold <b>Space</b></span>
+        <label class="chk"><input type="checkbox" id="mode-bot"> Bot mode: fires only inside its gate line</label>
+      </div>
+    </section>
+
+    <aside class="readouts">
+      <div class="big">
+        <div class="tile"><div class="label">SA now</div><div class="value"><span id="sa-now">0.0200</span><span class="unit">rad</span></div><div class="hint" id="reticle-x">lock bracket ×1.00</div></div>
+        <div class="tile"><div class="label">Sure-hit</div><div class="value"><span id="sure-hit">160.0</span><span class="unit">units</span></div><div class="hint">3.2 ÷ SA</div></div>
+        <div class="tile"><div class="label">Target at <span id="dist-echo">60</span></div><div class="value"><span id="range-pill" class="pill in">IN RANGE</span></div><div class="hint" id="range-note">every shot lands</div></div>
+        <div class="tile"><div class="label">Accuracy</div><div class="value acc"><span id="acc-now">—</span><span class="unit">%</span></div><div class="hint" id="acc-note">live hit rate since the last reset</div></div>
+      </div>
+      <div>
+        <div class="bloombar"><i id="bloom-fill"></i></div>
+        <div class="bloomlabels"><span>base <span id="lbl-base">0.0200</span></span><span>cap <span id="lbl-cap">0.0600</span></span></div>
+      </div>
+
+      <div class="controls">
+        <div class="ctl"><label for="c-dist">Distance to target</label><span class="val"><input type="number" id="n-dist" min="5" max="250" step="1"><em>units</em></span><input type="range" id="c-dist" min="5" max="250" step="1"></div>
+        <div class="ctl"><label for="c-rpm">Fire rate</label><span class="val"><input type="number" id="n-rpm" min="60" max="1500" step="10"><em>RPM</em></span><input type="range" id="c-rpm" min="60" max="1500" step="10"><span class="note" id="n-rpm-note">85.7 ms cooldown → 96 ms tick slot → 625 RPM real</span></div>
+        <div class="ctl"><label for="c-base">Base SA</label><span class="val"><input type="number" id="n-base" min="0.001" max="0.300" step="0.001"><em>rad</em></span><input type="range" id="c-base" min="0.001" max="0.300" step="0.001"></div>
+        <div class="ctl"><label for="c-inc">Bloom per shot</label><span class="val"><input type="number" id="n-inc" min="0" max="0.200" step="0.0005"><em>rad</em></span><input type="range" id="c-inc" min="0" max="0.200" step="0.0005"></div>
+        <div class="ctl"><label for="c-cap">SA cap</label><span class="val"><input type="number" id="n-cap" min="0.005" max="0.800" step="0.005"><em>rad</em></span><input type="range" id="c-cap" min="0.005" max="0.800" step="0.005"></div>
+        <div class="ctl"><label for="c-rec">Recovery</label><span class="val"><input type="number" id="n-rec" min="0" max="0.500" step="0.005"><em>rad/s</em></span><input type="range" id="c-rec" min="0" max="0.500" step="0.005"></div>
+        <div class="ctl"><label for="c-delay">Recovery starts after last shot</label><span class="val"><input type="number" id="n-delay" min="0" max="3000" step="50"><em>ms</em></span><input type="range" id="c-delay" min="0" max="3000" step="50"><span class="note">0 ms = SA recovers every tick, even between shots of a burst</span></div>
+        <div class="ctl" id="ctl-mag"><label for="c-mag">Magazine size</label><span class="val"><input type="number" id="n-mag" min="1" max="250" step="1"><em>rounds</em></span><input type="range" id="c-mag" min="1" max="250" step="1"></div>
+        <div class="ctl" id="ctl-reload"><label for="c-reload">Reload time</label><span class="val"><input type="number" id="n-reload" min="100" max="8000" step="100"><em>ms</em></span><input type="range" id="c-reload" min="100" max="8000" step="100"></div>
+        <div class="ctl"><label for="c-bmax">Lock bracket max size</label><span class="val"><input type="number" id="n-bmax" min="1" max="8" step="0.05"><em>×</em></span><input type="range" id="c-bmax" min="1" max="8" step="0.05"></div>
+        <div class="ctl"><label for="c-bfull">Full-bloom reference</label><span class="val"><input type="number" id="n-bfull" min="0.02" max="1" step="0.01"><em>rad</em></span><input type="range" id="c-bfull" min="0.02" max="1" step="0.01"><span class="note">universal for every gun: the bracket grows with the absolute bloom (0.38 = the SVD's full cap 0.40 minus its 0.02 base)</span></div>
+        <div class="ctl"><label for="c-bgain">Bracket growth gain</label><span class="val"><input type="number" id="n-bgain" min="0.5" max="4" step="0.25"><em>×</em></span><input type="range" id="c-bgain" min="0.5" max="4" step="0.25"><span class="note">the bracket reaches the max size at reference ÷ gain of bloom — gain 2 (owner 2026-09-22) pins it at 0.19, so only the SVD ever touches the ceiling</span></div>
+        <div class="ctl bot" id="ctl-sup"><label for="c-sup">Suppress burst (target outside sure-hit; 10 for the SMGs, 1 for the marksman rifles)</label><span class="val"><input type="number" id="n-sup" min="1" max="30" step="1"><em>rounds</em></span><input type="range" id="c-sup" min="1" max="30" step="1"><span class="note">fired only from a fully recovered cone; while recovering the bot holds unless the target closes in past where the line stood</span></div>
+        <div class="ctl bot" id="ctl-gate"><label for="c-gate">Bot gate width (line = width ÷ cone)</label><span class="val"><input type="number" id="n-gate" min="3.2" max="12" step="0.01"><em>u</em></span><input type="range" id="c-gate" min="3.2" max="12" step="0.01"><span class="note">owner 2026-09-22: 8.84 for the autos (the cone still lands one round in three on a standing target, 2.76× sure-hit), 3.2 = sure-hit for the marksman rifles</span></div>
+        <div class="togglerow">
+          <label class="chk"><input type="checkbox" id="c-usemag" checked> Use magazine and reload (off = infinite ammo)</label>
+          <label class="chk"><input type="checkbox" id="c-rest" checked> Bot rests 0.8–1.5 s after a full mag</label>
+          <label class="chk"><input type="checkbox" id="c-still"> Shooter standing still (grounded, &lt; 1 u/s for 200 ms): shots add no bloom, recovery ignores the delay</label>
+        </div>
+      </div>
+    </aside>
+
+    <section class="chart" aria-label="SA over time">
+      <div class="cap-title">SA over the last 6 seconds</div>
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i style="border-color: var(--accent)"></i>SA now</span>
+        <span><i class="dash" style="border-color: var(--cap)"></i>cap</span>
+        <span><i class="dash" style="border-color: var(--muted)"></i>base</span>
+        <span><i class="dash" style="border-color: var(--stop)"></i>bot stops above this SA at the current distance (gate width ÷ distance)</span>
+        <span><i style="border-color: var(--ink)"></i>shot</span>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Statistics">
+      <div class="cap-title">Numbers</div>
+      <div class="statgrid">
+        <div class="stat"><div class="k">Shots · hits · hit rate</div><div class="v" id="s-shots">0 · 0 · —</div></div>
+        <div class="stat"><div class="k">Hit rate, last 30 shots</div><div class="v" id="s-last30">—</div></div>
+        <div class="stat"><div class="k">Real cadence, last 2 s</div><div class="v" id="s-cadence">0.0 shots/s</div></div>
+        <div class="stat"><div class="k">Net SA per shot while holding</div><div class="v" id="s-net">—</div></div>
+        <div class="stat"><div class="k">Shots from base to cap (holding)</div><div class="v" id="s-tocap">—</div></div>
+        <div class="stat"><div class="k">Cap back to base, no fire</div><div class="v" id="s-toBase">—</div></div>
+        <div class="stat"><div class="k">Cone radius at target now</div><div class="v" id="s-cone">—</div></div>
+        <div class="stat"><div class="k">Bot: last burst · last pause</div><div class="v" id="s-bot">—</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+  const TICK = 16;                 // ms, game tick
+  const HIT_R = 1.6;               // capsule radius (3.2 wide)
+  const HIT_HALF_H = 1.6;          // straight section half-height (6.4 tall with caps)
+  const $ = (id) => document.getElementById(id);
+
+  // Owner-approved bloom numbers per weapon (2026-09-21) plus the game stats the tempo depends on.
+  const WEAPONS = {
+    m4:    { rpm: 700,  mag: 30,  reload: 1500, base: 0.02, inc: 0.002, cap: 0.06, rec: 0.035, delay: 200 },
+    famas: { rpm: 900,  mag: 25,  reload: 1500, base: 0.02, inc: 0.003, cap: 0.06, rec: 0.035, delay: 200 },
+    evo3:  { rpm: 1100, mag: 30,  reload: 1500, base: 0.03, inc: 0.003, cap: 0.08, rec: 0.05,  delay: 200, suppress: 10 },
+    p90:   { rpm: 900,  mag: 50,  reload: 1500, base: 0.03, inc: 0.003, cap: 0.08, rec: 0.05,  delay: 200, suppress: 10 },
+    rpk:   { rpm: 600,  mag: 100, reload: 5000, base: 0.02, inc: 0.004, cap: 0.12, rec: 0.03,  delay: 200 },
+    negev: { rpm: 1100, mag: 100, reload: 5000, base: 0.02, inc: 0.003, cap: 0.12, rec: 0.03,  delay: 200 },
+    m14:   { rpm: 180,  mag: 20,  reload: 1500, base: 0.02, inc: 0.1,   cap: 0.2,  rec: 0.17,  delay: 0, suppress: 1, gate: 3.2 },
+    svd:   { rpm: 180,  mag: 10,  reload: 1500, base: 0.02, inc: 0.1,   cap: 0.4,  rec: 0.17,  delay: 0, suppress: 1, gate: 3.2 },
+  };
+
+  const P = { dist: 60, rpm: 700, base: 0.02, inc: 0.002, cap: 0.06, rec: 0.035, delay: 200, magSize: 30, reloadMs: 1500, suppress: 5, gate: 8.84, bracketMax: 4.5, bracketFull: 0.38, bracketGain: 2, useMag: true, rest: true, bot: false, still: false };
+  const S = {
+    now: 0, bloom: 0, lastShotAt: -1e9, lastFireAt: -1e9, ammo: 30, reloadUntil: 0,
+    holding: false, nextFireAt: 0, burstRemaining: 0, bloomPaused: false, botSuppress: 0, botHoldDist: 0,
+    shots: 0, hits: 0, recent: [], shotTimes: [], impacts: [], trace: [],
+    burstShots: 0, lastBurst: 0, pauseStart: 0, lastPause: 0
+  };
+
+  const cooldown = () => 60000 / P.rpm;
+  const slot = () => Math.ceil(cooldown() / TICK) * TICK;
+  const saNow = () => P.base + S.bloom;
+  const sureHit = (sa) => 3.2 / sa;
+  const coneR = (sa, d) => d * Math.tan(sa / 2);
+  // Lock bracket visual (owner 2026-09-21, gain added 2026-09-22): ONE universal ratio for every gun — the bracket
+  // grows with the ABSOLUTE bloom, x bracketMax once bracketGain x bloom reaches bracketFull (0.38 = the SVD's full
+  // cap 0.40 minus its 0.02 base; gain 2 => the ceiling sits at 0.19 of bloom).
+  const bloomFrac = () => Math.min(1, Math.max(0, P.bracketGain * S.bloom / Math.max(1e-9, P.bracketFull)));
+  const bracketScale = () => 1 + (P.bracketMax - 1) * bloomFrac();
+
+  // ---------- controls: slider + exact number box per parameter ----------
+  const CONTROLS = [
+    { id: 'dist', key: 'dist' }, { id: 'rpm', key: 'rpm' }, { id: 'base', key: 'base' }, { id: 'inc', key: 'inc' },
+    { id: 'cap', key: 'cap' }, { id: 'rec', key: 'rec' }, { id: 'delay', key: 'delay' },
+    { id: 'mag', key: 'magSize' }, { id: 'reload', key: 'reloadMs' }, { id: 'sup', key: 'suppress' }, { id: 'gate', key: 'gate' }, { id: 'bmax', key: 'bracketMax' }, { id: 'bfull', key: 'bracketFull' }, { id: 'bgain', key: 'bracketGain' },
+  ];
+  const refresh = [];
+  for (const c of CONTROLS) {
+    const r = $('c-' + c.id), n = $('n-' + c.id);
+    const show = () => { r.value = P[c.key]; n.value = P[c.key]; };
+    r.addEventListener('input', () => { P[c.key] = parseFloat(r.value); n.value = r.value; onParamChange(); });
+    n.addEventListener('change', () => {
+      let v = parseFloat(n.value);
+      if (!isFinite(v)) { show(); return; }
+      v = Math.min(parseFloat(n.max), Math.max(parseFloat(n.min), v));
+      P[c.key] = v; show(); onParamChange(); n.blur();   // hand focus back so Space fires again right away
+    });
+    refresh.push(show); show();
+  }
+  $('c-usemag').addEventListener('change', (e) => { P.useMag = e.target.checked; S.ammo = P.magSize; S.reloadUntil = 0; onParamChange(); });
+  $('c-rest').addEventListener('change', (e) => { P.rest = e.target.checked; });
+  $('c-still').addEventListener('change', (e) => { P.still = e.target.checked; });
+  $('mode-bot').addEventListener('change', (e) => { P.bot = e.target.checked; S.holding = false; $('fire').classList.remove('on'); $('fire').disabled = P.bot; $('ctl-sup').classList.toggle('live', P.bot); $('ctl-gate').classList.toggle('live', P.bot); S.nextFireAt = S.now; S.burstRemaining = 0; });
+  $('reset-stats').addEventListener('click', () => { S.shots = 0; S.hits = 0; S.recent = []; S.impacts = []; S.lastBurst = 0; S.lastPause = 0; S.burstShots = 0; });
+  function loadWeapon(key) {
+    const w = WEAPONS[key];
+    Object.assign(P, { rpm: w.rpm, base: w.base, inc: w.inc, cap: w.cap, rec: w.rec, delay: w.delay, magSize: w.mag, reloadMs: w.reload, suppress: w.suppress ?? 5, gate: w.gate ?? 8.84 });
+    S.ammo = P.magSize; S.reloadUntil = 0; S.bloom = 0; S.burstRemaining = 0; S.botSuppress = 0; S.botHoldDist = 0;
+    refresh.forEach((f) => f()); onParamChange();
+  }
+  $('weapon').addEventListener('change', (e) => loadWeapon(e.target.value));
+  function onParamChange() {
+    if (P.cap < P.base) { P.cap = P.base; refresh.forEach((f) => f()); }
+    P.magSize = Math.max(1, Math.round(P.magSize));
+    S.bloom = Math.min(S.bloom, P.cap - P.base);
+    if (S.ammo > P.magSize) S.ammo = P.magSize;
+    $('n-rpm-note').textContent = cooldown().toFixed(1) + ' ms cooldown → ' + slot() + ' ms tick slot → ' + (60000 / slot()).toFixed(0) + ' RPM real';
+    $('lbl-base').textContent = P.base.toFixed(4); $('lbl-cap').textContent = P.cap.toFixed(4);
+    $('dist-echo').textContent = P.dist;
+    $('ctl-mag').classList.toggle('off', !P.useMag); $('ctl-reload').classList.toggle('off', !P.useMag);
+  }
+  loadWeapon('m4');
+
+  // ---------- input ----------
+  const fireBtn = $('fire');
+  const setHold = (on) => { if (P.bot) return; S.holding = on; fireBtn.classList.toggle('on', on); };
+  fireBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); fireBtn.setPointerCapture(e.pointerId); setHold(true); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => fireBtn.addEventListener(ev, () => setHold(false)));
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) { e.preventDefault(); setHold(true); } });
+  window.addEventListener('keyup', (e) => { if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); setHold(false); } });
+  window.addEventListener('blur', () => setHold(false));
+
+  // ---------- sim ----------
+  function fireShot() {
+    const sa = saNow();
+    const r = (sa / 2) * Math.sqrt(Math.random());   // uniform disc in angle space, as spawnProjectiles does
+    const t = Math.random() * Math.PI * 2;
+    const x = P.dist * Math.tan(r * Math.cos(t));
+    const y = P.dist * Math.tan(r * Math.sin(t));
+    const ay = Math.abs(y);
+    const hit = ay <= HIT_HALF_H ? Math.abs(x) <= HIT_R : (x * x + (ay - HIT_HALF_H) ** 2) <= HIT_R * HIT_R;
+    S.impacts.push({ x, y, hit, t: S.now });
+    if (S.impacts.length > 160) S.impacts.shift();
+    S.shots += 1; if (hit) S.hits += 1;
+    S.recent.push(hit ? 1 : 0); if (S.recent.length > 30) S.recent.shift();
+    S.shotTimes.push(S.now);
+    S.lastShotAt = S.now; S.lastFireAt = S.now;
+    if (!P.still) S.bloom = Math.min(P.cap - P.base, S.bloom + P.inc);   // bloom lands AFTER the shot spawned (not while standing still)
+    if (P.useMag) { S.ammo -= 1; if (S.ammo <= 0) S.reloadUntil = S.now + P.reloadMs; }
+    S.burstShots += 1;
+  }
+  const canFire = () => S.now - S.lastFireAt >= cooldown() && (!P.useMag || S.ammo > 0);
+
+  function tick() {
+    S.now += TICK;
+    if (P.useMag && S.ammo <= 0 && S.now >= S.reloadUntil) S.ammo = P.magSize;
+    // 1. recovery (per tick, like the boost regen pattern), gated by the delay after the last shot
+    if (P.still || S.now - S.lastShotAt >= P.delay) S.bloom = Math.max(0, S.bloom - P.rec * (TICK / 1000));   // standing still: no delay
+    // 2. firing
+    if (!P.bot) {
+      if (S.holding && canFire()) fireShot();
+      if (!S.holding && S.burstShots) { S.lastBurst = S.burstShots; S.burstShots = 0; }
+    } else if (S.now >= S.nextFireAt) {
+      if (P.useMag && S.ammo <= 0) {
+        S.nextFireAt = S.reloadUntil; S.burstRemaining = 0; S.botSuppress = 0; S.botHoldDist = 0; endBurst();
+      } else if (!botMayFire()) {
+        if (!S.bloomPaused) { S.bloomPaused = true; endBurst(); }
+        S.nextFireAt = S.now + TICK;                 // cheap closed-form check: poll every tick
+      } else {
+        if (S.bloomPaused) { S.bloomPaused = false; startBurst(); }
+        if (S.burstRemaining <= 0) { S.burstRemaining = P.magSize; startBurst(); }
+        if (canFire()) { fireShot(); S.burstRemaining -= 1; if (S.botSuppress > 0) S.botSuppress -= 1; }
+        S.nextFireAt = S.burstRemaining > 0 ? S.now + cooldown() : S.now + (P.rest ? 800 + Math.random() * 700 : 0);
+        if (S.burstRemaining <= 0) endBurst();
+      }
+    }
+    // trace
+    S.trace.push({ t: S.now, sa: saNow() }); if (S.trace.length > 6000 / TICK + 2) S.trace.shift();
+    while (S.shotTimes.length && S.now - S.shotTimes[0] > 6000) S.shotTimes.shift();
+  }
+  // Bot trigger rule — mirrors the game's shared bloom.js botMayFire (2026-09-21, gate line 2026-09-22),
+  // one rule for every gun: a committed suppress burst runs on; inside the
+  // current gate line: fire; outside with a recovered cone: start a suppress
+  // burst of P.suppress rounds (5 autos, 10 SMGs, 1 marksman rifles); outside with bloom
+  // up: hold until fully recovered, released early only if the target closes
+  // in past where the line stood when the hold began.
+  function botMayFire() {
+    if (S.botSuppress > 0) return true;
+    if (S.botHoldDist > 0) { if (S.bloom > 0 && P.dist > S.botHoldDist) return false; S.botHoldDist = 0; }
+    const line = P.gate / saNow();   // gate line: 8.84 / cone for the autos (33%-hit), 3.2 / cone (sure-hit) for the marksman rifles
+    if (P.dist <= line) return true;
+    if (!(S.bloom > 0)) { S.botSuppress = Math.max(1, Math.round(P.suppress)); return true; }
+    S.botHoldDist = line;
+    return false;
+  }
+  function startBurst() { if (S.pauseStart) { S.lastPause = S.now - S.pauseStart; S.pauseStart = 0; } S.burstShots = 0; }
+  function endBurst() { if (S.burstShots) S.lastBurst = S.burstShots; S.burstShots = 0; if (!S.pauseStart) S.pauseStart = S.now; }
+
+  // ---------- drawing ----------
+  const plane = $('plane'), chart = $('chart');
+  const fit = (c) => { const r = c.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); } return { w: r.width, h: r.height, dpr }; };
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const BRACKET_BASE = 2.4;   // world units, half-size of the lock bracket at base SA
+
+  function drawPlane() {
+    const { w, h, dpr } = fit(plane); const g = plane.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const sa = saNow(), maxSa = P.cap;
+    // view reach: enough to show the cone at cap, clamped so the capsule never shrinks below ~20 px wide
+    const reach = Math.min(16, Math.max(3.6, coneR(maxSa, P.dist) * 1.15, BRACKET_BASE * (1 + (P.bracketMax - 1) * Math.min(1, P.bracketGain * (P.cap - P.base) / Math.max(1e-9, P.bracketFull))) * 1.12));
+    const s = Math.min(26, (Math.min(w, h) / 2 - 18) / reach);   // px per unit, stable while params are stable
+    const cx = w / 2, cy = h / 2;
+    const ink = css('--ink'), muted = css('--muted'), grid = css('--grid'), accent = css('--accent'), hitC = css('--hit'), missC = css('--miss');
+    g.strokeStyle = grid; g.lineWidth = 1;
+    const gridStep = s >= 12 ? 1 : s >= 6 ? 2 : 5;
+    for (let u = -Math.floor(cx / s / gridStep) * gridStep; u <= cx / s; u += gridStep) { g.beginPath(); g.moveTo(cx + u * s, 0); g.lineTo(cx + u * s, h); g.stroke(); }
+    for (let u = -Math.floor(cy / s / gridStep) * gridStep; u <= cy / s; u += gridStep) { g.beginPath(); g.moveTo(0, cy + u * s); g.lineTo(w, cy + u * s); g.stroke(); }
+    g.strokeStyle = muted; g.fillStyle = muted; g.globalAlpha = .18; capsulePath(g, cx, cy, s); g.fill(); g.globalAlpha = 1; g.lineWidth = 1.5; capsulePath(g, cx, cy, s); g.stroke();
+    const cr = coneR(sa, P.dist) * s;
+    g.strokeStyle = accent; g.setLineDash([6, 5]); g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, cr, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+    const half = BRACKET_BASE * bracketScale() * s, arm = Math.max(10, half * .38);
+    g.strokeStyle = accent; g.lineWidth = 3; g.lineCap = 'square';
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy]) => {
+      g.beginPath(); g.moveTo(cx + sx * half, cy + sy * (half - arm)); g.lineTo(cx + sx * half, cy + sy * half); g.lineTo(cx + sx * (half - arm), cy + sy * half); g.stroke();
+    });
+    for (const im of S.impacts) {
+      const age = (S.now - im.t) / 2500; if (age > 1) continue;
+      g.globalAlpha = 1 - age * .85; g.fillStyle = im.hit ? hitC : missC;
+      g.beginPath(); g.arc(cx + im.x * s, cy - im.y * s, 3.2, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = ink; g.font = '600 12px "IBM Plex Sans", sans-serif';
+    g.fillText('target plane at ' + P.dist + ' units', 12, 20);
+    g.fillStyle = muted; g.font = '12px "IBM Plex Mono", monospace';
+    g.fillText('cone Ø ' + (2 * coneR(sa, P.dist)).toFixed(2) + '  capsule 3.2 × 6.4  bracket ×' + bracketScale().toFixed(2), 12, 38);
+    if (P.useMag) g.fillText(S.ammo > 0 ? 'ammo ' + S.ammo + ' / ' + P.magSize : 'reloading ' + Math.max(0, (S.reloadUntil - S.now) / 1000).toFixed(1) + ' s', 12, h - 14);
+    g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.moveTo(w - 12 - s * gridStep, h - 16); g.lineTo(w - 12, h - 16); g.stroke();
+    g.fillStyle = muted; g.textAlign = 'right'; g.fillText(gridStep + (gridStep === 1 ? ' unit' : ' units'), w - 12, h - 22); g.textAlign = 'left';
+  }
+  function capsulePath(g, cx, cy, s) {
+    const r = HIT_R * s, hh = HIT_HALF_H * s;
+    g.beginPath(); g.arc(cx, cy - hh, r, Math.PI, 0); g.lineTo(cx + r, cy + hh); g.arc(cx, cy + hh, r, 0, Math.PI); g.closePath();
+  }
+
+  function drawChart() {
+    const { w, h, dpr } = fit(chart); const g = chart.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const padL = 52, padR = 12, padT = 10, padB = 22;
+    const stopSa = P.gate / P.dist;
+    const raw = Math.max(P.cap * 1.15, 0.03, Math.min(stopSa * 1.1, P.cap * 1.6));
+    const step = raw > 0.25 ? 0.1 : raw > 0.1 ? 0.05 : 0.01;
+    const yMax = Math.ceil(raw / step) * step;
+    const X = (t) => padL + (w - padL - padR) * (1 - (S.now - t) / 6000);
+    const Y = (v) => padT + (h - padT - padB) * (1 - v / yMax);
+    const ink = css('--ink'), muted = css('--muted'), grid = css('--grid'), accent = css('--accent'), cap = css('--cap'), stop = css('--stop');
+    g.font = '11px "IBM Plex Mono", monospace'; g.textAlign = 'right';
+    const steps = Math.round(yMax / step);
+    for (let i = 0; i <= steps; i++) { const v = i * step; g.strokeStyle = grid; g.beginPath(); g.moveTo(padL, Y(v)); g.lineTo(w - padR, Y(v)); g.stroke(); g.fillStyle = muted; g.fillText(v.toFixed(step < 0.05 ? 2 : 2), padL - 6, Y(v) + 4); }
+    g.textAlign = 'center'; for (let sBack = 0; sBack <= 6; sBack++) { const x = X(S.now - sBack * 1000); g.fillStyle = muted; g.fillText('-' + sBack + ' s', x, h - 6); }
+    const hline = (v, color, label) => { if (v > yMax) return; g.strokeStyle = color; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(padL, Y(v)); g.lineTo(w - padR, Y(v)); g.stroke(); g.setLineDash([]); g.fillStyle = color; g.textAlign = 'left'; g.fillText(label, padL + 4, Y(v) - 4); };
+    hline(P.base, muted, 'base'); hline(P.cap, cap, 'cap'); hline(stopSa, stop, 'bot stop @ ' + P.dist);
+    g.strokeStyle = ink; g.lineWidth = 1; g.globalAlpha = .7;
+    for (const t of S.shotTimes) { const x = X(t); g.beginPath(); g.moveTo(x, h - padB); g.lineTo(x, h - padB - 8); g.stroke(); }
+    g.globalAlpha = 1;
+    g.strokeStyle = accent; g.lineWidth = 2; g.beginPath(); let first = true;
+    for (const p of S.trace) { if (S.now - p.t > 6000) continue; const x = X(p.t), y = Y(p.sa); if (first) { g.moveTo(x, y); first = false; } else g.lineTo(x, y); }
+    g.stroke();
+  }
+
+  function updateReadouts() {
+    const sa = saNow(), sh = sureHit(sa);
+    $('sa-now').textContent = sa.toFixed(4);
+    $('reticle-x').textContent = 'lock bracket ×' + bracketScale().toFixed(2) + ' (' + (100 * bloomFrac()).toFixed(0) + '% of the universal max)';
+    $('sure-hit').textContent = sh.toFixed(1);
+    $('acc-now').textContent = S.shots ? (100 * S.hits / S.shots).toFixed(1) : '—';
+    $('acc-note').textContent = S.shots ? S.hits + ' of ' + S.shots + ' rounds · last 30: ' + (S.recent.length ? (100 * S.recent.reduce((a, b) => a + b, 0) / S.recent.length).toFixed(0) + '%' : '—') : 'live hit rate since the last reset';
+    const pill = $('range-pill'), inR = P.dist <= sh;
+    pill.className = 'pill ' + (inR ? 'in' : 'out'); pill.textContent = inR ? 'IN RANGE' : 'OUT OF RANGE';
+    $('range-note').textContent = inR ? (P.gate <= 3.2 ? 'every shot lands on a standing target' : 'inside the bot gate line') : (P.bot ? (S.botSuppress > 0 ? 'bot: suppress burst' : S.botHoldDist > 0 ? 'bot holds until the cone recovers' : 'bot waits for a recovered cone') : 'shots can miss; bot would hold');
+    $('bloom-fill').style.width = ((S.bloom / Math.max(1e-9, P.cap - P.base)) * 100).toFixed(1) + '%';
+    const rate = S.shots ? (100 * S.hits / S.shots).toFixed(1) + '%' : '—';
+    $('s-shots').textContent = S.shots + ' · ' + S.hits + ' · ' + rate;
+    $('s-last30').textContent = S.recent.length ? (100 * S.recent.reduce((a, b) => a + b, 0) / S.recent.length).toFixed(0) + '% of ' + S.recent.length : '—';
+    const recentShots = S.shotTimes.filter((t) => S.now - t <= 2000).length;
+    $('s-cadence').textContent = (recentShots / 2).toFixed(1) + ' shots/s';
+    const net = P.still ? -(P.rec * slot() / 1000) : P.inc - (P.delay > slot() ? 0 : P.rec * slot() / 1000);
+    const netEl = $('s-net'); netEl.textContent = (net >= 0 ? '+' : '') + net.toFixed(5) + (P.delay > slot() ? ' (no recovery inside a burst)' : ''); netEl.classList.toggle('warn', net <= 0);
+    const toCap = $('s-tocap');
+    if (net <= 0) { toCap.textContent = 'never (recovery outpaces bloom)'; toCap.classList.add('warn'); }
+    else { const n = Math.ceil((P.cap - P.base) / net); toCap.textContent = n + ' shots ≈ ' + (Math.max(0, n - 1) * slot() / 1000).toFixed(1) + ' s'; toCap.classList.remove('warn'); }
+    $('s-toBase').textContent = P.rec > 0 ? ((P.cap - P.base) / P.rec).toFixed(2) + ' s + ' + (P.delay / 1000).toFixed(1) + ' s delay' : 'never';
+    $('s-cone').textContent = coneR(sa, P.dist).toFixed(2) + ' units (capsule half-width 1.6)';
+    $('s-bot').textContent = P.bot ? (S.lastBurst ? S.lastBurst + ' shots' : '—') + ' · ' + (S.lastPause ? (S.lastPause / 1000).toFixed(2) + ' s' : '—') : 'bot mode off';
+  }
+
+  // ---------- loop: fixed 16 ms steps ----------
+  let acc = 0, last = performance.now();
+  function frame(t) {
+    acc += Math.min(250, t - last); last = t;
+    let n = 0; while (acc >= TICK && n < 16) { tick(); acc -= TICK; n++; }
+    drawPlane(); drawChart(); updateReadouts();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

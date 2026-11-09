@@ -1,0 +1,172 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Kei Motion Map</title>
+<style>
+  /* Layout: one column, one row per game motion; the clip select is the only control. */
+  :root {
+    --bg: #f6f4ef; --fg: #1d1c1a; --muted: #6b665c; --line: #d9d4c8; --card: #ffffff;
+    --accent: #3a4a78; --ok: #2f7a4f;
+    --font-body: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #16171b; --fg: #ebe8e0; --muted: #9a958a; --line: #34363d; --card: #1f2126; --accent: #9fb0e6; --ok: #6fcf8f; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #16171b; --fg: #ebe8e0; --muted: #9a958a; --line: #34363d; --card: #1f2126; --accent: #9fb0e6; --ok: #6fcf8f; color-scheme: dark; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding-block: 28px 48px; padding-inline: 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .row { display: grid; grid-template-columns: 1fr minmax(180px, 240px) 92px; gap: 8px 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .speed { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+  .speed input { width: 56px; min-width: 0; font: inherit; font-family: var(--font-mono); font-size: 0.85rem; padding: 8px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); text-align: right; }
+  .speed input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .head { display: grid; grid-template-columns: 1fr minmax(180px, 240px) 92px; gap: 8px 16px; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; padding-bottom: 6px; }
+  .row:last-of-type { border-bottom: 1px solid var(--line); }
+  .name { font-weight: 600; }
+  .when { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .img { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  select { width: 100%; min-width: 0; font: inherit; font-family: var(--font-mono); font-size: 0.85rem; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+  select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+  button { font: inherit; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #status { color: var(--muted); font-size: 0.9rem; }
+  #status.ok { color: var(--ok); }
+  pre { font-family: var(--font-mono); font-size: 0.8rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr 92px; } .row > div:first-child { grid-column: 1 / -1; } .head { display: none; } }
+</style>
+<div class="wrap">
+  <h1>Kei 動作對應</h1>
+  <p class="sub">每一列選一個 glb 的 clip（括號是長度），右邊填播放速度（100 = 原速）。改了就自動存。預設是和 Saori 一樣的建議值。</p>
+  <div class="head"><span>遊戲動作</span><span>clip</span><span>速度 %</span></div>
+  <div id="rows"></div>
+  <div class="bar">
+    <button id="copy" type="button">複製清單</button>
+    <span id="status">載入中…</span>
+  </div>
+  <pre id="out" hidden></pre>
+</div>
+<script>
+  // Kei's own clips (name, seconds)
+  const DUR = {"Cafe_Reaction":10.77,"Cafe_Idle":4,"Cafe_Walk":7.2,"Formation_Idle":4,"Formation_Idle_Random":4,"Formation_Pickup":14,"Exs_Cutin_01":1.8,"Exs_Cutin_02":8.8,"Exs":4.1,"Exs_Prop_End":2.43,"Exs_Prop_Ing":1,"Exs_Prop_Start":1.93,"Victory_End":4,"Victory_End_Random":4,"Victory_Start":3,"Victory_Start_Random":3,"Normal_Idle":1.6,"Normal_Attack_Delay":1.33,"Normal_Attack_End":0.87,"Normal_Attack_Ing":2,"Normal_Attack_Start":0.8,"Normal_Callsign":1.67,"Normal_Callsign_Random":1.67,"Normal_Reload":1.97,"Move_End_Normal":1.53,"Move_Ing":0.67,"Vital_Death":2,"Vital_Dying_Ing":1.67,"Vital_Panic":1.67,"Vital_Retreat":1.67,"Public01":4.7,"Public01_Random":4.7};
+  const CLIPS = {
+    "站立 / 移動": [
+      "Cafe_Idle",
+      "Cafe_Walk",
+      "Normal_Idle",
+      "Move_End_Normal",
+      "Move_Ing"
+    ],
+    "射擊（Normal）": [
+      "Normal_Attack_Delay",
+      "Normal_Attack_End",
+      "Normal_Attack_Ing",
+      "Normal_Attack_Start",
+      "Normal_Reload"
+    ],
+    "受傷 / 死亡": [
+      "Vital_Death",
+      "Vital_Dying_Ing",
+      "Vital_Panic",
+      "Vital_Retreat"
+    ],
+    "演出": [
+      "Cafe_Reaction",
+      "Formation_Idle",
+      "Formation_Idle_Random",
+      "Formation_Pickup",
+      "Exs_Cutin_01",
+      "Exs_Cutin_02",
+      "Exs",
+      "Exs_Prop_End",
+      "Exs_Prop_Ing",
+      "Exs_Prop_Start",
+      "Victory_End",
+      "Victory_End_Random",
+      "Victory_Start",
+      "Victory_Start_Random",
+      "Normal_Callsign",
+      "Normal_Callsign_Random",
+      "Public01",
+      "Public01_Random"
+    ]
+  };
+  // key, game motion, when it shows, current image, suggested clip, may be empty, suggested speed %
+  const MOTIONS = [
+    ['stand', '站立不動', '沒有輸入', 'stand', 'Normal_Idle', false, 100],
+    ['walk', '走路', '一般移動', 'stand', 'Move_Ing', false, 50],
+    ['sprint', '衝刺', '按住 dash', 'sprint', 'Move_Ing', false, 100],
+    ['shoot', '站著射擊', '開火、沒移動', 'shoot', 'Normal_Attack_Ing', false, 100],
+    ['sprintShoot', '邊跑邊射', '開火 + 衝刺', 'sprint', 'Move_Ing', false, 100],
+    ['dodge', '閃避', '無敵閃步', 'dodge', 'Move_End_Normal', false, 100],
+    ['jump', '跳躍 / 空中', '跳起、落下', 'stand', 'Move_End_Normal', false, 100],
+    ['reload', '換彈', '彈匣空、換彈中', 'stand', 'Normal_Reload', false, 100],
+    ['death', '死亡', 'HP 歸零', '無，直接消失', 'Vital_Death', true, 100],
+    ['intro', '開場 / 勝利', '對戰開始、結束', '無', '', true, 100],
+  ];
+  const rowsEl = document.getElementById('rows');
+  const statusEl = document.getElementById('status');
+  const outEl = document.getElementById('out');
+  const selects = {}, speeds = {};
+  const clampSpeed = (v, fallback) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 10 && n <= 300 ? n : fallback; };
+  for (const [key, name, when, img, suggested, optional, speed] of MOTIONS) {
+    const row = document.createElement('div'); row.className = 'row';
+    const left = document.createElement('div');
+    left.innerHTML = `<div class="name">${name}</div><div class="when">${when}</div><div class="img">目前的圖：${img}</div>`;
+    const sel = document.createElement('select'); sel.id = 'sel-' + key;
+    if (optional) { const o = document.createElement('option'); o.value = ''; o.textContent = '（留空）'; sel.appendChild(o); }
+    for (const [group, names] of Object.entries(CLIPS)) {
+      const og = document.createElement('optgroup'); og.label = group;
+      for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = DUR[n] != null ? `${n} (${DUR[n]} s)` : n; og.appendChild(o); }
+      sel.appendChild(og);
+    }
+    sel.value = suggested;
+    selects[key] = sel;
+    const sp = document.createElement('label'); sp.className = 'speed';
+    const inp = document.createElement('input'); inp.type = 'number'; inp.id = 'speed-' + key; inp.min = '10'; inp.max = '300'; inp.step = '5'; inp.value = String(speed); inp.setAttribute('aria-label', name + ' 速度 %');
+    sp.appendChild(inp); sp.appendChild(document.createTextNode('%'));
+    speeds[key] = inp;
+    row.appendChild(left); row.appendChild(sel); row.appendChild(sp); rowsEl.appendChild(row);
+  }
+  const current = () => { const m = {}, s = {}; for (const [key, , , , , , dflt] of MOTIONS) { m[key] = selects[key].value; s[key] = clampSpeed(speeds[key].value, dflt); } return { map: m, speed: s }; };
+  const asText = () => MOTIONS.map(([key, name, , , , , dflt]) => `${name}: ${selects[key].value || '（留空）'}${selects[key].value ? ` @ ${clampSpeed(speeds[key].value, dflt)}%` : ''}`).join('\n');
+  const setStatus = (t, ok) => { statusEl.textContent = t; statusEl.className = ok ? 'ok' : ''; };
+
+  let db = null, saving = null, dirty = false;
+  const save = async () => {
+    if (!db) return;
+    if (saving) { dirty = true; return; }
+    setStatus('儲存中…', false);
+    saving = db.doc('motions/kei').set({ ...current(), updatedAt: new Date().toISOString() })
+      .then(() => setStatus('已儲存', true))
+      .catch((e) => setStatus('存不進去（' + (e && e.code ? e.code : 'error') + '），請按「複製清單」貼給我', false))
+      .finally(() => { saving = null; if (dirty) { dirty = false; save(); } });
+    await saving;
+  };
+  let timer = null;
+  const queueSave = () => { clearTimeout(timer); timer = setTimeout(save, 400); };
+  for (const [key] of MOTIONS) { selects[key].addEventListener('change', queueSave); speeds[key].addEventListener('input', queueSave); speeds[key].addEventListener('change', queueSave); }
+
+  document.getElementById('copy').addEventListener('click', async () => {
+    const text = asText();
+    outEl.textContent = text; outEl.hidden = false;
+    try { await navigator.clipboard.writeText(text); setStatus('已複製', true); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(outEl); const s = getSelection(); s.removeAllRanges(); s.addRange(r); setStatus('請手動複製下面的文字', false); }
+  });
+
+  (async () => {
+    try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+    if (!db) { setStatus('沒有連上儲存，選完請按「複製清單」貼給我', false); return; }
+    try {
+      const snap = await db.doc('motions/kei').get();
+      const data = snap.exists ? snap.data() : null;
+      if (data && data.map) for (const [key, , , , , , dflt] of MOTIONS) {
+        if (typeof data.map[key] === 'string' && (data.map[key] === '' || [...selects[key].options].some((o) => o.value === data.map[key]))) selects[key].value = data.map[key];
+        if (data.speed && data.speed[key] != null) speeds[key].value = String(clampSpeed(data.speed[key], dflt));
+      }
+      setStatus(data && data.map ? '已載入上次的選擇' : '還沒存過，顯示的是建議值', true);
+    } catch (e) { setStatus('讀取失敗，顯示的是建議值', false); }
+  })();
+</script>
+
+</body></html>
