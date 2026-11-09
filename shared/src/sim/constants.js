@@ -189,7 +189,7 @@ export const UNIT_DATA = {
     spreadCount: 1,
     spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
-    bloomCap: 0.14,            // SA ceiling while spraying
+    bloomCap: 0.20,            // SA ceiling while spraying (b1105er, PT and 9.6, user 2026-11-09: "Implement Hina's SA cap 0.2 in 9.6 as well"; 0.14 until then, its sure-hit at the cap 16 instead of 23)
     bloomRecoverPerSec: 0.03,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,

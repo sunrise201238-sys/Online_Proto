@@ -272,7 +272,7 @@ const UNIT_DATA = {
     spreadCount: 1,
     spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
-    bloomCap: 0.14,            // SA ceiling while spraying
+    bloomCap: 0.20,            // SA ceiling while spraying (b1105er, PT and 9.6, user 2026-11-09: "Implement Hina's SA cap 0.2 in 9.6 as well"; 0.14 until then, its sure-hit at the cap 16 instead of 23)
     bloomRecoverPerSec: 0.03,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     damage: 4,
@@ -7455,7 +7455,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ek 11-09';
+const CLIENT_BUILD_TAG = 'b1105er 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
