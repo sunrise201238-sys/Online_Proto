@@ -1330,6 +1330,12 @@ const DIORAMA_VIEW = {
 const DIORAMA_MAP_VIEW = {
   arena1: { yaw: Math.PI * 0.25, dist: 168, height: 0.95 },
   arena2: { yaw: Math.PI * 0.62, dist: 168, height: 0.74 },
+  // (b1105dy, PT and 9.5, user 2026-11-09: "Make the initial camera closer") `startDist`: where the camera opens, when the whole-map overview
+  // would not show the board. District's half-length is 547 units, so the overview (2.7 times that, 1478) stood the camera 1940
+  // units from the board's centre and its far corner 2487 off, past command mode's far plane (1600, applyDioramaDressing): the
+  // match opened on an almost empty plate. At 700 the whole city is in view and its farthest corner 1493 units off. The zoom's
+  // range is unchanged (minDist to the overview), yaw and tilt are the default's.
+  district: { yaw: Math.PI * 0.25, dist: 175, height: 0.85, startDist: 700 },
   default: { yaw: Math.PI * 0.25, dist: 175, height: 0.85 }
 };
 
@@ -7450,7 +7456,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dx 11-09';
+const CLIENT_BUILD_TAG = 'b1105dy 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11199,9 +11205,13 @@ function segmentHitsFace(a, b, f) {
 function updateWallFade() {
   const list = state.wallFadeMeshes;
   if (!list || list.length === 0) return;
+  // (b1105dy) a map whose command view keeps everything solid (GLB_MAPS `cmdNoFade`: District): no thing blocks there, so a
+  // faded one eases back to solid and leaves the blended pass, and no occlusion test runs; the shooter view fades as before
+  const noFade = dioramaActive() && !!GLB_MAPS[state.mapKey]?.cmdNoFade;
   for (const mesh of list) {
     const b = mesh.userData.fadeBox;
     if (!b || !mesh.material) continue;
+    if (noFade) { mesh.userData.fadeBlocking = false; continue; }
     let blocking;
     if (b.occlude) {
       // Occlusion mode (Streets buildings): fade only while the box actually
@@ -11274,7 +11284,8 @@ function updateWallFade() {
       blocking = groupBlocking.has(mesh.userData.fadeGroup);
     }
     const target = blocking ? (mesh.userData.fadeAlpha ?? 0.25) : 1;   // (how far a blocking thing fades: a quarter, or the map's own number — Warehouse, crowded with containers, a tenth; user 2026-10-22)
-    mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
+    if (noFade) mesh.material.opacity = 1;   // (b1105dy: solid at once in a no-fade command view — a thing faded in the shooter view, or by the match's first frames, does not ease back there)
+    else mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
     // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
     // (b1105be; user: "the transparent effect in concept maps seems to be gone, try to bring them back") the flip must
     // RECOMPILE: three.js bakes `transparent` into the shader (an opaque material's program forces alpha 1 — its OPAQUE
@@ -11580,10 +11591,12 @@ function applyMapAmbience(mapKey) {
 // (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
 // looks down from above, and `cmdCeil` cuts the model flat at that many metres over its ground there (a ceiling that is one
 // mesh with its walls — updateMapRoof); `cmdDark`: command mode draws pure black around the map, the stand included; `anomaly`: the anomaly
-// rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar. =====
+// rules — indoors only the player's own bars show — no lock bracket, no edge arrows, no portraits, no other unit's bar; `cmdNoFade`:
+// nothing of the map fades in command mode, the camera's view-block fade off there (updateWallFade) — District (b1105dy, PT and 9.5, user
+// 2026-11-09: "Turn off the transparent effect in District command mode"). =====
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false, cmdClear: false },   // (`cmdClear: false`, b1105bv: Town keeps its whole model in command mode, user 2026-11-07 "Town does not need this treatment") (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
-  district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
+  district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false, cmdNoFade: true },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
   blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, fadeForce: ['Node_78_78_copy_w8', 'Node_79_79_copy_w8', 'Node_78_78_copy_w16', 'Node_79_79_copy_w16', 'Node_76_76_copy_n8', 'Node_77_77_copy_n8', 'Node_78_78_copy_n8', 'Node_79_79_copy_n8', 'Node_205_205_cw'], cmdClear: ['Node_86_86', 'Node_32_32', 'Node_195_195', 'Node_37_37', 'Node_92_92', 'Node_85_85', 'Node_26_26', 'Node_151_151', 'Node_152_152', 'Node_31_31', 'Node_36_36', 'Node_84_84', 'Node_149_149', 'Node_125_125', 'Node_141_141', 'Node_184_184', 'Node_150_150', 'Node_194_194', 'Node_95_95', 'Node_28_28', 'Node_89_89', 'Node_142_142', 'Node_147_147', 'Node_183_183', 'Node_139_139', 'Node_201_201', 'Node_148_148', 'Node_102_102', 'Node_109_109', 'Node_88_88', 'Node_235_235', 'Node_30_30', 'Node_35_35', 'Node_83_83', 'Node_91_91', 'Node_197_197', 'Node_140_140', 'Node_145_145', 'Node_137_137', 'Node_199_199', 'Node_146_146', 'Node_198_198', 'Node_96_96', 'Node_101_101', 'Node_99_99', 'Node_138_138', 'Node_98_98', 'Node_120_120', 'Node_118_118', 'Node_119_119', 'Node_121_121', 'Node_45_45', 'Node_196_196', 'Node_224_224', 'Node_225_225', 'Node_124_124'] },   // (cmdClear, b1105bu: the tower parts starting 12 m or more over the street, hidden in command mode)   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick. b1105bk, fadeForce: the scaffold edits' decks — the extension's frame and grating (_w8), the two b1102h decks' (_w16, _n8) — and the catwalk's grating (Node_205_205_cw) are fade things whatever fadeNodes' tallness rule makes of them: the solid reading's floor strips at 5.30 m under those decks are "the floor at their foot", so they stood 0.47 m under fadeTall and never faded, while the deck they were copied from fades to a tenth beside them; a unit under the extension deck showed only through the grating texture's holes)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, edge: false, cmdDark: true },   // (the shooter view's tone the daylight one, as Warehouse's — user 2026-11-01; Factory's night tone from 2026-10-19 to then. Command mode stays black: cmdDark)
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
@@ -12755,7 +12768,7 @@ function updateDioramaCamera() {
   if (!c.snapped) {
     c.tx = 0;
     c.tz = 0;
-    c.dist = maxDist;
+    c.dist = Math.min(maxDist, mv.startDist ?? maxDist);   // (the whole-map overview, or the map's own opening distance — District, b1105dy)
     c.rot = 0;
     c.snapped = true;
   }
