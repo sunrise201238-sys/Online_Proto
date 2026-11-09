@@ -10,7 +10,12 @@ import { writeFileSync } from 'node:fs';
 const [root, out, runsArg] = process.argv.slice(2); const RUNS = Number(runsArg ?? 200);
 const S = await import(pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/index.js').href);
 const { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA, GROUND_BASE_Y, botMayFire, botNoteShot } = S;
-const UNITS = ['unit1', 'unit9', 'unit14', 'unit4', 'unit13', 'unit15', 'unit17', 'unit2', 'unit11', 'unit18', 'unit12', 'unit5', 'unit10', 'unit7', 'unit3', 'unit6'];
+// The twenty pickable units in the picker's order (UNIT_GRID_ORDER; Mika, unit8, is hidden). Minori, Maki, Iori and Hiyori joined the
+// measurement on 2026-11-09 (b1105er).
+const UNITS = ['unit1', 'unit9', 'unit14', 'unit22', 'unit4', 'unit13', 'unit15', 'unit17', 'unit2', 'unit11', 'unit18', 'unit12', 'unit5', 'unit21', 'unit10', 'unit7', 'unit20', 'unit3', 'unit6', 'unit19'];
+// THE FIELD WITHOUT ITS WALLS (b1105er, 2026-11-09): the lock ranges doubled on b1105eg (the machine guns 160, the snipers 240) and
+// Plain Field is 240 x 240 — a target at those ranges stood beyond its boundary walls, which ate every round. The walls go for the run.
+{ const A = await import(pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/arena.js').href); A.getArena('arena1').obstacles.length = 0; }
 const SPRINT = 11.76, ARC = 35 * Math.PI / 180;
 
 function run(unitKey, targetSpeed) {

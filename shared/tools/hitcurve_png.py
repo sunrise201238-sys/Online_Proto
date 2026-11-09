@@ -4,20 +4,20 @@ import json, sys
 from PIL import Image, ImageDraw, ImageFont
 src, out, title = sys.argv[1:4]
 D = json.load(open(src))
-NAMES = {'unit1': 'Saori', 'unit9': 'Asuna', 'unit14': 'Subaru', 'unit4': 'Atsuko', 'unit13': 'Marina', 'unit15': 'Yuuka', 'unit17': 'Kurumi', 'unit2': 'Hoshino', 'unit11': 'Haruka', 'unit18': 'Rabu', 'unit12': 'Koyuki', 'unit5': 'Hina', 'unit10': 'Fubuki', 'unit7': 'Aris', 'unit3': 'Aru', 'unit6': 'Kei'}
-ORDER = ['unit1', 'unit9', 'unit14', 'unit4', 'unit13', 'unit15', 'unit17', 'unit2', 'unit11', 'unit18', 'unit12', 'unit5', 'unit10', 'unit7', 'unit3', 'unit6']
+NAMES = {'unit1': 'Saori', 'unit9': 'Asuna', 'unit14': 'Subaru', 'unit22': 'Minori', 'unit4': 'Atsuko', 'unit13': 'Marina', 'unit15': 'Yuuka', 'unit17': 'Kurumi', 'unit2': 'Hoshino', 'unit11': 'Haruka', 'unit18': 'Rabu', 'unit12': 'Koyuki', 'unit5': 'Hina', 'unit21': 'Maki', 'unit10': 'Fubuki', 'unit7': 'Aris', 'unit20': 'Iori', 'unit3': 'Aru', 'unit6': 'Kei', 'unit19': 'Hiyori'}
+ORDER = ['unit1', 'unit9', 'unit14', 'unit22', 'unit4', 'unit13', 'unit15', 'unit17', 'unit2', 'unit11', 'unit18', 'unit12', 'unit5', 'unit21', 'unit10', 'unit7', 'unit20', 'unit3', 'unit6', 'unit19']   # (the picker's order; 20 units since b1105er)
 COL = {'still': (45, 111, 214), 'walk': (232, 112, 42), 'sprint': (31, 163, 109)}
 LABEL = {'still': 'Stationary', 'walk': 'Walk', 'sprint': 'Sprint'}
 F = lambda s, b=False: ImageFont.truetype(f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if b else ''}.ttf", s)
 SC = 2   # drawn at 2x for crisp lines
-W, COLS, ROWS = 2000, 4, 4; PW, PH, GX, GY = 470, 250, 20, 20; TOP = 125
+W, COLS = 2000, 4; ROWS = -(-len(ORDER) // COLS); PW, PH, GX, GY = 470, 250, 20, 20; TOP = 125   # (the rows follow the unit count)
 H = TOP + ROWS * (PH + GY) + 10
 im = Image.new('RGB', (W * SC, H * SC), (255, 255, 255)); d = ImageDraw.Draw(im)
 def text(x, y, s, size, fill=(40, 40, 40), bold=False, anchor='la'): d.text((x * SC, y * SC), s, font=F(size * SC, bold), fill=fill, anchor=anchor)
 def line(pts, fill, width): d.line([(x * SC, y * SC) for x, y in pts], fill=fill, width=width * SC, joint='curve')
 text(20, 18, title, 17, bold=True)
 text(20, 46, "Target orbits the shooter at her lock range, tangentially at 0 / her walk speed / walk + 11.76 u/s; the shooter strafes at her walk speed and holds the trigger through one magazine, obeying the bot fire gate", 10.5, (80, 80, 80))
-text(20, 62, "(Fubuki and Aris: one round per 0.6 s from a recovered cone). Lines are a short moving average; dots are raw rounds (magazines <= 40). 200 runs per series, on the shared sim, Plain Field.", 10.5, (80, 80, 80))
+text(20, 62, "(the marksman rifles: a round from a recovered cone). Lines are a short moving average; dots are raw rounds (magazines <= 40). 200 runs per series, on the shared sim, Plain Field without its walls.", 10.5, (80, 80, 80))
 lx = 20
 for k in ('still', 'walk', 'sprint'):
     line([(lx, 93), (lx + 14, 93)], COL[k], 3); text(lx + 20, 86, LABEL[k] + ' target', 12); lx += 150
