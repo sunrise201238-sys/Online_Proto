@@ -11,6 +11,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/sim/constants.js';
 import { createMatchState, tickMatch, tickBot, tickCommandDriver, setMoveOrder, getCommands, commandTargetIdOf, pickBotTargetId, emptyInput, respawnFighterNext, getArena, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
+// (b1105eg: every lockRange doubled, Saori's to 112. The test marked atBand56 below laid its pursuit for her old band at 56 —
+// it reads the gauge and the route, not the band — so it runs with her lock range at 56, put back when it ends.)
+const atBand56 = (fn) => () => { const u = C.UNIT_DATA.unit1, was = u.lockRange; u.lockRange = 56; try { return fn(); } finally { u.lockRange = was; } };
 
 const withDrain = (fn) => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };   // (the PT site's switch, where the tree has one)
 const FIVE = ['compound', 'district'];   // (the maps that name 5 — Blockade's went on 2026-11-03)
@@ -87,7 +90,7 @@ test('boost scale: the refill is five times a tick and the cap five times — Di
   assert.equal(d.full, 1250, 'District full'); assert.equal(t5.full, 1250, 'Town at 5 full'); assert.equal(t1.full, 250, 'Town full');
 }));
 
-test('boost scale: the plain brain\'s travel sprint leg runs the scaled reserve down to the scaled floor', () => withDrain(() => {
+test('boost scale: the plain brain\'s travel sprint leg runs the scaled reserve down to the scaled floor', atBand56(() => withDrain(() => {
   // (the travel sprint latch test's pursuit on Plain Field, the scale set by hand on the pursuer: a leg of 1250 -> 1000 at
   //  District's and Compound's 5, 250 -> 200 at Plain Field's own 1)
   const legs = (k) => { const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000, mode: '1v1' }); const p1 = m.fighters.p1, p2 = m.fighters.p2;
@@ -99,4 +102,4 @@ test('boost scale: the plain brain\'s travel sprint leg runs the scaled reserve 
   const one = legs(1), five = legs(5);
   assert.ok(one.length >= 1 && one[0] >= 40 && one[0] <= 50, 'at scale 1 the first leg is ~45 ticks (50 boost at 1.1 a tick): ' + JSON.stringify(one));
   assert.ok(five.length >= 1 && five[0] >= 215 && five[0] <= 240, 'at scale 5 the first leg is ~227 ticks (250 boost): ' + JSON.stringify(five));
-}));
+})));

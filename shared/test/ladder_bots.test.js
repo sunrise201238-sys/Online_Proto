@@ -15,6 +15,9 @@ import {
 } from '../src/sim/index.js';
 import { tickBot, navGridFor, registerNavGridData } from '../src/sim/ai.js';
 import { navDataFile, LADDER_LINK_REACH } from '../src/sim/navgrid.js';
+// (b1105eg: every lockRange doubled, Saori's to 112. The test marked atBand56 below laid its pursuit for her old band at 56 —
+// it reads the gauge and the route, not the band — so it runs with her lock range at 56, put back when it ends.)
+const atBand56 = (fn) => () => { const u = C.UNIT_DATA.unit1, was = u.lockRange; u.lockRange = 56; try { return fn(); } finally { u.lockRange = was; } };
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
 const PUBLIC = fileURLToPath(new URL('../../client/public/', import.meta.url));
@@ -158,7 +161,7 @@ function districtMatch(p1At, p2At) {
   return m;
 }
 
-test('the plain brain routes to an enemy on the roof, climbs T1 the whole way and walks on from the landing', () => withGauge(() => {
+test('the plain brain routes to an enemy on the roof, climbs T1 the whole way and walks on from the landing', atBand56(() => withGauge(() => {
   const m = districtMatch(T1.foot, T1.roof);
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
   p2.hp = 100000;   // (the enemy stands: the climb is the subject, not the fight)
@@ -186,7 +189,7 @@ test('the plain brain routes to an enemy on the roof, climbs T1 the whole way an
   const expect = (L.y1 - L.y0) / C.LADDER_CLIMB_SPEED / DT;
   assert.ok(climbTicks > expect * 0.9 && climbTicks < expect * 1.3, `the whole ladder: ${climbTicks} ticks on it, the climb alone ${expect.toFixed(0)}`);
   assert.ok(topAt != null, 'and walked on toward the enemy across the roof');
-}));
+})));
 
 test('an order to the roof climbs T1 and anchors there; an order for the way without a ladder takes the stairs', () => withGauge(() => {
   const m = districtMatch(T1.foot, { x: T1.foot.x + 40, z: T1.foot.z - 20 });

@@ -33,12 +33,9 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 56,
-    // 2v2 bot hold band (ported from the demo line 2026-08-15): compressed
-    // into 50-70 so long-lock units stop hanging back while a teammate dies
-    // alone. 1v1 keeps lockRange; the player-side lock UI ignores this field.
-    lockRange2v2: 60,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "remove all 2V2 lock range settings" — no unit carries lockRange2v2 now; 2v2 bots take lockRange, as 1v1 does)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
@@ -76,9 +73,8 @@ export const UNIT_DATA = {
     // unchanged) — a dodge-catching fan vs Haruka's concentrated slug.
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±7) gives the shotgun a 33–47 band.
-    lockRange: 40,
-    lockRange2v2: 50,
-    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
+    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -114,8 +110,7 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 120,
-    lockRange2v2: 70,
+    lockRange: 240,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 120 until then)
     projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -149,9 +144,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 50,
-    lockRange2v2: 55,
-    projectileSpeed: 600,
+    lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.03,         // base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
@@ -188,10 +182,9 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 80,
-    lockRange2v2: 65,
+    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
     botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
-    projectileSpeed: 600,
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
@@ -223,8 +216,7 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — cloned from Unit 3 / Sniper Rifle (to be tuned later).
-    lockRange: 120,
-    lockRange2v2: 70,
+    lockRange: 240,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 120 until then)
     projectileSpeed: 2000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -264,9 +256,8 @@ export const UNIT_DATA = {
     airJumpBoostCost: 12,
 
     // Weapon spec
-    lockRange: 56,
-    lockRange2v2: 65,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
@@ -312,8 +303,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 50,
-    projectileSpeed: 600,
+    lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
     spreadAngle: 0.04,         // base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
@@ -348,9 +339,8 @@ export const UNIT_DATA = {
 
     // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
     // per-shot damage, smaller mag.
-    lockRange: 56,
-    lockRange2v2: 60,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
@@ -386,9 +376,8 @@ export const UNIT_DATA = {
     // Weapon spec — Aris-derived, tuned 2026-07-14: ordinary bullet (no
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
-    lockRange: 56,
-    lockRange2v2: 65,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
@@ -426,9 +415,8 @@ export const UNIT_DATA = {
     // 2026-10-10: the two shotguns' patterns swapped — the 1.4x horizontal
     // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
     // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
-    lockRange: 40,
-    lockRange2v2: 50,
-    projectileSpeed: 350,      // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
+    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -461,10 +449,9 @@ export const UNIT_DATA = {
     // Weapon spec — Hina-derived, tuned 2026-07-14/15: slower cadence with
     // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
-    lockRange: 80,
-    lockRange2v2: 65,
+    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
     botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
-    projectileSpeed: 600,
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
@@ -501,9 +488,8 @@ export const UNIT_DATA = {
     // on a 2 s reload (tuned 2026-07-31: damage 3.5 -> 3 -> 2.5, reload
     // 1.5 s -> 2 s; HA 0 -> 0.04 taken from Atsuko — the WWII hose sprays
     // wide, sure-hit drops to ~32).
-    lockRange: 50,
-    lockRange2v2: 55,   // SMG archetype value from the demo line (user, 2026-08-16)
-    projectileSpeed: 600,
+    lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0.06,         // base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
@@ -540,9 +526,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — Saori's M4, the bloom per shot her own.
-    lockRange: 56,
-    lockRange2v2: 60,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -578,9 +563,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — Atsuko's evo3, the cadence and the bloom per shot her own.
-    lockRange: 50,
-    lockRange2v2: 55,
-    projectileSpeed: 600,
+    lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 850,        // user 2026-10-22 (the evo3: 1100) — fires on the 80 ms tick slot, 750 real
     spreadCount: 1,
     spreadAngle: 0.03,
@@ -617,9 +601,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — the MPX's shape with her own numbers (user 2026-10-23).
-    lockRange: 40,   // user 2026-10-23 (the MPX: 50) — the shotguns' reach
-    lockRange2v2: 50,   // user 2026-10-23 (the MPX: 55)
-    projectileSpeed: 600,
+    lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)   // user 2026-10-23 (the MPX: 50) — the shotguns' reach
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,   // user 2026-10-23 (the MPX: 850) — the 112 ms tick slot, Koyuki's, 535 real
     spreadCount: 1,
     spreadAngle: 0.03,
@@ -655,9 +638,8 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
-    lockRange: 40,
-    lockRange2v2: 50,
-    projectileSpeed: 350,
+    lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
+    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
     firePerMinute: 250,
     spreadCount: 8,
     pelletRange: 100,        // the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -687,8 +669,7 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 120,
-    lockRange2v2: 70,
+    lockRange: 240,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 120 until then)
     projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
@@ -723,9 +704,8 @@ export const UNIT_DATA = {
 
     // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
     // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
-    lockRange: 56,
-    lockRange2v2: 65,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
                                // the cooldown time from 0.5sec to 0.75sec")
     forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
@@ -762,10 +742,9 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec: the user's numbers; the reach, the bullet and the bots' rules are Koyuki's
-    lockRange: 80,
-    lockRange2v2: 65,
+    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
     botGateWidth: 0,          // no bloom gate line, as the other machine guns
-    projectileSpeed: 600,
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -801,9 +780,8 @@ export const UNIT_DATA = {
     // Weapon spec: the user's AKM numbers for the damage, the rate and the bloom (b1105ds, PT then 9.5, user 2026-11-08: "Apply these AKM
     // stats differences to Minori. The unmentioned stays the same with Saori M4, including the 33% hit rate gating."); the rest
     // Saori's, the bots' rules with it (no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO)
-    lockRange: 56,
-    lockRange2v2: 60,
-    projectileSpeed: 600,
+    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s, 535 real), Koyuki's rung (Saori's M4: 700, the 96 ms slot)
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -812,7 +790,7 @@ export const UNIT_DATA = {
     bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
     bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
     bloomRecoverDelayMs: 200,
-    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105ds, Saori 4) — 23 rounds to a full-HP kill
+    damage: 5,   // (b1105eg, PT and 9.6, user 2026-11-09: "change minori damage from 4.5 to 5")              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105ds, Saori 4) — 23 rounds to a full-HP kill
     magCapacity: 30,
     botFireCap: 30,          // bot: shots per trigger pull = full mag
     reloadMs: 1500,

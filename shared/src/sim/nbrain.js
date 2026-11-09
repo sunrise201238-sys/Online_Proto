@@ -700,6 +700,7 @@ export function nbBrainTick(host) {
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
   // universal rule for every weapon.
+  // (PT b1105ed, 9.6 b1105eg: no unit carries lockRange2v2 any more — the fallback to lockRange below is every unit's, 2v2 too.)
   // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
   // compressed 50–70 team-synergy table (long locks let a teammate die
   // alone at the front). Units without the field (hidden ones) and every

@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, tickBot, emptyInput, TICK_RATE_MS, TICK_DT } from '../src/sim/index.js';
 import * as C from '../src/sim/constants.js';
+// (b1105eg: every lockRange doubled, Saori's to 112. The test marked atBand56 below laid its pursuit for her old band at 56 —
+// it reads the gauge and the route, not the band — so it runs with her lock range at 56, put back when it ends.)
+const atBand56 = (fn) => () => { const u = C.UNIT_DATA.unit1, was = u.lockRange; u.lockRange = 56; try { return fn(); } finally { u.lockRange = was; } };
 
 // Travel sprint latch (owner 2026-09-29): a Pursue leg arms only from a full
 // tank (250) and runs down to 200, then the bot walks until the tank is full
@@ -54,7 +57,7 @@ test('travel sprint latch: a pursuing bot sprints in legs from 250 down to 200, 
   assert.ok(ticks[ticks.length - 1].x > -100 + 40, 'and the bot actually closes distance: ' + ticks[ticks.length - 1].x.toFixed(1));
 }));
 
-test('travel sprint latch at five times the gauge (District\'s and Compound\'s scale, set by hand): legs from 1,250 down to 1,000, re-armed only from a full tank', () => withDrain(() => {
+test('travel sprint latch at five times the gauge (District\'s and Compound\'s scale, set by hand): legs from 1,250 down to 1,000, re-armed only from a full tank', atBand56(() => withDrain(() => {
   // (an 8 s window: the first leg is ~228 ticks, then a ~42-tick walk, then the second leg from the full tank, still in Pursue)
   const { ticks, k } = pursueRun(8000, 5);
   assert.equal(k, 5, 'the pursuit plays at five times the gauge');
@@ -68,4 +71,4 @@ test('travel sprint latch at five times the gauge (District\'s and Compound\'s s
   assert.ok(rearm > firstWalk, 'a second leg starts');
   assert.equal(ticks[rearm].state, 'pursue', 'the second leg is a Pursue leg');
   assert.ok(ticks[rearm].boostBefore >= 250 * k - 1e-9, 'the next leg arms only from a full tank: ' + ticks[rearm].boostBefore);
-}));
+})));
