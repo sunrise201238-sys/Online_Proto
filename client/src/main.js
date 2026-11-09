@@ -7477,7 +7477,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105eb 11-09';
+const CLIENT_BUILD_TAG = 'b1105ec 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10236,6 +10236,9 @@ function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; r
 // (b1105dx, PT and 9.5, user 2026-11-09: "I also want to recrop some other unit", Yuuka, in the same card; then, from the tool, "x 50, y 91,
 // w 429, h 266": yuuka_card.png is that 429 x 266 cut of her profile art as it is, her picture 0.86 times the size it had in this
 // card, where her thumbnail, the profile's 369 px square at (86, 0), stood at face point 0.62)
+// (b1105ec, PT and 9.5, user 2026-11-09, from the tool: "Saori card crop, saori_profile.png 531x531: x 171, y 118, w 251, h 156", "Change
+// Saori 1V1 photo preview with this. All other layouts and photos stay the same."): saori_card.png is now that 251 x 156 cut as it
+// is, in place of b1105dw's 339 x 210 one, her picture 1.35 times the size that one gave it
 const UNIT_CARD_ART = { saori: 'saori_card.png', yuuka: 'yuuka_card.png' };
 // A unit's second picture, by spriteKey: the picker grid's tile, the lobby line-up's slanted panes (paneRowHTML: the Trio rows, a
 // 2v2 Duel's row, the foot's chip) and every in-game portrait (the HP chips and their Trio reserve, the bars over the units,
