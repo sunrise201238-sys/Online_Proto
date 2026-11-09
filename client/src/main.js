@@ -3190,8 +3190,8 @@ let hudRefs = null;
 // unchanged — hit detection in updateProjectileSystem / tickProjectiles uses
 // the projectile's logical position vs the target's hit radius and never the
 // mesh geometry, so the visual length/orientation has no gameplay effect.
-const SNIPER_TRACER_LENGTH = 20.4;   // (owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
-const SNIPER_TRACER_MID_RADIUS = 0.15;   // (owner 2026-10-14: 0.18 -> 0.15)
+const SNIPER_TRACER_LENGTH = 36.72;   // (b1105ek, PT and 9.6, user 2026-11-09: 1.8 times as long, 20.4 x 1.8: a round at 1100 u/s draws its tail off the muzzle after 33 ms, as one at 600 did with 20.4; 20.4 until then; owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
+const SNIPER_TRACER_MID_RADIUS = 0.225;   // (b1105ek, PT and 9.6, user 2026-11-09: 1.5 times as thick, 0.15 x 1.5; 0.15 until then; owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
 // === Bullet trails (visual-only): a thin light-grey streak that follows each
@@ -7455,7 +7455,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105eg 11-09';
+const CLIENT_BUILD_TAG = 'b1105ek 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
