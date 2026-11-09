@@ -935,6 +935,9 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    leave the picture centred.) */
 .menu .face-box { container-type: size; }
 .menu .face-box > img { object-position: min(0px, max(calc(100cqw - 100cqh), calc(50cqw - var(--fx, 0.5) * 100cqh))) min(0px, max(calc(100cqh - 100cqw), calc(44cqh - var(--fy, 0.62) * 100cqw))); }
+/* (b1105dw, PT and 9.5) a unit's own cut for the 1v1 line-up card (main.js UNIT_CARD_ART), the box's shape: it fills the 190 x 118 box as
+   it is; the 108 px box of a short screen loses its 10 px 44% above, 56% below, as the face-box keeps a face at 44% of its box */
+.menu .slot-art.card-art > img { object-position: 50% 44%; }
 .menu .slot-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .menu .slot-name { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu .slot-name-trio { font-size: 14px; letter-spacing: 0.01em; white-space: normal; }   /* (one roster's three names may take two lines — never a cut name) */

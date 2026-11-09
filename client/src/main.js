@@ -7450,7 +7450,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dv 11-09';
+const CLIENT_BUILD_TAG = 'b1105dw 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9667,9 +9667,10 @@ function renderTeamCard(card, side) {
   let art, text;
   if (single) {
     const weaponClass = lead ? (lead.name.split('/')[1] || '').trim() : '';
-    art = lead
-      ? `<span class="slot-art face-box" ${cardFaceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`
-      : '<span class="slot-art slot-empty">?</span>';
+    const cardArt = lead && UNIT_CARD_ART[lead.spriteKey];   // (a unit's own cut for this card, b1105dw; the thumbnail's band otherwise)
+    art = !lead ? '<span class="slot-art slot-empty">?</span>'
+      : cardArt ? `<span class="slot-art card-art"><img src="${import.meta.env.BASE_URL}units/${cardArt}" alt="${lead.char || ''}" draggable="false"></span>`
+      : `<span class="slot-art face-box" ${faceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`;
     text = lead
       ? `<b class="slot-name">${lead.char || lead.name}</b><small class="slot-sub">${weaponClass}${lead.weapon ? ` · ${lead.weapon}` : ''}</small>`
       : '<b class="slot-name">Pick a unit</b><small class="slot-sub">tap to choose</small>';
@@ -10197,16 +10198,19 @@ function unitClassTag(u) {
 // 1v1 Duel's lobby card show; the picker's grid, the line-up's panes and every in-game portrait take UNIT_ALT_THUMB below)
 const UNIT_FACE = { minori: [0.50, 0.60], maki: [0.50, 0.60], iori: [0.51, 0.57], hiyori: [0.50, 0.60], fubuki: [0.43, 0.63], haruka: [0.47, 0.60], atsuko: [0.50, 0.68], aris: [0.52, 0.60], asuna: [0.52, 0.60], aru: [0.50, 0.60], koyuki: [0.52, 0.62], kurumi: [0.52, 0.62], hina: [0.48, 0.62], rabu: [0.53, 0.63] };
 function faceStyle(u) { const [x, y] = UNIT_FACE[u?.spriteKey] || [0.5, 0.62]; return `style="--fx:${x};--fy:${y}"`; }
-// The 1v1 line-up card's picture alone may sit its face point elsewhere (b1105du, PT and 9.5, user 2026-11-09: "Saori in this specific photo style
-// should be cropped a bit more higher. All her other photos stays the same. And the layout should be untouched", then, of four samples,
-// "A little higher": her face point at 0.55 in this card, 0.62 everywhere else; b1105dv, "crop it in the height between these yellow marked
-// versions", the old crop and that one: 0.585, the picture 7 px lower than the old crop in its 193 x 123 box)
-const UNIT_CARD_FACE = { saori: [0.50, 0.585] };
-function cardFaceStyle(u) { const f = UNIT_CARD_FACE[u?.spriteKey]; return f ? `style="--fx:${f[0]};--fy:${f[1]}"` : faceStyle(u); }
+// The 1v1 line-up card's own picture, by spriteKey: a cut of the unit's profile art (units/<key>_profile.png) the shape of the card's
+// picture box, 190 x 118, which the card shows whole in place of the thumbnail's band; a screen under 440 px tall draws the box 190 x 108
+// and loses the 10 px 44% above, 56% below, as the face-box keeps a face at 44% of its box (style.css .card-art). The unit's other
+// pictures are unchanged.
+// (b1105dw, PT and 9.5, user 2026-11-09: "Make a quick tool for me to crop that photo from Saori profile image", then, from the tool, "x 120,
+// y 117, w 339, h 210": saori_card.png is that 339 x 210 cut as it is, her picture 0.79 times the size it had in this card. Before it,
+// b1105du and b1105dv moved her face point in this card alone, to 0.55 and then 0.585; their notes gave the box as 193 x 123, which
+// was its outline tilted 1.5 degrees)
+const UNIT_CARD_ART = { saori: 'saori_card.png' };
 // A unit's second picture, by spriteKey: the picker grid's tile, the lobby line-up's slanted panes (paneRowHTML: the Trio rows, a
 // 2v2 Duel's row, the foot's chip) and every in-game portrait (the HP chips and their Trio reserve, the bars over the units,
 // command mode's cards, the round's end screen) show it; the side card in the profile folder and the 1v1 Duel's lobby card keep
-// units/<key>_profile_thumbnail.png. `face`: its face point for the round frames (faceTransform) and the panes.
+// units/<key>_profile_thumbnail.png (that card a unit's own cut where UNIT_CARD_ART above has one). `face`: its face point for the round frames (faceTransform) and the panes.
 // (b1105do, PT then 9.5, user 2026-11-08: "update Minori's thumbnail" with a new picture, then "the one in the file stays the same. I just
 // want to update the thumbnail": the grid's tile alone. b1105dp, "Still seems a bit off. Try this, thumbnail only.": that
 // picture, as given, under a new name so no browser keeps the b1105do one — her profile's 342 px square at (100, 0), the face
