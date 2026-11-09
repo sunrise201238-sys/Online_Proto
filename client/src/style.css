@@ -54,13 +54,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    and the server slots' online (main.js setupHUD), which sets --c to the slot's colour there. */
 .hp-chip { position: absolute; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 18px 0 5px; box-sizing: border-box; border-radius: 999px; background: rgba(27, 27, 47, 0.9); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; font-family: var(--font-ui); --c: var(--lime); z-index: 1; }   /* (18 px on the bar's far side: the knob, 8 px past the track at full HP, stays 10 px inside the rim — user b1105x: "the HP bar should stay well inside the box") */
 /* (the chips' tilt stays — b1105y levelled them on a misread of "still tilted", which meant the faces; back in b1105z) */
-.hp-chip.health { top: 10px; left: 12px; --c: var(--lime); transform: rotate(-1.5deg); }
+.hp-chip.health { top: 10px; left: 12px; --c: var(--cyan); transform: rotate(-1.5deg); }   /* (b1105ea, PT and 9.5, user 2026-11-09: "currently, player is green and ally is blue. switch the color.": YOU cyan, lime until then; online the chips wear their seat's colour inline, unchanged) */
 .hp-chip.enemy-health { top: 10px; right: 12px; --c: var(--magenta); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1.5deg); }
 /* (b1105ab, user: "no overlapping for HP boxes; make all HP boxes same size — the current bigger one as standard") the
    ally's and the second enemy's chips are the first row's size, 10 px further in, on a second row 86 px down: 22 px
    under the first row's box — room for a WATCHING / DOWN tag hanging 9 px under a first-row chip, a second-row chip's
    7 px ring and the tilts (±4 px at a 290 px chip's ends) without a touch */
-.hp-chip.ally-health { top: 86px; left: 108px; --c: var(--cyan); transform: rotate(-1deg); }
+.hp-chip.ally-health { top: 86px; left: 108px; --c: var(--lime); transform: rotate(-1deg); }   /* (b1105ea: ALLY lime, cyan until then) */
 .hp-chip.enemy2-health { top: 86px; right: 108px; --c: var(--orange); flex-direction: row-reverse; padding: 0 5px 0 18px; transform: rotate(1deg); }
 /* (b1105bc; user: "move the lower hp boxes nearer to the left/right; they are too horizontally distant away from the above hp boxes" —
    on a desktop the second row stands flush under the first, 12 px in like it; the 108 px stagger (b1105ag) stays below 1100 px, where
@@ -1125,7 +1125,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-title { margin: 0 0 2px; }
 .menu .end-grid { display: flex; align-items: flex-start; justify-content: center; gap: 22px; flex-wrap: wrap; max-width: 880px; }
 .menu .end-team { position: relative; width: 300px; box-sizing: border-box; margin-top: 12px; padding: 16px 16px 12px; border-radius: 18px; background: rgba(27, 27, 47, 0.92); border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); color: #ffffff; display: flex; flex-direction: column; gap: 10px; }
-.menu .end-team.end-you { --c: var(--lime); transform: rotate(-1.5deg); }
+.menu .end-team.end-you { --c: var(--cyan); transform: rotate(-1.5deg); }   /* (b1105ea: YOU's cyan, the TEAM 1 flag and the first row; lime until then) */
 .menu .end-team.end-foe { --c: var(--magenta); transform: rotate(1.5deg); }
 .menu .end-tag, .menu .end-verdict { position: absolute; top: -14px; padding: 4px 10px; border-radius: 999px; border: 3px solid var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
 /* (b1105bf; user: "use option B for the 'Team 1/Team 2' in ending screen" — design round 9) TEAM 1 / TEAM 2 AS A STICKY FLAG: a flat memo
@@ -1145,8 +1145,12 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-verdict { right: 14px; background: var(--yellow); color: var(--ink); transform: rotate(4deg); }
 .menu .end-foe .end-verdict { right: auto; left: 14px; transform: rotate(-4deg); }
 .menu .end-row { display: flex; align-items: center; gap: 12px; --rc: var(--c); }
-.menu .end-you .end-row-second { --rc: var(--cyan); }
+.menu .end-you .end-row-second { --rc: var(--lime); }   /* (b1105ea: ALLY's lime, cyan until then) */
 .menu .end-foe .end-row-second { --rc: var(--orange); }   /* (b1105dz: ENEMY 2's orange, yellow until then) */
+/* (b1105ea) ONLINE THE PAGE KEEPS YOU LIME AND ALLY CYAN: YOU and ALLY traded colours offline only — asked about online, where the chips
+   wear the seat colours, the user's pick was "A. 線上不動，只改離線" (online unchanged). showEndPage marks the online page end-online. */
+.menu.end-online .end-team.end-you { --c: var(--lime); }
+.menu.end-online .end-you .end-row-second { --rc: var(--cyan); }
 .menu .end-w { flex: 0 0 56px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--rc); white-space: nowrap; }   /* (nowrap, b1105ax: SLOT 2 broke into two lines on the user's phone. 56 since b1105bb; user: "the thumbnail and names are not aligned at the left" — ENEMY 2 ran past the 48 px column, which then grew and pushed its row's units right; and the panel is 300 wide (280), so a row — 56 + 12 + three 52 px units and two 12 px gaps = 248 — ends 14 px short of the padding instead of on it: "too close to the box edge, even overlapping") */
 .menu .end-units { display: flex; gap: 12px; }
 .menu .end-u { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }

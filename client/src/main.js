@@ -1054,6 +1054,11 @@ function getAllFighters() {
 function getTeamOf(mech) {
   return mech?.state?.team ?? (mech === state.player || mech === state.ally ? 'A' : 'B');
 }
+// The role slot a fighter holds, 'player' / 'ally' / 'enemy' / 'enemy2', or null: what its HUD colour is keyed on
+// (dioSlotColor) — the bar over its head (b1105dz) and the teammate's screen-edge triangle (b1105ea).
+function roleOfMech(mech) {
+  return mech === state.player ? 'player' : mech === state.ally ? 'ally' : mech === state.enemy ? 'enemy' : mech === state.enemy2 ? 'enemy2' : null;
+}
 function getEnemiesOf(mech) {
   const myTeam = getTeamOf(mech);
   return getAllFighters().filter((f) => f !== mech && getTeamOf(f) !== myTeam);
@@ -2562,8 +2567,8 @@ const _barQuat = new THREE.Quaternion();    // scratch: the unit root's world ro
 
 function updateMechAnimations(dt, now) {
   // The bar's ink is the unit's own HUD colour, its HP chip's and its command card's (b1105dz, PT and 9.5, user 2026-11-09: "make the
-  // HP bar in top of unit head in shooter mode show the color accordingly"): offline the role palette — lime YOU, cyan
-  // ALLY, magenta ENEMY, orange ENEMY 2 — online the unit's server-slot colour, as the online chips (dioSlotColor). Until
+  // HP bar in top of unit head in shooter mode show the color accordingly"): offline the role palette — cyan YOU, lime
+  // ALLY (traded in b1105ea), magenta ENEMY, orange ENEMY 2 — online the unit's server-slot colour, as the online chips (dioSlotColor). Until
   // then it was team-relative, cyan for the camera unit's side and orange-red for the other; that pair stays for a unit
   // that holds none of the four roles. The camera unit's team still decides which hostile the lock placement serves.
   const camFocus = cameraFocusMech();
@@ -2675,7 +2680,7 @@ function updateMechAnimations(dt, now) {
         bar.userData.thumbDrawn = true;
         bar.userData.barFrac = -1;          // portrait just landed: repaint
       }
-      const role = m === state.player ? 'player' : m === state.ally ? 'ally' : m === state.enemy ? 'enemy' : m === state.enemy2 ? 'enemy2' : null;
+      const role = roleOfMech(m);
       const wantInk = role ? dioSlotColor(role) : (hostile ? UNIT_BAR_INK_ENEMY : UNIT_BAR_INK_ALLY);   // (b1105dz: the unit's own HUD colour)
       if (bar.userData.barInk !== wantInk) {
         bar.userData.barInk = wantInk;
@@ -6165,6 +6170,12 @@ function updateAllyArrow() {
   // so the screen-space bearing is (dx, -dy) and +90° aligns "up" onto it.
   const rot = Math.atan2(-dy, dx) + Math.PI / 2;
 
+  // The triangle wears the unit's own colour, its chip's and its bar's (b1105ea, PT and 9.5, user 2026-11-09: "make edge triangle
+  // indicator's color matches the unit's slot color. This one should work for online"): offline the role palette, online
+  // the unit's server-slot colour (dioSlotColor). It was a fixed light cyan, the bars' old ally ink (UNIT_BAR_INK_ALLY,
+  // still its fill at creation).
+  const ink = dioSlotColor(roleOfMech(mate) ?? 'ally');
+  if (edge.dataset.ink !== ink) { edge.dataset.ink = ink; edge.querySelector('svg path')?.setAttribute('fill', ink); }
   edge.style.display = 'block';
   edge.style.left = `${sx}px`;
   edge.style.top = `${sy}px`;
@@ -7460,7 +7471,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105dz 11-09';
+const CLIENT_BUILD_TAG = 'b1105ea 11-09';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11047,7 +11058,7 @@ function endTeamHTML(side, tag, roles, spectator, winner, outTeam = null) {
 // rematch wish); buttons: the foot's markup — the caller wires them
 function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '', outTeam = null }) {
   const menu = document.createElement('div');
-  menu.className = 'menu end-page';
+  menu.className = state.online ? 'menu end-page end-online' : 'menu end-page';   // (end-online, b1105ea: online YOU stays lime and ALLY cyan here — style.css)
   const m = MAP_DATA[state.mapKey];
   menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
     <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam)}
@@ -13360,15 +13371,16 @@ function renderDiorama() {
 // bots' fire gate uses, so "looks unhittable" always equals "is unhittable".
 
 // (b1105ac, user: "use the HP bar color as base, make the color of command card aligned") the offline palette is the
-// HP chips' — lime YOU, cyan ALLY, magenta ENEMY, orange ENEMY 2 (style.css .hp-chip.*) — so a card, its marker, its
+// HP chips' — cyan YOU, lime ALLY, magenta ENEMY, orange ENEMY 2 (style.css .hp-chip.*) — so a card, its marker, its
 // line and its chip share one colour; the blue / mint / pink / orange set lives on as the online slot palette below,
 // which the online chips wear too. Since b1105dz the bars over the units take them as well (updateMechAnimations), and
 // ENEMY 2 is orange, #FF8A2A (style.css --orange; user 2026-11-09: the friendly green and the hostile yellow "too
 // similar", then "Go for option A orange"): it was yellow, #FFE45C, OKLab 9 from YOU's lime, 2 under the colour-blind
-// simulations; the orange is 26, and 14.
+// simulations; the orange is 26, and 14. YOU and ALLY traded colours in b1105ea, offline only (user 2026-11-09: "currently, player is green and ally is blue. switch the color.";
+// online, where the chips wear the seat colours, the user's pick was to leave it): YOU was lime, ALLY cyan.
 const DIO_SLOT_META = {
-  player: { color: '#C6F24A', label: 'YOU', selectable: false },
-  ally: { color: '#3EE0FF', label: 'ALLY', selectable: false },
+  player: { color: '#3EE0FF', label: 'YOU', selectable: false },
+  ally: { color: '#C6F24A', label: 'ALLY', selectable: false },
   enemy: { color: '#FF3EA5', label: 'ENEMY 1', selectable: true },
   enemy2: { color: '#FF8A2A', label: 'ENEMY 2', selectable: true }
 };
