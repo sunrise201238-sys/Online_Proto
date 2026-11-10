@@ -182,7 +182,7 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec
-    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
+    lockRange: 126,   // (PT and 9.6 b1105es, user 2026-11-10: "change Maki/Hina/Koyuki Lockrange to 126"; 160 since b1105eg, 80 until then)
     botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
@@ -256,7 +256,7 @@ export const UNIT_DATA = {
     airJumpBoostCost: 12,
 
     // Weapon spec
-    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    lockRange: 160,   // (PT and 9.6 b1105es, user 2026-11-10: "change Iori/Aris/Fubuki Lockrange to 160"; 112 since b1105eg, 56 until then)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
@@ -376,7 +376,7 @@ export const UNIT_DATA = {
     // Weapon spec — Aris-derived, tuned 2026-07-14: ordinary bullet (no
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
-    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    lockRange: 160,   // (PT and 9.6 b1105es, user 2026-11-10: "change Iori/Aris/Fubuki Lockrange to 160"; 112 since b1105eg, 56 until then)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
@@ -449,7 +449,7 @@ export const UNIT_DATA = {
     // Weapon spec — Hina-derived, tuned 2026-07-14/15: slower cadence with
     // HA anti-dodge scatter, smaller mag, quicker reload, and AR-grade heavy
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
-    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
+    lockRange: 126,   // (PT and 9.6 b1105es, user 2026-11-10: "change Maki/Hina/Koyuki Lockrange to 126"; 160 since b1105eg, 80 until then)
     botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
@@ -704,7 +704,7 @@ export const UNIT_DATA = {
 
     // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
     // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
-    lockRange: 112,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 56 until then)
+    lockRange: 160,   // (PT and 9.6 b1105es, user 2026-11-10: "change Iori/Aris/Fubuki Lockrange to 160"; 112 since b1105eg, 56 until then)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
                                // the cooldown time from 0.5sec to 0.75sec")
@@ -742,7 +742,7 @@ export const UNIT_DATA = {
     jumpBoostCost: 48,
 
     // Weapon spec: the user's numbers; the reach, the bullet and the bots' rules are Koyuki's
-    lockRange: 160,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 80 until then)
+    lockRange: 126,   // (PT and 9.6 b1105es, user 2026-11-10: "change Maki/Hina/Koyuki Lockrange to 126"; 160 since b1105eg, 80 until then)
     botGateWidth: 0,          // no bloom gate line, as the other machine guns
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot

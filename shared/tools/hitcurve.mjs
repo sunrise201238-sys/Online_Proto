@@ -15,6 +15,7 @@ const { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DAT
 const UNITS = ['unit1', 'unit9', 'unit14', 'unit22', 'unit4', 'unit13', 'unit15', 'unit17', 'unit2', 'unit11', 'unit18', 'unit12', 'unit5', 'unit21', 'unit10', 'unit7', 'unit20', 'unit3', 'unit6', 'unit19'];
 // THE FIELD WITHOUT ITS WALLS (b1105er, 2026-11-09): the lock ranges doubled on b1105eg (the machine guns 160, the snipers 240) and
 // Plain Field is 240 x 240 — a target at those ranges stood beyond its boundary walls, which ate every round. The walls go for the run.
+// (b1105es, 2026-11-10: the machine guns at 126 and the marksman rifles at 160 stand past the walls too.)
 { const A = await import(pathToFileURL(root.replace(/\/?$/, '/') + 'shared/src/sim/arena.js').href); A.getArena('arena1').obstacles.length = 0; }
 const SPRINT = 11.76, ARC = 35 * Math.PI / 180;
 
@@ -40,7 +41,12 @@ function run(unitKey, targetSpeed) {
     if (!done && fired < mag && p1.ammo > 0 && botMayFire(u, p1, Math.hypot(dx, dz), '1v1')) { inp.shootHold = true; inp.shootTap = true; }
     const hpBefore = p2.hp, ammoBefore = p1.ammo;
     tickMatch(m, { p1: inp, p2: emptyInput() }, now, TICK_DT);
-    if (p1.ammo < ammoBefore) { fired += 1; rounds.push(0); botNoteShot(p1); lastRoundAt = now; }   // a new round: the magazine went down
+    // A new round: the magazine went down, or, for a gun that refills a round at a time (autoReload), a projectile left on a
+    // tick whose refill put the round straight back (b1105es, 2026-11-10: Aris's 1.2 s refill lands on every other shot of her
+    // ~0.6 s gate rhythm; the magazine count missed those shots, gave their bolts to the round before and, past her gate line,
+    // never spent the one-round suppress burst, so her next round left bloomed. The game counts a shot by its fire stamp.)
+    const newProj = m.projectiles.some((p) => p.ownerId === 'p1' && !projRound.has(p.id));
+    if (p1.ammo < ammoBefore || (u.autoReload && newProj)) { fired += 1; rounds.push(0); botNoteShot(p1); lastRoundAt = now; }
     for (const p of m.projectiles) if (p.ownerId === 'p1' && !projRound.has(p.id)) projRound.set(p.id, rounds.length - 1);   // its projectile(s): the newest round's
     let pelletDamage = 0;
     for (const ev of m.events) {
