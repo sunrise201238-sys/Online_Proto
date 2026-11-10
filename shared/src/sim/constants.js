@@ -183,7 +183,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
-    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
+    // (b1105fe, user 2026-11-10: "Give Hina the same 33% hit rate gating other auto-weapons have" — no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO 8.84 / cone, as the ARs and SMGs; botGateWidth 0, no gate line, from owner 2026-09-25 until then)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,

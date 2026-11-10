@@ -250,8 +250,17 @@ test('botMayFire state machine', () => {
   assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
 });
 
-test('bot gate — Koyuki and Hina are ungated in both modes (owner 2026-09-25); a 1v1-only width would still be honoured', () => {
-  for (const k of ['unit12', 'unit5']) {
+test('bot gate — Hina rides the autos\' 33%-hit line (b1105fe, user 2026-11-10)', () => {
+  const u = UNIT_DATA.unit5;
+  assert.equal(u.botGateWidth, undefined);                                        // the default, as the ARs and SMGs
+  assert.ok(Math.abs(botGateDistance(u, 0.2) - 8.84 / 0.2) < 1e-9);
+  const capped = { bloom: u.bloomCap - u.spreadAngle, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(u, capped, 400, '2v2'), false);                          // far past her line with the cone up: she holds
+  assert.ok(capped.botHoldDist > 0);
+});
+
+test('bot gate — Koyuki and Maki are ungated in both modes (owner 2026-09-25; Hina too until b1105fe); a 1v1-only width would still be honoured', () => {
+  for (const k of ['unit12', 'unit21']) {
     const u = UNIT_DATA[k];
     assert.equal(u.botGateWidth, 0);
     assert.equal(u.botGateWidth1v1, undefined);

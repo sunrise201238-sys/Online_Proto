@@ -67,7 +67,8 @@ export function withinSureHit(unit, bloom, dist) {
 // target, 2.76x the sure-hit line); the marksman rifles carry 3.2, the
 // sure-hit line itself.
 // A width of 0 means NO gate line (a 0% hit-rate threshold — the line sits
-// at infinity): the machine guns carry botGateWidth: 0 (owner 2026-09-25).
+// at infinity): Koyuki and Maki carry botGateWidth: 0 (owner 2026-09-25; Hina did too until b1105fe, user
+// 2026-11-10: "Give Hina the same 33% hit rate gating other auto-weapons have" — she rides the autos' 8.84 now).
 // `mode` ('1v1' / '2v2') lets a unit carry a 1v1-only width instead,
 // botGateWidth1v1 (no unit uses it today). Otherwise botGateWidth (3.2 for
 // the marksman rifles) or the autos' 8.84.
@@ -101,7 +102,7 @@ export function botMayFire(unit, bot, dist, mode) {
     bot.botHoldDist = 0;                       // recovered, or the target closed in
   }
   const cone = effectiveSpread(unit, bot.bloom);
-  const line = botGateDistance(unit, cone, mode);   // 33%-hit line (autos) / sure-hit line (marksman rifles) / none (MGs in 1v1)
+  const line = botGateDistance(unit, cone, mode);   // 33%-hit line (autos, Hina among them) / sure-hit line (marksman rifles) / none (Koyuki, Maki)
   if (dist <= line) return true;
   if (!(bot.bloom > 0)) { bot.botSuppressRemaining = unit.botSuppressBurst ?? BOT_SUPPRESS_BURST; return true; }
   bot.botHoldDist = line;                      // freeze where the line stood

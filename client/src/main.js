@@ -266,7 +266,7 @@ const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
-    botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
+    // (b1105fe, user 2026-11-10: "Give Hina the same 33% hit rate gating other auto-weapons have" — no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO 8.84 / cone, as the ARs and SMGs; botGateWidth 0, no gate line, from owner 2026-09-25 until then)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -7456,7 +7456,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fd 11-10';
+const CLIENT_BUILD_TAG = 'b1105fe 11-10';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
