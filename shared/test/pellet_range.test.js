@@ -38,7 +38,7 @@ function flyOne(m, botIds = []) {
 }
 
 test('a shotgun volley dies at pelletRange, not at the 2.2 s TTL', () => {
-  const u = UNIT_DATA.unit2; assert.equal(u.spreadCount, 8); assert.equal(u.pelletRange, 100);
+  const u = UNIT_DATA.unit2; assert.equal(u.spreadCount, 8); assert.equal(u.pelletRange, 150);   // (b1105et: 150, 100 until then)
   const r = flyOne(duel('unit2', 'unit1', 400));
   assert.equal(r.reason, 'range', 'the volley ended on ' + r.reason);
   // (the last position seen alive is short of the line by at most one tick of flight)
@@ -51,12 +51,12 @@ test('a gun without pelletRange flies as before: past 100 units, to the TTL or a
   assert.equal(UNIT_DATA.unit1.pelletRange, undefined);
   const r = flyOne(duel('unit1', 'unit2', 400));
   assert.notEqual(r.reason, 'range');
-  // (Plain Field's boundary stops it at ~144 u; the point is that it passed the shotgun's 100 u line)
-  assert.ok(r.flown > UNIT_DATA.unit2.pelletRange, 'a rifle round stopped at ' + r.flown.toFixed(1));
+  // (Plain Field's boundary stops it at ~144 u, short of the shotguns' 150 since b1105et; the point is that it flew on past 100 and no reach ended it)
+  assert.ok(r.flown > 100, 'a rifle round stopped at ' + r.flown.toFixed(1));
 });
 
 test('a shotgun bot holds fire on a target beyond pelletRange, and fires once it is within', () => {
-  const m = duel('unit1', 'unit2', 150);          // p2, the bot, holds the shotgun; p1 stands 150 u away in the open
+  const m = duel('unit1', 'unit2', 220);          // p2, the bot, holds the shotgun; p1 stands 220 u away in the open (150 until b1105et's 150 reach)
   const bot = m.fighters.p2, target = m.fighters.p1;
   const inputs = { p1: emptyInput(), p2: emptyInput() };
   // (shots are read off the fighter's own counter: the brain fires inside tickBot, and tickMatch clears the event list)

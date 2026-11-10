@@ -147,7 +147,7 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 // or less, so all go to 110). Assessed before the build on the bot-vs-bot round robin (16 units, seven maps, 3,360 duels, the same
 // seeds): the shotguns' mean win rate 59.7% to 53.1%, against the rifles and the assault rifles 69.8% to 54.6%, the machine guns
 // 36.0% to 23.5%, the SMGs and the snipers as they were; the duels against a shotgun 3 to 7 s longer; the brain's time a tick no longer.
-const BOT_SHOTGUN_ENGAGE_RANGE = 110;
+const BOT_SHOTGUN_ENGAGE_RANGE = 160;   // (PT and 9.6 b1105et, user 2026-11-10: "Change the range gating for SG encounter rule from 110 to 160"; 110 since b1105br)
 // a shotgun is told by its weapon class, the name's second half (Unit 2 / Shotgun), as the picker's class tags read it
 const isShotgunUnit = (u) => /\/\s*Shotgun\b/.test(u?.name || '');
 // HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
