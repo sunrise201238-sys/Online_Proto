@@ -112,11 +112,16 @@ export function createConnection() {
     log('match:end', payload);
   });
 
+  const hitQueue = [];
   socket.on('match:snapshot', (payload) => {
     if (!payload) return;
     // The server sends no unit tables (2026-10-25, a quarter of every snapshot): each fighter carries its unitKey, and the
     // same shared table it used to carry is re-attached here, so every reader downstream sees what it always saw.
     if (payload.fighters) for (const id in payload.fighters) { const f = payload.fighters[id]; if (f && !f.unit && f.unitKey) f.unit = UNIT_DATA[f.unitKey]; }
+    // HIT X (user 2026-11-10): every snapshot's hit events, queued — the render loop applies one snapshot a frame, and
+    // two can land between frames, so the events of the one skipped were lost; the loop drains this (drainHits).
+    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
+    if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
     prevSnapshot = latestSnapshot;
     latestSnapshot = payload;
     lastSnapshotAt = Date.now();
@@ -157,6 +162,7 @@ export function createConnection() {
 
     // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),
+    drainHits: () => hitQueue.splice(0),   // (HIT X: the hit events queued since the last call)
     getSnapshotCount: () => snapshotCount,
     getSnapshotHz: () => snapshotTimes.length,
 

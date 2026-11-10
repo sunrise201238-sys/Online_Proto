@@ -4285,6 +4285,7 @@ function updateProjectileSystem(dt) {
         tgtState.momentumVX = 0;
         tgtState.momentumVZ = 0;
         spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
+        noteHitX(p.owner, p.target);   // (HIT X)
         p.target.body.velocity.set(0, 0, 0);
       }
       if (p.pelletMask === 0) state.projectiles.splice(i, 1);
@@ -4441,6 +4442,7 @@ function updateProjectileSystem(dt) {
       p.target.state.momentumVX = 0;
       p.target.state.momentumVZ = 0;
       spawnHitEffect(p.target.root.position, p.target === state.player ? 0x67f2ff : 0xff73d2);
+      noteHitX(p.owner, p.target);   // (HIT X)
       if (state.mapKey === 'range' && p.target.state.isRangeTarget) {
         recordRangeDot(p.target, nearest.x, nearest.y, true);   // HIT dot at the impact point
       }
@@ -4612,6 +4614,7 @@ function updateBeamDamage(now) {
       st.momentumVZ = 0;
       m.body.velocity.set(0, 0, 0);
       spawnHitEffect(m.root.position, m === state.player ? 0x67f2ff : 0xff73d2);
+      noteHitX(b.owner, m);   // (HIT X)
       b.hitIds.push(m);
       // Shooting Range: yellow dot where the laser centerline crosses the sign.
       if (state.mapKey === 'range' && st.isRangeTarget) {
@@ -4891,6 +4894,7 @@ function updateChargedBeams(now, dt) {
       applyHitStun(tst, t.unit, u.stun?.ms ?? 100, u.stun?.moveScale ?? 0.25, now);
       tst.momentumVX = 0; tst.momentumVZ = 0; t.body.velocity.set(0, 0, 0);
       spawnHitEffect(t.root.position, t === state.player ? 0x67f2ff : 0xff73d2);
+      noteHitX(m, t);   // (HIT X)
       m.chargedBeamHitIds.push(t);
       // Shooting Range: yellow dot where the laser centerline crosses the sign.
       if (state.mapKey === 'range' && tst.isRangeTarget) {
@@ -5882,6 +5886,7 @@ const BLOOM_BRACKET_GAIN = 2;
 const LOCK_BRACKET_SIZE = 0.5;
 
 function updateLocksAndReticle() {
+  updateHitX();   // HIT X (user 2026-11-10): the red X on what the viewed unit's rounds hit — below
   const nowMs = performance.now();
   // Reticle is evaluated from the mech the camera follows: the player, or —
   // when the player is dead and spectating — the ally, so the lock bracket
@@ -5973,6 +5978,112 @@ function updateLocksAndReticle() {
   // portrait anchors to it so the bloom never moves it)
   state.reticle.userData.baseScale = 9.15 * LOCK_BRACKET_SIZE * distScale;
   state.reticle.quaternion.copy(camera.quaternion);
+}
+
+// HIT X (user 2026-11-10: "Whenever a unit's own bullet hits the target, a small thin X crosshair shortly appears around
+// the target, within the lock icon. The X crosshair can be overwritten for high RPM weapons"; then "use white", "shown in
+// spectating mode, no showing in command mode", an enemy hit without the lock (Kei's sweep, a round still flying after a
+// lock switch) gets its X too; then "move the X a bit more outside, leaving a bit more space in the middle", "change x
+// crosshair color to red"; picked: sample G, and free pov's option 2). Only the VIEWED unit's own hits — the player's, or
+// the unit the camera watches (cameraFocusMech) — and never in command mode. One X per enemy hit. THE POP (user
+// 2026-11-10, b1105fg: "For high RPM weapons, i want an fast over-writing pop-of of the XC", "kinda like the already-had
+// blue effect when player unit got hit" — spawnHitEffect's ring, 0.18 s growing and fading; picked: the ring's 0.18 s,
+// every weapon, free pov's X too): each hit restarts the X at its own size and full colour, and over HIT_X_LIFE_MS it
+// grows to HIT_X_POP_SCALE (fast, then slowing) while it fades out evenly; the next hit overwrites it, so a high-RPM
+// weapon pops it at its rate of fire (1250 RPM: every 48 ms). PT's first version, b1105ff, held it 120 ms and faded it
+// 80 ms, steady while a spray kept hitting. Angled pov: a sprite on the hit enemy, centred where the
+// bracket is, the bracket's BASE size (its bloom growth left out, so the X stays on the target while the bracket swells
+// with a spray); four thin red strokes with a dark rim, 16..40 of the bracket's 192 canvas. Free pov (the viewer's own,
+// or a watched unit's free aim — no bracket then): the X round the crosshair instead (updateHitXCross), whichever enemy
+// was hit. Offline the four hit sites call noteHitX; online the snapshots' hit events, queued in connection.js so none
+// is lost between frames (drainHits), call it after the server confirms the hit.
+const HIT_X_COLOR = 0xe61b1b;   // (the user's own mockup's red)
+const HIT_X_CSS = '#e61b1b';
+const HIT_X_LIFE_MS = 180;     // (spawnHitEffect's ring lives 0.18 s)
+const HIT_X_POP_SCALE = 1.5;   // (its size at the end of the pop: still inside the bracket)
+function hitXPop(age) {        // → [size factor, opacity] at `age` ms after the hit
+  const p = Math.min(1, Math.max(0, age / HIT_X_LIFE_MS));
+  return [1 + (HIT_X_POP_SCALE - 1) * (1 - (1 - p) ** 3), 1 - p];
+}
+let hitXTex = null;
+const hitXMarks = new Map();   // hit enemy mech → { sprite, at }
+function hitXTexture() {
+  if (hitXTex) return hitXTex;
+  const c = document.createElement('canvas'); c.width = c.height = 192; const x = c.getContext('2d'); x.lineCap = 'round';
+  const seg = (a) => { const ang = a * Math.PI / 4, ca = Math.cos(ang), sa = Math.sin(ang); x.beginPath(); x.moveTo(96 + ca * 16, 96 + sa * 16); x.lineTo(96 + ca * 40, 96 + sa * 40); x.stroke(); };
+  x.strokeStyle = 'rgba(0, 0, 0, 0.55)'; x.lineWidth = 9; [1, 3, 5, 7].forEach(seg);   // (the rim: 2.5 each side of the stroke)
+  x.strokeStyle = '#ffffff'; x.lineWidth = 4; [1, 3, 5, 7].forEach(seg);   // (white, tinted red by the material, as the bracket is tinted)
+  hitXTex = new THREE.CanvasTexture(c);
+  return hitXTex;
+}
+function hitXViewerFreeAims(viewer) {   // (updateLocksAndReticle's own test: then there is no bracket, but a crosshair)
+  return freePovOwner() && viewer === state.player ? !!state.freePov : !!viewer.state.freeAim;
+}
+function noteHitX(owner, target) {
+  if (!owner || !target || owner === target || !target.root || dioramaActive()) return;
+  if (owner !== cameraFocusMech()) return;
+  const now = performance.now();
+  if (hitXViewerFreeAims(owner)) { state.hitXCrossAt = now; return; }
+  let mk = hitXMarks.get(target);
+  if (!mk) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hitXTexture(), color: HIT_X_COLOR, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+    sp.renderOrder = 10000;   // (over the bracket's 9999)
+    mk = { sprite: sp, at: now }; hitXMarks.set(target, mk);
+  }
+  if (mk.sprite.parent !== target.root) { mk.sprite.parent?.remove(mk.sprite); target.root.add(mk.sprite); }
+  mk.at = now;
+  updateHitXMark(target, mk, now);
+}
+function updateHitXMark(t, mk, now) {
+  const [k, op] = hitXPop(now - mk.at);
+  mk.sprite.material.opacity = op;
+  mk.sprite.position.set(0, 0.2, 0);
+  mk.sprite.scale.setScalar(9.15 * LOCK_BRACKET_SIZE * THREE.MathUtils.clamp(camera.position.distanceTo(t.root.position) / 22, 0.7, 4.5) * k);
+  mk.pop = k;   // (automation: window.__hitX.peek)
+}
+function updateHitX() {
+  const now = performance.now(), life = HIT_X_LIFE_MS, off = dioramaActive();
+  for (const [t, mk] of hitXMarks) {
+    if (off || now - mk.at >= life || !t.root?.parent) { mk.sprite.parent?.remove(mk.sprite); mk.sprite.material.dispose(); hitXMarks.delete(t); continue; }
+    updateHitXMark(t, mk, now);
+  }
+}
+function clearHitX() {
+  for (const mk of hitXMarks.values()) { mk.sprite.parent?.remove(mk.sprite); mk.sprite.material.dispose(); }
+  hitXMarks.clear();
+  state.hitXCrossAt = 0;
+}
+// Free pov's X: four short red strokes with a dark edge round the crosshair, a little out from the crosshair's own
+// lines (4 px past its gap, its lines' length long), drawn while the crosshair shows; ch is the crosshair element. It
+// pops as the sprite does (hitXPop), grown round the crosshair's centre.
+function updateHitXCross(ch, shown) {
+  const hud = state.hud; if (!hud) return;
+  let el = hud.querySelector('#hit-x-cross');
+  const age = performance.now() - (state.hitXCrossAt || 0);
+  if (!shown || !ch || age >= HIT_X_LIFE_MS || dioramaActive()) { if (el) el.style.display = 'none'; return; }
+  const ns = 'http://www.w3.org/2000/svg';
+  if (!el) {
+    el = document.createElementNS(ns, 'svg'); el.id = 'hit-x-cross';
+    el.style.cssText = 'position:absolute;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;display:none';
+    for (const [col, w] of [['rgba(0, 0, 0, 0.55)', 4], [HIT_X_CSS, 2]]) for (let i = 0; i < 4; i += 1) { const l = document.createElementNS(ns, 'line'); l.setAttribute('stroke', col); l.setAttribute('stroke-width', w); l.setAttribute('stroke-linecap', 'butt'); el.appendChild(l); }
+    hud.appendChild(el);
+  }
+  const r0 = (ch._hitXGap ?? 6) + 4, r1 = r0 + (ch._hitXLen ?? 8), S = Math.ceil(r1 + 4) * 2, h = S / 2;
+  if (el._r0 !== r0 || el._r1 !== r1) {
+    el._r0 = r0; el._r1 = r1; el.setAttribute('width', S); el.setAttribute('height', S);
+    el.querySelectorAll('line').forEach((l, i) => { const ang = (2 * (i % 4) + 1) * Math.PI / 4, ca = Math.cos(ang), sa = Math.sin(ang);
+      l.setAttribute('x1', h + ca * r0); l.setAttribute('y1', h + sa * r0); l.setAttribute('x2', h + ca * r1); l.setAttribute('y2', h + sa * r1); });
+  }
+  const [k, op] = hitXPop(age);
+  el.style.left = ch.style.left; el.style.top = ch.style.top;
+  el.style.transform = `translate(-50%, -50%) scale(${k.toFixed(3)})`;
+  el.style.opacity = op.toFixed(3);
+  el.style.display = 'block';
+}
+// Online: a snapshot slot id as this client's mech (the slot map the match set up).
+function onlineMechOfId(id) {
+  const sm = state.online?.slotMap; if (!sm || !id) return null;
+  return id === sm.cameraId ? state.player : id === sm.allyId ? state.ally : id === sm.enemyId ? state.enemy : id === sm.enemy2Id ? state.enemy2 : null;
 }
 
 // Lazily build the screen-edge direction arrow (a DOM overlay). Kept on
@@ -7456,7 +7567,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fe 11-10';
+const CLIENT_BUILD_TAG = 'b1105fg 11-10';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8730,6 +8841,7 @@ function ensureOnlineMatchSetup(snap) {
   state.playerCurrentTarget = null;
   if (state.reticle?.parent) state.reticle.parent.remove(state.reticle);
   state.reticle = null;
+  clearHitX();   // (HIT X)
   if (state.allyArrow?.parent) state.allyArrow.parent.remove(state.allyArrow);
   state.allyArrow = null;
   if (state.enemyArrow?.parent) state.enemyArrow.parent.remove(state.enemyArrow);
@@ -8789,6 +8901,7 @@ function ensureOnlineMatchSetup(snap) {
 
   // Save the snapshot-id → mech mapping for per-frame mirroring.
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
+  onl.conn?.drainHits?.();   // (HIT X: hits queued before this match are not this match's)
 
   // Trio: pre-build each slot's future roster units and pre-warm all fielded
   // art (mirrors the offline match-start prebuild), so a Trio respawn swaps
@@ -9120,6 +9233,8 @@ function runOnlineMatchFrame(dt, onl, conn) {
     syncOnlineBeams(snap);
     processOnlineEvents(snap, onl.myPlayerId);
   }
+  // HIT X: every hit event of every snapshot that came in (a frame can see two), once the server confirmed it
+  for (const h of conn.drainHits?.() ?? []) noteHitX(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
 
   // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
   //    entirely: the unit is bot-driven server-side, input replay would
@@ -12435,7 +12550,7 @@ function updateCrosshair() {
   const viewer = live ? null : cameraFocusMech();
   const spectated = viewer && !(freePovOwner() && viewer === state.player) && viewer.state.freeAim && viewer.state.hp > 0 && viewer.state.aimYaw != null && inMatch && !dioramaActive() ? viewer : null;   // (an online spectator's state.player is the watched p1)
   if (ch) ch.style.display = live || spectated ? 'block' : 'none';
-  if (!live && !spectated) return;
+  if (!live && !spectated) { updateHitXCross(ch, false); return; }
   if (live) {
     const o = camera.position; const d = new THREE.Vector3(); camera.getWorldDirection(d);
     const hit = freePovAimPoint(o, d, getEnemiesOf(state.player));
@@ -12448,6 +12563,7 @@ function updateCrosshair() {
     // (the canvas's centre, as the spectator's point below is the canvas's: the HUD fills #app, 100vh — taller than the canvas
     // in a phone tab with its address bar showing, so the HUD's centre, left/top 50% until 2026-11-02, sat half the bar low)
     if (ch) freePovCrosshairAt(ch, state.player, renderer.domElement.clientWidth / 2, renderer.domElement.clientHeight / 2);
+    updateHitXCross(ch, true);
     return;
   }
   const dir = aimDirOf(spectated.state.aimYaw, spectated.state.aimPitch || 0);
@@ -12455,10 +12571,11 @@ function updateCrosshair() {
   const hit = freePovAimPoint(new THREE.Vector3(mz.x, mz.y + 0.8, mz.z), new THREE.Vector3(dir.x, dir.y, dir.z), getEnemiesOf(spectated));
   const v = new THREE.Vector3(hit.x, hit.y, hit.z).project(camera);
   if (!ch) return;
-  if (v.z > 1 || v.z < -1) { ch.style.display = 'none'; return; }   // (behind this camera)
+  if (v.z > 1 || v.z < -1) { ch.style.display = 'none'; updateHitXCross(ch, false); return; }   // (behind this camera)
   const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight;
   // (an aim point outside this screen is pinned to its edge, so the spectator still sees which way the unit aims)
   freePovCrosshairAt(ch, spectated, THREE.MathUtils.clamp((v.x + 1) / 2 * W, 16, W - 16), THREE.MathUtils.clamp((1 - v.y) / 2 * H, 16, H - 16));
+  updateHitXCross(ch, true);
 }
 
 // The point under a ray: its first wall (beamLengthToWall), or the first enemy body it crosses before that — and whether it is one.
@@ -12504,6 +12621,7 @@ function freePovCrosshairAt(ch, m, x, y) {
   ch.style.setProperty('--ch-len', dev(whole(FREE_POV.crosshairLinePx)));
   ch.style.setProperty('--ch-th', dev(th));
   ch.style.setProperty('--ch-edge', dev(whole(FREE_POV.crosshairEdgePx)));
+  ch._hitXGap = at(px / 2) / dpr; ch._hitXLen = whole(FREE_POV.crosshairLinePx) / dpr;   // (HIT X: free pov's X sits just outside these)
 }
 
 // The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
@@ -12564,6 +12682,8 @@ function setupFreePovPointer(signal) {
 function freePovDragStart(e) { if (e && e.pointerType !== 'mouse') freePovPtr.shoot = { id: e.pointerId, x: e.clientX, y: e.clientY }; }
 
 if (typeof window !== 'undefined') {
+  window.__hitX = { count: () => hitXMarks.size, crossAt: () => state.hitXCrossAt || 0, note: (o, t) => noteHitX(o, t), pop: hitXPop,
+    peek: () => [...hitXMarks.entries()].map(([t, mk]) => ({ pop: mk.pop, scale: mk.sprite.scale.x, opacity: mk.sprite.material.opacity, base: 9.15 * LOCK_BRACKET_SIZE * THREE.MathUtils.clamp(camera.position.distanceTo(t.root.position) / 22, 0.7, 4.5), age: performance.now() - mk.at })) };   // (automation: the hit X)
   window.__freePov = {
     cfg: FREE_POV, toggle: toggleFreePov, aim: state.aim,
     aimTo: (yaw, pitch = 0) => { state.aim.yaw = yaw; state.aim.pitch = pitch; },   // (automation: point the crosshair)
