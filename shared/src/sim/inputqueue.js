@@ -28,6 +28,7 @@ export function normalizeFrame(frame) {
     shootHold: !!frame.shootHold,
     jump: !!frame.jump,
     jumpHeld: !!frame.jump,
+    jumpDown: !!frame.jumpDown,                // (the jump button's own held state — the transporters' hold, pads.js: `jump` is a tap online for a unit that does not fly)
     stepTap: !!frame.stepTap,
     shootTap: !!frame.shootTap,
     targetSwitch: !!frame.targetSwitch,

@@ -28,6 +28,7 @@ import {
   voidUnder
 } from './physics.js';
 import { onLadder, ladderHumanInput, ladderPress, ladderBotStep, ladderTick } from './ladder.js';
+import { padHumanInput, padBotStep } from './pads.js';   // the transporters (b1105fk)
 import {
   tickBoost,
   applyMomentum,
@@ -114,6 +115,16 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const ladders = getArena(matchState.mapKey).ladders ?? [];
   if (onLadder(fighter)) { ladderHumanInput(fighter, fighter.pos, fighter.vel, input, ladders); return; }
   if (fighter.ladderJumpLatch) { if (input.jump) input = { ...input, jump: false }; else fighter.ladderJumpLatch = undefined; }
+  // THE TRANSPORTERS (pads.js; b1105fk): the jump button on a pad — a fresh press there starts the charge, the held button
+  // keeps it, PAD_HOLD_MS after the press the body stands on the other pad; meanwhile no move, no jump, no dodge (attemptFire
+  // refuses the shot), as on a ladder. A press spent (the latch: after the move, or a charge dropped with the button held) makes
+  // no jump. Mirrored in the client's updatePlayer.
+  const pads = getArena(matchState.mapKey).pads ?? [];
+  if (pads.length) {
+    const pr = padHumanInput(fighter, fighter.pos, fighter.vel, input, pads, now, Object.values(matchState.fighters), obstacles);
+    if (pr === 'charging' || pr === 'moved') return;
+    if (pr === 'spent' && input.jump) input = { ...input, jump: false };
+  }
 
   // Honour a one-tick target switch before resolving opp so the very next
   // shot already lands on the new target.
@@ -367,6 +378,8 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
     if (botSet.has(f.id)) {
       // (the ladder, ladder.js: a bot's goal mounts it, and on the ladder its body is the ladder's — no momentum, no gauge)
       if (ladderBotStep(f, f.pos, f.vel, arena.ladders ?? [])) continue;
+      // (the transporters, pads.js: a bot's goal starts the charge on its pad, and while it runs the body is the pad's — as a climber's)
+      if (padBotStep(f, f.pos, f.vel, arena.pads ?? [], now, fighters, arena.obstacles)) continue;
       applyMomentum(f, { suspend: f.action === 'step' });
       tickBoost(f, now, f.action, arena.surfaces);
       continue;

@@ -240,7 +240,9 @@ export function tickCommandDriver(matchState, slot, now) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) { cmd.move = null; cmd.lockTargetId = null; cmd.hide = false; cmd.hideAuto = false; return; }
   if (f.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderTick; the order goes on from the landing)
+  if (f.padCharge != null) return;   // (charging on a transporter, the same — pads.js padBotStep; the order goes on from the arrival)
   f.botLadderGoal = undefined;    // (the goal is this tick's: set below on a ladder leg of the route, else none — nbrain.js, THE LADDER'S GOAL)
+  f.botPadGoal = undefined;       // (the transporter's the same: set below on a pad's leg — pads.js)
   if (commandReflexActive(f, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex (Defense escape, cover hide) may have moved
@@ -282,17 +284,24 @@ export function tickCommandDriver(matchState, slot, now) {
     // legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit). No route jump at it.
     // Mirrors the offline applyMoveOrder.
     const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? 0) - myFloorY) > 2;
+    // THE TRANSPORTER (pads.js, b1105fk): a pad's arrival on another floor the same — reached by the pad: the goal is the pad it
+    // is taken from (padBotStep charges in its zone; the rule moves the body), the legs head for the zone's middle. No route jump.
+    const standY = f.floorY != null ? f.floorY - GROUND_BASE_Y : myFloorY;   // (the floor the body stands on — nbrain.js padAhead)
+    const padAhead = (w) => w.pad != null && Math.abs((w.y ?? 0) - standY) > 2;
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
-      && !ladderAhead(wp)
+      && !ladderAhead(wp) && !padAhead(wp)
       && Math.hypot(wp.x - f.pos.x, wp.z - f.pos.z) < 3) {
       mv.idx += 1;
       wp = mv.path[mv.idx];
     }
     const ladderLeg = !!wp && ladderAhead(wp);
     if (ladderLeg) f.botLadderGoal = wp.climb;
-    const gx = wp ? (ladderLeg ? wp.mx : wp.x) : mv.x;
-    const gz = wp ? (ladderLeg ? wp.mz : wp.z) : mv.z;
+    const padLeg = !!wp && !ladderLeg && padAhead(wp);
+    if (padLeg) f.botPadGoal = wp.pad;
+    const viaLink = ladderLeg || padLeg;
+    const gx = wp ? (viaLink ? wp.mx : wp.x) : mv.x;
+    const gz = wp ? (viaLink ? wp.mz : wp.z) : mv.z;
     const dx = gx - f.pos.x;
     const dz = gz - f.pos.z;
     const l = Math.hypot(dx, dz) || 1;
@@ -303,7 +312,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // discretionary reserve, which the 50<->125 dash-latch cycle can't
     // reach). tryStartJump paces retries via the bot 1.5 s cooldown floor.
     const wpY = wp ? (wp.y ?? 0) : mv.y;
-    if (grounded && !ladderLeg && wpY - myFloorY > 1.7 && l < 7
+    if (grounded && !viaLink && wpY - myFloorY > 1.7 && l < 7
       && f.boost >= MANDATED_JUMP_MIN_BOOST * (f.boostScale ?? DEFAULT_BOOST_SCALE)) {   // (the map's boost scale, state.js: District and Compound 5 — the tiers with the gauge)
       tryStartJump(f, now);
     }
@@ -325,7 +334,7 @@ export function tickCommandDriver(matchState, slot, now) {
     // walk-and-bank rule, sized for the command economy).
     let jumpAhead = false;
     for (let k = mv.idx; k < mv.path.length; k += 1) {
-      if (mv.path[k].ladder == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+      if (mv.path[k].ladder == null && mv.path[k].pad == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }   // (a ladder's landing and a pad's arrival are no jumps)
     }
     const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : CMD_TRAVEL_BOOST_FLOOR) * (f.boostScale ?? DEFAULT_BOOST_SCALE);
     // Latched dash segments. The drop check is PREDICTIVE (boost must

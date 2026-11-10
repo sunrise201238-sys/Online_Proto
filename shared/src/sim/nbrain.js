@@ -551,7 +551,8 @@ export function nbBrainTick(host) {
   // walks the bot at a ladder's end, and nothing else renews it, so a bot that dropped its route, or was taken by Defense,
   // passes a ladder's foot without mounting (ladderBotStep mounts on the goal alone). Under a standing move order the command
   // driver owns the goal the same way (command.js tickCommandDriver, the offline applyMoveOrder) and this clears nothing.
-  if (!(host.cmd && host.cmd.move)) me.botLadderGoal = undefined;
+  // The transporter's goal (pads.js botPadGoal; b1105fk) lives the same one tick, set by the same follower on a pad's leg.
+  if (!(host.cmd && host.cmd.move)) { me.botLadderGoal = undefined; me.botPadGoal = undefined; }
   // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
   // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
   // as the gauge's volume and refill are (movement.js); the costs are not.
@@ -1297,8 +1298,10 @@ export function nbBrainTick(host) {
     for (let i = 0; i < path.length; i += 1) {
       const seg = path[i];
       const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
-      // (a ladder's leg is the climb, not a walk: no sample along it — its landing alone is tried, and kept whole as the cut)
-      const steps = seg.ladder != null ? 1 : Math.max(1, Math.ceil(segLen / 6));
+      // (a ladder's leg is the climb, not a walk: no sample along it — its landing alone is tried, and kept whole as the cut;
+      // a transporter's leg the same, its arrival alone)
+      const linkLeg = seg.ladder != null || seg.pad != null;
+      const steps = linkLeg ? 1 : Math.max(1, Math.ceil(segLen / 6));
       for (let s = 1; s <= steps; s += 1) {
         const px = prev.x + ((seg.x - prev.x) * s) / steps;
         const pz = prev.z + ((seg.z - prev.z) * s) / steps;
@@ -1313,7 +1316,7 @@ export function nbBrainTick(host) {
           // Carry the sample's floor: smoothPath's same-floor gate reads
           // (y ?? 0), so a y-less cut point on a deck froze the final leg
           // out of smoothing (review 2026-08-13).
-          cut.push(seg.ladder != null ? seg : { x: px, z: pz, y: fy });
+          cut.push(linkLeg ? seg : { x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -1791,8 +1794,14 @@ export function nbBrainTick(host) {
       let wp = nav.path[nav.idx];
       // (a ladder's landing is reached by the climb — a bot under it, however near in the plan, has the ladder to ride first)
       const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? myFloorY) - myFloorY) >= BOT_SAME_FLOOR_RISE;
+      // (a transporter's arrival on another floor, the same: reached by the pad — pads.js, navgrid.js THE TRANSPORTERS ON THE GRID.
+      // The floor is the one the body stands on, the host's floorY: at the south end of B's walkway the body stands on a box's
+      // top that the floors list does not hold, the floor read off the list there is the roof 47 units under, and an arrival
+      // already made read as ahead.)
+      const standY = me.floorY != null ? me.floorY - GROUND_BASE_Y : myFloorY;
+      const padAhead = (w) => w.pad != null && Math.abs((w.y ?? standY) - standY) >= BOT_SAME_FLOOR_RISE;
       while (nav.idx < nav.path.length - 1
-          && !ladderAhead(wp)
+          && !ladderAhead(wp) && !padAhead(wp)
           && Math.hypot(wp.x - pos.x, wp.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
@@ -1823,7 +1832,13 @@ export function nbBrainTick(host) {
       // is reached) and the legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit).
       const ladderLeg = ladderAhead(wp);
       if (ladderLeg) me.botLadderGoal = wp.climb;
-      let tx = (ladderLeg ? wp.mx : wp.x) - pos.x, tz = (ladderLeg ? wp.mz : wp.z) - pos.z;
+      // THE TRANSPORTER (pads.js, b1105fk): the waypoint ahead is a pad's arrival on another floor — the goal is the pad it is
+      // taken from (padBotStep charges in its zone; the brain sleeps for the second and wakes on the arrival, where the waypoint
+      // is reached) and the legs head for the zone's middle (mx, mz).
+      const padLeg = !ladderLeg && padAhead(wp);
+      if (padLeg) me.botPadGoal = wp.pad;
+      const viaLink = ladderLeg || padLeg;
+      let tx = (viaLink ? wp.mx : wp.x) - pos.x, tz = (viaLink ? wp.mz : wp.z) - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.3;
       tz = tz / wl + avoid.rz * 0.3;

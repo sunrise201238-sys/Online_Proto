@@ -4,8 +4,9 @@
 export * from './constants.js';
 export * from './math.js';
 export * from './state.js';
-export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaLadders, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
+export { getArena, getArenaObstacles, getArenaSurfaces, getArenaSpawns, getArenaLadders, getArenaPads, getArenaBounds, getGeneratedObstacles, registerGeneratedData, hasGeneratedData, generatedDataFile, FILE_DATA_MAPS } from './arena.js';
 export { onLadder, ladderAt, ladderFootZone, ladderTopZone, ladderMount, ladderRelease, ladderIntentOf, ladderJumpPress, ladderHumanInput, ladderTryMount, ladderBotStep, ladderTick, ladderNormal, ladderRow, ladderGrabPoint, ladderTangent, ladderOffsetAt, ladderColumnAt, ladderExitAt, LADDER_SPAN_END, LADDER_SPAN_LINK_STEP, ladderApproach, ladderPress, LADDER_GRAB_FRONT, LADDER_GRAB_BACK, LADDER_GRAB_SIDE, LADDER_TOP_RADIUS, LADDER_GRAB_MID, LADDER_APPROACH_FRONT, LADDER_PRESS_MS } from './ladder.js';
+export { PAD_HOLD_MS, PAD_CLEAR, padCharging, padZone, padAt, padChargeProgress, padArrive, padHumanInput, padBotStep, padRow } from './pads.js';   // the transporters (pads.js; b1105fk)
 export {
   segmentHitsObstacle,
   unitOverlapsObstacle,

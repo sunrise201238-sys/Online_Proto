@@ -73,6 +73,7 @@ export function tickBloom(fighter, now, dt) {
 // it. Null = the classic aimed shot.
 export function attemptFire(matchState, owner, target, now, aim = null) {
   if (owner.ladder != null) return false;   // (no shot from a ladder — ladder.js; the client hides the button, user 2026-11-05)
+  if (owner.padCharge != null) return false;   // (no shot while a transporter's charge runs — pads.js, b1105fk)
   // Defensive re-target — if our caller handed us a dead target, swap it
   // for any live enemy on the opposite team. applyInput's auto-fallback
   // already does this for the human path, but a bot path or a continuous-
@@ -209,6 +210,7 @@ export function clearIncomingHoming(matchState, fighter, now) {
 export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
   const u = fighter.unit;
   if (fighter.ladder != null) return false;   // (no dodge from a ladder — ladder.js)
+  if (fighter.padCharge != null) return false;   // (nor while a transporter's charge runs — pads.js)
   if (now < fighter.stepCooldownUntil) return false;
   if (fighter.boost < (u?.stepBoostCost ?? STEP_BOOST_COST)) return false;
 
@@ -294,6 +296,7 @@ export function tryStartJump(fighter, now, carry = fighter.vel) {
   const jumpHoverMs = fighter.unit?.jumpHoverMs ?? JUMP_HOVER_MS;
   const jumpCooldownMs = fighter.unit?.jumpCooldownMs ?? JUMP_COOLDOWN_MS;
   if (fighter.ladder != null) return false;   // (on a ladder the jump button lets go — ladder.js, applyInput; never a jump)
+  if (fighter.padCharge != null) return false;   // (on a transporter the jump button holds the charge — pads.js; never a jump)
   if (now < fighter.jumpCooldownUntil) return false;
   if (fighter.boost < jumpBoostCost) return false;
   if (!fighter.grounded && fighter.pos.y > GROUND_BASE_Y + 0.15) return false;

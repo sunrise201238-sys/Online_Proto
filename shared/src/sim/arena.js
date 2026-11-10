@@ -5,6 +5,7 @@
 import { GROUND_BASE_Y } from './constants.js';
 import { obstaclesNearPoint } from './physics.js';   // (markFloorTops: the surfaces near a box, 2026-10-25)
 import { ladderRow } from './ladder.js';   // (ARENA_LADDERS: the rows in the model's metres)
+import { padRow } from './pads.js';   // (ARENA_PADS: the transporters' rows in the model's metres, b1105fk)
 
 // Each obstacle is an axis-aligned bounding box (AABB) used for unit and
 // projectile collision. Optional flags:
@@ -10350,6 +10351,36 @@ const ARENA_LADDERS = (() => {
   };
 })();
 
+// THE TRANSPORTERS (pads.js; b1105fk, user 2026-11-10), hand-set rows by map as the ladders are — the collision data is not
+// touched for them. Each row in the model's metres through padRow (the client's GLB_MAPS scale and centre): x, z, r the zone (a
+// circle on the floor, y the floor's height over the street; the client draws it there, a golden ring that wide), `to` the pad
+// it sends to, ax, az the arrival point, spots the arrival spots beside it for a second body (offsets in metres, the point
+// first), and `sign` a text on a wall — words only: no zone, no ring (b1105fl, user: "Move the transporting circle and its
+// detection on the floor instead of on the wall. The text stays on the wall though, without detection").
+//   Blockade: A, the tunnel's T junction — the zone and its ring in the middle of the junction's square (the tube's walls at z
+//   6.651 north, 9.350 south, the stem's at x -4.650 and -1.950; the ring 0.25 m clear of the north wall), on the tube's floor
+//   (0.5425 m), round where the user stood (x -3.05, z 8.29); the sign on the old corridor's wall over the tube's north wall
+//   (b1105fj's seal, its face at z 6.4386; the words' middle 3.36 m up, between the tube's ceiling, 2.257 m, and the old
+//   ceiling, 4.46 m), where the circle stood in b1105fk. B, the tower top's walled walkway, on its floor (21.2375 m; x
+//   -5.44..-1.19), where the user stood (x -3.31, z 19.76), with the fence across the walkway 1.9 m north of it.
+//   The silver pair (b1105fo, user: "Add another pair of transport points as well. use silver instead of golden this time"; a
+//   pad's `color` is its look alone, pads.js): C on the ground floor south of the bridge, in front of the framed door with the
+//   diamond sign (0.5425 m), where the user stood (x 4.24, z 67.45) — the same floor and nothing in the way for 2.65 m round it; D in the covered bridge
+//   near its south end, on its floor (20.235 m), where the user stood (x 4.07, z 56.40) — the walls 3.3 and 4.0 m off, the end
+//   floor's step 1.95 m south. Both a metre round as B; no sign.
+const ARENA_PADS = (() => {
+  const B = (m) => padRow(4, -12.44, 40.37, m);   // Blockade: GLB_MAPS scale 4, cx -12.44, cz 40.37
+  return {
+    blockade: [
+      B({ name: 'A tunnel junction', x: -3.30, z: 8.00, r: 1.1, y: 0.5425, to: 1, ax: -3.30, az: 8.00, spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.6], [0, -0.7]],
+        sign: { x: -3.29, z: 6.452, y: 3.36, w: 2.0, yaw: 0, text: 'Hold Jump to Transport' } }),
+      B({ name: 'B tower top', x: -3.31, z: 19.76, r: 1.0, y: 21.2375, to: 0, ax: -3.31, az: 19.76, spots: [[0, 0], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]] }),
+      B({ name: 'C street south', x: 4.24, z: 67.45, r: 1.0, y: 0.5425, to: 3, ax: 4.24, az: 67.45, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]] }),
+      B({ name: 'D bridge south end', x: 4.07, z: 56.40, r: 1.0, y: 20.235, to: 2, ax: 4.07, az: 56.40, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, -0.8], [0, 0.8]] }),
+    ],
+  };
+})();
+
 const ARENA_SPAWNS = {
   // Streets: diagonal corner spawns (user 2026-08-06; old values ±108, 0) —
   // 8u clear of the boundary walls (x ±126, z ±90) and the corner towers.
@@ -10491,6 +10522,7 @@ function buildGeneratedArena(mapKey) {
     surfaces: data.surfaces.map(materializeSurface),
     spawns: ARENA_SPAWNS[mapKey],
     ladders: ARENA_LADDERS[mapKey] ?? [],   // the map's ladders (ladder.js), hand-set rows as the spawns are
+    pads: ARENA_PADS[mapKey] ?? [],         // the map's transporters (pads.js), hand-set rows as the ladders are
     ceil: MAP_BOUNDARY[mapKey]?.ceil   // the map's ceiling (units over the street) where it has one: the cap on every body's feet (movement.js)
   };
 }
@@ -10587,6 +10619,7 @@ export function getArenaObstacles(mapKey) { return getArena(mapKey).obstacles; }
 export function getArenaSurfaces(mapKey) { return getArena(mapKey).surfaces; }
 export function getArenaSpawns(mapKey) { return getArena(mapKey).spawns; }
 export function getArenaLadders(mapKey) { return getArena(mapKey).ladders ?? []; }
+export function getArenaPads(mapKey) { return getArena(mapKey).pads ?? []; }
 // Modelled maps (client buildGlbArena): the play extent, and the collision data's own boxes without
 // the runtime perimeter — the offline client raises its own perimeter (addBoundaryIndicator).
 export function getArenaBounds(mapKey) { return MAP_BOUNDARY[mapKey] ?? { halfX: 138, halfZ: 138 }; }

@@ -28,8 +28,9 @@
 import {
   walkFloorTo, surfaceHeightAtXZ, unitOverlapsObstacle, segmentHitsObstacle, walkSegmentBlocked, sightHitsSurface,
   groundHeightAt, obstaclesNearSegment, obstaclesNearPoint } from './physics.js';
-import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, NAV_FILE_EXT } from './constants.js';
+import { GROUND_BASE_Y, BOT_LOS_EYE_HEIGHT, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, NAV_FILE_EXT, LADDER_CLIMB_SPEED } from './constants.js';
 import { ladderGrabPoint, ladderColumnAt, ladderExitAt, LADDER_SPAN_END, LADDER_SPAN_LINK_STEP } from './ladder.js';
+import { PAD_HOLD_MS } from './pads.js';
 
 const CELL = 4;
 // Max floor rise between adjacent samples: the sim's step plus slack for float
@@ -673,7 +674,17 @@ function isWalkEdge(grid, a, b) { let yes = false; forEachWalkNeighbor(grid, a, 
 //   rule's, and the release stands the body on the landing, where the waypoint is reached. Never `jump`; never a chord across it.
 //   A WALL (ladder.js THE WALLS, `span`) is linked at points along its run, 8 m apart, up only: the mount reads the body's own
 //   place along the wall, so the landing of each link is the exit straight behind its point.
+// THE TRANSPORTERS ON THE GRID (pads.js, b1105fk, user 2026-11-10: "Bot should know this as part of the path. perhaps via ladder
+// mechanics"): a pad is a link of the same list (attachLadderLinks' third argument), from the node at its zone's middle to the
+// node at the other pad's arrival point — one way per pad, so a pair makes both ways. Its waypoint is the arrival, flagged with
+// the pad it is taken from (`pad`) and the point to walk to first (`mx`, `mz`: the zone's middle); a follower heading for it from
+// the other floor sets the goal (botPadGoal) and walks there, padBotStep charges in the zone and the rule moves the body onto the
+// arrival, where the waypoint is reached. Its cost is the charge's second at the climb's speed in cells (a walk edge is a cell at
+// that speed), never under the cells between its two nodes, so the search's bound (h, those cells) stays a lower bound across
+// it; a drop link off a pad's floor still wins the way down where there is one, as at a ladder. Asked for as the ladders are
+// (opts.ladders): travel, Pursue / Maze and the command orders; never the hide-spot search nor Sudden Death.
 export const LADDER_LINK_REACH = 6;   // (units: the farthest a ladder's end may lie from the node that stands for it — 1.5 cells)
+export const PAD_LINK_REACH = 8;      // (units: the farthest a pad's middle or arrival point may lie from its node — 2 cells)
 function nodeNear(grid, x, z, floorY, reach = LADDER_LINK_REACH) {
   const { cols, rows, cell, minX, minZ, cellStart, floor, posX, posZ } = grid;
   const c0 = Math.floor((x - minX) / cell), r0 = Math.floor((z - minZ) / cell);
@@ -691,7 +702,7 @@ function nodeNear(grid, x, z, floorY, reach = LADDER_LINK_REACH) {
   }
   return best;
 }
-export function attachLadderLinks(grid, ladders) {
+export function attachLadderLinks(grid, ladders, pads = []) {
   if (!grid || grid.ladderAdj) return grid;   // (once per grid object: the server's cache and the client hold one grid per arena)
   const adj = new Map(), links = [];
   const add = (from, to, rec) => { if (!adj.has(from)) adj.set(from, []); adj.get(from).push(links.length); links.push({ index: links.length, from, to, ...rec }); };
@@ -710,14 +721,25 @@ export function attachLadderLinks(grid, ladders) {
       if (!L.span) add(top, foot, { ladder: k, climb: -1, cost, mx: ex.x, mz: ex.z, x: col.x, z: col.z, y: L.y0 });
     }
   }
-  grid.ladderAdj = adj; grid.ladderLinks = links; grid.ladders = ladders ?? [];
+  // (the transporters — THE TRANSPORTERS ON THE GRID above)
+  const { cols, nodeCell } = grid;
+  for (let k = 0; k < (pads?.length ?? 0); k += 1) {
+    const P = pads[k], Q = pads[P.to]; if (!Q) continue;
+    const from = nodeNear(grid, P.x, P.z, P.y, PAD_LINK_REACH), to = nodeNear(grid, Q.ax, Q.az, Q.y, PAD_LINK_REACH);
+    if (from < 0 || to < 0 || from === to) continue;
+    const cf = nodeCell[from], ct = nodeCell[to];
+    const span = Math.abs((cf % cols) - (ct % cols)) + Math.abs(((cf / cols) | 0) - ((ct / cols) | 0));
+    const cost = Math.max((LADDER_CLIMB_SPEED * PAD_HOLD_MS) / 1000 / CELL, span) + 1;
+    add(from, to, { pad: k, cost, mx: P.x, mz: P.z, x: Q.ax, z: Q.az, y: Q.y });
+  }
+  grid.ladderAdj = adj; grid.ladderLinks = links; grid.ladders = ladders ?? []; grid.pads = pads ?? [];
   return grid;
 }
 // A route's waypoint for node i reached from node p: the landing of the ladder link the search took (`via`, its index), flagged;
 // else the node's point, flagged `jump` when no walk edge joins them (a jump or drop link).
 function routePoint(grid, p, i, via) {
   const l = via >= 0 ? grid.ladderLinks[via] : null;
-  if (l) return { x: l.x, z: l.z, y: l.y, jump: false, ladder: l.ladder, climb: l.climb, mx: l.mx, mz: l.mz };
+  if (l) return { x: l.x, z: l.z, y: l.y, jump: false, ladder: l.ladder, climb: l.climb, pad: l.pad, mx: l.mx, mz: l.mz };   // (a pad's link: `pad` set, `ladder` none)
   return { x: nodeCenterX(grid, i), z: nodeCenterZ(grid, i), y: grid.floor[i], jump: p !== -1 && !isWalkEdge(grid, p, i) };
 }
 
@@ -861,7 +883,7 @@ function collapseWaypoints(pts) {
   const out = [pts[0]];
   for (let k = 1; k < pts.length - 1; k += 1) {
     const a = out[out.length - 1], b = pts[k], c2 = pts[k + 1];
-    const floorJump = !!(b.jump || c2.jump || b.ladder != null || c2.ladder != null);   // (nor across a ladder's landing)
+    const floorJump = !!(b.jump || c2.jump || b.ladder != null || c2.ladder != null || b.pad != null || c2.pad != null);   // (nor across a ladder's landing, nor a pad's arrival)
     const cross = (b.x - a.x) * (c2.z - b.z) - (b.z - a.z) * (c2.x - b.x);
     if (!floorJump && Math.abs(cross) < 1e-6) continue;
     out.push(b);
@@ -930,7 +952,7 @@ export function smoothPath(grid, path, obstacles) {
     let best = a + 1;
     const bMax = Math.min(path.length, a + 13);
     for (let b = a + 2; b < bMax; b += 1) {
-      if (path[b].jump || path[b].ladder != null) break;   // (never a chord across a jump link, nor a ladder's landing)
+      if (path[b].jump || path[b].ladder != null || path[b].pad != null) break;   // (never a chord across a jump link, nor a ladder's landing, nor a pad's arrival)
       if (Math.abs((path[b].y ?? 0) - (path[a].y ?? 0)) > 0.5) break;
       if (!clearLeg(path[a], path[b])) break;
       best = b;

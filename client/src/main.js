@@ -53,6 +53,7 @@ import {
   applyHitStun,
   getArena,
   ladderHumanInput, ladderPress, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
+  padHumanInput, padBotStep, padChargeProgress,               // the transporters (pads.js; b1105fk)
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
@@ -2960,6 +2961,7 @@ function teardownHud() {
   input.shootTap = false;
   input.shootHold = false;
   input.jump = false;
+  input.jumpDown = false;
   input.stepTap = false;
   input.dirNeutralSince = 0;
 }
@@ -3143,6 +3145,7 @@ function setupHUD() {
         input.boostHeld = true;
         input.boost = true;
       } else input[k] = true;
+      if (k === 'jump') input.jumpDown = true;   // (the button's own held state: the transporters' hold, pads.js — `jump` is a tap online)
       // THE PRESSED LOOK BY HAND (b1105cd, user 2026-11-07: "when the joycon is being held, other buttons on the right side
       // (Target/Fire/Dodge/Sprint/Jump) do not show the pushed down effect"): :active is one element per page, and the finger
       // on the stick holds it, so a second finger's button stayed up though its input went through. Each touch now marks its
@@ -3157,6 +3160,7 @@ function setupHUD() {
         input.boostHeld = false;
         if (!input.sprintLocked) input.boost = false;
       } else input[k] = false;
+      if (k === 'jump') input.jumpDown = false;
       btn.classList.remove('is-down');
     };
     btn.addEventListener('pointerup', release);
@@ -3902,6 +3906,7 @@ function attemptFire(owner, target, now, aimDir = null) {   // (aimDir, free pov
     }
   }
   const u = owner.unit;
+  if (owner.state.padCharge != null) return false;   // (a transporter's charge holds the body: no shot — the shared attemptFire's rule, pads.js)
   if (u.sniperCharge) {
     if (owner.state.airborne) return false;
     if (owner.state.sniperChargeTarget) return false;
@@ -5207,6 +5212,19 @@ function updatePlayer(now) {
   }
   let jumpPress = !!input.jump && !state.player.state.ladderJumpLatch;   // (let: a press kept for a ladder ahead is spent below — ladderPress 'kept')
   if (!input.jump) state.player.state.ladderJumpLatch = undefined;
+  // THE TRANSPORTERS (pads.js, the sim's applyInput mirrored; b1105fk): on a pad the jump button is the pad's — a fresh press
+  // starts the charge, the held button keeps it (the body stands: no move, no jump, no dodge, no shot — the taps are dropped),
+  // PAD_HOLD_MS after the press the body stands on the other pad. A spent press (after the move) makes no jump.
+  if (arenaPads.length) {
+    const pr = padHumanInput(state.player.state, state.player.body.position, state.player.body.velocity, { jumpDown: !!input.jumpDown }, arenaPads, now, padOthersOf(state.player), arenaObstacles);
+    if (pr === 'charging' || pr === 'moved') {
+      input.stepTap = false; input.shootTap = false; input.sprintLocked = false; input.boost = false;
+      if (pr === 'moved') state.player.grounded = true;
+      updateBoost(state.player, now, 'idle');
+      return;
+    }
+    if (pr === 'spent') jumpPress = false;
+  }
   const p = state.player.root.position;
   const e = state.enemy.root.position;
   const stepState = state.player.state;
@@ -5753,6 +5771,7 @@ function updateEnemy(now) {
   const mech = state.enemy, eState = mech.state;
   if (!ensureOfflineNavGrid()) return;   // (the grid file is still on its way: the bot stands this frame — see ensureOfflineNavGrid)
   if (eState.ladder != null) { ladderBotStep(eState, mech.body.position, mech.body.velocity, arenaLadders); mech.grounded = false; return; }   // (on a ladder the body is the ladder's, the brain sleeps — the sim's tickBot and tickMatch; ladder.js)
+  if (eState.padCharge != null) { padBotStep(eState, mech.body.position, mech.body.velocity, arenaPads, now, padOthersOf(mech), arenaObstacles); mech.grounded = true; return; }   // (charging on a transporter, the same: the pad holds the body and moves it — pads.js)
   const myTeam = getTeamOf(mech);
   const enemies = [];
   for (const f of (_botTrueFighters ?? getAllFighters())) {
@@ -5802,6 +5821,7 @@ function updateEnemy(now) {
   // online should be identical to offline").
   botBodyRules(mech.body.velocity, eState, mech.unit, now);
   if (ladderBotStep(eState, mech.body.position, mech.body.velocity, arenaLadders)) { mech.grounded = false; return; }   // (the brain's goal mounts it this frame: no momentum, no gauge — the sim's bot branch; ladder.js)
+  if (padBotStep(eState, mech.body.position, mech.body.velocity, arenaPads, now, padOthersOf(mech), arenaObstacles)) return;   // (the brain's goal starts the charge in the pad's zone: no momentum, no gauge — the sim's bot branch; pads.js)
   applyMomentum(mech, { suspend: ran === 'stepping' });
   if (ran !== 'stepping') updateBoost(mech, now, eState.action);   // (the step's own update ran in botTickStep)
 }
@@ -7363,6 +7383,7 @@ function buildOnlineInputFrame() {
     boost: !!input.boost,
     sprintLocked: !!input.sprintLocked,
     jump: !!input.jump,
+    jumpDown: !!input.jumpDown,   // (the jump button held, whatever the tap above says — the transporters' hold, pads.js)
     stepTap: !!input.stepTap,
     shootTap: !!input.shootTap,
     shootHold: !!input.shootHold,
@@ -7425,6 +7446,7 @@ function mirrorFighterToMech(fighter, mech) {
   // (b1105cx: a player's stick-chosen dodge, the server's flag, and that dodge's line — updateUnitModelState faces it while firing)
   s.stepStick = !!fighter.stepStick; s.netStepDX = (fighter.stepToX ?? 0) - (fighter.stepFromX ?? 0); s.netStepDZ = (fighter.stepToZ ?? 0) - (fighter.stepFromZ ?? 0);
   s.ladder = fighter.ladder; s.ladderDir = fighter.ladderDir; s.ladderLeg = fighter.ladderLeg; s.ladderS = fighter.ladderS;   // the ladder (ladder.js): the pose, the facing, the camera and the HUD read them
+  s.padCharge = fighter.padCharge; s.padChargeAt = fighter.padChargeAt; s.padMoves = fighter.padMoves;   // the transporters (pads.js): the own charge's ring (server clock), the move's count
   s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
@@ -7567,7 +7589,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fh 11-10';
+const CLIENT_BUILD_TAG = 'b1105fp 11-10';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9376,6 +9398,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   updateVfx(dt);
   updateCamera();
   updateCrosshair();   // (free pov: the point under the crosshair, from the camera just placed)
+  updatePadRing(); updatePadDecor(realNow);   // (the transporters: the own charge's ring at the crosshair; the pads' pulse)
   rebillboardBulletTrails();   // after the camera is final — see the offline note
   updateMechXRayVisibility();
   updateWallFade();
@@ -10826,7 +10849,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 's' || e.key === 'ArrowDown') keyState.down = true;
   else if (k === 'a' || e.key === 'ArrowLeft') keyState.left = true;
   else if (k === 'd' || e.key === 'ArrowRight') keyState.right = true;
-  else if (k === ' ') input.jump = true;
+  else if (k === ' ') { input.jump = true; input.jumpDown = true; }   // (jumpDown: the key's own held state — the transporters' hold, pads.js)
   else if (k === 'k' || k === 'shift') {   // (Shift too, user 2026-10-30: sprint; a double-tap locks it, as K)
     const now = performance.now();
     const hasDir = Math.hypot(input.x, input.y) > 0.15;
@@ -10849,7 +10872,7 @@ window.addEventListener('keyup', (e) => {
   else if (k === 's' || e.key === 'ArrowDown') keyState.down = false;
   else if (k === 'a' || e.key === 'ArrowLeft') keyState.left = false;
   else if (k === 'd' || e.key === 'ArrowRight') keyState.right = false;
-  else if (k === ' ') input.jump = false;
+  else if (k === ' ') { input.jump = false; input.jumpDown = false; }
   else if (k === 'k' || k === 'shift') { input.boostHeld = false; if (!input.sprintLocked) input.boost = false; }
   else if (k === 'j') input.shootHold = false;
   else if (k === 'q') keyState.rotL = false;
@@ -11295,6 +11318,15 @@ function applyMomentum(mech, { suspend = false } = {}) {
 
 const arenaSurfaces = [];
 const arenaLadders = [];   // the map's ladders (ladder.js): the shared arena's rows, filled with the lists above by buildGlbArena
+const arenaPads = [];      // the map's transporters (pads.js), the same: the shared arena's rows, by buildGlbArena
+const padDecor = [];       // their circles and signs: { ring, halo, tex, haloTex, sign?, signTex? } each, the ring pulsed by updatePadDecor (THE TRANSPORTERS' LOOK)
+// A pad's look by its record's `color` (pads.js padRow: 'gold' unless set): the ring's colour, its light edge, the words'
+// deep end and dark edge, and the rgb triples of the soft fill, the glow and the halo. Silver: Blockade's second pair (b1105fo).
+const PAD_LOOKS = {
+  gold: { main: '#ffc93c', light: '#fff1b0', deep: '#d98a00', ink: '#3b2500', fill: '255, 201, 60', glow: '255, 186, 30', halo: '255, 190, 40' },
+  silver: { main: '#dfe6ee', light: '#ffffff', deep: '#8c99a7', ink: '#1c2531', fill: '214, 224, 236', glow: '186, 206, 232', halo: '196, 212, 236' },
+};
+const padLook = (P) => PAD_LOOKS[P?.color] ?? PAD_LOOKS.gold;
 // (what splitFadeParts makes for one arena — its copies of the model's geometry, the parts cut from them, the cloned
 // materials — disposed with the arena. The model's own geometry and materials are the cache's, shared by every instance,
 // and stay: without this, each match left its ~750 part geometries on the GPU, and the map loads slowed round by round,
@@ -11464,6 +11496,8 @@ function clearArenaDecor() {
   arenaObstacles.length = 0;
   arenaSurfaces.length = 0;
   arenaLadders.length = 0;
+  arenaPads.length = 0;
+  for (const d of padDecor) { d.tex.dispose(); d.haloTex.dispose(); d.signTex?.dispose(); } padDecor.length = 0;   // (the pads' meshes went with arenaDecor above; their textures here)
 }
 
 function addBlockingBox({ x, y, z, sx, sy, sz, material, topBuffer, decorOnly, invisible, noProjectile }) {
@@ -11715,7 +11749,9 @@ function applyMapAmbience(mapKey) {
 const GLB_MAPS = {
   town: { file: 'maps/invasion', scale: 4, cx: -0.5, cz: -10, ground: -0.5, drop: ['UFO_33'], ceilY: 28, modelM: 1, fade: false, cmdClear: false },   // (`cmdClear: false`, b1105bv: Town keeps its whole model in command mode, user 2026-11-07 "Town does not need this treatment") (`fade: false`: nothing on Town goes translucent — user 2026-10-30, "remove all transparent effect in Town"; with the fade keys merely gone the cells' things were still registered, 245 of them)
   district: { file: 'maps/district', scale: 4, cx: -25.75, cz: 35.45, ground: 0.55, drop: [], ceilY: 28, modelM: 28, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, edge: false, cmdNoFade: true },   // (no red edge: the city's own wall is the edge, user 2026-10-29; 28 m per model unit: the model's unit is 100 Roblox studs of 0.28 m — its bowling balls are 2 studs across, its leaderboards 10 by 15; the served copy is scaled by 28 (glb_rescale.mjs), so the file's units are the game's metres; the street is the roads' top, y 0.55, the base plate 0.33 m under it; the model's 13,500 bricks are merged into 1,375 things by glb_merge_parts.mjs — a building and what stands against it one thing — and each fades whole when it hides the player's own unit, as Warehouse's; user 2026-10-29)
-  blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, fadeForce: ['Node_78_78_copy_w8', 'Node_79_79_copy_w8', 'Node_78_78_copy_w16', 'Node_79_79_copy_w16', 'Node_76_76_copy_n8', 'Node_77_77_copy_n8', 'Node_78_78_copy_n8', 'Node_79_79_copy_n8', 'Node_205_205_cw'], cmdClear: ['Node_86_86', 'Node_32_32', 'Node_195_195', 'Node_37_37', 'Node_92_92', 'Node_85_85', 'Node_26_26', 'Node_151_151', 'Node_152_152', 'Node_31_31', 'Node_36_36', 'Node_84_84', 'Node_149_149', 'Node_125_125', 'Node_141_141', 'Node_184_184', 'Node_150_150', 'Node_194_194', 'Node_95_95', 'Node_28_28', 'Node_89_89', 'Node_142_142', 'Node_147_147', 'Node_183_183', 'Node_139_139', 'Node_201_201', 'Node_148_148', 'Node_102_102', 'Node_109_109', 'Node_88_88', 'Node_235_235', 'Node_30_30', 'Node_35_35', 'Node_83_83', 'Node_91_91', 'Node_197_197', 'Node_140_140', 'Node_145_145', 'Node_137_137', 'Node_199_199', 'Node_146_146', 'Node_198_198', 'Node_96_96', 'Node_101_101', 'Node_99_99', 'Node_138_138', 'Node_98_98', 'Node_120_120', 'Node_118_118', 'Node_119_119', 'Node_121_121', 'Node_45_45', 'Node_196_196', 'Node_224_224', 'Node_225_225', 'Node_124_124'] },   // (cmdClear, b1105bu: the tower parts starting 12 m or more over the street, hidden in command mode)   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick. b1105bk, fadeForce: the scaffold edits' decks — the extension's frame and grating (_w8), the two b1102h decks' (_w16, _n8) — and the catwalk's grating (Node_205_205_cw) are fade things whatever fadeNodes' tallness rule makes of them: the solid reading's floor strips at 5.30 m under those decks are "the floor at their foot", so they stood 0.47 m under fadeTall and never faded, while the deck they were copied from fades to a tenth beside them; a unit under the extension deck showed only through the grating texture's holes)
+  // (b1105fm, user 2026-11-10 "remove this weird cube at the end of the catwalk visually and physically": the cube at the covered bridge's south
+  // end, Object_253, is out of the served model itself — glb_drop_nodes.mjs then glb_strip.mjs --keep-normals; its boxes went with it)
+  blockade: { file: 'maps/blockade', scale: 4, cx: -12.44, cz: 40.37, ground: 4.2927, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1, neverFade: ['Tunnel_ABC'], fadeForce: ['Node_78_78_copy_w8', 'Node_79_79_copy_w8', 'Node_78_78_copy_w16', 'Node_79_79_copy_w16', 'Node_76_76_copy_n8', 'Node_77_77_copy_n8', 'Node_78_78_copy_n8', 'Node_79_79_copy_n8', 'Node_205_205_cw'], cmdClear: ['Node_86_86', 'Node_32_32', 'Node_195_195', 'Node_37_37', 'Node_92_92', 'Node_85_85', 'Node_26_26', 'Node_151_151', 'Node_152_152', 'Node_31_31', 'Node_36_36', 'Node_84_84', 'Node_149_149', 'Node_125_125', 'Node_141_141', 'Node_184_184', 'Node_150_150', 'Node_194_194', 'Node_95_95', 'Node_28_28', 'Node_89_89', 'Node_142_142', 'Node_147_147', 'Node_183_183', 'Node_139_139', 'Node_201_201', 'Node_148_148', 'Node_102_102', 'Node_109_109', 'Node_88_88', 'Node_235_235', 'Node_30_30', 'Node_35_35', 'Node_83_83', 'Node_91_91', 'Node_197_197', 'Node_140_140', 'Node_145_145', 'Node_137_137', 'Node_199_199', 'Node_146_146', 'Node_198_198', 'Node_96_96', 'Node_101_101', 'Node_99_99', 'Node_138_138', 'Node_98_98', 'Node_120_120', 'Node_118_118', 'Node_119_119', 'Node_121_121', 'Node_45_45', 'Node_196_196', 'Node_224_224', 'Node_225_225', 'Node_124_124'] },   // (cmdClear, b1105bu: the tower parts starting 12 m or more over the street, hidden in command mode)   // (neverFade, b1105fi: the tunnel through the south tower — user 2026-11-10, "open a tunnel that connects below three locations", the reference tunnel's look — its own object, Tunnel_ABC, never fades: its faces look inward, so the camera over its low ceiling sees through the ceiling and down the tube anyway, and a whole-object fade took its floor and light strips to a tenth with it, the reference tunnel's look in play; b1105fj: the panels b1105fi had put over its doorways are gone, user 2026-11-10 "remove the visual of the half opened door of this kind at the entrances of the tunnels")   // (Downtown Echo, miniroyale.io, served as uploaded, 2026-10-31: 1 m per model unit, the user's pick — a shop door 2.7 m; the crop is the model's ground grid, x -108.44..83.56 z -7.63..88.37, the street the road's top at 4.2927; the walls fade as District's, the user's pick. b1105bk, fadeForce: the scaffold edits' decks — the extension's frame and grating (_w8), the two b1102h decks' (_w16, _n8) — and the catwalk's grating (Node_205_205_cw) are fade things whatever fadeNodes' tallness rule makes of them: the solid reading's floor strips at 5.30 m under those decks are "the floor at their foot", so they stood 0.47 m under fadeTall and never faded, while the deck they were copied from fades to a tenth beside them; a unit under the extension deck showed only through the grating texture's holes)
   spacecraft: { file: 'maps/spacecraft', scale: 4, cx: 62, cz: -35, ground: 0, drop: [], ceilY: 28, modelM: 14, fadeTall: 9.6, edge: false, cmdDark: true },   // (the shooter view's tone the daylight one, as Warehouse's — user 2026-11-01; Factory's night tone from 2026-10-19 to then. Command mode stays black: cmdDark)
   dust: { file: 'maps/dust', scale: 4, cx: 49.8, cz: -32, ground: 83.92, drop: [], ceilY: 28, modelM: 142.23, fadeTall: 2 * GROUND_BASE_Y, fadeOwn: true, fadeWalls: true, fadeCell: 8, edge: false },   // (142.23 m per model unit, the user's pick with the map scale test; the Backrooms' fade rules: a maze of walls, read in 2 m cells — 114 x 178 m of 16–20 m walls: at a metre 656 things and 1,229 draw calls, at two 357 and 771)
   warehouse: { file: 'maps/warehouse', scale: 4, cx: 5, cz: 8, ground: 0, drop: [], ceilY: 28, modelM: 1, fadeNodes: true, fadeTall: 3.2, fadeOwn: true, fadeAlpha: 0.1 },   // (1 m per model unit; the container cluster and its copy turned 180°, set end to end, 38 x 62 m; the red edge confines the arena to the yard. The fade by the model's objects (fadeNodes): each container, machine and crate is one node of the model — the copies nodes of their own — and fades whole, alone, when it hides the player's own character, not for an enemy or an ally it hides (fadeOwn); anything 0.8 m or taller counts (fadeTall: the 1 m machines and crates hide a body's legs at close range), and a thing fades to a tenth, not a quarter (fadeAlpha), the yard being crowded; user 2026-10-22)
@@ -11879,13 +11915,13 @@ function ensureOfflineNavGrid() {
   const t0 = performance.now();
   if (rec && rec.bytes) {
     const g = deserializeNavGrid(rec.bytes, arenaSurfaces, navDataSignature(arenaObstacles, arenaSurfaces, arenaLadders));
-    if (g) { offlineNavGrid = attachLadderLinks(g, arenaLadders); console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
+    if (g) { offlineNavGrid = attachLadderLinks(g, arenaLadders, arenaPads); console.log(`[nav] ${state.mapKey}: grid from file, ${(performance.now() - t0).toFixed(0)} ms`); return g; }
     console.warn(`[nav] ${state.mapKey}: grid file refused (other collision data: ${arenaObstacles.length} boxes / ${arenaSurfaces.length} floors here) — building`);
     rec.bytes = null; rec.failed = true;
   } else if (rec && !rec.failed && performance.now() - rec.startedAt < NAV_DATA_WAIT_MS) {
     return null;   // (the file is on its way)
   }
-  offlineNavGrid = attachLadderLinks(buildNavGrid(arenaObstacles, arenaSurfaces, arenaLadders), arenaLadders);   // (the ladders' links on the grid — navgrid.js attachLadderLinks, as the server's navGridFor)
+  offlineNavGrid = attachLadderLinks(buildNavGrid(arenaObstacles, arenaSurfaces, arenaLadders), arenaLadders, arenaPads);   // (the ladders' and the transporters' links on the grid — navgrid.js attachLadderLinks, as the server's navGridFor)
   console.log(`[nav] ${state.mapKey}: grid built, ${(performance.now() - t0).toFixed(0)} ms`);
   return offlineNavGrid;
 }
@@ -11902,6 +11938,8 @@ function buildGlbArena(mapKey) {
   for (const o of shared.obstacles) arenaObstacles.push({ ...o });   // collision only: the model is the visual
   for (const s of shared.surfaces) arenaSurfaces.push(s);           // the raised floors (stairs, porches, pavements)
   for (const L of shared.ladders ?? []) arenaLadders.push(L);        // the ladders (ladder.js), the rule's records
+  for (const P of shared.pads ?? []) arenaPads.push(P);              // the transporters (pads.js), the rule's records
+  addPadDecor(arenaPads);                                            // and their golden circles (drawn here; the rule draws nothing)
   const group = new THREE.Group();
   group.scale.setScalar(cfg.scale);
   group.position.set(-cfg.cx * cfg.scale, -cfg.ground * cfg.scale, -cfg.cz * cfg.scale);
@@ -12535,6 +12573,117 @@ function updateFreePovCamera(cam) {
   camera.updateProjectionMatrix();
 }
 
+// THE TRANSPORTERS' LOOK (pads.js; b1105fk, user 2026-11-10: "a golden glowing circle area at this wall ... Within the wall
+// there would be golden text showing "Hold Jump to Transport" ... The position also has a golden circle area on the ground,
+// but no text"; of the timer, "Transporting unit's own crosshair indicator is enough"; b1105fl: "Move the transporting circle
+// and its detection on the floor instead of on the wall. The text stays on the wall though, without detection"; b1105fo, the
+// second pair: "use silver instead of golden this time" — each pad in its record's `color`, PAD_LOOKS, gold as written below
+// unless the record says silver, the charging player's ring with it). The rule
+// draws nothing; the client draws each pad from its record: a golden ring with a soft fill lying on the pad's floor, `dr`
+// round — the zone itself, so the ring is where the button works — with a halo under it pulsing gently (updatePadDecor); and a
+// pad's `sign`, words alone on a wall's face, gold with a dark edge, still. All arenaDecor, gone with the arena. The charge's
+// timer is the charging player's own: a golden ring round its crosshair filling in PAD_HOLD_MS, TRANSPORTING under it
+// (updatePadRing) — nobody else sees it.
+function padOthersOf(mech) {   // (the other living bodies, as the rule reads them: an arrival spot must be clear of them)
+  return getAllFighters().filter((m) => m && m !== mech && m.state.hp > 0).map((m) => ({ pos: m.body.position, hp: m.state.hp }));
+}
+// The floor circle: a ring with a glow and a soft fill, on a square canvas, in the pad's look L (PAD_LOOKS).
+function drawPadRing(c, L = PAD_LOOKS.gold) {
+  const S = c.width, R = S / 2, g = c.getContext('2d');
+  g.clearRect(0, 0, S, S);
+  const fill = g.createRadialGradient(R, R, R * 0.15, R, R, R * 0.86);
+  fill.addColorStop(0, `rgba(${L.fill}, 0.06)`); fill.addColorStop(1, `rgba(${L.fill}, 0.30)`);
+  g.fillStyle = fill; g.beginPath(); g.arc(R, R, R * 0.86, 0, Math.PI * 2); g.fill();
+  g.save(); g.shadowColor = `rgba(${L.glow}, 1)`; g.shadowBlur = S * 0.05;
+  g.strokeStyle = L.main; g.lineWidth = S * 0.045; g.beginPath(); g.arc(R, R, R * 0.84, 0, Math.PI * 2); g.stroke(); g.restore();
+  g.strokeStyle = L.light; g.lineWidth = S * 0.012; g.beginPath(); g.arc(R, R, R * 0.84, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = `rgba(${L.fill}, 0.55)`; g.lineWidth = S * 0.008; g.beginPath(); g.arc(R, R, R * 0.72, 0, Math.PI * 2); g.stroke();
+}
+// The sign's words (lines) in Titan One, the pad's colour with a dark edge and a soft glow, centred on the canvas: the type 0.15
+// of the canvas's width, narrowed to fit 0.62 of it — on a canvas as wide as the sign, the size the words had inside b1105fk's circle.
+function drawPadWords(c, lines, L = PAD_LOOKS.gold) {
+  const S = c.width, g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const family = '"Titan One", "Arial Black", Impact, sans-serif';
+  let px = S * 0.15; g.font = `${px}px ${family}`;
+  const widest = Math.max(...lines.map((l) => g.measureText(l).width)); if (widest > S * 0.62) { px *= S * 0.62 / widest; g.font = `${px}px ${family}`; }
+  const lh = px * 1.12, y0 = c.height / 2 - (lines.length - 1) * lh / 2;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  const grad = g.createLinearGradient(0, y0 - px, 0, y0 + (lines.length - 1) * lh + px);
+  grad.addColorStop(0, L.light); grad.addColorStop(0.45, L.main); grad.addColorStop(1, L.deep);
+  lines.forEach((l, i) => {
+    const y = y0 + i * lh;
+    g.save(); g.shadowColor = `rgba(${L.glow}, 0.9)`; g.shadowBlur = S * 0.03; g.strokeStyle = L.ink; g.lineWidth = px * 0.2; g.strokeText(l, S / 2, y); g.restore();
+    g.fillStyle = grad; g.fillText(l, S / 2, y);
+  });
+}
+function drawPadHalo(c, L = PAD_LOOKS.gold) {
+  const S = c.width, R = S / 2, g = c.getContext('2d');
+  const h = g.createRadialGradient(R, R, R * 0.45, R, R, R);
+  h.addColorStop(0, `rgba(${L.halo}, 0)`); h.addColorStop(0.62, `rgba(${L.halo}, 0.55)`); h.addColorStop(1, `rgba(${L.halo}, 0)`);
+  g.fillStyle = h; g.fillRect(0, 0, S, S);
+}
+function addPadDecor(pads) {
+  const mat = (map, add) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, fog: false,
+    polygonOffset: true, polygonOffsetFactor: add ? -2 : -4, polygonOffsetUnits: add ? -2 : -4, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending });
+  for (const P of pads) {
+    const r = P.dr ?? P.r, L = padLook(P);
+    const fc = document.createElement('canvas'); fc.width = fc.height = 512; drawPadRing(fc, L);
+    const tex = new THREE.CanvasTexture(fc); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const hc = document.createElement('canvas'); hc.width = hc.height = 128; drawPadHalo(hc, L);
+    const haloTex = new THREE.CanvasTexture(hc);
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(2 * r, 2 * r), mat(tex, false));
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(2.7 * r, 2.7 * r), mat(haloTex, true));
+    ring.renderOrder = 6; halo.renderOrder = 5;
+    for (const m of [halo, ring]) { m.position.set(P.x, P.y + 0.06, P.z); m.rotation.x = -Math.PI / 2; scene.add(m); arenaDecor.push(m); }
+    const d = { ring, halo, tex, haloTex };
+    if (P.sign?.text) {
+      // the sign: words alone on the wall's face, w wide and half as high, facing out along yaw
+      const lines = padTextLines(P.sign.text);
+      const sc = document.createElement('canvas'); sc.width = 512; sc.height = 256; drawPadWords(sc, lines, L);
+      const signTex = new THREE.CanvasTexture(sc); signTex.colorSpace = THREE.SRGBColorSpace; signTex.anisotropy = 4;
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(P.sign.w, P.sign.w / 2), mat(signTex, false));
+      sign.position.set(P.sign.x, P.sign.y, P.sign.z); sign.rotation.y = P.sign.yaw ?? 0; sign.renderOrder = 6;
+      scene.add(sign); arenaDecor.push(sign);
+      // (the canvas drew with a fallback face if Titan One was not loaded yet: drawn again once it is)
+      if (document.fonts?.load) document.fonts.load('64px "Titan One"').then(() => { if (!arenaDecor.includes(sign)) return; drawPadWords(sc, lines, L); signTex.needsUpdate = true; }).catch(() => {});
+      d.sign = sign; d.signTex = signTex;
+    }
+    padDecor.push(d);
+  }
+}
+// A sign's text in two lines, split at the middle word ("Hold Jump to Transport": "Hold Jump" / "to Transport").
+function padTextLines(text) { const w = text.split(/\s+/); if (w.length < 3) return [text]; const k = Math.ceil(w.length / 2); return [w.slice(0, k).join(' '), w.slice(k).join(' ')]; }
+function updatePadDecor(nowMs) {
+  if (!padDecor.length) return;
+  const k = 0.5 + 0.5 * Math.sin(nowMs * Math.PI * 2 / 1600);
+  for (const d of padDecor) { d.halo.material.opacity = 0.35 + 0.45 * k; d.ring.material.opacity = 0.86 + 0.14 * k; }
+}
+// The charging player's own timer: a golden half-transparent ring round its crosshair (its centre where the crosshair is drawn,
+// the canvas's centre while no crosshair shows), filling clockwise from the top over PAD_HOLD_MS, TRANSPORTING under it in the
+// sign's style. Only the player's own unit, alive, under the player's hands (not spectating, not command mode).
+function updatePadRing() {
+  const hud = state.hud; if (!hud) return;
+  let el = hud.querySelector('#pad-ring');
+  const st = state.player?.state, onl = state.online;
+  const mine = st && st.padCharge != null && st.hp > 0 && (state.running || !!state.sdIntro) && !dioramaActive() && !playerIsBotDriven() && !onl?.commandMode;
+  const p = mine ? padChargeProgress(st, onl ? (onl.lastPredSimTime ?? 0) : performance.now()) : null;
+  if (p == null) { if (el) el.style.display = 'none'; return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'pad-ring';
+    el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle class="pr-track" cx="50" cy="50" r="40"/><circle class="pr-fill" cx="50" cy="50" r="40" pathLength="100"/></svg><div class="pr-text">TRANSPORTING</div>';
+    hud.appendChild(el);
+  }
+  const ch = hud.querySelector('#crosshair');
+  const shown = ch && ch.style.display !== 'none' && ch.style.left;
+  el.style.left = shown ? ch.style.left : `${renderer.domElement.clientWidth / 2}px`;
+  el.style.top = shown ? ch.style.top : `${renderer.domElement.clientHeight / 2}px`;
+  el.style.setProperty('--pr-r', `${Math.max(30, shown ? (ch._hitXGap ?? 6) + (ch._hitXLen ?? 8) + 12 : 30).toFixed(1)}px`);   // (clear of the crosshair's lines)
+  el.querySelector('.pr-fill').style.strokeDashoffset = `${(100 * (1 - p)).toFixed(2)}`;
+  el.classList.toggle('pr-silver', arenaPads[st.padCharge]?.color === 'silver');   // (the ring in the charging pad's colour: style.css)
+  el.style.display = 'block';
+}
+
 // Every frame after the camera moved. The player's own crosshair (free pov, alive, not spectating): the point under the
 // screen centre — the camera ray's first wall, or the enemy body it crosses before that — the shot's direction from the
 // muzzle to it, and the crosshair on that ray, at the canvas's centre, its lines on the rounds' cone (freePovCrosshairAt).
@@ -13141,7 +13290,9 @@ function applyMoveOrder(m, now) {
   if (!mv) return;
   if (m.state.hp <= 0) { m.cmdMove = null; return; }
   if (m.state.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderTick; the order goes on from the landing)
+  if (m.state.padCharge != null) return;   // (charging on a transporter, the same — pads.js padBotStep; the order goes on from the arrival)
   m.state.botLadderGoal = undefined;    // (the goal is this frame's: set below on a ladder leg of the route, else none — command.js, nbrain.js)
+  m.state.botPadGoal = undefined;       // (the transporter's the same: set below on a pad's leg — pads.js)
   if (botReflexActive(m, now)) {
     // Remember the yield so travel replans the moment the reflex releases
     // the frame — the reflex may have moved the unit far off the route.
@@ -13182,17 +13333,23 @@ function applyMoveOrder(m, now) {
     // legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit). No route jump at it.
     // Mirrors the shared tickCommandDriver.
     const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? 0) - myFloorY) > 2;
+    // (the transporter, pads.js: a pad's arrival on another floor the same — the goal the pad it is taken from, the legs to the zone's middle; the shared tickCommandDriver)
+    const standY = m.state.floorY != null ? m.state.floorY - GROUND_BASE_Y : myFloorY;   // (the floor the body stands on — nbrain.js padAhead)
+    const padAhead = (w) => w.pad != null && Math.abs((w.y ?? 0) - standY) > 2;
     let wp = mv.path[mv.idx];
     while (wp && mv.idx < mv.path.length - 1
-      && !ladderAhead(wp)
+      && !ladderAhead(wp) && !padAhead(wp)
       && Math.hypot(wp.x - pos.x, wp.z - pos.z) < 3) {
       mv.idx += 1;
       wp = mv.path[mv.idx];
     }
     const ladderLeg = !!wp && ladderAhead(wp);
     if (ladderLeg) m.state.botLadderGoal = wp.climb;
-    const gx = wp ? (ladderLeg ? wp.mx : wp.x) : mv.x;
-    const gz = wp ? (ladderLeg ? wp.mz : wp.z) : mv.z;
+    const padLeg = !!wp && !ladderLeg && padAhead(wp);
+    if (padLeg) m.state.botPadGoal = wp.pad;
+    const viaLink = ladderLeg || padLeg;
+    const gx = wp ? (viaLink ? wp.mx : wp.x) : mv.x;
+    const gz = wp ? (viaLink ? wp.mz : wp.z) : mv.z;
     const dx = gx - pos.x;
     const dz = gz - pos.z;
     const l = Math.hypot(dx, dz) || 1;
@@ -13218,7 +13375,7 @@ function applyMoveOrder(m, now) {
     // ledge unable to afford the hop.
     let jumpAhead = false;
     for (let k = mv.idx; k < mv.path.length; k += 1) {
-      if (mv.path[k].ladder == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }
+      if (mv.path[k].ladder == null && mv.path[k].pad == null && ((mv.path[k].y ?? 0) - myFloorY) > 1.7) { jumpAhead = true; break; }   // (a ladder's landing and a pad's arrival are no jumps)
     }
     const floor = (jumpAhead ? CMD_TRAVEL_JUMP_BANK : DIO_TRAVEL_BOOST_FLOOR) * (m.state.boostScale ?? boostScaleOf(state.mapKey));   // (the map's boost scale: District and Compound 5)
     // DASH to the assigned area in LATCHED segments — same sprint math as
@@ -18873,6 +19030,7 @@ function animate() {
       updateVfx(dt);
       updateCamera();
       updateCrosshair();   // (free pov: the point under the crosshair, from the camera just placed)
+      updatePadRing(); updatePadDecor(performance.now());   // (the transporters: the own charge's ring at the crosshair; the pads' pulse)
       // AFTER updateCamera: ribbon trails are re-aimed at the camera every
       // frame; aiming them with last frame's camera leaves a one-frame lag
       // that flickers while the camera settles after a shot. Re-aim once the

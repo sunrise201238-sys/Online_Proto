@@ -92,6 +92,15 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     ladderJumpLatch: undefined,
     ladderArmUntil: undefined,   // (a jump press kept for the ladder ahead — ladder.js THE APPROACH)
     botLadderGoal: undefined,
+    // The transporters (pads.js; b1105fk): the pad's index while the jump button's charge runs and when it began (ms), the
+    // press spent (the latch: nothing until the button is let go), the button's held state last tick (a fresh press starts a
+    // charge), the moves made (the online client snaps its view on a new one), and a bot's goal (the pad it means to use).
+    padCharge: undefined,
+    padChargeAt: undefined,
+    padLatch: undefined,
+    padPrevDown: undefined,
+    padMoves: undefined,
+    botPadGoal: undefined,
 
     // Dash.
     antiMeleeUntil: 0,
