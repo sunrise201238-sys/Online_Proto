@@ -111,7 +111,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 200,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 200; 240 until then)
-    projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
+    projectileSpeed: 4500,     // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Aru/Hiyori bullet speed from 4000 to 4500"; 4000 until then) user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -257,7 +257,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2000,   // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Iori/Aris/Fubuki bullet speed from 1100 to 2000"; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
@@ -377,7 +377,7 @@ export const UNIT_DATA = {
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2000,   // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Iori/Aris/Fubuki bullet speed from 1100 to 2000"; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
@@ -670,7 +670,7 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 200,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 200; 240 until then)
-    projectileSpeed: 4000,     // user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
+    projectileSpeed: 4500,     // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Aru/Hiyori bullet speed from 4000 to 4500"; 4000 until then) user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
     spreadAngle: 0.02,
@@ -705,7 +705,7 @@ export const UNIT_DATA = {
     // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
     // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2000,   // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Iori/Aris/Fubuki bullet speed from 1100 to 2000"; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
                                // the cooldown time from 0.5sec to 0.75sec")
     forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
