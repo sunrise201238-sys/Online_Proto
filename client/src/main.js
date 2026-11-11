@@ -266,6 +266,7 @@ const UNIT_DATA = {
     // Weapon spec
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
     // (b1105fe, user 2026-11-10: "Give Hina the same 33% hit rate gating other auto-weapons have" — no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO 8.84 / cone, as the ARs and SMGs; botGateWidth 0, no gate line, from owner 2026-09-25 until then)
+    botGateWidth: 11.42,       // bot fire gate (b1105ga, user 2026-11-11: "change hina hit rate gating from 33% to 20%"): she fires while her CURRENT cone still lands one round in five on a standing target — the 3.2 x 6.4 capsule a fifth of the cone's disc at radius 5.71 — so the line is 11.42 / cone, 1.29x the autos' 33% line (BOT_GATE_WIDTH_AUTO 8.84) she rode from b1105fe; at her 120 lock she holds once the cone passes 0.095
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -275,8 +276,8 @@ const UNIT_DATA = {
     bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 2.7 s after the 200 ms
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too) (PT b1105eq: 200, as b1105ep; 0 in b1105eo; b1105fy and b1105fz keep it, "200 ms")
     damage: 4,
-    magCapacity: 100,          // user 2026-11-06: 100 rounds (250 until then)
-    botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06)
+    magCapacity: 150,          // user 2026-11-11: "change hina mag size from 100 to 150" (b1105ga; 100 from 2026-11-06, 250 until then)
+    botFireCap: 150,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06; 150 with it, b1105ga)
     reloadMs: 5000,            // user 2026-11-06: 5 s (7 s until then)
     autoReload: false,
     stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
@@ -7591,7 +7592,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fz 11-11';
+const CLIENT_BUILD_TAG = 'b1105ga 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

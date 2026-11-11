@@ -279,13 +279,19 @@ test('botMayFire state machine', () => {
   assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
 });
 
-test('bot gate — Hina rides the autos\' 33%-hit line (b1105fe, user 2026-11-10)', () => {
+test('bot gate — Hina rides her own 20%-hit line (b1105ga, user 2026-11-11: "change hina hit rate gating from 33% to 20%"; the autos\' 33% from b1105fe)', () => {
   const u = UNIT_DATA.unit5;
-  assert.equal(u.botGateWidth, undefined);                                        // the default, as the ARs and SMGs
-  assert.ok(Math.abs(botGateDistance(u, 0.2) - 8.84 / 0.2) < 1e-9);
+  assert.equal(u.botGateWidth, 11.42);
+  assert.ok(Math.abs(3.2 * 6.4 / (Math.PI * (u.botGateWidth / 2) ** 2) - 0.2) < 1e-3);   // the capsule is a fifth of the cone's disc at the line
+  assert.ok(Math.abs(botGateDistance(u, 0.2) - 11.42 / 0.2) < 1e-9);
+  for (const mode of ['1v1', '2v2']) {                                               // at her 120 lock the line passes her at a 0.095 cone
+    assert.equal(botMayFire(u, { bloom: 0.093, botSuppressRemaining: 0, botHoldDist: 0 }, 120, mode), true);
+    assert.equal(botMayFire(u, { bloom: 0.096, botSuppressRemaining: 0, botHoldDist: 0 }, 120, mode), false);
+  }
   const capped = { bloom: u.bloomCap - u.spreadAngle, botSuppressRemaining: 0, botHoldDist: 0 };
   assert.equal(botMayFire(u, capped, 400, '2v2'), false);                          // far past her line with the cone up: she holds
   assert.ok(capped.botHoldDist > 0);
+  assert.equal(u.magCapacity, 150); assert.equal(u.botFireCap, u.magCapacity);   // b1105ga: a 150-round drum, the whole drum a pull
 });
 
 test('bot gate — Koyuki and Maki are ungated in both modes (owner 2026-09-25; Hina too until b1105fe); a 1v1-only width would still be honoured', () => {
