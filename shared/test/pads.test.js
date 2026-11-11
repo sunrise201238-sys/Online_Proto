@@ -28,6 +28,7 @@ test('Neon has two pairs, gold and silver, each pad sending to its own pair; zon
   const a = getArena('neon'); const pads = getArenaPads('neon');
   assert.equal(pads.length, 4); assert.deepEqual(pads.map((P) => P.to), [1, 0, 3, 2], 'A and B, C and D');
   assert.deepEqual(pads.map((P) => P.color), ['gold', 'gold', 'silver', 'silver'], 'the first pair gold, the second silver');
+  for (const P of pads) assert.ok(Math.abs(P.r / 4 - 1.1) < 1e-9, `${P.name}: 1.1 m round, as every pad (b1105fv)`);
   for (const P of pads) {
     const floor = groundHeightAt(P.x, P.z, a.surfaces, P.y + 0.1);
     assert.ok(Math.abs(floor - P.y) < 0.05, `${P.name}: the zone's floor ${floor.toFixed(2)} vs ${P.y.toFixed(2)}`);

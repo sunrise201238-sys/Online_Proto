@@ -10374,16 +10374,20 @@ const ARENA_LADDERS = (() => {
 //   there at z 70.026, in the plain stretch between its two light panels (x 2.5..6.6) from the ledge's top (1.35 m) to the
 //   hall's ceiling (2.261 m): the words' middle 1.81 m up over the pad's x, facing north, 13 mm off the face as A's; silver,
 //   its pad's own look (the client draws a sign in its pad's colour). D and B still have none.
+//   b1105fv (user 2026-11-11, asked whether the circles were all one size — A 1.1 m, the others 1.0 — then "全部改成 1.10 公尺：
+//   B、C、D 變大一點。"): B, C and D 1.1 m round as A, the zone and so the circle (pads.js: the circle drawn is the zone); each
+//   ring 1.1 m round still lies whole on its floor and clear of the walls (B's fence 1.9 m north, D's step 1.95 m south, C 2.65 m
+//   clear), and the arrival spots, 0.8 m off, inside the zones as before (pads.test.js).
 const ARENA_PADS = (() => {
   const B = (m) => padRow(4, -12.44, 40.37, m);   // Neon: GLB_MAPS scale 4, cx -12.44, cz 40.37
   return {
     neon: [
       B({ name: 'A tunnel junction', x: -3.30, z: 8.00, r: 1.1, y: 0.5425, to: 1, ax: -3.30, az: 8.00, spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.6], [0, -0.7]],
         sign: { x: -3.29, z: 6.452, y: 3.36, w: 2.0, yaw: 0, text: 'Hold Jump' } }),
-      B({ name: 'B tower top', x: -3.31, z: 19.76, r: 1.0, y: 21.2375, to: 0, ax: -3.31, az: 19.76, spots: [[0, 0], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]] }),
-      B({ name: 'C street south', x: 4.24, z: 67.45, r: 1.0, y: 0.5425, to: 3, ax: 4.24, az: 67.45, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]],
+      B({ name: 'B tower top', x: -3.31, z: 19.76, r: 1.1, y: 21.2375, to: 0, ax: -3.31, az: 19.76, spots: [[0, 0], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]] }),
+      B({ name: 'C street south', x: 4.24, z: 67.45, r: 1.1, y: 0.5425, to: 3, ax: 4.24, az: 67.45, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]],
         sign: { x: 4.24, z: 70.013, y: 1.81, w: 2.0, yaw: Math.PI, text: 'Hold Jump' } }),
-      B({ name: 'D bridge south end', x: 4.07, z: 56.40, r: 1.0, y: 20.235, to: 2, ax: 4.07, az: 56.40, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, -0.8], [0, 0.8]] }),
+      B({ name: 'D bridge south end', x: 4.07, z: 56.40, r: 1.1, y: 20.235, to: 2, ax: 4.07, az: 56.40, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, -0.8], [0, 0.8]] }),
     ],
   };
 })();

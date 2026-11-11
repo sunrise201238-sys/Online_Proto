@@ -6321,7 +6321,7 @@ function getUnlockedEnemy(viewer = state.player) {
   return null;
 }
 
-// Enemy counterpart to the friendly indicator (2v2 only), refreshed each frame.
+// Enemy counterpart to the friendly indicator (2v2; in free pov and on a ladder every live enemy, a 1v1's too), refreshed each frame.
 // Mirrors updateAllyArrow but rides the NOT-locked enemy, each arrow in its enemy's own colour (b1105eb; red-orange until then):
 //   1. state.enemyArrow     — a 3D chevron above that enemy, in-frustum only.
 //   2. state.enemyEdgeArrow — a screen-edge arrow pointing at it when off-frame.
@@ -6338,8 +6338,14 @@ function updateEnemyArrow() {
   const viewer = cameraFocusMech();
   // The foes the arrows ride: the NOT-locked enemy (2v2) — and while the viewer climbs a ladder, every live enemy, the
   // locked one among them (ladder.js; user 2026-11-05: the lock icon is off meanwhile, "the currently locking enemy will
-  // become one of the edge indicators"; the glint on each as ever).
-  const foes = viewer && viewer.state.ladder != null ? getEnemiesOf(viewer).filter((e) => e && e.state.hp > 0) : [getUnlockedEnemy(viewer)].filter(Boolean);
+  // become one of the edge indicators"; the glint on each as ever). In FREE POV the same (b1105fv, user 2026-11-11: "in free
+  // pov mode, the triangle edge indicator seems to disappear. they should still work in free pov mode", then "the triangle
+  // edge indicator do work in free pov; it just doesn't have one for ENEMY-1 slot"): free pov has no lock, no bracket, and its
+  // camera follows the crosshair, not the target, so the target too gets its triangle off the screen — every live enemy, the
+  // one of a 1v1 as well. The viewer free-aims as updateLocksAndReticle reads it: the player's own switch, or a watched unit's
+  // freeAim (whose chase view keeps its target on the screen, so that one shows no triangle).
+  const freeViewer = !!viewer && (freePovOwner() && viewer === state.player ? !!state.freePov : !!viewer.state.freeAim);
+  const foes = viewer && (viewer.state.ladder != null || freeViewer) ? getEnemiesOf(viewer).filter((e) => e && e.state.hp > 0) : [getUnlockedEnemy(viewer)].filter(Boolean);
   const foe = foes[0] ?? null;
   const active = !!foe;
 
@@ -7589,7 +7595,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fu 11-11';
+const CLIENT_BUILD_TAG = 'b1105fv 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
