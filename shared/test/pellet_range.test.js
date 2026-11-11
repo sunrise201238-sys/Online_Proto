@@ -6,10 +6,11 @@ import { tickBot } from '../src/sim/ai.js';
 // The blast's reach (user 2026-10-25, PT first): a gun carrying `pelletRange` loses its volley once the centre has flown
 // that far from the muzzle, and a bot holding it does not fire at a target beyond it. A gun without the field is untouched.
 
-function duel(p1UnitKey, p2UnitKey, apart) {
+function duel(p1UnitKey, p2UnitKey, apart, x1 = null) {   // (x1: the shooter's x, else the spawn's)
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey, p2UnitKey, startTime: 1000, mode: '1v1' });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
   for (const f of [p1, p2]) { f.invulnerableUntil = 0; f.hp = 1e9; }
+  if (x1 != null) p1.pos.x = x1;
   p2.pos.x = p1.pos.x + apart; p2.pos.z = p1.pos.z; p2.pos.y = p1.pos.y;
   p1.targetId = 'p2'; p2.targetId = 'p1';
   return m;
@@ -39,7 +40,9 @@ function flyOne(m, botIds = []) {
 
 test('a shotgun volley dies at pelletRange, not at the 2.2 s TTL', () => {
   const u = UNIT_DATA.unit2; assert.equal(u.spreadCount, 8); assert.equal(u.pelletRange, 150);   // (b1105et: 150, 100 until then)
-  const r = flyOne(duel('unit2', 'unit1', 400));
+  // (the shooter at x -100, 150 u of open field ahead: from the spawn, x -24, the boundary at x 120 stood 144 u off, short of
+  // the reach, and the volley passed it only on its centre's jitter until b1105fw took the jitter away with the base spread)
+  const r = flyOne(duel('unit2', 'unit1', 400, -100));
   assert.equal(r.reason, 'range', 'the volley ended on ' + r.reason);
   // (the last position seen alive is short of the line by at most one tick of flight)
   assert.ok(r.flown < u.pelletRange, 'alive past the reach: ' + r.flown.toFixed(1));

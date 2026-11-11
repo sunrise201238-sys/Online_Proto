@@ -38,8 +38,9 @@ test('M4 hold-fire: +0.002 per shot, frozen inside the burst, capped at 0.06, re
   assert.ok(shots >= 30, 'fired ' + shots);
   assert.equal(trace[0][1], 0.002);                 // after the 1st shot
   assert.equal(trace[9][1], 0.02);                  // after 10 shots, no recovery inside the burst (96 ms < 200 ms delay)
-  assert.equal(trace[19][1], 0.04);                 // 20th shot reaches the cap (0.06 - 0.02)
-  assert.equal(trace[trace.length - 1][1], 0.04);   // and never exceeds it
+  assert.equal(trace[19][1], 0.04);                 // 20th shot: 0.04, the cap not reached yet
+  assert.equal(trace[29][1], 0.06);                 // 30th shot reaches it: the whole 0.06 cap is bloom on a 0 base (b1105fw; 0.04 on the 0.02 base, from the 20th, until then)
+  assert.equal(trace[trace.length - 1][1], 0.06);   // and never exceeds it
   assert.equal(effectiveSpread(p1.unit, p1.bloom), 0.06);
   // stop firing: bloom holds until 200 ms after the LAST SHOT, then drops at 0.035/s
   const lastShot = p1.lastFireAt; const atStop = p1.bloom;
@@ -50,7 +51,7 @@ test('M4 hold-fire: +0.002 per shot, frozen inside the burst, capped at 0.06, re
   assert.ok(Math.abs(p1.bloom - expected) < 0.0006, `bloom ${p1.bloom} vs ${expected}`);
 });
 
-test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0.02, 0.063, 0.106, 0.149, then climbs to a ~0.24 steady under the 0.30 cap', () => {
+test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0, 0.043, 0.086, 0.129, 0.172, 0.214, then a 0.243 steady under the 0.30 cap', () => {
   const { m, p1 } = duel('unit10', 30);
   let now = 1000, last = p1.lastFireAt; const cones = [];
   for (let i = 0; i < 3000 / TICK_RATE_MS; i += 1) {
@@ -60,8 +61,8 @@ test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time
     if (p1.lastFireAt !== last) { cones.push(+atFire.toFixed(3)); last = p1.lastFireAt; }
     now += TICK_RATE_MS;
   }
-  assert.deepEqual(cones.slice(0, 4), [0.02, 0.063, 0.106, 0.149]);   // +0.10 per shot, -0.057 between shots; the 0.30 cap is not reached yet
-  for (const c of cones.slice(4)) assert.ok(c > 0.19 && c <= 0.3, 'steady ' + c);   // 0.192, 0.235, then ~0.243 once the cap clips the post-shot bloom
+  assert.deepEqual(cones.slice(0, 6), [0, 0.043, 0.086, 0.129, 0.172, 0.214]);   // from a 0 base (b1105fw; 0.02 until then): +0.10 per shot, -0.057 between shots; the 0.30 cap not reached yet
+  for (const c of cones.slice(6)) assert.ok(Math.abs(c - 0.243) < 0.001, 'steady ' + c);   // 0.243 once the cap clips the post-shot bloom (0.30 - 0.057), as on the old base
 });
 
 test('standing still: no bloom per shot, and recovery runs even mid-burst', () => {
@@ -145,11 +146,19 @@ test('sprinting in place blooms like any moving shooter; a sprint with a directi
   assert.ok(after.p1.bloom < settled, 'standing after the sprint: recovering while firing ' + after.p1.bloom + ' < ' + settled);
 });
 
+test('b1105fw: every base spread 0 but Aris\'s 0.02 (user 2026-11-11); a recovered cone puts a round on the aim line, the cones still grow to their caps', () => {
+  for (const [k, u] of Object.entries(UNIT_DATA)) assert.equal(u.spreadAngle, k === 'unit7' ? 0.02 : 0, k);
+  assert.equal(effectiveSpread(UNIT_DATA.unit1, 0), 0);
+  assert.equal(effectiveSpread(UNIT_DATA.unit1, 1), UNIT_DATA.unit1.bloomCap);
+  assert.equal(effectiveSpread(UNIT_DATA.unit7, 0), 0.02);
+});
+
 test('sure-hit closed form and the bot gate', () => {
   assert.equal(sureHitDistance(0.02), 160);
   assert.equal(+sureHitDistance(0.06).toFixed(1), 53.3);
   assert.equal(withinSureHit(UNIT_DATA.unit1, 0, 159), true);
-  assert.equal(withinSureHit(UNIT_DATA.unit1, 0.04, 60), false);   // M4 at cap: sure-hit 53
+  assert.equal(withinSureHit(UNIT_DATA.unit1, 0.06, 60), false);   // M4 at cap, its 0.06 all bloom on a 0 base (b1105fw): sure-hit 53
+  assert.equal(withinSureHit(UNIT_DATA.unit1, 0, 1e6), true);      // a recovered cone of 0: every round on the aim line
   assert.equal(withinSureHit(UNIT_DATA.unit2, 0, 999), true);       // shotgun: pattern, never gated
   assert.equal(withinSureHit(UNIT_DATA.unit3, 0, 999), true);       // sniper: never gated
 });
@@ -202,28 +211,35 @@ test('gate lines: autos 8.84 / cone (one round in three on a standing target), m
   assert.ok(Math.abs(botGateDistance(UNIT_DATA.unit10, 0.06) - 53.3) < 0.1);      // M14: sure-hit itself
   assert.equal(UNIT_DATA.unit13.botSuppressBurst, 10);                            // P90 keeps the 10-round suppress override
   assert.equal(UNIT_DATA.unit1.botSuppressBurst, undefined);                      // the rifles stay on the 5-round default
-  // suppress bursts for an SMG start only past its base line (8.84 / 0.03 = 295 u)
+  // suppress bursts start only past a unit's base line: on a 0 base (b1105fw) there is none, so a recovered SMG fires at any
+  // range with no burst (an SMG's burst started past 8.84 / 0.03 = 295 u until then); Aris, the one unit left on 0.02, keeps
+  // hers (3.2 / 0.02 = 160 u) and her one-round burst
   const bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
   assert.equal(botMayFire(UNIT_DATA.unit4, bot, 400), true);
-  assert.equal(bot.botSuppressRemaining, 10);
+  assert.equal(bot.botSuppressRemaining, 0);
+  const aris = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(UNIT_DATA.unit7, aris, 400), true);
+  assert.equal(aris.botSuppressRemaining, 1);
 });
 
-test('M14 bot at its 56-unit band: every shot pushes the cone past the line, so it fires once per full recovery', () => {
-  const { gaps, coneAtFire } = botRun('unit10', 56, 3000);
+test('M14 bot at its 135 lock range: every shot pushes the cone past the line, so it fires once per full recovery', () => {
+  // (at the old 56-unit band since b1105fw's 0 base, a second round goes 336 ms after the first from a 0.043 cone, whose
+  // sure-hit line, 74.6, is still past the target: two rounds, then the hold; from 100 on, one round per full recovery)
+  const { gaps, coneAtFire } = botRun('unit10', 135, 3000);
   assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
   for (const g of gaps) assert.ok(g >= 576 && g <= 624, 'gap ' + g);   // 0.1 / 0.17 = 0.59 s
-  for (const c of coneAtFire) assert.equal(c, 0.02);                    // and always from the base cone
+  for (const c of coneAtFire) assert.equal(c, 0);                       // and always from the base cone (0 since b1105fw, 0.02 until then)
 });
 
 test('auto on a recovery hold releases at once when the target closes in', () => {
-  const u = UNIT_DATA.unit13, bot = { bloom: 0.04, botSuppressRemaining: 0, botHoldDist: 0 };   // Marina, cone 0.10 -> 33% line 88.4 (Koyuki carried this test until she lost her gate, 2026-09-25)
+  const u = UNIT_DATA.unit13, bot = { bloom: 0.10, botSuppressRemaining: 0, botHoldDist: 0 };   // Marina, cone 0.10 (all bloom on her 0 base since b1105fw) -> 33% line 88.4 (Koyuki carried this test until she lost her gate, 2026-09-25)
   assert.equal(botMayFire(u, bot, 95), false);            // outside: hold begins, line frozen at 88.4
   assert.ok(bot.botHoldDist > 88 && bot.botHoldDist < 89);
-  bot.bloom = 0.03;                                       // line drifts out to 98.2 — a static target must NOT release the hold
+  bot.bloom = 0.09;                                       // line drifts out to 98.2 — a static target must NOT release the hold
   assert.equal(botMayFire(u, bot, 95), false);
   assert.equal(botMayFire(u, bot, 85), true);             // but a target that closed in past the frozen line does
   assert.equal(bot.botHoldDist, 0);
-  const m14 = { bloom: 0.05, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold
+  const m14 = { bloom: 0.07, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold (cone 0.07 -> sure-hit line 45.7)
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
   assert.ok(m14.botHoldDist > 0);
   m14.bloom = 0.03;                                       // line back out past the target: still holding
@@ -234,19 +250,24 @@ test('auto on a recovery hold releases at once when the target closes in', () =>
 
 test('botMayFire state machine', () => {
   const u = UNIT_DATA.unit1, bot = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(u, bot, 100), true);           // inside the base line (8.84 / 0.02 = 442)
-  bot.bloom = 0.04;                                       // cone 0.06 -> 33% line 147
+  assert.equal(botMayFire(u, bot, 100), true);           // a recovered cone: 0 on the 0 base (b1105fw), its line at infinity
+  bot.bloom = 0.06;                                       // cone 0.06 -> 33% line 147
   assert.equal(botMayFire(u, bot, 160), false);           // outside, bloom up: hold
   bot.bloom = 0;
-  assert.equal(botMayFire(u, bot, 500), true);            // outside the base line, recovered: burst starts
-  assert.equal(bot.botSuppressRemaining, 5);
-  bot.bloom = 0.01;
-  assert.equal(botMayFire(u, bot, 500), true);            // committed burst runs on
-  bot.botSuppressRemaining = 0;
-  assert.equal(botMayFire(u, bot, 500), false);           // burst spent, cone up: hold
+  assert.equal(botMayFire(u, bot, 500), true);            // recovered: fires at any range, and with no base line to be past, no burst
+  assert.equal(bot.botSuppressRemaining, 0);
+  // the burst, on Aris's 0.02 base, the one left (her line 3.2 / 0.02 = 160; the M4's 8.84 / 0.02 = 442 carried this until b1105fw)
+  const a = UNIT_DATA.unit7, ab = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
+  assert.equal(botMayFire(a, ab, 100), true);            // inside her base line
+  assert.equal(botMayFire(a, ab, 500), true);            // outside it, recovered: her one-round burst starts
+  assert.equal(ab.botSuppressRemaining, 1);
+  ab.bloom = 0.01;
+  assert.equal(botMayFire(a, ab, 500), true);            // committed burst runs on
+  ab.botSuppressRemaining = 0;
+  assert.equal(botMayFire(a, ab, 500), false);           // burst spent, cone up: hold
   const m14 = { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 };
-  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);
-  assert.equal(m14.botSuppressRemaining, 1);
+  assert.equal(botMayFire(UNIT_DATA.unit10, m14, 200), true);   // Fubuki, recovered on a 0 base: fires, no burst
+  assert.equal(m14.botSuppressRemaining, 0);
   assert.equal(botMayFire(UNIT_DATA.unit2, { bloom: 0, botSuppressRemaining: 0, botHoldDist: 0 }, 999), true);   // shotgun never gated
 });
 

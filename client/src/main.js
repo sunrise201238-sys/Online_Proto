@@ -115,7 +115,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
-    spreadAngle: 0.02,         // base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.002,        // SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
@@ -158,7 +158,7 @@ const UNIT_DATA = {
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
                              // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
-    spreadAngle: THREE.MathUtils.degToRad(16),
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; THREE.MathUtils.degToRad(16) until then)
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -194,7 +194,7 @@ const UNIT_DATA = {
     projectileSpeed: 4500,     // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Aru/Hiyori bullet speed from 4000 to 4500"; 4000 until then) user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     damage: 50,
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -230,7 +230,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.03,         // base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then) base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
@@ -271,7 +271,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.04,         // base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.20,            // SA ceiling while spraying (b1105er, PT and 9.6, user 2026-11-09: "Implement Hina's SA cap 0.2 in 9.6 as well"; 0.14 until then, its sure-hit at the cap 16 instead of 23)
     bloomRecoverPerSec: 0.03,  // SA recovered per second
@@ -306,7 +306,7 @@ const UNIT_DATA = {
     projectileSpeed: 2000,
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     damage: 30,
     magCapacity: 5,
     reloadMs: 2500,
@@ -406,7 +406,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
-    spreadAngle: 0.04,         // base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.09,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
@@ -444,7 +444,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
-    spreadAngle: 0.02,         // base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
@@ -483,7 +483,7 @@ const UNIT_DATA = {
     projectileSpeed: 1500,   // (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
-    spreadAngle: 0.02,         // base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
     bloomPerShot: 0.10,        // SA added per shot
     bloomCap: 0.30,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.17,  // SA recovered per second
@@ -526,7 +526,7 @@ const UNIT_DATA = {
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
                              // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
-    spreadAngle: THREE.MathUtils.degToRad(16),
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; THREE.MathUtils.degToRad(16) until then)
     damage: 4,               // per pellet (volley max 8 x 4 = 32 point-blank; owner 2026-09-27, was 3 / 24 since 2026-09-24, 5 / 40 before)
     magCapacity: 7,
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
@@ -560,7 +560,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
-    spreadAngle: 0.02,         // base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
     bloomPerShot: 0.004,        // SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
@@ -600,7 +600,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
-    spreadAngle: 0.06,         // base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.06 until then) base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
     bloomCap: 0.11,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
@@ -639,7 +639,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
     bloomPerShot: 0.005,       // user 2026-10-22 (the M4: 0.002)
     bloomCap: 0.06,
@@ -677,7 +677,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 850,        // user 2026-10-22 (the evo3: 1100) — fires on the 80 ms tick slot, 750 real
     spreadCount: 1,
-    spreadAngle: 0.03,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then)
     bloomPerShot: 0.01,        // user 2026-10-22 (the evo3: 0.003)
     bloomCap: 0.08,
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.05 until then) — the rifles' pace, 200 ms behind the last round (both tables: shared/src/sim/constants.js and the client's UNIT_DATA)
@@ -717,7 +717,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,   // user 2026-10-23 (the MPX: 850) — the 112 ms tick slot, Koyuki's, 535 real
     spreadCount: 1,
-    spreadAngle: 0.03,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then)
     bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
     bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.035 then 0.05 on 2026-10-23; 0.17, 0.3 and 0.17 again the same day) — the rifles' pace; mirrors shared/src/sim/constants.js (the offline sim reads THIS table — the shared one was changed alone first, and nothing was felt)
@@ -757,7 +757,7 @@ const UNIT_DATA = {
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
                              // (projectiles.js _tickVolley, and the offline mirror), and a bot does not fire it at a target farther than this (nbrain.js)
-    spreadAngle: THREE.MathUtils.degToRad(16),
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; THREE.MathUtils.degToRad(16) until then)
     damage: 4,               // per pellet, 8 x 4 = 32 point-blank
     magCapacity: 10,           // user 2026-10-23 (the SDASS: 7 shells)
     botFireCap: 10,            // user 2026-10-23: the bot empties the magazine in one pull, as Marina does (the shell-loaders: 4)
@@ -788,7 +788,7 @@ const UNIT_DATA = {
     projectileSpeed: 4500,     // (PT b1105fd, 9.6 b1105fd, user 2026-11-10: "Change Aru/Hiyori bullet speed from 4000 to 4500"; 4000 until then) user 2026-10-22 (was 2500): 16 u a tick at 4000, the 120 u lock crossed in 2 ticks
     firePerMinute: 60,         // = 1000 ms cooldown (exact)
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     damage: 60,   // (user: 60/40/20 — far, mid, near; 25 near until b1105da)
     // Distance-tiered damage (locked at fire time): closer than nearDist →
     // near, between nearDist and midDist → mid, beyond midDist → full damage.
@@ -827,7 +827,7 @@ const UNIT_DATA = {
                                // the cooldown time from 0.5sec to 0.75sec")
     forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
     spreadCount: 1,
-    spreadAngle: 0.02,         // Fubuki's accuracy
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) Fubuki's accuracy
     bloomPerShot: 0.10,        // Fubuki's bloom
     bloomCap: 0.30,
     bloomRecoverPerSec: 0.17,
@@ -866,7 +866,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
     bloomPerShot: 0.003,
     bloomCap: 0.06,
@@ -905,7 +905,7 @@ const UNIT_DATA = {
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s, 535 real), Koyuki's rung (Saori's M4: 700, the 96 ms slot)
     spreadCount: 1,
-    spreadAngle: 0.02,
+    spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
     bloomPerShot: 0.015,        // the cap from the 7th shot (Saori: 0.002)
     bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
@@ -7595,7 +7595,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fv 11-11';
+const CLIENT_BUILD_TAG = 'b1105fw 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
