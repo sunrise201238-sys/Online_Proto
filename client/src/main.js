@@ -271,9 +271,9 @@ const UNIT_DATA = {
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
     bloomPerShot: 0.003,        // SA added per shot
-    bloomCap: 0.20,            // SA ceiling while spraying (b1105er, PT and 9.6, user 2026-11-09: "Implement Hina's SA cap 0.2 in 9.6 as well"; 0.14 until then, its sure-hit at the cap 16 instead of 23)
-    bloomRecoverPerSec: 0.03,  // SA recovered per second
-    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
+    bloomCap: 0.16,            // SA ceiling while spraying (b1105fz, user 2026-11-11: "change hina bloom to 0.16 CAP, recovery 0.06/s, 200 ms"; 0.17 in PT b1105fy, 0.20 from b1105eq, 0.30 from b1105el, 0.14 until then): the sure-hit at the cap 20, reached at the 55th round on the 0 base, after 2.6 s of spray
+    bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 2.7 s after the 200 ms
+    bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too) (PT b1105eq: 200, as b1105ep; 0 in b1105eo; b1105fy and b1105fz keep it, "200 ms")
     damage: 4,
     magCapacity: 100,          // user 2026-11-06: 100 rounds (250 until then)
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06)
@@ -7591,7 +7591,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fx 11-11';
+const CLIENT_BUILD_TAG = 'b1105fz 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
