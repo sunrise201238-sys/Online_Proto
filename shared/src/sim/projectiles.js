@@ -47,7 +47,7 @@ export function applyHitStun(target, unit, ms, scale, now) {
 }
 
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
-import { effectiveSpread, bloomAfterShot, isStill } from './bloom.js';
+import { effectiveSpread, bloomAfterShot } from './bloom.js';
 import { bodyAt, hitCapAt } from './history.js';
 
 // SHARED SPREAD SEED (owner 2026-10-15, "implement seed"): the direction a
@@ -186,9 +186,9 @@ export function spawnProjectiles(matchState, owner, target, aim = null) {
     }
   }
 
-  // This shot's bloom lands AFTER its direction was sampled — unless the
-  // shooter has been standing still (bloom.js isStill). Mirrors offline.
-  if (!isStill(owner, matchState.now)) owner.bloom = bloomAfterShot(u, owner.bloom);
+  // This shot's bloom lands AFTER its direction was sampled, whatever the shooter is doing (b1105fx, user 2026-11-11: "Make bloom take effect in any firing condition";
+  // a shooter that had stood still for 200 ms added none until then). Mirrors offline.
+  owner.bloom = bloomAfterShot(u, owner.bloom);
 
   // SHOT COUNTER (2026-10-15): one per trigger pull, carried by the round(s)
   // it spawned as `shot`. The client's own-shot visuals use it to tell "the

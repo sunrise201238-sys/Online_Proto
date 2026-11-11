@@ -43,7 +43,6 @@ import {
 } from './movement.js';
 import { tickAmmo, tickBloom, attemptFire, tickSniperCharge, tickStep, tryStartStep, tryStartJump, startDash, reloadHolds } from './actions.js';
 import { tickProjectiles, tickBeams, tickChargedBeams } from './projectiles.js';
-import { tickStillness } from './bloom.js';
 import { recordBodies } from './history.js';
 
 // One input frame, sent client→server per tick. Defaults to no-op.
@@ -357,7 +356,6 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   // 1. Per-fighter pre-tick (ammo, spread bloom recovery, sniper charge timer).
   for (const f of fighters) {
     tickAmmo(f, now);
-    tickStillness(f, now, Math.hypot(f.vel.x, f.vel.z), !f.airborne && !onLadder(f), f.action === 'dash');   // last tick's motion — a 200 ms dwell makes the lag moot; a sprint, even in place, is not still (user 2026-11-03; action rides every snapshot, so the prediction agrees)
     tickBloom(f, now, dt);
     tickSniperCharge(matchState, f, now, inputs[f.id] ?? null, arena.obstacles);
   }

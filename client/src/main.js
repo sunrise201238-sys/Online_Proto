@@ -35,8 +35,6 @@ import {
   effectiveSpread,
   bloomAfterShot,
   bloomAfterTime,
-  tickStillness,
-  isStill,
   obstaclesNearSegment,
   obstaclesNearPoint,
   getArenaSpawns,
@@ -2786,7 +2784,6 @@ function createMech(color, unitData, isOwnUnit = false) {
       lastFireAt: 0,
       bloom: 0,               // spread bloom above spreadAngle (shared bloom.js)
       bloomTickAt: 0,         // last offline recovery step (performance.now)
-      stillSince: 0,          // grounded standstill stamp (shared bloom.js isStill)
       botSuppressRemaining: 0, // bot: rounds left in a committed suppress burst outside its gate line
       botHoldDist: 0,          // bot: gate line frozen when a recovery hold began
       ammo: unitData.magCapacity ?? Infinity,
@@ -3662,7 +3659,7 @@ function spawnProjectiles(owner, target, aimDir = null) {   // (aimDir, free pov
       hitStunMs: owner.unit.stun?.ms ?? 100,
       hitStunScale: owner.unit.stun?.moveScale ?? 0.25
     });
-    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
+    owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling, standing or moving (mirrors shared; b1105fx)
     return;
   }
 
@@ -3716,7 +3713,7 @@ function spawnProjectiles(owner, target, aimDir = null) {   // (aimDir, free pov
       boltLen: owner.unit.beamBolt?.length ?? 0,
       boltRadius: owner.unit.beamBolt?.radius ?? 0
     });
-    if (!isStill(owner.state, now)) owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling (mirrors shared)
+    owner.state.bloom = bloomAfterShot(owner.unit, owner.state.bloom);   // after sampling, standing or moving (mirrors shared; b1105fx)
   }
 }
 
@@ -3731,8 +3728,7 @@ function tickBloomOffline(mech, now) {
   s.bloomTickAt = now;
   if (!(s.bloom > 0)) return;
   const dtSec = Math.min(0.25, Math.max(0, (now - prev) / 1000));
-  const since = isStill(s, now) ? Infinity : now - s.lastFireAt;   // standing still: no delay, even mid-burst
-  s.bloom = bloomAfterTime(mech.unit, s.bloom, since, dtSec);
+  s.bloom = bloomAfterTime(mech.unit, s.bloom, now - s.lastFireAt, dtSec);   // the delay from the last shot, standing or moving (b1105fx; standing still skipped it until then)
 }
 
 
@@ -7595,7 +7591,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105fw 11-11';
+const CLIENT_BUILD_TAG = 'b1105fx 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -18989,7 +18985,6 @@ function animate() {
         // Spectator: the player-slot unit is a bot — the human's sprint key
         // must not cancel its sniper charge.
         tickAmmo(m, now);
-        tickStillness(m.state, now, Math.hypot(m.body.velocity.x, m.body.velocity.z), !m.state.airborne && m.state.ladder == null, m.state.action === 'dash');   // (a sprint in place is not still: mirrors the shared tick, user 2026-11-03)
         tickBloomOffline(m, now);
         tickSniperCharge(m, now,
           (m === state.player && !playerIsBotDriven()) ? playerSprintHeld : false);

@@ -53,7 +53,7 @@ export {
 } from './projectiles.js';
 export { tickBot, pickBotTargetId, botHasLineOfSight } from './ai.js';
 export { pickRespawnSpawn, mateSpawnFor } from './spawn.js';
-export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire, botNoteShot, botClearFireRule, tickStillness, isStill } from './bloom.js';
+export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, attachLadderLinks } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
 export { nearestEnemyId, aimTargetOf } from './aim.js';   // (free pov, user 2026-10-30)

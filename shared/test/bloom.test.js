@@ -65,30 +65,38 @@ test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time
   for (const c of cones.slice(6)) assert.ok(Math.abs(c - 0.243) < 0.001, 'steady ' + c);   // 0.243 once the cap clips the post-shot bloom (0.30 - 0.057), as on the old base
 });
 
-test('standing still: no bloom per shot, and recovery runs even mid-burst', () => {
-  const { m, p1 } = duel('unit1', 30);
-  let now = 1000;
-  const run = (ms, input) => { for (let i = 0; i < ms / TICK_RATE_MS; i += 1) { tickMatch(m, { p1: input(), p2: emptyInput() }, now, TICK_DT, ['p2']); p1.ammo = Math.max(p1.ammo, 2); now += TICK_RATE_MS; } };
-  run(320, () => emptyInput());                          // stand for the 200 ms dwell
-  run(2000, () => hold(false));                          // hold fire without moving
-  assert.equal(p1.bloom, 0, 'no bloom while standing still');
-  run(1000, () => hold(true));                           // walk and fire: bloom builds
-  const walked = p1.bloom; assert.ok(walked >= 0.018, 'walking bloom ' + walked);
-  const atStop = now;
-  run(192, () => hold(false));                           // stop but keep firing: inside the dwell shots still bloom
-  assert.ok(p1.bloom >= walked, 'dwell keeps the old rule');
-  run(400, () => hold(false));                           // past the dwell: recovery runs mid-burst, shots add nothing
-  assert.ok(p1.bloom < walked, 'recovering while firing: ' + p1.bloom);
-  run(1200, () => hold(false));
-  assert.equal(p1.bloom, 0, 'fully recovered while still firing');
-  void atStop;
+// b1105fx (user 2026-11-11: "Currently, when unit fires while standing still, the bloom wouldn't take effect. Make bloom take
+// effect in any firing condition"): until then a shooter that had stood on the ground under 1 u/s for 200 ms added no bloom
+// per shot and recovered with no delay, even mid-burst. Now standing is firing like any other.
+test('standing still blooms as walking does: every shot adds its bloom, and the recovery waits out the delay after the last shot', () => {
+  const spray = (walk) => {
+    const { m, p1 } = duel('unit1', 30);
+    let now = 1000, last = p1.lastFireAt; const seq = [];
+    const step = (input) => { tickMatch(m, { p1: input(), p2: emptyInput() }, now, TICK_DT, ['p2']); p1.ammo = Math.max(p1.ammo, 2);
+      if (p1.lastFireAt !== last) { seq.push(p1.bloom); last = p1.lastFireAt; } now += TICK_RATE_MS; };
+    for (let i = 0; i < 320 / TICK_RATE_MS; i += 1) step(() => emptyInput());   // stand past the old 200 ms dwell first
+    last = p1.lastFireAt; seq.length = 0;
+    for (let i = 0; i < 2000 / TICK_RATE_MS; i += 1) step(() => hold(walk));   // hold the trigger, standing or walking
+    const atStop = p1.bloom, held = [];
+    while (now + TICK_RATE_MS - p1.lastFireAt < 200) { step(() => emptyInput()); held.push(p1.bloom); }   // let go, stand: inside the delay
+    for (let i = 0; i < 1000 / TICK_RATE_MS; i += 1) step(() => emptyInput());
+    return { seq, atStop, held, after: p1.bloom };
+  };
+  const still = spray(false), walk = spray(true);
+  assert.ok(still.seq.length >= 15, 'shots ' + still.seq.length);
+  assert.deepEqual(still.seq, walk.seq, 'standing = walking, shot for shot');
+  still.seq.forEach((b, i) => assert.ok(Math.abs(b - Math.min(0.06, (i + 1) * UNIT_DATA.unit1.bloomPerShot)) < 1e-9, `standing, shot ${i}: ${b}`));   // the M4's 0.002 a shot toward its 0.06
+  assert.ok(still.held.length >= 3 && still.held.every((b) => b === still.atStop), 'standing still: nothing drains inside the 200 ms after the last shot');
+  assert.ok(still.after < still.atStop, 'then it drains at the recovery rate: ' + still.after);
+  assert.equal(still.after, walk.after, 'and as fast as after a walk');
 });
 
 // Sprint held with no direction (user 2026-11-03): the unit stays put at speed 0 but sprints (action 'dash', the gauge
-// drains) — it is not standing still, so its shots bloom. The flag only ever clears the standing stamp, so no way of
-// sprinting adds more than one bloomPerShot a shot: in place, with a direction, pressed into a wall or sliding along
-// one (a wall's push-out zeroes the velocity, which used to count a sprinter there as still too), every sprint blooms
-// shot for shot like a walk across open ground.
+// drains) — it was not standing still, so its shots bloomed. No way of sprinting adds more than one bloomPerShot a shot:
+// in place, with a direction, pressed into a wall or sliding along one (a wall's push-out zeroes the velocity, which used
+// to count a sprinter there as still too), every sprint blooms shot for shot like a walk across open ground. (Since
+// b1105fx there is no standing-still rule at all, so every way of firing blooms alike; the test keeps the one-bloom-a-shot
+// check.)
 test('sprinting in place blooms like any moving shooter; a sprint with a direction, in the open or at a wall, blooms no more than an open walk', () => {
   // p1 on arena1, 30 u from p2: stands past the 200 ms dwell, then holds the trigger and this move for `ms`; the bloom
   // right after each shot. `z` puts it by the arena's -z boundary (about -120), p2 alongside at -100.
@@ -134,16 +142,16 @@ test('sprinting in place blooms like any moving shooter; a sprint with a directi
       oneShotAtMost(r.seq, unitKey, 'sprint ' + label);
     }
   }
-  // Letting go of the sprint while standing: still again after the dwell — its shots add nothing, the bloom drains mid-burst.
+  // Letting go of the sprint and standing, the trigger still held: every shot keeps adding its bloomPerShot (b1105fx; until
+  // then, past the 200 ms dwell, a standing shooter's shots added nothing and its bloom drained mid-burst).
   const after = shotBlooms('unit1', { sprint: true });
   assert.ok(after.p1.bloom > 0, 'carried bloom ' + after.p1.bloom);
-  after.run(320, () => hold(false));      // let go, keep firing: the dwell
   const settled = after.p1.bloom, from = after.seq.length;
-  after.run(400, () => hold(false));
+  after.run(720, () => hold(false));
   const tail = after.seq.slice(from);
-  assert.ok(tail.length >= 3, 'shots after the dwell ' + tail.length);
-  tail.forEach((b, i) => assert.ok(b <= (i ? tail[i - 1] : settled), 'standing after the sprint: shot ' + i + ' adds no bloom'));
-  assert.ok(after.p1.bloom < settled, 'standing after the sprint: recovering while firing ' + after.p1.bloom + ' < ' + settled);
+  assert.ok(tail.length >= 5, 'shots standing after the sprint ' + tail.length);
+  tail.forEach((b, i) => assert.ok(Math.abs(b - Math.min(0.06, (i ? tail[i - 1] : settled) + UNIT_DATA.unit1.bloomPerShot)) < 1e-9,
+    'standing after the sprint: shot ' + i + ' adds its bloomPerShot (' + b + ')'));
 });
 
 test('b1105fw: every base spread 0 but Aris\'s 0.02 (user 2026-11-11); a recovered cone puts a round on the aim line, the cones still grow to their caps', () => {

@@ -928,13 +928,8 @@ export const BOT_GATE_WIDTH_AUTO = 8.84;
 // fires this many rounds as one committed burst; a unit can override the
 // size with `botSuppressBurst` (the marksman rifles fire 1, the SMGs 10).
 export const BOT_SUPPRESS_BURST = 5;
-// Standing-still accuracy (owner 2026-09-21): a fighter that has been on the
-// ground at under BLOOM_STILL_SPEED (horizontal, units/s) for at least
-// BLOOM_STILL_DWELL_MS fires without adding bloom, and its bloom recovers
-// even while it keeps firing (the recovery delay is skipped). A sprinting
-// fighter is never still, even sprinting in place (user 2026-11-03).
-export const BLOOM_STILL_SPEED = 1;
-export const BLOOM_STILL_DWELL_MS = 200;
+// (BLOOM_STILL_SPEED 1 and BLOOM_STILL_DWELL_MS 200, the standing-still accuracy rule's numbers, went with the rule,
+// b1105fx: every shot blooms, standing or moving; bloom.js.)
 export const HIT_STUN_MS = 100;
 
 // Spawn protection — fighters take no damage for this long at round start.
