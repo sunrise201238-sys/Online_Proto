@@ -7589,7 +7589,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ft 11-11';
+const CLIENT_BUILD_TAG = 'b1105fu 11-11';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12588,15 +12588,23 @@ function updateFreePovCamera(cam) {
 // and its detection on the floor instead of on the wall. The text stays on the wall though, without detection"; b1105fo, the
 // second pair: "use silver instead of golden this time" — each pad in its record's `color`, PAD_LOOKS, gold as written below
 // unless the record says silver, the charging player's ring with it). The rule
-// draws nothing; the client draws each pad from its record: a golden ring with a soft fill lying on the pad's floor, `dr`
-// round — the zone itself, so the ring is where the button works — with a halo under it pulsing gently (updatePadDecor); and a
-// pad's `sign`, words alone on a wall's face, gold with a dark edge, still. All arenaDecor, gone with the arena. The charge's
-// timer is the charging player's own: a golden ring round its crosshair filling in PAD_HOLD_MS, TRANSPORTING under it
-// (updatePadRing) — nobody else sees it.
+// draws nothing; the client draws each pad from its record: a golden ring with a soft fill lying on the pad's floor, its line
+// `dr` round — the zone's edge, so the ring is where the button works — with a halo under it pulsing gently (updatePadDecor);
+// and a pad's `sign`, words alone on a wall's face, in the pad's look with a dark edge, still. All arenaDecor, gone with the
+// arena. The charge's timer is the charging player's own: a golden ring round its crosshair filling in PAD_HOLD_MS, TELEPORTING
+// under it (updatePadRing) — nobody else sees it.
+//   b1105fu (user 2026-11-11: "1. make the portal circle on the ground slightly bigger. 2. change the glowing text on the
+// wall "Hold Jump to Transport" to "Hold Jump". 3. Add the "Hold Jump" text on the wall at the ground level silver portal as
+// well, change this one's color from golden to silver. ... 4. Change the loading text "TRANSPORTING" to "TELEPORTING"."): the
+// ring's line, drawn at 0.84 of the circle's half-width inside the zone's edge until then, now falls on the edge (PAD_RING_AT:
+// the circle and its halo 1/0.84, about 1.19, times the size; the zone itself unchanged); A's words "Hold Jump", one line, and
+// C's the same in silver (the records, arena.js); the timer's word TELEPORTING.
 function padOthersOf(mech) {   // (the other living bodies, as the rule reads them: an arrival spot must be clear of them)
   return getAllFighters().filter((m) => m && m !== mech && m.state.hp > 0).map((m) => ({ pos: m.body.position, hp: m.state.hp }));
 }
-// The floor circle: a ring with a glow and a soft fill, on a square canvas, in the pad's look L (PAD_LOOKS).
+// The floor circle: a ring with a glow and a soft fill, on a square canvas, in the pad's look L (PAD_LOOKS). The ring's line at
+// PAD_RING_AT of the canvas's half-width: addPadDecor sizes the plane so that line falls on the zone's edge (b1105fu).
+const PAD_RING_AT = 0.84;
 function drawPadRing(c, L = PAD_LOOKS.gold) {
   const S = c.width, R = S / 2, g = c.getContext('2d');
   g.clearRect(0, 0, S, S);
@@ -12604,8 +12612,8 @@ function drawPadRing(c, L = PAD_LOOKS.gold) {
   fill.addColorStop(0, `rgba(${L.fill}, 0.06)`); fill.addColorStop(1, `rgba(${L.fill}, 0.30)`);
   g.fillStyle = fill; g.beginPath(); g.arc(R, R, R * 0.86, 0, Math.PI * 2); g.fill();
   g.save(); g.shadowColor = `rgba(${L.glow}, 1)`; g.shadowBlur = S * 0.05;
-  g.strokeStyle = L.main; g.lineWidth = S * 0.045; g.beginPath(); g.arc(R, R, R * 0.84, 0, Math.PI * 2); g.stroke(); g.restore();
-  g.strokeStyle = L.light; g.lineWidth = S * 0.012; g.beginPath(); g.arc(R, R, R * 0.84, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = L.main; g.lineWidth = S * 0.045; g.beginPath(); g.arc(R, R, R * PAD_RING_AT, 0, Math.PI * 2); g.stroke(); g.restore();
+  g.strokeStyle = L.light; g.lineWidth = S * 0.012; g.beginPath(); g.arc(R, R, R * PAD_RING_AT, 0, Math.PI * 2); g.stroke();
   g.strokeStyle = `rgba(${L.fill}, 0.55)`; g.lineWidth = S * 0.008; g.beginPath(); g.arc(R, R, R * 0.72, 0, Math.PI * 2); g.stroke();
 }
 // The sign's words (lines) in Titan One, the pad's colour with a dark edge and a soft glow, centred on the canvas: the type 0.15
@@ -12636,7 +12644,7 @@ function addPadDecor(pads) {
   const mat = (map, add) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, fog: false,
     polygonOffset: true, polygonOffsetFactor: add ? -2 : -4, polygonOffsetUnits: add ? -2 : -4, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending });
   for (const P of pads) {
-    const r = P.dr ?? P.r, L = padLook(P);
+    const r = (P.dr ?? P.r) / PAD_RING_AT, L = padLook(P);   // (the plane's half-width: the ring's line, PAD_RING_AT of it, on dr — b1105fu)
     const fc = document.createElement('canvas'); fc.width = fc.height = 512; drawPadRing(fc, L);
     const tex = new THREE.CanvasTexture(fc); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const hc = document.createElement('canvas'); hc.width = hc.height = 128; drawPadHalo(hc, L);
@@ -12661,7 +12669,7 @@ function addPadDecor(pads) {
     padDecor.push(d);
   }
 }
-// A sign's text in two lines, split at the middle word ("Hold Jump to Transport": "Hold Jump" / "to Transport").
+// A sign's text in two lines, split at the middle word, when it has three words or more ("Hold Jump", two, stays one line).
 function padTextLines(text) { const w = text.split(/\s+/); if (w.length < 3) return [text]; const k = Math.ceil(w.length / 2); return [w.slice(0, k).join(' '), w.slice(k).join(' ')]; }
 function updatePadDecor(nowMs) {
   if (!padDecor.length) return;
@@ -12669,7 +12677,7 @@ function updatePadDecor(nowMs) {
   for (const d of padDecor) { d.halo.material.opacity = 0.35 + 0.45 * k; d.ring.material.opacity = 0.86 + 0.14 * k; }
 }
 // The charging player's own timer: a golden half-transparent ring round its crosshair (its centre where the crosshair is drawn,
-// the canvas's centre while no crosshair shows), filling clockwise from the top over PAD_HOLD_MS, TRANSPORTING under it in the
+// the canvas's centre while no crosshair shows), filling clockwise from the top over PAD_HOLD_MS, TELEPORTING under it in the
 // sign's style. Only the player's own unit, alive, under the player's hands (not spectating, not command mode).
 function updatePadRing() {
   const hud = state.hud; if (!hud) return;
@@ -12680,7 +12688,7 @@ function updatePadRing() {
   if (p == null) { if (el) el.style.display = 'none'; return; }
   if (!el) {
     el = document.createElement('div'); el.id = 'pad-ring';
-    el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle class="pr-track" cx="50" cy="50" r="40"/><circle class="pr-fill" cx="50" cy="50" r="40" pathLength="100"/></svg><div class="pr-text">TRANSPORTING</div>';
+    el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle class="pr-track" cx="50" cy="50" r="40"/><circle class="pr-fill" cx="50" cy="50" r="40" pathLength="100"/></svg><div class="pr-text">TELEPORTING</div>';
     hud.appendChild(el);
   }
   const ch = hud.querySelector('#crosshair');

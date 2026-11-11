@@ -10367,15 +10367,22 @@ const ARENA_LADDERS = (() => {
 //   pad's `color` is its look alone, pads.js): C on the ground floor south of the bridge, in front of the framed door with the
 //   diamond sign (0.5425 m), where the user stood (x 4.24, z 67.45) — the same floor and nothing in the way for 2.65 m round it; D in the covered bridge
 //   near its south end, on its floor (20.235 m), where the user stood (x 4.07, z 56.40) — the walls 3.3 and 4.0 m off, the end
-//   floor's step 1.95 m south. Both a metre round as B; no sign.
+//   floor's step 1.95 m south. Both a metre round as B; no sign then.
+//   b1105fu (user 2026-11-11: "change the glowing text on the wall "Hold Jump to Transport" to "Hold Jump"", then "Add the
+//   "Hold Jump" text on the wall at the ground level silver portal as well, change this one's color from golden to silver",
+//   standing at x 4.24, z 69.83, facing south): A's words "Hold Jump"; C's the same, on the wall south of it — the model's face
+//   there at z 70.026, in the plain stretch between its two light panels (x 2.5..6.6) from the ledge's top (1.35 m) to the
+//   hall's ceiling (2.261 m): the words' middle 1.81 m up over the pad's x, facing north, 13 mm off the face as A's; silver,
+//   its pad's own look (the client draws a sign in its pad's colour). D and B still have none.
 const ARENA_PADS = (() => {
   const B = (m) => padRow(4, -12.44, 40.37, m);   // Neon: GLB_MAPS scale 4, cx -12.44, cz 40.37
   return {
     neon: [
       B({ name: 'A tunnel junction', x: -3.30, z: 8.00, r: 1.1, y: 0.5425, to: 1, ax: -3.30, az: 8.00, spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.6], [0, -0.7]],
-        sign: { x: -3.29, z: 6.452, y: 3.36, w: 2.0, yaw: 0, text: 'Hold Jump to Transport' } }),
+        sign: { x: -3.29, z: 6.452, y: 3.36, w: 2.0, yaw: 0, text: 'Hold Jump' } }),
       B({ name: 'B tower top', x: -3.31, z: 19.76, r: 1.0, y: 21.2375, to: 0, ax: -3.31, az: 19.76, spots: [[0, 0], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]] }),
-      B({ name: 'C street south', x: 4.24, z: 67.45, r: 1.0, y: 0.5425, to: 3, ax: 4.24, az: 67.45, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]] }),
+      B({ name: 'C street south', x: 4.24, z: 67.45, r: 1.0, y: 0.5425, to: 3, ax: 4.24, az: 67.45, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]],
+        sign: { x: 4.24, z: 70.013, y: 1.81, w: 2.0, yaw: Math.PI, text: 'Hold Jump' } }),
       B({ name: 'D bridge south end', x: 4.07, z: 56.40, r: 1.0, y: 20.235, to: 2, ax: 4.07, az: 56.40, color: 'silver', spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, -0.8], [0, 0.8]] }),
     ],
   };

@@ -798,7 +798,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 /* THE TRANSPORTER'S TIMER (pads.js; b1105fk, user 2026-11-10: "a golden half-transparent circle timer ... The timer takes 1 sec
    to complete the circle", "same style text "TRANSPORTING""; "Transporting unit's own crosshair indicator is enough"): the
    charging player's own ring round its crosshair (--pr-r, its radius, set clear of the crosshair's lines by updatePadRing),
-   filling clockwise from the top; TRANSPORTING under it in the pads' gold with their dark edge. Nobody else sees it. */
+   filling clockwise from the top; TELEPORTING under it in the pads' gold with their dark edge (TRANSPORTING until b1105fu, user:
+   "Change the loading text "TRANSPORTING" to "TELEPORTING""). Nobody else sees it. */
 #pad-ring { position: absolute; width: 0; height: 0; display: none; pointer-events: none; z-index: 5; --pr-r: 32px; }
 #pad-ring svg { position: absolute; left: calc(var(--pr-r) * -1.25); top: calc(var(--pr-r) * -1.25); width: calc(var(--pr-r) * 2.5); height: calc(var(--pr-r) * 2.5); overflow: visible; transform: rotate(-90deg); }
 #pad-ring .pr-track { fill: rgba(255, 201, 60, 0.08); stroke: rgba(255, 201, 60, 0.28); stroke-width: 7; }

@@ -23,7 +23,8 @@
 //   Nothing of this is drawn by the sim: the client draws each pad as a golden circle on its floor, the zone's own size, and a
 //   pad's `sign` as words on a wall (b1105fl, user: "Move the transporting circle and its detection on the floor instead of on
 //   the wall. The text stays on the wall though, without detection" — the sign is no zone), and, for the charging player alone,
-//   a golden ring round its own crosshair with TRANSPORTING (user: "No need to show to the others"). A pad's `color` is its
+//   a golden ring round its own crosshair with TELEPORTING (user: "No need to show to the others"; TRANSPORTING until b1105fu,
+//   user: "Change the loading text "TRANSPORTING" to "TELEPORTING""). A pad's `color` is its
 //   look alone — 'gold' (the default) or 'silver' (b1105fo, Neon's second pair, user: "Add another pair of transport
 //   points as well. use silver instead of golden this time"): its floor circle and the charging player's ring in that colour;
 //   the rule is the same for every pad, and a pair sends only to each other (`to`).

@@ -50,8 +50,12 @@ test('Neon has two pairs, gold and silver, each pad sending to its own pair; zon
     }
     if (P.sign) assert.equal(padAt(pads, { x: P.sign.x, y: P.y + G, z: P.sign.z }), -1, `${P.name}: the sign's foot is no zone`);
   }
-  assert.ok(pads[0].sign && pads[0].sign.text === 'Hold Jump to Transport' && !pads[1].sign, 'A has the words on its wall, B none');
-  assert.ok(!pads[2].sign && !pads[3].sign, 'the silver pair has no words');
+  assert.ok(pads[0].sign && pads[0].sign.text === 'Hold Jump' && !pads[1].sign, 'A has the words on its wall, B none');
+  assert.ok(pads[2].sign && pads[2].sign.text === 'Hold Jump' && !pads[3].sign, 'C has the words on its wall (b1105fu), D none');
+  for (const P of pads) if (P.sign) {   // (a sign faces its pad: its face's outward direction, yaw, towards the zone)
+    const nx = Math.sin(P.sign.yaw), nz = Math.cos(P.sign.yaw);
+    assert.ok(nx * (P.x - P.sign.x) + nz * (P.z - P.sign.z) > 0, `${P.name}: the sign faces its pad`);
+  }
   // the user's own standing places are in the zones (A: x -3.05 z 8.29 at 0.54 m; B: x -3.31 z 19.76 at 21.24 m; C: x 4.24
   // z 67.45 at 0.54 m; D: x 4.07 z 56.40 at 20.23 m)
   const at = (mx, mz, h) => ({ x: (mx + 12.44) * 4, y: h * 4 + G, z: (mz - 40.37) * 4 });
