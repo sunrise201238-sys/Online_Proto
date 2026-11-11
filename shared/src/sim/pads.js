@@ -1,4 +1,4 @@
-// THE TRANSPORTERS (b1105fk, user 2026-11-10, Blockade: "a golden glowing circle area at this wall ... When unit near to the
+// THE TRANSPORTERS (b1105fk, user 2026-11-10, Neon: "a golden glowing circle area at this wall ... When unit near to the
 // wall holds jump button, a golden half-transparent circle timer will start running ... The timer takes 1 sec to complete the
 // circle. When the timer is done, the unit will be transported to this position. The position also has a golden circle area
 // on the ground, but no text. The transportation can be done from this spot as well. Bot should know this as part of the
@@ -24,7 +24,7 @@
 //   pad's `sign` as words on a wall (b1105fl, user: "Move the transporting circle and its detection on the floor instead of on
 //   the wall. The text stays on the wall though, without detection" — the sign is no zone), and, for the charging player alone,
 //   a golden ring round its own crosshair with TRANSPORTING (user: "No need to show to the others"). A pad's `color` is its
-//   look alone — 'gold' (the default) or 'silver' (b1105fo, Blockade's second pair, user: "Add another pair of transport
+//   look alone — 'gold' (the default) or 'silver' (b1105fo, Neon's second pair, user: "Add another pair of transport
 //   points as well. use silver instead of golden this time"): its floor circle and the charging player's ring in that colour;
 //   the rule is the same for every pad, and a pair sends only to each other (`to`).
 import { GROUND_BASE_Y, SURFACE_STEP_HEIGHT } from './constants.js';

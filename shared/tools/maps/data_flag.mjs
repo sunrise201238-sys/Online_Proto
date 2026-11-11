@@ -1,6 +1,6 @@
 // A flag given to the boxes inside a box of model metres: x0,x1,z0,z1,h0,h1 (h over the street); a box across its faces is cut along
 // them and only the pieces inside are flagged — a box of no height (a top to stand on: the reading keeps some) by its one height, as
-// in data_region.mjs, cut in x and z alone. Made for Blockade's scaffold edits (user 2026-11-02, "bullets should be able to go through
+// in data_region.mjs, cut in x and z alone. Made for Neon's scaffold edits (user 2026-11-02, "bullets should be able to go through
 // these gaps"): the solid reading fills a gap narrower than a body, so the slit the eye sees between two posts at a corner stopped
 // bullets too; `noProjectile` on the boxes between the posts lets the rounds and the bots' sight through (the sim's flag, arena.js)
 // and still holds a body. usage: node data_flag.mjs <in.json> <x0,x1,z0,z1,h0,h1> <flag[=json value]> <out.json>

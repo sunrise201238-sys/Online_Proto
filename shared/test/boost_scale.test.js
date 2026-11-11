@@ -1,5 +1,5 @@
 // A map's boost scale (constants.js MAP_DATA boostScale, DEFAULT_BOOST_SCALE — 1 — where a map names none): District's gauge and
-// refill five times, the bots' gates with them (user 2026-10-29), then Compound's (2026-10-30), and Blockade's from 2026-11-01 until
+// refill five times, the bots' gates with them (user 2026-10-29), then Compound's (2026-10-30), and Neon's from 2026-11-01 until
 // 2026-11-03 (user: "remove the 5 times boost feature in Blockade": it plays at 1 again); every other
 // map, scene and concept, plays at 1 (every map took 5 for part of 2026-11-01 and went back the same day, user: "keep current 5
 // times boost ... for below map: Neon, Compound, District. Revert the boost amount and the BOT boost management gates to 1 time in
@@ -16,17 +16,17 @@ import { createMatchState, tickMatch, tickBot, tickCommandDriver, setMoveOrder, 
 const atBand56 = (fn) => () => { const u = C.UNIT_DATA.unit1, was = u.lockRange; u.lockRange = 56; try { return fn(); } finally { u.lockRange = was; } };
 
 const withDrain = (fn) => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };   // (the PT site's switch, where the tree has one)
-const FIVE = ['compound', 'district'];   // (the maps that name 5 — Blockade's went on 2026-11-03)
+const FIVE = ['compound', 'district'];   // (the maps that name 5 — Neon's went on 2026-11-03)
 const rescale = (f, k) => { f.boost = (f.boost / f.boostScale) * k; f.boostScale = k; };   // (a scale set by hand, the gauge with it)
 
-test('boost scale: Compound and District five times, every other map at 1, Blockade among them since 2026-11-03 — every row of MAP_DATA, scene and concept, and a map with no row (the Shooting Range)', () => {
+test('boost scale: Compound and District five times, every other map at 1, Neon among them since 2026-11-03 — every row of MAP_DATA, scene and concept, and a map with no row (the Shooting Range)', () => {
   assert.equal(C.DEFAULT_BOOST_SCALE, 1);
   for (const key of FIVE) assert.equal(C.MAP_DATA[key]?.boostScale, 5, `${key} names 5`);
   for (const key of Object.keys(C.MAP_DATA)) assert.equal(C.boostScaleOf(key), FIVE.includes(key) ? 5 : 1, key);
   assert.equal(C.boostScaleOf('range'), 1, 'the Shooting Range, the client\'s alone, has no row');
   const d = createMatchState({ mapKey: 'district', p1UnitKey: 'unit1', p2UnitKey: 'unit2', mode: '2v2' });
   for (const id of ['p1', 'p2', 'p3', 'p4']) { assert.equal(d.fighters[id].boostScale, 5, id); assert.equal(d.fighters[id].boost, 1250, id + ' boost'); }
-  for (const [mapKey, k] of [['blockade', 1], ['compound', 5], ['town', 1], ['arena1', 1], ['station', 1]]) {
+  for (const [mapKey, k] of [['neon', 1], ['compound', 5], ['town', 1], ['arena1', 1], ['station', 1]]) {
     const t = createMatchState({ mapKey, p1UnitKey: 'unit1', p2UnitKey: 'unit2' });
     for (const id of ['p1', 'p2']) { assert.equal(t.fighters[id].boostScale, k, `${mapKey} ${id}`); assert.equal(t.fighters[id].boost, 250 * k, `${mapKey} ${id} boost`); }
   }

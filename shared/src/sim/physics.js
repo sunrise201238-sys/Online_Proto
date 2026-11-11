@@ -604,7 +604,7 @@ export function sightHitsSurface(p0, p1, s) {
   if (s.type === 'ramp' || s.type === 'plane') {
     const hA = s.heightAt(p0.x + dx * t0, p0.z + dz * t0);
     const hB = s.heightAt(p0.x + dx * t1, p0.z + dz * t1);
-    // A slope the data marks `deck` is part of an ELEVATED deck on an open frame (Blockade's deck joints, b1105bk: the
+    // A slope the data marks `deck` is part of an ELEVATED deck on an open frame (Neon's deck joints, b1105bk: the
     // old decks' last metre sloped down to floor B): it is a flat deck's kin, so only crossing it blocks — sight under it
     // passes, as under the flat deck beside it.
     if (s.deck) return (yA > hA + EPS && yB < hB - EPS) || (yA < hA - EPS && yB > hB + EPS);

@@ -3,13 +3,13 @@
 // child of the same parent, so the fade by node (`fadeNodes`: an object is a child of the first node that branches) sees
 // the copies as objects of their own; the copy's own matrix carries the turn, in the parent's space (L' = W⁻¹ R W L, W the
 // parent's world matrix, R the turn: x' = tx − x, z' = tz − z for 180°). Yard = Warehouse and its copy turned 180° (2026-10-22).
-// --only: those children alone, the rest left (Blockade's scaffold: 44 of the 242 objects under echo_01_242, 2026-11-02).
+// --only: those children alone, the rest left (Neon's scaffold: 44 of the 242 objects under echo_01_242, 2026-11-02).
 // --mirror: x' = −x first, then the turn and the move (at 0°: x' = tx − x, z' = z + tz). A mirror is no node matrix the client
 // or the collision tools read right — the determinant goes negative and the triangles' winding with it, faces inside out — so
 // each copied mesh is BAKED instead: new vertices of its own (the positions and the normals carried through the original's
 // world matrix, the mirror and the parent's inverse), each triangle's winding reversed, every copied node's matrix the
-// identity; the texture coordinates and the materials shared. The file grows by the copies' vertices (Blockade's scaffold, 5,980
-// triangles: some 300 KB). Blockade's scaffold copied mirrored onto the main road's south half, 2026-11-02.
+// identity; the texture coordinates and the materials shared. The file grows by the copies' vertices (Neon's scaffold, 5,980
+// triangles: some 300 KB). Neon's scaffold copied mirrored onto the main road's south half, 2026-11-02.
 // usage: node glb_clone.mjs <in.glb> <out.glb> <parentNodeName> <degreesAboutY> <tx> <tz> [--skip name,name] [--only name,name] [--mirror] [--suffix _copy]
 import { readFileSync, writeFileSync } from 'node:fs';
 const [inF, outF, parentName, degS, txS, tzS, ...rest] = process.argv.slice(2); const deg = Number(degS), TX = Number(txS), TZ = Number(tzS);

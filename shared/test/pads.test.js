@@ -1,4 +1,4 @@
-// The transporters (pads.js; b1105fk, user 2026-11-10): Blockade's rows against the installed data — the gold pair A and B, and
+// The transporters (pads.js; b1105fk, user 2026-11-10): Neon's rows against the installed data — the gold pair A and B, and
 // since b1105fo the silver pair C and D ("Add another pair of transport points as well. use silver instead of golden this
 // time") — and the rule on the server's sim: a fresh press on a pad starts the charge, the held button keeps it, PAD_HOLD_MS
 // moves the body onto the other pad's arrival point; let go and it is dropped; a body that jumped in holding the button is not
@@ -15,7 +15,7 @@ import {
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
 function match() {
-  const m = createMatchState({ mapKey: 'blockade', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
+  const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
   for (const f of Object.values(m.fighters)) { f.hp = 1e9; f.invulnerableUntil = 0; }
   m.fighters.p2.pos = { x: -200, y: G, z: 0 }; m.fighters.p2.floorY = G;   // (the other body far off)
   return m;
@@ -24,8 +24,8 @@ function stand(f, P, dx = 0, dz = 0) { f.pos = { x: P.x + dx, y: P.y + G, z: P.z
 function run(m, frames, now0, n, bots = []) { let now = now0; for (let i = 0; i < n; i += 1) { now += MS; tickMatch(m, { p1: frames(i) }, now, DT, bots); } return now; }
 const hold = (i) => ({ ...emptyInput(), jump: i === 0, jumpDown: true });
 
-test('Blockade has two pairs, gold and silver, each pad sending to its own pair; zones, arrival spots and floors clear of the boxes', () => {
-  const a = getArena('blockade'); const pads = getArenaPads('blockade');
+test('Neon has two pairs, gold and silver, each pad sending to its own pair; zones, arrival spots and floors clear of the boxes', () => {
+  const a = getArena('neon'); const pads = getArenaPads('neon');
   assert.equal(pads.length, 4); assert.deepEqual(pads.map((P) => P.to), [1, 0, 3, 2], 'A and B, C and D');
   assert.deepEqual(pads.map((P) => P.color), ['gold', 'gold', 'silver', 'silver'], 'the first pair gold, the second silver');
   for (const P of pads) {
@@ -62,7 +62,7 @@ test('Blockade has two pairs, gold and silver, each pad sending to its own pair;
 });
 
 test('a fresh press on A, held: the body stands for PAD_HOLD_MS, then it is on B; held on, nothing more; let go and press: back on A', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1; stand(p, pads[0]);
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1; stand(p, pads[0]);
   const x0 = p.pos.x, z0 = p.pos.z;
   let now = run(m, hold, 1000, Math.floor((PAD_HOLD_MS - 50) / MS));
   assert.equal(p.padCharge, 0, 'the charge runs'); assert.ok(Math.hypot(p.pos.x - x0, p.pos.z - z0) < 1e-6, 'the body stands'); assert.ok(!p.airborne, 'no jump');
@@ -78,7 +78,7 @@ test('a fresh press on A, held: the body stands for PAD_HOLD_MS, then it is on B
 });
 
 test('the silver pair the same: a fresh press on C, held, is on D after PAD_HOLD_MS; let go and press on D: back on C', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1; stand(p, pads[2]);
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1; stand(p, pads[2]);
   let now = run(m, hold, 1000, Math.floor((PAD_HOLD_MS - 50) / MS));
   assert.equal(p.padCharge, 2, 'the charge runs on C'); assert.ok(!p.padMoves);
   now = run(m, (i) => ({ ...emptyInput(), jumpDown: true }), now, 6);
@@ -92,7 +92,7 @@ test('the silver pair the same: a fresh press on C, held, is on D after PAD_HOLD
 });
 
 test('let go before the second: the charge is dropped, the body where it was, no jump; a body that jumped in holding is not caught', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1; stand(p, pads[0]);
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1; stand(p, pads[0]);
   let now = run(m, hold, 1000, Math.floor(500 / MS));
   assert.equal(p.padCharge, 0);
   now = run(m, () => emptyInput(), now, 2);
@@ -104,10 +104,10 @@ test('let go before the second: the charge is dropped, the body where it was, no
 });
 
 test('while the charge runs: no shot, no dodge, the stick does nothing; a hit does not stop it', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1; stand(p, pads[0]);
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1; stand(p, pads[0]);
   const now = run(m, hold, 1000, 10);
   assert.equal(attemptFire(m, p, m.fighters.p2, now), false, 'no shot');
-  assert.equal(tryStartStep(m, p, 1, 0, now, getArena('blockade').obstacles), false, 'no dodge');
+  assert.equal(tryStartStep(m, p, 1, 0, now, getArena('neon').obstacles), false, 'no dodge');
   const x0 = p.pos.x; run(m, (i) => ({ ...emptyInput(), jumpDown: true, moveX: 1, stepTap: true }), now, 5);
   assert.ok(Math.abs(p.pos.x - x0) < 1e-6, 'the stick does nothing'); assert.equal(p.padCharge, 0);
   p.hp -= 10; run(m, (i) => ({ ...emptyInput(), jumpDown: true }), now + 5 * MS, Math.ceil(PAD_HOLD_MS / MS));
@@ -115,7 +115,7 @@ test('while the charge runs: no shot, no dodge, the stick does nothing; a hit do
 });
 
 test('a second body arriving: beside the first, PAD_CLEAR apart, on the floor and in the zone', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1, q = m.fighters.p2; stand(p, pads[0]);
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1, q = m.fighters.p2; stand(p, pads[0]);
   stand(q, { x: pads[1].ax, z: pads[1].az, y: pads[1].y });
   run(m, hold, 1000, Math.ceil((PAD_HOLD_MS + 40) / MS));
   assert.equal(p.padMoves, 1); const d = Math.hypot(p.pos.x - q.pos.x, p.pos.z - q.pos.z);
@@ -124,11 +124,11 @@ test('a second body arriving: beside the first, PAD_CLEAR apart, on the floor an
 
 test('the route grid: a link each way per pad; every spawn reaches B and D up through A or C, and no other way', async () => {
   const { navGridFor } = await import('../src/sim/ai.js');
-  const a = getArena('blockade'); const pads = getArenaPads('blockade'); const grid = navGridFor(a);
+  const a = getArena('neon'); const pads = getArenaPads('neon'); const grid = navGridFor(a);
   const links = grid.ladderLinks.filter((l) => l.pad != null);
   assert.deepEqual(links.map((l) => l.pad).sort(), [0, 1, 2, 3], 'one link per pad');
   for (const l of links) assert.ok(Math.abs(l.y - pads[pads[l.pad].to].y) < 0.01, 'the link lands on the other pad\'s floor');
-  const sp = getArenaSpawns('blockade'); const spawns = Array.isArray(sp) ? sp : Object.values(sp).flat();
+  const sp = getArenaSpawns('neon'); const spawns = Array.isArray(sp) ? sp : Object.values(sp).flat();
   assert.ok(spawns.length >= 2);
   const firstLegs = { 1: new Set(), 3: new Set() };
   for (const k of [1, 3]) {
@@ -148,7 +148,7 @@ test('the route grid: a link each way per pad; every spawn reaches B and D up th
 
 test('a bot whose target stands on B: it walks to A, charges a second, and fights on B', async () => {
   const { tickBot } = await import('../src/sim/ai.js');
-  const m = match(); const pads = getArenaPads('blockade'); const p = m.fighters.p1, b = m.fighters.p2;
+  const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1, b = m.fighters.p2;
   p.pos = { x: pads[1].x, y: pads[1].y + G, z: pads[1].z - 6 }; p.floorY = p.pos.y; p.invulnerableUntil = 1e15;
   b.pos = { x: pads[0].x + 8, y: pads[0].y + G, z: pads[0].z + 10 }; b.floorY = b.pos.y; b.botControlled = true; b.targetId = 'p1'; p.targetId = 'p2';
   let now = 1000, chargeAt = null, movedAt = null;
@@ -163,7 +163,7 @@ test('a bot whose target stands on B: it walks to A, charges a second, and fight
 });
 
 test('a bot with the goal on D: charges, and is on C after PAD_HOLD_MS', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const b = m.fighters.p2; b.botControlled = true; stand(b, pads[3]); b.botPadGoal = 3;
+  const m = match(); const pads = getArenaPads('neon'); const b = m.fighters.p2; b.botControlled = true; stand(b, pads[3]); b.botPadGoal = 3;
   let now = 1000; for (let i = 0; i < 10; i += 1) { now += MS; tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']); }
   assert.equal(b.padCharge, 3);
   for (let i = 0; i < Math.ceil(PAD_HOLD_MS / MS); i += 1) { now += MS; tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']); }
@@ -172,7 +172,7 @@ test('a bot with the goal on D: charges, and is on C after PAD_HOLD_MS', () => {
 });
 
 test('a bot with the goal in the zone: charges, stands, and is on the other pad after PAD_HOLD_MS; the snapshot carries the charge', () => {
-  const m = match(); const pads = getArenaPads('blockade'); const b = m.fighters.p2; b.botControlled = true; stand(b, pads[1]); b.botPadGoal = 1;
+  const m = match(); const pads = getArenaPads('neon'); const b = m.fighters.p2; b.botControlled = true; stand(b, pads[1]); b.botPadGoal = 1;
   let now = 1000; for (let i = 0; i < 10; i += 1) { now += MS; tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']); }
   assert.equal(b.padCharge, 1); const snap = buildSnapshotFor(m, b.team); assert.equal(snap.fighters.p2.padCharge, 1, 'own team sees it');
   for (let i = 0; i < Math.ceil(PAD_HOLD_MS / MS); i += 1) { now += MS; tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']); }

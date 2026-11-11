@@ -45,7 +45,7 @@ const MAP_BOUNDARY = {
   compound:   { halfX: 300.2, halfZ: 348.4, open: ['west', 'north'] },   // cs_compound, the fenced compound and its surroundings (150 x 174 m at 4 units per metre, 1.34 m per model unit, the user's pick with the map scale test); no slab on the west and the north: the model's wall and fences are the edge there (user 2026-10-24)
   hospital:   { halfX: 213.7, halfZ: 191.6 },   // the animal hospital, its lawn and the road east of the fence (107 x 96 m at 4 units per metre; 0.37 m per model unit, the user's pick with the map scale test, 2026-10-28; the served copy scaled to metres); the parking beyond the road's wall stands as background
   district:   { halfX: 393.4, halfZ: 547.4 },   // the Jujutsu Shenanigans city block inside its wall and the station plaza south of it (197 x 274 m at 4 units per metre; 28 m per model unit — the unit is 100 Roblox studs of 0.28 m; the served copy scaled to metres); the dark beside the plaza is walled by the map's VOID data
-  blockade:       { halfX: 384, halfZ: 192, ceil: 104 },   // Downtown Echo (miniroyale.io), the model's ground grid: the main street, the cross street, the lots (192 x 96 m at 4 units per metre, 1 m per model unit); ceil 104: no body's feet over 26 m above the street, the skybridge's roof the highest place to stand (user 2026-10-31) — the towers over it carry no boxes
+  neon:       { halfX: 384, halfZ: 192, ceil: 104 },   // Downtown Echo (miniroyale.io), the model's ground grid: the main street, the cross street, the lots (192 x 96 m at 4 units per metre, 1 m per model unit); ceil 104: no body's feet over 26 m above the street, the skybridge's roof the highest place to stand (user 2026-10-31) — the towers over it carry no boxes
   backrooms:  { halfX: 109.6, halfZ: 114.4, ceil: 15.2 },   // Original Backrooms, the whole hall (55 x 57 m at 4 units per metre, 2 m per model unit)
   backrooms_anomaly:{ halfX: 109.6, halfZ: 114.4, ceil: 15.2 },   // Original Backrooms, the whole hall (55 x 57 m at 4 units per metre, 2 m per model unit)
 };
@@ -10357,7 +10357,7 @@ const ARENA_LADDERS = (() => {
 // it sends to, ax, az the arrival point, spots the arrival spots beside it for a second body (offsets in metres, the point
 // first), and `sign` a text on a wall — words only: no zone, no ring (b1105fl, user: "Move the transporting circle and its
 // detection on the floor instead of on the wall. The text stays on the wall though, without detection").
-//   Blockade: A, the tunnel's T junction — the zone and its ring in the middle of the junction's square (the tube's walls at z
+//   Neon: A, the tunnel's T junction — the zone and its ring in the middle of the junction's square (the tube's walls at z
 //   6.651 north, 9.350 south, the stem's at x -4.650 and -1.950; the ring 0.25 m clear of the north wall), on the tube's floor
 //   (0.5425 m), round where the user stood (x -3.05, z 8.29); the sign on the old corridor's wall over the tube's north wall
 //   (b1105fj's seal, its face at z 6.4386; the words' middle 3.36 m up, between the tube's ceiling, 2.257 m, and the old
@@ -10369,9 +10369,9 @@ const ARENA_LADDERS = (() => {
 //   near its south end, on its floor (20.235 m), where the user stood (x 4.07, z 56.40) — the walls 3.3 and 4.0 m off, the end
 //   floor's step 1.95 m south. Both a metre round as B; no sign.
 const ARENA_PADS = (() => {
-  const B = (m) => padRow(4, -12.44, 40.37, m);   // Blockade: GLB_MAPS scale 4, cx -12.44, cz 40.37
+  const B = (m) => padRow(4, -12.44, 40.37, m);   // Neon: GLB_MAPS scale 4, cx -12.44, cz 40.37
   return {
-    blockade: [
+    neon: [
       B({ name: 'A tunnel junction', x: -3.30, z: 8.00, r: 1.1, y: 0.5425, to: 1, ax: -3.30, az: 8.00, spots: [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.6], [0, -0.7]],
         sign: { x: -3.29, z: 6.452, y: 3.36, w: 2.0, yaw: 0, text: 'Hold Jump to Transport' } }),
       B({ name: 'B tower top', x: -3.31, z: 19.76, r: 1.0, y: 21.2375, to: 0, ax: -3.31, az: 19.76, spots: [[0, 0], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]] }),
@@ -10463,11 +10463,11 @@ const ARENA_SPAWNS = {
   // (p2) at the NW — a 2v2 mate beside its own home as before; the nine places, the Trio respawns' pool, unchanged.
   district: { p1: { x: 351, y: GROUND_BASE_Y, z: 202 }, p2: { x: -353, y: GROUND_BASE_Y, z: -510 },
     more: [{ x: 351, y: GROUND_BASE_Y, z: -510 }, { x: -353, y: GROUND_BASE_Y, z: 202 }, { x: -353, y: GROUND_BASE_Y, z: -154 }, { x: 351, y: GROUND_BASE_Y, z: -154 }, { x: -1, y: GROUND_BASE_Y, z: -510 }, { x: -1, y: GROUND_BASE_Y, z: 202 }, { x: -105, y: GROUND_BASE_Y, z: 318 }] },
-  // Blockade: the user's places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
+  // Neon: the user's places (2026-11-01, "use these as spawn spots"): the two teams' homes at model (-33.3, 52.2) and
   // (35.5, 11.5) and three more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —
   // the third number names the walked floor nearest the user's feet. A sixth, at the junction under the 12.9 m deck (model
   // (-1.1, 36.6)), came out the same day ("remove spot 3"). (The first set of eight, 2026-10-31, is gone.)
-  blockade: { p1: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 }, p2: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 },
+  neon: { p1: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 }, p2: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 },
     more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
@@ -10596,7 +10596,7 @@ function markFloorTops(arena) {
 //   town, by hand: by hand, the user 2026-11-04 (b1104i): six street cars and vans as the deck car — a body box to the bonnet's height and a cabin box over the roof's span, from the street, in place of their 70 boxes, 66 floors and 16 slopes (shared/tools/maps/data_boxes.mjs, the six commands in its README; README: Town); a regeneration must do it again
 //   town, by hand: by hand, the user 2026-11-04 (b1104i): the underground ramp by Building 11 — its two side kerbs down to the street (-0.2) with the six floors on them, its two side walls' tops down to -2.2, so a unit walks off the street onto the slope and one on the slope is still held (tools README: Town's underground ramp); a regeneration must do it again
 //   spacecraft: 3329 boxes and 1780 floors from restored: the data of 2026-10-24 before the kerb rule by shared/tools/glb_collision.mjs: crop x 62 z -35 (metres) at the origin, 4 units per metre, the street at y 0.
-export const FILE_DATA_MAPS = ['hospital', 'district', 'compound', 'warehouse', 'dust', 'town', 'spacecraft', 'blockade'];
+export const FILE_DATA_MAPS = ['hospital', 'district', 'compound', 'warehouse', 'dust', 'town', 'spacecraft', 'neon'];
 export const generatedDataFile = (mapKey) => `maps/${mapKey}_data.json`;
 export function hasGeneratedData(mapKey) { return !!GENERATED_ARENA_COLLISION_DATA[mapKey]; }
 export function registerGeneratedData(mapKey, data) {

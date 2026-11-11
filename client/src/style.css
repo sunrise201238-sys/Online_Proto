@@ -804,7 +804,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 #pad-ring .pr-track { fill: rgba(255, 201, 60, 0.08); stroke: rgba(255, 201, 60, 0.28); stroke-width: 7; }
 #pad-ring .pr-fill { fill: none; stroke: rgba(255, 207, 74, 0.8); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; filter: drop-shadow(0 0 3px rgba(255, 176, 20, 0.95)); }
 #pad-ring .pr-text { position: absolute; left: 0; top: calc(var(--pr-r) + 14px); transform: translateX(-50%); white-space: nowrap; font-family: var(--font-display); font-weight: 400; font-size: 17px; line-height: 1; letter-spacing: 0.06em; color: #ffcf4a; -webkit-text-stroke: 4px #3b2500; paint-order: stroke fill; text-shadow: 0 0 8px rgba(255, 176, 20, 0.85); }
-/* the silver pads' ring (b1105fo, Blockade's second pair: "use silver instead of golden this time"; updatePadRing sets .pr-silver
+/* the silver pads' ring (b1105fo, Neon's second pair: "use silver instead of golden this time"; updatePadRing sets .pr-silver
    while the charge is on a silver pad — main.js PAD_LOOKS.silver) */
 #pad-ring.pr-silver .pr-track { fill: rgba(214, 224, 236, 0.08); stroke: rgba(214, 224, 236, 0.3); }
 #pad-ring.pr-silver .pr-fill { stroke: rgba(238, 243, 249, 0.85); filter: drop-shadow(0 0 3px rgba(186, 206, 232, 0.95)); }
