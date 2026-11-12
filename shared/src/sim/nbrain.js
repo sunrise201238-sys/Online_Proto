@@ -32,7 +32,7 @@
 // dodge out), 'stepping' (the Sudden Death brain watched it) or 'ran'.
 
 import { between } from './math.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
+import { segmentHitsObstacle, groundHeightAt, walkFloorTo, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
@@ -1293,8 +1293,17 @@ export function nbBrainTick(host) {
   // cover-heavy maps — before range discipline could act (the "runs at me
   // at match start" report). Nothing qualifies → keep the full path (some
   // fights genuinely require getting close before any sight exists).
+  // WHERE A SAMPLE STANDS (b1105ge; user 2026-11-11, a bot under Compound's stair building, its player on the upper deck:
+  // "When player unit is at the position, BOT got stuck beneath it."): on the floor the ROUTE walks there — at a waypoint
+  // the waypoint's own floor, between two the floor a body walking the leg from its start stands on (walkFloorTo, the rule
+  // that made the leg a walk edge of the grid). It stood on the TOPMOST surface over the sample: under a deck or a roof the
+  // test looked from on top of it, saw a player the route's own floor could not, and cut the route there, before its stairs.
+  // From then on every plan was cut at its first sample — no route at all — and the Maze leg's fallback walked the bot at
+  // the player's place on the map: the spot beneath them. Any map with a floor over a floor; two levels are enough.
+  // (PT first; here with build b1105gf, 2026-11-12 — user: "update the BOT and the ending cameras to 9.7". Streets' bridge is
+  // such a floor: the equivalence test's sniper there used to stop under it, nb_equiv.test.js.)
   const truncateAtFiringPoint = (path) => {
-    let prev = { x: pos.x, z: pos.z };
+    let prev = { x: pos.x, z: pos.z, y: myFloorY };
     for (let i = 0; i < path.length; i += 1) {
       const seg = path[i];
       const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
@@ -1302,11 +1311,13 @@ export function nbBrainTick(host) {
       // a transporter's leg the same, its arrival alone)
       const linkLeg = seg.ladder != null || seg.pad != null;
       const steps = linkLeg ? 1 : Math.max(1, Math.ceil(segLen / 6));
+      let wx = prev.x, wz = prev.z, wy = prev.y ?? 0;   // (the walk along this leg: how far it has been followed, and the floor under it there)
       for (let s = 1; s <= steps; s += 1) {
         const px = prev.x + ((seg.x - prev.x) * s) / steps;
         const pz = prev.z + ((seg.z - prev.z) * s) / steps;
         if (Math.hypot(opp.pos.x - px, opp.pos.z - pz) > upperRange) continue;
-        const fy = groundHeightAt(px, pz, surfaces, 1000);
+        let fy = seg.y ?? 0;
+        if (s < steps) { fy = walkFloorTo(wx, wz, wy, px, pz, surfaces); wx = px; wz = pz; wy = fy; }
         if (botHasLineOfSight(
           { x: px, y: fy + GROUND_BASE_Y + eyeUp, z: pz },
           { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z },

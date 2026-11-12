@@ -1,4 +1,4 @@
-// FROZEN at b1105bt for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1105ge for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -35,11 +35,11 @@
 // dodge out), 'stepping' (the Sudden Death brain watched it) or 'ran'.
 
 import { between } from '../src/sim/math.js';
-import { segmentHitsObstacle, groundHeightAt, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
+import { segmentHitsObstacle, groundHeightAt, walkFloorTo, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
 import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1105bt_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1105ge_ref.js';
 import { hitStunMoveScale } from '../src/sim/movement.js';
 
 // --- Bot tactical-sprint tunables ---
@@ -150,7 +150,7 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 // or less, so all go to 110). Assessed before the build on the bot-vs-bot round robin (16 units, seven maps, 3,360 duels, the same
 // seeds): the shotguns' mean win rate 59.7% to 53.1%, against the rifles and the assault rifles 69.8% to 54.6%, the machine guns
 // 36.0% to 23.5%, the SMGs and the snipers as they were; the duels against a shotgun 3 to 7 s longer; the brain's time a tick no longer.
-const BOT_SHOTGUN_ENGAGE_RANGE = 160;   // (b1105et, user 2026-11-10: re-frozen with the plain brain's 160; 110 since b1105br)
+const BOT_SHOTGUN_ENGAGE_RANGE = 160;   // (PT and 9.6 b1105et, user 2026-11-10: "Change the range gating for SG encounter rule from 110 to 160"; 110 since b1105br)
 // a shotgun is told by its weapon class, the name's second half (Unit 2 / Shotgun), as the picker's class tags read it
 const isShotgunUnit = (u) => /\/\s*Shotgun\b/.test(u?.name || '');
 // HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
@@ -554,7 +554,8 @@ export function nbBrainTick(host) {
   // walks the bot at a ladder's end, and nothing else renews it, so a bot that dropped its route, or was taken by Defense,
   // passes a ladder's foot without mounting (ladderBotStep mounts on the goal alone). Under a standing move order the command
   // driver owns the goal the same way (command.js tickCommandDriver, the offline applyMoveOrder) and this clears nothing.
-  if (!(host.cmd && host.cmd.move)) me.botLadderGoal = undefined;
+  // The transporter's goal (pads.js botPadGoal; b1105fk) lives the same one tick, set by the same follower on a pad's leg.
+  if (!(host.cmd && host.cmd.move)) { me.botLadderGoal = undefined; me.botPadGoal = undefined; }
   // THE MAP'S BOOST SCALE (constants.js MAP_DATA boostScale, on the fighter from state.js; District 5, user 2026-10-29): every boost
   // threshold below — the latch's reserve and floor, the hide dash's arm and drop, the jump bank, the sprint floors — times it,
   // as the gauge's volume and refill are (movement.js); the costs are not.
@@ -703,6 +704,7 @@ export function nbBrainTick(host) {
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
   // universal rule for every weapon.
+  // (PT b1105ed, 9.6 b1105eg: no unit carries lockRange2v2 any more — the fallback to lockRange below is every unit's, 2v2 too.)
   // 2v2 (2026-08-07): bots derive the band from lockRange2v2 instead —
   // compressed 50–70 team-synergy table (long locks let a teammate die
   // alone at the front). Units without the field (hidden ones) and every
@@ -1294,18 +1296,31 @@ export function nbBrainTick(host) {
   // cover-heavy maps — before range discipline could act (the "runs at me
   // at match start" report). Nothing qualifies → keep the full path (some
   // fights genuinely require getting close before any sight exists).
+  // WHERE A SAMPLE STANDS (b1105ge; user 2026-11-11, a bot under Compound's stair building, its player on the upper deck:
+  // "When player unit is at the position, BOT got stuck beneath it."): on the floor the ROUTE walks there — at a waypoint
+  // the waypoint's own floor, between two the floor a body walking the leg from its start stands on (walkFloorTo, the rule
+  // that made the leg a walk edge of the grid). It stood on the TOPMOST surface over the sample: under a deck or a roof the
+  // test looked from on top of it, saw a player the route's own floor could not, and cut the route there, before its stairs.
+  // From then on every plan was cut at its first sample — no route at all — and the Maze leg's fallback walked the bot at
+  // the player's place on the map: the spot beneath them. Any map with a floor over a floor; two levels are enough.
+  // (PT first; here with build b1105gf, 2026-11-12 — user: "update the BOT and the ending cameras to 9.7". Streets' bridge is
+  // such a floor: the equivalence test's sniper there used to stop under it, nb_equiv.test.js.)
   const truncateAtFiringPoint = (path) => {
-    let prev = { x: pos.x, z: pos.z };
+    let prev = { x: pos.x, z: pos.z, y: myFloorY };
     for (let i = 0; i < path.length; i += 1) {
       const seg = path[i];
       const segLen = Math.hypot(seg.x - prev.x, seg.z - prev.z) || 1;
-      // (a ladder's leg is the climb, not a walk: no sample along it — its landing alone is tried, and kept whole as the cut)
-      const steps = seg.ladder != null ? 1 : Math.max(1, Math.ceil(segLen / 6));
+      // (a ladder's leg is the climb, not a walk: no sample along it — its landing alone is tried, and kept whole as the cut;
+      // a transporter's leg the same, its arrival alone)
+      const linkLeg = seg.ladder != null || seg.pad != null;
+      const steps = linkLeg ? 1 : Math.max(1, Math.ceil(segLen / 6));
+      let wx = prev.x, wz = prev.z, wy = prev.y ?? 0;   // (the walk along this leg: how far it has been followed, and the floor under it there)
       for (let s = 1; s <= steps; s += 1) {
         const px = prev.x + ((seg.x - prev.x) * s) / steps;
         const pz = prev.z + ((seg.z - prev.z) * s) / steps;
         if (Math.hypot(opp.pos.x - px, opp.pos.z - pz) > upperRange) continue;
-        const fy = groundHeightAt(px, pz, surfaces, 1000);
+        let fy = seg.y ?? 0;
+        if (s < steps) { fy = walkFloorTo(wx, wz, wy, px, pz, surfaces); wx = px; wz = pz; wy = fy; }
         if (botHasLineOfSight(
           { x: px, y: fy + GROUND_BASE_Y + eyeUp, z: pz },
           { x: opp.pos.x, y: opp.pos.y + eyeUp, z: opp.pos.z },
@@ -1315,7 +1330,7 @@ export function nbBrainTick(host) {
           // Carry the sample's floor: smoothPath's same-floor gate reads
           // (y ?? 0), so a y-less cut point on a deck froze the final leg
           // out of smoothing (review 2026-08-13).
-          cut.push(seg.ladder != null ? seg : { x: px, z: pz, y: fy });
+          cut.push(linkLeg ? seg : { x: px, z: pz, y: fy });
           return cut;
         }
       }
@@ -1793,8 +1808,14 @@ export function nbBrainTick(host) {
       let wp = nav.path[nav.idx];
       // (a ladder's landing is reached by the climb — a bot under it, however near in the plan, has the ladder to ride first)
       const ladderAhead = (w) => w.ladder != null && Math.abs((w.y ?? myFloorY) - myFloorY) >= BOT_SAME_FLOOR_RISE;
+      // (a transporter's arrival on another floor, the same: reached by the pad — pads.js, navgrid.js THE TRANSPORTERS ON THE GRID.
+      // The floor is the one the body stands on, the host's floorY: at the south end of B's walkway the body stands on a box's
+      // top that the floors list does not hold, the floor read off the list there is the roof 47 units under, and an arrival
+      // already made read as ahead.)
+      const standY = me.floorY != null ? me.floorY - GROUND_BASE_Y : myFloorY;
+      const padAhead = (w) => w.pad != null && Math.abs((w.y ?? standY) - standY) >= BOT_SAME_FLOOR_RISE;
       while (nav.idx < nav.path.length - 1
-          && !ladderAhead(wp)
+          && !ladderAhead(wp) && !padAhead(wp)
           && Math.hypot(wp.x - pos.x, wp.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
@@ -1825,7 +1846,13 @@ export function nbBrainTick(host) {
       // is reached) and the legs head for the point the waypoint names (mx, mz: the grab point before the foot, or the exit).
       const ladderLeg = ladderAhead(wp);
       if (ladderLeg) me.botLadderGoal = wp.climb;
-      let tx = (ladderLeg ? wp.mx : wp.x) - pos.x, tz = (ladderLeg ? wp.mz : wp.z) - pos.z;
+      // THE TRANSPORTER (pads.js, b1105fk): the waypoint ahead is a pad's arrival on another floor — the goal is the pad it is
+      // taken from (padBotStep charges in its zone; the brain sleeps for the second and wakes on the arrival, where the waypoint
+      // is reached) and the legs head for the zone's middle (mx, mz).
+      const padLeg = !ladderLeg && padAhead(wp);
+      if (padLeg) me.botPadGoal = wp.pad;
+      const viaLink = ladderLeg || padLeg;
+      let tx = (viaLink ? wp.mx : wp.x) - pos.x, tz = (viaLink ? wp.mz : wp.z) - pos.z;
       const wl = Math.hypot(tx, tz) || 1;
       tx = tx / wl + avoid.rx * 0.3;
       tz = tz / wl + avoid.rz * 0.3;

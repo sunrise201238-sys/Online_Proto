@@ -2266,6 +2266,12 @@ function updateUnitModelState(m, rig, dt, now) {
   } else if (want === 'stand') {
     rig.motionPose = null;
   }
+  // THE FINALE (PT b1105gb): its shots pose the units (finalePoseFor) — the fallen unit's death from its first frame slowed
+  // (FINALE.deathRate), the final blow's unit its victory (the reload clip for now) from its first frame at its own speed, the rest at ease
+  const cine = finalePoseFor(m);
+  if (cine) want = rig.actions[cine.want] ? cine.want : 'stand';
+  const cineRestart = !!cine && !!cine.restart && rig.cineToken !== cine.token;
+  if (cine) rig.cineToken = cine.token;
   if (!rig.actions[want]) want = 'stand';
   const entry = rig.actions[want];
   // EVERY SHOT'S COOLDOWN FROM ITS FIRST FRAME (PT b1105de, user 2026-11-08, Iori: "Match the cooldown motion to the cooldown time in
@@ -2273,12 +2279,13 @@ function updateUnitModelState(m, rig, dt, now) {
   // restarts it, so each cooldown plays the clip once across its whole span; it used to play the first one and hold its end.
   const coolRestart = !!rig.coolShot && want === 'cooldown';
   rig.coolShot = false;
-  if (entry && (want !== rig.current || (chargeStart && want === 'shoot') || coolRestart)) {
+  if (entry && (want !== rig.current || (chargeStart && want === 'shoot') || coolRestart || cineRestart)) {
     let rate = entry.cfg.speed ?? 1;
     if (entry.cfg.fit === 'step') rate *= entry.dur / (Math.max(50, m.unit?.stepDurationMs ?? STEP_DURATION_MS) / 1000);
     else if (entry.cfg.fit === 'reload') rate *= entry.dur / (Math.max(100, m.unit?.reloadMs ?? 1500) / 1000);
     else if (entry.cfg.fit === 'charge') rate *= entry.dur / (Math.max(100, m.unit?.chargeMs ?? 1000) / 1000);
     else if (entry.cfg.fit === 'cooldown') rate *= entry.dur / (Math.max(100, m.unit?.fireCooldownMs ?? 1000) / 1000);   // (one cycle across the fire cooldown, b1105cy)
+    if (cine) rate = (entry.cfg.speed ?? 1) * cine.rate;   // (the finale: the clip at its own speed times the shot's rate, no fit)
     const prev = rig.currentAction;
     const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
     // THE WAY OUT OF A BORROWED CLIP (b1105ch, PT and 9.5, user 2026-11-08: "there is a sudden flick between the last moment of
@@ -2365,6 +2372,7 @@ function updateUnitModelState(m, rig, dt, now) {
   if (tgt) { hx = tgt.root.position.x - px; hz = tgt.root.position.z - pz; have = Math.hypot(hx, hz) > 0.5; }
   if (!have && moving) { hx = vx; hz = vz; have = true; }
   if (st.ladder != null && arenaLadders[st.ladder]) { const L = arenaLadders[st.ladder]; const k = CLIMB_CLIP_TURNED ? -1 : 1; hx = k * Math.sin(L.yaw); hz = k * Math.cos(L.yaw); have = true; }   // (a climber faces the rungs — ladder.js; the clip's turned body does, so the holder faces away: CLIMB_CLIP_TURNED)
+  if (finale.active) have = false;   // (the finale: every unit holds its heading)
   if (have) {
     const target = Math.atan2(hx, hz);
     let d = target - rig.yaw;
@@ -2570,7 +2578,7 @@ function updateMechAnimations(dt, now) {
     if (bar) {
       // Diorama / command mode: the annotation layer carries identity + HP,
       // so the floating bar hides wholesale (restored per frame when off).
-      if (dioramaActive()) { bar.visible = false; continue; }
+      if (dioramaActive() || finale.active) { bar.visible = false; continue; }   // (the finale: no bars over the shots)
       // Shooting Range (owner 2026-09-28): no portrait, no bar — neither on
       // the practice lanes' targets nor on the player; the lanes carry their
       // own hit read-outs and the bar group only cluttered the sight line.
@@ -4282,6 +4290,7 @@ function updateProjectileSystem(dt) {
       if (pelletsHit > 0) {
         const finalDamage = getProjectileDamage(p) * pelletsHit;
         tgtState.hp = Math.max(0, tgtState.hp - finalDamage);
+        if (tgtState.hp <= 0) finaleNoteKill(p.target, p.owner);   // (the finale's final blow, PT b1105gb)
         if (tgtState.hp <= 0) sdRecordKill(p.target, p.owner, hitCenter, hitCenter);   // (death report: a volley — the pellet's path is not kept)
         applyHitStun(tgtState, p.target.unit, p.hitStunMs, p.hitStunScale, now);
         tgtState.momentumVX = 0;
@@ -4435,6 +4444,7 @@ function updateProjectileSystem(dt) {
     if (botHit) {
       const finalDamage = getProjectileDamage(p);
       p.target.state.hp = Math.max(0, p.target.state.hp - finalDamage);
+      if (p.target.state.hp <= 0) finaleNoteKill(p.target, p.owner);   // (the finale's final blow, PT b1105gb)
       if (p.target.state.hp <= 0) sdRecordKill(p.target, p.owner, prevPos, nearest, p.trailSpawnPos ?? null);   // (death report: the killing round, its spawn for the lead question)
       // Per-weapon stun, lowest-move-scale-wins: a fresh hit applies its stun
       // when the target is free OR when its stun is strictly heavier (lower
@@ -4611,6 +4621,7 @@ function updateBeamDamage(now) {
       let dmg = b.damage;
       if (state.dummyMode && b.owner !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       st.hp = Math.max(0, st.hp - dmg);
+      if (st.hp <= 0) finaleNoteKill(m, b.owner);   // (the finale's final blow, PT b1105gb)
       applyHitStun(st, m.unit, b.hitStunMs, b.hitStunScale, now);
       st.momentumVX = 0;
       st.momentumVZ = 0;
@@ -4893,6 +4904,7 @@ function updateChargedBeams(now, dt) {
       let dmg = u.beam?.chargedDamage ?? u.damage;
       if (state.dummyMode && m !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       tst.hp = Math.max(0, tst.hp - dmg);
+      if (tst.hp <= 0) finaleNoteKill(t, m);   // (the finale's final blow, PT b1105gb)
       applyHitStun(tst, t.unit, u.stun?.ms ?? 100, u.stun?.moveScale ?? 0.25, now);
       tst.momentumVX = 0; tst.momentumVZ = 0; t.body.velocity.set(0, 0, 0);
       spawnHitEffect(t.root.position, t === state.player ? 0x67f2ff : 0xff73d2);
@@ -6561,6 +6573,7 @@ function updateMechXRayVisibility() {
 // spectator mode (player dead, ally up). Per-map "see your own unit" visuals
 // (wall fade, X-ray silhouette) key off this so a spectator inherits them.
 function cameraFocusMech() {
+  if (finale.active && finale.focus) return finale.focus;   // (the finale's shot: the wall fade keeps its unit in view)
   if (state.spectatorActive) return spectateMech();
   const playerAlive = (state.player?.state.hp ?? 0) > 0;
   if (playerAlive || !state.ally) return state.player;
@@ -6948,6 +6961,8 @@ function cleanupMatch() {
 
 function startMatch() {
   if (GLB_MAPS[state.mapKey] && !hasGeneratedData(state.mapKey)) { warmMapData(state.mapKey).then(startMatch).catch(() => {}); return; }   // (the map's data file first: arena.js, THE MAPS' DATA AS FILES)
+  if (finale.active) finishFinale(false);
+  state.killLog = []; state.killNoted = new Set();   // (the finale's final blows, PT b1105gb)
   cleanupMatch();
   clearMenus();
   renderer.domElement.style.pointerEvents = 'auto';
@@ -7592,7 +7607,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ga 11-11';
+const CLIENT_BUILD_TAG = 'b1105gf 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8364,6 +8379,11 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
       break;
     case 'ended': {
       const end = conn.getLastMatchEnd();
+      // THE FINALE online (PT b1105gb): once per match end, a knockout only; the end page (or the rematch overlay) after it
+      if (end && end.reason === 'ko' && onl.finaleFor !== end && !finale.active) {
+        onl.finaleFor = end;
+        if (startOnlineFinale(conn, () => renderOnlineUi('ended', prevPhase, onl, conn))) break;
+      }
       const cfg = conn.getLobbyConfig();
       const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
       // Initialize the staleness signature so refreshEndMenuIfStale doesn't
@@ -9469,13 +9489,14 @@ function tickOnline(dt, _now) {
   if (targetPhase !== onl.uiSubPhase) {
     const prevPhase = onl.uiSubPhase;
     onl.uiSubPhase = targetPhase;
+    if (finale.active && targetPhase !== 'ended') finishFinale(false);   // (the lobby moved on: the finale gives way)
     renderOnlineUi(targetPhase, prevPhase, onl, conn);
   } else if (targetPhase === 'waiting-opp') {
     // Re-render waiting-opp on opponent config changes (their unit pick etc).
     refreshWaitingOppIfStale(onl, conn);
   } else if (targetPhase === 'ended') {
     // Re-render end menu / overlay when rematch readiness changes.
-    refreshEndMenuIfStale(onl, conn);
+    if (!finale.active) refreshEndMenuIfStale(onl, conn);   // (not over the finale, PT b1105gb)
   }
 
   if (targetPhase === 'playing') {
@@ -11090,6 +11111,294 @@ function tickTrioRespawns() {
     state.rosterIdx[slotName] = nextIdx;
     respawnSlotMech(slotName, roster[nextIdx]);
   }
+}
+
+// ============================================================================
+// THE FINALE (PT b1105gb proto; user 2026-11-11: "a sudden camera hijack for every player, which taken from the third person
+// view (three-quarter view, high angle) to watch the last killed unit's death motion in 0.5times speed? After that the camera
+// hijack shows the victory motion of the unit who delivers the final blow (if all units are dead, skip this one) in normal
+// speed", then: the final blow's unit dead though its side won — skip it; a forfeit — straight to the end screen; skippable —
+// yes; shot 1 from the front-diagonal of the fallen unit's facing, "the point is making it easy to watch"; shot 2 from the
+// front; command mode, free pov and spectators hijacked too; "Use reload motion for victory motion for now").
+// The match that ended stands frozen behind it (offline the sim stops; online the server has stopped already), the HUD steps
+// aside, the camera cuts to shot 1 and holds it, then flies to shot 2 in ONE TAKE (b1105gc, FINALE.move; through whatever
+// stands in its way where neither side of its arc is clear, b1105gd) and holds that; a tap or a key press after FINALE.skipArmMs skips to the end page (a held
+// fire key or finger is no new press). Client-side only: online it reads what the last snapshot carried — the lethal hit's
+// shooter (connection.js getLastKill), every unit's HP — and sends nothing, so it costs the match no lag.
+// Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
+// its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
+// (b1105gf) — less the site's photo mode, which this tree does not carry.
+const FINALE = {
+  // the last killed unit's death motion at 0.6 of its speed (b1105gf; 0.5 as first asked, then, user 2026-11-12: "Im thinking
+  // playing the death motion in 0.5 times speed is too slow, make it 0.6 times."): shot 1 lasts the motion's length over this
+  deathRate: 0.6,
+  // shot 1: the camera `dist` out along the fallen unit's facing turned `yaws` degrees (the first whose line to the unit is
+  // clear; then again nearer, `near`), `up` above the unit's root, looking at `lookUp` above it. The root is the body's
+  // centre plus modelYOffset — 4.8 above the feet on level ground, where a unit is 6.4 tall — so shot 1 looks at the chest
+  // from 12.8 up (b1105gc: the b1105gb note put the root at 2.45, the body's centre; the numbers were tuned by eye and stay)
+  shot1: { dist: 12, up: 8, lookUp: -0.8, fov: 50, yaws: [35, -35, 70, -70, 0, 110, -110, 180] },
+  // shot 2: the final blow's unit from the front, the camera a little above its head (8.0 up) looking at its face, the
+  // whole body in the frame
+  shot2: { dist: 13, up: 3.2, lookUp: 0.75, fov: 50, yaws: [0, 20, -20, 40, -40, 65, -65, 90, -90, 180] },
+  near: [1, 0.8, 0.6],
+  // the hold on the fallen unit after its death motion, before the take to the winner (or, with no winner to show, the
+  // end page): NONE since b1105gd, 0.5 s before — user 2026-11-11: "you can start the camera transition 0.3 sec earlier
+  // universally; the death motion takes a bit too much time at its end anyway", then, told of the hold: "there was a 停留?
+  // no need that." The take begins the frame the motion ends.
+  holdAfterDeathS: 0, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
+  skipArmMs: 500,
+  // THE ONE TAKE between the two shots (b1105gc; user 2026-11-11: "between the two characters the camera taken, can you zoom
+  // out from the defeated one and zoom in to the winning one like it one take? the transition should be done in 0.3 to 1 sec
+  // depending on their relatively distance", then, on the assessment's rule, times and fallback: "As you suggested", "OK"):
+  // the camera flies an arc from shot 1's place to shot 2's where it used to cut. `minS` with the two units `nearD` apart
+  // or less, `maxS` at `farD` or more, in proportion between (560 bot duels: a median 87 apart at the knockout, so 0.77 s).
+  // The arc swells to one side by bulge[0] × that distance, kept within bulge[1]..bulge[2]: both units in the frame half-way
+  // up to about 40 apart, a low sweep beyond (a close pair is circled at bulge[1], never crossed); its height runs straight
+  // from shot 1's to shot 2's, never above either (under Factory's pipes at 16).
+  // WHICH SIDE, AND THROUGH WHAT (b1105gd; user 2026-11-11, on b1105gc's rule "blocked: a tighter arc, each on either side;
+  // none clear, a cut": "make the camera go through the wall/object" — and of three ways to, "B": the same arc, its other
+  // side when one is blocked, through when both are). Each side of the arc is rated (finaleArcRate): clear; the way free
+  // but a unit hidden at some point; a step through a box or a deck. The better side is flown, the smaller turn on a tie.
+  // So the camera never cuts and never leaves its arc; over the 560 duels' knockouts it passes through a wall, an object or
+  // (seldom; Neon most) a deck in about a quarter. b1105gc's tighter arc and its cut are gone.
+  move: { minS: 0.3, maxS: 1.0, nearD: 20, farD: 120, bulge: [0.6, 12, 25], samples: 24, showFrac: 0.35 },
+  // the camera's near plane through the finale (0.1 in play; the command view's own 6 is left alone): at 0.1 the floor's
+  // 5 mm layers flickered into one another under the finale's low sweeps in the software renderer the previews ran on
+  nearPlane: 1,
+};
+const finale = { active: false, shot: 0, victim: null, killer: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
+if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
+
+// the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
+function finaleNoteKill(victim, killer) {
+  if (!victim) return;
+  const noted = state.killNoted ?? (state.killNoted = new Set());
+  if (noted.has(victim)) return;
+  noted.add(victim);
+  (state.killLog ?? (state.killLog = [])).push({ victim, killer: killer ?? null });
+}
+// a clip's length at its own speed, from the unit's model (0 while it stands on the billboard)
+function finaleClipSeconds(m, key) {
+  const e = m?.modelHolder?.userData?.modelRig?.actions?.[key];
+  return e && e.dur > 0 ? e.dur / (e.cfg?.speed || 1) : 0;
+}
+// the pose a unit holds during the finale (updateUnitModelState): the fallen unit's death from its first frame in shot 1, the
+// final blow's unit its victory (the reload clip for now) from its first frame in shot 2, every other living unit at ease
+function finalePoseFor(m) {
+  if (!finale.active) return null;
+  if (finale.shot === 1 && m === finale.victim) return { want: 'death', rate: FINALE.deathRate, token: `d${finale.tok}`, restart: true };
+  if (finale.shot === 2 && m === finale.killer) return { want: 'reload', rate: 1, token: `v${finale.tok}`, restart: true };
+  if ((m?.state?.hp ?? 0) > 0) return { want: 'stand', rate: 1, token: 'stand', restart: false };
+  return null;
+}
+// a shot of a unit: where the camera stands, the point it looks at, its lens — found, not yet taken
+function finaleCameraPose(m, cfg) {
+  const p = m.root.position;
+  const face = m.modelHolder?.userData?.modelRig?.yaw ?? m.root.rotation.y;   // (the model's world heading: forward is (sin, cos))
+  const look = { x: p.x, y: p.y + cfg.lookUp, z: p.z };
+  const at = (deg, k) => { const a = face + deg * Math.PI / 180; return { x: p.x + Math.sin(a) * cfg.dist * k, y: p.y + cfg.up * k, z: p.z + Math.cos(a) * cfg.dist * k }; };
+  let cam = null;
+  for (const k of FINALE.near) {
+    for (const deg of cfg.yaws) {
+      const c = at(deg, k);
+      if (botHasLineOfSight(look, c, arenaObstacles, arenaSurfaces)) { cam = c; break; }
+    }
+    if (cam) break;
+  }
+  if (!cam) cam = at(cfg.yaws[0], FINALE.near[FINALE.near.length - 1]);   // (every line blocked: the first choice, nearest; the wall fade does the rest where the map has it)
+  return { cam, look, fov: cfg.fov };
+}
+function applyFinalePose(pose) {
+  camera.position.set(pose.cam.x, pose.cam.y, pose.cam.z);
+  camera.lookAt(pose.look.x, pose.look.y, pose.look.z);
+  camera.fov = pose.fov;
+  camera.updateProjectionMatrix();
+}
+// THE ONE TAKE's arc (FINALE.move): from shot 1's camera A.cam to shot 2's B.cam through the point `bulge` to one side of
+// their mid-point (a quadratic curve; the height runs straight from the one to the other), the view panning evenly from
+// shot 1's line to shot 2's and bent, at the middle, onto the point half-way between the two units — so the take begins
+// exactly as shot 1 and ends exactly as shot 2. `side` +1 / −1: which side of the cameras' line it swells to.
+function finaleArcSetup(A, B, side, bulge) {
+  const cx = B.cam.x - A.cam.x, cz = B.cam.z - A.cam.z; const cl = Math.hypot(cx, cz) || 1;
+  const nx = side * cz / cl, nz = -side * cx / cl;
+  const mid = { x: (A.cam.x + B.cam.x) / 2 + nx * bulge, y: (A.cam.y + B.cam.y) / 2, z: (A.cam.z + B.cam.z) / 2 + nz * bulge };
+  const ctl = { x: 2 * mid.x - (A.cam.x + B.cam.x) / 2, y: mid.y, z: 2 * mid.z - (A.cam.z + B.cam.z) / 2 };   // (so the curve passes through `mid` half-way)
+  const dir = (c, l) => { const dx = l.x - c.x, dy = l.y - c.y, dz = l.z - c.z; return { yaw: Math.atan2(dx, dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)) }; };
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const d0 = dir(A.cam, A.look), d1 = dir(B.cam, B.look);
+  const M = { x: (A.look.x + B.look.x) / 2, y: (A.look.y + B.look.y) / 2, z: (A.look.z + B.look.z) / 2 };
+  const dm = dir(mid, M);
+  // the bend onto the half-way point fades out where the curve passes over it (whole from 8 away on the ground, none
+  // within 2): straight below the camera, "toward it" has no heading and the pan would spin
+  const w = Math.max(0, Math.min(1, (Math.hypot(M.x - mid.x, M.z - mid.z) - 2) / 6));
+  let dy = wrap(d1.yaw - d0.yaw);   // the pan: the shorter way round …
+  const alt = dy > 0 ? dy - 2 * Math.PI : dy + 2 * Math.PI;
+  if (w > 0.5 && Math.abs(wrap(d0.yaw + alt / 2 - dm.yaw)) < Math.abs(wrap(d0.yaw + dy / 2 - dm.yaw))) dy = alt;   // … unless the longer one faces the half-way point at the middle
+  return { A, B, ctl, d0, d1, dy, bulge, side, yawFix: w * wrap(dm.yaw - (d0.yaw + dy / 2)), pitchFix: w * (dm.pitch - (d0.pitch + d1.pitch) / 2) };
+}
+// the arc at t of its time (0..1), eased in and out: the camera's place and a point 10 ahead on its line of view
+function finaleArcAt(S, t) {
+  const e = 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t)));
+  const k = 1 - e, s = Math.sin(Math.PI * e);
+  const cam = { x: k * k * S.A.cam.x + 2 * e * k * S.ctl.x + e * e * S.B.cam.x, y: k * k * S.A.cam.y + 2 * e * k * S.ctl.y + e * e * S.B.cam.y, z: k * k * S.A.cam.z + 2 * e * k * S.ctl.z + e * e * S.B.cam.z };
+  const yaw = S.d0.yaw + S.dy * e + s * S.yawFix, pitch = S.d0.pitch + (S.d1.pitch - S.d0.pitch) * e + s * S.pitchFix;
+  const c = Math.cos(pitch);
+  return { e, cam, look: { x: cam.x + Math.sin(yaw) * c * 10, y: cam.y + Math.sin(pitch) * 10, z: cam.z + Math.cos(yaw) * c * 10 } };
+}
+// what an arc costs the picture (the shots' own sight rule): 0 — nothing in the camera's way, and its unit in sight, the
+// fallen one over the first `showFrac` of it and the winner over the last; 1 — the way free, a unit hidden at some point;
+// 2 — a step of it (each sample to the next) through a box or a deck
+function finaleArcRate(S) {
+  const N = FINALE.move.samples, f = FINALE.move.showFrac; let prev = null, hidden = false;
+  for (let i = 0; i <= N; i += 1) {
+    const c = finaleArcAt(S, i / N);
+    if (prev && !botHasLineOfSight(prev, c.cam, arenaObstacles, arenaSurfaces)) return 2;
+    if (!hidden && ((c.e <= f && !botHasLineOfSight(S.A.look, c.cam, arenaObstacles, arenaSurfaces)) || (c.e >= 1 - f && !botHasLineOfSight(S.B.look, c.cam, arenaObstacles, arenaSurfaces)))) hidden = true;
+    prev = c.cam;
+  }
+  return hidden ? 1 : 0;
+}
+// the arc for two units `d` apart: one swell, its two sides; the better rated is flown — through what blocks it where
+// both are blocked (b1105gd) — and of two alike, the one with the smaller turn
+function pickFinaleArc(A, B, d) {
+  const mv = FINALE.move; const bulge = Math.max(mv.bulge[1], Math.min(mv.bulge[2], mv.bulge[0] * d));
+  const sides = [finaleArcSetup(A, B, 1, bulge), finaleArcSetup(A, B, -1, bulge)].sort((a, b) => Math.abs(a.dy) - Math.abs(b.dy));
+  for (const S of sides) S.rate = finaleArcRate(S);
+  return sides[1].rate < sides[0].rate ? sides[1] : sides[0];
+}
+const finaleMoveSeconds = (d) => { const mv = FINALE.move; return mv.minS + (mv.maxS - mv.minS) * Math.max(0, Math.min(1, (d - mv.nearD) / (mv.farD - mv.nearD))); };
+// shot 1's time is up and the winner stands: the take begins where the camera is. False only with a unit gone (the caller cuts).
+function startFinaleMove(now) {
+  const V = finale.victim, K = finale.killer;
+  if (!V?.root || !K?.root) return false;
+  const A = { cam: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, look: { x: V.root.position.x, y: V.root.position.y + FINALE.shot1.lookUp, z: V.root.position.z }, fov: FINALE.shot1.fov };
+  const B = finaleCameraPose(K, FINALE.shot2);
+  const d = Math.hypot(K.root.position.x - V.root.position.x, K.root.position.z - V.root.position.z);
+  finale.move = { S: pickFinaleArc(A, B, d), t0: now, ms: finaleMoveSeconds(d) * 1000, d };
+  return true;
+}
+// the battle's leftovers out of the picture: the edge arrows, the lock, the hit X, the laser sights, the glints, the dash
+// puffs, the rounds in the air and their trails, the beams — each fades or moves in an update the frozen match no longer runs
+function finaleHideBattle() {
+  hideAllyEdgeArrow(); hideEnemyEdgeArrow(); clearHitX();
+  if (state.reticle) state.reticle.visible = false;
+  const hide = (o) => { if (o) o.visible = false; };
+  for (const m of getAllFighters()) {
+    if (!m) continue;
+    hide(m.laserSightVisual); hide(m.glintMesh); hide(m.chargedBeamVisual);
+    for (const t of m.trail ?? []) hide(t?.mesh);   // (the dash puffs: their fade is updateTransforms')
+    if (m.root) m.root.rotation.x = 0;              // (the last hit's stagger tilt, which updateTransforms would clear)
+  }
+  const shots = [...(state.projectiles ?? []), ...(state.online?.projectileMeshes?.values?.() ?? []), ...(state.online?.ownShots ?? [])];
+  for (const p of shots) { hide(p?.mesh); hide(p?.trail); for (const pm of p?.pelletMeshes ?? []) hide(pm); }
+  for (const d of state.dyingBulletTrails ?? []) hide(d?.trail);
+  for (const bv of state.beamVisuals ?? []) hide(bv?.group);
+}
+function startFinale({ victim, killer = null, onDone }) {
+  if (!victim?.root) { onDone?.(); return false; }
+  const now = performance.now();
+  finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now;
+  finale.victim = victim;
+  finale.killer = killer && killer !== victim && killer.root && (killer.state?.hp ?? 0) > 0 ? killer : null;   // (dead, or none: no shot 2)
+  const d = finaleClipSeconds(victim, 'death');
+  finale.dur1 = (d > 0 ? d / FINALE.deathRate : FINALE.fallbackDeathS) + FINALE.holdAfterDeathS;
+  const v = finale.killer ? finaleClipSeconds(finale.killer, 'reload') : 0;
+  finale.dur2 = finale.killer ? (v > 0 ? Math.min(FINALE.victoryMaxS, v) : FINALE.fallbackVictoryS) + FINALE.holdAfterVictoryS : 0;
+  // the two units on show, SHOWN (b1105gc): play hides a unit the frame its HP reaches 0 (updateTransforms; online
+  // mirrorFighterToMech). Offline the lethal hit lands after that in the match's last frame, so the fallen unit stood
+  // shown; online it did only while match:end arrived with the last snapshot — a frame or more later (a late packet) and
+  // that snapshot was drawn first, the unit hidden, and shot 1 looked at an empty floor.
+  victim.root.visible = true;
+  if (finale.killer) finale.killer.root.visible = true;
+  finale.move = null;
+  finale.prevNear = camera.near;
+  if (camera.near < FINALE.nearPlane) camera.near = FINALE.nearPlane;   // (applied by shot 1's updateProjectionMatrix just below)
+  document.documentElement.classList.add('finale-on');
+  finaleHideBattle();
+  finale.hint = document.createElement('div');
+  finale.hint.className = 'finale-skip';
+  finale.hint.textContent = 'TAP TO SKIP';
+  document.body.appendChild(finale.hint);
+  finale.onSkip = (e) => {
+    if (!finale.active || (e.type === 'keydown' && e.repeat)) return;
+    if (performance.now() - finale.t0 < FINALE.skipArmMs) return;
+    e.preventDefault?.(); e.stopPropagation?.();
+    // the same press must not land on the end page that replaces the shot: a tap's click (and a Space key's) comes after
+    // the press, with the page already up under it — so the clicks of the next half second are swallowed
+    const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+    window.addEventListener('click', eat, true);
+    setTimeout(() => window.removeEventListener('click', eat, true), 500);
+    finishFinale(true);
+  };
+  window.addEventListener('pointerdown', finale.onSkip, true);
+  window.addEventListener('keydown', finale.onSkip, true);
+  finaleShot(1, now);
+  return true;
+}
+function finaleShot(n, now, pose = null) {
+  finale.shot = n; finale.shotT0 = now;
+  finale.focus = n === 1 ? finale.victim : finale.killer;
+  applyFinalePose(pose ?? finaleCameraPose(finale.focus, n === 1 ? FINALE.shot1 : FINALE.shot2));
+}
+// every frame of the finale (animate, offline and online): the shots' clock and the take between them, the skip hint, the
+// wall fade on the unit in view
+function updateFinale(dt, now) {
+  if (!finale.active) return;
+  if (finale.hint && now - finale.t0 >= FINALE.skipArmMs) finale.hint.classList.add('on');
+  if (finale.move) {
+    // THE ONE TAKE: along its arc by the clock; at its end shot 2 begins on the arc's own last frame (the units keep shot
+    // 1's poses on the way — finalePoseFor — so the winner's motion starts as the camera arrives)
+    const mv = finale.move, t = (now - mv.t0) / mv.ms;
+    if (t >= 1) { finale.move = null; finaleShot(2, now, mv.S.B); }
+    else {
+      const c = finaleArcAt(mv.S, t);
+      camera.position.set(c.cam.x, c.cam.y, c.cam.z);
+      camera.lookAt(c.look.x, c.look.y, c.look.z);
+      const fov = mv.S.A.fov + (mv.S.B.fov - mv.S.A.fov) * c.e;
+      if (fov !== camera.fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+      finale.focus = c.e < 0.5 ? finale.victim : finale.killer;
+    }
+  } else {
+    const t = (now - finale.shotT0) / 1000;
+    if (finale.shot === 1 && t >= finale.dur1) {
+      if (!finale.killer) { finishFinale(true); return; }
+      if (!startFinaleMove(now)) finaleShot(2, now);   // (a unit gone: the cut — the take itself never refuses, b1105gd)
+    } else if (finale.shot === 2 && t >= finale.dur2) { finishFinale(true); return; }
+  }
+  updateVfx(dt);   // (the last hit's rings fade as they would)
+  updateWallFade();
+}
+function finishFinale(runDone) {
+  if (!finale.active) return;
+  finale.active = false; finale.shot = 0; finale.focus = null; finale.move = null;
+  if (finale.prevNear != null && camera.near !== finale.prevNear) { camera.near = finale.prevNear; camera.updateProjectionMatrix(); }
+  finale.prevNear = null;
+  document.documentElement.classList.remove('finale-on');
+  window.removeEventListener('pointerdown', finale.onSkip, true);
+  window.removeEventListener('keydown', finale.onSkip, true);
+  finale.hint?.remove(); finale.hint = null;
+  const done = finale.onDone; finale.onDone = null;
+  if (runDone) done?.();
+}
+// offline: the match-deciding knockout (animate's win check) — the last lethal hit noted, its unit still down
+function endWithFinale(win) {
+  state.running = false;
+  state.phase = 'finale';
+  const log = state.killLog ?? [];
+  let kill = log.length ? log[log.length - 1] : null;
+  if (kill && (kill.victim?.state?.hp ?? 1) > 0) kill = null;
+  const victim = kill?.victim ?? getAllFighters().filter((m) => m && (m.state?.hp ?? 1) <= 0).pop() ?? null;
+  startFinale({ victim, killer: kill?.killer ?? null, onDone: () => showEndMenu(win) });
+}
+// online: match:end with a knockout (renderOnlineUi's 'ended'). The last snapshot's HP onto the mechs first — the frame that
+// turns the page over mirrors nothing, so the mechs can sit a tick behind (endRowUnits) — then the lethal hit the connection kept.
+function startOnlineFinale(conn, onDone) {
+  const snap = conn.getLatestSnapshot?.();
+  if (snap?.fighters) for (const id in snap.fighters) { const mech = onlineMechOfId(id); if (mech && snap.fighters[id]) mech.state.hp = snap.fighters[id].hp; }
+  const k = conn.getLastKill?.();
+  const victim = k ? onlineMechOfId(k.targetId) : null;
+  if (!victim || (victim.state?.hp ?? 1) > 0) return false;
+  return startFinale({ victim, killer: onlineMechOfId(k.ownerId), onDone });
 }
 
 function showEndMenu(win) {
@@ -18975,6 +19284,7 @@ function animate() {
     if (state.online) {
       syncKeyboardMovement();
       tickOnline(dt, now);
+      if (finale.active) updateFinale(dt, now);   // (THE FINALE online, PT b1105gb)
       // Online has its own update path (no updateProjectileSystem), so the
       // dying-trails fade has to be ticked here too — otherwise online trails
       // sit at full opacity forever, never disposed.
@@ -19076,14 +19386,16 @@ function animate() {
           && (state.mode !== '2v2' || trioSlotRemaining('ally') <= 0);
         const teamBOut = trioSlotRemaining('enemy') <= 0
           && (state.mode !== '2v2' || trioSlotRemaining('enemy2') <= 0);
-        if (teamAOut || teamBOut) showEndMenu(teamBOut);
+        if (teamAOut || teamBOut) endWithFinale(teamBOut);   // (the finale first, PT b1105gb)
       } else if (state.mode === '2v2') {
         const teamADead = state.player.state.hp <= 0 && (state.ally?.state.hp ?? 0) <= 0;
         const teamBDead = state.enemy.state.hp <= 0 && (state.enemy2?.state.hp ?? 0) <= 0;
-        if (teamADead || teamBDead) showEndMenu(teamBDead);
+        if (teamADead || teamBDead) endWithFinale(teamBDead);
       } else if (state.player.state.hp <= 0 || state.enemy.state.hp <= 0) {
-        showEndMenu(state.enemy.state.hp <= 0);
+        endWithFinale(state.enemy.state.hp <= 0);
       }
+    } else if (finale.active) {
+      updateFinale(dt, now);   // (THE FINALE, PT b1105gb: the match frozen, the camera on its shots)
     } else if (state.sdIntro) {
       // SUDDEN DEATH INTRO (banner showing): the simulation is frozen — no
       // input, AI, physics, projectiles or win check — but the match view
@@ -19106,7 +19418,7 @@ function animate() {
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMapRoof();   // (a modelled map's roof hides in command mode — GLB_MAPS `roof`)
     updateMechAnimations(dt, now);
-    if (dioramaActive()) renderDiorama();
+    if (dioramaActive() && !finale.active) renderDiorama();   // (the finale's shots through the main camera, command mode too)
     else renderer.render(scene, camera);
   } catch (error) {
     console.error('Render loop error:', error);

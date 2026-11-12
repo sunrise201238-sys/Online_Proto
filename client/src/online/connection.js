@@ -102,6 +102,7 @@ export function createConnection() {
     latestSnapshot = null;
     prevSnapshot = null;
     lastMatchEnd = null;
+    lastKill = null;
     matchStart = payload ?? null;
     log('match:start', payload);
   });
@@ -113,6 +114,8 @@ export function createConnection() {
   });
 
   const hitQueue = [];
+  // THE FINALE (PT b1105gb): the last lethal hit seen, its shooter and its target — a knockout's final blow
+  let lastKill = null;
   socket.on('match:snapshot', (payload) => {
     if (!payload) return;
     // The server sends no unit tables (2026-10-25, a quarter of every snapshot): each fighter carries its unitKey, and the
@@ -122,6 +125,7 @@ export function createConnection() {
     // two can land between frames, so the events of the one skipped were lost; the loop drains this (drainHits).
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
     if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
+    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit' && ev.targetHp != null && ev.targetHp <= 0) lastKill = { ownerId: ev.ownerId, targetId: ev.targetId };
     prevSnapshot = latestSnapshot;
     latestSnapshot = payload;
     lastSnapshotAt = Date.now();
@@ -156,6 +160,7 @@ export function createConnection() {
     getMatchState: () => matchState,
     getMatchStart: () => matchStart,
     getLastMatchEnd: () => lastMatchEnd,
+    getLastKill: () => lastKill,   // (the finale's final blow, PT b1105gb)
     getLastError: () => lastError,
     getAttempts: () => attempts,
     getWaitingSince: () => waitingSince,   // 0 when connected

@@ -1238,3 +1238,8 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .buttons { --btn-gap: clamp(8px, 1.2vw, 14px); --btn-size: clamp(56px, min(13vw, calc((100vh - 90px - 12px - 2 * var(--btn-gap)) / 3)), 84px); right: max(22px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
 }
+
+/* THE FINALE (PT b1105gb): the match's HUD steps aside while the camera plays the knockout; "TAP TO SKIP" once a tap can */
+.finale-on .touch-hud, .finale-on .dio-layer, .finale-on #fullscreen-btn, .finale-on #ally-edge-arrow, .finale-on [id^="enemy-edge-arrow"] { display: none !important; }
+.finale-skip { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 90; padding: 6px 14px; border-radius: 999px; border: 2px solid var(--ink); background: rgba(255, 255, 255, 0.92); color: var(--ink); font-family: var(--font-ui); font-weight: 800; font-size: 13px; letter-spacing: 0.08em; opacity: 0; transition: opacity 0.25s ease-out; pointer-events: none; }
+.finale-skip.on { opacity: 1; }

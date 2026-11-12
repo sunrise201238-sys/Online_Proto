@@ -48,7 +48,13 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // Re-frozen at b1105bt (2026-11-07): a unit under a move order runs its four Defense commits 300 ms (nbrain.js BOT_DEFENSE_CMD_MOVE_MS; user:
 // "change these 4 durations from 1sec to 0.3sec for that assigned unit"); none of the seven matches carries an order, and they played equal to the
 // b1105br references after the change.
-import { tickBot as tickOld } from './ai_b1105bt_ref.js';
+// Re-frozen at b1105ge (PT 2026-11-11, here 2026-11-12 with build b1105gf): the route cut stands each of its samples on the floor the route
+// walks there, not on the topmost surface over it (nbrain.js WHERE A SAMPLE STANDS; user, of a bot under Compound's stair building: "When
+// player unit is at the position, BOT got stuck beneath it."); play altered by design wherever a route passes under a deck, a roof or a
+// bridge. Against the b1105bt references the Streets match (arena2 unit3 vs unit1) parted at 7.63 s — the sniper's route runs under the
+// bridge, where the old reading stood a sample on the deck (8) and saw the enemy the street under it could not — and the six others
+// played equal. The case itself is route_cut_floor.test.js.
+import { tickBot as tickOld } from './ai_b1105ge_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

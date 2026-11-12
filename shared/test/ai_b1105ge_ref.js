@@ -1,4 +1,4 @@
-// FROZEN at b1105bt for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1105ge for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/ai.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE BOT HOST, SERVER SIDE. The brain is shared/src/sim/nbrain.js (the
@@ -14,14 +14,14 @@ import { getArena } from '../src/sim/arena.js';
 import { buildNavGrid, deserializeNavGrid, navDataSignature, attachLadderLinks } from '../src/sim/navgrid.js';
 import { inheritMomentum, hitStunMoveScale } from '../src/sim/movement.js';
 import { PROJECTILE_MUZZLE_Y_OFFSET, TICK_RATE_MS, BOT_LOS_EYE_HEIGHT } from '../src/sim/constants.js';
-import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1105bt_ref.js';
-import { makeMuzzleClear, BOT_SD } from './sdbrain_b1105bt_ref.js';
+import { nbBrainTick, botHasLineOfSight, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from './nbrain_b1105ge_ref.js';
+import { makeMuzzleClear, BOT_SD } from './sdbrain_b1105ge_ref.js';
 // The Sudden Death brain, its knobs and its risk models live in sdbrain.js
 // (one module for the server and the client); re-exported here for the
 // client's imports. The plain brain's sight rule is re-exported for the
 // hide-order tests, which judge "hidden" by the bot's own rule.
-export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1105bt_ref.js';
-export { botHasLineOfSight } from './nbrain_b1105bt_ref.js';
+export { BOT_SD, capsuleHitFrac, sdExposureRisk, sdOwnHitChance, sdOwnReach, sdRouteRisk } from './sdbrain_b1105ge_ref.js';
+export { botHasLineOfSight } from './nbrain_b1105ge_ref.js';
 
 // Nav grids are built once per arena object (the ARENAS entries are module
 // singletons, so this is once per map per process) and shared by all bots
@@ -30,7 +30,7 @@ const navGridCache = new WeakMap();
 export function navGridFor(arena) {
   let grid = navGridCache.get(arena);
   if (!grid) {
-    grid = attachLadderLinks(buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []), arena.ladders ?? []);   // (the ladders' links on the grid — navgrid.js attachLadderLinks; the offline client's ensureOfflineNavGrid does the same)
+    grid = attachLadderLinks(buildNavGrid(arena.obstacles, arena.surfaces, arena.ladders ?? []), arena.ladders ?? [], arena.pads ?? []);   // (the ladders' and the transporters' links on the grid — navgrid.js attachLadderLinks; the offline client's ensureOfflineNavGrid does the same)
     navGridCache.set(arena, grid);
   }
   return grid;
@@ -41,7 +41,7 @@ export function registerNavGridData(arena, bytes) {
   if (navGridCache.has(arena)) return true;
   const grid = deserializeNavGrid(bytes, arena.surfaces, navDataSignature(arena.obstacles, arena.surfaces, arena.ladders ?? []));
   if (!grid) return false;
-  navGridCache.set(arena, attachLadderLinks(grid, arena.ladders ?? []));
+  navGridCache.set(arena, attachLadderLinks(grid, arena.ladders ?? [], arena.pads ?? []));
   return true;
 }
 export function hasNavGrid(arena) { return navGridCache.has(arena); }
@@ -83,6 +83,7 @@ export function tickBot(matchState, botId, now) {
   const me = matchState.fighters[botId];
   if (!me || me.hp <= 0) return;
   if (me.ladder != null) return;   // (on a ladder the body is the ladder's — ladder.js ladderBotStep rides it; the brain sleeps: no shot, no dodge, no plan)
+  if (me.padCharge != null) return;   // (charging on a transporter, the same: the body is the pad's — pads.js padBotStep holds it and moves it; the brain wakes on the other pad)
   // Mark bot control for shared helpers that behave differently for bots
   // (tryStartJump floors zero-cooldown jumps at 1.5 s for bots so the perch
   // reflex can't bunny-hop Aris — bots play flight units grounded).
@@ -164,6 +165,8 @@ export function tickBot(matchState, botId, now) {
 export function botBodyRules(vel, me, unit, now) {
   //   The ladder (ladder.js): a climbing bot's body is the ladder's — whatever the brain asked for this tick is thrown away.
   if (me.ladder != null) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; me.action = 'climb'; return; }
+  //   The transporter (pads.js): a charging bot stands — the brain's motion this tick is thrown away.
+  if (me.padCharge != null) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; me.action = 'idle'; return; }
   if (reloadHolds(unit, me, now)) { vel.x = 0; vel.z = 0; me.momentumVX = 0; me.momentumVZ = 0; if (me.action === 'dash') me.action = 'idle'; }
   const k = hitStunMoveScale(me, now);
   vel.x *= k; vel.z *= k;

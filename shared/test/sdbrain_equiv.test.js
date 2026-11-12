@@ -45,7 +45,9 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // stands down in Sudden Death, and the seven matches played equal to the b1105b references after the change.
 // Re-frozen at b1105bt (2026-11-07) with the plain brain's references (the ordered unit's short Defense, nb_equiv.test.js): it stands down
 // in Sudden Death, and the seven matches played equal to the b1105br references after the change.
-import { tickBot as tickOld } from './ai_b1105bt_ref.js';
+// Re-frozen at b1105ge (2026-11-12, build b1105gf) with the plain brain's references (the route cut's floor, nb_equiv.test.js): the seven
+// matches played equal to the b1105bt references after the change.
+import { tickBot as tickOld } from './ai_b1105ge_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;
