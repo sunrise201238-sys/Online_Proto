@@ -69,6 +69,16 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   .hp-chip.ally-health { left: 12px; }
   .hp-chip.enemy2-health { right: 12px; }
 }
+/* (b1105go; user 2026-11-12, of a 955 x 488 screen: "for smaller screen, move the lower HP boxes to the side more. The current mobile
+   phone version and the big screen layout are fine, leave those alone") between the phone's tier and the desktop's the second row stands
+   flush under the first too, where the screen is tall enough that the thumb cluster starts under the row: 460 px (DODGE's top is the
+   height less 16 and the cluster's three buttons and two gaps — 207 px down at 721 to 900 px wide, 165 at 1099 — and the row, a tag
+   hanging under it, ends at 149). A shorter screen of that width, a landscape phone at 844 x 390, keeps the 108 px stagger: there
+   DODGE reaches into the row's band (b1105ah). */
+@media (min-width: 721px) and (max-width: 1099px) and (min-height: 460px) {
+  .hp-chip.ally-health { left: 12px; }
+  .hp-chip.enemy2-health { right: 12px; }
+}
 /* (b1105ah) the second row steps IN by 108 px and is a little narrower: at 844 × 390 the DODGE button's top (126 px) reaches
    into the row's band (86–140), so the second enemy's chip must end before the thumb cluster (its left edge 100 px from
    the right); the ally's chip steps in the same so the row reads as one stagger. The narrow screens below put both

@@ -7621,7 +7621,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gl 11-12';
+const CLIENT_BUILD_TAG = 'b1105go 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11356,6 +11356,292 @@ function startFinaleMove(now) {
   if (finale.call) finale.call.className = 'finale-call off';   // (THE CALL leaves as the take starts)
   return true;
 }
+// ============================================================================
+// THE SEE-THROUGH WINDOW (PT b1105gn; user 2026-11-12: "In ending cameras, make the object go transparent if they block the
+// units.", then, shown a first build that opened it along the camera's flight too: "I don't need and don't want a clean hole
+// on the path where the camera switches position. What i want is simply when the camera stops and focuses on the units, the
+// objects blocking units during that time should be transparent"; and of the two looks, a whole thing translucent as play
+// fades it or "只有蓋住單位的那一塊變透明，物件其他部分不變": the latter).
+// WHERE: Town alone (`maps`; b1105go, user 2026-11-12, the build after: "turn this effect on in town only, for now"). On
+// every other map nothing of this runs: no twin is made, no mesh listed, no gate asked.
+// WHEN: at the finale's two stops alone — shot 1 on the fallen unit, shot 2 on the final blow's unit. Through the take
+// between them nothing of the map changes: the window is shut before the camera leaves shot 1 (`outMs` before its end) and
+// opens again only once the camera stands at shot 2.
+// AND ONLY WHEN SOMETHING IS IN THE WAY (THE GATE, below): a stop whose unit is in plain view draws exactly as it did.
+// (The gate was first an occlusion query on points drawn at the unit's bones — the picture's own answer; in the headless
+// renderer a query asked in one stop's first frames never came back, and it was dropped for the sight rule.)
+// WHAT: whatever of the map stands between the stopped camera and its unit is not drawn where it would hide the unit: a
+// window as wide and as tall as the unit's body, open from the camera to the unit, clear to `soft` of its radius and
+// thinning back to the whole thing at its rim (pixels left out on an ordered 4 x 4 screen: no blending and no sorting is
+// asked of the map's meshes). It opens over `inMs`, the same screen growing. `keep` can leave a share of the blocker
+// standing inside the window, as play's fade leaves a quarter of a thing; it is 0 — tried at a quarter, the screen's dots
+// lay over the unit, and over the own unit the X-ray silhouette (drawn wherever nearer geometry hides it) painted every
+// one of them cyan.
+// A WINDOW, NOT A FADED THING: play's own view-block fade (updateWallFade) turns a whole registered thing translucent, and
+// Town — where the user saw a unit blocked — has none (its fade is off since b1026x; its model is a few meshes a street
+// long, and splitting it into things again would have play draw some 245 more of them). The window needs no thing
+// registered: it is cut per pixel, out of any mesh of the arena. The fade still runs through a finale on the maps that
+// have it, as before (it writes the opacity of whatever material the mesh wears, so a twin fades as its material would).
+// Play draws nothing differently, on purpose: the window is a `discard` in a material's shader, and a phone's GPU takes a
+// shader that may discard out of its hidden-surface pass, so the map's own materials are left as they are. Each has a TWIN
+// (seeTwinOf: a clone whose shader carries the window) and a mesh wears its twin only at a stop whose window has opened, and
+// only once its ball lies on the camera's line to the unit. The twins are made and their shaders compiled ahead, one
+// material at a time, while the match is young (seeWarmTick), so the stop's frame finds them ready.
+// The window, for the unit (seeUpdate; all of it in the camera's own space, where a fragment's place is its vSeeView): an
+// ellipse about the middle of the unit's bones, their box's width and height on the screen and `pad` more — a body standing
+// or lying, as it is that frame. A fragment is left out when the camera sees it inside that ellipse and it lies
+//   BEFORE the unit: nearer the camera, on the level, than the unit's middle by `front` — an upright plane through the
+//     unit, so the wall at its back stays whole however steeply the camera looks down (the camera's own depth would cut
+//     that wall around the unit's head: a point behind and above the middle is nearer along a line of view that dips);
+//   ABOVE THE UNIT'S FLOOR by `floorEps` — the floor it stands or lies on stays whole;
+//   ABOVE THE CAMERA'S LINE TO ITS FEET — the plane through the camera and the floor `hinge` before the body's near edge:
+//     what the camera sees below the feet hides nothing of the unit (the ground between them, a ramp, a kerb).
+// ============================================================================
+const SEE = {
+  on: true,          // false: no window is opened (the finale as it was before b1105gn)
+  maps: ['town'],    // the maps it is on at (b1105go, WHERE above); null: every map
+  gate: true,        // false: a stop's window opens whether or not anything hides its unit
+  pad: 1.2,          // the window past the unit's own reach, each way (units)
+  min: 2.2,          // its least half-width and half-height
+  soft: 0.72,        // whole to this share of its radius, then thinning to nothing at the rim
+  keep: 0,           // the share of a blocker's face still drawn inside it (0: none — a clear window)
+  front: 0.3,        // only what stands this much nearer the camera than the unit's middle, on the level, is cut
+  floorEps: 0.35,    // and nothing lower than this over the unit's floor
+  hinge: 0.6,        // nor under the camera's line to the floor this far before the body's near edge
+  inMs: 150,         // the window opens over this long
+  outMs: 150,        // and shuts over this long, done as shot 1 ends (the camera leaves with the map whole)
+  gatePoints: 12,    // THE GATE: at most this many of the unit's bones are asked after
+  gateFloor: 0.8,    // and none lower than this over the unit's floor (a kerb before the feet hides nothing the window would show)
+  warmMs: 4000,      // how often a match looks for a material of the map that has no twin yet
+  warmGapMs: 50,     // and, one found and made, how soon for the next
+};
+const seeU = {
+  a: { value: new THREE.Vector4() },                // the unit's middle (camera space); w 1 while the window is open
+  r: { value: new THREE.Vector4() },                // xy the window's half-axes at the unit; z the floor plane's offset
+  f: { value: new THREE.Vector4() },                // the upright plane before the unit: normal and offset (cut on the camera's side)
+  p: { value: new THREE.Vector4() },                // the plane of the camera's line to the unit's feet: normal and offset (cut above)
+  up: { value: new THREE.Vector3(0, 1, 0) },        // the world's up
+  k: { value: new THREE.Vector2(SEE.soft, 1) },     // x where the rim starts; y the share of a blocker drawn inside (1: shut; `keep` when fully open)
+};
+const SEE_FRAG = `
+uniform vec4 uSeeA; uniform vec4 uSeeR; uniform vec4 uSeeF; uniform vec4 uSeeP; uniform vec3 uSeeUp; uniform vec2 uSeeK;
+varying vec3 vSeeView;
+float seeBayer2( vec2 a ) { a = mod( floor( a ), 2.0 ); return fract( a.x * 0.5 + a.y * 0.75 ); }
+void seeThrough() {
+	if ( uSeeA.w < 0.5 ) return;
+	if ( dot( uSeeF.xyz, vSeeView ) + uSeeF.w <= 0.0 ) return;
+	if ( dot( uSeeUp, vSeeView ) + uSeeR.z <= 0.0 ) return;
+	if ( dot( uSeeP.xyz, vSeeView ) + uSeeP.w <= 0.0 ) return;
+	vec2 d = ( vSeeView.xy * ( uSeeA.z / vSeeView.z ) - uSeeA.xy ) / uSeeR.xy;
+	float c = 1.0 - smoothstep( uSeeK.x, 1.0, length( d ) );
+	if ( c <= 0.0 ) return;
+	float n = seeBayer2( 0.5 * gl_FragCoord.xy ) * 0.25 + seeBayer2( gl_FragCoord.xy );
+	if ( c * ( 1.0 - uSeeK.y ) > n ) discard;
+}
+`;
+function seeCompile(shader) {
+  shader.uniforms.uSeeA = seeU.a; shader.uniforms.uSeeR = seeU.r; shader.uniforms.uSeeF = seeU.f; shader.uniforms.uSeeP = seeU.p;
+  shader.uniforms.uSeeUp = seeU.up; shader.uniforms.uSeeK = seeU.k;
+  shader.vertexShader = shader.vertexShader.replace(/void\s+main\s*\(\s*\)\s*\{/, 'varying vec3 vSeeView;\nvoid main() {').replace('#include <project_vertex>', '#include <project_vertex>\n\tvSeeView = mvPosition.xyz;');
+  shader.fragmentShader = shader.fragmentShader.replace(/void\s+main\s*\(\s*\)\s*\{/, `${SEE_FRAG}\nvoid main() {\n\tseeThrough();`);
+}
+const seeCacheKey = () => 'see-through-4';
+// (the materials three.js builds from its own chunks: each has the project_vertex chunk the patch hangs on)
+const seePatchable = (m) => !!m && (m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial || m.isMeshMatcapMaterial) && !m.isShaderMaterial;
+// a map material -> its twin (null: one that could not be cloned), for as long as the material lives; `seeVer`: the
+// material's version the twin's shader was last picked for
+const seeTwins = new WeakMap();
+function seeTwinOf(mat) {
+  if (seeTwins.has(mat)) return seeTwins.get(mat);
+  let t = null;
+  try { t = mat.clone(); } catch { t = null; }
+  seeTwins.set(mat, t);
+  if (!t) return null;
+  t.onBeforeCompile = seeCompile; t.customProgramCacheKey = seeCacheKey; t.seeVer = mat.version;
+  const drop = () => { mat.removeEventListener('dispose', drop); seeTwins.delete(mat); t.dispose(); };
+  mat.addEventListener('dispose', drop);
+  return t;
+}
+// every mesh of the arena a window can open in: the map's model, its fade copies, a concept map's boxes
+function seeArenaMeshes(visit) {
+  const seen = new Set();
+  const take = (o) => {
+    if (!o.isMesh || !o.geometry || o.isInstancedMesh || o.isSkinnedMesh || seen.has(o)) return;
+    seen.add(o);
+    if (Array.isArray(o.material) ? o.material.every(seePatchable) : seePatchable(o.material)) visit(o);
+  };
+  for (const top of arenaDecor) top.traverse(take);
+  for (const o of state.wallFadeMeshes ?? []) take(o);
+}
+// THE GATE: is any of the unit hidden at all? The sight rule the shots' own places are picked by (botHasLineOfSight: the
+// map's collision boxes and decks) asked from the camera to up to `gatePoints` of the unit's bones, those `gateFloor` or
+// more over its floor (a unit still on its billboard: three points up its middle). One line blocked and the stop's window
+// opens, and stays open to the stop's end. A stop whose unit is in plain view never opens it, and none of its meshes wears
+// a twin: its picture is the one it was. (A thing drawn with no collision box is not seen by the gate.)
+const _seeP = { x: 0, y: 0, z: 0 };
+function seeHidden(m, bones, floor) {
+  const eye = camera.position, step = Math.max(1, Math.ceil(bones.length / SEE.gatePoints));
+  for (let i = 0; i < bones.length; i += step) {
+    const e = bones[i].matrixWorld.elements;
+    if (e[13] < floor + SEE.gateFloor) continue;
+    _seeP.x = e[12]; _seeP.y = e[13]; _seeP.z = e[14];
+    if (!botHasLineOfSight(eye, _seeP, arenaObstacles, arenaSurfaces)) return true;
+  }
+  if (!bones.length) { const r = m.root.position; for (const dy of [1.2, -0.6, -2.4]) { _seeP.x = r.x; _seeP.y = r.y + dy; _seeP.z = r.z; if (!botHasLineOfSight(eye, _seeP, arenaObstacles, arenaSurfaces)) return true; } }
+  return false;
+}
+// THE TWINS, MADE AHEAD: while a match is played, the arena's meshes are looked through for a material with no twin yet;
+// one found, its twin is made and its shader compiled (renderer.compile on a stand-in mesh of the same geometry: nothing is
+// drawn) — for a mesh the play fade can turn translucent, the blended form too — and the next is looked for `warmGapMs`
+// on; none found, the next look is `warmMs` on (a map's late parts, a thing added mid-match). A look is one pass over the
+// arena's meshes. A material met first at a stop gets its twin there, and its shader then — a compile in that frame.
+const seeWarm = { at: 0, made: 0 };
+const seeHere = () => !SEE.maps || SEE.maps.includes(state.mapKey);
+function seeWarmTick(now) {
+  if (now < seeWarm.at || finale.active || !(state.running || (state.online?.slotMap && state.player))) return;
+  if (!seeHere()) { seeWarm.at = now + SEE.warmMs; return; }
+  seeWarm.at = now + SEE.warmGapMs;
+  let found = null;
+  seeArenaMeshes((o) => {
+    if (found) return;
+    for (const mat of Array.isArray(o.material) ? o.material : [o.material]) if (!seeTwins.has(mat)) { found = { o, mat }; return; }
+  });
+  if (!found) { seeWarm.at = now + SEE.warmMs; return; }
+  const t = seeTwinOf(found.mat);
+  if (!t) return;
+  const stand = new THREE.Mesh(found.o.geometry, t);
+  renderer.compile(stand, camera, scene);
+  if (found.o.userData.fadeBox) {
+    t.transparent = !t.transparent; t.needsUpdate = true; renderer.compile(stand, camera, scene);
+    t.transparent = !t.transparent; t.needsUpdate = true;   // (back as its material is: the next pick is from the twin's own two)
+  }
+  seeWarm.made += 1;
+}
+const see = { on: false, list: [], worn: new Set(), bones: new Map(), inv: new THREE.Matrix4(), unit: null, shot: 0, since: 0, open: 0 };
+const _seeV = new THREE.Vector3(), _seeN = new THREE.Vector3();
+// the finale begins: the arena's meshes and their balls, as they stand
+function seeBegin() {
+  seeEnd();
+  if (!seeHere()) return;
+  see.on = true;
+  seeArenaMeshes((o) => {
+    if (o.geometry.boundingSphere === null) o.geometry.computeBoundingSphere();
+    const bs = o.geometry.boundingSphere;
+    if (!bs) return;
+    _seeV.copy(bs.center).applyMatrix4(o.matrixWorld);
+    see.list.push({ o, x: _seeV.x, y: _seeV.y, z: _seeV.z, r: bs.radius * o.matrixWorld.getMaxScaleOnAxis(), home: null });
+  });
+}
+// the finale ends, or its arena goes: every mesh back in its own material (the play fade's state, which it kept on the twin
+// meanwhile, handed back), the window shut
+function seeEnd() {
+  for (const e of see.list) {
+    if (!e.home) continue;
+    const homes = Array.isArray(e.home) ? e.home : [e.home], twins = Array.isArray(e.o.material) ? e.o.material : [e.o.material];
+    for (let i = 0; i < homes.length; i += 1) {
+      const h = homes[i], t = twins[i];
+      if (!t || t === h) continue;
+      h.opacity = t.opacity; h.depthWrite = t.depthWrite;
+      if (h.transparent !== t.transparent) { h.transparent = t.transparent; h.needsUpdate = true; }
+    }
+    e.o.material = e.home;
+  }
+  see.list.length = 0; see.worn.clear(); see.bones.clear(); see.on = false; see.unit = null; see.shot = 0; see.since = 0; see.open = 0;
+  seeU.a.value.w = 0; seeU.k.value.y = 1;
+}
+// a mesh into its twin: the twin as the material is now, at its first wear of this finale (the play fade may have it
+// translucent; a material changed since the twin's shader was picked has it picked again)
+function seeWear(e) {
+  const one = (mat) => {
+    const t = seeTwinOf(mat);
+    if (!t) return mat;
+    if (!see.worn.has(t)) { see.worn.add(t); t.copy(mat); if (t.seeVer !== mat.version) { t.seeVer = mat.version; t.needsUpdate = true; } }
+    return t;
+  };
+  e.home = e.o.material;
+  e.o.material = Array.isArray(e.home) ? e.home.map(one) : one(e.home);
+}
+// a unit's bones (listed once a finale), and its body this frame: their box (a unit still on its billboard: a standing
+// body's box about its root)
+function seeBones(m) {
+  let bones = see.bones.get(m);
+  if (!bones) { bones = []; m.modelHolder?.traverse((o) => { if (o.isBone) bones.push(o); }); see.bones.set(m, bones); }
+  return bones;
+}
+function seeBody(m, bones, out) {
+  if (!bones.length) { const p = m.root.position; out.cx = p.x; out.cy = p.y - 1.6; out.cz = p.z; out.hx = 1.2; out.hy = 3.2; out.hz = 1.2; return out; }
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (const b of bones) { const e = b.matrixWorld.elements; if (e[12] < x0) x0 = e[12]; if (e[12] > x1) x1 = e[12]; if (e[13] < y0) y0 = e[13]; if (e[13] > y1) y1 = e[13]; if (e[14] < z0) z0 = e[14]; if (e[14] > z1) z1 = e[14]; }
+  out.cx = (x0 + x1) / 2; out.cy = (y0 + y1) / 2; out.cz = (z0 + z1) / 2;
+  out.hx = Math.min(4.2, (x1 - x0) / 2); out.hy = Math.min(4.2, (y1 - y0) / 2); out.hz = Math.min(4.2, (z1 - z0) / 2);   // (a body is 6.4 long: no stray bone widens the window past it)
+  return out;
+}
+const _seeBody = { cx: 0, cy: 0, cz: 0, hx: 0, hy: 0, hz: 0 };
+// every frame of the finale, once its camera stands (finaleShot, updateFinale): at a stop, the gate's question, and — once
+// it is answered yes — the window on the stop's unit and the twins onto whatever mesh lies on the camera's line to it
+function seeUpdate(now) {
+  if (!see.on) return;
+  const A = seeU.a.value, K = seeU.k.value;
+  const m = SEE.on && finale.active && !finale.move ? (finale.shot === 1 ? finale.victim : finale.shot === 2 ? finale.killer : null) : null;
+  if (m !== see.unit || finale.shot !== see.shot) { see.unit = m; see.shot = finale.shot; see.since = 0; }   // (another stop, or the take: asked afresh)
+  A.w = 0; K.set(SEE.soft, 1); see.open = 0;
+  if (!m?.root) return;
+  const bones = seeBones(m), B = seeBody(m, bones, _seeBody);
+  const floor = (m.body?.position.y ?? m.root.position.y - m.modelYOffset) - GROUND_BASE_Y;
+  // shut again by the time shot 1 ends: the take leaves with the map whole (shot 2 ends on the end page, which covers the picture)
+  const left = finale.shot === 1 && finale.killer ? finale.dur1 * 1000 - (now - finale.shotT0) : Infinity;
+  if (!see.since && left > SEE.outMs && (!SEE.gate || seeHidden(m, bones, floor))) see.since = now;
+  if (!see.since) return;
+  const s = Math.max(0, Math.min(1, (now - see.since) / SEE.inMs, left / SEE.outMs));
+  if (s <= 0) return;
+  camera.updateMatrixWorld(true);
+  const W = camera.matrixWorld.elements, eye = camera.position;
+  see.inv.copy(camera.matrixWorld).invert();
+  _seeV.set(B.cx, B.cy, B.cz).applyMatrix4(see.inv);
+  if (_seeV.z > -1) return;   // (the unit beside the camera or behind it: nothing of the picture hides it)
+  seeU.up.value.set(0, 1, 0).transformDirection(see.inv);
+  // the box's reach along the camera's right and up
+  const ex = Math.abs(W[0]) * B.hx + Math.abs(W[1]) * B.hy + Math.abs(W[2]) * B.hz, ey = Math.abs(W[4]) * B.hx + Math.abs(W[5]) * B.hy + Math.abs(W[6]) * B.hz;
+  const rx = Math.max(SEE.min, ex + SEE.pad), ry = Math.max(SEE.min, ey + SEE.pad), fl = floor + SEE.floorEps;
+  A.set(_seeV.x, _seeV.y, _seeV.z, 1);
+  seeU.r.value.set(rx, ry, eye.y - fl, 0);
+  K.set(SEE.soft, 1 - s * (1 - SEE.keep));
+  see.open = s;
+  // on the level, from the unit toward the camera
+  let hx = eye.x - B.cx, hz = eye.z - B.cz; const hl = Math.hypot(hx, hz);
+  if (hl > 1e-6) { hx /= hl; hz /= hl; } else { hx = 0; hz = 0; }
+  // the upright plane `front` before the unit's middle: cut on the camera's side of it
+  _seeN.set(hx, 0, hz).transformDirection(see.inv);
+  seeU.f.value.set(_seeN.x, _seeN.y, _seeN.z, hl - SEE.front);
+  // the plane through the camera and the floor `hinge` before the body's near edge: cut above it
+  const ext = Math.abs(hx) * B.hx + Math.abs(hz) * B.hz + SEE.hinge, run = hl - ext, drop = eye.y - fl;
+  const slope = Math.max(-50, Math.min(50, run > 1e-3 ? drop / run : (drop >= 0 ? 50 : -50)));
+  _seeN.set(-slope * hx, 1, -slope * hz).normalize();
+  const off = _seeN.x * (eye.x - (B.cx + hx * ext)) + _seeN.y * drop + _seeN.z * (eye.z - (B.cz + hz * ext));
+  _seeN.transformDirection(see.inv);
+  seeU.p.value.set(_seeN.x, _seeN.y, _seeN.z, off);
+  // a mesh wears its twin from the frame its ball touches the tube from the camera to the unit (and keeps it to the finale's end)
+  const dx = B.cx - eye.x, dy = B.cy - eye.y, dz = B.cz - eye.z, l2 = dx * dx + dy * dy + dz * dz || 1, wr = Math.max(rx, ry);
+  for (const e of see.list) {
+    if (e.home) continue;
+    const t = Math.max(0, Math.min(1, ((e.x - eye.x) * dx + (e.y - eye.y) * dy + (e.z - eye.z) * dz) / l2));
+    const reach = e.r + wr;
+    if ((eye.x + dx * t - e.x) ** 2 + (eye.y + dy * t - e.y) ** 2 + (eye.z + dz * t - e.z) ** 2 <= reach * reach) seeWear(e);
+  }
+}
+// (a probe's hooks, as __finale: the numbers, the state, how many shader programs the renderer holds, and whether the
+// window leaves a point of a mesh undrawn — the shader's own test)
+if (typeof window !== 'undefined') window.__see = { cfg: SEE, u: seeU, state: see, warm: seeWarm, twinOf: (mat) => seeTwins.get(mat) ?? null, programs: () => renderer.info.programs?.length ?? null,
+  cuts: (pt, o) => {
+    const A = seeU.a.value, R = seeU.r.value, F = seeU.f.value, P = seeU.p.value;
+    if (!see.on || !o || A.w < 0.5 || !see.list.some((e) => e.o === o && e.home)) return false;
+    const p = _seeV.copy(pt).applyMatrix4(see.inv);
+    if (F.x * p.x + F.y * p.y + F.z * p.z + F.w <= 0 || seeU.up.value.dot(p) + R.z <= 0 || P.x * p.x + P.y * p.y + P.z * p.z + P.w <= 0) return false;
+    const k = A.z / p.z, d = Math.hypot((p.x * k - A.x) / R.x, (p.y * k - A.y) / R.y);
+    const u = Math.max(0, Math.min(1, (d - SEE.soft) / (1 - SEE.soft)));
+    return (1 - u * u * (3 - 2 * u)) * (1 - seeU.k.value.y) > 0.5;
+  } };
+
 // the battle's leftovers out of the picture: the edge arrows, the lock, the hit X, the laser sights, the glints, the dash
 // puffs, the rounds in the air and their trails, the beams — each fades or moves in an update the frozen match no longer runs
 function finaleHideBattle() {
@@ -11397,6 +11683,7 @@ function startFinale({ victim, killer = null, heir = false, onDone }) {
   victim.root.visible = true;
   if (finale.killer) finale.killer.root.visible = true;
   finale.move = null;
+  seeBegin();   // (THE SEE-THROUGH WINDOW, b1105gn: the arena's meshes listed before the first shot stands)
   finale.prevNear = camera.near;
   if (camera.near < FINALE.nearPlane) camera.near = FINALE.nearPlane;   // (applied by shot 1's updateProjectionMatrix just below)
   document.documentElement.classList.add('finale-on');
@@ -11449,6 +11736,7 @@ function finaleShot(n, now, pose = null) {
   finaleCall(n);
   finale.focus = n === 1 ? finale.victim : finale.killer;
   applyFinalePose(pose ?? finaleCameraPose(finale.focus, n === 1 ? FINALE.shot1 : finaleShot2Cfg()));
+  seeUpdate(now);   // (THE SEE-THROUGH WINDOW, b1105gn: the stop's unit, asked after from the shot's first frame)
 }
 // every frame of the finale (animate, offline and online): the shots' clock and the take between them, the skip hint, the
 // wall fade on the unit in view
@@ -11475,6 +11763,7 @@ function updateFinale(dt, now) {
       if (!startFinaleMove(now)) finaleShot(2, now);   // (a unit gone: the cut — the take itself never refuses, b1105gd)
     } else if (finale.shot === 2 && t >= finale.dur2) { finishFinale(true); return; }
   }
+  seeUpdate(now);  // (THE SEE-THROUGH WINDOW, b1105gn: at a stop, the gate and the window; shut through the take)
   updateVfx(dt);   // (the last hit's rings fade as they would)
   updateWallFade();
 }
@@ -11488,6 +11777,7 @@ function finishFinale(runDone) {
   window.removeEventListener('keydown', finale.onSkip, true);
   finale.hint?.remove(); finale.hint = null;
   finale.call?.remove(); finale.call = null;
+  seeEnd();   // (THE SEE-THROUGH WINDOW, b1105gn: the map back in its own materials)
   const done = finale.onDone; finale.onDone = null;
   if (runDone) done?.();
 }
@@ -11926,6 +12216,7 @@ function registerWallFade(mesh, box) {
 let offlineNavGrid = null;
 
 function clearArenaDecor() {
+  seeEnd(); seeWarm.at = 0;   // (THE SEE-THROUGH WINDOW, b1105gn: no mesh of the arena going keeps a twin on; the next arena's materials are looked for at once)
   state.wallFadeMeshes = [];
   for (const o of fadeOwned) o.dispose(); fadeOwned.length = 0;   // (the fade's own geometry and materials of the arena going)
   offlineNavGrid = null;
@@ -19413,6 +19704,7 @@ function animate() {
     // One queued pre-warm texture upload per frame (menus included) — see
     // queueTexWarm. No-op when the queue is empty.
     drainTexWarmQueue();
+    seeWarmTick(now);   // (THE SEE-THROUGH WINDOW, b1105gn: its twins made ahead, a material at a time — nothing when none is due)
 
     if (state.online) {
       syncKeyboardMovement();
