@@ -103,6 +103,7 @@ export function createConnection() {
     prevSnapshot = null;
     lastMatchEnd = null;
     lastKill = null; kills.length = 0;
+    killQueue.length = 0; projSeen.clear(); for (const id in slotSwap) delete slotSwap[id];
     matchStart = payload ?? null;
     log('match:start', payload);
   });
@@ -121,6 +122,67 @@ export function createConnection() {
   // off the snapshots the page gets anyway: nothing more is sent or asked for.
   let lastKill = null;
   const kills = [];
+  // THE KILL FEED (PT b1105gm): every lethal hit as the page draws it — which seat, with which unit, knocked out which unit of
+  // which seat, and whether that knockout ended the match — worked out HERE, where every snapshot passes (the render loop sees
+  // one a frame, and two can land between frames):
+  //  - the fallen unit is the one its seat held in the snapshot BEFORE this one: in Trio the server refills the seat in the
+  //    very tick its unit falls, so the snapshot that carries the hit already shows the roster's next unit there;
+  //  - the shooter's unit is its seat's, unless that seat's roster moved after the round was fired (a hit names a seat, not a
+  //    unit). So each round is remembered by the snapshot that first showed it (projSeen) and each seat by its last roster
+  //    move (slotSwap). The seat's rounds that left the snapshots with this hit — gone, or a volley that lost pellets; those of
+  //    the hit's own damage when some are — are all from before the move: the unit that stood there until then fired it. Some
+  //    from before and some from after: the one nearest the hit decides. None left at all (a beam, a blade, a round born and
+  //    spent within a tick): the seat's unit — or, the roster having moved in this very tick, the one before it, for the fresh
+  //    unit has not lived a tick yet;
+  //  - the match is over when the snapshot says so by the server's own rule (index.js tickLobby, step 5: a seat is out when
+  //    its unit is down and its roster spent, a side when every seat of it is) — the feed does not show that knockout.
+  // Read off the snapshots the page gets anyway: nothing more is sent or asked for.
+  const killQueue = [];
+  const projSeen = new Map();   // a server round's id -> the server clock of the snapshot that first showed it
+  const slotSwap = {};          // a seat -> { at: the server clock of the snapshot its roster moved in, wasKey: the unit that stood there until then }
+  const slotOut = (f) => !f || ((f.hp ?? 0) <= 0 && (!f.roster || (f.rosterIdx ?? 0) >= f.roster.length - 1));
+  const snapshotEndsMatch = (snap) => {
+    const F = snap.fighters ?? {};
+    if (snap.mode === '2v2' || F.p3 || F.p4) return (slotOut(F.p1) && slotOut(F.p3)) || (slotOut(F.p2) && slotOut(F.p4));
+    return slotOut(F.p1) || slotOut(F.p2);
+  };
+  const firedBy = (ev, snap, prev) => {
+    const cur = snap.fighters?.[ev.ownerId]?.unitKey ?? null;
+    const sw = slotSwap[ev.ownerId];
+    if (!sw) return cur;
+    const live = new Map();
+    for (const p of snap.projectiles ?? []) live.set(p.id, p);
+    let gone = (prev?.projectiles ?? []).filter((p) => p.ownerId === ev.ownerId && (!live.has(p.id) || (p.pelletMask !== undefined && live.get(p.id).pelletMask !== p.pelletMask)));
+    if (!gone.length) return sw.at === snap.serverTime ? sw.wasKey : cur;
+    const same = gone.filter((p) => p.damage === ev.damage);
+    if (same.length) gone = same;
+    const old = gone.filter((p) => (projSeen.get(p.id) ?? Infinity) <= sw.at);
+    if (old.length === gone.length) return sw.wasKey;
+    if (!old.length || !ev.pos || !prev) return cur;
+    const dt = Math.max(0, (snap.serverTime - prev.serverTime) / 1000);
+    const far = (p) => Math.hypot(p.pos.x + p.vel.x * dt - ev.pos.x, p.pos.y + p.vel.y * dt - ev.pos.y, p.pos.z + p.vel.z * dt - ev.pos.z);
+    let best = gone[0];
+    for (const p of gone) if (far(p) < far(best)) best = p;
+    return old.includes(best) ? sw.wasKey : cur;
+  };
+  const noteKills = (snap, prev) => {
+    const F = snap.fighters ?? {}, P = prev?.fighters ?? {};
+    for (const id in F) { const f = F[id], was = P[id]; if (f && was && (f.rosterIdx ?? 0) !== (was.rosterIdx ?? 0)) slotSwap[id] = { at: snap.serverTime, wasKey: was.unitKey ?? null }; }
+    if (snap.events) {
+      const fell = new Set();   // (one knockout a unit: a second lethal hit on it in the same tick is the same fall)
+      let last = null;
+      for (const ev of snap.events) {
+        if (!ev || ev.type !== 'hit' || ev.targetHp == null || ev.targetHp > 0 || fell.has(ev.targetId)) continue;
+        fell.add(ev.targetId);
+        if (last == null) last = snapshotEndsMatch(snap);
+        killQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId, ownerKey: firedBy(ev, snap, prev), targetKey: P[ev.targetId]?.unitKey ?? F[ev.targetId]?.unitKey ?? null, last });
+      }
+      if (killQueue.length > 32) killQueue.splice(0, killQueue.length - 32);
+    }
+    const live = new Set();
+    for (const p of snap.projectiles ?? []) { live.add(p.id); if (!projSeen.has(p.id)) projSeen.set(p.id, snap.serverTime); }
+    for (const id of projSeen.keys()) if (!live.has(id)) projSeen.delete(id);
+  };
   socket.on('match:snapshot', (payload) => {
     if (!payload) return;
     // The server sends no unit tables (2026-10-25, a quarter of every snapshot): each fighter carries its unitKey, and the
@@ -131,6 +193,7 @@ export function createConnection() {
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
     if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit' && ev.targetHp != null && ev.targetHp <= 0) { lastKill = { ownerId: ev.ownerId, targetId: ev.targetId, at: performance.now() }; kills.push(lastKill); if (kills.length > 8) kills.shift(); }
+    noteKills(payload, latestSnapshot);   // (THE KILL FEED, b1105gm: against the snapshot before this one)
     prevSnapshot = latestSnapshot;
     latestSnapshot = payload;
     lastSnapshotAt = Date.now();
@@ -174,6 +237,7 @@ export function createConnection() {
     // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),
     drainHits: () => hitQueue.splice(0),   // (HIT X: the hit events queued since the last call)
+    drainKills: () => killQueue.splice(0), // (THE KILL FEED, b1105gm: the knockouts worked out since the last call)
     getSnapshotCount: () => snapshotCount,
     getSnapshotHz: () => snapshotTimes.length,
 

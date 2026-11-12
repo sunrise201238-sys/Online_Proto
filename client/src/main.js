@@ -2972,6 +2972,7 @@ function teardownHud() {
   state.hudAbort = null;
   state.hud?.remove();
   state.hud = null;
+  killFeedReset(); killFeed.el = null;   // (THE KILL FEED, b1105gm: it lived in that HUD)
   input.x = 0;
   input.y = 0;
   input.boost = false;
@@ -3019,8 +3020,10 @@ function setupHUD() {
     <div class="speed-lines" id="speed-lines"></div>
     <div class="crosshair" id="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
+    <div class="kill-feed" id="kill-feed" aria-hidden="true"></div>
   `;
   app.appendChild(hud);
+  killFeed.el = hud.querySelector('#kill-feed');   // (THE KILL FEED, b1105gm: its two places under PAUSE)
 
   // ONLINE ABSOLUTE HUD (owner 2026-08-22): the chips anchor by SERVER SLOT — left column team A (p1 top / p3
   // bottom), right column team B (p2 top / p4 bottom) — identical for every viewer, each chip in its slot colour (the
@@ -6753,6 +6756,189 @@ function chipFaceImg(u) {
   if (!u) return '';
   return `<img src="${thumbFile(u.spriteKey)}" alt="${u.char || ''}" draggable="false" style="${faceTransform(u)}">`;
 }
+// ============================================================================
+// THE KILL FEED (PT b1105gm; user 2026-11-12: "I want a killing HUD. It would visually be smth like "O>O", where O is the
+// thumbnail and > refers to elimination. There are two boxes I mark in the reference image. When there is only 1 kill
+// happening, the HUD shows at the upper one, stays for 1 sec then fade out while sliding up. When there are multiple kills
+// happening, the new one stack up at the below box area. If there are no more than 2 kills, the below one move up to the upper
+// area, stays for another 1sec then fade&slide out. If there are more than 2 kills, the HUD will be forced to speed up; only
+// about 0.3s sec before the HUD updates until there's no pending kills to be shown." — then, of the design canvas's rounds 13
+// and 13b: the mark is the killer's WEAPON, "make the black background blank", "D1"; on a mid-size 2v2 screen the two places
+// side by side, "M3"; the match-ending knockout is NOT shown; once nothing waits the pace is a second again; shown in command
+// mode and to a spectator too).
+// AN ENTRY: the final blow's unit's face, its weapon (the muzzle to the right, at the fallen unit), the fallen unit's face
+// greyed — each face ringed in its side's colour as the HP chips are (the seat's own online). Nothing behind them: the look,
+// the sizes and where the two places stand on each screen are style.css's (.kill-feed, .kf); the three pictures are drawn
+// ahead, at the match's start (THE ENTRY'S PICTURES, below), so an entry costs its frame nothing to speak of.
+// THE TWO PLACES AND THE PACE (updateKillFeed): a knockout takes the upper place when nothing shows, the lower beside one,
+// and waits its turn behind two. The upper entry leaves `stayMs` after it took that place — up and fading, `outMs` — and the
+// lower moves up to stay that long itself. While a knockout WAITS the feed steps `rushMs` after its last change instead
+// (never later than the plain second would have), and each step lets the next one in; with none waiting, the two that show
+// keep their second each. The clock is the feed's own: real time while the HUD is updated, so a paused match holds it.
+// WHAT FEEDS IT: offline the damage sites' first lethal hit on each unit (finaleNoteKill — the round's own shooter, so a unit
+// that fell before its round landed is still the one drawn); online the lethal hits the connection reads off the snapshots,
+// the units worked out there (connection.js drainKills). The knockout that ends the match never shows: offline the win check
+// runs later in the same frame and the finale clears the feed before a frame is drawn; online the connection marks it.
+// The feed lives in the match HUD (setupHUD), so it steps aside with it in the finale and goes with it at the match's end.
+// ============================================================================
+const KILL_FEED = { stayMs: 1000, rushMs: 300, outMs: 250, gun: [40, 17] };   // (gun: the room between the two faces, px)
+const killFeed = { el: null, shown: [], queue: [], clock: 0, last: 0, upAt: 0, changeAt: 0 };
+if (typeof window !== 'undefined') window.__killFeed = { state: killFeed, cfg: KILL_FEED, art: () => _killArt, push: (e) => killFeedPush(e), note: (v, k) => killFeedNote(v, k) };   // (a probe's hooks, as __finale)
+// THE ENTRY'S PICTURES, DRAWN AHEAD (warmKillArt, from renderHpChip: the unit on the field and its roster, at the match's start):
+// a unit's face as an entry frames it, the same face greyed for when it falls, and its weapon as a sticker — the gun itself
+// (WEAPON_BOX, the print's measure) scaled to the room between the faces, a white edge about it and an ink line about that —
+// each drawn on a small canvas, `px` canvas pixels to the entry's one, and kept as a PICTURE of its own (killArtImg). An entry
+// then clones three decoded <img> and no more: nothing is fetched or decoded when a unit falls, and no CSS filter runs on the
+// entry. Measured in a software renderer: every filter pass on a new entry cost a frame of 100 ms and more — the weapon's
+// edge by filters, a whole second —, and three canvases in the HUD cost every frame they showed; an <img> costs neither.
+// A page whose own pictures count as another origin's cannot turn a canvas into a picture: there the entry falls back to
+// the plain thumbnail and render (killFeedGunImg), the fallen face greyed by a filter, the weapon without its edge.
+const KILL_ART = { px: 4, pad: 2, edge: [0.8, 0.55] };   // (pad: room about the gun for its edge; edge: the white edge and the ink line, the entry's px)
+const _killArt = new Map();   // a unit's picture key -> { gun, face, grey }: an <img> each to clone, null until its pictures have loaded
+// a drawn canvas as a decoded <img>, the entries' template
+function killArtImg(canvas) {
+  const im = new Image();
+  im.className = 'kf-art'; im.alt = ''; im.draggable = false;
+  im.src = canvas.toDataURL('image/png');
+  im.decode?.().catch(() => {});
+  return im;
+}
+function killArtCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+// a part of a picture on its way to `tw` x `th`: halved step by step, so a tenfold reduction stays smooth
+function killArtShrink(src, sx, sy, sw, sh, tw, th) {
+  let cur = src, x = sx, y = sy, w = sw, h = sh;
+  while (w > tw * 2 && h > th * 2) {
+    const nw = Math.ceil(w / 2), nh = Math.ceil(h / 2);
+    const c = killArtCanvas(nw, nh), g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(cur, x, y, w, h, 0, 0, nw, nh);
+    cur = c; x = 0; y = 0; w = nw; h = nh;
+  }
+  return [cur, x, y, w, h];
+}
+// the weapon's sticker: the gun in the middle of its 40 x 17 room, the room `pad` wider all round for the edge
+function killArtGun(im, key) {
+  const [bx, by, bw, bh] = WEAPON_BOX[key]; const [ww, wh] = KILL_FEED.gun; const R = KILL_ART.px, pad = KILL_ART.pad;
+  const W = Math.round((ww + 2 * pad) * R), H = Math.round((wh + 2 * pad) * R);
+  const s = Math.min(ww / bw, wh / bh) * R, gw = bw * s, gh = bh * s;
+  const base = killArtCanvas(W, H), g = base.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(...killArtShrink(im, bx, by, bw, bh, gw, gh), (W - gw) / 2, (H - gh) / 2, gw, gh);
+  // the gun's shape grown `r` px square (across, then down) and filled with one colour
+  const grown = (r, colour) => {
+    const a = killArtCanvas(W, H), ax = a.getContext('2d');
+    for (let d = -r; d <= r; d += 1) ax.drawImage(base, d, 0);
+    const c = killArtCanvas(W, H), cx = c.getContext('2d');
+    for (let d = -r; d <= r; d += 1) cx.drawImage(a, 0, d);
+    cx.globalCompositeOperation = 'source-in'; cx.fillStyle = colour; cx.fillRect(0, 0, W, H);
+    return c;
+  };
+  const out = killArtCanvas(W, H), o = out.getContext('2d');
+  o.drawImage(grown(Math.round((KILL_ART.edge[0] + KILL_ART.edge[1]) * R), '#1B1B2F'), 0, 0);
+  o.drawImage(grown(Math.round(KILL_ART.edge[0] * R), '#ffffff'), 0, 0);
+  o.drawImage(base, 0, 0);
+  return out;
+}
+// a unit's face as the round frames show it (faceTransform: the face point to the middle, 1.3 times up), 16 px of the entry
+// square; `grey` as a chip greys a fallen unit's — the colour out, three tenths darker — by blending, no pixel read
+function killArtFace(im, u, grey) {
+  const S = 16 * KILL_ART.px;
+  const [fx, fy] = UNIT_ALT_THUMB[u.spriteKey]?.face || UNIT_FACE[u.spriteKey] || [0.5, 0.62];
+  const lim = (FACE_SCALE - 1) / 2, sh = (v) => Math.max(-lim, Math.min(lim, (0.5 - v) * FACE_SCALE)) * S;
+  const d = S * FACE_SCALE, side = Math.min(im.naturalWidth, im.naturalHeight);   // (object-fit cover: the picture's middle square)
+  const c = killArtCanvas(S, S), g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.fillStyle = '#2a2a44'; g.fillRect(0, 0, S, S);
+  g.drawImage(...killArtShrink(im, (im.naturalWidth - side) / 2, (im.naturalHeight - side) / 2, side, side, d, d), S / 2 + sh(fx) - d / 2, S / 2 + sh(fy) - d / 2, d, d);
+  if (grey) {
+    g.globalCompositeOperation = 'saturation'; g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = '#b3b3b3'; g.fillRect(0, 0, S, S);
+  }
+  return c;
+}
+function warmKillArt(u) {
+  const k = u?.spriteKey;
+  if (!k || _killArt.has(k)) return;
+  const art = { gun: null, face: null, grey: null };
+  _killArt.set(k, art);
+  const load = (src, draw) => { const im = new Image(); im.decoding = 'async'; im.onload = () => { try { draw(im); } catch (err) { console.warn('[kill feed] a picture would not draw', k, err); } }; im.src = src; };
+  if (WEAPON_BOX[k]) load(`${import.meta.env.BASE_URL}weapons/${k}.png`, (im) => { art.gun = killArtImg(killArtGun(im, k)); });
+  load(thumbFile(k), (im) => { art.face = killArtImg(killArtFace(im, u, false)); art.grey = killArtImg(killArtFace(im, u, true)); });
+}
+// (a unit whose weapon sticker is not drawn yet — its picture still on the way: the plain render, sized as the print sizes it)
+function killFeedGunImg(u) {
+  const box = WEAPON_BOX[u?.spriteKey];
+  if (!box) return '';
+  const [bx, by, bw, bh] = box; const [W, H] = WEAPON_RENDER; const [ww, wh] = KILL_FEED.gun;
+  const s = Math.min(ww / bw, wh / bh);
+  return `<img src="${import.meta.env.BASE_URL}weapons/${u.spriteKey}.png" alt="" draggable="false" style="width:${(W * s).toFixed(2)}px;height:${(H * s).toFixed(2)}px;left:${(ww / 2 - (bx + bw / 2) * s).toFixed(2)}px;top:${(wh / 2 - (by + bh / 2) * s).toFixed(2)}px">`;
+}
+function killFeedEntryEl(e) {
+  const el = document.createElement('div');
+  el.className = 'kf';
+  const ka = _killArt.get(e.ku.spriteKey), va = _killArt.get(e.vu.spriteKey);
+  el.innerHTML = `<span class="kf-in"><span class="kf-face k" style="--c:${e.kc}">${ka?.face ? '' : chipFaceImg(e.ku)}</span><span class="kf-gun">${ka?.gun ? '' : killFeedGunImg(e.ku)}</span><span class="kf-face v" style="--c:${e.vc}">${va?.grey ? '' : chipFaceImg(e.vu)}</span></span>`;
+  const put = (sel, art) => { if (art) el.querySelector(sel).appendChild(art.cloneNode(false)); };
+  put('.kf-face.k', ka?.face); put('.kf-gun', ka?.gun); put('.kf-face.v', va?.grey);
+  return el;
+}
+// a knockout for the feed: { ku, vu: the two units' tables; kc, vc: their rings' colours } — drawn by the next update
+function killFeedPush(e) { if (e?.ku && e?.vu) killFeed.queue.push(e); }
+function killFeedReset() {
+  killFeed.shown.length = 0; killFeed.queue.length = 0; killFeed.last = 0;
+  if (killFeed.el) killFeed.el.textContent = '';
+}
+// offline: a unit's first lethal hit and the unit that fired it. The slot of a unit already replaced by its roster's next is
+// the one its heirs stand in (respawnSlotMech's `heir`). A fall nobody fired has no "who": nothing is drawn.
+function killFeedNote(victim, killer) {
+  if (!victim?.unit || !killer?.unit) return;
+  const slotOf = (m) => { let x = m; while (x.heir) x = x.heir; return ['player', 'ally', 'enemy', 'enemy2'].find((r) => state[r] === x) ?? null; };
+  killFeedPush({ ku: killer.unit, vu: victim.unit, kc: FINALE_ROLE_COLOURS[slotOf(killer)] ?? '#ffffff', vc: FINALE_ROLE_COLOURS[slotOf(victim)] ?? '#ffffff' });
+}
+// online: a lethal hit as the connection worked it out — the seats, the two units' keys, whether it ended the match
+function killFeedNoteOnline(k) {
+  if (!k || k.last) return;
+  killFeedPush({ ku: UNIT_DATA[k.ownerKey], vu: UNIT_DATA[k.targetKey], kc: SLOT_HUD_COLORS[k.ownerId] ?? '#ffffff', vc: SLOT_HUD_COLORS[k.targetId] ?? '#ffffff' });
+}
+// every HUD update (updateHud: offline, online, command mode, a spectator's view)
+function updateKillFeed() {
+  const K = killFeed, host = K.el;
+  if (!host) return;
+  const now = performance.now();
+  K.clock += K.last ? Math.min(250, now - K.last) : 0;   // (real time, a quarter second at most a call: a paused match or a hidden tab adds no more)
+  K.last = now;
+  const t = K.clock;
+  // a waiting knockout into a free place: the upper when nothing shows, the lower beside one
+  const fill = () => {
+    while (K.queue.length && K.shown.length < 2) {
+      const e = K.queue.shift();
+      e.el = killFeedEntryEl(e);
+      host.appendChild(e.el);
+      if (!K.shown.length) K.upAt = t;
+      K.shown.push(e);
+      K.changeAt = t;
+    }
+  };
+  fill();
+  if (K.shown.length) {
+    // the upper entry's time: a second from when it took the place — or, with a knockout still WAITING (both places taken),
+    // rushMs from the feed's last change, never later than that second
+    const due = K.queue.length ? Math.min(K.upAt + KILL_FEED.stayMs, K.changeAt + KILL_FEED.rushMs) : K.upAt + KILL_FEED.stayMs;
+    if (t >= due) {
+      const gone = K.shown.shift();
+      gone.el.classList.add('out');
+      setTimeout(() => gone.el.remove(), KILL_FEED.outMs + 60);
+      K.upAt = t; K.changeAt = t;   // (the lower entry, if any, is the upper one from now)
+      fill();                       // (and the next one waiting takes the lower place in the same step)
+    }
+  }
+  // the places: .p0 the upper, .p1 the lower; .solo an entry alone (the side-by-side layout stands it in the middle)
+  for (let i = 0; i < K.shown.length; i += 1) {
+    const cls = `kf p${i}${K.shown.length === 1 ? ' solo' : ''}`;
+    if (K.shown[i].el.className !== cls) K.shown[i].el.className = cls;
+  }
+}
+
 function renderHpChip(chip, m, role, noSideWords) {
   const u = m.unit;
   // the roster: offline the lobby's (keys) with the slot's cursor; online the snapshot-mirrored fields
@@ -6769,6 +6955,7 @@ function renderHpChip(chip, m, role, noSideWords) {
   const sig = `${u.spriteKey}|${side}|${res.join(',')}`;
   if (chip.dataset.sig === sig) return roster;
   chip.dataset.sig = sig;
+  warmKillArt(u); if (roster) for (const k of roster) warmKillArt(UNIT_DATA[k]);   // (THE KILL FEED's pictures, drawn ahead — b1105gm)
   chip.querySelector('.chip-face').innerHTML = chipFaceImg(u);
   chip.querySelector('.chip-name').textContent = u.char || u.name;
   chip.querySelector('.chip-side').textContent = side;
@@ -6786,6 +6973,7 @@ function updateHud(now = performance.now()) {
   // higher-HP / higher-boost character's bar still reads full at full state.
   // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide (style.css
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
+  updateKillFeed();   // (THE KILL FEED, b1105gm: its two places and its pace)
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
   // (b1105aj, user: "no need hp bars in shooting range") the Shooting Range shows no HP chips — nothing is at stake on the
@@ -8961,6 +9149,7 @@ function ensureOnlineMatchSetup(snap) {
   // Save the snapshot-id → mech mapping for per-frame mirroring.
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
   onl.conn?.drainHits?.();   // (HIT X: hits queued before this match are not this match's)
+  onl.conn?.drainKills?.();  // (THE KILL FEED, b1105gm: nor are its knockouts)
 
   // Trio: pre-build each slot's future roster units and pre-warm all fielded
   // art (mirrors the offline match-start prebuild), so a Trio respawn swaps
@@ -9295,6 +9484,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   }
   // HIT X: every hit event of every snapshot that came in (a frame can see two), once the server confirmed it
   for (const h of conn.drainHits?.() ?? []) noteHitX(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
+  for (const k of conn.drainKills?.() ?? []) killFeedNoteOnline(k);   // (THE KILL FEED, b1105gm: every snapshot's knockouts, as the hits)
 
   // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
   //    entirely: the unit is bot-driven server-side, input replay would
@@ -11244,6 +11434,7 @@ function finaleNoteKill(victim, killer) {
   if (noted.has(victim)) return;
   noted.add(victim);
   (state.killLog ?? (state.killLog = [])).push({ victim, killer: killer ?? null });
+  killFeedNote(victim, killer);   // (THE KILL FEED, b1105gm)
 }
 // a clip's length at its own speed, from the unit's model (0 while it stands on the billboard)
 function finaleClipSeconds(m, key) {
@@ -11688,6 +11879,7 @@ function startFinale({ victim, killer = null, heir = false, onDone }) {
   if (camera.near < FINALE.nearPlane) camera.near = FINALE.nearPlane;   // (applied by shot 1's updateProjectionMatrix just below)
   document.documentElement.classList.add('finale-on');
   finaleHideBattle();
+  killFeedReset();   // (THE KILL FEED, b1105gm: the knockout that ended the match is not shown — offline it was noted earlier in this frame)
   finale.hint = document.createElement('div');
   finale.hint.className = 'finale-skip';
   finale.hint.textContent = 'TAP TO SKIP';
@@ -14110,7 +14302,7 @@ function applyMoveOrder(m, now) {
     // above the current floor — the path crossed a jump-link. Vault toward
     // it once close enough, funded at the MANDATED tier (60).
     const wpY = wp ? (wp.y ?? 0) : mv.y;
-    if (grounded && !ladderLeg && wpY - myFloorY > 1.7 && l < 7) {
+    if (grounded && !viaLink && wpY - myFloorY > 1.7 && l < 7) {   // (!viaLink, as the shared sim's command.js and PT's copy of this line: no vault on a ladder's leg or a transporter's; it read !ladderLeg here until 2026-11-12)
       cmdTryStartJump(m, now);
     }
     if (m.state.airborne || !m.grounded) {

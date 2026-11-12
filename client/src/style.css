@@ -84,7 +84,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    the right); the ally's chip steps in the same so the row reads as one stagger. The narrow screens below put both
    back at 22 px — there the cluster is a size down and starts under the row. */
 .chip-face { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c); box-sizing: border-box; background: #2a2a44; }
-.chip-face img, .chip-res-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
+.chip-face img, .chip-res-face img, .kf-face img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; transform: scale(1.3); display: block; }   /* (b1105z; user: "face should be at the center" — the b1105x placement by left/top percentages came out shifted on the user's browser) the square thumbnail fills the frame and a TRANSFORM — plain numbers set inline by main.js chipFaceImg: a translate that brings the unit's face point (UNIT_FACE) to the centre, clamped so the picture keeps covering, then scale 1.3 — centres the face; nothing here depends on calc(), clamp() or a custom property */
 .chip-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 /* (b1105ag, user: "the mobile end layout is off, too much overlapping in game" — a landscape phone 640 px wide) a chip
    never passes its half of the screen less PAUSE, the fullscreen button and the margins: the bar gives first (down to
@@ -142,6 +142,45 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    white glow "is not obvious enough"), and a WATCHING tag under it. */
 .touch-hud .spec-watched { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px var(--yellow), 0 0 0 7px var(--ink); z-index: 0; }   /* (b1105at; user: "no need the whole hp bar glowing effect for spectator anymore; the watching edge alone is enough" — the yellow edge and the tag stay; the 18 px glow and its pulse are gone. z-index 0 under the other chips' 1, b1105ax; user: "make the yellow watching edge always the one being covered by others when overlapping" — online the chips' DOM order follows the server slots, so which chip painted over which varied) */
 .touch-hud .spec-watched::after { content: 'WATCHING'; position: absolute; left: 50%; top: -9px; transform: translateX(-50%) rotate(-2deg); padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }   /* (top since b1105ay; user: "move the watching text box from the lower edge of the hp box to the upper edge") */
+/* THE KILL FEED (PT b1105gm; the design canvas's rounds 13 and 13b — user 2026-11-12: "I want a killing HUD. It would visually
+   be smth like "O>O", where O is the thumbnail and > refers to elimination", two places marked under PAUSE; of the marks, "Try
+   type D [the killer's weapon], but make the black background blank", then "D1"): who knocked out whom — the final blow's
+   unit's face, its weapon with the muzzle to the fallen unit, the fallen unit's face greyed — with NOTHING behind them. Each
+   piece carries its own edge instead: an ink line round each face's ring (the ring in the side's colour, --c, as the HP
+   chips'), a white edge and then an ink line round the weapon, so a dark gun reads on a dark wall and a white one on a bright
+   sky. 96 x 26 px; the faces 20 px, their middles 70 px apart WHATEVER the weapon (it is fitted to the 40 x 17 px between
+   them); leaning 1.5 degrees as the chips do. The three pictures are drawn AHEAD (main.js THE ENTRY'S PICTURES: the weapon
+   with its edge, the fallen face greyed; img.kf-art) — no filter runs on an entry; the plain thumbnail and render stand in
+   only while a unit's pictures are still on the way.
+   WHERE: two places under PAUSE, one under the other, their middles --kf-pitch apart — the first knockout in the upper, a
+   second under it (main.js updateKillFeed: .p0 / .p1). The feed's box is a point at the upper place's middle; an entry is
+   centred on it. Over 720 px wide, where the chips are bigger, the entry is a third bigger (--kf-s). Where the second row of
+   HP chips stands under PAUSE — 2v2 (html.hud-rows-2) on a screen 721 to 1099 px wide — the two places lie SIDE BY SIDE under
+   that row at the plain size (the canvas's M3; user: "M3"): an entry alone in the middle (.solo), a second to its right, the
+   first stepping left. One under the other there, the pair closed on the lock bracket at the screen's middle.
+   HOW IT MOVES: the place by a transform on .kf (a move takes 0.25 s); the pop-in and the leave — up, fading — by animations
+   on .kf-in inside it, so the two never share a property. Stills under reduced motion. */
+.kill-feed { position: absolute; left: 50%; top: 83px; width: 0; height: 0; z-index: 2; pointer-events: none; --kf-s: 1.3; --kf-pitch: 44px; --kf-side: 53px; }   /* (PAUSE ends at 59: the upper place 66 to 100, the lower 110 to 144) */
+.kf { position: absolute; left: -48px; top: -13px; width: 96px; height: 26px; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1); will-change: transform; }
+.kf.p1 { transform: translateY(var(--kf-pitch)); }
+.kf-in { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform: rotate(-1.5deg) scale(var(--kf-s)); animation: kf-pop 0.15s cubic-bezier(0.2, 1.3, 0.4, 1) both; will-change: transform, opacity; }
+.kf.out .kf-in { animation: kf-out 0.25s ease-in both; }
+@keyframes kf-pop { from { opacity: 0; transform: rotate(-1.5deg) scale(calc(var(--kf-s) * 1.35)); } to { opacity: 1; transform: rotate(-1.5deg) scale(var(--kf-s)); } }
+@keyframes kf-out { from { opacity: 1; transform: translateY(0) rotate(-1.5deg) scale(var(--kf-s)); } to { opacity: 0; transform: translateY(calc(-16px * var(--kf-s))) rotate(-1.5deg) scale(var(--kf-s)); } }
+.kf-face { position: absolute; top: 3px; width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; overflow: hidden; border: 2px solid var(--c, #ffffff); background: #2a2a44; box-shadow: 0 0 0 1.5px var(--ink); }
+.kf-face.k { left: 3px; }
+.kf-face.v { right: 3px; }
+.kf-face.v img { filter: grayscale(1) brightness(0.7); }   /* (the stand-in only: the fallen unit's own picture is drawn greyed) */
+.kf-face img.kf-art { transform: none; filter: none; }      /* (drawn ahead as the frame shows it: nothing left to place or grey) */
+.kf-gun { position: absolute; left: 28px; top: 4.5px; width: 40px; height: 17px; }
+.kf-gun img { position: absolute; display: block; max-width: none; }
+.kf-gun img.kf-art { left: -2px; top: -2px; width: 44px; height: 21px; }   /* (the sticker: the 40 x 17 room and 2 px all round for the edge — main.js KILL_ART.pad) */
+@media (min-width: 721px) and (max-width: 1099px) {
+  html.hud-rows-2 .kill-feed { top: 159px; --kf-s: 1; }   /* (the second row ends at 142: the entries 146 to 172, clear of the lock bracket at the middle of an 844 x 390 screen by 3 px) */
+  html.hud-rows-2 .kf.p0:not(.solo) { transform: translateX(calc(-1 * var(--kf-side))); }
+  html.hud-rows-2 .kf.p1 { transform: translateX(var(--kf-side)); }
+}
+@media (prefers-reduced-motion: reduce) { .kf { transition: none; } .kf-in { animation: none; } .kf.out .kf-in { animation: none; opacity: 0; } }
 /* THE BOOST STICKER (b1105w, the design canvas's round 5 — the sample's yellow ammo chip; the 10 px bar until then):
    level, at the bottom centre — the word, the gauge with a white knob (--bw on the track, updateHud), no number. The
    fill is the SPRINT button's magenta at every level (user b1105x: "shouldn't be black"); overheating does not tint it
@@ -1221,6 +1260,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   .hp-chip.ally-health { left: 12px; }
   .hp-chip.enemy2-health { right: 12px; }
   .pause-btn { top: 10px; padding: 6px 10px; font-size: 13px; }
+  .kill-feed { top: 68px; --kf-s: 1; --kf-pitch: 35px; }   /* (THE KILL FEED, b1105gm: the plain size at the two places the user marked — 55 and 90 px from the top, 96 x 26 each) */
   .fullscreen-btn.in-match { top: 54px; left: 16px; }   /* (b1105ar; user: "move the full screen button to around here" — under the LEFT chips' last row, at their left end; it sat under PAUSE in the middle since b1105ai. The two-row case is a class on <html>, set by setupHUD) */
   html.hud-rows-2 .fullscreen-btn.in-match { top: 94px; }
   .chip-nm { max-height: 11px; gap: 3px 5px; }
@@ -1247,6 +1287,14 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
      22 px off the right edge (12 until b1105at), the thumb's reach and the screen's rounded corner */
   .buttons { --btn-gap: clamp(8px, 1.2vw, 14px); --btn-size: clamp(56px, min(13vw, calc((100vh - 90px - 12px - 2 * var(--btn-gap)) / 3)), 84px); right: max(22px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
+}
+
+/* (THE KILL FEED on a screen too narrow for an entry between the second row's chips — 2v2 under 576 px wide, where the two
+   chips leave less than the entry's 96 px beside PAUSE: side by side under that row, as on the mid-size screens) */
+@media (max-width: 575px) {
+  html.hud-rows-2 .kill-feed { top: 101px; }
+  html.hud-rows-2 .kf.p0:not(.solo) { transform: translateX(calc(-1 * var(--kf-side))); }
+  html.hud-rows-2 .kf.p1 { transform: translateX(var(--kf-side)); }
 }
 
 /* THE FINALE (PT b1105gb): the match's HUD steps aside while the camera plays the knockout; "TAP TO SKIP" once a tap can */
