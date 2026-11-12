@@ -7915,7 +7915,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gx 11-12';
+const CLIENT_BUILD_TAG = 'b1105gy 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11436,7 +11436,7 @@ function tickTrioRespawns() {
 // front; command mode, free pov and spectators hijacked too; "Use reload motion for victory motion for now").
 // The match that ended stands frozen behind it (offline the sim stops; online the server has stopped already), the HUD steps
 // aside, the camera cuts to shot 1 and holds it, then flies to shot 2 in ONE TAKE (b1105gc, FINALE.move; through whatever
-// stands in its way where neither side of its arc is clear, b1105gd) and holds that; a tap or a key press after FINALE.skipArmMs skips to the end page (a held
+// stands in its way where neither side of its arc is clear, b1105gd) and holds that — until a tap or a key press since b1105gy (THE HOLD AT THE END, below); a tap or a key press after FINALE.skipArmMs skips to the end page at any moment before (a held
 // fire key or finger is no new press; 1 s from the finale's first frame since b1105gx, 0.5 s before). Client-side only: online it reads what the last snapshot carried — the lethal hit's
 // shooter (connection.js getLastKill), every unit's HP — and sends nothing, so it costs the match no lag.
 // EVERY UNIT DOWN (b1105gg; user 2026-11-12: "Currently when all units die at the ending, the camera skips the winner side
@@ -11467,6 +11467,15 @@ function tickTrioRespawns() {
 // .finale-call): K.O. over the fallen unit, FINAL BLOW over the final blow's unit (lying too, with every unit down), WINNER
 // over the roster unit standing in its place. It comes in with its shot and leaves as the take starts; the match is over
 // by then and frozen, so it costs play nothing.
+// THE HOLD AT THE END (b1105gy; user 2026-11-12: "if the player doesn't skip, make the screen stops at the end of winner
+// camera. It won't move on to the team ending screen unless player taps again. If the player taps skips anytime before the end
+// of winner camera, the screen skips to the team ending screen."): the end page no longer comes by itself. When the last shot
+// has run its length (finale.held) everything stays as it is — the camera, the unit on its motion's last frame, the call, the
+// hint — until a tap or a key press, which goes to the end page as a skip does. The last shot is shot 2; where there is none
+// (the final blow's unit down with a teammate standing, or no shooter known) it is shot 1, held on the fallen unit — this
+// side's reading, the message naming the winner camera alone: one rule for every ending, and no end page arriving under a
+// finger that meant to end the hold. Online the lobby moving on still ends it (a rematch begun, the room left: the phase
+// machine's finishFinale), and the end page a held player comes to is drawn from the lobby's state of that moment.
 // THE VICTORY'S TIMING (b1105gu; user 2026-11-12, told how shot 2's length was worked out: "Make it as below universally,
 // including iori. starting 0.6 秒 + normal speed reload motion + ending 0.6 秒"; then, b1105gv, the same day: "Make the
 // beginning 0.6sec before the motion 0.3sec instead universally. The ending 0.6sec stays the same."; then, b1105gw: "Changing that 0.3sec to 0.1sec universally."): shot 2 opens on its unit
@@ -11514,7 +11523,8 @@ const FINALE = {
   // universally; the death motion takes a bit too much time at its end anyway", then, told of the hold: "there was a 停留?
   // no need that." The take begins the frame the motion ends.
   // The holds round the victory motion (b1105gu): `holdBeforeVictoryS` on the unit standing, from the frame the camera
-  // arrives — 0.1 s since b1105gw, 0.3 s at b1105gv, 0.6 s as first asked; `holdAfterVictoryS` on the motion's last frame.
+  // arrives — 0.1 s since b1105gw, 0.3 s at b1105gv, 0.6 s as first asked; `holdAfterVictoryS` on the motion's last frame — the shot's own length ends there, and since b1105gy
+  // the frame stays up from then until a tap (THE HOLD AT THE END), so nothing shows of where this ends.
   holdAfterDeathS: 0, holdBeforeVictoryS: 0.1, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
   // the skip is armed, and its TAP TO SKIP hint comes in, this long after the finale's first frame: 1 s since b1105gx (user
   // 2026-11-12: "Make the ending camera skippable only after 1sec the ending camera starts."), 0.5 s before
@@ -11544,7 +11554,7 @@ const FINALE = {
   // lethal hit names a slot, not a unit): a round lives 2.2 s (the sim's PROJECTILE_TTL_S), and a snapshot can be late
   heirWindowMs: 2500,
 };
-const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
+const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null, held: false };   // (`held`: the last shot has run its length and waits for a tap, b1105gy)
 if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
 
 // the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
@@ -11970,7 +11980,7 @@ function finaleHideBattle() {
 function startFinale({ victim, killer = null, heir = false, onDone }) {
   if (!victim?.root) { onDone?.(); return false; }
   const now = performance.now();
-  finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now;
+  finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now; finale.held = false;
   finale.victim = victim;
   // shot 2's unit: the final blow's, standing — or down too with EVERY UNIT of the match down, shown as it lies (b1105gg);
   // down with a teammate still standing, or none: no shot 2
@@ -12066,10 +12076,12 @@ function updateFinale(dt, now) {
     }
   } else {
     const t = (now - finale.shotT0) / 1000;
+    // THE HOLD AT THE END (b1105gy): the last shot's length run — shot 2's, or shot 1's with no shot 2 to come — nothing
+    // moves on; the frame stays up until the skip's tap or key press (finale.onSkip), which was the way out all along
     if (finale.shot === 1 && t >= finale.dur1) {
-      if (!finale.killer) { finishFinale(true); return; }
-      if (!startFinaleMove(now)) finaleShot(2, now);   // (a unit gone: the cut — the take itself never refuses, b1105gd)
-    } else if (finale.shot === 2 && t >= finale.dur2) { finishFinale(true); return; }
+      if (!finale.killer) finale.held = true;
+      else if (!startFinaleMove(now)) finaleShot(2, now);   // (a unit gone: the cut — the take itself never refuses, b1105gd)
+    } else if (finale.shot === 2 && t >= finale.dur2) finale.held = true;
   }
   seeUpdate(now);  // (THE SEE-THROUGH WINDOW, b1105gn: at a stop, the gate and the window; shut through the take)
   updateVfx(dt);   // (the last hit's rings fade as they would)
@@ -12077,7 +12089,7 @@ function updateFinale(dt, now) {
 }
 function finishFinale(runDone) {
   if (!finale.active) return;
-  finale.active = false; finale.shot = 0; finale.focus = null; finale.move = null;
+  finale.active = false; finale.shot = 0; finale.focus = null; finale.move = null; finale.held = false;
   if (finale.prevNear != null && camera.near !== finale.prevNear) { camera.near = finale.prevNear; camera.updateProjectionMatrix(); }
   finale.prevNear = null;
   document.documentElement.classList.remove('finale-on');
