@@ -7915,7 +7915,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gv 11-12';
+const CLIENT_BUILD_TAG = 'b1105gw 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11469,10 +11469,10 @@ function tickTrioRespawns() {
 // by then and frozen, so it costs play nothing.
 // THE VICTORY'S TIMING (b1105gu; user 2026-11-12, told how shot 2's length was worked out: "Make it as below universally,
 // including iori. starting 0.6 秒 + normal speed reload motion + ending 0.6 秒"; then, b1105gv, the same day: "Make the
-// beginning 0.6sec before the motion 0.3sec instead universally. The ending 0.6sec stays the same."): shot 2 opens on its unit
-// standing at ease for FINALE.holdBeforeVictoryS (0.3 s), as it stood through the take; then the victory motion plays once from
+// beginning 0.6sec before the motion 0.3sec instead universally. The ending 0.6sec stays the same."; then, b1105gw: "Changing that 0.3sec to 0.1sec universally."): shot 2 opens on its unit
+// standing at ease for FINALE.holdBeforeVictoryS (0.1 s), as it stood through the take; then the victory motion plays once from
 // its first frame at its own speed (FINALE.victoryRate, 1); then its last frame is held for holdAfterVictoryS (0.6 s). Every
-// unit by the one rule: 2.4 s (Marina's reload, 1.5 s) to 3.7 s (Kurumi's, 2.8 s). The unit standing through the opening hold,
+// unit by the one rule: 2.2 s (Marina's reload, 1.5 s) to 3.5 s (Kurumi's, 2.8 s). The unit standing through the opening hold,
 // not held on the motion's first frame, and Iori's own setting gone were this side's readings of the first message; the user,
 // of both: "These are correct." Until b1105gu the motion began the frame the camera arrived and ran at 0.6
 // of its speed (b1105gk; user 2026-11-12: "play the winner reload motion in 0.6 times speed."), Iori's alone at its own
@@ -11514,8 +11514,8 @@ const FINALE = {
   // universally; the death motion takes a bit too much time at its end anyway", then, told of the hold: "there was a 停留?
   // no need that." The take begins the frame the motion ends.
   // The holds round the victory motion (b1105gu): `holdBeforeVictoryS` on the unit standing, from the frame the camera
-  // arrives — 0.3 s since b1105gv, 0.6 s as first asked; `holdAfterVictoryS` on the motion's last frame.
-  holdAfterDeathS: 0, holdBeforeVictoryS: 0.3, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
+  // arrives — 0.1 s since b1105gw, 0.3 s at b1105gv, 0.6 s as first asked; `holdAfterVictoryS` on the motion's last frame.
+  holdAfterDeathS: 0, holdBeforeVictoryS: 0.1, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
   skipArmMs: 500,
   // THE ONE TAKE between the two shots (b1105gc; user 2026-11-11: "between the two characters the camera taken, can you zoom
   // out from the defeated one and zoom in to the winning one like it one take? the transition should be done in 0.3 to 1 sec
