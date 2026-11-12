@@ -6764,7 +6764,7 @@ function chipFaceImg(u) {
 // area, stays for another 1sec then fade&slide out. If there are more than 2 kills, the HUD will be forced to speed up; only
 // about 0.3s sec before the HUD updates until there's no pending kills to be shown." — then, of the design canvas's rounds 13
 // and 13b: the mark is the killer's WEAPON, "make the black background blank", "D1"; on a mid-size 2v2 screen the two places
-// side by side, "M3"; the match-ending knockout is NOT shown; once nothing waits the pace is a second again; shown in command
+// side by side, "M3"; the match-ending knockout is NOT shown; once nothing waits the pace is the plain stay again; shown in command
 // mode and to a spectator too).
 // AN ENTRY: the final blow's unit's face, its weapon (the muzzle to the right, at the fallen unit), the fallen unit's face
 // greyed — each face ringed in its side's colour as the HP chips are (the seat's own online). Nothing behind them: the look,
@@ -6773,15 +6773,15 @@ function chipFaceImg(u) {
 // THE TWO PLACES AND THE PACE (updateKillFeed): a knockout takes the upper place when nothing shows, the lower beside one,
 // and waits its turn behind two. The upper entry leaves `stayMs` after it took that place — up and fading, `outMs` — and the
 // lower moves up to stay that long itself. While a knockout WAITS the feed steps `rushMs` after its last change instead
-// (never later than the plain second would have), and each step lets the next one in; with none waiting, the two that show
-// keep their second each. The clock is the feed's own: real time while the HUD is updated, so a paused match holds it.
+// (never later than the plain stay would have), and each step lets the next one in; with none waiting, the two that show
+// keep their stay each. The clock is the feed's own: real time while the HUD is updated, so a paused match holds it.
 // WHAT FEEDS IT: offline the damage sites' first lethal hit on each unit (finaleNoteKill — the round's own shooter, so a unit
 // that fell before its round landed is still the one drawn); online the lethal hits the connection reads off the snapshots,
 // the units worked out there (connection.js drainKills). The knockout that ends the match never shows: offline the win check
 // runs later in the same frame and the finale clears the feed before a frame is drawn; online the connection marks it.
 // The feed lives in the match HUD (setupHUD), so it steps aside with it in the finale and goes with it at the match's end.
 // ============================================================================
-const KILL_FEED = { stayMs: 1000, rushMs: 300, outMs: 250, gun: [40, 17] };   // (gun: the room between the two faces, px)
+const KILL_FEED = { stayMs: 1500, rushMs: 300, outMs: 250, gun: [40, 17] };   // (stayMs: 1.5 s since b1105gp, user 2026-11-12: "make the kill HUD duration from 1sec to 1.5sec"; the second first asked for until then. gun: the room between the two faces, px)
 const killFeed = { el: null, shown: [], queue: [], clock: 0, last: 0, upAt: 0, changeAt: 0 };
 if (typeof window !== 'undefined') window.__killFeed = { state: killFeed, cfg: KILL_FEED, art: () => _killArt, push: (e) => killFeedPush(e), note: (v, k) => killFeedNote(v, k) };   // (a probe's hooks, as __finale)
 // THE ENTRY'S PICTURES, DRAWN AHEAD (warmKillArt, from renderHpChip: the unit on the field and its roster, at the match's start):
@@ -7809,7 +7809,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105go 11-12';
+const CLIENT_BUILD_TAG = 'b1105gp 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11384,14 +11384,16 @@ const FINALE = {
   // centre plus modelYOffset — 4.8 above the feet on level ground, where a unit is 6.4 tall — so shot 1 looks at the chest
   // from 12.8 up (b1105gc: the b1105gb note put the root at 2.45, the body's centre; the numbers were tuned by eye and stay)
   shot1: { dist: 12, up: 8, lookUp: -0.8, fov: 50, yaws: [35, -35, 70, -70, 0, 110, -110, 180] },
-  // shot 2: the final blow's unit from its front turned 30° round to its right side (b1105gg; user 2026-11-12: "Make the
-  // camera angle of the winner camera rotate 30 degree to the left, so the winner unit can be seen better from its right
-  // side" — the camera's left as it faces the unit; a negative angle here is the unit's right), a little above its head
-  // (8.0 up) looking at its face, the whole body in the frame; blocked, the angles fan out from there, the right side
-  // first (straight from the front until then: 0, ±20, ±40, ±65, ±90, 180).
+  // shot 2: the final blow's unit from its front turned 40° round to its right side (b1105gp, user 2026-11-12: "rotate the
+  // winner camera 10 more degrees to the left (so the user see the winner from the right side more)"; 30° since b1105gg,
+  // user: "Make the camera angle of the winner camera rotate 30 degree to the left, so the winner unit can be seen better
+  // from its right side" — the camera's left as it faces the unit; a negative angle here is the unit's right), a little
+  // above its head (8.0 up) looking at its face, the whole body in the frame; blocked, the angles fan out from there, the
+  // right side first (the fan is the one that stood about the front until b1105gg — 0, ±20, ±40, ±65, ±90, 180 — moved
+  // with the first angle: about -30 then, about -40 now).
   // `lookUpDown`: where it looks when that unit lies fallen (EVERY UNIT DOWN, above) — at the body on the floor, 1.5 over
   // it, where the same camera aimed at a standing unit's face would leave the body on the frame's bottom edge
-  shot2: { dist: 13, up: 3.2, lookUp: 0.75, lookUpDown: -3.3, fov: 50, yaws: [-30, -50, -10, -70, 10, -95, 35, -120, 60, 150] },
+  shot2: { dist: 13, up: 3.2, lookUp: 0.75, lookUpDown: -3.3, fov: 50, yaws: [-40, -60, -20, -80, 0, -105, 25, -130, 50, 140] },
   near: [1, 0.8, 0.6],
   // the hold on the fallen unit after its death motion, before the take to the winner (or, with no winner to show, the
   // end page): NONE since b1105gd, 0.5 s before — user 2026-11-11: "you can start the camera transition 0.3 sec earlier
