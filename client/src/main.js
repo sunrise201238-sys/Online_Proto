@@ -7915,7 +7915,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gw 11-12';
+const CLIENT_BUILD_TAG = 'b1105gx 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11437,7 +11437,7 @@ function tickTrioRespawns() {
 // The match that ended stands frozen behind it (offline the sim stops; online the server has stopped already), the HUD steps
 // aside, the camera cuts to shot 1 and holds it, then flies to shot 2 in ONE TAKE (b1105gc, FINALE.move; through whatever
 // stands in its way where neither side of its arc is clear, b1105gd) and holds that; a tap or a key press after FINALE.skipArmMs skips to the end page (a held
-// fire key or finger is no new press). Client-side only: online it reads what the last snapshot carried — the lethal hit's
+// fire key or finger is no new press; 1 s from the finale's first frame since b1105gx, 0.5 s before). Client-side only: online it reads what the last snapshot carried — the lethal hit's
 // shooter (connection.js getLastKill), every unit's HP — and sends nothing, so it costs the match no lag.
 // EVERY UNIT DOWN (b1105gg; user 2026-11-12: "Currently when all units die at the ending, the camera skips the winner side
 // take. Make it the camera still do the take on winner, and use the last frame of the death motion for winner. The winner
@@ -11516,7 +11516,9 @@ const FINALE = {
   // The holds round the victory motion (b1105gu): `holdBeforeVictoryS` on the unit standing, from the frame the camera
   // arrives — 0.1 s since b1105gw, 0.3 s at b1105gv, 0.6 s as first asked; `holdAfterVictoryS` on the motion's last frame.
   holdAfterDeathS: 0, holdBeforeVictoryS: 0.1, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
-  skipArmMs: 500,
+  // the skip is armed, and its TAP TO SKIP hint comes in, this long after the finale's first frame: 1 s since b1105gx (user
+  // 2026-11-12: "Make the ending camera skippable only after 1sec the ending camera starts."), 0.5 s before
+  skipArmMs: 1000,
   // THE ONE TAKE between the two shots (b1105gc; user 2026-11-11: "between the two characters the camera taken, can you zoom
   // out from the defeated one and zoom in to the winning one like it one take? the transition should be done in 0.3 to 1 sec
   // depending on their relatively distance", then, on the assessment's rule, times and fallback: "As you suggested", "OK"):
