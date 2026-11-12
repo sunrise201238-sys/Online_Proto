@@ -68,11 +68,12 @@ import { findPathOnGrid, smoothPath } from './navgrid.js';
 import { navGridFor } from './ai.js';
 import { inheritMomentum } from './movement.js';
 import { tryStartJump } from './actions.js';
+import { setTactic } from './tactic.js';
 
 function commandsFor(matchState, slot) {
   if (matchState.commands == null) matchState.commands = {};
   let cmd = matchState.commands[slot];
-  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false, hideAuto: false };
+  if (!cmd) cmd = matchState.commands[slot] = { move: null, lockTargetId: null, orbitFlip: false, hide: false, hideAuto: false, tactic: null, tacticDirty: false };   // (tactic, tacticDirty: THE ALLY TACTIC — tactic.js)
   return cmd;
 }
 
@@ -96,6 +97,7 @@ export function clearCommands(matchState, slot) {
   cmd.lockTargetId = null;
   cmd.hide = false;
   cmd.hideAuto = false;
+  setTactic(cmd, null, 0);   // (the ally tactic too, tactic.js: a call dies with the unit it was made to)
 }
 
 // Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
@@ -190,6 +192,15 @@ export function setStance(matchState, slot, hide) {
     cmd.lockTargetId = null;
   }
   return true;
+}
+
+// THE ALLY TACTIC (tactic.js; b1105gq): a classic player's call to a bot teammate — 'push' | 'hide' for ALLY_TACTIC_MS, null to
+// take the standing one back. Rejects a missing or dead unit and an unknown kind; who may call, and how often, is the
+// host's to check (server index.js ally:tactic).
+export function setAllyTactic(matchState, slot, kind, now) {
+  const f = matchState.fighters[slot];
+  if (!f || f.hp <= 0) return false;
+  return setTactic(commandsFor(matchState, slot), kind, now);
 }
 
 export function isHideOrdered(matchState, slot) {

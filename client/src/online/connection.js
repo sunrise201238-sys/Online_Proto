@@ -332,6 +332,13 @@ export function createConnection() {
       if (!connected) return;
       socket.emit('order:stance', { slot, hide: !!hide });
     },
+    // THE ALLY TACTIC (shared tactic.js; b1105gq): a classic player's call to the bot on their side — kind 'push' (FORWARD) or
+    // 'hide' (BACK OFF) for 10 s, null to take the standing one back. Nothing is answered: what stands arrives as
+    // commands[slot].tactic { kind, until } in the side's snapshots.
+    sendAllyTactic: (kind, slot) => {
+      if (!connected) return;
+      socket.emit('ally:tactic', { slot, kind: kind ?? null });
+    },
     getOrderResult: () => ({ seq: orderResultSeq, data: lastOrderResult }),
 
     onUpdate: (cb) => { listeners.add(cb); return () => listeners.delete(cb); }

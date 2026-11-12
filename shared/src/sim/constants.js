@@ -1069,6 +1069,10 @@ export const ANTI_MELEE_WINDOW_MS = 260;
 // ring, orders rejected when the pathfinder's goal snap lands more than
 // 6 u from the tapped spot.
 export const CMD_TRAVEL_BOOST_FLOOR = 50;
+// --- THE ALLY TACTIC (tactic.js; PT b1105gq, user 2026-11-12) — one source for the server, the offline client and the HUD.
+export const ALLY_TACTIC_MS = 10000;             // how long a call stands ("hide 10 sec", "lockrange -30 for 10sec")
+export const ALLY_TACTIC_PUSH = 30;              // FORWARD: the range band this much nearer the target
+export const ALLY_TACTIC_MIN_INTERVAL_MS = 500;  // two calls to one unit stand at least this far apart (the orders' own limit — server index.js ORDER_MIN_INTERVAL_MS); a take-back is never held up
 export const CMD_TRAVEL_DASH_ARM = 125;
 export const CMD_ANCHOR_MS = 40000;   // 20 s -> 40 s (owner 2026-09-26)
 export const CMD_RADIUS = 12;

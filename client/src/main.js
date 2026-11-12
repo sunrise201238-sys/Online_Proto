@@ -52,6 +52,7 @@ import {
   getArena,
   ladderHumanInput, ladderPress, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
   padHumanInput, padBotStep, padChargeProgress,               // the transporters (pads.js; b1105fk)
+  setTactic, ALLY_TACTIC_MIN_INTERVAL_MS,                     // the ally tactic (tactic.js; b1105gq)
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
@@ -2986,6 +2987,102 @@ function teardownHud() {
   input.dirNeutralSince = 0;
 }
 
+// ---- THE ALLY TACTIC (shared tactic.js; PT b1105gq, user 2026-11-12) ------------------------------------------------
+// "i want to make a in-game command that makes ally BOT moving forward/backward. The idea is a small button at the up left
+// corner of the joystick. By tapping it, 2 pop up buttons will appear, one would say smth like 'forward' and the other would
+// say smth like 'back off'." What the two do (tactic.js): FORWARD — the bot teammate's range band 30 nearer its target for
+// 10 s; BACK OFF — the Hide stance for 10 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"').
+//   the lit one   while a call stands, its pop-up shows lit the next time the two are opened ("player will see that command
+//                 pop up button glowing once they open the command again"), and the button itself is lit for as long as
+//                 either call stands (b1105gr: "make the command button itself glowing as well");
+//   a tap         on the lit one takes the call back at once; on the other one replaces it at once;
+//   shown         in the shooter view of a 2v2 whose teammate is a bot (offline always; online a seat that was a bot at the
+//                 match's start) and stands — not in 1v1, not beside a human teammate, not in Sudden Death (that brain takes
+//                 no tactic), not on the Shooting Range, and not in command mode ("Remove these command buttons in command
+//                 mode": the commander has real orders — style.css hides it with the stick);
+//   inert         in spectator mode — the Practice toggle, or an online spectator: "shown but not responding";
+//   the player's own unit down, the teammate fighting on: the calls still work — the side is still the player's.
+// The two pop-ups close on a pick, on a second tap of the button, or TACTIC_HUD.closeMs after they opened.
+// Offline the call is set on the teammate's mech (cmdTactic — botCmdView hands it to the brain); online it is sent
+// (connection.js sendAllyTactic) and what stands comes back with the side's snapshots (syncOnlineCommands), so the lit
+// pop-up is the server's word. The page sends what the player meant — a kind, or null for the take-back.
+const TACTIC_HUD = { closeMs: 3000 };
+const ALLY_TACTIC_HTML = '<div class="tac" id="tac">'
+  + '<div class="tac-pop"><div class="tac-opt" data-tactic="push">FORWARD</div><div class="tac-opt" data-tactic="hide">BACK OFF</div></div>'
+  + '<div class="tac-btn" id="tac-btn" role="button" aria-label="Ally tactic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V5"/><path d="M4 9l4-4 4 4"/><path d="M16 4v15"/><path d="M12 15l4 4 4-4"/></svg></div>'
+  + '</div>';
+const tacticHud = { el: null, opts: [], open: false, openAt: 0, lastCallAt: -1e9, now: 0 };
+function allyTacticShown() {
+  const a = state.ally;
+  if (!a || state.mode !== '2v2' || a.state.hp <= 0) return false;
+  if (state.suddenDeathActive || state.mapKey === 'range' || dioramaActive()) return false;
+  return state.online ? !!state.online.allyIsBot : true;
+}
+function allyTacticCan() {
+  if (!allyTacticShown() || state.spectatorActive) return false;
+  const onl = state.online;
+  // (online the match's own word that it runs — state.running is the offline loop's flag and stays down there)
+  if (onl) return ONLINE_SLOT_IDS.includes(onl.myPlayerId) && !onl.commandMode && onl.conn?.getMatchState?.() === 'active';
+  return !!state.running;
+}
+// The call standing on the teammate now, as this page knows it: 'push' | 'hide' | null (`now` in the HUD's clock — the
+// page's own offline, the server's online, as the call's end is).
+function allyTacticLive(now = tacticHud.now) {
+  const t = state.ally?.cmdTactic;
+  return t && now < t.until ? t.kind : null;
+}
+function allyTacticCall(kind) {   // 'push' | 'hide' | null (the take-back)
+  if (!allyTacticCan()) return false;
+  if (state.online) { state.online.conn?.sendAllyTactic?.(kind, state.online.slotMap?.allyId); return true; }
+  const now = performance.now();
+  if (kind != null) {   // (two calls at least ALLY_TACTIC_MIN_INTERVAL_MS apart, as the server holds them; a take-back is never held up)
+    if (now - tacticHud.lastCallAt < ALLY_TACTIC_MIN_INTERVAL_MS) return false;
+    tacticHud.lastCallAt = now;
+  }
+  return setTactic(botCmdView(state.ally), kind, now);
+}
+function allyTacticOpen(open) {
+  tacticHud.open = !!open && !!tacticHud.el;
+  if (tacticHud.open) tacticHud.openAt = performance.now();
+  const live = tacticHud.open ? allyTacticLive() : null;   // (lit from the first frame the two show; nothing left lit on a closed pair)
+  for (const opt of tacticHud.opts) opt.classList.toggle('on', opt.dataset.tactic === live);
+  tacticHud.el?.classList.toggle('open', tacticHud.open);
+}
+function setupAllyTacticHud(hud) {
+  const el = hud.querySelector('#tac');
+  tacticHud.el = el; tacticHud.opts = el ? [...el.querySelectorAll('.tac-opt')] : []; tacticHud.open = false;
+  if (!el) return;
+  el.querySelector('#tac-btn').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!allyTacticCan()) return;   // (spectator mode: shown, not responding)
+    allyTacticOpen(!tacticHud.open);
+  });
+  for (const opt of tacticHud.opts) {
+    opt.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!tacticHud.open) return;
+      const kind = opt.dataset.tactic;
+      allyTacticCall(allyTacticLive() === kind ? null : kind);   // (the lit one: taken back; the other, or either with none standing: called)
+      allyTacticOpen(false);
+    });
+  }
+}
+function updateAllyTacticHud(now) {
+  tacticHud.now = now;
+  const hud = state.hud, el = tacticHud.el;
+  if (!hud || !el) return;
+  if (!state.online && state.ally?.cmdTactic && state.ally.state.hp <= 0) setTactic(botCmdView(state.ally), null, 0);   // (a call dies with the unit it was made to — the server's wipe on death, shared clearCommands)
+  const shown = allyTacticShown();
+  hud.classList.toggle('tac-on', shown);
+  const live = shown ? allyTacticLive(now) : null;
+  el.classList.toggle('live', live != null);   // (b1105gr, user 2026-11-12: "when there is either command in effect, make the command button itself glowing as well" — the button lit for as long as a call stands, the two closed or open; style.css .tac.live)
+  if (!shown) { if (tacticHud.open) allyTacticOpen(false); return; }
+  if (!tacticHud.open) return;
+  if (performance.now() - tacticHud.openAt > TACTIC_HUD.closeMs || !allyTacticCan()) { allyTacticOpen(false); return; }
+  for (const opt of tacticHud.opts) opt.classList.toggle('on', opt.dataset.tactic === live);
+}
+if (typeof window !== 'undefined') window.__tactic = { cfg: TACTIC_HUD, hud: tacticHud, shown: allyTacticShown, can: allyTacticCan, live: () => allyTacticLive(), call: allyTacticCall, open: allyTacticOpen, lit: () => !!tacticHud.el?.classList.contains('live') };   // (automation: the ally tactic)
+
 // The thumb buttons' arrows (b1105m): one stroke path each, drawn in the button's own colour (style.css .btn-icon).
 const HUD_BTN_ICON = {
   jump: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
@@ -3016,6 +3113,7 @@ function setupHUD() {
     ${teamChipsHtml}
     <div class="boost"><span class="boost-word">BOOST</span><span class="boost-track"><span id="boost-fill"></span><span class="boost-knob"></span></span></div>
     <div class="joy" id="joy"><div class="stick"></div></div>
+    ${state.mode === '2v2' ? ALLY_TACTIC_HTML : ''}
     <div class="buttons" id="buttons"></div>
     <div class="speed-lines" id="speed-lines"></div>
     <div class="crosshair" id="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i></div>
@@ -3193,6 +3291,7 @@ function setupHUD() {
     event.preventDefault();
     showPauseMenu();
   });
+  setupAllyTacticHud(hud);   // (THE ALLY TACTIC, b1105gq: its button by the stick and the two calls)
 
   state.hud = hud;
   state.speedLines = hud.querySelector('#speed-lines');
@@ -5756,7 +5855,9 @@ function botCmdView(m) {
     get hide() { return m.cmdHide; }, set hide(v) { m.cmdHide = v; },
     get hideAuto() { return m.cmdHideAuto; }, set hideAuto(v) { m.cmdHideAuto = v; },
     get move() { return m.cmdMove; }, set move(v) { m.cmdMove = v; },
-    get lockTargetId() { return m.cmdLock; }, set lockTargetId(v) { m.cmdLock = v; }
+    get lockTargetId() { return m.cmdLock; }, set lockTargetId(v) { m.cmdLock = v; },
+    get tactic() { return m.cmdTactic ?? null; }, set tactic(v) { m.cmdTactic = v; },   // (THE ALLY TACTIC, tactic.js: { kind, until } and the mark an order leaves)
+    get tacticDirty() { return !!m.cmdTacticDirty; }, set tacticDirty(v) { m.cmdTacticDirty = v; }
   };
 }
 // The step's lerp (mirrors the player's step block in updatePlayer): while
@@ -6974,6 +7075,7 @@ function updateHud(now = performance.now()) {
   // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide (style.css
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   updateKillFeed();   // (THE KILL FEED, b1105gm: its two places and its pace)
+  updateAllyTacticHud(now);   // (THE ALLY TACTIC, b1105gq: shown or not, the standing call lit)
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
   // (b1105aj, user: "no need hp bars in shooting range") the Shooting Range shows no HP chips — nothing is at stake on the
@@ -7809,7 +7911,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gp 11-12';
+const CLIENT_BUILD_TAG = 'b1105gr 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9209,6 +9311,7 @@ function ensureOnlineMatchSetup(snap) {
   // bot set — a slot that turns bot mid-match (disconnect) is not adopted.
   onl.allyCommandable = !!(onl.commandMode && allyId
     && (snap.botSlots ?? []).includes(allyId));
+  onl.allyIsBot = !!(allyId && (snap.botSlots ?? []).includes(allyId));   // (THE ALLY TACTIC, b1105gq: a teammate that was a bot at the match's start can be called to — the server's own rule, startBotSlots)
   if (onl.commandMode) {
     diorama.cam2.snapped = false;
     applyDioramaDressing();
@@ -9296,6 +9399,7 @@ function syncOnlineCommands(snap, onl) {
     // Fight / Hide stance flag (owner 2026-09-26): the shield badge and the
     // order gates read mech.cmdHide exactly like the offline layer.
     mech.cmdHide = !!c?.hide;
+    mech.cmdTactic = c?.tactic ?? null;   // (THE ALLY TACTIC, b1105gq: the call standing on a bot teammate — { kind, until }, the end in the server's clock)
   }
 }
 
@@ -14083,6 +14187,7 @@ function clearUnitCommands(m) {
   m.cmdLock = null;
   m.cmdHide = false;   // the double-tap wipe also releases a Hide (owner 2026-09-26)
   m.cmdHideAuto = false;
+  if (m.cmdTactic) setTactic(botCmdView(m), null, 0);   // (the ally tactic too — the shared clearCommands)
 }
 
 // Hide stance (owner 2026-09-26). Hide = "sight blocked first, fire only
@@ -14121,6 +14226,7 @@ function dioramaCommandTick() {
       continue;
     }
     if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;
+    if (m.cmdTactic) setTactic(botCmdView(m), null, 0);   // (no ally tactic stands in command mode — one called in the shooter view, the view then switched from the pause menu, ends here)
   }
   if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
 }

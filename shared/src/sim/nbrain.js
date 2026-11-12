@@ -34,10 +34,11 @@
 import { between } from './math.js';
 import { segmentHitsObstacle, groundHeightAt, walkFloorTo, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
-import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from './constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH, ALLY_TACTIC_PUSH } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick, silhouetteSeenFrom } from './sdbrain.js';
 import { hitStunMoveScale } from './movement.js';
+import { tacticOf, tacticSettle } from './tactic.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -697,6 +698,12 @@ export function nbBrainTick(host) {
     if (!sdStepping) return 'step';
   } else if (me.stepUntil > 0) host.tickStep();
 
+  // THE ALLY TACTIC (tactic.js; b1105gq): what a classic player called to this bot teammate, read off its command entry — 'push'
+  // (FORWARD: the band below ALLY_TACTIC_PUSH nearer), 'hide' (BACK OFF: the Hide stance, further down) or none. Whenever it
+  // changed since the brain last looked — an order, a take-back, its time run out — a Maze route starts afresh (the re-commit
+  // below): it was planned to a firing spot inside the band as it stood. The Sudden Death brain takes no tactic.
+  const tacticChanged = tacticSettle(host.cmd ?? null, now);
+  const tactic = sd ? null : tacticOf(host.cmd ?? null, now);
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±7. The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
@@ -715,9 +722,12 @@ export function nbBrainTick(host) {
   const lockRange = (!sd && isShotgunUnit(opp?.unit) && !isShotgunUnit(unit))
     ? Math.max(ownLockRange, BOT_SHOTGUN_ENGAGE_RANGE)
     : ownLockRange;
-  const upperRange = lockRange + 7;
-  const optimalRange = Math.max(10, lockRange);
-  const lowerRange = Math.max(6, lockRange - 7);
+  // (the tactic's push: the band's middle ALLY_TACTIC_PUSH nearer — taken off after the shotgun rule above, so the call always
+  //  moves the unit in from where it stood; the lock range itself, the red lock's and the homing's, is not touched)
+  const bandMid = tactic === 'push' ? Math.max(10, lockRange - ALLY_TACTIC_PUSH) : lockRange;
+  const upperRange = bandMid + 7;
+  const optimalRange = Math.max(10, bandMid);
+  const lowerRange = Math.max(6, bandMid - 7);
   // === Behavior state machine: Defense > Maze > Engage > Pursue.
   // Each state has explicit time-bound exits — no latching. Replaces the
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
@@ -853,7 +863,9 @@ export function nbBrainTick(host) {
       cmdEntry.hideAuto = false;
     }
   }
-  const hideOrdered = cmdEntry ? !!cmdEntry.hide : !!me.botReloadHide;
+  // (the ally tactic's BACK OFF is this stance for as long as the call stands — tactic.js; the entry's own hide flag, the
+  //  commander's and the reload's, is not written by it, so the two never undo each other)
+  const hideOrdered = cmdEntry ? (!!cmdEntry.hide || tactic === 'hide') : !!me.botReloadHide;
   // COVER HIDE lifecycle (owner 2026-09-26/27 — see the constants note): a
   // long reload on a unit with a standing move order and no Hide stance; a
   // live Defense keeps its frames first, and a no-cover verdict holds the
@@ -1335,7 +1347,7 @@ export function nbBrainTick(host) {
     }
     return path;
   };
-  const navPlan = () => {
+  const navPlan = (afresh = false) => {   // (afresh: the band moved under the plan — the ally tactic, below — so a parked search is not carried on)
     // FIRST CHOICE: walk to a FIRING POSITION — the nearest reachable spot
     // that already sees the target from inside the band. This is what makes
     // a sniper cross the map to a sniping lane instead of to the enemy.
@@ -1358,7 +1370,7 @@ export function nbBrainTick(host) {
     //     (its parked open sets were ordered for the old spot), the old route standing in meanwhile.
     const prev = host.navGet();
     const moved = !!(prev && Math.hypot(opp.pos.x - prev.gx, opp.pos.z - prev.gz) > 12);
-    const cont = !!(prev && prev.pending && !moved);
+    const cont = !!(prev && prev.pending && !moved && !afresh);
     const inReach = dist <= upperRange * BOT_FIRING_SEARCH_REACH;
     let rec;
     if (cont) rec = prev;
@@ -1485,7 +1497,7 @@ export function nbBrainTick(host) {
   // them from re-treading the pinned spot).
   const escapeDue = me.botMazeEscapeUntil != null && now >= me.botMazeEscapeUntil;
   if (nextState === 'maze' && prevState === 'maze'
-      && (stuckTriggered || escapeDue || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
+      && (stuckTriggered || escapeDue || tacticChanged || (now - (me.botStateEnteredAt ?? now)) > 7000)) {   // (tacticChanged: the ally tactic moved the band — the route is planned again, to a spot inside the band as it stands now)
     if (escapeDue) me.botMazeEscapeUntil = null;
     me.botStateEnteredAt = now;
     // STATUE ESCAPE (kept): a FROZEN bot is body-pinched in a corner pocket
@@ -1498,7 +1510,7 @@ export function nbBrainTick(host) {
     // never take the back-out, so live routing gains no back-and-forth.
     const navPrev = host.navGet();
     const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
-    let planned = navPlan();
+    let planned = navPlan(tacticChanged);
     if (planned && frozenWp) {
       const fresh = host.navGet();
       // The follower's own advance rule: the waypoint it would steer to.

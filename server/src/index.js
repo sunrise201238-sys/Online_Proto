@@ -20,6 +20,10 @@ import {
   setStance,
   isHideOrdered,
   ensureCommands,
+  setAllyTactic,
+  tacticEcho,
+  ALLY_TACTIC_KINDS,
+  ALLY_TACTIC_MIN_INTERVAL_MS,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -111,6 +115,7 @@ function createLobby() {
       p4: { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' }
     },
     lastOrderAt: { p1: 0, p2: 0, p3: 0, p4: 0 },   // command-order rate limiter
+    lastTacticAt: { p1: 0, p2: 0, p3: 0, p4: 0 },  // the ally tactic's, per unit called (ally:tactic)
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
     startedAt: 0,
     endedAt: 0,
@@ -392,7 +397,10 @@ function emitSnapshotsFor(lobby) {
       if (teamOf(cs) !== team) continue;
       if ((lobby.match.fighters[cs]?.hp ?? 0) <= 0) continue;   // dead unit
       const cmd = getCommands(lobby.match, cs);
-      if (!cmd || (!cmd.move && !cmd.lockTargetId && !cmd.hide)) continue;
+      // (THE ALLY TACTIC, tactic.js; b1105gq: the call standing on a bot teammate — its kind and its end in this clock, for the
+      //  caller's HUD, which lights the standing one; like every order it reaches its own team alone)
+      const tactic = tacticEcho(cmd, lobby.match.now);
+      if (!cmd || (!cmd.move && !cmd.lockTargetId && !cmd.hide && !tactic)) continue;
       out[cs] = {
         move: cmd.move ? {
           x: cmd.move.x, z: cmd.move.z, y: cmd.move.y,
@@ -402,6 +410,7 @@ function emitSnapshotsFor(lobby) {
         lockTargetId: cmd.lockTargetId,
         hide: !!cmd.hide
       };
+      if (tactic) out[cs].tactic = tactic;
     }
     return out;
   };
@@ -718,6 +727,34 @@ io.on('connection', (socket) => {
     else if (data?.what === 'lock') setForceLock(ctx.lb.match, ctx.slot, null);
     else clearCommands(ctx.lb.match, ctx.slot);
     socket.emit('order:result', { kind: 'clear', ok: true });
+  });
+
+  // ---- THE ALLY TACTIC (shared tactic.js; PT b1105gq, user 2026-11-12) -------
+  // A CLASSIC player's call to the bot on their side: { slot, kind } — 'push' (FORWARD: the bot's range band 30 nearer) or
+  // 'hide' (BACK OFF: the Hide stance) for 10 s, null to take the standing one back. The page sends what the player meant
+  // (it knows which one it showed lit), so a call that ran out on the way is not set anew by its own take-back.
+  //   who   a seated player of this match who is not in command mode (a commander has real orders, and no such buttons);
+  //   whom  a slot of the same side that was a bot at the match's start and still is (startBotSlots — a seat left by a
+  //         player mid-match is not adopted, as with the orders);
+  //   when  the match running, not Sudden Death (that brain takes no tactic); two calls to one unit ALLY_TACTIC_MIN_INTERVAL_MS
+  //         apart at least — a call drops the bot's route, and a route is a search; a take-back is never held up.
+  // Nothing is answered: the standing call reaches the side with the next snapshot (commands[slot].tactic).
+  socket.on('ally:tactic', (data) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match || lb.suddenDeath) return;
+    const sender = lb.players.get(socket.id);
+    if (!SLOT_IDS.includes(sender) || !activeSlots(lb.mode).includes(sender) || lb.commandSlots.has(sender) || lb.botSlots.has(sender)) return;
+    const slot = data?.slot;
+    if (typeof slot !== 'string' || slot === sender || !activeSlots(lb.mode).includes(slot)
+      || teamOf(slot) !== teamOf(sender) || !lb.startBotSlots.has(slot) || !lb.botSlots.has(slot)) return;
+    const kind = data?.kind ?? null;
+    if (kind !== null && !ALLY_TACTIC_KINDS.includes(kind)) return;
+    if (kind !== null) {
+      const nowMs = Date.now();
+      if (nowMs - lb.lastTacticAt[slot] < ALLY_TACTIC_MIN_INTERVAL_MS) return;
+      lb.lastTacticAt[slot] = nowMs;
+    }
+    setAllyTactic(lb.match, slot, kind, lb.match.now || Date.now());   // (the match's own clock — the last tick's, which the brain and the echo read)
   });
 
   socket.on('match:configure', (cfg) => {

@@ -59,5 +59,6 @@ export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';
 export { nearestEnemyId, aimTargetOf } from './aim.js';   // (free pov, user 2026-10-30)
 export {
   setMoveOrder, setForceLock, setStance, isHideOrdered, clearCommands, clearMoveOrder, getCommands, ensureCommands,
-  commandTargetIdOf, tickCommandDriver
+  commandTargetIdOf, tickCommandDriver, setAllyTactic
 } from './command.js';
+export { ALLY_TACTIC_KINDS, tacticOf, tacticSettle, setTactic, tacticEcho } from './tactic.js';   // THE ALLY TACTIC (b1105gq)
