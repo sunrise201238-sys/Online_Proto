@@ -2286,6 +2286,7 @@ function updateUnitModelState(m, rig, dt, now) {
     else if (entry.cfg.fit === 'charge') rate *= entry.dur / (Math.max(100, m.unit?.chargeMs ?? 1000) / 1000);
     else if (entry.cfg.fit === 'cooldown') rate *= entry.dur / (Math.max(100, m.unit?.fireCooldownMs ?? 1000) / 1000);   // (one cycle across the fire cooldown, b1105cy)
     if (cine) rate = (entry.cfg.speed ?? 1) * cine.rate;   // (the finale: the clip at its own speed times the shot's rate, no fit)
+    const atEnd = !!cine && !!cine.end;   // (the finale's final-blow unit down itself: the clip's last frame at once and held — no blend into it, no motion)
     const prev = rig.currentAction;
     const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
     // THE WAY OUT OF A BORROWED CLIP (b1105ch, PT and 9.5, user 2026-11-08: "there is a sudden flick between the last moment of
@@ -2306,7 +2307,7 @@ function updateUnitModelState(m, rig, dt, now) {
       // The same looping clip under another key (walk / sprint / sprintShoot
       // share Move_Ing): keep its phase, only retime it — no rewind to frame 0.
       entry.action.setEffectiveTimeScale(rate).setEffectiveWeight(1);
-    } else if (fade > 0 && prev && prev !== entry.action) {
+    } else if (fade > 0 && prev && prev !== entry.action && !atEnd) {
       prev.fadeOut(fade);
       entry.action.reset().setEffectiveTimeScale(rate).setEffectiveWeight(1).fadeIn(fade).play();
     } else {
@@ -2315,6 +2316,7 @@ function updateUnitModelState(m, rig, dt, now) {
       // into a jump — cuts to its first frame; a fade-0 model always cuts)
       if (prev && prev !== entry.action) prev.stop();
       entry.action.reset().setEffectiveTimeScale(rate).setEffectiveWeight(1).play();
+      if (atEnd) { entry.action.time = entry.dur; rig.poseBlend = null; }   // (a once clip clamps there on the mixer's update just below)
     }
     rig.current = want;
     rig.currentAction = entry.action;
@@ -7607,7 +7609,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gf 11-12';
+const CLIENT_BUILD_TAG = 'b1105gg 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11125,9 +11127,17 @@ function tickTrioRespawns() {
 // stands in its way where neither side of its arc is clear, b1105gd) and holds that; a tap or a key press after FINALE.skipArmMs skips to the end page (a held
 // fire key or finger is no new press). Client-side only: online it reads what the last snapshot carried — the lethal hit's
 // shooter (connection.js getLastKill), every unit's HP — and sends nothing, so it costs the match no lag.
+// EVERY UNIT DOWN (b1105gg; user 2026-11-12: "Currently when all units die at the ending, the camera skips the winner side
+// take. Make it the camera still do the take on winner, and use the last frame of the death motion for winner. The winner
+// side camera take duration is same as the normal version, just that the winner is a fixed defeated visual as well."): with
+// every unit of the match down — a double knockout, or the final blow's round still in the air when its shooter fell — the
+// take and shot 2 run as ever, their lengths the same, on the final blow's unit as it lies: its death motion's last frame,
+// held from the finale's first (finale.killerDown). Down with a teammate still standing (its side won) there is no shot 2,
+// as first settled.
 // Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
 // its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
-// (b1105gf) — less the site's photo mode, which this tree does not carry.
+// (b1105gf) — less the site's photo mode, which this tree does not carry; b1105gg (shot 2 turned 30° round to the unit's
+// right, EVERY UNIT DOWN) the same day (user: "Update to 9.7.").
 const FINALE = {
   // the last killed unit's death motion at 0.6 of its speed (b1105gf; 0.5 as first asked, then, user 2026-11-12: "Im thinking
   // playing the death motion in 0.5 times speed is too slow, make it 0.6 times."): shot 1 lasts the motion's length over this
@@ -11137,9 +11147,14 @@ const FINALE = {
   // centre plus modelYOffset — 4.8 above the feet on level ground, where a unit is 6.4 tall — so shot 1 looks at the chest
   // from 12.8 up (b1105gc: the b1105gb note put the root at 2.45, the body's centre; the numbers were tuned by eye and stay)
   shot1: { dist: 12, up: 8, lookUp: -0.8, fov: 50, yaws: [35, -35, 70, -70, 0, 110, -110, 180] },
-  // shot 2: the final blow's unit from the front, the camera a little above its head (8.0 up) looking at its face, the
-  // whole body in the frame
-  shot2: { dist: 13, up: 3.2, lookUp: 0.75, fov: 50, yaws: [0, 20, -20, 40, -40, 65, -65, 90, -90, 180] },
+  // shot 2: the final blow's unit from its front turned 30° round to its right side (b1105gg; user 2026-11-12: "Make the
+  // camera angle of the winner camera rotate 30 degree to the left, so the winner unit can be seen better from its right
+  // side" — the camera's left as it faces the unit; a negative angle here is the unit's right), a little above its head
+  // (8.0 up) looking at its face, the whole body in the frame; blocked, the angles fan out from there, the right side
+  // first (straight from the front until then: 0, ±20, ±40, ±65, ±90, 180).
+  // `lookUpDown`: where it looks when that unit lies fallen (EVERY UNIT DOWN, above) — at the body on the floor, 1.5 over
+  // it, where the same camera aimed at a standing unit's face would leave the body on the frame's bottom edge
+  shot2: { dist: 13, up: 3.2, lookUp: 0.75, lookUpDown: -3.3, fov: 50, yaws: [-30, -50, -10, -70, 10, -95, 35, -120, 60, 150] },
   near: [1, 0.8, 0.6],
   // the hold on the fallen unit after its death motion, before the take to the winner (or, with no winner to show, the
   // end page): NONE since b1105gd, 0.5 s before — user 2026-11-11: "you can start the camera transition 0.3 sec earlier
@@ -11166,7 +11181,7 @@ const FINALE = {
   // 5 mm layers flickered into one another under the finale's low sweeps in the software renderer the previews ran on
   nearPlane: 1,
 };
-const finale = { active: false, shot: 0, victim: null, killer: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
+const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
 if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
 
 // the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
@@ -11183,10 +11198,12 @@ function finaleClipSeconds(m, key) {
   return e && e.dur > 0 ? e.dur / (e.cfg?.speed || 1) : 0;
 }
 // the pose a unit holds during the finale (updateUnitModelState): the fallen unit's death from its first frame in shot 1, the
-// final blow's unit its victory (the reload clip for now) from its first frame in shot 2, every other living unit at ease
+// final blow's unit its victory (the reload clip for now) from its first frame in shot 2 — or, down itself (EVERY UNIT
+// DOWN), its death motion's last frame from the finale's first to its last (`end`) —, every other living unit at ease
 function finalePoseFor(m) {
   if (!finale.active) return null;
   if (finale.shot === 1 && m === finale.victim) return { want: 'death', rate: FINALE.deathRate, token: `d${finale.tok}`, restart: true };
+  if (m === finale.killer && finale.killerDown) return { want: 'death', rate: 1, token: `x${finale.tok}`, restart: true, end: true };
   if (finale.shot === 2 && m === finale.killer) return { want: 'reload', rate: 1, token: `v${finale.tok}`, restart: true };
   if ((m?.state?.hp ?? 0) > 0) return { want: 'stand', rate: 1, token: 'stand', restart: false };
   return null;
@@ -11268,11 +11285,13 @@ function pickFinaleArc(A, B, d) {
 }
 const finaleMoveSeconds = (d) => { const mv = FINALE.move; return mv.minS + (mv.maxS - mv.minS) * Math.max(0, Math.min(1, (d - mv.nearD) / (mv.farD - mv.nearD))); };
 // shot 1's time is up and the winner stands: the take begins where the camera is. False only with a unit gone (the caller cuts).
+// shot 2's numbers for the unit it shows: standing, as they are; lying fallen, the look at the body (lookUpDown)
+const finaleShot2Cfg = () => (finale.killerDown ? { ...FINALE.shot2, lookUp: FINALE.shot2.lookUpDown } : FINALE.shot2);
 function startFinaleMove(now) {
   const V = finale.victim, K = finale.killer;
   if (!V?.root || !K?.root) return false;
   const A = { cam: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, look: { x: V.root.position.x, y: V.root.position.y + FINALE.shot1.lookUp, z: V.root.position.z }, fov: FINALE.shot1.fov };
-  const B = finaleCameraPose(K, FINALE.shot2);
+  const B = finaleCameraPose(K, finaleShot2Cfg());
   const d = Math.hypot(K.root.position.x - V.root.position.x, K.root.position.z - V.root.position.z);
   finale.move = { S: pickFinaleArc(A, B, d), t0: now, ms: finaleMoveSeconds(d) * 1000, d };
   return true;
@@ -11299,7 +11318,12 @@ function startFinale({ victim, killer = null, onDone }) {
   const now = performance.now();
   finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now;
   finale.victim = victim;
-  finale.killer = killer && killer !== victim && killer.root && (killer.state?.hp ?? 0) > 0 ? killer : null;   // (dead, or none: no shot 2)
+  // shot 2's unit: the final blow's, standing — or down too with EVERY UNIT of the match down, shown as it lies (b1105gg);
+  // down with a teammate still standing, or none: no shot 2
+  const kHere = !!(killer && killer !== victim && killer.root), kUp = kHere && (killer.state?.hp ?? 0) > 0;
+  const allDown = getAllFighters().every((m) => !m || (m.state?.hp ?? 0) <= 0);
+  finale.killer = kHere && (kUp || allDown) ? killer : null;
+  finale.killerDown = !!finale.killer && !kUp;
   const d = finaleClipSeconds(victim, 'death');
   finale.dur1 = (d > 0 ? d / FINALE.deathRate : FINALE.fallbackDeathS) + FINALE.holdAfterDeathS;
   const v = finale.killer ? finaleClipSeconds(finale.killer, 'reload') : 0;
@@ -11338,7 +11362,7 @@ function startFinale({ victim, killer = null, onDone }) {
 function finaleShot(n, now, pose = null) {
   finale.shot = n; finale.shotT0 = now;
   finale.focus = n === 1 ? finale.victim : finale.killer;
-  applyFinalePose(pose ?? finaleCameraPose(finale.focus, n === 1 ? FINALE.shot1 : FINALE.shot2));
+  applyFinalePose(pose ?? finaleCameraPose(finale.focus, n === 1 ? FINALE.shot1 : finaleShot2Cfg()));
 }
 // every frame of the finale (animate, offline and online): the shots' clock and the take between them, the skip hint, the
 // wall fade on the unit in view
