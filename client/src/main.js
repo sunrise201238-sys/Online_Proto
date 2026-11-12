@@ -1963,9 +1963,7 @@ const UNIT_MODELS = {
   // the reload): her file has no Move_Jump, so the borrowed jump (Saori's) and the borrowed dodge (Subaru's Move_Jump, which is her jump and
   // her dodge, subaru_dodge_clip.json) pose the rest from her Kneel_Attack_Start, as Fubuki's jump does; `cooldown`: her 0.75 s fire cooldown's
   // clip (updateUnitModelState), over walking and standing, cut by a sprint, a jump or a dodge (user: "not shown during sprint/jump/dodge")
-  // (b1105gl, user 2026-11-12: "For Iori specifically, show her winning camera in normal speed." — `victoryRate`: a model's own rate for
-  // its victory motion in the finale's shot 2, in place of FINALE.victoryRate; hers 1, the clip at its own speed. finaleVictoryRate)
-  iori: { file: 'models/iori', height: UNIT_SPRITE_HEIGHT, victoryRate: 1, clips: { ...MODEL_CLIPS_DEFAULT,
+  iori: { file: 'models/iori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true },
     cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
@@ -2270,8 +2268,9 @@ function updateUnitModelState(m, rig, dt, now) {
     rig.motionPose = null;
   }
   // THE FINALE (PT b1105gb): its shots pose the units (finalePoseFor) — the fallen unit's death from its first frame slowed
-  // (FINALE.deathRate), the final blow's unit its victory (the reload clip for now) from its first frame slowed too (finaleVictoryRate, b1105gk), the rest at ease
-  const cine = finalePoseFor(m);
+  // (FINALE.deathRate), the final blow's unit its victory (the reload clip for now) from its first frame at its own speed once shot 2's
+  // opening hold is over (FINALE.holdBeforeVictoryS, b1105gu), the rest at ease
+  const cine = finalePoseFor(m, now);
   if (cine) want = rig.actions[cine.want] ? cine.want : 'stand';
   const cineRestart = !!cine && !!cine.restart && rig.cineToken !== cine.token;
   if (cine) rig.cineToken = cine.token;
@@ -7916,7 +7915,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gt 11-12';
+const CLIENT_BUILD_TAG = 'b1105gu 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11468,26 +11467,29 @@ function tickTrioRespawns() {
 // .finale-call): K.O. over the fallen unit, FINAL BLOW over the final blow's unit (lying too, with every unit down), WINNER
 // over the roster unit standing in its place. It comes in with its shot and leaves as the take starts; the match is over
 // by then and frozen, so it costs play nothing.
-// THE VICTORY SLOWED (b1105gk; user 2026-11-12: "play the winner reload motion in 0.6 times speed."): the victory motion runs
-// at FINALE.victoryRate, as the death motion runs at deathRate, and shot 2 lasts the motion's length over that rate and its
-// hold — 3.1 s (Marina's reload, 1.5 s) to 5.3 s (Kurumi's, 2.8 s), where it was 2.1 to 3.4. With EVERY UNIT DOWN shot 2
-// keeps the normal ending's length, as asked for it, so it is that much longer too; the unit lies still through it.
-// A model may name its own rate (UNIT_MODELS `victoryRate`, finaleVictoryRate): Iori's is 1 (b1105gl; user 2026-11-12: "For
-// Iori specifically, show her winning camera in normal speed.") — her motion at its own speed, her shot 2 3.1 s as before b1105gk.
+// THE VICTORY'S TIMING (b1105gu; user 2026-11-12, told how shot 2's length was worked out: "Make it as below universally,
+// including iori. starting 0.6 秒 + normal speed reload motion + ending 0.6 秒"): shot 2 opens on its unit standing at ease
+// for FINALE.holdBeforeVictoryS, as it stood through the take; then the victory motion plays once from its first frame at its
+// own speed (FINALE.victoryRate, 1); then its last frame is held for holdAfterVictoryS. Every unit by the one rule: 2.7 s
+// (Marina's reload, 1.5 s) to 4.0 s (Kurumi's, 2.8 s). Until then the motion began the frame the camera arrived and ran at 0.6
+// of its speed (b1105gk; user 2026-11-12: "play the winner reload motion in 0.6 times speed."), Iori's alone at its own
+// (b1105gl; user: "For Iori specifically, show her winning camera in normal speed." — a model's own `victoryRate`, gone with
+// her exception), and shot 2 lasted 3.1 to 5.3 s. With EVERY UNIT DOWN shot 2 keeps the normal ending's length, as asked for
+// it — the two holds and the motion's length — and the unit lies still through it.
 // Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
 // its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
 // (b1105gf) — less the site's photo mode, which this tree does not carry; b1105gg (shot 2 turned 30° round to the unit's
 // right, EVERY UNIT DOWN) the same day (user: "Update to 9.7."); b1105gh (THE NEXT ROSTER UNIT, THE CALL) and b1105gi (THE
-// VICTORY ONCE, updateUnitModelState) at b1105gj (user: "Update cameras and Town to 9.7."); b1105gk (THE VICTORY SLOWED) and
-// b1105gl (Iori's own rate) at b1105gl (user: "Then update to 9.7.").
+// VICTORY ONCE, updateUnitModelState) at b1105gj (user: "Update cameras and Town to 9.7."); b1105gk (the victory at 0.6 of its
+// speed) and b1105gl (Iori's own rate) at b1105gl (user: "Then update to 9.7."), both replaced by b1105gu (THE VICTORY'S TIMING)
+// the same day (user: "PT and 9.7").
 const FINALE = {
   // the last killed unit's death motion at 0.6 of its speed (b1105gf; 0.5 as first asked, then, user 2026-11-12: "Im thinking
   // playing the death motion in 0.5 times speed is too slow, make it 0.6 times."): shot 1 lasts the motion's length over this
   deathRate: 0.6,
-  // the final blow's unit's victory motion (its reload clip for now) at 0.6 of its speed too (b1105gk, THE VICTORY SLOWED above;
-  // at its own speed until then, as first asked): shot 2 lasts the motion's length over this, and holdAfterVictoryS more.
-  // The rate of every model that names none of its own (UNIT_MODELS victoryRate: Iori's 1, b1105gl)
-  victoryRate: 0.6,
+  // the final blow's unit's victory motion (its reload clip for now) at its own speed (b1105gu, THE VICTORY'S TIMING above; 0.6
+  // of it from b1105gk until then): shot 2 lasts holdBeforeVictoryS, the motion's length over this, and holdAfterVictoryS.
+  victoryRate: 1,
   // shot 1: the camera `dist` out along the fallen unit's facing turned `yaws` degrees (the first whose line to the unit is
   // clear; then again nearer, `near`), `up` above the unit's root, looking at `lookUp` above it. The root is the body's
   // centre plus modelYOffset — 4.8 above the feet on level ground, where a unit is 6.4 tall — so shot 1 looks at the chest
@@ -11508,7 +11510,9 @@ const FINALE = {
   // end page): NONE since b1105gd, 0.5 s before — user 2026-11-11: "you can start the camera transition 0.3 sec earlier
   // universally; the death motion takes a bit too much time at its end anyway", then, told of the hold: "there was a 停留?
   // no need that." The take begins the frame the motion ends.
-  holdAfterDeathS: 0, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
+  // The holds round the victory motion (b1105gu): `holdBeforeVictoryS` on the unit standing, from the frame the camera
+  // arrives; `holdAfterVictoryS` on the motion's last frame.
+  holdAfterDeathS: 0, holdBeforeVictoryS: 0.6, holdAfterVictoryS: 0.6, victoryMaxS: 4.5, fallbackDeathS: 2.0, fallbackVictoryS: 2.0,
   skipArmMs: 500,
   // THE ONE TAKE between the two shots (b1105gc; user 2026-11-11: "between the two characters the camera taken, can you zoom
   // out from the defeated one and zoom in to the winning one like it one take? the transition should be done in 0.3 to 1 sec
@@ -11552,20 +11556,16 @@ function finaleClipSeconds(m, key) {
   const e = m?.modelHolder?.userData?.modelRig?.actions?.[key];
   return e && e.dur > 0 ? e.dur / (e.cfg?.speed || 1) : 0;
 }
-// the rate a unit's victory motion runs at in shot 2: its model's own where it names one (UNIT_MODELS victoryRate, b1105gl), FINALE's
-function finaleVictoryRate(m) {
-  const own = UNIT_MODELS[m?.unit?.model]?.victoryRate;
-  return own > 0 ? own : FINALE.victoryRate;
-}
-// the pose a unit holds during the finale (updateUnitModelState): the fallen unit's death from its first frame in shot 1, the
-// final blow's unit its victory (the reload clip for now) from its first frame in shot 2, slowed (finaleVictoryRate), one pass held on its last frame
-// (`once`: a shell-by-shell gun's reload loops in play, b1105gi) — or, down itself (EVERY UNIT
+// the pose a unit holds during the finale (updateUnitModelState; `now`: the frame's clock, the shots'): the fallen unit's death
+// from its first frame in shot 1, the final blow's unit its victory (the reload clip for now) in shot 2 — at ease through the
+// opening hold (FINALE.holdBeforeVictoryS, b1105gu), then the motion from its first frame at FINALE.victoryRate, one pass held on
+// its last frame (`once`: a shell-by-shell gun's reload loops in play, b1105gi) — or, down itself (EVERY UNIT
 // DOWN), its death motion's last frame from the finale's first to its last (`end`) —, every other living unit at ease
-function finalePoseFor(m) {
+function finalePoseFor(m, now) {
   if (!finale.active) return null;
   if (finale.shot === 1 && m === finale.victim) return { want: 'death', rate: FINALE.deathRate, token: `d${finale.tok}`, restart: true };
   if (m === finale.killer && finale.killerDown) return { want: 'death', rate: 1, token: `x${finale.tok}`, restart: true, end: true };
-  if (finale.shot === 2 && m === finale.killer) return { want: 'reload', rate: finaleVictoryRate(m), token: `v${finale.tok}`, restart: true, once: true };
+  if (finale.shot === 2 && m === finale.killer && now - finale.shotT0 >= FINALE.holdBeforeVictoryS * 1000) return { want: 'reload', rate: FINALE.victoryRate, token: `v${finale.tok}`, restart: true, once: true };
   if ((m?.state?.hp ?? 0) > 0) return { want: 'stand', rate: 1, token: 'stand', restart: false };
   return null;
 }
@@ -11977,7 +11977,7 @@ function startFinale({ victim, killer = null, heir = false, onDone }) {
   const d = finaleClipSeconds(victim, 'death');
   finale.dur1 = (d > 0 ? d / FINALE.deathRate : FINALE.fallbackDeathS) + FINALE.holdAfterDeathS;
   const v = finale.killer ? finaleClipSeconds(finale.killer, 'reload') : 0;
-  finale.dur2 = finale.killer ? (v > 0 ? Math.min(FINALE.victoryMaxS, v) / finaleVictoryRate(finale.killer) : FINALE.fallbackVictoryS) + FINALE.holdAfterVictoryS : 0;   // (the clip slowed, b1105gk, by the unit's rate, b1105gl; victoryMaxS: the most of its own length waited for)
+  finale.dur2 = finale.killer ? FINALE.holdBeforeVictoryS + (v > 0 ? Math.min(FINALE.victoryMaxS, v) / FINALE.victoryRate : FINALE.fallbackVictoryS) + FINALE.holdAfterVictoryS : 0;   // (the opening hold, the clip at its rate, the closing hold, b1105gu; victoryMaxS: the most of its own length waited for)
   // the two units on show, SHOWN (b1105gc): play hides a unit the frame its HP reaches 0 (updateTransforms; online
   // mirrorFighterToMech). Offline the lethal hit lands after that in the match's last frame, so the fallen unit stood
   // shown; online it did only while match:end arrived with the last snapshot — a frame or more later (a late packet) and
@@ -12048,7 +12048,7 @@ function updateFinale(dt, now) {
   if (finale.hint && now - finale.t0 >= FINALE.skipArmMs) finale.hint.classList.add('on');
   if (finale.move) {
     // THE ONE TAKE: along its arc by the clock; at its end shot 2 begins on the arc's own last frame (the units keep shot
-    // 1's poses on the way — finalePoseFor — so the winner's motion starts as the camera arrives)
+    // 1's poses on the way — finalePoseFor — so the winner stands as the camera arrives; its motion starts holdBeforeVictoryS on, b1105gu)
     const mv = finale.move, t = (now - mv.t0) / mv.ms;
     if (t >= 1) { finale.move = null; finaleShot(2, now, mv.S.B); }
     else {
