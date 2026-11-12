@@ -102,7 +102,7 @@ export function createConnection() {
     latestSnapshot = null;
     prevSnapshot = null;
     lastMatchEnd = null;
-    lastKill = null;
+    lastKill = null; kills.length = 0;
     matchStart = payload ?? null;
     log('match:start', payload);
   });
@@ -114,8 +114,13 @@ export function createConnection() {
   });
 
   const hitQueue = [];
-  // THE FINALE (PT b1105gb): the last lethal hit seen, its shooter and its target — a knockout's final blow
+  // THE FINALE (PT b1105gb): the last lethal hit seen, its shooter and its target — a knockout's final blow.
+  // (b1105gh) And the lethal hits before it, the last eight, each with the moment it arrived: where a Trio slot's unit fell in
+  // the match's last tick the server has refilled the slot before it ends the match, so the LAST lethal hit can be on a
+  // unit that stands again — the finale takes the last one whose target is still down (main.js startOnlineFinale). Read
+  // off the snapshots the page gets anyway: nothing more is sent or asked for.
   let lastKill = null;
+  const kills = [];
   socket.on('match:snapshot', (payload) => {
     if (!payload) return;
     // The server sends no unit tables (2026-10-25, a quarter of every snapshot): each fighter carries its unitKey, and the
@@ -125,7 +130,7 @@ export function createConnection() {
     // two can land between frames, so the events of the one skipped were lost; the loop drains this (drainHits).
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
     if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
-    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit' && ev.targetHp != null && ev.targetHp <= 0) lastKill = { ownerId: ev.ownerId, targetId: ev.targetId };
+    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit' && ev.targetHp != null && ev.targetHp <= 0) { lastKill = { ownerId: ev.ownerId, targetId: ev.targetId, at: performance.now() }; kills.push(lastKill); if (kills.length > 8) kills.shift(); }
     prevSnapshot = latestSnapshot;
     latestSnapshot = payload;
     lastSnapshotAt = Date.now();
@@ -161,6 +166,7 @@ export function createConnection() {
     getMatchStart: () => matchStart,
     getLastMatchEnd: () => lastMatchEnd,
     getLastKill: () => lastKill,   // (the finale's final blow, PT b1105gb)
+    getKills: () => kills,         // (the lethal hits before it too, oldest first, b1105gh)
     getLastError: () => lastError,
     getAttempts: () => attempts,
     getWaitingSince: () => waitingSince,   // 0 when connected

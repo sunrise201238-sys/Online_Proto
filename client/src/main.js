@@ -2124,7 +2124,7 @@ function makeUnitModel(unitData, isOwnUnit) {
       // (a shell-by-shell gun — autoReload — loops its reload clip, one pass per round; a magazine gun plays it once)
       const once = cfg.once && !(key === 'reload' && unitData.autoReload);
       if (once) { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
-      rig.actions[key] = { action, cfg, dur: clip.duration };
+      rig.actions[key] = { action, cfg, dur: clip.duration, loops: !!cfg.once && !once };   // (`loops`: a once clip that loops in play — the finale's victory plays it once, b1105gi)
     }
     rig.ready = true;
   });
@@ -2287,6 +2287,15 @@ function updateUnitModelState(m, rig, dt, now) {
     else if (entry.cfg.fit === 'cooldown') rate *= entry.dur / (Math.max(100, m.unit?.fireCooldownMs ?? 1000) / 1000);   // (one cycle across the fire cooldown, b1105cy)
     if (cine) rate = (entry.cfg.speed ?? 1) * cine.rate;   // (the finale: the clip at its own speed times the shot's rate, no fit)
     const atEnd = !!cine && !!cine.end;   // (the finale's final-blow unit down itself: the clip's last frame at once and held — no blend into it, no motion)
+    // THE VICTORY ONCE (b1105gi; user 2026-11-12: "When the winner camera is on auto reload unit (haruka, hoshino, aris), they would
+    // do their reload motion repeatedly. Make them only do once."): a shell-by-shell gun loops its reload clip in play, one pass a
+    // round (`loops`, where the rig is built), and as the finale's victory it went round and round through shot 2. There (the
+    // pose's `once`) it plays one pass from its first frame and holds its last, as a magazine gun's does — also where the unit
+    // was mid-reload when the match ended, its clip already running. The loop is back the next time play starts the clip.
+    if (entry.loops) {
+      const one = !!cine && !!cine.once;
+      if ((entry.action.loop === THREE.LoopOnce) !== one) { entry.action.setLoop(one ? THREE.LoopOnce : THREE.LoopRepeat, one ? 1 : Infinity); entry.action.clampWhenFinished = one; }
+    }
     const prev = rig.currentAction;
     const fade = rig.cfg.fade ?? MODEL_FADE_S;   // (per model: 0 cuts between clips instead of blending)
     // THE WAY OUT OF A BORROWED CLIP (b1105ch, PT and 9.5, user 2026-11-08: "there is a sudden flick between the last moment of
@@ -7469,6 +7478,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.padCharge = fighter.padCharge; s.padChargeAt = fighter.padChargeAt; s.padMoves = fighter.padMoves;   // the transporters (pads.js): the own charge's ring (server clock), the move's count
   s.aimYaw = fighter.aimYaw; s.aimPitch = fighter.aimPitch;   // (its crosshair, for a spectator's screen — present only while it free-aims)
   s.roster = fighter.roster ?? null;                     // Trio: ordered 3-unit roster (null in Duel)
+  if (s.rosterIdx != null && (fighter.rosterIdx ?? 0) !== s.rosterIdx) mech.bornAt = performance.now();   // (THE FINALE's next roster unit, b1105gh: the roster's cursor moved on a mech that stays — the same unit again, which no rebuild marks)
   s.rosterIdx = fighter.rosterIdx ?? 0;                  // Trio: index of the unit currently fielded
   // sniperChargeTarget needs to be a truthy reference for HUD/glint code;
   // anything works since the offline code only checks truthiness.
@@ -7609,7 +7619,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gg 11-12';
+const CLIENT_BUILD_TAG = 'b1105gj 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9042,6 +9052,7 @@ function rebuildOnlineMechForSlot(slotName, unitKey) {
   const fresh = takePrebuiltMech(slotName, unitKey)
     ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
   fresh.unitKey = unitKey;
+  fresh.bornAt = performance.now();   // (THE FINALE's next roster unit, b1105gh: FINALE.heirWindowMs)
   fresh.state.team = old.state.team;
   fresh.body.position.copy(old.body.position);   // one-frame placeholder; the mirror overwrites
   state[slotName] = fresh;
@@ -11038,6 +11049,7 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
   if (slotName === 'enemy' || slotName === 'enemy2' || slotName === 'ally' || (slotName === 'player' && state.spectatorActive)) fresh.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server's Trio respawn)
   state[slotName] = fresh;
+  old.heir = fresh;   // (THE FINALE's next roster unit, b1105gh: a round the fallen unit left in the air still names it as its owner)
 
   // Re-home anything that rode on the old mech's root, and repoint the
   // player's lock if it was aiming at the replaced unit. In-flight
@@ -11134,10 +11146,32 @@ function tickTrioRespawns() {
 // take and shot 2 run as ever, their lengths the same, on the final blow's unit as it lies: its death motion's last frame,
 // held from the finale's first (finale.killerDown). Down with a teammate still standing (its side won) there is no shot 2,
 // as first settled.
+// THE NEXT ROSTER UNIT (b1105gh; user 2026-11-12: "when a team is eliminated, but the enemy unit who kills it also dies, and
+// there's another roster spawning, there's no winner camera. suggestions without making online/offline games more lag?"):
+// in Trio the unit that fired the final blow can be down by the time it lands — the same frame, or its round still in the
+// air — and its slot holds its next roster unit, alive: the game refills a slot the frame its unit falls, offline
+// (tickTrioRespawns, before the win check) and on the server (before its end check). The final blow's unit was then a mech
+// no longer on the field, not every unit was down, and shot 2 was dropped (offline; online the slot's mech stood for it,
+// the fallen unit's own model where the last snapshot had not been drawn yet). Now the unit that STANDS IN THAT SLOT takes
+// shot 2 — the winning side's unit on the field, its victory motion as ever (finale.heir; the call over it reads WINNER,
+// since the blow was its predecessor's). Offline the fallen mech points at the one that replaced it (respawnSlotMech,
+// `heir`); online the last snapshot's roster swaps are drawn before the shots are set (startOnlineFinale), and a unit that
+// came on within FINALE.heirWindowMs of the lethal hit counts as standing in. And the knockout the finale opens on is the
+// last one whose unit still lies on the field: the last lethal hit of all can be the one on the unit just replaced
+// (shot 1 then looked at an empty floor offline, and online the finale did not run). No lag in it: the next unit is the
+// mech built at match load (takePrebuiltMech) that any respawn swaps in, and nothing is sent or asked of the server.
+// THE CALL (b1105gh; user 2026-11-12: "I want some visual HUD during the ending camera. Ask claude design to provide few
+// samples", then, of the design canvas's round 12 — the chips stay A, the call B, cinema bars C, a taped photo D —
+// "Option B."): one big word over each shot in the end page's title lettering — white, an ink outline, a hard drop in
+// the colour of the unit in view — and that unit's face, name and side word on a small chip under it (style.css
+// .finale-call): K.O. over the fallen unit, FINAL BLOW over the final blow's unit (lying too, with every unit down), WINNER
+// over the roster unit standing in its place. It comes in with its shot and leaves as the take starts; the match is over
+// by then and frozen, so it costs play nothing.
 // Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
 // its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
 // (b1105gf) — less the site's photo mode, which this tree does not carry; b1105gg (shot 2 turned 30° round to the unit's
-// right, EVERY UNIT DOWN) the same day (user: "Update to 9.7.").
+// right, EVERY UNIT DOWN) the same day (user: "Update to 9.7."); b1105gh (THE NEXT ROSTER UNIT, THE CALL) and b1105gi (THE
+// VICTORY ONCE, updateUnitModelState) at b1105gj (user: "Update cameras and Town to 9.7.").
 const FINALE = {
   // the last killed unit's death motion at 0.6 of its speed (b1105gf; 0.5 as first asked, then, user 2026-11-12: "Im thinking
   // playing the death motion in 0.5 times speed is too slow, make it 0.6 times."): shot 1 lasts the motion's length over this
@@ -11180,8 +11214,14 @@ const FINALE = {
   // the camera's near plane through the finale (0.1 in play; the command view's own 6 is left alone): at 0.1 the floor's
   // 5 mm layers flickered into one another under the finale's low sweeps in the software renderer the previews ran on
   nearPlane: 1,
+  // THE CALL's words (b1105gh, above): over the fallen unit, over the final blow's unit, over the roster unit that stands
+  // in its place. Two words are set a line each at a smaller size, one long word smaller still (style.css .finale-word).
+  call: { ko: 'K.O.', blow: 'FINAL BLOW', heir: 'WINNER' },
+  // online, how long after a slot's roster swap its new unit still counts as standing in for the one that fired (the
+  // lethal hit names a slot, not a unit): a round lives 2.2 s (the sim's PROJECTILE_TTL_S), and a snapshot can be late
+  heirWindowMs: 2500,
 };
-const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
+const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null };
 if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
 
 // the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
@@ -11198,13 +11238,14 @@ function finaleClipSeconds(m, key) {
   return e && e.dur > 0 ? e.dur / (e.cfg?.speed || 1) : 0;
 }
 // the pose a unit holds during the finale (updateUnitModelState): the fallen unit's death from its first frame in shot 1, the
-// final blow's unit its victory (the reload clip for now) from its first frame in shot 2 — or, down itself (EVERY UNIT
+// final blow's unit its victory (the reload clip for now) from its first frame in shot 2, one pass held on its last frame
+// (`once`: a shell-by-shell gun's reload loops in play, b1105gi) — or, down itself (EVERY UNIT
 // DOWN), its death motion's last frame from the finale's first to its last (`end`) —, every other living unit at ease
 function finalePoseFor(m) {
   if (!finale.active) return null;
   if (finale.shot === 1 && m === finale.victim) return { want: 'death', rate: FINALE.deathRate, token: `d${finale.tok}`, restart: true };
   if (m === finale.killer && finale.killerDown) return { want: 'death', rate: 1, token: `x${finale.tok}`, restart: true, end: true };
-  if (finale.shot === 2 && m === finale.killer) return { want: 'reload', rate: 1, token: `v${finale.tok}`, restart: true };
+  if (finale.shot === 2 && m === finale.killer) return { want: 'reload', rate: 1, token: `v${finale.tok}`, restart: true, once: true };
   if ((m?.state?.hp ?? 0) > 0) return { want: 'stand', rate: 1, token: 'stand', restart: false };
   return null;
 }
@@ -11294,6 +11335,7 @@ function startFinaleMove(now) {
   const B = finaleCameraPose(K, finaleShot2Cfg());
   const d = Math.hypot(K.root.position.x - V.root.position.x, K.root.position.z - V.root.position.z);
   finale.move = { S: pickFinaleArc(A, B, d), t0: now, ms: finaleMoveSeconds(d) * 1000, d };
+  if (finale.call) finale.call.className = 'finale-call off';   // (THE CALL leaves as the take starts)
   return true;
 }
 // the battle's leftovers out of the picture: the edge arrows, the lock, the hit X, the laser sights, the glints, the dash
@@ -11305,6 +11347,7 @@ function finaleHideBattle() {
   for (const m of getAllFighters()) {
     if (!m) continue;
     hide(m.laserSightVisual); hide(m.glintMesh); hide(m.chargedBeamVisual);
+    hide(m.immunityAura);                           // (the spawn glow of a roster unit that came on in its last three seconds, b1105gh: applyImmunityGlow's)
     for (const t of m.trail ?? []) hide(t?.mesh);   // (the dash puffs: their fade is updateTransforms')
     if (m.root) m.root.rotation.x = 0;              // (the last hit's stagger tilt, which updateTransforms would clear)
   }
@@ -11313,7 +11356,7 @@ function finaleHideBattle() {
   for (const d of state.dyingBulletTrails ?? []) hide(d?.trail);
   for (const bv of state.beamVisuals ?? []) hide(bv?.group);
 }
-function startFinale({ victim, killer = null, onDone }) {
+function startFinale({ victim, killer = null, heir = false, onDone }) {
   if (!victim?.root) { onDone?.(); return false; }
   const now = performance.now();
   finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now;
@@ -11324,6 +11367,7 @@ function startFinale({ victim, killer = null, onDone }) {
   const allDown = getAllFighters().every((m) => !m || (m.state?.hp ?? 0) <= 0);
   finale.killer = kHere && (kUp || allDown) ? killer : null;
   finale.killerDown = !!finale.killer && !kUp;
+  finale.heir = !!finale.killer && !!heir;   // (the roster unit standing in the final blow's slot, b1105gh)
   const d = finaleClipSeconds(victim, 'death');
   finale.dur1 = (d > 0 ? d / FINALE.deathRate : FINALE.fallbackDeathS) + FINALE.holdAfterDeathS;
   const v = finale.killer ? finaleClipSeconds(finale.killer, 'reload') : 0;
@@ -11343,6 +11387,9 @@ function startFinale({ victim, killer = null, onDone }) {
   finale.hint.className = 'finale-skip';
   finale.hint.textContent = 'TAP TO SKIP';
   document.body.appendChild(finale.hint);
+  finale.call = document.createElement('div');   // (THE CALL, b1105gh: filled by finaleShot)
+  finale.call.className = 'finale-call';
+  document.body.appendChild(finale.call);
   finale.onSkip = (e) => {
     if (!finale.active || (e.type === 'keydown' && e.repeat)) return;
     if (performance.now() - finale.t0 < FINALE.skipArmMs) return;
@@ -11359,8 +11406,29 @@ function startFinale({ victim, killer = null, onDone }) {
   finaleShot(1, now);
   return true;
 }
+// THE CALL (b1105gh, above): the word and the name chip over shot `n`'s unit — the colour its HP chip wears (the slot's own
+// online), the side word the chip shows (none for a spectator)
+const FINALE_ROLE_COLOURS = { player: 'var(--cyan)', ally: 'var(--lime)', enemy: 'var(--magenta)', enemy2: 'var(--orange)' };
+function finaleCall(n) {
+  const el = finale.call;
+  if (!el) return;
+  const m = n === 1 ? finale.victim : finale.killer;
+  if (!m?.unit) { el.className = 'finale-call'; return; }
+  const role = ['player', 'ally', 'enemy', 'enemy2'].find((r) => state[r] === m) ?? null;
+  const sid = state.online?.slotMap ? onlineServerIdOf(role) : null;
+  const noSide = !!state.spectatorActive || !!(state.online && state.online.myPlayerId === 'spectator');
+  const word = n === 1 ? FINALE.call.ko : finale.heir ? FINALE.call.heir : FINALE.call.blow;
+  el.style.setProperty('--c', (sid && SLOT_HUD_COLORS[sid]) || FINALE_ROLE_COLOURS[role] || '#ffffff');
+  const lines = word.split(' ');
+  el.innerHTML = `<span class="finale-word${lines.length > 1 ? ' two' : word.length > 4 ? ' long' : ''}">${lines.join('<br>')}</span>`
+    + `<span class="finale-who"><span class="chip-face">${chipFaceImg(m.unit)}</span><b>${m.unit.char || m.unit.name}</b><i>${noSide ? '' : (HUD_SIDE_WORD[role] || '')}</i></span>`;
+  el.className = 'finale-call';
+  void el.offsetWidth;   // (the pop starts over for shot 2)
+  el.className = 'finale-call on';
+}
 function finaleShot(n, now, pose = null) {
   finale.shot = n; finale.shotT0 = now;
+  finaleCall(n);
   finale.focus = n === 1 ? finale.victim : finale.killer;
   applyFinalePose(pose ?? finaleCameraPose(finale.focus, n === 1 ? FINALE.shot1 : finaleShot2Cfg()));
 }
@@ -11401,28 +11469,51 @@ function finishFinale(runDone) {
   window.removeEventListener('pointerdown', finale.onSkip, true);
   window.removeEventListener('keydown', finale.onSkip, true);
   finale.hint?.remove(); finale.hint = null;
+  finale.call?.remove(); finale.call = null;
   const done = finale.onDone; finale.onDone = null;
   if (runDone) done?.();
 }
-// offline: the match-deciding knockout (animate's win check) — the last lethal hit noted, its unit still down
+// offline: the match-deciding knockout (animate's win check) — the last lethal hit noted whose unit still lies on the field
+// (b1105gh: a unit whose slot has brought on its next roster unit since is gone from it — `heir`, respawnSlotMech — and
+// the last hit of all can be the one on it), and its shooter, or the roster unit that stands in the shooter's slot now
 function endWithFinale(win) {
   state.running = false;
   state.phase = 'finale';
   const log = state.killLog ?? [];
-  let kill = log.length ? log[log.length - 1] : null;
-  if (kill && (kill.victim?.state?.hp ?? 1) > 0) kill = null;
+  let kill = null;
+  for (let i = log.length - 1; i >= 0 && !kill; i -= 1) { const v = log[i].victim; if (v && !v.heir && (v.state?.hp ?? 1) <= 0) kill = log[i]; }
   const victim = kill?.victim ?? getAllFighters().filter((m) => m && (m.state?.hp ?? 1) <= 0).pop() ?? null;
-  startFinale({ victim, killer: kill?.killer ?? null, onDone: () => showEndMenu(win) });
+  let killer = kill?.killer ?? null, heir = false;
+  while (killer?.heir) { killer = killer.heir; heir = true; }
+  startFinale({ victim, killer, heir, onDone: () => showEndMenu(win) });
 }
-// online: match:end with a knockout (renderOnlineUi's 'ended'). The last snapshot's HP onto the mechs first — the frame that
-// turns the page over mirrors nothing, so the mechs can sit a tick behind (endRowUnits) — then the lethal hit the connection kept.
+// online: match:end with a knockout (renderOnlineUi's 'ended'). The last snapshot onto the mechs first — the frame that
+// turns the page over mirrors nothing, so the mechs can sit a tick behind (endRowUnits): its roster swaps (b1105gh: a slot
+// whose unit fell in the last tick holds its next unit in that snapshot already — the mech built at match load is swapped in
+// and stood where the snapshot has it, as runOnlineMatchFrame would have; a roster that fields the same unit again keeps
+// its mech and is stood there all the same) and every unit's HP. Then the lethal hits the
+// connection kept: the last one whose target is still down, its shooter's slot — and whether the unit in that slot came on
+// after the shot (FINALE.heirWindowMs).
 function startOnlineFinale(conn, onDone) {
   const snap = conn.getLatestSnapshot?.();
+  const sm = state.online?.slotMap;
+  if (snap?.fighters && sm) for (const [slotName, id] of [['player', sm.cameraId], ['ally', sm.allyId], ['enemy', sm.enemyId], ['enemy2', sm.enemy2Id]]) {
+    const f = id ? snap.fighters[id] : null, was = state[slotName];
+    if (!was || !f || !was.unitKey || !f.unitKey) continue;
+    const swapped = was.unitKey !== f.unitKey, turned = (f.rosterIdx ?? 0) !== (was.state.rosterIdx ?? 0);   // (the same unit again turns the cursor alone)
+    if (!swapped && !turned) continue;
+    if (swapped) rebuildOnlineMechForSlot(slotName, f.unitKey);
+    mirrorFighterToMech(f, state[slotName]);
+  }
   if (snap?.fighters) for (const id in snap.fighters) { const mech = onlineMechOfId(id); if (mech && snap.fighters[id]) mech.state.hp = snap.fighters[id].hp; }
-  const k = conn.getLastKill?.();
+  const kills = conn.getKills?.() ?? [];
+  let k = null;
+  for (let i = kills.length - 1; i >= 0 && !k; i -= 1) { const v = onlineMechOfId(kills[i].targetId); if (v && (v.state?.hp ?? 1) <= 0) k = kills[i]; }
   const victim = k ? onlineMechOfId(k.targetId) : null;
-  if (!victim || (victim.state?.hp ?? 1) > 0) return false;
-  return startFinale({ victim, killer: onlineMechOfId(k.ownerId), onDone });
+  if (!victim) return false;
+  const killer = onlineMechOfId(k.ownerId);
+  const heir = !!killer && killer.bornAt != null && k.at - killer.bornAt < FINALE.heirWindowMs;
+  return startFinale({ victim, killer, heir, onDone });
 }
 
 function showEndMenu(win) {
