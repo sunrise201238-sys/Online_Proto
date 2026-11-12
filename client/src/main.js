@@ -3003,9 +3003,11 @@ function teardownHud() {
 //   inert         in spectator mode — the Practice toggle, or an online spectator: "shown but not responding";
 //   the player's own unit down, the teammate fighting on: the calls still work — the side is still the player's.
 // The two pop-ups close on a pick, on a second tap of the button, or TACTIC_HUD.closeMs after they opened.
-// Where it sits (style.css .tac): at the fullscreen button's size; on a narrow screen right of the fullscreen button, under
-// the left chips (b1105gs, user 2026-11-12: "move the command button to the right of full screen button, make Command
-// Button's size same as FC button"); on a wider one by the stick.
+// Where it sits (style.css .tac): at the fullscreen button's size, by the fullscreen button's place — on a narrow screen
+// right of it, under the left chips (b1105gs, user 2026-11-12: "move the command button to the right of full screen button,
+// make Command Button's size same as FC button"); on a big screen next to it at the top; on a small wide one, where it has
+// no room beside it, at its mirror place right of PAUSE (b1105gt: "for big screen, place it next to the FC button", "for
+// small screen, place it at the symmetrical position at the right side of pause as the FC button is on the left").
 // Offline the call is set on the teammate's mech (cmdTactic — botCmdView hands it to the brain); online it is sent
 // (connection.js sendAllyTactic) and what stands comes back with the side's snapshots (syncOnlineCommands), so the lit
 // pop-up is the server's word. The page sends what the player meant — a kind, or null for the take-back.
@@ -7914,7 +7916,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gs 11-12';
+const CLIENT_BUILD_TAG = 'b1105gt 11-12';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
