@@ -84,7 +84,7 @@ const firstDiff = (a, b) => {
 };
 
 const SCENARIOS = [
-  { mapKey: 'arena1', p1: 'unit1', p2: 'unit2', hp: 1, seed: 11, ticks: 4000 },
+  { mapKey: 'arena1', p1: 'unit1', p2: 'unit2', hp: 1, seed: 11, ticks: 4000, immuneMs: 3000 },   // (immuneMs: the opening's three immune seconds, the sim's own until b1105gz and set here since — without them the two 1 HP bots, 48 apart in plain sight, end the match in 23 ticks)
   { mapKey: 'factory', p1: 'unit4', p2: 'unit5', hp: 150, seed: 22, ticks: 2500 },
   { mapKey: 'airport', p1: 'unit1', p2: 'unit7', hp: 1, seed: 33, ticks: 4000 },
   { mapKey: 'station', p1: 'unit2', p2: 'unit4', hp: 150, seed: 44, ticks: 2500 },
@@ -97,7 +97,7 @@ for (const sc of SCENARIOS) {
   test(`sdbrain equals the frozen brain: ${sc.mapKey} ${sc.p1} vs ${sc.p2} hp ${sc.hp} seed ${sc.seed}`, () => {
     const make = () => {
       const m = createMatchState({ mapKey: sc.mapKey, p1UnitKey: sc.p1, p2UnitKey: sc.p2, startTime: 1000 });
-      for (const id of ['p1', 'p2']) { m.fighters[id].botSD = true; m.fighters[id].hp = sc.hp; }
+      for (const id of ['p1', 'p2']) { m.fighters[id].botSD = true; m.fighters[id].hp = sc.hp; if (sc.immuneMs) m.fighters[id].invulnerableUntil = 1000 + sc.immuneMs; }
       return m;
     };
     const mA = make(), mB = make();

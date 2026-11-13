@@ -412,6 +412,46 @@ body.pseudo-fullscreen #app {
   height: 100dvh;
 }
 
+/* ---- THE LOADING SCREEN (b1105hd, main.js showLoadingScreen; the design canvas's round 15, sample A, the user's pick, "from
+   right to left at first", the pair with a white rim): the ink ground up at once, the content in after 150 ms (LOADING
+   showAfterMs / inMs: the same numbers there). Sizes in em — 1em is 16 px on a phone held sideways (844 x 390), as the
+   intro's band — and the flight's reach in the screen's own width and height. Every motion is transform or opacity: it
+   runs on while the page's own work holds the main thread. ---- */
+.ld { position: absolute; inset: 0; z-index: 96; overflow: hidden; background: var(--ink); color: #ffffff; font-family: var(--font-ui); font-size: clamp(9px, min(1.896vw, 4.103vh), 30px); pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ld-on #fullscreen-btn { display: none !important; }
+@media (orientation: portrait) { .ld { font-size: clamp(9px, min(3.6vw, 2.2vh), 30px); } }   /* (a screen held upright: sized by its width, or everything is a third of its size) */
+.ld-in { position: absolute; inset: 0; opacity: 0; animation: ld-in 140ms linear 150ms forwards; }
+.ld-bl { position: absolute; border-radius: 50%; background: #22223C; }
+.ld-sp { position: absolute; width: 0.375em; height: 0.375em; border-radius: 50%; }
+.ld-nm { z-index: 2; position: absolute; left: calc(2.5em + env(safe-area-inset-left)); bottom: calc(5.25em + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-start; gap: 0.625em; transform: rotate(-4deg); transform-origin: 0 100%; }
+.ld-tm { display: inline-flex; align-items: center; gap: 0.4615em; height: 1.846em; padding: 0 0.846em 0 0.538em; box-sizing: border-box; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 0.154em solid var(--ink); box-shadow: 0.154em 0.154em 0 var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 0.8125em; line-height: 1; letter-spacing: 0.04em; white-space: nowrap; }
+.ld-tm u { flex: 0 0 auto; width: 0.769em; height: 0.769em; box-sizing: border-box; border-radius: 50%; background: var(--cyan); border: 0.154em solid var(--ink); text-decoration: none; }
+.ld-name { display: block; font-family: var(--font-display); font-weight: 400; font-size: 5.25em; line-height: 0.9; letter-spacing: 0.01em; white-space: nowrap; color: #ffffff; text-shadow: 0.0476em 0.0000em 0 var(--ink),0.0440em 0.0182em 0 var(--ink),0.0337em 0.0337em 0 var(--ink),0.0182em 0.0440em 0 var(--ink),0.0000em 0.0476em 0 var(--ink),-0.0182em 0.0440em 0 var(--ink),-0.0337em 0.0337em 0 var(--ink),-0.0440em 0.0182em 0 var(--ink),-0.0476em 0.0000em 0 var(--ink),-0.0440em -0.0182em 0 var(--ink),-0.0337em -0.0337em 0 var(--ink),-0.0182em -0.0440em 0 var(--ink),-0.0000em -0.0476em 0 var(--ink),0.0182em -0.0440em 0 var(--ink),0.0337em -0.0337em 0 var(--ink),0.0440em -0.0182em 0 var(--ink), 0.0952em 0.0952em 0 var(--cyan); }
+.ld-now { z-index: 2; position: absolute; left: calc(2.625em + env(safe-area-inset-left)); bottom: calc(3.125em + env(safe-area-inset-bottom)); display: flex; align-items: center; font-size: 0.78em; font-weight: 800; letter-spacing: 0.16em; white-space: nowrap; color: rgba(255, 255, 255, 0.78); }
+.ld-dots { display: inline-flex; gap: 0.4em; margin-left: 0.64em; color: var(--yellow); }
+.ld-dots i { width: 0.48em; height: 0.48em; border-radius: 50%; background: currentColor; animation: ld-dot 1s ease-in-out infinite; }
+.ld-dots i:nth-child(2) { animation-delay: -0.8s; }
+.ld-dots i:nth-child(3) { animation-delay: -0.6s; }
+.ld-trk { z-index: 2; position: absolute; left: calc(2.5em + env(safe-area-inset-left)); right: calc(2.5em + env(safe-area-inset-right)); bottom: calc(1.875em + env(safe-area-inset-bottom)); height: 0.5em; border-radius: 0.25em; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.ld-trk i { display: block; width: 100%; height: 100%; border-radius: 0.25em; background: var(--yellow); transform: translateX(-100%); transition: transform 250ms linear; will-change: transform; }
+/* the pair's flight: left and right once in 8 s — from the right to the left first — and up and down twice in that, a
+   quarter of a rise behind: a figure of eight; a rock from side to side on top. The halo's three squares fly the same two
+   animations a little behind (their delays are set where they are made). A map's name longer than TOWN reaches under the
+   flight's lower left turn: there the pair passes BEHIND the name (user 2026-11-13, of the two orders: "Use 字在Q版上面") —
+   the name, the words and the bar are the layer above (z-index 2), always whole */
+.ld-fx { position: absolute; left: 37.7%; top: 2.6%; animation: ld-x 4s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; will-change: transform; }
+.ld-fy { animation: ld-y 2s cubic-bezier(0.37, 0, 0.63, 1) -1s infinite alternate; will-change: transform; }
+.ld-fr { animation: ld-r 1s ease-in-out infinite alternate; transform-origin: 50% 60%; }
+.ld-pair { display: block; height: 7.92em; width: auto; aspect-ratio: 293 / 329; -webkit-user-drag: none; }   /* (the pair 124 px tall on the 844 x 390 screen, as the sample's: 126.7 with the rim) */
+.ld-tr { left: calc(37.7% + 4.38em - var(--s) / 2); top: calc(2.6% + 2.09em - var(--s) / 2); }   /* (from the halo's own place on the pair) */
+.ld-sq { display: block; width: var(--s); height: var(--s); box-sizing: border-box; border: 0.125em solid #A1FFE3; border-radius: 0.125em; transform: rotate(14deg); }
+@keyframes ld-in { to { opacity: 1; } }
+@keyframes ld-x { from { transform: translateX(min(46.4vw, 62.3vw - 7.6em)); } to { transform: translateX(0); } }   /* (the far end never past the screen's right edge on a narrow one) */
+@keyframes ld-y { from { transform: translateY(0); } to { transform: translateY(33.8vh); } }
+@keyframes ld-r { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+@keyframes ld-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-0.4em); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ld-fx, .ld-fy, .ld-fr, .ld-dots i { animation: none; } .ld-tr { display: none; } }
+
 /* ---- the menus: an opaque cream sheet with three ink blobs and a few drips (an inline SVG, scaled to cover the
    sheet and pinned to it while the content scrolls), sticker titles, chunky pills ---- */
 .menu {
@@ -1348,6 +1388,35 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
   html.hud-rows-2 .kf.p1 { transform: translateX(var(--kf-side)); }
 }
 
+/* THE GAME-START INTRO (PT b1105gz; main.js THE GAME-START INTRO — user 2026-11-12: "Only the "Pause" HUD will be shown and
+   functioning during these beginning cameras", "After this HUD disappear, the normal HUD finally appears"): while it runs
+   (html.intro-on) the match's HUD is away but for PAUSE — the chips, the stick, the buttons, the boost, the kill feed, the
+   crosshair, the command layer, the fullscreen button, the edge triangles; they come as START leaves.
+   GET READY (.intro-band; the design canvas's round 14, option B, the user's pick): a band along the screen's foot through
+   the two team shots — ink, a white rule above and below, an edge in the team's colour (--c), a little off the level — with
+   the team's sticker, the words in the title lettering, and the team's units as chips at its far end (face, name, side word,
+   in each unit's colour). START (.intro-go; round 14's option A, with the user's "cap-and-bottom-line feel"): the ending
+   camera's lettering — white, an ink ring, a hard drop in yellow — between a bar over its caps and a bar under its foot, off
+   the level as the finale's call is; main.js moves it by the intro's own clock (the pop in, then the swipe out: the bars
+   part, one to each side, and the word is wiped away between them), so a paused intro holds it still.
+   Both are sized off the screen: the band's em is 16 px and START's 112 px on an 844 x 390 phone, the canvas's frame. */
+.intro-on .touch-hud > :not(#pause-btn), .intro-on .dio-layer, .intro-on #fullscreen-btn, .intro-on #ally-edge-arrow, .intro-on [id^="enemy-edge-arrow"], .intro-on #pad-ring { display: none !important; }
+.intro-band { position: absolute; left: -1.875em; right: -1.875em; bottom: calc(1em + env(safe-area-inset-bottom)); z-index: 30; height: 3.625em; box-sizing: border-box; display: flex; align-items: center; gap: 1em; padding: 0 calc(4em + env(safe-area-inset-right)) 0 calc(4em + env(safe-area-inset-left)); font-size: clamp(8px, min(1.896vw, 4.103vh), 26px); --c: var(--cyan); background: rgba(27, 27, 47, 0.94); color: #ffffff; font-family: var(--font-ui); border-top: 0.1875em solid #ffffff; border-bottom: 0.1875em solid #ffffff; box-shadow: 0 -0.125em 0 var(--ink), 0 0.125em 0 var(--ink), 0 0.5em 0 var(--c), 0 0.625em 0 var(--ink); transform: rotate(-2.2deg); white-space: nowrap; pointer-events: none; will-change: transform, opacity; }
+.ib-team { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.4615em; height: 1.846em; padding: 0 0.846em 0 0.538em; box-sizing: border-box; border-radius: 999px; background: var(--yellow); color: var(--ink); border: 0.154em solid var(--ink); box-shadow: 0.154em 0.154em 0 var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 0.8125em; line-height: 1; letter-spacing: 0.04em; }
+.ib-team u { flex: 0 0 auto; width: 0.769em; height: 0.769em; box-sizing: border-box; border-radius: 50%; background: var(--c); border: 0.154em solid var(--ink); text-decoration: none; }
+.ib-word { flex: 0 0 auto; font-family: var(--font-display); font-weight: 400; font-size: 2.25em; line-height: 1; letter-spacing: 0.03em; color: #ffffff; }
+.ib-units { margin-left: auto; display: flex; align-items: center; gap: 0.625em; }
+.ib-who { display: flex; align-items: center; gap: 0.4375em; height: 2em; padding: 0 0.8125em 0 0.1875em; box-sizing: border-box; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 0.125em solid #ffffff; color: #ffffff; }
+.ib-who .chip-face { width: 1.625em; height: 1.625em; border-width: 0.125em; }
+.ib-who b { font-family: var(--font-display); font-weight: 400; font-size: 1em; line-height: 1; text-transform: uppercase; }
+.ib-who i { font-style: normal; font-size: 0.594em; font-weight: 800; letter-spacing: 0.06em; color: var(--c); }
+.ib-who i:empty { display: none; }   /* (no side word for a spectator, as the HP chips) */
+@media (max-aspect-ratio: 5/4) { .intro-band { height: auto; flex-wrap: wrap; row-gap: 0.5em; padding-top: 0.6em; padding-bottom: 0.6em; padding-left: calc(2.6em + env(safe-area-inset-left)); padding-right: calc(2.6em + env(safe-area-inset-right)); font-size: clamp(9px, 2.6vw, 20px); } .ib-units { margin-left: 0; width: 100%; } }   /* (an upright or square screen: the units on a second line) */
+.intro-go { position: absolute; left: 50%; top: 50%; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.179em; font-size: clamp(52px, min(13.27vw, 28.72vh), 190px); --c: var(--yellow); transform: translate(-50%, -50%) rotate(-6deg); pointer-events: none; will-change: transform, opacity; }
+.ig-word { display: block; font-family: var(--font-display); font-weight: 400; font-size: 1em; line-height: 0.86; letter-spacing: 0.01em; color: #ffffff; white-space: nowrap; text-shadow: 0.0536em 0.0000em 0 var(--ink), 0.0518em 0.0139em 0 var(--ink), 0.0464em 0.0268em 0 var(--ink), 0.0379em 0.0379em 0 var(--ink), 0.0268em 0.0464em 0 var(--ink), 0.0139em 0.0518em 0 var(--ink), 0.0000em 0.0536em 0 var(--ink), -0.0139em 0.0518em 0 var(--ink), -0.0268em 0.0464em 0 var(--ink), -0.0379em 0.0379em 0 var(--ink), -0.0464em 0.0268em 0 var(--ink), -0.0518em 0.0139em 0 var(--ink), -0.0536em 0.0000em 0 var(--ink), -0.0518em -0.0139em 0 var(--ink), -0.0464em -0.0268em 0 var(--ink), -0.0379em -0.0379em 0 var(--ink), -0.0268em -0.0464em 0 var(--ink), -0.0139em -0.0518em 0 var(--ink), -0.0000em -0.0536em 0 var(--ink), 0.0139em -0.0518em 0 var(--ink), 0.0268em -0.0464em 0 var(--ink), 0.0379em -0.0379em 0 var(--ink), 0.0464em -0.0268em 0 var(--ink), 0.0518em -0.0139em 0 var(--ink), 0.1071em 0.1071em 0 var(--c); will-change: transform, clip-path; }
+.ig-ln { display: block; width: 4.464em; height: 0.1071em; border-radius: 0.0536em; background: #ffffff; box-shadow: 0 0 0 0.0446em var(--ink), 0.0804em 0.0804em 0 0.0446em var(--c); will-change: transform; }
+.ig-cap { align-self: flex-start; margin-left: -0.411em; }
+.ig-bot { align-self: flex-end; margin-right: -0.411em; }
 /* THE FINALE (PT b1105gb): the match's HUD steps aside while the camera plays the knockout; "TAP TO SKIP" once a tap can */
 .finale-on .touch-hud, .finale-on .dio-layer, .finale-on #fullscreen-btn, .finale-on #ally-edge-arrow, .finale-on [id^="enemy-edge-arrow"] { display: none !important; }
 .finale-skip { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 90; padding: 6px 14px; border-radius: 999px; border: 2px solid var(--ink); background: rgba(255, 255, 255, 0.92); color: var(--ink); font-family: var(--font-ui); font-weight: 800; font-size: 13px; letter-spacing: 0.08em; opacity: 0; transition: opacity 0.25s ease-out; pointer-events: none; }

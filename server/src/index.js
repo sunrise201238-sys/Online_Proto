@@ -31,7 +31,7 @@ import {
   MAP_DATA,
   GLINT_CONFIRM_CAP_MS
 } from '@gvg/shared/src/sim/index.js';
-import { SPAWN_IMMUNITY_MS, SD_START_HOLD_MS } from '@gvg/shared/src/sim/constants.js';
+import { SD_START_HOLD_MS, INTRO_MS } from '@gvg/shared/src/sim/constants.js';
 import { warmSimulation, warmMap } from './warmup.js';
 import { normalizeFrame, enqueueFrame, consumeFrames, drainQueue } from '@gvg/shared/src/sim/inputqueue.js';
 
@@ -275,19 +275,22 @@ function startMatchFor(lobby) {
   // plain brain under their orders.
   lobby.match.suddenDeath = lobby.suddenDeath;
   // START HOLD (owner 2026-10-07, "character already starts moving when
-  // banner is still there"): a Sudden Death match stands still for the
-  // banner — tickLobby ignores inputs and skips the bots until holdUntil,
-  // the clients mute their own frames (they read holdUntil off the
-  // snapshot) — and the spawn immunity runs from the release, as offline.
-  lobby.match.holdUntil = lobby.suddenDeath ? startTime + SD_START_HOLD_MS : 0;
-  if (lobby.suddenDeath) {
-    for (const s of slots) {
-      const f = lobby.match.fighters[s];
-      if (!f) continue;
-      f.hp = 1;
-      f.invulnerableUntil = lobby.match.holdUntil + SPAWN_IMMUNITY_MS;
-      if (lobby.botSlots.has(s)) { f.botSD = true; f.nextFireAt = lobby.match.holdUntil + 650; }   // (offline parity: the bot's first shot waits 650 ms past the banner)
-    }
+  // banner is still there"): the match stands still until holdUntil —
+  // tickLobby ignores inputs and skips the bots, the clients mute their own
+  // frames (they read holdUntil off the snapshot).
+  // EVERY MATCH since b1105gz (THE GAME-START INTRO, constants.js INTRO_MS): held for the intro's length — the two team
+  // shots and START — and, in Sudden Death, for the banner after it (SD_START_HOLD_MS; the banner alone until then, and a
+  // match of the other rules not held at all). `introUntil` is the moment START is gone: the clients lay the intro's
+  // sequence back from it (it rides match:start and every snapshot, as holdUntil does), so a client that came to the
+  // match late — its map still loading — joins the intro where everyone is and starts with everyone. No spawn immunity
+  // follows the hold (state.js createMatchState, b1105gz), and every bot's first round waits 650 ms past it, as offline.
+  lobby.match.introUntil = startTime + INTRO_MS;
+  lobby.match.holdUntil = lobby.match.introUntil + (lobby.suddenDeath ? SD_START_HOLD_MS : 0);
+  for (const s of slots) {
+    const f = lobby.match.fighters[s];
+    if (!f) continue;
+    if (lobby.suddenDeath) f.hp = 1;
+    if (lobby.botSlots.has(s)) { if (lobby.suddenDeath) f.botSD = true; f.nextFireAt = lobby.match.holdUntil + 650; }   // (offline parity: the bot's first shot waits 650 ms past the hold)
   }
   // Command side-table entries for every driven command-side slot up front
   // (owner 2026-09-26): the automatic reload hide lands on the entry (badge
@@ -303,7 +306,7 @@ function startMatchFor(lobby) {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, holdUntil: lobby.match.holdUntil, shotSeed: lobby.match.shotSeed });
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, introUntil: lobby.match.introUntil, holdUntil: lobby.match.holdUntil, shotSeed: lobby.match.shotSeed });
   emitLobbyConfig(lobby);
   console.log(`[${lobby.id}] ${lobby.mode}${lobby.suddenDeath ? ' SUDDEN DEATH' : ''} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
 }
@@ -375,6 +378,7 @@ function emitSnapshotsFor(lobby) {
   const extra = {
     mode: lobby.mode,
     suddenDeath: lobby.suddenDeath,   // (the client reads the rules off the first snapshot, like the map)
+    introUntil: lobby.match.introUntil ?? 0,   // (server clock: the game-start intro's end, START gone — b1105gz)
     holdUntil: lobby.match.holdUntil ?? 0,   // (server clock; the client mutes its input frames until then)
     botSlots: Array.from(lobby.botSlots),
     acks: {
@@ -438,8 +442,8 @@ function tickLobby(lobby, late = false) {
     ? new Set([...lobby.botSlots, ...lobby.commandSlots])
     : lobby.botSlots;
   lobby.match.searchDeadline = performance.now() + SEARCH_BUDGET_MS;   // (shared by every search this tick)
-  // START HOLD (Sudden Death): while the banner shows, no bot thinks and
-  // every human frame reads as empty — the fighters stand on their spawns.
+  // START HOLD (every match's game-start intro, b1105gz; and Sudden Death's banner after it): until it is over no bot
+  // thinks and every human frame reads as empty — the fighters stand on their spawns.
   const holding = (lobby.match.holdUntil ?? 0) > now;
   // (the order rotates each tick, 2026-10-25: the one route search a tick (ai.js searchSlot) went to the first bot in
   //  the list every tick while its search was pending, and the others waited for all of it; the brains read last tick's

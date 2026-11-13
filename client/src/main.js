@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { boostScaleOf } from '@gvg/shared/src/sim/constants.js';   // (a map's boost scale: District's gauge and refill five times, the bots' gates with them; user 2026-10-29)
+import { INTRO_PUSH_MS, INTRO_STAND_MS, INTRO_START_MS } from '@gvg/shared/src/sim/constants.js';   // (THE GAME-START INTRO's lengths, b1105gz: the one place to tune them — the server holds the match for their sum)
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
@@ -1406,8 +1407,8 @@ const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the rationale.
 const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
-// Spawn protection — fighters take no damage for this long at round start
-// (mirrors SPAWN_IMMUNITY_MS in shared/src/sim/constants.js).
+// Spawn protection — a Trio roster unit that comes on mid-match takes no damage for this long (mirrors SPAWN_IMMUNITY_MS
+// in shared/src/sim/constants.js). Not at the match's start since b1105gz: THE GAME-START INTRO holds the match instead.
 const SPAWN_IMMUNITY_MS = 3000;
 
 const input = {
@@ -1910,6 +1911,7 @@ const UNIT_MODELS = {
       dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: '01_Move_End_Normal', speed: 1, fit: 'step', once: true },   // (Subaru's dodge, borrowClip — PT b1105ce, user 2026-11-08: "let's try to apply subaru's dodge motion to Hoshino first"; her own was 01_Move_End_Normal)
       jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: '01_Move_End_Normal', easeIn: true, speed: 1, once: true },   // (Saori's jump, borrowClip — PT b1105ci, user 2026-11-08: "Apply Saori's jump motion to Hoshino"; her own was 01_Move_End_Normal, still her gear's)
       reload: { name: '01_Normal_Attack_Delay', speed: 1, fit: 'reload', once: true },
+      victoryIdle: { name: '01_Normal_Idle', speed: 1 },   // (THE ENDING LOOP, b1105hg: what the winner camera's unit loops after its victory motion, finalePoseFor; user 2026-11-13: 'Use "01_Normal_Idle" from Hoshino glb')
       hit: null,
       death: { name: '01_Vital_Death', speed: 1, once: true },
       climb: { name: '01_Vital_Retreat', speed: 2.5 },   // (her new file's own, user 2026-11-05: "For Hoshino, use 01_Vital_Retreat")
@@ -1931,6 +1933,7 @@ const UNIT_MODELS = {
       dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_end_Normal', speed: 1, fit: 'step', once: true },   // (Fubuki's dodge, borrowClip — PT b1105cs, user 2026-11-08: "Apply Fubuki's dodge motion to Aris/Kei"; her own Move_end_Normal, still her jump, poses the rest)
       jump: { name: 'Move_end_Normal', speed: 1, once: true },
       reload: { name: 'Normal_Reload', speed: 1, fit: 'reload', once: true },
+      victoryIdle: { name: 'Normal_Idle', speed: 1 },   // (THE ENDING LOOP, b1105hg, finalePoseFor; user 2026-11-13: '"Normal_Idle" from Aris glb' — the clip her ground walk holds at half speed, here at its own)
       hit: null,
       death: { name: 'Vital_Death', speed: 1, once: true },
       climb: { name: 'Vital_Retreat', speed: 2.5 },
@@ -1996,14 +1999,17 @@ const MODEL_SILHOUETTE_COLOR = 0x8fd4ff;
 const MODEL_FILE_EXT = '.glb';
 const _gltfLoader = new GLTFLoader();
 const _modelCache = {};             // model key -> gltf
-const _modelPending = {};           // model key -> [callbacks]
+const _modelPending = {};           // model key -> [[onReady, onFail], …]
+const _modelFailed = {};            // model key -> true: its last load failed (b1105hd: THE LOADING SCREEN waits for a model to load OR fail)
+const _modelProgress = {};          // model key -> the share of its file that has come in, 0 to 1 (where the browser tells the file's size: the loading screen's bar)
 
-function loadUnitModel(key, onReady) {
+function loadUnitModel(key, onReady, onFail) {   // (`onFail`, b1105hd: told when the load fails — until then a failure told nobody)
   const cfg = UNIT_MODELS[key];
-  if (!cfg) return;
+  if (!cfg) { onFail?.(); return; }
   if (_modelCache[key]) { onReady(_modelCache[key]); return; }
-  if (_modelPending[key]) { _modelPending[key].push(onReady); return; }
-  _modelPending[key] = [onReady];
+  if (_modelPending[key]) { _modelPending[key].push([onReady, onFail]); return; }
+  _modelPending[key] = [[onReady, onFail]];
+  delete _modelFailed[key];
   _gltfLoader.load(`${import.meta.env.BASE_URL}${cfg.file}${MODEL_FILE_EXT}`, (gltf) => {
     // Unlit, like the billboards: the toon textures carry their own shading.
     gltf.scene.traverse((o) => {
@@ -2024,8 +2030,14 @@ function loadUnitModel(key, onReady) {
     _modelCache[key] = gltf;
     const cbs = _modelPending[key] || [];
     delete _modelPending[key];
-    for (const cb of cbs) cb(gltf);
-  }, undefined, (err) => { console.warn('unit model failed to load', key, err); delete _modelPending[key]; });
+    for (const [ok] of cbs) ok(gltf);
+  }, (e) => { if (e && e.lengthComputable && e.total > 0) _modelProgress[key] = e.loaded / e.total; }, (err) => {
+    console.warn('unit model failed to load', key, err);
+    const cbs = _modelPending[key] || [];
+    delete _modelPending[key];
+    _modelFailed[key] = true;
+    for (const [, fail] of cbs) fail?.(err);
+  });
 }
 
 // World-space box of an instance's meshes in the bind pose (skinned meshes
@@ -2154,14 +2166,18 @@ function borrowClimbClip(rig, inst, cfg) {
 // (borrowClimbClip): the rotations alone, a bone the rig lacks left out — the Biped bodies share their names, the hair, the
 // skirt and the guns do not; a one-shot entry plays once and holds its last frame, as the rig's own do.
 const _borrowedClips = new Map();
+const _jsonIn = new Set();   // a clip file's name once it has been read or has failed (b1105hd: THE LOADING SCREEN asks without waiting)
+function warmBorrowedClip(from) {
+  if (!_borrowedClips.has(from)) _borrowedClips.set(from, fetch(`${import.meta.env.BASE_URL}${from}`).then((r) => r.json()));
+  return _borrowedClips.get(from);
+}
 // (b1105cg, user 2026-11-08: "her accessories from "bind pose" are showing up during the dodge motion"): the borrowed clip moves
 // the Biped's body alone — its bones by name, the face, the eyes and the gun left out — and the rig's own clip named `base` moves
 // everything else, fitted to the borrowed clip's length: Hoshino's plates, shield, pistol and shells are posed (scaled into her
 // vest, onto her back) by her own clips alone, and a part no playing clip moves falls back to its bind pose, where her file lays
 // them out beside her; her hair, skirt, pockets and mouth follow her own dodge too.
 function borrowClip(rig, inst, key, cfg, anims = []) {
-  if (!_borrowedClips.has(cfg.from)) _borrowedClips.set(cfg.from, fetch(`${import.meta.env.BASE_URL}${cfg.from}`).then((r) => r.json()));
-  _borrowedClips.get(cfg.from).then((json) => {
+  warmBorrowedClip(cfg.from).then((json) => {
     const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
     const body = (n) => /^Bip001/.test(n) && !/eye|Xtra|Weapon/i.test(n);
     const borrowed = THREE.AnimationClip.parse({ ...json, tracks: json.tracks.filter((t) => { const n = t.name.split('.')[0]; return t.type === 'quaternion' && names.has(n) && body(n); }) });
@@ -2269,8 +2285,9 @@ function updateUnitModelState(m, rig, dt, now) {
   }
   // THE FINALE (PT b1105gb): its shots pose the units (finalePoseFor) — the fallen unit's death from its first frame slowed
   // (FINALE.deathRate), the final blow's unit its victory (the reload clip for now) from its first frame at its own speed once shot 2's
-  // opening hold is over (FINALE.holdBeforeVictoryS, b1105gu), the rest at ease
-  const cine = finalePoseFor(m, now);
+  // opening hold is over (FINALE.holdBeforeVictoryS, b1105gu) and its stand motion after that pass (b1105he; its model's own
+  // ending loop where it names one, b1105hg), the rest at ease
+  const cine = finalePoseFor(m, now) ?? introPoseFor();   // (THE GAME-START INTRO, b1105gz: every unit at ease through it)
   if (cine) want = rig.actions[cine.want] ? cine.want : 'stand';
   const cineRestart = !!cine && !!cine.restart && rig.cineToken !== cine.token;
   if (cine) rig.cineToken = cine.token;
@@ -2386,6 +2403,7 @@ function updateUnitModelState(m, rig, dt, now) {
   if (!have && moving) { hx = vx; hz = vz; have = true; }
   if (st.ladder != null && arenaLadders[st.ladder]) { const L = arenaLadders[st.ladder]; const k = CLIMB_CLIP_TURNED ? -1 : 1; hx = k * Math.sin(L.yaw); hz = k * Math.cos(L.yaw); have = true; }   // (a climber faces the rungs — ladder.js; the clip's turned body does, so the holder faces away: CLIMB_CLIP_TURNED)
   if (finale.active) have = false;   // (the finale: every unit holds its heading)
+  if (intro.active) { const y = introFacing(m); if (y != null) rig.yaw = y; have = false; }   // (THE GAME-START INTRO, b1105gz: turned to the other team's middle and held)
   if (have) {
     const target = Math.atan2(hx, hz);
     let d = target - rig.yaw;
@@ -2591,7 +2609,7 @@ function updateMechAnimations(dt, now) {
     if (bar) {
       // Diorama / command mode: the annotation layer carries identity + HP,
       // so the floating bar hides wholesale (restored per frame when off).
-      if (dioramaActive() || finale.active) { bar.visible = false; continue; }   // (the finale: no bars over the shots)
+      if (dioramaActive() || finale.active || intro.active) { bar.visible = false; continue; }   // (the finale: no bars over the shots; nor through the game-start intro, b1105gz — they come with the HUD, as START leaves)
       // Shooting Range (owner 2026-09-28): no portrait, no bar — neither on
       // the practice lanes' targets nor on the player; the lanes carry their
       // own hit read-outs and the bar group only cluttered the sight line.
@@ -6749,6 +6767,7 @@ function spectateMech() {
 }
 
 function updateCamera() {
+  if (introShots()) return;   // (THE GAME-START INTRO's team shots, b1105gz: the camera is the intro's — updateIntro)
   // Camera frames a LIVE fighter on the player's team and that fighter's
   // current target. Normally that's the player + state.playerCurrentTarget.
   // When the player has died but their ally is still up, the camera switches
@@ -6961,14 +6980,20 @@ function killArtFace(im, u, grey) {
   }
   return c;
 }
-function warmKillArt(u) {
+function warmKillArt(u) {   // (returns a promise since b1105hd — settled when both pictures are drawn or have failed: THE LOADING SCREEN waits for it)
   const k = u?.spriteKey;
-  if (!k || _killArt.has(k)) return;
-  const art = { gun: null, face: null, grey: null };
+  if (!k) return Promise.resolve();
+  if (_killArt.has(k)) return _killArt.get(k).done;
+  const art = { gun: null, face: null, grey: null, done: null, in: false };
   _killArt.set(k, art);
-  const load = (src, draw) => { const im = new Image(); im.decoding = 'async'; im.onload = () => { try { draw(im); } catch (err) { console.warn('[kill feed] a picture would not draw', k, err); } }; im.src = src; };
-  if (WEAPON_BOX[k]) load(`${import.meta.env.BASE_URL}weapons/${k}.png`, (im) => { art.gun = killArtImg(killArtGun(im, k)); });
-  load(thumbFile(k), (im) => { art.face = killArtImg(killArtFace(im, u, false)); art.grey = killArtImg(killArtFace(im, u, true)); });
+  const load = (src, draw) => new Promise((res) => { const im = new Image(); im.decoding = 'async';
+    im.onload = () => { try { draw(im); } catch (err) { console.warn('[kill feed] a picture would not draw', k, err); } res(); };
+    im.onerror = () => res(); im.src = src; });
+  const both = [];
+  if (WEAPON_BOX[k]) both.push(load(`${import.meta.env.BASE_URL}weapons/${k}.png`, (im) => { art.gun = killArtImg(killArtGun(im, k)); }));
+  both.push(load(thumbFile(k), (im) => { art.face = killArtImg(killArtFace(im, u, false)); art.grey = killArtImg(killArtFace(im, u, true)); }));
+  art.done = Promise.all(both).then(() => { art.in = true; });
+  return art.done;
 }
 // (a unit whose weapon sticker is not drawn yet — its picture still on the way: the plain render, sized as the print sizes it)
 function killFeedGunImg(u) {
@@ -7177,6 +7202,7 @@ function updateHud(now = performance.now()) {
 }
 
 function cleanupMatch() {
+  introClear();   // (THE GAME-START INTRO, b1105gz: its words and its hold on the HUD go with the match)
   // If we were in an online match, close the socket + drop online-only meshes.
   if (state.online) {
     disposeOnlineCommandShare(state.online);   // classic-teammate ring/lock sprite
@@ -7266,9 +7292,227 @@ function cleanupMatch() {
   hideDioramaLayer();
 }
 
+// ============================================================================
+// THE LOADING SCREEN (b1105hd; user 2026-11-13, of the design canvas's round 15: "Use option A and the shown moving path. But
+// make the image hovers from right to left at first instead of left to right."; of the white rim: "Yes."; and: "While we make
+// this loading screen, might as well use this time to load everything the game would need, the weapon image for killing HUD,
+// BOT pathfinder etc."). It takes the place of THE MAP FIRST's cover (b1105ha — user 2026-11-12, of the game-start intro: "can
+// you make sure the map is loaded before the camera starts running? currently there are sometimes where player only sees
+// units but no background map (still loading). I can live with longer stating time before game. We might add a loading
+// screen in the future." — a match waited for its map's data and model under the online page's "Match starting…" card).
+// EVERY START GOES THROUGH IT. startMatch puts the screen up first — the menus cleared (b1105hb), its ink ground there on
+// the frame after the tap — and only then gathers the match and sets it up (startMatchNow); the match's first frame is
+// drawn under it, and it comes off with that picture. Until this build the set-up ran on the menu's last picture: the page
+// stood frozen on the lobby for as long as the arena, the route grid and the first frame's upload took. A start with
+// everything in hand is over before the screen's content would show (`showAfterMs`): the ground alone is seen, a cut
+// through ink. Longer than that and the content comes in (`inMs`) and then stays `minMs` at the least, never a flicker.
+// WHAT IS WAITED FOR (matchLoadBegin — everything a match reads after its start; until this build the units' models, their
+// clips, the grid's file and the kill feed's pictures were fetched while the match was already on the screen):
+//   the map's data file (no match without it: its failure puts the lobby back), its model, and its route grid's file — the
+//     bots' pathfinder: with the file in hand the grid is read at the set-up, under the screen, where a young fetch used to
+//     leave it to the frame the bots first thought in, the frame play began;
+//   every unit the match fields — a Trio roster whole — its model, the clips it borrows from other files (the climb, a
+//     dodge, a jump), the kill feed's pictures of it (its weapon's sticker and its face, drawn ahead) and the portrait
+//     of the bar over its head;
+//   and the frame that puts all of it on the graphics card: the match's first frame is drawn once with nothing culled
+//     (matchWarmDraw), so what stands outside the first shot is uploaded too and the intro's later cuts find it there.
+// A file that fails is not waited for twice: the match starts without it, as it always could (the data file excepted).
+// THE BAR is the files' own progress: each thing a weight (`weights`), a model's share by its bytes where the browser tells
+// the file's size, else by whole things; it stands at `preBar` when every file is in and runs on through the set-up.
+// THE SCREEN (showLoadingScreen; style.css `.ld`): round 15's sample A — the ink ground, the map's sticker and name in the
+// ending camera's lettering, NOW LOADING and a thin bar along the foot — and the pair cut out of the user's picture (Aris
+// holding Kei: ui/loading_pair.png, the white rim baked in) flying a figure of eight over the rest of the screen, from the
+// right to the left first, three squares of the halo's mint after them. Every motion is a CSS animation of transform or
+// opacity: it runs on while the page's own work holds the main thread.
+// THE MATCH WAITS UNDER IT: offline the intro enters its first shot — the camera placed, the picture uploaded — and its
+// clock stands until the screen is off (updateIntro), so the intro is seen from its first moment. While files are still
+// on their way nothing is drawn under the screen (animate): the frame's time goes to the loading.
+// A later start, or the lobby (showSelectMenu), voids a start still waiting (matchStartWait).
+// ONLINE (runOnlineMatchFrame) the server's clock runs whatever this page has loaded: the screen stays up, and the intro is
+// not begun, until the same things are in — then the intro is fitted to what is left of the server's time (THE CLOCK
+// ONLINE) — or until that time has run out, when play begins as it used to on whatever has loaded. No least time there.
+// ============================================================================
+const LOADING = {
+  showAfterMs: 150,   // the content comes in this long after the ground (style.css `.ld-in`: the same number there)
+  inMs: 140,          // … over this long (there too)
+  minMs: 450,         // and, once it has begun to show, stays this long at the least (offline)
+  preBar: 0.9,        // the bar's place when every file is in; the rest is the set-up and the first frame
+  weights: { data: 2, model: 10, nav: 1, unit: 5, clip: 0.4, art: 0.3 },
+};
+let matchStartWait = 0;            // the start now waiting (a token: a later start, or the lobby, voids it)
+let matchCoverUp = false;          // the loading screen is on the screen
+let matchCoverUntilDrawn = false;  // the match under it is set up: the next frame drawn is its first
+let matchCoverDrawn = false;       // … and that frame has been drawn: the screen comes off when it may (loadingTick)
+let matchLoadRec = null;           // what the start now waiting waits for (matchLoadBegin)
+const loadScreen = { el: null, bar: null, upAt: 0, p: 0 };
+if (typeof window !== 'undefined') {
+  window.__loading = { cfg: LOADING, up: () => matchCoverUp, rec: () => matchLoadRec, drawn: () => matchCoverDrawn, screen: loadScreen,   // (a probe's hooks, as __intro)
+    has: () => ({ nav: !!offlineNavGrid, models: Object.keys(_modelCache), failed: Object.keys(_modelFailed), art: [..._killArt].filter(([, a]) => a.in).map(([k]) => k), json: [..._jsonIn] }) };
+  new Image().src = `${import.meta.env.BASE_URL}ui/loading_pair.png`;   // (the pair's picture asked for as the page boots: in hand by the first start)
+}
+function fitLoadingName(el) {
+  const n = el.querySelector('.ld-name'); n.style.fontSize = '';
+  // (a long name — SHOOTING RANGE — set smaller: to six tenths of the screen's width; on a screen held upright, where the
+  //  pair flies far above the name, to most of it)
+  const max = el.clientWidth * (el.clientHeight > el.clientWidth ? 0.85 : 0.6), w = n.scrollWidth;
+  if (w > max && max > 0) n.style.fontSize = `${Math.max(2, 5.25 * max / w).toFixed(3)}em`;
+}
+if (typeof window !== 'undefined') window.addEventListener('resize', () => { if (loadScreen.el?.isConnected) fitLoadingName(loadScreen.el); });   // (the screen turned while it is up)
+function showLoadingScreen() {
+  const name = (mapShortName(MAP_DATA[state.mapKey]) || '').toUpperCase();
+  if (loadScreen.el?.isConnected) {   // (already up — a start over a start: the same screen flies on)
+    const n = loadScreen.el.querySelector('.ld-name');
+    if (n.textContent !== name) { n.textContent = name; fitLoadingName(loadScreen.el); }
+    return;
+  }
+  const el = document.createElement('div');
+  el.id = 'match-loading'; el.className = 'ld';
+  el.setAttribute('role', 'status'); el.setAttribute('aria-label', 'Loading');
+  // (the halo's squares: the pair's own two animations, each a little behind — a share of the 8 s round and of the 4 s rise and fall)
+  const trail = [[0.30, 1, 0.95], [0.60, 0.75, 0.7], [0.90, 0.5625, 0.45]].map(([lag, s, op]) =>
+    `<div class="ld-fx ld-tr" style="--s:${s}em;animation-delay:${(lag - 8).toFixed(2)}s"><div class="ld-fy" style="animation-delay:${(lag - 5).toFixed(2)}s"><i class="ld-sq" style="opacity:${op}"></i></div></div>`).join('');
+  el.innerHTML = `<div class="ld-in">
+    <span class="ld-bl" style="left:-8.3%;top:-23.1%;width:39.1%;height:66.7%"></span><span class="ld-bl" style="left:61.6%;top:53.8%;width:49.8%;height:76.9%"></span><span class="ld-bl" style="left:39.1%;top:-30.8%;width:35.5%;height:53.8%"></span>
+    <span class="ld-sp" style="left:29.6%;top:30.8%;background:var(--lime)"></span><span class="ld-sp" style="left:72.5%;top:10.3%;background:var(--magenta);width:0.5em;height:0.5em"></span><span class="ld-sp" style="left:91.2%;top:38.5%;background:var(--cyan)"></span><span class="ld-sp" style="left:55.7%;top:76.9%;background:var(--lime);width:0.3125em;height:0.3125em"></span>
+    <div class="ld-nm"><span class="ld-tm"><u></u>MAP</span><span class="ld-name"></span></div>
+    <div class="ld-now">NOW LOADING<span class="ld-dots"><i></i><i></i><i></i></span></div>
+    <div class="ld-trk"><i></i></div>
+    ${trail}
+    <div class="ld-fx"><div class="ld-fy"><div class="ld-fr"><img class="ld-pair" src="${import.meta.env.BASE_URL}ui/loading_pair.png" alt="" draggable="false"></div></div></div>
+  </div>`;
+  el.querySelector('.ld-name').textContent = name;
+  app.appendChild(el);
+  fitLoadingName(el);
+  document.documentElement.classList.add('ld-on');
+  loadScreen.el = el; loadScreen.bar = el.querySelector('.ld-trk i'); loadScreen.upAt = performance.now(); loadScreen.p = 0;
+}
+function hideLoadingScreen() {
+  loadScreen.el?.remove();
+  loadScreen.el = null; loadScreen.bar = null;
+  document.documentElement.classList.remove('ld-on');
+}
+// the bar to `p` of its length (it only ever grows), over `ms` — a CSS transition of transform, so it moves while the page is busy
+function loadingBar(p, ms = 250) {
+  if (!loadScreen.bar || !(p > loadScreen.p)) return;
+  loadScreen.p = p;
+  loadScreen.bar.style.transitionDuration = `${ms}ms`;
+  loadScreen.bar.style.transform = `translateX(${(-(1 - Math.min(1, p)) * 100).toFixed(2)}%)`;
+}
+function matchStartCover(on) {
+  matchCoverUp = !!on;
+  if (on) showLoadingScreen();
+  else { hideLoadingScreen(); matchCoverUntilDrawn = false; matchCoverDrawn = false; matchLoadRec = null; }
+}
+// what the offline match about to start is made of: its map and every unit it fields (a Trio roster whole; the Shooting
+// Range the player's unit alone)
+function matchNeeds() {
+  const range = state.mapKey === 'range';
+  const slots = range ? ['player'] : state.mode === '2v2' ? ['player', 'ally', 'enemy', 'enemy2'] : ['player', 'enemy'];
+  const keyOf = { player: 'playerUnitKey', ally: 'allyUnitKey', enemy: 'enemyUnitKey', enemy2: 'enemy2UnitKey' };
+  const trio = state.mainMode === 'trio' && !range && state.trioRosters;
+  const units = new Set();
+  for (const s of slots) { units.add(state[keyOf[s]]); if (trio) for (const k of state.trioRosters[s] ?? []) units.add(k); }
+  return { mapKey: state.mapKey, units: [...units].filter((k) => UNIT_DATA[k]), nav: true };
+}
+// … and the online one: the units of the snapshot's seats, their rosters too; the route grid's file only for a commander
+// (the server finds the bots' ways: this page reads the grid for the command view's previews alone)
+function matchNeedsOnline(snap, onl) {
+  const units = new Set();
+  for (const f of Object.values(snap?.fighters ?? {})) { if (f?.unitKey) units.add(f.unitKey); for (const k of f?.roster ?? []) units.add(k); }
+  return { mapKey: state.mapKey, units: [...units].filter((k) => UNIT_DATA[k]), nav: !!onl?.commandMode };
+}
+// everything in `spec` asked for now (what is in hand already costs nothing): `settled` — each thing here or failed, asked
+// without waiting — `progress()` 0 to 1, `fatal` when the map's data file failed, `all` a promise of the lot
+function matchLoadBegin(spec) {
+  const W = LOADING.weights, items = [], waits = [];
+  const rec = { spec, items, fatal: false, all: null,
+    get settled() { return items.every((it) => it.done || it.ready()); },
+    progress() { let a = 0, b = 0; for (const it of items) { b += it.w; a += it.w * ((it.done || it.ready()) ? 1 : Math.min(0.98, it.prog ? it.prog() : 0)); } return b ? a / b : 1; } };
+  const add = (w, promise, ready, { prog = null, fatal = false, mark = null } = {}) => {
+    const it = { w, done: false, ready, prog }; items.push(it);
+    waits.push(Promise.resolve(promise).then(() => { mark?.(); it.done = true; }, () => { mark?.(); it.done = true; if (fatal) rec.fatal = true; }));
+  };
+  const cfg = GLB_MAPS[spec.mapKey];
+  if (cfg) {
+    add(W.data, warmMapData(spec.mapKey), () => hasGeneratedData(spec.mapKey), { fatal: true });
+    add(W.model, new Promise((res) => loadMapModel(cfg.file, res, res)), () => !!_mapModelCache[cfg.file] || !!_mapModelFailed[cfg.file], { prog: () => _mapModelProgress[cfg.file] ?? 0 });
+    if (spec.nav) add(W.nav, warmNavData(spec.mapKey), () => { const r = _navData[spec.mapKey]; return !!r && (!!r.bytes || r.failed); });
+  }
+  let modelled = false;
+  for (const k of spec.units) {
+    const u = UNIT_DATA[k];
+    if (u?.model && UNIT_MODELS[u.model]) {   // (a unit drawn as a 3D character: this tree's own test, as makeUnitModel's)
+      modelled = true;
+      const mk = u.model;
+      add(W.unit, new Promise((res) => loadUnitModel(mk, res, res)), () => !!_modelCache[mk] || !!_modelFailed[mk], { prog: () => _modelProgress[mk] ?? 0 });
+      for (const c of Object.values(UNIT_MODELS[mk].clips ?? {})) if (c?.from) add(W.clip, warmBorrowedClip(c.from), () => _jsonIn.has(c.from), { mark: () => _jsonIn.add(c.from) });
+    }
+    if (u.spriteKey) {
+      add(W.art, warmKillArt(u), () => !!_killArt.get(u.spriteKey)?.in);
+      const th = unitThumbImage(u.spriteKey);   // (the bar over the unit's head paints its portrait from this one picture)
+      add(W.art, th.complete ? null : new Promise((res) => { th.addEventListener('load', res, { once: true }); th.addEventListener('error', res, { once: true }); }), () => th.complete);
+    }
+  }
+  if (modelled) add(W.clip, loadClimbClip(), () => _jsonIn.has('climb'), { mark: () => _jsonIn.add('climb') });
+  rec.all = Promise.all(waits);
+  return rec;
+}
+// the match's first frame, drawn once with nothing culled (under the loading screen): every mesh of the arena goes to the
+// graphics card now, the ones outside the first shot too — the intro's cuts and the play after them find them there
+function matchWarmDraw() {
+  const off = [];
+  scene.traverse((o) => { if (o.frustumCulled && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) { o.frustumCulled = false; off.push(o); } });
+  try { renderer.render(scene, camera); } catch (e) { console.warn('[loading] the warm frame', e); }
+  for (const o of off) o.frustumCulled = true;
+}
+// every frame the screen is up (animate, after the frame's drawing): the bar; and, once the match's first frame has been
+// drawn, the screen off — at once where its content has not begun to show, or online, or with no intro to hold (the
+// Shooting Range); else when the content has had its least time
+function loadingTick() {
+  if (matchCoverUntilDrawn) { matchCoverUntilDrawn = false; matchCoverDrawn = true; loadingBar(1, 200); }
+  if (matchCoverDrawn) {
+    const up = performance.now() - loadScreen.upAt;
+    if (state.online || !intro.active || up < LOADING.showAfterMs || up >= LOADING.showAfterMs + LOADING.minMs) {
+      matchStartCover(false);
+      if (intro.active && !intro.online) intro.last = performance.now();   // (the intro's clock from this moment: the frame that drew its first picture is none of its time)
+    }
+    return;
+  }
+  if (matchLoadRec) loadingBar(matchLoadRec.progress() * LOADING.preBar);
+}
 function startMatch() {
-  if (GLB_MAPS[state.mapKey] && !hasGeneratedData(state.mapKey)) { warmMapData(state.mapKey).then(startMatch).catch(() => {}); return; }   // (the map's data file first: arena.js, THE MAPS' DATA AS FILES)
+  const tok = ++matchStartWait, key = state.mapKey;
+  if (state.online) cleanupMatch();   // (an offline start out of an online match — no page offers one — ends it here, as the set-up always did)
+  // the last match stands still under the screen until the set-up takes it down: its ending camera gone (left running it
+  // would put its end page up over the screen), its intro too, its sim held
   if (finale.active) finishFinale(false);
+  introClear();
+  state.running = false;
+  clearMenus();   // (b1105hb: the page the start was asked from goes now — the lobby, a picker, the end page of a REMATCH)
+  matchCoverUntilDrawn = false; matchCoverDrawn = false;
+  matchStartCover(true);
+  const rec = matchLoadRec = matchLoadBegin(matchNeeds());
+  // (a later start, or the lobby, has taken this one's place — and the screen with it; anything else that moved under the
+  //  screen — it takes every tap, so nothing should — voids the start and lifts the screen: none is left up that nobody will lift)
+  const live = () => { if (tok !== matchStartWait) return false; if (state.online || state.mapKey !== key) { matchStartCover(false); return false; } return true; };
+  // (two frames on from the last file: the screen is on the glass before the set-up takes the main thread; then the bar is
+  //  sent on its way to the end — a transition, running through the set-up — and the frame after that the match is set up)
+  rec.all.then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (!live()) return;
+    if (rec.fatal) { matchStartCover(false); showSelectMenu(); return; }   // (the data file: no match without it)
+    loadingBar(0.97, 1500);
+    requestAnimationFrame(() => {
+      if (!live()) return;
+      // (a set-up that throws leaves no match to show: the screen off and the lobby back, where it used to leave the page bare)
+      try { startMatchNow(); } catch (e) { console.error('[loading] the match would not set up', e); matchStartCover(false); showSelectMenu(); return; }
+      matchCoverUntilDrawn = true;
+    });
+  })));
+}
+// the match set up, at once (startMatch has gathered what it needs and the loading screen is over the page)
+function startMatchNow() {
+  if (finale.active) finishFinale(false);
+  introClear();   // (THE GAME-START INTRO, b1105gz: one still up — New Game from its pause — goes with its match)
   state.killLog = []; state.killNoted = new Set();   // (the finale's final blows, PT b1105gb)
   cleanupMatch();
   clearMenus();
@@ -7454,16 +7698,10 @@ function startMatch() {
   // while a young fetch is still on its way, by the bots' first frame (ensureOfflineNavGrid).
   warmNavData(state.mapKey);
   ensureOfflineNavGrid();
-  const now = performance.now();
-  getAllFighters().forEach((m) => {
-    m.state.lastFireAt = now;
-    m.state.fireInitAt = now;   // (not a shot: the SD brain's "heard a round" test ignores this stamp)
-    m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
-  });
-  // (every BOT slot waits 650 ms before its first round — the ally and a
-  // spectated player slot too, as the server stamps every bot slot;
-  // alignment check 2026-10-09)
-  for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;
+  // The opening stamps (stampMatchOpen: the guns' clocks, every bot's first round 650 ms on) — set again as the game-start
+  // intro ends, when the match really begins. No spawn protection since b1105gz (invulnerableUntil stays 0: THE GAME-START
+  // INTRO, "Remove the invincibility for all unit during their first spawn in the game"); all fighters had 3 s of it until then.
+  stampMatchOpen(performance.now());
   input.shootHold = false;
   input.shootTap = false;
   // Default the player's lock target to the first enemy. In 2v2 this can be
@@ -7492,17 +7730,22 @@ function startMatch() {
   state.phase = 'match';
   state.running = true;
   state.matchStartAt = performance.now();
-  // Sudden Death: the match opens on the banner (sim frozen, the scene
-  // rendering behind it); the fight starts when it has flashed out.
-  if (state.suddenDeathActive) showSuddenDeathBanner();
+  // THE GAME-START INTRO (b1105gz): the match opens on it — the sim held, the picture live — and begins as START leaves;
+  // in Sudden Death the banner follows START (endIntro), where it used to open the match. The Shooting Range has no other
+  // team to show and opens as it did.
+  if (introWanted()) startIntro();
+  else if (state.suddenDeathActive) showSuddenDeathBanner();
 }
 
 // SUDDEN DEATH START BANNER (prototype 2026-10-05): a full-width band across
 // the middle of the screen flashing "SUDDEN DEATH" in and out, then the
 // match starts. While it plays the offline sim is frozen (state.running =
-// false; the frame loop keeps rendering), and when it ends the spawn
-// immunity and the bots' first-shot delay are re-stamped so the fight
-// begins exactly then. Style variants live in style.css (.sd-banner.style-*)
+// false; the frame loop keeps rendering), and when it ends the bots'
+// first-shot delay is re-stamped so the fight begins exactly then (the spawn
+// immunity too until b1105gz, which took it from every first spawn). Since
+// b1105gz it comes AFTER the game-start intro's START (endIntro; user
+// 2026-11-12: "in sudden death mode, the SD banner shows up after the "START"
+// disappear"), the HUD in behind it. Style variants live in style.css (.sd-banner.style-*)
 // — pick one with window.__SD_BANNER_STYLE ('a' | 'b' | 'c' | 'd');
 // window.__SD_BANNER_HOLD = true freezes it fully visible (screenshots).
 const SD_BANNER_MS = 2300;
@@ -7533,14 +7776,7 @@ function showSuddenDeathBanner(durationMs = SD_BANNER_MS) {
   setTimeout(() => {
     el.remove();
     if (state.phase !== 'match' || state.online) { state.sdIntro = false; return; }
-    const now = performance.now();
-    getAllFighters().forEach((m) => {
-      m.state.lastFireAt = now;
-      m.state.fireInitAt = now;
-      m.state.invulnerableUntil = now + SPAWN_IMMUNITY_MS;
-    });
-    for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server)
-    state.matchStartAt = now;
+    stampMatchOpen(performance.now());   // (the guns' clocks and every bot's first round from the release; no spawn protection since b1105gz)
     state.sdIntro = false;
     state.running = true;
   }, Math.max(0, durationMs));
@@ -7915,7 +8151,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105gy 11-12';
+const CLIENT_BUILD_TAG = 'b1105hg 11-13';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8653,7 +8889,12 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
     onl.nextSeq = 0;
     onl.lastAppliedSnapshotTick = -1;
     onl.predictedState = null;
+    // (b1105gz: and the smoothing offset left from the last match's last correction — it used to fade over the rematch's first
+    //  frames, a slide of a unit or so; the game-start intro's camera is on the unit from the match's first frame)
+    if (onl.visualPosOffset) { onl.visualPosOffset.x = 0; onl.visualPosOffset.y = 0; onl.visualPosOffset.z = 0; }
+    onl.loadCover = false;   // (THE LOADING SCREEN online: the screen, if this match needs one, is put up by its own frames)
   }
+  if (phase !== 'playing' && matchCoverUp) matchStartCover(false);   // (THE LOADING SCREEN, b1105hd: gone with the match it stood for)
 
   switch (phase) {
     case 'connecting':
@@ -9329,7 +9570,10 @@ function ensureOnlineMatchSetup(snap) {
   // (the banner stays as long as the SERVER's start hold has left — the
   // server froze the match at start; this client joined it a round-trip
   // later. runOnlineMatchFrame keeps onl.holdLocalUntil from the snapshot.)
-  if (state.suddenDeathActive) showSuddenDeathBanner(Math.max(0, (snap.holdUntil ?? 0) - snap.serverTime));
+  // Since b1105gz the banner follows THE GAME-START INTRO where the server holds the match for one (snapshot `introUntil`
+  // still ahead: runOnlineMatchFrame starts the intro and endIntro shows the banner for the hold's rest); from here only
+  // with no intro to wait for — a server older than the intro, or a client that came in after START.
+  if (state.suddenDeathActive && !((snap.introUntil ?? 0) > snap.serverTime)) showSuddenDeathBanner(Math.max(0, (snap.holdUntil ?? 0) - snap.serverTime));
 }
 
 // Online cousin of respawnSlotMech: swap one slot's mech to a new unit
@@ -9756,6 +10000,35 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // no-selection gesture off and leaves the Trio respawn pre-selected.
   if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
   updateDioramaHud();
+
+  // THE GAME-START INTRO online (b1105gz): once a match — a rematch too: each match:start is its own — from the first frame
+  // that has drawn the match's units on their spawns (the mirrors above). The server holds the match until `introUntil`
+  // (its clock; index.js startMatchFor) and the intro's sequence is fitted to what remains of that: `left` — the
+  // snapshot's own age taken off, this frame's map build included — so a client that came to the match late still ends
+  // START as everyone does (THE CLOCK ONLINE, updateIntro). Nothing is sent or asked for; a server that sends no
+  // introUntil plays none.
+  const started = conn.getMatchStart?.() ?? null;
+  if (started && onl.introFor !== started) {
+    const left = (snap.introUntil ?? 0) - snap.serverTime - Math.max(0, Date.now() - (lastSnapAt || Date.now()));   // (the snapshot's arrival is stamped by the wall clock — connection.js)
+    if (onl.loadFor !== started) { onl.loadFor = started; onl.loadRec = matchLoadBegin(matchNeedsOnline(snap, onl)); }   // (THE LOADING SCREEN online, b1105hd: this match's things asked for once)
+    if (left > 0 && introWanted() && !onl.loadRec.settled) {
+      // THE LOADING SCREEN online (b1105hd, as THE MAP FIRST's cover was since b1105ha; startMatch's note): the map or a
+      // unit still on its way — no camera on units in an empty scene or on their stand-ins: the screen up and the intro
+      // not begun, asked again every frame while any of the server's intro time is left
+      onl.loadCover = true;
+      matchLoadRec = onl.loadRec;
+      matchStartCover(true);
+    } else {
+      onl.introFor = started;
+      if (onl.loadCover) { onl.loadCover = false; matchCoverUntilDrawn = true; }   // (the screen off with this frame's picture — loadingTick)
+      if (left > 0 && introWanted()) startIntro({ online: true, leftMs: left });
+    }
+  } else if (intro.active && intro.online && snap.introUntil) {
+    // (every later snapshot is another reading of the server's moment, and a reading can only be late — by the snapshot's
+    //  way here, by a frame that kept it waiting — never early: the earliest one stands, and the sequence closes up to it)
+    const end = performance.now() + (snap.introUntil - snap.serverTime) - Math.max(0, Date.now() - (lastSnapAt || Date.now()));
+    if (end < intro.endLocal) intro.endLocal = end;
+  }
 }
 
 function tickOnline(dt, _now) {
@@ -9803,6 +10076,7 @@ function tickOnline(dt, _now) {
     const prevPhase = onl.uiSubPhase;
     onl.uiSubPhase = targetPhase;
     if (finale.active && targetPhase !== 'ended') finishFinale(false);   // (the lobby moved on: the finale gives way)
+    if (intro.active && targetPhase !== 'playing') introClear();          // (and the game-start intro, b1105gz)
     renderOnlineUi(targetPhase, prevPhase, onl, conn);
   } else if (targetPhase === 'waiting-opp') {
     // Re-render waiting-opp on opponent config changes (their unit pick etc).
@@ -9835,6 +10109,7 @@ function refreshWaitingOppIfStale(onl, conn) {
 }
 
 function showSelectMenu() {
+  matchStartWait += 1; if (matchCoverUp) matchStartCover(false);   // (THE LOADING SCREEN, b1105hd: a start still waiting is void, its screen off)
   cleanupMatch();
   clearMenus();
   state.phase = 'select';
@@ -11428,6 +11703,416 @@ function tickTrioRespawns() {
 }
 
 // ============================================================================
+// THE GAME-START INTRO (PT b1105gz; user 2026-11-12: "I want to make a game start intro. … 1. When the game starts, the camera
+// zooms in to the slightly high angle, three-quarter view of team1, sticks for a very very short period of time, then does the
+// same to team2, then the player sees the normal playing pov (either shooter or command). 2. Either 1V1 or 2V2, the camera
+// should be able to include all members in the team. 3. During the taking-turn-zooming-in session, a HUD "Get Ready" will be
+// shown on the screen. 4. When the camera switches back to normal playing pov, a HUD "Start" will be shown on the screen. After
+// this HUD disappear, the normal HUD finally appears. 5. Only the "Pause" HUD will be shown and functioning during these
+// beginning cameras. 6. Beginning cameras will be unskipable, online and offline. 7. Remove the invincibility for all unit
+// during their first spawn in the game, so there should be no white light surrounding them during the beginning cameras. …
+// 9. If there will be objects blocking the sight to units, the transparent effect should kick in as usual. For map Town, apply
+// the hollow effect from the ending screen."; then: "in sudden death mode, the SD banner shows up after the "START" disappear.
+// Also, for "START" HUD, i want it has a cap-and-bottom-line feel and swipes out instead of simply disappear."; of the design
+// canvas's round 14, GET READY as its band B and START as its lettering A between two bars; and of this side's readings — the
+// order team 1 then team 2 on every screen, a cut between the teams and no flight, Trio's first units alone, every match and
+// rematch, the units standing at ease facing the other team with no bar over their heads — "These are correct.").
+// THE SEQUENCE (its lengths are the shared constants INTRO_PUSH_MS / INTRO_STAND_MS / INTRO_START_MS, the one place to tune
+// them: "you need to make fast response when we start tuning the timing duration later"):
+//   team 1's shot — the camera pushes in on the team from its front three-quarter, a little above (`pushMs`), and stands
+//     (`standMs`); a cut;
+//   team 2's shot — the same; a cut to the viewer's own view (the chase camera, the free pov, the command view; a spectator's);
+//   START — over that view for `startMs`, the last `swipeMs` of it its swipe out; then the match's HUD and the match itself.
+// GET READY rides the two team shots as a band along the screen's foot: the team's sticker, the words, and the team's units as
+// chips — face, name and the side word the HP chips give them, in their colours (the seat's own online; no side word for a
+// spectator). START is the ending camera's lettering between a bar over its caps and a bar under its foot; it leaves in a
+// swipe — the bars part, one to each side, and the word is wiped away between them.
+// THE MATCH WAITS FOR IT ("START 顯示時角色能不能動？… 我建議比賽在 START 掃出、HUD 出現的那一刻才開始。" — "As you
+// suggested."): through the whole of it nobody moves, fires, thinks or can be hit. Offline the sim is not run (state.running
+// false; the frame loop's intro branch keeps the picture live) and the opening stamps are set again as it ends; online the
+// server holds the match (index.js: `introUntil`, and `holdUntil` = that plus Sudden Death's banner) and this client only
+// draws — the sequence is laid back from the server's moment (a client whose map loaded late joins it part-way and starts
+// with everyone), and a server that sends no `introUntil` (one older than this) gets no intro. In Sudden Death the banner
+// comes after START (its own 2.3 s, the HUD in behind it), then the match.
+// ONLY PAUSE: the HUD, the command layer, the fullscreen button, the bars over the heads, the lock, the arrows and the edge
+// triangles stay away until START is gone (style.css `.intro-on`); PAUSE alone shows and works — offline, where there is one:
+// its menu opens over the intro and the intro's clock stands while it is up (showPauseMenu). Nothing skips the intro.
+// NO SPAWN PROTECTION AT THE START: the white light and its three seconds are gone from every unit's first spawn (shared
+// state.js createMatchState, the server, startMatch and the banner's end here); a Trio roster unit coming on mid-match keeps
+// its own (respawnSlotMech, respawnFighterNext). The Shooting Range has no other team and plays no intro.
+// A TEAM'S SHOT (introTeamShot): the camera `dist` out from the middle of the team along the line to the other team's middle
+// turned `yaws` degrees — the first angle from which every unit of the team is in sight (botHasLineOfSight, the ending
+// cameras' own rule) and stands whole in the picture, clear of the band (`frame`); none such, the first that sees them all;
+// then again nearer, `near`; none: the one that sees most —, `up` above the units' roots, looking `lookUp`
+// above them, the whole moved `side` along the camera's right so the team stands right of the middle, as the canvas's frames
+// had it. The push in is along the camera's own line, from `pushFrom` times as far (the first with a clear line; none: the
+// lens does it, `pushFov`). The units are turned to the other team's middle and held at ease (updateUnitModelState) — in
+// their own team's shot turned on toward the camera when it would not see their faces (THE FACE, b1105hc: introFacing).
+// THE MAP FIRST (b1105ha; user 2026-11-12: "can you make sure the map is loaded before the camera starts running?"), now
+// THE LOADING SCREEN (b1105hd, startMatch's note): the intro never opens on a map or a unit still loading — the match is
+// set up only when everything it needs is in, the loading screen over the page meanwhile, and the intro's clock starts as
+// that screen comes off; online the intro waits for the same things within the server's time.
+// WHAT STANDS IN THE WAY: play's own fade (updateWallFade) keeps EVERY unit of the team in view through the shot, at once on
+// the cut (`wallFadeSnap`); on Town, where play fades nothing, the ending cameras' see-through window opens over each unit of
+// the team that something hides (THE SEE-THROUGH WINDOW: two windows since this build, its twins made as the intro begins).
+// ============================================================================
+const INTRO = {
+  // the lengths: the shared constants (the server holds the match for their sum) — tune them THERE
+  pushMs: INTRO_PUSH_MS, standMs: INTRO_STAND_MS, startMs: INTRO_START_MS,
+  swipeMs: 260,   // START's swipe out: the last this long of startMs
+  popMs: 160,     // the band and START come in over this long
+  // a team's shot: two units, one unit (a duel) — see A TEAM'S SHOT above; the numbers are the design canvas's frames'
+  duo: { dist: 16, up: 6.5, side: -3.6, lookUp: -2.0, fov: 50 },
+  solo: { dist: 11, up: 5.5, side: -2.6, lookUp: -1.6, fov: 50 },
+  yaws: [35, -35, 55, -55, 20, -20, 80, -80, 0, 115, -115, 180],
+  near: [1, 0.8, 0.6],
+  pushFrom: [1.5, 1.3, 1.15], pushFov: 1.3,
+  // a shot FITS when every unit of its team stands whole in the picture: its head under `top` and its feet over `foot` — the
+  // band's upper edge — and both within `side` of the middle (the screen's half-height and half-width are 1). Of the angles
+  // that see the whole team, the first that also fits is taken; none fitting, the first that sees it.
+  frame: { side: 0.92, top: 0.92, foot: -0.5 },
+  // THE FACE (b1105hc): in its own team's shot a unit's heading is never more than this many degrees off the line to the
+  // camera; a unit the camera would see from further round turns to it (introFacing). 15: the shot looks down on the units
+  // from a little above, and at 40, as first tried, a unit under a helmet or a cap still showed the camera a profile and one
+  // eye (Dust, Minori and Haruka, the same shot at 40, 30, 20, 10 and 0); from 20 down both eyes are in the picture
+  faceMax: 15,
+  nearPlane: 1,   // (the camera's near plane through the team shots, as the finale's: FINALE.nearPlane)
+  // online, the most the sequence is sped up to end with the server's hold when this page fell behind it (THE CLOCK ONLINE,
+  // updateIntro): past this the sequence is joined further on instead
+  catchUp: 1.6,
+  words: { ready: 'GET READY', go: 'START', team: 'TEAM' },
+};
+const intro = { active: false, online: false, stage: 0, t: 0, last: 0, endLocal: 0, tok: 0, teams: [[], []], shots: [null, null], band: null, bandT0: 0, go: null, prevNear: null };
+if (typeof window !== 'undefined') { window.__intro = intro; window.__INTRO = INTRO; window.__introShot = (i) => { intro.teams = introTeams(); return introTeamShot(i); };
+  // (a team's units as the picture has them now: each one's heading, how far that is off the line to the camera, and off the other team's line — degrees)
+  window.__introFaces = (i) => (intro.teams[i] || []).map((m) => { const deg = (r) => Math.round(Math.atan2(Math.sin(r), Math.cos(r)) * 1800 / Math.PI) / 10; const y = m.modelHolder?.userData?.modelRig?.yaw ?? null; const o = intro.teams[1 - i] || []; let ox = 0, oz = 0; for (const u of o) { ox += u.root.position.x; oz += u.root.position.z; }
+    const toCam = Math.atan2(camera.position.x - m.root.position.x, camera.position.z - m.root.position.z), toFoe = o.length ? Math.atan2(ox / o.length - m.root.position.x, oz / o.length - m.root.position.z) : null;
+    return y == null ? null : { yaw: deg(y), offCam: Math.abs(deg(toCam - y)), offFoe: toFoe == null ? null : Math.abs(deg(toFoe - y)), camOffFoe: toFoe == null ? null : Math.abs(deg(toCam - toFoe)) }; }); }   // (a probe's hooks, as __finale: the state, the numbers, and a team's shot as the game would find it now)
+const introTotalMs = () => 2 * (INTRO.pushMs + INTRO.standMs) + INTRO.startMs;
+const _introCam = new THREE.PerspectiveCamera(50, 16 / 9, 1, 2000), _introV = new THREE.Vector3();   // (scratch: a shot tried before it is taken)
+// the team shots are on: the camera is the intro's (the command view and the chase camera stand aside — dioramaActive, updateCamera)
+function introShots() { return intro.active && (intro.stage === 1 || intro.stage === 2); }
+// a match that opens on the intro: every one but the Shooting Range's (no other team to show)
+function introWanted() { return state.mapKey !== 'range' && !!state.player && !!state.enemy; }
+// team 1 then team 2, the same on every screen: online the server's seats (p1 and p3, p2 and p4); offline the player's side is team 1
+function introTeams() {
+  const here = (list) => list.filter((m) => m?.root && m.unit);
+  if (state.online?.slotMap) return [here(['p1', 'p3'].map(onlineMechOfId)), here(['p2', 'p4'].map(onlineMechOfId))];
+  return [here([state.player, state.ally]), here([state.enemy, state.enemy2])];
+}
+// the heading a unit holds through the intro: toward the middle of the other team (updateUnitModelState) —
+// THE FACE (b1105hc; user 2026-11-13, of a Dust 2v2 where team 1's shot looked at Haruka's back: "show the unit's face in the
+// cameras"): but in its OWN team's shot never more than `faceMax` off the line to where that shot's camera stands. A spawn
+// with a wall before it leaves the shot no angle but one beside or behind the team (the fan's last angles — A TEAM'S SHOT),
+// and a unit turned to the other team then showed the camera its back — and from the fan's FIRST angles too a unit could
+// stand side on: the camera is 35 degrees off the team's line, but a team's two units are 12 apart and the one further
+// round saw it from 40 to 65 degrees. A unit now turns toward the camera, the short way round, until the camera is `faceMax`
+// off its heading — its face to the camera, turned a little — and no further: a unit the camera already sees from inside
+// that keeps the other team's line exactly. Each unit by its own line to the camera (two units a team's width apart see it
+// from different sides), so a team's two units end turned in toward it together.
+// The turn is the shot's own: found with it, on the cut's own frame (introEnter), and gone with it — in the other team's
+// shot and under START every unit is back on the other team's line.
+function introFacing(m) {
+  if (!intro.active) return null;
+  const i = intro.teams[0].includes(m) ? 0 : intro.teams[1].includes(m) ? 1 : -1;
+  const other = i < 0 ? null : intro.teams[1 - i];
+  let yaw = null;
+  if (other?.length) {
+    let ox = 0, oz = 0;
+    for (const o of other) { ox += o.root.position.x; oz += o.root.position.z; }
+    const dx = ox / other.length - m.root.position.x, dz = oz / other.length - m.root.position.z;
+    if (dx * dx + dz * dz > 1e-6) yaw = Math.atan2(dx, dz);
+  }
+  const S = i >= 0 && introShots() && intro.stage === i + 1 ? intro.shots[i] : null;
+  if (S) {
+    const cx = S.cam.x - m.root.position.x, cz = S.cam.z - m.root.position.z;
+    if (cx * cx + cz * cz > 1e-6) {
+      const toCam = Math.atan2(cx, cz), max = INTRO.faceMax * Math.PI / 180;
+      if (yaw == null) yaw = toCam;
+      let d = toCam - yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.abs(d) > max) yaw = toCam - Math.sign(d) * max;
+    }
+  }
+  return yaw;
+}
+// a team's units turned for their shot at once (introEnter: before the see-through window reads where their bodies are, and
+// whatever order the frame's own model update comes in)
+function introFaceNow(i) {
+  for (const m of intro.teams[i] || []) {
+    const rig = m.modelHolder?.userData?.modelRig, y = introFacing(m);
+    if (rig && y != null) { rig.yaw = y; m.modelHolder.rotation.y = y - m.root.rotation.y; }
+    m.root.updateMatrixWorld(true);
+  }
+}
+// the pose every unit holds through it: at ease (updateUnitModelState, as the finale's finalePoseFor)
+function introPoseFor() { return intro.active ? { want: 'stand', rate: 1, token: 'stand', restart: false } : null; }
+// a team's shot, found once as its turn comes (A TEAM'S SHOT, above): where the camera ends, the point it looks at, its lens,
+// and where its push in starts
+function introTeamShot(i) {
+  const mine = intro.teams[i], other = intro.teams[1 - i];
+  if (!mine?.length) return null;
+  const mid = (list) => { const c = { x: 0, y: 0, z: 0 }; for (const m of list) { c.x += m.root.position.x; c.y += m.root.position.y; c.z += m.root.position.z; } c.x /= list.length; c.y /= list.length; c.z /= list.length; return c; };
+  const C = mid(mine), O = other?.length ? mid(other) : null;
+  const facing = O && Math.hypot(O.x - C.x, O.z - C.z) > 1e-3 ? Math.atan2(O.x - C.x, O.z - C.z) : mine[0].root.rotation.y;
+  const cfg = mine.length > 1 ? INTRO.duo : INTRO.solo;
+  const at = (deg, k) => {
+    const a = facing + deg * Math.PI / 180, sx = Math.cos(a) * cfg.side * k, sz = -Math.sin(a) * cfg.side * k;   // (`side`: the camera and its aim moved together along the camera's right)
+    return { cam: { x: C.x + Math.sin(a) * cfg.dist * k + sx, y: C.y + cfg.up * k, z: C.z + Math.cos(a) * cfg.dist * k + sz }, look: { x: C.x + sx, y: C.y + cfg.lookUp * k, z: C.z + sz }, fov: cfg.fov };
+  };
+  const p = { x: 0, y: 0, z: 0 };
+  const sees = (c) => { let n = 0; for (const m of mine) { p.x = m.root.position.x; p.y = m.root.position.y - 0.8; p.z = m.root.position.z; if (botHasLineOfSight(p, c, arenaObstacles, arenaSurfaces)) n += 1; } return n; };
+  // (does the shot hold every unit whole? — a camera of its own stood at the shot's place: each unit's head and feet on its screen)
+  const F = INTRO.frame;
+  const fits = (P) => {
+    _introCam.fov = P.fov; _introCam.aspect = camera.aspect; _introCam.near = 1; _introCam.far = 2000;
+    _introCam.position.set(P.cam.x, P.cam.y, P.cam.z); _introCam.lookAt(P.look.x, P.look.y, P.look.z);
+    _introCam.updateProjectionMatrix(); _introCam.updateMatrixWorld(true);
+    for (const m of mine) {
+      const r = m.root.position;
+      _introV.set(r.x, r.y + 2.2, r.z).project(_introCam);
+      if (_introV.z >= 1 || Math.abs(_introV.x) > F.side || _introV.y > F.top) return false;
+      _introV.set(r.x, r.y - (m.modelYOffset ?? 2.35) - GROUND_BASE_Y, r.z).project(_introCam);
+      if (_introV.z >= 1 || Math.abs(_introV.x) > F.side || _introV.y < F.foot) return false;
+    }
+    return true;
+  };
+  let best = null, bestN = -1, bestFit = false;
+  const full = () => bestN === mine.length && bestFit;
+  for (const k of INTRO.near) {
+    for (const deg of INTRO.yaws) {
+      const P = at(deg, k), n = sees(P.cam), f = n === mine.length && fits(P);
+      if (n > bestN || (n === bestN && f && !bestFit)) { best = P; bestN = n; bestFit = f; }
+      if (full()) break;
+    }
+    if (bestN === mine.length) break;   // (nearer is tried only when no angle at this distance sees the whole team)
+  }
+  // the push in: along the camera's own line from further out, where that start has a clear line to the team's middle
+  let from = 1;
+  const mid0 = { x: C.x, y: C.y - 0.8, z: C.z };
+  for (const f of INTRO.pushFrom) {
+    const s = { x: best.look.x + (best.cam.x - best.look.x) * f, y: best.look.y + (best.cam.y - best.look.y) * f, z: best.look.z + (best.cam.z - best.look.z) * f };
+    if (botHasLineOfSight(mid0, s, arenaObstacles, arenaSurfaces)) { from = f; break; }
+  }
+  return { cam: best.cam, look: best.look, fov: best.fov, from, fovFrom: from > 1 ? 1 : INTRO.pushFov, seen: bestN, fits: bestFit };
+}
+// the battle's own marks out of the picture, every frame of the intro (online the match's frame has just set them)
+function introHideBattle() {
+  hideAllyEdgeArrow(); hideEnemyEdgeArrow();
+  if (state.reticle) state.reticle.visible = false;
+  if (state.allyArrow) state.allyArrow.visible = false;
+  if (state.enemyArrow) state.enemyArrow.visible = false;
+  for (const m of getAllFighters()) { if (m?.laserSightVisual) m.laserSightVisual.visible = false; }
+}
+// the own unit's X-ray silhouettes (drawn wherever nearer geometry hides it): away through the team shots, back after them
+function introGhosts(show) {
+  for (const m of getAllFighters()) {
+    const mr = m?.modelHolder?.userData?.modelRig;
+    if (mr) for (const g of mr.silhouettes ?? []) g.visible = show && !!mr.own;
+    if (!show) for (const g of m?.xRayGhosts ?? []) g.visible = false;   // (the billboard's: play's updateMechXRayVisibility sets them again)
+  }
+}
+// GET READY's band for team `i` (0: team 1)
+function introBand(i) {
+  intro.band?.remove(); intro.band = null;
+  const team = intro.teams[i];
+  if (!team?.length) return;
+  const noSide = !!state.spectatorActive || !!(state.online && state.online.myPlayerId === 'spectator');
+  const colourOf = (m) => { const role = roleOfMech(m); const sid = state.online?.slotMap ? onlineServerIdOf(role) : null; return (sid && SLOT_HUD_COLORS[sid]) || FINALE_ROLE_COLOURS[role] || '#ffffff'; };
+  const el = document.createElement('div');
+  el.className = 'intro-band';
+  el.style.setProperty('--c', colourOf(team[0]));
+  el.style.opacity = '0';
+  el.innerHTML = `<span class="ib-team"><u></u>${INTRO.words.team} ${i + 1}</span><span class="ib-word">${INTRO.words.ready}</span><span class="ib-units">`
+    + team.map((m) => `<span class="ib-who" style="--c:${colourOf(m)}"><span class="chip-face">${chipFaceImg(m.unit)}</span><b>${m.unit.char || m.unit.name}</b><i>${noSide ? '' : (HUD_SIDE_WORD[roleOfMech(m)] || '')}</i></span>`).join('')
+    + '</span>';
+  app.appendChild(el);
+  // (names too long for the screen: the whole band a size smaller — it is sized in em — never a cut name)
+  if (el.scrollWidth > el.clientWidth + 1) el.style.fontSize = `${(parseFloat(getComputedStyle(el).fontSize) * el.clientWidth / el.scrollWidth * 0.98).toFixed(2)}px`;
+  intro.band = el; intro.bandT0 = intro.t;
+}
+// START: the word between its two bars
+function introGo() {
+  intro.go?.el.remove();
+  const el = document.createElement('div');
+  el.className = 'intro-go';
+  el.style.opacity = '0';
+  el.innerHTML = `<i class="ig-ln ig-cap"></i><span class="ig-word">${INTRO.words.go}</span><i class="ig-ln ig-bot"></i>`;
+  app.appendChild(el);
+  intro.go = { el, cap: el.children[0], word: el.children[1], bot: el.children[2], s: -1 };
+}
+// into the team shots / out of them: the near plane, the window's list and its twins, the silhouettes
+function introShotsOn() {
+  intro.prevNear = camera.near;
+  if (camera.near < INTRO.nearPlane) { camera.near = INTRO.nearPlane; camera.updateProjectionMatrix(); }
+  introGhosts(false);
+  if (seeHere()) seeBegin();   // (THE SEE-THROUGH WINDOW on Town: the arena's meshes listed for the shots)
+}
+// Town's twins for the shots to come, made now (seeWarmFor): for each unit of each team still to be shown, from where its
+// shot's camera starts its push and from where it stands
+function introSeeWarm(fromTeam) {
+  if (!see.on) return;
+  for (let i = fromTeam; i < 2; i += 1) {
+    const S = i === fromTeam ? intro.shots[i] : introTeamShot(i);
+    if (!S) continue;
+    const start = { x: S.look.x + (S.cam.x - S.look.x) * S.from, y: S.look.y + (S.cam.y - S.look.y) * S.from, z: S.look.z + (S.cam.z - S.look.z) * S.from };
+    for (const m of intro.teams[i]) { seeWarmFor(S.cam, m); if (S.from > 1) seeWarmFor(start, m); }
+  }
+}
+function introShotsOff() {
+  seeEnd();
+  if (intro.prevNear != null && camera.near !== intro.prevNear) { camera.near = intro.prevNear; camera.updateProjectionMatrix(); }
+  intro.prevNear = null;
+  introGhosts(true);
+}
+// a stage begins: 1 team 1's shot, 2 team 2's, 3 START over the viewer's own view
+function introEnter(stage) {
+  const wasShots = introShots();
+  intro.stage = stage;
+  intro.teams = introTeams();
+  wallFadeSnap = true;   // (a cut: what blocks the new view is faded at once, what blocked the old one solid at once — updateWallFade)
+  if (stage <= 2) {
+    if (!wasShots) introShotsOn();
+    for (const m of intro.teams[stage - 1]) m.root.updateMatrixWorld(true);   // (the window's gate reads the bones' places: current before the shot's first picture)
+    intro.shots[stage - 1] = introTeamShot(stage - 1);
+    introFaceNow(stage - 1);   // (THE FACE, b1105hc: the team turned for its shot before the shot's first picture)
+    introSeeWarm(stage - 1);
+    introBand(stage - 1);
+    return;
+  }
+  if (wasShots) introShotsOff();
+  intro.band?.remove(); intro.band = null;
+  introGo();
+  // the viewer's own view, settled: the chase camera eases toward its place a frame at a time — run to its end here, so START
+  // stands over the view the match opens on and not over the camera's flight back (as the Sudden Death banner does)
+  // (free pov in Sudden Death: the crosshair on the enemy from here, where the banner that follows START puts it — no turn of
+  //  the view as the banner comes; a free-pov match of the other rules opens on the aim it had, as it always did)
+  if (!intro.online) { updateTransforms(0); if (state.freePov && state.suddenDeathActive) freePovAimAtEnemy(); }
+  for (let i = 0; i < 60; i += 1) updateCamera();
+}
+// offline, the match's opening stamps: the guns' clocks from this moment, every bot's first round 650 ms on (startMatch, and
+// again as the intro or the Sudden Death banner ends — the match begins then)
+function stampMatchOpen(now) {
+  getAllFighters().forEach((m) => {
+    m.state.lastFireAt = now;
+    m.state.fireInitAt = now;   // (not a shot: the SD brain's "heard a round" test ignores this stamp)
+  });
+  // (every BOT slot waits 650 ms before its first round — the ally and a spectated player slot too, as the server stamps
+  // every bot slot; alignment check 2026-10-09)
+  for (const m of [state.enemy, state.enemy2, state.ally, state.spectatorActive ? state.player : null]) if (m) m.state.nextFireAt = now + 650;
+  state.matchStartAt = now;
+}
+// the intro begins. Offline: from its first moment, the sim held. Online: `leftMs` of it left by the server's clock.
+function startIntro({ online = false, leftMs = 0 } = {}) {
+  introClear();
+  const now = performance.now();
+  intro.active = true; intro.online = online; intro.tok += 1; intro.stage = 0; intro.last = now;
+  intro.t = 0;
+  intro.endLocal = now + leftMs;
+  intro.teams = introTeams(); intro.shots = [null, null];
+  if (!online) { state.running = false; updateTransforms(0); }   // (the units on their spawns before the first shot is found)
+  document.documentElement.classList.add('intro-on');
+  updateIntro(0, now);
+}
+// every frame of the intro (animate: offline in the sim's place, online after the match's own frame)
+function updateIntro(dt, now) {
+  if (!intro.active) return;
+  if (intro.online) {
+    // THE CLOCK ONLINE: the server releases the match at endLocal whatever this page's frames did meanwhile — it came to the
+    // match a moment late, its map still building, or its first picture took a long frame. What is left of the sequence is
+    // played in what is left of the time: at its own pace when the page is on time, a little faster after a stall (`catchUp`
+    // at most), and past that the sequence is joined further on — so START leaves as the server's hold ends, on every screen.
+    // (A page that is early holds the first frame until the sequence's time has come.)
+    const total = introTotalMs(), dt = Math.max(0, now - intro.last), had = intro.endLocal - intro.last;   // (`had`: the time left as the last frame was drawn)
+    intro.last = now;
+    if (had <= 0) intro.t = total;
+    else {
+      if (total - intro.t > INTRO.catchUp * had) intro.t = total - INTRO.catchUp * had;   // (too far behind: joined further on)
+      const rate = intro.t <= 0 && had > total ? 0 : (total - intro.t) / had;
+      intro.t = Math.min(total, intro.t + dt * rate);
+    }
+  } else {
+    if (state.phase === 'pause') { intro.last = now; return; }   // (PAUSE's menu is up: the intro's clock stands)
+    if (matchCoverUp && intro.stage) { intro.last = now; return; }   // (THE LOADING SCREEN, b1105hd: the first shot is entered — its camera placed, its picture drawn under the screen — and the clock stands until the screen is off)
+    intro.t += Math.max(0, Math.min(100, now - intro.last));     // (real time, a tenth of a second at most a frame: a hidden tab does not run it out)
+    intro.last = now;
+  }
+  const T1 = INTRO.pushMs + INTRO.standMs, T2 = 2 * T1, T3 = T2 + INTRO.startMs, t = intro.t;
+  const stage = t < T1 ? 1 : t < T2 ? 2 : t < T3 ? 3 : 4;
+  if (stage === 4) { endIntro(now); return; }
+  const entered = stage !== intro.stage;
+  if (entered) introEnter(stage);
+  if (!intro.online) updateTransforms(dt);
+  const pop = (t0) => { const p = Math.max(0, Math.min(1, (t - t0) / Math.max(1, INTRO.popMs))); return 1 - (1 - p) ** 3; };
+  if (stage <= 2) {
+    // a team's shot: the push in along the camera's own line, eased out into the stand
+    const S = intro.shots[stage - 1];
+    if (S) {
+      const u = Math.max(0, Math.min(1, (t - (stage - 1) * T1) / Math.max(1, INTRO.pushMs))), e = 1 - (1 - u) ** 3;
+      const k = S.from + (1 - S.from) * e;
+      camera.position.set(S.look.x + (S.cam.x - S.look.x) * k, S.look.y + (S.cam.y - S.look.y) * k, S.look.z + (S.cam.z - S.look.z) * k);
+      camera.lookAt(S.look.x, S.look.y, S.look.z);
+      const fov = S.fov * (S.fovFrom + (1 - S.fovFrom) * e);
+      if (fov !== camera.fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    }
+    if (intro.band) {
+      const e = pop(intro.bandT0);
+      intro.band.style.opacity = e.toFixed(3);
+      intro.band.style.transform = `translateX(${(-(1 - e) * 4).toFixed(3)}%) rotate(-2.2deg)`;
+    }
+    seeUpdate(now);   // (THE SEE-THROUGH WINDOW on Town: over each unit of the team that something hides)
+    if (!intro.online || entered) updateWallFade();   // (online the match's frame runs it, on the camera as this left it — but for the frame of a cut, run here on the new view)
+  } else {
+    // START over the viewer's own view: it pops in, stands, and swipes out over the last swipeMs
+    if (!intro.online) { updateCamera(); updateMechXRayVisibility(); updateWallFade(); updateHud(); updateDioramaHud(); }
+    else if (entered) updateWallFade();   // (the cut back to the viewer's own view: the fade at once)
+    const g = intro.go;
+    if (g) {
+      const e = pop(T2);
+      g.el.style.opacity = e.toFixed(3);
+      g.el.style.transform = `translate(-50%, -50%) rotate(-6deg) scale(${(1.4 - 0.4 * e).toFixed(4)})`;
+      const s = Math.max(0, Math.min(1, (t - (T3 - INTRO.swipeMs)) / Math.max(1, INTRO.swipeMs))), se = s * s;
+      if (se !== g.s) {
+        g.s = se;
+        const W = window.innerWidth;
+        g.cap.style.transform = se ? `translateX(${(se * W).toFixed(1)}px)` : '';
+        g.bot.style.transform = se ? `translateX(${(-se * W).toFixed(1)}px)` : '';
+        g.word.style.clipPath = se ? `inset(-0.3em -0.4em -0.3em ${(se * 100).toFixed(2)}%)` : '';
+        g.word.style.transform = se ? `translateX(${(se * 0.46).toFixed(3)}em)` : '';
+      }
+    }
+  }
+  introHideBattle();
+}
+// the intro's own things away — its words, the HUD's gate, the team shots' camera settings and window (its end, a match
+// torn down under it, a lobby that moved on)
+function introClear() {
+  if (!intro.active && !intro.band && !intro.go) return;
+  const wasShots = introShots();
+  intro.active = false; intro.stage = 0;
+  intro.band?.remove(); intro.band = null;
+  intro.go?.el.remove(); intro.go = null;
+  document.documentElement.classList.remove('intro-on');
+  if (wasShots) introShotsOff();
+  wallFadeSnap = false;
+}
+// START is gone: the match begins — in Sudden Death after its banner
+function endIntro(now) {
+  const online = intro.online;
+  introClear();
+  if (online) {
+    // (the server releases the match at this moment — in Sudden Death after the banner, which stays for what is left of the hold)
+    const left = (state.online?.holdLocalUntil ?? 0) - now;
+    if (state.suddenDeathActive && left > 60) showSuddenDeathBanner(left);
+    return;
+  }
+  if (state.phase !== 'match') return;
+  input.shootTap = false; input.stepTap = false; input.jump = false;   // (a key pressed during the intro is no order for the match's first frame)
+  if (state.suddenDeathActive) { showSuddenDeathBanner(); return; }    // (its own hold, then the match: showSuddenDeathBanner)
+  stampMatchOpen(now);
+  state.running = true;
+}
+
+// ============================================================================
 // THE FINALE (PT b1105gb proto; user 2026-11-11: "a sudden camera hijack for every player, which taken from the third person
 // view (three-quarter view, high angle) to watch the last killed unit's death motion in 0.5times speed? After that the camera
 // hijack shows the victory motion of the unit who delivers the final blow (if all units are dead, skip this one) in normal
@@ -11470,8 +12155,9 @@ function tickTrioRespawns() {
 // THE HOLD AT THE END (b1105gy; user 2026-11-12: "if the player doesn't skip, make the screen stops at the end of winner
 // camera. It won't move on to the team ending screen unless player taps again. If the player taps skips anytime before the end
 // of winner camera, the screen skips to the team ending screen."): the end page no longer comes by itself. When the last shot
-// has run its length (finale.held) everything stays as it is — the camera, the unit on its motion's last frame, the call, the
-// hint — until a tap or a key press, which goes to the end page as a skip does. The last shot is shot 2; where there is none
+// has run its length (finale.held) everything stays as it is — the camera, the call, the hint; the unit at ease, its stand
+// motion going round, since b1105he (on its motion's last frame until then) — until a tap or a key press, which goes to the
+// end page as a skip does. The last shot is shot 2; where there is none
 // (the final blow's unit down with a teammate standing, or no shooter known) it is shot 1, held on the fallen unit — this
 // side's reading, the message naming the winner camera alone: one rule for every ending, and no end page arriving under a
 // finger that meant to end the hold. Online the lobby moving on still ends it (a rematch begun, the room left: the phase
@@ -11488,13 +12174,33 @@ function tickTrioRespawns() {
 // (b1105gl; user: "For Iori specifically, show her winning camera in normal speed." — a model's own `victoryRate`, gone with
 // her exception), and shot 2 lasted 3.1 to 5.3 s. With EVERY UNIT DOWN shot 2 keeps the normal ending's length, as asked for
 // it — the two holds and the motion's length — and the unit lies still through it.
+// THE IDLE AFTER THE VICTORY (b1105he; user 2026-11-13: "In the winner camera, after the reload motion is completed, loop the
+// idle motion every unit uses for their stand motions. I will provide special motion for ARIS/HARUKA/HOSHINO to use in this
+// situation, but for now use their standing motion as well."): the victory motion plays its one pass and the unit then goes
+// back to its STAND clip, looping, for as long as the frame stays up — through the closing hold and THE HOLD AT THE END,
+// until the tap. It used to stop on the motion's last frame and stand frozen there, however long the player looked. The
+// change of clip is the one play makes whenever a reload ends: the model's own blend (a cut for a model that cuts,
+// Hoshino). Every unit by the one rule, the three shell-by-shell guns too (their own motion for this moment is to come:
+// the stand clip stands in for it — Aris's and Hoshino's came at b1105hg, THE ENDING LOOP below). Nothing of the timing moves: the opening hold, the motion at its own speed, shot 2's
+// length and the moment the skip is armed are as they were; a unit that lies fallen through shot 2 (EVERY UNIT DOWN) lies still.
+// THE ENDING LOOP (b1105hg; user 2026-11-13, with Aris's and Hoshino's model files: "these are the files to use to update the
+// winner camera ending loop. Only Aris and Hoshino need update. Use "01_Normal_Idle" from Hoshino glb and "Normal_Idle" from
+// Aris glb as their ending loops after the reload motion in winner camera."): the motion promised at b1105he for two of the
+// three. A model may name the loop its unit holds once its victory motion is over (`victoryIdle`, UNIT_MODELS); Aris's is
+// Normal_Idle and Hoshino's 01_Normal_Idle, each at its own speed — their battle stance, the weapon held up, where the stand
+// clip (Formation_Idle) lowers it. The two files sent are, byte for byte, the models the game already serves, so nothing is
+// added to a download: the clips were in them (Aris's ground walk holds the same clip at half speed). The loop is for the
+// final blow's unit in shot 2 alone and only after the motion's one pass: through the take and the opening hold it stands
+// on its stand clip as before, and a teammate in the frame, Aris or Hoshino too, keeps the stand clip. The change of clip
+// is the model's own (Aris blends, Hoshino cuts). Every other unit, Haruka among them, goes back to its stand clip as at b1105he.
 // Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
 // its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
 // (b1105gf) — less the site's photo mode, which this tree does not carry; b1105gg (shot 2 turned 30° round to the unit's
 // right, EVERY UNIT DOWN) the same day (user: "Update to 9.7."); b1105gh (THE NEXT ROSTER UNIT, THE CALL) and b1105gi (THE
 // VICTORY ONCE, updateUnitModelState) at b1105gj (user: "Update cameras and Town to 9.7."); b1105gk (the victory at 0.6 of its
 // speed) and b1105gl (Iori's own rate) at b1105gl (user: "Then update to 9.7."), both replaced by b1105gu (THE VICTORY'S TIMING)
-// the same day (user: "PT and 9.7").
+// the same day (user: "PT and 9.7"); THE IDLE AFTER THE VICTORY (b1105he) and THE ENDING LOOP
+// (b1105hg) at b1105hg (user 2026-11-13: "Update all new added/fixed features to 9.7.").
 const FINALE = {
   // the last killed unit's death motion at 0.6 of its speed (b1105gf; 0.5 as first asked, then, user 2026-11-12: "Im thinking
   // playing the death motion in 0.5 times speed is too slow, make it 0.6 times."): shot 1 lasts the motion's length over this
@@ -11554,7 +12260,7 @@ const FINALE = {
   // lethal hit names a slot, not a unit): a round lives 2.2 s (the sim's PROJECTILE_TTL_S), and a snapshot can be late
   heirWindowMs: 2500,
 };
-const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null, held: false };   // (`held`: the last shot has run its length and waits for a tap, b1105gy)
+const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null, held: false, victoryOver: 0 };   // (`held`: the last shot has run its length and waits for a tap, b1105gy; `victoryOver`: the finale — its `tok` — whose victory motion has played its pass, b1105he)
 if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
 
 // the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
@@ -11573,16 +12279,30 @@ function finaleClipSeconds(m, key) {
 }
 // the pose a unit holds during the finale (updateUnitModelState; `now`: the frame's clock, the shots'): the fallen unit's death
 // from its first frame in shot 1, the final blow's unit its victory (the reload clip for now) in shot 2 — at ease through the
-// opening hold (FINALE.holdBeforeVictoryS, b1105gu), then the motion from its first frame at FINALE.victoryRate, one pass held on
-// its last frame (`once`: a shell-by-shell gun's reload loops in play, b1105gi) — or, down itself (EVERY UNIT
+// opening hold (FINALE.holdBeforeVictoryS, b1105gu), then the motion from its first frame at FINALE.victoryRate, one pass
+// (`once`: a shell-by-shell gun's reload loops in play, b1105gi), then at ease again, its stand motion going round (THE IDLE
+// AFTER THE VICTORY, b1105he; held on the motion's last frame until then) or the loop its model names for this moment (THE
+// ENDING LOOP, b1105hg) — or, down itself (EVERY UNIT
 // DOWN), its death motion's last frame from the finale's first to its last (`end`) —, every other living unit at ease
 function finalePoseFor(m, now) {
   if (!finale.active) return null;
   if (finale.shot === 1 && m === finale.victim) return { want: 'death', rate: FINALE.deathRate, token: `d${finale.tok}`, restart: true };
   if (m === finale.killer && finale.killerDown) return { want: 'death', rate: 1, token: `x${finale.tok}`, restart: true, end: true };
-  if (finale.shot === 2 && m === finale.killer && now - finale.shotT0 >= FINALE.holdBeforeVictoryS * 1000) return { want: 'reload', rate: FINALE.victoryRate, token: `v${finale.tok}`, restart: true, once: true };
-  if ((m?.state?.hp ?? 0) > 0) return { want: 'stand', rate: 1, token: 'stand', restart: false };
-  return null;
+  if (finale.shot === 2 && m === finale.killer && now - finale.shotT0 >= FINALE.holdBeforeVictoryS * 1000 && finale.victoryOver !== finale.tok) {
+    // THE IDLE AFTER THE VICTORY (b1105he, above): the motion's one pass is over when the rig's own clip says so — started
+    // by this finale (its token) and stopped on its last frame — not by the clock, so a slow device's unit finishes its
+    // motion too; from then on the unit is at ease like the rest (the line below), its stand motion going round
+    const rig = m.modelHolder?.userData?.modelRig, e = rig?.actions?.reload;
+    const over = !e || (rig.current === 'reload' && rig.cineToken === `v${finale.tok}` && (e.action.paused || e.action.time >= e.dur - 1e-3));
+    if (!over) return { want: 'reload', rate: FINALE.victoryRate, token: `v${finale.tok}`, restart: true, once: true };
+    finale.victoryOver = finale.tok;
+  }
+  if ((m?.state?.hp ?? 0) <= 0) return null;
+  // THE ENDING LOOP (b1105hg, above): the final blow's unit, its victory motion over, on the loop its model names for this
+  // moment (`victoryIdle`: Aris, Hoshino); a model that names none is given its stand clip where the pose is taken up
+  // (updateUnitModelState: a clip the rig lacks is the stand clip), as every other living unit is
+  if (finale.shot === 2 && m === finale.killer && finale.victoryOver === finale.tok) return { want: 'victoryIdle', rate: 1, token: 'stand', restart: false };
+  return { want: 'stand', rate: 1, token: 'stand', restart: false };
 }
 // a shot of a unit: where the camera stands, the point it looks at, its lens — found, not yet taken
 function finaleCameraPose(m, cfg) {
@@ -11732,25 +12452,37 @@ const SEE = {
   warmMs: 4000,      // how often a match looks for a material of the map that has no twin yet
   warmGapMs: 50,     // and, one found and made, how soon for the next
 };
+// TWO WINDOWS (b1105gz): the game-start intro's team shot shows two units at once, each with a window of its own when
+// something hides it — the second set of four below (a2, r2, f2, p2); the finale's stops use the first alone. A window of
+// its own for each, not one wide window over both: the cut is made BEFORE each unit's own upright plane and ABOVE its own
+// floor, and one plane for two units a dozen units apart would leave a wall between them standing or open the one behind.
 const seeU = {
   a: { value: new THREE.Vector4() },                // the unit's middle (camera space); w 1 while the window is open
   r: { value: new THREE.Vector4() },                // xy the window's half-axes at the unit; z the floor plane's offset
   f: { value: new THREE.Vector4() },                // the upright plane before the unit: normal and offset (cut on the camera's side)
   p: { value: new THREE.Vector4() },                // the plane of the camera's line to the unit's feet: normal and offset (cut above)
+  a2: { value: new THREE.Vector4() }, r2: { value: new THREE.Vector4() }, f2: { value: new THREE.Vector4() }, p2: { value: new THREE.Vector4() },   // the second window: the same four
   up: { value: new THREE.Vector3(0, 1, 0) },        // the world's up
   k: { value: new THREE.Vector2(SEE.soft, 1) },     // x where the rim starts; y the share of a blocker drawn inside (1: shut; `keep` when fully open)
 };
+const seeWin = [{ a: seeU.a, r: seeU.r, f: seeU.f, p: seeU.p }, { a: seeU.a2, r: seeU.r2, f: seeU.f2, p: seeU.p2 }];
 const SEE_FRAG = `
-uniform vec4 uSeeA; uniform vec4 uSeeR; uniform vec4 uSeeF; uniform vec4 uSeeP; uniform vec3 uSeeUp; uniform vec2 uSeeK;
+uniform vec4 uSeeA; uniform vec4 uSeeR; uniform vec4 uSeeF; uniform vec4 uSeeP;
+uniform vec4 uSeeA2; uniform vec4 uSeeR2; uniform vec4 uSeeF2; uniform vec4 uSeeP2;
+uniform vec3 uSeeUp; uniform vec2 uSeeK;
 varying vec3 vSeeView;
 float seeBayer2( vec2 a ) { a = mod( floor( a ), 2.0 ); return fract( a.x * 0.5 + a.y * 0.75 ); }
+float seeCut( vec4 A, vec4 R, vec4 F, vec4 P ) {
+	if ( A.w < 0.5 ) return 0.0;
+	if ( dot( F.xyz, vSeeView ) + F.w <= 0.0 ) return 0.0;
+	if ( dot( uSeeUp, vSeeView ) + R.z <= 0.0 ) return 0.0;
+	if ( dot( P.xyz, vSeeView ) + P.w <= 0.0 ) return 0.0;
+	vec2 d = ( vSeeView.xy * ( A.z / vSeeView.z ) - A.xy ) / R.xy;
+	return 1.0 - smoothstep( uSeeK.x, 1.0, length( d ) );
+}
 void seeThrough() {
-	if ( uSeeA.w < 0.5 ) return;
-	if ( dot( uSeeF.xyz, vSeeView ) + uSeeF.w <= 0.0 ) return;
-	if ( dot( uSeeUp, vSeeView ) + uSeeR.z <= 0.0 ) return;
-	if ( dot( uSeeP.xyz, vSeeView ) + uSeeP.w <= 0.0 ) return;
-	vec2 d = ( vSeeView.xy * ( uSeeA.z / vSeeView.z ) - uSeeA.xy ) / uSeeR.xy;
-	float c = 1.0 - smoothstep( uSeeK.x, 1.0, length( d ) );
+	if ( uSeeA.w < 0.5 && uSeeA2.w < 0.5 ) return;
+	float c = max( seeCut( uSeeA, uSeeR, uSeeF, uSeeP ), seeCut( uSeeA2, uSeeR2, uSeeF2, uSeeP2 ) );
 	if ( c <= 0.0 ) return;
 	float n = seeBayer2( 0.5 * gl_FragCoord.xy ) * 0.25 + seeBayer2( gl_FragCoord.xy );
 	if ( c * ( 1.0 - uSeeK.y ) > n ) discard;
@@ -11758,11 +12490,12 @@ void seeThrough() {
 `;
 function seeCompile(shader) {
   shader.uniforms.uSeeA = seeU.a; shader.uniforms.uSeeR = seeU.r; shader.uniforms.uSeeF = seeU.f; shader.uniforms.uSeeP = seeU.p;
+  shader.uniforms.uSeeA2 = seeU.a2; shader.uniforms.uSeeR2 = seeU.r2; shader.uniforms.uSeeF2 = seeU.f2; shader.uniforms.uSeeP2 = seeU.p2;
   shader.uniforms.uSeeUp = seeU.up; shader.uniforms.uSeeK = seeU.k;
   shader.vertexShader = shader.vertexShader.replace(/void\s+main\s*\(\s*\)\s*\{/, 'varying vec3 vSeeView;\nvoid main() {').replace('#include <project_vertex>', '#include <project_vertex>\n\tvSeeView = mvPosition.xyz;');
   shader.fragmentShader = shader.fragmentShader.replace(/void\s+main\s*\(\s*\)\s*\{/, `${SEE_FRAG}\nvoid main() {\n\tseeThrough();`);
 }
-const seeCacheKey = () => 'see-through-4';
+const seeCacheKey = () => 'see-through-5';
 // (the materials three.js builds from its own chunks: each has the project_vertex chunk the patch hangs on)
 const seePatchable = (m) => !!m && (m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial || m.isMeshMatcapMaterial) && !m.isShaderMaterial;
 // a map material -> its twin (null: one that could not be cloned), for as long as the material lives; `seeVer`: the
@@ -11796,8 +12529,8 @@ function seeArenaMeshes(visit) {
 // opens, and stays open to the stop's end. A stop whose unit is in plain view never opens it, and none of its meshes wears
 // a twin: its picture is the one it was. (A thing drawn with no collision box is not seen by the gate.)
 const _seeP = { x: 0, y: 0, z: 0 };
-function seeHidden(m, bones, floor) {
-  const eye = camera.position, step = Math.max(1, Math.ceil(bones.length / SEE.gatePoints));
+function seeHidden(m, bones, floor, eye = camera.position) {   // (`eye`: the camera's place, or a place it will stand at — seeWarmFor)
+  const step = Math.max(1, Math.ceil(bones.length / SEE.gatePoints));
   for (let i = 0; i < bones.length; i += step) {
     const e = bones[i].matrixWorld.elements;
     if (e[13] < floor + SEE.gateFloor) continue;
@@ -11824,17 +12557,40 @@ function seeWarmTick(now) {
     for (const mat of Array.isArray(o.material) ? o.material : [o.material]) if (!seeTwins.has(mat)) { found = { o, mat }; return; }
   });
   if (!found) { seeWarm.at = now + SEE.warmMs; return; }
-  const t = seeTwinOf(found.mat);
+  seeWarmOne(found.o, found.mat);
+}
+// one material's twin made and its shader compiled, on a stand-in mesh of `o`'s geometry
+function seeWarmOne(o, mat) {
+  const t = seeTwinOf(mat);
   if (!t) return;
-  const stand = new THREE.Mesh(found.o.geometry, t);
+  const stand = new THREE.Mesh(o.geometry, t);
   renderer.compile(stand, camera, scene);
-  if (found.o.userData.fadeBox) {
+  if (o.userData.fadeBox) {
     t.transparent = !t.transparent; t.needsUpdate = true; renderer.compile(stand, camera, scene);
     t.transparent = !t.transparent; t.needsUpdate = true;   // (back as its material is: the next pick is from the twin's own two)
   }
   seeWarm.made += 1;
 }
-const see = { on: false, list: [], worn: new Set(), bones: new Map(), inv: new THREE.Matrix4(), unit: null, shot: 0, since: 0, open: 0 };
+// THE TWINS A SHOT WILL NEED, MADE AS IT IS SET (b1105gz: the game-start intro's team shots stand in the match's first
+// two seconds, before the slow walk above has made any — a twin first met at a shot would compile in that frame): for a
+// unit that is hidden from `eye` (the gate's own question, asked for the place the camera will stand at), every mesh the
+// window on it could open in gets its twin now. A unit in plain view asks for none, so a shot that sees its whole team —
+// the usual one, the shot's place being picked for it — costs nothing here.
+function seeWarmFor(eye, m) {
+  if (!see.on || !m?.root) return;
+  m.root.updateMatrixWorld(true);
+  const bones = seeBones(m), B = seeBody(m, bones, _seeBody);
+  const floor = (m.body?.position.y ?? m.root.position.y - m.modelYOffset) - GROUND_BASE_Y;
+  if (SEE.gate && !seeHidden(m, bones, floor, eye)) return;
+  const dx = B.cx - eye.x, dy = B.cy - eye.y, dz = B.cz - eye.z, l2 = dx * dx + dy * dy + dz * dz || 1, wr = Math.max(SEE.min, Math.max(B.hx, B.hy, B.hz) + SEE.pad);
+  for (const e of see.list) {
+    const t = Math.max(0, Math.min(1, ((e.x - eye.x) * dx + (e.y - eye.y) * dy + (e.z - eye.z) * dz) / l2));
+    const reach = e.r + wr;
+    if ((eye.x + dx * t - e.x) ** 2 + (eye.y + dy * t - e.y) ** 2 + (eye.z + dz * t - e.z) ** 2 > reach * reach) continue;
+    for (const mat of Array.isArray(e.o.material) ? e.o.material : [e.o.material]) if (!seeTwins.has(mat)) seeWarmOne(e.o, mat);
+  }
+}
+const see = { on: false, list: [], worn: new Set(), bones: new Map(), inv: new THREE.Matrix4(), key: '', units: [null, null], since: [0, 0], open: 0 };   // (`key`, `units`, `since`: the stop and its one or two units, each with the moment its window opened — two since b1105gz)
 const _seeV = new THREE.Vector3(), _seeN = new THREE.Vector3();
 // the finale begins: the arena's meshes and their balls, as they stand
 function seeBegin() {
@@ -11863,8 +12619,8 @@ function seeEnd() {
     }
     e.o.material = e.home;
   }
-  see.list.length = 0; see.worn.clear(); see.bones.clear(); see.on = false; see.unit = null; see.shot = 0; see.since = 0; see.open = 0;
-  seeU.a.value.w = 0; seeU.k.value.y = 1;
+  see.list.length = 0; see.worn.clear(); see.bones.clear(); see.on = false; see.key = ''; see.units[0] = null; see.units[1] = null; see.since[0] = 0; see.since[1] = 0; see.open = 0;
+  seeU.a.value.w = 0; seeU.a2.value.w = 0; seeU.k.value.y = 1;
 }
 // a mesh into its twin: the twin as the material is now, at its first wear of this finale (the play fade may have it
 // translucent; a material changed since the twin's shader was picked has it picked again)
@@ -11894,69 +12650,94 @@ function seeBody(m, bones, out) {
   return out;
 }
 const _seeBody = { cx: 0, cy: 0, cz: 0, hx: 0, hy: 0, hz: 0 };
-// every frame of the finale, once its camera stands (finaleShot, updateFinale): at a stop, the gate's question, and — once
-// it is answered yes — the window on the stop's unit and the twins onto whatever mesh lies on the camera's line to it
+// the stop whose units a window may open over this frame, or null: the finale's unit at one of its two stops (none through
+// the take; shot 1's window shut again by the time it ends — the take leaves with the map whole; shot 2 ends on the end page,
+// which covers the picture); the game-start intro's team in view (b1105gz: both units of it, and — the shot being cut into —
+// the window open from its first frame, `inMs` 0, to the cut that ends it)
+function seeStop(now) {
+  if (!SEE.on) return null;
+  if (finale.active) {
+    const m = finale.move ? null : finale.shot === 1 ? finale.victim : finale.shot === 2 ? finale.killer : null;
+    if (!m) return null;
+    return { key: `f${finale.shot}`, units: [m], left: finale.shot === 1 && finale.killer ? finale.dur1 * 1000 - (now - finale.shotT0) : Infinity, inMs: SEE.inMs };
+  }
+  if (introShots()) return { key: `i${intro.stage}`, units: intro.teams[intro.stage - 1], left: Infinity, inMs: 0 };
+  return null;
+}
+// every frame of the finale, once its camera stands (finaleShot, updateFinale), and of the game-start intro's team shots
+// (updateIntro): at a stop, the gate's question for each of its units, and — once it is answered yes for one — the window on
+// that unit and the twins onto whatever mesh lies on the camera's line to it
 function seeUpdate(now) {
   if (!see.on) return;
-  const A = seeU.a.value, K = seeU.k.value;
-  const m = SEE.on && finale.active && !finale.move ? (finale.shot === 1 ? finale.victim : finale.shot === 2 ? finale.killer : null) : null;
-  if (m !== see.unit || finale.shot !== see.shot) { see.unit = m; see.shot = finale.shot; see.since = 0; }   // (another stop, or the take: asked afresh)
-  A.w = 0; K.set(SEE.soft, 1); see.open = 0;
-  if (!m?.root) return;
-  const bones = seeBones(m), B = seeBody(m, bones, _seeBody);
-  const floor = (m.body?.position.y ?? m.root.position.y - m.modelYOffset) - GROUND_BASE_Y;
-  // shut again by the time shot 1 ends: the take leaves with the map whole (shot 2 ends on the end page, which covers the picture)
-  const left = finale.shot === 1 && finale.killer ? finale.dur1 * 1000 - (now - finale.shotT0) : Infinity;
-  if (!see.since && left > SEE.outMs && (!SEE.gate || seeHidden(m, bones, floor))) see.since = now;
-  if (!see.since) return;
-  const s = Math.max(0, Math.min(1, (now - see.since) / SEE.inMs, left / SEE.outMs));
-  if (s <= 0) return;
-  camera.updateMatrixWorld(true);
-  const W = camera.matrixWorld.elements, eye = camera.position;
-  see.inv.copy(camera.matrixWorld).invert();
-  _seeV.set(B.cx, B.cy, B.cz).applyMatrix4(see.inv);
-  if (_seeV.z > -1) return;   // (the unit beside the camera or behind it: nothing of the picture hides it)
-  seeU.up.value.set(0, 1, 0).transformDirection(see.inv);
-  // the box's reach along the camera's right and up
-  const ex = Math.abs(W[0]) * B.hx + Math.abs(W[1]) * B.hy + Math.abs(W[2]) * B.hz, ey = Math.abs(W[4]) * B.hx + Math.abs(W[5]) * B.hy + Math.abs(W[6]) * B.hz;
-  const rx = Math.max(SEE.min, ex + SEE.pad), ry = Math.max(SEE.min, ey + SEE.pad), fl = floor + SEE.floorEps;
-  A.set(_seeV.x, _seeV.y, _seeV.z, 1);
-  seeU.r.value.set(rx, ry, eye.y - fl, 0);
-  K.set(SEE.soft, 1 - s * (1 - SEE.keep));
-  see.open = s;
-  // on the level, from the unit toward the camera
-  let hx = eye.x - B.cx, hz = eye.z - B.cz; const hl = Math.hypot(hx, hz);
-  if (hl > 1e-6) { hx /= hl; hz /= hl; } else { hx = 0; hz = 0; }
-  // the upright plane `front` before the unit's middle: cut on the camera's side of it
-  _seeN.set(hx, 0, hz).transformDirection(see.inv);
-  seeU.f.value.set(_seeN.x, _seeN.y, _seeN.z, hl - SEE.front);
-  // the plane through the camera and the floor `hinge` before the body's near edge: cut above it
-  const ext = Math.abs(hx) * B.hx + Math.abs(hz) * B.hz + SEE.hinge, run = hl - ext, drop = eye.y - fl;
-  const slope = Math.max(-50, Math.min(50, run > 1e-3 ? drop / run : (drop >= 0 ? 50 : -50)));
-  _seeN.set(-slope * hx, 1, -slope * hz).normalize();
-  const off = _seeN.x * (eye.x - (B.cx + hx * ext)) + _seeN.y * drop + _seeN.z * (eye.z - (B.cz + hz * ext));
-  _seeN.transformDirection(see.inv);
-  seeU.p.value.set(_seeN.x, _seeN.y, _seeN.z, off);
-  // a mesh wears its twin from the frame its ball touches the tube from the camera to the unit (and keeps it to the finale's end)
-  const dx = B.cx - eye.x, dy = B.cy - eye.y, dz = B.cz - eye.z, l2 = dx * dx + dy * dy + dz * dz || 1, wr = Math.max(rx, ry);
-  for (const e of see.list) {
-    if (e.home) continue;
-    const t = Math.max(0, Math.min(1, ((e.x - eye.x) * dx + (e.y - eye.y) * dy + (e.z - eye.z) * dz) / l2));
-    const reach = e.r + wr;
-    if ((eye.x + dx * t - e.x) ** 2 + (eye.y + dy * t - e.y) ** 2 + (eye.z + dz * t - e.z) ** 2 <= reach * reach) seeWear(e);
+  const K = seeU.k.value, stop = seeStop(now);
+  const u0 = stop?.units[0] ?? null, u1 = stop?.units[1] ?? null, key = stop?.key ?? '';
+  if (key !== see.key || u0 !== see.units[0] || u1 !== see.units[1]) { see.key = key; see.units[0] = u0; see.units[1] = u1; see.since[0] = 0; see.since[1] = 0; }   // (another stop, or the take: asked afresh)
+  seeU.a.value.w = 0; seeU.a2.value.w = 0; K.set(SEE.soft, 1); see.open = 0;
+  if (!stop) return;
+  let framed = false, open = 0;
+  const eye = camera.position;
+  for (let i = 0; i < 2; i += 1) {
+    const m = see.units[i];
+    if (!m?.root) continue;
+    const bones = seeBones(m), B = seeBody(m, bones, _seeBody);
+    const floor = (m.body?.position.y ?? m.root.position.y - m.modelYOffset) - GROUND_BASE_Y;
+    if (!see.since[i] && stop.left > SEE.outMs && (!SEE.gate || seeHidden(m, bones, floor))) see.since[i] = now;
+    if (!see.since[i]) continue;
+    const s = Math.max(0, Math.min(1, stop.inMs > 0 ? (now - see.since[i]) / stop.inMs : 1, stop.left / SEE.outMs));
+    if (s <= 0) continue;
+    if (!framed) {
+      framed = true;
+      camera.updateMatrixWorld(true);
+      see.inv.copy(camera.matrixWorld).invert();
+      seeU.up.value.set(0, 1, 0).transformDirection(see.inv);
+    }
+    const W = camera.matrixWorld.elements, win = seeWin[i];
+    _seeV.set(B.cx, B.cy, B.cz).applyMatrix4(see.inv);
+    if (_seeV.z > -1) continue;   // (the unit beside the camera or behind it: nothing of the picture hides it)
+    // the box's reach along the camera's right and up
+    const ex = Math.abs(W[0]) * B.hx + Math.abs(W[1]) * B.hy + Math.abs(W[2]) * B.hz, ey = Math.abs(W[4]) * B.hx + Math.abs(W[5]) * B.hy + Math.abs(W[6]) * B.hz;
+    const rx = Math.max(SEE.min, ex + SEE.pad), ry = Math.max(SEE.min, ey + SEE.pad), fl = floor + SEE.floorEps;
+    win.a.value.set(_seeV.x, _seeV.y, _seeV.z, 1);
+    win.r.value.set(rx, ry, eye.y - fl, 0);
+    if (s > open) open = s;
+    // on the level, from the unit toward the camera
+    let hx = eye.x - B.cx, hz = eye.z - B.cz; const hl = Math.hypot(hx, hz);
+    if (hl > 1e-6) { hx /= hl; hz /= hl; } else { hx = 0; hz = 0; }
+    // the upright plane `front` before the unit's middle: cut on the camera's side of it
+    _seeN.set(hx, 0, hz).transformDirection(see.inv);
+    win.f.value.set(_seeN.x, _seeN.y, _seeN.z, hl - SEE.front);
+    // the plane through the camera and the floor `hinge` before the body's near edge: cut above it
+    const ext = Math.abs(hx) * B.hx + Math.abs(hz) * B.hz + SEE.hinge, run = hl - ext, drop = eye.y - fl;
+    const slope = Math.max(-50, Math.min(50, run > 1e-3 ? drop / run : (drop >= 0 ? 50 : -50)));
+    _seeN.set(-slope * hx, 1, -slope * hz).normalize();
+    const off = _seeN.x * (eye.x - (B.cx + hx * ext)) + _seeN.y * drop + _seeN.z * (eye.z - (B.cz + hz * ext));
+    _seeN.transformDirection(see.inv);
+    win.p.value.set(_seeN.x, _seeN.y, _seeN.z, off);
+    // a mesh wears its twin from the frame its ball touches the tube from the camera to the unit (and keeps it to the finale's end)
+    const dx = B.cx - eye.x, dy = B.cy - eye.y, dz = B.cz - eye.z, l2 = dx * dx + dy * dy + dz * dz || 1, wr = Math.max(rx, ry);
+    for (const e of see.list) {
+      if (e.home) continue;
+      const t = Math.max(0, Math.min(1, ((e.x - eye.x) * dx + (e.y - eye.y) * dy + (e.z - eye.z) * dz) / l2));
+      const reach = e.r + wr;
+      if ((eye.x + dx * t - e.x) ** 2 + (eye.y + dy * t - e.y) ** 2 + (eye.z + dz * t - e.z) ** 2 <= reach * reach) seeWear(e);
+    }
   }
+  if (open > 0) { K.set(SEE.soft, 1 - open * (1 - SEE.keep)); see.open = open; }   // (the windows share their openness: the wider of the two — the intro's stand open whole, the finale has one)
 }
 // (a probe's hooks, as __finale: the numbers, the state, how many shader programs the renderer holds, and whether the
 // window leaves a point of a mesh undrawn — the shader's own test)
 if (typeof window !== 'undefined') window.__see = { cfg: SEE, u: seeU, state: see, warm: seeWarm, twinOf: (mat) => seeTwins.get(mat) ?? null, programs: () => renderer.info.programs?.length ?? null,
   cuts: (pt, o) => {
-    const A = seeU.a.value, R = seeU.r.value, F = seeU.f.value, P = seeU.p.value;
-    if (!see.on || !o || A.w < 0.5 || !see.list.some((e) => e.o === o && e.home)) return false;
+    if (!see.on || !o || !see.list.some((e) => e.o === o && e.home)) return false;
     const p = _seeV.copy(pt).applyMatrix4(see.inv);
-    if (F.x * p.x + F.y * p.y + F.z * p.z + F.w <= 0 || seeU.up.value.dot(p) + R.z <= 0 || P.x * p.x + P.y * p.y + P.z * p.z + P.w <= 0) return false;
-    const k = A.z / p.z, d = Math.hypot((p.x * k - A.x) / R.x, (p.y * k - A.y) / R.y);
-    const u = Math.max(0, Math.min(1, (d - SEE.soft) / (1 - SEE.soft)));
-    return (1 - u * u * (3 - 2 * u)) * (1 - seeU.k.value.y) > 0.5;
+    for (const win of seeWin) {   // (either window, b1105gz)
+      const A = win.a.value, R = win.r.value, F = win.f.value, P = win.p.value;
+      if (A.w < 0.5 || F.x * p.x + F.y * p.y + F.z * p.z + F.w <= 0 || seeU.up.value.dot(p) + R.z <= 0 || P.x * p.x + P.y * p.y + P.z * p.z + P.w <= 0) continue;
+      const k = A.z / p.z, d = Math.hypot((p.x * k - A.x) / R.x, (p.y * k - A.y) / R.y);
+      const u = Math.max(0, Math.min(1, (d - SEE.soft) / (1 - SEE.soft)));
+      if ((1 - u * u * (3 - 2 * u)) * (1 - seeU.k.value.y) > 0.5) return true;
+    }
+    return false;
   } };
 
 // the battle's leftovers out of the picture: the edge arrows, the lock, the hit X, the laser sights, the glints, the dash
@@ -12317,7 +13098,9 @@ function getMeleeHitboxCenter(mech, forward = 2.55) {
 }
 
 function showPauseMenu() {
-  if (!state.running || state.phase !== 'match') return;
+  // (THE GAME-START INTRO, b1105gz: "Only the "Pause" HUD will be shown and functioning during these beginning cameras" — the
+  //  sim is not running yet, the intro is: the menu opens over it and its clock stands, updateIntro)
+  if ((!state.running && !intro.active) || state.phase !== 'match' || matchCoverUp) return;   // (nor under THE LOADING SCREEN, b1105hd: the match has not begun)
   state.running = false;
   state.phase = 'pause';
   hideAllyEdgeArrow();
@@ -12335,7 +13118,7 @@ function showPauseMenu() {
     event.preventDefault();
     clearMenus();
     state.phase = 'match';
-    state.running = true;
+    state.running = !intro.active;   // (paused over the game-start intro: back to it, the sim still held — b1105gz)
   });
   menu.querySelector('button[data-action="diorama"]')?.addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -12407,7 +13190,11 @@ function segmentHitsFace(a, b, f) {
   const t = (e2x * qx + e2y * qy + e2z * qz) * inv; return t >= 0 && t <= 1;
 }
 
+// (THE GAME-START INTRO, b1105gz: set for the frame of a cut — the fade's opacities go to their ends at once instead of
+//  easing there, so a thing that hides the new view is not seen whole fading out, nor one that hid the old view fading back)
+let wallFadeSnap = false;
 function updateWallFade() {
+  const snap = wallFadeSnap; wallFadeSnap = false;
   const list = state.wallFadeMeshes;
   if (!list || list.length === 0) return;
   // (b1105dy) a map whose command view keeps everything solid (GLB_MAPS `cmdNoFade`: District): no thing blocks there, so a
@@ -12437,8 +13224,10 @@ function updateWallFade() {
         }
         return false;
       };
-      const pr = cameraFocusMech()?.root;
-      blocking = !!pr && hidesFrom(pr);
+      // (THE GAME-START INTRO's team shot, b1105gz: every unit of the team in view counts — one of them hidden and the thing fades)
+      const shot = introShots() ? intro.teams[intro.stage - 1] : null;
+      if (shot?.length) { blocking = false; for (const sm of shot) { if (sm?.root && hidesFrom(sm.root)) { blocking = true; break; } } }
+      else { const pr = cameraFocusMech()?.root; blocking = !!pr && hidesFrom(pr); }
       // occludeEnemy (Streets bridge deck/rails): ALSO fade while the box
       // hides ANY other living unit from the camera — you always see your
       // target, and (owner report 2026-09-11) your ally too: in command mode
@@ -12490,6 +13279,7 @@ function updateWallFade() {
     }
     const target = blocking ? (mesh.userData.fadeAlpha ?? 0.25) : 1;   // (how far a blocking thing fades: a quarter, or the map's own number — Warehouse, crowded with containers, a tenth; user 2026-10-22)
     if (noFade) mesh.material.opacity = 1;   // (b1105dy: solid at once in a no-fade command view — a thing faded in the shooter view, or by the match's first frames, does not ease back there)
+    else if (snap) mesh.material.opacity = target;   // (a cut of the game-start intro: at once)
     else mesh.material.opacity += (target - mesh.material.opacity) * 0.2;
     // (transparent only while it fades: a transparent mesh is blended and sorted every frame, a double-sided one drawn twice)
     // (b1105be; user: "the transparent effect in concept maps seems to be gone, try to bring them back") the flip must
@@ -12898,7 +13688,9 @@ function anomalyRules() { return !!GLB_MAPS[state.mapKey]?.anomaly && !dioramaAc
 const _mapGltfLoader = new GLTFLoader();   // (the maps' own loader: the 0.8.8 line has no glTF loader of its own, and a modelled map failed to start there — 2026-10-19)
 const MAP_FILE_EXT = '.glb';             // (the served models' extension: .glb on the release lines, .wasm on the PT site, whose host serves no .glb; the 0.8.8 line has no MODEL_FILE_EXT)
 const _mapModelCache = {};     // file -> gltf
-const _mapModelPending = {};   // file -> [callbacks]
+const _mapModelPending = {};   // file -> [[onReady, onFail], …]
+const _mapModelFailed = {};    // file -> true: its last load failed (b1105ha: a match that waited for the model starts without it, as it always could; the next arena build asks for it again)
+const _mapModelProgress = {};  // file -> the share of it that has come in, 0 to 1 (b1105hd: the loading screen's bar, where the browser tells the file's size)
 // THE QUANTIZED MODEL READ BACK AS FLOATS (2026-10-29, the second day; shared/tools/maps/glb_quantize.mjs: a served model's
 // vertex positions are 16-bit integers over each node's box, the node's translation and scale placing them — District's file
 // 5.2 MiB to 4.3). The loader hands such positions over as an interleaved short attribute, which the fade's piece builder
@@ -12925,18 +13717,34 @@ function dequantizeMapModel(scene) {
   if (meshes) scene.updateMatrixWorld(true);
   return meshes;
 }
-function loadMapModel(file, onReady) {
+function loadMapModel(file, onReady, onFail) {   // (`onFail`, b1105ha: told when the load fails — THE LOADING SCREEN, startMatch)
   if (_mapModelCache[file]) { onReady(_mapModelCache[file]); return; }
-  if (_mapModelPending[file]) { _mapModelPending[file].push(onReady); return; }
-  _mapModelPending[file] = [onReady];
+  if (_mapModelPending[file]) { _mapModelPending[file].push([onReady, onFail]); return; }
+  _mapModelPending[file] = [[onReady, onFail]];
+  delete _mapModelFailed[file];
   _mapGltfLoader.load(`${import.meta.env.BASE_URL}${file}${MAP_FILE_EXT}`, (gltf) => {
     dequantizeMapModel(gltf.scene);
     _mapModelCache[file] = gltf;
     const cbs = _mapModelPending[file] || [];
     delete _mapModelPending[file];
-    for (const cb of cbs) cb(gltf);
-  }, undefined, (err) => { console.warn('map model failed to load', file, err); delete _mapModelPending[file]; });
+    for (const [ok] of cbs) ok(gltf);
+  }, (e) => { if (e && e.lengthComputable && e.total > 0) _mapModelProgress[file] = e.loaded / e.total; }, (err) => {
+    console.warn('map model failed to load', file, err);
+    const cbs = _mapModelPending[file] || [];
+    delete _mapModelPending[file];
+    _mapModelFailed[file] = true;
+    for (const [, fail] of cbs) fail?.(err);
+  });
 }
+// (b1105ha, THE MAP FIRST — a probe's reading since b1105hd, where matchLoadBegin asks the same of every thing a match needs)
+// is the map all here — a hand-made map always; a modelled one once its data file is in and its
+// model has loaded (or failed to: nothing more to wait for)?
+function mapReadyFor(mapKey) {
+  const cfg = GLB_MAPS[mapKey];
+  return !cfg || (hasGeneratedData(mapKey) && (!!_mapModelCache[cfg.file] || !!_mapModelFailed[cfg.file]));
+}
+// (a probe's hooks, as __intro: is a map all here, how many meshes the arena holds, is a start waiting, is the cover up)
+if (typeof window !== 'undefined') window.__mapLoad = { ready: (k = state.mapKey) => mapReadyFor(k), meshes: () => { let n = 0; for (const g of arenaDecor) g.traverse((o) => { if (o.isMesh) n += 1; }); return n; }, waiting: () => matchStartWait, cover: () => matchCoverUp };
 function warmMapModel(mapKey) {
   const cfg = GLB_MAPS[mapKey];
   if (cfg) loadMapModel(cfg.file, () => {});
@@ -12965,13 +13773,15 @@ function warmMapData(mapKey) {
 // (NAV_DATA_WAIT_MS) the bots wait without a grid; after that, or without a file, the grid is built as before.
 const _navData = {};   // mapKey -> { bytes, startedAt, failed }
 const NAV_DATA_WAIT_MS = 3000;
-function warmNavData(mapKey) {
-  if (!GLB_MAPS[mapKey] || _navData[mapKey]) return;
-  const rec = _navData[mapKey] = { bytes: null, startedAt: performance.now(), failed: false };
-  fetch(`${import.meta.env.BASE_URL}${navDataFile(mapKey)}`)
+function warmNavData(mapKey) {   // (returns a promise since b1105hd — settled when the file is in or has failed: THE LOADING SCREEN waits for it, so the set-up reads the grid from it)
+  if (!GLB_MAPS[mapKey]) return Promise.resolve();
+  if (_navData[mapKey]) return _navData[mapKey].done;
+  const rec = _navData[mapKey] = { bytes: null, startedAt: performance.now(), failed: false, done: null };
+  rec.done = fetch(`${import.meta.env.BASE_URL}${navDataFile(mapKey)}`)
     .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('HTTP ' + r.status))))
     .then((b) => { rec.bytes = new Uint8Array(b); })
     .catch((e) => { rec.failed = true; console.warn('[nav] no grid file for', mapKey, e?.message ?? e); });
+  return rec.done;
 }
 // The arena's grid: read from the data when it is here and is this arena's; null while the fetch is young; built otherwise.
 function ensureOfflineNavGrid() {
@@ -13134,9 +13944,19 @@ function splitFadeParts(inst, group, cfg, halfX, halfZ) {
   // (user 2026-10-22). An object is a thing when it stands `fadeTall` over the floor at its foot; every face of it is its
   // hull (an object narrower than a body both ways — a post — has none and never fades); it fades whole, alone.
   if (cfg.fadeNodes) {
-    // (an object: the highest ancestor of the mesh that has siblings — the scene's root is wrapped in a chain of single-child
-    // nodes (Sketchfab_model, root, the scene root node), and the objects are the children of the first node that branches)
-    const objOf = (o) => { let obj = o; for (let n = o; n && n !== inst; n = n.parent) if (n.parent && n.parent.children.length > 1) obj = n; return obj; };
+    // (an object: the model's root is wrapped in a chain of single-child nodes (Sketchfab_model, root, the scene root node), and
+    // the objects are the children of the first node that branches. Found INSIDE EACH OF THE SCENE'S TOP NODES on its own
+    // (b1105hf): down from the top node through the single-child wrappers, the first node with several children is the one
+    // whose children are the objects; a top node that never branches — a mesh set beside the model — is an object itself.
+    // Until b1105hf an object was "the highest ancestor of the mesh that has siblings", the scene's own top nodes counted:
+    // right while a model had one top node, and wrong from the day a tool set pieces beside it — Neon's bridge partitions
+    // (b1105fq, 18 meshes at the scene's top) and District's door frames (14) gave the model's root siblings, the root became
+    // the one object, and the WHOLE MAP was a single thing that faded together whenever any face of it hid the player: every
+    // building at once, and the raised pavements of the ground's own tiles with them (user 2026-11-13, at Neon's x -21.19
+    // z 55.74: "the walkway in Neon should not go transparent"). Neon's fadeForce names objects and found none meanwhile.)
+    const objOf = (o) => { const chain = []; for (let n = o; n && n !== inst; n = n.parent) chain.unshift(n);
+      for (let i = 0; i < chain.length - 1; i += 1) if (chain[i].children.length > 1) return chain[i + 1];
+      return chain[0] ?? o; };
     const objs = new Map(); for (const mesh of meshes) { const o = objOf(mesh); let e = objs.get(o); if (!e) { e = { meshes: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; objs.set(o, e); } e.meshes.push(mesh); }
     for (const e of objs.values()) for (const mesh of e.meshes) { const geo = geoOf.get(mesh); const pos = geo.attributes.position; const idx = indexOf(geo); for (let i = 0; i < idx.length; i += 1) { w[0].fromBufferAttribute(pos, idx[i]).applyMatrix4(mesh.matrixWorld); if (w[0].x < e.minX) e.minX = w[0].x; if (w[0].x > e.maxX) e.maxX = w[0].x; if (w[0].y < e.minY) e.minY = w[0].y; if (w[0].y > e.maxY) e.maxY = w[0].y; if (w[0].z < e.minZ) e.minZ = w[0].z; if (w[0].z > e.maxZ) e.maxZ = w[0].z; } }
     let n = 0;
@@ -13919,10 +14739,13 @@ function dioramaActive() {
   // state.online.commandMode at match setup — the whole diorama stack
   // (camera, tilt-shift render, annotation layer, gestures) rides this
   // gate; classic online players and spectators keep the chase view.
+  // THE GAME-START INTRO (b1105gz): its two team shots are the main camera's plain picture for every viewer, a commander
+  // too (as the finale's shots); START then stands over the viewer's own view — the command view where that is chosen.
+  if (introShots()) return false;
   if (state.online) return !!(state.online.commandMode && state.online.slotMap && state.player);
   // The Sudden Death intro (banner over a frozen sim) keeps the chosen view:
   // Command mode renders its diorama behind the banner too.
-  return diorama.enabled && (state.running || !!state.sdIntro);
+  return diorama.enabled && (state.running || !!state.sdIntro || intro.active);
 }
 
 function toggleDiorama(force) {
@@ -13935,7 +14758,7 @@ function toggleDiorama(force) {
     diorama.cam2.snapped = false;   // open on the whole-map overview
     // Apply while a match is live OR paused (the mobile toggle sits in the
     // pause menu, where state.running is false but the arena is built).
-    if (!state.online && (state.running || state.phase === 'pause')) applyDioramaDressing();
+    if (!state.online && (state.running || state.phase === 'pause' || intro.active)) applyDioramaDressing();   // (or through the game-start intro, the sim not yet run — b1105gz)
   } else {
     // Leaving command mode: the player REGAINS direct control of the blue
     // unit and every standing order (ally included) is deleted (owner spec).
@@ -20032,6 +20855,7 @@ function animate() {
       syncKeyboardMovement();
       tickOnline(dt, now);
       if (finale.active) updateFinale(dt, now);   // (THE FINALE online, PT b1105gb)
+      if (intro.active) updateIntro(dt, now);     // (THE GAME-START INTRO online, b1105gz: after the match's own frame — the server holds the match meanwhile)
       // Online has its own update path (no updateProjectileSystem), so the
       // dying-trails fade has to be ticked here too — otherwise online trails
       // sit at full opacity forever, never disposed.
@@ -20143,18 +20967,23 @@ function animate() {
       }
     } else if (finale.active) {
       updateFinale(dt, now);   // (THE FINALE, PT b1105gb: the match frozen, the camera on its shots)
+    } else if (intro.active) {
+      // THE GAME-START INTRO (b1105gz): the sim not yet run — no input, AI, physics or win check — the two team shots and
+      // START over the viewer's own view (updateIntro); the match begins as it ends.
+      updateIntro(dt, now);
     } else if (state.sdIntro) {
       // SUDDEN DEATH INTRO (banner showing): the simulation is frozen — no
       // input, AI, physics, projectiles or win check — but the match view
       // is already live behind the banner: mech visuals synced to their
       // spawn bodies, the chase camera settled behind the player, lock
-      // reticle, arrows, immunity glow and the HUD all running, so the
-      // fight starts the instant the banner is gone.
+      // reticle, arrows and the HUD all running, so the
+      // fight starts the instant the banner is gone. (No spawn glow since
+      // b1105gz: the first spawn has no protection to show.)
       updateTransforms(dt);
       updateLocksAndReticle();
       updateAllyArrow();
       updateEnemyArrow();
-      getAllFighters().forEach((m) => applyImmunityGlow(m, true));
+      getAllFighters().forEach((m) => applyImmunityGlow(m, now < m.state.invulnerableUntil));
       updateCamera();
       updateMechXRayVisibility();
       updateWallFade();
@@ -20165,11 +20994,17 @@ function animate() {
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMapRoof();   // (a modelled map's roof hides in command mode — GLB_MAPS `roof`)
     updateMechAnimations(dt, now);
-    if (dioramaActive() && !finale.active) renderDiorama();   // (the finale's shots through the main camera, command mode too)
-    else renderer.render(scene, camera);
+    // THE LOADING SCREEN (b1105hd): while a match's files are on their way nothing is drawn under it — the frame's time is
+    // the loading's; the match's first frame is drawn once more with nothing culled (matchWarmDraw)
+    if (!(matchCoverUp && !matchCoverUntilDrawn && !matchCoverDrawn)) {
+      if (matchCoverUntilDrawn) matchWarmDraw();
+      if (dioramaActive() && !finale.active) renderDiorama();   // (the finale's shots through the main camera, command mode too — and the game-start intro's team shots, b1105gz: dioramaActive is false through them)
+      else renderer.render(scene, camera);
+    }
   } catch (error) {
     console.error('Render loop error:', error);
   }
+  if (matchCoverUp) loadingTick();   // (THE LOADING SCREEN, b1105hd: its bar; and off once the frame just drawn was the match's first)
   requestAnimationFrame(animate);
 }
 

@@ -262,10 +262,10 @@ export function createMatchState({
     spawnPoints.p4 = { x: p4Spawn.x, y: p4Spawn.y ?? GROUND_BASE_Y, z: p4Spawn.z };
   }
 
-  // Spawn protection — all fighters immune for the first SPAWN_IMMUNITY_MS.
-  for (const f of Object.values(fighters)) {
-    f.invulnerableUntil = startTime + SPAWN_IMMUNITY_MS;
-  }
+  // No spawn protection at the match's start (b1105gz; all fighters were immune for the first SPAWN_IMMUNITY_MS until
+  // then): the match is held through the game-start intro and the first units begin it plain — invulnerableUntil stays 0,
+  // which is also what marks a unit's first life for the bots' reference (nbrain.js botDefenseRefLife: a roster unit that
+  // comes on later is stamped by respawnFighterNext, below, and keeps its protection).
 
   // Trio: each fighter carries its ordered roster + current index. These
   // travel in every snapshot, so clients read remaining-unit counts and

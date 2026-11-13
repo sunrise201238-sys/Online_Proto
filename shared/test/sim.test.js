@@ -156,7 +156,9 @@ test('sniper charge — initiates charge on shootTap', () => {
   assert.equal(m.fighters.p1.sniperChargeTargetId, null);
   assert.ok(now - 1000 >= chargeMs, `the charge resolved early: ${now - 1000} ms`);
   assert.equal(m.fighters.p1.ammo, beforeAmmo - 1);
-  assert.ok(m.projectiles.length > 0, 'expected sniper projectile to spawn after charge');
+  // (b1105gz: no spawn protection at the match's start, so the round — 72 u a tick — crosses the 48 u and lands on p2 in the
+  //  tick it is fired; until then p2 was immune for the match's first 3 s and the round flew on, still in the list here)
+  assert.ok(m.projectiles.length > 0 || m.fighters.p2.hp < m.fighters.p2.unit.hp, 'expected the sniper round to be fired after the charge: in the air, or landed on p2');
 });
 
 test('step (dodge) reduces incoming homing window', () => {

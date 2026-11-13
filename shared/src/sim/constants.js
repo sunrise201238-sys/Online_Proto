@@ -933,13 +933,32 @@ export const BOT_SUPPRESS_BURST = 5;
 // b1105fx: every shot blooms, standing or moving; bloom.js.)
 export const HIT_STUN_MS = 100;
 
-// Spawn protection — fighters take no damage for this long at round start.
+// Spawn protection — a roster unit that comes on mid-match (Trio) takes no damage for this long. Not at the match's
+// start since b1105gz (user 2026-11-12, of the game-start intro: "Remove the invincibility for all unit during their first
+// spawn in the game, so there should be no white light surrounding them during the beginning cameras"): the match stands
+// held through the intro (INTRO_MS below), nobody can be hit before it is released, and the first units start it plain.
 export const SPAWN_IMMUNITY_MS = 3000;
+// THE GAME-START INTRO (b1105gz; user 2026-11-12: "When the game starts, the camera zooms in to the slightly high angle,
+// three-quarter view of team1, sticks for a very very short period of time, then does the same to team2, then the player
+// sees the normal playing pov", GET READY over the team shots, START over the player's own view, "Beginning cameras will
+// be unskipable, online and offline"; of the lengths: "每隊拉近 0.5 秒再停 0.5 秒，START 0.8 秒，共 2.8 秒" — "We'll start
+// from here. But you need to make fast response when we start tuning the timing duration later."). ITS LENGTHS, THE ONE
+// PLACE TO TUNE THEM: each team's shot is the camera's push in and then its stand; START stays its own time over the
+// viewer's own view, its swipe out included; the match is held — nobody moves, fires, thinks or can be hit — for the sum,
+// and begins the moment START is gone (in Sudden Death the banner's SD_START_HOLD_MS follows, then the match). Offline the
+// client times it by these; online the server holds every match for INTRO_MS (index.js startMatchFor: `introUntil`) and
+// each client lays the same sequence back from that moment, so every screen reaches START's end together.
+export const INTRO_PUSH_MS = 1000;   // a team's shot: the camera's push in (1 s since b1105ha, user 2026-11-12: "The zoom in is too fast, make zoon in 1sec."; 0.5 s as first set — each team's shot is now 1.5 s and the whole intro 3.8 s)
+export const INTRO_STAND_MS = 500;   // a team's shot: the camera standing, after the push
+export const INTRO_START_MS = 800;   // START over the viewer's own view (its swipe out is the last of it)
+export const INTRO_MS = 2 * (INTRO_PUSH_MS + INTRO_STAND_MS) + INTRO_START_MS;
 // SUDDEN DEATH start hold (owner 2026-10-07, "character already starts
 // moving when banner is still there"): nobody moves, fires or thinks while
 // the banner shows — the offline match already froze for its 2.3 s; the
 // server holds its SD matches the same length (inputs ignored, bots
-// skipped) and the spawn immunity counts from the release, as offline.
+// skipped). Since b1105gz the banner comes after the game-start intro (user 2026-11-12: "in sudden death mode, the SD
+// banner shows up after the \"START\" disappear"): the hold is the intro's length and then this; and no spawn immunity
+// follows it (SPAWN_IMMUNITY_MS above).
 export const SD_START_HOLD_MS = 2300;
 // Lag compensation (2026-10-17, shared/src/sim/history.js): a human's shot is
 // judged against the world their screen showed, at most this far behind the
