@@ -8151,7 +8151,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hg 11-13';
+const CLIENT_BUILD_TAG = 'b1105hh 11-13';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10010,8 +10010,16 @@ function runOnlineMatchFrame(dt, onl, conn) {
   const started = conn.getMatchStart?.() ?? null;
   if (started && onl.introFor !== started) {
     const left = (snap.introUntil ?? 0) - snap.serverTime - Math.max(0, Date.now() - (lastSnapAt || Date.now()));   // (the snapshot's arrival is stamped by the wall clock — connection.js)
-    if (onl.loadFor !== started) { onl.loadFor = started; onl.loadRec = matchLoadBegin(matchNeedsOnline(snap, onl)); }   // (THE LOADING SCREEN online, b1105hd: this match's things asked for once)
-    if (left > 0 && introWanted() && !onl.loadRec.settled) {
+    if (onl.loadFor !== started) { onl.loadFor = started; onl.loadRec = matchLoadBegin(matchNeedsOnline(snap, onl)); onl.loadTold = false; }   // (THE LOADING SCREEN online, b1105hd: this match's things asked for once)
+    // THE LOADING WAIT (b1105hh; shared loadwait.js, its story; user 2026-11-13: the server waits for every player's
+    // files, "up to 30 sec (player would standby in loading screen, correct?)"): a server of this build does not start
+    // the hold's clock until every player's page has loaded — `loadUntil`, in match:start and every snapshot, is the
+    // latest moment it will, and 0 once it has. While that moment is ahead this page stays on its loading screen,
+    // its own things in hand or not, and begins no intro: the clock it would be fitted to has not started. (A server
+    // older than this build sends no `loadUntil`: nothing is waited for and nothing is said — the lines below are as
+    // they were.)
+    const waiting = (snap.loadUntil ?? 0) > snap.serverTime;
+    if (left > 0 && introWanted() && (waiting || !onl.loadRec.settled)) {
       // THE LOADING SCREEN online (b1105hd, as THE MAP FIRST's cover was since b1105ha; startMatch's note): the map or a
       // unit still on its way — no camera on units in an empty scene or on their stand-ins: the screen up and the intro
       // not begun, asked again every frame while any of the server's intro time is left
@@ -10028,6 +10036,16 @@ function runOnlineMatchFrame(dt, onl, conn) {
     //  way here, by a frame that kept it waiting — never early: the earliest one stands, and the sequence closes up to it)
     const end = performance.now() + (snap.introUntil - snap.serverTime) - Math.max(0, Date.now() - (lastSnapAt || Date.now()));
     if (end < intro.endLocal) intro.endLocal = end;
+  }
+  // THE LOADING WAIT (b1105hh): this page's word that it has loaded, once a match and only to a server that waits for it
+  // (its match:start carried `loadUntil`). Said when every file is in or has failed AND the match's picture has been
+  // drawn once under the screen with nothing culled (matchWarmDraw) — the upload to the graphics card is this page's
+  // loading too, and done here it is not done in the intro's first frame. Outside the lines above on purpose: they stop
+  // running once the intro is begun or passed over, and the word must go whatever became of them.
+  if (started && onl.loadFor === started && !onl.loadTold && onl.loadRec?.settled && (started.loadUntil ?? 0) > 0) {
+    onl.loadTold = true;
+    if ((snap.loadUntil ?? 0) > snap.serverTime) matchWarmDraw();   // (while the server still waits: the screen is up over this picture; past the wait's end there is no time to spend on it)
+    conn.sendLoaded?.(started.startTime);
   }
 }
 

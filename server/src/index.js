@@ -32,6 +32,7 @@ import {
   GLINT_CONFIRM_CAP_MS
 } from '@gvg/shared/src/sim/index.js';
 import { SD_START_HOLD_MS, INTRO_MS } from '@gvg/shared/src/sim/constants.js';
+import { beginLoadWait, loadWaitDone, loadWaitOver } from '@gvg/shared/src/sim/loadwait.js';   // THE LOADING WAIT (b1105hh)
 import { warmSimulation, warmMap } from './warmup.js';
 import { normalizeFrame, enqueueFrame, consumeFrames, drainQueue } from '@gvg/shared/src/sim/inputqueue.js';
 
@@ -284,14 +285,26 @@ function startMatchFor(lobby) {
   // sequence back from it (it rides match:start and every snapshot, as holdUntil does), so a client that came to the
   // match late — its map still loading — joins the intro where everyone is and starts with everyone. No spawn immunity
   // follows the hold (state.js createMatchState, b1105gz), and every bot's first round waits 650 ms past it, as offline.
-  lobby.match.introUntil = startTime + INTRO_MS;
-  lobby.match.holdUntil = lobby.match.introUntil + (lobby.suddenDeath ? SD_START_HOLD_MS : 0);
+  // THE LOADING WAIT (b1105hh, loadwait.js): the hold does not begin now but when every player's page has said its
+  // match's things are in hand (`match:loaded`, below), and LOAD_WAIT_MAX_MS after the start at the latest. Waited for:
+  // the seats whose pages said, as they connected, that they report their loading (the handshake's `auth.loadWait`) — a
+  // page older than this build says nothing, would never report, and is not waited for; a bot's seat and a spectator
+  // have nothing to wait for. Until the wait is over `introUntil` and `holdUntil` stand at the LATEST they can be — the
+  // wait's whole length, then the hold — so the match is held throughout (tickLobby) and an older page, which reads
+  // those two alone, stays on its intro's first frame; `loadUntil` (match:start and every snapshot; 0 once the wait is
+  // over, or with nobody to wait for) tells a page of this build that the clock has not started: it stays on its
+  // loading screen. With nobody to wait for the hold begins now, as it always did.
+  const loaders = [];
+  for (const [sid, seat] of lobby.players) if (slots.includes(seat) && io.sockets.sockets.get(sid)?.handshake?.auth?.loadWait) loaders.push(seat);
+  lobby.match.loadWait = beginLoadWait(loaders, startTime);
+  lobby.match.loadUntil = lobby.match.loadWait ? lobby.match.loadWait.until : 0;
   for (const s of slots) {
     const f = lobby.match.fighters[s];
     if (!f) continue;
     if (lobby.suddenDeath) f.hp = 1;
-    if (lobby.botSlots.has(s)) { if (lobby.suddenDeath) f.botSD = true; f.nextFireAt = lobby.match.holdUntil + 650; }   // (offline parity: the bot's first shot waits 650 ms past the hold)
+    if (lobby.botSlots.has(s) && lobby.suddenDeath) f.botSD = true;
   }
+  stampMatchHold(lobby, lobby.match.loadWait ? lobby.match.loadWait.until : startTime);
   // Command side-table entries for every driven command-side slot up front
   // (owner 2026-09-26): the automatic reload hide lands on the entry (badge
   // + order wipe), so it must exist before any order was ever given.
@@ -306,9 +319,30 @@ function startMatchFor(lobby) {
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
   lobby.winnerId = null;
-  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, introUntil: lobby.match.introUntil, holdUntil: lobby.match.holdUntil, shotSeed: lobby.match.shotSeed });
+  io.to(lobby.id).emit('match:start', { startTime, mapKey, mode: lobby.mode, mainMode: lobby.mainMode, suddenDeath: lobby.suddenDeath, loadUntil: lobby.match.loadUntil, introUntil: lobby.match.introUntil, holdUntil: lobby.match.holdUntil, shotSeed: lobby.match.shotSeed });
   emitLobbyConfig(lobby);
-  console.log(`[${lobby.id}] ${lobby.mode}${lobby.suddenDeath ? ' SUDDEN DEATH' : ''} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'})`);
+  console.log(`[${lobby.id}] ${lobby.mode}${lobby.suddenDeath ? ' SUDDEN DEATH' : ''} match started (bots: ${Array.from(lobby.botSlots).join(',') || 'none'}; loading wait: ${loaders.join(',') || 'none'})`);
+}
+
+// the match's hold, its clock started at `t0`: the game-start intro's length from there and, in Sudden Death, the banner
+// after it; every bot's first round 650 ms past it (offline parity). Stamped at the match's start — at once with nobody
+// to wait for, else at the latest the wait allows — and again when THE LOADING WAIT is over (b1105hh).
+function stampMatchHold(lobby, t0) {
+  const m = lobby.match;
+  m.introUntil = t0 + INTRO_MS;
+  m.holdUntil = m.introUntil + (lobby.suddenDeath ? SD_START_HOLD_MS : 0);
+  for (const s of lobby.botSlots) { const f = m.fighters[s]; if (f) f.nextFireAt = m.holdUntil + 650; }
+}
+// THE LOADING WAIT over (b1105hh): every waited page has loaded or left — the clock starts now — or the time has run
+// out — it starts where it stood, at the wait's end. The pages read the new moments off their next snapshot.
+function releaseLoadWait(lobby, now) {
+  const w = lobby.match?.loadWait;
+  if (!w) return;
+  const late = [...w.waiting];
+  lobby.match.loadWait = null;
+  lobby.match.loadUntil = 0;
+  stampMatchHold(lobby, late.length ? w.until : now);
+  console.log(`[${lobby.id}] loading wait over after ${now - lobby.startedAt} ms (${late.length ? 'time out, still loading: ' + late.join(',') : 'all loaded'})`);
 }
 
 function endMatchFor(lobby, winnerId, reason) {
@@ -378,6 +412,7 @@ function emitSnapshotsFor(lobby) {
   const extra = {
     mode: lobby.mode,
     suddenDeath: lobby.suddenDeath,   // (the client reads the rules off the first snapshot, like the map)
+    loadUntil: lobby.match.loadUntil ?? 0,     // (server clock: THE LOADING WAIT's latest end while some page is still loading, 0 once the clock has started — b1105hh)
     introUntil: lobby.match.introUntil ?? 0,   // (server clock: the game-start intro's end, START gone — b1105gz)
     holdUntil: lobby.match.holdUntil ?? 0,   // (server clock; the client mutes its input frames until then)
     botSlots: Array.from(lobby.botSlots),
@@ -433,6 +468,7 @@ function tickLobby(lobby, late = false) {
   if (lobby.state !== 'active' || !lobby.match) return;
   const now = Date.now();
   lobby.match.searchClosed = late;   // (a late tick: no route search this tick — ai.js searchSlot)
+  if (lobby.match.loadWait && loadWaitOver(lobby.match.loadWait, now)) releaseLoadWait(lobby, now);   // (THE LOADING WAIT, b1105hh: the hold's clock starts)
 
   // 1. Drive bots AND command-mode humans — both are tickBot-driven; a
   //    force lock (commandTargetIdOf) overrides the bot target pick, and
@@ -899,6 +935,18 @@ io.on('connection', (socket) => {
     emitLobbyConfig(lb);
   });
 
+  // THE LOADING WAIT (b1105hh, loadwait.js): this seat's page has its match's things in hand. `startTime` names the
+  // match — a word about the match before, arriving after a rematch began, counts for nothing. The wait is found over
+  // at the next tick (tickLobby).
+  socket.on('match:loaded', (data) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match?.loadWait) return;
+    if (!data || data.startTime !== lb.startedAt) return;
+    const seat = lb.players.get(socket.id);
+    if (!SLOT_IDS.includes(seat)) return;
+    loadWaitDone(lb.match.loadWait, seat);
+  });
+
   socket.on('match:start-now', () => {
     const lb = lobbyForSocket(socket);
     if (!lb) return;
@@ -950,6 +998,7 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     lb.players.delete(socket.id);
     if (SLOT_IDS.includes(slot) && lb.state === 'active') {
+      loadWaitDone(lb.match?.loadWait, slot);   // (THE LOADING WAIT, b1105hh: a player who leaves is not waited for)
       // A leaving commander's standing orders die with them; the unit
       // continues (2v2) as a plain bot.
       if (lb.commandSlots.has(slot)) {

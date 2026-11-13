@@ -952,6 +952,11 @@ export const INTRO_PUSH_MS = 1000;   // a team's shot: the camera's push in (1 s
 export const INTRO_STAND_MS = 500;   // a team's shot: the camera standing, after the push
 export const INTRO_START_MS = 800;   // START over the viewer's own view (its swipe out is the last of it)
 export const INTRO_MS = 2 * (INTRO_PUSH_MS + INTRO_STAND_MS) + INTRO_START_MS;
+// THE LOADING WAIT (b1105hh, loadwait.js; user 2026-11-13: the online server waits for every player's files before it
+// starts its clock, "up to 30 sec (player would standby in loading screen, correct?)"): online, the hold above begins
+// when every player's page has said its match's things are in hand, and at the latest this long after the match was
+// started; until then every page stays on its loading screen. THE ONE PLACE TO TUNE IT.
+export const LOAD_WAIT_MAX_MS = 30000;
 // SUDDEN DEATH start hold (owner 2026-10-07, "character already starts
 // moving when banner is still there"): nobody moves, fires or thinks while
 // the banner shows — the offline match already froze for its 2.3 s; the

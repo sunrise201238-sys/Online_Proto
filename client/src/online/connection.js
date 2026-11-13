@@ -14,6 +14,9 @@ export function createConnection() {
   // player was left with "Connection error: websocket error" and a dead page. Now the client never gives up: it retries
   // every 1–5 s (backing off, jittered) for as long as the page is open, and the overlay says the server is waking up.
   const socket = io(SERVER_URL, {
+    // THE LOADING WAIT (b1105hh, shared loadwait.js): this page says as it connects that it reports when a match's things
+    // are in hand (sendLoaded) — the server waits, at a match's start, for the pages that said so and for no other
+    auth: { loadWait: 1 },
     autoConnect: false,
     transports: ['websocket', 'polling'],
     reconnection: true,
@@ -293,6 +296,14 @@ export function createConnection() {
     sendStartNow: () => {
       if (!connected) return;
       socket.emit('match:start-now');
+    },
+
+    // THE LOADING WAIT (b1105hh): everything this page's match needs is in hand and its first picture drawn — `startTime`
+    // is the match's own (match:start), so the word cannot be taken for the next match's. Nothing is answered: the
+    // server's clock starts when every page has said so, and shows in the snapshots (`loadUntil` 0, `introUntil`).
+    sendLoaded: (startTime) => {
+      if (!connected) return;
+      socket.emit('match:loaded', { startTime });
     },
 
     // Move to a different (empty) slot during the lobby. Used by the team
