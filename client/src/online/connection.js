@@ -118,6 +118,7 @@ export function createConnection() {
   });
 
   const hitQueue = [];
+  const firedQueue = [];   // (THE UNIT'S SOUNDS, b1105hk: the trigger pulls of the snapshots since the last drain — see the snapshot handler)
   // THE FINALE (PT b1105gb): the last lethal hit seen, its shooter and its target — a knockout's final blow.
   // (b1105gh) And the lethal hits before it, the last eight, each with the moment it arrived: where a Trio slot's unit fell in
   // the match's last tick the server has refilled the slot before it ends the match, so the LAST lethal hit can be on a
@@ -195,6 +196,18 @@ export function createConnection() {
     // two can land between frames, so the events of the one skipped were lost; the loop drains this (drainHits).
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
     if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
+    // THE UNIT'S SOUNDS (b1105hk): every snapshot's trigger pulls, queued as the hits are. Who fired; as which unit (the
+    // event's own word: in Trio the seat may hold its next unit by the snapshot's end); the pull's number in the sim's
+    // shot counter and the rounds left after it — the seat's own in this snapshot, or, its roster having moved in this
+    // very tick, the count of the unit that stood there plus this pull, and no rounds (that unit is down); and the
+    // page's clock at arrival, for a report that waits is not sounded late.
+    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'fired') {
+      const cur = payload.fighters?.[ev.ownerId], was = latestSnapshot?.fighters?.[ev.ownerId];
+      const moved = !!cur && !!was && (cur.rosterIdx ?? 0) !== (was.rosterIdx ?? 0);
+      const n = moved ? was.shotsFired + 1 : cur?.shotsFired;
+      firedQueue.push({ ownerId: ev.ownerId, unitKey: ev.weapon ?? cur?.unitKey ?? null, shot: Number.isFinite(n) ? n : null, ammo: moved ? 0 : (Number.isFinite(cur?.ammo) ? cur.ammo : null), at: performance.now() });
+    }
+    if (firedQueue.length > 64) firedQueue.splice(0, firedQueue.length - 64);
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit' && ev.targetHp != null && ev.targetHp <= 0) { lastKill = { ownerId: ev.ownerId, targetId: ev.targetId, at: performance.now() }; kills.push(lastKill); if (kills.length > 8) kills.shift(); }
     noteKills(payload, latestSnapshot);   // (THE KILL FEED, b1105gm: against the snapshot before this one)
     prevSnapshot = latestSnapshot;
@@ -240,6 +253,7 @@ export function createConnection() {
     // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),
     drainHits: () => hitQueue.splice(0),   // (HIT X: the hit events queued since the last call)
+    drainFired: () => firedQueue.splice(0), // (THE UNIT'S SOUNDS, b1105hk: the trigger pulls queued since the last call)
     drainKills: () => killQueue.splice(0), // (THE KILL FEED, b1105gm: the knockouts worked out since the last call)
     getSnapshotCount: () => snapshotCount,
     getSnapshotHz: () => snapshotTimes.length,

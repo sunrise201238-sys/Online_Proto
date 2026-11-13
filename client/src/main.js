@@ -6,6 +6,8 @@ import { INTRO_PUSH_MS, INTRO_STAND_MS, INTRO_START_MS } from '@gvg/shared/src/s
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
+import { sfxBoot, sfxPlay, sfxStop, sfxState, bgmPlace, bgmWarm, bgmSetOn, bgmIsOn, bgmState } from './sfx.js';   // (THE GAME'S SOUNDS AND ITS MUSIC, b1105hk)
+import { SFX_UNITS, SFX_SHELL_LEAD_MS } from './sfx_data.js';   // (what plays and how loud: written by the listening site's own tool)
 import {
   tickMatch as simTickMatch,
   emptyInput as simEmptyInput,
@@ -2866,7 +2868,7 @@ function tickAmmo(mech, now) {
     }
     if (s.ammo >= u.magCapacity) s.reloadTickStartAt = 0;
   } else if (s.ammo === 0) {
-    if (!s.reloadingUntil) s.reloadingUntil = now + u.reloadMs;
+    if (!s.reloadingUntil) { s.reloadingUntil = now + u.reloadMs; unitReloadSfx(mech); }   // (THE GAME'S SOUNDS, b1105hk: the reload set going)
     if (now >= s.reloadingUntil) {
       s.ammo = u.magCapacity;
       s.reloadingUntil = 0;
@@ -3749,11 +3751,299 @@ function fireGatePass(st, cooldownMs, now) {
   return true;
 }
 
+// THE GAME'S SOUNDS IN PLAY (b1105hk, user 2026-11-13: "use the OG one, make this Hiyori's gunshot sound" — the first sounds the game
+// had; then a recording for every gun and every other sound, each set to its level by ear on the listening site; then, the site's
+// numbers all standing: "Implement in PT and 9.7"). sfx.js plays them; sfx_data.js — written by the site's own tool from the levels
+// the site plays — says which file each is and how loud, and names each unit's sounds (SFX_UNITS, hung on the unit's row as `sfx`).
+// THE GUNS — whoever holds the unit sounds them (the player, a bot, another player), at one level wherever it stands:
+//   shot    at every trigger pull that fires;
+//   bolt    `boltDelayMs` after a shot that leaves rounds in the magazine (the shot that empties it is followed by the reload
+//           instead); Iori's (`boltCut`) is cut by her next shot — her gun fires again before the bolt's sound is over ("Oh, this");
+//   reload  at each of `reloadAtMs` after a magazine's reload starts (half a second: a shot is at its loudest for that long and
+//           nothing under it would be heard; a machine gun's three passes fill its five seconds, the first at once);
+//   shell   the round going in, for a gun that loads one at a time ("every time HARUKA/HOSHINO/ARIS auto reloads an ammo. Not only
+//           when their reload motions show, but every time their actual ammo reload"): started SFX_SHELL_LEAD_MS before the gain,
+//           so its click falls on the gain;
+//   charge / quick / full   Kei: the charge's own sound from the charge's start, cut when the charge is let go early; the shot of
+//           a cancelled charge (Aris's gunshot: "change Kei's charge cancel shot sound same as Aris gunshot sound"); the full beam;
+//   scope   Aru's and Hiyori's, at a charge's start, for the player whose unit it is alone ("this should be played for the sniper
+//           itself when Hiyori/aru starts their charges").
+// The places a pull and a reload's start are known:
+//  - offline: spawnProjectiles below (the pull that passed the fire gate), spawnBeamOffline and tickAmmo (the reload set going);
+//  - online, the local player's own pull: with the local round its prediction fires at the muzzle (spawnOwnShotVisuals), at
+//    the trigger and not a round trip later;
+//  - online, every pull the server reports (the snapshots' `fired` events, queued by connection.js as the hits are): the other
+//    units', and the local player's own where no local round was fired for it (command mode, a spectator, a pull the
+//    prediction missed). A pull the local round already sounded is passed over: the same pull by its number in the sim's shot
+//    counter, or, from a server without the counter, any local round of the last SHOT_SFX_SAME_MS. A report that waited for
+//    the page (a hidden tab, a stall) longer than SHOT_SFX_FRESH_MS is not sounded late; a quick beam with its picture (syncOnlineBeams);
+//  - online, a reload's start: the unit's mirrored state going from no reload to one (mirrorFighterToMech), once in
+//    RELOAD_SFX_GAP_MS for a unit (the prediction may set the same reload going twice).
+// What a unit's STATE tells is read off it every frame, the same offline and online (updateUnitSfx, from updateHud, in the
+// clock the state's stamps are in): a charge's start and end, the full beam's start, the round's wait, a unit down (its
+// reload's later passes, its bolt, its charge and its round's sound stopped).
+// THE PLAYER'S OWN UNIT ALONE: its steps (five takes in turn, each as a foot of its model comes down — the walk about every
+// 0.6 s, the sprint the same steps twice as fast: "use this for footsteps and sprint (speed up)"; a unit whose feet never
+// come down, Aris hovering, has none), its dodge, its jump and its landing — in the shooter's view, not the command view;
+// the hit hint when its round lands on an enemy and the being-hit sound when one lands on it (with the HIT X's own
+// rule of whose view it is). THE KILL HUD's sound comes with each entry of the kill feed as it comes up — never for the knockout
+// that ends the match, which has no entry; the same sound opens each team's shot of the start intro and the upload's other
+// sound comes with START ("play the killing HUD effect at each team's beginning ... and when the "START" HUD shows up, play
+// the previously removed "head shot killing HUD""). THE UI: its button sound for the pages' buttons and cards, the tick for
+// the small ones (an option's chip, a tab, back, close, the small HUD buttons), the pop in the Pause menu alone.
+const SFX_FILE_EXT = null;   // (each sound and track under its own extension here; the PT site serves every one as .wasm, as it does the models — MODEL_FILE_EXT)
+const SHOT_SFX_FRESH_MS = 250, SHOT_SFX_SAME_MS = 600, RELOAD_SFX_GAP_MS = 1500;
+// THE STEPS FALL WITH THE FEET. The walk's and the sprint's clip of the player's model are each read once for the moments a
+// foot comes down (strideFootfalls, `stride`: the two foot bones by `foot`; each one's height through the clip at `samples`
+// moments; a foot is up above `up` of its travel and comes down as it passes `down` of it; one that travels less than `lift`
+// of the model's height never left the ground; the steps then set evenly through the cycle where they fit those moments
+// best, so the rhythm does not limp). While the model strides — its own choice of clip, with its own hold against a blink —
+// a step sounds as the playing clip passes one of those moments and at no other time, so the rhythm is the clip's at
+// whatever rate it plays, the first step is the first foot down, and a nudge too short to bring one down is silent. A
+// movement whose clip brings no foot down has no steps (Aris hovers, walking and sprinting). The body moving under another
+// clip (a shot or a reload on the walk, a shot on the sprint for the two whose sprint has its own firing clip) keeps the
+// same stride's pace on a clock: a step once that long has passed since the last, and standing read after `graceMs` without
+// travel (one frame that came before the sim stepped is not standing); with no model yet a foot comes down every `walkS`
+// walking and every `runS` sprinting. No step sooner than `minGap` of the stride's step after the last. The air: a leap is a
+// jump when the body rises faster than `jumpRise` (u/s) as it leaves the ground — a walk off an edge is not — and a landing
+// sounds after `airMinMs` in the air.
+const MOVE_SFX = {
+  walkS: 0.6, runS: 0.3, minGap: 0.55, graceMs: 120, jumpRise: 2, jumpWithinMs: 150, airMinMs: 120,
+  stride: { foot: /(?:^|[_ .])([LR])[_ ]?Foot$/i, samples: 48, lift: 0.04, down: 0.1, up: 0.5 },
+};
+sfxBoot(import.meta.env.BASE_URL, SFX_FILE_EXT);
+for (const k in UNIT_DATA) UNIT_DATA[k].sfx = SFX_UNITS[k] ?? null;
+if (typeof window !== 'undefined') window.__sfx = { state: sfxState, play: sfxPlay, stop: sfxStop, bgm: bgmState, place: bgmPlace, bgmOn: bgmSetOn, units: SFX_UNITS, move: MOVE_SFX };   // (a probe's hooks, as __intro)
+// `roundsLeft`: the magazine after this shot (null where it is not known: the bolt then sounds). `mech`: who fired, where known.
+function unitShotSfx(unit, roundsLeft, mech = null) {
+  const x = unit?.sfx;
+  if (!x) return;
+  if (mech?.sfxBolt) { sfxStop(mech.sfxBolt); mech.sfxBolt = null; }   // (the bolt of the shot before, still sounding: cut by this one)
+  if (x.shot) sfxPlay(x.shot);
+  if (x.bolt && !(unit.magCapacity != null && !unit.autoReload && roundsLeft != null && roundsLeft <= 0)) {
+    const v = sfxPlay(x.bolt, (x.boltDelayMs ?? 500) / 1000);
+    if (mech && x.boltCut) mech.sfxBolt = v;
+  }
+}
+function unitReloadSfx(mech) {
+  const x = mech?.unit?.sfx;
+  if (!x?.reload) return;
+  if (mech.sfxReload) for (const v of mech.sfxReload) sfxStop(v);
+  mech.sfxReload = (x.reloadAtMs ?? [0]).map((ms) => sfxPlay(x.reload, ms / 1000)).filter(Boolean);
+}
+// a unit down, or another unit in its seat: what of its sounds is still to come, or still sounding and its own to stop
+function unitSfxStop(mech) {
+  if (!mech) return;
+  if (mech.sfxReload) { for (const v of mech.sfxReload) sfxStop(v); mech.sfxReload = null; }
+  for (const k of ['sfxBolt', 'sfxCharge', 'sfxShell']) if (mech[k]) { sfxStop(mech[k]); mech[k] = null; }
+}
+function beamSfx(mech, full) { const x = mech?.unit?.sfx; if (x) sfxPlay(full ? x.full : x.quick); }
+function shotSfxOnline(f, now) {
+  const unit = UNIT_DATA[f.unitKey];
+  if (!unit?.sfx || now - f.at > SHOT_SFX_FRESH_MS) return;
+  const onl = state.online;
+  if (onl && f.ownerId === onl.myPlayerId) {
+    const mine = onl.ownShotFires ?? [];
+    if (mine.some((o) => (f.shot != null && o.shot != null ? o.shot === f.shot : Math.abs(now - o.at) < SHOT_SFX_SAME_MS))) return;
+  }
+  unitShotSfx(unit, f.ammo, onlineMechOfId(f.ownerId));
+}
+function reloadSfxOnline(mech) {
+  const now = performance.now();
+  if (now - (mech.sfxReloadAt ?? -Infinity) < RELOAD_SFX_GAP_MS) return;
+  mech.sfxReloadAt = now;
+  unitReloadSfx(mech);
+}
+// the hit hint and the being-hit sound: `owner`'s round, beam or pellets landed on `target` (noteHitX's callers)
+function hitSfx(owner, target) {
+  const me = cameraFocusMech();
+  if (!me) return;
+  if (owner === me && getTeamOf(target) !== getTeamOf(me)) sfxPlay('hit');
+  else if (target === me) sfxPlay('hurt');
+}
+// every frame of a match, from updateHud — `now` in the clock the units' stamps are in (the page's offline, the prediction's online)
+function updateUnitSfx(now) {
+  const real = performance.now();
+  for (const m of getAllFighters()) {
+    const st = m?.state, u = m?.unit;
+    if (!st || !u) continue;
+    const w = m.sfxw ?? (m.sfxw = { unit: u, alive: st.hp > 0, charging: !!st.sniperChargeTarget, chargeAt: 0, beam: st.chargedBeamUntil || 0, tick: st.reloadTickStartAt || 0, shellFor: 0, shellDue: 0 });
+    if (w.unit !== u) { unitSfxStop(m); w.unit = u; w.charging = !!st.sniperChargeTarget; w.beam = st.chargedBeamUntil || 0; w.tick = 0; w.shellFor = 0; }   // (Trio: the seat's next unit)
+    const alive = st.hp > 0, x = u.sfx;
+    if (!alive || !x) {
+      if (w.alive && !alive) unitSfxStop(m);
+      w.alive = alive; w.charging = !!st.sniperChargeTarget; w.beam = st.chargedBeamUntil || 0; w.tick = st.reloadTickStartAt || 0; w.shellFor = w.tick;
+      continue;
+    }
+    w.alive = true;
+    // a charge's start and its end
+    const charging = !!st.sniperChargeTarget;
+    if (charging && !w.charging) {
+      w.chargeAt = real;
+      if (x.charge) { if (m.sfxCharge) sfxStop(m.sfxCharge); m.sfxCharge = sfxPlay(x.charge); }
+      if (x.scope && m === state.player) sfxPlay(x.scope);
+    } else if (!charging && w.charging && m.sfxCharge) {
+      if (real - w.chargeAt < (u.chargeMs ?? 1000) - 80) sfxStop(m.sfxCharge);   // (let go early: the charge's sound with it; a full charge's rings out under the beam)
+      m.sfxCharge = null;
+    }
+    w.charging = charging;
+    // the full beam's start
+    const beam = st.chargedBeamUntil || 0;
+    if (beam > 0 && !(w.beam > 0)) beamSfx(m, true);
+    w.beam = beam;
+    // the round going in: its sound a little before the gain
+    if (x.shell && u.autoReload && u.magCapacity != null) {
+      const tick = st.reloadTickStartAt || 0;
+      if (tick !== w.tick) {
+        if (m.sfxShell && w.shellDue - now > 40) sfxStop(m.sfxShell);   // (the wait ended before its round came: the sound begun for it does not click)
+        w.tick = tick; m.sfxShell = null;
+      }
+      if (tick && w.shellFor !== tick && (st.ammo ?? 0) < u.magCapacity) {
+        const due = tick + u.reloadMs;
+        if (now >= due - SFX_SHELL_LEAD_MS && now < due + 100) { w.shellFor = tick; w.shellDue = due; m.sfxShell = sfxPlay(x.shell, Math.max(0, (due - SFX_SHELL_LEAD_MS - now) / 1000)); }
+        else if (now >= due + 100) w.shellFor = tick;   // (seen too late — a stall, a page put away: not sounded after the fact)
+      }
+    }
+  }
+  updateMoveSfx(now, real);
+}
+// WHERE IN A CLIP A MODEL'S FEET COME DOWN (the steps, MOVE_SFX.stride). The clip is run through once on a mixer of its own —
+// the model's mixer, its weights and its blends are not touched, and the pose the model had is put back as that mixer lets go —
+// and each foot's height read in the model's own upright. Returns the steps as fractions of the clip, in order — as many as
+// feet came down, evenly apart (below); none for a clip that brings no foot down (a stand, a hover) or a model without the two
+// foot bones. Kept by clip on the rig (strideOf):
+// one reading each, about a hundredth of a second, taken through the intro where it can be.
+function strideOf(rig, entry) {
+  const clip = entry?.action?.getClip?.();
+  if (!clip || !rig?.mixer) return null;
+  const kept = rig.strides ?? (rig.strides = new Map());
+  let falls = kept.get(clip);
+  if (!falls) { falls = strideFootfalls(rig.mixer.getRoot(), clip, rig.cfg?.height ?? UNIT_SPRITE_HEIGHT); kept.set(clip, falls); }
+  return falls;
+}
+function strideFootfalls(root, clip, height) {
+  const O = MOVE_SFX.stride, feet = { L: null, R: null };
+  root.traverse((o) => { if (!o.isBone) return; const k = O.foot.exec(o.name)?.[1].toUpperCase(); if (k && !feet[k]) feet[k] = o; });
+  if (!feet.L || !feet.R || !(clip.duration > 0)) return [];
+  const up = root.parent ?? root;
+  up.updateWorldMatrix(true, false);
+  const inv = new THREE.Matrix4().copy(up.matrixWorld).invert(), v = new THREE.Vector3();
+  const mixer = new THREE.AnimationMixer(root), act = mixer.clipAction(clip), N = O.samples;
+  const ys = { L: new Float32Array(N), R: new Float32Array(N) };
+  act.play();
+  for (let i = 0; i < N; i += 1) {
+    act.time = clip.duration * i / N; mixer.update(0);
+    for (const k of ['L', 'R']) ys[k][i] = feet[k].getWorldPosition(v).applyMatrix4(inv).y;
+  }
+  mixer.stopAllAction(); mixer.uncacheRoot(root); root.updateMatrixWorld(true);
+  const falls = [];
+  for (const k of ['L', 'R']) {
+    const y = ys[k];
+    let lo = Infinity, hi = -Infinity, top = 0;
+    for (let i = 0; i < N; i += 1) { if (y[i] < lo) lo = y[i]; if (y[i] > hi) { hi = y[i]; top = i; } }
+    const r = hi - lo;
+    if (r < O.lift * height) continue;
+    // (round the cycle from the foot's highest moment, where it is surely up)
+    let down = false;
+    for (let j = 1; j <= N; j += 1) {
+      const i = (top + j) % N;
+      if (!down && y[i] <= lo + O.down * r) { down = true; falls.push(i / N); }
+      else if (down && y[i] >= lo + O.up * r) down = false;
+    }
+  }
+  // THE STEPS EVEN: as many in a cycle as feet came down, the same time apart, set where they fit those moments best (the mean
+  // of the footfalls round the cycle). A foot is read a few hundredths of a cycle from the truth, and a stride's two feet are
+  // not always half a cycle apart to begin with; steps that come 250 and 350 ms apart by turns limp to the ear, while a step a
+  // twentieth of a second from its foot is not seen.
+  const n = falls.length;
+  if (!n) return falls;
+  let sx = 0, sy = 0;
+  for (const f of falls) { const a = 2 * Math.PI * ((f * n) % 1); sx += Math.cos(a); sy += Math.sin(a); }
+  const first = ((Math.atan2(sy, sx) / (2 * Math.PI) + 1) % 1) / n;
+  return falls.map((f, i) => first + i / n);
+}
+// the player's own unit: its dodge, its jump, its landing, its steps
+function updateMoveSfx(now, real) {
+  const m = state.player, st = m?.state;
+  if (!st || !m.root) return;
+  const p = m.root.position;
+  const w = m.sfxm ?? (m.sfxm = { x: p.x, y: p.y, z: p.z, at: real, air: !!st.airborne, airAt: 0, leap: false, step: false, movedAt: -Infinity, last: -Infinity, act: null, ph: 0, n: 0 });
+  const dt = (real - w.at) / 1000, dx = p.x - w.x, dy = p.y - w.y, dz = p.z - w.z;
+  w.x = p.x; w.y = p.y; w.z = p.z; w.at = real;
+  const stepping = st.action === 'step' || now < (st.stepUntil || 0), air = !!st.airborne;
+  const rig0 = m.modelHolder?.userData?.modelRig, rig = rig0?.ready ? rig0 : null;
+  // (the command view has no body of the player's own under the camera: its unit moves there as the others do, unheard)
+  const quiet = st.hp <= 0 || finale.active || intro.active || state.phase !== 'match' || !m.root.visible || dioramaActive();
+  // (a stall, a page put away, a body set down elsewhere — a respawn, a transporter, a snap: nothing is read off that frame)
+  if (quiet || !(dt > 0) || dt > 0.25 || Math.hypot(dx, dz) > MODEL_SNAP_U) {
+    w.air = air; w.step = stepping; w.leap = false; w.act = null;
+    // (the strides read ahead where a frame has the time to spare: through the intro)
+    if (rig && intro.active) { strideOf(rig, rig.actions.walk); strideOf(rig, rig.actions.sprint); }
+    return;
+  }
+  if (stepping && !w.step) sfxPlay('dodge');
+  w.step = stepping;
+  const onLadder = st.ladder != null;
+  if (air && !w.air) { w.airAt = real; w.leap = !onLadder; }
+  if (w.leap) {
+    if (!air || real - w.airAt > MOVE_SFX.jumpWithinMs) w.leap = false;
+    else if (dy / dt > MOVE_SFX.jumpRise) { w.leap = false; sfxPlay('jump'); }
+  }
+  if (!air && w.air && !onLadder && real - w.airAt >= MOVE_SFX.airMinMs) sfxPlay('land');
+  w.air = air;
+  // the steps
+  const run = st.action === 'dash';
+  const base = rig ? rig.actions[run ? 'sprint' : 'walk'] : null;   // this movement's own clip
+  const falls = base ? strideOf(rig, base) : null;                  // its footfalls (none: its feet do not come down)
+  if (air || stepping || onLadder || st.padCharge != null || (falls && !falls.length)) { w.act = null; return; }
+  const period = falls ? base.dur / Math.max(0.05, Math.abs(base.cfg.speed ?? 1)) / falls.length : (run ? MOVE_SFX.runS : MOVE_SFX.walkS);
+  const cur = rig ? rig.current : null;
+  let foot = false;
+  if (falls && (cur === 'walk' || cur === 'sprint' || cur === 'sprintShoot') && rig.actions[cur]?.action === base.action) {
+    // the model strides: a step as its clip passes a footfall
+    const ph = ((base.action.time / base.dur) % 1 + 1) % 1;
+    if (w.act === base.action) {
+      const adv = ((ph - w.ph) % 1 + 1) % 1;
+      for (const f of falls) { const d = ((f - w.ph) % 1 + 1) % 1; if (d > 0 && d <= adv) foot = true; }
+    }
+    w.act = base.action; w.ph = ph; w.movedAt = real;
+  } else {
+    // the body moving under another clip, or no model here yet: the stride's pace on a clock
+    // (a model still in its stand has not begun to stride — the frame its body first moves, a drift too slow for it: no step)
+    w.act = null;
+    if (Math.hypot(dx, dz) / dt > MODEL_MOVE_MIN) w.movedAt = real;
+    if (real - w.movedAt > MOVE_SFX.graceMs || (falls && cur === 'stand')) return;
+    foot = real - w.last >= period * 1000;
+  }
+  if (foot && real - w.last >= MOVE_SFX.minGap * period * 1000) { w.last = real; w.n = w.n % 5 + 1; sfxPlay(`${run ? 'run' : 'step'}_${w.n}`); }
+}
+// THE UI'S SOUNDS AND THE BGM BUTTON: one listener for every page. A press on a page's button or card sounds by what was pressed;
+// the match's own controls (the stick, fire, sprint, dodge, jump) are not the UI's and are silent here.
+function uiSfxFor(el) {
+  const hit = el?.closest?.('button, .unit-card, .slot-card, .picker-card, .toggle-chip, .enemy-chip, .memo-dice, .roster-bot-pick, .photo-pop, .tac-opt');
+  if (!hit || hit.disabled || hit.id === 'pause-btn') return null;   // (PAUSE's own press: the menu's opening sounds, showPauseMenu)
+  if (hit.closest('.pause-menu')) return 'ui_pause';
+  const small = hit.matches('.toggle-chip, .guide-close-btn, .back-btn, .lobby-corner-btn, .fullscreen-btn, .tac-btn, .tac-opt, .enemy-chip, .memo-dice, .roster-bot-pick, [data-filter], [data-bgm]') || !!hit.closest('.mode-chip');
+  if (!hit.closest('.menu, .guide-overlay, .unit-profile-popup') && !hit.matches('.fullscreen-btn, .tac-btn, .tac-opt')) return null;
+  return small ? 'ui_small' : 'ui';
+}
+const bgmLabel = () => `Music: ${bgmIsOn() ? 'On' : 'Off'}`;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    const b = t?.closest?.('[data-bgm]');
+    if (b) { bgmSetOn(!bgmIsOn()); document.querySelectorAll('[data-bgm]').forEach((x) => { x.textContent = bgmLabel(); x.setAttribute('aria-pressed', String(bgmIsOn())); }); }
+    const key = uiSfxFor(t);
+    if (key && !sfxPlay(key)) setTimeout(() => sfxPlay(key), 200);   // (the page's very first press opens its audio: its sound a moment later, once the audio runs)
+  }, { capture: true, passive: true });
+}
+
 function spawnProjectiles(owner, target, aimDir = null) {   // (aimDir, free pov: the rounds fly it, never home, hit whom they meet — the sim's spawnProjectiles)
   const now = performance.now();
   if (owner.unit.magCapacity != null && owner.state.ammo <= 0) return;
   if (!fireGatePass(owner.state, owner.unit.fireCooldownMs, now)) return;
   if (owner.unit.magCapacity != null) owner.state.ammo -= 1;
+  unitShotSfx(owner.unit, owner.unit.magCapacity != null ? owner.state.ammo : null, owner);   // (THE GAME'S SOUNDS, b1105hk: this pull fires)
 
   // Distance-tiered damage (Aru): tier locked at FIRE time so it always matches
   // what the laser sight showed. Units without rangeDamage keep flat damage.
@@ -4687,6 +4977,7 @@ function spawnBeamOffline(owner, target, aimDir = null) {   // (aimDir, free pov
   if (u.magCapacity != null && owner.state.ammo <= 0) return;
   if (!fireGatePass(owner.state, u.fireCooldownMs, now)) return;
   if (u.magCapacity != null) owner.state.ammo -= 1;
+  beamSfx(owner, false);   // (THE GAME'S SOUNDS, b1105hk: the shot of a cancelled charge)
   const ox = owner.root.position.x;
   const oy = owner.root.position.y + 0.8;   // muzzle height (matches projectile spawn)
   const oz = owner.root.position.z;
@@ -5215,6 +5506,7 @@ function syncOnlineBeams(snap) {
     if (b.id > last) {
       const remaining = b.expiresAt - snap.serverTime;   // server clock, same units as expiresAt
       spawnBeamMesh(b.ox, b.oy, b.oz, b.dx, b.dy, b.dz, b.length, b.radius, Math.max(120, remaining));
+      if (remaining > 200) beamSfx(onlineMechOfId(b.ownerId), false);   // (THE GAME'S SOUNDS, b1105hk: a beam just fired, not one met in passing)
     }
     if (b.id > maxId) maxId = b.id;
   }
@@ -6189,7 +6481,9 @@ function hitXViewerFreeAims(viewer) {   // (updateLocksAndReticle's own test: th
   return freePovOwner() && viewer === state.player ? !!state.freePov : !!viewer.state.freeAim;
 }
 function noteHitX(owner, target) {
-  if (!owner || !target || owner === target || !target.root || dioramaActive()) return;
+  if (!owner || !target || owner === target || !target.root) return;
+  hitSfx(owner, target);   // (THE GAME'S SOUNDS, b1105hk: the hit hint, the being-hit sound — in command mode too, where no X is drawn)
+  if (dioramaActive()) return;
   if (owner !== cameraFocusMech()) return;
   const now = performance.now();
   if (hitXViewerFreeAims(owner)) { state.hitXCrossAt = now; return; }
@@ -7039,12 +7333,16 @@ function updateKillFeed() {
   K.clock += K.last ? Math.min(250, now - K.last) : 0;   // (real time, a quarter second at most a call: a paused match or a hidden tab adds no more)
   K.last = now;
   const t = K.clock;
+  // THE KILL HUD'S SOUND (b1105hk): with every entry, a frame after it was made — the knockout that ends the match is noted
+  // and cleared within one frame offline (the finale's killFeedReset), so it has no entry here and no sound
+  for (const e of K.shown) if (e.sfxDue) { e.sfxDue = false; sfxPlay('kill'); }
   // a waiting knockout into a free place: the upper when nothing shows, the lower beside one
   const fill = () => {
     while (K.queue.length && K.shown.length < 2) {
       const e = K.queue.shift();
       e.el = killFeedEntryEl(e);
       host.appendChild(e.el);
+      e.sfxDue = true;   // (THE GAME'S SOUNDS, b1105hk: its sound at the next update that still finds it — below)
       if (!K.shown.length) K.upAt = t;
       K.shown.push(e);
       K.changeAt = t;
@@ -7105,6 +7403,7 @@ function updateHud(now = performance.now()) {
   // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide (style.css
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   updateKillFeed();   // (THE KILL FEED, b1105gm: its two places and its pace)
+  updateUnitSfx(now);   // (THE GAME'S SOUNDS, b1105hk: what the units' state tells this frame)
   updateAllyTacticHud(now);   // (THE ALLY TACTIC, b1105gq: shown or not, the standing call lit)
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
@@ -7401,7 +7700,7 @@ function loadingBar(p, ms = 250) {
 }
 function matchStartCover(on) {
   matchCoverUp = !!on;
-  if (on) showLoadingScreen();
+  if (on) { showLoadingScreen(); bgmWarm('combat'); }   // (THE MUSIC, b1105hk: the battle's track made ready under the screen; what was playing plays on)
   else { hideLoadingScreen(); matchCoverUntilDrawn = false; matchCoverDrawn = false; matchLoadRec = null; }
 }
 // what the offline match about to start is made of: its map and every unit it fields (a Trio roster whole; the Shooting
@@ -7475,6 +7774,7 @@ function loadingTick() {
     const up = performance.now() - loadScreen.upAt;
     if (state.online || !intro.active || up < LOADING.showAfterMs || up >= LOADING.showAfterMs + LOADING.minMs) {
       matchStartCover(false);
+      bgmPlace('combat');   // (THE MUSIC, b1105hk: "whenever the loading screen ends and the battle starts")
       if (intro.active && !intro.online) intro.last = performance.now();   // (the intro's clock from this moment: the frame that drew its first picture is none of its time)
     }
     return;
@@ -7876,6 +8176,7 @@ function startOnlineMatch() {
 // sat on the main menu until b1105o. A status line, Server Boot-up (the debug panel, as before), Leave; the online
 // lobby's own pages take over the moment the connection is up (renderOnlineUi).
 function showOnlineConnectPage() {
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: one of the main menu's pages)
   const menu = document.createElement('div');
   menu.className = 'menu online-connect';
   menu.innerHTML = `<h2>Online</h2>
@@ -7989,6 +8290,7 @@ function mirrorFighterToMech(fighter, mech) {
   s.ammo = fighter.ammo;
   s.lastFireAt = fighter.lastFireAt;
   s.bloom = fighter.bloom ?? 0;
+  if (!(s.reloadingUntil > 0) && fighter.reloadingUntil > 0 && fighter.hp > 0) reloadSfxOnline(mech);   // (THE UNIT'S SOUNDS, b1105hk: a reload's start)
   s.reloadingUntil = fighter.reloadingUntil;
   s.reloadTickStartAt = fighter.reloadTickStartAt;
   s.redLock = fighter.redLock;
@@ -8152,7 +8454,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hj 11-13';
+const CLIENT_BUILD_TAG = 'b1105hk 11-13';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -8186,6 +8488,7 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo, fromReplay = f
     if (sameShot) { onl.ownShotStats.dedup += 1; continue; }
     if (onl.ownShots.length >= OWN_SHOT_MAX_PENDING) continue;
     fires.push({ at: firedAt, shot, ammo: ammoAfter });
+    unitShotSfx(UNIT_DATA[me?.unitKey], ammoAfter, state.player);   // (THE GAME'S SOUNDS, b1105hk: with the local round, at the trigger; the server's report of this pull is then passed over — shotSfxOnline)
     fires.sort((a, b) => a.at - b.at);
     onl.ownShotStats.local += 1;
     if (fromReplay) onl.ownShotStats.replay += 1;
@@ -8985,6 +9288,7 @@ function refreshEndMenuIfStale(onl, conn) {
 // lands. Only shown once per session (gated by onl.modePushedToServer);
 // joiners skip this and inherit the lobby's mode.
 function showOnlineModePicker(onl) {
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: one of the main menu's pages)
   const menu = document.createElement('div');
   menu.className = 'menu';
   // SUDDEN DEATH online (owner 2026-10-07, "make it available online"): the
@@ -9052,6 +9356,7 @@ function showOnlineModePicker(onl) {
 }
 
 function showOnlineUnitPicker(onl, conn) {
+  bgmPlace('char');   // (THE MUSIC, b1105hk: the character menu)
   const menu = document.createElement('div');
   menu.className = 'menu';
   // offlineOnly units (Aris) are hidden online: the server sim doesn't know
@@ -9129,6 +9434,7 @@ function showOnlineUnitPicker(onl, conn) {
 // sends { botSlot, botUnitKey }; Trio collects three ordered picks and sends
 // { botSlot, botUnitKeys }. The server stores it per-slot in lobby.botUnits.
 function showOnlineBotUnitPicker(onl, conn) {
+  bgmPlace('char');   // (THE MUSIC, b1105hk: the character menu)
   const menu = document.createElement('div');
   menu.className = 'menu';
   const slot = onl.pickingBotSlot;
@@ -9191,6 +9497,7 @@ function showOnlineBotUnitPicker(onl, conn) {
 }
 
 function showOnlineMapPicker(onl, conn) {
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: one of the main menu's pages)
   const menu = document.createElement('div');
   menu.className = 'menu';
   // Every map is online but the ones MAP_DATA marks `offlineOnly` (the Shooting Range), and those are fully HIDDEN (not
@@ -9215,6 +9522,7 @@ function showOnlineMapPicker(onl, conn) {
 }
 
 function showOnlineWaitingOpp(onl, conn) {
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: one of the main menu's pages)
   const cfg = conn.getLobbyConfig();
   const myId = onl.myPlayerId;
   const mode = cfg?.mode ?? '1v1';
@@ -9498,6 +9806,7 @@ function ensureOnlineMatchSetup(snap) {
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
   onl.conn?.drainHits?.();   // (HIT X: hits queued before this match are not this match's)
   onl.conn?.drainKills?.();  // (THE KILL FEED, b1105gm: nor are its knockouts)
+  onl.conn?.drainFired?.();  // (THE UNIT'S SOUNDS, b1105hk: nor its trigger pulls)
 
   // Trio: pre-build each slot's future roster units and pre-warm all fielded
   // art (mirrors the offline match-start prebuild), so a Trio respawn swaps
@@ -9838,6 +10147,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // HIT X: every hit event of every snapshot that came in (a frame can see two), once the server confirmed it
   for (const h of conn.drainHits?.() ?? []) noteHitX(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
   for (const k of conn.drainKills?.() ?? []) killFeedNoteOnline(k);   // (THE KILL FEED, b1105gm: every snapshot's knockouts, as the hits)
+  { const t = performance.now(); for (const f of conn.drainFired?.() ?? []) shotSfxOnline(f, t); }   // (THE UNIT'S SOUNDS, b1105hk: every snapshot's trigger pulls, as the hits)
 
   // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
   //    entirely: the unit is bot-driven server-side, input replay would
@@ -10133,6 +10443,7 @@ function showSelectMenu() {
   clearMenus();
   state.phase = 'select';
   state.running = false;
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: the main menu — entered from another place, one of its tracks is drawn)
   // An abandoned All Random chain must never leak into manual picking.
   state.allRandomFill = false;
   // Outside gameplay the fullscreen button returns to its top-left home.
@@ -11191,6 +11502,7 @@ function wireUnitFilters(menu) {
   }
 }
 function showUnitPicker(title, onPick, excluded = [], onAllRandom = null, onBack = () => showSelectMenu()) {
+  bgmPlace('char');   // (THE MUSIC, b1105hk: the character menu)
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.hidden);
   const menu = document.createElement('div');
   menu.className = 'menu picker';
@@ -11241,6 +11553,7 @@ function fitPickerMenu(menu) {
   window.addEventListener('resize', onResize);
 }
 function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
+  bgmPlace('menu');   // (THE MUSIC, b1105hk: one of the main menu's pages)
   state.allRandomFill = false;   // the All Random chain ends here
   const mapEntries = Object.entries(MAP_DATA);
   const mapMenu = document.createElement('div');
@@ -11268,6 +11581,7 @@ function showGuidePopup() {
       <div class="guide-card">
         <div class="guide-card-header">
           <h3>Guide</h3>
+          <button class="bgm-btn" type="button" data-bgm aria-pressed="${bgmIsOn()}">${bgmLabel()}</button>
           <button class="guide-close-btn" aria-label="Close">×</button>
         </div>
         <div class="guide-card-body">
@@ -12007,6 +12321,7 @@ function introShotsOff() {
 function introEnter(stage) {
   const wasShots = introShots();
   intro.stage = stage;
+  intro.sfxDue = stage;   // (THE GAME'S SOUNDS, b1105hk: each team's shot opens with the kill HUD's sound, START with the other — updateIntro, once the loading screen is off)
   intro.teams = introTeams();
   wallFadeSnap = true;   // (a cut: what blocks the new view is faded at once, what blocked the old one solid at once — updateWallFade)
   if (stage <= 2) {
@@ -12045,7 +12360,7 @@ function startIntro({ online = false, leftMs = 0 } = {}) {
   introClear();
   const now = performance.now();
   intro.active = true; intro.online = online; intro.tok += 1; intro.stage = 0; intro.last = now;
-  intro.t = 0;
+  intro.t = 0; intro.sfxDue = 0;
   intro.endLocal = now + leftMs;
   intro.teams = introTeams(); intro.shots = [null, null];
   if (!online) { state.running = false; updateTransforms(0); }   // (the units on their spawns before the first shot is found)
@@ -12080,6 +12395,7 @@ function updateIntro(dt, now) {
   if (stage === 4) { endIntro(now); return; }
   const entered = stage !== intro.stage;
   if (entered) introEnter(stage);
+  if (intro.sfxDue && !matchCoverUp) { sfxPlay(intro.sfxDue <= 2 ? 'intro_team' : 'intro_start'); intro.sfxDue = 0; }
   if (!intro.online) updateTransforms(dt);
   const pop = (t0) => { const p = Math.max(0, Math.min(1, (t - t0) / Math.max(1, INTRO.popMs))); return 1 - (1 - p) ** 3; };
   if (stage <= 2) {
@@ -12805,6 +13121,7 @@ function startFinale({ victim, killer = null, heir = false, onDone }) {
   if (!victim?.root) { onDone?.(); return false; }
   const now = performance.now();
   finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now; finale.held = false;
+  bgmPlace('end');   // (THE MUSIC, b1105hk: "every time the game end camera starts")
   finale.victim = victim;
   // shot 2's unit: the final blow's, standing — or down too with EVERY UNIT of the match down, shown as it lies (b1105gg);
   // down with a teammate still standing, or none: no shot 2
@@ -13150,12 +13467,13 @@ function showPauseMenu() {
   hideEnemyEdgeArrow();
   clearMenus();
   const menu = document.createElement('div');
-  menu.className = 'menu';
+  menu.className = 'menu pause-menu';   // (pause-menu: THE UI'S SOUNDS know it, b1105hk)
+  sfxPlay('ui_pause');
   // Offline: the diorama view toggle lives here so touch devices can reach
   // it too (V key remains the desktop shortcut).
   const dioramaBtn = state.online ? '' : `<button data-action="diorama">Mode: ${diorama.enabled ? 'Command' : 'Shooter'}</button>`;
   // (the build tag under the title, so the build can be read in the game — the user asked 2026-10-24, on the PT site first)
-  menu.innerHTML = `<h2>Paused</h2><div style="margin:-6px 0 8px;font:12px monospace;opacity:.7">build ${CLIENT_BUILD_TAG}</div><button data-action="resume">Resume</button>${dioramaBtn}<button data-action="new">New Game</button>`;
+  menu.innerHTML = `<h2>Paused</h2><div style="margin:-6px 0 8px;font:12px monospace;opacity:.7">build ${CLIENT_BUILD_TAG}</div><button data-action="resume">Resume</button><button type="button" data-bgm aria-pressed="${bgmIsOn()}">${bgmLabel()}</button>${dioramaBtn}<button data-action="new">New Game</button>`;
   app.appendChild(menu);
   menu.querySelector('button[data-action="resume"]').addEventListener('pointerdown', (event) => {
     event.preventDefault();

@@ -552,6 +552,27 @@ body.pseudo-fullscreen #app {
   padding: 0;
   box-shadow: 2px 2px 0 var(--ink);
 }
+/* THE BGM BUTTON (b1105hk, user 2026-11-13: "The background music will be able to turn off via mute button inside "Guide" and
+   "Pause""): the music alone, off or on. In the Guide's header beside the close button; in the Pause menu a row of its own
+   (a .menu button there). Dimmed while the music is off. */
+.bgm-btn {
+  margin-left: auto;
+  margin-right: 10px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  color: var(--ink);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+[data-bgm][aria-pressed="false"] { opacity: 0.7; }
 .guide-card-body {
   padding: 16px 20px 22px;
   line-height: 1.55;
