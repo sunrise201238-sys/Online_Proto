@@ -1862,7 +1862,8 @@ const UNIT_MODELS = {
     sprintShoot: { name: 'Move01_Ing', speed: 1 },
     dodge: { name: 'Move02_End_Normal', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move02_End_Normal', speed: 1, once: true },
-    reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
+    reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true },
+    victoryIdle: { name: 'Normal01_Idle', speed: 1 } } },   // (THE ENDING LOOP, b1105hi, finalePoseFor; user 2026-11-13: 'Use motion "Normal01_Idle" as the looping motion after the winner reload motion for Kurumi.')
   // (Rabu's form, the user's motion sheet of 2026-10-23: the formation idle stands, firing on the run keeps the firing clip,
   // the rest the default names — all in her file)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
@@ -8151,7 +8152,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hh 11-13';
+const CLIENT_BUILD_TAG = 'b1105hi 11-13';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12211,6 +12212,10 @@ function endIntro(now) {
 // final blow's unit in shot 2 alone and only after the motion's one pass: through the take and the opening hold it stands
 // on its stand clip as before, and a teammate in the frame, Aris or Hoshino too, keeps the stand clip. The change of clip
 // is the model's own (Aris blends, Hoshino cuts). Every other unit, Haruka among them, goes back to its stand clip as at b1105he.
+// Kurumi's came at b1105hi (user 2026-11-13, with her model file — again, byte for byte, the one the game serves: "Use
+// motion "Normal01_Idle" as the looping motion after the winner reload motion for Kurumi."): Normal01_Idle, her first
+// set's battle stance — her reload is that set's (Normal01_Reload) and ends in it — where her stand clip, Formation_Idle
+// as Aris's and Hoshino's, lowers the gun. Her model blends.
 // Here since b1105gf (2026-11-12; user: "update the BOT and the ending cameras to 9.7"), as the PT site had it at that build —
 // its proto (b1105gb), the one take (b1105gc), the take through what blocks it and no hold (b1105gd), the death motion at 0.6
 // (b1105gf) — less the site's photo mode, which this tree does not carry; b1105gg (shot 2 turned 30° round to the unit's
@@ -12317,7 +12322,7 @@ function finalePoseFor(m, now) {
   }
   if ((m?.state?.hp ?? 0) <= 0) return null;
   // THE ENDING LOOP (b1105hg, above): the final blow's unit, its victory motion over, on the loop its model names for this
-  // moment (`victoryIdle`: Aris, Hoshino); a model that names none is given its stand clip where the pose is taken up
+  // moment (`victoryIdle`: Aris, Hoshino, Kurumi); a model that names none is given its stand clip where the pose is taken up
   // (updateUnitModelState: a clip the rig lacks is the stand clip), as every other living unit is
   if (finale.shot === 2 && m === finale.killer && finale.victoryOver === finale.tok) return { want: 'victoryIdle', rate: 1, token: 'stand', restart: false };
   return { want: 'stand', rate: 1, token: 'stand', restart: false };
