@@ -8152,7 +8152,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hi 11-13';
+const CLIENT_BUILD_TAG = 'b1105hj 11-13';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11256,6 +11256,10 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   });
 }
 
+// THE GUIDE (the main menu's Guide button). b1105hj, user 2026-11-13: "update the in game Guide for basic features (pov
+// switch etc.). But keep the guide very easy and concise to read" — a line or three each for the point of view switch, the
+// edge triangles, the ally tactic, the ladders, the transporters and the ending camera; and the Trio line no longer says the
+// next unit starts "at the spawn point" (ten maps pick the place — spawn.js).
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -11274,7 +11278,8 @@ function showGuidePopup() {
           <ul>
             <li>Bring the enemy's HP to zero before they do it to you.</li>
             <li><strong>Health Point</strong> rules: every unit has 100 HP, Kurumi has 120. <strong>Sudden Death</strong>: everyone has 1 HP, so one hit wins.</li>
-            <li><strong>Duel</strong>: one unit each. <strong>Trio</strong>: three units each, in the order you pick them. When one falls, the next one starts at the spawn point and can't be hurt for 3 seconds.</li>
+            <li><strong>Duel</strong>: one unit each. <strong>Trio</strong>: three units each, in the order you pick them. When one falls, the next one comes in and can't be hurt for 3 seconds.</li>
+            <li>The last knockout plays an ending camera. Tap to move on.</li>
           </ul>
 
           <h4>Main menu</h4>
@@ -11290,7 +11295,14 @@ function showGuidePopup() {
           <h4>Controls</h4>
           <ul>
             <li>Phone: the stick on the left moves you. The buttons fire, sprint, dodge, jump and switch target.</li>
-            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or E · Shooter or Command V · free camera I.</li>
+            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or E · Shooter or Command V · point of view I.</li>
+          </ul>
+
+          <h4>Point of view</h4>
+          <ul>
+            <li>Switch any time: tap the empty screen twice quickly, or press I.</li>
+            <li><strong>Angled</strong>: your shots aim at the locked enemy by themselves.</li>
+            <li><strong>Free</strong>: you aim the crosshair, and shots go where it points. Swipe the empty screen or drag the fire button to aim. On PC, use the mouse and left-click to fire.</li>
           </ul>
 
           <h4>Fighting</h4>
@@ -11303,6 +11315,14 @@ function showGuidePopup() {
             <li><strong class="guide-hl">Double-tap sprint to keep sprinting</strong>, handy on a phone. It keeps using stamina.</li>
             <li><strong class="guide-hl">You can't be hit while dodging.</strong></li>
             <li>Walls and boxes stop bullets. Hide behind them to refill stamina safely, and fight from the distance your gun likes.</li>
+            <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 10 seconds.</li>
+          </ul>
+
+          <h4>On some maps</h4>
+          <ul>
+            <li><strong>Ladder</strong>: press jump at it to get on, then move up or down. Press jump again to let go.</li>
+            <li><strong>Transporter</strong>: stand in the glowing circle and hold jump for 1 second.</li>
           </ul>
 
           <h4>Weapon types</h4>
