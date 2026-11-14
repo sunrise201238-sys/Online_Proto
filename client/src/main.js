@@ -3757,9 +3757,11 @@ function fireGatePass(st, cooldownMs, now) {
 // the site plays — says which file each is and how loud, and names each unit's sounds (SFX_UNITS, hung on the unit's row as `sfx`).
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
-// the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, charge, scope — sounds for the
+// the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
 // unit this player plays and for no other (sfxOwn: not a teammate's, not an enemy's, and none at all for a viewer who plays
-// no unit, the spectator's views; a commander's own unit is theirs).
+// no unit, the spectator's views; a commander's own unit is theirs). KEI'S CHARGE IS THE EXCEPTION (b1105hm, user 2026-11-14:
+// "kei is an exception, others can hear her charging sound, but still can't hear her reload sound."): it sounds whoever
+// holds her, as her beams do; her recharge is her own player's alone, as every reload.
 //   shot    at every trigger pull that fires;
 //   bolt    `boltDelayMs` after a shot that leaves rounds in the magazine (the shot that empties it is followed by the reload
 //           instead); Iori's (`boltCut`) is cut by her next shot — her gun fires again before the bolt's sound is over ("Oh, this");
@@ -3818,7 +3820,7 @@ const MOVE_SFX = {
 sfxBoot(import.meta.env.BASE_URL, SFX_FILE_EXT);
 for (const k in UNIT_DATA) UNIT_DATA[k].sfx = SFX_UNITS[k] ?? null;
 if (typeof window !== 'undefined') window.__sfx = { state: sfxState, play: sfxPlay, stop: sfxStop, bgm: bgmState, place: bgmPlace, bgmOn: bgmSetOn, units: SFX_UNITS, move: MOVE_SFX };   // (a probe's hooks, as __intro)
-// THE UNIT THIS PLAYER PLAYS (b1105hl): whose bolt, reload, round, charge and scope sound. A spectator plays none (offline the
+// THE UNIT THIS PLAYER PLAYS (b1105hl): whose bolt, reload, round and scope sound. A spectator plays none (offline the
 // watched match's first seat is `state.player` too, a bot's).
 function sfxOwn(mech) { return !!mech && mech === state.player && !state.spectatorActive && state.online?.myPlayerId !== 'spectator'; }
 // `roundsLeft`: the magazine after this shot (null where it is not known: the bolt then sounds). `mech`: who fired, where known.
@@ -3887,8 +3889,8 @@ function updateUnitSfx(now) {
     const charging = !!st.sniperChargeTarget;
     if (charging && !w.charging) {
       w.chargeAt = real;
-      if (x.charge && sfxOwn(m)) { if (m.sfxCharge) sfxStop(m.sfxCharge); m.sfxCharge = sfxPlay(x.charge); }   // (b1105hl: the player's own unit's alone, as the scope)
-      if (x.scope && sfxOwn(m)) sfxPlay(x.scope);
+      if (x.charge) { if (m.sfxCharge) sfxStop(m.sfxCharge); m.sfxCharge = sfxPlay(x.charge); }   // (Kei's, whoever holds her: b1105hm, the one exception to b1105hl's rule)
+      if (x.scope && sfxOwn(m)) sfxPlay(x.scope);   // (b1105hl: the player's own unit's alone)
     } else if (!charging && w.charging && m.sfxCharge) {
       if (real - w.chargeAt < (u.chargeMs ?? 1000) - 80) sfxStop(m.sfxCharge);   // (let go early: the charge's sound with it; a full charge's rings out under the beam)
       m.sfxCharge = null;
@@ -8462,7 +8464,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hl 11-14';
+const CLIENT_BUILD_TAG = 'b1105hm 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
