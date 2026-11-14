@@ -1,4 +1,4 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 5), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 6), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
@@ -6,7 +6,7 @@
 export const SFX_VOLUME = 0.7;
 export const SFX_SOUNDS = {
   shot_unit1: {"file": "sfx/m4_shot", "ext": ".mp3", "level": 0.28664},
-  shot_unit9: {"file": "sfx/famas_shot_e", "ext": ".mp3", "level": 0.31528},
+  shot_unit9: {"file": "sfx/famas_shot_a", "ext": ".mp3", "level": 0.34448},
   shot_unit14: {"file": "sfx/hk_shot", "ext": ".mp3", "level": 0.15288},
   shot_unit22: {"file": "sfx/ak_shot_a", "ext": ".mp3", "level": 0.35508},
   shot_unit4: {"file": "sfx/smg3_e50m", "ext": ".mp3", "level": 0.31756},
@@ -17,7 +17,7 @@ export const SFX_SOUNDS = {
   shot_unit11: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit18: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit12: {"file": "sfx/m249_shot_a", "ext": ".mp3", "level": 0.19556},
-  shot_unit5: {"file": "sfx/negev_shot_a_e100m", "ext": ".mp3", "level": 0.54816},
+  shot_unit5: {"file": "sfx/negev_shot_b", "ext": ".mp3", "level": 0.64508},
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
   shot_unit10: {"file": "sfx/m14_shot", "ext": ".mp3", "level": 0.20236},
   shot_unit7: {"file": "sfx/laser_shot", "ext": ".mp3", "level": 0.23432},
@@ -48,8 +48,8 @@ export const SFX_SOUNDS = {
   dodge: {"file": "sfx/axe_swing", "ext": ".wav", "level": 0.234},
   jump: {"file": "sfx/cs_jump", "ext": ".mp3", "level": 0.195},
   land: {"file": "sfx/cs_land", "ext": ".mp3", "level": 0.26},
-  hit: {"file": "sfx/hitmarker", "ext": ".wav", "level": 0.132},
-  hurt: {"file": "sfx/hurt_punch", "ext": ".wav", "level": 0.24},
+  hit: {"file": "sfx/hitmarker", "ext": ".wav", "level": 0.264},
+  hurt: {"file": "sfx/hurt_punch", "ext": ".wav", "level": 0.48},
   kill: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_team: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_start: {"file": "sfx/kill_1", "ext": ".mp3", "level": 0.4875},

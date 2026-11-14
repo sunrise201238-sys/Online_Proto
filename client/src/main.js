@@ -3768,6 +3768,10 @@ function fireGatePass(st, cooldownMs, now) {
 // for all MG unit."): the gunshot of an M249 sound pack, as it is. And THE MACHINE GUNS' RELOAD — Koyuki's, Hina's, Maki's — is
 // that pack's seven mechanical sounds in a row, one piece 4.78 s long, in place of the three passes of the Machine Gun Reload
 // recording: the first reload from the new recordings to go in (the others' stay: "keep them as they are now").
+// From b1105hr: Hina's is the Negev recording's B — its first shot joined to what rings after the burst's end, no echo added
+// ("update MG42 gunshot sound in game with chosen NEGEV sound in image") — and Asuna's the FAMAS recording's first shot in place
+// of its last sound ("and use this for FAMAS"). The hit hint and the being-hit sound play twice as loud ("increase hit and
+// being-hit sound": the mixer's two numbers at 200).
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -6669,8 +6673,9 @@ const _allyArrowNdc = new THREE.Vector3();
 const _allyArrowCam = new THREE.Vector3();
 function updateAllyArrow() {
   // Diorama POC: the whole fight is in frame and the annotation layer carries
-  // identity — both arrow forms are parked. (The anomaly rules parks them too.)
-  if (dioramaActive() || anomalyRules()) {
+  // identity — both arrow forms are parked. (The anomaly rules parks them too; and the shooting range, b1105hr: see
+  // updateEnemyArrow.)
+  if (dioramaActive() || anomalyRules() || state.mapKey === 'range') {
     if (state.allyArrow) state.allyArrow.visible = false;
     hideAllyEdgeArrow();
     return;
@@ -6796,8 +6801,10 @@ const _enemyArrowNdc = new THREE.Vector3();
 const _enemyArrowCam = new THREE.Vector3();
 const OVERHEAD_TEAM_CHEVRONS = false;   // the floating triangles over the teammate and the unlocked enemy (owner 2026-09-19: both sat on the overhead HP bars); the screen-edge arrows stay
 function updateEnemyArrow() {
-  // Diorama POC: parked for the same reason as updateAllyArrow.
-  if (dioramaActive() || anomalyRules()) {
+  // Diorama POC: parked for the same reason as updateAllyArrow. THE SHOOTING RANGE has none either (b1105hr, user 2026-11-14: "in the
+  // shooting range, the edge triangle indicators show up in free pov, no need them in shooting range."): its targets are the
+  // "enemies", and free pov gave each one a triangle as it left the screen.
+  if (dioramaActive() || anomalyRules() || state.mapKey === 'range') {
     if (state.enemyArrow) state.enemyArrow.visible = false;
     hideEnemyEdgeArrows();
     return;
@@ -8478,7 +8485,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hq 11-14';
+const CLIENT_BUILD_TAG = 'b1105hr 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
