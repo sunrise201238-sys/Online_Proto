@@ -8,7 +8,7 @@ export const SFX_SOUNDS = {
   shot_unit1: {"file": "sfx/m4_shot", "ext": ".mp3", "level": 0.28664},
   shot_unit9: {"file": "sfx/famas_shot_a", "ext": ".mp3", "level": 0.34448},
   shot_unit14: {"file": "sfx/hk_shot", "ext": ".mp3", "level": 0.15288},
-  shot_unit22: {"file": "sfx/ak_shot_a", "ext": ".mp3", "level": 0.35508},
+  shot_unit22: {"file": "sfx/ak47_shot_c", "ext": ".mp3", "level": 0.26344},
   shot_unit4: {"file": "sfx/ump_shot_b", "ext": ".mp3", "level": 0.3176},
   shot_unit13: {"file": "sfx/ppsh_shot", "ext": ".mp3", "level": 0.1808},
   shot_unit15: {"file": "sfx/mpx_shot", "ext": ".mp3", "level": 0.22536},

@@ -3775,6 +3775,8 @@ function fireGatePass(st, cooldownMs, now) {
 // From b1105hs: Atsuko's is the UMP recording's B — its first shot's start joined to its last shot's tail — a cut of another
 // gun's recording, picked over the two gunshots of her own EVO3's ("Use this for Atsuko evo3 gunshot instead.").
 // From b1105ht: Hina's plays at half its level ("make MG42 50% lesser volume in game": the mixer's fold 7).
+// From b1105hv: Minori's is a second AK recording's cut — the last shot of its one long burst with what rings after it, as
+// recorded — picked over the first recording's first shot she had since b1105hn ("Use this as minori AK sound.").
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -8488,7 +8490,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hu 11-14';
+const CLIENT_BUILD_TAG = 'b1105hv 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
