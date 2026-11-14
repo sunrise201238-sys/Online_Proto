@@ -3777,6 +3777,10 @@ function fireGatePass(st, cooldownMs, now) {
 // From b1105ht: Hina's plays at half its level ("make MG42 50% lesser volume in game": the mixer's fold 7).
 // From b1105hv: Minori's is a second AK recording's cut — the last shot of its one long burst with what rings after it, as
 // recorded — picked over the first recording's first shot she had since b1105hn ("Use this as minori AK sound.").
+// From b1105hw: Fubuki's is in two parts ("There's a high pitch metal sound in Fubuki gun shot sound. Can you make that metal sound
+// only be heard by Fubuki itself, others would only hear its gunshot without metal sound."): the M14 recording's shot
+// without her gun's action — everyone's — and the action's clicks and ring alone, 0.15 s after the shot's start, which her
+// own player alone hears with it (`shotOwn`; sfx.js adds the two into one voice: the recording as it was).
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -3784,7 +3788,8 @@ function fireGatePass(st, cooldownMs, now) {
 // no unit, the spectator's views; a commander's own unit is theirs). KEI'S CHARGE IS THE EXCEPTION (b1105hm, user 2026-11-14:
 // "kei is an exception, others can hear her charging sound, but still can't hear her reload sound."): it sounds whoever
 // holds her, as her beams do; her recharge is her own player's alone, as every reload.
-//   shot    at every trigger pull that fires;
+//   shot    at every trigger pull that fires; `shotOwn` is added to it, sample for sample, for the unit's own player alone
+//           (b1105hw: the part of a shot's recording the others are not to hear — Fubuki's gun's metal sound);
 //   bolt    `boltDelayMs` after a shot that leaves rounds in the magazine (the shot that empties it is followed by the reload
 //           instead); Iori's (`boltCut`) is cut by her next shot — her gun fires again before the bolt's sound is over ("Oh, this");
 //   reload  at each of `reloadAtMs` after a magazine's reload starts (half a second: a shot is at its loudest for that long and
@@ -3851,7 +3856,7 @@ function unitShotSfx(unit, roundsLeft, mech = null) {
   const x = unit?.sfx;
   if (!x) return;
   if (mech?.sfxBolt) { sfxStop(mech.sfxBolt); mech.sfxBolt = null; }   // (the bolt of the shot before, still sounding: cut by this one)
-  if (x.shot) sfxPlay(x.shot);
+  if (x.shot) sfxPlay(x.shot, 0, x.shotOwn && sfxOwn(mech) ? x.shotOwn : null);   // (b1105hw: with the part its own player alone hears)
   if (x.bolt && sfxOwn(mech) && !(unit.magCapacity != null && !unit.autoReload && roundsLeft != null && roundsLeft <= 0)) {   // (b1105hl: the player's own unit's alone)
     const v = sfxPlay(x.bolt, (x.boltDelayMs ?? 500) / 1000);
     if (mech && x.boltCut) mech.sfxBolt = v;
@@ -8490,7 +8495,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hv 11-14';
+const CLIENT_BUILD_TAG = 'b1105hw 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

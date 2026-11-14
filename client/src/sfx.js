@@ -16,6 +16,15 @@
 // it runs, and while a file is not in hand, a play is dropped: a shot heard late is worse than a shot not heard. The page put
 // away (a hidden tab, a locked phone) holds the audio; it runs on when the page is back.
 //
+// A SOUND WITH ANOTHER ADDED TO IT (b1105hw, user 2026-11-14: "There's a high pitch metal sound in Fubuki gun shot sound. Can you make that
+// metal sound only be heard by Fubuki itself, others would only hear its gunshot without metal sound."): her shot's recording
+// is two files, cut on one clock — the shot without her gun's action, and the action's clicks and ring alone — that add up to
+// the recording sample for sample. Everyone hears the first; her own player hears the recording. Two voices started one after
+// the other can fall a block of the audio apart, and the halves a quarter of a millisecond out of step lose up to 2.5 dB
+// where they overlap; so a play that names a second sound gets the two ADDED INTO ONE BUFFER (mixOf: made once, the second at
+// its level against the first's) and plays that as its one voice, at the first's level, from the first's start. The two
+// files are one encoder's at one setting: a place in one is the same moment in the other.
+//
 // THE MUSIC (user 2026-11-13: "I'm going to add some background music. The background music will be able to turn off via mute
 // button inside "Guide" and "Pause"."): a track is a file under public/bgm, some two minutes of stereo. The game says which
 // PLACE the player is in (bgmPlace: the main menu, the character menu, the battle, the ending camera); entering a place draws
@@ -52,6 +61,7 @@ let ctx = null, master = null, sfxBus = null, musicBus = null;
 const files = {};                // file -> { ext, bytes, fetched, buffer, offset, busy, retryAt }
 const voices = [];               // { src, gain, key, file, at }, oldest first
 const stats = { played: 0, dropped: 0, stolen: 0 };
+const mixes = {};                // 'key+withKey' -> { buffer, file }: a sound with another added to it, made once
 const log = [];                  // (a probe's: the last plays, { key, at: the page clock, delay })
 
 // One step on towards a file being playable: its bytes fetched, then (the audio open) decoded and its start found. Called at
@@ -142,9 +152,26 @@ function fadeOut(v, fadeS = SFX_STOP_FADE_S) {
 }
 function drop(v) { const i = voices.indexOf(v); if (i >= 0) voices.splice(i, 1); }
 
-// Play a sound `delayS` seconds from now (0: now), at its own level. Gives back the voice (to stop it with sfxStop), or null
+// The sound `key` with `withKey` added to it sample for sample, each at its level (so against the first's, whose level the
+// voice plays at): one buffer as long as the first. Null while the second is not in hand — the play is then the first alone.
+function mixOf(key, withKey) {
+  const id = `${key}+${withKey}`;
+  if (mixes[id]) return mixes[id];
+  const a = SFX_SOUNDS[key], b = SFX_SOUNDS[withKey], A = a ? files[a.file]?.buffer : null, sb = b ? files[b.file] : null, B = sb?.buffer;
+  if (!A || !B || A.sampleRate !== B.sampleRate || !(a.level > 0)) { if (sb && !B) want(b.file); return null; }
+  const out = ctx.createBuffer(A.numberOfChannels, A.length, A.sampleRate), k = b.level / a.level;
+  for (let c = 0; c < A.numberOfChannels; c += 1) {
+    const d = out.getChannelData(c), e = B.getChannelData(Math.min(c, B.numberOfChannels - 1)), n = Math.min(d.length, e.length);
+    d.set(A.getChannelData(c));
+    for (let i = 0; i < n; i += 1) d[i] += k * e[i];
+  }
+  return (mixes[id] = { buffer: out, file: `${a.file}+${b.file}` });
+}
+
+// Play a sound `delayS` seconds from now (0: now), at its own level; with `withKey`, that sound added to it (see A SOUND WITH
+// ANOTHER ADDED TO IT). Gives back the voice (to stop it with sfxStop), or null
 // when nothing was started.
-export function sfxPlay(key, delayS = 0) {
+export function sfxPlay(key, delayS = 0, withKey = null) {
   const f = SFX_SOUNDS[key], s = f ? files[f.file] : null;
   if (!s) return null;
   if (!ctx || ctx.state !== 'running' || !s.buffer) { want(f.file); stats.dropped += 1; return null; }
@@ -152,18 +179,19 @@ export function sfxPlay(key, delayS = 0) {
     const now = ctx.currentTime;
     // room: of this file its oldest voice, of them all the oldest that has started (one still waiting for its moment — a
     // reload's later pass, a bolt — is the last to go)
-    const same = voices.filter((v) => v.file === f.file);
+    const mix = withKey ? mixOf(key, withKey) : null, file = mix ? mix.file : f.file;   // (a pair's sum is a file of its own in the count below)
+    const same = voices.filter((v) => v.file === file);
     if (same.length >= SFX_MAX_PER_FILE) { const v = same[0]; drop(v); fadeOut(v); stats.stolen += 1; }
     while (voices.length >= SFX_MAX_VOICES) { const v = voices.find((x) => x.at <= now) ?? voices[0]; drop(v); fadeOut(v); stats.stolen += 1; }
-    const src = ctx.createBufferSource(); src.buffer = s.buffer;
+    const src = ctx.createBufferSource(); src.buffer = mix ? mix.buffer : s.buffer;
     const gain = ctx.createGain(); gain.gain.value = f.level;
     src.connect(gain); gain.connect(sfxBus);
-    const v = { src, gain, key, file: f.file, at: delayS > 0 ? now + delayS : now };
+    const v = { src, gain, key, file, at: delayS > 0 ? now + delayS : now };
     src.onended = () => { drop(v); try { gain.disconnect(); } catch (e) { /* gone */ } };
     src.start(delayS > 0 ? v.at : 0, s.offset);
     voices.push(v);
     stats.played += 1;
-    log.push({ key, at: Math.round(performance.now()), delay: delayS }); if (log.length > 400) log.shift();
+    log.push({ key, at: Math.round(performance.now()), delay: delayS, ...(mix ? { with: withKey } : {}) }); if (log.length > 400) log.shift();
     return v;
   } catch (e) { stats.dropped += 1; return null; }
 }
@@ -179,7 +207,7 @@ export function sfxStop(v, fadeS = SFX_STOP_FADE_S) {
 
 // (a probe's hook, as main.js's __intro: what is open, what is in hand, what has played)
 export function sfxState() {
-  const out = { audio: ctx ? ctx.state : null, volume: SFX_VOLUME, voices: voices.length, sounding: voices.map((v) => v.key), ...stats, log: log.slice(), sounds: {}, files: Object.keys(files).length };
+  const out = { audio: ctx ? ctx.state : null, volume: SFX_VOLUME, voices: voices.length, sounding: voices.map((v) => v.key), ...stats, log: log.slice(), sounds: {}, files: Object.keys(files).length, mixes: Object.keys(mixes) };
   for (const key in SFX_SOUNDS) { const f = SFX_SOUNDS[key], s = files[f.file]; out.sounds[key] = { file: f.file, fetched: !!s?.fetched, ready: !!s?.buffer, level: f.level, startS: s?.buffer ? +s.offset.toFixed(4) : null, seconds: s?.buffer ? +s.buffer.duration.toFixed(3) : null }; }
   return out;
 }

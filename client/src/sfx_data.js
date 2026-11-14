@@ -19,7 +19,8 @@ export const SFX_SOUNDS = {
   shot_unit12: {"file": "sfx/m249_shot_a", "ext": ".mp3", "level": 0.19556},
   shot_unit5: {"file": "sfx/negev_shot_b", "ext": ".mp3", "level": 0.32254},
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
-  shot_unit10: {"file": "sfx/m14_shot", "ext": ".mp3", "level": 0.20236},
+  shot_unit10: {"file": "sfx/m14_shot_body", "ext": ".mp3", "level": 0.20236},
+  shotown_unit10: {"file": "sfx/m14_shot_ring", "ext": ".mp3", "level": 0.20236},
   shot_unit7: {"file": "sfx/laser_shot", "ext": ".mp3", "level": 0.23432},
   shot_unit20: {"file": "sfx/kar98_shot_e50l", "ext": ".mp3", "level": 0.4316},
   bolt_unit20: {"file": "sfx/kar98_bolt", "ext": ".mp3", "level": 0.8},
@@ -57,7 +58,8 @@ export const SFX_SOUNDS = {
   ui_small: {"file": "sfx/fx_ui_a", "ext": ".wav", "level": 0.5},
   ui_pause: {"file": "sfx/fx_ui_c", "ext": ".mp3", "level": 0.5},
 };
-// a unit's sounds (main.js THE UNIT'S SOUNDS): shot; bolt, boltDelayMs after a shot that leaves rounds, boltCut = stopped by the
+// a unit's sounds (main.js THE UNIT'S SOUNDS): shot; shotOwn = the part of the shot that the unit's own player alone hears, added
+// to it sample for sample (the two are one recording's halves); bolt, boltDelayMs after a shot that leaves rounds, boltCut = stopped by the
 // unit's next shot; reload, at each of reloadAtMs after a reload's start; shell = the round going in, on every ammo gain;
 // charge / quick / full = a beam unit's charge, the shot of a cancelled charge, the full beam; scope = at a charge's start, for
 // the player whose unit it is
@@ -76,7 +78,7 @@ export const SFX_UNITS = {
   unit12: {"shot": "shot_unit12", "reload": "reload_mg", "reloadAtMs": [140]},
   unit5: {"shot": "shot_unit5", "reload": "reload_mg", "reloadAtMs": [140]},
   unit21: {"shot": "shot_unit21", "reload": "reload_mg", "reloadAtMs": [140]},
-  unit10: {"shot": "shot_unit10", "reload": "reload_mag", "reloadAtMs": [500]},
+  unit10: {"shot": "shot_unit10", "shotOwn": "shotown_unit10", "reload": "reload_mag", "reloadAtMs": [500]},
   unit7: {"shot": "shot_unit7", "shell": "shell"},
   unit20: {"shot": "shot_unit20", "bolt": "bolt_unit20", "boltDelayMs": 500, "boltCut": true, "reload": "reload_mag", "reloadAtMs": [500]},
   unit3: {"shot": "shot_unit3", "scope": "scope", "reload": "reload_sniper", "reloadAtMs": [500]},
