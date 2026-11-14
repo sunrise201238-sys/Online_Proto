@@ -1,18 +1,18 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (b1105hk). Written by the listening site's own tool from its mixer (its fold 5), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 5), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
 // one as .wasm), and the level it plays at, of the game's volume. Several sounds may be one file at different levels.
 export const SFX_VOLUME = 0.7;
 export const SFX_SOUNDS = {
-  shot_unit1: {"file": "sfx/rifle3B_e50l", "ext": ".mp3", "level": 0.4044},
-  shot_unit9: {"file": "sfx/rifle3B_e50l", "ext": ".mp3", "level": 0.4044},
-  shot_unit14: {"file": "sfx/rifle3B_e50l", "ext": ".mp3", "level": 0.4044},
-  shot_unit22: {"file": "sfx/rifle3C_e50l", "ext": ".mp3", "level": 0.40836},
+  shot_unit1: {"file": "sfx/m4_shot", "ext": ".mp3", "level": 0.28664},
+  shot_unit9: {"file": "sfx/famas_shot_e", "ext": ".mp3", "level": 0.31528},
+  shot_unit14: {"file": "sfx/hk_shot", "ext": ".mp3", "level": 0.15288},
+  shot_unit22: {"file": "sfx/ak_shot_a", "ext": ".mp3", "level": 0.35508},
   shot_unit4: {"file": "sfx/smg3_e50m", "ext": ".mp3", "level": 0.31756},
-  shot_unit13: {"file": "sfx/smg3_e00", "ext": ".mp3", "level": 0.31756},
-  shot_unit15: {"file": "sfx/smg3_e20m", "ext": ".mp3", "level": 0.31756},
-  shot_unit17: {"file": "sfx/smg3_e70m", "ext": ".mp3", "level": 0.31756},
+  shot_unit13: {"file": "sfx/ppsh_shot", "ext": ".mp3", "level": 0.1808},
+  shot_unit15: {"file": "sfx/mpx_shot", "ext": ".mp3", "level": 0.22536},
+  shot_unit17: {"file": "sfx/ump_shot_a", "ext": ".mp3", "level": 0.86884},
   shot_unit2: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit11: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit18: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},

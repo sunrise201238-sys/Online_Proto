@@ -3755,6 +3755,10 @@ function fireGatePass(st, cooldownMs, now) {
 // had; then a recording for every gun and every other sound, each set to its level by ear on the listening site; then, the site's
 // numbers all standing: "Implement in PT and 9.7"). sfx.js plays them; sfx_data.js — written by the site's own tool from the levels
 // the site plays — says which file each is and how loud, and names each unit's sounds (SFX_UNITS, hung on the unit's row as `sfx`).
+// THE PICKED RECORDINGS (b1105hn, user 2026-11-14, eight more recordings cut and listed on the site, a row of each circled: "here.
+// keep these options on sound test site, we might need them later."): Saori's, Asuna's, Subaru's, Minori's, Marina's, Yuuka's
+// and Kurumi's shots are recordings of their own guns now (M4, FAMAS, HK, AK, PPSh-41, MPX, UMP-45), each a file of its own —
+// the made rifles and SMGs they had are off the table, kept on the site. Nothing here changed for it but the table.
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -8464,7 +8468,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hm 11-14';
+const CLIENT_BUILD_TAG = 'b1105hn 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
