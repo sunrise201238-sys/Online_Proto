@@ -3761,6 +3761,8 @@ function fireGatePass(st, cooldownMs, now) {
 // the made rifles and SMGs they had are off the table, kept on the site. Nothing here changed for it but the table.
 // Fubuki's too from b1105ho ("M14 for Fubuki, use M4 reload sound for HK."): the M14 recording's shot for her Ruger Mini-14,
 // in place of the Mini-14 recording's. No new reload is in the table yet.
+// Hina's from b1105hp ("Use A with these settings for Hina MG42"): one shot of an MG42 recording, the site's echo at 1.0,
+// medium, baked into it — as her made rifle had it.
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -8470,7 +8472,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ho 11-14';
+const CLIENT_BUILD_TAG = 'b1105hp 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

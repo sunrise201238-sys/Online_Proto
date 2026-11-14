@@ -17,7 +17,7 @@ export const SFX_SOUNDS = {
   shot_unit11: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit18: {"file": "sfx/shotgun_shot_e50l", "ext": ".mp3", "level": 0.271746},
   shot_unit12: {"file": "sfx/rifle3C_e30l", "ext": ".mp3", "level": 0.245016},
-  shot_unit5: {"file": "sfx/rifle3C_e100m", "ext": ".mp3", "level": 0.253968},
+  shot_unit5: {"file": "sfx/mg42_shot_a_e100m", "ext": ".mp3", "level": 0.46248},
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
   shot_unit10: {"file": "sfx/m14_shot", "ext": ".mp3", "level": 0.20236},
   shot_unit7: {"file": "sfx/laser_shot", "ext": ".mp3", "level": 0.23432},
