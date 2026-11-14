@@ -3762,7 +3762,12 @@ function fireGatePass(st, cooldownMs, now) {
 // Fubuki's too from b1105ho ("M14 for Fubuki, use M4 reload sound for HK."): the M14 recording's shot for her Ruger Mini-14,
 // in place of the Mini-14 recording's. No new reload is in the table yet.
 // Hina's from b1105hp ("Use A with these settings for Hina MG42"): one shot of an MG42 recording, the site's echo at 1.0,
-// medium, baked into it — as her made rifle had it.
+// medium, baked into it — as her made rifle had it. Then from b1105hq ("use this for new mg42"): the first shot of a Negev
+// recording's long burst in its place, the same echo baked in; the MG42 recording's stays on the site.
+// Koyuki's from b1105hq too ("use this for M60 koyuki (i know the mp3 file says M249, ignore that). And apply this reload sound
+// for all MG unit."): the gunshot of an M249 sound pack, as it is. And THE MACHINE GUNS' RELOAD — Koyuki's, Hina's, Maki's — is
+// that pack's seven mechanical sounds in a row, one piece 4.78 s long, in place of the three passes of the Machine Gun Reload
+// recording: the first reload from the new recordings to go in (the others' stay: "keep them as they are now").
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -3774,7 +3779,8 @@ function fireGatePass(st, cooldownMs, now) {
 //   bolt    `boltDelayMs` after a shot that leaves rounds in the magazine (the shot that empties it is followed by the reload
 //           instead); Iori's (`boltCut`) is cut by her next shot — her gun fires again before the bolt's sound is over ("Oh, this");
 //   reload  at each of `reloadAtMs` after a magazine's reload starts (half a second: a shot is at its loudest for that long and
-//           nothing under it would be heard; a machine gun's three passes fill its five seconds, the first at once);
+//           nothing under it would be heard; a machine gun's, one piece of 4.78 s from b1105hq, 0.14 s in — it ends 0.08 s
+//           before its five seconds do, as the listening site set it; three passes of a shorter recording before that);
 //   shell   the round going in, for a gun that loads one at a time ("every time HARUKA/HOSHINO/ARIS auto reloads an ammo. Not only
 //           when their reload motions show, but every time their actual ammo reload"): started SFX_SHELL_LEAD_MS before the gain,
 //           so its click falls on the gain;
@@ -8472,7 +8478,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hp 11-14';
+const CLIENT_BUILD_TAG = 'b1105hq 11-14';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
