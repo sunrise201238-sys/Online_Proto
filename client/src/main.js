@@ -8551,7 +8551,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ii 11-15';
+const CLIENT_BUILD_TAG = 'b1105ij 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10906,7 +10906,7 @@ function renderLobbySlots(menu) {
   const size = mapSizeText(state.mapKey);
   // (the map's whole square picture, letterboxed — user b1105q: "the full uncropped image"; MAP_DATA.thumb is the picker's wide tile's business)
   // (b1105t: a memo pinned to the wall — the pin and the ruled lines are style.css .memo; the tape sits on the picture's corner)
-  menu.querySelector('.map-slot').innerHTML = `<span class="slot-art slot-art-map"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m.name}" draggable="false"></span><span class="memo-tape"></span>
+  menu.querySelector('.map-slot').innerHTML = `<span class="slot-art slot-art-map"><img src="${mapCardFile(state.mapKey)}" alt="${m.name}" draggable="false"></span><span class="memo-tape"></span>
     <span class="slot-text"><b class="slot-name">${mapShortName(m)}</b><small class="slot-sub"><i class="pip-map">MAP</i>${mapSectionName(state.mapKey).replace(' map', '')}${size ? ` · ${size}` : ''}</small></span>
     <span class="slot-change">Change</span>${crayonHTML(m)}
     <span class="memo-dice" role="button" aria-label="Random map" title="A random map — scene or concept">${LOBBY_DIE_ICON}</span>`;
@@ -11320,7 +11320,7 @@ function showMapProfilePopup(card, mapId, mapName, onConfirm) {
   const tags = [m.noRandom ? '<span class="tag-ink">MANUAL PICK ONLY</span>' : '', m.offlineOnly ? '<span class="tag-ink">OFFLINE ONLY</span>' : ''].join('');
   const head = `<div class="profile-head"><b class="profile-name">${mapShortName(m) || mapName}</b><span class="profile-sub">${mapSectionName(mapId)}${size ? ` · ${size}` : ''}</span>${tags ? `<span class="profile-tags">${tags}</span>` : ''}</div>`;
   spawnProfilePopup(card,
-    `<img class="profile-face map-face" src="${import.meta.env.BASE_URL}maps/${mapId}.png" alt="${mapName}" draggable="false" />${head}${crayonHTML(m, 'memo-crayon-flow')}`,
+    `<img class="profile-face map-face" src="${mapCardFile(mapId)}" alt="${mapName}" draggable="false" />${head}${crayonHTML(m, 'memo-crayon-flow')}`,
     onConfirm, 'map');
 }
 
@@ -11430,6 +11430,16 @@ function thumbFile(spriteKey) { const alt = UNIT_ALT_THUMB[spriteKey]?.file; ret
 // (b1105ic: Hoshino's repaired art — HOSHINO'S ART, by showFullPicture; b1105ie: Maki's — MAKI'S ART, there too)
 const UNIT_PROFILE_ART = { hoshino: 'hoshino_profile_v2.png', maki: 'maki_profile_v2.png' };
 function profileFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_PROFILE_ART[spriteKey] ?? `${spriteKey}_profile.png`}`; }
+// A map's card picture under a file name of its own, by map key, for the reason UNIT_PROFILE_ART above has — a picture that takes
+// another's place is given a new name, so no browser keeps the old one: the lobby's map slot, the map's info card, the picker's
+// tile and the end page's memo ask for it here; every other map's is maps/<key>.png.
+// DUST'S CARD (b1105ij, user 2026-11-15, of six samples taken on b1105ii once the map was lit: "option C for map info card image."):
+// the paved plateau at eye level, its crates and the houses beyond. The photo before it showed the map as it stood dark (b1105ii).
+// Taken as a card photo is (photo mode: the fog dropped, the units hidden, every wall solid, one 1024-px square frame), from a
+// camera of its own at arena (46, 30, -50) looking to (40, 18, 20), its field 65 degrees, with the map's model and the lights
+// alone in the frame; stored without the renderer's alpha channel, which was opaque throughout (1.23 MB for 1.92).
+const MAP_CARD_ART = { dust: 'dust_v2.png' };
+function mapCardFile(mapKey) { return `${import.meta.env.BASE_URL}maps/${MAP_CARD_ART[mapKey] ?? `${mapKey}.png`}`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
@@ -11529,7 +11539,7 @@ function mapGridHTML(mapEntries, disabled = new Set()) {
   return tabs + sections.map(({ entries }, i) => `<div class="map-section" data-map-section="${i}"${i === 0 ? '' : ' hidden'}><div class="unit-grid map-grid">${entries.map(([id, m]) => {
       const off = disabled.has(id);
       return `<button class="unit-card map-card" data-map-card="${id}"${off ? ' disabled' : ''}>
-      <img class="unit-thumb map-thumb" src="${import.meta.env.BASE_URL}maps/${id}.png" alt="${m.name}" draggable="false"${m.thumb ? ` style="object-position:${m.thumb}"` : ''} />
+      <img class="unit-thumb map-thumb" src="${mapCardFile(id)}" alt="${m.name}" draggable="false"${m.thumb ? ` style="object-position:${m.thumb}"` : ''} />
       <span class="unit-label">${m.name}${off ? '<br>(offline only)' : ''}</span>
     </button>`;
     }).join('')}<button class="unit-card map-card" data-map-card="${RANDOM_PICK_KEY}">
@@ -13503,7 +13513,7 @@ function showEndPage({ title, note = '', winner = null, spectator = false, butto
   const m = MAP_DATA[state.mapKey];
   menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
     <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam)}
-      <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${import.meta.env.BASE_URL}maps/${state.mapKey}.png" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${mapShortName(m)}</b>${crayonHTML(m, 'memo-crayon-end')}</div>
+      <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${mapCardFile(state.mapKey)}" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${mapShortName(m)}</b>${crayonHTML(m, 'memo-crayon-end')}</div>
       ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam)}</div>
     <div class="end-foot">${buttons}</div>`;
   app.appendChild(menu);
