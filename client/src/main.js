@@ -49,6 +49,7 @@ import {
   getGeneratedObstacles,
   registerGeneratedData,
   hasGeneratedData,
+  dropGeneratedData,
   generatedDataFile,
   reloadHolds,
   applyHitStun,
@@ -1614,7 +1615,13 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
   };
   sprite.userData.stateRig = rig;
 
-  if (unitData.spriteKey) {
+  // THE POSE ART ONLY WHEN THE MODEL FAILS (b1105im, A MATCH'S WEIGHT — by the units' loader). A unit with a 3D character loaded its 2D poses all the same —
+  // four to nine pictures a unit, front for the others, the rear set and its shadows for the own unit: 40 to 76 MB decoded for each of the twelve units that
+  // have the full set — for a billboard that steps aside the moment the model is up; and since the loading screen (b1105hd) the model is in hand before the
+  // match is seen, so nobody saw one. Fetched, decoded and sent to the graphics card for nothing, a Trio's twelve units at a time. Now such a unit asks for
+  // its poses only if its model fails to load: the billboard keeps its placeholder card until then, as on the playtest site, which has loaded none since
+  // b1105k. A unit without a model — Mika — loads hers as ever. The files stay in the repository.
+  const loadPoses = () => {
     // Flight units (Aris) also load the 'fly' pose — the air-sprint art.
     // Non-flight units skip it (no <key>_fly.png exists for them).
     const spriteStates = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
@@ -1639,7 +1646,8 @@ function makeUnitSprite(unitData, isOwnUnit = false) {
         });
       }
     }
-  }
+  };
+  if (unitData.spriteKey) { if (unitData.model && UNIT_MODELS[unitData.model]) loadUnitModel(unitData.model, () => {}, loadPoses); else loadPoses(); }
   return sprite;
 }
 
@@ -1669,17 +1677,21 @@ function warmUnitArt(unitData, own = false) {
   // A unit with a 3D character: its model downloads and parses here too, in
   // the pickers' dead time, and its textures join the one-per-frame upload
   // queue — the match then starts on the model, not on the billboard.
+  const warmPoses = () => {
+    const bodySuffix = own ? '_rear' : '';
+    const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
+    for (const s of states) {
+      loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, queueTexWarm);
+      if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, queueTexWarm);
+    }
+  };
   if (unitData.model && UNIT_MODELS[unitData.model]) {
     loadUnitModel(unitData.model, (gltf) => {
       gltf.scene.traverse((o) => { if (o.isMesh && o.material?.map) queueTexWarm(o.material.map); });
-    });
+    }, warmPoses);   // (b1105im: the pose art only if the model fails to load — makeUnitSprite's note)
+    return;
   }
-  const bodySuffix = own ? '_rear' : '';
-  const states = unitData.flight ? [...UNIT_SPRITE_STATES, 'fly'] : UNIT_SPRITE_STATES;
-  for (const s of states) {
-    loadUnitArt(unitData.spriteKey, `${s}${bodySuffix}`, queueTexWarm);
-    if (own) loadUnitArt(unitData.spriteKey, `${s}_rear_shadow`, queueTexWarm);
-  }
+  warmPoses();
 }
 
 // ----------------------------------------------------------------------------
@@ -1830,34 +1842,34 @@ const UNIT_MODELS = {
   // (Saori's form, 2026-10-10: the default map. Owner 2026-10-15: the dodge is Move_Jump, her jump
   // clip, fitted to the step — it had been Move_End_Normal since the 10-10 evening)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
-  saori: { file: 'models/saori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  saori: { file: 'models/saori_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Asuna's form, 2026-10-10: standing is Formation_Idle; the rest as the default map. Owner
   // 2026-10-15: the dodge is Move_Jump, her jump clip, fitted to the step — it had been her EX clip, Exs)
   // (PT b1105cm, user 2026-11-08: "Apply Subaru's dodge motion to Asuna": her body takes Subaru's dodge, borrowClip; her own
   // Move_Jump, her dodge until then and still her jump, poses the rest — hair, skirt, gun; her clips crossfade, MODEL_FADE_S)
-  asuna: { file: 'models/asuna', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  asuna: { file: 'models/asuna_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     stand: { name: 'Formation_Idle', speed: 1 },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Atsuko's form, 2026-10-10: the default map as is)
   // (PT b1105cq, user 2026-11-08: "Apply Subaru's dodge motion to Atsuko": her body takes Subaru's dodge, borrowClip; her own
   // Move_Jump, her dodge until then and still her jump, poses the rest — hat, hair, skirt, gun, ribbon; her clips crossfade, MODEL_FADE_S)
-  atsuko: { file: 'models/atsuko', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  atsuko: { file: 'models/atsuko_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Subaru's form, user 2026-10-22, a first map until the user's motion sheet: her file names its firing clips in two sets,
   // Normal01_* and Normal02_*, with no Normal_Attack_Ing / Normal_Reload — the first set is taken; the rest as the default map)
-  subaru: { file: 'models/subaru', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  subaru: { file: 'models/subaru_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     shoot: { name: 'Normal01_Attack_Ing', speed: 1 },
     reload: { name: 'Normal01_Reload', speed: 1, fit: 'reload', once: true } } },
   // (Yuuka's form, user 2026-10-22, a first map until the user's motion sheet: every default name is in her file; she also
   // carries a Stand_* set and Move_End_* clips, unused)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
-  yuuka: { file: 'models/yuuka', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  yuuka: { file: 'models/yuuka_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Kurumi's form, the user's motion sheet of 2026-10-23: her file names its idle, move and reload clips in two sets,
   // Normal01_* / Move01_* and Normal02_* / Move02_*, and carries no Move_Jump — the formation idle stands, the first move set
   // walks, the second set's move-end clip is her dodge and her jump)
-  kurumi: { file: 'models/kurumi', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  kurumi: { file: 'models/kurumi_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     stand: { name: 'Formation_Idle', speed: 1 },
     walk: { name: 'Move01_Ing', speed: 0.5 },
     sprint: { name: 'Move01_Ing', speed: 1 },
@@ -1869,27 +1881,27 @@ const UNIT_MODELS = {
   // (Rabu's form, the user's motion sheet of 2026-10-23: the formation idle stands, firing on the run keeps the firing clip,
   // the rest the default names — all in her file)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
-  rabu: { file: 'models/rabu', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 }, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
+  rabu: { file: 'models/rabu_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, stand: { name: 'Formation_Idle', speed: 1 }, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Marina's form, 2026-10-10: firing on the run keeps the firing clip, Normal_Attack_Ing; the rest as the default map)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
-  marina: { file: 'models/marina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
+  marina: { file: 'models/marina_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT, sprintShoot: { name: 'Normal_Attack_Ing', speed: 1 },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Haruka's form, 2026-10-10: nothing changed from the default map)
   // (PT b1105cs, user 2026-11-08: "Apply Subaru's dodge motion to Saori/Marina/Haruka/Yuuka/Rabu": her body takes Subaru's dodge, borrowClip; her own Move_Jump, her dodge until then and still her jump, poses the rest)
-  haruka: { file: 'models/haruka', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  haruka: { file: 'models/haruka_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
   // (Fubuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Kneel_Attack_Start)
   // (PT b1105cs, user 2026-11-08: "Apply Saori's jump motion to Fubuki": her body takes Saori's jump, borrowClip; her own
   // Kneel_Attack_Start, her jump until then and still her dodge, poses the rest — her gun, hair, skirt)
-  fubuki: { file: 'models/fubuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  fubuki: { file: 'models/fubuki_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true } } },
   // (Hina's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Move_End_Normal)
   // (PT b1105ck, user 2026-11-08: "Apply Saori's jump motion and Subaru's dodge motion to Hina": her body takes Subaru's dodge
   // and Saori's jump, borrowClip — since b1105cl her dodge too takes Saori's jump, fitted to the dodge; her own Move_End_Normal, her dodge and jump until then, still poses the rest — her MG42 and its
   // parts, her jacket, her wings (Wing_Root at 0.65), the hair bones it scales; her clips crossfade, MODEL_FADE_S)
-  hina: { file: 'models/hina', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  hina: { file: 'models/hina_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },   // (Fubuki's dodge, borrowClip — PT and 9.5 b1105cw, user 2026-11-08: "Apply Fubuki's dodge motion to Hina"; b1105cl had Saori's jump fitted to the dodge; her own Move_End_Normal still poses her MG42, jacket and wings)
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Move_End_Normal', speed: 1, once: true } } },
   // (Koyuki's form, 2026-10-10: no Move_Jump in her file — the dodge and the jump are Normal_Attack_Start)
@@ -1897,14 +1909,14 @@ const UNIT_MODELS = {
   // and Saori's jump, borrowClip; her own Normal_Attack_Start, her dodge and jump until then, still poses the rest — it scales her
   // spare magazines and her bomb to 0.001, which a borrowed clip alone would have left at their bind pose, full size beside her;
   // her clips crossfade, MODEL_FADE_S, so the ways in and out blend as they always did)
-  koyuki: { file: 'models/koyuki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  koyuki: { file: 'models/koyuki_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Normal_Attack_Start', speed: 1, once: true } } },
   // (Hoshino's form, 2026-10-10: the battle model's first form, "01_"; no Move_Jump in this file.
   // fade 0: her backpack sits on a different bone pose in the formation idle than in the run, and a
   // crossfade slid it across her back — the clips cut instead; owner 2026-10-10)
   hoshino: {
-    file: 'models/hoshino', height: UNIT_SPRITE_HEIGHT, fade: 0,
+    file: 'models/hoshino_v2', height: UNIT_SPRITE_HEIGHT, fade: 0,
     clips: {
       stand: { name: '01_Formation_Idle', speed: 1 },
       walk: { name: '01_Move_Ing', speed: 0.5 },
@@ -1925,7 +1937,7 @@ const UNIT_MODELS = {
   // level flight — airborne and sprinting — are Move_Ing; firing on the run keeps
   // Normal_Attack_Ing; no Move_Jump in her file — the dodge and the jump are Move_end_Normal)
   aris: {
-    file: 'models/aris', height: UNIT_SPRITE_HEIGHT,
+    file: 'models/aris_v2', height: UNIT_SPRITE_HEIGHT,
     clips: {
       stand: { name: 'Formation_Idle', speed: 1 },
       walk: { name: 'Normal_Idle', speed: 0.5 },
@@ -1946,12 +1958,12 @@ const UNIT_MODELS = {
   // jump are Move_End_Normal. Her firing clip follows the sniper rule in makeUnitModel.)
   // (PT b1105cs, user 2026-11-08: "Apply Fubuki's dodge motion to Aris/Kei": her body takes Fubuki's dodge, borrowClip; her own
   // Move_End_Normal, her dodge until then and still her jump, poses the rest)
-  kei: { file: 'models/kei', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  kei: { file: 'models/kei_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Kneel_Attack_Start', from: 'models/fubuki_dodge_clip.json', base: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
   // (Aru's form, 2026-10-10: standing is Formation_Idle; no Move_Jump in her file — the dodge and
   // the jump are Move_End_Normal; the rest as the default map. Sniper: firing clip per makeUnitModel.)
-  aru: { file: 'models/aru', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  aru: { file: 'models/aru_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     stand: { name: 'Formation_Idle', speed: 1 },
     dodge: { name: 'Move_End_Normal', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_End_Normal', speed: 1, once: true } } },
@@ -1960,7 +1972,7 @@ const UNIT_MODELS = {
   // Normal_Idle, holding the gun, user: "Normal_Idle"; `cooldown`: her fire cooldown's clip — updateUnitModelState)
   // (b1105cz, user: "Her hair seems off in game": the model rebuilt — her hair follows her Formation_Idle alone, never the swimsuit's hair
   // bones, which a letter-case match had married to hers; a new file name, so no browser keeps the old one)
-  hiyori: { file: 'models/hiyori_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  hiyori: { file: 'models/hiyori_v3', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', speed: 1, once: true },
     cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
@@ -1969,7 +1981,7 @@ const UNIT_MODELS = {
   // the reload): her file has no Move_Jump, so the borrowed jump (Saori's) and the borrowed dodge (Subaru's Move_Jump, which is her jump and
   // her dodge, subaru_dodge_clip.json) pose the rest from her Kneel_Attack_Start, as Fubuki's jump does; `cooldown`: her 0.75 s fire cooldown's
   // clip (updateUnitModelState), over walking and standing, cut by a sprint, a jump or a dodge (user: "not shown during sprint/jump/dodge")
-  iori: { file: 'models/iori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  iori: { file: 'models/iori_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Kneel_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Kneel_Attack_Start', speed: 1, once: true },
     cooldown: { name: 'Normal_Attack_Delay', speed: 1, fit: 'cooldown', once: true } } },
@@ -1978,7 +1990,7 @@ const UNIT_MODELS = {
   // dodge motion"; the defaults name all but the opening, the jump and the dodge, the climb's Vital_Retreat among them): `shootStart`,
   // her attack's opening, plays once and whole at the start of every attack before Normal_Attack_Ing (updateUnitModelState); her
   // file has no Move_Jump, so the borrowed jump and dodge pose the rest from her Normal_Attack_Start, as Koyuki's do
-  maki: { file: 'models/maki', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+  maki: { file: 'models/maki_v2', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
     shootStart: { name: 'Normal_Attack_ReadyStart', speed: 1, once: true },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Normal_Attack_Start', speed: 1, fit: 'step', once: true },
     jump: { name: 'Move_Jump', from: 'models/saori_jump_clip.json', base: 'Normal_Attack_Start', speed: 1, once: true } } },
@@ -2006,6 +2018,54 @@ const _modelPending = {};           // model key -> [[onReady, onFail], …]
 const _modelFailed = {};            // model key -> true: its last load failed (b1105hd: THE LOADING SCREEN waits for a model to load OR fail)
 const _modelProgress = {};          // model key -> the share of its file that has come in, 0 to 1 (where the browser tells the file's size: the loading screen's bar)
 
+// A MATCH'S WEIGHT (b1105im; user 2026-11-15, of a phone whose page died starting a 2v2 Trio after several maps had been looked at in the picker: "選地圖時不預先載模型，
+// 確定後才載 / 刪掉角色模型裡沒用到的動作", and: "we already made the loading screen, so try to make the best use out of it to make the games (online games especially)
+// more light weight and less lag. I don't mind a longer waiting time in loading screen."). Until this build nothing a page had loaded was ever let go: every map
+// looked at in the picker and every unit ever picked stayed in memory and on the graphics card for as long as the page lived — on a phone-shaped page, six maps
+// looked at and a 2v2 Trio on Town stood 1.2 GB over the main menu. Now the page holds what the match in hand is made of and no more:
+//   ONE MAP IN HAND (holdMap, below the maps' loader): the picker loads nothing on a tap; the confirmed map alone is fetched, and a map's model, data and route
+//     grid are let go when another map is confirmed or started. An arena goes when its match does (showSelectMenu) — every start builds its own.
+//   THE MATCH'S UNITS (trimUnitModels): a unit's model is kept while a unit on the field wears it or a pick names it, and let go otherwise — when a roster is
+//     picked, when the lobby comes up, at a start (the last match is taken down first, under the loading screen, so two matches' units never stand in memory
+//     together) and online in the room and at each match's start.
+//   WHAT A MODEL IN HAND IS: its scene, its clips and its bounds. The loader's own record of the file — the file's bytes over again, its JSON, every picture
+//     as it came — is dropped once the model is made; and a unit's file carries only the clips the game plays (shared/tools/anim/unit_anims.mjs: 24 to 57 in a
+//     file until this build, seven to nine now — a track was built for every channel of every one of them).
+//   THE LOADING SCREEN DOES THE GRAPHICS CARD'S WORK (matchWarmDraw, matchWarmKeep): everything the match will draw is drawn once under it — the roster units
+//     still to come and what a match hides until it needs it — so no model's upload and no shader's compile is left for the moment it first shows mid-match.
+// disposeModel: everything a loaded model holds given back — the graphics card's geometry and textures, and every picture's decoded pixels at once (an
+// ImageBitmap keeps them until it is closed or collected, and a phone's collector is in no hurry). Only for a model nothing in the scene wears.
+function disposeModel(m) {
+  const geos = new Set(), mats = new Set(), texs = new Set();
+  m?.scene?.traverse((o) => { if (o.geometry) geos.add(o.geometry); for (const mat of [].concat(o.material ?? [])) if (mat) mats.add(mat); if (o.isSkinnedMesh) o.skeleton?.dispose?.(); });
+  for (const mat of mats) { for (const v of Object.values(mat)) if (v?.isTexture) texs.add(v); mat.dispose(); }
+  for (const g of geos) g.dispose();
+  for (const t of texs) { t.dispose(); const im = t.source?.data; if (im && typeof im.close === 'function') { try { im.close(); } catch { /* (closed already) */ } } }
+}
+// the models the units now made wear: the four seats' and the roster units built ahead (state.prebuiltMechs)
+function unitModelsOnField() {
+  const used = new Set(); const note = (m) => { const mk = m?.unit?.model; if (mk) used.add(mk); };
+  for (const s of ['player', 'ally', 'enemy', 'enemy2']) { note(state[s]); for (const m of state.prebuiltMechs?.[s] ?? []) note(m); }
+  return used;
+}
+// every unit model let go but those `unitKeys` name and those a unit on the field wears; the count of the ones that went. (A model still on its way lands in
+// the cache whatever it is — a unit may be waiting to wear it — and goes at the next call.)
+function trimUnitModels(unitKeys) {
+  const keep = unitModelsOnField();
+  for (const k of unitKeys ?? []) { const mk = UNIT_DATA[k]?.model; if (mk) keep.add(mk); }
+  let n = 0;
+  for (const mk of Object.keys(_modelCache)) {
+    if (keep.has(mk)) continue;
+    const m = _modelCache[mk]; delete _modelCache[mk]; delete _modelProgress[mk];
+    try {   // (letting go is never a reason for a pick or a start to fail: whatever goes wrong here is said and passed over)
+      const gone = new Set(); m.scene.traverse((o) => { for (const mat of [].concat(o.material ?? [])) if (mat?.map) gone.add(mat.map); });
+      for (let i = _texWarmQueue.length - 1; i >= 0; i -= 1) if (gone.has(_texWarmQueue[i])) _texWarmQueue.splice(i, 1);   // (none of its pictures is left waiting for an upload)
+      disposeModel(m); n += 1;
+    } catch (e) { console.warn('[memory] a unit model let go', mk, e); }
+  }
+  return n;
+}
+
 function loadUnitModel(key, onReady, onFail) {   // (`onFail`, b1105hd: told when the load fails — until then a failure told nobody)
   const cfg = UNIT_MODELS[key];
   if (!cfg) { onFail?.(); return; }
@@ -2030,10 +2090,10 @@ function loadUnitModel(key, onReady, onFail) {   // (`onFail`, b1105hd: told whe
       o.frustumCulled = false;   // skinned bounds are the bind pose's: never cull a posed unit
       o.renderOrder = 2;         // after the own unit's silhouette (see makeUnitModel)
     });
-    _modelCache[key] = gltf;
+    const kept = _modelCache[key] = { scene: gltf.scene, animations: gltf.animations, userData: gltf.userData };   // (b1105im, A MATCH'S WEIGHT: the three things the game reads of a loaded file — the loader's own record of it is let go)
     const cbs = _modelPending[key] || [];
     delete _modelPending[key];
-    for (const [ok] of cbs) ok(gltf);
+    for (const [ok] of cbs) ok(kept);
   }, (e) => { if (e && e.lengthComputable && e.total > 0) _modelProgress[key] = e.loaded / e.total; }, (err) => {
     console.warn('unit model failed to load', key, err);
     const cbs = _modelPending[key] || [];
@@ -3635,16 +3695,23 @@ function updateDyingBulletTrails(now) {
   }
 }
 
+// ONE GEOMETRY A KIND (b1105im, A MATCH'S WEIGHT): a round's shape, a pellet's, a laser bolt's and a hit's ring are the same every time — each is made once and
+// worn by every mesh of its kind (`userData.shared`: never disposed with a mesh), where every shot built its own, sent it to the graphics card and took it off
+// again: some 1,300 in a two and a half minute 2v2 of bots. A mesh still brings its own material — its opacity is its own.
+const _sharedGeo = new Map();
+function sharedGeo(key, make) {
+  let g = _sharedGeo.get(key);
+  if (!g) { g = make(); g.userData.shared = true; _sharedGeo.set(key, g); }
+  return g;
+}
 function buildProjectileMesh(unit, isRedLock) {
   // Aris laser bolt: hitbox == visual — a thin transparent bright-cyan
   // cylinder, nose at the mesh origin with the body trailing behind (same
   // convention as the spindle tracers, so orientTracer aligns it with
   // velocity). The hit test extends its swept segment by this body length.
   if (unit?.beamBolt) {
-    const geom = new THREE.CylinderGeometry(
-      unit.beamBolt.radius, unit.beamBolt.radius, unit.beamBolt.length, 10, 1, true
-    );
-    geom.translate(0, -unit.beamBolt.length / 2, 0);
+    const { radius, length } = unit.beamBolt;
+    const geom = sharedGeo(`bolt ${radius} ${length}`, () => new THREE.CylinderGeometry(radius, radius, length, 10, 1, true).translate(0, -length / 2, 0));
     const mesh = new THREE.Mesh(
       geom,
       new THREE.MeshBasicMaterial({ color: 0x66faff, transparent: true, opacity: 0.85, fog: false, depthWrite: false })
@@ -3661,7 +3728,7 @@ function buildProjectileMesh(unit, isRedLock) {
   // Radius is purely visual; the hit box (see header) is unchanged.
   if (!isSniper && !isMG) {
     return new THREE.Mesh(
-      new THREE.SphereGeometry(0.15, 8, 8),
+      sharedGeo('pellet', () => new THREE.SphereGeometry(0.15, 8, 8)),
       new THREE.MeshBasicMaterial({ color: 0xfff4d0 })
     );
   }
@@ -3683,8 +3750,7 @@ function buildProjectileMesh(unit, isRedLock) {
     new THREE.Vector2(midRadius, 0),    // mid (widest)
     new THREE.Vector2(0, half)          // head tip (sharp)
   ];
-  const geom = new THREE.LatheGeometry(profile, 10);
-  geom.translate(0, -half, 0);
+  const geom = sharedGeo(`spindle ${half} ${midRadius}`, () => new THREE.LatheGeometry(profile, 10).translate(0, -half, 0));
   // One tracer color for everyone (2026-08-01): the amber in-lock tint
   // (0xffd28a, a vestige of the removed lock-on homing mechanic) is gone —
   // in-range status is deliberately not signalled to players. The isRedLock
@@ -3717,7 +3783,7 @@ function orientTracer(mesh, velX, velY, velZ) {
 function disposeProjectileMesh(mesh) {
   if (!mesh) return;
   if (mesh.parent) mesh.parent.remove(mesh);
-  if (mesh.geometry) mesh.geometry.dispose();
+  if (mesh.geometry && !mesh.geometry.userData?.shared) mesh.geometry.dispose();   // (ONE GEOMETRY A KIND, b1105im: a shared shape stays)
   if (mesh.material) mesh.material.dispose();
 }
 
@@ -7099,7 +7165,7 @@ function updateTransforms(dt) {
     if (performance.now() < m.state.staggerUntil) m.root.rotation.x = 0.18;
     if (m.state.action === 'stagger' && performance.now() > m.state.staggerUntil) m.state.action = 'idle';
     if (!['dash'].includes(m.state.action)) return;
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), new THREE.MeshBasicMaterial({ color: 0x7efbff, transparent: true, opacity: 0.4 }));
+    const puff = new THREE.Mesh(sharedGeo('dash puff', () => new THREE.SphereGeometry(0.12, 6, 6)), new THREE.MeshBasicMaterial({ color: 0x7efbff, transparent: true, opacity: 0.4 }));   // (ONE GEOMETRY A KIND, b1105im: a puff a frame of a dash, each with a sphere of its own until then)
     puff.position.copy(m.root.position).add(new THREE.Vector3(0, -1.8, -0.6));
     scene.add(puff);
     m.trail.push({ mesh: puff, life: 0.2 });
@@ -7112,7 +7178,7 @@ function updateTransforms(dt) {
       t.mesh.scale.multiplyScalar(1.07);
       if (t.life > 0) return true;
       scene.remove(t.mesh);
-      t.mesh.geometry.dispose();
+      if (!t.mesh.geometry.userData?.shared) t.mesh.geometry.dispose();
       t.mesh.material.dispose();
       return false;
     });
@@ -7893,11 +7959,59 @@ function matchLoadBegin(spec) {
 }
 // the match's first frame, drawn once with nothing culled (under the loading screen): every mesh of the arena goes to the
 // graphics card now, the ones outside the first shot too — the intro's cuts and the play after them find them there
+// (b1105im, A MATCH'S WEIGHT — until then this frame drew what the first shot's scene showed and no more, and the rest went to the graphics card in the middle of
+// play: a roster's second unit in the frame it spawned (its geometry, its pictures), a unit's see-through outline and the bars and arrows over the units in the
+// first frame of play, a round, its trail and a hit's ring at the first shot — the shaders of all of them compiled there. Now, for this one frame under the
+// screen: the roster units built ahead are put in the scene, one of each kind of round, trail and hit ring the match's units fire is put in it too
+// (matchWarmSamples), every picture still queued for its upload goes up (not one a frame through the match's first seconds), and what the scene holds hidden
+// is drawn as well — all of it under the lights that light the scene now and no other: a light more or less is another shader for everything it lights (a
+// unit carries one), so a light this frame would bring in is put out for it. The ground and the grid a modelled map hides stay hidden: nothing shows them.)
 function matchWarmDraw() {
-  const off = [];
-  scene.traverse((o) => { if (o.frustumCulled && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) { o.frustumCulled = false; off.push(o); } });
+  const off = [], shown = [], dimmed = [], parked = [], samples = matchWarmSamples();
+  const lit = new Set();
+  const lights = (o, vis, out) => { const v = vis && o.visible; if (o.isLight && v) out(o); for (const c of o.children) lights(c, v, out); };
+  lights(scene, true, (l) => lit.add(l));
+  for (const list of Object.values(state.prebuiltMechs ?? {})) for (const m of list) if (m?.root && !m.root.parent) { scene.add(m.root); parked.push(m.root); }
+  for (const o of samples) scene.add(o);
+  while (_texWarmQueue.length) renderer.initTexture?.(_texWarmQueue.shift());
+  scene.traverse((o) => {
+    if (o === ground || o === gridHelper) return;
+    if (!o.visible && !o.isLight) { o.visible = true; shown.push(o); }
+    if (o.frustumCulled && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) { o.frustumCulled = false; off.push(o); }
+  });
+  lights(scene, true, (l) => { if (!lit.has(l)) { l.visible = false; dimmed.push(l); } });
   try { renderer.render(scene, camera); } catch (e) { console.warn('[loading] the warm frame', e); }
+  pinPrograms();   // (before the samples go: their shaders stay)
   for (const o of off) o.frustumCulled = true;
+  for (const o of shown) o.visible = false;
+  for (const l of dimmed) l.visible = true;
+  for (const r of parked) scene.remove(r);
+  for (const o of samples) { scene.remove(o); o.traverse((x) => { if (x.geometry && !x.geometry.userData?.shared) x.geometry.dispose(); x.material?.dispose?.(); }); }
+}
+// one of each kind of round, trail and hit ring the match's units will fire — the units on the field and the roster units built ahead — made by the game's own
+// builders, so that each wears the very material its kind wears in play
+function matchWarmSamples() {
+  const out = [], seen = new Set(), units = new Set();
+  for (const s of ['player', 'ally', 'enemy', 'enemy2']) { if (state[s]?.unit) units.add(state[s].unit); for (const m of state.prebuiltMechs?.[s] ?? []) if (m?.unit) units.add(m.unit); }
+  const once = (kind, make) => { if (seen.has(kind)) return; seen.add(kind); try { out.push(make()); } catch (e) { console.warn('[loading] a warm sample', kind, e); } };
+  for (const u of units) {
+    once(u.beamBolt ? `bolt ${u.beamBolt.radius} ${u.beamBolt.length}` : (u.sniperCharge || (u.spreadCount ?? 0) === 1) ? 'spindle' : 'pellet', () => buildProjectileMesh(u, false));
+    if (bulletTrailFadeMsFor(u) > 0) { const r = bulletTrailRadiusFor(u); once(r > 0 ? 'ribbon' : 'line', () => buildBulletTrail(r)); }
+  }
+  if (units.size) once('hit ring', () => buildHitRing(0xffffff));
+  return out;
+}
+// EVERY SHADER KEPT (b1105im, A MATCH'S WEIGHT). The renderer throws a shader program away the moment no material is left that uses it, and makes it again —
+// compiles and links it, in the middle of a frame — when the next such material is drawn. A round, its trail and a hit's ring each brought a material of their own
+// and took it away again, so between two bursts their shaders were gone: in a two and a half minute 2v2 of bots the round's own was made five times and the hit
+// ring's seven. Each program is now held once more than its materials hold it (`usedTimes`, the count the renderer frees it by), so none is thrown away: a
+// shader is compiled once in the page's life. After every frame's drawing (animate) and in the loading screen's warm frame; the list is a few dozen long.
+let _pinnedPrograms = 0;
+function pinPrograms() {
+  const list = renderer.info.programs;
+  if (!list || list.length === _pinnedPrograms) return;
+  for (const p of list) if (!p.pinned) { p.pinned = true; p.usedTimes += 1; }
+  _pinnedPrograms = list.length;
 }
 // every frame the screen is up (animate, after the frame's drawing): the bar; and, once the match's first frame has been
 // drawn, the screen off — at once where its content has not begun to show, or online, or with no intro to hold (the
@@ -7918,15 +8032,21 @@ function loadingTick() {
 function startMatch() {
   const tok = ++matchStartWait, key = state.mapKey;
   if (state.online) cleanupMatch();   // (an offline start out of an online match — no page offers one — ends it here, as the set-up always did)
-  // the last match stands still under the screen until the set-up takes it down: its ending camera gone (left running it
-  // would put its end page up over the screen), its intro too, its sim held
+  // the last match ends here, under the screen: its ending camera gone (left running it would put its end page up over the
+  // screen), its intro too, its sim held — and, since b1105im (A MATCH'S WEIGHT), the match itself taken down before the new
+  // one's files are asked for, where it used to stand until the set-up: the two never stand in memory together, and what
+  // the new one does not field is let go — every other map, every unit model no seat names
   if (finale.active) finishFinale(false);
   introClear();
-  state.running = false;
+  state.running = false; state.sdIntro = false; document.getElementById('sd-banner')?.remove();
   clearMenus();   // (b1105hb: the page the start was asked from goes now — the lobby, a picker, the end page of a REMATCH)
   matchCoverUntilDrawn = false; matchCoverDrawn = false;
   matchStartCover(true);
-  const rec = matchLoadRec = matchLoadBegin(matchNeeds());
+  cleanupMatch();
+  const needs = matchNeeds();
+  if (arenaStandingKey && arenaStandingKey !== needs.mapKey) clearArenaDecor();   // (an arena of another map goes with its match, and its model with it — not when the new arena is built)
+  holdMap(needs.mapKey, false); trimUnitModels(needs.units);
+  const rec = matchLoadRec = matchLoadBegin(needs);
   // (a later start, or the lobby, has taken this one's place — and the screen with it; anything else that moved under the
   //  screen — it takes every tap, so nothing should — voids the start and lifts the screen: none is left up that nobody will lift)
   const live = () => { if (tok !== matchStartWait) return false; if (state.online || state.mapKey !== key) { matchStartCover(false); return false; } return true; };
@@ -8588,7 +8708,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105il 11-15';
+const CLIENT_BUILD_TAG = 'b1105im 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9674,14 +9794,24 @@ function showOnlineWaitingOpp(onl, conn) {
   // PNGs and their one-per-frame GPU uploads finish before the match starts
   // instead of trickling into the first seconds of the fight. Re-running on
   // every config update is free — loads and uploads are cache-deduped.
+  // (b1105im, A MATCH'S WEIGHT: … and the models of units no seat names any more are let go — trimUnitModels — and the room's map is got ready here, for
+  //  the host and the guests alike, where a guest's used to wait for the match's start; a map the host picked before it is let go — holdMap)
+  const roomUnits = [];
   for (const s of slots) {
     const isMe = s === myId;
     if (trio) {
-      for (const k of cfg?.rosters?.[s] ?? []) warmUnitArt(UNIT_DATA[k], isMe);
+      for (const k of cfg?.rosters?.[s] ?? []) { warmUnitArt(UNIT_DATA[k], isMe); roomUnits.push(k); }
     } else {
       const k = cfg?.config?.[s]?.unitKey ?? (occupied.has(s) ? null : (cfg?.botUnits?.[s] || 'unit1'));
-      if (k) warmUnitArt(UNIT_DATA[k], isMe);
+      if (k) { warmUnitArt(UNIT_DATA[k], isMe); roomUnits.push(k); }
     }
+  }
+  trimUnitModels(roomUnits);
+  if (mapKey && MAP_DATA[mapKey]) {
+    // (an arena still standing from the last match, of another map: it goes now, and its model with it — the next match's set-up builds its own; its record
+    //  of what it built for is cleared so that it does, even if the room comes back to the old map)
+    if (arenaStandingKey && arenaStandingKey !== mapKey) { clearArenaDecor(); onl.mechsCreatedFor = null; }
+    holdMap(mapKey);
   }
 
   // Headline text. Both modes use the manual-start flow: the host picks unit +
@@ -9964,6 +10094,7 @@ function ensureOnlineMatchSetup(snap) {
   // matches kept whatever map was last played OFFLINE (or none) and trails
   // rendered the wrong color on dark-ground maps.
   state.mapKey = mapKey;
+  holdMap(mapKey, false);   // (b1105im, ONE MAP IN HAND: this match's map from here on — the build below and the match's own loading ask for its files)
   buildArenaForMap(mapKey);
   state.reticle = makeReticleSprite();
   state.enemy.root.add(state.reticle);
@@ -10455,7 +10586,11 @@ function runOnlineMatchFrame(dt, onl, conn) {
   const started = conn.getMatchStart?.() ?? null;
   if (started && onl.introFor !== started) {
     const left = (snap.introUntil ?? 0) - snap.serverTime - Math.max(0, Date.now() - (lastSnapAt || Date.now()));   // (the snapshot's arrival is stamped by the wall clock — connection.js)
-    if (onl.loadFor !== started) { onl.loadFor = started; onl.loadRec = matchLoadBegin(matchNeedsOnline(snap, onl)); onl.loadTold = false; }   // (THE LOADING SCREEN online, b1105hd: this match's things asked for once)
+    if (onl.loadFor !== started) {   // (THE LOADING SCREEN online, b1105hd: this match's things asked for once — and, b1105im, A MATCH'S WEIGHT: what it does not field let go first, the last match's units and any other map)
+      onl.loadFor = started; const needs = matchNeedsOnline(snap, onl);
+      holdMap(needs.mapKey, false); trimUnitModels(needs.units);
+      onl.loadRec = matchLoadBegin(needs); onl.loadTold = false;
+    }
     // THE LOADING WAIT (b1105hh; shared loadwait.js, its story; user 2026-11-13: the server waits for every player's
     // files, "up to 30 sec (player would standby in loading screen, correct?)"): a server of this build does not start
     // the hold's clock until every player's page has loaded — `loadUntil`, in match:start and every snapshot, is the
@@ -10587,6 +10722,9 @@ function showSelectMenu() {
   renderer.domElement.style.pointerEvents = 'none';
 
   if (!MAP_DATA[state.mapKey]) state.mapKey = 'town';   // (the lobby's map card always names a map)
+  // (b1105im, A MATCH'S WEIGHT: the arena goes with its match — every start builds its own — and of what the page has loaded only the card's map and the picks'
+  //  units stay in hand; nothing is fetched here)
+  clearArenaDecor(); holdMap(state.mapKey, false); trimUnitModels(matchNeeds().units);
 
   // THE LOBBY (PT, b1105m, 2026-11-05; the design canvas's F lobby — user: "i want that layout previously shown in
   // the artifact"): your unit's card on the left, the option rows in the middle (since b1105bp in three groups, Teams /
@@ -11018,6 +11156,7 @@ function assignRoster(slot, arr) {
   // Kick this slot's art downloads NOW — the remaining pickers and the map
   // screen are dead time, so the PNGs land before the fight starts.
   for (const k of arr) warmUnitArt(UNIT_DATA[k], slot === 'player');
+  trimUnitModels(matchNeeds().units);   // (b1105im, A MATCH'S WEIGHT: … and the models of units no pick names any more are let go — a die rolled ten times used to leave every unit's model in memory)
 }
 
 function trioPickCount() { return state.mainMode === 'trio' ? 3 : 1; }
@@ -11626,7 +11765,6 @@ function wireMapGrid(menu, onPick) {
       if (key === RANDOM_PICK_KEY) {
         showRandomProfilePopup(card, true, () => { clearPending(); confirm(card, key); });
       } else {
-        warmMapModel(key);   // a modelled map's scene starts downloading at the first tap
         showMapProfilePopup(card, key, MAP_DATA[key]?.name ?? key, () => { clearPending(); confirm(card, key); });
       }
     });
@@ -11731,6 +11869,7 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
   fitPickerMenu(mapMenu);
   wireMapGrid(mapMenu, (key) => {
     state.mapKey = key;
+    holdMap(key);   // (b1105im, ONE MAP IN HAND: the confirmed map is fetched from here on — a tap on a card fetches nothing — and the map held until now is let go)
     if (onPick) { clearMenus(); onPick(); } else startMatch();
   });
 }
@@ -13592,11 +13731,15 @@ function PhaserLikeBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
-function spawnHitEffect(position, color) {
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.4, 0.58, 20),
+// (b1105im: the ring's mesh by itself — the loading screen's warm frame draws one, matchWarmSamples — on the one ring every hit wears, ONE GEOMETRY A KIND)
+function buildHitRing(color) {
+  return new THREE.Mesh(
+    sharedGeo('hit ring', () => new THREE.RingGeometry(0.4, 0.58, 20)),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
   );
+}
+function spawnHitEffect(position, color) {
+  const ring = buildHitRing(color);
   ring.position.copy(position).add(new THREE.Vector3(0, 1.4, 0));
   ring.lookAt(camera.position);
   scene.add(ring);
@@ -13857,6 +14000,7 @@ function clearArenaDecor() {
   state.wallFadeMeshes = [];
   for (const o of fadeOwned) o.dispose(); fadeOwned.length = 0;   // (the fade's own geometry and materials of the arena going)
   offlineNavGrid = null;
+  arenaStandingKey = null;   // (b1105im, ONE MAP IN HAND: no arena stands — its map's model may go)
   while (arenaDecor.length) {
     const obj = arenaDecor.pop();
     scene.remove(obj);
@@ -14110,7 +14254,7 @@ function applyMapAmbience(mapKey) {
 // ===== MODELLED MAPS (2026-10-18): a glTF scene is the arena's visual; its collision is the shared
 // arena data, generated from the same model's triangles by shared/tools/glb_collision.mjs (README,
 // Maps) — the model's metres times `scale`, the crop centre at the origin, the street at y 0. The
-// model loads once per session (warmMapModel from the map popup, else at the build) and is cloned
+// model is loaded when its map is confirmed or started (holdMap; ONE MAP IN HAND, b1105im — at the first tap in the picker and once a session until then) and is cloned
 // per build; the nodes in `drop` are left out (the Invasion map's spinning UFO); the nodes in `neverFade` are no
 // things that stand between the camera and a unit — a ground (a desert map's valley floor and mountains), a ceiling
 // (the Backrooms' tiles, lights and vents) — and never fade; the nodes in `roof` hide in command mode, where the camera
@@ -14257,11 +14401,13 @@ function loadMapModel(file, onReady, onFail) {   // (`onFail`, b1105ha: told whe
   _mapModelPending[file] = [[onReady, onFail]];
   delete _mapModelFailed[file];
   _mapGltfLoader.load(`${import.meta.env.BASE_URL}${file}${MAP_FILE_EXT}`, (gltf) => {
-    dequantizeMapModel(gltf.scene);
-    _mapModelCache[file] = gltf;
     const cbs = _mapModelPending[file] || [];
     delete _mapModelPending[file];
-    for (const [ok] of cbs) ok(gltf);
+    const kept = { scene: gltf.scene };   // (b1105im: the one thing the game reads of the file — the loader's own record of it is let go, as a unit's is)
+    if (!mapModelKept(file)) { disposeModel(kept); for (const [, fail] of cbs) fail?.(new Error('map no longer wanted')); return; }   // (ONE MAP IN HAND: a file that lands after its map was given up is not kept)
+    dequantizeMapModel(gltf.scene);
+    _mapModelCache[file] = kept;
+    for (const [ok] of cbs) ok(kept);
   }, (e) => { if (e && e.lengthComputable && e.total > 0) _mapModelProgress[file] = e.loaded / e.total; }, (err) => {
     console.warn('map model failed to load', file, err);
     const cbs = _mapModelPending[file] || [];
@@ -14278,11 +14424,33 @@ function mapReadyFor(mapKey) {
   return !cfg || (hasGeneratedData(mapKey) && (!!_mapModelCache[cfg.file] || !!_mapModelFailed[cfg.file]));
 }
 // (a probe's hooks, as __intro: is a map all here, how many meshes the arena holds, is a start waiting, is the cover up)
-if (typeof window !== 'undefined') window.__mapLoad = { ready: (k = state.mapKey) => mapReadyFor(k), meshes: () => { let n = 0; for (const g of arenaDecor) g.traverse((o) => { if (o.isMesh) n += 1; }); return n; }, waiting: () => matchStartWait, cover: () => matchCoverUp };
-function warmMapModel(mapKey) {
+if (typeof window !== 'undefined') window.__mapLoad = { ready: (k = state.mapKey) => mapReadyFor(k), meshes: () => { let n = 0; for (const g of arenaDecor) g.traverse((o) => { if (o.isMesh) n += 1; }); return n; }, waiting: () => matchStartWait, cover: () => matchCoverUp,
+  held: () => ({ wanted: mapWantedKey, standing: arenaStandingKey, maps: Object.keys(_mapModelCache), data: Object.keys(_mapData).filter((k) => hasGeneratedData(k)), nav: Object.keys(_navData), units: Object.keys(_modelCache), queued: _texWarmQueue.length }) };   // (`held`, b1105im: what the page has in hand — A MATCH'S WEIGHT)
+// ONE MAP IN HAND (b1105im, A MATCH'S WEIGHT — by the units' loader; user 2026-11-15: "選地圖時不預先載模型，確定後才載"). Until this build a tap on a card in
+// the map picker fetched that map — its model, its data, its route grid — and nothing fetched was ever let go: on a phone-shaped page Warehouse cost 145 MB
+// and Compound 161 MB for a look. Now a tap fetches nothing, and the page holds one map: the one last confirmed in the picker, named by the online room or
+// started (`mapWantedKey`), besides the one whose arena stands in the scene (`arenaStandingKey` — its meshes wear the model's own geometry and pictures). Every
+// other map's model is let go with its data and its route grid (trimMaps), and a model that lands after its map was given up is not kept (loadMapModel).
+// holdMap: this map from here on; with `load` its files are asked for now (the picker's confirm, the online room), else they are left to whoever asks (a
+// start's own loading, the lobby).
+let mapWantedKey = null;
+let arenaStandingKey = null;
+function mapModelKept(file) { return file === GLB_MAPS[mapWantedKey]?.file || file === GLB_MAPS[arenaStandingKey]?.file; }
+function trimMaps() {
+  const kept = (k) => k === mapWantedKey || k === arenaStandingKey;
+  try {   // (letting go is never a reason for a pick or a start to fail: whatever goes wrong here is said and passed over, and the map in hand is untouched)
+    for (const file of Object.keys(_mapModelCache)) { if (mapModelKept(file)) continue; const m = _mapModelCache[file]; delete _mapModelCache[file]; delete _mapModelProgress[file]; disposeModel(m); }
+    for (const k of Object.keys(_navData)) if (!kept(k)) delete _navData[k];
+    for (const k of Object.keys(_mapData)) if (!kept(k)) { delete _mapData[k]; dropGeneratedData(k); }   // (a fetch still on its way registers its data when it lands, as it must for whoever waits on it: it goes at the next call)
+  } catch (e) { console.warn('[memory] a map let go', e); }
+}
+function holdMap(mapKey, load = true) {
+  mapWantedKey = mapKey;
+  trimMaps();
+  if (!load) return;
   const cfg = GLB_MAPS[mapKey];
-  if (cfg) loadMapModel(cfg.file, () => {});
-  warmMapData(mapKey);
+  if (cfg) loadMapModel(cfg.file, () => {}, () => {});
+  warmMapData(mapKey).catch(() => {});
   warmNavData(mapKey);
 }
 // THE MAPS' DATA AS FILES (2026-10-29, the second day; arena.js): a modelled map's collision data is served beside its model
@@ -14658,6 +14826,7 @@ function buildArenaForMap(mapKey) {
     return;
   }
   clearArenaDecor();
+  arenaStandingKey = mapKey; trimMaps();   // (b1105im, ONE MAP IN HAND: with the last arena down its map's model is let go, unless it is this map's or the one being got ready)
   ground.visible = gridHelper.visible = !GLB_MAPS[mapKey];   // a modelled map brings its own ground
   applyMapAmbience(mapKey);
   arenaBounds = null;   // re-recorded by addBoundaryIndicator (diorama plate)
@@ -21371,7 +21540,7 @@ function updateVfx(dt) {
     vfx.mesh.scale.multiplyScalar(vfx.growth);
     if (vfx.life > 0) return true;
     scene.remove(vfx.mesh);
-    vfx.mesh.geometry.dispose();
+    if (!vfx.mesh.geometry.userData?.shared) vfx.mesh.geometry.dispose();   // (ONE GEOMETRY A KIND, b1105im)
     vfx.mesh.material.dispose();
     return false;
   });
@@ -21539,6 +21708,7 @@ function animate() {
   } catch (error) {
     console.error('Render loop error:', error);
   }
+  pinPrograms();   // (EVERY SHADER KEPT, b1105im: the programs this frame made are held from here on)
   if (matchCoverUp) loadingTick();   // (THE LOADING SCREEN, b1105hd: its bar; and off once the frame just drawn was the match's first)
   requestAnimationFrame(animate);
 }

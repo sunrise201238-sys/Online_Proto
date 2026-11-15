@@ -10618,6 +10618,14 @@ export function registerGeneratedData(mapKey, data) {
   GENERATED_ARENA_COLLISION_DATA[mapKey] = data;
   delete ARENAS[mapKey];
 }
+// (b1105im, the client's ONE MAP IN HAND — main.js: a map's file data let go again, with the arena built from it. Only a map whose data is a file's can be read
+// again, so no other map's is ever dropped; true when something went.)
+export function dropGeneratedData(mapKey) {
+  if (!FILE_DATA_MAPS.includes(mapKey) || !GENERATED_ARENA_COLLISION_DATA[mapKey]) return false;
+  delete GENERATED_ARENA_COLLISION_DATA[mapKey];
+  delete ARENAS[mapKey];
+  return true;
+}
 export function getArena(mapKey) {
   let base = ARENAS[mapKey];
   if (!base) {   // (a map whose data came as a file, built the first time it is asked for)
