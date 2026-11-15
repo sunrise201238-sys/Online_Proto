@@ -8512,7 +8512,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ia 11-15';
+const CLIENT_BUILD_TAG = 'b1105ib 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11201,6 +11201,10 @@ function showProfilePopup(card, unit, onConfirm) {
 // thumbnail's face crop) on the top one over the unit's class colour, the name in marker on its foot and the weapon beside it,
 // a black binder clip on the top edge. The stack is drawn at its design size (a print 228 x 282) and scaled to the screen by
 // --fit, 0.5 to 1.35. Any tap closes it, the round x included; taps inside stop at the pop-up (no confirm, no cancel).
+// HOSHINO'S ART (b1105ib, user 2026-11-15: "Hoshino Profile image's arms/sleeves are overcropped that they become transparent. Should have been
+// white clothes."): the cut-out that made her picture had taken her two white sleeves, the end of her left one and a small
+// white piece under her gun's stock for background — clear in their middles, the class colour showing through. The file has
+// them white again (alpha raised there, white put behind what was left; the halo's open middle stays open).
 const BINDER_CLIP_SVG = '<svg class="binder-clip" viewBox="0 0 66 60" fill="none" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
   + '<path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#C9CDD8" stroke-width="2.6"/>'
   + '<path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#E4E7EF" stroke-width="2.6"/>'
