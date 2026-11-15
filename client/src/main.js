@@ -3843,10 +3843,10 @@ function fireGatePass(st, cooldownMs, now) {
 // the previously removed "head shot killing HUD""). THE UI: its button sound for the pages' buttons and cards, the tick for
 // the small ones (an option's chip, a tab, back, close, the small HUD buttons), the pop in the Pause menu alone.
 // A SPECTATOR'S EARS (b1105id, user 2026-11-15: "i don't think i can hear the footsteps in spectator mode, which i should have
-// could."): a viewer who plays no unit — the Practice toggle's spectator, an online room's — hears the steps, walking and
-// sprinting, of the unit their camera follows (updateMoveSfx), as a player hears their own unit's, and they change with the
-// watched unit. Nothing else that is a unit's own: not its dodge, its jump or its landing, and of its gun the shots alone, as
-// b1105hl has it.
+// could."; b1105if, asked whether the dodge, the jump and the landing should follow the watched unit too: "yes"): a viewer
+// who plays no unit — the Practice toggle's spectator, an online room's — hears the movement of the unit their camera
+// follows (updateMoveSfx) as a player hears their own unit's: its steps, walking and sprinting, its dodge, its jump and its
+// landing, and they change with the watched unit. Of its gun the shots alone, as b1105hl has it.
 const SFX_FILE_EXT = null;   // (each sound and track under its own extension here; the PT site serves every one as .wasm, as it does the models — MODEL_FILE_EXT)
 const SHOT_SFX_FRESH_MS = 250, SHOT_SFX_SAME_MS = 600, RELOAD_SFX_GAP_MS = 1500;
 // THE STEPS FALL WITH THE FEET. The walk's and the sprint's clip of the player's model are each read once for the moments a
@@ -4021,8 +4021,8 @@ function strideFootfalls(root, clip, height) {
   const first = ((Math.atan2(sy, sx) / (2 * Math.PI) + 1) % 1) / n;
   return falls.map((f, i) => first + i / n);
 }
-// the player's own unit: its dodge, its jump, its landing, its steps — and, for a viewer who plays no unit, the steps of the
-// unit they watch (A SPECTATOR'S EARS, above): the Practice toggle's spectator, whose TARGET picks the unit, and an online
+// the dodge, the jump, the landing and the steps of the player's own unit — and, for a viewer who plays no unit, of the unit
+// they watch (A SPECTATOR'S EARS, above): the Practice toggle's spectator, whose TARGET picks the unit, and an online
 // room's, whose view is the match's first seat and its teammate once that seat is down (cameraFocusMech)
 function updateMoveSfx(now, real) {
   const viewer = !!state.spectatorActive || state.online?.myPlayerId === 'spectator';
@@ -4035,10 +4035,10 @@ function updateMoveSfx(now, real) {
   const stepping = st.action === 'step' || now < (st.stepUntil || 0), air = !!st.airborne;
   const rig0 = m.modelHolder?.userData?.modelRig, rig = rig0?.ready ? rig0 : null;
   // (the command view has no body of the player's own under the camera: its unit moves there as the others do, unheard; a
-  // spectator plays no unit and hears the steps of the one they watch — b1105id; from b1105hl until then a spectator heard
-  // no movement at all, and before b1105hl the watched match's first seat walking, whoever was watched)
-  const own = sfxOwn(m);
-  const quiet = st.hp <= 0 || finale.active || intro.active || state.phase !== 'match' || !m.root.visible || dioramaActive() || !(own || viewer);
+  // spectator plays no unit and hears the movement of the one they watch — its steps from b1105id, its dodge, jump and
+  // landing from b1105if; from b1105hl until then a spectator heard no movement at all, and before b1105hl the watched
+  // match's first seat's, whoever was watched)
+  const quiet = st.hp <= 0 || finale.active || intro.active || state.phase !== 'match' || !m.root.visible || dioramaActive() || !(sfxOwn(m) || viewer);
   // (a stall, a page put away, a body set down elsewhere — a respawn, a transporter, a snap: nothing is read off that frame)
   if (quiet || !(dt > 0) || dt > 0.25 || Math.hypot(dx, dz) > MODEL_SNAP_U) {
     w.air = air; w.step = stepping; w.leap = false; w.act = null;
@@ -4046,15 +4046,15 @@ function updateMoveSfx(now, real) {
     if (rig && intro.active) { strideOf(rig, rig.actions.walk); strideOf(rig, rig.actions.sprint); }
     return;
   }
-  if (stepping && !w.step && own) sfxPlay('dodge');
+  if (stepping && !w.step) sfxPlay('dodge');
   w.step = stepping;
   const onLadder = st.ladder != null;
   if (air && !w.air) { w.airAt = real; w.leap = !onLadder; }
   if (w.leap) {
     if (!air || real - w.airAt > MOVE_SFX.jumpWithinMs) w.leap = false;
-    else if (dy / dt > MOVE_SFX.jumpRise) { w.leap = false; if (own) sfxPlay('jump'); }
+    else if (dy / dt > MOVE_SFX.jumpRise) { w.leap = false; sfxPlay('jump'); }
   }
-  if (!air && w.air && !onLadder && real - w.airAt >= MOVE_SFX.airMinMs && own) sfxPlay('land');
+  if (!air && w.air && !onLadder && real - w.airAt >= MOVE_SFX.airMinMs) sfxPlay('land');
   w.air = air;
   // the steps
   const run = st.action === 'dash';
@@ -8522,7 +8522,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ie 11-15';
+const CLIENT_BUILD_TAG = 'b1105if 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
