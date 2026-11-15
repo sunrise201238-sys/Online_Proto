@@ -8512,7 +8512,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ib 11-15';
+const CLIENT_BUILD_TAG = 'b1105ic 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11172,7 +11172,7 @@ function showProfilePopup(card, unit, onConfirm) {
   // thumbnail — the face-centred crop the tiles use — where the full profile art, cut to a band, lost the eyes; the
   // floating card keeps the full art as before
   const sideCard = !!card.closest('.menu')?.querySelector('.picker-side');
-  const face = `${import.meta.env.BASE_URL}units/${spriteKey}_profile${sideCard ? '_thumbnail' : ''}.png`;
+  const face = sideCard ? `${import.meta.env.BASE_URL}units/${spriteKey}_profile_thumbnail.png` : profileFile(spriteKey);
   const faceImg = `<img class="profile-face" src="${face}" alt="${char || ''}" draggable="false" />`;
   // (b1105t) the paper clip on the sheet's top-right corner — the card is a sheet in a file folder (style.css); with the
   // weapon print (b1105bd, the side card alone) it moves to the print's corner (.clip-corner)
@@ -11205,6 +11205,8 @@ function showProfilePopup(card, unit, onConfirm) {
 // white clothes."): the cut-out that made her picture had taken her two white sleeves, the end of her left one and a small
 // white piece under her gun's stock for background — clear in their middles, the class colour showing through. The file has
 // them white again (alpha raised there, white put behind what was left; the halo's open middle stays open).
+// From b1105ic the repaired file has a name of its own, units/hoshino_profile_v2.png (UNIT_PROFILE_ART below), so no browser
+// keeps the picture it had under the old name: the game asks for these pictures by name alone.
 const BINDER_CLIP_SVG = '<svg class="binder-clip" viewBox="0 0 66 60" fill="none" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
   + '<path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#C9CDD8" stroke-width="2.6"/>'
   + '<path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#E4E7EF" stroke-width="2.6"/>'
@@ -11224,7 +11226,7 @@ function showFullPicture(menu, unit, cls) {
       <div class="pol pol-back1"><span class="pol-photo"></span></div>
       <div class="pol pol-back2"><span class="pol-photo"></span></div>
       <div class="pol pol-top">
-        <span class="pol-photo pol-ground"><img src="${import.meta.env.BASE_URL}units/${spriteKey}_profile.png" alt="${char || ''}" draggable="false"></span>
+        <span class="pol-photo pol-ground"><img src="${profileFile(spriteKey)}" alt="${char || ''}" draggable="false"></span>
         <span class="pol-name">${char || ''}</span><span class="pol-sub">${[weapon, weaponClass].filter(Boolean).join(' · ')}</span>
         ${BINDER_CLIP_SVG}
       </div>
@@ -11373,6 +11375,11 @@ const UNIT_CARD_ART = { saori: 'saori_card.png', yuuka: 'yuuka_card.png' };
 // of it, "Use in-game v2 instead": the line-up's panes take it too — her face about 1.13 times the profile thumbnail's there)
 const UNIT_ALT_THUMB = { minori: { file: 'minori_grid_thumbnail_v2.png', face: [0.50, 0.525] } };
 function thumbFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_ALT_THUMB[spriteKey]?.file ?? `${spriteKey}_profile_thumbnail.png`}`; }
+// A unit's whole profile art under a file name of its own, by spriteKey: the picker's full photo (showFullPicture) and the floating
+// profile card (showProfilePopup) ask for it here; every other unit's is units/<key>_profile.png.
+// (b1105ic: Hoshino's repaired art — HOSHINO'S ART, by showFullPicture)
+const UNIT_PROFILE_ART = { hoshino: 'hoshino_profile_v2.png' };
+function profileFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_PROFILE_ART[spriteKey] ?? `${spriteKey}_profile.png`}`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
   unitEntries = [...unitEntries].sort((a, b) => rank(a[0]) - rank(b[0]));
