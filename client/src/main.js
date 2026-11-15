@@ -3790,6 +3790,11 @@ function fireGatePass(st, cooldownMs, now) {
 // then, with pictures of the site's rows at 100: "Use these for Kei") — the shot of a cancelled charge its first 1.34 s, the
 // full charge's shot its first 1.75 s, each as long and as loud as the sound it takes the place of. The laser shot that was
 // Aris's and the beam made of it are out of the game.
+// From b1105hz: Kei's two shots are those cuts with their highs turned down, as Aris's is ("Provide soften version like what you did
+// to Aris gunshot in ST site"; then, with a picture of the site's two softened rows at the lever's 100 and their sliders at
+// 200: "Apply these") — everything over 3.5 kHz down by a 20 dB shelf over the whole sound, at twice the level they were
+// listed at. The same pictures' other numbers: steps and the sprint's steps at twice their level, the dodge at one and a
+// half (the mixer's 腳步 200, 衝刺 200, 閃避 150: its fold 9).
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -3808,7 +3813,8 @@ function fireGatePass(st, cooldownMs, now) {
 //           when their reload motions show, but every time their actual ammo reload"): started SFX_SHELL_LEAD_MS before the gain,
 //           so its click falls on the gain;
 //   charge / quick / full   Kei: the charge's own sound from the charge's start, cut when the charge is let go early; the shot of
-//           a cancelled charge and the full beam (from b1105hy two lengths of one beam recording's blast: "Use these for Kei");
+//           a cancelled charge and the full beam (two lengths of one beam recording's blast, from b1105hz with their highs turned
+//           down: "Use these for Kei", "Apply these");
 //   scope   Aru's and Hiyori's, at a charge's start ("this should be played for the sniper itself when Hiyori/aru starts their
 //           charges": the first sound that was the player's own unit's alone; from b1105hl all but the shots and beams are).
 // The places a pull and a reload's start are known:
@@ -8504,7 +8510,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hy 11-15';
+const CLIENT_BUILD_TAG = 'b1105hz 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
