@@ -1,4 +1,4 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 9), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 10), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
@@ -26,8 +26,8 @@ export const SFX_SOUNDS = {
   bolt_unit20: {"file": "sfx/kar98_bolt", "ext": ".mp3", "level": 0.8},
   shot_unit3: {"file": "sfx/scout_shot", "ext": ".mp3", "level": 0.31746},
   kei_charge: {"file": "sfx/kei_charge_a", "ext": ".mp3", "level": 0.16},
-  kei_quick: {"file": "sfx/keib_quick_b_s100", "ext": ".mp3", "level": 0.45216},
-  kei_full: {"file": "sfx/keib_full_b_s100", "ext": ".mp3", "level": 0.41864},
+  kei_quick: {"file": "sfx/keib_quick_b_s100", "ext": ".mp3", "level": 0.67824},
+  kei_full: {"file": "sfx/keib_full_b_s100", "ext": ".mp3", "level": 0.62796},
   shot_unit19: {"file": "sfx/awp_shot", "ext": ".mp3", "level": 0.2},
   bolt_unit19: {"file": "sfx/awp_bolt", "ext": ".mp3", "level": 0.4},
   reload_kei: {"file": "sfx/kei_recharge_c", "ext": ".mp3", "level": 0.4},
@@ -49,8 +49,8 @@ export const SFX_SOUNDS = {
   dodge: {"file": "sfx/axe_swing", "ext": ".wav", "level": 0.351},
   jump: {"file": "sfx/cs_jump", "ext": ".mp3", "level": 0.195},
   land: {"file": "sfx/cs_land", "ext": ".mp3", "level": 0.26},
-  hit: {"file": "sfx/hitmarker", "ext": ".wav", "level": 0.264},
-  hurt: {"file": "sfx/hurt_punch", "ext": ".wav", "level": 0.48},
+  hit: {"file": "sfx/hitmarker", "ext": ".wav", "level": 0.396},
+  hurt: {"file": "sfx/hurt_punch", "ext": ".wav", "level": 0.72},
   kill: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_team: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_start: {"file": "sfx/kill_1", "ext": ".mp3", "level": 0.4875},

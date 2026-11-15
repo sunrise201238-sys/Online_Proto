@@ -3795,6 +3795,8 @@ function fireGatePass(st, cooldownMs, now) {
 // 200: "Apply these") — everything over 3.5 kHz down by a 20 dB shelf over the whole sound, at twice the level they were
 // listed at. The same pictures' other numbers: steps and the sprint's steps at twice their level, the dodge at one and a
 // half (the mixer's 腳步 200, 衝刺 200, 閃避 150: its fold 9).
+// From b1105ia: Kei's two shots, the hit hint and the being-hit sound at one and a half times their level ("Apply these": the
+// mixer's Kei 取消集氣 150, Kei 長光束 150, 命中提示 150, 被打中 150, its fold 10).
 // THE GUNS — at one level wherever the unit stands. WHOSE (b1105hl, user 2026-11-14: "only the user unit itself should hear its own
 // bolt sound/reload/scope sound; other unit would only hear gunshot sound from others."): a shot and a beam sound whoever holds
 // the unit (the player, a bot, another player); everything else of a gun — bolt, reload, shell, scope — sounds for the
@@ -8510,7 +8512,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105hz 11-15';
+const CLIENT_BUILD_TAG = 'b1105ia 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
