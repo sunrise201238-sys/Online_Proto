@@ -8522,7 +8522,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105id 11-15';
+const CLIENT_BUILD_TAG = 'b1105ie 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10824,7 +10824,7 @@ function renderTeamCard(card, side) {
     const cardArt = lead && UNIT_CARD_ART[lead.spriteKey];   // (a unit's own cut for this card, b1105dw; the thumbnail's band otherwise)
     art = !lead ? '<span class="slot-art slot-empty">?</span>'
       : cardArt ? `<span class="slot-art card-art"><img src="${import.meta.env.BASE_URL}units/${cardArt}" alt="${lead.char || ''}" draggable="false"></span>`
-      : `<span class="slot-art face-box" ${faceStyle(lead)}><img src="${import.meta.env.BASE_URL}units/${lead.spriteKey}_profile_thumbnail.png" alt="${lead.char || ''}" draggable="false"></span>`;
+      : `<span class="slot-art face-box" ${faceStyle(lead)}><img src="${profileThumbFile(lead.spriteKey)}" alt="${lead.char || ''}" draggable="false"></span>`;
     text = lead
       ? `<b class="slot-name">${lead.char || lead.name}</b><small class="slot-sub">${weaponClass}${lead.weapon ? ` · ${lead.weapon}` : ''}</small>`
       : '<b class="slot-name">Pick a unit</b><small class="slot-sub">tap to choose</small>';
@@ -11182,7 +11182,7 @@ function showProfilePopup(card, unit, onConfirm) {
   // thumbnail — the face-centred crop the tiles use — where the full profile art, cut to a band, lost the eyes; the
   // floating card keeps the full art as before
   const sideCard = !!card.closest('.menu')?.querySelector('.picker-side');
-  const face = sideCard ? `${import.meta.env.BASE_URL}units/${spriteKey}_profile_thumbnail.png` : profileFile(spriteKey);
+  const face = sideCard ? profileThumbFile(spriteKey) : profileFile(spriteKey);
   const faceImg = `<img class="profile-face" src="${face}" alt="${char || ''}" draggable="false" />`;
   // (b1105t) the paper clip on the sheet's top-right corner — the card is a sheet in a file folder (style.css); with the
   // weapon print (b1105bd, the side card alone) it moves to the print's corner (.clip-corner)
@@ -11217,6 +11217,12 @@ function showProfilePopup(card, unit, onConfirm) {
 // them white again (alpha raised there, white put behind what was left; the halo's open middle stays open).
 // From b1105ic the repaired file has a name of its own, units/hoshino_profile_v2.png (UNIT_PROFILE_ART below), so no browser
 // keeps the picture it had under the old name: the game asks for these pictures by name alone.
+// MAKI'S ART (b1105ie, user 2026-11-15: "Fix maki profile image crop as well."): the same cut-out had taken four parts of hers
+// for background — her gun's white receiver panel (half of it clear), the top band and the end of the gun's slotted white
+// plate, the white pin of the bipod's bracket, and a patch of her temple's skin between two locks of hair above her far eye.
+// The file has them again, each in its own colour (white behind what was left of the gun's parts, the face's skin colour
+// behind the temple's). Her thumbnail is that picture's own 400 px square at (110, -6), pixel for pixel, and showed the panel
+// and the temple the same: it is cut again from the repaired picture. Both under new names (UNIT_PROFILE_ART, UNIT_PROFILE_THUMB).
 const BINDER_CLIP_SVG = '<svg class="binder-clip" viewBox="0 0 66 60" fill="none" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
   + '<path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M15 34 L21 6 Q22 3 25 3 L41 3 Q44 3 45 6 L51 34" stroke="#C9CDD8" stroke-width="2.6"/>'
   + '<path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#1B1B2F" stroke-width="5.2"/><path d="M19 34 L24 11 Q25 9 27 9 L39 9 Q41 9 42 11 L47 34" stroke="#E4E7EF" stroke-width="2.6"/>'
@@ -11384,11 +11390,16 @@ const UNIT_CARD_ART = { saori: 'saori_card.png', yuuka: 'yuuka_card.png' };
 // b1105dr, user: "Her photo in trio line up seems a bit small", then, shown the panes with this picture and with a 324 px crop
 // of it, "Use in-game v2 instead": the line-up's panes take it too — her face about 1.13 times the profile thumbnail's there)
 const UNIT_ALT_THUMB = { minori: { file: 'minori_grid_thumbnail_v2.png', face: [0.50, 0.525] } };
-function thumbFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_ALT_THUMB[spriteKey]?.file ?? `${spriteKey}_profile_thumbnail.png`}`; }
+// A unit's profile thumbnail under a file name of its own, by spriteKey, for the reason UNIT_PROFILE_ART below has: the 1v1 Duel's
+// lobby card, the profile folder's side card and — where the unit has no second picture — every user of thumbFile ask for it
+// here; every other unit's is units/<key>_profile_thumbnail.png. (b1105ie: Maki's repaired thumbnail — MAKI'S ART, by showFullPicture)
+const UNIT_PROFILE_THUMB = { maki: 'maki_profile_thumbnail_v2.png' };
+function profileThumbFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_PROFILE_THUMB[spriteKey] ?? `${spriteKey}_profile_thumbnail.png`}`; }
+function thumbFile(spriteKey) { const alt = UNIT_ALT_THUMB[spriteKey]?.file; return alt ? `${import.meta.env.BASE_URL}units/${alt}` : profileThumbFile(spriteKey); }
 // A unit's whole profile art under a file name of its own, by spriteKey: the picker's full photo (showFullPicture) and the floating
 // profile card (showProfilePopup) ask for it here; every other unit's is units/<key>_profile.png.
-// (b1105ic: Hoshino's repaired art — HOSHINO'S ART, by showFullPicture)
-const UNIT_PROFILE_ART = { hoshino: 'hoshino_profile_v2.png' };
+// (b1105ic: Hoshino's repaired art — HOSHINO'S ART, by showFullPicture; b1105ie: Maki's — MAKI'S ART, there too)
+const UNIT_PROFILE_ART = { hoshino: 'hoshino_profile_v2.png', maki: 'maki_profile_v2.png' };
 function profileFile(spriteKey) { return `${import.meta.env.BASE_URL}units/${UNIT_PROFILE_ART[spriteKey] ?? `${spriteKey}_profile.png`}`; }
 function unitGridHTML(unitEntries) {
   const rank = (id) => { const i = UNIT_GRID_ORDER.indexOf(id); return i === -1 ? Infinity : i; };
