@@ -6,7 +6,7 @@ import { INTRO_PUSH_MS, INTRO_STAND_MS, INTRO_START_MS } from '@gvg/shared/src/s
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
-import { sfxBoot, sfxPlay, sfxStop, sfxState, bgmPlace, bgmWarm, bgmSetOn, bgmIsOn, bgmState } from './sfx.js';   // (THE GAME'S SOUNDS AND ITS MUSIC, b1105hk)
+import { sfxBoot, sfxPlay, sfxStop, sfxState, sfxPlaceMake, sfxPlaceSet, sfxMeter, bgmPlace, bgmWarm, bgmSetOn, bgmIsOn, bgmState } from './sfx.js';   // (THE GAME'S SOUNDS AND ITS MUSIC, b1105hk)
 import { SFX_UNITS, SFX_SHELL_LEAD_MS } from './sfx_data.js';   // (what plays and how loud: written by the listening site's own tool)
 import {
   tickMatch as simTickMatch,
@@ -3875,7 +3875,7 @@ const MOVE_SFX = {
 };
 sfxBoot(import.meta.env.BASE_URL, SFX_FILE_EXT);
 for (const k in UNIT_DATA) UNIT_DATA[k].sfx = SFX_UNITS[k] ?? null;
-if (typeof window !== 'undefined') window.__sfx = { state: sfxState, play: sfxPlay, stop: sfxStop, bgm: bgmState, place: bgmPlace, bgmOn: bgmSetOn, units: SFX_UNITS, move: MOVE_SFX };   // (a probe's hooks, as __intro)
+if (typeof window !== 'undefined') window.__sfx = { state: sfxState, play: sfxPlay, stop: sfxStop, bgm: bgmState, place: bgmPlace, bgmOn: bgmSetOn, units: SFX_UNITS, move: MOVE_SFX, meter: sfxMeter, ears: sfxSpaceEars, get space() { return SFX_SPACE; } };   // (a probe's hooks, as __intro)
 // THE UNIT THIS PLAYER PLAYS (b1105hl): whose bolt, reload, round and scope sound. A spectator plays none (offline the
 // watched match's first seat is `state.player` too, a bot's).
 function sfxOwn(mech) { return !!mech && mech === state.player && !state.spectatorActive && state.online?.myPlayerId !== 'spectator'; }
@@ -3892,13 +3892,47 @@ function sfxOwn(mech) { return !!mech && mech === state.player && !state.spectat
 // seat was watched).
 let sfxViewMech = null;
 function sfxAsOwn(mech) { return sfxOwn(mech) || (!!mech && mech === sfxViewMech); }
+// WHERE A SHOT IS HEARD FROM (b1105ik, user 2026-11-15: "do we have the spatial gun fire feature that adjusts how the gun shots hear
+// like according to units relative locations? i don't feel like. can we make it happen with out making online/offline games more
+// lag?" — there was none: every shot played at its one level, the same in both ears, wherever it was fired — and, of the way put
+// to them: "As you suggested. PT and 9.7"). A unit's sounds that everyone hears — its shot, Kei's charge and her two beams —
+// are heard from where the unit stands, by the unit this viewer listens from: THE EAR, the unit the camera follows
+// (cameraFocusMech: the player's own; a spectator's watched unit; the teammate while the player's unit is down — and in the
+// command view the player's own still, left and right being the screen's there as everywhere).
+//   HOW FAR: full level out to `near`, then down as (near / distance) to the power `roll` — 3.6 dB for each doubling, gentler
+//   than open air's 6, so the ranges a match is fought at are told apart — and never under `floor`: a shot is always heard.
+//   At 4 units to the metre: 10 m 0.74, 20 m 0.49, 40 m 0.32, 60 m and beyond 0.25.
+//   WHICH SIDE: the ear on the shooter's side of the screen keeps that level; the other is `sideDb` under it for a shooter
+//   straight to the side, and less by the sine of the bearing off the camera's line (5 dB at 30 degrees). Nearer than
+//   `panNear` the bearing counts for less, so a unit brushing past does not flip from ear to ear. Ahead and behind are not
+//   told apart, and a wall between changes nothing: both were left for later.
+// The ear's own unit is `direct`: its sounds play as they always did, and so do the sounds that are a unit's own player's
+// alone (sfxAsOwn), which only ever sound for it. Each unit has its place (sfx.js) on it, `sfxAt`, told every frame from the
+// HUD's pass (updateUnitSfx) and read when a sound of the unit starts — a bot's shot starts inside the bot's turn, where the
+// seats stand in for one another (sfxViewMech's note), so nothing about the ear is asked there. A sound that is already
+// ringing follows its unit and the camera. Nothing is sent for this: a client knows where every unit is.
+const SFX_SPACE = { near: 24, roll: 0.6, floor: 0.25, sideDb: 10, panNear: 8 };   // (distances in arena units, 4 to the metre)
+// each ear's level for a sound at (dx, dy, dz) from the ear, the screen's right being (rx, rz) on the ground: [left, right]
+function sfxSpaceEars(dx, dy, dz, rx, rz) {
+  const d = Math.hypot(dx, dy, dz), dh = Math.hypot(dx, dz);
+  const level = Math.max(SFX_SPACE.floor, Math.min(1, (SFX_SPACE.near / Math.max(d, 1e-3)) ** SFX_SPACE.roll));
+  const side = Math.max(-1, Math.min(1, (dx * rx + dz * rz) / Math.max(dh, SFX_SPACE.panNear)));   // (-1: straight to the screen's left; 1: to its right)
+  const far = level * 10 ** (-SFX_SPACE.sideDb * Math.abs(side) / 20);
+  return side > 0 ? [far, level] : [level, far];
+}
+function sfxSpaceTell(m, ear, rx, rz) {
+  const at = m.sfxAt ?? (m.sfxAt = sfxPlaceMake());
+  if (!ear || m === ear || !m.root || !ear.root) { sfxPlaceSet(at, 1, 1, true); return; }
+  const a = m.root.position, b = ear.root.position, e = sfxSpaceEars(a.x - b.x, a.y - b.y, a.z - b.z, rx, rz);
+  sfxPlaceSet(at, e[0], e[1], false);
+}
 // `roundsLeft`: the magazine after this shot (null where it is not known: the bolt then sounds). `mech`: who fired, where known.
 function unitShotSfx(unit, roundsLeft, mech = null) {
   const x = unit?.sfx;
   if (!x) return;
   if (mech?.sfxBolt) { sfxStop(mech.sfxBolt); mech.sfxBolt = null; }   // (the bolt of the shot before, still sounding: cut by this one)
   const whole = sfxAsOwn(mech);   // (b1105ig: the player's own unit's shot, and the shot of the unit a spectator watches)
-  if (x.shot) sfxPlay(x.shot, 0, x.shotOwn && whole ? x.shotOwn : null);   // (b1105hw: with the part its own player alone hears)
+  if (x.shot) sfxPlay(x.shot, 0, x.shotOwn && whole ? x.shotOwn : null, mech?.sfxAt ?? null);   // (b1105hw: with the part its own player alone hears)
   if (x.bolt && whole && !(unit.magCapacity != null && !unit.autoReload && roundsLeft != null && roundsLeft <= 0)) {   // (b1105hl: the player's own unit's alone)
     const v = sfxPlay(x.bolt, (x.boltDelayMs ?? 500) / 1000);
     if (mech && x.boltCut) mech.sfxBolt = v;
@@ -3917,7 +3951,7 @@ function unitSfxStop(mech) {
   if (mech.sfxReload) { for (const v of mech.sfxReload) sfxStop(v); mech.sfxReload = null; }
   for (const k of ['sfxBolt', 'sfxBoltOf', 'sfxCharge', 'sfxShell']) if (mech[k]) { sfxStop(mech[k]); mech[k] = null; }
 }
-function beamSfx(mech, full) { const x = mech?.unit?.sfx; if (x) sfxPlay(full ? x.full : x.quick); }
+function beamSfx(mech, full) { const x = mech?.unit?.sfx; if (x) sfxPlay(full ? x.full : x.quick, 0, null, mech.sfxAt ?? null); }   // (b1105ik: heard from where she stands)
 function shotSfxOnline(f, now) {
   const unit = UNIT_DATA[f.unitKey];
   if (!unit?.sfx || now - f.at > SHOT_SFX_FRESH_MS) return;
@@ -3945,9 +3979,12 @@ function hitSfx(owner, target) {
 function updateUnitSfx(now) {
   const real = performance.now();
   sfxViewMech = (state.spectatorActive || state.online?.myPlayerId === 'spectator') ? cameraFocusMech() : null;   // (b1105ig: whom a spectator watches, this frame)
+  // (b1105ik, WHERE A SHOT IS HEARD FROM: the ear this frame, and the screen's right on the ground — the camera's own x axis)
+  const ear = cameraFocusMech(), ce = camera.matrixWorld.elements, cl = Math.hypot(ce[0], ce[2]) || 1, earRx = ce[0] / cl, earRz = ce[2] / cl;
   for (const m of getAllFighters()) {
     const st = m?.state, u = m?.unit;
     if (!st || !u) continue;
+    sfxSpaceTell(m, ear, earRx, earRz);
     // (b1105ig, b1105ih: a spectator's view moved off this unit — its bolt, its reload and its round's sound, sounding or
     //  still to come, are not for that view)
     if ((m.sfxBoltOf || m.sfxReload || m.sfxShell) && !sfxAsOwn(m)) {
@@ -3968,7 +4005,7 @@ function updateUnitSfx(now) {
     const charging = !!st.sniperChargeTarget;
     if (charging && !w.charging) {
       w.chargeAt = real;
-      if (x.charge) { if (m.sfxCharge) sfxStop(m.sfxCharge); m.sfxCharge = sfxPlay(x.charge); }   // (Kei's, whoever holds her: b1105hm, the one exception to b1105hl's rule)
+      if (x.charge) { if (m.sfxCharge) sfxStop(m.sfxCharge); m.sfxCharge = sfxPlay(x.charge, 0, null, m.sfxAt ?? null); }   // (Kei's, whoever holds her: b1105hm, the one exception to b1105hl's rule)
       if (x.scope && sfxAsOwn(m)) sfxPlay(x.scope);   // (b1105hl: the player's own unit's alone; b1105ih: and the unit a spectator watches)
     } else if (!charging && w.charging && m.sfxCharge) {
       if (real - w.chargeAt < (u.chargeMs ?? 1000) - 80) sfxStop(m.sfxCharge);   // (let go early: the charge's sound with it; a full charge's rings out under the beam)
@@ -8551,7 +8588,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ij 11-15';
+const CLIENT_BUILD_TAG = 'b1105ik 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

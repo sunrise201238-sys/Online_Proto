@@ -25,6 +25,20 @@
 // its level against the first's) and plays that as its one voice, at the first's level, from the first's start. The two
 // files are one encoder's at one setting: a place in one is the same moment in the other.
 //
+// A SOUND HEARD FROM A PLACE (b1105ik, user 2026-11-15: "do we have the spatial gun fire feature that adjusts how the gun shots
+// hear like according to units relative locations? i don't feel like. can we make it happen with out making online/offline
+// games more lag?", and, of the way put to them: "As you suggested. PT and 9.7"): a play may be given a PLACE — the level the
+// sound has in the left ear and in the right, each 0 to 1 of the level it plays at. The game keeps one for each unit and tells
+// it anew as the units and the camera move (main.js, WHERE A SHOT IS HEARD FROM); a place marked `direct` is no place — the
+// sound plays as it always did, which is what the player's own unit's are. A place's voices go through five small nodes of
+// its own: both of a recording's channels kept (a mono one given to both), each ear's turned down by a gain of its own, the
+// two put back together. The recording is never summed to one channel — most of the shots are two channels that differ, and
+// their sum is up to 1.6 dB under either — so a shot from near and straight ahead is the recording as it was set on the
+// listening site, to the sample. An ear's level follows what it is told over a few hundredths of a second, so no step is
+// heard, and is told again only when it has moved; the nodes are made at a place's first sound and let go when nothing has
+// told the place anything for half a minute (its unit is gone). The mixing is the browser's audio thread's, as every voice's
+// is, and nothing is sent or asked over the network for it.
+//
 // THE MUSIC (user 2026-11-13: "I'm going to add some background music. The background music will be able to turn off via mute
 // button inside "Guide" and "Pause"."): a track is a file under public/bgm, some two minutes of stereo. The game says which
 // PLACE the player is in (bgmPlace: the main menu, the character menu, the battle, the ending camera); entering a place draws
@@ -45,6 +59,9 @@ const SFX_ONSET_LEVEL = 0.02;    // the recording's sound starts at its first sa
 const SFX_LEAD_IN_S = 0.003;     // ...and a play starts this long before it
 const SFX_RETRY_MS = 5000;       // a file that did not come, or did not decode, is tried again no sooner than this
 const SFX_STOP_FADE_S = 0.03;    // a voice stopped: down to nothing over this long
+const SFX_PLACE_TAU_S = 0.03;    // a place's ear follows the level it is told over about this long...
+const SFX_PLACE_STEP = 0.004;    // ...and is told a level only when it has moved this much (of 1)
+const SFX_PLACE_IDLE_S = 30;     // a place nothing has told anything for this long lets its nodes go
 // THE LIMITER: every voice and the music add up before the output, and four guns at once can pass what it carries (1), where it
 // would be clipped flat. A compressor as a ceiling stands before the output: nothing under -3 dB of full scale is touched, what
 // passes it is held under it; the gain after it takes back the lift such a compressor adds of its own.
@@ -62,7 +79,9 @@ const files = {};                // file -> { ext, bytes, fetched, buffer, offse
 const voices = [];               // { src, gain, key, file, at }, oldest first
 const stats = { played: 0, dropped: 0, stolen: 0 };
 const mixes = {};                // 'key+withKey' -> { buffer, file }: a sound with another added to it, made once
-const log = [];                  // (a probe's: the last plays, { key, at: the page clock, delay })
+const log = [];                  // (a probe's: the last plays, { key, at: the page clock, delay } — and each ear's level, where the play had a place)
+const placed = [];               // the places that have their nodes (A SOUND HEARD FROM A PLACE)
+let meter = null;                // (a probe's: sfxMeter's nodes, made when it is first asked)
 
 // One step on towards a file being playable: its bytes fetched, then (the audio open) decoded and its start found. Called at
 // boot, when the audio opens, and by every play that found the file not ready.
@@ -168,10 +187,36 @@ function mixOf(key, withKey) {
   return (mixes[id] = { buffer: out, file: `${a.file}+${b.file}` });
 }
 
+// A place (A SOUND HEARD FROM A PLACE): `l` and `r` the level in each ear, `direct` no place at all; `n` its nodes once it has
+// sounded, `sl` and `sr` the levels they were last told, `seen` when it was last told anything (the audio's clock).
+export function sfxPlaceMake() { return { l: 1, r: 1, direct: true, n: null, sl: 1, sr: 1, seen: 0 }; }
+export function sfxPlaceSet(p, left, right, direct = false) {
+  if (!p) return;
+  p.l = left; p.r = right; p.direct = !!direct;
+  if (!p.n || !ctx) return;
+  try {
+    const t = ctx.currentTime; p.seen = t;
+    if (Math.abs(left - p.sl) > SFX_PLACE_STEP) { p.n.gl.gain.setTargetAtTime(left, t, SFX_PLACE_TAU_S); p.sl = left; }
+    if (Math.abs(right - p.sr) > SFX_PLACE_STEP) { p.n.gr.gain.setTargetAtTime(right, t, SFX_PLACE_TAU_S); p.sr = right; }
+  } catch (e) { /* as it was */ }
+}
+// the node a place's voices play into: its nodes made at the first call, at the levels it holds; the places gone quiet let go
+function placeIn(p) {
+  if (p.n) return p.n.inp;
+  const t = ctx.currentTime;
+  for (let i = placed.length - 1; i >= 0; i -= 1) { const q = placed[i]; if (t - q.seen > SFX_PLACE_IDLE_S) { try { q.n.merge.disconnect(); } catch (e) { /* gone */ } q.n = null; placed.splice(i, 1); } }
+  const inp = ctx.createGain(); inp.channelCount = 2; inp.channelCountMode = 'explicit'; inp.channelInterpretation = 'speakers';   // (two channels whatever comes: a mono recording in both)
+  const split = ctx.createChannelSplitter(2), gl = ctx.createGain(), gr = ctx.createGain(), merge = ctx.createChannelMerger(2);
+  gl.gain.value = p.l; gr.gain.value = p.r; p.sl = p.l; p.sr = p.r;
+  inp.connect(split); split.connect(gl, 0); split.connect(gr, 1); gl.connect(merge, 0, 0); gr.connect(merge, 0, 1); merge.connect(sfxBus);
+  p.n = { inp, gl, gr, merge }; p.seen = t; placed.push(p);
+  return inp;
+}
+
 // Play a sound `delayS` seconds from now (0: now), at its own level; with `withKey`, that sound added to it (see A SOUND WITH
-// ANOTHER ADDED TO IT). Gives back the voice (to stop it with sfxStop), or null
-// when nothing was started.
-export function sfxPlay(key, delayS = 0, withKey = null) {
+// ANOTHER ADDED TO IT); with `place`, heard from it (see A SOUND HEARD FROM A PLACE; a place marked `direct`, or none: as it
+// is). Gives back the voice (to stop it with sfxStop), or null when nothing was started.
+export function sfxPlay(key, delayS = 0, withKey = null, place = null) {
   const f = SFX_SOUNDS[key], s = f ? files[f.file] : null;
   if (!s) return null;
   if (!ctx || ctx.state !== 'running' || !s.buffer) { want(f.file); stats.dropped += 1; return null; }
@@ -185,13 +230,15 @@ export function sfxPlay(key, delayS = 0, withKey = null) {
     while (voices.length >= SFX_MAX_VOICES) { const v = voices.find((x) => x.at <= now) ?? voices[0]; drop(v); fadeOut(v); stats.stolen += 1; }
     const src = ctx.createBufferSource(); src.buffer = mix ? mix.buffer : s.buffer;
     const gain = ctx.createGain(); gain.gain.value = f.level;
-    src.connect(gain); gain.connect(sfxBus);
+    let into = sfxBus;
+    if (place && !place.direct) { try { into = placeIn(place); } catch (e) { into = sfxBus; } }   // (a browser without the nodes: the sound as it is)
+    src.connect(gain); gain.connect(into);
     const v = { src, gain, key, file, at: delayS > 0 ? now + delayS : now };
     src.onended = () => { drop(v); try { gain.disconnect(); } catch (e) { /* gone */ } };
     src.start(delayS > 0 ? v.at : 0, s.offset);
     voices.push(v);
     stats.played += 1;
-    log.push({ key, at: Math.round(performance.now()), delay: delayS, ...(mix ? { with: withKey } : {}) }); if (log.length > 400) log.shift();
+    log.push({ key, at: Math.round(performance.now()), delay: delayS, ...(mix ? { with: withKey } : {}), ...(into !== sfxBus ? { l: +place.l.toFixed(3), r: +place.r.toFixed(3) } : {}) }); if (log.length > 400) log.shift();
     return v;
   } catch (e) { stats.dropped += 1; return null; }
 }
@@ -205,9 +252,27 @@ export function sfxStop(v, fadeS = SFX_STOP_FADE_S) {
   fadeOut(v, fadeS);
 }
 
+// (a probe's hook: the level in each ear, just now, of everything the sounds' bus carries — the music is not on it. The root
+// mean square of the last 2048 samples of each ear, read off two analysers that are made, and joined to the bus, when this
+// is first asked; a game nobody probes never has them.)
+export function sfxMeter() {
+  if (!ctx || !sfxBus) return null;
+  try {
+    if (!meter) {
+      const up = ctx.createGain(); up.channelCount = 2; up.channelCountMode = 'explicit'; up.channelInterpretation = 'speakers';
+      const split = ctx.createChannelSplitter(2), a = [ctx.createAnalyser(), ctx.createAnalyser()];
+      for (const x of a) x.fftSize = 2048;
+      sfxBus.connect(up); up.connect(split); split.connect(a[0], 0); split.connect(a[1], 1);
+      meter = { a, buf: new Float32Array(2048) };
+    }
+    const out = [];
+    for (const x of meter.a) { x.getFloatTimeDomainData(meter.buf); let q = 0; for (let i = 0; i < meter.buf.length; i += 1) q += meter.buf[i] * meter.buf[i]; out.push(Math.sqrt(q / meter.buf.length)); }
+    return { l: out[0], r: out[1] };
+  } catch (e) { return null; }
+}
 // (a probe's hook, as main.js's __intro: what is open, what is in hand, what has played)
 export function sfxState() {
-  const out = { audio: ctx ? ctx.state : null, volume: SFX_VOLUME, voices: voices.length, sounding: voices.map((v) => v.key), ...stats, log: log.slice(), sounds: {}, files: Object.keys(files).length, mixes: Object.keys(mixes) };
+  const out = { audio: ctx ? ctx.state : null, volume: SFX_VOLUME, voices: voices.length, sounding: voices.map((v) => v.key), ...stats, log: log.slice(), sounds: {}, files: Object.keys(files).length, mixes: Object.keys(mixes), places: placed.length };
   for (const key in SFX_SOUNDS) { const f = SFX_SOUNDS[key], s = files[f.file]; out.sounds[key] = { file: f.file, fetched: !!s?.fetched, ready: !!s?.buffer, level: f.level, startS: s?.buffer ? +s.offset.toFixed(4) : null, seconds: s?.buffer ? +s.buffer.duration.toFixed(3) : null }; }
   return out;
 }
