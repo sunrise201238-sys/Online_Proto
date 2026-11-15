@@ -3805,9 +3805,11 @@ function fireGatePass(st, cooldownMs, now) {
 // "kei is an exception, others can hear her charging sound, but still can't hear her reload sound."): it sounds whoever
 // holds her, as her beams do; her recharge is her own player's alone, as every reload.
 //   shot    at every trigger pull that fires; `shotOwn` is added to it, sample for sample, for the unit's own player alone
-//           (b1105hw: the part of a shot's recording the others are not to hear — Fubuki's gun's metal sound);
+//           (b1105hw: the part of a shot's recording the others are not to hear — Fubuki's gun's metal sound), and for a
+//           spectator watching the unit (b1105ig, sfxShotWhole);
 //   bolt    `boltDelayMs` after a shot that leaves rounds in the magazine (the shot that empties it is followed by the reload
 //           instead); Iori's (`boltCut`) is cut by her next shot — her gun fires again before the bolt's sound is over ("Oh, this");
+//           the player's own unit's and, for a spectator, the watched unit's (b1105ig), stopped when the view leaves that unit;
 //   reload  at each of `reloadAtMs` after a magazine's reload starts (half a second: a shot is at its loudest for that long and
 //           nothing under it would be heard; a machine gun's, one piece of 4.78 s from b1105hq, 0.14 s in — it ends 0.08 s
 //           before its five seconds do, as the listening site set it; three passes of a shorter recording before that);
@@ -3846,7 +3848,10 @@ function fireGatePass(st, cooldownMs, now) {
 // could."; b1105if, asked whether the dodge, the jump and the landing should follow the watched unit too: "yes"): a viewer
 // who plays no unit — the Practice toggle's spectator, an online room's — hears the movement of the unit their camera
 // follows (updateMoveSfx) as a player hears their own unit's: its steps, walking and sprinting, its dodge, its jump and its
-// landing, and they change with the watched unit. Of its gun the shots alone, as b1105hl has it.
+// landing, and they change with the watched unit. Of its gun the shots — whole from b1105ig (user: "spectator cannot hear
+// the bolt sound and metal sound when the spectating target is iori and fubuki, which they should have could."): with the
+// bolt that follows one and the part of one that is its own player's (sfxShotWhole) — and nothing else of a gun: a reload, the
+// round going in and the scope stay the player's own unit's, as b1105hl has it.
 const SFX_FILE_EXT = null;   // (each sound and track under its own extension here; the PT site serves every one as .wasm, as it does the models — MODEL_FILE_EXT)
 const SHOT_SFX_FRESH_MS = 250, SHOT_SFX_SAME_MS = 600, RELOAD_SFX_GAP_MS = 1500;
 // THE STEPS FALL WITH THE FEET. The walk's and the sprint's clip of the player's model are each read once for the moments a
@@ -3873,15 +3878,28 @@ if (typeof window !== 'undefined') window.__sfx = { state: sfxState, play: sfxPl
 // THE UNIT THIS PLAYER PLAYS (b1105hl): whose bolt, reload, round and scope sound. A spectator plays none (offline the
 // watched match's first seat is `state.player` too, a bot's).
 function sfxOwn(mech) { return !!mech && mech === state.player && !state.spectatorActive && state.online?.myPlayerId !== 'spectator'; }
+// THE UNIT WHOSE SHOT THIS VIEWER HEARS WHOLE (b1105ig, user 2026-11-15: "spectator cannot hear the bolt sound and metal sound when the
+// spectating target is iori and fubuki, which they should have could."): the bolt after a shot (Iori's, Hiyori's) and the
+// part of a shot's recording that is its own player's alone (Fubuki's gun's metal sound) sound for the unit this player
+// plays and, for a viewer who plays none — the Practice toggle's spectator, an online room's — for the unit their camera
+// follows, and for that one alone. A reload, the round going in and the scope stay the player's own unit's (sfxOwn).
+// `sfxViewMech` is that unit as the frame's HUD pass found it (updateUnitSfx), null for a viewer who plays a unit. A bot's shot
+// is sounded from inside the bot's turn, where runBotAIForMech has state.player and state.enemy standing in for the bot's
+// target and the bot: cameraFocusMech asked there names the other seat (the first seat's bot had its bolt when the second
+// seat was watched).
+let sfxViewMech = null;
+function sfxShotWhole(mech) { return sfxOwn(mech) || (!!mech && mech === sfxViewMech); }
 // `roundsLeft`: the magazine after this shot (null where it is not known: the bolt then sounds). `mech`: who fired, where known.
 function unitShotSfx(unit, roundsLeft, mech = null) {
   const x = unit?.sfx;
   if (!x) return;
   if (mech?.sfxBolt) { sfxStop(mech.sfxBolt); mech.sfxBolt = null; }   // (the bolt of the shot before, still sounding: cut by this one)
-  if (x.shot) sfxPlay(x.shot, 0, x.shotOwn && sfxOwn(mech) ? x.shotOwn : null);   // (b1105hw: with the part its own player alone hears)
-  if (x.bolt && sfxOwn(mech) && !(unit.magCapacity != null && !unit.autoReload && roundsLeft != null && roundsLeft <= 0)) {   // (b1105hl: the player's own unit's alone)
+  const whole = sfxShotWhole(mech);   // (b1105ig: the player's own unit's shot, and the shot of the unit a spectator watches)
+  if (x.shot) sfxPlay(x.shot, 0, x.shotOwn && whole ? x.shotOwn : null);   // (b1105hw: with the part its own player alone hears)
+  if (x.bolt && whole && !(unit.magCapacity != null && !unit.autoReload && roundsLeft != null && roundsLeft <= 0)) {   // (b1105hl: the player's own unit's alone)
     const v = sfxPlay(x.bolt, (x.boltDelayMs ?? 500) / 1000);
     if (mech && x.boltCut) mech.sfxBolt = v;
+    if (mech) mech.sfxBoltOf = v;   // (the bolt last begun for this unit: stopped when a spectator's view leaves the unit — updateUnitSfx)
   }
 }
 function unitReloadSfx(mech) {
@@ -3894,7 +3912,7 @@ function unitReloadSfx(mech) {
 function unitSfxStop(mech) {
   if (!mech) return;
   if (mech.sfxReload) { for (const v of mech.sfxReload) sfxStop(v); mech.sfxReload = null; }
-  for (const k of ['sfxBolt', 'sfxCharge', 'sfxShell']) if (mech[k]) { sfxStop(mech[k]); mech[k] = null; }
+  for (const k of ['sfxBolt', 'sfxBoltOf', 'sfxCharge', 'sfxShell']) if (mech[k]) { sfxStop(mech[k]); mech[k] = null; }
 }
 function beamSfx(mech, full) { const x = mech?.unit?.sfx; if (x) sfxPlay(full ? x.full : x.quick); }
 function shotSfxOnline(f, now) {
@@ -3923,9 +3941,12 @@ function hitSfx(owner, target) {
 // every frame of a match, from updateHud — `now` in the clock the units' stamps are in (the page's offline, the prediction's online)
 function updateUnitSfx(now) {
   const real = performance.now();
+  sfxViewMech = (state.spectatorActive || state.online?.myPlayerId === 'spectator') ? cameraFocusMech() : null;   // (b1105ig: whom a spectator watches, this frame)
   for (const m of getAllFighters()) {
     const st = m?.state, u = m?.unit;
     if (!st || !u) continue;
+    // (b1105ig: a spectator's view moved off this unit — its bolt, sounding or still to come, is not for that view)
+    if (m.sfxBoltOf && !sfxShotWhole(m)) { sfxStop(m.sfxBoltOf); m.sfxBoltOf = null; m.sfxBolt = null; }
     const w = m.sfxw ?? (m.sfxw = { unit: u, alive: st.hp > 0, charging: !!st.sniperChargeTarget, chargeAt: 0, beam: st.chargedBeamUntil || 0, tick: st.reloadTickStartAt || 0, shellFor: 0, shellDue: 0 });
     if (w.unit !== u) { unitSfxStop(m); w.unit = u; w.charging = !!st.sniperChargeTarget; w.beam = st.chargedBeamUntil || 0; w.tick = 0; w.shellFor = 0; }   // (Trio: the seat's next unit)
     const alive = st.hp > 0, x = u.sfx;
@@ -8522,7 +8543,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105if 11-15';
+const CLIENT_BUILD_TAG = 'b1105ig 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
