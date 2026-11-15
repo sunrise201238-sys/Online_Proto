@@ -10433,7 +10433,10 @@ const ARENA_SPAWNS = {
   // on two metres of clear floor at the floor it stands on. The offline client reads these (getArenaSpawns), no second copy.
   // (The heights re-read on the pieces reading of 2026-10-29 — the terraces' tops as the model's faces have them, 9.46 and
   //  15.54 for 9.4 and 15.6, the road's 0.2 under the street — the same six places.)
-  town: { p1: { x: -208, y: GROUND_BASE_Y + 9.49, z: 10 }, p2: { x: 168, y: GROUND_BASE_Y + 15.54, z: 22 },
+  // The homes swapped (b1105il, user 2026-11-15, "switch the initial spawn position between team1 and team2 in map Town."): team 1 (p1) on the east
+  // terrace, team 2 (p2) on the west — a 2v2 mate beside its own home as before (mateSpawnFor asks the home, not the slot); the six places, the Trio
+  // respawns' pool, unchanged.
+  town: { p1: { x: 168, y: GROUND_BASE_Y + 15.54, z: 22 }, p2: { x: -208, y: GROUND_BASE_Y + 9.49, z: 10 },
     more: [{ x: -124, y: GROUND_BASE_Y + 9.49, z: -74 }, { x: 116, y: GROUND_BASE_Y - 0.19, z: -78 }, { x: -104, y: GROUND_BASE_Y - 0.19, z: 118 }, { x: 236, y: GROUND_BASE_Y + 15.51, z: 122 }] },
   // Spacecraft: the two far corners the generator picked (spawn_pick.mjs), until places are set.
   spacecraft: { p1: { x: 198, y: GROUND_BASE_Y, z: -10 }, p2: { x: -200, y: GROUND_BASE_Y, z: -2 },

@@ -1,4 +1,4 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 10), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 12), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
@@ -21,7 +21,7 @@ export const SFX_SOUNDS = {
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
   shot_unit10: {"file": "sfx/m14_shot_body", "ext": ".mp3", "level": 0.20236},
   shotown_unit10: {"file": "sfx/m14_shot_ring", "ext": ".mp3", "level": 0.20236},
-  shot_unit7: {"file": "sfx/implaser_shot_a_s100", "ext": ".mp3", "level": 0.39696},
+  shot_unit7: {"file": "sfx/implaser_shot_a_s100", "ext": ".mp3", "level": 0.4962},
   shot_unit20: {"file": "sfx/kar98_shot_e50l", "ext": ".mp3", "level": 0.4316},
   bolt_unit20: {"file": "sfx/kar98_bolt", "ext": ".mp3", "level": 0.8},
   shot_unit3: {"file": "sfx/scout_shot", "ext": ".mp3", "level": 0.31746},
@@ -88,16 +88,16 @@ export const SFX_UNITS = {
 export const SFX_SHELL_LEAD_MS = 361;   // the round's sound is started this long before the gain: its click falls on it
 // the music: a track's file, the place it belongs to, its level (the tracks brought to one loudness, times where music stands)
 export const BGM_TRACKS = {
-  menu_1: {"file": "bgm/menu_1", "ext": ".mp3", "place": "menu", "level": 0.1875},
-  menu_2: {"file": "bgm/menu_2", "ext": ".mp3", "place": "menu", "level": 0.2415},
-  menu_3: {"file": "bgm/menu_3", "ext": ".mp3", "place": "menu", "level": 0.1633},
-  char_1: {"file": "bgm/char_1", "ext": ".mp3", "place": "char", "level": 0.1541},
-  char_2: {"file": "bgm/char_2", "ext": ".mp3", "place": "char", "level": 0.179},
-  char_3: {"file": "bgm/char_3", "ext": ".mp3", "place": "char", "level": 0.1104},
-  combat_1: {"file": "bgm/combat_1", "ext": ".mp3", "place": "combat", "level": 0.1541},
-  combat_2: {"file": "bgm/combat_2", "ext": ".mp3", "place": "combat", "level": 0.171},
-  combat_3: {"file": "bgm/combat_3", "ext": ".mp3", "place": "combat", "level": 0.1559},
-  game_end: {"file": "bgm/game_end", "ext": ".mp3", "place": "end", "level": 0.1312},
+  menu_1: {"file": "bgm/menu_1", "ext": ".mp3", "place": "menu", "level": 0.15},
+  menu_2: {"file": "bgm/menu_2", "ext": ".mp3", "place": "menu", "level": 0.1932},
+  menu_3: {"file": "bgm/menu_3", "ext": ".mp3", "place": "menu", "level": 0.13064},
+  char_1: {"file": "bgm/char_1", "ext": ".mp3", "place": "char", "level": 0.12328},
+  char_2: {"file": "bgm/char_2", "ext": ".mp3", "place": "char", "level": 0.1432},
+  char_3: {"file": "bgm/char_3", "ext": ".mp3", "place": "char", "level": 0.08832},
+  combat_1: {"file": "bgm/combat_1", "ext": ".mp3", "place": "combat", "level": 0.12328},
+  combat_2: {"file": "bgm/combat_2", "ext": ".mp3", "place": "combat", "level": 0.1368},
+  combat_3: {"file": "bgm/combat_3", "ext": ".mp3", "place": "combat", "level": 0.12472},
+  game_end: {"file": "bgm/game_end", "ext": ".mp3", "place": "end", "level": 0.10496},
 };
 export const BGM_SOFT = [["menu", "char"], ["end", "menu"]];   // the pairs of places between which the change is a cross-fade; any other change is a cut
 export const BGM_FADE_MS = 1500;
