@@ -1,4 +1,4 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 7), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 8), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
@@ -21,7 +21,7 @@ export const SFX_SOUNDS = {
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
   shot_unit10: {"file": "sfx/m14_shot_body", "ext": ".mp3", "level": 0.20236},
   shotown_unit10: {"file": "sfx/m14_shot_ring", "ext": ".mp3", "level": 0.20236},
-  shot_unit7: {"file": "sfx/laser_shot", "ext": ".mp3", "level": 0.23432},
+  shot_unit7: {"file": "sfx/implaser_shot_a_s100", "ext": ".mp3", "level": 0.39696},
   shot_unit20: {"file": "sfx/kar98_shot_e50l", "ext": ".mp3", "level": 0.4316},
   bolt_unit20: {"file": "sfx/kar98_bolt", "ext": ".mp3", "level": 0.8},
   shot_unit3: {"file": "sfx/scout_shot", "ext": ".mp3", "level": 0.31746},
