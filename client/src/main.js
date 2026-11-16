@@ -3077,8 +3077,8 @@ function teardownHud() {
 //                 pop up button glowing once they open the command again"), and the button itself is lit for as long as
 //                 either call stands (b1105gr: "make the command button itself glowing as well");
 //   a tap         on the lit one takes the call back at once; on the other one replaces it at once;
-//   shown         in the shooter view of a 2v2 whose teammate is a bot (offline always; online a seat that was a bot at the
-//                 match's start) and stands — not in 1v1, not beside a human teammate, not in Sudden Death (that brain takes
+//   shown         in the shooter view of a 2v2 whose teammate is a bot (offline always; online a seat a bot plays NOW —
+//                 WHOSE SEAT, b1105iq, below; a seat that was a bot at the match's start, until then) and stands — not in 1v1, not beside a human teammate, not in Sudden Death (that brain takes
 //                 no tactic), not on the Shooting Range, and not in command mode ("Remove these command buttons in command
 //                 mode": the commander has real orders — style.css hides it with the stick);
 //   inert         in spectator mode — the Practice toggle, or an online spectator: "shown but not responding";
@@ -3092,6 +3092,16 @@ function teardownHud() {
 // Offline the call is set on the teammate's mech (cmdTactic — botCmdView hands it to the brain); online it is sent
 // (connection.js sendAllyTactic) and what stands comes back with the side's snapshots (syncOnlineCommands), so the lit
 // pop-up is the server's word. The page sends what the player meant — a kind, or null for the take-back.
+// WHOSE SEAT (b1105iq; user 2026-11-16: "Hide the "Forward/Back off" command button in online game when both player in the same
+// team are not BOT. Still shows and functions when one of the player is BOT. Still not functioning in spectating mode."):
+// online the button is there exactly while a bot plays the teammate's seat, read off each snapshot (botSlots, the seats
+// the server drives — onlineAllyIsBot). Two players on one side: no button, as it was. The answer used to be read ONCE,
+// with the match's set-up, and that set-up is skipped while the map, the seat and the mode stay the same
+// (ensureOnlineMatchSetup's signature): a REMATCH kept the first match's answer, so a teammate gone before it began left
+// a bot the server took calls for and no button to make them with. And a teammate who leaves in mid-match leaves a bot
+// too: the button comes up for the player who stays, and the server takes the call (index.js ally:tactic — it took the
+// match-start bots alone; the commander's orders keep that rule, startBotSlots). Spectating is as it was: under the
+// Practice toggle and for an online spectator the button shows and does not answer (allyTacticCan).
 const TACTIC_HUD = { closeMs: 3000 };
 const ALLY_TACTIC_HTML = '<div class="tac" id="tac">'
   + '<div class="tac-pop"><div class="tac-opt" data-tactic="push">FORWARD</div><div class="tac-opt" data-tactic="hide">BACK OFF</div></div>'
@@ -3102,7 +3112,13 @@ function allyTacticShown() {
   const a = state.ally;
   if (!a || state.mode !== '2v2' || a.state.hp <= 0) return false;
   if (state.suddenDeathActive || state.mapKey === 'range' || dioramaActive()) return false;
-  return state.online ? !!state.online.allyIsBot : true;
+  return state.online ? onlineAllyIsBot() : true;
+}
+// Online: a bot plays the teammate's seat NOW — the last snapshot's word (WHOSE SEAT, b1105iq, above).
+function onlineAllyIsBot() {
+  const onl = state.online, allyId = onl?.slotMap?.allyId;
+  const bots = onl?.conn?.getLatestSnapshot?.()?.botSlots;
+  return !!allyId && Array.isArray(bots) && bots.includes(allyId);
 }
 function allyTacticCan() {
   if (!allyTacticShown() || state.spectatorActive) return false;
@@ -8709,7 +8725,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ip 11-16';
+const CLIENT_BUILD_TAG = 'b1105iq 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10132,7 +10148,7 @@ function ensureOnlineMatchSetup(snap) {
   // bot set — a slot that turns bot mid-match (disconnect) is not adopted.
   onl.allyCommandable = !!(onl.commandMode && allyId
     && (snap.botSlots ?? []).includes(allyId));
-  onl.allyIsBot = !!(allyId && (snap.botSlots ?? []).includes(allyId));   // (THE ALLY TACTIC, b1105gq: a teammate that was a bot at the match's start can be called to — the server's own rule, startBotSlots)
+  // (THE ALLY TACTIC: whether a bot plays the teammate's seat is read off each snapshot since b1105iq — onlineAllyIsBot; it was kept here, read once, and this set-up is skipped on a rematch)
   if (onl.commandMode) {
     diorama.cam2.snapped = false;
     applyDioramaDressing();

@@ -200,7 +200,15 @@ export function setStance(matchState, slot, hide) {
 export function setAllyTactic(matchState, slot, kind, now) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
-  return setTactic(commandsFor(matchState, slot), kind, now);
+  const fresh = !matchState.commands?.[slot];
+  const cmd = commandsFor(matchState, slot);
+  // A slot with no entry until this call — online, a seat its player left in mid-match, which can be called to since
+  // b1105iq (a match-start bot has its entry from the start, server startMatchFor). The brain keeps a RELOAD HIDE on the
+  // fighter alone where there is no entry (nbrain: botReloadHide), and reads the entry alone once there is one: a hide
+  // under way goes onto the new entry as the brain would have put it at the reload's start (hide + hideAuto, released
+  // when the reload ends), so the call does not let the unit out of it — as it does not for any other bot.
+  if (fresh && f.botReloadHide) { cmd.hide = true; cmd.hideAuto = true; }
+  return setTactic(cmd, kind, now);
 }
 
 export function isHideOrdered(matchState, slot) {

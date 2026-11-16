@@ -85,8 +85,8 @@ test('FORWARD taken back: the bot is back at its band without waiting the 20 s o
 // Streets 2v2, command.test.js's fixture: the bot (p1) in the open, both enemies standing with a clear line on it.
 const eyeOf = (f) => ({ x: f.pos.x, y: f.pos.y + BOT_LOS_EYE_HEIGHT, z: f.pos.z });
 const hiddenFrom = (arena, me, enemy) => !botHasLineOfSight(eyeOf(enemy), eyeOf(me), arena.obstacles, arena.surfaces);
-function streets() {
-  const m = createMatchState({ mapKey: 'arena2', mode: '2v2', p1UnitKey: 'unit1', p2UnitKey: 'unit1', p3UnitKey: 'unit1', p4UnitKey: 'unit1', startTime: 1000 });
+function streets(p1Unit = 'unit1') {
+  const m = createMatchState({ mapKey: 'arena2', mode: '2v2', p1UnitKey: p1Unit, p2UnitKey: 'unit1', p3UnitKey: 'unit1', p4UnitKey: 'unit1', startTime: 1000 });
   const place = (f, x, z) => { f.pos.x = x; f.pos.z = z; f.pos.y = GROUND_BASE_Y; };
   place(m.fighters.p1, -100, -75); place(m.fighters.p2, -60, -75); place(m.fighters.p4, -75, -85); place(m.fighters.p3, -126, -82);
   for (const f of Object.values(m.fighters)) { f.invulnerableUntil = 0; f.hp = 1e9; }
@@ -155,4 +155,36 @@ test('a route under way is planned again on a call: the Maze\'s route record is 
   setAllyTactic(m, 'p1', null, now);
   step();
   assert.notEqual(m._navPaths.p1, landed, 'and the take-back does, again');
+});
+
+// b1105iq: online a seat its player left in mid-match can be called to, and has no entry until the first call (a match-start
+// bot has one from the start). The machine guns alone reload long enough for the bot's reload hide (5 s; 3 s is the least).
+test('a call to a slot with no entry yet does not let the unit out of a reload hide under way, and the hide ends with the reload', () => {
+  const run = (entryFromStart) => {
+    const { m, step, now } = streets('unit5');
+    const me = m.fighters.p1;
+    if (entryFromStart) ensureCommands(m, 'p1');
+    me.ammo = 0;   // the drum is out: the 5 s reload starts on the next tick, and the bot spends it in the stance
+    for (let i = 0; i < 40 && !(me.botReloadHide === true && me.botHideHold != null); i += 1) step();
+    assert.equal(me.botReloadHide, true, 'fixture: the reload hide is under way'); assert.ok(me.botHideHold != null, 'fixture: the bot is in the stance');
+    assert.ok(me.reloadingUntil - now() > 3000, `fixture: most of the reload is ahead (${me.reloadingUntil - now()} ms)`);
+    assert.equal(!!getCommands(m, 'p1'), entryFromStart, 'fixture: the entry is there only where it was made at the start');
+    assert.equal(setAllyTactic(m, 'p1', 'push', now()), true);
+    const c = getCommands(m, 'p1');
+    assert.equal(c.hide, true, 'the hide under way is on the entry'); assert.equal(c.hideAuto, true, 'as the reload\'s own, to be released with it');
+    let ticks = 0, out = 0;
+    while (me.reloadingUntil > now() + TICK_RATE_MS) { step(); ticks += 1; if (me.botHideHold == null) out += 1; }
+    assert.ok(ticks > 150, `fixture: the rest of the reload was ticked (${ticks})`);
+    assert.equal(out, 0, `out of the stance on ${out} of ${ticks} ticks of the reload after the call`);
+    for (let i = 0; i < 4; i += 1) step();   // the reload over: the hide is released, the call stands on
+    assert.equal(me.botReloadHide, false); assert.equal(c.hide, false); assert.equal(c.hideAuto, false);
+    assert.equal(me.botHideHold, null, 'out of the stance once the reload is over');
+    assert.equal(tacticOf(c, now()), 'push', 'the call still stands');
+  };
+  run(true);    // a match-start bot: the entry is there from the start, the brain itself put the hide on it
+  run(false);   // a seat left in mid-match: the call makes the entry
+  // and with no reload hide under way a new entry carries none
+  const { m, now } = streets('unit5');
+  assert.equal(setAllyTactic(m, 'p1', 'push', now()), true);
+  assert.equal(getCommands(m, 'p1').hide, false); assert.equal(getCommands(m, 'p1').hideAuto, false);
 });

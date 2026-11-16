@@ -774,8 +774,9 @@ io.on('connection', (socket) => {
   // 'hide' (BACK OFF: the Hide stance) for ALLY_TACTIC_MS (20 s since b1105io, 10 s until then), null to take the standing one back. The page sends what the player meant
   // (it knows which one it showed lit), so a call that ran out on the way is not set anew by its own take-back.
   //   who   a seated player of this match who is not in command mode (a commander has real orders, and no such buttons);
-  //   whom  a slot of the same side that was a bot at the match's start and still is (startBotSlots — a seat left by a
-  //         player mid-match is not adopted, as with the orders);
+  //   whom  a slot of the same side that a bot plays now (botSlots) — a seat a player left in mid-match too, since b1105iq
+  //         (user 2026-11-16: "Still shows and functions when one of the player is BOT"); until then the match-start bots
+  //         alone, as the commander's orders still are (startBotSlots);
   //   when  the match running, not Sudden Death (that brain takes no tactic); two calls to one unit ALLY_TACTIC_MIN_INTERVAL_MS
   //         apart at least — a call drops the bot's route, and a route is a search; a take-back is never held up.
   // Nothing is answered: the standing call reaches the side with the next snapshot (commands[slot].tactic).
@@ -786,7 +787,7 @@ io.on('connection', (socket) => {
     if (!SLOT_IDS.includes(sender) || !activeSlots(lb.mode).includes(sender) || lb.commandSlots.has(sender) || lb.botSlots.has(sender)) return;
     const slot = data?.slot;
     if (typeof slot !== 'string' || slot === sender || !activeSlots(lb.mode).includes(slot)
-      || teamOf(slot) !== teamOf(sender) || !lb.startBotSlots.has(slot) || !lb.botSlots.has(slot)) return;
+      || teamOf(slot) !== teamOf(sender) || !lb.botSlots.has(slot)) return;
     const kind = data?.kind ?? null;
     if (kind !== null && !ALLY_TACTIC_KINDS.includes(kind)) return;
     if (kind !== null) {
