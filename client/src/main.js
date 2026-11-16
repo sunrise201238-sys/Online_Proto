@@ -8709,7 +8709,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105io 11-16';
+const CLIENT_BUILD_TAG = 'b1105ip 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11879,6 +11879,13 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // switch etc.). But keep the guide very easy and concise to read" — a line or three each for the point of view switch, the
 // edge triangles, the ally tactic, the ladders, the transporters and the ending camera; and the Trio line no longer says the
 // next unit starts "at the spawn point" (ten maps pick the place — spawn.js).
+// b1105ip, user 2026-11-16: "there are wrong descriptions in in-game Guide. Lock icon goes red when enemy fires at you, and
+// there's no homing effect in game (all tuned to 0 degree). No need mentioning homing effect in Guide either." — the Fighting
+// list's first line said the lock turns red when the enemy is close enough and that shots follow the enemy from there, flying
+// straight only from farther away. Neither is the game: the lock icon is green and goes red while its target fires
+// (updateLocksAndReticle — a sniper's aim at the viewer and Kei's sweep hold it red too), and a round flies straight at every
+// range (shared HOMING_MAX_DEG_PER_FRAME and HOMING_SOFTEN_DEG_PER_FRAME, both 0). The line now says the first and nothing of
+// homing; "at you" is left out of it, the icon reading the locked enemy's fire whoever it is aimed at (a teammate, in a 2v2).
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -11927,7 +11934,7 @@ function showGuidePopup() {
 
           <h4>Fighting</h4>
           <ul>
-            <li>Your unit locks on to an enemy by itself. When the enemy is close enough, the lock turns red and your shots follow them. From farther away, shots fly straight and miss more.</li>
+            <li>Your unit locks on to an enemy by itself. The lock icon turns red when that enemy fires.</li>
             <li>Holding fire makes your shots spread wider. Short bursts stay accurate, and a short pause brings the spread back.</li>
             <li>When the magazine is empty you reload by yourself. Some shotguns load one shell at a time.</li>
             <li>Getting hit slows you down for a moment.</li>
