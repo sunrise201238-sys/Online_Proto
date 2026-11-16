@@ -7759,7 +7759,7 @@ function miniMapShoot() {
   const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, cutY != null ? 0.01 : 1, 4000);   // (north, -z, at the top; east, +x, to the right)
   cam.position.set(0, cutY ?? 1500, 0); cam.up.set(0, 0, -1); cam.lookAt(0, -1000, 0); cam.updateMatrixWorld(true);
   // only the map is drawn — what is DRAWN of everything else goes (a unit, what hangs on it, a round, a mark), never the thing
-  // itself: a unit carries a light, and a light more or less in the scene is another shader for all it lights (matchWarmDraw)
+  // itself: a unit carries a light, and a light more or less in the scene is another shader for all it lights (matchWarmDraw, holdUnitLights)
   const was = new Map();
   const vis = (o, v) => { if (o.visible !== v) { was.set(o, o.visible); o.visible = v; } };
   const out = (o) => o.traverse((x) => { if (x.isMesh || x.isLine || x.isPoints || x.isSprite) vis(x, false); });
@@ -8334,6 +8334,32 @@ function matchWarmSamples() {
   }
   if (units.size) once('hit ring', () => buildHitRing(0xffffff));
   return out;
+}
+// THE LIGHT COUNT HELD (b1105jb; user 2026-11-16: "keep the light count constant"). Each unit carries a small light of its own
+// (createMech's plumeLight: the boost's glow on the floor, dark but while the unit boosts), and the renderer writes the NUMBER of
+// lights in the picture into every shader it makes: a light more or fewer, and every lit material is compiled anew in the middle
+// of a frame — the map's own at once, and after them each round's, trail's and mark's as it is made under the new number. A unit
+// knocked out is hidden whole (updateTransforms; online mirrorFighterToMech), its light with it:
+// one enemy knocked out in a 2v2 on Town took the lights from 4 to 3 and seven shaders were made at once (the map's four lit
+// materials, three of the rounds' and marks'), in a frame of 583 ms where its neighbours took 233 ms (a software renderer, 480 x
+// 270); the teammate after it, seven more.
+// So for every unit whose light the picture has lost — the unit hidden, or out of the scene — a dark light stands in: a point
+// light of no colour and no strength, which lights nothing and which the renderer counts like any other. The number of lights
+// is then the number of the units on the field, from the match's first frame (the loading screen's warm frame, where its
+// shaders are made — matchWarmDraw) to its last, whoever falls, and a knockout compiles nothing. A light switched off for good
+// is none to stand in for (the Shooting Range's sign dummies). Before every drawing of the scene (animate).
+const unitLightSpares = [];
+function holdUnitLights() {
+  let need = 0;
+  for (const m of getAllFighters()) {
+    const l = m?.plumeLight;
+    if (!l || !l.visible) continue;
+    let o = m.root;
+    while (o && o !== scene && o.visible) o = o.parent;
+    if (o !== scene) need += 1;   // (hidden somewhere on the way up, or not in the scene at all: the renderer does not count its light)
+  }
+  while (unitLightSpares.length < need) { const s = new THREE.PointLight(0x000000, 0, 7, 2); s.visible = false; scene.add(s); unitLightSpares.push(s); }
+  for (let i = 0; i < unitLightSpares.length; i += 1) { const on = i < need; if (unitLightSpares[i].visible !== on) unitLightSpares[i].visible = on; }
 }
 // EVERY SHADER KEPT (b1105im, A MATCH'S WEIGHT). The renderer throws a shader program away the moment no material is left that uses it, and makes it again —
 // compiles and links it, in the middle of a frame — when the next such material is drawn. A round, its trail and a hit's ring each brought a material of their own
@@ -9048,7 +9074,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ja 11-16';
+const CLIENT_BUILD_TAG = 'b1105jb 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -22366,6 +22392,7 @@ function animate() {
     // both online and offline. No-op for mechs still on the billboard fallback.
     updateMapRoof();   // (a modelled map's roof hides in command mode — GLB_MAPS `roof`)
     updateMechAnimations(dt, now);
+    holdUnitLights();   // (THE LIGHT COUNT HELD, b1105jb: after all that hides or shows a unit this frame, before all that draws the scene — the warm frame and the mini map's picture too)
     // THE LOADING SCREEN (b1105hd): while a match's files are on their way nothing is drawn under it — the frame's time is
     // the loading's; the match's first frame is drawn once more with nothing culled (matchWarmDraw)
     if (!(matchCoverUp && !matchCoverUntilDrawn && !matchCoverDrawn)) {
