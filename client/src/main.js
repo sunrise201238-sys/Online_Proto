@@ -7694,9 +7694,12 @@ function renderHpChip(chip, m, role, noSideWords) {
 // the map reaches is a triangle on the rim pointing out to it.
 // THE LARGE MAP: a tap on the round map lays the whole map over the middle of the view (.mm-pop), north up, its name on it,
 // each unit's mark with the chips' side word beside it (none for a spectator, as the chips have none); the play goes on under
-// it. The next press ANYWHERE takes it away and does nothing else — the stick, a thumb button, the round map itself and the
-// empty screen alike (one listener on the window, before any other: it stops the press) — but for PAUSE, which closes the map
-// and opens its menu as ever. A touch already held when the map opens (the stick's, the fire button's) keeps working.
+// it. THE ROUND MAP IS ITS SWITCH (b1105iy; user 2026-11-16, of b1105iw's "the next press anywhere takes it away": "Change it to
+// tapping the map button to close it instead. Other buttons still function while the big [map] is shown."): the next press on
+// the round map takes the large map away, and no other press touches it — the stick, the thumb buttons, PAUSE and the empty
+// screen work under it as they do without it (the large map takes no press: style.css .mm-pop), and it is still there when a
+// pause ends. It goes of itself where its switch cannot be reached: where the buttons hide (command mode, the game-start
+// intro, the finale) and on a desktop page whose pointer the free pov has taken.
 // WHO IS ON IT: the marks follow the edge triangles' rule — under the anomaly rules and on the Shooting Range none but the
 // viewer's own (updateAllyArrow's gate); a unit down has none until its roster's next stands.
 // THE PICTURE is the map itself, photographed from straight above once per arena (miniMapShoot): the play area and a little
@@ -7828,17 +7831,12 @@ function setupMiniMap(hud, signal) {
   miniMap.el = el; miniMap.win = el.querySelector('.mm-win'); miniMap.picEl = el.querySelector('.mm-pic'); miniMap.n = el.querySelector('.mm-n'); miniMap.u = marks(el);
   miniMap.pop = pop; miniMap.big = pop.querySelector('.mm-big'); miniMap.bigPic = pop.querySelector('.mm-pic'); miniMap.name = pop.querySelector('.mm-name'); miniMap.U = marks(pop);
   miniMapPicShow();
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); miniMapOpen(true); });
-  // the large map up: the next press anywhere takes it away, and is no press of anything else — but PAUSE's, which is its own too.
-  // Where the HUD is away with the map still up — the ending cameras, begun by a knockout under it, run no HUD update — the map
-  // is not on the screen and the press is the shot's own: it is let through.
-  window.addEventListener('pointerdown', (e) => {
-    if (!miniMap.open) return;
-    const shown = miniMap.pop.getClientRects().length > 0;
-    miniMapOpen(false);
-    if (!shown || (e.target instanceof Element && e.target.closest('#pause-btn'))) return;
-    e.preventDefault(); e.stopImmediatePropagation();
-  }, { capture: true, signal });
+  // the round map is the large map's switch: a press on it opens the large map and the next press on it closes it — no other
+  // press is this function's (b1105iy)
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); miniMapOpen(!miniMap.open); });
+  // (a desktop page in free pov holds the mouse — setupFreePovPointer — and a held mouse cannot click the round map: the large
+  //  map is put away as the pointer is taken)
+  document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) miniMapOpen(false); }, { signal });
 }
 function miniMapReset() {
   miniMap.el = miniMap.win = miniMap.picEl = miniMap.n = miniMap.pop = miniMap.big = miniMap.bigPic = miniMap.name = null;
@@ -9043,7 +9041,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ix 11-16';
+const CLIENT_BUILD_TAG = 'b1105iy 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -14429,7 +14427,6 @@ function showPauseMenu() {
   // (THE GAME-START INTRO, b1105gz: "Only the "Pause" HUD will be shown and functioning during these beginning cameras" — the
   //  sim is not running yet, the intro is: the menu opens over it and its clock stands, updateIntro)
   if ((!state.running && !intro.active) || state.phase !== 'match' || matchCoverUp) return;   // (nor under THE LOADING SCREEN, b1105hd: the match has not begun)
-  miniMapOpen(false);   // (THE MINI MAP, b1105iw: the large map goes as the menu comes — by PAUSE's own press or the page's)
   state.running = false;
   state.phase = 'pause';
   hideAllyEdgeArrow();

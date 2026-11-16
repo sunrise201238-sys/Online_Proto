@@ -350,7 +350,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
    on the rim, .off none) and north's tag (.mm-n), and sets --mk, the marks' scale. No filter and no canvas: a picture, a few
    small SVGs, and transforms. The large map (.mm-pop, .mm-big): the whole map over the middle of the view while .open, between
    the chips and BOOST (--mmp-top, --mmp-bot: each tier's), as wide as 45.2% of the page or as tall as that room, by the map's
-   shape (--ar, main.js); it takes no press itself (main.js: the next press anywhere closes it). Under the kill feed's and the
+   shape (--ar, main.js); it takes no press itself (main.js: the round map is its switch, b1105iy). Under the kill feed's and the
    tactic's layer, over the rest of the HUD. */
 .buttons .mini-map {
   position: absolute; right: calc(var(--btn-size) + var(--btn-gap) + 2px); bottom: calc((var(--btn-size) + var(--btn-gap)) * 2 + 2px);
