@@ -8708,7 +8708,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105im 11-15';
+const CLIENT_BUILD_TAG = 'b1105in 11-15';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12789,8 +12789,8 @@ function endIntro(now) {
 // side camera take duration is same as the normal version, just that the winner is a fixed defeated visual as well."): with
 // every unit of the match down — a double knockout, or the final blow's round still in the air when its shooter fell — the
 // take and shot 2 run as ever, their lengths the same, on the final blow's unit as it lies: its death motion's last frame,
-// held from the finale's first (finale.killerDown). Down with a teammate still standing (its side won) there is no shot 2,
-// as first settled.
+// held from the finale's first (finale.killerDown). Down with a teammate still standing (its side won) there was no shot 2,
+// as first settled, until b1105in (A TEAMMATE STANDING, below).
 // THE NEXT ROSTER UNIT (b1105gh; user 2026-11-12: "when a team is eliminated, but the enemy unit who kills it also dies, and
 // there's another roster spawning, there's no winner camera. suggestions without making online/offline games more lag?"):
 // in Trio the unit that fired the final blow can be down by the time it lands — the same frame, or its round still in the
@@ -12805,12 +12805,26 @@ function endIntro(now) {
 // last one whose unit still lies on the field: the last lethal hit of all can be the one on the unit just replaced
 // (shot 1 then looked at an empty floor offline, and online the finale did not run). No lag in it: the next unit is the
 // mech built at match load (takePrebuiltMech) that any respawn swaps in, and nothing is sent or asked of the server.
+// A TEAMMATE STANDING (b1105in; user 2026-11-15: "in 2V2, when the last unit of losing team and the attacker from winning
+// team die at the same time while there is other unit alive in winning team, the "WINNER" camera (not the "FINAL BLOW" camera
+// doesn't seem to work."): with the final blow's unit down and no roster unit come on in its slot — a 2v2 without rosters, or
+// its roster spent — the winning side still has a unit on the field, its teammate, and that unit takes shot 2 as the roster
+// unit standing in does: its victory motion, the call WINNER (finale.mate). Until now the finale stopped on shot 1 there.
+// Shot 2's unit, the first of these that applies: the final blow's unit standing (FINAL BLOW); the roster unit standing in
+// its slot (WINNER); a unit of its side standing (WINNER — the unit in its teammate's slot, that roster's next where the
+// teammate fell in the same frame); with every unit down, the final blow's unit as it lies (FINAL BLOW).
+// And the knockout the finale opens on is the LOSING side's: two units down in one frame are noted in the order their hits
+// landed, and the last noted could be the one on the winner's unit — shot 1 then read K.O. over a unit of the side that
+// won, and its shooter's side had nobody standing to show. Offline the side is the win check's (endWithFinale), online
+// match:end's winner (startOnlineFinale); where the loser's knockout is not found the last of all is taken, as before. One
+// reading for every ending, a double knockout that leaves nobody standing too: the unit shot 1 shows is of the side the end
+// page names the loser. Nothing is sent or asked of the server, and nothing runs before the match has stopped.
 // THE CALL (b1105gh; user 2026-11-12: "I want some visual HUD during the ending camera. Ask claude design to provide few
 // samples", then, of the design canvas's round 12 — the chips stay A, the call B, cinema bars C, a taped photo D —
 // "Option B."): one big word over each shot in the end page's title lettering — white, an ink outline, a hard drop in
 // the colour of the unit in view — and that unit's face, name and side word on a small chip under it (style.css
 // .finale-call): K.O. over the fallen unit, FINAL BLOW over the final blow's unit (lying too, with every unit down), WINNER
-// over the roster unit standing in its place. It comes in with its shot and leaves as the take starts; the match is over
+// over the roster unit standing in its place, or the teammate standing for it (b1105in). It comes in with its shot and leaves as the take starts; the match is over
 // by then and frozen, so it costs play nothing.
 // THE HOLD AT THE END (b1105gy; user 2026-11-12: "if the player doesn't skip, make the screen stops at the end of winner
 // camera. It won't move on to the team ending screen unless player taps again. If the player taps skips anytime before the end
@@ -12818,7 +12832,7 @@ function endIntro(now) {
 // has run its length (finale.held) everything stays as it is — the camera, the call, the hint; the unit at ease, its stand
 // motion going round, since b1105he (on its motion's last frame until then) — until a tap or a key press, which goes to the
 // end page as a skip does. The last shot is shot 2; where there is none
-// (the final blow's unit down with a teammate standing, or no shooter known) it is shot 1, held on the fallen unit — this
+// (no shooter known; until b1105in the final blow's unit down with a teammate standing too) it is shot 1, held on the fallen unit — this
 // side's reading, the message naming the winner camera alone: one rule for every ending, and no end page arriving under a
 // finger that meant to end the hold. Online the lobby moving on still ends it (a rematch begun, the room left: the phase
 // machine's finishFinale), and the end page a held player comes to is drawn from the lobby's state of that moment.
@@ -12918,13 +12932,13 @@ const FINALE = {
   // 5 mm layers flickered into one another under the finale's low sweeps in the software renderer the previews ran on
   nearPlane: 1,
   // THE CALL's words (b1105gh, above): over the fallen unit, over the final blow's unit, over the roster unit that stands
-  // in its place. Two words are set a line each at a smaller size, one long word smaller still (style.css .finale-word).
+  // in its place or the teammate that stands for it (b1105in). Two words are set a line each at a smaller size, one long word smaller still (style.css .finale-word).
   call: { ko: 'K.O.', blow: 'FINAL BLOW', heir: 'WINNER' },
   // online, how long after a slot's roster swap its new unit still counts as standing in for the one that fired (the
   // lethal hit names a slot, not a unit): a round lives 2.2 s (the sim's PROJECTILE_TTL_S), and a snapshot can be late
   heirWindowMs: 2500,
 };
-const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null, held: false, victoryOver: 0 };   // (`held`: the last shot has run its length and waits for a tap, b1105gy; `victoryOver`: the finale — its `tok` — whose victory motion has played its pass, b1105he)
+const finale = { active: false, shot: 0, victim: null, killer: null, killerDown: false, heir: false, mate: false, call: null, focus: null, onDone: null, t0: 0, shotT0: 0, dur1: 0, dur2: 0, tok: 0, hint: null, onSkip: null, move: null, prevNear: null, held: false, victoryOver: 0 };   // (`held`: the last shot has run its length and waits for a tap, b1105gy; `victoryOver`: the finale — its `tok` — whose victory motion has played its pass, b1105he)
 if (typeof window !== 'undefined') { window.__finale = finale; window.__FINALE = FINALE; }   // (a probe's hooks, as __gvgState: the state, and the numbers — a probe stretches move.minS / maxS to watch the take)
 
 // the final blow, offline: the first lethal hit on each unit and its shooter, in order (the four damage sites call it)
@@ -13428,13 +13442,15 @@ function startFinale({ victim, killer = null, heir = false, onDone }) {
   finale.active = true; finale.tok += 1; finale.onDone = onDone; finale.t0 = now; finale.held = false;
   bgmPlace('end');   // (THE MUSIC, b1105hk: "every time the game end camera starts")
   finale.victim = victim;
-  // shot 2's unit: the final blow's, standing — or down too with EVERY UNIT of the match down, shown as it lies (b1105gg);
-  // down with a teammate still standing, or none: no shot 2
+  // shot 2's unit: the final blow's, standing — or, down, a unit of its side that stands (A TEAMMATE STANDING, b1105in) —
+  // or down too with EVERY UNIT of the match down, shown as it lies (b1105gg); no shooter known: no shot 2
   const kHere = !!(killer && killer !== victim && killer.root), kUp = kHere && (killer.state?.hp ?? 0) > 0;
   const allDown = getAllFighters().every((m) => !m || (m.state?.hp ?? 0) <= 0);
-  finale.killer = kHere && (kUp || allDown) ? killer : null;
-  finale.killerDown = !!finale.killer && !kUp;
-  finale.heir = !!finale.killer && !!heir;   // (the roster unit standing in the final blow's slot, b1105gh)
+  const mate = kHere && !kUp ? getAlliesOf(killer).find((m) => m !== victim && m.root && (m.state?.hp ?? 0) > 0) ?? null : null;
+  finale.killer = mate ?? (kHere && (kUp || allDown) ? killer : null);
+  finale.killerDown = !!finale.killer && !mate && !kUp;
+  finale.heir = !!finale.killer && !mate && !!heir;   // (the roster unit standing in the final blow's slot, b1105gh)
+  finale.mate = !!mate;                               // (the final blow's teammate, standing for it, b1105in)
   const d = finaleClipSeconds(victim, 'death');
   finale.dur1 = (d > 0 ? d / FINALE.deathRate : FINALE.fallbackDeathS) + FINALE.holdAfterDeathS;
   const v = finale.killer ? finaleClipSeconds(finale.killer, 'reload') : 0;
@@ -13486,7 +13502,7 @@ function finaleCall(n) {
   const role = ['player', 'ally', 'enemy', 'enemy2'].find((r) => state[r] === m) ?? null;
   const sid = state.online?.slotMap ? onlineServerIdOf(role) : null;
   const noSide = !!state.spectatorActive || !!(state.online && state.online.myPlayerId === 'spectator');
-  const word = n === 1 ? FINALE.call.ko : finale.heir ? FINALE.call.heir : FINALE.call.blow;
+  const word = n === 1 ? FINALE.call.ko : finale.heir || finale.mate ? FINALE.call.heir : FINALE.call.blow;
   el.style.setProperty('--c', (sid && SLOT_HUD_COLORS[sid]) || FINALE_ROLE_COLOURS[role] || '#ffffff');
   const lines = word.split(' ');
   el.innerHTML = `<span class="finale-word${lines.length > 1 ? ' two' : word.length > 4 ? ' long' : ''}">${lines.join('<br>')}</span>`
@@ -13549,14 +13565,18 @@ function finishFinale(runDone) {
 }
 // offline: the match-deciding knockout (animate's win check) — the last lethal hit noted whose unit still lies on the field
 // (b1105gh: a unit whose slot has brought on its next roster unit since is gone from it — `heir`, respawnSlotMech — and
-// the last hit of all can be the one on it), and its shooter, or the roster unit that stands in the shooter's slot now
+// the last hit of all can be the one on it) — of the side that LOST, first (b1105in, A TEAMMATE STANDING: the win check's
+// side; the player's team is 'A') —, and its shooter, or the roster unit that stands in the shooter's slot now
 function endWithFinale(win) {
   state.running = false;
   state.phase = 'finale';
   const log = state.killLog ?? [];
+  const lies = (v) => !!v && !v.heir && (v.state?.hp ?? 1) <= 0, lost = win ? 'B' : 'A';
   let kill = null;
-  for (let i = log.length - 1; i >= 0 && !kill; i -= 1) { const v = log[i].victim; if (v && !v.heir && (v.state?.hp ?? 1) <= 0) kill = log[i]; }
-  const victim = kill?.victim ?? getAllFighters().filter((m) => m && (m.state?.hp ?? 1) <= 0).pop() ?? null;
+  for (let i = log.length - 1; i >= 0 && !kill; i -= 1) if (lies(log[i].victim) && getTeamOf(log[i].victim) === lost) kill = log[i];
+  for (let i = log.length - 1; i >= 0 && !kill; i -= 1) if (lies(log[i].victim)) kill = log[i];
+  const downs = getAllFighters().filter((m) => m && (m.state?.hp ?? 1) <= 0);
+  const victim = kill?.victim ?? downs.filter((m) => getTeamOf(m) === lost).pop() ?? downs.pop() ?? null;
   let killer = kill?.killer ?? null, heir = false;
   while (killer?.heir) { killer = killer.heir; heir = true; }
   startFinale({ victim, killer, heir, onDone: () => showEndMenu(win) });
@@ -13566,8 +13586,9 @@ function endWithFinale(win) {
 // whose unit fell in the last tick holds its next unit in that snapshot already — the mech built at match load is swapped in
 // and stood where the snapshot has it, as runOnlineMatchFrame would have; a roster that fields the same unit again keeps
 // its mech and is stood there all the same) and every unit's HP. Then the lethal hits the
-// connection kept: the last one whose target is still down, its shooter's slot — and whether the unit in that slot came on
-// after the shot (FINALE.heirWindowMs).
+// connection kept: the last one whose target is still down — of the side that LOST, first (b1105in, A TEAMMATE STANDING:
+// match:end's winner, a team's letter in a 2v2 and a slot's id in a duel) —, its shooter's slot — and whether the unit in
+// that slot came on after the shot (FINALE.heirWindowMs).
 function startOnlineFinale(conn, onDone) {
   const snap = conn.getLatestSnapshot?.();
   const sm = state.online?.slotMap;
@@ -13581,8 +13602,11 @@ function startOnlineFinale(conn, onDone) {
   }
   if (snap?.fighters) for (const id in snap.fighters) { const mech = onlineMechOfId(id); if (mech && snap.fighters[id]) mech.state.hp = snap.fighters[id].hp; }
   const kills = conn.getKills?.() ?? [];
+  const w = conn.getLastMatchEnd?.()?.winnerId ?? null, won = w === 'A' || w === 'B' ? w : w ? teamOfSlot(w) : null;
+  const downOf = (kk) => { const v = onlineMechOfId(kk.targetId); return v && (v.state?.hp ?? 1) <= 0 ? v : null; };
   let k = null;
-  for (let i = kills.length - 1; i >= 0 && !k; i -= 1) { const v = onlineMechOfId(kills[i].targetId); if (v && (v.state?.hp ?? 1) <= 0) k = kills[i]; }
+  for (let i = kills.length - 1; i >= 0 && !k && won; i -= 1) { const v = downOf(kills[i]); if (v && getTeamOf(v) !== won) k = kills[i]; }
+  for (let i = kills.length - 1; i >= 0 && !k; i -= 1) if (downOf(kills[i])) k = kills[i];
   const victim = k ? onlineMechOfId(k.targetId) : null;
   if (!victim) return false;
   const killer = onlineMechOfId(k.ownerId);
