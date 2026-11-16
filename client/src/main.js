@@ -8725,7 +8725,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105iq 11-16';
+const CLIENT_BUILD_TAG = 'b1105ir 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9980,9 +9980,12 @@ function showOnlineWaitingOpp(onl, conn) {
 }
 
 // Lazy mech + arena setup. Called every frame from runOnlineMatchFrame; only
-// rebuilds when the (mapKey, mode, unit assignments, my slot) signature
-// changes. In 2v2 it builds 4 mechs and remembers which snapshot slot maps
-// to state.player / state.ally / state.enemy / state.enemy2 (onl.slotMap).
+// rebuilds when the (mapKey, my slot, mode, my view) signature changes. In
+// 2v2 it builds 4 mechs and remembers which snapshot slot maps to
+// state.player / state.ally / state.enemy / state.enemy2 (onl.slotMap).
+// What a match fixes at its start and the set-up does not build for — my
+// view, the teammate a commander may order — is taken first, once a match
+// (THE MATCH'S OWN ANSWERS, below): a rematch builds nothing here.
 function ensureOnlineMatchSetup(snap) {
   if (!snap) return;
   const onl = state.online;
@@ -10002,7 +10005,34 @@ function ensureOnlineMatchSetup(snap) {
   // repicks) are handled surgically per-mech in runOnlineMatchFrame via
   // rebuildOnlineMechForSlot.
   const mapKey = snap.mapKey;
-  const sig = `${mapKey}|${cameraId}|${mode}`;
+  // THE MATCH'S OWN ANSWERS (b1105ir): which view this page plays the match in, and whether a commander may order its
+  // teammate. Both are the server's, fixed anew at EVERY match's start (index.js startMatchFor: commandSlots from the
+  // picks, startBotSlots from the seats nobody sits in). They were taken with the set-up below, and that set-up is skipped
+  // while the map, the seat and the mode stay the same: a REMATCH kept the first match's answers. A teammate gone before
+  // the rematch began left a bot the server took the commander's orders for and a page that would not select it; and a
+  // pick that differed from the last match's — the server takes one in the ended window, and a page that reconnects comes
+  // into a new room whose pick stands at Shooter — left the page in the other view than the one the server ran its seat
+  // in. So they are taken here, once a match, from the match's first snapshot: each match:start is its own
+  // (conn.getMatchStart, as the intro's and the loading's once-a-match lines read it), and also whenever the set-up itself
+  // is for another map, seat or mode, as before.
+  //   the view     my own row of the room's picks, which the server reads at the start and takes no change to while the
+  //                match runs. It is part of the set-up's signature: a pick other than the standing set-up's builds anew
+  //                (the diorama's dressing on or off, the HUD), as another seat does; the same pick builds nothing.
+  //   the teammate the seats a bot played at the match's START, the server's own frozen list (snapshot `startBotSlots`),
+  //                the set its orderGate goes by — never the live `botSlots`: a seat its player leaves in mid-match is not
+  //                adopted (owner 2026-08-22). A server of before this build sends no such list: then the snapshot's
+  //                `botSlots` as this first snapshot has it, the page's own reading as it was.
+  const base = `${mapKey}|${cameraId}|${mode}`;
+  const started = onl.conn?.getMatchStart?.() ?? null;
+  if (onl.rolesFor !== started || onl.rolesBase !== base) {
+    onl.rolesFor = started;
+    onl.rolesBase = base;
+    onl.commandMode = ONLINE_SLOT_IDS.includes(myId)
+      && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
+    const startBots = Array.isArray(snap.startBotSlots) ? snap.startBotSlots : (snap.botSlots ?? []);
+    onl.allyCommandable = !!(onl.commandMode && allyId && startBots.includes(allyId));
+  }
+  const sig = `${base}|${onl.commandMode ? 'command' : 'classic'}`;
   if (onl.mechsCreatedFor === sig) return;
 
   // Tear down old mechs/arena/HUD/projectile meshes. getAllFighters covers
@@ -10137,18 +10167,13 @@ function ensureOnlineMatchSetup(snap) {
   const pauseBtn = state.hud?.querySelector('#pause-btn');
   if (pauseBtn) pauseBtn.remove();
 
-  // COMMAND MODE online (phase 3 R4): freeze my queue-room pick for the
-  // match. Commanders get the diorama dressing (base plate, grade,
-  // airborne de-clutter), the whole-map opening camera, and a local
-  // navgrid so the order preview / deny prediction runs client-side (the
-  // server re-validates authoritatively).
-  onl.commandMode = ONLINE_SLOT_IDS.includes(myId)
-    && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
-  // Commandable BOT teammate (owner 2026-08-22): frozen from the match-start
-  // bot set — a slot that turns bot mid-match (disconnect) is not adopted.
-  onl.allyCommandable = !!(onl.commandMode && allyId
-    && (snap.botSlots ?? []).includes(allyId));
-  // (THE ALLY TACTIC: whether a bot plays the teammate's seat is read off each snapshot since b1105iq — onlineAllyIsBot; it was kept here, read once, and this set-up is skipped on a rematch)
+  // COMMAND MODE online (phase 3 R4): commanders get the diorama dressing
+  // (base plate, grade, airborne de-clutter), the whole-map opening camera,
+  // and a local navgrid so the order preview / deny prediction runs
+  // client-side (the server re-validates authoritatively).
+  // (onl.commandMode — my queue-room pick, frozen for the match — and onl.allyCommandable — the bot teammate a commander may
+  //  order, owner 2026-08-22 — were taken here until b1105ir; this set-up is skipped on a rematch, so they are taken above, once
+  //  a match: THE MATCH'S OWN ANSWERS. THE ALLY TACTIC reads its own answer off each snapshot since b1105iq — onlineAllyIsBot.)
   if (onl.commandMode) {
     diorama.cam2.snapped = false;
     applyDioramaDressing();
@@ -15488,7 +15513,8 @@ if (typeof window !== 'undefined') {
 
 function dioramaActive() {
   // ONLINE (phase 3 R4): the queue-room pick is frozen into
-  // state.online.commandMode at match setup — the whole diorama stack
+  // state.online.commandMode at each match's start (ensureOnlineMatchSetup,
+  // THE MATCH'S OWN ANSWERS — a rematch's too, b1105ir) — the whole diorama stack
   // (camera, tilt-shift render, annotation layer, gestures) rides this
   // gate; classic online players and spectators keep the chase view.
   // THE GAME-START INTRO (b1105gz): its two team shots are the main camera's plain picture for every viewer, a commander
@@ -16326,6 +16352,9 @@ function dioSlotColor(slot) {
 // Which units this ONLINE commander may order (owner 2026-08-22): always
 // their own unit; the teammate too when that slot was BOT-FILLED at match
 // start (frozen set — a disconnected human's leftover bot is not adopted).
+// The answer is the match's: taken at every match's start, a rematch's too,
+// from the server's own list (ensureOnlineMatchSetup, THE MATCH'S OWN
+// ANSWERS, b1105ir).
 function onlineCommandable(slot) {
   if (slot === 'player') return true;
   return slot === 'ally' && !!state.online?.allyCommandable;

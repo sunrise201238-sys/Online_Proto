@@ -416,6 +416,11 @@ function emitSnapshotsFor(lobby) {
     introUntil: lobby.match.introUntil ?? 0,   // (server clock: the game-start intro's end, START gone — b1105gz)
     holdUntil: lobby.match.holdUntil ?? 0,   // (server clock; the client mutes its input frames until then)
     botSlots: Array.from(lobby.botSlots),
+    // (b1105ir: the seats a bot played at the match's START — the frozen set orderGate takes a commander's orders for, set
+    //  anew at every start in startMatchFor. A commander's page reads here whether its teammate can be ordered: it used to
+    //  work that out itself from botSlots, once, with a set-up it skips on a rematch. Not botSlots, which a player's leaving
+    //  in mid-match adds to.)
+    startBotSlots: Array.from(lobby.startBotSlots),
     acks: {
       p1: lobby.lastAcked.p1, p2: lobby.lastAcked.p2,
       p3: lobby.lastAcked.p3, p4: lobby.lastAcked.p4
