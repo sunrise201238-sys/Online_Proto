@@ -1348,6 +1348,37 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 .menu .end-select:active { transform: rotate(1.5deg) translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
 .menu .end-go { width: 170px; font-size: 24px; }
 
+/* ---- THE END OF A MATCH ONLINE (b1105is; main.js THE END OF A MATCH ONLINE; user 2026-11-16: "I want there be
+   rematch/reselect/leave options … And player should be notified that other human player has left and be replaced by BOT.")
+   THE THREE BUTTONS: Leave, RESELECT (cyan, the white pill's size) and REMATCH. The one I chose stays pressed — sunk on
+   its shadow, a tick before its word — and can be changed for the other until the room moves.
+   A SEAT'S WORD: a tag at the end of its row — REMATCH lime, RESELECT cyan, LEFT · BOT NEXT white, BOT and CHOOSING… dim;
+   in a Trio row, which three faces fill, under the row's word and smaller.
+   THE ROOM'S WORD (.online-toast): one line for a few seconds when a player leaves. In a match it stands on the left over
+   the stick, clear of the middle column (the kill feed's places under PAUSE, the lock bracket); over a menu at the top
+   middle, where for its few seconds it stands over the page's own title (user 2026-11-16, shown it over the waiting
+   room's: "I'm fine with that if that's temporary; it is supposed to be visually obvious.").
+   THE LAST PICK (.last-pick): the card picked for the last match, tagged LAST in the pickers of a RESELECT — a Trio
+   roster's cards with their places (data-last). */
+.menu .end-reselect { background: var(--cyan); color: var(--ink); transform: rotate(-1.5deg); }
+.menu .end-reselect:active { transform: rotate(-1.5deg) translate(2px, 2px); }
+.menu .end-foot .chosen, .menu .end-foot .chosen:active { box-shadow: 1px 1px 0 var(--ink); translate: 4px 4px; }
+.menu .end-foot .chosen::before { content: "\2713\00a0"; }
+.menu .end-st { margin-left: auto; flex: 0 0 auto; padding: 3px 8px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: 9px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.2; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
+.menu .end-st-rematch { background: var(--lime); }
+.menu .end-st-reselect { background: var(--cyan); }
+.menu .end-row { position: relative; }
+.menu .end-row.end-many .end-st { position: absolute; left: 0; top: calc(50% + 8px); margin: 0; padding: 2px 5px; font-size: 8px; box-shadow: 1px 1px 0 var(--ink); }   /* (a Trio row: three faces fill it — the tag under the row's word) */
+.menu .end-st-bot, .menu .end-st-wait { background: transparent; color: rgba(255, 255, 255, 0.7); border-color: rgba(255, 255, 255, 0.4); box-shadow: none; }
+.online-toast { position: absolute; left: 50%; top: 10px; transform: translateX(-50%) rotate(-1deg); z-index: 210; pointer-events: none; padding: 7px 16px; border: 3px solid var(--ink); border-radius: 999px; background: var(--yellow); color: var(--ink); font-family: var(--font-ui); font-size: 13px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.2; white-space: nowrap; box-shadow: 3px 3px 0 var(--ink); animation: toast-in 0.18s ease-out both; }
+.online-toast.in-match { left: 16px; top: auto; bottom: 184px; transform: rotate(-1deg); font-size: 12px; }
+@media (max-width: 720px) { .online-toast.in-match { bottom: 160px; font-size: 11px; padding: 6px 12px; } }
+@media (max-width: 600px) { .online-toast.in-match { font-size: 10px; padding: 5px 10px; letter-spacing: 0.03em; } }   /* (the narrowest screens: short of the middle column) */
+@keyframes toast-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .online-toast { animation: none; } }
+.menu .unit-card.last-pick { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.menu .unit-card.last-pick::after { content: "LAST " attr(data-last); position: absolute; left: -7px; top: -10px; z-index: 1; padding: 2px 6px; border: 2px solid var(--ink); border-radius: 999px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.2; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); transform: rotate(-4deg); pointer-events: none; }
+
 /* ---- the memos' red crayon (b1105af; the design canvas's round 7, style B): District's and Compound's "more stamina"
    and Backrooms (Anomaly)'s "(Anomaly)" left the text and are written on the memo's ruled lines in red wax — Permanent
    Marker, a few degrees off, multiplied into the paper so the rules show through the stroke, the edge roughened by the

@@ -62,6 +62,7 @@ import {
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
 import { nbBrainTick, botHasLineOfSight, resetBotHideFields, BOT_TARGET_BLOCKED_PENALTY, BOT_TARGET_SWITCH_MARGIN } from '@gvg/shared/src/sim/nbrain.js';
 import { coverDistanceAt, deserializeNavGrid, navDataSignature, navDataFile } from '@gvg/shared/src/sim/navgrid.js';
+import { endVerdict } from '@gvg/shared/src/sim/rematch.js';   // (THE END OF A MATCH ONLINE, b1105is: what the room is about to do, for the end page's note)
 import { boxHoldsAt } from '@gvg/shared/src/sim/physics.js';   // (the one hold window, the shared sim's: a box whose top is a floor lets a body within a step of that top come, so the ground rule steps it up — this file's mirror lacked that clause, and offline a body was pushed off a chair row's side before it could step on; user 2026-10-29)
 
 const app = document.getElementById('app');
@@ -8725,7 +8726,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ir 11-16';
+const CLIENT_BUILD_TAG = 'b1105is 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9190,40 +9191,177 @@ function processOnlineEvents(snap, myPlayerId) {
   }
 }
 
-function showOnlineEndMenu(winnerId, myPlayerId, rematchRequested) {
-  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended', and
-  // re-drawn by refreshEndMenuIfStale when the opponent's rematch status
-  // changes. The new match doesn't start until BOTH players click Rematch.
+// ---- THE END OF A MATCH ONLINE (b1105is; the rule: shared rematch.js; the room: server index.js THE END OF A MATCH) ----
+// User 2026-11-16: "Revamp the current online rematches flow. Currently there are only rematch and leave options, any
+// player's wouldn't know if opponents have left. I want there be rematch/reselect/leave options, where reselect will let
+// host to reselect the map and both sides to reselect their units. The mode could not be changed though. And player
+// should be notified that other human player has left and be replaced by BOT." Of the ways put to them the user took:
+// everyone chooses first, and one RESELECT is enough ("等所有人都選完，只要有一人選 RESELECT 就重選"); everyone picks a unit
+// again and the host the map, the last pick marked; the waiting room open as a new room's is.
+//   the end page   Leave | RESELECT | REMATCH. My choice is sent (connection.js sendEndChoice) and its button stays
+//                  pressed; I may change it until the room moves, and Leave stays. The page stands until the room moves —
+//                  until b1105is a REMATCH turned it into a bare "Waiting for opponent…" with no button, which stood for
+//                  ever if the opponent then left.
+//   each seat      beside its row, what its player has done: REMATCH, RESELECT, CHOOSING…, or LEFT · BOT NEXT for a
+//                  player who has gone — in mid-match or at this page — and whose seat a bot plays in the next match; BOT
+//                  for a seat a bot played from the start. Read off the room's config (endChoice, occupied, leftSlots),
+//                  which the server sends at the match's end and at every change; the page is drawn again when it changes.
+//   the note       a 1v1 its other player left in mid-match ends at once, and the page says why; my choice made, it says
+//                  whom the room still waits for. And where the last player the room waited for LEAVES the end page, the
+//                  server holds the room a moment before it moves (rematch.js END_LEAVE_NOTICE_MS): the seat's row reads
+//                  LEFT · BOT NEXT and the note says what comes — "starting with a BOT…" — so the next match does not
+//                  begin with a bot in the seat and no word of it.
+//   a RESELECT     the room is a waiting room again and the pages follow its state: my unit is asked for anew
+//                  (computeOnlineUiPhase: no pick stands), then the host's map, then the waiting room and the host's
+//                  Start. The cards picked for the last match wear a LAST tag (markLastPicks; the picks are kept by
+//                  noteRoomConfig). The mode's page is not shown again (the room's config says the mode stands).
+//   in a match     a 2v2's player leaves and a bot plays the unit on: a line says so for a few seconds (THE ROOM'S WORD,
+//                  showOnlineToast) — on the left over the stick, clear of the kill feed's places and the lock bracket in
+//                  the middle column. It is said when the match is on the screen: a leaving under the loading screen or
+//                  the game-start intro waits for them to be over (sayLeftNotices). In a waiting room or a picker the
+//                  line is at the top middle, over the page's title for its few seconds (the user, of that: "I'm fine
+//                  with that if that's temporary; it is supposed to be visually obvious.").
+// MY SIDE AT THE END PAGE is the seat I played the match in (the set-up's own record, slotMap.cameraId), not the seat I
+// hold now: a server of before b1105is moved the player who stayed into a host's empty seat at the end page, and the
+// page, working its side out from that new seat, turned YOU LOSE into YOU WIN.
+// A server of before b1105is sends no choices: then the page offers REMATCH alone, by the old message, and reads the
+// old field.
+function onlineEndState(conn) {
+  const cfg = conn?.getLobbyConfig?.() ?? {};
+  const flow = !!cfg.endChoice;
+  const choice = (seat) => (flow ? (cfg.endChoice[seat] ?? null) : (cfg.rematchRequested?.[seat] ? 'rematch' : null));
+  return { cfg, flow, choice, occupied: cfg.occupied ?? [], left: cfg.leftSlots ?? [] };
+}
+function onlineEndSig(onl, conn) {
+  const { cfg, flow, occupied, left } = onlineEndState(conn);
+  return JSON.stringify([onl.myPlayerId, flow, flow ? cfg.endChoice : (cfg.rematchRequested ?? null), occupied, left]);
+}
+function showOnlineEndMenu(winnerId, myPlayerId) {
+  // Drawn by renderOnlineUi when uiSubPhase transitions to 'ended', and re-drawn by refreshEndMenuIfStale when the
+  // room's word changes — a choice made, a player gone.
   //
   // winnerId is either a slot id ('p1'/'p2' for 1v1) OR a team letter
   // ('A'/'B' for 2v2). Detect by string content.
+  const onl = state.online, conn = onl?.conn;
+  const { cfg, flow, choice, occupied, left } = onlineEndState(conn);
   const isTeamWinner = winnerId === 'A' || winnerId === 'B';
   const mySlot = ONLINE_SLOT_IDS.includes(myPlayerId);
+  const seat = mySlot ? (onl?.slotMap?.cameraId ?? myPlayerId) : null;   // (the seat I played the match in — MY SIDE AT THE END PAGE, above)
   const tie = winnerId == null;
   const winnerTeam = tie ? null : (isTeamWinner ? winnerId : teamOfSlot(winnerId));
   // (b1105ac) the end page's left panel is the viewer's side — the player's team, or the camera slot's team for a
   // spectator — and "TEAM 1" names that panel, so a spectator's verdict reads by the panels, not the server's letters
-  const leftTeam = mySlot ? teamOfSlot(myPlayerId) : teamOfSlot(state.online?.slotMap?.cameraId || 'p1');
+  const leftTeam = teamOfSlot(seat ?? onl?.slotMap?.cameraId ?? 'p1');
   const win = !tie && winnerTeam === leftTeam;
-  const oppId = (myPlayerId === 'p1') ? 'p2' : 'p1';
-  const oppReady = rematchRequested?.[oppId] === true;
   const title = tie ? 'MATCH ENDED' : (mySlot ? (win ? 'YOU WIN' : 'YOU LOSE') : (win ? 'TEAM 1 WINS' : 'TEAM 2 WINS'));
+  const end = conn?.getLastMatchEnd?.();
   // (b1105ad) a knockout leaves the losing team's every unit out — the page says so whatever the last snapshot holds
-  const outTeam = (!tie && state.online?.conn?.getLastMatchEnd?.()?.reason === 'ko') ? (winnerTeam === 'A' ? 'B' : 'A') : null;
-  const menu = showEndPage({
-    title, note: oppReady ? 'Opponent wants a rematch' : '', winner: tie ? null : (win ? 'you' : 'foe'), spectator: !mySlot, outTeam,
-    buttons: '<button data-leave class="online-leave-btn end-select">Leave</button><button data-rematch class="go-btn end-go">REMATCH</button>'
-  });
-  menu.querySelector('[data-rematch]').addEventListener('click', (e) => {
-    e.preventDefault();
-    state.online.conn.requestRematch();
-    // Server's lobby:config will echo back our request; refreshEndMenuIfStale
-    // sees rematchRequested[me]=true and switches to the overlay.
+  const outTeam = (!tie && end?.reason === 'ko') ? (winnerTeam === 'A' ? 'B' : 'A') : null;
+  const mine = mySlot ? choice(myPlayerId) : null;
+  const undecided = ONLINE_SLOT_IDS.filter((s) => s !== myPlayerId && occupied.includes(s) && !choice(s)).length;
+  // (what the room is about to do: set only while the server holds it after a leaving at this page — else the room has moved)
+  const verdict = flow && mine ? endVerdict(occupied, cfg.endChoice) : null;
+  let note = '';
+  if (verdict && left.length) note = `${cfg.mode === '2v2' ? 'A player' : 'The other player'} left · ${verdict === 'rematch' ? 'starting with a BOT…' : 'back to the room…'}`;
+  else if (end?.reason === 'forfeit') note = 'The other player left the match';
+  else if (mine && undecided) note = undecided === 1 ? 'Waiting for the other player…' : 'Waiting for the other players…';
+  const pick = (kind, cls, label, extra = '') => `<button data-end-choice="${kind}"${extra} class="${cls}${mine === kind ? ' chosen' : ''}">${label}</button>`;
+  const buttons = '<button data-leave class="online-leave-btn end-select">Leave</button>'
+    + (mySlot ? (flow ? pick('reselect', 'end-select end-reselect', 'RESELECT') : '') + pick('rematch', 'go-btn end-go', 'REMATCH', ' data-rematch') : '');
+  const tag = (kind, text) => `<span class="end-st end-st-${kind}">${text}</span>`;
+  // (roster: a Trio row holds three faces and has no room at its end — the tag stands under the row's word, in fewer words)
+  const rowTag = (role, roster) => {
+    const s = onlineServerIdOf(role);
+    if (!s || s === seat) return '';   // (my own row: my buttons say it)
+    if (left.includes(s)) return tag('left', roster ? 'LEFT · BOT' : 'LEFT · BOT NEXT');
+    if (!occupied.includes(s)) return tag('bot', 'BOT');
+    const c = choice(s);
+    return c === 'rematch' ? tag('rematch', 'REMATCH') : c === 'reselect' ? tag('reselect', 'RESELECT') : tag('wait', roster ? 'CHOOSING' : 'CHOOSING…');
+  };
+  const menu = showEndPage({ title, note, winner: tie ? null : (win ? 'you' : 'foe'), spectator: !mySlot, outTeam, buttons, rowTag });
+  menu.querySelectorAll('[data-end-choice]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const kind = btn.dataset.endChoice;
+      if (kind === mine) return;
+      // (the room's config comes back with the choice in it; refreshEndMenuIfStale draws the page again, the button pressed)
+      if (flow) conn.sendEndChoice(kind); else conn.requestRematch();
+    });
   });
   menu.querySelector('[data-leave]').addEventListener('click', (e) => {
     e.preventDefault();
     showSelectMenu();
   });
+}
+
+// THE ROOM'S CONFIG, READ ONCE A MESSAGE (b1105is; tickOnline calls it when the connection holds a new one): my picks are
+// kept for the pickers of a RESELECT — the server clears them there — and a player's leaving is noticed.
+//   in a match          a seat new among the room's leftSlots: its unit plays on as a bot, and a line says so;
+//   in a waiting room   one player fewer than in the last message (a change of seats keeps the number): a line says a
+//                       player left. At the end page nothing is shown over it: the seat's own row says it.
+function noteRoomConfig(onl, cfg, prev) {
+  const mine = cfg.config?.[onl.myPlayerId];
+  if (mine?.unitKey) onl.lastUnitKey = mine.unitKey;
+  if (Array.isArray(mine?.unitKeys) && mine.unitKeys.length === 3) onl.lastUnitKeys = mine.unitKeys.slice();
+  if (cfg.config?.p1?.mapKey) onl.lastMapKey = cfg.config.p1.mapKey;
+  if (!prev) return;
+  if (cfg.state === 'active') {
+    const before = prev.state === 'active' ? (prev.leftSlots ?? []) : [];
+    for (const s of cfg.leftSlots ?? []) if (!before.includes(s) && s !== onl.myPlayerId) (onl.leftNotices ??= []).push(s);   // (said by sayLeftNotices)
+  } else if (cfg.state === 'waiting' && prev.state === 'waiting' && (cfg.occupied ?? []).length < (prev.occupied ?? []).length) {
+    showOnlineToast('A PLAYER LEFT THE ROOM');
+  }
+}
+// The seats noteRoomConfig found left in mid-match, said one at a time when the match is on the screen (tickOnline, every
+// frame): not under the loading screen or the game-start intro, where the line would be over before the match is seen,
+// and not while another line stands. Outside a match they are dropped: the end page's rows say it.
+function sayLeftNotices(onl, conn) {
+  if (!onl.leftNotices?.length) return;
+  if (conn.getMatchState() !== 'active') { onl.leftNotices.length = 0; return; }
+  if (onl.uiSubPhase !== 'playing' || matchCoverUp || intro.active || document.getElementById('online-toast')) return;
+  showOnlineToast(leftNoticeText(onl.leftNotices.shift()));
+}
+// "ENEMY HOSHINO LEFT · BOT TOOK OVER": the seat by the words of my HUD (a spectator's HUD has no sides: the unit alone).
+function leftNoticeText(seat) {
+  const sm = state.online?.slotMap;
+  const role = !sm ? null : seat === sm.cameraId ? 'player' : seat === sm.allyId ? 'ally' : seat === sm.enemyId ? 'enemy' : seat === sm.enemy2Id ? 'enemy2' : null;
+  const m = role ? state[role] : null;
+  const name = String(m?.unit?.char || m?.unit?.name || '').toUpperCase();
+  const word = role && state.online?.myPlayerId !== 'spectator' ? END_SLOT_WORD[role] : '';
+  return `${[word, name].filter(Boolean).join(' ') || 'A PLAYER'} LEFT · BOT TOOK OVER`;
+}
+// THE ROOM'S WORD: one line over whatever page stands — a match's HUD, a picker, the waiting room — gone after a few
+// seconds. A second line takes the first one's place.
+let onlineToastTimer = 0;
+function showOnlineToast(text, ms = 4500) {
+  let el = document.getElementById('online-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'online-toast';
+    app.appendChild(el);
+  }
+  el.className = state.online?.uiSubPhase === 'playing' ? 'online-toast in-match' : 'online-toast';
+  el.textContent = text;
+  clearTimeout(onlineToastTimer);
+  onlineToastTimer = setTimeout(hideOnlineToast, ms);
+}
+function hideOnlineToast() {
+  clearTimeout(onlineToastTimer);
+  document.getElementById('online-toast')?.remove();
+}
+// THE LAST PICK MARKED (b1105is): in the pickers of a RESELECT the card picked for the last match wears a LAST tag — a
+// Trio roster's cards their places in it — so the same pick is found at a glance. A mark alone: the card is picked as any
+// other is, by its two taps.
+function markLastPicks(menu, attr, keys) {
+  if (!keys || !keys.length) return;
+  const places = new Map();
+  keys.forEach((k, i) => { if (!places.has(k)) places.set(k, []); places.get(k).push(i + 1); });
+  for (const [k, at] of places) {
+    const card = menu.querySelector(`[${attr}="${k}"]`);
+    if (!card) continue;
+    card.classList.add('last-pick');
+    card.dataset.last = keys.length > 1 ? at.join('·') : '';
+  }
 }
 
 // ---- Phase 3: prediction & interpolation ----
@@ -9437,7 +9575,8 @@ function computeOnlineUiPhase(onl, conn) {
   const myCfg = cfg?.config?.[myId] ?? {};
   // Host has to choose Duel/Trio + 1v1/2v2 before anything else — and only
   // once. Joiners (p2/p3/p4) skip this — they inherit the lobby's mode.
-  if (myId === 'p1' && !onl.modePushedToServer) return 'pick-mode';
+  // (b1105is: nor in a room that has played — its mode stands, and a RESELECT asks for units and the map alone)
+  if (myId === 'p1' && !onl.modePushedToServer && !cfg?.modeLocked) return 'pick-mode';
   // Trio needs the full ordered 3-pick; Duel just the single unit. The
   // host's local pick wins until the server's config echo reflects it
   // (joiners have no local pick and read the lobby's mainMode).
@@ -9503,22 +9642,17 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
       break;
     case 'ended': {
       const end = conn.getLastMatchEnd();
-      // THE FINALE online (PT b1105gb): once per match end, a knockout only; the end page (or the rematch overlay) after it
+      // THE FINALE online (PT b1105gb): once per match end, a knockout only; the end page after it
       if (end && end.reason === 'ko' && onl.finaleFor !== end && !finale.active) {
         onl.finaleFor = end;
         if (startOnlineFinale(conn, () => renderOnlineUi('ended', prevPhase, onl, conn))) break;
       }
-      const cfg = conn.getLobbyConfig();
-      const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
       // Initialize the staleness signature so refreshEndMenuIfStale doesn't
       // immediately re-render this same state.
-      onl.lastEndMenuSig = rematchSig(onl.myPlayerId, rs);
-      if (rs[onl.myPlayerId]) {
-        // We've already requested (e.g. mid-flight reconnect) — show overlay.
-        showOnlineOverlay(rs[opponentId(onl.myPlayerId)] ? 'Opponent ready — starting…' : 'Waiting for opponent…');
-      } else {
-        showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
-      }
+      onl.lastEndMenuSig = onlineEndSig(onl, conn);
+      // (THE END OF A MATCH, b1105is: the page stands with my choice on it until the room moves — a REMATCH used to turn
+      //  it into a bare "Waiting for opponent…")
+      showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId);
       break;
     }
     default:
@@ -9526,32 +9660,15 @@ function renderOnlineUi(phase, prevPhase, onl, conn) {
   }
 }
 
-function opponentId(myId) {
-  return myId === 'p1' ? 'p2' : 'p1';
-}
-
-function rematchSig(myId, rs) {
-  const oppId = opponentId(myId);
-  return `${rs[myId] ? 1 : 0}|${rs[oppId] ? 1 : 0}`;
-}
-
+// The end page drawn again when the room's word changed: a choice made — mine, echoed, or another's — or a player gone
+// (THE END OF A MATCH, b1105is; until then the two 1v1 seats' rematch flags alone were read, whatever the mode).
 function refreshEndMenuIfStale(onl, conn) {
-  const cfg = conn.getLobbyConfig();
-  const rs = cfg?.rematchRequested ?? { p1: false, p2: false };
-  const sig = rematchSig(onl.myPlayerId, rs);
+  const sig = onlineEndSig(onl, conn);
   if (onl.lastEndMenuSig === sig) return;
   onl.lastEndMenuSig = sig;
   clearMenus();
   hideOnlineOverlay();
-  if (rs[onl.myPlayerId]) {
-    // Self has requested — show waiting overlay; opp may or may not be ready.
-    const oppReady = rs[opponentId(onl.myPlayerId)];
-    showOnlineOverlay(oppReady ? 'Opponent ready — starting…' : 'Waiting for opponent…');
-  } else {
-    // Self hasn't requested yet — show end menu, possibly with "opponent wants rematch".
-    const end = conn.getLastMatchEnd();
-    showOnlineEndMenu(end?.winnerId ?? null, onl.myPlayerId, rs);
-  }
+  showOnlineEndMenu(conn.getLastMatchEnd()?.winnerId ?? null, onl.myPlayerId);
 }
 
 // Host-only step, two layers: main mode (Duel | Trio) first, then team
@@ -9657,15 +9774,22 @@ function showOnlineUnitPicker(onl, conn) {
   const pickedLine = picks.length
     ? `<div class="menu-divider">Picked: ${picks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
     : '';
+  // (THE LAST PICK MARKED, b1105is: a RESELECT asks for the unit again — the last match's is named and its card tagged)
+  const lastPicks = trio ? (onl.lastUnitKeys ?? null) : (onl.lastUnitKey ? [onl.lastUnitKey] : null);
+  const lastLine = lastPicks
+    ? `<div class="menu-divider last-line">Last time: ${lastPicks.map((k) => UNIT_DATA[k]?.char ?? k).join(' · ')}</div>`
+    : '';
   menu.innerHTML = `
     <h2>${trio ? `Pick Your Unit (${picks.length + 1}/3)` : 'Pick Your Unit'}</h2>
     <div class="menu-divider">Online ${trio ? 'Trio ' : ''}${mode} — you are ${onl.myPlayerId}${onl.myPlayerId === 'p1' ? ' (host)' : ''}</div>
     ${sdRoom ? '<div class="menu-divider sd-rules-tag">Rules: SUDDEN DEATH — everyone at 1 HP</div>' : ''}
+    ${lastLine}
     ${pickedLine}
     ${unitGridHTML(unitEntries)}
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
+  markLastPicks(menu, 'data-unit-card', lastPicks);
   // (All Random rolls from the grid minus the sniper rifles in Sudden Death — the Random card does the same in wireUnitGrid)
   const onlinePool = unitEntries.map(([id]) => id).filter((k) => !(sdRoom && UNIT_DATA[k].sniperCharge));
   wireUnitGrid(menu, (key) => {
@@ -9786,6 +9910,17 @@ function showOnlineMapPicker(onl, conn) {
   wireMapGrid(menu, (key) => {
     onl.conn.sendConfigure({ mapKey: key });
   });
+  // (THE LAST PICK MARKED, b1105is: the last match's map tagged, its tab opened)
+  if (onl.lastMapKey) {
+    markLastPicks(menu, 'data-map-card', [onl.lastMapKey]);
+    // (its tab shown by hand: a click made here is taken for a ghost click of the page before and dropped — markMenuSwap)
+    const lastSection = menu.querySelector('.map-card.last-pick')?.closest('.map-section');
+    if (lastSection?.hidden) {
+      const idx = lastSection.dataset.mapSection;
+      menu.querySelectorAll('.map-tabs button[data-map-tab]').forEach((t) => t.classList.toggle('tab-active', t.dataset.mapTab === idx));
+      menu.querySelectorAll('.map-section').forEach((sec) => { sec.hidden = sec.dataset.mapSection !== idx; });
+    }
+  }
   menu.querySelector('button[data-leave]').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     showSelectMenu();
@@ -10698,6 +10833,12 @@ function tickOnline(dt, _now) {
   if (onl.myPlayerId && onl.myPlayerId !== 'p1' && !onl.modePushedToServer) {
     onl.modePushedToServer = true;
   }
+  // THE END OF A MATCH (b1105is): the room's config is looked at once a message — my picks kept, a player's leaving noticed.
+  const roomCfg = conn.getLobbyConfig();
+  if (roomCfg && roomCfg !== onl.roomCfgSeen) {
+    noteRoomConfig(onl, roomCfg, onl.roomCfgSeen ?? null);
+    onl.roomCfgSeen = roomCfg;
+  }
   if (!conn.isConnected() && conn.getLastError()) {
     // The link is down and the connection keeps retrying on its own (connection.js: no attempt limit, 1–5 s apart). The
     // usual reason is a sleeping server waking up and warming its maps, which takes up to a minute or two on the free
@@ -10722,13 +10863,14 @@ function tickOnline(dt, _now) {
     // Re-render waiting-opp on opponent config changes (their unit pick etc).
     refreshWaitingOppIfStale(onl, conn);
   } else if (targetPhase === 'ended') {
-    // Re-render end menu / overlay when rematch readiness changes.
+    // The end page drawn again when the room's word changes: a choice made, a player gone (refreshEndMenuIfStale).
     if (!finale.active) refreshEndMenuIfStale(onl, conn);   // (not over the finale, PT b1105gb)
   }
 
   if (targetPhase === 'playing') {
     runOnlineMatchFrame(dt, onl, conn);
   }
+  sayLeftNotices(onl, conn);   // (THE ROOM'S WORD in a match, b1105is)
 }
 
 function refreshWaitingOppIfStale(onl, conn) {
@@ -10750,6 +10892,7 @@ function refreshWaitingOppIfStale(onl, conn) {
 
 function showSelectMenu() {
   matchStartWait += 1; if (matchCoverUp) matchStartCover(false);   // (THE LOADING SCREEN, b1105hd: a start still waiting is void, its screen off)
+  hideOnlineToast();   // (THE ROOM'S WORD, b1105is: the room is left)
   cleanupMatch();
   clearMenus();
   state.phase = 'select';
@@ -13750,20 +13893,21 @@ function endRowUnits(role, outTeam = null) {
   if (!roster) return [{ u: m.unit, st: alive ? 'std' : 'out' }];
   return roster.map((k, i) => ({ u: UNIT_DATA[k] || m.unit, st: (teamOut || i < idx) ? 'out' : (i === idx ? (alive ? 'std' : 'out') : 'res') }));
 }
-function endTeamHTML(side, tag, roles, spectator, winner, outTeam = null) {
-  const rows = roles.map((role, i) => ({ word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role, outTeam) })).filter((r) => r.units);
-  return `<div class="end-team end-${side}"><span class="end-tag">${END_FLAG_SVG}<span class="end-tag-text">${tag}</span></span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div></div>`).join('')}</div>`;
+function endTeamHTML(side, tag, roles, spectator, winner, outTeam = null, rowTag = null) {
+  const rows = roles.map((role, i) => ({ role, word: spectator ? `SLOT ${i + 1}` : END_SLOT_WORD[role], units: endRowUnits(role, outTeam) })).filter((r) => r.units);
+  return `<div class="end-team end-${side}"><span class="end-tag">${END_FLAG_SVG}<span class="end-tag-text">${tag}</span></span>${winner ? '<span class="end-verdict">WINNER</span>' : ''}${rows.map((r, i) => `<div class="end-row${i ? ' end-row-second' : ''}${r.units.length > 1 ? ' end-many' : ''}"><span class="end-w">${r.word}</span><div class="end-units">${r.units.map(({ u, st }) => `<div class="end-u ${st}"><span class="end-fw"><span class="end-f">${chipFaceImg(u)}</span>${st === 'std' ? '<span class="end-std"></span>' : ''}</span><b>${u.char || u.name}</b></div>`).join('')}</div>${rowTag ? rowTag(r.role, r.units.length > 1) : ''}</div>`).join('')}</div>`;
 }
-// winner: 'you' (the left panel's side) | 'foe' | null (a tie); note: a chip under the title (online: the opponent's
-// rematch wish); buttons: the foot's markup — the caller wires them
-function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '', outTeam = null }) {
+// winner: 'you' (the left panel's side) | 'foe' | null (a tie); note: a chip under the title (online: why the match
+// ended, or what the room waits for); buttons: the foot's markup — the caller wires them; rowTag (online, b1105is): role -> the markup of a
+// tag at its row's end — what the seat's player has done since the match
+function showEndPage({ title, note = '', winner = null, spectator = false, buttons = '', outTeam = null, rowTag = null }) {
   const menu = document.createElement('div');
   menu.className = state.online ? 'menu end-page end-online' : 'menu end-page';   // (end-online, b1105ea: online YOU stays lime and ALLY cyan here — style.css)
   const m = MAP_DATA[state.mapKey];
   menu.innerHTML = `<h2 class="lobby-title end-title">${title}</h2>${note ? `<div class="menu-divider">${note}</div>` : ''}
-    <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam)}
+    <div class="end-grid">${endTeamHTML('you', 'TEAM 1', ['player', 'ally'], spectator, winner === 'you', outTeam, rowTag)}
       <div class="end-memo"><span class="memo-tape"></span><span class="end-photo"><img src="${mapCardFile(state.mapKey)}" alt="${m?.name || ''}" draggable="false"></span><b class="end-map">${mapShortName(m)}</b>${crayonHTML(m, 'memo-crayon-end')}</div>
-      ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam)}</div>
+      ${endTeamHTML('foe', 'TEAM 2', ['enemy', 'enemy2'], spectator, winner === 'foe', outTeam, rowTag)}</div>
     <div class="end-foot">${buttons}</div>`;
   app.appendChild(menu);
   // (b1105at) a menu: the fullscreen button takes its corner, and the narrow tier's HUD marks come off (the match is over)

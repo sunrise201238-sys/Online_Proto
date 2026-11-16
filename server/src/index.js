@@ -33,6 +33,7 @@ import {
 } from '@gvg/shared/src/sim/index.js';
 import { SD_START_HOLD_MS, INTRO_MS } from '@gvg/shared/src/sim/constants.js';
 import { beginLoadWait, loadWaitDone, loadWaitOver } from '@gvg/shared/src/sim/loadwait.js';   // THE LOADING WAIT (b1105hh)
+import { END_CHOICES, endVerdict, endHoldLeft, leftSeats } from '@gvg/shared/src/sim/rematch.js';   // THE END OF A MATCH (b1105is)
 import { warmSimulation, warmMap } from './warmup.js';
 import { normalizeFrame, enqueueFrame, consumeFrames, drainQueue } from '@gvg/shared/src/sim/inputqueue.js';
 
@@ -118,6 +119,12 @@ function createLobby() {
     lastOrderAt: { p1: 0, p2: 0, p3: 0, p4: 0 },   // command-order rate limiter
     lastTacticAt: { p1: 0, p2: 0, p3: 0, p4: 0 },  // the ally tactic's, per unit called (ally:tactic)
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
+    endChoice: { p1: null, p2: null, p3: null, p4: null },   // THE END OF A MATCH (b1105is): each seat's 'rematch' | 'reselect', null until chosen
+    modeLocked: false,                // the mode — Duel | Trio, 1v1 | 2v2, the rules — stands once the room has played a match
+    mapKey: null,                     // the last match's map: the room's own, whoever hosts (a rematch with the host gone)
+    reselects: 0,                     // how often the room has gone back to its waiting room to pick again
+    endLeftAt: 0,                     // when a player last left the END PAGE of the match just over (0: nobody has) — the room holds a moment after it
+    endHoldTimer: null,               // the look at the room that is due when that hold is over
     startedAt: 0,
     endedAt: 0,
     winnerId: null
@@ -128,6 +135,7 @@ function createLobby() {
 }
 
 function destroyLobby(lobby) {
+  clearTimeout(lobby.endHoldTimer);
   lobbies.delete(lobby.id);
   console.log(`[lobbies] destroyed ${lobby.id} (total ${lobbies.size})`);
 }
@@ -213,7 +221,12 @@ function isValidRoster(v) {
 
 function startMatchFor(lobby) {
   const startTime = Date.now();
-  const mapKey = lobby.config.p1.mapKey ?? 'arena1';
+  // (b1105is: the room's own map where the host's seat names none — a rematch with the host gone and nobody in that seat)
+  const mapKey = lobby.config.p1.mapKey ?? lobby.mapKey ?? 'arena1';
+  lobby.mapKey = mapKey;
+  lobby.modeLocked = true;   // (THE END OF A MATCH: a room that has played keeps its mode)
+  clearTimeout(lobby.endHoldTimer);
+  lobby.endLeftAt = 0;
   const slots = activeSlots(lobby.mode);
   const occupied = occupiedSlotsOf(lobby);
 
@@ -315,6 +328,7 @@ function startMatchFor(lobby) {
     lobby.lastAcked[s] = -1;
     lobby.inputQueue[s] = [];
     lobby.rematchRequested[s] = false;
+    lobby.endChoice[s] = null;
   }
   lobby.startedAt = startTime;
   lobby.endedAt = 0;
@@ -351,7 +365,97 @@ function endMatchFor(lobby, winnerId, reason) {
   lobby.endedAt = Date.now();
   lobby.winnerId = winnerId;
   io.to(lobby.id).emit('match:end', { winnerId, reason, endedAt: lobby.endedAt });
+  emitLobbyConfig(lobby);   // (THE END OF A MATCH, b1105is: the end page reads who is still here, who left and who chose what off the room's config)
   console.log(`[${lobby.id}] match ended — winner: ${winnerId ?? 'none'} (${reason})`);
+}
+
+// ---- THE END OF A MATCH (shared rematch.js; b1105is, user 2026-11-16: "Revamp the current online rematches flow. Currently
+// there are only rematch and leave options, any player's wouldn't know if opponents have left. I want there be
+// rematch/reselect/leave options, where reselect will let host to reselect the map and both sides to reselect their units.
+// The mode could not be changed though. And player should be notified that other human player has left and be replaced by
+// BOT.") ---------------------------------------------------------------------------------------------------------------
+// A match over, every seated player chooses REMATCH or RESELECT (`match:end-choice`; a page of before sends
+// `match:rematch-request`, which is a REMATCH), and may change the choice until the room moves. The room moves when
+// everyone who still sits has chosen (endVerdict) — and is looked at again when somebody leaves, so nobody waits for a
+// player who has gone (until then a REMATCH asked for before the other left waited for ever); after a leaving at the
+// end page it holds a moment first, so that the pages can say who went (settleEnded):
+//   everyone REMATCH   the match starts again: the same map (the room's own, lobby.mapKey), the same units and seats; a
+//                      seat nobody sits in is a bot's. It needs no host — the host may be the one who left.
+//   one RESELECT       the room goes back to its waiting room (beginReselect): every pick is cleared — each player picks
+//                      a unit again and the host a map, their pages marking the last ones — the mode stands
+//                      (lobby.modeLocked: match:set-mode is refused in a room that has played), and the room is an open
+//                      waiting room like a new one: a new player may take a free seat, a 2v2's players may change sides,
+//                      and the host starts the match.
+// What the pages are told rides lobby:config, which is sent at the match's end too: each seat's choice (endChoice), and
+// the seats whose player left since the match began (leftSlots) — in mid-match, where a 2v2's unit plays on as a bot, or
+// at the end page; such a seat is a bot's in the next match.
+// SEATS DO NOT CHANGE HANDS WHILE A ROOM STANDS ENDED. The end page names its rows by the match's seats and reads who is
+// still here, who left and who chose what by them. So a host who leaves at the end page is not replaced THERE (until
+// b1105is the longest-seated player was moved into p1 at once — which also turned that player's verdict round, their page
+// working "my side" out from its seat): the next host is made when the room goes back to waiting, where a host is needed
+// and seats are free to change anyway. And a host who left a 2v2 in mid-match left a room with nobody in p1, in which
+// REMATCH waited for ever: it starts now, and a RESELECT there makes a host.
+function setEndChoice(lobby, slot, choice) {
+  lobby.endChoice[slot] = choice;
+  lobby.rematchRequested[slot] = choice === 'rematch';   // (what a page of before b1105is reads)
+}
+// The host's seat empty where a host is needed (a waiting room): the longest-seated player takes it, picks and all.
+function promoteHostIfMissing(lobby) {
+  if (occupiedSlotsOf(lobby).has('p1')) return false;
+  const entry = [...lobby.players.entries()].find(([, s]) => SLOT_IDS.includes(s));
+  if (!entry) return false;
+  const [sid, oldSlot] = entry;
+  lobby.players.set(sid, 'p1');
+  lobby.config.p1 = lobby.config[oldSlot];
+  lobby.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
+  lobby.lastAcked.p1 = -1;
+  lobby.inputQueue.p1 = [];
+  setEndChoice(lobby, 'p1', null);
+  setEndChoice(lobby, oldSlot, null);
+  const s = io.sockets.sockets.get(sid);
+  if (s) {
+    s.emit('player:assigned', {
+      playerId: 'p1',
+      team: teamOf('p1'),
+      mode: 'online-ready',
+      lobbyId: lobby.id,
+      lobbyMode: lobby.mode,
+      matchState: lobby.state
+    });
+  }
+  console.log(`[${lobby.id}] no host — promoted ${oldSlot} to p1`);
+  return true;
+}
+function beginReselect(lobby) {
+  lobby.state = 'waiting';
+  lobby.reselects += 1;
+  clearTimeout(lobby.endHoldTimer);
+  lobby.endLeftAt = 0;
+  lobby.botSlots.clear();   // (the match's bots: a waiting room has none — an empty seat is whoever takes it, or a bot at the start)
+  for (const s of SLOT_IDS) {
+    lobby.config[s].unitKey = null;
+    lobby.config[s].unitKeys = null;
+    setEndChoice(lobby, s, null);
+  }
+  lobby.config.p1.mapKey = null;
+  promoteHostIfMissing(lobby);
+  emitLobbyConfig(lobby);
+  console.log(`[${lobby.id}] reselect — back to the waiting room (${lobby.mainMode} ${lobby.mode}${lobby.suddenDeath ? ', SUDDEN DEATH' : ''}; players: ${Array.from(occupiedSlotsOf(lobby)).join(',') || 'none'})`);
+}
+// A PLAYER'S LEAVING DOES NOT MOVE THE ROOM IN THE SAME BREATH (rematch.js, its story): for END_LEAVE_NOTICE_MS after a
+// player left the end page the room stands as it is — the pages show the seat as left — and is looked at again when the
+// hold is over; a choice made meanwhile is kept and waits with it.
+function settleEnded(lobby) {
+  if (lobby.state !== 'ended') return;
+  clearTimeout(lobby.endHoldTimer);
+  const hold = endHoldLeft(lobby.endLeftAt, Date.now());
+  if (hold > 0) {
+    lobby.endHoldTimer = setTimeout(() => { if (lobbies.get(lobby.id) === lobby) settleEnded(lobby); }, hold);
+    return;
+  }
+  const verdict = endVerdict(occupiedSlotsOf(lobby), lobby.endChoice);
+  if (verdict === 'rematch') startMatchFor(lobby);
+  else if (verdict === 'reselect') beginReselect(lobby);
 }
 
 function maybeStartMatchFor(lobby) {
@@ -385,7 +489,13 @@ function emitLobbyConfig(lobby) {
     rosters,
     occupied: Array.from(occupied),
     botSlots: Array.from(lobby.botSlots),
-    rematchRequested: lobby.rematchRequested
+    rematchRequested: lobby.rematchRequested,
+    // THE END OF A MATCH (b1105is): what each seat chose; the seats whose player left since the match began (while it
+    // runs or stands ended); that the mode stands; how often the room has gone back to pick again.
+    endChoice: lobby.endChoice,
+    leftSlots: lobby.state === 'waiting' ? [] : leftSeats(activeSlots(lobby.mode), lobby.startBotSlots, occupied),
+    modeLocked: lobby.modeLocked,
+    reselects: lobby.reselects
   };
   // viewMode secrecy (owner decision 3): a slot's Classic|Command pick is
   // visible to its OWN TEAM only — the opponent's config rows ship without
@@ -866,6 +976,7 @@ io.on('connection', (socket) => {
     const slot = lb.players.get(socket.id);
     if (slot !== 'p1') return;
     if (lb.state === 'active') return;
+    if (lb.modeLocked) return;   // (THE END OF A MATCH, b1105is: a room that has played keeps its mode — a RESELECT changes units and map alone)
     // Main mode ('sd' = Duel | 'trio') rides the same message as the team
     // size — the host picks both up front.
     let changed = false;
@@ -927,8 +1038,8 @@ io.on('connection', (socket) => {
     lb.lastAcked[slot] = -1;
     lb.inputQueue[newSlot] = [];
     lb.inputQueue[slot] = [];
-    lb.rematchRequested[newSlot] = false;
-    lb.rematchRequested[slot] = false;
+    setEndChoice(lb, newSlot, null);
+    setEndChoice(lb, slot, null);
 
     socket.emit('player:assigned', {
       playerId: newSlot,
@@ -979,29 +1090,28 @@ io.on('connection', (socket) => {
     shooter.sniperGlintAt = Math.min(shooter.sniperGlintAt, Date.now());
   });
 
-  socket.on('match:rematch-request', () => {
+  // THE END OF A MATCH (b1105is, above): a seated player's choice at the end page — REMATCH or RESELECT, changeable until
+  // the room moves. Everyone told (lobby:config), then the room is settled: it moves once everyone seated has chosen.
+  const chooseEnd = (choice) => {
     const lb = lobbyForSocket(socket);
     if (!lb) return;
     const slot = lb.players.get(socket.id);
     if (!SLOT_IDS.includes(slot)) return;
     if (lb.state !== 'ended') return;
-
-    if (lb.rematchRequested[slot]) return;
-    lb.rematchRequested[slot] = true;
+    if (!END_CHOICES.includes(choice) || lb.endChoice[slot] === choice) return;
+    setEndChoice(lb, slot, choice);
     emitLobbyConfig(lb);
-
-    const occ = occupiedSlotsOf(lb);
-    const allReady = Array.from(occ).every((s) => lb.rematchRequested[s]);
-    // Both modes: once every occupied slot has requested a rematch (host present),
-    // restart — an empty opponent slot re-fills with a bot.
-    if (allReady && occ.size > 0 && occ.has('p1')) startMatchFor(lb);
-  });
+    settleEnded(lb);
+  };
+  socket.on('match:end-choice', (data) => chooseEnd(data?.choice));
+  socket.on('match:rematch-request', () => chooseEnd('rematch'));   // (a page of before b1105is: its REMATCH)
 
   socket.on('disconnect', () => {
     const lb = lobbyForSocket(socket);
     socketToLobby.delete(socket.id);
     if (!lb) return;
     const slot = lb.players.get(socket.id);
+    const leftEndPage = SLOT_IDS.includes(slot) && lb.state === 'ended';   // (read here: a 1v1 left in mid-match is ended just below)
     lb.players.delete(socket.id);
     if (SLOT_IDS.includes(slot) && lb.state === 'active') {
       loadWaitDone(lb.match?.loadWait, slot);   // (THE LOADING WAIT, b1105hh: a player who leaves is not waited for)
@@ -1021,44 +1131,24 @@ io.on('connection', (socket) => {
     }
     if (SLOT_IDS.includes(slot)) {
       lb.config[slot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
-      lb.rematchRequested[slot] = false;
+      setEndChoice(lb, slot, null);
     }
-    // Host left outside an active match (waiting room / end menu): promote
-    // the longest-tenured remaining player to p1. Without this the lobby
-    // sits headless — joiners can pick units but nobody can choose the map,
-    // start, or rematch (field case: a host refresh mid-setup rejoined as
-    // p2 while the ghost p1 socket drained, then the freed p1 stayed empty).
-    if (slot === 'p1' && lb.state !== 'active' && lb.players.size > 0) {
-      const entry = [...lb.players.entries()].find(([, s]) => SLOT_IDS.includes(s));
-      if (entry) {
-        const [sid, oldSlot] = entry;
-        lb.players.set(sid, 'p1');
-        lb.config.p1 = lb.config[oldSlot];
-        lb.config[oldSlot] = { unitKey: null, unitKeys: null, mapKey: null, viewMode: 'classic' };
-        lb.lastAcked.p1 = -1;
-        lb.inputQueue.p1 = [];
-        lb.rematchRequested.p1 = false;
-        lb.rematchRequested[oldSlot] = false;
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.emit('player:assigned', {
-            playerId: 'p1',
-            team: teamOf('p1'),
-            mode: 'online-ready',
-            lobbyId: lb.id,
-            lobbyMode: lb.mode,
-            matchState: lb.state
-          });
-        }
-        console.log(`[${lb.id}] host left — promoted ${oldSlot} to p1`);
-      }
-    }
+    // Host left a WAITING room: the longest-seated remaining player takes p1 (promoteHostIfMissing). Without this the
+    // lobby sits headless — joiners can pick units but nobody can choose the map or start (field case: a host refresh
+    // mid-setup rejoined as p2 while the ghost p1 socket drained, then the freed p1 stayed empty). Not at the end page,
+    // since b1105is: seats do not change hands while a room stands ended (THE END OF A MATCH, above) — a rematch needs no
+    // host, and a RESELECT makes one as the room goes back to waiting.
+    if (slot === 'p1' && lb.state === 'waiting') promoteHostIfMissing(lb);
     if (lb.players.size === 0) {
       // Last player left — drop the whole lobby. Otherwise it'd loiter and
       // pickLobbyForJoin would funnel future joiners into a stale 'ended'.
       destroyLobby(lb);
     } else {
+      // THE END OF A MATCH (b1105is): the one who left is not waited for — the room is looked at again. Gone from the end
+      // page, the room holds for the notice first (settleEnded): the config sent here shows the seat as left meanwhile.
+      if (leftEndPage) lb.endLeftAt = Date.now();
       emitLobbyConfig(lb);
+      settleEnded(lb);
     }
   });
 });

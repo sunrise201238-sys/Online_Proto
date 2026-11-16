@@ -274,6 +274,15 @@ export function createConnection() {
       if (!connected) return;
       socket.emit('match:rematch-request');
     },
+    // THE END OF A MATCH (b1105is): my choice at the end page — 'rematch' | 'reselect', changeable until the room moves. A
+    // REMATCH is sent in the old message as well, which a server of before b1105is knows (it knows no RESELECT; main.js
+    // offers that button only where the room's config carries the choices). A server of this build takes the first and
+    // finds nothing new in the second.
+    sendEndChoice: (choice) => {
+      if (!connected) return;
+      socket.emit('match:end-choice', { choice });
+      if (choice === 'rematch') socket.emit('match:rematch-request');
+    },
 
     // Floating sniper unlock: confirm to the server that a charge aimed at
     // ME just rendered its glint — the shooter's 0.5 s cancel floor counts
