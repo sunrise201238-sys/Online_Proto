@@ -1,4 +1,4 @@
-// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 12), not
+// sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 13), not
 // by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
 // changed here holds only until the table is next written, so a lasting change is made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
@@ -7,8 +7,8 @@ export const SFX_VOLUME = 0.7;
 export const SFX_SOUNDS = {
   shot_unit1: {"file": "sfx/m4_shot", "ext": ".mp3", "level": 0.28664},
   shot_unit9: {"file": "sfx/famas_shot_a", "ext": ".mp3", "level": 0.34448},
-  shot_unit14: {"file": "sfx/hk_shot", "ext": ".mp3", "level": 0.15288},
-  shot_unit22: {"file": "sfx/ak47_shot_c", "ext": ".mp3", "level": 0.26344},
+  shot_unit14: {"file": "sfx/ak47_shot_c", "ext": ".mp3", "level": 0.26344},
+  shot_unit22: {"file": "sfx/hk_shot", "ext": ".mp3", "level": 0.15288},
   shot_unit4: {"file": "sfx/ump_shot_b", "ext": ".mp3", "level": 0.3176},
   shot_unit13: {"file": "sfx/ppsh_shot", "ext": ".mp3", "level": 0.1808},
   shot_unit15: {"file": "sfx/mpx_shot", "ext": ".mp3", "level": 0.22536},
@@ -21,7 +21,7 @@ export const SFX_SOUNDS = {
   shot_unit21: {"file": "sfx/rifle3C_e60l", "ext": ".mp3", "level": 0.245016},
   shot_unit10: {"file": "sfx/m14_shot_body", "ext": ".mp3", "level": 0.20236},
   shotown_unit10: {"file": "sfx/m14_shot_ring", "ext": ".mp3", "level": 0.20236},
-  shot_unit7: {"file": "sfx/implaser_shot_a_s100", "ext": ".mp3", "level": 0.4962},
+  shot_unit7: {"file": "sfx/implaser_shot_a_s100", "ext": ".mp3", "level": 0.9924},
   shot_unit20: {"file": "sfx/kar98_shot_e50l", "ext": ".mp3", "level": 0.4316},
   bolt_unit20: {"file": "sfx/kar98_bolt", "ext": ".mp3", "level": 0.8},
   shot_unit3: {"file": "sfx/scout_shot", "ext": ".mp3", "level": 0.31746},
