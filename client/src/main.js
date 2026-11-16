@@ -3271,6 +3271,8 @@ function setupHUD() {
     if (action === 'shoot') {
       // Layer order: reload ring (outer), faint crosshair logo (watermark),
       // ammo count on top — the number intentionally overlaps the logo.
+      // (b1105iv: with the weapon of the HUD's unit on the button — fireArtShow puts its picture in before the count — the
+      // logo is out and the count stands under the picture: style.css .has-art)
       b.innerHTML = '<svg class="reload-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>'
         + '<svg class="fire-logo" viewBox="0 0 100 100" aria-hidden="true">'
         + '<circle cx="50" cy="50" r="28"/>'
@@ -7431,7 +7433,7 @@ if (typeof window !== 'undefined') window.__killFeed = { state: killFeed, cfg: K
 // A page whose own pictures count as another origin's cannot turn a canvas into a picture: there the entry falls back to
 // the plain thumbnail and render (killFeedGunImg), the fallen face greyed by a filter, the weapon without its edge.
 const KILL_ART = { px: 4, pad: 2, edge: [0.8, 0.55] };   // (pad: room about the gun for its edge; edge: the white edge and the ink line, the entry's px)
-const _killArt = new Map();   // a unit's picture key -> { gun, face, grey }: an <img> each to clone, null until its pictures have loaded
+const _killArt = new Map();   // a unit's picture key -> { gun, face, grey, fire }: an <img> each to clone, null until its pictures have loaded (fire: the fire button's, b1105iv)
 // a drawn canvas as a decoded <img>, the entries' template
 function killArtImg(canvas) {
   const im = new Image();
@@ -7453,6 +7455,16 @@ function killArtShrink(src, sx, sy, sw, sh, tw, th) {
   }
   return [cur, x, y, w, h];
 }
+// a drawn shape grown `r` px square (across, then down) and filled with one colour (the kill feed's edges; the fire button's ink line)
+function killArtGrown(base, r, colour) {
+  const W = base.width, H = base.height;
+  const a = killArtCanvas(W, H), ax = a.getContext('2d');
+  for (let d = -r; d <= r; d += 1) ax.drawImage(base, d, 0);
+  const c = killArtCanvas(W, H), cx = c.getContext('2d');
+  for (let d = -r; d <= r; d += 1) cx.drawImage(a, 0, d);
+  cx.globalCompositeOperation = 'source-in'; cx.fillStyle = colour; cx.fillRect(0, 0, W, H);
+  return c;
+}
 // the weapon's sticker: the gun in the middle of its 40 x 17 room, the room `pad` wider all round for the edge
 function killArtGun(im, key) {
   const [bx, by, bw, bh] = WEAPON_BOX[key]; const [ww, wh] = KILL_FEED.gun; const R = KILL_ART.px, pad = KILL_ART.pad;
@@ -7461,15 +7473,7 @@ function killArtGun(im, key) {
   const base = killArtCanvas(W, H), g = base.getContext('2d');
   g.imageSmoothingQuality = 'high';
   g.drawImage(...killArtShrink(im, bx, by, bw, bh, gw, gh), (W - gw) / 2, (H - gh) / 2, gw, gh);
-  // the gun's shape grown `r` px square (across, then down) and filled with one colour
-  const grown = (r, colour) => {
-    const a = killArtCanvas(W, H), ax = a.getContext('2d');
-    for (let d = -r; d <= r; d += 1) ax.drawImage(base, d, 0);
-    const c = killArtCanvas(W, H), cx = c.getContext('2d');
-    for (let d = -r; d <= r; d += 1) cx.drawImage(a, 0, d);
-    cx.globalCompositeOperation = 'source-in'; cx.fillStyle = colour; cx.fillRect(0, 0, W, H);
-    return c;
-  };
+  const grown = (r, colour) => killArtGrown(base, r, colour);
   const out = killArtCanvas(W, H), o = out.getContext('2d');
   o.drawImage(grown(Math.round((KILL_ART.edge[0] + KILL_ART.edge[1]) * R), '#1B1B2F'), 0, 0);
   o.drawImage(grown(Math.round(KILL_ART.edge[0] * R), '#ffffff'), 0, 0);
@@ -7493,17 +7497,80 @@ function killArtFace(im, u, grey) {
   }
   return c;
 }
+// THE WEAPON IN HAND, ON THE FIRE BUTTON (b1105iv; user: "I'm thinking the possibility to add a weapon i[con] on the player is using
+// in the screen ... the HUDs are already crowded on mobile ends", and of what it is for: "to add the call of duty style weapon using
+// feeling. so theoretically the nearer the icon is to the firing button, the better"; of the design canvas's round 16b: "W1, but
+// don't use silhouette for weapon, use origin image"; of round 16c: "描邊：深色描邊只加在這五把 彈數維持 17 px"): the weapon render of
+// the unit the HUD follows, over the ammo count, on the button that fires it — no new piece on a screen that has no room for one.
+// The picture is the kill feed's own source (weapons/<spriteKey>.png) cut to the gun's box (WEAPON_BOX) and DRAWN AHEAD with the
+// kill feed's pictures (warmKillArt: one fetch serves both, under the loading screen): an <img> to clone, no canvas and no filter
+// in the HUD, for the cost measured above. The five weapons with white or pale bodies, which lose their shape on the white button,
+// carry an ink line round them, drawn into the picture (FIRE_ART.lined, `line` canvas px). Every measure on the button is a share
+// of the button's own size (--btn-size), read off the canvas's sample on the user's phone, a 67.33 px button: the count 17 px
+// (22 px and more where it stands alone), 3 px between the picture and it, the pair 2 px low, the picture's top corners 6 px
+// inside the button's edge — so a long thin gun is drawn wider than a short tall one (fireArtFit).
+const FIRE_ART = { w: 208, pad: 3, line: 2, lined: new Set(['aris', 'fubuki', 'hoshino', 'kei', 'koyuki']),
+  count: 17 / 67.33, gap: 3 / 67.33, low: 2 / 67.33, rim: 6 / 67.33, widest: 0.7624 };
+// the gun's box `w` canvas px wide with `pad` about it, and round a pale weapon the ink line
+function fireArtGun(im, key) {
+  const [bx, by, bw, bh] = WEAPON_BOX[key]; const gw = FIRE_ART.w, gh = Math.round(bh * gw / bw), p = FIRE_ART.pad;
+  const base = killArtCanvas(gw + 2 * p, gh + 2 * p), g = base.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(...killArtShrink(im, bx, by, bw, bh, gw, gh), p, p, gw, gh);
+  if (!FIRE_ART.lined.has(key)) return base;
+  const out = killArtCanvas(base.width, base.height), o = out.getContext('2d');
+  o.drawImage(killArtGrown(base, FIRE_ART.line, '#1B1B2F'), 0, 0);
+  o.drawImage(base, 0, 0);
+  return out;
+}
+function fireArtImg(canvas) { const im = killArtImg(canvas); im.className = 'fire-art'; return im; }
+// the picture's width on the button, a share of the button's size, by the gun's shape (r: its height over its width): as wide as
+// its top corners allow with the count under it
+function fireArtFit(r) {
+  const F = FIRE_ART, R = 0.5 - F.rim, h0 = (F.gap + F.count) / 2 - F.low;
+  const a = 0.25 * (1 + r * r), b = r * h0, c = h0 * h0 - R * R;
+  return Math.min((-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a), F.widest);
+}
+// the weapon of the unit the HUD follows, put on the fire button: when that unit changes (a Trio's next unit, the watched unit in
+// Spectator mode, the ally once the player is out) and when its drawn picture arrives — until then, and on a page that cannot
+// draw one, the plain render stands in, placed by the gun's box. A unit with no weapon render keeps the button as it was.
+function fireArtShow(u) {
+  const btn = hudRefs.shootBtn;
+  if (!btn) return;
+  const k = u?.spriteKey ?? '', box = WEAPON_BOX[k], drawn = box ? (_killArt.get(k)?.fire ?? null) : null;
+  if (btn._fireKey === k && btn._fireDrawn === !!drawn) return;
+  btn._fireKey = k; btn._fireDrawn = !!drawn;
+  btn.querySelector('.fire-art')?.remove();
+  btn.classList.toggle('has-art', !!box);
+  if (!box) return;
+  const F = FIRE_ART, [bx, by, bw, bh] = box, r = bh / bw, w = fireArtFit(r);
+  const top = 0.5 - (w * r + F.gap + F.count) / 2 + F.low;   // the gun's top, a share of the button's size (the 3 px border off it: style.css)
+  const B = (v) => `var(--btn-size) * ${v.toFixed(4)}`;   // a share of the button's size, inside a calc()
+  btn.style.setProperty('--fc', (top + w * r + F.gap).toFixed(4));
+  // the picture's scale (the button's size to one px of it), where the gun's box starts in it, and its whole width
+  let im, s, ox, oy, pw;
+  if (drawn) { im = drawn.cloneNode(false); s = w / F.w; ox = F.pad; oy = F.pad; pw = F.w + 2 * F.pad; }
+  else {
+    im = new Image(); im.className = 'fire-art'; im.alt = ''; im.draggable = false; im.src = `${import.meta.env.BASE_URL}weapons/${k}.png`;
+    s = w / bw; ox = bx; oy = by; pw = WEAPON_RENDER[0];
+  }
+  im.style.width = `calc(${B(pw * s)})`;
+  im.style.left = `calc(50% - ${B(w / 2 + ox * s)})`;
+  im.style.top = `calc(${B(top - oy * s)} - 3px)`;
+  btn.insertBefore(im, hudRefs.ammoCount);
+}
+if (typeof window !== 'undefined') window.__fireArt = { cfg: FIRE_ART, fit: (r) => fireArtFit(r), shown: () => hudRefs.shootBtn?._fireKey ?? null, drawn: () => !!hudRefs.shootBtn?._fireDrawn };   // (a probe's hooks)
 function warmKillArt(u) {   // (returns a promise since b1105hd — settled when both pictures are drawn or have failed: THE LOADING SCREEN waits for it)
   const k = u?.spriteKey;
   if (!k) return Promise.resolve();
   if (_killArt.has(k)) return _killArt.get(k).done;
-  const art = { gun: null, face: null, grey: null, done: null, in: false };
+  const art = { gun: null, face: null, grey: null, fire: null, done: null, in: false };
   _killArt.set(k, art);
   const load = (src, draw) => new Promise((res) => { const im = new Image(); im.decoding = 'async';
     im.onload = () => { try { draw(im); } catch (err) { console.warn('[kill feed] a picture would not draw', k, err); } res(); };
     im.onerror = () => res(); im.src = src; });
   const both = [];
-  if (WEAPON_BOX[k]) both.push(load(`${import.meta.env.BASE_URL}weapons/${k}.png`, (im) => { art.gun = killArtImg(killArtGun(im, k)); }));
+  if (WEAPON_BOX[k]) both.push(load(`${import.meta.env.BASE_URL}weapons/${k}.png`, (im) => { art.gun = killArtImg(killArtGun(im, k)); art.fire = fireArtImg(fireArtGun(im, k)); }));
   both.push(load(thumbFile(k), (im) => { art.face = killArtImg(killArtFace(im, u, false)); art.grey = killArtImg(killArtFace(im, u, true)); }));
   art.done = Promise.all(both).then(() => { art.in = true; });
   return art.done;
@@ -7686,6 +7753,7 @@ function updateHud(now = performance.now()) {
 
   const u = shown.unit;
   const s = shown.state;
+  fireArtShow(u);   // (b1105iv: that unit's weapon on the fire button, over the count)
   if (u.magCapacity != null && hudRefs.ammoCount) {
     hudRefs.ammoCount.textContent = String(s.ammo);
     const isMg = !u.autoReload;
@@ -8732,7 +8800,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105iu 11-16';
+const CLIENT_BUILD_TAG = 'b1105iv 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

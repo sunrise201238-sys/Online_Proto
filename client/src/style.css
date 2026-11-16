@@ -334,6 +334,15 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   stroke-dasharray: 289.03;
   stroke-dashoffset: 289.03;
 }
+/* THE WEAPON IN HAND (b1105iv, the design canvas's round 16c): the weapon render of the unit the HUD follows, over the count —
+   main.js fireArtShow places the picture (its width, left and top, shares of --btn-size) and sets --fc, the count's top. With a
+   picture on it the button drops its crosshair logo and the count stands under the picture at a quarter of the button's size:
+   17 px on the 67 px button of a 597 x 320 phone page (22 px and more where the count stands alone). An empty magazine fades the
+   picture with the count and the button. */
+.buttons .btn-shoot .fire-art { position: absolute; display: block; max-width: none; height: auto; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.buttons .btn-shoot.has-art .fire-logo { display: none; }
+.buttons .btn-shoot.has-art .ammo-count { inset: auto; left: 0; right: 0; top: calc(var(--btn-size) * var(--fc, 0.55) - 3px); height: calc(var(--btn-size) * 0.2525); font-size: calc(var(--btn-size) * 0.2525); line-height: 1; }
+.buttons .btn-shoot.empty .fire-art { opacity: 0.4; }
 .buttons .btn-melee { right: calc(var(--btn-size) + var(--btn-gap)); bottom: calc(var(--btn-size) + var(--btn-gap)); }
 .buttons .btn-target {
   right: calc(var(--btn-size) + var(--btn-gap));
