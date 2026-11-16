@@ -8431,7 +8431,13 @@ function startOnlineMatch() {
     // Phase 4 — UI lifecycle.
     uiSubPhase: 'connecting',    // see computeOnlineUiPhase()
     mechsCreatedFor: null,        // signature key; set when ensureOnlineMatchSetup builds rig
-    modePushedToServer: false     // set true once host has pushed state.mode → server
+    modePushedToServer: false,    // set true once host has pushed state.mode → server
+    // THE ROOM CHANGED UNDER THE PAGE (b1105it):
+    hostMode: null,               // the mode this page chose as a host — { mode, mainMode, suddenDeath } — sent again to a room it comes back into as the host
+    modeSent: null,               // that pick while the server's echo is still on its way (THE PICK ON ITS WAY)
+    joinSeen: 0,                  // the connection the page's room belongs to, by the connection's own count
+    roomPending: false,           // the room changed and its config has not come yet
+    redraw: false                 // the page is to be drawn anew at the next tick, its phase moved or not
   };
   // Sudden Death online is the ROOM's rule (lobby:config / the snapshot),
   // read in ensureOnlineMatchSetup — never a leftover of an offline match.
@@ -8726,7 +8732,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105is 11-16';
+const CLIENT_BUILD_TAG = 'b1105it 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9304,6 +9310,13 @@ function noteRoomConfig(onl, cfg, prev) {
   if (mine?.unitKey) onl.lastUnitKey = mine.unitKey;
   if (Array.isArray(mine?.unitKeys) && mine.unitKeys.length === 3) onl.lastUnitKeys = mine.unitKeys.slice();
   if (cfg.config?.p1?.mapKey) onl.lastMapKey = cfg.config.p1.mapKey;
+  // (THE PICK ON ITS WAY, b1105it: over once the room's config shows it, or the room will not take it, or the page is no host)
+  const sent = onl.modeSent;
+  if (sent && (onl.myPlayerId !== 'p1' || cfg.modeLocked
+      || (cfg.mode === sent.mode && cfg.mainMode === sent.mainMode && !!cfg.suddenDeath === sent.suddenDeath))) {
+    onl.modeSent = null;
+    onl.pickedMainMode = null;
+  }
   if (!prev) return;
   if (cfg.state === 'active') {
     const before = prev.state === 'active' ? (prev.leftSlots ?? []) : [];
@@ -9555,11 +9568,91 @@ function interpolateRemoteFighter(remoteId, prevSnap, latestSnap, lastSnapAt, no
   };
 }
 
+// ---- THE ROOM CHANGED UNDER THE PAGE (b1105it) ----------------------------------------------------------------------
+// A page whose connection drops and comes back — the server was restarted or redeployed, or the player's own line went
+// for a moment — is a NEW visitor to the server: its seat was let go when the line dropped, and it is put into another
+// room (index.js pickLobbyForJoin), as the host of a fresh one or as a guest of one that waits. A fresh room stands at
+// the server's defaults: Duel, 1v1, Health Point. The host is asked the mode once a visit to Online (pick-mode, gated by
+// modePushedToServer), and the page held "asked" through the change: the host was not asked again, the new room stayed a
+// Duel 1v1 under Health Point whatever had been chosen, and the unit picker's header went on naming the page's own old
+// pick (seen 2026-11-16: Trio, 2v2, Sudden Death chosen; back in a Duel 1v1 Health Point room under a picker headed
+// "Trio … Rules: SUDDEN DEATH", three units asked for and one played). User, shown it, on the way put to them: "Fix" —
+// the page sends its own pick again, with no question.
+// A connection made again is another room (connection.js getJoinCount; not the room's id, which a restarted server
+// gives out again). When that happens:
+//   the new room's host, who chose a mode as a host before   that pick is sent again (match:set-mode, which a room that
+//                                                            has not played takes): the room is the one the player
+//                                                            asked for, and the pickers follow it;
+//   the new room's host, a guest until now                   asked the mode, as any host is — it never chose one. (It
+//                                                            was held "asked" as every guest is, and got the defaults.)
+//   a guest of the new room                                  the room's mode, as any guest: the page's own old pick is
+//                                                            put by (kept for a room it hosts again). Until b1105it
+//                                                            it still ruled the picker — three units asked for in
+//                                                            another host's Duel room;
+//   a room that has played (modeLocked)                      its mode stands: nothing is sent and nothing asked.
+// The choice is made once the new room's config is in hand. From the connection's coming back until then (roomPending)
+// the page is the connecting page (computeOnlineUiPhase): what it holds meanwhile is of two rooms — the old one's match
+// state and snapshot, the new one's seat — and no page of a room is drawn off that, nor a match's frame run for a seat
+// the old match may not have had. The gap is some milliseconds as a rule, and a frame seldom falls into it. The page
+// is then drawn anew whatever its phase: a picker that stood named the old room's seat and mode, and a "Waking the
+// server up…" line stayed over a page whose phase had not moved. What the page noted of the room before goes with it:
+// its config (b1105is reads a player's leaving off two configs of ONE room; across two rooms it said "A PLAYER LEFT THE
+// ROOM" of a room the page had just come into) and any line about it still up.
+// NO PICKER BEFORE THE ROOM'S CONFIG (computeOnlineUiPhase). The seat comes a message ahead of the config, and a frame
+// that fell between the two drew the unit picker off no config at all — the Duel picker with no rules line, whatever the
+// room: a guest of a Trio room then sent one unit at a time for ever and never left the picker (seen once in some forty
+// joins, headless; made to happen each time by holding the config back on a test copy of the server). The page waits for
+// the config on the connecting page, at a first join as at a coming back.
+// THE PICK ON ITS WAY (modeSent): from the sending until the room's config shows it, the pickers go by the page's own
+// pick — the phase flips to the unit picker a frame after the tap, before the server's echo. Until b1105it the main mode
+// alone was held so, and for good (pickedMainMode), the header's team size came from the stale config, and the rules were
+// the page's own flag for a host whatever the room said. Once the config shows the pick, or the room will not take it,
+// or the page is no host, the room's config is what counts.
+// THE PICKER FOLLOWS THE ROOM (unitPickerSig, refreshUnitPickerIfStale). The pages are drawn when the phase moves, and the
+// unit picker is drawn for a mode — Duel or Trio, the team size, the rules — and for a seat. A picker that stood when
+// the room's mode changed stayed as drawn, the phase being "pick a unit" before and after: a guest who came into a room
+// while its host was still choosing the mode stood in the Duel picker of the server's defaults; the host chose Trio,
+// and the guest's picker went on sending one unit, which a Trio room does not take as a roster — the guest never left
+// it (old as the mode page; seen 2026-11-16 on a page of b1105ip). A host's pick sent again to a room just made — above
+// — lands a moment after the room is there, and opens the same gap for a guest who comes back in that moment. What the
+// picker was drawn for is kept, and looked at every frame it stands (tickOnline): other values draw it anew, the picks
+// half made in it dropped — they were for another mode. The values are the ones the picker itself goes by: the host's
+// own pick while it is on its way, else the room's config — so the server's echo of that pick draws nothing.
+function onlineRoomChanged(onl) {
+  onl.roomPending = true;
+  onl.roomCfgSeen = null;
+  if (onl.leftNotices) onl.leftNotices.length = 0;
+  hideOnlineToast();
+}
+function settleNewRoom(onl, conn, cfg) {
+  onl.roomPending = false;
+  onl.redraw = true;             // (the page drawn anew for this room, whatever its phase — tickOnline)
+  onl.lastWaitingSig = null;
+  onl.lastEndMenuSig = null;
+  onl.pickingBotSlot = null;
+  const host = onl.myPlayerId === 'p1';
+  if (host && !cfg.modeLocked && onl.hostMode) {
+    const m = onl.hostMode;
+    state.suddenDeath = m.suddenDeath;   // (the rules chip is the host's pick)
+    onl.pickedMainMode = m.mainMode;
+    onl.modeSent = m;
+    conn.sendSetMode(m.mode, m.mainMode, m.suddenDeath);
+    onl.modePushedToServer = true;
+  } else {
+    onl.pickedMainMode = null;
+    onl.modeSent = null;
+    onl.modePushedToServer = !host || !!cfg.modeLocked;   // (a host who never chose is asked; a guest, or a room whose mode stands, is not)
+  }
+}
+
 // Compute which UI sub-phase we should be in based on connection + lobby state.
 function computeOnlineUiPhase(onl, conn) {
   const myId = onl.myPlayerId;
   const matchSt = conn.getMatchState();
   if (!myId) return 'connecting';
+  // (b1105it, THE ROOM CHANGED UNDER THE PAGE: from the connection's coming back until the new room's config is in, the
+  //  connecting page — what the page holds meanwhile is of two rooms, the old one's match and the new one's seat)
+  if (onl.roomPending) return 'connecting';
   if (myId === 'spectator') {
     if (matchSt === 'active' && conn.getLatestSnapshot()) return 'playing';
     if (matchSt === 'ended') return 'ended';
@@ -9572,6 +9665,7 @@ function computeOnlineUiPhase(onl, conn) {
   if (matchSt === 'ended') return 'ended';
   // 'waiting' — drive UI off picks.
   const cfg = conn.getLobbyConfig();
+  if (!cfg) return 'connecting';   // (b1105it, NO PICKER BEFORE THE ROOM'S CONFIG: the connecting page until it is in)
   const myCfg = cfg?.config?.[myId] ?? {};
   // Host has to choose Duel/Trio + 1v1/2v2 before anything else — and only
   // once. Joiners (p2/p3/p4) skip this — they inherit the lobby's mode.
@@ -9730,6 +9824,10 @@ function showOnlineModePicker(onl) {
         // stale config still says 'sd' and the host would briefly get the
         // single-pick Duel picker in a Trio lobby.
         onl.pickedMainMode = mainMode;
+        // (b1105it: the whole pick is kept — sent again to a room the page comes back into as the host, THE ROOM CHANGED
+        //  UNDER THE PAGE — and held as on its way until the room's config shows it)
+        onl.hostMode = { mode: btn.dataset.modePick, mainMode, suddenDeath: !!state.suddenDeath };
+        onl.modeSent = onl.hostMode;
         onl.conn.sendSetMode(btn.dataset.modePick, mainMode, !!state.suddenDeath);
         onl.modePushedToServer = true;
       });
@@ -9754,14 +9852,16 @@ function showOnlineUnitPicker(onl, conn) {
   // computeOnlineUiPhase) — otherwise this can render as the Duel picker
   // for one round-trip.
   const cfg = conn?.getLobbyConfig?.();
-  const mode = cfg?.mode ?? '1v1';
+  const mode = onl.modeSent?.mode ?? cfg?.mode ?? '1v1';   // (b1105it, THE PICK ON ITS WAY: the host's own team size too, until the config shows it)
   const trio = (onl.pickedMainMode ?? cfg?.mainMode) === 'trio';
   // SUDDEN DEATH online: the room's rules reach every picker through
   // lobby:config — a joiner's chip mirrors the room (the host set it). The
   // sniper cards stay on the grid (owner 2026-10-10, "if the human chooses
   // it manually, it should appear"); only the Random / All Random rolls skip
   // them in Sudden Death.
-  if (typeof cfg?.suddenDeath === 'boolean' && onl.myPlayerId !== 'p1') state.suddenDeath = cfg.suddenDeath;
+  // (b1105it: a host's too, once no pick of its own is on its way — a host made by the room, or back in a room whose mode
+  //  stands, did not set these rules, and its own flag was the last room's)
+  if (typeof cfg?.suddenDeath === 'boolean' && (onl.myPlayerId !== 'p1' || !onl.modeSent)) state.suddenDeath = cfg.suddenDeath;
   const sdRoom = onl.myPlayerId === 'p1' ? !!state.suddenDeath : !!cfg?.suddenDeath;
   // hidden units (Mika) are out of every picker, online and offline.
   const unitEntries = Object.entries(UNIT_DATA).filter(([, u]) => !u.offlineOnly && !u.hidden);
@@ -9789,6 +9889,7 @@ function showOnlineUnitPicker(onl, conn) {
     <button data-leave class="online-leave-btn">Leave</button>
   `;
   app.appendChild(menu);
+  onl.unitPickerSig = onlinePickerSig(onl, conn);   // (b1105it, THE PICKER FOLLOWS THE ROOM: what this picker is drawn for)
   markLastPicks(menu, 'data-unit-card', lastPicks);
   // (All Random rolls from the grid minus the sniper rifles in Sudden Death — the Random card does the same in wireUnitGrid)
   const onlinePool = unitEntries.map(([id]) => id).filter((k) => !(sdRoom && UNIT_DATA[k].sniperCharge));
@@ -10166,8 +10267,14 @@ function ensureOnlineMatchSetup(snap) {
       && onl.conn?.getLobbyConfig()?.config?.[myId]?.viewMode === 'command';
     const startBots = Array.isArray(snap.startBotSlots) ? snap.startBotSlots : (snap.botSlots ?? []);
     onl.allyCommandable = !!(onl.commandMode && allyId && startBots.includes(allyId));
+    // (b1105it) And the match's RULES, Health Point | Sudden Death: the room's, riding the snapshot. They were read with
+    // the set-up below alone (state.suddenDeathActive), which is skipped while the map, the seat and the mode stay the
+    // same — a page that came back into a room under the other rules kept the last match's: the Sudden Death HUD, its
+    // bars hidden, over a Health Point match. Part of the signature now, as the view is: other rules build the set-up
+    // anew, the same rules build nothing.
+    onl.matchSD = !!(snap.suddenDeath ?? onl.conn?.getLobbyConfig?.()?.suddenDeath);
   }
-  const sig = `${base}|${onl.commandMode ? 'command' : 'classic'}`;
+  const sig = `${base}|${onl.commandMode ? 'command' : 'classic'}|${onl.matchSD ? 'sd' : 'hp'}`;
   if (onl.mechsCreatedFor === sig) return;
 
   // Tear down old mechs/arena/HUD/projectile meshes. getAllFighters covers
@@ -10824,6 +10931,10 @@ function tickOnline(dt, _now) {
     // Force the lobby UI to re-render with the new slot info.
     onl.lastWaitingSig = null;
   }
+  // THE ROOM CHANGED UNDER THE PAGE (b1105it): the connection was made again, and the server put the page into another room.
+  const joins = conn.getJoinCount?.() ?? 0;
+  if (joins && onl.joinSeen && joins !== onl.joinSeen) onlineRoomChanged(onl);
+  if (joins) onl.joinSeen = joins;
   // Mode is committed by the host via the in-flow `pick-mode` UI phase
   // (showOnlineModePicker). The auto-push from state.mode that used to be
   // here was removed — the offline chip no longer drives the online mode.
@@ -10836,6 +10947,7 @@ function tickOnline(dt, _now) {
   // THE END OF A MATCH (b1105is): the room's config is looked at once a message — my picks kept, a player's leaving noticed.
   const roomCfg = conn.getLobbyConfig();
   if (roomCfg && roomCfg !== onl.roomCfgSeen) {
+    if (onl.roomPending) settleNewRoom(onl, conn, roomCfg);   // (b1105it: the new room's config is in — whose mode it is to be)
     noteRoomConfig(onl, roomCfg, onl.roomCfgSeen ?? null);
     onl.roomCfgSeen = roomCfg;
   }
@@ -10853,7 +10965,8 @@ function tickOnline(dt, _now) {
 
   // Phase machine — re-render UI on transition.
   const targetPhase = computeOnlineUiPhase(onl, conn);
-  if (targetPhase !== onl.uiSubPhase) {
+  if (targetPhase !== onl.uiSubPhase || onl.redraw) {   // (redraw, b1105it: a new room's page, its phase moved or not)
+    onl.redraw = false;
     const prevPhase = onl.uiSubPhase;
     onl.uiSubPhase = targetPhase;
     if (finale.active && targetPhase !== 'ended') finishFinale(false);   // (the lobby moved on: the finale gives way)
@@ -10862,6 +10975,8 @@ function tickOnline(dt, _now) {
   } else if (targetPhase === 'waiting-opp') {
     // Re-render waiting-opp on opponent config changes (their unit pick etc).
     refreshWaitingOppIfStale(onl, conn);
+  } else if (targetPhase === 'pick-unit') {
+    refreshUnitPickerIfStale(onl, conn);   // (b1105it, THE PICKER FOLLOWS THE ROOM: the room's mode changed under a picker that stands)
   } else if (targetPhase === 'ended') {
     // The end page drawn again when the room's word changes: a choice made, a player gone (refreshEndMenuIfStale).
     if (!finale.active) refreshEndMenuIfStale(onl, conn);   // (not over the finale, PT b1105gb)
@@ -10888,6 +11003,22 @@ function refreshWaitingOppIfStale(onl, conn) {
   // Rebuild the menu in place.
   clearMenus();
   showOnlineWaitingOpp(onl, conn);
+}
+
+// THE PICKER FOLLOWS THE ROOM (b1105it; the story is with THE ROOM CHANGED UNDER THE PAGE): what the unit picker is drawn
+// for — the seat, Duel or Trio, the team size, the rules — and the picker drawn anew when the room's are others.
+function onlinePickerSig(onl, conn) {
+  const cfg = conn?.getLobbyConfig?.();
+  const mine = onl.myPlayerId === 'p1' ? onl.modeSent : null;   // (the host's own pick, while it is on its way)
+  const trio = (onl.pickedMainMode ?? cfg?.mainMode) === 'trio';
+  const sd = mine ? mine.suddenDeath : !!cfg?.suddenDeath;
+  return `${onl.myPlayerId}|${trio ? 'trio' : 'duel'}|${onl.modeSent?.mode ?? cfg?.mode ?? '1v1'}|${sd ? 'sd' : 'hp'}`;
+}
+function refreshUnitPickerIfStale(onl, conn) {
+  if (onl.unitPickerSig === onlinePickerSig(onl, conn)) return;
+  clearMenus();
+  onl.trioUnitPicks = [];   // (picks half made were for another mode)
+  showOnlineUnitPicker(onl, conn);
 }
 
 function showSelectMenu() {

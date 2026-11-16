@@ -67,11 +67,21 @@ export function createConnection() {
     notify();
   };
 
+  // THE ROOM THE PAGE IS IN (b1105it). Every time the connection is made — the first time, and again each time it comes
+  // back after a drop — the server takes it for a NEW visitor and puts it into a room (index.js pickLobbyForJoin): the
+  // seat of before was let go when the line dropped. So a connection made again is another room. `joins` counts the
+  // connections made, and main.js reads it to know that the room changed under the page (THE ROOM CHANGED UNDER THE
+  // PAGE). The room's id is no measure of it: the server numbers its rooms from 1 again after a restart, and the room a
+  // page comes back into is then called what its last one was. The config held is the last room's, and is dropped here:
+  // the new room's own follows the seat.
+  let joins = 0;
   socket.on('connect', () => {
     connected = true;
     lastError = null;
     attempts = 0;
     waitingSince = 0;
+    if (joins > 0) lobbyConfig = null;
+    joins += 1;
     log('connect', { id: socket.id });
   });
 
@@ -338,6 +348,7 @@ export function createConnection() {
     },
 
     getLobbyConfig: () => lobbyConfig,
+    getJoinCount: () => joins,   // (THE ROOM THE PAGE IS IN, b1105it: one more each time the connection is made)
 
     // COMMAND MODE (phase 3): order transport. The server validates and
     // answers with order:result to this socket only; the standing command
