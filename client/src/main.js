@@ -3055,6 +3055,7 @@ function teardownHud() {
   state.hud?.remove();
   state.hud = null;
   killFeedReset(); killFeed.el = null;   // (THE KILL FEED, b1105gm: it lived in that HUD)
+  miniMapReset();   // (THE MINI MAP, b1105iw: the two maps lived in that HUD too; the arena's picture is kept)
   input.x = 0;
   input.y = 0;
   input.boost = false;
@@ -3222,6 +3223,7 @@ function setupHUD() {
     <div class="crosshair" id="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
     <div class="kill-feed" id="kill-feed" aria-hidden="true"></div>
+    ${MINI_MAP_POP_HTML}
   `;
   app.appendChild(hud);
   killFeed.el = hud.querySelector('#kill-feed');   // (THE KILL FEED, b1105gm: its two places under PAUSE)
@@ -3397,6 +3399,7 @@ function setupHUD() {
     showPauseMenu();
   });
   setupAllyTacticHud(hud);   // (THE ALLY TACTIC, b1105gq: its button by the stick and the two calls)
+  setupMiniMap(hud, hudAbort.signal);   // (THE MINI MAP, b1105iw: the round map into the grid's empty slot, the large one's press)
 
   state.hud = hud;
   state.speedLines = hud.querySelector('#speed-lines');
@@ -7677,6 +7680,243 @@ function renderHpChip(chip, m, role, noSideWords) {
   return roster;
 }
 
+// ============================================================================
+// THE MINI MAP (b1105iw; user 2026-11-16, who had asked for "a weapon i[con] ... along with a mini map" on a phone HUD that is
+// "already crowded", of the design canvas's rounds 16 and 16b: "Use the W1 version of mini map. When player taps on the map, the
+// option C style map pops up. tapping anywhere again closes the pop up map (pause button still functions on its own).").
+// THE ROUND MAP stands in the one empty slot of the thumb buttons' grid, the slot above TARGET's (setupMiniMap; style.css
+// .mini-map — inside .buttons, so it is sized by the buttons, goes where they go and hides when they hide: command mode, the
+// game-start intro, the finale). It shows the `reach` about the unit the HUD follows — the player, the watched unit in
+// Spectator mode, the ally once the player is out — and TURNS WITH THE CAMERA: what the screen looks at is up, where the stick
+// pushes forward, and the N tag rides the rim at north. That unit is the arrow at the middle, a fan of its view over it; every
+// other unit standing is a dot in its own colour, its chip's and its edge triangle's (dioSlotColor), and one farther off than
+// the map reaches is a triangle on the rim pointing out to it.
+// THE LARGE MAP: a tap on the round map lays the whole map over the middle of the view (.mm-pop), north up, its name on it,
+// each unit's mark with the chips' side word beside it (none for a spectator, as the chips have none); the play goes on under
+// it. The next press ANYWHERE takes it away and does nothing else — the stick, a thumb button, the round map itself and the
+// empty screen alike (one listener on the window, before any other: it stops the press) — but for PAUSE, which closes the map
+// and opens its menu as ever. A touch already held when the map opens (the stick's, the fire button's) keeps working.
+// WHO IS ON IT: the marks follow the edge triangles' rule — under the anomaly rules and on the Shooting Range none but the
+// viewer's own (updateAllyArrow's gate); a unit down has none until its roster's next stands.
+// THE PICTURE is the map itself, photographed from straight above once per arena (miniMapShoot): the play area and a little
+// about it through an orthographic camera, on the game's own renderer and canvas at 1024 px — nothing in the scene but the
+// map, and the map dressed as COMMAND MODE shows it from above, which every map already has an answer for: the built maps'
+// airborne dressing out (cmdHide), a modelled map's roof out (`roof`), its ceiling cut (`cmdCeil` — by the camera's own height
+// here), the things beside and over it out (cmdClear). The fog is pushed out of range, not taken away; a unit's light stays lit
+// while the unit is not drawn; and the picture is read off the canvas in the same task (as __mapPhoto does), no render target:
+// so no shader is made that play does not use. A little colour out and a wash of
+// ink, then one JPEG data address for both maps' <img>: no canvas and no filter in the HUD (THE KILL FEED's measure). It is
+// taken UNDER THE LOADING SCREEN, with the match's warm frame (matchWarmDraw), and kept while the map stays the same; a page
+// that never saw the screen over this arena takes it in its first frame of play (updateMiniMap). Each frame then moves a
+// handful of transforms and no more: the picture's and the marks'. No picture — a page that cannot read its canvas — leaves
+// the ink disc and the marks.
+// ============================================================================
+const MINI_MAP = {
+  reach: 140,               // world units from the unit to the round map's rim: 35 m, the canvas's sample
+  far: 0.9, pinAt: 0.84,    // a unit past `far` of the reach is a triangle, standing at `pinAt` of the radius
+  px: 1024, margin: 0.04,   // the picture: its longer side in px; the room about the play area, a share of that side
+  grey: 0.12, wash: 0.12, quality: 0.9   // its tint — the colour out, the ink over — and the JPEG's quality
+};
+const MINI_MAP_ROLES = ['enemy2', 'enemy', 'ally', 'player'];
+const MM_ARROW = 'M0,-6.4 L4.9,5 L0,2.5 L-4.9,5 Z', MM_PIN = 'M0,-4.8 L4.2,2.8 L-4.2,2.8 Z';
+const miniMap = { el: null, win: null, picEl: null, n: null, u: {}, pop: null, big: null, bigPic: null, name: null, U: {},
+  open: false, bakeKey: null, pic: null, shot: null, rect: null, rectKey: null, dim: '', d: 0, D: 0, mk: 0.82, bw: 0, bh: 0, head: 0 };
+const _mmDir = new THREE.Vector3();
+// a unit's marks, one set per seat: the dot, the triangle for a unit out of reach, the arrow and its fan for the viewer's own
+function miniMapMarksHtml(labels) {
+  return MINI_MAP_ROLES.map((r) => `<div class="mm-u off" data-mm="${r}">`
+    + '<svg class="mm-dot" viewBox="-6 -6 12 12" aria-hidden="true"><circle r="4.85" fill="none" stroke="#fff" stroke-width=".9"/><circle class="mm-fill" r="3.6" stroke-width="1.4"/></svg>'
+    + `<svg class="mm-pin" viewBox="-7 -7 14 14" aria-hidden="true"><path d="${MM_PIN}" fill="none" stroke="#fff" stroke-width="3.4" stroke-linejoin="round"/><path class="mm-fill" d="${MM_PIN}" stroke-width="1.3" stroke-linejoin="round"/></svg>`
+    + '<span class="mm-rot"><svg class="mm-cone" viewBox="-12 -27.5 24 28" aria-hidden="true"><path d="M0,0 L-11.5,-24.5 A27,27 0 0 1 11.5,-24.5 Z" fill="#fff" opacity=".24"/></svg>'
+    + `<svg class="mm-arrow" viewBox="-7 -8.5 14 15.5" aria-hidden="true"><path d="${MM_ARROW}" fill="none" stroke="#fff" stroke-width="3.6" stroke-linejoin="round"/><path class="mm-fill" d="${MM_ARROW}" stroke-width="1.4" stroke-linejoin="round"/></svg></span>`
+    + (labels ? '<b class="mm-lab"></b>' : '') + '</div>').join('');
+}
+const MINI_MAP_POP_HTML = `<div class="mm-pop" id="mm-pop" aria-hidden="true"><div class="mm-big"><img class="mm-pic" alt="" draggable="false">${miniMapMarksHtml(true)}<span class="mm-name"></span><span class="mm-n">N</span></div></div>`;
+// which arena the picture is of: the map, and whether a modelled map's model stands in it yet
+function miniMapKey() {
+  const k = state.mapKey;
+  if (!k || arenaStandingKey !== k) return null;
+  return `${k}:${!GLB_MAPS[k] || arenaDecor.some((g) => Array.isArray(g.userData?.roof)) ? 1 : 0}`;
+}
+// the world the picture shows, half its width (x) and half its height (z) about the origin: the play area and the margin
+function miniMapRect(mapKey) {
+  const { halfX, halfZ } = getArenaBounds(mapKey);
+  const m = 2 * Math.max(halfX, halfZ) * MINI_MAP.margin;
+  return { hw: halfX + m, hh: halfZ + m };
+}
+function miniMapShoot() {
+  const { hw, hh } = miniMapRect(state.mapKey);
+  const s = MINI_MAP.px / (2 * Math.max(hw, hh));
+  const W = Math.round(2 * hw * s), H = Math.round(2 * hh * s);
+  // (a ceiling that is one mesh with its walls — `cmdCeil`, the Hospital's: command mode clips the map's materials at that height, a
+  //  shader of their own; here the camera itself stands at it, looking down, and what is over the cut is behind the camera)
+  const cfg = GLB_MAPS[state.mapKey], cutY = cfg?.cmdCeil != null ? cfg.cmdCeil * cfg.scale : null;
+  const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, cutY != null ? 0.01 : 1, 4000);   // (north, -z, at the top; east, +x, to the right)
+  cam.position.set(0, cutY ?? 1500, 0); cam.up.set(0, 0, -1); cam.lookAt(0, -1000, 0); cam.updateMatrixWorld(true);
+  // only the map is drawn — what is DRAWN of everything else goes (a unit, what hangs on it, a round, a mark), never the thing
+  // itself: a unit carries a light, and a light more or less in the scene is another shader for all it lights (matchWarmDraw)
+  const was = new Map();
+  const vis = (o, v) => { if (o.visible !== v) { was.set(o, o.visible); o.visible = v; } };
+  const out = (o) => o.traverse((x) => { if (x.isMesh || x.isLine || x.isPoints || x.isSprite) vis(x, false); });
+  const keep = new Set(arenaDecor); keep.add(ground); keep.add(gridHelper);
+  for (const o of scene.children) if (!keep.has(o)) out(o);
+  for (const o of [ground, gridHelper]) vis(o, !GLB_MAPS[state.mapKey]);   // (the built maps' floor, which command mode swaps for its plate)
+  for (const g of arenaDecor) {
+    if (g.userData?.cmdHide) out(g);
+    for (const o of g.userData?.roof ?? []) vis(o, false);
+    if (g.userData?.cmdClearNodes) for (const o of cmdClearList(g) ?? []) vis(o, false);
+  }
+  const fog = scene.fog, fogWas = fog ? [fog.near, fog.far] : null;
+  if (fog) { fog.near = 1e5; fog.far = 2e5; }
+  const bg = scene.background?.isColor ? scene.background.getHex() : null;
+  if (bg != null) scene.background.setHex(0x1b1b2f);   // (beyond the map: the ink)
+  const size = renderer.getSize(new THREE.Vector2()), ratio = renderer.getPixelRatio();
+  let url = null;
+  try {
+    renderer.setDrawingBufferSize(W, H, 1);   // (the buffer at the picture's size in ONE step, and back in one: never the picture's size at the screen's pixel ratio, four times the memory)
+    const n0 = renderer.info.programs?.length ?? 0, t0 = performance.now();
+    renderer.render(scene, cam);
+    const c = killArtCanvas(W, H), g = c.getContext('2d');
+    g.drawImage(renderer.domElement, 0, 0, W, H);
+    miniMap.shot = { drawMs: performance.now() - t0, programs: (renderer.info.programs?.length ?? 0) - n0 };   // (a probe's reading: the frame's time, the shaders it made)
+    g.globalCompositeOperation = 'saturation'; g.globalAlpha = MINI_MAP.grey; g.fillStyle = '#808080'; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = MINI_MAP.wash; g.fillStyle = '#1B1B2F'; g.fillRect(0, 0, W, H);
+    url = c.toDataURL('image/jpeg', MINI_MAP.quality);
+  } finally {
+    renderer.setDrawingBufferSize(size.x, size.y, ratio);
+    if (bg != null) scene.background.setHex(bg);
+    if (fog) { fog.near = fogWas[0]; fog.far = fogWas[1]; }
+    for (const [o, v] of was) o.visible = v;
+  }
+  return url && url.startsWith('data:image/jpeg') ? { url, w: W, h: H } : null;
+}
+// the picture of the arena that stands, taken once (a try that failed is not tried again for the same arena)
+function miniMapBake() {
+  const key = miniMapKey();
+  if (!key || miniMap.bakeKey === key) return;
+  miniMap.bakeKey = key; miniMap.pic = null;
+  const t0 = performance.now();
+  try { miniMap.pic = miniMapShoot(); } catch (e) { console.warn('[mini map] no picture of', key, e); }
+  if (miniMap.pic) miniMap.pic.ms = performance.now() - t0;
+  miniMapPicShow();
+}
+function miniMapPicShow() {
+  for (const im of [miniMap.picEl, miniMap.bigPic]) {
+    if (!im) continue;
+    const url = miniMap.pic?.url ?? null;
+    if (url) { if (im.getAttribute('src') !== url) im.src = url; } else im.removeAttribute('src');
+  }
+}
+function miniMapOpen(on) {
+  const want = !!on && !!miniMap.pop;
+  if (want === miniMap.open) return;
+  miniMap.open = want;
+  miniMap.pop?.classList.toggle('open', want);
+  miniMap.el?.classList.toggle('open', want);
+  miniMap.dim = '';   // (the large map is measured when it shows: closed, it has no box)
+}
+function setupMiniMap(hud, signal) {
+  const grid = hud.querySelector('#buttons'), pop = hud.querySelector('#mm-pop');
+  miniMapReset();
+  if (!grid || !pop) return;
+  const el = document.createElement('div');
+  el.className = 'mini-map'; el.id = 'mini-map'; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Map');
+  el.innerHTML = `<div class="mm-win"><img class="mm-pic" alt="" draggable="false"></div>${miniMapMarksHtml(false)}<span class="mm-n">N</span>`;
+  grid.appendChild(el);
+  const marks = (root) => { const o = {}; for (const r of MINI_MAP_ROLES) { const u = root.querySelector(`.mm-u[data-mm="${r}"]`); u._rot = u.querySelector('.mm-rot'); u._lab = u.querySelector('.mm-lab'); o[r] = u; } return o; };
+  miniMap.el = el; miniMap.win = el.querySelector('.mm-win'); miniMap.picEl = el.querySelector('.mm-pic'); miniMap.n = el.querySelector('.mm-n'); miniMap.u = marks(el);
+  miniMap.pop = pop; miniMap.big = pop.querySelector('.mm-big'); miniMap.bigPic = pop.querySelector('.mm-pic'); miniMap.name = pop.querySelector('.mm-name'); miniMap.U = marks(pop);
+  miniMapPicShow();
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); miniMapOpen(true); });
+  // the large map up: the next press anywhere takes it away, and is no press of anything else — but PAUSE's, which is its own too.
+  // Where the HUD is away with the map still up — the ending cameras, begun by a knockout under it, run no HUD update — the map
+  // is not on the screen and the press is the shot's own: it is let through.
+  window.addEventListener('pointerdown', (e) => {
+    if (!miniMap.open) return;
+    const shown = miniMap.pop.getClientRects().length > 0;
+    miniMapOpen(false);
+    if (!shown || (e.target instanceof Element && e.target.closest('#pause-btn'))) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, { capture: true, signal });
+}
+function miniMapReset() {
+  miniMap.el = miniMap.win = miniMap.picEl = miniMap.n = miniMap.pop = miniMap.big = miniMap.bigPic = miniMap.name = null;
+  miniMap.u = {}; miniMap.U = {}; miniMap.open = false; miniMap.dim = ''; miniMap.d = 0; miniMap.bw = 0; miniMap.rectKey = null;
+}
+// the two maps' boxes, read when the page's size, the map or the large map's state changed — never in a plain frame
+function miniMapMeasure() {
+  const el = miniMap.el, r = miniMap.rect;
+  miniMap.d = miniMap.win.clientWidth; miniMap.D = el.offsetWidth;
+  if (miniMap.d > 0) {
+    miniMap.mk = Math.max(0.82, miniMap.D / 84);
+    el.style.setProperty('--mk', miniMap.mk.toFixed(3));
+    const k = miniMap.d / 2 / MINI_MAP.reach;
+    miniMap.picEl.style.width = `${(2 * r.hw * k).toFixed(1)}px`; miniMap.picEl.style.height = `${(2 * r.hh * k).toFixed(1)}px`;
+  }
+  miniMap.bw = 0;
+  if (miniMap.open) {
+    const b = miniMap.big;
+    b.style.setProperty('--mk', Math.max(1.2, Math.min(2, 1.2 * b.offsetWidth / 270)).toFixed(3));
+    miniMap.bw = b.clientWidth; miniMap.bh = b.clientHeight;
+  }
+}
+const mmSet = (o, t) => { if (o._t !== t) { o._t = t; o.style.transform = t; } };
+const mmCls = (o, c, on) => { const k = `_${c}`; if (o[k] !== on) { o[k] = on; o.classList.toggle(c, on); } };
+// every frame the HUD is updated (updateHud): `focus` the unit the HUD follows, `noSide` no side words (a spectator's page)
+function updateMiniMap(focus, noSide) {
+  const el = miniMap.el;
+  if (!el || !focus?.root) return;
+  if (dioramaActive() || intro.active || finale.active) { if (miniMap.open) miniMapOpen(false); return; }   // (the buttons are hidden there, the round map with them)
+  miniMapBake();   // (taken under the loading screen as a rule — matchWarmDraw; here for a page that saw none over this arena)
+  if (miniMap.rectKey !== state.mapKey) {
+    miniMap.rectKey = state.mapKey; miniMap.rect = miniMapRect(state.mapKey); miniMap.dim = '';
+    miniMap.big.style.setProperty('--ar', (miniMap.rect.hw / miniMap.rect.hh).toFixed(4));
+    miniMap.name.textContent = (mapShortName(MAP_DATA[state.mapKey]) || '').toUpperCase();
+  }
+  const dim = `${window.innerWidth}x${window.innerHeight}|${miniMap.open ? 1 : 0}`;
+  if (dim !== miniMap.dim || miniMap.d <= 0) { miniMap.dim = dim; miniMapMeasure(); }
+  if (miniMap.d <= 0) return;   // (not laid out: nothing to place)
+  const p = focus.root.position, rect = miniMap.rect;
+  camera.getWorldDirection(_mmDir);
+  if (_mmDir.x * _mmDir.x + _mmDir.z * _mmDir.z > 1e-6) miniMap.head = Math.atan2(_mmDir.x, -_mmDir.z);   // (the camera's heading, clockwise from north)
+  const th = miniMap.head, cs = Math.cos(th), sn = Math.sin(th), deg = th * 180 / Math.PI;
+  const others = !anomalyRules() && state.mapKey !== 'range';   // (the edge triangles' rule)
+  const R = miniMap.d / 2, k = R / MINI_MAP.reach, big = miniMap.open && miniMap.bw > 0;
+  mmSet(miniMap.picEl, `rotate(${(-deg).toFixed(1)}deg) translate(${(-(p.x + rect.hw) * k).toFixed(1)}px,${(-(p.z + rect.hh) * k).toFixed(1)}px)`);
+  const rn = miniMap.D / 2 - 6.5 * miniMap.mk;
+  mmSet(miniMap.n, `translate(${(-sn * rn).toFixed(1)}px,${(-cs * rn).toFixed(1)}px) scale(${miniMap.mk.toFixed(3)})`);
+  for (const role of MINI_MAP_ROLES) {
+    const m = state[role], u = miniMap.u[role], U = miniMap.U[role];
+    const me = !!m && m === focus, on = me || (!!m?.root && others && m.state.hp > 0);
+    mmCls(u, 'off', !on); if (big) mmCls(U, 'off', !on);
+    if (!on) continue;
+    const c = dioSlotColor(role);
+    if (u._c !== c) { u._c = c; u.style.setProperty('--c', c); }
+    mmCls(u, 'me', me);
+    const q = m.root.position;
+    if (me) { mmCls(u, 'far', false); mmSet(u, 'translate(0px,0px)'); }
+    else {
+      const dx = (q.x - p.x) * k, dz = (q.z - p.z) * k;
+      let x = dx * cs + dz * sn, y = dz * cs - dx * sn;   // (turned with the picture: the heading up)
+      const dist = Math.hypot(x, y), far = dist > MINI_MAP.far * R;
+      if (far) { const f = MINI_MAP.pinAt * R / dist; x *= f; y *= f; }
+      mmCls(u, 'far', far);
+      mmSet(u, far ? `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${(Math.atan2(x, -y) * 180 / Math.PI).toFixed(0)}deg)` : `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`);
+    }
+    if (!big) continue;
+    if (U._c !== c) { U._c = c; U.style.setProperty('--c', c); }
+    mmCls(U, 'me', me);
+    const X = (q.x + rect.hw) / (2 * rect.hw) * miniMap.bw, Y = (q.z + rect.hh) / (2 * rect.hh) * miniMap.bh;
+    mmSet(U, `translate(${X.toFixed(1)}px,${Y.toFixed(1)}px)`);
+    if (me) mmSet(U._rot, `rotate(${deg.toFixed(0)}deg)`);
+    const word = noSide ? '' : (HUD_SIDE_WORD[role] || '');
+    if (U._w !== word) { U._w = word; U._lab.textContent = word; }
+    // the word beside its mark: right of the viewer's side's, left of the other's — and the other way where the map's edge is near
+    const room = 9 + 7 * word.length, left = (role === 'enemy' || role === 'enemy2') ? X > room : X > miniMap.bw - room;
+    mmCls(U, 'lab-l', left);
+  }
+}
+if (typeof window !== 'undefined') window.__miniMap = { cfg: MINI_MAP, state: miniMap, open: (on = true) => miniMapOpen(on), key: () => miniMapKey(), bake: () => { miniMap.bakeKey = null; miniMapBake(); return miniMap.pic; }, tick: (focus = cameraFocusMech() ?? state.player, noSide = false) => updateMiniMap(focus, noSide) };   // (a probe's hooks)
 function updateHud(now = performance.now()) {
   // `now` defaults to performance.now() for offline (where mech.state
   // timestamps are stored in performance.now() reference). Online passes the
@@ -7754,6 +7994,7 @@ function updateHud(now = performance.now()) {
   const u = shown.unit;
   const s = shown.state;
   fireArtShow(u);   // (b1105iv: that unit's weapon on the fire button, over the count)
+  updateMiniMap(shown, noSideWords);   // (THE MINI MAP, b1105iw: the picture under that unit, every mark in its place)
   if (u.magCapacity != null && hudRefs.ammoCount) {
     hudRefs.ammoCount.textContent = String(s.ammo);
     const isMg = !u.autoReload;
@@ -8053,6 +8294,7 @@ function matchLoadBegin(spec) {
 // is drawn as well — all of it under the lights that light the scene now and no other: a light more or less is another shader for everything it lights (a
 // unit carries one), so a light this frame would bring in is put out for it. The ground and the grid a modelled map hides stay hidden: nothing shows them.)
 function matchWarmDraw() {
+  miniMapBake();   // (THE MINI MAP, b1105iw: the arena's picture from above, taken under the screen — before this frame shows what the scene hides)
   const off = [], shown = [], dimmed = [], parked = [], samples = matchWarmSamples();
   const lit = new Set();
   const lights = (o, vis, out) => { const v = vis && o.visible; if (o.isLight && v) out(o); for (const c of o.children) lights(c, v, out); };
@@ -8800,7 +9042,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105iv 11-16';
+const CLIENT_BUILD_TAG = 'b1105iw 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -14186,6 +14428,7 @@ function showPauseMenu() {
   // (THE GAME-START INTRO, b1105gz: "Only the "Pause" HUD will be shown and functioning during these beginning cameras" — the
   //  sim is not running yet, the intro is: the menu opens over it and its clock stands, updateIntro)
   if ((!state.running && !intro.active) || state.phase !== 'match' || matchCoverUp) return;   // (nor under THE LOADING SCREEN, b1105hd: the match has not begun)
+  miniMapOpen(false);   // (THE MINI MAP, b1105iw: the large map goes as the menu comes — by PAUSE's own press or the page's)
   state.running = false;
   state.phase = 'pause';
   hideAllyEdgeArrow();

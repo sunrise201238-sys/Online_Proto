@@ -343,6 +343,52 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
 .buttons .btn-shoot.has-art .fire-logo { display: none; }
 .buttons .btn-shoot.has-art .ammo-count { inset: auto; left: 0; right: 0; top: calc(var(--btn-size) * var(--fc, 0.55) - 3px); height: calc(var(--btn-size) * 0.2525); font-size: calc(var(--btn-size) * 0.2525); line-height: 1; }
 .buttons .btn-shoot.empty .fire-art { opacity: 0.4; }
+/* THE MINI MAP (b1105iw, the design canvas's rounds 16 and 16b; main.js THE MINI MAP). The round map: in the thumb grid's one
+   empty slot, the one above TARGET's — the chips' white rim and ink line about a picture of the map from straight above, the
+   buttons' hard shadow under it, 4 px smaller than a button and not tilted (its picture turns). main.js sizes and moves the
+   picture (.mm-pic), places each unit's mark (.mm-u: --c its colour; .me the viewer's own arrow and its fan, .far a triangle
+   on the rim, .off none) and north's tag (.mm-n), and sets --mk, the marks' scale. No filter and no canvas: a picture, a few
+   small SVGs, and transforms. The large map (.mm-pop, .mm-big): the whole map over the middle of the view while .open, between
+   the chips and BOOST (--mmp-top, --mmp-bot: each tier's), as wide as 45.2% of the page or as tall as that room, by the map's
+   shape (--ar, main.js); it takes no press itself (main.js: the next press anywhere closes it). Under the kill feed's and the
+   tactic's layer, over the rest of the HUD. */
+.buttons .mini-map {
+  position: absolute; right: calc(var(--btn-size) + var(--btn-gap) + 2px); bottom: calc((var(--btn-size) + var(--btn-gap)) * 2 + 2px);
+  width: calc(var(--btn-size) - 4px); height: calc(var(--btn-size) - 4px); box-sizing: border-box;
+  border: 3px solid #ffffff; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px var(--ink);
+  pointer-events: auto; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; --mk: 0.82;
+}
+.mini-map .mm-win { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.mini-map .mm-win::after { content: ''; position: absolute; inset: 0; background: rgba(27, 27, 47, 0.11); }   /* (the small map a shade deeper than the large one: its marks are small) */
+.mm-pic { position: absolute; left: 50%; top: 50%; display: block; max-width: none; transform-origin: 0 0; will-change: transform; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.mm-pic:not([src]) { display: none; }
+.mm-u { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.mm-u.off { display: none; }
+.mm-u svg { position: absolute; display: block; overflow: visible; }
+.mm-fill { fill: var(--c, #ffffff); stroke: var(--ink); }
+.mm-dot { left: calc(-6px * var(--mk)); top: calc(-6px * var(--mk)); width: calc(12px * var(--mk)); height: calc(12px * var(--mk)); }
+.mm-pin { left: calc(-7px * var(--mk)); top: calc(-7px * var(--mk)); width: calc(14px * var(--mk)); height: calc(14px * var(--mk)); }
+.mm-rot { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.mm-cone { left: calc(-12px * var(--mk)); top: calc(-27.5px * var(--mk)); width: calc(24px * var(--mk)); height: calc(28px * var(--mk)); }
+.mm-arrow { left: calc(-7px * var(--mk)); top: calc(-8.5px * var(--mk)); width: calc(14px * var(--mk)); height: calc(15.5px * var(--mk)); }
+.mm-u .mm-pin, .mm-u .mm-rot, .mm-u.far .mm-dot, .mm-u.me .mm-dot, .mm-u.me .mm-pin { display: none; }
+.mm-u.far .mm-pin, .mm-u.me .mm-rot { display: block; }
+.mm-n { position: absolute; left: 50%; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; box-sizing: border-box; border-radius: 50%; background: var(--ink); border: 1.5px solid #ffffff; color: #ffffff; font-family: var(--font-ui); font-weight: 800; font-size: 7px; line-height: 10px; text-align: center; pointer-events: none; will-change: transform; }
+.touch-hud { --mmp-top: 156px; --mmp-bot: 70px; }
+.mm-pop { position: absolute; left: 0; right: 0; top: var(--mmp-top); bottom: var(--mmp-bot); z-index: 1; display: none; align-items: center; justify-content: center; pointer-events: none; }
+.mm-pop.open { display: flex; }
+.mm-big {
+  position: relative; flex: none; box-sizing: border-box; overflow: hidden;
+  width: min(45.2vw, calc((100vh - var(--mmp-top) - var(--mmp-bot)) * var(--ar, 1.667))); aspect-ratio: var(--ar, 1.667);
+  border: 3px solid #ffffff; border-radius: 12px; background: rgba(27, 27, 47, 0.55); box-shadow: 0 0 0 2px var(--ink), 5px 5px 0 rgba(27, 27, 47, 0.55); --mk: 1.2;
+}
+.mm-big .mm-pic { left: 0; top: 0; width: 100%; height: 100%; opacity: 0.92; will-change: auto; }
+.mm-big .mm-u { left: 0; top: 0; }
+.mm-lab { position: absolute; left: calc(7.5px * var(--mk)); top: 0; transform: translateY(-50%); white-space: nowrap; font-family: var(--font-ui); font-weight: 800; font-size: calc(6.25px * var(--mk)); line-height: 1; letter-spacing: 0.04em; color: var(--c, #ffffff);
+  text-shadow: 1.1px 0 0 var(--ink), -1.1px 0 0 var(--ink), 0 1.1px 0 var(--ink), 0 -1.1px 0 var(--ink), 0.8px 0.8px 0 var(--ink), -0.8px 0.8px 0 var(--ink), 0.8px -0.8px 0 var(--ink), -0.8px -0.8px 0 var(--ink); }
+.mm-u.lab-l .mm-lab { left: auto; right: calc(7.5px * var(--mk)); }
+.mm-name { position: absolute; left: 7px; top: 6px; font-family: var(--font-display); font-weight: 400; font-size: calc(9.17px * var(--mk)); line-height: 1; letter-spacing: 0.04em; color: #ffffff; text-shadow: 1.5px 1.5px 0 var(--ink); pointer-events: none; }
+.mm-big .mm-n { left: auto; right: 4.5px; top: 4.5px; margin: 0; transform: scale(calc(var(--mk) / 1.2)); transform-origin: 100% 0; will-change: auto; }
 .buttons .btn-melee { right: calc(var(--btn-size) + var(--btn-gap)); bottom: calc(var(--btn-size) + var(--btn-gap)); }
 .buttons .btn-target {
   right: calc(var(--btn-size) + var(--btn-gap));
@@ -1439,6 +1485,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
      22 px off the right edge (12 until b1105at), the thumb's reach and the screen's rounded corner */
   .buttons { --btn-gap: clamp(8px, 1.2vw, 14px); --btn-size: clamp(56px, min(13vw, calc((100vh - 90px - 12px - 2 * var(--btn-gap)) / 3)), 84px); right: max(22px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joy { width: 120px; height: 120px; }
+  .touch-hud { --mmp-top: 100px; --mmp-bot: 58px; }   /* (THE MINI MAP, b1105iw: the large map between the chips' second row, which ends at 84, and BOOST, which starts 44 px off the foot) */
 }
 
 /* (THE KILL FEED on a screen too narrow for an entry between the second row's chips — 2v2 under 576 px wide, where the two
