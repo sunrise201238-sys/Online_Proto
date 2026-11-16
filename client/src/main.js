@@ -7507,20 +7507,21 @@ function killArtFace(im, u, grey) {
 // the unit the HUD follows, over the ammo count, on the button that fires it — no new piece on a screen that has no room for one.
 // The picture is the kill feed's own source (weapons/<spriteKey>.png) cut to the gun's box (WEAPON_BOX) and DRAWN AHEAD with the
 // kill feed's pictures (warmKillArt: one fetch serves both, under the loading screen): an <img> to clone, no canvas and no filter
-// in the HUD, for the cost measured above. The five weapons with white or pale bodies, which lose their shape on the white button,
-// carry an ink line round them, drawn into the picture (FIRE_ART.lined, `line` canvas px). Every measure on the button is a share
+// in the HUD, for the cost measured above. Every weapon carries an ink line round it, drawn into the picture (FIRE_ART.line, canvas
+// px; 0 for none): the five with white or pale bodies, which lose their shape on the white button, from the first, and every other
+// since b1105ix (user 2026-11-16, of that line on the five alone: "apply to all other weapons as well."). Every measure on the button is a share
 // of the button's own size (--btn-size), read off the canvas's sample on the user's phone, a 67.33 px button: the count 17 px
 // (22 px and more where it stands alone), 3 px between the picture and it, the pair 2 px low, the picture's top corners 6 px
 // inside the button's edge — so a long thin gun is drawn wider than a short tall one (fireArtFit).
-const FIRE_ART = { w: 208, pad: 3, line: 2, lined: new Set(['aris', 'fubuki', 'hoshino', 'kei', 'koyuki']),
+const FIRE_ART = { w: 208, pad: 3, line: 2,
   count: 17 / 67.33, gap: 3 / 67.33, low: 2 / 67.33, rim: 6 / 67.33, widest: 0.7624 };
-// the gun's box `w` canvas px wide with `pad` about it, and round a pale weapon the ink line
+// the gun's box `w` canvas px wide with `pad` about it, and round the gun the ink line
 function fireArtGun(im, key) {
   const [bx, by, bw, bh] = WEAPON_BOX[key]; const gw = FIRE_ART.w, gh = Math.round(bh * gw / bw), p = FIRE_ART.pad;
   const base = killArtCanvas(gw + 2 * p, gh + 2 * p), g = base.getContext('2d');
   g.imageSmoothingQuality = 'high';
   g.drawImage(...killArtShrink(im, bx, by, bw, bh, gw, gh), p, p, gw, gh);
-  if (!FIRE_ART.lined.has(key)) return base;
+  if (!(FIRE_ART.line > 0)) return base;
   const out = killArtCanvas(base.width, base.height), o = out.getContext('2d');
   o.drawImage(killArtGrown(base, FIRE_ART.line, '#1B1B2F'), 0, 0);
   o.drawImage(base, 0, 0);
@@ -9042,7 +9043,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105iw 11-16';
+const CLIENT_BUILD_TAG = 'b1105ix 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
