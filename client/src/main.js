@@ -7700,6 +7700,7 @@ function renderHpChip(chip, m, role, noSideWords) {
 // screen work under it as they do without it (the large map takes no press: style.css .mm-pop), and it is still there when a
 // pause ends. It goes of itself where its switch cannot be reached: where the buttons hide (command mode, the game-start
 // intro, the finale) and on a desktop page whose pointer the free pov has taken.
+// Pressed, the round map goes down as a thumb button does (b1105iz: setupMiniMap, style.css .mini-map.is-down).
 // WHO IS ON IT: the marks follow the edge triangles' rule — under the anomaly rules and on the Shooting Range none but the
 // viewer's own (updateAllyArrow's gate); a unit down has none until its roster's next stands.
 // THE PICTURE is the map itself, photographed from straight above once per arena (miniMapShoot): the play area and a little
@@ -7833,7 +7834,13 @@ function setupMiniMap(hud, signal) {
   miniMapPicShow();
   // the round map is the large map's switch: a press on it opens the large map and the next press on it closes it — no other
   // press is this function's (b1105iy)
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); miniMapOpen(!miniMap.open); });
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); miniMapOpen(!miniMap.open); if (e.pointerType !== 'mouse') el.classList.add('is-down'); });
+  // THE PRESSED LOOK (b1105iz; user 2026-11-16: "Give mini-map button the same pushed down effect when tapped as other maneuvers
+  // buttons."): the thumb buttons' own look by their own means (setupHUD, b1105cd) — each touch marks the round map while it is
+  // down, so it shows pressed under a second finger too, the stick held; lifted or cancelled, the mark goes. A mouse keeps
+  // :active (style.css .mini-map.is-down)
+  const mmUp = () => el.classList.remove('is-down');
+  el.addEventListener('pointerup', mmUp); el.addEventListener('pointercancel', mmUp);
   // (a desktop page in free pov holds the mouse — setupFreePovPointer — and a held mouse cannot click the round map: the large
   //  map is put away as the pointer is taken)
   document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) miniMapOpen(false); }, { signal });
@@ -9041,7 +9048,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105iy 11-16';
+const CLIENT_BUILD_TAG = 'b1105iz 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

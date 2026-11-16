@@ -358,6 +358,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   border: 3px solid #ffffff; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px var(--ink);
   pointer-events: auto; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; --mk: 0.82;
 }
+/* THE PRESSED LOOK (b1105iz; user 2026-11-16: "Give mini-map button the same pushed down effect when tapped as other maneuvers
+   buttons."): the thumb buttons' own (.buttons button.is-down) — 2 px down and right onto its shadow, the shadow halved; the ink
+   ring stays. .is-down is each touch's own mark (main.js setupMiniMap, as the buttons' — b1105cd); a mouse keeps :active. */
+.buttons .mini-map:active, .buttons .mini-map.is-down { transform: translate(2px, 2px); box-shadow: 0 0 0 2px var(--ink), 2px 2px 0 2px var(--ink); }
 .mini-map .mm-win { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
 .mini-map .mm-win::after { content: ''; position: absolute; inset: 0; background: rgba(27, 27, 47, 0.11); }   /* (the small map a shade deeper than the large one: its marks are small) */
 .mm-pic { position: absolute; left: 50%; top: 50%; display: block; max-width: none; transform-origin: 0 0; will-change: transform; pointer-events: none; user-select: none; -webkit-user-drag: none; }
