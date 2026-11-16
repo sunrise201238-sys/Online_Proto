@@ -3071,7 +3071,8 @@ function teardownHud() {
 // "i want to make a in-game command that makes ally BOT moving forward/backward. The idea is a small button at the up left
 // corner of the joystick. By tapping it, 2 pop up buttons will appear, one would say smth like 'forward' and the other would
 // say smth like 'back off'." What the two do (tactic.js): FORWARD — the bot teammate's range band 30 nearer its target for
-// 10 s; BACK OFF — the Hide stance for 10 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"').
+// 20 s; BACK OFF — the Hide stance for 20 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"'; 10 s each
+// until b1105io — user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec": the one number, shared ALLY_TACTIC_MS).
 //   the lit one   while a call stands, its pop-up shows lit the next time the two are opened ("player will see that command
 //                 pop up button glowing once they open the command again"), and the button itself is lit for as long as
 //                 either call stands (b1105gr: "make the command button itself glowing as well");
@@ -8708,7 +8709,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105in 11-15';
+const CLIENT_BUILD_TAG = 'b1105io 11-16';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -11935,7 +11936,7 @@ function showGuidePopup() {
             <li><strong class="guide-hl">You can't be hit while dodging.</strong></li>
             <li>Walls and boxes stop bullets. Hide behind them to refill stamina safely, and fight from the distance your gun likes.</li>
             <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
-            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 10 seconds.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 20 seconds.</li>
           </ul>
 
           <h4>On some maps</h4>

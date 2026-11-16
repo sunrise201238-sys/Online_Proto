@@ -1,6 +1,7 @@
 import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their files, before any arena is asked for)
 // THE ALLY TACTIC (tactic.js; b1105gq): a classic player's call to a bot teammate — 'push' (FORWARD: the range band 30 nearer)
-// or 'hide' (BACK OFF: the Hide stance), each for 10 s; the standing one taken back, or replaced by the other, at once.
+// or 'hide' (BACK OFF: the Hide stance), each for 20 s (b1105io; 10 s until then — the times below are written off
+// ALLY_TACTIC_MS, its value pinned once); the standing one taken back, or replaced by the other, at once.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -11,16 +12,17 @@ import {
 } from '../src/sim/index.js';
 
 test('the call on the table: set, taken back, replaced, run out; an unknown kind and a dead unit refused; a wipe takes it', () => {
-  assert.equal(ALLY_TACTIC_MS, 10000); assert.equal(ALLY_TACTIC_PUSH, 30); assert.deepEqual(ALLY_TACTIC_KINDS, ['push', 'hide']);
+  assert.equal(ALLY_TACTIC_MS, 20000); assert.equal(ALLY_TACTIC_PUSH, 30); const D = ALLY_TACTIC_MS; assert.deepEqual(ALLY_TACTIC_KINDS, ['push', 'hide']);
   const m = createMatchState({ mapKey: 'arena1', mode: '2v2', p1UnitKey: 'unit1', p2UnitKey: 'unit1', p3UnitKey: 'unit1', p4UnitKey: 'unit1', startTime: 1000 });
   const cmd = ensureCommands(m, 'p3');
   assert.equal(tacticOf(cmd, 1000), null); assert.equal(tacticSettle(cmd, 1000), false, 'nothing called: nothing changed');
   assert.equal(setAllyTactic(m, 'p3', 'push', 1000), true);
-  assert.equal(tacticOf(cmd, 1000), 'push'); assert.equal(tacticOf(cmd, 10999), 'push'); assert.equal(tacticOf(cmd, 11000), null, 'it stands 10 s to the tick');
-  assert.deepEqual(tacticEcho(cmd, 5000), { kind: 'push', until: 11000 }); assert.equal(tacticEcho(cmd, 11000), null);
+  assert.equal(tacticOf(cmd, 1000), 'push'); assert.equal(tacticOf(cmd, 1000 + D - 1), 'push'); assert.equal(tacticOf(cmd, 1000 + D), null, 'it stands 20 s to the tick');
+  assert.equal(tacticOf(cmd, 11000), 'push', 'still standing where the 10 s of before b1105io ended');
+  assert.deepEqual(tacticEcho(cmd, 5000), { kind: 'push', until: 1000 + D }); assert.equal(tacticEcho(cmd, 1000 + D), null);
   assert.equal(tacticSettle(cmd, 1016), true, 'an order is a change, once'); assert.equal(tacticSettle(cmd, 1032), false);
   assert.equal(setAllyTactic(m, 'p3', 'hide', 3000), true, 'the other one replaces it at once');
-  assert.equal(tacticOf(cmd, 3000), 'hide'); assert.equal(cmd.tactic.until, 13000, 'and its 10 s run from then');
+  assert.equal(tacticOf(cmd, 3000), 'hide'); assert.equal(cmd.tactic.until, 3000 + D, 'and its 20 s run from then');
   assert.equal(cmd.hide, false, 'the stance flag of the commander and of the reload is not the tactic\'s to write');
   assert.equal(tacticSettle(cmd, 3016), true);
   assert.equal(setAllyTactic(m, 'p3', null, 4000), true, 'the take-back');
@@ -28,11 +30,11 @@ test('the call on the table: set, taken back, replaced, run out; an unknown kind
   assert.equal(setAllyTactic(m, 'p3', null, 4100), true, 'taking back nothing is no error'); assert.equal(tacticSettle(cmd, 4116), false, 'and no change');
   assert.equal(setAllyTactic(m, 'p3', 'charge', 5000), false, 'an unknown kind'); assert.equal(tacticOf(cmd, 5000), null);
   setAllyTactic(m, 'p3', 'push', 6000); tacticSettle(cmd, 6016);
-  assert.equal(tacticSettle(cmd, 15999), false); assert.equal(tacticSettle(cmd, 16000), true, 'running out is a change too'); assert.equal(cmd.tactic, null);
-  setAllyTactic(m, 'p3', 'hide', 17000); clearCommands(m, 'p3');
-  assert.equal(tacticOf(cmd, 17001), null, 'the wipe (death, respawn) takes the call with it');
+  assert.equal(tacticSettle(cmd, 6000 + D - 1), false); assert.equal(tacticSettle(cmd, 6000 + D), true, 'running out is a change too'); assert.equal(cmd.tactic, null);
+  setAllyTactic(m, 'p3', 'hide', 7000 + D); clearCommands(m, 'p3');
+  assert.equal(tacticOf(cmd, 7001 + D), null, 'the wipe (death, respawn) takes the call with it');
   m.fighters.p3.hp = 0;
-  assert.equal(setAllyTactic(m, 'p3', 'push', 18000), false, 'a dead unit takes no call');
+  assert.equal(setAllyTactic(m, 'p3', 'push', 8000 + D), false, 'a dead unit takes no call');
   assert.equal(setTactic(null, 'push', 0), false); assert.equal(tacticOf(null, 0), null); assert.equal(tacticSettle(null, 0), false); assert.equal(tacticEcho(null, 0), null);
 });
 
@@ -56,18 +58,18 @@ function fieldRun(script, ms) {
 }
 const span = (rows, a, b) => { const v = rows.filter((r) => r.t >= a && r.t < b).map((r) => r.d); return { min: Math.min(...v), max: Math.max(...v), mean: v.reduce((s, x) => s + x, 0) / v.length }; };
 
-test('FORWARD on Plain Field: the bot stands 30 nearer for the call\'s 10 s, inside its own lock, and is back at its band after', () => {
+test('FORWARD on Plain Field: the bot stands 30 nearer for the call\'s 20 s, inside its own lock, and is back at its band after', () => {
   assert.equal(UNIT_DATA.unit1.lockRange, 110);
-  let called = false;
-  const { rows } = fieldRun((m, t, now) => { if (!called && t >= 3000) { called = true; assert.equal(setAllyTactic(m, 'p1', 'push', now), true); } }, 22000);
-  const before = span(rows, 1500, 3000), held = span(rows, 7000, 13000), after = span(rows, 18000, 22000);
+  let called = false; const end = 3000 + ALLY_TACTIC_MS;   // (the call at 3 s of the run: it stands to `end`)
+  const { rows } = fieldRun((m, t, now) => { if (!called && t >= 3000) { called = true; assert.equal(setAllyTactic(m, 'p1', 'push', now), true); } }, end + 9000);
+  const before = span(rows, 1500, 3000), held = span(rows, 7000, end), after = span(rows, end + 5000, end + 9000);
   assert.ok(before.min > 100 && before.max < 120, `before the call the bot keeps its band: ${before.min.toFixed(1)} to ${before.max.toFixed(1)}`);
   assert.ok(held.min > 70 && held.max < 90, `under the call it keeps 73 to 87: ${held.min.toFixed(1)} to ${held.max.toFixed(1)}`);
-  assert.ok(rows.filter((r) => r.t >= 7000 && r.t < 13000).every((r) => r.locked), 'a pushed bot stands inside its lock: the lock range itself has not moved');
+  assert.ok(rows.filter((r) => r.t >= 7000 && r.t < end).every((r) => r.locked), 'a pushed bot stands inside its lock: the lock range itself has not moved');
   assert.ok(after.min > 100 && after.max < 120, `the call over, it is back at its band: ${after.min.toFixed(1)} to ${after.max.toFixed(1)}`);
 });
 
-test('FORWARD taken back: the bot is back at its band without waiting the 10 s out; with no call nothing moves', () => {
+test('FORWARD taken back: the bot is back at its band without waiting the 20 s out; with no call nothing moves', () => {
   let step = 0;
   const { rows } = fieldRun((m, t, now) => {
     if (step === 0 && t >= 3000) { step = 1; setAllyTactic(m, 'p1', 'push', now); }
