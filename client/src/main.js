@@ -9181,7 +9181,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jk 11-17';
+const CLIENT_BUILD_TAG = 'b1105jl 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12655,6 +12655,7 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // b1105jk, user 2026-11-17: "Update ... in-game Guide(keep it easy to read and concise)" — the PC line names the right-click
 // for the target switch and is shorter (the ally command's W and S moved to the ally's own line under Fighting), and Fighting
 // has a line each for the round map (b1105iw) and for the fire button's gun and rounds (b1105iv), which the Guide did not say.
+// b1105jl, user 2026-11-17: the right-click is the dodge's in the PC line, not the target switch's.
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -12691,7 +12692,7 @@ function showGuidePopup() {
           <h4>Controls</h4>
           <ul>
             <li>Phone: the stick on the left moves you. The buttons fire, sprint, dodge, jump and switch target.</li>
-            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or right-click · point of view T · map R · ally command E · Shooter or Command V.</li>
+            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L, Q or right-click · jump Space · switch target U · point of view T · map R · ally command E · Shooter or Command V.</li>
           </ul>
 
           <h4>Point of view</h4>
@@ -15811,7 +15812,7 @@ const FREE_POV = {
   crosshairThickPx: 2,  // nearest whole device pixels (freePovCrosshairAt), so style.css's --ch-len, --ch-th and --ch-edge never show
   crosshairEdgePx: 1
 };
-const freePovPtr = { screen: null, shoot: null, lastTapAt: 0, right: null };   // (the pointer swiping the screen / dragging the fire button; the last clean tap; the mouse's right button down where its drag aims — b1105jk)
+const freePovPtr = { screen: null, shoot: null, lastTapAt: 0, right: null };   // (the pointer swiping the screen / dragging the fire button; the last clean tap; the mouse's right button down where its drag aims — b1105jk, the dodge's since b1105jl)
 
 // The local human driving a LIVE unit — the only one with a pov of their own to switch (user 2026-10-30, "the pov toggle
 // shouldn't react to spectator"): not the spectator-mode watcher nor command mode (playerIsBotDriven), not a dead player
@@ -16187,8 +16188,8 @@ function freePovCrosshairAt(ch, m, x, y) {
 
 // The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
 // canvas is on the empty screen. Mouse: left button = fire (and the first click asks for the pointer lock; refused
-// by the page's frame, the mouse aims while a button is held), movement = aim, right button = the target switch (b1105jk,
-// below). Touch: a swipe aims; two clean taps
+// by the page's frame, the mouse aims while a button is held), movement = aim, right button = the dodge (b1105jl, below;
+// the target switch for one build, b1105jk). Touch: a swipe aims; two clean taps
 // (< 12 px, < 300 ms each, < 260 ms apart) toggle the pov. The fire button's own pointer aims too (freePovDragStart).
 function setupFreePovPointer(signal) {
   const canvas = renderer.domElement;
@@ -16207,7 +16208,7 @@ function setupFreePovPointer(signal) {
     if (e.pointerType === 'mouse') {
       if (!state.freePov || !(state.running || onlineMatchLive()) || dioramaActive()) return;
       if (document.pointerLockElement !== canvas && !(e.buttons & 3)) return;
-      if (freePovPtr.right) freePovPtr.right.moved += Math.hypot(e.movementX, e.movementY);   // (a right button's click or its drag — THE TARGET SWITCH BY THE RIGHT BUTTON, below)
+      if (freePovPtr.right) freePovPtr.right.moved += Math.hypot(e.movementX, e.movementY);   // (a right button's click or its drag — THE DODGE BY THE MOUSE'S RIGHT BUTTON, below)
       freePovTurn(e.movementX, e.movementY, FREE_POV.sensMouse, FREE_POV.sensMouse);
       return;
     }
@@ -16241,24 +16242,25 @@ function setupFreePovPointer(signal) {
   };
   window.addEventListener('pointerup', end, { signal });
   window.addEventListener('pointercancel', end, { signal });
-  // THE TARGET SWITCH BY THE MOUSE'S RIGHT BUTTON (b1105jk; user 2026-11-17: "Bind target switch to mouse right click for desktop
-  // as well" — E, the hand's own key for it beside W A S D, went to the ally tactic in b1105jj). A press of the right button
-  // on the empty screen is TARGET's press and U's (cyclePlayerTarget: the lock in a 2v2, the lanes on the Shooting Range, the
-  // watched unit for a spectator), in either pov, in the shooter view alone — command mode turns its camera by that button.
-  // One case waits for the release: free pov on a page whose frame refuses the pointer lock, where a held button's drag is
-  // the aim (pointermove, above) — there the switch is a clean click's, the two taps' own measure (< 12 px, < 300 ms), so a
-  // drag to look about switches nothing. The mouse's own events and not the pointer's: a button pressed while another is held
-  // — the left one, firing — sends no pointerdown. The page's menu is kept off the canvas while a match is played.
+  // THE DODGE BY THE MOUSE'S RIGHT BUTTON (b1105jl; user 2026-11-17: "Change the mouse right click binding from target switch
+  // to dodge. PT and 9.8" — the button was the target switch for one build, b1105jk: "Bind target switch to mouse right click
+  // for desktop as well"; the switch is U's and TARGET's alone again). A press of the right button on the empty screen is
+  // DODGE's press, L's and Q's (input.stepTap — the step's own rules decide the rest: its cooldown, its boost, a body free to
+  // move), in either pov, in the shooter view alone — command mode turns its camera by that button. One case waits for the
+  // release: free pov on a page whose frame refuses the pointer lock, where a held button's drag is the aim (pointermove,
+  // above) — there the dodge is a clean click's, the two taps' own measure (< 12 px, < 300 ms), so a drag to look about is no
+  // dodge. The mouse's own events and not the pointer's: a button pressed while another is held — the left one, firing —
+  // sends no pointerdown. The page's menu is kept off the canvas while a match is played.
   const rightLive = () => (state.running || onlineMatchLive()) && !dioramaActive();
   window.addEventListener('mousedown', (e) => {
     if (e.button !== 2 || e.target !== canvas || !rightLive()) return;
     if (state.freePov && document.pointerLockElement !== canvas) freePovPtr.right = { at: performance.now(), moved: 0 };
-    else cyclePlayerTarget();
+    else input.stepTap = true;
   }, { signal });
   window.addEventListener('mouseup', (e) => {
     if (e.button !== 2) return;
     const r = freePovPtr.right; freePovPtr.right = null;
-    if (r && r.moved < 12 && performance.now() - r.at < 300 && rightLive()) cyclePlayerTarget();
+    if (r && r.moved < 12 && performance.now() - r.at < 300 && rightLive()) input.stepTap = true;
   }, { signal });
   canvas.addEventListener('contextmenu', (e) => { if (state.freePov || rightLive()) e.preventDefault(); }, { signal });
 }
