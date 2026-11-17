@@ -3128,6 +3128,7 @@ function teardownHud() {
 //   inert         in spectator mode — the Practice toggle, or an online spectator: "shown but not responding";
 //   the player's own unit down, the teammate fighting on: the calls still work — the side is still the player's.
 // The two pop-ups close on a pick, on a second tap of the button, or TACTIC_HUD.closeMs after they opened.
+// BY KEY (b1105jj): E is the button's press, and W and S the two calls' while they are up — THE ALLY TACTIC BY KEY, below.
 // Where it sits (style.css .tac): at the fullscreen button's size, by the fullscreen button's place — on a narrow screen
 // right of it, under the left chips (b1105gs, user 2026-11-12: "move the command button to the right of full screen button,
 // make Command Button's size same as FC button"); on a big screen next to it at the top; on a small wide one, where it has
@@ -3206,12 +3207,37 @@ function setupAllyTacticHud(hud) {
   for (const opt of tacticHud.opts) {
     opt.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (!tacticHud.open) return;
-      const kind = opt.dataset.tactic;
-      allyTacticCall(allyTacticLive() === kind ? null : kind);   // (the lit one: taken back; the other, or either with none standing: called)
-      allyTacticOpen(false);
+      allyTacticPick(opt.dataset.tactic);
     });
   }
+}
+// A pick of one of the two — a tap on it, or its key (b1105jj): the lit one is taken back, the other, or either with none
+// standing, is called; the two close.
+function allyTacticPick(kind) {
+  if (!tacticHud.open) return false;
+  allyTacticCall(allyTacticLive() === kind ? null : kind);
+  allyTacticOpen(false);
+  return true;
+}
+// THE ALLY TACTIC BY KEY (b1105jj; user 2026-11-17: 'bind "E" to shooter mode in-game BOT command. After clicking E, pressing
+// "W" would command "Forward", pressing "S" would command "Back Off"'). E is the button's own press: the two calls come up, a
+// second E puts them away, and they close of themselves after TACTIC_HUD.closeMs as they do after a tap. While they are up, a
+// press of W is a tap on FORWARD and a press of S a tap on BACK OFF (allyTacticPick). That press is the call's alone: it moves
+// nothing — the window's key handler returns on it —, and a W or an S already held when E was pressed goes on moving the unit,
+// its press being the earlier one. The arrow keys stay the stick's. Where the button answers no tap — a 1v1, no bot beside the
+// player, Sudden Death, the Shooting Range, a spectator — or is not on the screen to be tapped — command mode (E turns the
+// camera there, as it did), the game-start intro, the ending camera, the pause menu — E does nothing. E switched the lock in
+// the shooter view until this build (user 2026-10-30, with Q the dodge); U switches it, as it did. The keys sound as the taps do.
+function allyTacticKeyPress() {
+  if (!matchKeysLive() || !allyTacticCan()) return false;
+  allyTacticOpen(!tacticHud.open);
+  sfxPlay('ui_small');   // (the button's own sound, uiSfxFor)
+  return true;
+}
+function allyTacticKeyPick(kind) {   // true: the two were up, and the press was a call's
+  if (!tacticHud.open || !matchKeysLive() || !allyTacticCan()) return false;
+  sfxPlay('ui_small');
+  return allyTacticPick(kind);
 }
 function updateAllyTacticHud(now) {
   tacticHud.now = now;
@@ -7767,6 +7793,8 @@ function renderHpChip(chip, m, role, noSideWords) {
 // screen work under it as they do without it (the large map takes no press: style.css .mm-pop), and it is still there when a
 // pause ends. It goes of itself where its switch cannot be reached: where the buttons hide (command mode, the game-start
 // intro, the finale) and on a desktop page whose pointer the free pov has taken.
+// BY KEY (b1105jj; user 2026-11-17: '"R" for calling up map'): R is the round map's own press (miniMapKeyPress) — the one
+// way to the large map on that desktop page, its pointer held.
 // Pressed, the round map goes down as a thumb button does (b1105iz: setupMiniMap, style.css .mini-map.is-down).
 // WHO IS ON IT: the marks follow the edge triangles' rule — under the anomaly rules and on the Shooting Range none but the
 // viewer's own (updateAllyArrow's gate); a unit down has none until its roster's next stands.
@@ -7911,6 +7939,15 @@ function setupMiniMap(hud, signal) {
   // (a desktop page in free pov holds the mouse — setupFreePovPointer — and a held mouse cannot click the round map: the large
   //  map is put away as the pointer is taken)
   document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) miniMapOpen(false); }, { signal });
+}
+// THE MAP BY KEY (b1105jj; user 2026-11-17: '"R" for calling up map'): R is the round map's own press — the large map comes
+// up, and the next R, or the next press on the round map, takes it away. It answers where the round map is on the screen to
+// be pressed: a match being played on this page (matchKeysLive — not the menus, the pause menu, the game-start intro or the
+// ending camera) and the buttons not away (command mode). Silent, as the round map's press is.
+function miniMapKeyPress() {
+  if (!miniMap.el || !matchKeysLive() || dioramaActive()) return false;
+  miniMapOpen(!miniMap.open);
+  return true;
 }
 function miniMapReset() {
   miniMap.el = miniMap.win = miniMap.picEl = miniMap.n = miniMap.pop = miniMap.big = miniMap.bigPic = miniMap.name = null;
@@ -9141,7 +9178,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ji 11-17';
+const CLIENT_BUILD_TAG = 'b1105jj 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12610,6 +12647,8 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // (updateLocksAndReticle — a sniper's aim at the viewer and Kei's sweep hold it red too), and a round flies straight at every
 // range (shared HOMING_MAX_DEG_PER_FRAME and HOMING_SOFTEN_DEG_PER_FRAME, both 0). The line now says the first and nothing of
 // homing; "at you" is left out of it, the icon reading the locked enemy's fire whoever it is aimed at (a teammate, in a 2v2).
+// b1105jj, user 2026-11-17 (the keyboard): the PC line's keys — the point of view on T (I until then), the map on R, the ally
+// command on E with W and S its two calls (E switched the target until then; U does) — and "press T" under Point of view.
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -12646,12 +12685,12 @@ function showGuidePopup() {
           <h4>Controls</h4>
           <ul>
             <li>Phone: the stick on the left moves you. The buttons fire, sprint, dodge, jump and switch target.</li>
-            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or E · Shooter or Command V · point of view I.</li>
+            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U · Shooter or Command V · point of view T · map R · ally command E, then W for FORWARD or S for BACK OFF.</li>
           </ul>
 
           <h4>Point of view</h4>
           <ul>
-            <li>Switch any time: tap the empty screen twice quickly, or press I.</li>
+            <li>Switch any time: tap the empty screen twice quickly, or press T.</li>
             <li><strong>Angled</strong>: your shots aim at the locked enemy by themselves.</li>
             <li><strong>Free</strong>: you aim the crosshair, and shots go where it points. Swipe the empty screen or drag the fire button to aim. On PC, use the mouse and left-click to fire.</li>
           </ul>
@@ -12847,6 +12886,7 @@ let lastSprintKeyAt = 0;
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
+  if ((k === 'w' || k === 's') && allyTacticKeyPick(k === 'w' ? 'push' : 'hide')) return;   // (THE ALLY TACTIC BY KEY, b1105jj: the two calls up, W is FORWARD's press and S BACK OFF's — the call's alone, nothing moves by it)
   if (k === 'w' || e.key === 'ArrowUp') keyState.up = true;
   else if (k === 's' || e.key === 'ArrowDown') keyState.down = true;
   else if (k === 'a' || e.key === 'ArrowLeft') keyState.left = true;
@@ -12863,9 +12903,10 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'j') { input.shootTap = true; input.shootHold = true; }
   else if (k === 'u') { if (!dioramaActive()) cyclePlayerTarget(); }
   else if (k === 'v') toggleDiorama();   // classic <-> command mode toggle
-  else if (k === 'i') toggleFreePov();   // angled <-> free pov (user 2026-10-30)
+  else if (k === 't') toggleFreePov();   // angled <-> free pov (b1105jj, user 2026-11-17: 'Change pov switch from "I" to "T"'; I from 2026-10-30 until then)
+  else if (k === 'r') miniMapKeyPress();   // the large map, as a press on the round map (b1105jj: '"R" for calling up map')
   else if (k === 'q') { if (dioramaActive()) keyState.rotL = true; else input.stepTap = true; }   // (shooter: dodge, user 2026-10-30; command mode: rotate left)
-  else if (k === 'e') { if (dioramaActive()) keyState.rotR = true; else cyclePlayerTarget(); }   // (shooter: target switch, user 2026-10-30; command mode: rotate right)
+  else if (k === 'e') { if (dioramaActive()) keyState.rotR = true; else allyTacticKeyPress(); }   // (shooter: the ally tactic's button, b1105jj — the target switch from 2026-10-30 until then, U's still; command mode: rotate right)
 });
 
 window.addEventListener('keyup', (e) => {
@@ -15741,7 +15782,7 @@ if (typeof window !== 'undefined') {
 // lock is kept but not fired at; the unit turns to the crosshair while it fires or charges and otherwise faces the way
 // it moves, holding its heading when still; the crosshair's four lines (Counter-Strike's classic, user 2026-11-02; a
 // ring until then) have their inner ends on the rounds' cone drawn on the screen (the base spread plus the bloom, as the
-// rounds sample it), one green whatever they sit on (red over an enemy's body until 2026-11-02). `i`, or two clean taps
+// rounds sample it), one green whatever they sit on (red over an enemy's body until 2026-11-02). `t` (`i` until b1105jj), or two clean taps
 // on the empty screen, toggles; back in angled pov the lock goes to the enemy nearest
 // the crosshair (ties to the nearer one). Ignored while command mode stands. The same rules offline (updatePlayer, the offline mirrors) and online (the frame's
 // freeAim/aimYaw/aimPitch — tick.js applyInput; the server fires along the aim it is sent).
@@ -15777,13 +15818,21 @@ function freePovAllowed() { return !dioramaActive() && freePovOwner(); }
 // runs off the server's word. Free pov's gates read that flag alone from its first build (PT b1027c, 2026-10-30): the two
 // taps and the swipe on the empty screen, the mouse's aim and its click, the crosshair — and with it the crosshair of a
 // free-aiming unit that a fallen teammate or a spectator watches —, so in an online match none of them ever came on, though
-// the frame carried freeAim / aimYaw / aimPitch and the server fired along them (the `i` key alone got through: the pov
+// the frame carried freeAim / aimYaw / aimPitch and the server fired along them (the pov's key alone got through: the pov
 // switched, with no crosshair and nothing to turn it by). The transporters' ring (updatePadRing) read it the same way.
 // Online they read this: the server's match 'active', this page's units built, the game-start intro over (the HUD is away
 // through it and the server holds every input) and no ending camera up. Offline nothing changes: the flag is theirs there.
 function onlineMatchLive() {
   const onl = state.online;
   return !!onl && !!state.player && onl.conn?.getMatchState?.() === 'active' && !intro.active && !finale.active;
+}
+// A MATCH BEING PLAYED ON THIS PAGE, NOW, AS A KEY READS IT (b1105jj). A tap on a HUD button needs no such question — the
+// button is on the screen to be tapped, or it is not — and a key is always under the hand. Offline the loop's own flag: down
+// under the pause menu, through the game-start intro and the ending camera, and in the menus (the Sudden Death banner keeps
+// the HUD live behind it, so it counts). Online the match's word (onlineMatchLive, b1105ji). Never under the loading screen.
+function matchKeysLive() {
+  if (matchCoverUp) return false;
+  return state.online ? onlineMatchLive() : state.phase === 'match' && (!!state.running || !!state.sdIntro);
 }
 
 function toggleFreePov(force) {
