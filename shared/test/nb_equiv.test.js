@@ -58,7 +58,11 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // "change the lockrange band in normal brain from +-7 to +-15"); play altered by design wherever a bot stands between the old edge
 // and the new. Against the b1105ge references six of the seven matches parted, between 0.85 s and 2.96 s (factory, airport,
 // station, lobby, flashpoint, arena2), and Plain Field's (arena1 unit1 vs unit2) played equal. The width itself is band_width.test.js.
-import { tickBot as tickOld } from './ai_b1105jc_ref.js';
+// Re-frozen at b1105jd (2026-11-17): the band's half-width is a number of constants.js (BOT_BAND_HALF_WIDTH), read there by the frozen
+// brain as by the live one, like every knob of that file — a new width parts nothing here and asks for no re-freeze (user: "i might
+// want to change the normal brain lock range band to +-25 in the future. make sure it won't take long when i ask to implement that").
+// The logic is untouched: the seven matches played equal to the b1105jc references after the change.
+import { tickBot as tickOld } from './ai_b1105jd_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

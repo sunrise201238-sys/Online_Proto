@@ -52,7 +52,9 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // parked. Against the b1105ge references six of the seven matches parted in ONE value — botApproachBlockedSince, the plain brain's
 // clock for its Maze trigger, written on the fighter every tick off the band's upper edge and never read under the Sudden Death
 // brain — and with that one value left out of the comparison all seven played equal after the change, to the last tick.
-import { tickBot as tickOld } from './ai_b1105jc_ref.js';
+// Re-frozen at b1105jd (2026-11-17) with the plain brain's references (the band's half-width a number of constants.js, read there by
+// the frozen brain too, nb_equiv.test.js): the seven matches played equal to the b1105jc references after the change.
+import { tickBot as tickOld } from './ai_b1105jd_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

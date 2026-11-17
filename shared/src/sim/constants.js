@@ -72,7 +72,7 @@ export const UNIT_DATA = {
     // volley is stretched 1.4x horizontally (volleyStretchX below; vertical
     // unchanged) — a dodge-catching fan vs Haruka's concentrated slug.
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
-    // lockRange, edges ±15 since b1105jc) gives the shotgun a 65–95 band.
+    // lockRange, edges ±BOT_BAND_HALF_WIDTH) gives the shotgun its band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
     projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
@@ -1131,11 +1131,44 @@ export const CMD_ANCHOR_LEASH = 20;
 // mirrors the value). findFiringPath's inline 1.6 is this same height.
 export const BOT_LOS_EYE_HEIGHT = 1.6;
 
+// THE PLAIN BOTS' BAND, ITS HALF-WIDTH (b1105jc; user 2026-11-17: "change the lockrange band in normal brain from +-7 to +-15. SD
+// brain should be uneffected if i'm not misunderstood"). The plain brain (nbrain.js, the band) keeps its target between the
+// band's middle less this and the middle plus this — inside it the bot fights (Engage), nearer it backs off and farther it
+// closes in (Pursue), and a route's firing spot is looked for inside it (Maze: the route cut, the firing-position search and
+// that search's reach, below). The middle is the unit's lock range, moved by the shotgun rule and by the ally tactic's push.
+// 7 until b1105jb, 15 since b1105jc.
+// TO CHANGE IT (b1105jd; the user, of a wider band still: "i might want to change the normal brain lock range band to +-25 in
+// the future. make sure it won't take long when i ask to implement that"): this number, its pin in
+// shared/test/band_width.test.js, the build tag (main.js CLIENT_BUILD_TAG) and the README's list of bands (Preferred engage
+// distance). Nothing else carries the number: the test lays its distances off it, the comments name it, and the bots' frozen
+// references (shared/test/*_ref.js) read it here as the live brain does, so a new width asks for no re-freeze.
+// The trial before the build, 80 matches of four plain bots (2v2 Health Point, eight maps, ten seeds a map, the same seeds either
+// way), at 7 and then at 15: a bot's time in Engage 6.3% and 11.3%, in the band with sight of its target 7.8% and 12.5%; backing
+// off 4.9% of its time and 3.5%; out of Engage for the range's sake 4.7 times a bot-minute and 3.6; pressed to a wall while in
+// Pursue 12.2 ticks a bot-minute and 9.7; damage dealt a bot-minute 232 and 225, the bots' time alive in all 4.5% more — the
+// fights are no shorter, a little longer. The searches' nodes a bot-minute 67,000 and 60,100. Under the server's budget (2 ms a
+// tick for the searches; 24 matches, each run twice): the brains' time a tick as it was (median 0.1 ms, the 99th percentile 2.3 to
+// 2.4 ms either way), the ticks over 2 ms 1.9 to 2.0% and 2.3%.
+// The Sudden Death brain reads no band — its own reach is all it has (sdbrain.js sdOwnReach), and under it the plain brain's
+// states stand parked (nbrain.js sdParks) — so its matches play tick for tick the same at any width: at b1105jc they parted from
+// the references of the width before in one value alone, the plain brain's clock for its Maze trigger (botApproachBlockedSince:
+// written on the fighter off the band's upper edge, never read under the Sudden Death brain), and 64 Sudden Death matches of
+// four bots on eight maps came out the same to the last record at 7 and at 15.
+// THE WIDTH 25, TRIED AHEAD (b1105jd): on scratch copies of both trees with this number and its pin changed and nothing else, the
+// 224 tests pass and 64 Sudden Death matches of four bots came out the same to the last record. On the 80 matches of the trial
+// above, at 15 and then at 25: a bot's time in Engage 11.3% and 14.2%, in the band with sight of its target 12.5% and 17.3%;
+// backing off 3.5% and 3.0%; out of Engage for the range's sake 3.6 times a bot-minute and 2.8; damage dealt a bot-minute 225 and
+// 228, the bots' time alive in all 1.6% less. Pressed to a wall as much in all (54.6 ticks a bot-minute and 57.7): less of it in
+// Pursue (9.7 and 9.2), more of it in Maze (9.8 and 17.8, on five of the eight maps). The searches' nodes a bot-minute 60,100 and
+// 56,800; under the server's budget the brains' time a tick the same within the runs' spread at 7, 15 and 25 (median 0.1 ms, the
+// 99th percentile 2.2 to 2.4 ms, the ticks over 4 ms 0.3 to 0.45%).
+export const BOT_BAND_HALF_WIDTH = 15;
+
 // THE FIRING-POSITION SEARCH'S REACH (user 2026-10-25, "the near guns walk first"): a bot farther from its target than this
-// many times its band's upper edge (lockRange + 15 since b1105jc, + 7 before) walks toward the target first (A*, cut at the
+// many times its band's upper edge (lockRange + BOT_BAND_HALF_WIDTH, above) walks toward the target first (A*, cut at the
 // first spot that fires) and runs the firing-position search only once inside the reach. At the rule's making: shotgun 47 →
-// 117 u, SMG 57 → 142 u; a sniper's 127 → 317 u, so it keeps crossing the map to its lane as before. With the lock ranges of
-// b1105et and the edges of b1105jc: the shotguns 95 → 237 u, the SMGs 115 → 287 u, Aru's and Hiyori's 215 → 537 u. The
+// 117 u, SMG 57 → 142 u; a sniper's 127 → 317 u, so it keeps crossing the map to its lane as before. At b1105jc (the lock
+// ranges of b1105et, the band 15 either side): the shotguns 95 → 237 u, the SMGs 115 → 287 u, Aru's and Hiyori's 215 → 537 u. The
 // search is the brains' largest single cost on the big maps.
 export const BOT_FIRING_SEARCH_REACH = 2.5;
 

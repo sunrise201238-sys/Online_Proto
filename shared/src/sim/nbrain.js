@@ -34,7 +34,7 @@
 import { between } from './math.js';
 import { segmentHitsObstacle, groundHeightAt, walkFloorTo, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from './physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from './navgrid.js';
-import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH, ALLY_TACTIC_PUSH } from './constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH, ALLY_TACTIC_PUSH, BOT_BAND_HALF_WIDTH } from './constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 import { sdBrainTick, silhouetteSeenFrom } from './sdbrain.js';
 import { hitStunMoveScale } from './movement.js';
@@ -151,25 +151,6 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 const BOT_SHOTGUN_ENGAGE_RANGE = 160;   // (PT and 9.6 b1105et, user 2026-11-10: "Change the range gating for SG encounter rule from 110 to 160"; 110 since b1105br)
 // a shotgun is told by its weapon class, the name's second half (Unit 2 / Shotgun), as the picker's class tags read it
 const isShotgunUnit = (u) => /\/\s*Shotgun\b/.test(u?.name || '');
-// THE BAND'S HALF-WIDTH (b1105jc; user 2026-11-17: "change the lockrange band in normal brain from +-7 to +-15. SD brain should be
-// uneffected if i'm not misunderstood"): the plain brain keeps its target between the band's middle less this and the middle plus
-// this — inside it the bot fights (Engage), nearer it backs off and farther it closes in (Pursue), and a route's firing spot is
-// looked for inside it (Maze: the route cut, the firing-position search and that search's reach, constants.js
-// BOT_FIRING_SEARCH_REACH). The middle is the unit's lock range, moved by the shotgun rule above and by the ally tactic's push
-// (tickBot, the band). 7 until b1105jb.
-// The trial before the build, 80 matches of four plain bots (2v2 Health Point, eight maps, ten seeds a map, the same seeds either
-// way), at 7 and then at 15: a bot's time in Engage 6.3% and 11.3%, in the band with sight of its target 7.8% and 12.5%; backing
-// off 4.9% of its time and 3.5%; out of Engage for the range's sake 4.7 times a bot-minute and 3.6; pressed to a wall while in
-// Pursue 12.2 ticks a bot-minute and 9.7; damage dealt a bot-minute 232 and 225, the bots' time alive in all 4.5% more — the
-// fights are no shorter, a little longer. The searches' nodes a bot-minute 67,000 and 60,100. Under the server's budget (2 ms a
-// tick for the searches; 24 matches, each run twice): the brains' time a tick as it was (median 0.1 ms, the 99th percentile 2.3 to
-// 2.4 ms either way), the ticks over 2 ms 1.9 to 2.0% and 2.3%.
-// The Sudden Death brain reads no band — its own reach is all it has (sdbrain.js sdOwnReach), and under it the plain brain's
-// states stand parked (sdParks) — so its matches play tick for tick as before: against the b1105ge references they part in one
-// value alone, the plain brain's clock for its Maze trigger (botApproachBlockedSince: written on the fighter off the band's upper
-// edge, never read under the Sudden Death brain; sdbrain_equiv.test.js, the note of b1105jc), and 64 Sudden Death matches of four
-// bots on eight maps came out the same to the last record at 7 and at 15.
-const BOT_BAND_HALF_WIDTH = 15;
 // HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
 // tickBot): a hidden-spot search runs at most every SEARCH_MS per unit (and
 // once per tick per match), a search that found nothing at all retries
@@ -724,7 +705,7 @@ export function nbBrainTick(host) {
   const tacticChanged = tacticSettle(host.cmd ?? null, now);
   const tactic = sd ? null : tacticOf(host.cmd ?? null, now);
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
-  // edges ±BOT_BAND_HALF_WIDTH (15 since b1105jc, 7 before). The bot hovers right at the red-lock boundary — drifting past
+  // edges ±BOT_BAND_HALF_WIDTH (constants.js: the band's width is that one number). The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
   // universal rule for every weapon.
   // (PT b1105ed, 9.6 b1105eg: no unit carries lockRange2v2 any more — the fallback to lockRange below is every unit's, 2v2 too.)
