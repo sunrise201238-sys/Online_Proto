@@ -6651,8 +6651,11 @@ function applyImmunityGlow(mech, immune) {
 // now. Growth = BLOOM_BRACKET_GAIN × bloom / BLOOM_BRACKET_FULL_BLOOM of the
 // way from ×1 to ×BLOOM_BRACKET_MAX_SCALE, clamped: the reference is 0.38 of
 // bloom (the demo SVD's full cap) and the ceiling ×4.5, reached at 0.19 of
-// bloom. Saori at her 0.06 cap shows ×1.74, Marina ×1.92, Koyuki at 0.12
-// ×2.84, Aris ×4.32, Fubuki pins at ×4.5 from her 4th quick shot on. The
+// bloom. A cap is all bloom since every base cone but Aris's went to 0
+// (b1105fw): Saori at her 0.06 cap shows ×2.11, Marina at 0.11 ×3.03, Koyuki
+// at 0.12 ×3.21, Aris (0.18 over her 0.02 base) ×4.32, and Fubuki pins at
+// ×4.5 from her 4th quick shot on (×1.74, ×1.92 and ×2.84 for the first three
+// while their bases were 0.02, 0.06 and 0.02). The
 // bracket's base size is the BA line's own; only the bloom factor is new.
 const BLOOM_BRACKET_MAX_SCALE = 4.5;
 const BLOOM_BRACKET_FULL_BLOOM = 0.38;
@@ -9178,7 +9181,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jj 11-17';
+const CLIENT_BUILD_TAG = 'b1105jk 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12649,6 +12652,9 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // homing; "at you" is left out of it, the icon reading the locked enemy's fire whoever it is aimed at (a teammate, in a 2v2).
 // b1105jj, user 2026-11-17 (the keyboard): the PC line's keys — the point of view on T (I until then), the map on R, the ally
 // command on E with W and S its two calls (E switched the target until then; U does) — and "press T" under Point of view.
+// b1105jk, user 2026-11-17: "Update ... in-game Guide(keep it easy to read and concise)" — the PC line names the right-click
+// for the target switch and is shorter (the ally command's W and S moved to the ally's own line under Fighting), and Fighting
+// has a line each for the round map (b1105iw) and for the fire button's gun and rounds (b1105iv), which the Guide did not say.
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -12685,7 +12691,7 @@ function showGuidePopup() {
           <h4>Controls</h4>
           <ul>
             <li>Phone: the stick on the left moves you. The buttons fire, sprint, dodge, jump and switch target.</li>
-            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U · Shooter or Command V · point of view T · map R · ally command E, then W for FORWARD or S for BACK OFF.</li>
+            <li>PC: move W A S D or the arrow keys · fire J · sprint K or Shift · dodge L or Q · jump Space · switch target U or right-click · point of view T · map R · ally command E · Shooter or Command V.</li>
           </ul>
 
           <h4>Point of view</h4>
@@ -12706,7 +12712,9 @@ function showGuidePopup() {
             <li><strong class="guide-hl">You can't be hit while dodging.</strong></li>
             <li>Walls and boxes stop bullets. Hide behind them to refill stamina safely, and fight from the distance your gun likes.</li>
             <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
-            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 20 seconds.</li>
+            <li>The round map shows the units near you. Tap it to see the whole map, and tap it again to close it.</li>
+            <li>The fire button shows your gun and the rounds left.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 20 seconds. On PC: E, then W for FORWARD or S for BACK OFF.</li>
           </ul>
 
           <h4>On some maps</h4>
@@ -15803,7 +15811,7 @@ const FREE_POV = {
   crosshairThickPx: 2,  // nearest whole device pixels (freePovCrosshairAt), so style.css's --ch-len, --ch-th and --ch-edge never show
   crosshairEdgePx: 1
 };
-const freePovPtr = { screen: null, shoot: null, lastTapAt: 0 };   // (the pointer swiping the screen / dragging the fire button; the last clean tap)
+const freePovPtr = { screen: null, shoot: null, lastTapAt: 0, right: null };   // (the pointer swiping the screen / dragging the fire button; the last clean tap; the mouse's right button down where its drag aims — b1105jk)
 
 // The local human driving a LIVE unit — the only one with a pov of their own to switch (user 2026-10-30, "the pov toggle
 // shouldn't react to spectator"): not the spectator-mode watcher nor command mode (playerIsBotDriven), not a dead player
@@ -16179,7 +16187,8 @@ function freePovCrosshairAt(ch, m, x, y) {
 
 // The pointers. The HUD passes pointer events through everywhere but its controls, so a pointer that starts on the
 // canvas is on the empty screen. Mouse: left button = fire (and the first click asks for the pointer lock; refused
-// by the page's frame, the mouse aims while a button is held), movement = aim. Touch: a swipe aims; two clean taps
+// by the page's frame, the mouse aims while a button is held), movement = aim, right button = the target switch (b1105jk,
+// below). Touch: a swipe aims; two clean taps
 // (< 12 px, < 300 ms each, < 260 ms apart) toggle the pov. The fire button's own pointer aims too (freePovDragStart).
 function setupFreePovPointer(signal) {
   const canvas = renderer.domElement;
@@ -16198,6 +16207,7 @@ function setupFreePovPointer(signal) {
     if (e.pointerType === 'mouse') {
       if (!state.freePov || !(state.running || onlineMatchLive()) || dioramaActive()) return;
       if (document.pointerLockElement !== canvas && !(e.buttons & 3)) return;
+      if (freePovPtr.right) freePovPtr.right.moved += Math.hypot(e.movementX, e.movementY);   // (a right button's click or its drag — THE TARGET SWITCH BY THE RIGHT BUTTON, below)
       freePovTurn(e.movementX, e.movementY, FREE_POV.sensMouse, FREE_POV.sensMouse);
       return;
     }
@@ -16231,7 +16241,26 @@ function setupFreePovPointer(signal) {
   };
   window.addEventListener('pointerup', end, { signal });
   window.addEventListener('pointercancel', end, { signal });
-  canvas.addEventListener('contextmenu', (e) => { if (state.freePov) e.preventDefault(); }, { signal });
+  // THE TARGET SWITCH BY THE MOUSE'S RIGHT BUTTON (b1105jk; user 2026-11-17: "Bind target switch to mouse right click for desktop
+  // as well" — E, the hand's own key for it beside W A S D, went to the ally tactic in b1105jj). A press of the right button
+  // on the empty screen is TARGET's press and U's (cyclePlayerTarget: the lock in a 2v2, the lanes on the Shooting Range, the
+  // watched unit for a spectator), in either pov, in the shooter view alone — command mode turns its camera by that button.
+  // One case waits for the release: free pov on a page whose frame refuses the pointer lock, where a held button's drag is
+  // the aim (pointermove, above) — there the switch is a clean click's, the two taps' own measure (< 12 px, < 300 ms), so a
+  // drag to look about switches nothing. The mouse's own events and not the pointer's: a button pressed while another is held
+  // — the left one, firing — sends no pointerdown. The page's menu is kept off the canvas while a match is played.
+  const rightLive = () => (state.running || onlineMatchLive()) && !dioramaActive();
+  window.addEventListener('mousedown', (e) => {
+    if (e.button !== 2 || e.target !== canvas || !rightLive()) return;
+    if (state.freePov && document.pointerLockElement !== canvas) freePovPtr.right = { at: performance.now(), moved: 0 };
+    else cyclePlayerTarget();
+  }, { signal });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button !== 2) return;
+    const r = freePovPtr.right; freePovPtr.right = null;
+    if (r && r.moved < 12 && performance.now() - r.at < 300 && rightLive()) cyclePlayerTarget();
+  }, { signal });
+  canvas.addEventListener('contextmenu', (e) => { if (state.freePov || rightLive()) e.preventDefault(); }, { signal });
 }
 function freePovDragStart(e) { if (e && e.pointerType !== 'mouse') freePovPtr.shoot = { id: e.pointerId, x: e.clientX, y: e.clientY }; }
 
