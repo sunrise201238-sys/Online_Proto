@@ -193,7 +193,7 @@ export const UNIT_DATA = {
     bloomCap: 0.16,            // SA ceiling while spraying (b1105fz, user 2026-11-11: "change hina bloom to 0.16 CAP, recovery 0.06/s, 200 ms"; 0.17 in PT b1105fy, 0.20 from b1105eq, 0.30 from b1105el, 0.14 until then): the sure-hit at the cap 20, reached at the 55th round on the 0 base, after 2.6 s of spray
     bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 2.7 s after the 200 ms
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too) (PT b1105eq: 200, as b1105ep; 0 in b1105eo; b1105fy and b1105fz keep it, "200 ms")
-    damage: 4,
+    damage: 3.5,               // (b1105jg, user 2026-11-17: "Change Hina damage to 3.5"; 4 until then) — 29 rounds to a full-HP kill, 1.34 s of her 48 ms beat with every round landing (25 rounds and 1.15 s at 4); a full drum carries 525 (600)
     magCapacity: 150,          // user 2026-11-11: "change hina mag size from 100 to 150" (b1105ga; 100 from 2026-11-06, 250 until then)
     botFireCap: 150,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06; 150 with it, b1105ga)
     reloadMs: 5000,            // user 2026-11-06: 5 s (7 s until then)
@@ -755,7 +755,7 @@ export const UNIT_DATA = {
     bloomCap: 0.06,
     bloomRecoverPerSec: 0.045,
     bloomRecoverDelayMs: 200,
-    damage: 4.5,              // (b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105dj) — 23 rounds to a full-HP kill, as Koyuki
+    damage: 4,                // (b1105jg, user 2026-11-17: "Change Maki damage to 4"; 4.5 from b1105dt, user 2026-11-08: "change maki and minori damage to 4.5"; 5 from b1105dj) — 25 rounds to a full-HP kill, 3.07 s of her 128 ms beat with every round landing (23 rounds and 2.82 s at 4.5, Koyuki's bullet)
     magCapacity: 100,
     botFireCap: 100,         // bot: shots per trigger pull = full mag
     reloadMs: 5000,

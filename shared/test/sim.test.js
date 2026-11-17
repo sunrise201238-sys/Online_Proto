@@ -10,7 +10,8 @@ import {
   TICK_RATE_MS,
   TICK_DT,
   MAP_DATA,
-  getArena
+  getArena,
+  UNIT_DATA
 } from '../src/sim/index.js';
 
 // Helper — assert no number in `obj` is NaN/±Infinity.
@@ -128,6 +129,30 @@ test('mg burst — fighter shoots MG with shootHold input', () => {
   // MG fires every 140ms; in 1000ms we expect ~7 shots.
   const fires = m.fighters.p1.unit.magCapacity - m.fighters.p1.ammo;
   assert.ok(fires >= 5 && fires <= 9, `expected ~7 MG fires in 1s, got ${fires}`);
+});
+
+// THE MACHINE GUNS' BULLETS (b1105jg, user 2026-11-17: "Change Hina damage to 3.5. Change Maki damage to 4."): a held trigger
+// on a target standing 48 u away, read hit by hit off the target's HP. Every hit takes the unit's own damage and the last one
+// what is left, so the hits to a full-HP kill are 100 over the damage, rounded up: Hina's 29 (25 at her 4 until then), Maki's
+// 25 (23 at her 4.5). Hits are counted, not rounds: a round of an open cone that misses changes nothing here.
+test('the machine guns\' bullets — Hina\'s takes 3.5 and Maki\'s 4 off a standing target, 29 and 25 hits to the kill (b1105jg)', () => {
+  for (const [key, damage, hits] of [['unit5', 3.5, 29], ['unit21', 4, 25]]) {
+    assert.equal(UNIT_DATA[key].damage, damage, `${key}: the table's damage`);
+    assert.equal(Math.ceil(100 / damage), hits);
+    const m = createMatchState({ p1UnitKey: key, p2UnitKey: 'unit1', startTime: 1000 });
+    let now = 1000, hp = m.fighters.p2.hp;
+    const drops = [];
+    assert.equal(hp, 100);
+    for (let i = 0; i < 4000 && m.fighters.p2.hp > 0; i += 1) {
+      now += TICK_RATE_MS;
+      tickMatch(m, { p1: { ...emptyInput(), shootHold: true }, p2: emptyInput() }, now, TICK_DT);
+      if (m.fighters.p2.hp !== hp) { drops.push(hp - m.fighters.p2.hp); hp = m.fighters.p2.hp; }
+    }
+    assert.equal(m.fighters.p2.hp, 0, `${key}: the target still stands at ${m.fighters.p2.hp}`);
+    assert.equal(drops.length, hits, `${key}: ${drops.length} hits to the kill`);
+    for (const d of drops.slice(0, -1)) assert.equal(d, damage, `${key}: a hit took ${d}`);
+    assert.equal(drops[drops.length - 1], 100 - damage * (hits - 1), `${key}: the last hit took ${drops[drops.length - 1]}`);
+  }
 });
 
 test('sniper charge — initiates charge on shootTap', () => {
