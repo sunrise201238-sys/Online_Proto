@@ -1433,6 +1433,48 @@ const input = {
 };
 
 let touchSteeringActive = false;
+// THE STICK'S TOUCHES (b1105jf; user 2026-11-17, of the stick on a phone: "i feel i was holding it but there was no input so i have
+// to retap to hold the joystick button", then, of the four remedies offered: "甲乙丙丁一起做"). The stick took one touch alone — the
+// one that went down on its ring — and was dead to a thumb that was down by any other way. Measured with real touches on a phone's
+// screen (844 x 390): a thumb put down before the stick was on the screen (the loading screen, GET READY, START — the HUD is away
+// for the intro's 3.8 s) gave nothing after START, held or moved, until it was lifted and put down again; a thumb that had slid out
+// of the ring — the stick follows a held thumb anywhere, so it stands out there unnoticed, full push being 46 px out and the ring's
+// edge 70 — and lost the glass for 40 ms came back as a touch on the empty screen; a second touch inside the ring (the heel of the
+// thumb) took the stick over and let it go as it lifted, the first thumb still down; and two quick taps beside the ring, a re-tap
+// that missed, switched to Free pov. Now every touch that is down is kept here by its pointer — where it went down, where it is,
+// what it went down on — and the stick (setupHUD) reads it:
+//   ITS ZONE is the ring and a collar round it: JOY_ZONE_SCALE times the ring's radius about its centre (a 140 px ring: 140 px
+//   out, 70 past its edge; a 120 px ring: 120 and 60), which reaches the screen's two edges at that corner. A touch that goes down
+//   in the zone on the empty screen or on the ring is the stick's; one that goes down on a button or the round map is that
+//   control's, wherever it stands; one that goes down outside the zone never becomes the stick's, slide where it may (Free pov's
+//   swipe keeps its own).
+//   ONE TOUCH DRIVES IT: the first of its touches down. A second one in the zone waits and takes nothing; when the driver lifts,
+//   the oldest still down takes the stick on, the sprint as it was held, and only with none left is the stick let go.
+//   A THUMB DOWN BEFORE THE STICK IS THERE is judged once the ring can be measured — as the intro's gate comes off the HUD
+//   (introClear), or at that thumb's next move with the stick free — and takes the stick where it stands.
+//   A TAP IN THE ZONE IS NO TAP ON THE SCREEN: Free pov's screen pointer leaves the stick's touches alone (setupFreePovPointer).
+// A release the browser never sent would leave its touch here for good, and a stick that waits for its driver would wait on it for
+// ever: the browser's own list of touches is the check (touchLiveCheck) — at every touch going down, lifting or cancelled, the list
+// here is cut back, the oldest first, to as many touches as the browser counts on the glass. A mouse or a pen starts the stick on
+// its ring alone and takes it over, as before. Event work only: nothing here runs in a frame.
+const JOY_ZONE_SCALE = 2;
+const touchLive = new Map();   // pointerId -> { x0, y0, x, y, target, joy } (joy: is it the stick's — null until judged)
+let joyHooks = null;           // the standing HUD's stick: { adopt, sync } (setupHUD; none without a HUD)
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch') touchLive.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, target: e.target, joy: null });
+  }, true);
+  window.addEventListener('pointermove', (e) => { const t = touchLive.get(e.pointerId); if (t) { t.x = e.clientX; t.y = e.clientY; } }, true);
+  const touchLiveEnd = (e) => { touchLive.delete(e.pointerId); };
+  window.addEventListener('pointerup', touchLiveEnd, true);
+  window.addEventListener('pointercancel', touchLiveEnd, true);
+  const touchLiveCheck = (e) => {
+    let cut = false;
+    for (const id of touchLive.keys()) { if (touchLive.size <= e.touches.length) break; touchLive.delete(id); cut = true; }
+    if (cut) joyHooks?.sync();
+  };
+  for (const type of ['touchstart', 'touchend', 'touchcancel']) window.addEventListener(type, touchLiveCheck, { capture: true, passive: true });
+}
 
 const keyState = {
   up: false,
@@ -3053,6 +3095,7 @@ function teardownHud() {
   input.lockTargetTap = null;
   state.hudAbort?.abort();
   state.hudAbort = null;
+  joyHooks = null;   // (THE STICK'S TOUCHES, b1105jf: that HUD's stick)
   state.hud?.remove();
   state.hud = null;
   killFeedReset(); killFeed.el = null;   // (THE KILL FEED, b1105gm: it lived in that HUD)
@@ -3308,7 +3351,8 @@ function setupHUD() {
 
   const joy = hud.querySelector('#joy');
   const stick = joy.querySelector('.stick');
-  let pointerId = null;
+  let pointerId = null;        // the pointer that drives the stick: the first of its touches down (or a mouse, a pen, on the ring)
+  let pointerIsTouch = false;
   let lastTapAt = 0;
   let lastSprintTapAt = 0;
 
@@ -3324,25 +3368,29 @@ function setupHUD() {
     input.y = Math.sin(ang) * (len / maxR);
   };
 
-  joy.addEventListener('pointerdown', (e) => {
+  // THE STICK'S TOUCHES (b1105jf, the note at touchLive): its zone, which touches are its own, which one drives.
+  const joyJudge = (t) => {   // (once, and only while the ring can be measured: hidden — the intro, command mode — it has no size)
+    if (t.joy !== null) return;
+    const r = joy.getBoundingClientRect();
+    if (!(r.width > 0)) return;
+    const el = t.target;   // (the empty screen, the ring, or a thing since gone — the loading screen, a menu; a control keeps its own touch)
+    t.joy = (el === renderer.domElement || joy.contains(el) || !el?.isConnected)
+      && Math.hypot(t.x0 - (r.left + r.width / 2), t.y0 - (r.top + r.height / 2)) <= r.width / 2 * JOY_ZONE_SCALE;
+  };
+  const joyTap = () => {   // (two presses within 240 ms: the sprint, as it always was)
     const now = performance.now();
     if (now - lastTapAt < 240) input.boost = true;
     lastTapAt = now;
-    pointerId = e.pointerId;
-    touchSteeringActive = true;
-    applyStick(e.clientX, e.clientY);
-  });
-
-  window.addEventListener('pointermove', (e) => {
-    if (pointerId !== e.pointerId) return;
-    applyStick(e.clientX, e.clientY);
-  }, { signal: hudAbort.signal });
-
-  // (the stick's finger lifted, or its touch cancelled by the system — a call, a swipe in from the screen's edge — b1105cd, user
-  // 2026-11-07: a cancelled touch sent no pointerup, so the stick stayed deflected and the unit walked on until the next touch)
-  const joyRelease = (e) => {
-    if (pointerId !== e.pointerId) return;
+  };
+  const joyTake = (id, t) => { pointerId = id; pointerIsTouch = true; touchSteeringActive = true; applyStick(t.x, t.y); };
+  const joyAdopt = () => {   // (the stick free: the oldest of its touches still down takes it, where that touch stands)
+    if (pointerId !== null) return;
+    for (const [id, t] of touchLive) { joyJudge(t); if (t.joy) { joyTake(id, t); return; } }
+  };
+  const joyLetGo = () => {
     pointerId = null;
+    joyAdopt();   // (another of its touches is still down: the hold goes on, the sprint as it was held)
+    if (pointerId !== null) return;
     touchSteeringActive = false;
     input.x = 0;
     input.y = 0;
@@ -3351,6 +3399,36 @@ function setupHUD() {
     input.boostHeld = false;
     stick.style.transform = 'translate(0px,0px)';
   };
+  joyHooks = { adopt: joyAdopt, sync: () => { if (pointerId !== null && pointerIsTouch && !touchLive.has(pointerId)) joyLetGo(); } };
+
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') {   // a mouse or a pen: on the ring alone, and it takes the stick as it always did
+      if (!joy.contains(e.target)) return;
+      joyTap();
+      pointerId = e.pointerId; pointerIsTouch = false; touchSteeringActive = true;
+      applyStick(e.clientX, e.clientY);
+      return;
+    }
+    const t = touchLive.get(e.pointerId);
+    if (!t) return;
+    joyJudge(t);
+    if (!t.joy || pointerId !== null) return;   // (not the stick's; or the stick is held, and this one waits)
+    joyTap();
+    joyTake(e.pointerId, t);
+  }, { capture: true, signal: hudAbort.signal });
+
+  window.addEventListener('pointermove', (e) => {
+    if (pointerId === e.pointerId) { applyStick(e.clientX, e.clientY); return; }
+    if (pointerId !== null || e.pointerType !== 'touch') return;
+    const t = touchLive.get(e.pointerId);   // (the stick free and a touch moving: one that was down before the stick was there)
+    if (!t || t.joy === false) return;
+    joyJudge(t);
+    if (t.joy) joyTake(e.pointerId, t);
+  }, { signal: hudAbort.signal });
+
+  // (the stick's finger lifted, or its touch cancelled by the system — a call, a swipe in from the screen's edge — b1105cd, user
+  // 2026-11-07: a cancelled touch sent no pointerup, so the stick stayed deflected and the unit walked on until the next touch)
+  const joyRelease = (e) => { if (pointerId === e.pointerId) joyLetGo(); };
   window.addEventListener('pointerup', joyRelease, { signal: hudAbort.signal });
   window.addEventListener('pointercancel', joyRelease, { signal: hudAbort.signal });
   setupFreePovPointer(hudAbort.signal);   // FREE POV (user 2026-10-30): the mouse, the screen swipe, the double-tap
@@ -9075,7 +9153,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105je 11-17';
+const CLIENT_BUILD_TAG = 'b1105jf 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13418,6 +13496,7 @@ function introClear() {
   intro.band?.remove(); intro.band = null;
   intro.go?.el.remove(); intro.go = null;
   document.documentElement.classList.remove('intro-on');
+  joyHooks?.adopt();   // (THE STICK'S TOUCHES, b1105jf: the stick is on the screen again — a thumb that was put down where it stands takes it)
   if (wasShots) introShotsOff();
   wallFadeSnap = false;
 }
@@ -16075,6 +16154,7 @@ function setupFreePovPointer(signal) {
       input.shootTap = true; input.shootHold = true;
       return;
     }
+    if (touchLive.get(e.pointerId)?.joy) return;   // (THE STICK'S TOUCHES, b1105jf: a touch in the stick's zone is the stick's — no swipe, no tap of the two that switch the pov)
     freePovPtr.screen = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, at: performance.now() };
   }, { signal });
   window.addEventListener('pointermove', (e) => {
