@@ -3114,10 +3114,11 @@ function teardownHud() {
 // ---- THE ALLY TACTIC (shared tactic.js; PT b1105gq, user 2026-11-12) ------------------------------------------------
 // "i want to make a in-game command that makes ally BOT moving forward/backward. The idea is a small button at the up left
 // corner of the joystick. By tapping it, 2 pop up buttons will appear, one would say smth like 'forward' and the other would
-// say smth like 'back off'." What the two do (tactic.js): FORWARD — the bot teammate's range band 30 nearer its target for
-// 40 s; BACK OFF — the Hide stance for 40 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"'; 10 s each
-// until b1105io — user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec"; 20 s each
-// until b1105jm — user 2026-11-17: "Change the in-game BOT command effective duration (Forward/Back Off) to 40sec": the one number, shared ALLY_TACTIC_MS).
+// say smth like 'back off'." What the two do (tactic.js): FORWARD — the bot teammate's range band 30 nearer its target;
+// BACK OFF — the Hide stance ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"'). A CALL HAS NO TIME LIMIT
+// (b1105jn; user 2026-11-17: "Change the in-game BOT command effective duration (Forward/Back Off) to no time limit"): it stands until it
+// is taken back, replaced by the other, or its unit falls. It stood 10 s at first, 20 s from b1105io (user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec")
+// and 40 s from b1105jm (user 2026-11-17: "Change the in-game BOT command effective duration (Forward/Back Off) to 40sec").
 //   the lit one   while a call stands, its pop-up shows lit the next time the two are opened ("player will see that command
 //                 pop up button glowing once they open the command again"), and the button itself is lit for as long as
 //                 either call stands (b1105gr: "make the command button itself glowing as well");
@@ -3153,7 +3154,7 @@ const ALLY_TACTIC_HTML = '<div class="tac" id="tac">'
   + '<div class="tac-pop"><div class="tac-opt" data-tactic="push">FORWARD</div><div class="tac-opt" data-tactic="hide">BACK OFF</div></div>'
   + '<div class="tac-btn" id="tac-btn" role="button" aria-label="Ally tactic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V5"/><path d="M4 9l4-4 4 4"/><path d="M16 4v15"/><path d="M12 15l4 4 4-4"/></svg></div>'
   + '</div>';
-const tacticHud = { el: null, opts: [], open: false, openAt: 0, lastCallAt: -1e9, now: 0 };
+const tacticHud = { el: null, opts: [], open: false, openAt: 0, lastCallAt: -1e9 };
 function allyTacticShown() {
   const a = state.ally;
   if (!a || state.mode !== '2v2' || a.state.hp <= 0) return false;
@@ -3173,11 +3174,11 @@ function allyTacticCan() {
   if (onl) return ONLINE_SLOT_IDS.includes(onl.myPlayerId) && !onl.commandMode && onl.conn?.getMatchState?.() === 'active';
   return !!state.running;
 }
-// The call standing on the teammate now, as this page knows it: 'push' | 'hide' | null (`now` in the HUD's clock — the
-// page's own offline, the server's online, as the call's end is).
-function allyTacticLive(now = tacticHud.now) {
-  const t = state.ally?.cmdTactic;
-  return t && now < t.until ? t.kind : null;
+// The call standing on the teammate now, as this page knows it: 'push' | 'hide' | null. A call is there until it is taken
+// away (b1105jn: no time limit, and no clock read here) — offline the shared rule's own record, online the server's word
+// with each snapshot. A server of before b1105jn ends a call by its clock and stops sending it then, which this reads the same.
+function allyTacticLive() {
+  return state.ally?.cmdTactic?.kind ?? null;
 }
 function allyTacticCall(kind) {   // 'push' | 'hide' | null (the take-back)
   if (!allyTacticCan()) return false;
@@ -3187,7 +3188,7 @@ function allyTacticCall(kind) {   // 'push' | 'hide' | null (the take-back)
     if (now - tacticHud.lastCallAt < ALLY_TACTIC_MIN_INTERVAL_MS) return false;
     tacticHud.lastCallAt = now;
   }
-  return setTactic(botCmdView(state.ally), kind, now);
+  return setTactic(botCmdView(state.ally), kind);
 }
 function allyTacticOpen(open) {
   tacticHud.open = !!open && !!tacticHud.el;
@@ -3240,14 +3241,13 @@ function allyTacticKeyPick(kind) {   // true: the two were up, and the press was
   sfxPlay('ui_small');
   return allyTacticPick(kind);
 }
-function updateAllyTacticHud(now) {
-  tacticHud.now = now;
+function updateAllyTacticHud() {
   const hud = state.hud, el = tacticHud.el;
   if (!hud || !el) return;
-  if (!state.online && state.ally?.cmdTactic && state.ally.state.hp <= 0) setTactic(botCmdView(state.ally), null, 0);   // (a call dies with the unit it was made to — the server's wipe on death, shared clearCommands)
+  if (!state.online && state.ally?.cmdTactic && state.ally.state.hp <= 0) setTactic(botCmdView(state.ally), null);   // (a call dies with the unit it was made to — the server's wipe on death, shared clearCommands)
   const shown = allyTacticShown();
   hud.classList.toggle('tac-on', shown);
-  const live = shown ? allyTacticLive(now) : null;
+  const live = shown ? allyTacticLive() : null;
   el.classList.toggle('live', live != null);   // (b1105gr, user 2026-11-12: "when there is either command in effect, make the command button itself glowing as well" — the button lit for as long as a call stands, the two closed or open; style.css .tac.live)
   if (!shown) { if (tacticHud.open) allyTacticOpen(false); return; }
   if (!tacticHud.open) return;
@@ -6489,7 +6489,7 @@ function botCmdView(m) {
     get hideAuto() { return m.cmdHideAuto; }, set hideAuto(v) { m.cmdHideAuto = v; },
     get move() { return m.cmdMove; }, set move(v) { m.cmdMove = v; },
     get lockTargetId() { return m.cmdLock; }, set lockTargetId(v) { m.cmdLock = v; },
-    get tactic() { return m.cmdTactic ?? null; }, set tactic(v) { m.cmdTactic = v; },   // (THE ALLY TACTIC, tactic.js: { kind, until } and the mark an order leaves)
+    get tactic() { return m.cmdTactic ?? null; }, set tactic(v) { m.cmdTactic = v; },   // (THE ALLY TACTIC, tactic.js: { kind } and the mark an order leaves)
     get tacticDirty() { return !!m.cmdTacticDirty; }, set tacticDirty(v) { m.cmdTacticDirty = v; }
   };
 }
@@ -8043,7 +8043,7 @@ function updateHud(now = performance.now()) {
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   updateKillFeed();   // (THE KILL FEED, b1105gm: its two places and its pace)
   updateUnitSfx(now);   // (THE GAME'S SOUNDS, b1105hk: what the units' state tells this frame)
-  updateAllyTacticHud(now);   // (THE ALLY TACTIC, b1105gq: shown or not, the standing call lit)
+  updateAllyTacticHud();   // (THE ALLY TACTIC, b1105gq: shown or not, the standing call lit)
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
   if (state.hud) state.hud.classList.toggle('hud-anomaly', anomalyRules());   // (the anomaly rules: the other units' chips hide)
   // (b1105aj, user: "no need hp bars in shooting range") the Shooting Range shows no HP chips — nothing is at stake on the
@@ -9182,7 +9182,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jm 11-17';
+const CLIENT_BUILD_TAG = 'b1105jn 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10956,7 +10956,7 @@ function syncOnlineCommands(snap, onl) {
     // Fight / Hide stance flag (owner 2026-09-26): the shield badge and the
     // order gates read mech.cmdHide exactly like the offline layer.
     mech.cmdHide = !!c?.hide;
-    mech.cmdTactic = c?.tactic ?? null;   // (THE ALLY TACTIC, b1105gq: the call standing on a bot teammate — { kind, until }, the end in the server's clock)
+    mech.cmdTactic = c?.tactic ?? null;   // (THE ALLY TACTIC, b1105gq: the call standing on a bot teammate — its kind; the `until` beside it is for older pages, and unread here since b1105jn)
   }
 }
 
@@ -12658,6 +12658,7 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // has a line each for the round map (b1105iw) and for the fire button's gun and rounds (b1105iv), which the Guide did not say.
 // b1105jl, user 2026-11-17: the right-click is the dodge's in the PC line, not the target switch's.
 // b1105jm, user 2026-11-17: the ally command's line says 40 seconds (20 until then; the call's length, shared ALLY_TACTIC_MS).
+// b1105jn, user 2026-11-17: no time limit — the line says the teammate keeps doing it until it falls, and how to cancel.
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -12717,7 +12718,7 @@ function showGuidePopup() {
             <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
             <li>The round map shows the units near you. Tap it to see the whole map, and tap it again to close it.</li>
             <li>The fire button shows your gun and the rounds left.</li>
-            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 40 seconds. On PC: E, then W for FORWARD or S for BACK OFF.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate keeps doing it until it falls. Pick the same one again to cancel. On PC: E, then W for FORWARD or S for BACK OFF.</li>
           </ul>
 
           <h4>On some maps</h4>
@@ -16578,7 +16579,7 @@ function clearUnitCommands(m) {
   m.cmdLock = null;
   m.cmdHide = false;   // the double-tap wipe also releases a Hide (owner 2026-09-26)
   m.cmdHideAuto = false;
-  if (m.cmdTactic) setTactic(botCmdView(m), null, 0);   // (the ally tactic too — the shared clearCommands)
+  if (m.cmdTactic) setTactic(botCmdView(m), null);   // (the ally tactic too — the shared clearCommands)
 }
 
 // Hide stance (owner 2026-09-26). Hide = "sight blocked first, fire only
@@ -16617,7 +16618,7 @@ function dioramaCommandTick() {
       continue;
     }
     if (m.cmdLock && m.cmdLock.state.hp <= 0) m.cmdLock = null;
-    if (m.cmdTactic) setTactic(botCmdView(m), null, 0);   // (no ally tactic stands in command mode — one called in the shooter view, the view then switched from the pause menu, ends here)
+    if (m.cmdTactic) setTactic(botCmdView(m), null);   // (no ally tactic stands in command mode — one called in the shooter view, the view then switched from the pause menu, ends here)
   }
   if (diorama.sel && (!state[diorama.sel] || state[diorama.sel].state.hp <= 0)) diorama.sel = null;
 }

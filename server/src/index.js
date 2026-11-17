@@ -551,9 +551,10 @@ function emitSnapshotsFor(lobby) {
       if (teamOf(cs) !== team) continue;
       if ((lobby.match.fighters[cs]?.hp ?? 0) <= 0) continue;   // dead unit
       const cmd = getCommands(lobby.match, cs);
-      // (THE ALLY TACTIC, tactic.js; b1105gq: the call standing on a bot teammate — its kind and its end in this clock, for the
-      //  caller's HUD, which lights the standing one; like every order it reaches its own team alone)
-      const tactic = tacticEcho(cmd, lobby.match.now);
+      // (THE ALLY TACTIC, tactic.js; b1105gq: the call standing on a bot teammate — its kind, for the caller's HUD, which lights
+      //  the standing one; like every order it reaches its own team alone. No end since b1105jn: tacticEcho writes one no clock
+      //  reaches, for the pages of before that build)
+      const tactic = tacticEcho(cmd);
       if (!cmd || (!cmd.move && !cmd.lockTargetId && !cmd.hide && !tactic)) continue;
       out[cs] = {
         move: cmd.move ? {
@@ -886,8 +887,9 @@ io.on('connection', (socket) => {
 
   // ---- THE ALLY TACTIC (shared tactic.js; PT b1105gq, user 2026-11-12) -------
   // A CLASSIC player's call to the bot on their side: { slot, kind } — 'push' (FORWARD: the bot's range band 30 nearer) or
-  // 'hide' (BACK OFF: the Hide stance) for ALLY_TACTIC_MS (40 s since b1105jm, 20 s since b1105io, 10 s until then), null to take the standing one back. The page sends what the player meant
-  // (it knows which one it showed lit), so a call that ran out on the way is not set anew by its own take-back.
+  // 'hide' (BACK OFF: the Hide stance), which stands until it is taken back (no time limit since b1105jn — 40 s from b1105jm,
+  // 20 s from b1105io, 10 s before that), null to take the standing one back. The page sends what the player meant
+  // (it knows which one it showed lit), so a call that was wiped on the way — its unit fell — is not set anew by its own take-back.
   //   who   a seated player of this match who is not in command mode (a commander has real orders, and no such buttons);
   //   whom  a slot of the same side that a bot plays now (botSlots) — a seat a player left in mid-match too, since b1105iq
   //         (user 2026-11-16: "Still shows and functions when one of the player is BOT"); until then the match-start bots
@@ -910,7 +912,7 @@ io.on('connection', (socket) => {
       if (nowMs - lb.lastTacticAt[slot] < ALLY_TACTIC_MIN_INTERVAL_MS) return;
       lb.lastTacticAt[slot] = nowMs;
     }
-    setAllyTactic(lb.match, slot, kind, lb.match.now || Date.now());   // (the match's own clock — the last tick's, which the brain and the echo read)
+    setAllyTactic(lb.match, slot, kind);
   });
 
   socket.on('match:configure', (cfg) => {

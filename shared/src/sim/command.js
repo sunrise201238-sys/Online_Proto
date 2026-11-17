@@ -97,7 +97,7 @@ export function clearCommands(matchState, slot) {
   cmd.lockTargetId = null;
   cmd.hide = false;
   cmd.hideAuto = false;
-  setTactic(cmd, null, 0);   // (the ally tactic too, tactic.js: a call dies with the unit it was made to)
+  setTactic(cmd, null);   // (the ally tactic too, tactic.js: a call dies with the unit it was made to)
 }
 
 // Granular clear (owner 2026-08-27): the ring double-tap removes ONLY the
@@ -194,10 +194,10 @@ export function setStance(matchState, slot, hide) {
   return true;
 }
 
-// THE ALLY TACTIC (tactic.js; b1105gq): a classic player's call to a bot teammate — 'push' | 'hide' for ALLY_TACTIC_MS, null to
-// take the standing one back. Rejects a missing or dead unit and an unknown kind; who may call, and how often, is the
+// THE ALLY TACTIC (tactic.js; b1105gq): a classic player's call to a bot teammate — 'push' | 'hide', which stands until it is
+// taken back (no time limit, b1105jn), null to take the standing one back. Rejects a missing or dead unit and an unknown kind; who may call, and how often, is the
 // host's to check (server index.js ally:tactic).
-export function setAllyTactic(matchState, slot, kind, now) {
+export function setAllyTactic(matchState, slot, kind) {
   const f = matchState.fighters[slot];
   if (!f || f.hp <= 0) return false;
   const fresh = !matchState.commands?.[slot];
@@ -208,7 +208,7 @@ export function setAllyTactic(matchState, slot, kind, now) {
   // under way goes onto the new entry as the brain would have put it at the reload's start (hide + hideAuto, released
   // when the reload ends), so the call does not let the unit out of it — as it does not for any other bot.
   if (fresh && f.botReloadHide) { cmd.hide = true; cmd.hideAuto = true; }
-  return setTactic(cmd, kind, now);
+  return setTactic(cmd, kind);
 }
 
 export function isHideOrdered(matchState, slot) {

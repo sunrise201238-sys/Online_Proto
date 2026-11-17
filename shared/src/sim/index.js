@@ -60,4 +60,4 @@ export {
   setMoveOrder, setForceLock, setStance, isHideOrdered, clearCommands, clearMoveOrder, getCommands, ensureCommands,
   commandTargetIdOf, tickCommandDriver, setAllyTactic
 } from './command.js';
-export { ALLY_TACTIC_KINDS, tacticOf, tacticSettle, setTactic, tacticEcho } from './tactic.js';   // THE ALLY TACTIC (b1105gq)
+export { ALLY_TACTIC_KINDS, ALLY_TACTIC_NO_END, tacticOf, tacticSettle, setTactic, tacticEcho } from './tactic.js';   // THE ALLY TACTIC (b1105gq)

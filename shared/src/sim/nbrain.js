@@ -700,10 +700,10 @@ export function nbBrainTick(host) {
 
   // THE ALLY TACTIC (tactic.js; b1105gq): what a classic player called to this bot teammate, read off its command entry — 'push'
   // (FORWARD: the band below ALLY_TACTIC_PUSH nearer), 'hide' (BACK OFF: the Hide stance, further down) or none. Whenever it
-  // changed since the brain last looked — an order, a take-back, its time run out — a Maze route starts afresh (the re-commit
+  // changed since the brain last looked — an order, a take-back, a wipe (no clock ends a call, b1105jn) — a Maze route starts afresh (the re-commit
   // below): it was planned to a firing spot inside the band as it stood. The Sudden Death brain takes no tactic.
-  const tacticChanged = tacticSettle(host.cmd ?? null, now);
-  const tactic = sd ? null : tacticOf(host.cmd ?? null, now);
+  const tacticChanged = tacticSettle(host.cmd ?? null);
+  const tactic = sd ? null : tacticOf(host.cmd ?? null);
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
   // edges ±BOT_BAND_HALF_WIDTH (constants.js: the band's width is that one number). The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
