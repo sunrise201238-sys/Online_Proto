@@ -9141,7 +9141,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jh 11-17';
+const CLIENT_BUILD_TAG = 'b1105ji 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -15772,6 +15772,19 @@ function freePovOwner() {
   return !!state.player && state.player.state.hp > 0 && !playerIsBotDriven() && !(state.online && state.online.myPlayerId === 'spectator');
 }
 function freePovAllowed() { return !dioramaActive() && freePovOwner(); }
+// AN ONLINE MATCH BEING PLAYED ON THIS PAGE, NOW (b1105ji; user 2026-11-17: "Free pov is unavailable in online matches").
+// state.running is the OFFLINE loop's flag: startOnlineMatch puts it down and nothing online raises it — an online match
+// runs off the server's word. Free pov's gates read that flag alone from its first build (PT b1027c, 2026-10-30): the two
+// taps and the swipe on the empty screen, the mouse's aim and its click, the crosshair — and with it the crosshair of a
+// free-aiming unit that a fallen teammate or a spectator watches —, so in an online match none of them ever came on, though
+// the frame carried freeAim / aimYaw / aimPitch and the server fired along them (the `i` key alone got through: the pov
+// switched, with no crosshair and nothing to turn it by). The transporters' ring (updatePadRing) read it the same way.
+// Online they read this: the server's match 'active', this page's units built, the game-start intro over (the HUD is away
+// through it and the server holds every input) and no ending camera up. Offline nothing changes: the flag is theirs there.
+function onlineMatchLive() {
+  const onl = state.online;
+  return !!onl && !!state.player && onl.conn?.getMatchState?.() === 'active' && !intro.active && !finale.active;
+}
 
 function toggleFreePov(force) {
   const want = force !== undefined ? !!force : !state.freePov;
@@ -16008,7 +16021,7 @@ function updatePadRing() {
   const hud = state.hud; if (!hud) return;
   let el = hud.querySelector('#pad-ring');
   const st = state.player?.state, onl = state.online;
-  const mine = st && st.padCharge != null && st.hp > 0 && (state.running || !!state.sdIntro) && !dioramaActive() && !playerIsBotDriven() && !onl?.commandMode;
+  const mine = st && st.padCharge != null && st.hp > 0 && (state.running || !!state.sdIntro || onlineMatchLive()) && !dioramaActive() && !playerIsBotDriven() && !onl?.commandMode;
   const p = mine ? padChargeProgress(st, onl ? (onl.lastPredSimTime ?? 0) : performance.now()) : null;
   if (p == null) { if (el) el.style.display = 'none'; return; }
   if (!el) {
@@ -16035,7 +16048,7 @@ function updatePadRing() {
 // player's own live free pov (.free-pov-live); a spectator keeps it to change the watched unit.
 function updateCrosshair() {
   const ch = state.hud?.querySelector('#crosshair');
-  const inMatch = state.running || !!state.sdIntro;
+  const inMatch = state.running || !!state.sdIntro || onlineMatchLive();   // (online the match's own word: state.running is the offline loop's — onlineMatchLive, b1105ji)
   const live = state.freePov && freePovAllowed() && inMatch && state.player.state.ladder == null;   // (the climb's camera is the chase camera: no crosshair meanwhile — ladder.js)
   state.hud?.classList.toggle('free-pov-live', !!live);
   const viewer = live ? null : cameraFocusMech();
@@ -16122,7 +16135,7 @@ function freePovCrosshairAt(ch, m, x, y) {
 function setupFreePovPointer(signal) {
   const canvas = renderer.domElement;
   window.addEventListener('pointerdown', (e) => {
-    if (!state.running || dioramaActive() || e.target !== canvas) return;
+    if (!(state.running || onlineMatchLive()) || dioramaActive() || e.target !== canvas) return;   // (online too, b1105ji: onlineMatchLive)
     if (e.pointerType === 'mouse') {
       if (!state.freePov || !freePovAllowed() || e.button !== 0) return;
       if (document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.(); } catch { /* the frame refuses: drag-aim */ } }
@@ -16134,7 +16147,7 @@ function setupFreePovPointer(signal) {
   }, { signal });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
-      if (!state.freePov || !state.running || dioramaActive()) return;
+      if (!state.freePov || !(state.running || onlineMatchLive()) || dioramaActive()) return;
       if (document.pointerLockElement !== canvas && !(e.buttons & 3)) return;
       freePovTurn(e.movementX, e.movementY, FREE_POV.sensMouse, FREE_POV.sensMouse);
       return;
