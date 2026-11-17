@@ -155,6 +155,36 @@ test('the machine guns\' bullets — Hina\'s takes 3.5 and Maki\'s 4 off a stand
   }
 });
 
+// ARIS'S BOLT (b1105jo, user 2026-11-17: "Change Aris damage from 12 to 9."): the same reading for unit7. Every hit takes 9 and
+// the last one the 1 that eleven hits leave, so a full-HP kill takes 12 hits (9 at her 12 until then) and a full magazine of 8
+// carries 72 (96). WHEN the bolts leave is the gun's own beat and no chance: ten in a row 336 ms apart — the magazine's 8 and
+// the 2 rounds that come back while it empties (one every 1200 ms from the first shot) — then each bolt waits for its round, so
+// the 11th leaves 3616 ms after the first and the 12th 4816 ms: 4.82 s to the kill with every bolt landing, 2.69 s (the 9th)
+// until then. Hits are counted, not bolts: a bolt of her open cone that misses changes nothing in the count.
+test('Aris\'s bolt takes 9 off a standing target, 12 hits to the kill; ten bolts in a row, then one a round (b1105jo)', () => {
+  const u = UNIT_DATA.unit7;
+  assert.equal(u.damage, 9, 'the table\'s damage');
+  assert.equal(Math.ceil(100 / u.damage), 12);
+  assert.equal(u.magCapacity * u.damage, 72, 'a full magazine');
+  const m = createMatchState({ p1UnitKey: 'unit7', p2UnitKey: 'unit1', startTime: 1000 });
+  let now = 1000, hp = m.fighters.p2.hp, lastFire = m.fighters.p1.lastFireAt;
+  const drops = [], fires = [];
+  assert.equal(hp, 100);
+  for (let i = 0; i < 4000 && m.fighters.p2.hp > 0; i += 1) {
+    now += TICK_RATE_MS;
+    tickMatch(m, { p1: { ...emptyInput(), shootHold: true }, p2: emptyInput() }, now, TICK_DT);
+    if (m.fighters.p1.lastFireAt !== lastFire) { lastFire = m.fighters.p1.lastFireAt; fires.push(lastFire); }
+    if (m.fighters.p2.hp !== hp) { drops.push(hp - m.fighters.p2.hp); hp = m.fighters.p2.hp; }
+  }
+  assert.equal(m.fighters.p2.hp, 0, `the target still stands at ${m.fighters.p2.hp}`);
+  assert.equal(drops.length, 12, `${drops.length} hits to the kill`);
+  for (const d of drops.slice(0, -1)) assert.equal(d, 9, `a hit took ${d}`);
+  assert.equal(drops[drops.length - 1], 1, `the last hit took ${drops[drops.length - 1]}`);
+  assert.ok(fires.length >= 12, `${fires.length} bolts left`);
+  assert.deepEqual(fires.slice(0, 12).map((t) => t - fires[0]),
+    [0, 336, 672, 1008, 1344, 1680, 2016, 2352, 2688, 3024, 3616, 4816], 'when the first twelve bolts leave');
+});
+
 test('sniper charge — initiates charge on shootTap', () => {
   const m = createMatchState({ p1UnitKey: 'unit3', startTime: 1000 });
   // Make p2 close enough to be in lock range (sniper lock = 120, default spawns are 48 apart).

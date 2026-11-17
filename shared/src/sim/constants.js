@@ -268,7 +268,7 @@ export const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
-    damage: 12,                  // 15 -> 12 (2026-08-06 user tune, ported from the demo line)
+    damage: 9,                   // (b1105jo, user 2026-11-17: "Change Aris damage from 12 to 9."; 12 from the user's tune of 2026-08-06, ported from the demo line, 15 until then) — 12 bolts to a full-HP kill, 4.82 s after the first with every bolt landing: ten leave in 3.02 s (the magazine's 8 and the 2 that come back meanwhile), the 11th and the 12th each wait for their round (9 bolts and 2.69 s at 12); a full magazine carries 72 (96)
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
