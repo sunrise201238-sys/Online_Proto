@@ -38,7 +38,8 @@ test('the call on the table: set, taken back, replaced, run out; an unknown kind
   assert.equal(setTactic(null, 'push', 0), false); assert.equal(tacticOf(null, 0), null); assert.equal(tacticSettle(null, 0), false); assert.equal(tacticEcho(null, 0), null);
 });
 
-// Plain Field, a bot (p1, the AR: lock range 110, band 103 to 117) against a target that stands: the distance it keeps.
+// Plain Field, a bot (p1, the AR: lock range 110, band 95 to 125 since b1105jc, 103 to 117 before) against a target that stands:
+// the distance it keeps — the band's middle, where Engage's pull holds it.
 function fieldRun(script, ms) {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000, mode: '1v1' });
   const p1 = m.fighters.p1, p2 = m.fighters.p2;
@@ -64,7 +65,7 @@ test('FORWARD on Plain Field: the bot stands 30 nearer for the call\'s 20 s, ins
   const { rows } = fieldRun((m, t, now) => { if (!called && t >= 3000) { called = true; assert.equal(setAllyTactic(m, 'p1', 'push', now), true); } }, end + 9000);
   const before = span(rows, 1500, 3000), held = span(rows, 7000, end), after = span(rows, end + 5000, end + 9000);
   assert.ok(before.min > 100 && before.max < 120, `before the call the bot keeps its band: ${before.min.toFixed(1)} to ${before.max.toFixed(1)}`);
-  assert.ok(held.min > 70 && held.max < 90, `under the call it keeps 73 to 87: ${held.min.toFixed(1)} to ${held.max.toFixed(1)}`);
+  assert.ok(held.min > 70 && held.max < 90, `under the call it keeps the pushed band's middle, 80 (the band 65 to 95): ${held.min.toFixed(1)} to ${held.max.toFixed(1)}`);
   assert.ok(rows.filter((r) => r.t >= 7000 && r.t < end).every((r) => r.locked), 'a pushed bot stands inside its lock: the lock range itself has not moved');
   assert.ok(after.min > 100 && after.max < 120, `the call over, it is back at its band: ${after.min.toFixed(1)} to ${after.max.toFixed(1)}`);
 });

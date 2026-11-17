@@ -54,7 +54,11 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // bridge. Against the b1105bt references the Streets match (arena2 unit3 vs unit1) parted at 7.63 s — the sniper's route runs under the
 // bridge, where the old reading stood a sample on the deck (8) and saw the enemy the street under it could not — and the six others
 // played equal. The case itself is route_cut_floor.test.js.
-import { tickBot as tickOld } from './ai_b1105ge_ref.js';
+// Re-frozen at b1105jc (2026-11-17): the band is 15 either side of its middle, 7 until then (nbrain.js BOT_BAND_HALF_WIDTH; user:
+// "change the lockrange band in normal brain from +-7 to +-15"); play altered by design wherever a bot stands between the old edge
+// and the new. Against the b1105ge references six of the seven matches parted, between 0.85 s and 2.96 s (factory, airport,
+// station, lobby, flashpoint, arena2), and Plain Field's (arena1 unit1 vs unit2) played equal. The width itself is band_width.test.js.
+import { tickBot as tickOld } from './ai_b1105jc_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

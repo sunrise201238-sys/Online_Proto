@@ -72,7 +72,7 @@ export const UNIT_DATA = {
     // volley is stretched 1.4x horizontally (volleyStretchX below; vertical
     // unchanged) — a dodge-catching fan vs Haruka's concentrated slug.
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
-    // lockRange, edges ±7) gives the shotgun a 33–47 band.
+    // lockRange, edges ±15 since b1105jc) gives the shotgun a 65–95 band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
     projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
@@ -1132,9 +1132,11 @@ export const CMD_ANCHOR_LEASH = 20;
 export const BOT_LOS_EYE_HEIGHT = 1.6;
 
 // THE FIRING-POSITION SEARCH'S REACH (user 2026-10-25, "the near guns walk first"): a bot farther from its target than this
-// many times its band's upper edge (lockRange + 7) walks toward the target first (A*, cut at the first spot that fires) and
-// runs the firing-position search only once inside the reach. Shotgun 47 → 117 u, SMG 57 → 142 u; a sniper's 127 → 317 u,
-// so it keeps crossing the map to its lane as before. The search is the brains' largest single cost on the big maps.
+// many times its band's upper edge (lockRange + 15 since b1105jc, + 7 before) walks toward the target first (A*, cut at the
+// first spot that fires) and runs the firing-position search only once inside the reach. At the rule's making: shotgun 47 →
+// 117 u, SMG 57 → 142 u; a sniper's 127 → 317 u, so it keeps crossing the map to its lane as before. With the lock ranges of
+// b1105et and the edges of b1105jc: the shotguns 95 → 237 u, the SMGs 115 → 287 u, Aru's and Hiyori's 215 → 537 u. The
+// search is the brains' largest single cost on the big maps.
 export const BOT_FIRING_SEARCH_REACH = 2.5;
 
 // THE ROUTE GRID AS DATA (user 2026-10-25): a modelled map's nav grid is built by shared/tools/maps/navgrid_build.mjs and

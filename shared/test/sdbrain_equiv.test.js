@@ -47,7 +47,12 @@ import { tickBot as tickNew } from '../src/sim/ai.js';
 // in Sudden Death, and the seven matches played equal to the b1105br references after the change.
 // Re-frozen at b1105ge (2026-11-12, build b1105gf) with the plain brain's references (the route cut's floor, nb_equiv.test.js): the seven
 // matches played equal to the b1105bt references after the change.
-import { tickBot as tickOld } from './ai_b1105ge_ref.js';
+// Re-frozen at b1105jc (2026-11-17) with the plain brain's references (the band's half-width 15, nb_equiv.test.js; user: "SD brain
+// should be uneffected if i'm not misunderstood"): the Sudden Death brain reads no band, and under it the plain brain's states stand
+// parked. Against the b1105ge references six of the seven matches parted in ONE value — botApproachBlockedSince, the plain brain's
+// clock for its Maze trigger, written on the fighter every tick off the band's upper edge and never read under the Sudden Death
+// brain — and with that one value left out of the comparison all seven played equal after the change, to the last tick.
+import { tickBot as tickOld } from './ai_b1105jc_ref.js';
 
 const mulberry32 = (a) => () => {
   a |= 0; a = (a + 0x6D2B79F5) | 0;

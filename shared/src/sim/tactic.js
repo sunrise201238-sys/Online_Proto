@@ -3,7 +3,7 @@
 // "lockrange -30 for 10sec"'). A player in the classic view calls one of two things to a bot teammate, each standing for
 // ALLY_TACTIC_MS — 20 s since b1105io (user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec"), 10 s until then:
 //   'push'  FORWARD: the bot's range band (nbrain.js — the distance it keeps to its target, centred on its lock range, edges
-//           ±7) sits ALLY_TACTIC_PUSH nearer. Only where the bot wants to stand moves: the unit's own lock range — the red
+//           ±15 since b1105jc, ±7 before) sits ALLY_TACTIC_PUSH nearer. Only where the bot wants to stand moves: the unit's own lock range — the red
 //           lock's, the homing's (tick.js updateLocks) — is as it was, so a pushed bot stands well inside its lock.
 //   'hide'  BACK OFF: the Hide stance (command mode's — nbrain.js HIDE STANCE): out of every enemy's sight, firing back only
 //           at what it can see from where it stands.

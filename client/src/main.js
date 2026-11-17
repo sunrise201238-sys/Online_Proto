@@ -155,7 +155,7 @@ const UNIT_DATA = {
     // volley is stretched 1.4x horizontally (volleyStretchX below; vertical
     // unchanged) — a dodge-catching fan vs Haruka's concentrated slug.
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
-    // lockRange, edges ±7) gives the shotgun a 33–47 band.
+    // lockRange, edges ±15 since b1105jc) gives the shotgun a 65–95 band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
     projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
@@ -9074,7 +9074,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jb 11-16';
+const CLIENT_BUILD_TAG = 'b1105jc 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

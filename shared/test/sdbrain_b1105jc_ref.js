@@ -1,4 +1,4 @@
-// FROZEN at b1105ge for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1105jc for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/sdbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // SUDDEN DEATH BRAIN (b1017a): ONE RULE IN FOUR PARTS, EACH WRITTEN ONCE.
@@ -793,7 +793,22 @@ export function sdBrainTick(host) {
         const stage = Math.min(me.botSDSearchStage ?? 0, stages.length - 1);
         if (stage === 0 && !me.botSDSearchJob) me.botSDRefusedPath = null;   // (a new cycle: no refused route yet)
         const a = stages[stage];
-        const jobKey = `${a.kind}|${stage}|${Math.round(mePos.x)},${Math.round(mePos.z)}`;
+        // THE SEARCH KEPT WHILE PACING (b1105ja; user 2026-11-16, of the 2v2 Sudden Death bots that stood with no plan: "Do 乙").
+        // A search that does not end inside its slice is parked in its job and taken up at the unit's next tick — while its key
+        // stays the same; and the key carried the body's own square. THE WAIT paces: a step on and the square is another, the
+        // parked search was thrown away and begun again, at every step and without end. Its calls took the page's one search of
+        // the frame each time, and the unit after it in the order stood with no plan. A waiting unit's key is its wait's own
+        // square now (plan.cx, plan.cz: where the wait began), which the pacing does not move, so the search goes on to its end.
+        // The trial, Town and Compound, 12 matches of 120 s, the player's unit standing and its teammate down, a 1 ms slice, the
+        // page's fixed order: 4,201 parked searches thrown away and 246 ended before, 28 and 1,490 after; a unit with no plan for
+        // 20 s or more in 5 of the 12 before, in none for 5 s after. The route found begins where the search began, a few steps of
+        // the pacing from the body (1.9 units in the middle, 5.4 at the most, the straight leg to it fitting the body in all 36):
+        // the body walks to its first square as to any waypoint, the route priced from where the body stands (sdRouteRisk);
+        // a wall met on that leg is THE ROUTE's own case (the slide, or the route dropped and searched again). A search that
+        // ends inside its slice never meets its key: where there is time nothing changes (12 matches on six maps with no
+        // slice played the same to the last knockout, and the frozen references stand — sdbrain_equiv.test.js).
+        const jobAt = plan && plan.kind === 'wait' ? { x: plan.cx, z: plan.cz } : mePos;
+        const jobKey = `${a.kind}|${stage}|${Math.round(jobAt.x)},${Math.round(jobAt.z)}`;
         if (!me.botSDSearchJob || me.botSDSearchJob.key !== jobKey) me.botSDSearchJob = { key: jobKey, state: null };
         let found = findHiddenSpot(sdGrid, mePos.x, mePos.z, myFloorY, sdEyes, obstacles, {
           maxPops: a.maxPops, within: a.within ?? null, minDistFrom: a.minDistFrom ?? null, accept: a.accept, eyeHeight: MUZZLE_H,

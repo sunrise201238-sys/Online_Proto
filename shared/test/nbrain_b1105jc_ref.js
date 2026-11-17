@@ -1,4 +1,4 @@
-// FROZEN at b1105ge for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
+// FROZEN at b1105jc for the bots' equivalence tests (nb_equiv.test.js, sdbrain_equiv.test.js): a copy of
 // shared/src/sim/nbrain.js with its imports pointed at the live sim and at the other frozen copies. Not edited by hand;
 // re-frozen with the build whose play it must match (shared/tools/freeze_refs.py).
 // THE PLAIN BRAIN (Health Point mode) — one module for both hosts (owner
@@ -37,10 +37,11 @@
 import { between } from '../src/sim/math.js';
 import { segmentHitsObstacle, groundHeightAt, walkFloorTo, unitOverlapsObstacle, walkSegmentBlocked, sightHitsSurface, obstaclesNearPoint, obstaclesNearSegment, boxHoldsAt } from '../src/sim/physics.js';
 import { findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath } from '../src/sim/navgrid.js';
-import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH } from '../src/sim/constants.js';
+import { DEFAULT_BOOST_SCALE, SURFACE_STEP_HEIGHT, JUMP_RISE_MIN, GROUND_BASE_Y, BOOST_MOVE_SPEED, WALK_SPEED, MOMENTUM_STANDARD, SNIPER_CANCEL_MIN_CHARGE_MS, MANDATED_JUMP_MIN_BOOST, HIT_RADIUS_NORMAL, BOT_FIRING_SEARCH_REACH, ALLY_TACTIC_PUSH } from '../src/sim/constants.js';
 import { botMayFire, botNoteShot, botClearFireRule } from '../src/sim/bloom.js';
-import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1105ge_ref.js';
+import { sdBrainTick, silhouetteSeenFrom } from './sdbrain_b1105jc_ref.js';
 import { hitStunMoveScale } from '../src/sim/movement.js';
+import { tacticOf, tacticSettle } from '../src/sim/tactic.js';
 
 // --- Bot tactical-sprint tunables ---
 // THE SLICE (user 2026-10-29): where the host sets no per-tick deadline (the offline client, the sim's tests), the route
@@ -153,6 +154,25 @@ const BOT_RELOAD_HIDE_MIN_MS = 3000;
 const BOT_SHOTGUN_ENGAGE_RANGE = 160;   // (PT and 9.6 b1105et, user 2026-11-10: "Change the range gating for SG encounter rule from 110 to 160"; 110 since b1105br)
 // a shotgun is told by its weapon class, the name's second half (Unit 2 / Shotgun), as the picker's class tags read it
 const isShotgunUnit = (u) => /\/\s*Shotgun\b/.test(u?.name || '');
+// THE BAND'S HALF-WIDTH (b1105jc; user 2026-11-17: "change the lockrange band in normal brain from +-7 to +-15. SD brain should be
+// uneffected if i'm not misunderstood"): the plain brain keeps its target between the band's middle less this and the middle plus
+// this — inside it the bot fights (Engage), nearer it backs off and farther it closes in (Pursue), and a route's firing spot is
+// looked for inside it (Maze: the route cut, the firing-position search and that search's reach, constants.js
+// BOT_FIRING_SEARCH_REACH). The middle is the unit's lock range, moved by the shotgun rule above and by the ally tactic's push
+// (tickBot, the band). 7 until b1105jb.
+// The trial before the build, 80 matches of four plain bots (2v2 Health Point, eight maps, ten seeds a map, the same seeds either
+// way), at 7 and then at 15: a bot's time in Engage 6.3% and 11.3%, in the band with sight of its target 7.8% and 12.5%; backing
+// off 4.9% of its time and 3.5%; out of Engage for the range's sake 4.7 times a bot-minute and 3.6; pressed to a wall while in
+// Pursue 12.2 ticks a bot-minute and 9.7; damage dealt a bot-minute 232 and 225, the bots' time alive in all 4.5% more — the
+// fights are no shorter, a little longer. The searches' nodes a bot-minute 67,000 and 60,100. Under the server's budget (2 ms a
+// tick for the searches; 24 matches, each run twice): the brains' time a tick as it was (median 0.1 ms, the 99th percentile 2.3 to
+// 2.4 ms either way), the ticks over 2 ms 1.9 to 2.0% and 2.3%.
+// The Sudden Death brain reads no band — its own reach is all it has (sdbrain.js sdOwnReach), and under it the plain brain's
+// states stand parked (sdParks) — so its matches play tick for tick as before: against the b1105ge references they part in one
+// value alone, the plain brain's clock for its Maze trigger (botApproachBlockedSince: written on the fighter off the band's upper
+// edge, never read under the Sudden Death brain; sdbrain_equiv.test.js, the note of b1105jc), and 64 Sudden Death matches of four
+// bots on eight maps came out the same to the last record at 7 and at 15.
+const BOT_BAND_HALF_WIDTH = 15;
 // HIDE ORDER (owner 2026-09-26 — the Fight/Hide stance; the HIDE block in
 // tickBot): a hidden-spot search runs at most every SEARCH_MS per unit (and
 // once per tick per match), a search that found nothing at all retries
@@ -700,8 +720,14 @@ export function nbBrainTick(host) {
     if (!sdStepping) return 'step';
   } else if (me.stepUntil > 0) host.tickStep();
 
+  // THE ALLY TACTIC (tactic.js; b1105gq): what a classic player called to this bot teammate, read off its command entry — 'push'
+  // (FORWARD: the band below ALLY_TACTIC_PUSH nearer), 'hide' (BACK OFF: the Hide stance, further down) or none. Whenever it
+  // changed since the brain last looked — an order, a take-back, its time run out — a Maze route starts afresh (the re-commit
+  // below): it was planned to a firing spot inside the band as it stood. The Sudden Death brain takes no tactic.
+  const tacticChanged = tacticSettle(host.cmd ?? null, now);
+  const tactic = sd ? null : tacticOf(host.cmd ?? null, now);
   // Range band centers ON the lock range: sweet spot = lockRange exactly,
-  // edges ±7. The bot hovers right at the red-lock boundary — drifting past
+  // edges ±BOT_BAND_HALF_WIDTH (15 since b1105jc, 7 before). The bot hovers right at the red-lock boundary — drifting past
   // it briefly is fine, the Engage pull immediately corrects back. One
   // universal rule for every weapon.
   // (PT b1105ed, 9.6 b1105eg: no unit carries lockRange2v2 any more — the fallback to lockRange below is every unit's, 2v2 too.)
@@ -718,9 +744,12 @@ export function nbBrainTick(host) {
   const lockRange = (!sd && isShotgunUnit(opp?.unit) && !isShotgunUnit(unit))
     ? Math.max(ownLockRange, BOT_SHOTGUN_ENGAGE_RANGE)
     : ownLockRange;
-  const upperRange = lockRange + 7;
-  const optimalRange = Math.max(10, lockRange);
-  const lowerRange = Math.max(6, lockRange - 7);
+  // (the tactic's push: the band's middle ALLY_TACTIC_PUSH nearer — taken off after the shotgun rule above, so the call always
+  //  moves the unit in from where it stood; the lock range itself, the red lock's and the homing's, is not touched)
+  const bandMid = tactic === 'push' ? Math.max(10, lockRange - ALLY_TACTIC_PUSH) : lockRange;
+  const upperRange = bandMid + BOT_BAND_HALF_WIDTH;
+  const optimalRange = Math.max(10, bandMid);
+  const lowerRange = Math.max(6, bandMid - BOT_BAND_HALF_WIDTH);
   // === Behavior state machine: Defense > Maze > Engage > Pursue.
   // Each state has explicit time-bound exits — no latching. Replaces the
   // tangle of evadeActive / coverSeeking / escaping / inBurst / direSearch
@@ -856,7 +885,9 @@ export function nbBrainTick(host) {
       cmdEntry.hideAuto = false;
     }
   }
-  const hideOrdered = cmdEntry ? !!cmdEntry.hide : !!me.botReloadHide;
+  // (the ally tactic's BACK OFF is this stance for as long as the call stands — tactic.js; the entry's own hide flag, the
+  //  commander's and the reload's, is not written by it, so the two never undo each other)
+  const hideOrdered = cmdEntry ? (!!cmdEntry.hide || tactic === 'hide') : !!me.botReloadHide;
   // COVER HIDE lifecycle (owner 2026-09-26/27 — see the constants note): a
   // long reload on a unit with a standing move order and no Hide stance; a
   // live Defense keeps its frames first, and a no-cover verdict holds the
@@ -1338,7 +1369,7 @@ export function nbBrainTick(host) {
     }
     return path;
   };
-  const navPlan = () => {
+  const navPlan = (afresh = false) => {   // (afresh: the band moved under the plan — the ally tactic, below — so a parked search is not carried on)
     // FIRST CHOICE: walk to a FIRING POSITION — the nearest reachable spot
     // that already sees the target from inside the band. This is what makes
     // a sniper cross the map to a sniping lane instead of to the enemy.
@@ -1349,8 +1380,9 @@ export function nbBrainTick(host) {
     // the brains' largest single cost, 20,010 nodes there, three bots in one tick; and the walk route across the map
     // after a respawn the next):
     //   - REACH: beyond BOT_FIRING_SEARCH_REACH times the band's upper edge the bot walks first (the fallback route,
-    //     cut at the first spot that fires) and searches for a spot only once inside the reach — a shotgun 117 u out
-    //     does not need the map's best spot yet; a sniper's reach is 317 u, so it keeps crossing the map to its lane.
+    //     cut at the first spot that fires) and searches for a spot only once inside the reach — a gun far out
+    //     does not need the map's best spot yet (a shotgun's reach was 117 u at the rule's making and a sniper's 317 u; with the
+    //     lock ranges of b1105et and the band's edges of b1105jc they are 237 u and 537 u).
     //   - TURN: one route search per tick per match (host.searchSlot, shared with the hide search).
     //   - BUDGET: a search gets the tick's slice (host.deadline) and PARKS when it runs out, continuing next tick — both
     //     the firing-position search and the walk route (findPathOnGrid), each with its job on the route record (off
@@ -1361,7 +1393,7 @@ export function nbBrainTick(host) {
     //     (its parked open sets were ordered for the old spot), the old route standing in meanwhile.
     const prev = host.navGet();
     const moved = !!(prev && Math.hypot(opp.pos.x - prev.gx, opp.pos.z - prev.gz) > 12);
-    const cont = !!(prev && prev.pending && !moved);
+    const cont = !!(prev && prev.pending && !moved && !afresh);
     const inReach = dist <= upperRange * BOT_FIRING_SEARCH_REACH;
     let rec;
     if (cont) rec = prev;
@@ -1488,7 +1520,7 @@ export function nbBrainTick(host) {
   // them from re-treading the pinned spot).
   const escapeDue = me.botMazeEscapeUntil != null && now >= me.botMazeEscapeUntil;
   if (nextState === 'maze' && prevState === 'maze'
-      && (stuckTriggered || escapeDue || (now - (me.botStateEnteredAt ?? now)) > 7000)) {
+      && (stuckTriggered || escapeDue || tacticChanged || (now - (me.botStateEnteredAt ?? now)) > 7000)) {   // (tacticChanged: the ally tactic moved the band — the route is planned again, to a spot inside the band as it stands now)
     if (escapeDue) me.botMazeEscapeUntil = null;
     me.botStateEnteredAt = now;
     // STATUE ESCAPE (kept): a FROZEN bot is body-pinched in a corner pocket
@@ -1501,7 +1533,7 @@ export function nbBrainTick(host) {
     // never take the back-out, so live routing gains no back-and-forth.
     const navPrev = host.navGet();
     const frozenWp = stuckFrozen && navPrev ? navPrev.path[navPrev.idx] : null;
-    let planned = navPlan();
+    let planned = navPlan(tacticChanged);
     if (planned && frozenWp) {
       const fresh = host.navGet();
       // The follower's own advance rule: the waypoint it would steer to.
