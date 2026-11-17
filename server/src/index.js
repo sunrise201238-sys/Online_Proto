@@ -886,7 +886,7 @@ io.on('connection', (socket) => {
 
   // ---- THE ALLY TACTIC (shared tactic.js; PT b1105gq, user 2026-11-12) -------
   // A CLASSIC player's call to the bot on their side: { slot, kind } — 'push' (FORWARD: the bot's range band 30 nearer) or
-  // 'hide' (BACK OFF: the Hide stance) for ALLY_TACTIC_MS (20 s since b1105io, 10 s until then), null to take the standing one back. The page sends what the player meant
+  // 'hide' (BACK OFF: the Hide stance) for ALLY_TACTIC_MS (40 s since b1105jm, 20 s since b1105io, 10 s until then), null to take the standing one back. The page sends what the player meant
   // (it knows which one it showed lit), so a call that ran out on the way is not set anew by its own take-back.
   //   who   a seated player of this match who is not in command mode (a commander has real orders, and no such buttons);
   //   whom  a slot of the same side that a bot plays now (botSlots) — a seat a player left in mid-match too, since b1105iq

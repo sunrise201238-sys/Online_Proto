@@ -3115,8 +3115,9 @@ function teardownHud() {
 // "i want to make a in-game command that makes ally BOT moving forward/backward. The idea is a small button at the up left
 // corner of the joystick. By tapping it, 2 pop up buttons will appear, one would say smth like 'forward' and the other would
 // say smth like 'back off'." What the two do (tactic.js): FORWARD — the bot teammate's range band 30 nearer its target for
-// 20 s; BACK OFF — the Hide stance for 20 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"'; 10 s each
-// until b1105io — user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec": the one number, shared ALLY_TACTIC_MS).
+// 40 s; BACK OFF — the Hide stance for 40 s ('change the effect to "hide 10 sec" and "lockrange -30 for 10sec"'; 10 s each
+// until b1105io — user 2026-11-16: "make the effeteness duration of "forward/back off" command from 10sec to 20sec"; 20 s each
+// until b1105jm — user 2026-11-17: "Change the in-game BOT command effective duration (Forward/Back Off) to 40sec": the one number, shared ALLY_TACTIC_MS).
 //   the lit one   while a call stands, its pop-up shows lit the next time the two are opened ("player will see that command
 //                 pop up button glowing once they open the command again"), and the button itself is lit for as long as
 //                 either call stands (b1105gr: "make the command button itself glowing as well");
@@ -9181,7 +9182,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jl 11-17';
+const CLIENT_BUILD_TAG = 'b1105jm 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12656,6 +12657,7 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // for the target switch and is shorter (the ally command's W and S moved to the ally's own line under Fighting), and Fighting
 // has a line each for the round map (b1105iw) and for the fire button's gun and rounds (b1105iv), which the Guide did not say.
 // b1105jl, user 2026-11-17: the right-click is the dodge's in the PC line, not the target switch's.
+// b1105jm, user 2026-11-17: the ally command's line says 40 seconds (20 until then; the call's length, shared ALLY_TACTIC_MS).
 function showGuidePopup() {
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
@@ -12715,7 +12717,7 @@ function showGuidePopup() {
             <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
             <li>The round map shows the units near you. Tap it to see the whole map, and tap it again to close it.</li>
             <li>The fire button shows your gun and the rounds left.</li>
-            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 20 seconds. On PC: E, then W for FORWARD or S for BACK OFF.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate does it for 40 seconds. On PC: E, then W for FORWARD or S for BACK OFF.</li>
           </ul>
 
           <h4>On some maps</h4>
