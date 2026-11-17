@@ -602,6 +602,7 @@ const UNIT_DATA = {
     // 1.5 s -> 2 s; HA 0 -> 0.04 taken from Atsuko — the WWII hose sprays
     // wide, sure-hit drops to ~32).
     lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
+    botGateWidth: 11.42,       // bot fire gate (b1105je, user 2026-11-17: "change marina's firing gating from 33% to 20%. That should make her gating same with Hina"): the 20%-hit line, Hina's own (b1105ga) — she fires while her CURRENT cone still lands one round in five on a standing target, the line 11.42 / cone where the autos' 33% line is 8.84 / cone (BOT_GATE_WIDTH_AUTO), which she rode until then. Her cone stops at 0.11, so the line never comes nearer than 103.8, past her 100 lock: inside it she fires her whole drum in one pull and holds for the cone only beyond it (the 33% line stood at 80.4 at her cap and passed her at 100 once the cone reached 0.088, after thirty rounds)
     projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
@@ -9074,7 +9075,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jd 11-17';
+const CLIENT_BUILD_TAG = 'b1105je 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

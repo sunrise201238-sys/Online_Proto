@@ -240,12 +240,12 @@ test('M14 bot at its 135 lock range: every shot pushes the cone past the line, s
 });
 
 test('auto on a recovery hold releases at once when the target closes in', () => {
-  const u = UNIT_DATA.unit13, bot = { bloom: 0.10, botSuppressRemaining: 0, botHoldDist: 0 };   // Marina, cone 0.10 (all bloom on her 0 base since b1105fw) -> 33% line 88.4 (Koyuki carried this test until she lost her gate, 2026-09-25)
-  assert.equal(botMayFire(u, bot, 95), false);            // outside: hold begins, line frozen at 88.4
-  assert.ok(bot.botHoldDist > 88 && bot.botHoldDist < 89);
-  bot.bloom = 0.09;                                       // line drifts out to 98.2 — a static target must NOT release the hold
-  assert.equal(botMayFire(u, bot, 95), false);
-  assert.equal(botMayFire(u, bot, 85), true);             // but a target that closed in past the frozen line does
+  const u = UNIT_DATA.unit13, bot = { bloom: 0.10, botSuppressRemaining: 0, botHoldDist: 0 };   // Marina, cone 0.10 (all bloom on her 0 base since b1105fw) -> her 20% line 114.2 (b1105je; the autos' 33% line, 88.4, until then; Koyuki carried this test until she lost her gate, 2026-09-25)
+  assert.equal(botMayFire(u, bot, 120), false);           // outside: hold begins, line frozen at 114.2
+  assert.ok(bot.botHoldDist > 114 && bot.botHoldDist < 115);
+  bot.bloom = 0.09;                                       // line drifts out to 126.9 — a static target must NOT release the hold
+  assert.equal(botMayFire(u, bot, 120), false);
+  assert.equal(botMayFire(u, bot, 110), true);            // but a target that closed in past the frozen line does
   assert.equal(bot.botHoldDist, 0);
   const m14 = { bloom: 0.07, botSuppressRemaining: 0, botHoldDist: 0 };   // marksman rifles take the same hold (cone 0.07 -> sure-hit line 45.7)
   assert.equal(botMayFire(UNIT_DATA.unit10, m14, 56), false);
@@ -292,6 +292,22 @@ test('bot gate — Hina rides her own 20%-hit line (b1105ga, user 2026-11-11: "c
   assert.equal(botMayFire(u, capped, 400, '2v2'), false);                          // far past her line with the cone up: she holds
   assert.ok(capped.botHoldDist > 0);
   assert.equal(u.magCapacity, 150); assert.equal(u.botFireCap, u.magCapacity);   // b1105ga: a 150-round drum, the whole drum a pull
+});
+
+test('bot gate — Marina rides the 20%-hit line, Hina\'s own (b1105je, user 2026-11-17: "change marina\'s firing gating from 33% to 20%"; the autos\' 33% until then)', () => {
+  const u = UNIT_DATA.unit13;
+  assert.equal(u.botGateWidth, 11.42);
+  assert.equal(u.botGateWidth, UNIT_DATA.unit5.botGateWidth);                       // one line for the two of them
+  assert.ok(Math.abs(botGateDistance(u, 0.1) - 11.42 / 0.1) < 1e-9);
+  assert.ok(botGateDistance(u, u.bloomCap) > u.lockRange);                          // her cone stops at 0.11: the line never comes nearer than 103.8, past her 100 lock
+  const capped = () => ({ bloom: u.bloomCap - u.spreadAngle, botSuppressRemaining: 0, botHoldDist: 0 });
+  for (const mode of ['1v1', '2v2']) {
+    assert.equal(botMayFire(u, capped(), u.lockRange, mode), true);                 // so at her lock range she never holds for the cone: the whole drum a pull
+    assert.equal(botMayFire(u, capped(), 103, mode), true);
+    const far = capped();
+    assert.equal(botMayFire(u, far, 105, mode), false);                             // beyond the line with the cone up: she holds
+    assert.ok(far.botHoldDist > 0);
+  }
 });
 
 test('bot gate — Koyuki and Maki are ungated in both modes (owner 2026-09-25; Hina too until b1105fe); a 1v1-only width would still be honoured', () => {
