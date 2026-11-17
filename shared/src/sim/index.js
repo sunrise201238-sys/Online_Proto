@@ -13,7 +13,6 @@ export {
   walkSegmentBlocked,
   resolveUnitObstacleCollisions,
   groundHeightAt,
-  groundSurfaceAt,
   surfaceHeightAtXZ,
   projectileHitsSurface,
   getGroundLevelY,

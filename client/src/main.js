@@ -42,8 +42,6 @@ import {
   obstaclesNearPoint,
   getArenaSpawns,
   pickRespawnSpawn,
-  LAND_PLANT_MS,
-  LAND_PLANT_LEVEL,
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles,
@@ -5968,12 +5966,6 @@ function updatePlayer(now) {
   const stepState = state.player.state;
   const inStep = now <= stepState.stepUntil;
   const hasDirInput = Math.hypot(input.x, input.y) > 0.15;
-  // The landing plant (shared constants.js LAND_PLANT_MS; mirrors the sim's applyInput): the body just landed on a thing's
-  // lid at another level than the floor it left (updateTransforms raised the flag and dropped its momentum) — it is held
-  // where it landed, the stick it still holds ignored, until the stick is let go or the plant times out.
-  if (stepState.landedOnLid) { stepState.landedOnLid = false; stepState.plantUntil = now + LAND_PLANT_MS; }
-  if (!hasDirInput) stepState.plantUntil = 0;
-  const planted = now < stepState.plantUntil;
   // The reload hold (shared actions.js reloadHolds; mirrors the sim's applyInput): a unit flagged reloadHolds neither walks
   // nor sprints while its magazine is being changed; the dodge and the jump stay open.
   const reloadHeld = reloadHolds(state.player.unit, stepState, now);
@@ -5988,7 +5980,7 @@ function updatePlayer(now) {
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = jumpPress && !(state.player.unit.flight && state.player.state.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || state.player.state.boost <= 0) input.sprintLocked = false;
-  input.boost = !planted && !reloadHeld && (input.boostHeld || input.sprintLocked);   // (no dash out of a plant, nor out of a held reload)
+  input.boost = !reloadHeld && (input.boostHeld || input.sprintLocked);   // (no dash out of a held reload)
 
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -6021,8 +6013,8 @@ function updatePlayer(now) {
   const canInputMove = !emptyPenaltyActive;
   const lastVX = state.player.body.velocity.x, lastVZ = state.player.body.velocity.z;   // (the velocity the frame began with: a jump banks from it, as the sim's applyInput and a bot's jump)
   if (!inStep) {
-    state.player.body.velocity.x = canInputMove && !planted && !reloadHeld ? move.x * speed * hitStunScale : 0;
-    state.player.body.velocity.z = canInputMove && !planted && !reloadHeld ? move.z * speed * hitStunScale : 0;
+    state.player.body.velocity.x = canInputMove && !reloadHeld ? move.x * speed * hitStunScale : 0;
+    state.player.body.velocity.z = canInputMove && !reloadHeld ? move.z * speed * hitStunScale : 0;
   }
   // The jump button at a ladder (ladder.js ladderPress, as the sim's applyInput): at an end it mounts — no jump, nothing else this
   // frame; running at a foot it is kept for the mount ahead — no jump, the run goes on; a kept press mounts the body as it arrives.
@@ -7225,11 +7217,7 @@ function updateTransforms(dt) {
         m.body.position.y = groundY;
         m.body.velocity.y = 0;
         m.state.airborne = false;
-        m.state.jumpVelocity = 0;
-        // The landing plant (mirrors integrateVertical in the shared sim): landed on a thing's lid at another level than
-        // the floor it left — the momentum is dropped and the input (updatePlayer) holds the body.
-        const lid = groundSurfaceAt(m.body.position.x, m.body.position.z, groundY - GROUND_BASE_Y);
-        if (lid?.lid && Math.abs(groundY - (m.state.floorY ?? groundY)) > LAND_PLANT_LEVEL) { m.state.landedOnLid = true; m.state.momentumVX = 0; m.state.momentumVZ = 0; }
+        m.state.jumpVelocity = 0;   // (a landing, on whatever it is: the momentum carries on, the stick is read at once — the landing plant is gone, b1105jh, as in the shared sim)
       }
     } else if (m.body.position.y > groundY + 0.6) {
       m.state.airborne = true;
@@ -9153,7 +9141,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jg 11-17';
+const CLIENT_BUILD_TAG = 'b1105jh 11-17';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -14900,19 +14888,6 @@ function groundHeightAt(x, z, currentSurfaceY = 0) {
     if (h > best) best = h;
   }
   return best === -Infinity ? 0 : best;
-}
-
-// (the surface groundHeightAt stands a body on, or null on the street — the landing plant asks whether it is a thing's
-// lid; mirrors the shared physics.js groundSurfaceAt)
-function groundSurfaceAt(x, z, currentSurfaceY = 0) {
-  let best = -Infinity, found = null;
-  for (const s of obstaclesNearPoint(arenaSurfaces, x, z, 0, _groundScratch)) {
-    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
-    const h = s.heightAt(x, z);
-    if (h > currentSurfaceY + SURFACE_STEP_HEIGHT) continue;
-    if (h > best) { best = h; found = s; }
-  }
-  return found;
 }
 
 // THE VOID'S EDGE (mirrors the shared physics.js voidUnder, 2026-10-29): the street is the ground where no surface covers a

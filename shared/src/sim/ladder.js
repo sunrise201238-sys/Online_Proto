@@ -103,12 +103,12 @@ export function ladderMount(st, pos, vel, ladders, index, end) {
   st.ladderS = ladderOffsetAt(ladders[index], pos);   // (THE WALLS: where along the wall; 0 on a ladder)
   clearMotion(st, vel);
   st.airborne = false; st.grounded = false; st.jumpVelocity = 0; st.action = 'climb';
-  st.hitStunUntil = 0; st.plantUntil = 0; st.landedOnLid = false;
+  st.hitStunUntil = 0;
   st.ladderJumpLatch = true; st.ladderClock = undefined;
   st.yaw = ladders[index].yaw;
 }
-// Off the ladder: standing where it is ('stand' — the foot or the exit, the floor it stands on noted for the landing plant and
-// the void's edge) or dropped ('drop' — a let-go or a death: airborne from here, gravity's from the next tick).
+// Off the ladder: standing where it is ('stand' — the foot or the exit, the floor it stands on noted for the void's edge) or
+// dropped ('drop' — a let-go or a death: airborne from here, gravity's from the next tick).
 export function ladderRelease(st, pos, vel, how) {
   clearMotion(st, vel);
   if (how === 'stand') { st.airborne = false; st.grounded = true; st.floorY = pos.y; }

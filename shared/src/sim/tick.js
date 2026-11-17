@@ -7,7 +7,6 @@
 import {
   BOOST_MOVE_SPEED,
   WALK_SPEED,
-  LAND_PLANT_MS,
   SPRINT_LOCK_RELEASE_GRACE_MS,
   STEP_DISTANCE,
   STEP_DURATION_MS,
@@ -157,12 +156,6 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   }
   const moveMag = Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ);
   const hasDirInput = moveMag > 0.15;
-  // The landing plant (constants.js LAND_PLANT_MS): the body just landed on a thing's lid at another level than the floor
-  // it left (integrateVertical raised the flag and dropped its momentum) — it is held where it landed, the stick it still
-  // holds ignored, until the stick is let go or the plant times out. Mirrored in the client's updatePlayer.
-  if (fighter.landedOnLid) { fighter.landedOnLid = false; fighter.plantUntil = now + LAND_PLANT_MS; }
-  if (!hasDirInput) fighter.plantUntil = 0;
-  const planted = now < fighter.plantUntil;
   // The reload hold (user 2026-10-23, Kurumi): a unit flagged reloadHolds neither walks nor sprints while its magazine is
   // being changed; the dodge and the jump stay open. Mirrored in the client's updatePlayer; the bots in ai.js / updateEnemy.
   const reloadHeld = reloadHolds(fighter.unit, fighter, now);
@@ -178,7 +171,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   // there, held jump is the climb verb and must coexist with locked sprint.
   const jumpBreaksLock = input.jump && !(fighter.unit?.flight && fighter.airborne);
   if (dirReleased || jumpBreaksLock || input.stepTap || fighter.boost <= 0) sprintLocked = false;
-  const boostActive = !planted && !reloadHeld && (input.boost || sprintLocked);   // (no dash out of a plant, nor out of a held reload)
+  const boostActive = !reloadHeld && (input.boost || sprintLocked);   // (no dash out of a held reload)
 
   const hasBoost = fighter.boost > 0;
   const emptyPenaltyActive = now < fighter.emptyRecoverUntil;
@@ -206,8 +199,8 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
   const inStep = now <= fighter.stepUntil;
   const lastVX = fighter.vel.x, lastVZ = fighter.vel.z;   // (the velocity the tick began with: a jump banks from it, as a bot's does — actions.js tryStartJump)
   if (!inStep) {
-    fighter.vel.x = canInputMove && !planted && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
-    fighter.vel.z = canInputMove && !planted && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
+    fighter.vel.x = canInputMove && !reloadHeld ? input.moveX * speed * hitStunScale : 0;
+    fighter.vel.z = canInputMove && !reloadHeld ? input.moveZ * speed * hitStunScale : 0;
   }
   // The jump button at a ladder (ladder.js ladderPress; the body on the ground, out of a dodge): at an end it mounts — no jump,
   // nothing else this tick; running at a foot it is kept for the mount ahead — no jump, the run goes on; a kept press mounts the

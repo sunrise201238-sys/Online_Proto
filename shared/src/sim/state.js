@@ -76,11 +76,9 @@ export function createFighter(id, unitKey, spawn, boostScale = DEFAULT_BOOST_SCA
     airborne: false,
     jumpVelocity: 0,
     hoverUntil: 0,
-    // The landing plant (constants.js LAND_PLANT_MS): the floor the body last stood on (units, feet), whether its last
-    // landing was on a thing's lid at another level (read and cleared by the input), and until when the plant holds.
+    // The floor the body last stood on (units, feet): the void's edge (movement.js), a ladder's and a transporter's standing
+    // and the bots' way to a transporter read it. (The landing plant measured its landings against it until b1105jh.)
     floorY: 0,
-    landedOnLid: false,
-    plantUntil: 0,
     // The ladder (ladder.js): the arena record's index while on one, the way (+1 up from the foot, -1 down from the exit),
     // the leg ('enter' onto the line, 'climb', 'exit' onto the platform), this tick's intent, and the jump button's latch;
     // a bot's goal (+1 / -1) while its brain has it take one. Undefined off a ladder: nothing rides the snapshot then.

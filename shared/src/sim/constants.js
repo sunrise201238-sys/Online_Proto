@@ -888,15 +888,12 @@ export const STEP_HOMING_CUT_MS = 260;
 // Jump tunables.
 export const JUMP_BOOST_COST = STEP_BOOST_COST;
 export const JUMP_INITIAL_VELOCITY = 30;
-// THE LANDING PLANT (user 2026-10-22, "make the containers standable"): a body that lands on a thing's lid — a crate's,
-// a container's, a roof (the generator marks them `lid`) — at another level than the floor it left, up onto it or down
-// onto it from a taller thing, is planted there: its momentum dropped, the stick it still holds ignored, until the stick
-// is let go or LAND_PLANT_MS pass. A sprint-jump from a 3.2 m crate onto a container's 2.4 m roof crossed it in a third
-// of a second and fell off the far side while the player still held the stick (the user's clip, Warehouse). A landing on
-// the street, on a plateau, or a hop along the same roof (the level unchanged within LAND_PLANT_LEVEL) plants nothing:
-// the ground game is as it was.
-export const LAND_PLANT_MS = 600;
-export const LAND_PLANT_LEVEL = 0.4;   // (units: a tenth of a metre — the level counts as changed beyond this)
+// (THE LANDING PLANT is gone, b1105jh; user 2026-11-17, shown what the rule did: "Remove this feature." From 2026-10-22, "make
+// the containers standable", a body that landed on a thing's lid — a crate's, a container's, a roof — at another level than the
+// floor it left was held there: its momentum dropped and the stick it still held ignored until the stick was let go or 600 ms
+// passed (LAND_PLANT_MS, LAND_PLANT_LEVEL). A landing is a landing now whatever the body lands on: the momentum it came with
+// carries on and the stick is read at once. With the rule went its two flags on the fighter and the surface lookup it asked;
+// the `lid` mark stays on the maps' surfaces — the client's fade reads it.)
 export const JUMP_HOVER_MS = 300;
 export const JUMP_COOLDOWN_MS = 1500;
 

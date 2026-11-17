@@ -1,7 +1,7 @@
 // Hand-made boxes in place of what a reading made of a thing: each box (model metres, x0,x1,z0,z1,top — the top over the street, as
 // the F4 line and the other data tools give heights) goes in from the street up with the reading's topBuffer 0.8 and a lid — a flat
 // floor on its top, 0.08 units wider each side, `lid` 1, as the parts reading's own tops (Town's car; Compound's reading makes them
-// flush): a body stands on it and a landing on it plants. Out go the reading's entries the boxes stand for: a box, floor or slope whose plan lies half or more inside the
+// flush): a body stands on it. Out go the reading's entries the boxes stand for: a box, floor or slope whose plan lies half or more inside the
 // boxes grown by <grow> metres and whose top (a slope's highest corner) lies in the band h0..h1 metres over the street — below h0 the
 // ground the things stand on stays, above h1 what stands behind them (a wall) — and any entry whose plan lies wholly inside one new
 // box and no higher than its top (hidden in it: no body reaches it). Made for Compound's yellow car and blue flatbed by the curved

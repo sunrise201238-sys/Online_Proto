@@ -65,7 +65,7 @@ export function padArrive(st, pos, vel, pads, to, others = [], obstacles = []) {
   pos.x = at.x; pos.y = y; pos.z = at.z;
   clearMotion(st, vel); vel.y = 0;
   st.airborne = false; st.grounded = true; st.jumpVelocity = 0; st.floorY = y; st.action = 'idle';
-  st.plantUntil = 0; st.landedOnLid = false; st.stepUntil = 0;
+  st.stepUntil = 0;
   st.padMoves = (st.padMoves ?? 0) + 1;
   dropCharge(st); if (st.botPadGoal != null) st.botPadGoal = undefined;
   return true;
