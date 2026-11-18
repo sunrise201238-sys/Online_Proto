@@ -55,6 +55,7 @@ import {
   ladderHumanInput, ladderPress, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
   padHumanInput, padBotStep, padChargeProgress,               // the transporters (pads.js; b1105fk)
   setTactic, ALLY_TACTIC_MIN_INTERVAL_MS,                     // the ally tactic (tactic.js; b1105gq)
+  ALLY_MSG_KINDS, ALLY_MSG_TEXT, ALLY_MSG_SHOW_MS, ALLY_MSG_COOLDOWN_MS,   // the teammate's messages (allymsg.js; b1105js)
 } from '@gvg/shared/src/sim/index.js';
 // Sudden Death brain tunables (prototype) — one bag shared with the server sim.
 import { BOT_SD, botBodyRules } from '@gvg/shared/src/sim/ai.js';
@@ -3192,21 +3193,38 @@ function teardownHud() {
 // Practice toggle and for an online spectator the button shows and does not answer (allyTacticCan).
 const TACTIC_HUD = { closeMs: 3000 };
 const ALLY_TACTIC_HTML = '<div class="tac" id="tac">'
-  + '<div class="tac-pop"><div class="tac-opt" data-tactic="push">FORWARD</div><div class="tac-opt" data-tactic="hide">BACK OFF</div></div>'
+  + '<div class="tac-pop"><div class="tac-opt" data-tactic="push">FORWARD</div><div class="tac-opt" data-tactic="hide">PULL BACK</div></div>'
+  + `<div class="tac-pop tac-msgs">${ALLY_MSG_KINDS.map((k) => `<div class="tac-opt" data-msg="${k}">${ALLY_MSG_TEXT[k]}</div>`).join('')}</div>`   // (THE TEAMMATE'S MESSAGES, b1105js: the four, in the two calls' place where a player sits beside the player)
   + '<div class="tac-btn" id="tac-btn" role="button" aria-label="Ally tactic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20V5"/><path d="M4 9l4-4 4 4"/><path d="M16 4v15"/><path d="M12 15l4 4 4-4"/></svg></div>'
   + '</div>';
-const tacticHud = { el: null, opts: [], open: false, openAt: 0, lastCallAt: -1e9 };
-function allyTacticShown() {
+const tacticHud = { el: null, opts: [], msgs: [], open: false, openAt: 0, lastCallAt: -1e9, msgSentAt: -1e9 };
+// WHICH BUTTON IT IS NOW (b1105js, THE TEAMMATE'S MESSAGES below): 'bot' — the two calls to a bot teammate, as it was; 'msg' —
+// the four messages to a PLAYER in the teammate's seat, online alone, and in Sudden Death too, where no call is taken (user:
+// "yes, 2v2 online SD only"); null — no button. Read every frame off the last snapshot, so a mate who leaves in mid-match
+// leaves the two calls behind (user: "if the teammate is still alive and the human player left, the button changes its
+// function to normal BOT command version"). No button while the mate's unit is down, either way (user: "No."). A spectator
+// sends no message: the four are not shown to one.
+function allyTacticVersion() {
   const a = state.ally;
-  if (!a || state.mode !== '2v2' || a.state.hp <= 0) return false;
-  if (state.suddenDeathActive || state.mapKey === 'range' || dioramaActive()) return false;
-  return state.online ? onlineAllyIsBot() : true;
+  if (!a || state.mode !== '2v2' || a.state.hp <= 0) return null;
+  if (state.mapKey === 'range' || dioramaActive()) return null;
+  if (!state.online || onlineAllyIsBot()) return state.suddenDeathActive ? null : 'bot';
+  return onlineAllyIsPlayer() && !state.spectatorActive ? 'msg' : null;
+}
+function allyTacticShown() {
+  return allyTacticVersion() != null;
 }
 // Online: a bot plays the teammate's seat NOW — the last snapshot's word (WHOSE SEAT, b1105iq, above).
 function onlineAllyIsBot() {
   const onl = state.online, allyId = onl?.slotMap?.allyId;
   const bots = onl?.conn?.getLatestSnapshot?.()?.botSlots;
   return !!allyId && Array.isArray(bots) && bots.includes(allyId);
+}
+// Online: a PLAYER sits in the teammate's seat now, and this page's own seat is a player's — the last snapshot's word.
+function onlineAllyIsPlayer() {
+  const onl = state.online, allyId = onl?.slotMap?.allyId;
+  const bots = onl?.conn?.getLatestSnapshot?.()?.botSlots;
+  return !!allyId && Array.isArray(bots) && !bots.includes(allyId) && ONLINE_SLOT_IDS.includes(onl.myPlayerId);
 }
 function allyTacticCan() {
   if (!allyTacticShown() || state.spectatorActive) return false;
@@ -3234,17 +3252,21 @@ function allyTacticCall(kind) {   // 'push' | 'hide' | null (the take-back)
 function allyTacticOpen(open) {
   tacticHud.open = !!open && !!tacticHud.el;
   if (tacticHud.open) tacticHud.openAt = performance.now();
-  const live = tacticHud.open ? allyTacticLive() : null;   // (lit from the first frame the two show; nothing left lit on a closed pair)
+  const msg = allyTacticVersion() === 'msg';
+  tacticHud.el?.classList.toggle('msg', msg);   // (which of the two sets comes up: the four messages, or the two calls — style.css .tac.msg)
+  const live = tacticHud.open && !msg ? allyTacticLive() : null;   // (lit from the first frame the two show; nothing left lit on a closed pair; a message is never lit)
   for (const opt of tacticHud.opts) opt.classList.toggle('on', opt.dataset.tactic === live);
   tacticHud.el?.classList.toggle('open', tacticHud.open);
 }
 function setupAllyTacticHud(hud) {
   const el = hud.querySelector('#tac');
-  tacticHud.el = el; tacticHud.opts = el ? [...el.querySelectorAll('.tac-opt')] : []; tacticHud.open = false;
+  tacticHud.el = el; tacticHud.open = false; tacticHud.msgSentAt = -1e9;
+  tacticHud.opts = el ? [...el.querySelectorAll('.tac-opt[data-tactic]')] : [];   // (the two calls)
+  tacticHud.msgs = el ? [...el.querySelectorAll('.tac-opt[data-msg]')] : [];      // (the four messages, b1105js)
   if (!el) return;
   el.querySelector('#tac-btn').addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!allyTacticCan()) return;   // (spectator mode: shown, not responding)
+    if (!allyTacticCan() || allyMsgCooling()) return;   // (spectator mode: shown, not responding; a message just sent: not for three seconds)
     allyTacticOpen(!tacticHud.open);
   });
   for (const opt of tacticHud.opts) {
@@ -3253,7 +3275,85 @@ function setupAllyTacticHud(hud) {
       allyTacticPick(opt.dataset.tactic);
     });
   }
+  for (const opt of tacticHud.msgs) {
+    opt.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      allyMsgPick(opt.dataset.msg);
+    });
+  }
 }
+// ============================================================================
+// THE TEAMMATE'S MESSAGES (b1105js, 9.8; shared allymsg.js has the request word for word). Online, in a 2v2, with a PLAYER in
+// the seat beside the player's, the ally command's button brings up four messages where it brings up the two calls for a bot
+// (allyTacticVersion): I'LL GO FORWARD, I'LL PULL BACK, PLEASE GO FORWARD, PLEASE PULL BACK. A tap on one sends it and puts
+// the four away; the button is dim and answers nothing for the three seconds after (allyMsgCooling — the server holds the
+// sender to the same). The four are a pointer's to pick (user: "mouse click for now"): E brings them up as it brings up the
+// two calls, and W and S go on moving the unit.
+// WHAT THE TWO PAGES SHOW (the server passes a message on to the mate's page and back to the sender's — connection.js
+// drainAllyMsgs): a line at the kill feed's place, for two seconds from its arrival. The player must never take a line for
+// the other's (user: "do make sure player won't be confused identifying the message of being sent by theirselves or receive
+// from others"), so the two differ in every part:
+//   the mate's   the mate's face in its seat's ring, the word ALLY, the message — a paper sticker with an ink edge, at the
+//                kill feed's size, and the UI's sound with it;
+//   my own       my own face in my seat's ring, the word YOU, the message — smaller, dark and see-through, without a sound:
+//                the receipt that it went. It shows only once the server has passed the message on, so a message that was
+//                not taken shows nothing.
+// ONE LINE AT A TIME (the place holds no more on a phone held sideways): the mate's line stands its two seconds whatever I
+// send meanwhile, and my own receipt shows for what is left of its own two seconds after it. With knockouts in the feed the
+// line stands clear of them — under them where they stand one under the other, left of them where they stand side by side
+// (style.css .amsg.k1 / .k2, kept by updateAllyMsgHud).
+// ============================================================================
+const allyMsgHud = { el: null, recv: null, echo: null, shown: null, node: null, k: 0 };
+function allyMsgCooling(now = performance.now()) {
+  return allyTacticVersion() === 'msg' && now - tacticHud.msgSentAt < ALLY_MSG_COOLDOWN_MS;
+}
+function allyMsgPick(kind) {
+  if (!tacticHud.open || allyTacticVersion() !== 'msg' || !allyTacticCan() || allyMsgCooling() || !ALLY_MSG_TEXT[kind]) return false;
+  state.online?.conn?.sendAllyMsg?.(kind);
+  tacticHud.msgSentAt = performance.now();
+  allyTacticOpen(false);
+  return true;
+}
+// a message the server passed on to this page: the mate's, or my own back as its receipt
+function allyMsgNote(m) {
+  const onl = state.online;
+  if (!onl || !m || !ALLY_MSG_TEXT[m.kind]) return;
+  const own = m.from === onl.myPlayerId;
+  if (!own && m.from !== onl.slotMap?.allyId) return;
+  const e = { kind: m.kind, from: m.from, own, until: (m.at ?? performance.now()) + ALLY_MSG_SHOW_MS };
+  if (own) allyMsgHud.echo = e;
+  else { allyMsgHud.recv = e; sfxPlay('ui'); }
+}
+function allyMsgEl(e) {
+  const u = (e.own ? state.player : state.ally)?.unit, art = u ? _killArt.get(u.spriteKey) : null;
+  const el = document.createElement('div');
+  el.className = `am${e.own ? ' own' : ''}`;
+  el.innerHTML = `<span class="am-in" style="--c:${SLOT_HUD_COLORS[e.from] ?? '#ffffff'}"><span class="kf-face">${art?.face ? '' : chipFaceImg(u)}</span><span class="am-who">${e.own ? 'YOU' : 'ALLY'}</span><span class="am-txt">${ALLY_MSG_TEXT[e.kind]}</span></span>`;
+  if (art?.face) el.querySelector('.kf-face').appendChild(art.face.cloneNode(false));
+  return el;
+}
+function allyMsgReset() {
+  const A = allyMsgHud;
+  A.recv = null; A.echo = null; A.shown = null; A.node = null; A.k = 0;
+  if (A.el) { A.el.textContent = ''; A.el.classList.remove('k1', 'k2'); }
+}
+// every HUD update, after the kill feed's (updateHud)
+function updateAllyMsgHud() {
+  const A = allyMsgHud, host = A.el;
+  if (!host) return;
+  const now = performance.now();
+  if (A.recv && now >= A.recv.until) A.recv = null;
+  if (A.echo && now >= A.echo.until) A.echo = null;
+  const cur = A.recv ?? A.echo;
+  if (cur !== A.shown) {
+    A.shown = cur;
+    if (A.node) { const old = A.node; old.classList.add('out'); setTimeout(() => old.remove(), KILL_FEED.outMs + 60); A.node = null; }
+    if (cur) { A.node = allyMsgEl(cur); host.appendChild(A.node); }
+  }
+  const k = Math.min(2, killFeed.shown.length);   // (the knockouts showing now: the line stands clear of them)
+  if (k !== A.k) { A.k = k; host.classList.toggle('k1', k === 1); host.classList.toggle('k2', k === 2); }
+}
+
 // A pick of one of the two — a tap on it, or its key (b1105jj): the lit one is taken back, the other, or either with none
 // standing, is called; the two close.
 function allyTacticPick(kind) {
@@ -3272,13 +3372,17 @@ function allyTacticPick(kind) {
 // camera there, as it did), the game-start intro, the ending camera, the pause menu — E does nothing. E switched the lock in
 // the shooter view until this build (user 2026-10-30, with Q the dodge); U switches it, as it did. The keys sound as the taps do.
 function allyTacticKeyPress() {
-  if (!matchKeysLive() || !allyTacticCan()) return false;
+  if (!matchKeysLive() || !allyTacticCan() || allyMsgCooling()) return false;
   allyTacticOpen(!tacticHud.open);
+  // (THE FOUR MESSAGES ARE A POINTER'S TO PICK, b1105js — user: "mouse click for now". In free pov the canvas holds the mouse,
+  // and a held mouse clicks nothing on the HUD: the press that brings the four up gives the mouse back, and the next click on
+  // the field takes it again, as the first one of a match does.)
+  if (tacticHud.open && allyTacticVersion() === 'msg' && typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.();
   sfxPlay('ui_small');   // (the button's own sound, uiSfxFor)
   return true;
 }
 function allyTacticKeyPick(kind) {   // true: the two were up, and the press was a call's
-  if (!tacticHud.open || !matchKeysLive() || !allyTacticCan()) return false;
+  if (!tacticHud.open || !matchKeysLive() || !allyTacticCan() || allyTacticVersion() !== 'bot') return false;   // (the four messages have no keys: W and S go on moving the unit)
   sfxPlay('ui_small');
   return allyTacticPick(kind);
 }
@@ -3286,16 +3390,20 @@ function updateAllyTacticHud() {
   const hud = state.hud, el = tacticHud.el;
   if (!hud || !el) return;
   if (!state.online && state.ally?.cmdTactic && state.ally.state.hp <= 0) setTactic(botCmdView(state.ally), null);   // (a call dies with the unit it was made to — the server's wipe on death, shared clearCommands)
-  const shown = allyTacticShown();
+  const ver = allyTacticVersion(), shown = ver != null, msg = ver === 'msg';
   hud.classList.toggle('tac-on', shown);
-  const live = shown ? allyTacticLive() : null;
+  // (the seat beside the player changed hands — its player left, a bot plays it: the set that was up is no longer the button's)
+  if (shown && el.classList.contains('msg') !== msg) { if (tacticHud.open) allyTacticOpen(false); el.classList.toggle('msg', msg); }
+  el.classList.toggle('cool', msg && allyMsgCooling());   // (a message just sent: the button dimmed for its three seconds — style.css .tac.cool)
+  const live = shown && !msg ? allyTacticLive() : null;
   el.classList.toggle('live', live != null);   // (b1105gr, user 2026-11-12: "when there is either command in effect, make the command button itself glowing as well" — the button lit for as long as a call stands, the two closed or open; style.css .tac.live)
   if (!shown) { if (tacticHud.open) allyTacticOpen(false); return; }
   if (!tacticHud.open) return;
   if (performance.now() - tacticHud.openAt > TACTIC_HUD.closeMs || !allyTacticCan()) { allyTacticOpen(false); return; }
   for (const opt of tacticHud.opts) opt.classList.toggle('on', opt.dataset.tactic === live);
 }
-if (typeof window !== 'undefined') window.__tactic = { cfg: TACTIC_HUD, hud: tacticHud, shown: allyTacticShown, can: allyTacticCan, live: () => allyTacticLive(), call: allyTacticCall, open: allyTacticOpen, lit: () => !!tacticHud.el?.classList.contains('live') };   // (automation: the ally tactic)
+if (typeof window !== 'undefined') window.__tactic = { cfg: TACTIC_HUD, hud: tacticHud, shown: allyTacticShown, can: allyTacticCan, live: () => allyTacticLive(), call: allyTacticCall, open: allyTacticOpen, lit: () => !!tacticHud.el?.classList.contains('live'),
+  version: () => allyTacticVersion(), pickMsg: (k) => allyMsgPick(k), cooling: () => allyMsgCooling(), msgs: allyMsgHud, note: (m) => allyMsgNote(m) };   // (automation: the ally tactic, and the teammate's messages)
 
 // The thumb buttons' arrows (b1105m): one stroke path each, drawn in the button's own colour (style.css .btn-icon).
 const HUD_BTN_ICON = {
@@ -3333,10 +3441,12 @@ function setupHUD() {
     <div class="crosshair" id="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i></div>
     <button id="pause-btn" class="pause-btn">PAUSE</button>
     <div class="kill-feed" id="kill-feed" aria-hidden="true"></div>
+    <div class="kill-feed amsg" id="ally-msg" aria-hidden="true"></div>
     ${MINI_MAP_POP_HTML}
   `;
   app.appendChild(hud);
   killFeed.el = hud.querySelector('#kill-feed');   // (THE KILL FEED, b1105gm: its two places under PAUSE)
+  allyMsgHud.el = hud.querySelector('#ally-msg'); allyMsgReset();   // (THE TEAMMATE'S MESSAGES, b1105js: their line, at the kill feed's place)
 
   // ONLINE ABSOLUTE HUD (owner 2026-08-22): the chips anchor by SERVER SLOT — left column team A (p1 top / p3
   // bottom), right column team B (p2 top / p4 bottom) — identical for every viewer, each chip in its slot colour (the
@@ -8083,6 +8193,7 @@ function updateHud(now = performance.now()) {
   // SUDDEN DEATH (owner 2026-10-06, "no need health bar"): everyone is at 1 HP — the chips' bars hide (style.css
   // .sd-hud); the portrait, the name and the Trio faces stay, so does the boost sticker.
   updateKillFeed();   // (THE KILL FEED, b1105gm: its two places and its pace)
+  updateAllyMsgHud(); // (THE TEAMMATE'S MESSAGES, b1105js: the line at the kill feed's place)
   updateUnitSfx(now);   // (THE GAME'S SOUNDS, b1105hk: what the units' state tells this frame)
   updateAllyTacticHud();   // (THE ALLY TACTIC, b1105gq: shown or not, the standing call lit)
   if (state.hud) state.hud.classList.toggle('sd-hud', !!state.suddenDeathActive);
@@ -9223,7 +9334,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jr 11-18';
+const CLIENT_BUILD_TAG = 'b1105js 11-18';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -10850,6 +10961,7 @@ function ensureOnlineMatchSetup(snap) {
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
   onl.conn?.drainHits?.();   // (HIT X: hits queued before this match are not this match's)
   onl.conn?.drainKills?.();  // (THE KILL FEED, b1105gm: nor are its knockouts)
+  onl.conn?.drainAllyMsgs?.();   // (THE TEAMMATE'S MESSAGES, b1105js: nor a message of the match before)
   onl.conn?.drainFired?.();  // (THE UNIT'S SOUNDS, b1105hk: nor its trigger pulls)
 
   // Trio: pre-build each slot's future roster units and pre-warm all fielded
@@ -11187,6 +11299,7 @@ function runOnlineMatchFrame(dt, onl, conn) {
   // HIT X: every hit event of every snapshot that came in (a frame can see two), once the server confirmed it
   for (const h of conn.drainHits?.() ?? []) noteHitX(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
   for (const k of conn.drainKills?.() ?? []) killFeedNoteOnline(k);   // (THE KILL FEED, b1105gm: every snapshot's knockouts, as the hits)
+  for (const m of conn.drainAllyMsgs?.() ?? []) allyMsgNote(m);       // (THE TEAMMATE'S MESSAGES, b1105js: the ones passed on to this page)
   { const t = performance.now(); for (const f of conn.drainFired?.() ?? []) shotSfxOnline(f, t); }   // (THE UNIT'S SOUNDS, b1105hk: every snapshot's trigger pulls, as the hits)
 
   // 2. Drive prediction at fixed 25 ms cadence. COMMAND MODE skips it
@@ -12759,7 +12872,8 @@ function showGuidePopup() {
             <li>A triangle on the edge of the screen points at a unit that is off the screen.</li>
             <li>The round map shows the units near you. Tap it to see the whole map, and tap it again to close it.</li>
             <li>The fire button shows your gun and the rounds left.</li>
-            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>BACK OFF</strong>. The teammate keeps doing it until it falls. Pick the same one again to cancel. On PC: E, then W for FORWARD or S for BACK OFF.</li>
+            <li>2v2 with a bot teammate: tap the small arrows button at the top of the screen, then <strong>FORWARD</strong> or <strong>PULL BACK</strong>. The teammate keeps doing it until it falls. Pick the same one again to cancel. On PC: E, then W for FORWARD or S for PULL BACK.</li>
+            <li>Online 2v2 with a player as your teammate: the same button shows four quick messages instead. Tap one and your teammate sees it for 2 seconds. You can send one every 3 seconds.</li>
           </ul>
 
           <h4>On some maps</h4>

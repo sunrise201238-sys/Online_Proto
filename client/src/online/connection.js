@@ -117,6 +117,7 @@ export function createConnection() {
     lastMatchEnd = null;
     lastKill = null; kills.length = 0;
     killQueue.length = 0; projSeen.clear(); for (const id in slotSwap) delete slotSwap[id];
+    msgQueue.length = 0;
     matchStart = payload ?? null;
     log('match:start', payload);
   });
@@ -232,6 +233,17 @@ export function createConnection() {
     log('lobby:config', payload);
   });
 
+  // THE TEAMMATE'S MESSAGES (shared allymsg.js; b1105js): a message the server passed on to this page — the mate's to me, or
+  // my own come back as its receipt ({ from: the sender's seat, kind }). Queued with the page's clock at arrival; the HUD
+  // drains it (drainAllyMsgs) and shows each for its two seconds from then.
+  const msgQueue = [];
+  socket.on('ally:msg', (payload) => {
+    if (!payload || typeof payload.from !== 'string' || typeof payload.kind !== 'string') return;
+    msgQueue.push({ from: payload.from, kind: payload.kind, at: performance.now() });
+    if (msgQueue.length > 8) msgQueue.splice(0, msgQueue.length - 8);
+    log('ally:msg', payload);
+  });
+
   // COMMAND MODE (phase 3): order acknowledgements. The render loop polls
   // getOrderResult and compares seq to know when a fresh one landed.
   let lastOrderResult = null;
@@ -265,6 +277,7 @@ export function createConnection() {
     drainHits: () => hitQueue.splice(0),   // (HIT X: the hit events queued since the last call)
     drainFired: () => firedQueue.splice(0), // (THE UNIT'S SOUNDS, b1105hk: the trigger pulls queued since the last call)
     drainKills: () => killQueue.splice(0), // (THE KILL FEED, b1105gm: the knockouts worked out since the last call)
+    drainAllyMsgs: () => msgQueue.splice(0), // (THE TEAMMATE'S MESSAGES, b1105js: the ones passed on to this page since the last call)
     getSnapshotCount: () => snapshotCount,
     getSnapshotHz: () => snapshotTimes.length,
 
@@ -378,11 +391,17 @@ export function createConnection() {
       socket.emit('order:stance', { slot, hide: !!hide });
     },
     // THE ALLY TACTIC (shared tactic.js; b1105gq): a classic player's call to the bot on their side — kind 'push' (FORWARD) or
-    // 'hide' (BACK OFF) for 10 s, null to take the standing one back. Nothing is answered: what stands arrives as
-    // commands[slot].tactic { kind, until } in the side's snapshots.
+    // 'hide' (PULL BACK; BACK OFF until b1105js), standing until it is taken back (b1105jn), null to take the standing one
+    // back. Nothing is answered: what stands arrives as commands[slot].tactic { kind, until } in the side's snapshots.
     sendAllyTactic: (kind, slot) => {
       if (!connected) return;
       socket.emit('ally:tactic', { slot, kind: kind ?? null });
+    },
+    // THE TEAMMATE'S MESSAGES (shared allymsg.js; b1105js): one of the four to the player beside me. The server passes it on
+    // to that page and back to this one (ally:msg above) — or, where it does not stand, answers nothing.
+    sendAllyMsg: (kind) => {
+      if (!connected) return;
+      socket.emit('ally:msg', { kind });
     },
     getOrderResult: () => ({ seq: orderResultSeq, data: lastOrderResult }),
 

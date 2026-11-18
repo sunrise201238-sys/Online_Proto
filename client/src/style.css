@@ -181,6 +181,36 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   html.hud-rows-2 .kf.p1 { transform: translateX(var(--kf-side)); }
 }
 @media (prefers-reduced-motion: reduce) { .kf { transition: none; } .kf-in { animation: none; } .kf.out .kf-in { animation: none; opacity: 0; } }
+/* THE TEAMMATE'S MESSAGES, the line (main.js THE TEAMMATE'S MESSAGES; b1105js): a message at the kill feed's place for two
+   seconds — #ally-msg is a second box of the feed's own class, so it stands at the feed's point on every screen. One line
+   at a time, centred on that point, at the feed's scale (--kf-s) and lean.
+   WHOSE IT IS must never be in doubt, so the two looks share nothing:
+     the mate's (.am)      a paper sticker with an ink edge and the sticker's shadow — the mate's face in its seat's ring
+                           (--c), ALLY on an ink tag in that colour, the message in ink;
+     my own (.am.own)      the receipt: smaller, dark and see-through, no edge and no shadow — my face in my seat's ring,
+                           YOU in that colour, the message in white.
+   WITH KNOCKOUTS SHOWING (.k1 one, .k2 two — main.js updateAllyMsgHud) the line stands clear of them: under them where the
+   feed's places stand one under the other; LEFT of them where they stand side by side (a 2v2 on a screen up to 1099 px —
+   there is no room under them on a small wide one, the lock bracket begins 3 px below) — its right end 8 px off the left
+   end of the one (48 px half an entry) or of the pair (101); and under them again on a narrow screen, where there is room. */
+.amsg .am { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1); will-change: transform; }
+.amsg .am-in { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px 0 3px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 2px 2px 0 var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 11px; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; transform: rotate(-1.5deg) scale(var(--kf-s)); animation: kf-pop 0.15s cubic-bezier(0.2, 1.3, 0.4, 1) both; will-change: transform, opacity; }
+.amsg .am.out .am-in { animation: kf-out 0.25s ease-in both; }
+.amsg .kf-face { position: relative; top: 0; flex: none; width: 18px; height: 18px; }
+.amsg .am-who { flex: none; padding: 3px 6px 2px; border-radius: 999px; background: var(--ink); color: var(--c, #ffffff); font-size: 9px; }
+.amsg .am.own .am-in { height: 21px; padding: 0 9px 0 2px; gap: 4px; border: 0; background: rgba(27, 27, 47, 0.62); color: #ffffff; box-shadow: none; font-size: 9px; }
+.amsg .am.own .kf-face { width: 15px; height: 15px; box-shadow: none; }
+.amsg .am.own .am-who { padding: 0; background: none; font-size: 8px; }
+.amsg.k1 .am { transform: translate(-50%, calc(-50% + var(--kf-pitch))); }
+.amsg.k2 .am { transform: translate(-50%, calc(-50% + 2 * var(--kf-pitch))); }
+@media (max-width: 1099px) {
+  html.hud-rows-2 .amsg.k1 .am { transform: translate(calc(-100% - 56px), -50%); }
+  html.hud-rows-2 .amsg.k2 .am { transform: translate(calc(-100% - 109px), -50%); }
+}
+@media (max-width: 720px) {
+  html.hud-rows-2 .amsg.k1 .am, html.hud-rows-2 .amsg.k2 .am { transform: translate(-50%, calc(-50% + 31px)); }
+}
+@media (prefers-reduced-motion: reduce) { .amsg .am { transition: none; } .amsg .am-in { animation: none; } .amsg .am.out .am-in { animation: none; opacity: 0; } }
 /* THE BOOST STICKER (b1105w, the design canvas's round 5 — the sample's yellow ammo chip; the 10 px bar until then):
    level, at the bottom centre — the word, the gauge with a white knob (--bw on the track, updateHud), no number. The
    fill is the SPRINT button's magenta at every level (user b1105x: "shouldn't be black"); overheating does not tint it
@@ -250,6 +280,20 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none !importan
   .tac-pop { left: 84px; top: 94px; transform: none; flex-direction: column; align-items: flex-start; }
 }
 @media (max-width: 720px) and (max-height: 303px) { .tac-pop { flex-direction: row; align-items: center; } }
+/* THE TEAMMATE'S MESSAGES, the four on the button (main.js THE TEAMMATE'S MESSAGES; b1105js). Where a player sits beside the
+   player (.tac.msg, kept by updateAllyTacticHud) the button brings up the four messages (.tac-msgs) and not the two calls;
+   one of the two sets is in the page at a time. They are the calls' pills. Where the calls stand in a column — a big screen,
+   a narrow one — the four stand in a column in their place. Where the calls stand in one row under PAUSE — a small wide
+   screen, 721 to 1099 px: 230 px between the top chips there, and the four in a row are near 600 — they stand two by two,
+   I'LL over PLEASE, FORWARD left of PULL BACK, and for the three seconds they are up the lower two lie over the inner ends
+   of the chips' second row. The button is dim for the three seconds after a message went (.tac.cool). */
+.tac.msg .tac-pop:not(.tac-msgs), .tac:not(.msg) .tac-msgs { display: none; }
+.tac.open.msg .tac-msgs { display: grid; grid-template-columns: auto auto; gap: 4px 5px; }
+.tac-msgs .tac-opt { justify-content: center; }
+.tac.cool .tac-btn { opacity: 0.45; }
+@media (min-width: 1100px) { .tac.open.msg .tac-msgs { display: flex; } }
+@media (max-width: 720px) { .tac.open.msg .tac-msgs { display: flex; } }
+@media (max-width: 720px) and (max-height: 303px) { .tac.open.msg .tac-msgs { display: grid; } }
 
 .buttons {
   --btn-size: clamp(72px, 8vw, 84px);

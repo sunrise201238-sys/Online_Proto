@@ -61,3 +61,4 @@ export {
   commandTargetIdOf, tickCommandDriver, setAllyTactic
 } from './command.js';
 export { ALLY_TACTIC_KINDS, ALLY_TACTIC_NO_END, tacticOf, tacticSettle, setTactic, tacticEcho } from './tactic.js';   // THE ALLY TACTIC (b1105gq)
+export { ALLY_MSG_KINDS, ALLY_MSG_TEXT, ALLY_MSG_SHOW_MS, ALLY_MSG_COOLDOWN_MS, ALLY_MSG_SLACK_MS, allyMsgMate, allyMsgTo } from './allymsg.js';   // THE TEAMMATE'S MESSAGES (b1105js)

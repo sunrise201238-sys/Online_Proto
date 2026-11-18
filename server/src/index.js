@@ -24,6 +24,7 @@ import {
   tacticEcho,
   ALLY_TACTIC_KINDS,
   ALLY_TACTIC_MIN_INTERVAL_MS,
+  allyMsgTo,
   emptyInput,
   TICK_RATE_MS,
   TICK_DT,
@@ -118,6 +119,7 @@ function createLobby() {
     },
     lastOrderAt: { p1: 0, p2: 0, p3: 0, p4: 0 },   // command-order rate limiter
     lastTacticAt: { p1: 0, p2: 0, p3: 0, p4: 0 },  // the ally tactic's, per unit called (ally:tactic)
+    lastMsgAt: { p1: 0, p2: 0, p3: 0, p4: 0 },     // the teammate's messages', per sender (ally:msg)
     rematchRequested: { p1: false, p2: false, p3: false, p4: false },
     endChoice: { p1: null, p2: null, p3: null, p4: null },   // THE END OF A MATCH (b1105is): each seat's 'rematch' | 'reselect', null until chosen
     modeLocked: false,                // the mode — Duel | Trio, 1v1 | 2v2, the rules — stands once the room has played a match
@@ -913,6 +915,28 @@ io.on('connection', (socket) => {
       lb.lastTacticAt[slot] = nowMs;
     }
     setAllyTactic(lb.match, slot, kind);
+  });
+
+  // ---- THE TEAMMATE'S MESSAGES (shared allymsg.js; b1105js, user 2026-11-18) -------
+  // A player's word to the PLAYER beside them in a 2v2: { kind } — one of the four (ALLY_MSG_KINDS). Who may send what to
+  // whom, and how often, is the shared rule's (allyMsgTo): a seated player not in command mode, to a mate's seat a player
+  // sits in now and whose unit stands, three seconds apart; in Sudden Death as in any other match. A message that stands
+  // is passed on to two pages and no further — the mate's, and the sender's own, which shows it as sent on that word
+  // alone. One that does not stand is answered by nothing. It touches nothing of the match: no state, no snapshot, no tick.
+  socket.on('ally:msg', (data) => {
+    const lb = lobbyForSocket(socket);
+    if (!lb || lb.state !== 'active' || !lb.match) return;
+    const sender = lb.players.get(socket.id);
+    const humans = new Set();
+    for (const s of lb.players.values()) if (SLOT_IDS.includes(s)) humans.add(s);
+    const kind = data?.kind, nowMs = Date.now();
+    const mate = allyMsgTo({
+      mode: lb.mode, sender, kind, humans, bots: lb.botSlots, commanders: lb.commandSlots,
+      hpOf: (s) => lb.match.fighters[s]?.hp ?? 0, lastAt: lb.lastMsgAt[sender], now: nowMs
+    });
+    if (!mate) return;
+    lb.lastMsgAt[sender] = nowMs;
+    for (const [sid, s] of lb.players) if (s === mate || s === sender) io.to(sid).emit('ally:msg', { from: sender, kind });
   });
 
   socket.on('match:configure', (cfg) => {
