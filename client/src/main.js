@@ -1980,6 +1980,16 @@ const UNIT_MODELS = {
   // Normal_Attack_Ing; no Move_Jump in her file — the dodge and the jump are Move_end_Normal)
   aris: {
     file: 'models/aris_v2', height: UNIT_SPRITE_HEIGHT,
+    // HER PLAIN BODY IS NOT DRAWN (b1105jq, PT and 9.8; user 2026-11-18, with a picture of the winner camera on her and two rings round
+    // thin pale slivers at her shoulders: "Aris winner motion seems to have a bit flickering/glitching issue on her back."). Her file
+    // holds two bodies, the plain one (CH0334_Body) and the armoured one (CH0334_Arms_Body), and each carries one morph that gathers
+    // every vertex of it at a single point: the file's way of putting a body away. All eight of her clips hold the plain body's
+    // morph at 1 and the armoured one's at 0, so the plain body is never meant to be seen here. It was still drawn: gathered at one
+    // point, then skinned, and its vertices hang on 73 bones, so each bone carried its share of that point somewhere else and the
+    // triangles between them became long thin slivers out of her chest and shoulders (166 of its 3,900 triangles over 8 % of her
+    // height long in the ending loop, the longest 21 %) in every motion of hers, plainest in the winner camera's close view. `away`
+    // names the meshes of a model that are never drawn and get no see-through outline (makeUnitModel): the plain body's two.
+    away: /^CH0334_Body(_\d+)?$/,
     clips: {
       stand: { name: 'Formation_Idle', speed: 1 },
       walk: { name: 'Normal_Idle', speed: 0.5 },
@@ -2209,8 +2219,13 @@ function makeUnitModel(unitData, isOwnUnit) {
     // then passes exactly where closer geometry hides the unit. Drawn as a
     // transparent object it would come after the body and its own far side
     // would pass against the body's near side — a solid cyan unit.
+    // (a model's `away` meshes — Aris's plain body, b1105jq — are never drawn, and so get no silhouette either: they stay in the
+    // instance, hidden, so that her clips' morph tracks still find the mesh they name; `neverDrawn` keeps the loading screen's
+    // warm frame, which draws what the scene holds hidden, from drawing them and sending them to the graphics card)
+    const away = rig.cfg.away;
+    if (away) inst.traverse((o) => { if (o.isMesh && away.test(o.name)) { o.visible = false; o.userData.neverDrawn = true; } });
     const skins = [];
-    inst.traverse((o) => { if (o.isSkinnedMesh && !/^Mouth_/i.test(o.name)) skins.push(o); });
+    inst.traverse((o) => { if (o.isSkinnedMesh && o.visible && !/^Mouth_/i.test(o.name)) skins.push(o); });
     for (const o of skins) {
       const ghost = new THREE.SkinnedMesh(o.geometry, new THREE.MeshBasicMaterial({
         color: MODEL_SILHOUETTE_COLOR,
@@ -8417,7 +8432,7 @@ function matchWarmDraw() {
   for (const o of samples) scene.add(o);
   while (_texWarmQueue.length) renderer.initTexture?.(_texWarmQueue.shift());
   scene.traverse((o) => {
-    if (o === ground || o === gridHelper) return;
+    if (o === ground || o === gridHelper || o.userData?.neverDrawn) return;   // (neverDrawn: a model's `away` meshes, b1105jq)
     if (!o.visible && !o.isLight) { o.visible = true; shown.push(o); }
     if (o.frustumCulled && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) { o.frustumCulled = false; off.push(o); }
   });
@@ -9182,7 +9197,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jp 11-18';
+const CLIENT_BUILD_TAG = 'b1105jq 11-18';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
