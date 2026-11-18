@@ -2051,7 +2051,17 @@ const UNIT_MODELS = {
   // barricades, placard), her AKM kept, and Saori's seven battle clips by bone name in place of her own (none battle-ready) — what
   // they leave still (hair, scarf, hood, helmet, coat tails) stays as the bind pose; her map is Saori's, Subaru's dodge on her
   // Move_Jump included
+  // HER WALK AND SPRINT ARE SUBARU'S (b1105jr, PT and 9.8; user 2026-11-18: "Apply Subaru's walk/sprint motion to Minori's walk/sprint."):
+  // Subaru walks and sprints on one clip, her Move_Ing, at half speed and at its own (the default map), and so does Minori now, on
+  // the same clip at the same two speeds: models/subaru_move_clip.json (clip_extract.mjs, out of Subaru's file), borrowed whole
+  // (borrowClip's `whole`: her Biped is Subaru's in its proportions) — the Biped body's rotations and positions and the weapon
+  // bone's from Subaru, everything else (her eyes, her arms' helper bones, her gun bone's scale) from her own Move_Ing, fitted to
+  // the borrowed clip's length. The sprint with the trigger held shows the sprint clip, as it does for every unit, so it borrows
+  // too. The three entries share one action (borrowClip), so a walk into a sprint keeps its step and is only retimed.
   minori: { file: 'models/minori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
+    walk: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 0.5 },
+    sprint: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 1 },
+    sprintShoot: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 1 },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
@@ -2298,22 +2308,38 @@ function warmBorrowedClip(from) {
 // them out beside her; her hair, skirt, pockets and mouth follow her own dodge too.
 function borrowClip(rig, inst, key, cfg, anims = []) {
   warmBorrowedClip(cfg.from).then((json) => {
-    const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
-    const body = (n) => /^Bip001/.test(n) && !/eye|Xtra|Weapon/i.test(n);
-    const borrowed = THREE.AnimationClip.parse({ ...json, tracks: json.tracks.filter((t) => { const n = t.name.split('.')[0]; return t.type === 'quaternion' && names.has(n) && body(n); }) });
-    if (!borrowed.tracks.length || !rig.mixer) return;
-    const driven = new Set(borrowed.tracks.map((t) => t.name.split('.')[0]));
-    const own = cfg.base ? THREE.AnimationClip.findByName(anims, cfg.base) : null;
-    const rest = own ? own.tracks.filter((t) => !driven.has(t.name.split('.')[0])).map((t) => t.clone().scale(borrowed.duration / own.duration)) : [];
-    const clip = new THREE.AnimationClip(`${borrowed.name}+${cfg.base ?? ''}`, borrowed.duration, [...borrowed.tracks, ...rest]);
-    const action = rig.mixer.clipAction(clip);
+    if (!rig.mixer) return;
+    // ONE CLIP, ONE ACTION (b1105jr): entries of a rig that borrow the same file on the same base, both looping or both once —
+    // Minori's walk, sprint and sprint-and-fire, all Subaru's Move_Ing — share the clip built here, so the mixer hands them one
+    // action and updateUnitModelState only retimes it from one key to the next, as it does a model's own Move_Ing under those keys
+    const kept = rig.borrowed ?? (rig.borrowed = new Map()), id = `${cfg.from}|${cfg.base ?? ''}|${cfg.once ? 1 : 0}|${cfg.whole ? 1 : 0}`;
+    let made = kept.get(id);
+    if (!made) {
+      const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
+      // THE CLIP TAKEN WHOLE (an entry's `whole`, b1105jr — Minori's run, which is Subaru's): where the two rigs share their Biped's
+      // proportions (Minori's rest offsets are Subaru's, bone for bone down the spine, the arms and the legs) the Biped's positions
+      // are taken with its rotations — the root's rise, lean and sway, without which the body ran at its standing height — and so
+      // is the weapon bone, which hangs on the root and not on a hand: left to her own clip the gun stood at her hip while her
+      // hands held Subaru's grip. Her own clip still gives a borrowed bone its scale (her gun's bone rests at a thousandth and
+      // every clip of hers scales it up). Without `whole`, as before: the rotations alone, the gun left to the rig's own clip.
+      const whole = !!cfg.whole;
+      const body = (n) => /^Bip001/.test(n) && !/eye|Xtra/i.test(n) && (whole || !/Weapon/i.test(n));
+      const borrowed = THREE.AnimationClip.parse({ ...json, tracks: json.tracks.filter((t) => { const n = t.name.split('.')[0]; return (t.type === 'quaternion' || (whole && t.name.endsWith('.position'))) && names.has(n) && body(n); }) });
+      if (!borrowed.tracks.length) return;
+      const driven = new Set(borrowed.tracks.map((t) => t.name.split('.')[0]));
+      const own = cfg.base ? THREE.AnimationClip.findByName(anims, cfg.base) : null;
+      const rest = own ? own.tracks.filter((t) => !driven.has(t.name.split('.')[0]) || (whole && t.name.endsWith('.scale'))).map((t) => t.clone().scale(borrowed.duration / own.duration)) : [];
+      const clip = new THREE.AnimationClip(`${borrowed.name}+${cfg.base ?? ''}`, borrowed.duration, [...borrowed.tracks, ...rest]);
+      // (body: what the way out eases — BORROWED_EXIT_S — every part the clip moves but the gear, the borrowed body and the parts
+      // of her own clip alike: the Biped's helper bones, the hair, the skirt; the gear — shield, plates, pistol, shells, holster,
+      // pockets, grenades — still cuts, the backpack never sliding across her back)
+      const gear = /Shield|Plate|Pistol|Bullet|Holster|Pocket|Grenade/i;
+      const eased = [...new Set(clip.tracks.map((t) => t.name.split('.')[0]))].filter((n) => !gear.test(n)).map((n) => inst.getObjectByName(n)).filter((o) => o && !o.isMesh);
+      kept.set(id, made = { clip, eased });
+    }
+    const action = rig.mixer.clipAction(made.clip);
     if (cfg.once) { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
-    // (body: what the way out eases — BORROWED_EXIT_S — every part the clip moves but the gear, the borrowed body and the parts
-    // of her own clip alike: the Biped's helper bones, the hair, the skirt; the gear — shield, plates, pistol, shells, holster,
-    // pockets, grenades — still cuts, the backpack never sliding across her back)
-    const gear = /Shield|Plate|Pistol|Bullet|Holster|Pocket|Grenade/i;
-    const eased = [...new Set(clip.tracks.map((t) => t.name.split('.')[0]))].filter((n) => !gear.test(n)).map((n) => inst.getObjectByName(n)).filter((o) => o && !o.isMesh);
-    rig.actions[key] = { action, cfg, dur: clip.duration, body: eased };
+    rig.actions[key] = { action, cfg, dur: made.clip.duration, body: made.eased };
   }).catch((e) => console.warn('borrowed clip', cfg.from, e));
 }
 
@@ -9197,7 +9223,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jq 11-18';
+const CLIENT_BUILD_TAG = 'b1105jr 11-18';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
