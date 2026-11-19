@@ -1,0 +1,23 @@
+{
+  "v": 5,
+  "createdOnFiles": { "v": 1, "at": "2026-11-19T03:55:14Z" },
+  "lists": "css",
+  "format": { "v": 1, "shared": ["project/deck.css"] },
+  "title": "強角與強組合模擬結果",
+  "cover": "cover",
+  "order": ["cover", "method", "answer", "solo", "duo", "shift", "maps", "teams", "weak", "limits"],
+  "sections": {
+    "s1": { "description": "測試方法和結論。", "start": "cover" },
+    "s2": { "description": "每個角色在 1v1 和 2v2 的勝率。", "start": "solo" },
+    "s3": { "description": "地圖怎麼影響結果。", "start": "shift" },
+    "s4": { "description": "2v2 的強組合和弱組合。", "start": "teams" },
+    "s5": { "description": "這次模擬的限制。", "start": "limits" }
+  },
+  "faces": {
+    "noto-sans-tc": {
+      "family": "Noto Sans TC",
+      "href": "https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
+    }
+  },
+  "designSystems": []
+}

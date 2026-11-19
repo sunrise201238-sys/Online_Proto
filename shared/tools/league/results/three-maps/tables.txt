@@ -1,0 +1,106 @@
+# agg.py names.json r1_0.jsonl r1_1.jsonl -- r2_0.jsonl r2_1.jsonl -- r3_0.jsonl r3_1.jsonl
+1v1: 2280 matches, 2280 ended by knockout, median length 20.8 s; maps ['square', 'town', 'warehouse']
+  Maki      70.6%  n=228  beats 12 of 19   square: 86  town: 68  warehouse: 58
+  Asuna     67.3%  n=228  beats 15 of 19   square: 82  town: 64  warehouse: 56
+  Koyuki    64.3%  n=228  beats 13 of 19   square: 63  town: 66  warehouse: 63
+  Iori      63.2%  n=228  beats 13 of 19   square: 61  town: 64  warehouse: 64
+  Fubuki    60.5%  n=228  beats 13 of 19   square: 61  town: 68  warehouse: 52
+  Hina      59.4%  n=228  beats 12 of 19   square: 53  town: 65  warehouse: 60
+  Minori    56.4%  n=228  beats 10 of 19   square: 53  town: 56  warehouse: 61
+  Atsuko    56.1%  n=228  beats 12 of 19   square: 57  town: 50  warehouse: 61
+  Aru       55.9%  n=228  beats 12 of 19   square: 76  town: 53  warehouse: 38
+  Subaru    53.1%  n=228  beats 10 of 19   square: 66  town: 48  warehouse: 45
+  Kurumi    52.6%  n=228  beats 10 of 19   square: 35  town: 56  warehouse: 67
+  Hiyori    49.3%  n=228  beats 10 of 19   square: 68  town: 47  warehouse: 32
+  Saori     43.4%  n=228  beats  6 of 19   square: 45  town: 43  warehouse: 43
+  Marina    42.1%  n=228  beats  5 of 19   square: 43  town: 39  warehouse: 44
+  Hoshino   39.9%  n=228  beats  5 of 19   square: 16  town: 41  warehouse: 62
+  Haruka    37.3%  n=228  beats  2 of 19   square: 17  town: 26  warehouse: 69
+  Rabu      35.3%  n=228  beats  2 of 19   square:  7  town: 41  warehouse: 59
+  Aris      35.1%  n=228  beats  5 of 19   square: 35  town: 45  warehouse: 26
+  Yuuka     31.8%  n=228  beats  1 of 19   square: 39  town: 26  warehouse: 30
+  Kei       26.3%  n=228  beats  2 of 19   square: 37  town: 33  warehouse:  9
+
+2v2: 1700 matches, 1700 ended by knockout, median length 26.1 s
+  unit      win%   n    strength
+  Koyuki    60.9%   344  +0.45
+  Maki      59.2%   325  +0.42
+  Hina      58.1%   314  +0.40
+  Asuna     57.9%   299  +0.37
+  Aru       56.7%   326  +0.24
+  Rabu      55.4%   327  +0.20
+  Iori      54.6%   351  +0.20
+  Minori    50.9%   290  +0.06
+  Fubuki    50.9%   334  +0.05
+  Hiyori    48.0%   369  -0.05
+  Kurumi    50.0%   308  -0.05
+  Subaru    48.6%   326  -0.06
+  Haruka    48.4%   316  -0.06
+  Atsuko    47.3%   333  -0.10
+  Saori     47.1%   357  -0.13
+  Hoshino   43.7%   317  -0.30
+  Marina    44.2%   355  -0.31
+  Kei       42.4%   356  -0.32
+  Aris      41.4%   339  -0.44
+  Yuuka     37.1%   346  -0.57
+
+  teams with 8 or more matches, by win rate (top 14, bottom 6):
+  Haruka + Rabu           86.7%  n=15  the fit foretells  53%
+  Haruka + Iori           85.7%  n=14  the fit foretells  53%
+  Maki + Hina             81.8%  n=11  the fit foretells  69%
+  Rabu + Aru              81.2%  n=16  the fit foretells  61%
+  Koyuki + Maki           81.0%  n=21  the fit foretells  70%
+  Kurumi + Maki           80.0%  n=15  the fit foretells  59%
+  Minori + Asuna          77.8%  n= 9  the fit foretells  61%
+  Koyuki + Asuna          76.9%  n=13  the fit foretells  69%
+  Hina + Asuna            76.9%  n=13  the fit foretells  68%
+  Koyuki + Hiyori         76.5%  n=17  the fit foretells  60%
+  Hina + Hina             75.0%  n=12  the fit foretells  69%
+  Fubuki + Koyuki         75.0%  n=16  the fit foretells  62%
+  Fubuki + Atsuko         75.0%  n=16  the fit foretells  49%
+  Kurumi + Aru            73.3%  n=15  the fit foretells  55%
+  Hoshino + Aris          12.5%  n=16  the fit foretells  32%
+  Yuuka + Yuuka           12.5%  n= 8  the fit foretells  24%
+  Yuuka + Aris            12.5%  n=16  the fit foretells  27%
+  Aris + Aris             12.5%  n= 8  the fit foretells  29%
+  Haruka + Kurumi         11.8%  n=17  the fit foretells  47%
+  Kurumi + Hoshino        10.0%  n=15  the fit foretells  41%
+
+  the fit's own top 12 teams (the sum of two strengths):
+  Koyuki + Koyuki        foretold  71%   played 12
+  Koyuki + Maki          foretold  70%   played 21
+  Koyuki + Hina          foretold  70%   played 15
+  Maki + Maki            foretold  70%   played 7
+  Koyuki + Asuna         foretold  69%   played 13
+  Maki + Hina            foretold  69%   played 11
+  Maki + Asuna           foretold  69%   played 16
+  Hina + Hina            foretold  69%   played 12
+  Hina + Asuna           foretold  68%   played 13
+  Asuna + Asuna          foretold  68%   played 7
+  Koyuki + Aru           foretold  67%   played 16
+  Maki + Aru             foretold  66%   played 18
+
+round robin of the chosen teams: 270 matches
+  Koyuki + Maki           63.0%  n=54
+  Maki + Asuna            62.0%  n=54
+  Koyuki + Asuna          61.1%  n=54
+  Hina + Asuna            55.6%  n=54
+  Maki + Hina             53.7%  n=54
+  Maki + Maki             52.8%  n=54
+  Iori + Maki             41.7%  n=54
+  Asuna + Asuna           39.8%  n=54
+  Iori + Asuna            36.1%  n=54
+  Maki + Aru              34.3%  n=54
+
+# the second round robin (r4: four of the strongest teams and six teams that won most in the random sample)
+round robin of the chosen teams: 270 matches
+  Koyuki + Maki           68.5%  n=54
+  Koyuki + Asuna          64.8%  n=54
+  Hina + Asuna            53.7%  n=54
+  Maki + Asuna            51.9%  n=54
+  Kurumi + Maki           46.3%  n=54
+  Haruka + Iori           46.3%  n=54
+  Rabu + Asuna            46.3%  n=54
+  Koyuki + Hiyori         44.4%  n=54
+  Haruka + Rabu           39.8%  n=54
+  Rabu + Aru              38.0%  n=54

@@ -1,0 +1,123 @@
+# agg2.py names.json m1_0.jsonl m1_1.jsonl -- m2_0.jsonl m2_1.jsonl -- m3_0.jsonl m3_1.jsonl m3_2.jsonl m3_3.jsonl
+1v1: 9120 matches, 9120 knockouts, median 21.8 s, 16 maps; per pair 48.0
+  unit      all    n     beats  scene  concept  best map          worst map         spread
+  Koyuki    73.7%   912  18/19   71.6   75.8    Compound     91   Spacecraft   53   10.3
+  Iori      67.6%   912  15/19   59.6   75.5    Airport      92   Neon         29   14.8
+  Minori    63.7%   912  14/19   62.9   64.5    Scrapyard    75   Station      55    5.7
+  Maki      63.5%   912  15/19   61.6   65.5    Station      80   Dust         50    9.3
+  Asuna     60.7%   912  15/19   56.8   64.6    Square       75   Scrapyard    45    9.7
+  Fubuki    60.1%   912  13/19   53.0   67.3    Factory      80   Neon         27   12.6
+  Kurumi    57.9%   912  12/19   54.5   61.4    Streets      72   Neon         32   11.3
+  Hina      55.0%   912  12/19   61.5   48.6    Dust         75   Compound     37   12.1
+  Hoshino   51.0%   912  12/19   55.9   46.2    Compound     74   Spacecraft   14   17.9
+  Haruka    48.2%   912   9/19   50.8   45.7    Neon         74   Spacecraft   10   20.0
+  Atsuko    48.0%   912   8/19   54.1   42.0    Dust         72   Airport      29   11.2
+  Rabu      48.0%   912   6/19   50.8   45.2    Neon         84   Spacecraft    9   21.8
+  Aru       47.9%   912   7/19   49.1   46.7    Square       75   Flashpoint   21   13.5
+  Subaru    44.5%   912   8/19   45.6   43.4    Spacecraft   61   Factory      36    6.7
+  Hiyori    43.6%   912   4/19   43.5   43.6    Square       81   Flashpoint   22   14.8
+  Marina    42.6%   912   6/19   47.6   37.6    Neon         64   Factory      29    9.5
+  Aris      39.5%   912   6/19   34.4   44.5    Town         55   Dust         24   10.5
+  Saori     37.8%   912   5/19   39.9   35.7    Spacecraft   54   Backrooms    25    7.1
+  Yuuka     29.3%   912   1/19   30.0   28.5    Square       46   Hospital     17    7.4
+  Kei       17.2%   912   0/19   16.7   17.7    Factory      33   Warehouse     2   10.0
+
+  per map (scene first):  Backr Compo  Dust Hospi  Neon Space  Town Wareh Airpo Stree Facto Scrap Flash Lobby Squar Stati
+  Koyuki                     61    91    61    73    81    53    80    74    81    77    76    85    83    67    61    76
+  Iori                       61    70    47    54    29    82    63    71    92    80    77    66    80    76    61    72
+  Minori                     57    67    66    72    60    60    57    66    63    65    58    75    72    64    63    55
+  Maki                       74    60    50    51    67    72    66    54    60    54    70    65    50    73    72    80
+  Asuna                      69    46    52    50    51    66    67    54    72    56    64    45    67    70    75    68
+  Fubuki                     65    53    52    46    27    73    63    46    70    60    80    62    66    64    63    74
+  Kurumi                     63    64    42    68    32    44    52    71    63    72    59    68    56    51    54    68
+  Hina                       51    37    75    70    73    65    66    56    47    38    51    46    41    50    49    67
+  Hoshino                    57    74    62    69    68    14    39    63    39    68    42    51    72    44    23    32
+  Haruka                     40    60    71    70    74    10    30    52    54    56    39    62    68    52    12    23
+  Atsuko                     39    39    72    47    69    56    52    58    29    34    44    46    42    46    51    45
+  Rabu                       38    37    75    71    84     9    28    64    54    54    45    55    73    45    16    20
+  Aru                        61    53    32    39    39    61    64    43    37    44    54    35    21    55    75    53
+  Subaru                     54    43    39    40    39    61    41    47    46    38    36    39    46    40    53    50
+  Hiyori                     52    56    34    29    39    66    46    26    34    37    41    35    22    51    81    48
+  Marina                     42    32    61    50    64    41    36    54    39    41    29    38    41    39    36    38
+  Aris                       36    39    24    25    24    49    55    25    39    51    46    50    41    37    40    52
+  Saori                      25    34    45    40    39    54    39    42    46    32    36    37    29    29    43    34
+  Yuuka                      29    35    30    17    39    35    24    32    21    28    19    32    25    34    46    24
+  Kei                        25    12    11    18     4    32    32     2    14    16    33     9     5    14    27    23
+  n per unit and map: [57]
+
+2v2: 4168 matches, 4168 knockouts, median 25.9 s, 16 maps
+  unit      win%    n    strength  scene  concept
+  Koyuki    64.3%   819  +0.62      64.5   64.1
+  Asuna     56.8%   808  +0.29      53.5   60.0
+  Maki      56.0%   825  +0.27      56.4   55.5
+  Kurumi    55.3%   808  +0.25      55.3   55.2
+  Hina      54.8%   804  +0.22      58.3   51.5
+  Iori      54.1%   849  +0.18      50.7   57.7
+  Fubuki    53.7%   792  +0.17      51.9   55.6
+  Minori    53.5%   826  +0.14      56.4   50.3
+  Hoshino   53.2%   835  +0.14      56.5   50.0
+  Rabu      51.0%   821  +0.06      52.1   49.8
+  Aru       49.0%   874  -0.06      46.2   51.7
+  Haruka    48.7%   814  -0.06      49.6   47.8
+  Subaru    48.2%   800  -0.07      48.7   47.7
+  Aris      46.7%   813  -0.15      45.3   48.3
+  Hiyori    45.5%   782  -0.17      41.7   49.5
+  Atsuko    45.9%   835  -0.17      45.0   46.7
+  Saori     44.4%   786  -0.22      43.2   45.5
+  Marina    43.6%   815  -0.28      49.3   37.9
+  Kei       37.0%   760  -0.57      37.2   36.7
+  Yuuka     36.7%   818  -0.59      38.0   35.4
+
+  teams with 20 or more matches (199 teams), top 16 and bottom 8:
+  Koyuki + Kurumi         80.3%  n= 33  fit  70%
+  Maki + Maki             76.2%  n= 21  fit  63%
+  Koyuki + Minori         76.0%  n= 50  fit  68%
+  Maki + Hina             74.3%  n= 35  fit  62%
+  Fubuki + Koyuki         74.2%  n= 31  fit  69%
+  Koyuki + Iori           73.7%  n= 38  fit  69%
+  Rabu + Iori             73.3%  n= 45  fit  56%
+  Hoshino + Asuna         73.3%  n= 45  fit  61%
+  Rabu + Rabu             72.7%  n= 22  fit  53%
+  Kurumi + Hina           71.8%  n= 39  fit  61%
+  Iori + Hina             70.2%  n= 42  fit  60%
+  Koyuki + Aris           69.2%  n= 39  fit  62%
+  Saori + Koyuki          67.9%  n= 39  fit  60%
+  Iori + Maki             67.6%  n= 37  fit  61%
+  Hiyori + Asuna          67.5%  n= 40  fit  53%
+  Koyuki + Aru            67.3%  n= 49  fit  64%
+  Yuuka + Aris            27.5%  n= 51  fit  32%
+  Saori + Aris            27.1%  n= 35  fit  41%
+  Yuuka + Hoshino         24.4%  n= 41  fit  39%
+  Kei + Aris              18.4%  n= 49  fit  33%
+  Marina + Yuuka          17.5%  n= 40  fit  30%
+  Saori + Kei             17.5%  n= 40  fit  31%
+  Atsuko + Kei            13.4%  n= 41  fit  32%
+  Yuuka + Yuuka           13.0%  n= 23  fit  23%
+
+  the fit's top 10 teams of two different units:
+  Koyuki + Asuna         fit  71%   played 45  won  63.3%
+  Koyuki + Maki          fit  71%   played 44  won  62.5%
+  Koyuki + Kurumi        fit  70%   played 33  won  80.3%
+  Koyuki + Hina          fit  70%   played 47  won  59.6%
+  Koyuki + Iori          fit  69%   played 38  won  73.7%
+  Fubuki + Koyuki        fit  69%   played 31  won  74.2%
+  Koyuki + Minori        fit  68%   played 50  won  76.0%
+  Koyuki + Hoshino       fit  68%   played 43  won  64.0%
+  Koyuki + Rabu          fit  66%   played 31  won  62.9%
+  Maki + Asuna           fit  64%   played 42  won  64.3%
+
+TEAMS=unit12+unit9,unit12+unit21,unit12+unit17,unit12+unit5,unit12+unit20,unit10+unit12,unit12+unit22,unit21+unit5,unit18+unit20,unit2+unit9,unit17+unit5,unit20+unit5
+
+round robin: 2558 matches, 2558 knockouts
+  Koyuki + Asuna          64.0%  n=414  beats 10/11  scene  61.1  concept  67.0
+  Koyuki + Kurumi         57.1%  n=427  beats  7/11  scene  63.1  concept  51.2
+  Koyuki + Iori           57.1%  n=435  beats  7/11  scene  51.4  concept  62.6
+  Koyuki + Maki           55.6%  n=418  beats  7/11  scene  59.6  concept  51.7
+  Kurumi + Hina           55.4%  n=420  beats  7/11  scene  60.6  concept  50.2
+  Koyuki + Hina           54.5%  n=414  beats  7/11  scene  58.3  concept  50.7
+  Fubuki + Koyuki         49.0%  n=433  beats  4/11  scene  43.4  concept  54.7
+  Maki + Hina             48.0%  n=421  beats  4/11  scene  49.8  concept  46.2
+  Koyuki + Minori         45.7%  n=432  beats  5/11  scene  49.8  concept  41.8
+  Rabu + Iori             38.5%  n=431  beats  2/11  scene  28.0  concept  49.1
+  Hoshino + Asuna         38.5%  n=430  beats  3/11  scene  40.6  concept  36.5
+  Iori + Hina             37.9%  n=441  beats  1/11  scene  36.1  concept  39.6
