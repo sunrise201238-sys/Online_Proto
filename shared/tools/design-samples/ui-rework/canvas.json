@@ -1,0 +1,674 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-05T06:20:00Z"
+  },
+  "title": "GunVS UI Rework Samples",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 844,
+      "h": 390,
+      "title": "A · Tactical — Lobby (phone, landscape)"
+    },
+    "HUD_A.dc.html": {
+      "x": 924,
+      "y": 0,
+      "w": 844,
+      "h": 390,
+      "title": "A · Tactical — In match (phone)"
+    },
+    "Lobby_B.dc.html": {
+      "x": 0,
+      "y": 810,
+      "w": 844,
+      "h": 390,
+      "title": "B · Arcade — Lobby (phone, landscape)"
+    },
+    "HUD_B.dc.html": {
+      "x": 924,
+      "y": 810,
+      "w": 844,
+      "h": 390,
+      "title": "B · Arcade — In match (phone)"
+    },
+    "Lobby_C.dc.html": {
+      "x": 0,
+      "y": 1620,
+      "w": 844,
+      "h": 390,
+      "title": "C · Signal — Lobby (phone, landscape)"
+    },
+    "HUD_C.dc.html": {
+      "x": 924,
+      "y": 1620,
+      "w": 844,
+      "h": 390,
+      "title": "C · Signal — In match (phone)"
+    },
+    "Desktop_A.dc.html": {
+      "x": 0,
+      "y": 2430,
+      "w": 1280,
+      "h": 800,
+      "title": "A · Tactical — Lobby on desktop (same layout, wider)"
+    },
+    "Lobby_D.dc.html": {
+      "x": 0,
+      "y": 3540,
+      "w": 844,
+      "h": 390,
+      "title": "D · Slash — Lobby (phone, landscape)"
+    },
+    "HUD_D.dc.html": {
+      "x": 924,
+      "y": 3540,
+      "w": 844,
+      "h": 390,
+      "title": "D · Slash — In match (phone)"
+    },
+    "Lobby_E.dc.html": {
+      "x": 0,
+      "y": 4350,
+      "w": 844,
+      "h": 390,
+      "title": "E · Holo — Lobby (phone, landscape)"
+    },
+    "HUD_E.dc.html": {
+      "x": 924,
+      "y": 4350,
+      "w": 844,
+      "h": 390,
+      "title": "E · Holo — In match (phone)"
+    },
+    "Lobby_F.dc.html": {
+      "x": 0,
+      "y": 5160,
+      "w": 844,
+      "h": 390,
+      "title": "F · Splat — Lobby (phone, landscape)"
+    },
+    "HUD_F.dc.html": {
+      "x": 924,
+      "y": 5160,
+      "w": 844,
+      "h": 390,
+      "title": "F · Splat — In match (phone)"
+    },
+    "Lobby_G.dc.html": {
+      "x": 0,
+      "y": 5970,
+      "w": 844,
+      "h": 390,
+      "title": "G · Ops — Lobby (phone, landscape)"
+    },
+    "HUD_G.dc.html": {
+      "x": 924,
+      "y": 5970,
+      "w": 844,
+      "h": 390,
+      "title": "G · Ops — In match (phone), the real five-button cluster"
+    },
+    "Units_F.dc.html": {
+      "x": 0,
+      "y": 6780,
+      "w": 844,
+      "h": 390,
+      "title": "F · Splat — Unit picker (phone, landscape): the real 17 units + Random"
+    },
+    "Maps_F.dc.html": {
+      "x": 924,
+      "y": 6780,
+      "w": 844,
+      "h": 390,
+      "title": "F · Splat — Map picker (phone, landscape): the Scene Maps tab"
+    },
+    "Lobby_Folder_A.dc.html": {
+      "x": 0,
+      "y": 7590,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 5 — Lobby: the LINE-UP folder and the map memo (as built, b1105u)"
+    },
+    "HUD_F2.dc.html": {
+      "x": 924,
+      "y": 7590,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 5 — In match, 1v1 Trio: the HP chips (no numbers; the two in reserve inside the chip), the BOOST sticker"
+    },
+    "HUD_F2_2v2.dc.html": {
+      "x": 0,
+      "y": 8400,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 5 — In match, 2v2: you have fallen and watch your ally — the side words stay"
+    },
+    "HUD_F2_spec.dc.html": {
+      "x": 924,
+      "y": 8400,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 5 — In match, 2v2 in Spectator mode (the Practice toggle): no side words, the watched chip ringed"
+    },
+    "End_F.dc.html": {
+      "x": 0,
+      "y": 9210,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 6 — End of match, YOU WIN (1v1 Trio): the map memo, the rosters in the HUD's round frames, the fallen greyed"
+    },
+    "End_F_2v2.dc.html": {
+      "x": 924,
+      "y": 9210,
+      "w": 844,
+      "h": 390,
+      "title": "F · round 6 — End of match, TEAM 2 WINS (2v2 Duel, watched): a row per slot"
+    },
+    "Memo_Crayon.dc.html": {
+      "x": 0,
+      "y": 10020,
+      "w": 1768,
+      "h": 330,
+      "title": "F · round 7 — the lobby memo's red crayon: More Stamina! (District, Compound) and Anomaly! (Backrooms), three hands to pick from"
+    },
+    "Unit_Clip.dc.html": {
+      "x": 0,
+      "y": 10440,
+      "w": 1768,
+      "h": 480,
+      "title": "F · round 8 — the unit file's weapon photo under the paper clip, its free corner curled: still (A), breathing (B) or flipping on a tap (C)"
+    },
+    "Unit_Clip_A.dc.html": {
+      "x": 0,
+      "y": 11010,
+      "w": 1768,
+      "h": 500,
+      "title": "F · round 8b — option A: the paper clip moved off the gun (three places), the gun as big as the print allows"
+    },
+    "Lobby_Tags.dc.html": {
+      "x": 0,
+      "y": 11660,
+      "w": 1768,
+      "h": 850,
+      "title": "F · round 9 — the YOUR UNIT / ENEMY stickers as tape (A), a sticky flag (B) or a file tab (C); 1v1 at 1.5×, Trio at 1×"
+    },
+    "Lobby_Groups.dc.html": {
+      "x": 0,
+      "y": 12930,
+      "w": 1880,
+      "h": 1000,
+      "title": "F · round 10: the option rows in three groups with a red crayon dotted line between them: wax dots A, dabs B, fine stipple C; today for reference"
+    },
+    "Lobby_Lines.dc.html": {
+      "x": 0,
+      "y": 14350,
+      "w": 1880,
+      "h": 1000,
+      "title": "F · round 10b: a red crayon line between the groups: long strokes D, dashes E, a skipping line F, a solid line G"
+    },
+    "Unit_Photo.dc.html": {
+      "x": 0,
+      "y": 15770,
+      "w": 1776,
+      "h": 900,
+      "title": "F · round 11: the unit file's photo opened as a stack of photos: instant photos A, a fan of prints B, a pile C; today for reference"
+    },
+    "Unit_Photo_Holders.dc.html": {
+      "x": 0,
+      "y": 17090,
+      "w": 1776,
+      "h": 900,
+      "title": "F · round 11b: style A held by stationery in place of the tape: a paper clip A1, a binder clip A2, a push pin A3, staples A4"
+    },
+    "Finale_HUD.dc.html": {
+      "x": 0,
+      "y": 18410,
+      "w": 1776,
+      "h": 2364,
+      "title": "F · round 12: a HUD for the ending camera's two shots: the chips stay A, the call B, cinema bars C, a taped photo D; today for reference"
+    },
+    "Kill_HUD.dc.html": {
+      "x": 0,
+      "y": 21194,
+      "w": 1776,
+      "h": 3979,
+      "title": "F · round 13: a kill HUD under PAUSE, face, mark, face: an arrow A, a K.O. burst B, a hit marker C, the weapon D; how it moves; other screens"
+    },
+    "Kill_HUD_Bare.dc.html": {
+      "x": 0,
+      "y": 25593,
+      "w": 1776,
+      "h": 3270,
+      "title": "F · round 13b: the weapon entry D with its black background gone: nothing behind it D1, the rim alone D2; what the edges are for; a mid-size screen's lock bracket, three placements M1 to M3"
+    },
+    "Intro_HUD.dc.html": {
+      "x": 0,
+      "y": 29283,
+      "w": 2648,
+      "h": 2530,
+      "title": "F · round 14: a HUD for the game-start intro: GET READY over each team in turn, START over the player's own view with a line over it and a line under it: the call A, the band B, tags over the units C; START swiping out; a Duel in A; the sequence and its lengths"
+    },
+    "Loading_Screen.dc.html": {
+      "x": 0,
+      "y": 32233,
+      "w": 1760,
+      "h": 1838,
+      "title": "F · round 15: a loading screen with the pair from the picture moving on it: the flyby A, the runner B, the match-up C; today's card and the cut-out over them"
+    },
+    "HUD_Weapon_Map.dc.html": {
+      "x": 0,
+      "y": 34491,
+      "w": 1776,
+      "h": 2815,
+      "title": "F · round 16: the weapon in hand and a mini map on a phone screen that is full already, at the user's own 597 × 320: the map in the grid's empty slot with the weapon on the fire button A, the map beside the small buttons with the weapon in the slot B, the map on demand with a weapon tag C; the room that is free today; A and B on a larger screen"
+    },
+    "HUD_Weapon_CoD.dc.html": {
+      "x": 0,
+      "y": 37726,
+      "w": 1776,
+      "h": 1931,
+      "title": "F · round 16b: the weapon in hand as a Call of Duty silhouette by the fire button, on the user's own 597 × 320: on the trigger W1, a plate beside it with the ammo count W2, a badge above it W3; what stays in sight under the thumb that fires"
+    },
+    "HUD_Weapon_Picture.dc.html": {
+      "x": 0,
+      "y": 40077,
+      "w": 1776,
+      "h": 1329,
+      "title": "F · round 16c: the user's pick of round 16b, W1, with the weapon's own picture in place of the silhouette: the frame at 597 × 320, a close look, the button ready, reloading and empty; every playable unit's weapon on the button; the five pale weapons plain and with the kill feed's ink line"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "HUD_A.dc.html",
+    "Lobby_B.dc.html",
+    "HUD_B.dc.html",
+    "Lobby_C.dc.html",
+    "HUD_C.dc.html",
+    "Desktop_A.dc.html",
+    "Lobby_D.dc.html",
+    "HUD_D.dc.html",
+    "Lobby_E.dc.html",
+    "HUD_E.dc.html",
+    "Lobby_F.dc.html",
+    "HUD_F.dc.html",
+    "Lobby_G.dc.html",
+    "HUD_G.dc.html",
+    "Units_F.dc.html",
+    "Maps_F.dc.html",
+    "Lobby_Folder_A.dc.html",
+    "HUD_F2.dc.html",
+    "HUD_F2_2v2.dc.html",
+    "HUD_F2_spec.dc.html",
+    "End_F.dc.html",
+    "End_F_2v2.dc.html",
+    "Memo_Crayon.dc.html",
+    "Unit_Clip.dc.html",
+    "Unit_Clip_A.dc.html",
+    "Lobby_Tags.dc.html",
+    "Lobby_Groups.dc.html",
+    "Lobby_Lines.dc.html",
+    "Unit_Photo.dc.html",
+    "Unit_Photo_Holders.dc.html",
+    "Finale_HUD.dc.html",
+    "Kill_HUD.dc.html",
+    "Kill_HUD_Bare.dc.html",
+    "Intro_HUD.dc.html",
+    "Loading_Screen.dc.html",
+    "HUD_Weapon_Map.dc.html",
+    "HUD_Weapon_CoD.dc.html",
+    "HUD_Weapon_Picture.dc.html"
+  ],
+  "notes": {
+    "brief": {
+      "x": 1848,
+      "y": 0,
+      "w": 520,
+      "text": "THE BRIEF\n\nGame: GunVS — a third-person arena shooter prototype. 17 anime-style units, each a 3D character with one weapon class: assault rifle, SMG, shotgun, machine gun, sniper. One brain drives the bots offline and online.\n\nHow it is played: mobile landscape first (left thumb joystick, right thumb Dodge / Jump / Sprint, Pause at the top), desktop with WASD + mouse. One web build serves both; the UI is HTML over the 3D view.\n\nModes today: Shooter or Commander (you order a bot); 1v1, 2v2, Trio; Standard or Sudden Death; Offline vs bots or Online vs a player.\n\nScreens to rework: lobby (mode · unit · map · start), unit picker, map picker, online room, pause with help and settings, the in-match HUD, the commander's order tray.\n\nConstraints: in-match stays dark and readable over 3D; touch targets 44 px or more; nothing over the centre of the view; existing art (portraits, map photos) stays; English now, Chinese later.\n\nThis round: three visual directions on the two screens that matter most — the lobby and the match. Pick one, then every screen follows in that direction.",
+      "fill": "blue"
+    },
+    "tA": {
+      "x": 0,
+      "y": -300,
+      "text": "A · Tactical — dark steel, cyan signal, condensed type",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "tB": {
+      "x": 0,
+      "y": 510,
+      "text": "B · Arcade — bright, rounded, portraits forward",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "tC": {
+      "x": 0,
+      "y": 1320,
+      "text": "C · Signal — pale grey, ink and one lime accent, mono numbers",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "tD": {
+      "x": 0,
+      "y": 2130,
+      "text": "The same lobby on desktop — direction A shown; B and C scale the same way",
+      "kind": "title1",
+      "maxW": 1280
+    },
+    "r2": {
+      "x": 1848,
+      "y": 3540,
+      "w": 520,
+      "text": "ROUND 2 — WILDER\n\nSame content as round 1, pushed hard. Each direction borrows the look of a big game's menus (the look, not its art):\n\nD · Slash — Persona 5's menus and Valorant's agent select. Red, black and white only; every edge cut on a diagonal; halftone on the red; the title's letters in tilted boxes; the unit cut out of the page.\n\nE · Holo — Apex Legends' lobby and Overwatch's hero select. The unit stands in the middle on a glowing floor ring; holographic panes with corner brackets; a hex strip of units; in the match a compass, segmented health and a sprint ring around the reticle.\n\nF · Splat — Splatoon and Jet Set Radio. Ink blobs, stickers and tape, everything slightly tilted, chunky buttons with hard shadows, a GO!! button.\n\nAll three keep the match HUD dark and readable over the 3D view, and touch targets at 44 px or more.",
+      "fill": "blue"
+    },
+    "t2D": {
+      "x": 0,
+      "y": 3240,
+      "text": "D · Slash — after Persona 5 and Valorant: red, black, white, everything cut on the diagonal",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "t2E": {
+      "x": 0,
+      "y": 4050,
+      "text": "E · Holo — after Apex Legends and Overwatch: the unit in the middle, holographic panes, hex strip, compass",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "t2F": {
+      "x": 0,
+      "y": 4860,
+      "text": "F · Splat — after Splatoon and Jet Set Radio: ink blobs, stickers, everything tilted",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "t3G": {
+      "x": 0,
+      "y": 5670,
+      "text": "G · Ops — after Call of Duty: Mobile: left rail, the unit in the middle, chamfered panels, yellow START; radar and score block in the match",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "t4F": {
+      "x": 0,
+      "y": 6480,
+      "text": "F · Splat — the unit picker and the map picker, with the game's real 17 units and real map list",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r4": {
+      "x": 1848,
+      "y": 6780,
+      "w": 520,
+      "text": "ROUND 4 — F's pickers\n\nUNIT PICKER: all 17 units + Random fit a 6 × 3 sticker grid at phone landscape, no scrolling. The tile's colour and tag are the weapon class (AR / RF rifle / SMG / SG / MG / SN sniper). Tap a tile → the big card on the left opens (today's two-tap flow: tap = preview, tap again or CONFIRM = pick). The card's facts come from the game data: magazine, reload, range as five pips from the lock range. The class filter chips at the top are new.\n\nMAP PICKER: two tabs, as the game already divides them — Scene Maps (10, with models) and Concept Maps (10, hand-made arenas). The Scene tab is drawn; Random rolls inside the open tab, as today. The +STAMINA tag is the map's existing card note (District, Compound); MANUAL PICK ONLY is the existing no-random flag (District, Backrooms Anomaly, Plain Field, Shooting Range). Thumb crops follow the game's thumb settings (Warehouse, Hospital, Backrooms: top; Spacecraft: bottom). The Anomaly tile is tinted only to tell it from Backrooms; the game ships the same picture for both.",
+      "fill": "blue"
+    },
+    "t5F": {
+      "x": 0,
+      "y": 7290,
+      "text": "F · round 5 — the folder and the memo (built), and the match HUD proposal: HP chips with portraits, the BOOST sticker",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r5": {
+      "x": 1848,
+      "y": 7590,
+      "w": 520,
+      "text": "ROUND 5\n\nLOBBY (left board): what PT b1105u ships — the LINE-UP folder (manila, a 24 px tab, a thumb notch) holding your card and the enemy's slip; the map as a memo hung from a strip of the yellow tape, ruled below the picture, the whole square picture on ink. The pickers' side cards follow: UNIT FILE folders with a paper clip, map memos.\n\nMATCH HUD (right board + the board below) — a PROPOSAL, not built yet:\n\nHP CHIPS. The game's corner bar (white rim, ink outline, the side's colour) grows into the sample's chip: an ink pill holding the portrait in a ring of the side's colour, the name with YOU / ENEMY, and the bar with a round end — no HP number (round 5b). Your chip top-left, the enemy's mirrored top-right. TRIO: the remaining-units hint moves INSIDE the chip — the unit on the field is the big portrait, the two in reserve sit at the chip's far end as small overlapping faces, a fallen one greyed (round 5b, 'fit in the remaining unit hint'). In 2v2 the ally's and the second enemy's chips sit under the first two, smaller (cyan, yellow — the game's colours). SPECTATOR: in Spectator mode (the Practice toggle) the side words YOU / ALLY / ENEMY / ENEMY 2 are dropped — nobody is 'you' — and the watched chip wears the b1105s yellow ring and a WATCHING tag (the board at the bottom right); when the spectating comes from your own death the words STAY, your chip dims with a DOWN tag and the ally's chip is the watched one (the board at the bottom left). The fullscreen button docks right of your chip as it docks right of the bar today. Sudden Death still hides the chips' bars; the portrait and the name stay. No SPECTATOR chip under PAUSE (round 5c): the missing side words and the ringed chip say it.\n\nBOOST. The bottom bar becomes a yellow sticker in the sample's ammo-chip style, level (not tilted): the word BOOST and the gauge in ink with a white knob — no number. When low (the 2v2 board) the fill turns magenta.\n\nUnchanged: the CS crosshair, PAUSE, the red stick, the five buttons (lime JUMP).",
+      "fill": "blue"
+    },
+    "t6F": {
+      "x": 0,
+      "y": 8910,
+      "text": "F · round 6 — the end of the match: the map memo in the middle, each side's roster in the HUD's round frames, the fallen greyed",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r6": {
+      "x": 1848,
+      "y": 9210,
+      "w": 520,
+      "text": "ROUND 6 — THE END OF THE MATCH (a proposal, not built)\n\nToday the page is the verdict (YOU WIN / YOU LOSE, or TEAM 1 / TEAM 2 WINS when you watched) and two buttons. Proposed:\n\nTHE MAP MEMO in the middle — the lobby's memo as it is (taped at the top, the whole picture on ink, the name, MAP · section · size), with the match's rules in small caps at its foot (1v1 · Trio · Health Point).\n\nA ROSTER PANEL each side — the HUD chip's ink and white rim as a card, TEAM 1 left (your side, lime) and TEAM 2 right (magenta), a WINNER sticker on the winning one. Inside, a row per slot: the slot word (YOU / ALLY, ENEMY / ENEMY 2 — SLOT 1 / SLOT 2 when you watched, as the HUD drops the words then), then the roster's units in the HUD's round frames with their names. A FALLEN unit is greyed (grayscale, dimmed, a thin slash); a unit never fielded stays in colour; the one left standing wears a dot in the side's colour. In Trio that reads the whole story: who fell, who was left.\n\nThe foot: Select Unit (white) and REMATCH (the lime GO!! sticker). Online: Rematch and Leave as today, the 'Opponent wants a rematch' chip above them.\n\nThe game has the data: the lobby's rosters and each slot's roster cursor offline (a unit before the cursor fell; the one at it is on the field — dead or alive by its HP; after it, in reserve), the snapshot's roster fields online.",
+      "fill": "blue"
+    },
+    "r3": {
+      "x": 1848,
+      "y": 5970,
+      "w": 520,
+      "text": "ROUND 3 — G · Ops\n\nAfter Call of Duty: Mobile's lobby and match HUD (the look, not its art).\n\nLobby: a left rail for the app's screens (Lobby, Units, Maps, Online room, Guide, Settings), the unit standing in the middle with a fade, a chamfered Match Setup panel with the map card on top, a player card top-left, a yellow START bottom-right.\n\nMatch: this board shows the REAL thumb cluster the game has today — FIRE with the ammo count and the reload ring, SPRINT, JUMP, DODGE (TARGET appears in 2v2 only). Rounds 1 and 2 simplified it to three buttons. Hina's magazine really is 250, reload 7 s.\n\nTwo things on this board are new features, not restyles: the radar top-left and the kills score block top centre. Drop them and the direction still stands.\n\nPalette: charcoal, white, one yellow; teal for you, red for the enemy.",
+      "fill": "blue"
+    },
+    "t7F": {
+      "x": 0,
+      "y": 9720,
+      "text": "F · round 7 — the memo's red crayon marks: More Stamina! and Anomaly!, written in three hands (A / B / C)",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r7": {
+      "x": 1848,
+      "y": 10020,
+      "w": 520,
+      "text": "ROUND 7 — THE CRAYON MARKS (built as B, b1105ag)\n\nThe ask: District's and Compound's little \"· more stamina\" leaves the memo's size line and a red crayon \"More Stamina!\" is written on the ruled lines under it, left of the die; Backrooms (Anomaly) reads \"Backrooms\" and gets a red crayon \"Anomaly!\" there.\n\nTHE MARK: red wax (#E0382C) in a hand font, written a few degrees off, multiplied into the paper so the blue rules show through the stroke, its edge roughened by a small noise filter (an SVG filter the page carries — the same trick works in the game's HTML). It never passes the die.\n\nTHREE HANDS to pick from — the fonts are free (Google Fonts, bundled like Titan One and Rubik):\nA · Rock Salt — a scratchy, chalky print; the most crayon-like, the widest (12.5 px here).\nB · Permanent Marker — a thick felt marker; the boldest and clearest at this size (17 px).\nC · Caveat Brush — a brush pen; loose and quick (22 px).\n\nWHERE: the lobby memo (asked). The same mark would go on the picker's side memo and the end page's memo, so one map always wears one mark. The picker's grid tile keeps its full name (\"Backrooms (Anomaly)\") and its +STAMINA tag, since two tiles would otherwise both read Backrooms — unless you want the crayon there too.\n\nYou picked B — Permanent Marker; it is on PT and the 0.9.5 line since b1105ag.",
+      "fill": "blue"
+    },
+    "t8F": {
+      "x": 0,
+      "y": 10140,
+      "text": "F · round 8 — the weapon photo clipped to the unit file, with a curled corner (A / B / C)",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r8": {
+      "x": 1848,
+      "y": 10440,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 8 — THE WEAPON PHOTO (you picked A; the clip's place is round 8b, below)\n\nThe ask: at the unit file's paper clip, a photo of the unit's weapon, with a corner-flip effect.\n\nTHE PRINT: 112 × 58, a white matte with the ink rim (the stickers' look), the gun's render — the game already ships one per unit, weapons/<unit>.png, the picture the old floating card showed — on a pale wash of the unit's class colour (lavender rifle, cyan AR, lime SMG, yellow SG, magenta MG, ink sniper), set 7° off and tucked under the clip at the card's top-right, over the folder's edge, so the clip reads as holding it. On the phone it is about 78 × 41 CSS px. It changes with the card: tap another unit, another gun.\n\nTHE CORNER: the free corner (bottom-left, away from the clip) is curled — cut off the print, the folded-over back showing, shaded. Three behaviours:\nA · still.\nB · breathing: the curl grows from 18 to 30 px and settles, once every 3 s (CSS only, nothing to compute).\nC · flip: a tap turns the whole print over; the back is ruled like the memo and names the gun and its class. The board flips it on its own every 4 s so you see it.\n\nCost: one image per card (55 KB, already in the build); none on the match.\n\nYou picked A, and asked for the clip to move off the gun and for the gun to be as big as the print allows — round 8b below."
+    },
+    "t8bF": {
+      "x": 0,
+      "y": 10710,
+      "text": "F · round 8b — A it is; the clip moved so it does not block the gun (1 / 2 / 3), the gun at its biggest",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r8b": {
+      "x": 1848,
+      "y": 11010,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 8b — A, THE CLIP MOVED (you picked 1 — built as b1105bd)\n\nYou picked A (the still curl) and asked for the clip to move off the gun, and for the gun to be as big as the print allows without cropping or stretching.\n\nTHE GUN: the renders the game ships are 958 × 246 with wide empty margins — Fubuki's Ruger is 544 × 227 of that, Yuuka's gun only 445 wide, Hina's 794. The print now scales each picture so the gun itself spans the window's whole width (102 px here, about 71 on the phone): a table of the 17 guns' solid boxes, measured once, sets each picture's size and place inside the window — nothing cut, nothing stretched, the same trick the HUD uses to centre a face. The print is 112 × 64 for it and sits a little higher (36 px over the card's top), so it covers less of the portrait.\n\nTHE CLIP, three places:\n1 · Corner — it pinches the print's top-right corner at 48°, half of it off the print; it covers only the blank corner above the barrel.\n2 · Top edge — it comes down over the top edge at the right third with a 14 px grip: over the matte and the blank band above the gun.\n3 · Left end — it sits on the stock's side, where the gun leaves a 16 px margin; the gun is 16 px narrower for it.\n\nYou picked 1, the corner clip; it is on PT and the 0.9.5 line as b1105bd."
+    },
+    "t9F": {
+      "x": 0,
+      "y": 11360,
+      "text": "F · round 9 — the lobby’s YOUR UNIT / ENEMY stickers restyled: tape (A), a sticky flag (B), a file tab (C) — the colours stay",
+      "kind": "title1",
+      "maxW": 1768
+    },
+    "r9": {
+      "x": 1848,
+      "y": 11660,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 9 — THE SIDE STICKERS (built: A for the lobby, B for the end page — b1105bf)\n\nThe ask: the lobby card’s YOUR UNIT / YOUR TRIO / YOUR TEAM and the enemy slip’s ENEMY / ENEMY TRIO / ENEMY TEAM — today tilted pills with the ink rim and the hard shadow — as tape or a memo bookmark, the colours as they are (lime for yours, magenta for the enemy).\n\nA · TAPE — a strip of washi tape of the colour, slightly see-through (the sheet’s rim and the manila show through it), torn ends, the word printed on it. It straddles the sheet’s top edge where the pill sits today, tilted the same 4°. The memo already hangs from the yellow tape, so the lobby then has one tape language.\n\nB · STICKY FLAG — a flat memo index flag (the sticky-note kind), square corners, no ink rim, standing up from the sheet’s top edge; its top-right corner folded back in a darker shade of the colour, a thin crease where it meets the sheet, a soft shadow instead of the hard one. The only thing in the lobby without a rim — that is what makes it read as a sticky flag.\n\nC · FILE TAB — the folder’s own LINE-UP tab shape in the colour: the ink rim, round top corners, no bottom, standing on the sheet’s top edge. The enemy’s tab peeks out from behind the card above it, as a bookmark between two sheets does (the slip goes under the card, a z-order change only).\n\nThe big folders show 1v1 at 1.5×; the small ones under them the Trio words at 1×, the longest case (YOUR TEAM / ENEMY TEAM of 2v2 are shorter). Everything else on the card and the slip stays as built.\n\nYou picked A for the lobby’s stickers and B for the end page’s TEAM 1 / TEAM 2; both are on PT and the 0.9.5 line as b1105bf."
+    },
+    "t10F": {
+      "x": 0,
+      "y": 12630,
+      "text": "F · round 10: the option rows in three groups, Teams · Roster, Play as · Rules, Practice, with a red crayon dotted line in each gap: A, B or C",
+      "kind": "title1",
+      "maxW": 1880
+    },
+    "r10": {
+      "x": 1960,
+      "y": 12930,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 10: THE OPTION ROWS IN THREE GROUPS. Samples, not built. You found B okay-ish and asked for lines instead of dots: round 10b, below.\n\nThe ask: the lobby's option rows in the order TEAMS, ROSTER, PLAY AS, RULES, PRACTICE, a slightly bigger gap between the three groups Teams · Roster, Play as · Rules and Practice, and a red crayon dotted line in each gap.\n\nTHE GAP. Inside a group the rows stay 10 px apart. Between groups the gap is 22 px, with the line in its middle. The column grows from 230 to 254 px, still shorter than the map memo at 275 px, so the folder, the memo and the buttons stay where they are. A short phone screen zooms the lobby as it does today.\n\nTHE LINE. The memos' red crayon, #E0382C, the More Stamina! red, multiplied into the paper: the paper's grain shows through the wax and the edge is rough. It runs the column's whole width, from the label's left edge to the pills' right edge, tilted half a degree, the second line the other way.\n\nA · WAX DOTS. Round dots, 5 to 6 px, about every 12 px, a little uneven in size and height.\nB · DABS. Short pressed strokes, 8 to 10 px long, tilted the way a hand pokes, about every 15 px.\nC · FINE STIPPLE. Small dots, about 4 px, every 7.5 px: a lighter, busier line.\n\nToday, top left, for reference. Each lobby is the desktop layout at 1×."
+    },
+    "t10b": {
+      "x": 0,
+      "y": 14050,
+      "text": "F · round 10b: lines instead of dots, long strokes D, dashes E, a skipping line F or a solid line G",
+      "kind": "title1",
+      "maxW": 1880
+    },
+    "r10b": {
+      "x": 1960,
+      "y": 14350,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 10b: LINES INSTEAD OF DOTS. Samples, not built.\n\nYou found B okay-ish and asked for something more like a line. Everything else is as in round 10: the order TEAMS, ROSTER, PLAY AS, RULES, PRACTICE, rows 10 px apart inside a group, 22 px between groups with the line in the middle, the memos' red crayon #E0382C, the paper's grain now streaking along the stroke.\n\nD · LONG STROKES. B's pressed strokes stretched to 14 to 18 px and laid almost flat, 5 to 7 px apart: still a hand-made dashed line, the closest to B.\nE · DASHES. An even dashed line: 24 px dashes, 9 px apart, each one thinning at its ends where the crayon lands and lifts.\nF · SKIPPING LINE. One stroke drawn in a go that skips here and there: runs of 40 to 110 px with short breaks, the pressure breathing along each run.\nG · SOLID LINE. One unbroken crayon line, a little wavy, thinner where it starts and ends.\n\nRevised: the option buttons, 1v1 / 2v2 and the rest, now stand straight with no tilt; the row labels keep theirs.\n\nEach lobby is the desktop layout at 1×."
+    },
+    "t11": {
+      "x": 0,
+      "y": 15470,
+      "text": "F · round 11: tap the unit file's photo and the full picture opens as a stack of photos: instant photos A, a fan of prints B or a pile C",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r11": {
+      "x": 1856,
+      "y": 15770,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 11: THE UNIT FILE'S PHOTO, OPENED. Samples, not built. You picked A, with stationery in place of the tape: round 11b, below.\n\nThe ask: in the unit picker, tapping the character's photo on the unit file opens a pop-up with the character's full picture, in a stacked photo style.\n\nThe full picture is the unit's whole profile art, units/<unit>_profile.png: the full body, where the file's band shows the face-centred crop of the thumbnail. The pop-up opens over the picker with the picker dimmed behind it, and closes with the round × or a tap anywhere. Tapping the rest of the card still confirms, as today; only the photo band opens the pop-up.\n\nA · INSTANT PHOTOS. Three instant prints in a stack, the full picture on the top one over the class colour, the name written on its foot in marker, a strip of tape across the top.\nB · A FAN OF PRINTS. Three glossy prints fanned out and held by the file's paper clip: the face behind on the left, the gun and its name behind on the right, the full picture in front with a name label.\nC · A PILE. Loose prints in the game's colours scattered on the table, the full picture mounted on top with black album corners, a yellow sticky note with the name and the gun.\n\nShown on Rabu at phone landscape, 844 × 390. The photo's ground is the unit's class colour, so every unit's photo matches its tile."
+    },
+    "t11b": {
+      "x": 0,
+      "y": 16790,
+      "text": "F · round 11b: the instant photos held by stationery, a paper clip A1, a binder clip A2, a push pin A3 or staples A4",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r11b": {
+      "x": 1856,
+      "y": 17090,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 11b: STYLE A, HELD BY STATIONERY. Samples, not built.\n\nYou picked A, the stack of instant photos, and asked for something from the stationery drawer in place of the tape. Everything else is A as it was: three instant prints, the full picture on the top one over the class colour, the name in marker on its foot, the round × and a tap anywhere to close.\n\nA1 · PAPER CLIP. The unit file's own paper clip, bigger, silver inside its ink line, slipped over the stack's top edge near the right.\nA2 · BINDER CLIP. A black binder clip on the middle of the top edge, its two silver wire handles folded up.\nA3 · PUSH PIN. A red push pin through the three prints, in the middle of the top margin.\nA4 · STAPLES. Two staples across the top-left corner.\n\nShown on Rabu at phone landscape, 844 × 390."
+    },
+    "t12": {
+      "x": 0,
+      "y": 18110,
+      "text": "F · round 12: a HUD for the ending camera, over its two shots: the chips stay A, the call B, cinema bars C or a taped photo D",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r12": {
+      "x": 1856,
+      "y": 18410,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 12: A HUD FOR THE ENDING CAMERA. Samples, not built.\n\nThe ask: some visual HUD during the ending camera. Today the match HUD is hidden for it and the TAP TO SKIP hint alone shows: the top row.\n\nEvery sample is drawn over the same two real frames, Town at phone landscape, 844 × 390. Shot 1 is the fallen unit: Hoshino, ENEMY, her death motion at 0.6 of its speed, 5.0 s. Shot 2 is the final blow's unit, after the one take of 0.3 to 1.0 s: Saori, YOU, her reload and a 0.6 s hold, 2.4 s. The words are the same in all four: K.O. for the fallen unit, FINAL BLOW for the other. YOU WIN or YOU LOSE stays on the end page that follows.\n\nA · THE CHIPS STAY. The match's two HP chips stay where they were. The spectator's yellow WATCHING ring marks the unit in view; the fallen unit's bar is empty, its face grey, a K.O. tag under its chip; in shot 2 a FINAL BLOW tag hangs under the other chip, which still shows the HP it had left. Nothing new to learn, and the least on screen.\nB · THE CALL. One big word per shot in the end page's title lettering: white, the ink outline, a hard drop in the colour of the unit in view; that unit's name on a small chip under it. The loudest, and it reads in a shot of two seconds.\nC · CINEMA BARS. Ink bars top and bottom, the picture between them; one caption line in the lower bar, the bar's edge in the unit's colour; the skip hint becomes a word in the bar. The quietest, and it takes 84 px of the picture's height.\nD · TAPED PHOTO. The unit's photo as one instant print from the unit picker's pop-up, its ground the unit's colour and grey once fallen, the name in marker; a strip of the memos' yellow tape holds it on, the verdict on the tape in the memos' red crayon. The lobby's desk, carried into the match.\n\nThe colours follow the unit in view: cyan YOU, lime ALLY, magenta ENEMY, orange ENEMY 2. When you lose, the same pieces show with the roles swapped. With every unit down, shot 2's unit lies as it fell and still reads FINAL BLOW; in A both chips then carry K.O. Each piece comes in with its shot and leaves as the take starts."
+    },
+    "t13": {
+      "x": 0,
+      "y": 20894,
+      "text": "F · round 13: a kill HUD under PAUSE: face, mark, face. The mark an arrow A, a K.O. burst B, a hit marker C or the weapon D",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r13": {
+      "x": 1856,
+      "y": 21194,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 13: A KILL HUD. Samples, not built.\n\nThe ask: when a unit is knocked out, show who did it to whom under PAUSE, as face, mark, face. Two places, as marked on your picture: the first kill in the upper one, a second under it.\n\nTHE ENTRY. Of the HP chips' make: ink glass, a paper rim, an ink line, leaning 1.5°. On your screen (606 × 327) it is 96 × 26 px, the size you drew. Where the chips are bigger, on a screen over 720 px wide, it is a third bigger: 125 × 34. A face at each end, 20 px, ringed in its side's colour: cyan YOU, lime ALLY, magenta ENEMY, orange ENEMY 2; online, the seat's own. The fallen unit's face is greyed, as the chips grey it. The faces' middles stand 70 px apart in every sample: the mark is fitted to the 40 px between them and never moves them.\n\nA · THE ARROW. Three white chevrons growing toward the fallen unit, cousin of the chips' roster arrow. The plainest: who, to whom, and nothing else.\nB · THE K.O. BURST. A comic burst in the BOOST yellow with K.O. in the title lettering, the word the ending camera calls.\nC · THE HIT MARKER. A shooter's kill tick: four red strokes about an open middle, edged in white.\nD · THE WEAPON. The killer's own weapon picture, its muzzle to the fallen unit, cut out with a white edge so its dark parts read on the glass. A long rifle fills the 40 px and draws thin (Iori's KAR98K: 9 px tall); a shorter gun draws taller (Fubuki's: 17 px).\n\nHOW IT MOVES, as you set it out. One kill: it pops into the upper place, stays one second, slides up and fades. Two: the second pops in under the first; when the first leaves, the second moves up, stays one second more, then leaves. More than two: while a kill waits to be shown, a step takes 0.3 s; once none waits, the usual pace again. Proposed for the motion itself: the pop 0.15 s, the slide and fade 0.25 s.\n\nON OTHER SCREENS. The space under PAUSE is free on your screen and on a desktop. On a mid-size screen, 721 to 1099 px wide, a 2v2's second row of chips stands 108 px in from each edge and fills it; there the two places hang under that row, and the lower one reaches the middle of the screen. In 1v1 there is no second row: the places under PAUSE are free on every screen.\n\nTo decide: the mark, A to D, and the questions in the chat."
+    },
+    "t13b": {
+      "x": 0,
+      "y": 25293,
+      "text": "F · round 13b: the weapon entry D with its black background gone: nothing behind it D1, or the rim alone D2",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r13b": {
+      "x": 1856,
+      "y": 25593,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 13b: THE WEAPON ENTRY, ITS BLACK BACKGROUND GONE. Samples, not built.\n\nThe ask: type D, the black background blank. Read as: the ink glass out and the play showing through. The two faces, their rings and the 70 px between their middles are round 13's; the weapon is fitted to the same 40 px.\n\nD1 · NOTHING BEHIND. No background and no rim: the two faces and the weapon alone. With the glass gone each piece carries its own edge: an ink line round every face's ring; round the weapon a white edge, then an ink line.\nD2 · THE RIM ALONE. The background out, the HP chips' white rim kept as an empty frame between two ink lines. It ties the three pieces into one entry and reads as a chip; it also draws a hollow shape over the play.\n\nEach is shown five times up on a bright sky, a street and a dark wall, each scene with the weapon hardest to read on it: Fubuki's white rifle on the sky, Iori's dark KAR98K on the wall. Then in place on your own screen (606 × 327, Town), and at the same two places on Spacecraft's sky and against a dark wall on Neon.\n\nWHY THE EDGES. A strip sets D1 beside the same entry with no edge at all. Bare, the weapon thins to a hairline: the white rifle fades into a pale front, the dark one into the dark wall. Edged, it reads on all three grounds.\n\nA MID-SIZE SCREEN, 2v2 (844 × 390). The place is beneath the HP boxes, in the middle of the screen's width, as you confirmed. The lock bracket stands at that screen's middle, 34 px under the boxes, so the two places close on it. Three ways to place the entry there:\nM1 · a third bigger, one under the other, as round 13 drew it: each place covers about 9 px of the bracket.\nM2 · normal size, one under the other: the first place is clear of the bracket; the second lies over most of it while two kills overlap.\nM3 · normal size, side by side: both clear; the second kill stands to the right and slides left when the first leaves.\nYour own screen is clear of the bracket by 31 px. In 1v1 there is one row of HP boxes: the places stay under PAUSE, clear of it.\n\nSettled for the build: the match-ending kill is not shown; with more than two kills a step takes 0.3 s while one waits, and the last two return to a second each; shown in command mode and when spectating too."
+    },
+    "t14": {
+      "x": 0,
+      "y": 28983,
+      "text": "F · round 14: a HUD for the game-start intro: GET READY over each team in turn, START over the player's own view: the call A, the band B or tags over the units C",
+      "kind": "title1",
+      "maxW": 2648
+    },
+    "r14": {
+      "x": 2728,
+      "y": 29283,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 14: A GAME-START INTRO. Samples, not built.\n\nThe ask: when the game starts the camera pushes in on team 1 from a little above, three-quarters on, stands a moment, does the same on team 2, then gives the player their own view. GET READY shows through the two team shots, START over the player's view, and the match's HUD comes in after START. PAUSE alone is on the screen until then. No skipping.\n\nTHE FRAMES. Real frames of Town at phone landscape, 844 × 390, with nothing of the game changed: an offline 2v2 stood on its spawns, the HUD out but PAUSE, no bars over the heads, no spawn light. Team 1 is Saori and Iori, team 2 Hoshino and Kurumi. Teammates spawn 12 apart on every map, so one camera distance holds both units everywhere. In these frames the team stands right of the middle and a little high, which leaves the left third and the foot of the screen free for the words.\n\nSTART carries a line over its caps and a line under its foot in all three, as asked, and leaves in a swipe. The fourth row shows each of them half-way out.\n\nA · THE CALL. The ending camera's own lettering, as picked in round 12: GET READY in two lines at the left, white with an ink outline, its hard drop in the colour of the team in view. The team's sticker sits over it, its units' name chips under it. START is the same lettering between two bars of its own make. Leaving, the bars part to either side and the word is wiped away between them.\nB · THE BAND. An ink strip across the foot of the screen with a paper rim, its lower edge in the team's colour: the team's sticker, GET READY, the units' chips in a row. START is a yellow strip across the middle with hazard stripes at its ends, an ink line standing off it above and below. Leaving, the strip slides off to the right.\nC · TAGS OVER THE UNITS. Nothing big over the picture. GET READY is a small sticker at the foot of the screen, and every unit of the team in view wears its name over its head. START is a light word between two thin lines. Leaving, it slides off to the left and thins out.\n\nThe last row is a Duel in A: one unit a side, the camera nearer, one chip.\n\nTHE SEQUENCE at the top is to scale and its lengths are a proposal: each team shot 1.0 s, START 0.8 s, 2.8 s in all before play. In Sudden Death its banner comes after START, 2.3 s as today, with the HUD in behind it.\n\nCOLOURS are the offline ones with the player on team 1: cyan YOU, lime ALLY, magenta ENEMY, orange ENEMY 2. Online each seat keeps its own colour.\n\nPick a letter, or mix: A's GET READY with C's tags, for one."
+    },
+    "t15": {
+      "x": 0,
+      "y": 31933,
+      "text": "F · round 15: a loading screen with the pair from the picture moving on it: the flyby A, the runner B, the match-up C",
+      "kind": "title1",
+      "maxW": 1760
+    },
+    "r15": {
+      "x": 1840,
+      "y": 32233,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 15: A LOADING SCREEN. Samples, not built.\n\nThe ask: the wait before a match, while the map comes in, gets a loading screen in place of today's card, with the picture of Aris holding Kei on it, cut out of its sky, and moving if it can.\n\nTHE CUT-OUT. The pair alone: the white and the light blue are gone, and so is the sky seen through the halo and through the loop of hair. The halo is kept, hollow and half see-through as it was drawn. The picture is small, 209 by 224, and the pair in it 144 by 161, so every sample draws them between 104 and 124 pixels high on a phone. Larger than that they go soft. A bigger original would let them be bigger. The fourth strip shows them with a white rim, for a ground where the dark hair needs it.\n\nTHE FRAMES are drawn at phone landscape, 844 × 390, and the left one of each pair is live: every motion is CSS alone and runs in a loop of 8 seconds. Beside it stands the same frame stopped, with the way the pair move drawn in.\n\nA · THE FLYBY. The ink ground of today's card, kept. The map's sticker and its name in the ending camera's lettering, NOW LOADING and a thin bar along the foot. The pair fly a figure of eight over the rest of the screen, rocking, with three squares of their halo's mint after them. The least to build: it needs the map's name and nothing else.\nB · THE RUNNER. The lobby's cream sheet and blobs, so the wait reads as the lobby still, with the map's memo as the lobby pins it. A fat bar along the foot, its stripes running. The pair stand on the bar's end and hop, and the bar carries them along as it fills.\nC · THE MATCH-UP. The screen parted between the two teams in their colours, each team's sticker and its units' chips, VS on a yellow disc. Along the foot the intro's own band, as built for GET READY, with the map's sticker and NOW LOADING: the same band is on the screen a moment later with GET READY on it. The pair walk the band to its end, turn round and walk back. The most to build: it reads both teams, and online each seat keeps its own colour.\n\nTHE BAR in A and B fills with the map's download where the browser gives its size. Where it does not, its stripes just run, and in B the pair walk the bar back and forth.\n\nWHEN IT SHOWS. Only while a map is still on its way: a map already fetched starts its match at once with no screen at all, as today. The wait is long on a slow line or a first visit. Town's model is 14 MB.\n\nPick a letter, or mix: A's ground with B's bar, for one."
+    },
+    "t16": {
+      "x": 0,
+      "y": 34191,
+      "text": "F · round 16: the weapon in hand and a mini map on a phone HUD that is full already: the empty button slot A, beside the small buttons B, on demand C",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r16": {
+      "x": 1856,
+      "y": 34491,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 16: A WEAPON MARK AND A MINI MAP ON THE PHONE HUD. Samples, not built.\n\nThe ask: show the weapon the player is using, and a mini map, on a phone screen whose HUD is full already. What are the options?\n\nTHE SCREEN. Your screenshot shows the game on a page of 597 × 320. Every frame here is the real game at that size: Town, a 2v2 Trio, your Kurumi, and each HUD piece stands where your screenshot has it. On that page the room nothing uses is small. One whole slot of the button grid is empty, the one above TARGET, 67 × 67. Under the two small buttons there is a band 42 px high. Right of them is a square of 76 × 78, where the tactic choices open. Nothing else is free.\n\nTHE MAPS show a picture of the map from straight above with a mark for each unit, in the colours of the HP chips. The two small ones show the 35 m around you and follow you. A unit farther off is a triangle on the rim, pointing to it.\n\nA · THE EMPTY SLOT. The map is round and sits in the grid's empty slot, at 63 px. It turns with you, so ahead is always up. The weapon goes on the fire button, over the ammo count. Nothing moves and no new piece lands on the view. The slot exists on every screen size.\n\nB · BESIDE THE SMALL BUTTONS. The map is square, 70 px, north always up, right of the fullscreen and tactic buttons. The tactic choices open there today and would have to move. The weapon takes the empty slot as a badge with its name.\n\nC · ON DEMAND. No map on the screen. A third small button lays the whole town over the middle for three seconds, or until a second tap. The weapon is a white tag above the stick, the largest of the three.\n\nThe map's place and the weapon's place are separate choices: any map here can go with any weapon mark, as long as both do not want the empty slot.\n\nON A LARGER SCREEN, 727 × 390, the last strip: A is the same with a bigger slot. B's map moves to the tall pocket under your HP chip and grows to 84 px. C's button needs a new place there, because the small buttons sit beside PAUSE and that row is full.\n\nSTILL OPEN. What the map shows of the enemy: always, or only when your side sees them. Round and turning, or square with north up. Whether a tap on the small map opens the whole one. Maps with more than one floor need a mark for above and below."
+    },
+    "t16b": {
+      "x": 0,
+      "y": 37426,
+      "text": "F · round 16b: the weapon mark as a Call of Duty silhouette by the fire button: on the trigger W1, a plate beside it W2, a badge above it W3",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r16b": {
+      "x": 1856,
+      "y": 37726,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 16B: THE WEAPON MARK, CALL OF DUTY STYLE. Samples, not built.\n\nYour word after round 16: the mark is there to give the feeling of using a weapon that Call of Duty gives, so the nearer it stands to the fire button the better, though it does not have to touch it.\n\nTHE MARK. That game draws its weapons as flat silhouettes, and so do these samples. Each one is cut from the game's own weapon picture, the same file the kill feed uses, so nothing new has to be drawn. White on the HUD's ink glass, ink on the white fire button. The top strip shows eight units' weapons at twice their HUD size: each keeps a shape of its own.\n\nW1 · ON THE TRIGGER. The silhouette sits on the fire button over the ammo count. Nearest of all and nothing new on the screen, but your thumb hides it for as long as you fire.\n\nW2 · BESIDE THE TRIGGER. A plate in the HUD's ink glass comes out from behind the fire button, above BOOST, with the silhouette and the count side by side, the way Call of Duty pairs them. It stays in sight while you fire. It is one more piece low on the view, 90 × 30. The count moves from the button to the plate here. It could stay on the button as well.\n\nW3 · ABOVE THE TRIGGER. A badge in the grid's empty slot with the silhouette and the weapon's name. In sight while you fire, but two buttons away, and it takes the slot round 16 gave the mini map.\n\nEach row's last picture lays a thumb over the fire button to show what stays in sight.\n\nW1 and W2 keep round 16's map in the empty slot. W3 sends the map to a third small button.\n\nSTILL OPEN. Whether the count stays on the fire button, moves to the plate, or shows on both. Whether the plate also shows reloading and an empty magazine, as the button does today."
+    },
+    "t16c": {
+      "x": 0,
+      "y": 39777,
+      "text": "F · round 16c: W1 with the weapon's own picture on the fire button, on every unit, and the pale weapons with an ink line",
+      "kind": "title1",
+      "maxW": 1776
+    },
+    "r16c": {
+      "x": 1856,
+      "y": 40077,
+      "w": 520,
+      "fill": "blue",
+      "text": "ROUND 16C: W1 WITH THE WEAPON'S OWN PICTURE. A sample, not built.\n\nYour pick of round 16b: W1, the weapon on the fire button, with the original picture and no silhouette.\n\nTHE SAMPLE. The fire button carries the picture the kill feed already uses, over the ammo count. On your phone the button is 67 px, the picture about 43 px wide and the count 17 px, where the count alone is 22 px today. Each picture is fitted to the round button by its own shape, so a long thin gun is drawn wider than a short tall one.\n\nTHE THREE STATES. Ready. Reloading, with today's lime ring round the button. Empty, where the picture fades with the count and the button, as they fade today.\n\nALL TWENTY. The second strip puts every playable unit's weapon on the button at twice its size. Dark and coloured weapons keep their shape. Five have white or pale bodies and lose much of it on the white button: Aris, Fubuki, Hoshino, Kei and Koyuki.\n\nTHE INK LINE. The kill feed already draws each weapon with an edge so that it reads on any ground. The last strip shows those five plain and with the same ink line. It can go round all twenty for one look, or only round the five.\n\nThe map in the frame's empty slot is round 16's and is still open.\n\nSTILL OPEN. The ink line: none, on the five, or on all. Whether the count keeps 17 px or the picture gives up some room to it."
+    }
+  },
+  "designSystems": []
+}

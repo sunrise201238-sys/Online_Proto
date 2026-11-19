@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ArchiveVS unit picker, F round 11: tap the unit file's photo and the full picture opens as a stack of photos: instant photos A, a fan of prints B, a pile C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Titan+One&family=Permanent+Marker&display=swap">
+<style>
+body{margin:0}
+button{font:inherit;cursor:pointer}
+.wrap{position:relative;width:1776px;height:900px;overflow:hidden;background:#FBF6EA;color:#1B1B2F;font-family:Rubik,system-ui,sans-serif}
+.lab{position:absolute;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5A5A74;white-space:nowrap}
+.lab b{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;box-sizing:border-box;border-radius:12px;background:#1B1B2F;color:#fff;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:13px;letter-spacing:.02em}
+.lab small{font-weight:700;text-transform:none;letter-spacing:0;color:#8a8aa0}
+.frame{position:absolute;width:844px;height:390px;overflow:hidden;border-radius:10px;box-shadow:0 0 0 1px rgba(27,27,47,.16);background:#FFF4DC}
+.frame>.bg{position:absolute;left:0;top:0;width:844px;height:390px;display:block}
+.dim{position:absolute;inset:0;background:rgba(27,27,47,.62)}
+.hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.06em;color:rgba(255,255,255,.86);text-transform:uppercase}
+.x{position:absolute;width:40px;height:40px;border-radius:50%;border:3px solid #1B1B2F;background:#fff;box-shadow:3px 3px 0 #1B1B2F;display:flex;align-items:center;justify-content:center;padding:0;z-index:9}
+/* TODAY: where the tap lands, the card's photo band */
+.tapbox{position:absolute;left:74px;top:98px;width:170px;height:95px;box-sizing:border-box;border:3px dashed #FF3EA5;border-radius:14px}
+.ring{position:absolute;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px #1B1B2F}
+.tapnote{position:absolute;left:252px;top:112px;padding:6px 12px;border:3px solid #1B1B2F;border-radius:999px;background:#FFE45C;font-weight:800;font-size:12px;box-shadow:3px 3px 0 #1B1B2F;transform:rotate(-3deg);white-space:nowrap}
+/* the photo's ground: the class colour (SG yellow), a little lighter in the middle */
+.ground{position:absolute;overflow:hidden;background:radial-gradient(circle at 50% 42%,#FFF3B0 0,#FFE45C 62%)}
+.ground img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+/* A · INSTANT PHOTOS: a stack of three instant prints, the full picture on the top one, the name written on its foot */
+.pol{position:absolute;width:228px;height:282px;box-sizing:border-box;background:#fff;border:3px solid #1B1B2F;border-radius:4px;box-shadow:5px 6px 0 rgba(0,0,0,.42)}
+.pol .ground{left:10px;top:10px;width:202px;height:202px;border:2px solid #1B1B2F;box-sizing:border-box}
+.pol .blank{position:absolute;left:10px;top:10px;width:202px;height:202px;border:2px solid #1B1B2F;box-sizing:border-box}
+.pol .nm{position:absolute;left:14px;bottom:26px;font-family:'Permanent Marker',cursive;font-size:27px;line-height:1;transform:rotate(-3deg)}
+.pol .sub{position:absolute;right:12px;bottom:14px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#5A5A74}
+.tape{position:absolute;height:24px;background:rgba(198,242,74,.8) linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%);clip-path:polygon(0 10%,3% 0,97% 4%,100% 16%,98% 34%,100% 52%,97% 70%,100% 88%,96% 100%,3% 96%,0 80%,2% 62%,0 44%,3% 26%);z-index:3}
+/* B · A FAN OF PRINTS: three glossy prints held by the file's paper clip, the face and the gun behind, the full picture in front */
+.print{position:absolute;width:196px;height:250px;box-sizing:border-box;background:#fff;border:3px solid #1B1B2F;border-radius:6px;box-shadow:4px 6px 0 rgba(0,0,0,.42);padding:8px}
+.print .ground{left:8px;top:8px;right:8px;bottom:8px;border:2px solid #1B1B2F;box-sizing:border-box;border-radius:2px}
+.print .gloss{position:absolute;left:8px;top:8px;right:8px;bottom:8px;background:linear-gradient(125deg,rgba(255,255,255,.34) 0,rgba(255,255,255,0) 38%);pointer-events:none}
+.print .face img{object-fit:cover;object-position:100% 30%}
+.print .gunbox{position:absolute;left:8px;top:8px;right:8px;bottom:8px;border:2px solid #1B1B2F;box-sizing:border-box;border-radius:2px;background:#FFF6C9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-left:46px}
+.print .gunbox img{width:124px;height:auto;display:block;transform:rotate(-8deg)}
+.print .gunbox b{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:22px;line-height:1}
+.print .gunbox small{font-size:10px;font-weight:800;letter-spacing:.06em;color:#5A5A74}
+.clip{position:absolute;width:22px;height:46px;z-index:6}
+.label{position:absolute;padding:5px 12px;background:#1B1B2F;color:#fff;font-family:'Titan One','Arial Black',sans-serif;font-size:16px;line-height:1;letter-spacing:.03em;border-radius:6px;transform:rotate(-4deg);z-index:7;white-space:nowrap}
+.label small{font-family:Rubik,sans-serif;font-weight:800;font-size:9px;letter-spacing:.08em;color:#FFE45C;margin-left:6px;vertical-align:2px}
+/* C · A PILE ON THE TABLE: a scatter of coloured prints, the full picture mounted on top with album corners, a sticky note */
+.loose{position:absolute;width:186px;height:186px;box-sizing:border-box;background:#fff;border:3px solid #1B1B2F;border-radius:3px;box-shadow:3px 4px 0 rgba(0,0,0,.36);padding:9px}
+.loose i{display:block;width:100%;height:100%;border:2px solid #1B1B2F;box-sizing:border-box}
+.mount{position:absolute;width:262px;height:262px;box-sizing:border-box;background:#fff;border:3px solid #1B1B2F;border-radius:3px;box-shadow:6px 7px 0 rgba(0,0,0,.45);padding:12px}
+.mount .ground{left:12px;top:12px;right:12px;bottom:12px;border:2px solid #1B1B2F;box-sizing:border-box}
+.corner{position:absolute;width:30px;height:30px;background:#1B1B2F;z-index:2}
+.note{position:absolute;width:122px;height:96px;box-sizing:border-box;padding:10px 10px;background:#FFE45C;box-shadow:3px 5px 0 rgba(0,0,0,.4);transform:rotate(7deg);z-index:8;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.note::before{content:'';position:absolute;left:0;right:0;top:0;height:14px;background:rgba(0,0,0,.07)}
+.note b{font-family:'Permanent Marker',cursive;font-weight:400;font-size:26px;line-height:1}
+.note small{font-family:'Permanent Marker',cursive;font-size:12px;line-height:1.15;color:#3a3a52}
+</style>
+</helmet>
+<div class="wrap">
+  <div class="lab" style="left:16px;top:12px"><b>Today</b><small>tap the photo band on the unit file: the full picture opens over the picker</small></div>
+  <div class="lab" style="left:920px;top:12px"><b>A</b>Instant photos<small>a stack of three instant prints, the name written on the top one</small></div>
+  <div class="lab" style="left:16px;top:458px"><b>B</b>A fan of prints<small>three prints held by the file's paper clip: the face, the full picture, the gun</small></div>
+  <div class="lab" style="left:920px;top:458px"><b>C</b>A pile<small>loose prints in the class colours, the full picture mounted on top, a sticky note</small></div>
+<div class="frame" style="left:14px;top:46px"><img class="bg" src="/_blob/6adf65adae114e22e63c6c885dd8b0d2" alt="The unit picker with Rabu in the PROFILE folder"><div class="tapbox"></div><div class="ring" style="left:139px;top:125px;width:40px;height:40px"></div><div class="ring" style="left:129px;top:115px;width:60px;height:60px;opacity:.55"></div><div class="tapnote">tap the photo</div></div>
+<div class="frame" style="left:918px;top:46px"><img class="bg" src="/_blob/6adf65adae114e22e63c6c885dd8b0d2" alt="The unit picker with Rabu in the PROFILE folder"><div class="dim"></div><div class="pol" style="left:290px;top:58px;transform:rotate(-9deg)"><span class="blank" style="background:#FFF3B0"></span></div><div class="pol" style="left:330px;top:46px;transform:rotate(6deg)"><span class="blank" style="background:#FFE45C"></span></div><div class="pol" style="left:308px;top:52px;transform:rotate(-2deg)"><span class="tape" style="left:62px;top:-13px;width:100px;transform:rotate(-4deg)"></span><span class="ground"><img src="/_blob/2c573f1bd164723b46696c01d5b4719b" alt="Rabu, the full picture"></span><span class="nm">Rabu</span><span class="sub">M590 · SHOTGUN</span></div><button type="button" class="x" aria-label="Close" style="left:520px;top:38px;transform:rotate(6deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1B1B2F" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="hint">tap anywhere to close</div></div>
+<div class="frame" style="left:14px;top:492px"><img class="bg" src="/_blob/6adf65adae114e22e63c6c885dd8b0d2" alt="The unit picker with Rabu in the PROFILE folder"><div class="dim"></div><div class="print" style="left:182px;top:84px;transform:rotate(-13deg)"><span class="ground face"><img src="/_blob/4ac369da748694187332e3e19c32a5b8" alt="Rabu, the face"></span><span class="gloss"></span></div><div class="print" style="left:468px;top:82px;transform:rotate(12deg)"><span class="gunbox"><img src="/_blob/817549353f628e8e48d77db0531613a8" alt="M590"><b>M590</b><small>SHOTGUN</small></span><span class="gloss"></span></div><div class="print" style="left:324px;top:56px;transform:rotate(-2deg)"><span class="ground"><img src="/_blob/2c573f1bd164723b46696c01d5b4719b" alt="Rabu, the full picture"></span><span class="gloss"></span></div><span class="clip" style="left:402px;top:34px;transform:rotate(8deg)"><svg class="clip" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v25a2 2 0 0 0 4 0V14"/></svg></span><span class="label" style="left:350px;top:292px">RABU<small>SHOTGUN</small></span><button type="button" class="x" aria-label="Close" style="left:520px;top:36px;transform:rotate(6deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1B1B2F" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="hint">tap anywhere to close</div></div>
+<div class="frame" style="left:918px;top:492px"><img class="bg" src="/_blob/6adf65adae114e22e63c6c885dd8b0d2" alt="The unit picker with Rabu in the PROFILE folder"><div class="dim"></div><div class="loose" style="left:250px;top:92px;transform:rotate(-16deg)"><i style="background:#FF3EA5"></i></div><div class="loose" style="left:420px;top:70px;transform:rotate(14deg)"><i style="background:#3EE0FF"></i></div><div class="loose" style="left:300px;top:150px;transform:rotate(8deg)"><i style="background:#C6F24A"></i></div><div class="loose" style="left:408px;top:160px;transform:rotate(-9deg)"><i style="background:#C9B2FF"></i></div><div class="mount" style="left:291px;top:56px;transform:rotate(2deg)"><span class="ground"><img src="/_blob/2c573f1bd164723b46696c01d5b4719b" alt="Rabu, the full picture"></span><span class="corner" style="left:-3px;top:-3px;clip-path:polygon(0 0,100% 0,0 100%)"></span><span class="corner" style="right:-3px;top:-3px;clip-path:polygon(0 0,100% 0,100% 100%)"></span><span class="corner" style="left:-3px;bottom:-3px;clip-path:polygon(0 0,100% 100%,0 100%)"></span><span class="corner" style="right:-3px;bottom:-3px;clip-path:polygon(100% 0,100% 100%,0 100%)"></span></div><div class="note" style="left:500px;top:236px"><b>Rabu</b><small>M590<br>Shotgun · Fast</small></div><button type="button" class="x" aria-label="Close" style="left:530px;top:40px;transform:rotate(6deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1B1B2F" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="hint">tap anywhere to close</div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1776,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

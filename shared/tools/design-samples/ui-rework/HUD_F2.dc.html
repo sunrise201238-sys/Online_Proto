@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GunVS in match — F, round 5: the HP chips (no numbers, the Trio reserve inside the chip) and the BOOST sticker (1v1 Trio)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Titan+One&display=swap">
+<style>
+body{margin:0}
+button{font:inherit;cursor:pointer}
+.wrap{position:relative;width:844px;height:390px;overflow:hidden;background:#1B1B2F;color:#fff;font-family:Rubik,system-ui,sans-serif}
+.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+/* THE HP CHIP: an ink pill with a white rim and an ink outline (the game's bar, grown), the portrait of the unit on
+   the field in a ring of the side's colour, the name and the side word, the bar with its round end — no number;
+   in Trio the two units in reserve sit inside the chip's far end as small faces (a fallen one greyed) */
+.chip{position:absolute;top:10px;display:flex;align-items:center;gap:8px;height:54px;padding:0 10px 0 5px;box-sizing:border-box;border-radius:999px;background:rgba(27,27,47,.9);border:3px solid #fff;box-shadow:0 0 0 2px #1B1B2F}
+.chip.you{left:12px;--c:#C6F24A;transform:rotate(-1.5deg)}
+.chip.foe{right:12px;--c:#FF3EA5;flex-direction:row-reverse;padding:0 5px 0 10px;transform:rotate(1.5deg)}
+.chip>img{width:40px;height:40px;border-radius:50%;object-fit:cover;object-position:50% 62%;display:block;border:3px solid var(--c);box-sizing:border-box;background:#2a2a44}
+.chip .col{display:flex;flex-direction:column;gap:5px}
+.chip.foe .col{align-items:flex-end}
+.chip .nm{display:flex;align-items:baseline;gap:6px;line-height:1}
+.chip.foe .nm{flex-direction:row-reverse}
+.chip .nm b{font-size:15px;font-weight:400;font-family:'Titan One','Arial Black',sans-serif}
+.chip .nm i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--c)}
+.chip .bar{position:relative;width:150px;height:10px;border-radius:5px;background:rgba(255,255,255,.22)}
+.chip .bar b{display:block;height:100%;border-radius:5px;background:var(--c);width:var(--w)}
+.chip .bar i{position:absolute;top:-3px;left:calc(var(--w) - 8px);width:16px;height:16px;border-radius:50%;background:var(--c);border:2px solid #1B1B2F;box-sizing:border-box}
+.chip.foe .bar b{margin-left:auto}
+.chip.foe .bar i{left:auto;right:calc(var(--w) - 8px)}
+.chip .res{display:flex;align-items:center;padding-left:4px}
+.chip.foe .res{flex-direction:row-reverse;padding:0 4px 0 0}
+.chip .res img{width:24px;height:24px;border-radius:50%;object-fit:cover;object-position:50% 62%;border:2px solid rgba(255,255,255,.9);box-sizing:border-box;background:#2a2a44;display:block;margin-left:-7px}
+.chip.foe .res img{margin:0 -7px 0 0}
+.chip .res img.out{opacity:.4;filter:grayscale(1)}
+.fs{position:absolute;left:318px;top:19px;width:34px;height:34px;border-radius:50%;border:3px solid #fff;background:rgba(27,27,47,.9);box-shadow:0 0 0 2px #1B1B2F;display:flex;align-items:center;justify-content:center;padding:0;color:#fff}
+.pause{position:absolute;left:50%;top:12px;transform:translateX(-50%) rotate(-2deg);height:34px;padding:0 16px;display:flex;align-items:center;background:#fff;color:#1B1B2F;border:3px solid #1B1B2F;border-radius:10px;font-weight:800;font-size:13px;letter-spacing:.08em;box-shadow:2px 2px 0 #1B1B2F}
+.xh{position:absolute;left:50%;top:50%;width:0;height:0}
+.xh i{position:absolute;background:#C6F24A;outline:1px solid rgba(27,27,47,.9)}
+/* THE BOOST STICKER: level, the word and the gauge in ink with a white knob — no number */
+.boost{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);height:36px;padding:0 14px;display:flex;align-items:center;gap:10px;background:#FFE45C;color:#1B1B2F;border:3px solid #1B1B2F;border-radius:10px;box-shadow:3px 3px 0 #1B1B2F}
+.boost .w{font-family:'Titan One','Arial Black',sans-serif;font-size:14px;line-height:1;letter-spacing:.02em}
+.boost .g{position:relative;width:170px;height:12px;border-radius:6px;background:rgba(27,27,47,.18);border:2px solid #1B1B2F;box-sizing:border-box}
+.boost .g b{display:block;height:100%;width:62%;border-radius:4px;background:#1B1B2F}
+.boost .g i{position:absolute;top:-6px;left:calc(62% - 9px);width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #1B1B2F;box-sizing:border-box}
+.joy{position:absolute;left:28px;bottom:28px;width:140px;height:140px;box-sizing:border-box;border-radius:50%;background:rgba(27,27,47,.22);border:4px solid rgba(255,255,255,.92);box-shadow:0 0 0 2px #1B1B2F,inset 0 0 0 2px #1B1B2F}
+.joy i{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#FF4F4F;border:3px solid #1B1B2F;box-sizing:border-box}
+.btns{position:absolute;right:24px;bottom:24px;width:230px;height:230px}
+.btn{position:absolute;width:66px;height:66px;border-radius:50%;border:3px solid #1B1B2F;background:rgba(255,255,255,.92);color:#1B1B2F;box-shadow:4px 4px 0 #1B1B2F;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.btn.sprint{right:0;bottom:0;background:#FF3EA5;color:#fff;transform:rotate(-3deg)}
+.btn.jump{right:0;bottom:78px;background:#C6F24A;transform:rotate(3deg)}
+.btn.dodge{right:0;bottom:156px;background:#3EE0FF;transform:rotate(-2deg)}
+.btn.fire{right:78px;bottom:0;transform:rotate(2deg)}
+.btn.fire b{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:24px;line-height:1}
+.btn.fire::after{content:'';position:absolute;inset:-8px;border-radius:50%;border:3px solid #C6F24A;border-right-color:transparent;transform:rotate(30deg)}
+</style>
+</helmet>
+<div class="wrap">
+  <img class="bg" src="/_blob/d35955475b13a1567ea6c1c206bd5c58" alt="The District street, seen over the unit's shoulder">
+
+  <div class="chip you"><img src="/_blob/2959371eef3ba105319b3c0b07ad94df" alt="Saori, on the field"><div class="col"><div class="nm"><b>SAORI</b><i>YOU</i></div><div class="bar" style="--w:78%"><b></b><i></i></div></div><span class="res"><img src="/_blob/a3c19edc427051c041535b247b7e1e7b" alt="Fubuki, in reserve"><img src="/_blob/6d95edd0b5a5671037a67311108ff57a" alt="Atsuko, in reserve"></span></div>
+  <button type="button" class="fs" aria-label="Fullscreen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+
+  <div class="chip foe"><img src="/_blob/7463f2d8f4072cf5f5e5bd7b173db6c3" alt="Hoshino, on the field"><div class="col"><div class="nm"><b>HOSHINO</b><i>ENEMY</i></div><div class="bar" style="--w:100%"><b></b><i></i></div></div><span class="res"><img src="/_blob/3947ae4e01037f8f2bf62be5855e7423" alt="Aru, in reserve"><img class="out" src="/_blob/683adc980e7f4180d0b839e2211a9f90" alt="Kei, fallen"></span></div>
+
+  <span class="pause">PAUSE</span>
+
+  <div class="xh" aria-hidden="true"><i style="left:-1px;top:-14px;width:2px;height:8px"></i><i style="left:-1px;top:6px;width:2px;height:8px"></i><i style="left:-14px;top:-1px;width:8px;height:2px"></i><i style="left:6px;top:-1px;width:8px;height:2px"></i></div>
+
+  <div class="boost"><span class="w">BOOST</span><span class="g"><b></b><i></i></span></div>
+
+  <div class="joy" aria-hidden="true"><i></i></div>
+  <div class="btns">
+    <button type="button" class="btn dodge"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M4 6v12"/></svg>Dodge</button>
+    <button type="button" class="btn jump"><svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>Jump</button>
+    <button type="button" class="btn fire"><b>30</b></button>
+    <button type="button" class="btn sprint"><svg viewBox="0 0 24 24"><path d="M3 12h7"/><path d="M5 7h5"/><path d="M5 17h5"/><path d="M13 5l8 7-8 7"/></svg>Sprint</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

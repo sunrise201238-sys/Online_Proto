@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The MG pick among the six classes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&amp;family=Titan+One&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BEA}a:hover{color:#1B1B2F}
+</style>
+</helmet>
+<div style="width: 1200px; height: 420px; box-sizing: border-box; padding: 44px 56px; background: #FFF4DC; font-family: Rubik, system-ui, sans-serif; color: #1B1B2F; display: flex; flex-direction: column; gap: 34px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: 'Titan One', 'Arial Black', sans-serif; font-weight: 400; font-size: 34px; line-height: 1.1">One card per class</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #5A5A74">The picker's six class colours side by side, MG in the pick. Try the other candidates from Tweaks.</p>
+  </div>
+  <div style="display: flex; gap: 36px">
+    <sc-for list="{{cards}}" as="card" hint-placeholder-count="6">
+      <div style="position: relative; width: 140px; height: 168px; box-sizing: border-box; background: #FFFFFF; border: 3px solid #1B1B2F; border-radius: 18px; box-shadow: 5px 5px 0 #1B1B2F; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 16px">
+        <img src="{{card.src}}" alt="{{card.name}}" style="width: 96px; height: 96px; object-fit: cover; border-radius: 14px; background: {{card.bg}}">
+        <span style="font-weight: 800; font-size: 16px">{{card.name}}</span>
+        <span style="position: absolute; top: -13px; right: -10px; padding: 2px 9px; border-radius: 999px; border: 2px solid #1B1B2F; background: {{card.bg}}; color: {{card.ink}}; font-family: 'Titan One', 'Arial Black', sans-serif; font-size: 13px">{{card.tag}}</span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mg":{"editor":"color","default":"#2F5BEA","options":["#2F5BEA","#3D6BFF","#FF3EA5","#14B8A6"]},"$preview":{"width":1200,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mg = this.props.mg ?? '#2F5BEA';
+    const lin = (c) => { c = c / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const h = mg.replace('#', '');
+    const lum = 0.2126 * lin(parseInt(h.slice(0, 2), 16)) + 0.7152 * lin(parseInt(h.slice(2, 4), 16)) + 0.0722 * lin(parseInt(h.slice(4, 6), 16));
+    const mgInk = (1.05 / (lum + 0.05)) >= 4.5 ? '#FFFFFF' : '#1B1B2F';
+    const cards = [
+      { name: 'Saori', tag: 'AR', bg: '#3EE0FF', ink: '#1B1B2F', src: '/_blob/cc3de9caea6493d5d1a15f9802878bf6' },
+      { name: 'Fubuki', tag: 'RF', bg: '#C9B2FF', ink: '#1B1B2F', src: '/_blob/2ca46ef66cf6b897d232eccb1a39ce2b' },
+      { name: 'Atsuko', tag: 'SMG', bg: '#C6F24A', ink: '#1B1B2F', src: '/_blob/72466438b9513b03a89831a0beac918c' },
+      { name: 'Hoshino', tag: 'SG', bg: '#FFE45C', ink: '#1B1B2F', src: '/_blob/fa905a4bf3b21f2883fcf28e2fda0260' },
+      { name: 'Maki', tag: 'MG', bg: mg, ink: mgInk, src: '/_blob/1a688ca4658eeed74f46af577da677e5' },
+      { name: 'Aru', tag: 'SR', bg: '#1B1B2F', ink: '#FFFFFF', src: '/_blob/0b2dd8086e627d45ad588103cf897d6c' }
+    ];
+    return { cards };
+  }
+}
+</script>
+</body>
+</html>

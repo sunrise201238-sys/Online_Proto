@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ArchiveVS unit picker — F, round 8b: option A, the paper clip moved off the gun — three places for it — and the gun as big as the print allows</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800&family=Titan+One&display=swap">
+<style>
+body{margin:0}
+.wrap{position:relative;width:1768px;height:500px;overflow:hidden;background:#FFF4DC;color:#1B1B2F;font-family:Rubik,system-ui,sans-serif}
+.col{position:absolute;top:14px;width:260px}
+.lab{display:flex;align-items:center;gap:6px;margin:0 0 42px 2px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5A5A74;white-space:nowrap}
+.lab b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#1B1B2F;color:#fff;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:12px}
+/* THE UNIT FILE as built (b1105m–az): the manila folder with its tab, the white sheet inside, the paper clip top-right */
+.folder{position:relative;width:236px;box-sizing:border-box;margin-top:28px;border-radius:0 14px 14px 14px;border:4px solid #1B1B2F;background:#F6D27A;box-shadow:7px 7px 0 #1B1B2F;transform:rotate(-2deg)}
+.folder::before{content:'UNIT FILE';position:absolute;left:12px;top:-30px;width:110px;height:30px;box-sizing:border-box;padding-bottom:4px;background:#F6D27A;border:4px solid #1B1B2F;border-bottom:0;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;letter-spacing:.08em}
+.card{position:relative;margin:8px;background:#fff;border:3px solid #1B1B2F;border-radius:12px;box-shadow:4px 4px 0 #1B1B2F;transform:rotate(.8deg);display:flex;flex-direction:column;gap:6px;padding:8px}
+.face{display:block;width:100%;height:100px;border-radius:12px;overflow:hidden;background:#C9B8F2}
+.face img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 77.4%}
+.head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.name{font-family:'Titan One','Arial Black',sans-serif;font-size:20px;line-height:1.05}
+.cls{padding:4px 9px;border-radius:999px;background:#C9B8F2;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.range{display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.04em;color:#5A5A74}
+.range b{display:flex;gap:3px}
+.range i{width:14px;height:10px;border-radius:4px;border:2px solid #1B1B2F;box-sizing:border-box;background:#fff}
+.range i.on{background:#C9B8F2}
+.panel{background:#FFF4DC;border:2px solid #1B1B2F;border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.panel .wn{text-align:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding-bottom:4px;border-bottom:2px dashed rgba(27,27,47,.35)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px 4px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:1px}
+.cell small{font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:#5A5A74;font-weight:700}
+.cell b{font-size:11px;line-height:13px;font-weight:800}
+.cell .sc{width:30px;height:30px;border-radius:6px;background:#fff;border:1px solid rgba(27,27,47,.3)}
+.confirm{width:100%;height:34px;box-sizing:border-box;margin-top:2px;border-radius:999px;border:3px solid #1B1B2F;background:#C6F24A;box-shadow:3px 3px 0 #1B1B2F;font-family:'Titan One','Arial Black',sans-serif;font-size:16px;display:flex;align-items:center;justify-content:center}
+.clip{position:absolute;right:14px;top:-14px;width:22px;height:46px;transform:rotate(12deg);z-index:3}
+/* THE WEAPON PHOTO — option A (the still curl): 112 x 64, a white matte and the ink rim, the gun's render on a pale wash of the
+   class colour; the gun as BIG as the print allows: the render's empty margins (the picture is 958 x 246, the gun 544 x 227 of it)
+   are left out — the picture is scaled so the gun spans the window's whole width, nothing cut, nothing stretched.  The print sits
+   at the card's top-right, over the folder's edge, 6° off; its free corner (bottom-left) is curled. */
+.photo{position:absolute;right:-12px;top:-36px;width:112px;height:64px;box-sizing:border-box;z-index:2;transform:rotate(6deg);transform-origin:80% 20%;--fold:18px}
+.photo .print{position:absolute;inset:0;background:#fff;border:2px solid #1B1B2F;border-radius:3px;box-shadow:2px 3px 0 rgba(27,27,47,.9);padding:3px;box-sizing:border-box;clip-path:polygon(0 0,100% 0,100% 100%,var(--fold) 100%,0 calc(100% - var(--fold)))}
+.photo .print .gnd{position:absolute;inset:3px;background:linear-gradient(135deg,#F3EEFF,#E2D7FA 60%,#D4C6F5);overflow:hidden}
+.photo .print .gnd img{display:block;filter:drop-shadow(0 2px 1px rgba(27,27,47,.25))}
+.photo .curl{position:absolute;left:0;bottom:0;width:var(--fold);height:var(--fold);background:linear-gradient(45deg,transparent 48%,#1B1B2F 48% 55%,#f4f4f4 55%,#d8d8de 80%,#bdbdc6);border-bottom-left-radius:2px;box-shadow:-1px 1px 2px rgba(27,27,47,.25)}
+/* THE CLIP, three places — all over the print's z-index 2 */
+.clip{position:absolute;width:22px;height:46px;z-index:3}
+.clip.a1{right:-24px;top:-58px;transform:rotate(48deg)}     /* pinching the print's top-right corner, half of it off the print */
+.clip.a2{right:30px;top:-74px;transform:rotate(14deg)}      /* down over the print's top edge, 14 px of grip */
+.clip.a3{right:96px;top:-48px;transform:rotate(-10deg)}     /* on the print's left end, over the margin the gun leaves there */
+/* the detail: the card's top-right at 2x, in a window */
+.detail{position:absolute;left:1130px;top:60px;width:320px;height:236px;overflow:hidden;border:2px dashed rgba(27,27,47,.3);border-radius:8px;background:#F6D27A}
+.detail .z{position:absolute;left:-180px;top:112px;transform:scale(2);transform-origin:0 0}
+.detail .z .card{width:236px;height:150px;margin:0;transform:none;border-radius:12px}
+.dlab{position:absolute;left:1130px;top:36px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5A5A74}
+.note{position:absolute;left:1130px;top:314px;width:600px;font-size:11px;font-weight:700;color:#5A5A74;line-height:1.45}
+.note b{color:#1B1B2F}
+</style>
+</helmet>
+<div class="wrap">
+  <div class="col" style="left:60px"><span class="lab"><b>1</b>Corner clip</span>
+    <div class="folder"><div class="card"><div class="photo "><div class="print"><div class="gnd"><img src="/_blob/d7f4dc9b2f39d42d874491cf1491e971" alt="Ruger Mini-14" style="position:absolute;width:179.6px;height:46.1px;left:-39.9px;top:3.3px"></div></div><i class="curl"></i></div><svg class="clip a1" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg><span class="face"><img src="/_blob/9b782fe4f24e0dcade43e94a525ba942" alt="Fubuki"></span><div class="head"><span class="name">Fubuki</span><span class="cls">Rifle</span></div><div class="range"><span>RANGE</span><b><i class="on"></i><i class="on"></i><i></i><i></i><i></i></b></div><div class="panel"><div class="wn">Ruger Mini-14</div><div class="grid"><div class="cell"><small>Mag</small><b>30</b></div><div class="cell"><small>Dmg</small><b>13</b></div><div class="cell"><small>Rpm</small><b>180</b></div><div class="cell"><small>Movement</small><b>Medium</b></div><div class="cell"><small>Reload</small><b>2.0 s</b></div><div class="cell"><small>Spread</small><span class="sc"></span></div></div></div><div class="confirm">CONFIRM!</div></div></div></div>
+  <div class="col" style="left:420px"><span class="lab"><b>2</b>Top-edge clip, a short grip</span>
+    <div class="folder"><div class="card"><div class="photo "><div class="print"><div class="gnd"><img src="/_blob/d7f4dc9b2f39d42d874491cf1491e971" alt="Ruger Mini-14" style="position:absolute;width:179.6px;height:46.1px;left:-39.9px;top:3.3px"></div></div><i class="curl"></i></div><svg class="clip a2" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg><span class="face"><img src="/_blob/9b782fe4f24e0dcade43e94a525ba942" alt="Fubuki"></span><div class="head"><span class="name">Fubuki</span><span class="cls">Rifle</span></div><div class="range"><span>RANGE</span><b><i class="on"></i><i class="on"></i><i></i><i></i><i></i></b></div><div class="panel"><div class="wn">Ruger Mini-14</div><div class="grid"><div class="cell"><small>Mag</small><b>30</b></div><div class="cell"><small>Dmg</small><b>13</b></div><div class="cell"><small>Rpm</small><b>180</b></div><div class="cell"><small>Movement</small><b>Medium</b></div><div class="cell"><small>Reload</small><b>2.0 s</b></div><div class="cell"><small>Spread</small><span class="sc"></span></div></div></div><div class="confirm">CONFIRM!</div></div></div></div>
+  <div class="col" style="left:780px"><span class="lab"><b>3</b>Left-end clip, the gun moved right</span>
+    <div class="folder"><div class="card"><div class="photo a3"><div class="print"><div class="gnd"><img src="/_blob/d7f4dc9b2f39d42d874491cf1491e971" alt="Ruger Mini-14" style="position:absolute;width:151.4px;height:38.9px;left:-17.7px;top:7.0px"></div></div><i class="curl"></i></div><svg class="clip a3" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg><span class="face"><img src="/_blob/9b782fe4f24e0dcade43e94a525ba942" alt="Fubuki"></span><div class="head"><span class="name">Fubuki</span><span class="cls">Rifle</span></div><div class="range"><span>RANGE</span><b><i class="on"></i><i class="on"></i><i></i><i></i><i></i></b></div><div class="panel"><div class="wn">Ruger Mini-14</div><div class="grid"><div class="cell"><small>Mag</small><b>30</b></div><div class="cell"><small>Dmg</small><b>13</b></div><div class="cell"><small>Rpm</small><b>180</b></div><div class="cell"><small>Movement</small><b>Medium</b></div><div class="cell"><small>Reload</small><b>2.0 s</b></div><div class="cell"><small>Spread</small><span class="sc"></span></div></div></div><div class="confirm">CONFIRM!</div></div></div></div>
+  <span class="dlab">Place 1 at 2× — the corner clip, the curled corner, the gun across the whole print</span>
+  <div class="detail"><div class="z"><div class="card">
+      <div class="photo"><div class="print"><div class="gnd"><img src="/_blob/d7f4dc9b2f39d42d874491cf1491e971" alt="Ruger Mini-14" style="position:absolute;width:179.6px;height:46.1px;left:-39.9px;top:3.3px"></div></div><i class="curl"></i></div>
+      <svg class="clip a1" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg>
+      <span class="face"><img src="/_blob/9b782fe4f24e0dcade43e94a525ba942" alt="Fubuki"></span>
+  </div></div></div>
+  <div class="note"><b>Option A, as picked — and the gun as big as the print allows:</b> the renders the game ships are 958 × 246 with wide empty margins (Fubuki's Ruger is 544 × 227 of that); the print now scales each picture so the gun itself spans the window's whole width — 102 px here, about 71 on the phone — nothing cut, nothing stretched. The print grew to 112 × 64 for it, set a little higher (its top 36 px over the card) so it covers less of the portrait.<br><br><b>The clip, three places:</b> <b>1</b> pinches the top-right corner at 48°, half of it off the print — it covers only the blank corner above the barrel. <b>2</b> comes down over the top edge at the right third with a 14 px grip, over the matte and the blank band above the gun. <b>3</b> sits on the left end, where the gun leaves it a 16 px margin — the gun is 16 px narrower there.<br><br>Say 1, 2 or 3 (and any change), and A goes onto PT and the 0.9.5 line with it.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1768,"height":500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

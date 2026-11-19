@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ArchiveVS game-start intro, F round 14: GET READY over each team in turn, START over the player's own view: the call A, the band B, tags over the units C; a Duel in A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Titan+One&display=swap">
+<style>
+body{margin:0}
+.wrap{position:relative;width:2648px;height:2530px;overflow:hidden;background:#FBF6EA;color:#1B1B2F;font-family:Rubik,system-ui,sans-serif}
+.head{position:absolute;display:flex;align-items:baseline;gap:10px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#1B1B2F;white-space:nowrap}
+.head small{font-weight:700;text-transform:none;letter-spacing:0;color:#6b6b84;font-size:12px}
+.lab{position:absolute;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5A5A74;white-space:nowrap}
+.lab b{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;box-sizing:border-box;border-radius:12px;background:#1B1B2F;color:#fff;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:13px;letter-spacing:.02em}
+.lab small{font-weight:700;text-transform:none;letter-spacing:0;color:#6b6b84;font-size:12px}
+.then{position:absolute;width:32px;height:32px;border-radius:50%;background:#1B1B2F;display:flex;align-items:center;justify-content:center}
+.frame{position:absolute;width:844px;height:390px;overflow:hidden;border-radius:10px;box-shadow:0 0 0 1px rgba(27,27,47,.16);background:#1B1B2F;color:#fff}
+.frame>.bg{position:absolute;left:0;top:0;width:844px;height:390px;display:block}
+
+/* the sequence, to scale: 300 px a second */
+.seq{position:absolute;left:14px;top:46px;display:flex;align-items:stretch;height:62px;border-radius:12px;overflow:hidden;box-shadow:0 0 0 2px #1B1B2F;white-space:nowrap}
+.seq>span{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 16px;box-sizing:border-box;border-right:2px solid #1B1B2F;color:#1B1B2F}
+.seq>span:last-child{border-right:0}
+.seq b{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:17px;line-height:1;letter-spacing:.02em}
+.seq i{font-style:normal;font-weight:700;font-size:11.5px;line-height:1}
+.seq .hold{background:repeating-linear-gradient(135deg,rgba(27,27,47,.10) 0 8px,rgba(27,27,47,0) 8px 16px),var(--c)}
+.seq .opt{background:repeating-linear-gradient(135deg,rgba(27,27,47,.10) 0 8px,rgba(27,27,47,0) 8px 16px),#E9E2D0;color:#5A5A74}
+.seq .opt b{color:#1B1B2F}
+.brace{position:absolute;top:116px;height:10px;border:2px solid #1B1B2F;border-top:0;border-radius:0 0 8px 8px;box-sizing:border-box}
+.note{position:absolute;top:132px;font-size:12px;font-weight:700;color:#5A5A74;white-space:nowrap}
+.note b{color:#1B1B2F;font-weight:800}
+.after{position:absolute;top:26px;display:flex;align-items:center;gap:14px;font-size:12px;font-weight:700;line-height:1.5;color:#5A5A74;white-space:nowrap}
+.after .mini{position:relative;width:304px;height:140px;border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px rgba(27,27,47,.16)}
+.after .mini img{position:absolute;left:0;top:0;width:304px;height:140px;display:block}
+.after b{color:#1B1B2F;font-weight:800}
+
+/* the small pieces every direction shares: a unit's face ringed in its colour, its name chip (the ending camera's) */
+.face{position:relative;flex:0 0 auto;width:26px;height:26px;border-radius:50%;overflow:hidden;border:2px solid var(--c);box-sizing:border-box;background:#2a2a44}
+.face img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;display:block}
+.who{display:flex;align-items:center;gap:7px;height:34px;padding:0 13px 0 3px;box-sizing:border-box;border-radius:999px;background:rgba(27,27,47,.9);border:3px solid #fff;box-shadow:0 0 0 2px #1B1B2F;color:#fff;white-space:nowrap}
+.who b{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:16px;line-height:1;text-transform:uppercase}
+.who i{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.06em;color:var(--c)}
+.tm{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 11px 0 7px;box-sizing:border-box;border-radius:999px;background:#FFE45C;border:2px solid #1B1B2F;box-shadow:2px 2px 0 #1B1B2F;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:13px;line-height:1;letter-spacing:.04em;color:#1B1B2F;white-space:nowrap}
+.tm u{flex:0 0 auto;width:10px;height:10px;border-radius:50%;background:var(--c);border:2px solid #1B1B2F;box-sizing:border-box}
+
+/* A · THE CALL: the ending camera's own lettering (white, an ink outline, a hard drop in the colour of the team in view),
+   two lines at the left, the team's sticker over it and its units' name chips under it; START the same word once, bigger,
+   in the middle, its drop yellow */
+.call{position:absolute;left:36px;display:flex;flex-direction:column;align-items:flex-start;gap:11px;transform:rotate(-6deg);transform-origin:0 50%;--c:#3EE0FF}
+.call .w{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;color:#fff;letter-spacing:.01em;white-space:nowrap}
+.call .w.two{font-size:74px;line-height:.92;text-shadow:4.00px 0.00px 0 #1B1B2F,3.70px 1.53px 0 #1B1B2F,2.83px 2.83px 0 #1B1B2F,1.53px 3.70px 0 #1B1B2F,0.00px 4.00px 0 #1B1B2F,-1.53px 3.70px 0 #1B1B2F,-2.83px 2.83px 0 #1B1B2F,-3.70px 1.53px 0 #1B1B2F,-4.00px 0.00px 0 #1B1B2F,-3.70px -1.53px 0 #1B1B2F,-2.83px -2.83px 0 #1B1B2F,-1.53px -3.70px 0 #1B1B2F,-0.00px -4.00px 0 #1B1B2F,1.53px -3.70px 0 #1B1B2F,2.83px -2.83px 0 #1B1B2F,3.70px -1.53px 0 #1B1B2F,9px 9px 0 var(--c)}
+.call .whos{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:4px 0 0 8px}
+.go{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-6deg);display:flex;flex-direction:column;align-items:center;gap:20px;--c:#FFE45C}
+.go .w{display:block;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;color:#fff;letter-spacing:.01em;white-space:nowrap;font-size:112px;line-height:.86;text-shadow:6.00px 0.00px 0 #1B1B2F,5.80px 1.55px 0 #1B1B2F,5.20px 3.00px 0 #1B1B2F,4.24px 4.24px 0 #1B1B2F,3.00px 5.20px 0 #1B1B2F,1.55px 5.80px 0 #1B1B2F,0.00px 6.00px 0 #1B1B2F,-1.55px 5.80px 0 #1B1B2F,-3.00px 5.20px 0 #1B1B2F,-4.24px 4.24px 0 #1B1B2F,-5.20px 3.00px 0 #1B1B2F,-5.80px 1.55px 0 #1B1B2F,-6.00px 0.00px 0 #1B1B2F,-5.80px -1.55px 0 #1B1B2F,-5.20px -3.00px 0 #1B1B2F,-4.24px -4.24px 0 #1B1B2F,-3.00px -5.20px 0 #1B1B2F,-1.55px -5.80px 0 #1B1B2F,-0.00px -6.00px 0 #1B1B2F,1.55px -5.80px 0 #1B1B2F,3.00px -5.20px 0 #1B1B2F,4.24px -4.24px 0 #1B1B2F,5.20px -3.00px 0 #1B1B2F,5.80px -1.55px 0 #1B1B2F,12px 12px 0 var(--c)}
+.go .ln{display:block;width:500px;height:12px;border-radius:6px;background:#fff;box-shadow:0 0 0 5px #1B1B2F,9px 9px 0 5px var(--c)}
+.go .ln.cap{align-self:flex-start;margin-left:-46px}
+.go .ln.bot{align-self:flex-end;margin-right:-46px}
+.go.out .ln.cap{transform:translateX(330px)}
+.go.out .ln.bot{transform:translateX(-330px)}
+.go.out .w{clip-path:inset(-30px -40px -30px 47%);transform:translateX(26px)}
+
+/* B · THE BAND: an ink strip across the foot of the screen with a paper rim, its lower edge in the team's colour: the
+   team's sticker, GET READY, the units' chips in a row; START a yellow strip across the middle, hazard stripes at its ends */
+.band{position:absolute;left:-30px;right:-30px;bottom:16px;height:58px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 64px;background:rgba(27,27,47,.94);border-top:3px solid #fff;border-bottom:3px solid #fff;box-shadow:0 -2px 0 #1B1B2F,0 2px 0 #1B1B2F,0 8px 0 var(--c),0 10px 0 #1B1B2F;transform:rotate(-2.2deg);white-space:nowrap}
+.band .t{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:36px;line-height:1;letter-spacing:.03em;color:#fff}
+.band .ns{margin-left:auto;display:flex;align-items:center;gap:10px}
+.band .who{height:32px;background:rgba(255,255,255,.08);border-width:2px;box-shadow:none}
+.gob{position:absolute;left:-30px;right:-30px;top:50%;height:92px;margin-top:-46px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:#FFE45C;border-top:4px solid #1B1B2F;border-bottom:4px solid #1B1B2F;transform:rotate(-2.2deg)}
+.gob .ln{position:absolute;left:0;right:0;height:9px;background:#1B1B2F;box-shadow:0 -2px 0 #fff,0 2px 0 #fff}
+.gob .ln.cap{top:-24px}
+.gob .ln.bot{bottom:-24px}
+.gob.out{transform:rotate(-2.2deg) translateX(46%)}
+.gob.out .ln.cap{transform:translateX(22%)}
+.gob.out .ln.bot{transform:translateX(-30%)}
+.gob::before,.gob::after{content:'';position:absolute;top:0;bottom:0;width:190px;background:repeating-linear-gradient(135deg,#1B1B2F 0 16px,#FFE45C 16px 32px)}
+.gob::before{left:0}
+.gob::after{right:0}
+.gob .t{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:70px;line-height:1;letter-spacing:.06em;color:#1B1B2F}
+
+/* C · TAGS OVER THE UNITS: nothing big over the picture. GET READY a small sticker at the foot of the screen; each unit of the team in
+   view wears its name over its head, its word under it in its colour, a pointer down to it; START a yellow sticker in
+   the middle */
+.stk{position:absolute;left:50%;bottom:20px;transform:translateX(-50%) rotate(-2deg);display:flex;align-items:center;gap:9px;height:34px;padding:0 16px;box-sizing:border-box;border-radius:999px;background:#fff;border:3px solid #1B1B2F;box-shadow:3px 3px 0 #1B1B2F;font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:18px;line-height:1;letter-spacing:.04em;color:#1B1B2F;white-space:nowrap}
+.stk .dots{display:flex;gap:4px}
+.stk .dots i{width:6px;height:6px;border-radius:50%;background:#1B1B2F}
+.stk .dots i:nth-child(2){opacity:.55}
+.stk .dots i:nth-child(3){opacity:.22}
+.ut{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;gap:0;--c:#3EE0FF;white-space:nowrap}
+.ut .n{display:flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 3px;box-sizing:border-box;border-radius:999px;background:rgba(27,27,47,.9);border:2px solid #fff;box-shadow:0 0 0 2px #1B1B2F}
+.ut .n .face{width:20px;height:20px}
+.ut .n b{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:14px;line-height:1;text-transform:uppercase;color:#fff}
+.ut .n i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--c)}
+.ut .p{width:0;height:0;margin-top:3px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid var(--c);filter:drop-shadow(0 2px 0 #1B1B2F) drop-shadow(0 -1px 0 #1B1B2F) drop-shadow(1px 0 0 #1B1B2F) drop-shadow(-1px 0 0 #1B1B2F)}
+.gos{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:12px}
+.gos .t{font-family:'Titan One','Arial Black',sans-serif;font-weight:400;font-size:64px;line-height:.9;letter-spacing:.12em;margin-right:-.12em;color:#FFE45C;white-space:nowrap;text-shadow:3.00px 0.00px 0 #1B1B2F,2.77px 1.15px 0 #1B1B2F,2.12px 2.12px 0 #1B1B2F,1.15px 2.77px 0 #1B1B2F,0.00px 3.00px 0 #1B1B2F,-1.15px 2.77px 0 #1B1B2F,-2.12px 2.12px 0 #1B1B2F,-2.77px 1.15px 0 #1B1B2F,-3.00px 0.00px 0 #1B1B2F,-2.77px -1.15px 0 #1B1B2F,-2.12px -2.12px 0 #1B1B2F,-1.15px -2.77px 0 #1B1B2F,-0.00px -3.00px 0 #1B1B2F,1.15px -2.77px 0 #1B1B2F,2.12px -2.12px 0 #1B1B2F,2.77px -1.15px 0 #1B1B2F}
+.gos .ln{display:block;width:330px;height:5px;border-radius:3px;background:#fff;box-shadow:0 0 0 3px #1B1B2F}
+.gos.out{transform:translate(-50%,-50%) translateX(-150px);-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 30%,#000 70%);mask-image:linear-gradient(90deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 30%,#000 70%)}
+
+</style>
+</helmet>
+<div class="wrap">
+<div class="head" style="left:14px;top:14px">The sequence <small>to scale. The lengths are a proposal: 2.8 s from the first frame to play</small></div>
+<div class="seq"><span class="hold" style="width:300px;--c:#3EE0FF;background-color:#3EE0FF"><b>GET READY · TEAM 1</b><i>the camera pushes in 0.5 s, stands 0.5 s</i></span><span class="hold" style="width:300px;--c:#FF3EA5;background-color:#FF3EA5"><b>GET READY · TEAM 2</b><i>the same on the other side</i></span><span class="hold" style="width:240px;--c:#FFE45C;background-color:#FFE45C"><b>START</b><i>0.8 s, then swiped out</i></span><span class="opt" style="width:690px;--c:#E9E2D0;"><b>SUDDEN DEATH</b><i>in Sudden Death only: its banner comes after START, 2.3 s as today, the HUD in behind it</i></span><span class="" style="width:270px;--c:#FFFFFF;background-color:#FFFFFF"><b>PLAY</b><i>the HUD is in</i></span></div>
+<div class="brace" style="left:14px;width:840px"></div>
+<div class="note" style="left:14px"><b>The match stands still through GET READY and START</b>, and in Sudden Death through its banner too: nobody moves, nobody fires, nobody can be hit. No skipping. PAUSE alone is on the screen and works. An online match has no PAUSE today, so nothing is on its screen.</div>
+<div class="after" style="left:1870px"><span><b>Then the match's HUD comes in</b><br>and play begins: the chips, the stick, the buttons</span><span class="mini"><img src="/_blob/f78b0e09e43d77ac94889ad89295e753" alt="The same view with the match's HUD in: the HP chips, the stick, the buttons"></span></div>
+<div class="head" style="left:14px;top:188px">1 · Team 1 in view <small>GET READY; the camera a little above, three-quarters on, both units in the picture</small></div>
+<div class="head" style="left:902px;top:188px">2 · Team 2 in view <small>the same again</small></div>
+<div class="head" style="left:1790px;top:188px">3 · The player's own view <small>START, a line over its caps and a line under its foot; shooter view here, the command view for a commander</small></div>
+<div class="lab" style="left:14px;top:214px"><b>A</b>The call <small>the ending camera's lettering: GET READY in two lines at the left, its drop in the colour of the team in view, the team's sticker over it, its units' name chips under it; START the same lettering between two bars of its own make, one over its caps, one under its foot</small></div>
+<div class="frame" style="left:14px;top:248px"><img class="bg" src="/_blob/9070244a127fca3c6c9b6ee3d8bef090" alt="Team 1 on Town from a little above and to one side: Iori and Saori on their spawns by a fire engine, only PAUSE on the screen"><div class="call" style="top:46px;--c:#3EE0FF"><span class="tm" style="--c:#3EE0FF"><u></u>TEAM 1</span><span class="w two">GET<br>READY</span><span class="whos"><span class="who" style="--c:#3EE0FF"><span class="face" style="--c:#3EE0FF"><img src="/_blob/155d133fdcdde96337fd085f6b018059" alt="Saori"></span><b>Saori</b><i>YOU</i></span><span class="who" style="--c:#C6F24A"><span class="face" style="--c:#C6F24A"><img src="/_blob/60eb4eae54680ba70ac0b426ee80591c" alt="Iori"></span><b>Iori</b><i>ALLY</i></span></span></div></div>
+<div class="then" style="left:864px;top:427px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:902px;top:248px"><img class="bg" src="/_blob/fcdc69227174e3b33b14f8ff474abd3a" alt="Team 2 on Town from a little above and to one side: Hoshino and Kurumi on their spawns in a park, only PAUSE on the screen"><div class="call" style="top:46px;--c:#FF3EA5"><span class="tm" style="--c:#FF3EA5"><u></u>TEAM 2</span><span class="w two">GET<br>READY</span><span class="whos"><span class="who" style="--c:#FF3EA5"><span class="face" style="--c:#FF3EA5"><img src="/_blob/82e436a3281b315f1025c53f8293a68d" alt="Hoshino"></span><b>Hoshino</b><i>ENEMY</i></span><span class="who" style="--c:#FF8A2A"><span class="face" style="--c:#FF8A2A"><img src="/_blob/86038f42e8bbd6196359a63e841f4654" alt="Kurumi"></span><b>Kurumi</b><i>ENEMY 2</i></span></span></div></div>
+<div class="then" style="left:1752px;top:427px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:1790px;top:248px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="go"><span class="ln cap"></span><span class="w">START</span><span class="ln bot"></span></div></div>
+<div class="lab" style="left:14px;top:676px"><b>B</b>The band <small>an ink strip across the foot of the screen, its lower edge in the team's colour: the team's sticker, GET READY, the units' chips in a row; START a yellow strip across the middle, an ink line standing off it above and below</small></div>
+<div class="frame" style="left:14px;top:710px"><img class="bg" src="/_blob/9070244a127fca3c6c9b6ee3d8bef090" alt="Team 1 on Town from a little above and to one side: Iori and Saori on their spawns by a fire engine, only PAUSE on the screen"><div class="band" style="--c:#3EE0FF"><span class="tm" style="--c:#3EE0FF"><u></u>TEAM 1</span><span class="t">GET READY</span><span class="ns"><span class="who" style="--c:#3EE0FF"><span class="face" style="--c:#3EE0FF"><img src="/_blob/155d133fdcdde96337fd085f6b018059" alt="Saori"></span><b>Saori</b><i>YOU</i></span><span class="who" style="--c:#C6F24A"><span class="face" style="--c:#C6F24A"><img src="/_blob/60eb4eae54680ba70ac0b426ee80591c" alt="Iori"></span><b>Iori</b><i>ALLY</i></span></span></div></div>
+<div class="then" style="left:864px;top:889px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:902px;top:710px"><img class="bg" src="/_blob/fcdc69227174e3b33b14f8ff474abd3a" alt="Team 2 on Town from a little above and to one side: Hoshino and Kurumi on their spawns in a park, only PAUSE on the screen"><div class="band" style="--c:#FF3EA5"><span class="tm" style="--c:#FF3EA5"><u></u>TEAM 2</span><span class="t">GET READY</span><span class="ns"><span class="who" style="--c:#FF3EA5"><span class="face" style="--c:#FF3EA5"><img src="/_blob/82e436a3281b315f1025c53f8293a68d" alt="Hoshino"></span><b>Hoshino</b><i>ENEMY</i></span><span class="who" style="--c:#FF8A2A"><span class="face" style="--c:#FF8A2A"><img src="/_blob/86038f42e8bbd6196359a63e841f4654" alt="Kurumi"></span><b>Kurumi</b><i>ENEMY 2</i></span></span></div></div>
+<div class="then" style="left:1752px;top:889px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:1790px;top:710px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="gob"><span class="ln cap"></span><span class="t">START</span><span class="ln bot"></span></div></div>
+<div class="lab" style="left:14px;top:1138px"><b>C</b>Tags over the units <small>nothing big over the picture: GET READY a small sticker at the foot of the screen, every unit of the team in view wearing its name over its head; START a light word between two thin lines</small></div>
+<div class="frame" style="left:14px;top:1172px"><img class="bg" src="/_blob/9070244a127fca3c6c9b6ee3d8bef090" alt="Team 1 on Town from a little above and to one side: Iori and Saori on their spawns by a fire engine, only PAUSE on the screen"><div class="stk">GET READY<span class="dots"><i></i><i></i><i></i></span></div><div class="ut" style="left:698px;top:144px;--c:#3EE0FF"><span class="n"><span class="face" style="--c:#3EE0FF"><img src="/_blob/155d133fdcdde96337fd085f6b018059" alt="Saori"></span><b>Saori</b><i>YOU</i></span><span class="p"></span></div><div class="ut" style="left:390px;top:101px;--c:#C6F24A"><span class="n"><span class="face" style="--c:#C6F24A"><img src="/_blob/60eb4eae54680ba70ac0b426ee80591c" alt="Iori"></span><b>Iori</b><i>ALLY</i></span><span class="p"></span></div></div>
+<div class="then" style="left:864px;top:1351px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:902px;top:1172px"><img class="bg" src="/_blob/fcdc69227174e3b33b14f8ff474abd3a" alt="Team 2 on Town from a little above and to one side: Hoshino and Kurumi on their spawns in a park, only PAUSE on the screen"><div class="stk">GET READY<span class="dots"><i></i><i></i><i></i></span></div><div class="ut" style="left:383px;top:147px;--c:#FF3EA5"><span class="n"><span class="face" style="--c:#FF3EA5"><img src="/_blob/82e436a3281b315f1025c53f8293a68d" alt="Hoshino"></span><b>Hoshino</b><i>ENEMY</i></span><span class="p"></span></div><div class="ut" style="left:606px;top:99px;--c:#FF8A2A"><span class="n"><span class="face" style="--c:#FF8A2A"><img src="/_blob/86038f42e8bbd6196359a63e841f4654" alt="Kurumi"></span><b>Kurumi</b><i>ENEMY 2</i></span><span class="p"></span></div></div>
+<div class="then" style="left:1752px;top:1351px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:1790px;top:1172px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="gos"><span class="ln"></span><span class="t">START</span><span class="ln"></span></div></div>
+<div class="lab" style="left:14px;top:1600px"><b>A</b>START leaves in a swipe · half-way out <small>the two bars part, one to each side, and the word is wiped away between them</small></div>
+<div class="frame" style="left:14px;top:1634px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="go out"><span class="ln cap"></span><span class="w">START</span><span class="ln bot"></span></div></div>
+<div class="lab" style="left:902px;top:1600px"><b>B</b>START leaves in a swipe · half-way out <small>the strip slides off to the right, its upper line ahead of it, its lower line behind</small></div>
+<div class="frame" style="left:902px;top:1634px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="gob out"><span class="ln cap"></span><span class="t">START</span><span class="ln bot"></span></div></div>
+<div class="lab" style="left:1790px;top:1600px"><b>C</b>START leaves in a swipe · half-way out <small>the word and its two lines slide off to the left and thin out as they go</small></div>
+<div class="frame" style="left:1790px;top:1634px"><img class="bg" src="/_blob/af1b0f136a87618c055090f4fa24b5de" alt="The player's own view at the first moment of play on Town: Saori from behind, the street ahead, only PAUSE on the screen"><div class="gos out"><span class="ln"></span><span class="t">START</span><span class="ln"></span></div></div>
+<div class="lab" style="left:14px;top:2062px">A Duel, in A <small>one unit a side: the camera stands nearer, the call carries the one chip</small></div>
+<div class="frame" style="left:14px;top:2096px"><img class="bg" src="/_blob/21580d846d96ff25e89d899ce87d7944" alt="A Duel on Town: Saori alone on her spawn, from a little above and to one side"><div class="call" style="top:62px;--c:#3EE0FF"><span class="tm" style="--c:#3EE0FF"><u></u>TEAM 1</span><span class="w two">GET<br>READY</span><span class="whos"><span class="who" style="--c:#3EE0FF"><span class="face" style="--c:#3EE0FF"><img src="/_blob/155d133fdcdde96337fd085f6b018059" alt="Saori"></span><b>Saori</b><i>YOU</i></span></span></div></div>
+<div class="then" style="left:864px;top:2275px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:902px;top:2096px"><img class="bg" src="/_blob/7ea9f421cf61ec4203083de540b8a6a0" alt="A Duel on Town: Hoshino alone on her spawn, from a little above and to one side"><div class="call" style="top:62px;--c:#FF3EA5"><span class="tm" style="--c:#FF3EA5"><u></u>TEAM 2</span><span class="w two">GET<br>READY</span><span class="whos"><span class="who" style="--c:#FF3EA5"><span class="face" style="--c:#FF3EA5"><img src="/_blob/82e436a3281b315f1025c53f8293a68d" alt="Hoshino"></span><b>Hoshino</b><i>ENEMY</i></span></span></div></div>
+<div class="then" style="left:1752px;top:2275px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+<div class="frame" style="left:1790px;top:2096px"><img class="bg" src="/_blob/4996ec8f3a909c5f1ada1655e7327c0c" alt="A Duel on Town: the player's own view at the first moment of play"><div class="go"><span class="ln cap"></span><span class="w">START</span><span class="ln bot"></span></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2648,"height":2530}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

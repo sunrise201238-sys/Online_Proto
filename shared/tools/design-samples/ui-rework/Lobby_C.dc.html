@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GunVS lobby — direction C, Signal (phone, landscape)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#111111}a:hover{color:#444444}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 844px; height: 390px; box-sizing: border-box; background: #F4F5F7; color: #111111; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; padding: 12px 16px 14px; gap: 10px">
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 36px; border-bottom: 1px solid #D9DCE1; padding-bottom: 8px">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; color: #111111">GUNVS</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; color: #6B7280; letter-spacing: 0.08em; text-transform: uppercase">Lobby · b1105k</span>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <button type="button" aria-label="Guide" style="height: 32px; padding: 0 12px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7"></path><path d="M12 17h.01"></path></svg>Guide</button>
+      <button type="button" aria-label="Settings" style="height: 32px; padding: 0 12px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="9" cy="6" r="2" fill="#FFFFFF"></circle><circle cx="15" cy="12" r="2" fill="#FFFFFF"></circle><circle cx="7" cy="18" r="2" fill="#FFFFFF"></circle></svg>Settings</button>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 16px; flex: 1 1 auto; min-height: 0">
+    <div style="width: 320px; display: flex; flex-direction: column; justify-content: space-between">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 58px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280">Play as</span>
+          <div style="display: flex; gap: 4px; flex: 1 1 0">
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #111111; background: #111111; color: #FFFFFF; font-weight: 600; font-size: 13px">Shooter</button>
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-weight: 500; font-size: 13px">Commander</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 58px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280">Teams</span>
+          <div style="display: flex; gap: 4px; flex: 1 1 0">
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #111111; background: #111111; color: #FFFFFF; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px">1v1</button>
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-family: 'IBM Plex Mono', monospace; font-weight: 500; font-size: 13px">2v2</button>
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-family: 'IBM Plex Mono', monospace; font-weight: 500; font-size: 13px">3v3</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 58px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280">Rules</span>
+          <div style="display: flex; gap: 4px; flex: 1 1 0">
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #111111; background: #111111; color: #FFFFFF; font-weight: 600; font-size: 13px">Standard</button>
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-weight: 500; font-size: 13px">Sudden Death</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 58px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280">Where</span>
+          <div style="display: flex; gap: 4px; flex: 1 1 0">
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #111111; background: #111111; color: #FFFFFF; font-weight: 600; font-size: 13px">Offline · bots</button>
+            <button type="button" style="flex: 1 1 0; height: 36px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-weight: 500; font-size: 13px">Online</button>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #D9DCE1">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280">Summary</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #111111">shooter · 1v1 · standard · offline</span>
+      </div>
+    </div>
+
+    <div style="flex: 1 1 0; display: flex; gap: 12px; min-width: 0">
+      <a href="#unit" style="flex: 1 1 0; min-width: 0; text-decoration: none; color: #111111; display: flex; flex-direction: column; border-radius: 6px; border: 1px solid #D9DCE1; background: #FFFFFF; overflow: hidden">
+        <div style="position: relative; flex: 1 1 auto; min-height: 0; background: #E7E9EE">
+          <img src="/_blob/6e77f6e89804888446ccb5523307433a" alt="Hina" style="width: 100%; height: 100%; object-fit: cover; object-position: top; display: block">
+          <span style="position: absolute; top: 8px; left: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #B6F23A; background: #111111; border-radius: 3px; padding: 3px 6px; font-weight: 600">Unit</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; gap: 8px; border-top: 1px solid #D9DCE1">
+          <div style="display: flex; flex-direction: column; min-width: 0; gap: 2px">
+            <span style="font-weight: 600; font-size: 16px; line-height: 1.1">Hina</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">MG · 32–46 m</span>
+          </div>
+          <span style="font-size: 12px; font-weight: 600; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px">Change</span>
+        </div>
+      </a>
+      <a href="#map" style="flex: 1 1 0; min-width: 0; text-decoration: none; color: #111111; display: flex; flex-direction: column; border-radius: 6px; border: 1px solid #D9DCE1; background: #FFFFFF; overflow: hidden">
+        <div style="position: relative; flex: 1 1 auto; min-height: 0; background: #E7E9EE">
+          <img src="/_blob/6007cf4ed1cbadb22227574435043b5b" alt="District, seen from above" style="width: 100%; height: 100%; object-fit: cover; display: block">
+          <span style="position: absolute; top: 8px; left: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #B6F23A; background: #111111; border-radius: 3px; padding: 3px 6px; font-weight: 600">Map</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; gap: 8px; border-top: 1px solid #D9DCE1">
+          <div style="display: flex; flex-direction: column; min-width: 0; gap: 2px">
+            <span style="font-weight: 600; font-size: 16px; line-height: 1.1">District</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">L · ladders · underground</span>
+          </div>
+          <span style="font-size: 12px; font-weight: 600; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px">Change</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 44px">
+    <button type="button" style="height: 36px; padding: 0 12px; border-radius: 4px; border: 1px solid #D9DCE1; background: #FFFFFF; color: #111111; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor"></circle><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor"></circle><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor"></circle><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"></circle></svg>Random unit</button>
+    <button type="button" style="height: 44px; padding: 0 28px; border-radius: 4px; border: 0; background: #111111; color: #B6F23A; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 10px">Start match <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
