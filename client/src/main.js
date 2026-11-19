@@ -1880,6 +1880,9 @@ const MODEL_CLIPS_DEFAULT = {
   death: { name: 'Vital_Death', speed: 1, once: true },
   climb: { name: 'Vital_Retreat', speed: 2.5 },   // the ladder (ladder.js; user 2026-11-05): in every file since the user's new files of that day (Hoshino's is 01_Vital_Retreat, in her map); a file without one would borrow Kurumi's (borrowClimbClip, kept as the fallback); the body is turned about in it — CLIMB_CLIP_TURNED
 };
+// (Minori's left fingers, put away while she runs on Subaru's clip — UNIT_MODELS.minori, b1105jt; the bones as the loader names them)
+const MINORI_RUN_TUCK = ['Bip001_L_Finger0', 'Bip001_L_Finger1', 'Bip001_L_Finger2'];
+const MODEL_TUCK_SCALE = 0.001;   // a tucked bone's scale: a thousandth, as her file itself rests the gun's bone it puts away
 const UNIT_MODELS = {
   // `file`: the path under public/ without its extension (MODEL_FILE_EXT below).
   // (Saori's form, 2026-10-10: the default map. Owner 2026-10-15: the dodge is Move_Jump, her jump
@@ -2059,10 +2062,18 @@ const UNIT_MODELS = {
   // bone's from Subaru, everything else (her eyes, her arms' helper bones, her gun bone's scale) from her own Move_Ing, fitted to
   // the borrowed clip's length. The sprint with the trigger held shows the sprint clip, as it does for every unit, so it borrows
   // too. The three entries share one action (borrowClip), so a walk into a sprint keeps its step and is only retimed.
+  // HER LEFT FINGERS ARE PUT AWAY IN IT (b1105jt, PT and 9.8; user 2026-11-19: "When Minori is in walk/sprint motion (where she just
+  // got from Subaru motion), her left hand finger is overlapping/merging with her gun. Can you address this by temporary removing
+  // her left hand (not arms) or smth? smth that won't cause any more lag to online games."; of the two ways shown — the fingers
+  // alone, or the whole hand — "做法 A：只收起手指"). Subaru's hand has five fingers' bones and Minori's three, and Subaru holds
+  // an HK33 where Minori holds an AKM: Subaru's grip on Minori's hand put her fingers through the handguard, out on the gun's far
+  // side. Her own clip's fingers go through it too, and open ones stand out under the gun. So for as long as this clip plays the
+  // three finger bones of her left hand are shrunk to a point (an entry's `tuck`, borrowClip): the palm stays under the handguard,
+  // which is what shows from her left. They are back with any other clip — her stand, shot, reload, jump, dodge are her own.
   minori: { file: 'models/minori', height: UNIT_SPRITE_HEIGHT, clips: { ...MODEL_CLIPS_DEFAULT,
-    walk: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 0.5 },
-    sprint: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 1 },
-    sprintShoot: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, speed: 1 },
+    walk: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, tuck: MINORI_RUN_TUCK, speed: 0.5 },
+    sprint: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, tuck: MINORI_RUN_TUCK, speed: 1 },
+    sprintShoot: { name: 'Move_Ing', from: 'models/subaru_move_clip.json', base: 'Move_Ing', whole: true, tuck: MINORI_RUN_TUCK, speed: 1 },
     dodge: { name: 'Move_Jump', from: 'models/subaru_dodge_clip.json', base: 'Move_Jump', speed: 1, fit: 'step', once: true } } },
 };
 const MODEL_FADE_S = 0.12;          // crossfade between clips
@@ -2313,7 +2324,7 @@ function borrowClip(rig, inst, key, cfg, anims = []) {
     // ONE CLIP, ONE ACTION (b1105jr): entries of a rig that borrow the same file on the same base, both looping or both once —
     // Minori's walk, sprint and sprint-and-fire, all Subaru's Move_Ing — share the clip built here, so the mixer hands them one
     // action and updateUnitModelState only retimes it from one key to the next, as it does a model's own Move_Ing under those keys
-    const kept = rig.borrowed ?? (rig.borrowed = new Map()), id = `${cfg.from}|${cfg.base ?? ''}|${cfg.once ? 1 : 0}|${cfg.whole ? 1 : 0}`;
+    const kept = rig.borrowed ?? (rig.borrowed = new Map()), id = `${cfg.from}|${cfg.base ?? ''}|${cfg.once ? 1 : 0}|${cfg.whole ? 1 : 0}|${(cfg.tuck ?? []).join(',')}`;
     let made = kept.get(id);
     if (!made) {
       const names = new Set(); inst.traverse((o) => { if (o.name) names.add(o.name); });
@@ -2329,8 +2340,14 @@ function borrowClip(rig, inst, key, cfg, anims = []) {
       if (!borrowed.tracks.length) return;
       const driven = new Set(borrowed.tracks.map((t) => t.name.split('.')[0]));
       const own = cfg.base ? THREE.AnimationClip.findByName(anims, cfg.base) : null;
-      const rest = own ? own.tracks.filter((t) => !driven.has(t.name.split('.')[0]) || (whole && t.name.endsWith('.scale'))).map((t) => t.clone().scale(borrowed.duration / own.duration)) : [];
-      const clip = new THREE.AnimationClip(`${borrowed.name}+${cfg.base ?? ''}`, borrowed.duration, [...borrowed.tracks, ...rest]);
+      // BONES PUT AWAY WHILE THE CLIP PLAYS (an entry's `tuck`, b1105jt — Minori's left fingers in Subaru's run): each named bone
+      // the rig has is held at a thousandth of its size by one track of one key, so it and what hangs on it shrink to a point
+      // at its joint; the mixer gives the bone its own size back when the clip is no longer played, and blends between the two
+      // across a crossfade. It costs the clip three tracks beside its fifty-five, and the frame nothing else.
+      const tucked = (cfg.tuck ?? []).filter((n) => names.has(n));
+      const tuck = tucked.map((n) => new THREE.VectorKeyframeTrack(`${n}.scale`, [0], [MODEL_TUCK_SCALE, MODEL_TUCK_SCALE, MODEL_TUCK_SCALE]));
+      const rest = own ? own.tracks.filter((t) => { const [n, prop] = t.name.split('.'); if (prop === 'scale' && tucked.includes(n)) return false; return !driven.has(n) || (whole && prop === 'scale'); }).map((t) => t.clone().scale(borrowed.duration / own.duration)) : [];
+      const clip = new THREE.AnimationClip(`${borrowed.name}+${cfg.base ?? ''}`, borrowed.duration, [...borrowed.tracks, ...rest, ...tuck]);
       // (body: what the way out eases — BORROWED_EXIT_S — every part the clip moves but the gear, the borrowed body and the parts
       // of her own clip alike: the Biped's helper bones, the hair, the skirt; the gear — shield, plates, pistol, shells, holster,
       // pockets, grenades — still cuts, the backpack never sliding across her back)
@@ -9334,7 +9351,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105js 11-18';
+const CLIENT_BUILD_TAG = 'b1105jt 11-19';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
