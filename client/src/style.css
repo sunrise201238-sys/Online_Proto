@@ -1462,7 +1462,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
    middle, where for its few seconds it stands over the page's own title (user 2026-11-16, shown it over the waiting
    room's: "I'm fine with that if that's temporary; it is supposed to be visually obvious.").
    THE LAST PICK (.last-pick): the card picked for the last match, tagged LAST in the pickers of a RESELECT — a Trio
-   roster's cards with their places (data-last). */
+   roster's cards with their places (data-last). The tag is the card's ::before (b1105ju; user 2026-11-19, with a picture of
+   a LAST 3 tag as tall as its card: 'the "last X" tag will get incorrectly extended while the unit card is tapped'). It
+   was the card's ::after, and so is the PICK! tag of a tapped card (.selecting::after): on a tapped LAST card the two rules
+   met in one box, which took LAST's words, colour and top with PICK!'s bottom, and stood from over the card's top to under
+   its foot, PICK! gone. Each tag has its own box now, and a tapped LAST card wears both. */
 .menu .end-reselect { background: var(--cyan); color: var(--ink); transform: rotate(-1.5deg); }
 .menu .end-reselect:active { transform: rotate(-1.5deg) translate(2px, 2px); }
 .menu .end-foot .chosen, .menu .end-foot .chosen:active { box-shadow: 1px 1px 0 var(--ink); translate: 4px 4px; }
@@ -1480,7 +1484,7 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 @keyframes toast-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .online-toast { animation: none; } }
 .menu .unit-card.last-pick { outline: 3px solid var(--yellow); outline-offset: 2px; }
-.menu .unit-card.last-pick::after { content: "LAST " attr(data-last); position: absolute; left: -7px; top: -10px; z-index: 1; padding: 2px 6px; border: 2px solid var(--ink); border-radius: 999px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.2; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); transform: rotate(-4deg); pointer-events: none; }
+.menu .unit-card.last-pick::before { content: "LAST " attr(data-last); position: absolute; left: -7px; top: -10px; z-index: 1; padding: 2px 6px; border: 2px solid var(--ink); border-radius: 999px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.2; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); transform: rotate(-4deg); pointer-events: none; }
 
 /* ---- the memos' red crayon (b1105af; the design canvas's round 7, style B): District's and Compound's "more stamina"
    and Backrooms (Anomaly)'s "(Anomaly)" left the text and are written on the memo's ruled lines in red wax — Permanent
