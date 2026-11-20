@@ -1,0 +1,34 @@
+{
+  "id": "aris",
+  "data": {
+    "map": {
+      "death": "Vital_Death",
+      "dodge": "Move_end_Normal",
+      "fly": "Move_Ing",
+      "intro": "",
+      "jump": "Move_end_Normal",
+      "reload": "Normal_Reload",
+      "shoot": "Normal_Attack_Ing",
+      "sprint": "Move_Ing",
+      "sprintShoot": "Normal_Attack_Ing",
+      "stand": "Formation_Idle",
+      "walk": "Normal_Idle"
+    },
+    "speed": {
+      "death": 100,
+      "dodge": 100,
+      "fly": 100,
+      "intro": 100,
+      "jump": 100,
+      "reload": 100,
+      "shoot": 100,
+      "sprint": 100,
+      "sprintShoot": 100,
+      "stand": 100,
+      "walk": 50
+    },
+    "updatedAt": "2026-10-10T11:52:41.956Z"
+  },
+  "version": 6,
+  "updatedAt": "2026-10-10T11:52:43.711402Z"
+}

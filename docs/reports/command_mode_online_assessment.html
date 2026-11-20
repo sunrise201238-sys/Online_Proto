@@ -1,0 +1,285 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>指揮模式上線評估</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ink: #16202e;
+    --ink-soft: #4a586b;
+    --ground: #f2f4f8;
+    --panel: #ffffff;
+    --panel-2: #e9edf3;
+    --line: #d3dae4;
+    --gold: #8a6410;
+    --cyan: #1c6f9e;
+    --ok: #1d7a4f;
+    --warn: #96650f;
+    --risk: #b02a3a;
+    --ok-bg: #e2f3ea;
+    --warn-bg: #f7edd8;
+    --risk-bg: #f9e3e6;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #dfe7f5;
+      --ink-soft: #93a2b8;
+      --ground: #0b111c;
+      --panel: #121a28;
+      --panel-2: #0e1521;
+      --line: #263344;
+      --gold: #ffd257;
+      --cyan: #62d7ff;
+      --ok: #7effbd;
+      --warn: #ffc94d;
+      --risk: #ff6b7a;
+      --ok-bg: #12281d;
+      --warn-bg: #2a2210;
+      --risk-bg: #2c151a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #dfe7f5;
+    --ink-soft: #93a2b8;
+    --ground: #0b111c;
+    --panel: #121a28;
+    --panel-2: #0e1521;
+    --line: #263344;
+    --gold: #ffd257;
+    --cyan: #62d7ff;
+    --ok: #7effbd;
+    --warn: #ffc94d;
+    --risk: #ff6b7a;
+    --ok-bg: #12281d;
+    --warn-bg: #2a2210;
+    --risk-bg: #2c151a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 15.5px;
+    line-height: 1.85;
+    margin: 0;
+    padding: 0 20px 90px;
+  }
+  .wrap { max-width: 840px; margin: 0 auto; }
+  header { padding: 56px 0 30px; border-bottom: 3px solid var(--ink); margin-bottom: 8px; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: var(--gold);
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-family: "Noto Serif TC", serif;
+    font-weight: 900;
+    font-size: clamp(30px, 5.5vw, 44px);
+    line-height: 1.25;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--ink-soft); max-width: 42em; margin: 0; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 22px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+    margin-top: 20px;
+  }
+  h2 {
+    font-family: "Noto Serif TC", serif;
+    font-weight: 900;
+    font-size: 24px;
+    margin: 60px 0 6px;
+    display: flex; align-items: baseline; gap: 12px;
+    text-wrap: balance;
+  }
+  h2 .no { font-family: var(--mono); font-weight: 500; font-size: 14px; color: var(--gold); letter-spacing: 0.1em; }
+  h3 { font-size: 17px; font-weight: 700; margin: 34px 0 8px; }
+  p { margin: 12px 0; max-width: 46em; }
+  .lede { color: var(--ink-soft); margin: 0 0 20px; max-width: 46em; }
+  code, .ref {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+  .ref { color: var(--cyan); border-color: transparent; background: none; padding: 0; }
+  /* verdict strip */
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 26px 0 4px; }
+  .verdict {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--gold);
+    padding: 14px 16px 12px;
+  }
+  .verdict b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .verdict span { font-size: 13px; color: var(--ink-soft); line-height: 1.65; display: block; }
+  /* chips */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    padding: 1px 8px; border-radius: 2px; vertical-align: 1px;
+    white-space: nowrap;
+  }
+  .c-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .c-warn { background: var(--warn-bg); color: var(--warn); }
+  .c-risk { background: var(--risk-bg); color: var(--risk); }
+  /* tables */
+  .tblwrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  th {
+    text-align: left; font-size: 12px; letter-spacing: 0.12em; color: var(--ink-soft);
+    font-weight: 500; padding: 10px 14px; border-bottom: 2px solid var(--line);
+    background: var(--panel-2); white-space: nowrap;
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.7; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { white-space: nowrap; font-weight: 700; }
+  /* fact / risk lists */
+  .facts { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+  .facts li {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 13px 16px; font-size: 14.5px; line-height: 1.75;
+  }
+  .facts li b { color: var(--ink); }
+  .facts .src { display: block; font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+  .risk-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+  .risk-list li {
+    background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--risk);
+    padding: 12px 16px; font-size: 14.5px; line-height: 1.75;
+  }
+  .risk-list li.warn { border-left-color: var(--warn); }
+  .risk-list li b { display: block; margin-bottom: 2px; }
+  /* decision list */
+  .decisions { counter-reset: d; list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+  .decisions li {
+    counter-increment: d;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 13px 16px 13px 52px; position: relative; font-size: 14.5px; line-height: 1.75;
+  }
+  .decisions li::before {
+    content: counter(d);
+    position: absolute; left: 16px; top: 14px;
+    font-family: var(--mono); font-size: 13px; color: var(--gold);
+  }
+  .decisions .rec { display: block; margin-top: 4px; color: var(--ink-soft); }
+  .decisions .rec b { color: var(--ok); font-weight: 700; }
+  /* phases */
+  .phase {
+    background: var(--panel); border: 1px solid var(--line); margin: 12px 0;
+    padding: 16px 18px;
+  }
+  .phase h4 { margin: 0 0 6px; font-size: 15.5px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+  .phase h4 .tag { font-family: var(--mono); font-size: 11px; color: var(--gold); letter-spacing: 0.1em; }
+  .phase p { font-size: 14.5px; margin: 6px 0 0; color: var(--ink-soft); max-width: none; }
+  .foot {
+    margin-top: 70px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-soft); font-family: var(--mono); line-height: 1.9;
+  }
+  @media (max-width: 620px) { body { font-size: 15px; } h2 { font-size: 21px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="kicker">GVG PROTO · COMMAND MODE · ONLINE MIGRATION AUDIT</div>
+  <h1>指揮模式上線評估</h1>
+  <p class="sub">把離線指揮模式（全 BOT 駕駛＋下令玩法）搬進伺服器權威的線上對戰：五層程式碼逐行審計後的可行性、工程分解、風險與待拍板決策。</p>
+  <div class="meta">
+    <span>2026-08-21</span>
+    <span>branch: Demo_0.7.5_Test-Fields</span>
+    <span>審計範圍：shared/sim（ai · tick · movement · state · navgrid · arena）＋ server ＋ client 線上層</span>
+  </div>
+</header>
+
+<div class="verdicts">
+  <div class="verdict"><b>可行，且比初評樂觀</b><span>線上 BOT（shared ai.js）已具備離線 BOT 的全部反射等價物；尋路、Boost 經濟、動量、計時模型與離線同構。指令層是「掛覆蓋」不是「重寫腦」。</span></div>
+  <div class="verdict"><b>真正的主工程換了位置</b><span>不是移植 BOT，而是「資訊隱藏管線」：現行快照把整個賽局狀態原樣廣播給全房——敵方 Boost、彈藥、冷卻、鎖定目標現在就全裸。任何指令欄位上車前，過濾層必須先落地。</span></div>
+  <div class="verdict"><b>你的兩條規則都成立</b><span>排隊房各選＋入場鎖死：小工程，且反而省掉線上換手交接。藏敵方 Boost：屬於過濾層工作的一部分，順帶把指令狀態、鎖定推斷一起藏。</span></div>
+</div>
+
+<h2><span class="no">01</span>審計方法與關鍵事實</h2>
+<p class="lede">五個並行代理各讀一層（線上 BOT／模擬管線／狀態與導航／伺服器／client 線上層），所有結論附行號證據，重點交叉驗證過。以下是承重的事實。</p>
+
+<h3>好消息：指令層的每個構件在 shared 裡都有現成模板</h3>
+<ul class="facts">
+  <li><b>線上 BOT 反射面幾乎完備。</b>防禦態（垂直脫離＋400ms 再垂直化）、反光閃避（隨機 400/800/900ms 反應 → i-frame 墊步 → 520ms 防禦衝刺）、換彈搶掩體（A* 尋路＋held 擺動）、墊步、硬直、Engage 環繞（切線＋距離拉力）全部存在。狀態機優先序 Defense &gt; Maze &gt; Engage &gt; Pursue。<span class="src">ai.js:493-582 · 698-860 · 1149-1231 · 1492-1513 · 1590-1707</span></li>
+  <li><b>衝刺算式與離線完全同式：</b>vel = dir × sprintSpeed(11.76) ＋ inheritMomentum(×1.5)，衝刺極速是動量堆出來的（裸 sprint 比走路 16 還慢）——指令衝刺必須重用 <code>startDash</code>／動量管線，不能手搓速度。<span class="src">ai.js:1738-1742 · tick.js:296-304 · actions.js:288-292</span></li>
+  <li><b>Boost 經濟同構：</b>dash 扣 1.1/tick、回充 4.59/tick、500ms 回充暫停、cap 250、empty-recover——2.1b 的「滿格閂鎖＋50 底線」是純新增的小狀態機；BOT 自己的 Pursue 甚至已有「滿格才衝」的遲滯閂（BOT_BOOST_RESERVE=250）可直接仿。<span class="src">movement.js:24-54 · ai.js:1281-1283</span></li>
+  <li><b>尋路與驗單工具全在伺服器端：</b>navGridFor(arena) 每張圖每進程只建一次（WeakMap 快取）、findPathOnGrid／smoothPath 已匯出、導航格自 2026-08-14 起多層（每格至多 4 個站立高度）涵蓋多樓層地圖。離線的「終點 6u 內＋樓層可站」驗單只是薄包裝。<span class="src">ai.js:104-113 · navgrid.js:8-26 · 558 · shared index.js:49</span></li>
+  <li><b>計時模型零阻力：</b>整個 sim 使用絕對毫秒 <code>xxxUntil</code> 慣例對比 server clock——20 秒錨定就是 <code>anchorUntil = now + 20000</code>，一行入慣例。<span class="src">tick.js:271-281</span></li>
+  <li><b>Client 渲染層幾乎免改：</b>快照鏡射（mirrorFighterToMech）把 hp／boost／位置寫進與離線相同的 mech 欄位，縮景 HUD 讀的每個欄位線上都有；標記層以 slot 為鍵、不綁 mech 物件，Trio 換機可存活。<span class="src">main.js:7472-7504 · 11144-11216</span></li>
+</ul>
+
+<h3>壞消息：現行協定是「全裸廣播」</h3>
+<ul class="facts">
+  <li><b>快照零過濾：</b><code>buildSnapshot</code> 原樣送出 <code>state.fighters</code>（引用直傳），一份相同快照 <code>io.to(lobby.id)</code> 廣播全房——敵方 Boost、彈藥、全部冷卻、狙擊充能、<code>targetId</code>（鎖定目標）、甚至 BOT 的 ~40 個 <code>botXxx</code> 意圖欄位，<b>今天就全部送到對手手上</b>。藏 Boost 是新能力，不是回歸修復。<span class="src">state.js:338-352 · server index.js:256-266 · 341</span></li>
+  <li><b>指令欄位上車即洩漏：</b>把 cmdMove／cmdLock 照離線習慣放上 fighter，下一個 tick 敵人就看得到你的目的地與鎖定。程式庫已有警語與先例：BOT 路徑刻意存 <code>matchState._navPaths</code> 而非 fighter，就是為了避開序列化。<span class="src">ai.js:926-928 · 987-997</span></li>
+  <li><b>targetId 是既存的鎖定洩漏：</b>force lock 寫的就是 targetId，光藏 cmd 欄位、不處理 targetId，等於沒藏。過濾時要一併裁決哪些敵方欄位是「本來就看得見的表演」（紅鎖、玻光、步進）哪些是私密。<span class="src">state.js:160-166 · 193-194</span></li>
+</ul>
+
+<h2><span class="no">02</span>工程分解</h2>
+<p class="lede">按層列出每一塊工作、掛載點與難度。「模板」欄指出 shared 裡可直接仿作的現成程式。</p>
+<div class="tblwrap"><table>
+  <tr><th>工作項</th><th>掛載點</th><th>難度</th><th>現成模板</th></tr>
+  <tr><td>快照過濾層</td><td>buildSnapshot 加 viewer 參數；<span class="ref">server:341/347/352</span> 改逐 socket 發送</td><td><span class="chip c-warn">中</span></td><td>無（全新，建議 allowlist 式；序列化成本 ×2-4）</td></tr>
+  <tr><td>Force lock</td><td>pickBotTargetId 上方一個 guard＋server 每 tick 重挑的呼叫點協調 <span class="ref">ai.js:398 · server:277</span></td><td><span class="chip c-ok">小</span></td><td>離線 commandTargetOf 同型</td></tr>
+  <tr><td>移動指令驅動</td><td>tickBot 之後、tickMatch 之前（或 bot branch 內）<span class="ref">tick.js:305-311</span></td><td><span class="chip c-warn">中</span></td><td>離線 applyMoveOrder；反射讓行判定用 8 個既有時戳旗標</td></tr>
+  <tr><td>衝刺閂鎖＋50 底線</td><td>指令驅動內的小狀態機</td><td><span class="chip c-ok">小</span></td><td>Pursue 滿格遲滯閂 <span class="ref">ai.js:1281-1283</span></td></tr>
+  <tr><td>20s 錨定環繞</td><td>指令驅動內；半徑 12 切線＋拉力</td><td><span class="chip c-ok">小</span></td><td>Engage 環繞數學 <span class="ref">ai.js:1492-1537</span></td></tr>
+  <tr><td>伺服器驗單</td><td>訂單訊息處理器：navGridFor＋findPathOnGrid＋6u＋樓層檢查；開局預熱導航格</td><td><span class="chip c-ok">小</span></td><td>工具鏈全數已匯出</td></tr>
+  <tr><td>與 BOT 狀態機共存</td><td>stuck／no-LoS 偵測器、Maze 劫持的 clock-pinning</td><td><span class="chip c-warn">中</span></td><td>cover-reload 的鐘擺定錨模式 <span class="ref">ai.js:850-860</span></td></tr>
+  <tr><td>排隊房選模式</td><td>lobby.config 加 viewMode＋match:configure；client chip 抄離線樣式</td><td><span class="chip c-ok">小</span></td><td>離線 view-mode-chip；注意 staleness 簽名要加欄位 <span class="ref">main.js:8794-8799</span></td></tr>
+  <tr><td>訂單傳輸協定</td><td>connection.js 加 sendOrder／sendLock；rate limit（尋路是 CPU 放大向量）</td><td><span class="chip c-ok">小</span></td><td>sendConfigure／glint-ack 慣例</td></tr>
+  <tr><td>指揮玩家跳過預測</td><td>本機單位改走 interpolateRemoteFighter（內插路徑已存在）</td><td><span class="chip c-ok">小</span></td><td><span class="ref">main.js:7870 · 8593-8624</span></td></tr>
+  <tr><td>縮景層線上解鎖</td><td>dioramaActive 的 ~50 個 gate 改 per-mode aware；setupHUD 與手勢層互斥</td><td><span class="chip c-warn">中</span></td><td>渲染鏈可整段沿用；風險在經典線上回歸</td></tr>
+  <tr><td>Client 預覽尋路</td><td>ensureOnlineMatchSetup 補一次 buildNavGrid（在等待房期間建，避免數百 ms 卡頓）</td><td><span class="chip c-ok">極小</span></td><td><span class="ref">main.js:8503</span></td></tr>
+</table></div>
+
+<h2><span class="no">03</span>風險登記簿</h2>
+<ul class="risk-list">
+  <li><b>過濾層必須第一個落地</b>任何 cmd 欄位在過濾層之前上 fighter 都是即時洩漏；過濾採 allowlist 才不會被未來新欄位默默突破。teammates 應互見 → per-team 兩份變體即可（不必 per-socket 四份）。</li>
+  <li><b>botSlots 是四用途集合，不能直接塞指揮人類</b>它同時代表「用 tickBot 驅動」「忽略此 socket 輸入」「玻光反作弊的非人類判定」「廣播給 client 的資訊」。指揮人類需要獨立的 commandSlots，否則玻光反作弊對他們失效、訂單訊息被當輸入丟棄。<span class="ref">server:277 · 309-310 · 407</span></li>
+  <li><b>BOT 狀態機會搶指令</b>「背向敵人行軍」超過 2 秒觸發 noLoSTime 劫持進 Maze；無存活目標時 tickBot 直接 early-return，指令單位會凍住——驅動要掛在該檢查之前並 pin 住偵測時鐘。<span class="ref">ai.js:459-460 · 663-688 · 1033-1051</span></li>
+  <li class="warn"><b>action 欄位不可承載指令狀態</b>tickBoost 每 tick 覆寫 fighter.action，且過熱／耗盡時強制改寫——指令狀態機必須自持欄位，並把正確的 action 字串交給 tickBoost（'dash' 才扣氣）。<span class="ref">movement.js:35-36</span></li>
+  <li class="warn"><b>botControlled 的副作用</b>跳躍冷卻 1.5s 下限、飛行單位地面化——離線指揮模式本來就是 BOT 駕駛，行為其實一致，但值得知情。<span class="ref">actions.js:278-283</span></li>
+  <li class="warn"><b>時鐘域陷阱</b>離線指令計時用 performance.now()；線上鏡射欄位是 server clock（hudNow）——client 端任何比對必須換時鐘，否則圖示與圈圈時序漂移。<span class="ref">main.js:8707-8713</span></li>
+  <li class="warn"><b>裁剪欄位要「歸零」不要「刪除」</b>client 鏡射無條件寫入（<code>s.boost = fighter.boost</code>），undefined 會讓 HUD 條寬變 NaN；被遮蔽欄位以常數歸零＋client 容錯最穩。<span class="ref">main.js:7486</span></li>
+  <li class="warn"><b>1v1 斷線語意</b>現制斷線即判負；指揮玩家的單位本來就是 BOT、斷了照打——要不要寬限期？做寬限就得建重連身份層（現在完全沒有）。</li>
+  <li class="warn"><b>混搭平衡是未知數</b>BOT 反射超人、戰略笨；「選指揮拿完美閃避」或「指揮＝送頭」的 meta 只能內測裁決。</li>
+</ul>
+
+<h2><span class="no">04</span>待你拍板的設計決策</h2>
+<ol class="decisions">
+  <li>2v2 隊友是 <b>BOT 填位</b>時，指揮玩家可否指揮它？<span class="rec">建議：<b>可</b>——這是指揮模式最有價值的場景，離線已有雙單位指揮的完整語意。</span></li>
+  <li>人類隊友能否看見你的指令（目的地圈、鎖定）？<span class="rec">建議：<b>可見</b>（per-team 過濾）——協同作戰需要，且過濾只需兩份變體。</span></li>
+  <li>對手「選了指揮模式」這件事本身要不要藏？<span class="rec">建議：<b>不藏</b>——排隊房自然可見，入場後也無法改。</span></li>
+  <li>1v1 指揮玩家斷線：立即判負（現制）還是 BOT 續打＋寬限？<span class="rec">建議：<b>先維持現制</b>，避免第一版就建重連身份層。</span></li>
+  <li>觀戰者看到哪個視角的過濾快照？<span class="rec">建議：第一版<b>全視角</b>（私人房觀戰），公開化再收緊。</span></li>
+  <li>Trio × 指揮線上第一版要不要一起上？<span class="rec">建議：<b>先 Duel</b>——respawn 換機與指令簿記的互動留到第二版。</span></li>
+  <li>敵方 Boost 之外，可推斷氣量的欄位（overheat、sprint-lock）要不要一起藏？<span class="rec">建議：<b>一起藏</b>，但保留有視覺表演的欄位（推進器噴焰本來就看得見）。</span></li>
+</ol>
+
+<h2><span class="no">05</span>建議實作切法</h2>
+<div class="phase"><h4><span class="tag">PHASE 0</span>快照過濾層（必須最先）<span class="chip c-warn">中</span></h4>
+<p>buildSnapshot(state, viewerTeam) allowlist 版＋逐 socket 發送＋client 鏡射容錯。順帶收掉現存的 Boost／冷卻／botXxx 洩漏——這一步即使不做指揮模式也值得。</p></div>
+<div class="phase"><h4><span class="tag">PHASE 1</span>shared 指令層<span class="chip c-warn">中-大</span></h4>
+<p>指令狀態 side-table（仿 _navPaths）→ force lock guard → 移動指令驅動（反射讓行＋狀態機 clock-pinning）→ 衝刺閂鎖 → 錨定環繞 → 伺服器驗單＋開局預熱導航格。每一塊都有行號級的模板可仿。</p></div>
+<div class="phase"><h4><span class="tag">PHASE 2</span>伺服器房間層<span class="chip c-ok">小</span></h4>
+<p>commandSlots（獨立於 botSlots）、lobby.config.viewMode（跟上 slot swap／host promotion／rematch 三條搬移路徑）、訂單訊息＋rate limit＋ack。</p></div>
+<div class="phase"><h4><span class="tag">PHASE 3</span>client 接線<span class="chip c-warn">中</span></h4>
+<p>排隊房 chip（記得 staleness 簽名）、dioramaActive per-mode 化、指揮玩家改純內插、等待房預建導航格、指令回聲餵 HUD 圖示、時鐘域統一。</p></div>
+<div class="phase"><h4><span class="tag">PHASE 4</span>平衡內測<span class="chip c-ok">—</span></h4>
+<p>混搭對局的 meta 觀察：指揮 vs 經典的勝率、反射強度是否需要指揮側專屬調參。</p></div>
+<p>粗略量級（誠實標註為粗估）：以我們平常一輪實作的粒度，全程約 <b>5–8 輪</b>＋內測調整。Phase 0 與 Phase 1 可並行開工（過濾層不依賴指令層）。</p>
+
+<div class="foot">
+  審計方法：5 個並行代理逐層閱讀（shared ai / tick·movement·actions / state·navgrid·arena / server / client online），共 58 次工具呼叫；全部結論附 file:line 證據，關鍵斷言（衝刺算式、快照內容、反射旗標）經人工抽驗。<br>
+  本報告對應 commit 33e6a7f（Demo_0.7.5_Test-Fields）。僅評估，未動任何程式碼。
+</div>
+</div>
+
+</body></html>

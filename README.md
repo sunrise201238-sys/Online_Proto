@@ -533,4 +533,15 @@ The user (2026-11-19): "Put everything you need in \"Testing_0.9.0_Develop-Tools
 - `shared/tools/online-rigs/`: the two-page rig that checks online 2v2 against the repo's own server (the teammate's messages, b1105js), the HUD pictures, the LAST tag check (b1105ju), and what a headless page's slowness costs and how to get round it.
 - `shared/tools/town-pit/`: the Town pit of b1105jp — the data fill, the sim and page probes, and the pattern for the next hole in a scene map.
 - `shared/tools/sound-board/`: **ArchiveVS Sound Board**, the page the user set every sound's level on by ear (b1105hk and after), as served, with the music it plays: 146 sounds inside it, the ones no unit uses among them.
-- `shared/tools/design-samples/`: the sample pages the looks were chosen from — the 39 boards of **GunVS UI Rework Samples**, **MG Card Colour**, **SR Card Colour** (their source; the pictures on the boards were uploads of their artifacts and are not here) and **Boost Gauge Edges** (whole).
+- `shared/tools/design-samples/`: the sample pages the looks were chosen from — the 39 boards of **GunVS UI Rework Samples**, **MG Card Colour**, **SR Card Colour** (their source; the pictures on the boards were uploads of their artifacts and came here on 2026-11-20, below) and **Boost Gauge Edges** (whole).
+
+## Saved here on 2026-11-20
+
+The user (2026-11-20), naming twenty-two artifacts of their claude.ai account (the twelve motion maps; six style and tool pages; four assessment and simulation pages): "Store these in \"Testing_0.9.0_Develop-Tools\"." And, sending two PDFs: "And these 2 files as well to 9.0." Nineteen of the twenty-two were here already, three of them without their pictures. Each artifact was read again and compared with its copy, byte for byte, and what was missing was added. Nothing of any other branch was changed for this.
+
+- `docs/artifacts/`: **the record**. Each of the twenty-two artifacts, what it served on that day, the file here that holds each piece, and a sha256 list that checks all 219 copies with one command.
+- `shared/tools/design-samples/`: **the pictures of the three board sets** (GunVS UI Rework Samples 117, MG Card Colour 8, SR Card Colour 8; 27 MB), each under the id its boards name it by, with a table for each set; and `view.cjs`, which shows a set in a browser with its pictures.
+- `shared/tools/motion-maps/picks/`: **the picks saved on the motion map pages**, ten documents from the pages' own stores (Kei's and Haruka's hold none). The twelve pages were already the served ones.
+- `docs/reports/`: **three report pages that were not in this branch**: the 1v1 Duel bot win rates of 2026-08-10, in English and in Traditional Chinese, and 指揮模式上線評估 of 2026-08-21.
+- `docs/history/`: **the two PDFs**, as sent: ArchiveVS 六個月回顧 (3 pages) and 0.9.8 ArchiveVS 開發編年史 (54 pages; the first edition, on the user's word).
+- Found to be what the artifacts serve, and left as they were: Line-up Card Crop, Bloom Range, Boost Gauge Edges, the ten slides of 強角與強組合模擬結果, and the source of the three board sets.

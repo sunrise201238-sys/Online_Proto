@@ -1,0 +1,32 @@
+{
+  "id": "koyuki",
+  "data": {
+    "map": {
+      "death": "Vital_Death",
+      "dodge": "Normal_Attack_Start",
+      "intro": "",
+      "jump": "Normal_Attack_Start",
+      "reload": "Normal_Reload",
+      "shoot": "Normal_Attack_Ing",
+      "sprint": "Move_Ing",
+      "sprintShoot": "Move_Ing",
+      "stand": "Normal_Idle",
+      "walk": "Move_Ing"
+    },
+    "speed": {
+      "death": 100,
+      "dodge": 100,
+      "intro": 100,
+      "jump": 100,
+      "reload": 100,
+      "shoot": 100,
+      "sprint": 100,
+      "sprintShoot": 100,
+      "stand": 100,
+      "walk": 50
+    },
+    "updatedAt": "2026-10-10T11:20:45.589Z"
+  },
+  "version": 2,
+  "updatedAt": "2026-10-10T11:20:47.42705Z"
+}

@@ -1,0 +1,405 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Gun VS Gun &#8212; 1v1 Duel BOT &#21213;&#29575;</title>
+
+<style>
+  :root {
+    --ground:      #f4f6f9;
+    --panel:       #ffffff;
+    --panel-sunk:  #eceff4;
+    --line:        #d8dde6;
+    --line-soft:   #e8ebf1;
+    --text:        #171c26;
+    --text-dim:    #4f5a6d;
+    --text-faint:  #8b95a6;
+    --signal:      #a86a12;
+    --signal-bg:   rgba(227,162,60,.16);
+    --hot:         200, 74, 52;
+    --cold:        44, 104, 152;
+    --shadow:      0 1px 2px rgba(20,28,44,.06), 0 8px 24px -12px rgba(20,28,44,.18);
+    --heat-max:    .62;
+
+    --display: "Segoe UI Variable Display", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    --body:    "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    --data:    "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:     #0c0f16;
+      --panel:      #141924;
+      --panel-sunk: #10141d;
+      --line:       #262f40;
+      --line-soft:  #1c2431;
+      --text:       #ccd4e2;
+      --text-dim:   #93a0b4;
+      --text-faint: #5d6a7e;
+      --signal:     #e3a23c;
+      --signal-bg:  rgba(227,162,60,.13);
+      --hot:        222, 96, 72;
+      --cold:       82, 148, 200;
+      --shadow:     0 1px 0 rgba(255,255,255,.03), 0 16px 40px -20px rgba(0,0,0,.8);
+      --heat-max:   .58;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6f9; --panel: #ffffff; --panel-sunk: #eceff4;
+    --line: #d8dde6; --line-soft: #e8ebf1;
+    --text: #171c26; --text-dim: #4f5a6d; --text-faint: #8b95a6;
+    --signal: #a86a12; --signal-bg: rgba(227,162,60,.16);
+    --hot: 200,74,52; --cold: 44,104,152;
+    --shadow: 0 1px 2px rgba(20,28,44,.06), 0 8px 24px -12px rgba(20,28,44,.18);
+    --heat-max: .62;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c0f16; --panel: #141924; --panel-sunk: #10141d;
+    --line: #262f40; --line-soft: #1c2431;
+    --text: #ccd4e2; --text-dim: #93a0b4; --text-faint: #5d6a7e;
+    --signal: #e3a23c; --signal-bg: rgba(227,162,60,.13);
+    --hot: 222,96,72; --cold: 82,148,200;
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 16px 40px -20px rgba(0,0,0,.8);
+    --heat-max: .58;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.78;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: clamp(28px, 5vw, 68px) clamp(16px, 4vw, 36px) 96px; }
+
+  .mast { border-bottom: 2px solid var(--text); padding-bottom: 20px; margin-bottom: 34px; }
+  .kicker {
+    font-family: var(--data); font-size: 11.5px; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--signal); margin-bottom: 14px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700; letter-spacing: -.01em;
+    font-size: clamp(28px, 5vw, 46px); line-height: 1.18; text-wrap: balance; margin-bottom: 12px;
+  }
+  .standfirst { color: var(--text-dim); font-size: 17px; max-width: 40em; text-wrap: pretty; }
+
+  .facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    margin: 30px 0 46px; border-radius: 3px; overflow: hidden;
+  }
+  .fact { background: var(--panel); padding: 13px 15px 15px; }
+  .fact dt {
+    font-family: var(--data); font-size: 10.5px; letter-spacing: .06em;
+    color: var(--text-faint); margin-bottom: 5px;
+  }
+  .fact dd { font-family: var(--data); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .fact dd small { display: block; font-family: var(--body); font-size: 11.5px; font-weight: 400; color: var(--text-dim); letter-spacing: 0; margin-top: 3px; line-height: 1.5; }
+
+  section { margin-bottom: 54px; }
+  .shead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 9px; margin-bottom: 20px; flex-wrap: wrap; }
+  .shead h2 { font-family: var(--display); font-weight: 700; font-size: 21px; }
+  .shead .note { font-size: 12px; color: var(--text-faint); margin-left: auto; }
+  .lede { color: var(--text-dim); max-width: 42em; margin-bottom: 22px; text-wrap: pretty; }
+
+  .ladder { display: flex; flex-direction: column; gap: 3px; }
+  .rung {
+    display: grid; grid-template-columns: 20px 96px 1fr 108px; align-items: center; gap: 12px;
+    padding: 7px 10px; border-radius: 3px;
+  }
+  .rung:nth-child(odd) { background: var(--panel-sunk); }
+  .rank { font-family: var(--data); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; text-align: right; }
+  .wname { font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .wname span { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
+  .track { position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 2px; }
+  .track::before {
+    content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px;
+    background: var(--text-faint); opacity: .55;
+  }
+  .fill { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+  .whisk { position: absolute; top: 50%; height: 9px; transform: translateY(-50%); border-left: 1px solid var(--text); border-right: 1px solid var(--text); opacity: .5; }
+  .figs { font-family: var(--data); font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+  .figs b { font-weight: 600; font-size: 15px; }
+  .figs em { font-style: normal; color: var(--text-faint); font-size: 11px; }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--data); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; text-align: right; white-space: nowrap; }
+  thead th {
+    font-size: 10.5px; letter-spacing: .04em; color: var(--text-faint);
+    font-weight: 500; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel);
+  }
+  tbody th { text-align: left; font-weight: 600; color: var(--text); font-family: var(--body); font-size: 13px; }
+  tbody tr + tr td, tbody tr + tr th { border-top: 1px solid var(--line-soft); }
+  td.self { color: var(--text-faint); }
+  .rowlabel { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  tbody tr:hover td, tbody tr:hover th { background-image: linear-gradient(var(--signal-bg), var(--signal-bg)); }
+
+  .find { border: 1px solid var(--line); border-left: 3px solid var(--signal); background: var(--panel); border-radius: 3px; padding: 17px 20px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .find h3 { font-family: var(--display); font-size: 16.5px; font-weight: 700; margin-bottom: 7px; line-height: 1.45; }
+  .find p { color: var(--text-dim); font-size: 15px; }
+  .find p + p { margin-top: 9px; }
+  .find strong { color: var(--text); font-weight: 600; }
+  code, .mono { font-family: var(--data); font-size: .88em; background: var(--panel-sunk); padding: 1px 5px; border-radius: 2px; }
+
+  .caveat { border: 1px dashed var(--line); border-radius: 3px; padding: 17px 20px; color: var(--text-dim); font-size: 14.5px; }
+  .caveat h3 { font-family: var(--display); font-size: 15.5px; font-weight: 700; color: var(--text); margin-bottom: 7px; }
+  .caveat ul { margin: 8px 0 0 20px; }
+  .caveat li + li { margin-top: 8px; }
+
+  .legend { display: flex; align-items: center; gap: 9px; font-family: var(--data); font-size: 10.5px; color: var(--text-faint); margin-top: 10px; }
+  .ramp { height: 9px; width: 190px; border-radius: 2px; border: 1px solid var(--line); }
+
+  @media (max-width: 640px) {
+    .rung { grid-template-columns: 16px 80px 1fr; gap: 9px; }
+    .rung .figs { grid-column: 2 / -1; text-align: left; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="kicker">Gun VS Gun &#183; &#28961;&#30059;&#38754;&#27169;&#25836; &#183; &#20998;&#25903; Demo_0.7.2_Opus &#183; 2026-08-10</div>
+    <h1>&#38617;&#26041;&#37117;&#26159; BOT &#26178;&#65292;1v1 Duel &#35504;&#26371;&#36111;</h1>
+    <p class="standfirst">
+      &#21313;&#20108;&#25226;&#21487;&#36984;&#27494;&#22120;&#30340;&#27599;&#19968;&#32068;&#37197;&#23565;&#65292;&#36305;&#36941;&#20840;&#37096;&#20061;&#24373;&#22320;&#22294;&#65292;&#20841;&#31278;&#20986;&#29983;&#40670;&#38918;&#24207;&#37117;&#25171;&#65292;&#19968;&#36335;&#25171;&#21040;&#25802;&#20498;&#28858;&#27490;&#12290;
+      &#27794;&#26377;&#22238;&#21512;&#35336;&#26178;&#65292;&#27794;&#26377;&#21644;&#23616;&#12290;&#19979;&#38754;&#36889;&#20221;&#25490;&#21517;&#20195;&#34920;&#30340;&#26159; <em>BOT</em> &#29992;&#27599;&#25226;&#27085;&#33021;&#25171;&#20986;&#20160;&#40636;&#32080;&#26524; &#8212;&#8212;
+      &#32780;&#19968;&#32068;&#23565;&#29031;&#23526;&#39511;&#39023;&#31034;&#65292;&#36889;&#24190;&#20046;&#21644;&#27494;&#22120;&#25976;&#20540;&#35611;&#30340;&#23436;&#20840;&#30456;&#21453;&#12290;
+    </p>
+  </header>
+
+  <dl class="facts" id="facts"></dl>
+
+  <section>
+    <div class="shead">
+      <h2>&#21213;&#29575;&#25490;&#21517;</h2>
+      <span class="note" id="ladder-note"></span>
+    </div>
+    <p class="lede">
+      &#36328;&#25152;&#26377;&#23565;&#25163;&#33287;&#25152;&#26377;&#22320;&#22294;&#30340;&#21213;&#29575;&#65292;&#38468; 95% &#20449;&#36084;&#21312;&#38291;&#12290;&#20013;&#32218;&#26159; 50%&#12290;
+      &#37857;&#20687;&#23565;&#23616;&#65288;&#21516;&#19968;&#25226;&#27085;&#25171;&#33258;&#24049;&#65289;&#24050;&#25490;&#38500; &#8212;&#8212; &#37027;&#31278;&#23565;&#23616;&#24517;&#23450;&#19968;&#21213;&#19968;&#25943;&#35352;&#22312;&#21516;&#19968;&#25226;&#27085;&#38957;&#19978;&#65292;&#21482;&#26371;&#25226;&#25152;&#26377;&#20154;&#24448;&#20013;&#38291;&#25289;&#12290;
+    </p>
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>&#20381;&#27494;&#22120;&#39006;&#21029;</h2></div>
+    <div class="scroll">
+      <table id="classes">
+        <thead><tr><th class="rowlabel" style="text-align:left">&#39006;&#21029;</th><th>&#21213;&#29575; %</th><th>95% CI</th><th>&#22580;&#25976;</th><th style="width:44%"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>&#23565;&#20301;&#30697;&#38499;</h2>
+      <span class="note">&#27243;&#21015;&#23565;&#32305;&#34892;&#30340;&#21213;&#29575; &#183; &#27599;&#26684; 359 &#22580; &#183; &#177;5%</span>
+    </div>
+    <p class="lede">
+      &#27243;&#33879;&#35712;&#19968;&#21015;&#65292;&#23601;&#26159;&#37027;&#25226;&#27085;&#25171;&#24471;&#36111;&#35504;&#12290;&#25972;&#39636;&#25490;&#24207;&#25509;&#36817;&#36958;&#31227;&#65292;&#21807;&#19968;&#20540;&#24471;&#27880;&#24847;&#30340;&#20363;&#22806;&#23531;&#22312;&#19979;&#26041;&#12290;
+    </p>
+    <div class="scroll"><table id="matrix"></table></div>
+    <div class="legend"><span>0%</span><div class="ramp" id="ramp"></div><span>100%</span></div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>&#20381;&#22320;&#22294;</h2>
+      <span class="note">&#33853;&#24046; = &#26368;&#39640;&#30340;&#22320;&#22294;&#28187;&#26368;&#20302;&#30340;&#22320;&#22294;</span>
+    </div>
+    <p class="lede">
+      &#26377;&#20123;&#27494;&#22120;&#22312;&#27599;&#24373;&#22320;&#22294;&#37117;&#19968;&#27171;&#31337;&#65292;&#26377;&#20123;&#33021;&#25850;&#30442; 50 &#20491;&#30334;&#20998;&#40670;&#12290;&#33853;&#24046;&#22823;&#20195;&#34920;&#25490;&#21517;&#19978;&#37027;&#20491;&#25976;&#23383;&#20854;&#23526;&#26159;&#20841;&#25226;&#19981;&#21516;&#30340;&#27085;&#24179;&#22343;&#20986;&#20358;&#30340;
+      &#8212;&#8212; &#19968;&#25226;&#22312;&#38283;&#38346;&#22320;&#33021;&#29992;&#65292;&#19968;&#25226;&#19981;&#33021;&#12290;
+    </p>
+    <div class="scroll"><table id="maps"></table></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>&#30495;&#27491;&#22312;&#27770;&#23450;&#21213;&#36000;&#30340;&#26159;&#20160;&#40636;</h2></div>
+    <div id="findings"></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>&#24590;&#40636;&#36305;&#30340;&#65292;&#20197;&#21450;&#36889;&#20221;&#25976;&#25818;&#19981;&#33021;&#21578;&#35380;&#20320;&#20160;&#40636;</h2></div>
+    <div class="caveat" id="method"></div>
+  </section>
+
+</div>
+
+<script id="payload" type="application/json">{"meta":{"matches":28080,"reps":20,"maps":["Plain Field","Streets","Factory","Factory 2","Square","Lobby","Station","Flashpoint","Airport"],"mapKeys":["arena1","arena2","factory","factory2","square","lobby","station","flashpoint","airport"],"unresolved":1,"medianSecs":18.96,"maxSecs":85.648,"mirrorP1":47.06018518518518,"mirrorCi":1.4884430506703457,"mirrorN":4320,"realP1":50.28831179763458,"realCi":0.6357769473505379,"preMatches":9504},"units":[{"key":"unit10","name":"M14","cls":"Rifle","win":79.29292929292929,"ci":1.2620746473861968,"n":3960,"winPre":78.8510101010101,"ciPre":2.0110687992037595,"avgWinSecs":18.90372484076433,"avgHpLeft":38.63232484076433,"dmg":10,"pellets":1,"perShot":10,"rpm":180,"effRpm":179,"mag":20,"reload":1500,"lock":56,"fireCap":20,"sustDps":25.367833587011667,"stk":10,"perMap":[81.13636363636364,83.86363636363636,74.77272727272727,79.0909090909091,77.04545454545455,81.13636363636364,81.13636363636364,75,80.45454545454545]},{"key":"unit18","name":"SVD","cls":"Rifle","win":75.60606060606061,"ci":1.3376046001553916,"n":3960,"winPre":72.41161616161617,"ciPre":2.2011302023268646,"avgWinSecs":19.062279225116903,"avgHpLeft":37.249164996659985,"dmg":12,"pellets":1,"perShot":12,"rpm":180,"effRpm":179,"mag":10,"reload":1500,"lock":56,"fireCap":10,"sustDps":26.52519893899204,"stk":9,"perMap":[79.54545454545455,78.63636363636364,66.36363636363636,73.86363636363636,76.5909090909091,75.68181818181819,78.4090909090909,74.0909090909091,77.27272727272727]},{"key":"unit16","name":"RPK","cls":"Machine Gun","win":68.71212121212122,"ci":1.4441530325331915,"n":3960,"winPre":70.26515151515152,"ciPre":2.2510303017936217,"avgWinSecs":20.12882910694598,"avgHpLeft":40.40683572216097,"dmg":5,"pellets":1,"perShot":5,"rpm":600,"effRpm":536,"mag":100,"reload":5000,"lock":80,"fireCap":100,"sustDps":31.079065141720534,"stk":20,"perMap":[95.45454545454545,57.27272727272727,62.95454545454545,50,91.36363636363636,60.68181818181818,73.4090909090909,56.36363636363637,70.9090909090909]},{"key":"unit15","name":"AA12","cls":"Shotgun","win":60.42929292929293,"ci":1.5230674613731776,"n":3960,"winPre":60.73232323232323,"ciPre":2.4049499015187052,"avgWinSecs":18.28168157124948,"avgHpLeft":40.15399080651901,"dmg":3,"pellets":8,"perShot":24,"rpm":300,"effRpm":288,"mag":20,"reload":4000,"lock":40,"fireCap":20,"sustDps":60.36217303822938,"stk":5,"perMap":[35.68181818181818,77.27272727272727,61.36363636363637,71.36363636363636,30.90909090909091,69.54545454545455,58.18181818181818,80.9090909090909,58.63636363636363]},{"key":"unit17","name":"NEGEV","cls":"Machine Gun","win":60.27777777777778,"ci":1.5240663111273427,"n":3960,"winPre":61.74242424242424,"ciPre":2.3934758230688873,"avgWinSecs":21.028330121491415,"avgHpLeft":37.39757017176372,"dmg":4,"pellets":1,"perShot":4,"rpm":1100,"effRpm":938,"mag":100,"reload":5000,"lock":80,"fireCap":100,"sustDps":35.28581510232886,"stk":25,"perMap":[69.77272727272727,56.36363636363637,64.31818181818181,57.27272727272727,75.45454545454545,50.22727272727273,52.95454545454545,57.04545454545455,59.09090909090909]},{"key":"unit11","name":"M1014","cls":"Shotgun","win":48.547613033594345,"ci":1.5568616645127997,"n":3959,"winPre":48.83133291219204,"ciPre":2.462447360862042,"avgWinSecs":18.52840790842872,"avgHpLeft":32.69588969823101,"dmg":3,"pellets":8,"perShot":24,"rpm":250,"effRpm":250,"mag":7,"reload":1000,"lock":40,"fireCap":4,"sustDps":68.85245901639344,"stk":5,"perMap":[32.04545454545455,58.76993166287016,48.40909090909091,57.95454545454545,24.545454545454547,65.22727272727273,23.181818181818183,72.72727272727273,54.09090909090909]},{"key":"unit1","name":"M4","cls":"Assault Rifle","win":46.06060606060606,"ci":1.55248114250159,"n":3960,"winPre":46.906565656565654,"ciPre":2.4576255322449456,"avgWinSecs":21.851447368421052,"avgHpLeft":31.92297149122807,"dmg":4.5,"pellets":1,"perShot":4.5,"rpm":700,"effRpm":625,"mag":30,"reload":1500,"lock":56,"fireCap":30,"sustDps":31.51260504201681,"stk":23,"perMap":[47.95454545454545,42.72727272727273,39.54545454545455,47.04545454545455,51.36363636363637,49.77272727272727,45.90909090909091,42.72727272727273,47.5]},{"key":"unit9","name":"FAMAS","cls":"Assault Rifle","win":41.98029805506441,"ci":1.5373538013485855,"n":3959,"winPre":40.74542008843967,"ciPre":2.4205606873247,"avgWinSecs":21.715552346570394,"avgHpLeft":32.28188929001203,"dmg":4,"pellets":1,"perShot":4,"rpm":900,"effRpm":750,"mag":25,"reload":1500,"lock":56,"fireCap":25,"sustDps":29.239766081871345,"stk":25,"perMap":[40.22727272727273,41.68564920273349,37.27272727272727,46.59090909090909,45.22727272727273,41.13636363636363,42.27272727272727,41.13636363636363,42.27272727272727]},{"key":"unit4","name":"evo3","cls":"SMG","win":41.96969696969697,"ci":1.5371059878170314,"n":3960,"winPre":42.61363636363637,"ciPre":2.43532615760741,"avgWinSecs":21.05841636582431,"avgHpLeft":32.43200962695548,"dmg":3.5,"pellets":1,"perShot":3.5,"rpm":1100,"effRpm":938,"mag":30,"reload":1500,"lock":50,"fireCap":30,"sustDps":31.28724672228844,"stk":29,"perMap":[43.63636363636363,37.72727272727273,37.27272727272727,44.54545454545455,47.72727272727273,46.81818181818182,36.36363636363637,40.90909090909091,42.72727272727273]},{"key":"unit3","name":"PSG1","cls":"Sniper","win":34.67171717171717,"ci":1.4823364076577263,"n":3960,"winPre":34.974747474747474,"ciPre":2.3485337204032235,"avgWinSecs":12.668504005826657,"avgHpLeft":36.684996358339404,"dmg":50,"pellets":1,"perShot":50,"rpm":60,"effRpm":60,"mag":5,"reload":2500,"lock":120,"fireCap":5,"sustDps":38.27311696264544,"stk":2,"perMap":[47.27272727272727,24.545454545454547,48.63636363636363,25,40.68181818181818,27.954545454545453,50,16.59090909090909,31.363636363636363]},{"key":"unit14","name":"P90","cls":"SMG","win":28.71212121212121,"ci":1.4091231955844397,"n":3960,"winPre":28.8510101010101,"ciPre":2.231224980219526,"avgWinSecs":20.35060686015831,"avgHpLeft":34.878188214599824,"dmg":3.5,"pellets":1,"perShot":3.5,"rpm":900,"effRpm":750,"mag":50,"reload":2000,"lock":50,"fireCap":50,"sustDps":29.56081081081081,"stk":29,"perMap":[21.818181818181817,30.227272727272727,27.5,35.22727272727273,30.681818181818183,27.045454545454547,29.772727272727273,32.04545454545455,24.09090909090909]},{"key":"unit6","name":"Railgun","cls":"Sniper","win":13.737373737373737,"ci":1.0721898048510272,"n":3960,"winPre":13.068181818181818,"ciPre":1.6598752462219215,"avgWinSecs":19.167823529411766,"avgHpLeft":31.893382352941178,"dmg":30,"pellets":1,"perShot":30,"rpm":60,"effRpm":60,"mag":5,"reload":2500,"lock":120,"fireCap":5,"sustDps":22.963870177587264,"stk":4,"perMap":[5.454545454545454,10.909090909090908,31.59090909090909,12.045454545454545,8.409090909090908,4.7727272727272725,28.40909090909091,10.454545454545455,11.590909090909092]}],"matrix":[[null,54.166666666666664,59.44444444444444,68.61111111111111,78.88888888888889,78.61111111111111,91.66666666666667,89.16666666666667,92.22222222222223,68.88888888888889,97.77777777777777,92.77777777777777],[45.833333333333336,null,55.55555555555556,60,82.5,77.77777777777777,87.22222222222223,89.44444444444444,88.61111111111111,61.388888888888886,91.11111111111111,92.22222222222223],[40.55555555555556,44.44444444444444,null,46.94444444444444,58.05555555555556,68.33333333333333,77.22222222222223,78.05555555555556,83.05555555555556,73.05555555555556,93.33333333333333,92.77777777777777],[31.38888888888889,40,53.05555555555556,null,54.166666666666664,48.05555555555556,64.44444444444444,69.44444444444444,64.72222222222223,77.5,71.94444444444444,90],[21.11111111111111,17.5,41.94444444444444,45.833333333333336,null,66.38888888888889,70,68.33333333333333,77.22222222222223,76.38888888888889,88.61111111111111,89.72222222222223],[21.38888888888889,22.22222222222222,31.666666666666668,51.94444444444444,33.611111111111114,null,53.05555555555556,60.16713091922006,46.94444444444444,70.83333333333333,64.72222222222223,77.5],[8.333333333333334,12.777777777777779,22.77777777777778,35.55555555555556,30,46.94444444444444,null,60,63.611111111111114,59.166666666666664,79.72222222222223,87.77777777777777],[10.833333333333334,10.555555555555555,21.944444444444443,30.555555555555557,31.666666666666668,39.83286908077994,40,null,48.333333333333336,61.94444444444444,75,91.11111111111111],[7.777777777777778,11.38888888888889,16.944444444444443,35.27777777777778,22.77777777777778,53.05555555555556,36.388888888888886,51.666666666666664,null,65.55555555555556,72.77777777777777,88.05555555555556],[31.11111111111111,38.611111111111114,26.944444444444443,22.5,23.61111111111111,29.166666666666668,40.833333333333336,38.05555555555556,34.44444444444444,null,35,61.111111111111114],[2.2222222222222223,8.88888888888889,6.666666666666667,28.055555555555557,11.38888888888889,35.27777777777778,20.27777777777778,25,27.22222222222222,65,null,85.83333333333333],[7.222222222222222,7.777777777777778,7.222222222222222,10,10.277777777777779,22.5,12.222222222222221,8.88888888888889,11.944444444444445,38.888888888888886,14.166666666666666,null]],"classes":[{"name":"Rifle","win":77.44949494949495,"ci":0.9204091174300479,"n":7920},{"name":"Machine Gun","win":64.4949494949495,"ci":1.0539048459503633,"n":7920},{"name":"Shotgun","win":54.489203182219974,"ci":1.0968149163311496,"n":7919},{"name":"Assault Rifle","win":44.02070968556636,"ci":1.0933598301498177,"n":7919},{"name":"SMG","win":35.34090909090909,"ci":1.052803054090791,"n":7920},{"name":"Sniper","win":24.204545454545453,"ci":0.9433297412961833,"n":7920}]}</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById('payload').textContent);
+  var U = D.units, M = D.matrix, meta = D.meta;
+  var n1 = function (x, d) { return x.toFixed(d === undefined ? 1 : d); };
+
+  var CLS_TW = {
+    'Rifle': '\u6b65\u69cd', 'Machine Gun': '\u6a5f\u69cd', 'Shotgun': '\u9730\u5f48\u69cd',
+    'Assault Rifle': '\u7a81\u64ca\u6b65\u69cd', 'SMG': '\u885d\u92d2\u69cd', 'Sniper': '\u72d9\u64ca\u69cd'
+  };
+  var tw = function (c) { return CLS_TW[c] || c; };
+
+  /* \u7528\u4e3b\u984c\u81ea\u5df1\u7684 CSS \u8b8a\u6578\u8868\u793a\u984f\u8272\uff0c\u8b80\u8005\u5207\u63db\u660e\u6697\u6642\u6bcf\u4e00\u683c\u90fd\u6703\u91cd\u65b0\u89e3\u6790\u3002
+     \u82e5\u6539\u6210\u5728\u9019\u88e1\u8b80\u53d6 computed value\uff0c\u5c31\u6703\u628a\u8f09\u5165\u7576\u4e0b\u7684\u4e3b\u984c\u5beb\u6b7b\uff0c\u5207\u63db\u5f8c\u71b1\u5340\u5716\u6703\u7559\u5728\u820a\u4e3b\u984c\u3002 */
+  function heat(p) {
+    if (p === null || p === undefined) return 'transparent';
+    var d = (p - 50) / 50;
+    var k = Math.min(1, Math.abs(d)).toFixed(3);
+    return 'rgba(var(' + (d >= 0 ? '--hot' : '--cold') + '), calc(var(--heat-max) * ' + k + '))';
+  }
+
+  var facts = [
+    ['\u7e3d\u5834\u6578', meta.matches.toLocaleString(), '\u5168\u90e8\u6253\u5230\u64ca\u5012'],
+    ['\u548c\u5c40', String(meta.unresolved), '\u53ea\u6709 1 \u5834\u89f8\u53ca 10 \u5206\u9418\u4fdd\u96aa\u4e0a\u9650'],
+    ['\u6b66\u5668', String(U.length), '\u53ef\u9078\u540d\u55ae\u5168\u54e1'],
+    ['\u5730\u5716', String(meta.maps.length), '\u6a21\u64ec\u5668\u88e1\u7684\u6bcf\u4e00\u5f35'],
+    ['\u5c0d\u5c40\u4e2d\u4f4d\u6578', n1(meta.medianSecs) + ' \u79d2', '\u6700\u9577 ' + n1(meta.maxSecs) + ' \u79d2'],
+    ['\u843d\u5dee', n1(U[0].win - U[U.length - 1].win, 0) + ' \u500b\u767e\u5206\u9ede', U[0].name + ' \u9ad8\u65bc ' + U[U.length - 1].name]
+  ];
+  document.getElementById('facts').innerHTML = facts.map(function (f) {
+    return '<div class="fact"><dt>' + f[0] + '</dt><dd>' + f[1] + '<small>' + f[2] + '</small></dd></div>';
+  }).join('');
+
+  document.getElementById('ladder-note').textContent = '\u6bcf\u628a\u69cd ' + U[0].n.toLocaleString() + ' \u5834';
+
+  document.getElementById('ladder').innerHTML = U.map(function (u, i) {
+    var lo = Math.min(u.win, 50), w = Math.abs(u.win - 50);
+    return '<div class="rung">' +
+      '<div class="rank">' + (i + 1) + '</div>' +
+      '<div class="wname">' + u.name + '<span>' + tw(u.cls) + '</span></div>' +
+      '<div class="track">' +
+        '<div class="fill" style="left:' + lo + '%;width:' + w + '%;background:' + heat(u.win) + '"></div>' +
+        '<div class="whisk" style="left:' + (u.win - u.ci) + '%;width:' + (2 * u.ci) + '%"></div>' +
+      '</div>' +
+      '<div class="figs"><b>' + n1(u.win) + '%</b> <em>&#177;' + n1(u.ci) + '</em></div>' +
+      '</div>';
+  }).join('');
+
+  document.querySelector('#classes tbody').innerHTML = D.classes.map(function (c) {
+    var lo = Math.min(c.win, 50), w = Math.abs(c.win - 50);
+    return '<tr><th class="rowlabel">' + tw(c.name) + '</th>' +
+      '<td>' + n1(c.win) + '</td><td>&#177;' + n1(c.ci) + '</td><td>' + c.n.toLocaleString() + '</td>' +
+      '<td><div class="track" style="height:16px">' +
+        '<div class="fill" style="left:' + lo + '%;width:' + w + '%;background:' + heat(c.win) + '"></div>' +
+      '</div></td></tr>';
+  }).join('');
+
+  document.getElementById('matrix').innerHTML =
+    '<thead><tr><th class="rowlabel" style="text-align:left">\u6253\u8d0f &#8594;</th>' +
+    U.map(function (u) { return '<th>' + u.name + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    U.map(function (u, i) {
+      return '<tr><th class="rowlabel">' + u.name + '</th>' + M[i].map(function (v) {
+        if (v === null) return '<td class="self">&#8212;</td>';
+        return '<td style="background:' + heat(v) + '">' + n1(v, 0) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+
+  var stops = [];
+  for (var s = 0; s <= 10; s++) stops.push(heat(s * 10));
+  document.getElementById('ramp').style.background = 'linear-gradient(90deg,' + stops.join(',') + ')';
+
+  var spreads = U.map(function (u) { return Math.max.apply(null, u.perMap) - Math.min.apply(null, u.perMap); });
+  document.getElementById('maps').innerHTML =
+    '<thead><tr><th class="rowlabel" style="text-align:left">\u6b66\u5668</th>' +
+    meta.maps.map(function (m) { return '<th>' + m + '</th>'; }).join('') + '<th>\u843d\u5dee</th></tr></thead><tbody>' +
+    U.map(function (u, i) {
+      return '<tr><th class="rowlabel">' + u.name + '</th>' +
+        u.perMap.map(function (v) { return '<td style="background:' + heat(v) + '">' + n1(v, 0) + '</td>'; }).join('') +
+        '<td style="font-weight:600">' + n1(spreads[i], 0) + '</td></tr>';
+    }).join('') + '</tbody>';
+
+  var m14 = U.find(function (u) { return u.name === 'M14'; });
+  var svd = U.find(function (u) { return u.name === 'SVD'; });
+  var rail = U.find(function (u) { return u.name === 'Railgun'; });
+  var p90 = U.find(function (u) { return u.name === 'P90'; });
+  var m4u = U.find(function (u) { return u.name === 'M4'; });
+  var negev = U.find(function (u) { return u.name === 'NEGEV'; });
+
+  var findings = [
+    ['\u9019\u4efd\u6392\u540d\u6392\u7684\u662f\u5c04\u901f\u7bc0\u594f\uff0c\u4e0d\u662f\u706b\u529b',
+      '<p>\u5148\u770b\u8cc7\u6599\u88e1\u6700\u4e7e\u6de8\u7684\u4e00\u500b\u4e8b\u5be6\uff1a<strong>M14 \u548c Railgun \u7684\u6bcf\u5206\u9418\u50b7\u5bb3\u5b8c\u5168\u4e00\u6a23</strong>\uff0c\u90fd\u662f 1,800\uff0c' +
+      '\u7d50\u679c\u4e00\u500b <strong>' + n1(m14.win) + '%</strong>\u3001\u4e00\u500b <strong>' + n1(rail.win) + '%</strong>\u3002' +
+      '\u628a\u6392\u540d\u5c0d\u6240\u6709\u539f\u59cb\u6578\u503c\u505a\u8ff4\u6b78\u4e5f\u662f\u540c\u6a23\u7d50\u8ad6\uff1a\u6700\u5f37\u7684\u9810\u6e2c\u8b8a\u6578\u662f\u9396\u5b9a\u8ddd\u96e2\uff0cr&#178; = 0.18\uff1b\u6301\u7e8c DPS \u662f r&#178; = 0.01\uff1b' +
+      '\u64ca\u6bba\u6642\u9593\u662f r&#178; = 0.00\u3002</p>' +
+      '<p>\u6240\u4ee5\u6211\u8dd1\u4e86\u5c0d\u7167\u7d44\u3002\u6211\u8b93\u5341\u4e8c\u628a\u69cd\u7684\u6bcf\u5206\u9418\u50b7\u5bb3<em>\u5b8c\u5168\u76f8\u540c</em>\uff083,150\uff09\uff0c\u53ea\u8abf\u55ae\u767c\u50b7\u5bb3 \u2014\u2014 ' +
+      '\u5c04\u901f\u3001\u5f48\u5323\u3001\u63db\u5f48\u3001\u6563\u5e03\u3001\u786c\u76f4\u3001\u9396\u5b9a\u8ddd\u96e2\u548c\u6574\u5957 AI \u4e00\u5f8b\u4e0d\u52d5 \u2014\u2014 \u518d\u8dd1 9,504 \u5834\u3002' +
+      '\u5982\u679c\u6392\u540d\u662f\u706b\u529b\u6c7a\u5b9a\u7684\uff0c\u5b83\u5c31\u5fc5\u9808\u88ab\u62c9\u5e73\u3002<strong>\u7d50\u679c\u53cd\u800c\u66f4\u9661\u4e86\uff1a\u843d\u5dee\u5f9e 65.6 \u500b\u767e\u5206\u9ede\u64f4\u5927\u5230 84.0</strong>\uff0c' +
+      '\u800c\u4e14\u9806\u5e8f\u91cd\u6392\uff08\u540d\u6b21\u76f8\u95dc\u4fc2\u6578 0.25\uff09\u3002M14 \u722c\u5230 92.8%\u3002AA12 \u2014\u2014 \u5168\u904a\u6232\u539f\u59cb\u8f38\u51fa\u6700\u9ad8\u7684\u69cd\uff0c\u6bcf\u5206\u9418 7,200 \u50b7\u5bb3 \u2014\u2014 \u6389\u5230 8.8%\u3002</p>'],
+
+    ['\u6a5f\u5236\uff1a\u4f60\u6bcf\u6253\u4e2d\u4e00\u767c\uff0c\u5c0d\u65b9\u5c31\u66f4\u96e3\u6253\u4e2d',
+      '<p>\u6bcf\u4e00\u6b21\u547d\u4e2d\u90fd\u6703\u66ff\u88ab\u6253\u7684\u90a3\u4e00\u65b9\u4e0a\u7dca\u9583\u907f\u8a08\u6642\u5668 \u2014\u2014 ' +
+      '<span class="mono">botHitEvadeUntil = now + 350ms</span>\uff08<span class="mono">ai.js:618</span>\uff09\u3002' +
+      '\u90a3\u6703\u8b93 <span class="mono">underFire</span> \u6210\u7acb\uff08<span class="mono">:626</span>\uff09\uff0c' +
+      '\u9032\u800c\u5f37\u5236\u5207\u5165 Defense \u72c0\u614b\uff08<span class="mono">:984</span>\uff09\uff0c\u800c Defense \u6703\u8a2d\u5b9a ' +
+      '<span class="mono">wantSprint = true</span>\uff08<span class="mono">:1510</span>\uff09\u3002</p>' +
+      '<p>\u6240\u4ee5\u5c04\u901f\u5feb\u7684\u69cd\u6703\u8b93\u76ee\u6a19\u4e00\u76f4\u8655\u5728\u885d\u523a\u72c0\u614b\uff0c\u81ea\u5df1\u7684\u547d\u4e2d\u7387\u4e5f\u8ddf\u8457\u5d29\u6389\u3002\u6574\u8f2a\u5be6\u6e2c\u4e0b\u4f86\uff0c' +
+      '\u6bcf\u79d2\u5c04\u64ca\u6578\u5c0d\u55ae\u767c\u547d\u4e2d\u7387\u662f\u55ae\u8abf\u7684\uff1a<strong>M1014 \u6bcf\u79d2 0.97 \u767c\u3001\u547d\u4e2d 66%\uff1bNEGEV \u6bcf\u79d2 3.96 \u767c\u3001\u547d\u4e2d 26%\u3002</strong>' +
+      '\u628a\u5b50\u5f48\u6253\u5728\u300c\u5df2\u7d93\u9032\u5165 Defense\u300d\u7684\u76ee\u6a19\u8eab\u4e0a\u7684\u6bd4\u4f8b\uff0c\u81ea\u52d5\u6b66\u5668\u7d04 71%\uff0cM14 \u548c SVD \u53ea\u6709 42\u201349%\u3002' +
+      '\u9ad8\u5c04\u901f\u7b49\u65bc\u81ea\u5df1\u88fd\u9020\u81ea\u5df1\u7684\u5931\u6e96\u3002</p>'],
+
+    ['\u4eca\u5929\u90a3\u6b21 M14 / SVD \u8abf\u6574\uff0c\u662f\u4e00\u6839\u6c92\u6709\u4f5c\u7528\u7684\u69d3\u687f',
+      '<p>\u6211\u628a\u5169\u628a\u69cd\u6539\u56de\u4eca\u5929\u4e4b\u524d\u7684\u898f\u683c\uff08<span class="mono">250 rpm / 2000ms</span>\uff0c\u800c\u975e\u73fe\u5728\u7684 ' +
+      '<span class="mono">180 rpm / 1500ms</span>\uff09\u91cd\u8dd1\u4e86 ' + meta.preMatches.toLocaleString() + ' \u5834\uff0c\u5176\u4ed6\u4e00\u5f8b\u4e0d\u52d5\u3002' +
+      'M14 \u5f9e <strong>' + n1(m14.winPre) + '% &#8594; ' + n1(m14.win) + '%</strong>\uff0c' +
+      'SVD \u5f9e <strong>' + n1(svd.winPre) + '% &#8594; ' + n1(svd.win) + '%</strong>\u3002</p>' +
+      '<p>\u90a3\u6b21\u8abf\u6574\u780d\u6389\u4e86 M14 17% \u7684\u6301\u7e8c DPS\uff0c\u52dd\u7387\u52d5\u4e86\u96f6\u9ede\u56db\u500b\u767e\u5206\u9ede\u3002\u9019\u6b63\u597d\u7b26\u5408\u4e0a\u9762\u90a3\u689d\u767c\u73fe \u2014\u2014 ' +
+      '\u4f60\u62c9\u7684\u525b\u597d\u662f\u9019\u4efd\u6392\u540d\u552f\u4e00\u4e0d\u654f\u611f\u7684\u90a3\u6839\u687f\u5b50\u3002\u9019\u5169\u628a\u69cd\u5f37\u7684\u539f\u56e0\u662f 10 \u548c 12 \u9ede\u7684<em>\u55ae\u767c</em>\u50b7\u5bb3\uff0c' +
+      '\u800c\u4e14\u4f86\u5f97\u5920\u6162\uff0c\u6162\u5230\u5b50\u5f48\u843d\u5730\u6642\u76ee\u6a19\u9084\u7ad9\u8457\u3002</p>'],
+
+    ['P90 \u548c M4 \u6578\u503c\u4e0a\u662f\u96d9\u80de\u80ce\uff0c\u537b\u5dee\u4e86 17 \u500b\u767e\u5206\u9ede \u2014\u2014 \u5dee\u5728\u786c\u76f4',
+      '<p>\u6bcf\u5206\u9418\u50b7\u5bb3\u76f8\u540c\uff08\u5404 3,150\uff09\u3001\u6563\u5e03\u89d2\u76f8\u540c\u3001\u5f48\u901f\u76f8\u540c\u3001\u8d70\u8def\u8207\u885d\u523a\u901f\u5ea6\u76f8\u540c\uff0c' +
+      '\u9023\u542b\u63db\u5f48\u7684\u6301\u7e8c DPS \u90fd\u53ea\u5dee 2%\u3002\u7d50\u679c\u4e00\u500b <strong>' + n1(m4u.win) + '%</strong>\u3001\u4e00\u500b <strong>' + n1(p90.win) + '%</strong>\u3002</p>' +
+      '<p>\u552f\u4e00\u771f\u6b63\u7684\u5dee\u5225\u662f\u786c\u76f4\u8a2d\u5b9a\uff1aM4 \u662f <span class="mono">{100ms, 0.25}</span>\uff0c' +
+      'P90 \u662f <span class="mono">{50ms, 0.5}</span> \u2014\u2014 M4 \u628a\u76ee\u6a19\u58d3\u4f4f\u7684\u6642\u9593\u662f\u5169\u500d\u3001\u7a0b\u5ea6\u662f\u56db\u500d\u3002' +
+      '\u628a\u5168\u540d\u55ae\u7684\u786c\u76f4\u7d71\u4e00\u4e4b\u5f8c\uff0c\u9019\u500b\u5dee\u8ddd\u88dc\u56de\u5927\u7d04\u4e00\u534a\u3002NEGEV \u662f\u540c\u4e00\u4ef6\u4e8b\u7684\u53e6\u4e00\u7aef\uff1a' +
+      '\u5b83\u5e36\u8457\u5168\u904a\u6232\u6700\u5f31\u7684\u786c\u76f4\uff08<span class="mono">{50ms, 0.85}</span>\uff0c\u5e7e\u4e4e\u7b49\u65bc\u6c92\u6e1b\u901f\uff09\uff0c' +
+      '\u6240\u4ee5\u5373\u4f7f\u6bcf\u5206\u9418\u50b7\u5bb3\u6bd4 RPK \u9ad8 47%\uff0c\u9084\u662f\u53ea\u6709 ' + n1(negev.win) + '%\uff0c\u843d\u5728 RPK \u5f8c\u9762\u3002</p>'],
+
+    ['Railgun \u6709\u5169\u500b\u5730\u65b9\u770b\u8d77\u4f86\u4e0d\u662f\u6545\u610f\u7684',
+      '<p>' + n1(rail.win) + '% \u7684\u5b83\u8f38\u7d66\u6240\u6709\u4eba\uff0c\u5305\u62ec\u540c\u4e00\u5957\u5e95\u5b50\uff08\u9396\u5b9a 120\u300160 rpm\u30015 \u767c\uff09\u7684 PSG1\uff0c' +
+      '\u5c0d\u4f4d\u662f 39&#8211;61\u3002\u5dee\u8ddd\u5728\u5f48\u982d\uff1a<strong>PSG1 \u5169\u767c\u5e36\u8d70\uff0cRailgun \u8981\u56db\u767c</strong>\uff0c\u800c\u4e14\u4e00\u79d2\u624d\u4e00\u767c\u3002' +
+      '\u628a\u5b83\u63db\u6210\u5c0d\u7167\u7d44\u90a3\u500b 52.5 \u50b7\u5bb3\uff0c\u5b83\u7acb\u523b\u8df3\u5230 72.5% \u2014\u2014 \u6295\u5c04\u65b9\u5f0f\u6c92\u554f\u984c\uff0c\u6578\u5b57\u6709\u554f\u984c\u3002</p>' +
+      '<p>\u7b2c\u4e8c\u9ede\u8ddf\u5e73\u8861\u7121\u95dc\u4f46\u503c\u5f97\u770b\u4e00\u773c\uff1aRailgun \u7684\u84c4\u529b\u5149\u675f\u8a2d\u5b9a\u662f ' +
+      '<span class="mono">chargedDamage: 20</span>\uff0c\u800c\u5b83\u81ea\u5df1\u7684\u4e00\u822c\u5c04\u64ca\u662f <span class="mono">damage: 30</span>\u3002' +
+      '\u4e5f\u5c31\u662f\u8aaa\u73fe\u5728<em>\u84c4\u529b\u53cd\u800c\u6bd4\u4e0d\u84c4\u529b\u9084\u5f31</em>\u3002</p>'],
+
+    ['\u4ea4\u6230\u8ddd\u96e2\u5e36\u662f\u5f9e\u9396\u5b9a\u8ddd\u96e2\u63a8\u51fa\u4f86\u7684\uff0c\u800c\u4e14\u53ea\u80fd\u5f80\u5916\u63a8',
+      '<p><span class="mono">ai.js:585&#8211;590</span> \u76f4\u63a5\u62ff <span class="mono">lockRange</span> \u7576 BOT \u7684\u4fdd\u6301\u8ddd\u96e2\uff1a' +
+      '\u5c31\u5b88\u5728\u90a3\u500b\u8ddd\u96e2\uff0c\u6b63\u8ca0 7\u3002\u6b66\u5668\u6e96\u4e0d\u6e96\u5b8c\u5168\u6c92\u9032\u5230\u9019\u500b\u7b97\u5f0f\u3002NEGEV \u548c RPK \u7684\u9396\u5b9a\u8ddd\u96e2\u662f 80\uff0c' +
+      '\u65bc\u662f\u62ff\u8457\u60f3\u8cbc\u8fd1\u6253\u7684\u69cd\u5728 80 \u7684\u8ddd\u96e2\u5c0d\u5cd9 \u2014\u2014 \u628a NEGEV \u7684\u9396\u5b9a\u8ddd\u96e2\u964d\u5230 40\uff0c\u5b83\u6703\u5f9e 57% \u5347\u5230 75%\uff0c\u76f4\u63a5\u8d8a\u904e RPK\u3002</p>' +
+      '<p>\u9730\u5f48\u69cd\u5247\u662f\u53cd\u904e\u4f86\uff0c\u800c\u4e14\u554f\u984c<em>\u4e0d</em>\u5728\u9019\u689d\u898f\u5247\uff1a\u5b83\u5011\u5be6\u969b\u958b\u706b\u7684\u8ddd\u96e2\u4e2d\u4f4d\u6578\u5df2\u7d93\u662f\u7d04 52u\uff0c' +
+      '\u9060\u5728\u81ea\u5df1 33\u201347 \u7684\u8ddd\u96e2\u5e36\u4e4b\u5916\uff0c\u628a\u8ddd\u96e2\u5e36\u786c\u58d3\u5230 7\u201321 \u4e5f\u5e7e\u4e4e\u4e0d\u52d5\u3002' +
+      '\u9019\u689d\u898f\u5247\u80fd\u628a BOT \u63a8\u5230\u6bd4\u5b83\u60f3\u6253\u7684\u4f4d\u7f6e\u66f4\u9060\uff0c\u4f46\u62c9\u4e0d\u56de\u4f86 \u2014\u2014 \u72c0\u614b\u6a5f\u6709\u4e00\u500b 52\u201355u \u5de6\u53f3\u7684\u5730\u677f\uff0c\u5b83\u4e0d\u6703\u8de8\u904e\u53bb\u3002</p>']
+  ];
+  document.getElementById('findings').innerHTML = findings.map(function (f) {
+    return '<div class="find"><h3>' + f[0] + '</h3>' + f[1] + '</div>';
+  }).join('');
+
+  document.getElementById('method').innerHTML =
+    '<h3>\u65b9\u6cd5</h3>' +
+    '<p>\u8dd1\u5728\u5171\u7528\u6a21\u64ec\u5668\uff08<span class="mono">shared/src/sim</span>\uff09\u4e0a\uff0c\u9a45\u52d5\u65b9\u5f0f\u5b8c\u5168\u6bd4\u7167\u7dda\u4e0a\u4f3a\u670d\u5668\u7684 ' +
+    '<span class="mono">tickLobby</span> \u8ff4\u5708\uff1a\u6bcf\u500b tick \u5148\u9078\u5b9a\u5404 BOT \u7684\u76ee\u6a19\uff0c\u57f7\u884c <span class="mono">tickBot</span>\uff0c' +
+    '\u518d\u57f7\u884c <span class="mono">tickMatch</span>\u3002Duel \u53ea\u6709\u5728\u64ca\u5012\u6642\u624d\u7d50\u675f \u2014\u2014 \u4f3a\u670d\u5668\u672c\u4f86\u5c31\u6c92\u6709\u56de\u5408\u8a08\u6642\uff0c' +
+    '\u6240\u4ee5\u300c\u6253\u5230\u5206\u51fa\u52dd\u8ca0\u300d\u4e0d\u9700\u8981\u984d\u5916\u767c\u660e\u4efb\u4f55\u6771\u897f\u3002\u6bcf\u4e00\u5834\u7684\u4e82\u6578\u7a2e\u5b50\u90fd\u7531\u8a72\u5834\u81ea\u5df1\u7684\u8b58\u5225\u503c\u6c7a\u5b9a\uff0c\u6574\u8f2a\u53ef\u5b8c\u6574\u91cd\u73fe\u3002</p>' +
+    '<ul>' +
+    '<li><strong>\u5148\u5f8c\u624b\u504f\u5dee\u662f\u91cf\u51fa\u4f86\u7684\uff0c\u4e0d\u662f\u5047\u8a2d\u7684\u3002</strong>' + meta.mirrorN.toLocaleString() + ' \u5834\u93e1\u50cf\u5c0d\u5c40\uff08\u5169\u908a\u540c\u4e00\u628a\u69cd\uff09' +
+    '\u628a p1 \u653e\u5728 ' + n1(meta.mirrorP1) + '% &#177;' + n1(meta.mirrorCi) + ' \u2014\u2014 p2 \u78ba\u5be6\u6709\u4e00\u9ede\u771f\u5be6\u512a\u52e2\uff0c' +
+    '\u800c\u4e14\u5728\u672c\u4f86\u5c31\u4e94\u4e94\u958b\u7684\u69cd\u4e0a\u6700\u660e\u986f\u3002\u56e0\u70ba\u6bcf\u4e00\u7d44\u914d\u5c0d\u7684\u5169\u7a2e\u51fa\u751f\u9806\u5e8f\u90fd\u6253\u4e86\u540c\u6a23\u5834\u6b21\uff0c\u9019\u500b\u504f\u5dee\u6703\u62b5\u6d88\uff1a' +
+    '\u5168\u90e8 ' + (meta.matches - meta.mirrorN).toLocaleString() + ' \u5834\u975e\u93e1\u50cf\u5c0d\u5c40\u88e1\uff0cp1 \u52dd\u7387\u662f ' + n1(meta.realP1) + '% &#177;' + n1(meta.realCi) + '%\u3002</li>' +
+    '<li><strong>\u9019\u91cf\u7684\u662f\u7dda\u4e0a\u90a3\u96bb BOT\uff0c\u800c\u4e14\u93e1\u50cf\u5df2\u7d93\u5728\u5169\u500b\u5730\u65b9\u8d70\u9418\u4e86\u3002</strong>\u6211\u628a\u96e2\u7dda\u7684 ' +
+    '<span class="mono">updateEnemy</span> \u548c\u7dda\u4e0a\u7684 <span class="mono">tickBot</span> \u505a\u4e86\u6bd4\u5c0d\uff1a' +
+    '\u5168\u90e8 34 \u500b BOT \u5e38\u6578\u5b8c\u5168\u76f8\u540c\uff0c\u72c0\u614b\u6a5f\u9010\u884c\u662f\u540c\u4e00\u5957\u6f14\u7b97\u6cd5\u3002\u4f46\u662f ' +
+    '\uff08\u4e00\uff09\u786c\u76f4\u7684\u901f\u5ea6\u7e2e\u653e\u88ab\u5957\u5728\u52d5\u91cf\u7a4d\u5206\u7684\u76f8\u53cd\u5074\uff0c\u6240\u4ee5\u88ab\u58d3\u5236\u7684<em>\u7dda\u4e0a</em> BOT \u4ee5 1.75&#215; \u57fa\u790e\u901f\u5ea6\u812b\u96e2\uff0c' +
+    '\u800c\u96e2\u7dda BOT \u548c\u73a9\u5bb6\u5169\u689d\u8def\u5f91\u90fd\u662f 0.625&#215; \u2014\u2014 \u7dda\u4e0a BOT \u7529\u958b\u58d3\u5236\u7684\u901f\u5ea6\u5feb\u7d04 2.8 \u500d\uff1b' +
+    '\uff08\u4e8c\uff09BOT \u7684\u8996\u7dda\u8d77\u9ede\u96e2\u7dda\u662f 6.40\u3001\u7dda\u4e0a\u662f 4.05\uff0c\u9019\u5728 Factory\uff08\u6709 68 \u500b\u969c\u7919\u7269\u843d\u5728\u9019\u500b\u593e\u5c64\uff09\u3001' +
+    'Factory 2\uff0839\uff09\u3001Streets \u548c Flashpoint\uff08\u5404 4\uff09\u3001Lobby\uff082\uff09\u6703\u6709\u5dee\uff0c\u53e6\u5916\u56db\u5f35\u5730\u5716\u5b8c\u5168\u6c92\u5dee\u3002' +
+    '\u8aa4\u5dee\u65b9\u5411\uff1a<em>\u5728\u96e2\u7dda\u74b0\u5883\uff0c\u6301\u7e8c\u8f38\u51fa\u578b\u6b66\u5668\u7684\u6392\u540d\u61c9\u8a72\u6bd4\u9019\u5f35\u8868\u66f4\u9ad8\u3002</em></li>' +
+    '<li><strong>\u9019\u6392\u7684\u662f BOT \u7684\u64cd\u4f5c\uff0c\u4e0d\u662f\u6b66\u5668\u5f37\u5ea6\u3002</strong>\u7b49\u50b7\u5bb3\u5c0d\u7167\u7d44\u5c31\u662f\u8b49\u64da\u800c\u4e0d\u662f\u514d\u8cac\u8072\u660e \u2014\u2014 ' +
+    '\u628a\u6b66\u5668\u8f38\u51fa\u56fa\u5b9a\u4f4f\uff0c\u6392\u540d\u53cd\u800c<em>\u66f4\u9661</em>\u3002\u734e\u52f5\u4eba\u985e\u7784\u6e96\u6216\u6642\u6a5f\u7684\u6b66\u5668\u5728\u9019\u88e1\u6703\u504f\u4f4e\uff0c' +
+    '\u8cbc\u5408 BOT \u7bc0\u594f\u7684\u6703\u504f\u9ad8\u3002\u62ff\u5b83\u53bb\u627e\u300cBOT \u6c92\u628a\u54ea\u628a\u69cd\u7528\u597d\u300d\uff0c\u4e0d\u8981\u76f4\u63a5\u62ff\u53bb\u8abf\u73a9\u5bb6\u5e73\u8861\u3002</li>' +
+    '<li><strong>\u77e9\u9663\u6bcf\u4e00\u683c\u662f &#177;5%\u3002</strong>\u6574\u9ad4\u6392\u540d\u662f &#177;1.3\uff0c\u5206\u5730\u5716\u6bcf\u683c\u662f &#177;10\u3002' +
+    '\u55ae\u4e00\u683c\u5b50\u88e1 3 \u500b\u767e\u5206\u9ede\u7684\u5dee\u8ddd\u4e0d\u8981\u7576\u771f\u3002</li>' +
+    '</ul>';
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,34 @@
+{
+  "id": "atsuko",
+  "data": {
+    "map": {
+      "death": "Vital_Death",
+      "dodge": "Move_Jump",
+      "hit": "",
+      "intro": "",
+      "jump": "Move_Jump",
+      "reload": "Normal_Reload",
+      "shoot": "Normal_Attack_Ing",
+      "sprint": "Move_Ing",
+      "sprintShoot": "Move_Ing",
+      "stand": "Normal_Idle",
+      "walk": "Move_Ing"
+    },
+    "speed": {
+      "death": 100,
+      "dodge": 100,
+      "hit": 100,
+      "intro": 100,
+      "jump": 100,
+      "reload": 100,
+      "shoot": 100,
+      "sprint": 100,
+      "sprintShoot": 100,
+      "stand": 100,
+      "walk": 50
+    },
+    "updatedAt": "2026-10-10T10:20:01.657Z"
+  },
+  "version": 1,
+  "updatedAt": "2026-10-10T10:20:03.416876Z"
+}

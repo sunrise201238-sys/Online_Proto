@@ -1,0 +1,420 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Gun VS Gun &#8212; 1v1 Duel bot win rates</title>
+
+<style>
+  :root {
+    --ground:      #f4f6f9;
+    --panel:       #ffffff;
+    --panel-sunk:  #eceff4;
+    --line:        #d8dde6;
+    --line-soft:   #e8ebf1;
+    --text:        #171c26;
+    --text-dim:    #5c6779;
+    --text-faint:  #8b95a6;
+    --signal:      #a86a12;
+    --signal-bg:   rgba(227,162,60,.16);
+    --hot:         200, 74, 52;
+    --cold:        44, 104, 152;
+    --shadow:      0 1px 2px rgba(20,28,44,.06), 0 8px 24px -12px rgba(20,28,44,.18);
+    --heat-max:    .62;
+
+    --display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --body:    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --data:    "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:     #0c0f16;
+      --panel:      #141924;
+      --panel-sunk: #10141d;
+      --line:       #262f40;
+      --line-soft:  #1c2431;
+      --text:       #ccd4e2;
+      --text-dim:   #8592a6;
+      --text-faint: #5d6a7e;
+      --signal:     #e3a23c;
+      --signal-bg:  rgba(227,162,60,.13);
+      --hot:        222, 96, 72;
+      --cold:       82, 148, 200;
+      --shadow:     0 1px 0 rgba(255,255,255,.03), 0 16px 40px -20px rgba(0,0,0,.8);
+      --heat-max:   .58;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6f9; --panel: #ffffff; --panel-sunk: #eceff4;
+    --line: #d8dde6; --line-soft: #e8ebf1;
+    --text: #171c26; --text-dim: #5c6779; --text-faint: #8b95a6;
+    --signal: #a86a12; --signal-bg: rgba(227,162,60,.16);
+    --hot: 200,74,52; --cold: 44,104,152;
+    --shadow: 0 1px 2px rgba(20,28,44,.06), 0 8px 24px -12px rgba(20,28,44,.18);
+    --heat-max: .62;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c0f16; --panel: #141924; --panel-sunk: #10141d;
+    --line: #262f40; --line-soft: #1c2431;
+    --text: #ccd4e2; --text-dim: #8592a6; --text-faint: #5d6a7e;
+    --signal: #e3a23c; --signal-bg: rgba(227,162,60,.13);
+    --hot: 222,96,72; --cold: 82,148,200;
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 16px 40px -20px rgba(0,0,0,.8);
+    --heat-max: .58;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: clamp(28px, 5vw, 68px) clamp(16px, 4vw, 36px) 96px; }
+
+  /* ---------- masthead ---------- */
+  .mast { border-bottom: 2px solid var(--text); padding-bottom: 20px; margin-bottom: 34px; }
+  .kicker {
+    font-family: var(--data); font-size: 11.5px; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--signal); margin-bottom: 14px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700; letter-spacing: -.03em;
+    font-size: clamp(30px, 5.4vw, 50px); line-height: 1.02; text-wrap: balance; margin-bottom: 12px;
+  }
+  .standfirst { color: var(--text-dim); font-size: 17px; max-width: 62ch; text-wrap: pretty; }
+
+  .facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    margin: 30px 0 46px; border-radius: 3px; overflow: hidden;
+  }
+  .fact { background: var(--panel); padding: 13px 15px 15px; }
+  .fact dt {
+    font-family: var(--data); font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--text-faint); margin-bottom: 5px;
+  }
+  .fact dd { font-family: var(--data); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .fact dd small { display: block; font-size: 11px; font-weight: 400; color: var(--text-dim); letter-spacing: 0; margin-top: 3px; }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 54px; }
+  .shead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 9px; margin-bottom: 20px; flex-wrap: wrap; }
+  .shead h2 { font-family: var(--display); font-weight: 700; letter-spacing: -.018em; font-size: 21px; }
+  .shead .note { font-family: var(--data); font-size: 11.5px; color: var(--text-faint); margin-left: auto; }
+  .lede { color: var(--text-dim); max-width: 68ch; margin-bottom: 22px; text-wrap: pretty; }
+
+  /* ---------- ladder ---------- */
+  .ladder { display: flex; flex-direction: column; gap: 3px; }
+  .rung {
+    display: grid; grid-template-columns: 20px 92px 1fr 108px; align-items: center; gap: 12px;
+    padding: 7px 10px; border-radius: 3px;
+  }
+  .rung:nth-child(odd) { background: var(--panel-sunk); }
+  .rank { font-family: var(--data); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; text-align: right; }
+  .wname { font-weight: 600; font-size: 15px; }
+  .wname span { display: block; font-family: var(--data); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); font-weight: 400; }
+  .track { position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 2px; overflow: visible; }
+  .track::before {
+    content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px;
+    background: var(--text-faint); opacity: .55;
+  }
+  .fill { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+  .whisk { position: absolute; top: 50%; height: 9px; transform: translateY(-50%); border-left: 1px solid var(--text); border-right: 1px solid var(--text); opacity: .5; }
+  .figs { font-family: var(--data); font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+  .figs b { font-weight: 600; font-size: 15px; }
+  .figs em { font-style: normal; color: var(--text-faint); font-size: 11px; }
+
+  /* ---------- generic data table / heatmap ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--data); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; text-align: right; white-space: nowrap; }
+  thead th {
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint);
+    font-weight: 500; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel);
+  }
+  tbody th { text-align: left; font-weight: 600; color: var(--text); font-family: var(--body); font-size: 13px; }
+  tbody tr + tr td, tbody tr + tr th { border-top: 1px solid var(--line-soft); }
+  td.self { color: var(--text-faint); }
+  .rowlabel { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  tbody tr:hover td, tbody tr:hover th { background-image: linear-gradient(var(--signal-bg), var(--signal-bg)); }
+
+  /* ---------- callouts ---------- */
+  .find { border: 1px solid var(--line); border-left: 3px solid var(--signal); background: var(--panel); border-radius: 3px; padding: 17px 20px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .find h3 { font-family: var(--display); font-size: 16px; font-weight: 700; letter-spacing: -.012em; margin-bottom: 7px; }
+  .find p { color: var(--text-dim); font-size: 15px; }
+  .find p + p { margin-top: 9px; }
+  .find strong { color: var(--text); font-weight: 600; }
+  code, .mono { font-family: var(--data); font-size: .88em; background: var(--panel-sunk); padding: 1px 5px; border-radius: 2px; }
+
+  .caveat { border: 1px dashed var(--line); border-radius: 3px; padding: 17px 20px; color: var(--text-dim); font-size: 14.5px; }
+  .caveat h3 { font-family: var(--display); font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 7px; }
+  .caveat ul { margin: 8px 0 0 18px; }
+  .caveat li + li { margin-top: 6px; }
+
+  .legend { display: flex; align-items: center; gap: 9px; font-family: var(--data); font-size: 10.5px; color: var(--text-faint); margin-top: 10px; letter-spacing: .05em; }
+  .ramp { height: 9px; width: 190px; border-radius: 2px; border: 1px solid var(--line); }
+
+  @media (max-width: 640px) {
+    .rung { grid-template-columns: 16px 76px 1fr; gap: 9px; }
+    .rung .figs { grid-column: 2 / -1; text-align: left; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="kicker">Gun VS Gun &#183; headless sim &#183; branch Demo_0.7.2_Opus &#183; 2026-08-10</div>
+    <h1>Which weapon wins a 1v1 Duel when both sides are bots</h1>
+    <p class="standfirst">
+      Every pairing of the twelve pickable units, on all nine maps, both spawn orders, fought to a KO.
+      No round timer, no draws. The ladder below is what the <em>bot</em> can do with each weapon &#8212; and a
+      control run says that is almost the opposite of what the weapon cards say.
+    </p>
+  </header>
+
+  <dl class="facts" id="facts"></dl>
+
+  <section>
+    <div class="shead">
+      <h2>The ladder</h2>
+      <span class="note" id="ladder-note"></span>
+    </div>
+    <p class="lede">
+      Win rate across all opponents and maps, with 95% confidence intervals. The centre line is 50%.
+      Mirror matches are excluded &#8212; a unit fighting itself always banks one win and one loss, which only
+      pulls everything toward the middle.
+    </p>
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>By weapon class</h2></div>
+    <div class="scroll">
+      <table id="classes">
+        <thead><tr><th class="rowlabel" style="text-align:left">Class</th><th>Win %</th><th>95% CI</th><th>Matches</th><th style="width:44%"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>Matchup matrix</h2>
+      <span class="note">row's win % against column &#183; n = 359 per cell &#183; &#177;5%</span>
+    </div>
+    <p class="lede">
+      Read across a row to see who that weapon beats. The ordering is close to transitive &#8212; with one
+      exception worth noticing, called out below the grid.
+    </p>
+    <div class="scroll"><table id="matrix"></table></div>
+    <div class="legend"><span>0%</span><div class="ramp" id="ramp"></div><span>100%</span></div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>By map</h2>
+      <span class="note">spread = best map minus worst map</span>
+    </div>
+    <p class="lede">
+      Some weapons are flat across every arena and some swing 50 points. A big spread means the number in
+      the ladder is an average of two different weapons &#8212; one that works in open ground and one that doesn't.
+    </p>
+    <div class="scroll"><table id="maps"></table></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>What actually moves the needle</h2></div>
+    <div id="findings"></div>
+  </section>
+
+  <section>
+    <div class="shead"><h2>How it ran, and what it can't tell you</h2></div>
+    <div class="caveat" id="method"></div>
+  </section>
+
+</div>
+
+<script id="payload" type="application/json">{"meta":{"matches":28080,"reps":20,"maps":["Plain Field","Streets","Factory","Factory 2","Square","Lobby","Station","Flashpoint","Airport"],"mapKeys":["arena1","arena2","factory","factory2","square","lobby","station","flashpoint","airport"],"unresolved":1,"medianSecs":18.96,"maxSecs":85.648,"mirrorP1":47.06018518518518,"mirrorCi":1.4884430506703457,"mirrorN":4320,"realP1":50.28831179763458,"realCi":0.6357769473505379,"preMatches":9504},"units":[{"key":"unit10","name":"M14","cls":"Rifle","win":79.29292929292929,"ci":1.2620746473861968,"n":3960,"winPre":78.8510101010101,"ciPre":2.0110687992037595,"avgWinSecs":18.90372484076433,"avgHpLeft":38.63232484076433,"dmg":10,"pellets":1,"perShot":10,"rpm":180,"effRpm":179,"mag":20,"reload":1500,"lock":56,"fireCap":20,"sustDps":25.367833587011667,"stk":10,"perMap":[81.13636363636364,83.86363636363636,74.77272727272727,79.0909090909091,77.04545454545455,81.13636363636364,81.13636363636364,75,80.45454545454545]},{"key":"unit18","name":"SVD","cls":"Rifle","win":75.60606060606061,"ci":1.3376046001553916,"n":3960,"winPre":72.41161616161617,"ciPre":2.2011302023268646,"avgWinSecs":19.062279225116903,"avgHpLeft":37.249164996659985,"dmg":12,"pellets":1,"perShot":12,"rpm":180,"effRpm":179,"mag":10,"reload":1500,"lock":56,"fireCap":10,"sustDps":26.52519893899204,"stk":9,"perMap":[79.54545454545455,78.63636363636364,66.36363636363636,73.86363636363636,76.5909090909091,75.68181818181819,78.4090909090909,74.0909090909091,77.27272727272727]},{"key":"unit16","name":"RPK","cls":"Machine Gun","win":68.71212121212122,"ci":1.4441530325331915,"n":3960,"winPre":70.26515151515152,"ciPre":2.2510303017936217,"avgWinSecs":20.12882910694598,"avgHpLeft":40.40683572216097,"dmg":5,"pellets":1,"perShot":5,"rpm":600,"effRpm":536,"mag":100,"reload":5000,"lock":80,"fireCap":100,"sustDps":31.079065141720534,"stk":20,"perMap":[95.45454545454545,57.27272727272727,62.95454545454545,50,91.36363636363636,60.68181818181818,73.4090909090909,56.36363636363637,70.9090909090909]},{"key":"unit15","name":"AA12","cls":"Shotgun","win":60.42929292929293,"ci":1.5230674613731776,"n":3960,"winPre":60.73232323232323,"ciPre":2.4049499015187052,"avgWinSecs":18.28168157124948,"avgHpLeft":40.15399080651901,"dmg":3,"pellets":8,"perShot":24,"rpm":300,"effRpm":288,"mag":20,"reload":4000,"lock":40,"fireCap":20,"sustDps":60.36217303822938,"stk":5,"perMap":[35.68181818181818,77.27272727272727,61.36363636363637,71.36363636363636,30.90909090909091,69.54545454545455,58.18181818181818,80.9090909090909,58.63636363636363]},{"key":"unit17","name":"NEGEV","cls":"Machine Gun","win":60.27777777777778,"ci":1.5240663111273427,"n":3960,"winPre":61.74242424242424,"ciPre":2.3934758230688873,"avgWinSecs":21.028330121491415,"avgHpLeft":37.39757017176372,"dmg":4,"pellets":1,"perShot":4,"rpm":1100,"effRpm":938,"mag":100,"reload":5000,"lock":80,"fireCap":100,"sustDps":35.28581510232886,"stk":25,"perMap":[69.77272727272727,56.36363636363637,64.31818181818181,57.27272727272727,75.45454545454545,50.22727272727273,52.95454545454545,57.04545454545455,59.09090909090909]},{"key":"unit11","name":"M1014","cls":"Shotgun","win":48.547613033594345,"ci":1.5568616645127997,"n":3959,"winPre":48.83133291219204,"ciPre":2.462447360862042,"avgWinSecs":18.52840790842872,"avgHpLeft":32.69588969823101,"dmg":3,"pellets":8,"perShot":24,"rpm":250,"effRpm":250,"mag":7,"reload":1000,"lock":40,"fireCap":4,"sustDps":68.85245901639344,"stk":5,"perMap":[32.04545454545455,58.76993166287016,48.40909090909091,57.95454545454545,24.545454545454547,65.22727272727273,23.181818181818183,72.72727272727273,54.09090909090909]},{"key":"unit1","name":"M4","cls":"Assault Rifle","win":46.06060606060606,"ci":1.55248114250159,"n":3960,"winPre":46.906565656565654,"ciPre":2.4576255322449456,"avgWinSecs":21.851447368421052,"avgHpLeft":31.92297149122807,"dmg":4.5,"pellets":1,"perShot":4.5,"rpm":700,"effRpm":625,"mag":30,"reload":1500,"lock":56,"fireCap":30,"sustDps":31.51260504201681,"stk":23,"perMap":[47.95454545454545,42.72727272727273,39.54545454545455,47.04545454545455,51.36363636363637,49.77272727272727,45.90909090909091,42.72727272727273,47.5]},{"key":"unit9","name":"FAMAS","cls":"Assault Rifle","win":41.98029805506441,"ci":1.5373538013485855,"n":3959,"winPre":40.74542008843967,"ciPre":2.4205606873247,"avgWinSecs":21.715552346570394,"avgHpLeft":32.28188929001203,"dmg":4,"pellets":1,"perShot":4,"rpm":900,"effRpm":750,"mag":25,"reload":1500,"lock":56,"fireCap":25,"sustDps":29.239766081871345,"stk":25,"perMap":[40.22727272727273,41.68564920273349,37.27272727272727,46.59090909090909,45.22727272727273,41.13636363636363,42.27272727272727,41.13636363636363,42.27272727272727]},{"key":"unit4","name":"evo3","cls":"SMG","win":41.96969696969697,"ci":1.5371059878170314,"n":3960,"winPre":42.61363636363637,"ciPre":2.43532615760741,"avgWinSecs":21.05841636582431,"avgHpLeft":32.43200962695548,"dmg":3.5,"pellets":1,"perShot":3.5,"rpm":1100,"effRpm":938,"mag":30,"reload":1500,"lock":50,"fireCap":30,"sustDps":31.28724672228844,"stk":29,"perMap":[43.63636363636363,37.72727272727273,37.27272727272727,44.54545454545455,47.72727272727273,46.81818181818182,36.36363636363637,40.90909090909091,42.72727272727273]},{"key":"unit3","name":"PSG1","cls":"Sniper","win":34.67171717171717,"ci":1.4823364076577263,"n":3960,"winPre":34.974747474747474,"ciPre":2.3485337204032235,"avgWinSecs":12.668504005826657,"avgHpLeft":36.684996358339404,"dmg":50,"pellets":1,"perShot":50,"rpm":60,"effRpm":60,"mag":5,"reload":2500,"lock":120,"fireCap":5,"sustDps":38.27311696264544,"stk":2,"perMap":[47.27272727272727,24.545454545454547,48.63636363636363,25,40.68181818181818,27.954545454545453,50,16.59090909090909,31.363636363636363]},{"key":"unit14","name":"P90","cls":"SMG","win":28.71212121212121,"ci":1.4091231955844397,"n":3960,"winPre":28.8510101010101,"ciPre":2.231224980219526,"avgWinSecs":20.35060686015831,"avgHpLeft":34.878188214599824,"dmg":3.5,"pellets":1,"perShot":3.5,"rpm":900,"effRpm":750,"mag":50,"reload":2000,"lock":50,"fireCap":50,"sustDps":29.56081081081081,"stk":29,"perMap":[21.818181818181817,30.227272727272727,27.5,35.22727272727273,30.681818181818183,27.045454545454547,29.772727272727273,32.04545454545455,24.09090909090909]},{"key":"unit6","name":"Railgun","cls":"Sniper","win":13.737373737373737,"ci":1.0721898048510272,"n":3960,"winPre":13.068181818181818,"ciPre":1.6598752462219215,"avgWinSecs":19.167823529411766,"avgHpLeft":31.893382352941178,"dmg":30,"pellets":1,"perShot":30,"rpm":60,"effRpm":60,"mag":5,"reload":2500,"lock":120,"fireCap":5,"sustDps":22.963870177587264,"stk":4,"perMap":[5.454545454545454,10.909090909090908,31.59090909090909,12.045454545454545,8.409090909090908,4.7727272727272725,28.40909090909091,10.454545454545455,11.590909090909092]}],"matrix":[[null,54.166666666666664,59.44444444444444,68.61111111111111,78.88888888888889,78.61111111111111,91.66666666666667,89.16666666666667,92.22222222222223,68.88888888888889,97.77777777777777,92.77777777777777],[45.833333333333336,null,55.55555555555556,60,82.5,77.77777777777777,87.22222222222223,89.44444444444444,88.61111111111111,61.388888888888886,91.11111111111111,92.22222222222223],[40.55555555555556,44.44444444444444,null,46.94444444444444,58.05555555555556,68.33333333333333,77.22222222222223,78.05555555555556,83.05555555555556,73.05555555555556,93.33333333333333,92.77777777777777],[31.38888888888889,40,53.05555555555556,null,54.166666666666664,48.05555555555556,64.44444444444444,69.44444444444444,64.72222222222223,77.5,71.94444444444444,90],[21.11111111111111,17.5,41.94444444444444,45.833333333333336,null,66.38888888888889,70,68.33333333333333,77.22222222222223,76.38888888888889,88.61111111111111,89.72222222222223],[21.38888888888889,22.22222222222222,31.666666666666668,51.94444444444444,33.611111111111114,null,53.05555555555556,60.16713091922006,46.94444444444444,70.83333333333333,64.72222222222223,77.5],[8.333333333333334,12.777777777777779,22.77777777777778,35.55555555555556,30,46.94444444444444,null,60,63.611111111111114,59.166666666666664,79.72222222222223,87.77777777777777],[10.833333333333334,10.555555555555555,21.944444444444443,30.555555555555557,31.666666666666668,39.83286908077994,40,null,48.333333333333336,61.94444444444444,75,91.11111111111111],[7.777777777777778,11.38888888888889,16.944444444444443,35.27777777777778,22.77777777777778,53.05555555555556,36.388888888888886,51.666666666666664,null,65.55555555555556,72.77777777777777,88.05555555555556],[31.11111111111111,38.611111111111114,26.944444444444443,22.5,23.61111111111111,29.166666666666668,40.833333333333336,38.05555555555556,34.44444444444444,null,35,61.111111111111114],[2.2222222222222223,8.88888888888889,6.666666666666667,28.055555555555557,11.38888888888889,35.27777777777778,20.27777777777778,25,27.22222222222222,65,null,85.83333333333333],[7.222222222222222,7.777777777777778,7.222222222222222,10,10.277777777777779,22.5,12.222222222222221,8.88888888888889,11.944444444444445,38.888888888888886,14.166666666666666,null]],"classes":[{"name":"Rifle","win":77.44949494949495,"ci":0.9204091174300479,"n":7920},{"name":"Machine Gun","win":64.4949494949495,"ci":1.0539048459503633,"n":7920},{"name":"Shotgun","win":54.489203182219974,"ci":1.0968149163311496,"n":7919},{"name":"Assault Rifle","win":44.02070968556636,"ci":1.0933598301498177,"n":7919},{"name":"SMG","win":35.34090909090909,"ci":1.052803054090791,"n":7920},{"name":"Sniper","win":24.204545454545453,"ci":0.9433297412961833,"n":7920}]}</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById('payload').textContent);
+  var U = D.units, M = D.matrix, meta = D.meta;
+  var n1 = function (x, d) { return x.toFixed(d === undefined ? 1 : d); };
+
+  /* Returns a colour expressed through the theme's own custom properties, so a
+     reader toggling light/dark re-resolves every cell. Reading the computed
+     values here instead would bake whichever theme happened to be active at
+     load and leave the heatmap stale after a toggle. */
+  function heat(p) {
+    if (p === null || p === undefined) return 'transparent';
+    var d = (p - 50) / 50;
+    var k = Math.min(1, Math.abs(d)).toFixed(3);
+    return 'rgba(var(' + (d >= 0 ? '--hot' : '--cold') + '), calc(var(--heat-max) * ' + k + '))';
+  }
+
+  /* ---- facts strip ---- */
+  var facts = [
+    ['Matches run', meta.matches.toLocaleString(), 'fought to a KO'],
+    ['Draws', String(meta.unresolved), meta.unresolved === 1 ? '1 hit the 10-min guard' : 'hit the 10-min guard'],
+    ['Weapons', String(U.length), 'the pickable roster'],
+    ['Maps', String(meta.maps.length), 'every arena in the sim'],
+    ['Median duel', n1(meta.medianSecs) + 's', 'longest ' + n1(meta.maxSecs) + 's'],
+    ['Spread', n1(U[0].win - U[U.length - 1].win, 0) + ' pts', U[0].name + ' over ' + U[U.length - 1].name]
+  ];
+  document.getElementById('facts').innerHTML = facts.map(function (f) {
+    return '<div class="fact"><dt>' + f[0] + '</dt><dd>' + f[1] + '<small>' + f[2] + '</small></dd></div>';
+  }).join('');
+
+  document.getElementById('ladder-note').textContent = 'n = ' + U[0].n.toLocaleString() + ' per weapon';
+
+  /* ---- ladder ---- */
+  document.getElementById('ladder').innerHTML = U.map(function (u, i) {
+    var lo = Math.min(u.win, 50), w = Math.abs(u.win - 50);
+    var fill = '<div class="fill" style="left:' + lo + '%;width:' + w + '%;background:' + heat(u.win) + '"></div>';
+    var whisk = '<div class="whisk" style="left:' + (u.win - u.ci) + '%;width:' + (2 * u.ci) + '%"></div>';
+    return '<div class="rung">' +
+      '<div class="rank">' + (i + 1) + '</div>' +
+      '<div class="wname">' + u.name + '<span>' + u.cls + '</span></div>' +
+      '<div class="track">' + fill + whisk + '</div>' +
+      '<div class="figs"><b>' + n1(u.win) + '%</b> <em>\u00b1' + n1(u.ci) + '</em></div>' +
+      '</div>';
+  }).join('');
+
+  /* ---- classes ---- */
+  document.querySelector('#classes tbody').innerHTML = D.classes.map(function (c) {
+    var lo = Math.min(c.win, 50), w = Math.abs(c.win - 50);
+    return '<tr><th class="rowlabel">' + c.name + '</th>' +
+      '<td>' + n1(c.win) + '</td><td>\u00b1' + n1(c.ci) + '</td><td>' + c.n.toLocaleString() + '</td>' +
+      '<td><div class="track" style="height:16px">' +
+        '<div class="fill" style="left:' + lo + '%;width:' + w + '%;background:' + heat(c.win) + '"></div>' +
+      '</div></td></tr>';
+  }).join('');
+
+  /* ---- matchup matrix ---- */
+  var mh = '<thead><tr><th class="rowlabel" style="text-align:left">beats \u2192</th>' +
+    U.map(function (u) { return '<th>' + u.name + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    U.map(function (u, i) {
+      return '<tr><th class="rowlabel">' + u.name + '</th>' + M[i].map(function (v) {
+        if (v === null) return '<td class="self">\u2014</td>';
+        return '<td style="background:' + heat(v) + '">' + n1(v, 0) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+  document.getElementById('matrix').innerHTML = mh;
+
+  var stops = [];
+  for (var s = 0; s <= 10; s++) stops.push(heat(s * 10));
+  document.getElementById('ramp').style.background = 'linear-gradient(90deg,' + stops.join(',') + ')';
+
+  /* ---- by map ---- */
+  var spreads = U.map(function (u) { return Math.max.apply(null, u.perMap) - Math.min.apply(null, u.perMap); });
+  var mp = '<thead><tr><th class="rowlabel" style="text-align:left">Weapon</th>' +
+    meta.maps.map(function (m) { return '<th>' + m + '</th>'; }).join('') + '<th>Spread</th></tr></thead><tbody>' +
+    U.map(function (u, i) {
+      return '<tr><th class="rowlabel">' + u.name + '</th>' +
+        u.perMap.map(function (v) { return '<td style="background:' + heat(v) + '">' + n1(v, 0) + '</td>'; }).join('') +
+        '<td style="font-weight:600">' + n1(spreads[i], 0) + '</td></tr>';
+    }).join('') + '</tbody>';
+  document.getElementById('maps').innerHTML = mp;
+
+  /* ---- findings ---- */
+  var m14 = U.find(function (u) { return u.name === 'M14'; });
+  var svd = U.find(function (u) { return u.name === 'SVD'; });
+  var psg = U.find(function (u) { return u.name === 'PSG1'; });
+  var rail = U.find(function (u) { return u.name === 'Railgun'; });
+  var p90 = U.find(function (u) { return u.name === 'P90'; });
+  var evo = U.find(function (u) { return u.name === 'evo3'; });
+
+  var m4u = U.find(function (u) { return u.name === 'M4'; });
+  var negev = U.find(function (u) { return u.name === 'NEGEV'; });
+
+  var findings = [
+    ['This ladder ranks cadence, not firepower',
+      '<p>Start with the cleanest fact in the data: <strong>M14 and Railgun deal exactly the same damage per minute</strong> ' +
+      '\u2014 1,800 each \u2014 and finish at <strong>' + n1(m14.win) + '% and ' + n1(rail.win) + '%</strong>. ' +
+      'Regressing the ladder against every raw stat agrees: the best predictor is lock range at r&#178; = 0.18, ' +
+      'sustained DPS is r&#178; = 0.01, and time-to-kill is r&#178; = 0.00.</p>' +
+      '<p>So I ran the control. I gave all twelve units <em>identical</em> damage per minute (3,150) by adjusting only ' +
+      'per-shot damage \u2014 rate, magazine, reload, spread, stun, lock range and the entire AI untouched \u2014 and re-ran ' +
+      '9,504 matches. If output drove the ladder it had to flatten. <strong>It got steeper: the spread widened from ' +
+      '65.6 points to 84.0</strong>, and re-sorted (rank correlation 0.25). M14 climbed to 92.8%. AA12 \u2014 the highest ' +
+      'raw output in the game at 7,200 damage per minute \u2014 fell to 8.8%.</p>'],
+
+    ['The mechanism: landing hits makes your target harder to hit',
+      '<p>Every hit arms the victim\'s evade timer \u2014 <span class="mono">botHitEvadeUntil = now + 350&#8239;ms</span> ' +
+      '(<span class="mono">ai.js:618</span>). That sets <span class="mono">underFire</span> ' +
+      '(<span class="mono">:626</span>), which forces the Defense state (<span class="mono">:984</span>), which sets ' +
+      '<span class="mono">wantSprint = true</span> (<span class="mono">:1510</span>).</p>' +
+      '<p>So a fast weapon keeps its target permanently sprinting, and its own accuracy collapses. Measured across the ' +
+      'run, shots-per-second against per-shot hit rate is monotone: <strong>M1014 fires 0.97/s and hits 66%; NEGEV fires ' +
+      '3.96/s and hits 26%.</strong> The share of shots fired at a target <em>already</em> in Defense runs ~71% for the ' +
+      'automatics against ~42\u201349% for M14 and SVD. A high fire rate manufactures its own miss.</p>'],
+
+    ['Today\'s M14 / SVD retune was a non-lever',
+      '<p>I re-ran the sweep with both reverted to their pre-today spec ' +
+      '(<span class="mono">250 rpm / 2000&#8239;ms</span> instead of <span class="mono">180 rpm / 1500&#8239;ms</span>), ' +
+      meta.preMatches.toLocaleString() + ' matches, everything else fixed. M14 went <strong>' + n1(m14.winPre) + '% &#8594; ' + n1(m14.win) +
+      '%</strong> and SVD <strong>' + n1(svd.winPre) + '% &#8594; ' + n1(svd.win) + '%</strong>.</p>' +
+      '<p>The edit cut M14\'s sustained DPS by 17% and moved its win rate four tenths of a point. Which follows from the ' +
+      'finding above \u2014 you were pulling the one lever the bot ladder is insensitive to. What makes these two strong is ' +
+      '10 and 12 damage <em>per shot</em> arriving slowly enough that the target is standing still when it lands.</p>'],
+
+    ['P90 and M4 are stat twins, 17 points apart \u2014 and it is stun',
+      '<p>Identical damage per minute (3,150 each), identical spread cone, identical projectile speed, identical walk ' +
+      'and sprint speed, sustained DPS within 2%. They finish <strong>' + n1(m4u.win) + '% and ' + n1(p90.win) + '%</strong>.</p>' +
+      '<p>The one live difference is the stun profile: M4 is <span class="mono">{100&#8239;ms, 0.25}</span>, P90 is ' +
+      '<span class="mono">{50&#8239;ms, 0.5}</span> \u2014 M4 pins its target twice as long and four times as hard. ' +
+      'Equalising stun across the roster recovers about half the gap. NEGEV is the same story from the other end: ' +
+      'it carries the weakest stun in the game (<span class="mono">{50&#8239;ms, 0.85}</span>, barely a slow), which is ' +
+      'why it trails RPK at ' + n1(negev.win) + '% despite 47% more damage per minute.</p>'],
+
+    ['Two things in the Railgun look unintended',
+      '<p>At ' + n1(rail.win) + '% it loses to everything, including PSG1 39&#8211;61 on the same chassis (lock 120, 60 rpm, ' +
+      '5 rounds). The gap is payload: <strong>PSG1 kills in 2 shots, Railgun needs 4</strong>, at one shot per second. ' +
+      'Give it the control\'s 52.5 damage and it jumps to 72.5% \u2014 the delivery is fine, the number is not.</p>' +
+      '<p>Second, worth a look regardless of balance: the Railgun\'s charged beam is set to ' +
+      '<span class="mono">chargedDamage: 20</span> against its own quick shot\'s <span class="mono">damage: 30</span>. ' +
+      'Charging it up currently does <em>less</em> damage than not charging it.</p>'],
+
+    ['The hold band is derived from lock range, and it only pushes outward',
+      '<p><span class="mono">ai.js:585&#8211;590</span> builds the bot\'s standoff distance straight from ' +
+      '<span class="mono">lockRange</span>: hold at it, \u00b17. Nothing about the weapon\'s accuracy enters. NEGEV and RPK ' +
+      'carry lock 80, so they fight at 80 with weapons that want to be closer \u2014 dropping NEGEV\'s lock to 40 lifts it from ' +
+      '57% to 75% and past RPK.</p>' +
+      '<p>The shotguns are the reverse and the band is <em>not</em> their problem: they already fire at a median ~52u, ' +
+      'far outside their own 33\u201347 band, and forcing the band down to 7\u201321 barely moves them. The rule can push a bot ' +
+      'out past where it wants to fight, but it cannot pull one in \u2014 the state machine has a floor around 52\u201355u it ' +
+      'will not cross.</p>']
+  ];
+  document.getElementById('findings').innerHTML = findings.map(function (f) {
+    return '<div class="find"><h3>' + f[0] + '</h3>' + f[1] + '</div>';
+  }).join('');
+
+  /* ---- method ---- */
+  document.getElementById('method').innerHTML =
+    '<h3>Method</h3>' +
+    '<p>Ran on the shared sim (<span class="mono">shared/src/sim</span>) driven exactly like the live server\'s ' +
+    '<span class="mono">tickLobby</span> loop: per tick, pick each bot\'s target, run <span class="mono">tickBot</span>, ' +
+    'then <span class="mono">tickMatch</span>. A Duel ends only on a KO \u2014 the server has no round timer, so nothing had ' +
+    'to be invented to make them fight to the end. Every match is seeded from its own identity, so the whole run reproduces.</p>' +
+    '<ul>' +
+    '<li><strong>Side bias was measured, not assumed.</strong> ' + meta.mirrorN.toLocaleString() + ' mirror matches (same weapon both sides) ' +
+    'put p1 at ' + n1(meta.mirrorP1) + '% \u00b1' + n1(meta.mirrorCi) + ' \u2014 p2 has a small real edge, biggest on weapons where the fight is ' +
+    'already a coin flip. Because every pairing was played in both spawn orders an equal number of times it cancels: ' +
+    'across all ' + (meta.matches - meta.mirrorN).toLocaleString() + ' non-mirror matches p1 wins ' + n1(meta.realP1) + '% \u00b1' + n1(meta.realCi) + '%.</li>' +
+    '<li><strong>This is the online bot, and the mirror has drifted in two places.</strong> I diffed offline ' +
+    '<span class="mono">updateEnemy</span> against online <span class="mono">tickBot</span>: all 34 bot constants match ' +
+    'exactly and the state machine is line-for-line the same algorithm. But (a) hit-stun scaling is applied on opposite ' +
+    'sides of momentum integration, so a suppressed <em>online</em> bot escapes at 1.75&#215; base speed where the offline ' +
+    'bot and both human paths move at 0.625&#215; \u2014 the online bot shrugs off suppression ~2.8&#215; faster; and (b) the bot\'s ' +
+    'sight line starts at 6.40 offline against 4.05 online, which matters on Factory (68 obstacles fall in the gap), ' +
+    'Factory 2 (39), Streets and Flashpoint (4 each), Lobby (2), and not at all on the other four maps. ' +
+    'Direction of the error: offline, the sustained-fire weapons should rank <em>higher</em> than this table shows.</li>' +
+    '<li><strong>Bot skill, not weapon strength.</strong> The equal-damage control is the proof rather than a hedge \u2014 ' +
+    'holding weapon output constant made the ladder <em>steeper</em>. A weapon that rewards human aim or timing will read low ' +
+    'here; one that suits the bot\'s cadence will read high. Use this to find where the bot fails a weapon, not to set ' +
+    'player balance directly.</li>' +
+    '<li><strong>Matchup cells are \u00b15%.</strong> The overall ladder is \u00b11.3. Per-map cells are \u00b110. Do not read a 3-point ' +
+    'difference in a single cell as real.</li>' +
+    '</ul>';
+})();
+</script>
+
+</body></html>

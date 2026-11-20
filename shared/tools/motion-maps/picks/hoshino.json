@@ -1,0 +1,32 @@
+{
+  "id": "hoshino",
+  "data": {
+    "map": {
+      "death": "01_Vital_Death",
+      "dodge": "01_Move_End_Normal",
+      "intro": "",
+      "jump": "01_Move_End_Normal",
+      "reload": "01_Normal_Attack_Delay",
+      "shoot": "01_Normal_Attack_Ing_02",
+      "sprint": "01_Move_Ing",
+      "sprintShoot": "01_Move_Ing",
+      "stand": "01_Formation_Idle",
+      "walk": "01_Move_Ing"
+    },
+    "speed": {
+      "death": 100,
+      "dodge": 100,
+      "intro": 100,
+      "jump": 100,
+      "reload": 100,
+      "shoot": 100,
+      "sprint": 100,
+      "sprintShoot": 100,
+      "stand": 100,
+      "walk": 50
+    },
+    "updatedAt": "2026-10-10T11:05:33.473Z"
+  },
+  "version": 11,
+  "updatedAt": "2026-10-10T11:05:35.161521Z"
+}

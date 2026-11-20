@@ -28,5 +28,33 @@ SQCBSd4kHTvsak8dybTkHX, Marina 3K3SYWTdgGiDxzyDzdWYgs, Atsuko U9ZmjmgDGgwhPoZTv1
 their owner). There, a page saved the picks in its own store (document `motions/<unit>`); opened from a file it has no store, says
 so, and the **複製清單** (copy list) button gives the picks as text to paste instead.
 
+On 2026-11-20 each of the twelve artifacts was read again: every page here is the page it served, byte for byte
+(`docs/artifacts/` has the list).
+
+## The saved picks (`picks/`)
+
+`picks/<unit>.json` is what each page's store held on 2026-11-20, the document `motions/<unit>` as the store gave it: `data.map`
+names the model clip chosen for each motion (an empty name is a motion left unset), `data.speed` its playback speed in percent,
+`data.updatedAt` when the page last saved; `version` and the outer `updatedAt` are the store's own count of saves and its clock.
+All ten were last saved on 2026-10-10. In every one of them the walk plays at 50 and every other motion at 100.
+
+| unit | saved | left unset |
+| --- | --- | --- |
+| Saori | 16:33 UTC | hit, intro |
+| Hoshino | 11:05 UTC | intro |
+| Asuna | 16:29 UTC | hit, intro |
+| Aru | 12:09 UTC | intro |
+| Aris | 11:52 UTC | intro |
+| Fubuki | 11:32 UTC | intro |
+| Hina | 11:26 UTC | intro |
+| Koyuki | 11:20 UTC | intro |
+| Marina | 10:40 UTC | intro |
+| Atsuko | 10:20 UTC | hit, intro |
+
+Kei's and Haruka's stores hold no document, so there is no file for them.
+
+To put a pick back: publish the unit's page on an artifact that declares the `db` capability, then write the file's `data` as
+the document `motions/<unit>` of that artifact's store. The page reads it when it opens.
+
 For a new unit: copy a page whose model is alike, set `CLIPS` to the new model's clip names (with `DUR`, each clip's seconds, where
 the page lists lengths), the suggested clips and speeds in `MOTIONS`, the title, and the store's document name.

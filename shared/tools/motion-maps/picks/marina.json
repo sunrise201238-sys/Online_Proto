@@ -1,0 +1,32 @@
+{
+  "id": "marina",
+  "data": {
+    "map": {
+      "death": "Vital_Death",
+      "dodge": "Move_Jump",
+      "intro": "",
+      "jump": "Move_Jump",
+      "reload": "Normal_Reload",
+      "shoot": "Normal_Attack_Ing",
+      "sprint": "Move_Ing",
+      "sprintShoot": "Normal_Attack_Ing",
+      "stand": "Normal_Idle",
+      "walk": "Move_Ing"
+    },
+    "speed": {
+      "death": 100,
+      "dodge": 100,
+      "intro": 100,
+      "jump": 100,
+      "reload": 100,
+      "shoot": 100,
+      "sprint": 100,
+      "sprintShoot": 100,
+      "stand": 100,
+      "walk": 50
+    },
+    "updatedAt": "2026-10-10T10:40:44.248Z"
+  },
+  "version": 2,
+  "updatedAt": "2026-10-10T10:40:45.963374Z"
+}
