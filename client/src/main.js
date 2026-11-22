@@ -7,7 +7,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { createConnection } from './online/connection.js';
 import { sfxBoot, sfxPlay, sfxStop, sfxState, sfxPlaceMake, sfxPlaceSet, sfxMeter, bgmPlace, bgmWarm, bgmSetOn, bgmIsOn, bgmState } from './sfx.js';   // (THE GAME'S SOUNDS AND ITS MUSIC, b1105hk)
-import { SFX_UNITS, SFX_SHELL_LEAD_MS } from './sfx_data.js';   // (what plays and how loud: written by the listening site's own tool)
+import { SFX_UNITS, SFX_SHELL_LEAD_MS, BGM_TRACKS } from './sfx_data.js';   // (what plays and how loud: written by the listening site's own tool)
 import {
   tickMatch as simTickMatch,
   emptyInput as simEmptyInput,
@@ -9351,7 +9351,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jv 11-22';
+const CLIENT_BUILD_TAG = 'b1105jw 11-22';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -12830,7 +12830,16 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // b1105jl, user 2026-11-17: the right-click is the dodge's in the PC line, not the target switch's.
 // b1105jm, user 2026-11-17: the ally command's line says 40 seconds (20 until then; the call's length, shared ALLY_TACTIC_MS).
 // b1105jn, user 2026-11-17: no time limit — the line says the teammate keeps doing it until it falls, and how to cancel.
+// b1105jw, user 2026-11-22, with their disclaimer's six points: "Add the disclaimer at the bottom of in game Guide. Use small gray
+// text; I don't want it to be too lengthy." — THE DISCLAIMER AT THE GUIDE'S FOOT (.guide-legal): the six points as the user wrote
+// them, in small gray print under the last list. Whole in what it says and short on the page: a point's heading runs into its
+// text, and an address is not printed — the name it belongs to is the link (opened in a new tab, so the game's page stays). The
+// nine modelled maps stand one to a line in the user's order: the map's name in the game, the model's title and its maker as
+// Sketchfab has them. The count of the tracks is the music table's own (the text said ten; eleven since b1105jv), so the line
+// stays true when a track is added.
 function showGuidePopup() {
+  const out = (href, text) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  const model = (page, title) => out(`https://sketchfab.com/3d-models/${page}`, title);
   const overlay = document.createElement('div');
   overlay.className = 'guide-overlay';
   overlay.innerHTML = `
@@ -12919,6 +12928,27 @@ function showGuidePopup() {
             <li>With nothing selected: drag the area ring to move it, double-tap the ring to remove it, and tap a marked enemy to drop the attack order on it.</li>
             <li>Camera: drag to move, pinch or the mouse wheel to zoom, and a two-finger twist, right-drag or Q and E to turn.</li>
           </ul>
+
+          <div class="guide-legal">
+            <h5>Disclaimer</h5>
+            <p><b>1. What this is.</b> This is a fan-made game created by a player. It is not affiliated with, authorized by, or endorsed by the official Blue Archive team. The game is free, accepts no donations, and is not for commercial use.</p>
+            <p><b>2. Material from Blue Archive.</b> The characters, 3D models, images, and music are the property of NEXON Korea Corp. and NEXON Games Co., Ltd. Character models were obtained from the ${out('https://bluearchive.wiki/wiki/Main_Page', 'Blue Archive Wiki')}. The music consists of ${Object.keys(BGM_TRACKS).length} tracks from the ${out('https://www.youtube.com/playlist?list=PLh6Ws4Fpphfqr7VL72Q6HK5Ole9YI54hv', 'Blue Archive Original Soundtrack')}.</p>
+            <p><b>3. Map models.</b> The following models are from Sketchfab and are used under the ${out('https://creativecommons.org/licenses/by/4.0/', 'Creative Commons Attribution 4.0 license')}. Some have been cropped, rescaled, or had their textures compressed.</p>
+            <ul>
+              <li>Town: ${model('invasion-map-miniroyaleio-89f52d6ee9344cc48060076c222ad40b', 'Invasion Map - miniroyale.io')}, by zct_33</li>
+              <li>Neon: ${model('downtown-echo-miniroyaleio-79a2c6382cbe4e39905e0653d19dec57', 'Downtown Echo - miniroyale.io')}, by zct_33</li>
+              <li>Spacecraft: ${model('among-us-map-the-skeld-59a93886f9e74ff6836dff0c269da45f', 'Among Us - Map "The Skeld"')}, by Pablopcb</li>
+              <li>Backrooms: ${model('original-backrooms-e5c6b30995ff442d9852a1dd697aaef1', 'Original Backrooms')}, by Huuxloc</li>
+              <li>Dust: ${model('dust2-short-211b9b2535e144fb9d1021228cc93d53', 'Dust2-short')}, by frostychaos144</li>
+              <li>Warehouse: ${model('map-79-void-9faa9374c3794950994ab5dee79c42db', 'Map 79 (Void)')}, by Eveston - Elite Big Speakerman - Hugo</li>
+              <li>Compound: ${model('cs-compound-7c453b0c61a844cdada962d7df94570a', 'Cs_compound')}, by Leafia dev.</li>
+              <li>Hospital: ${model('animal-hospital-map-optimized-textured-8cfe9ebf8c1a4739b0ea02e658e1a4a0', 'Animal Hospital map OPTIMIZED &amp; TEXTURED')}, by groty</li>
+              <li>District: ${model('jujutsu-shenanigans-map-9a7319c29e7e426e987e65d9f71ff004', 'jujutsu shenanigans map')}, by amogusstrikesback2</li>
+            </ul>
+            <p><b>4. Sound effects.</b> Some gunshots and sound effects are from the Counter-Strike series, the property of Valve. Some beam sound effects are from the Mobile Suit Gundam series, the property of SOTSU and SUNRISE. Some interface sounds are from the Call of Duty series, the property of Activision.</p>
+            <p><b>5. How it was made.</b> The code was written with the help of AI tools.</p>
+            <p><b>6. Removal.</b> If a rights holder objects to any of this content, please let me know and it will be removed immediately.</p>
+          </div>
         </div>
       </div>
     </div>`;

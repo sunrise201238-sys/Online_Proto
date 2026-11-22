@@ -691,6 +691,19 @@ body.pseudo-fullscreen #app {
 /* (b1105bs, user 2026-11-07: "Some yellow text needs their text color changed") the guide's key lines read in ink over a yellow
    highlighter stroke, where the yellow text itself was hard to read on the white card */
 .guide-card-body .guide-hl { color: var(--ink); background: linear-gradient(transparent 52%, var(--yellow) 52%, var(--yellow) 92%, transparent 92%); padding: 0 2px; }
+/* THE DISCLAIMER AT THE GUIDE'S FOOT (b1105jw, user 2026-11-22: "Use small gray text; I don't want it to be too lengthy"): small
+   print under the Guide's last list, a dashed line over it. The gray stands 4.5 to 1 on the card's cream, so letters this small
+   still read. A link is the text's own gray, underlined; the maps' list has no bullets and no gaps, and a line that wraps
+   hangs under its first. */
+.guide-card-body .guide-legal { margin-top: 20px; padding-top: 10px; border-top: 2px dashed rgba(27, 27, 47, 0.2); color: #6F6F7F; font-size: 11px; line-height: 1.45; }
+.guide-card-body .guide-legal h5 { margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.guide-card-body .guide-legal p { margin: 0 0 4px; }
+.guide-card-body .guide-legal p:last-child { margin-bottom: 0; }
+.guide-card-body .guide-legal b { font-weight: 700; }
+.guide-card-body .guide-legal ul { list-style: none; margin: 0 0 4px; padding: 0 0 0 10px; }
+.guide-card-body .guide-legal li { margin: 0; padding-left: 10px; text-indent: -10px; }
+.guide-card-body .guide-legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.guide-card-body .guide-legal a:hover { color: var(--ink); }
 
 .online-overlay {
   position: absolute;
