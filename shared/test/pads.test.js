@@ -127,7 +127,11 @@ test('a second body arriving: beside the first, PAD_CLEAR apart, on the floor an
   assert.ok(d >= PAD_CLEAR - 0.3, `apart ${d.toFixed(2)}`); assert.ok(padZone(pads[1], p.pos), 'in B\'s zone');
 });
 
-test('the route grid: a link each way per pad; every spawn reaches B and D up through A or C, and no other way', async () => {
+// (Until b1105kg the tower top and the bridge were reached by the pads alone, and this test asked that of every spawn: a pad leg
+// on every route, and no route without the links. The scaffolds are carried up to the bridge now — neon_ways_up.mjs; user
+// 2026-11-22: "So the unit can walk seamlessly to the top catwalk." — so a route may take a pad or climb a way, whichever is
+// nearer, and without the links there is a route on foot from every spawn: up the north way to B, up the south way to D.)
+test('the route grid: a link each way per pad; every spawn reaches B and D, by a pad or up a way, and on foot without the links', async () => {
   const { navGridFor } = await import('../src/sim/ai.js');
   const a = getArena('neon'); const pads = getArenaPads('neon'); const grid = navGridFor(a);
   const links = grid.ladderLinks.filter((l) => l.pad != null);
@@ -135,6 +139,9 @@ test('the route grid: a link each way per pad; every spawn reaches B and D up th
   for (const l of links) assert.ok(Math.abs(l.y - pads[pads[l.pad].to].y) < 0.01, 'the link lands on the other pad\'s floor');
   const sp = getArenaSpawns('neon'); const spawns = Array.isArray(sp) ? sp : Object.values(sp).flat();
   assert.ok(spawns.length >= 2);
+  // a way's own floor a route up it must cross (model metres): the north way's landing, 17.014 m; the south way's walkway, 21.88 m
+  const on = (w, x0, x1, z0, z1, h) => w.y != null && Math.abs(w.y - h * 4) < 1 && w.x >= (x0 + 12.44) * 4 && w.x <= (x1 + 12.44) * 4 && w.z >= (z0 - 40.37) * 4 && w.z <= (z1 - 40.37) * 4;
+  const way = { 1: (w) => on(w, -10.4, -2.2, 29.6, 33.8, 17.014), 3: (w) => on(w, 13.3, 17.5, 45.6, 57.9, 21.88) };
   const firstLegs = { 1: new Set(), 3: new Set() };
   for (const k of [1, 3]) {
     const T = pads[k];
@@ -143,15 +150,16 @@ test('the route grid: a link each way per pad; every spawn reaches B and D up th
       const path = findPathOnGrid(grid, s.x, s.z, T.x, T.z, f0, T.y, a.obstacles, { ladders: true });
       assert.ok(path, `spawn (${s.x.toFixed(0)}, ${s.z.toFixed(0)}) has a route to ${T.name}`);
       const leg = path.find((w) => w.pad != null);
-      assert.ok(leg && (leg.pad === 0 || leg.pad === 2) && Math.abs(leg.y - pads[pads[leg.pad].to].y) < 0.01, 'up through A or C, arriving on its pair');
-      firstLegs[k].add(leg.pad);
-      assert.equal(findPathOnGrid(grid, s.x, s.z, T.x, T.z, f0, T.y, a.obstacles, {}), null, 'and no route without the links');
+      if (leg) { assert.ok((leg.pad === 0 || leg.pad === 2) && Math.abs(leg.y - pads[pads[leg.pad].to].y) < 0.01, 'a route with a pad on it goes up through A or C, arriving on its pair'); firstLegs[k].add(leg.pad); }
+      else assert.ok(path.some(way[k]), 'a route with none climbs the way');
+      const foot = findPathOnGrid(grid, s.x, s.z, T.x, T.z, f0, T.y, a.obstacles, {});
+      assert.ok(foot && foot.some(way[k]), `spawn (${s.x.toFixed(0)}, ${s.z.toFixed(0)}): without the links, a route on foot up the ${k === 1 ? 'north' : 'south'} way to ${T.name}`);
     }
   }
-  assert.ok(firstLegs[1].has(0) && firstLegs[3].has(2), 'the gold pair carries routes to B, the silver pair routes to the bridge');
+  assert.ok(firstLegs[1].has(0) && firstLegs[3].has(2), 'the gold pair still carries routes to B, the silver pair routes to the bridge');
 });
 
-test('a bot whose target stands on B: it walks to A, charges a second, and fights on B', async () => {
+test('a bot whose target stands on B: it walks to A, charges a second, and stands on B with no goal left', async () => {
   const { tickBot } = await import('../src/sim/ai.js');
   const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1, b = m.fighters.p2;
   p.pos = { x: pads[1].x, y: pads[1].y + G, z: pads[1].z - 6 }; p.floorY = p.pos.y; p.invulnerableUntil = 1e15;
@@ -164,7 +172,18 @@ test('a bot whose target stands on B: it walks to A, charges a second, and fight
   }
   assert.ok(chargeAt && movedAt, 'it charged and moved'); assert.ok(movedAt - chargeAt >= PAD_HOLD_MS && movedAt - chargeAt < PAD_HOLD_MS + 3 * MS, `a second's charge (${movedAt - chargeAt} ms)`);
   assert.ok(Math.abs(b.pos.y - G - pads[1].y) < 0.05, 'on B');
-  for (let t = 0; t < 3000 / MS; t += 1) { now += MS; m.tick += 1; tickBot(m, 'p2', now); tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']); assert.equal(b.botPadGoal, undefined, 'no goal left on B'); }
+  // No goal is left by the move. (Until b1105kg this was asked of the next three seconds whole, which the bot spent on the
+  // tower top: the strip's south edge held its retreat. The north way's ramp goes on from that edge now; a bot backing off a
+  // target this near goes on down it and may hop off its side, and a bot that has come down has a goal again, as it should. So
+  // it is asked while the bot stands up there — the tower top, the strip and the way's platform on it, 0.2 m higher — which
+  // is half a second at the least.)
+  let up = 0;
+  for (let t = 0; t < 3000 / MS; t += 1) {
+    now += MS; m.tick += 1; tickBot(m, 'p2', now); tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']);
+    if (b.airborne || Math.abs(b.pos.y - G - pads[1].y) > 1) break;
+    up += 1; assert.equal(b.botPadGoal, undefined, 'no goal left on B');
+  }
+  assert.ok(up >= 500 / MS, `it stood up there for ${up} ticks after the move`);
 });
 
 test('a bot with the goal on D: charges, and is on C after PAD_HOLD_MS', () => {
