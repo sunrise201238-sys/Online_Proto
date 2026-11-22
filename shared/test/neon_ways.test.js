@@ -4,10 +4,12 @@
 // visually."), their rails and the little ramp in the bridge (b1105ki; "加欄杆可以解決", "Add a little slope connecting the
 // catwalk floor and the platform so the BOT knows to walk onto it.", "can you add guarding gates on this slope as well?") and
 // the unseen slope at the bridge's north step (b1105kj; "add an invisible small slope at this gap edge so units can walk right
-// onto the higher ground here."), against the installed data, on the server's sim: each way walked from the user's own start
+// onto the higher ground here.") and the bridge's floor carried to its side walls (b1105kl; of a bot that stood held at a window of
+// the bridge: "investigate and fix without touching universal rule."), against the installed data, on the server's sim: each way walked from the user's own start
 // to the user's own end with the stick alone, no tick of it in the air; out of the bridge and back in by the little ramp the
 // same, and up and down the unseen slope; one walk from the first scaffold's top over the bridge to the second's; a body
-// walked at a rail is held at it; where the stub stood, a body stands. A reading of Neon's data made again from the model has
+// walked at a rail is held at it; the route grid has no drop from the bridge's floor over a sill, a bot in the bridge comes
+// to sight of a target on the decks below, and no body stands in a wall on the floors carried to the walls; where the stub stood, a body stands. A reading of Neon's data made again from the model has
 // none of this: the tool is run after it, and these fail until it has been. (The routes over the ways are asked of the route
 // grid in pads.test.js, and there a bot moved onto the tower top stays up there.)
 import '../tools/maps/arena_files.mjs';
@@ -15,6 +17,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/sim/constants.js';
 import { createMatchState, tickMatch, emptyInput, getArena, groundHeightAt, unitOverlapsObstacle } from '../src/sim/index.js';
+import { tickBot, navGridFor, botHasLineOfSight } from '../src/sim/ai.js';
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS, R = C.FIGHTER_RADIUS / 4;
 const AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4;   // (Neon: the model's metres to the arena's units — the client's GLB_MAPS line)
@@ -115,6 +118,63 @@ test('one walk from the first scaffold\'s top to the second\'s and back, the sti
   assert.ok(Math.abs(top.feet - 12.585) < 0.02, `up the little ramp, out by the window and down the south way to the second scaffold's top: feet ${top.feet.toFixed(2)}`);
   const back = w.go([...there.slice(0, -1).reverse(), [-7.92, 24.15]]);
   assert.ok(Math.abs(back.feet - 12.585) < 0.02 && Math.hypot(back.x + 7.92, back.z - 24.15) < 0.3, `and the same way back to the first scaffold's top: (${back.x.toFixed(2)}, ${back.z.toFixed(2)}) feet ${back.feet.toFixed(2)}`);
+});
+
+// THE BRIDGE'S FLOOR CARRIED TO ITS SIDE WALLS (b1105kl). The floor in the data stopped a quarter metre short of each side wall; the
+// route grid's walk test, which looks at floors alone, walked past its edge and fell to what lies under the wall, and — a sill
+// being a lip a jump hops — the grid had 42 drops from the bridge's floor over its sills. A bot sent down one stood at the sill
+// (the route's hop mark is lost where the route is cut at the drop's landing) or hopped onto it and turned back in (the landing
+// is under the sill, reached in the plan from on top of it): the bots' own rules, on every map, and not touched. The floor is
+// carried on as far as the walk test goes — across the gap to the east wall, across the gap and under the west wall where its
+// sill's floor lies over it, a hair of it on the grid's one line across that wall's north end — the walk test stays on it, and
+// the grid has no such drop.
+test('the bridge\'s floor is carried to its side walls: the route grid has no link from the bridge\'s floor, or from a slope on it, down past a sill', () => {
+  const grid = navGridFor(getArena('neon')); let nodes = 0; const down = [];
+  for (let i = 0; i < grid.N; i += 1) {
+    const x = grid.posX[i] / 4 - 12.44, z = grid.posZ[i] / 4 + 40.37, f = grid.floor[i] / 4;
+    if (x < 0.8 || x > 8.1 || z < 24.6 || z > 59.2 || f < 20.2 || f > 21.3) continue;   // (inside the bridge: its floor and ribs, the unseen slope, the little ramp's lower part — not the sills, 21.80 m)
+    nodes += 1;
+    for (let k = grid.linkStart[i]; k < grid.linkStart[i + 1]; k += 1) { const j = grid.linkAdj[k]; if (grid.floor[j] < grid.floor[i] - 12) down.push(`(${x.toFixed(2)}, ${z.toFixed(2)} | ${f.toFixed(2)}) to (${(grid.posX[j] / 4 - 12.44).toFixed(2)}, ${(grid.posZ[j] / 4 + 40.37).toFixed(2)} | ${(grid.floor[j] / 4).toFixed(2)})`); }
+  }
+  assert.ok(nodes > 150, `the bridge's floor has its nodes (${nodes})`);
+  assert.equal(down.length, 0, `links from the bridge's floor to a floor more than 3 m under it: ${down.slice(0, 4).join('; ')}`);
+});
+
+test('a bot in the bridge comes to sight of a target that stands on the decks below — beside the bridge, where the user\'s bot stood held at the west window, and under it', () => {
+  const a = getArena('neon'); const EYE = C.BOT_LOS_EYE_HEIGHT;
+  // (the bot's place in the bridge and its target's on the 8.63 m decks, model metres; each run was "never" in thirty seconds before b1105kl)
+  for (const [name, B0, T0] of [['beside the bridge, under the strip (the user\'s case)', [4.5, 28.0, 20.285], [-2.0, 24.5, 8.63]], ['under the bridge', [4.5, 40.0, 20.235], [6.06, 33.87, 8.63]]]) {
+    const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
+    const p = m.fighters.p1, b = m.fighters.p2; for (const q of [p, b]) { q.hp = 1e9; q.invulnerableUntil = 0; }
+    p.pos = { x: AX(T0[0]), y: T0[2] * 4 + G, z: AZ(T0[1]) }; p.floorY = p.pos.y; const p0 = { ...p.pos };
+    b.pos = { x: AX(B0[0]), y: B0[2] * 4 + G, z: AZ(B0[1]) }; b.floorY = b.pos.y; b.botControlled = true; b.targetId = 'p1'; p.targetId = 'p2';
+    let now = 1000, seen = null;
+    for (let t = 0; t < 15000 / MS && seen == null; t += 1) {
+      now += MS; m.tick = (m.tick ?? 0) + 1; tickBot(m, 'p2', now); tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']);
+      p.pos.x = p0.x; p.pos.y = p0.y; p.pos.z = p0.z; p.vel.x = p.vel.y = p.vel.z = 0; p.airborne = false; p.grounded = true;   // (the target stands still)
+      if (botHasLineOfSight({ x: b.pos.x, y: b.pos.y + EYE, z: b.pos.z }, { x: p.pos.x, y: p.pos.y + EYE, z: p.pos.z }, a.obstacles, a.surfaces)) seen = (now - 1000) / 1000;
+    }
+    assert.ok(seen != null, `${name}: no sight of the target in 15 s; the bot stands at (${(b.pos.x / 4 - 12.44).toFixed(1)}, ${(b.pos.z / 4 + 40.37).toFixed(1)}) feet ${((b.pos.y - G) / 4).toFixed(1)} m`);
+  }
+});
+
+// And what those floors must not be: a floor a body comes down onto inside a wall. The PT site's b1105kk had them under the whole
+// of both walls, end to end; at a wall's end, where its top has no sill floor, a body did — walked north off the west sill's end it
+// stood in the wall at the bridge's floor's height, where it had fallen outside onto the scaffold's deck before. Here a body does
+// there what it did before the floors were laid.
+test('the floors carried to the walls are no floor for a body: one that walks north off the west sill\'s end falls outside onto the deck, and one let down onto a wall anywhere along it does not come to stand in the wall', () => {
+  const off = walker([0.5, 25.5, 21.8025]).push(0.5, 10, 240);   // (the west sill's floor ends half a metre short of the corner pillar)
+  assert.ok(Math.abs(off.feet - 8.64) < 0.03, `off the west sill's north end the body is down on the 8.64 m deck: (${off.x.toFixed(2)}, ${off.z.toFixed(2)}) feet ${off.feet.toFixed(2)}`);
+  const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 }); const f = m.fighters.p1, e = m.fighters.p2; const blank = JSON.stringify(f);
+  let now = 1000; const inWall = [];
+  for (const [x0, x1] of [[0.06, 0.81], [8.06, 8.81]]) for (const dx of [0.2, 0.375, 0.55]) for (let z = 24.45; z <= 58.45; z += 0.15) {
+    const o = JSON.parse(blank); for (const k of Object.keys(f)) delete f[k]; Object.assign(f, o); for (const q of [f, e]) { q.hp = 1e9; q.invulnerableUntil = 1e15; } e.pos = { x: -200, y: G, z: 0 }; e.floorY = G;
+    f.pos = { x: AX(x0 + dx), y: 22.4 * 4 + G, z: AZ(z) }; f.vel = { x: 0, y: 0, z: 0 }; f.airborne = true; f.grounded = false; f.floorY = G;
+    for (let t = 0; t < 90; t += 1) { now += MS; tickMatch(m, { p1: emptyInput() }, now, DT); }
+    const x = f.pos.x / 4 - 12.44, feet = (f.pos.y - G) / 4;
+    if (x > x0 && x < x1 && Math.abs(feet - 20.235) < 0.3) inWall.push(`(${x.toFixed(2)}, ${(f.pos.z / 4 + 40.37).toFixed(2)}) feet ${feet.toFixed(2)}`);
+  }
+  assert.equal(inWall.length, 0, `bodies that came to stand in a wall at the bridge's floor's height: ${inWall.slice(0, 4).join('; ')}`);
 });
 
 test('the stub of a railing at the catwalk\'s joint is gone: a body stands where it stood', () => {

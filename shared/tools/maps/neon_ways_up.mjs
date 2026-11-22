@@ -54,11 +54,39 @@
 // step now, from wall to wall (model x 0.81..8.06) and 1.25 m long (z 24.62..25.87: 37.3 degrees, between the little ramp's 36.7 and the south
 // way's 37.7) — in the data alone. Nothing is added to the model: a unit on it stands over the floor the picture shows, half a metre over it
 // half way up. No box under it: its two sides are the bridge's walls, and what lies under it is the bridge's own floor.
+// THE BRIDGE'S FLOOR CARRIED TO ITS SIDE WALLS (b1105kl; user 2026-11-22, shown a bot that stood at the bridge's west wall, under its northmost
+// window, for as long as its target stood on the scaffold's deck below: "investigate and fix without touching universal rule. pt and 9.9").
+// The bridge's floor in the data ended a quarter metre short of the inner face of each side wall (model x 1.06 for the west wall's 0.81,
+// 7.81 for the east wall's 8.06), though the slab runs on under the walls. The route grid's walk test looks at floors alone: sent from a
+// node by a wall to the node a cell beyond it, it walked off the floor's edge, fell, and landed on whatever lies under the wall — the
+// scaffolds' decks, the roofs, the street — and the wall's sill being a lip that a jump hops, the grid made a drop there: 42 of them, from
+// the bridge's floor over its sills, at the windows of both sides. A bot whose route took one did not get down it. Two things of the bots'
+// own are why, on every map and not touched here: a route cut at the first place with sight of the target loses the mark that tells the
+// follower to hop, when the cut falls on the drop's landing (nbrain.js truncateAtFiringPoint) — the bot walked at the wall under the sill
+// and stood; and a hop that did go up set the bot on the sill, over the drop's landing in the plan and so past it, and the route's next
+// point, back under the bridge, turned it round into the bridge again. With its target on the decks under and beside the bridge, a bot in
+// the bridge never came to sight of it in 156 runs of 450. The floor is carried on now as far as the walk test goes, and only where no
+// body's centre comes at a height to stand on it:
+//   EAST, where the grid's next node lies on the wall's inner face: across the gap alone, from the floor's edge to that face (model x
+//     7.81..8.06), from the unseen slope's foot to the south end of the sill's floor (z 25.87..57.87) — the strip b1105kg laid under the
+//     last window, grown north. A wall holds a body 0.29 m off its face, so no centre is in the gap below the sill's reach.
+//   WEST, where the grid's next node lies under the wall's OUTER face: across the gap and under the wall (x 0.06..1.06), as far along as the
+//     sill's own floor lies over the wall (z 25.12..57.87). A body over that stretch at the sill's height stands on the sill's floor, and
+//     a lower one is outside the wall.
+//   A HAIR of it (2.5 cm, x 0.06..0.81) on the grid's one line across the west wall's north end (z 24.87), where the wall's top has no
+//     sill floor: the foot of the corner pillar and the tower's top keep a body's centre 2.5 cm south of the hair at every height under
+//     the pillar foot's reach, and over that height the hair is 1.3 m under its feet.
+// The walk test stays on the bridge's floor there, and the grid has none of those drops. A window is a player's way out and no bot's now;
+// a bot leaves the bridge by the unseen slope, the little ramp or the transporter.
+// (The PT site's b1105kk carried the floor under the whole of both walls, end to end. At the walls' ends, where a wall's top has no sill
+// floor, that was a floor a body could come down onto inside the wall: one that walked north off the west sill's end stood in the wall at
+// the bridge's floor's height, where it had fallen outside onto the deck before, and 1,014 of 34,000 random walks about the walls ended
+// elsewhere than before. With the floors as they are here all 34,000, and 144,448 set walks, go tick for tick as on the data before.)
 // usage: node neon_ways_up.mjs spec <out spec.json>                         the copies, for glb_place.mjs <in.glb> <out.glb> echo_01_242 <spec.json>
 //        node neon_ways_up.mjs data <in neon_data.json> <out neon_data.json>   the stub's boxes out, the ways' boxes and floors in
 // A run of `data` on its own output changes nothing, and one on an earlier build's data (b1105kg: the ways without rails; b1105kh: the north
-// way's rails; b1105ki: both ways' rails and the little ramp) takes out the floors that build wrote whole and the rails narrow, and puts in
-// the narrowed ones and what that build had not. The route grid file is built again after it (navgrid_build.mjs).
+// way's rails; b1105ki: both ways' rails and the little ramp; b1105kj: the unseen slope too; the PT site's b1105kk: the bridge's floor under the whole of both walls) takes out the floors that build wrote and
+// this one writes otherwise, and puts in these and what that build had not. The route grid file is built again after it (navgrid_build.mjs).
 import fs from 'node:fs';
 const GROUND = 4.2927, SCALE = 4, CX = -12.44, CZ = 40.37;   // (the client's GLB_MAPS line for Neon: arena = (model - c) * scale, heights over the road's top)
 // the kit's pieces as the model has them: metres, heights over the street
@@ -125,12 +153,20 @@ const slab = (name, ps, floor = true) => { const s = { name, x0: Math.min(...ps.
 // ---- THE UNSEEN SLOPE AT THE BRIDGE'S NORTH STEP (b1105kj): a floor in the data alone, no copy in the model
 const STEP = { strip: 21.2375, floor: 20.285, face: 24.62, x: [0.81, 8.06], long: 1.25 };   // (the strip's top and the bridge's floor at its north end, as the data has them; the step's face; the bridge's two walls' inner faces; the slope's length)
 planes.push({ name: 'the unseen slope at the bridge\'s north step', x0: STEP.x[0], x1: STEP.x[1], zLow: STEP.face + STEP.long, zHigh: STEP.face, low: STEP.floor, high: STEP.strip });
+// ---- THE BRIDGE'S FLOOR CARRIED TO ITS SIDE WALLS (b1105kl): three floors in the data alone, in the arena's units, as the bridge's own floors are written: [x0, x1, z0, z1]
+const BRIDGE = { top: 80.94, sill: 87.21,   // (the slab's top; the sills' tops)
+  strips: [['east, the gap from the floor\'s edge to the wall\'s inner face', 81, 82, -58, 70], ['west, the gap and under the wall, where the sill\'s floor lies over it', 50, 54, -61, 70], ['west, the hair on the grid\'s line across the wall\'s north end', 50, 53, -62.05, -61.95]],
+  floors: [[54, 64, -62, 75], [64, 81, -62, -44], [64, 81, -44, 34], [64, 81, 34, 75]], walls: [[50, 53, -63, 72], [82, 85, -64, -44], [82, 85, -44, 34], [82, 85, 34, 72]],   // (the bridge's four floors at that height, whose edges the strips meet; the walls, each with its sill's top at 87.21)
+  sills: [[49.32, 53, -61, 70], [82, 85, -61, -44], [82, 85, -44, 34], [82, 85, 34, 70]],   // (the sills' own floors: the west one lies over the whole of the west strip's stretch under the wall)
+  keepers: [[49, 53, -63.52, -63, 85.01, 87.72], [21, 82, -76, -63, 70.01, 84.95]],   // (the corner pillar's foot and the tower's top, boxes [x0, x1, z0, z1, y0, y1]: they hold a body's centre at z -61.85 or south of it, off the hair)
+  earlier: [[81, 82, 60.48, 70], [50, 54, -63, 75], [81, 84, -63, 75]] };   // (b1105kg to b1105kj: the gap under the last east window alone, from model z 55.49; the PT site's b1105kk: under the whole of both walls)
 const [mode, a, b] = process.argv.slice(2);
 if (mode === 'spec') { if (!a) throw new Error('usage: neon_ways_up.mjs spec <out spec.json>'); fs.writeFileSync(a, JSON.stringify([...spec, ...laterSpec], null, 1)); console.log(`${spec.length + laterSpec.length} copies written to ${a}`);
   for (const p of planes) console.log(p.east ? `  ${p.name}: z ${p.z0.toFixed(3)}..${p.z1.toFixed(3)} x ${p.x0.toFixed(3)} (${p.low.toFixed(3)} m) to ${p.x1.toFixed(3)} (${p.high.toFixed(3)} m), ${(Math.atan((p.high - p.low) / (p.x1 - p.x0)) * 180 / Math.PI).toFixed(1)} degrees`
     : `  ${p.name}: x ${p.x0.toFixed(3)}..${p.x1.toFixed(3)} z ${p.zLow.toFixed(3)} (${p.low.toFixed(3)} m) to ${p.zHigh.toFixed(3)} (${p.high.toFixed(3)} m), ${(Math.atan((p.high - p.low) / Math.abs(p.zHigh - p.zLow)) * 180 / Math.PI).toFixed(1)} degrees`);
   for (const s of slabs) console.log(`  ${s.name}: x ${s.x0.toFixed(3)}..${s.x1.toFixed(3)} z ${s.z0.toFixed(3)}..${s.z1.toFixed(3)} top ${s.top.toFixed(3)} m`);
   for (const r of [...rails, ...blocks]) console.log(`  ${r.name}: x ${r.x0.toFixed(3)}..${r.x1.toFixed(3)} z ${r.z0.toFixed(3)}..${r.z1.toFixed(3)} from ${r.y0.toFixed(3)} to ${r.y1.toFixed(3)} m`);
+  for (const [name, x0, x1, z0, z1] of BRIDGE.strips) console.log(`  the bridge's floor carried on — ${name}: x ${(x0 / SCALE + CX).toFixed(3)}..${(x1 / SCALE + CX).toFixed(3)} z ${(z0 / SCALE + CZ).toFixed(3)}..${(z1 / SCALE + CZ).toFixed(3)} at ${(BRIDGE.top / SCALE).toFixed(3)} m`);
 } else if (mode === 'data') { if (!a || !b) throw new Error('usage: neon_ways_up.mjs data <in neon_data.json> <out neon_data.json>');
   const text = fs.readFileSync(a, 'utf8'); const D = JSON.parse(text); if (JSON.stringify(D) !== text) throw new Error('the file does not come back the same from a read and a write');
   const u = (v) => Math.round(v * 1000) / 1000; const ax = (x) => u((x - CX) * SCALE), az = (z) => u((z - CZ) * SCALE), ay = (h) => u(h * SCALE);
@@ -154,15 +190,22 @@ if (mode === 'spec') { if (!a) throw new Error('usage: neon_ways_up.mjs spec <ou
   { const strip = D.surfaces.filter((q) => q.type === 'flat' && q.maxZ === az(STEP.face) && q.top === ay(STEP.strip) && q.minX <= ax(STEP.x[0]) && q.maxX === ax(STEP.x[1])), floor = D.surfaces.filter((q) => q.type === 'flat' && q.minZ === az(STEP.face + 0.25) && q.top === ay(STEP.floor) && q.maxZ >= az(STEP.face + STEP.long));
     const walls = D.obstacles.filter((o) => (o.maxX === ax(STEP.x[0]) || o.minX === ax(STEP.x[1])) && o.minZ <= az(STEP.face) && o.maxZ >= az(STEP.face + STEP.long) && o.minY <= ay(STEP.floor) && o.maxY >= ay(STEP.strip));
     if (strip.length !== 1 || floor.length !== 2 || floor[0].maxX !== floor[1].minX || walls.length !== 2) throw new Error(`the step at the bridge's north end: ${strip.length} floors of the strip, ${floor.length} of the bridge and ${walls.length} walls found`); }
+  // the bridge's floors, side walls and sills, and the two boxes that keep a body off the hair, as the strips expect them: each found once
+  { const flat = (top) => ([x0, x1, z0, z1]) => D.surfaces.filter((q) => q.type === 'flat' && q.minX === x0 && q.maxX === x1 && q.minZ === z0 && q.maxZ === z1 && q.top === top).length;
+    const nf = BRIDGE.floors.map(flat(BRIDGE.top)), ns = BRIDGE.sills.map(flat(BRIDGE.sill)), nw = BRIDGE.walls.map(([x0, x1, z0, z1]) => D.obstacles.filter((o) => o.minX === x0 && o.maxX === x1 && o.minZ === z0 && o.maxZ === z1 && o.maxY === BRIDGE.sill).length);
+    const nk = BRIDGE.keepers.map(([x0, x1, z0, z1, y0, y1]) => D.obstacles.filter((o) => o.minX === x0 && o.maxX === x1 && o.minZ === z0 && o.maxZ === z1 && o.minY === y0 && o.maxY === y1).length);
+    if ([...nf, ...ns, ...nw, ...nk].some((n) => n !== 1)) throw new Error(`the bridge's floors, sills, side walls and the hair's two keepers: found ${nf.join(', ')} of the four floors, ${ns.join(', ')} of the four sills, ${nw.join(', ')} of the four walls and ${nk.join(', ')} of the two keepers`); }
   const boxes = [...slabs.map((s) => ({ minX: ax(s.x0), maxX: ax(s.x1), minZ: az(s.z0), maxZ: az(s.z1), minY: ay(s.top - THICK), maxY: ay(s.top), topBuffer: 0.8 })),
     ...rails.map((r) => ({ minX: ax(r.x0), maxX: ax(r.x1), minZ: az(r.z0), maxZ: az(r.z1), minY: ay(r.y0), maxY: ay(r.y1) })),   // (a rail is a wall: no floor on its top, no buffer)
     ...blocks.map((r) => ({ minX: ax(r.x0), maxX: ax(r.x1), minZ: az(r.z0), maxZ: az(r.z1), minY: ay(r.y0), maxY: ay(r.y1), topBuffer: 0.8 }))];   // (under a ramp: the ramp's own floor is over it)
-  const surfs = [...planes.map(planeOf), ...floors.map(floorOf), { minX: 81, maxX: 82, minZ: az(55.49), maxZ: 70, maxTop: 80.94, type: 'flat', top: 80.94 }];
+  const stripOf = ([x0, x1, z0, z1]) => ({ minX: x0, maxX: x1, minZ: z0, maxZ: z1, maxTop: BRIDGE.top, type: 'flat', top: BRIDGE.top });
+  const strips = BRIDGE.strips.map(([, ...r]) => stripOf(r)), oldStrips = BRIDGE.earlier.map(stripOf);   // (the earlier builds' strips come out: each lies inside one of these, or is the PT site's b1105kk)
+  const surfs = [...planes.map(planeOf), ...floors.map(floorOf), ...strips];
   // what is here of them already comes out and all of it goes in at the lists' ends, in this order — so a run on a fresh reading, one on an earlier build's data (the floors
-  // that build wrote whole and the rails narrow come out) and one on this tool's own output all write the same file
+  // that build wrote and this one writes otherwise come out) and one on this tool's own output all write the same file
   const take = (list, e) => { const i = list.findIndex((q) => same(q, e)); if (i < 0) return 0; list.splice(i, 1); return 1; };
-  let hadB = 0, hadF = 0, outOld = 0; for (const e of boxes) hadB += take(D.obstacles, e); for (const e of surfs) hadF += take(D.surfaces, e); for (const e of [...gone.planes.map(planeOf), ...gone.floors.map(floorOf)]) outOld += take(D.surfaces, e);
+  let hadB = 0, hadF = 0, outOld = 0; for (const e of boxes) hadB += take(D.obstacles, e); for (const e of surfs) hadF += take(D.surfaces, e); for (const e of [...gone.planes.map(planeOf), ...gone.floors.map(floorOf), ...oldStrips]) outOld += take(D.surfaces, e);
   D.obstacles.push(...boxes); D.surfaces.push(...surfs);
   fs.writeFileSync(b, JSON.stringify(D));
-  console.log(`the stub: ${outB} boxes and ${outF} floors out; earlier builds' floors the rails narrow: ${outOld} out; the ways: ${boxes.length} boxes (${rails.length} of them the rails', ${blocks.length} under the little ramp) and ${surfs.length} floors (${planes.length} of them sloped, one of those the unseen slope at the bridge's north step), ${hadB} and ${hadF} of them there already: ${D.obstacles.length} boxes, ${D.surfaces.length} floors`);
+  console.log(`the stub: ${outB} boxes and ${outF} floors out; earlier builds' floors written otherwise now: ${outOld} out; the ways: ${boxes.length} boxes (${rails.length} of them the rails', ${blocks.length} under the little ramp) and ${surfs.length} floors (${planes.length} of them sloped, one of those the unseen slope at the bridge's north step; ${strips.length} the bridge's floor carried to its side walls), ${hadB} and ${hadF} of them there already: ${D.obstacles.length} boxes, ${D.surfaces.length} floors`);
 } else throw new Error('usage: neon_ways_up.mjs spec <out spec.json> | data <in neon_data.json> <out neon_data.json>');
