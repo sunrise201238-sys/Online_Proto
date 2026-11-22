@@ -1,6 +1,7 @@
 // sfx_data.js — WHAT PLAYS AND HOW LOUD (since b1105hk). Written by the listening site's own tool from its mixer (its fold 13), not
-// by hand: every level is the one the user set by ear there. The tool is kept with the site, outside this repository; a level
-// changed here holds only until the table is next written, so a lasting change is made on the site.
+// by hand: every level is the one the user set by ear there (but for one track's line, combat_4 below, b1105jv). The tool is kept
+// with the site, outside this repository; a level changed here holds only until the table is next written, so a lasting change is
+// made on the site.
 // A sound: its file under public/ without the extension, the extension it has on the release lines (the PT site serves every
 // one as .wasm), and the level it plays at, of the game's volume. Several sounds may be one file at different levels.
 export const SFX_VOLUME = 0.7;
@@ -97,6 +98,12 @@ export const BGM_TRACKS = {
   combat_1: {"file": "bgm/combat_1", "ext": ".mp3", "place": "combat", "level": 0.12328},
   combat_2: {"file": "bgm/combat_2", "ext": ".mp3", "place": "combat", "level": 0.1368},
   combat_3: {"file": "bgm/combat_3", "ext": ".mp3", "place": "combat", "level": 0.12472},
+  // combat_4 (b1105jv, 2026-11-22; user, with the file: "Add this BGM to one of those randomly picked for battle. There should be four of
+  // them now including this new one."): the one line of this table written by hand — the listening site was put away by then. Its rule is
+  // kept: the site brought every track to one loudness (a level of 0.1875 at -11.5 LUFS, the measure ffmpeg's ebur128 gives, which reads
+  // the site's own figure for each of the ten) and the game plays them at 0.8 of that (b1105il). This track reads -7.8 LUFS: 0.1225 on
+  // the site's scale, 0.098 here.
+  combat_4: {"file": "bgm/combat_4", "ext": ".mp3", "place": "combat", "level": 0.098},
   game_end: {"file": "bgm/game_end", "ext": ".mp3", "place": "end", "level": 0.10496},
 };
 export const BGM_SOFT = [["menu", "char"], ["end", "menu"]];   // the pairs of places between which the change is a cross-fade; any other change is a cut
