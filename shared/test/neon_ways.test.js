@@ -1,20 +1,26 @@
 // Neon's two ways up to the skybridge (b1105kg; shared/tools/maps/neon_ways_up.mjs; user 2026-11-22: "Use existing objects as
 // materials to extend the current scaffolding structure. So the unit can walk seamlessly to the top catwalk.", with the two
 // ends of each way read off the game, and of a stub of a railing at the catwalk's joint: "remove this object physically and
-// visually."), against the installed data, on the server's sim: each way walked from the user's own start to the user's own
-// end with the stick alone, no tick of it in the air; where the stub stood, a body stands. A reading of Neon's data made again
-// from the model has neither the ways' floors nor the bridge's floor under the window: the tool is run after it, and these
-// fail until it has been. (The routes over the ways are asked of the route grid in pads.test.js.)
+// visually."), their rails and the little ramp in the bridge (b1105ki; "加欄杆可以解決", "Add a little slope connecting the
+// catwalk floor and the platform so the BOT knows to walk onto it.", "can you add guarding gates on this slope as well?") and
+// the unseen slope at the bridge's north step (b1105kj; "add an invisible small slope at this gap edge so units can walk right
+// onto the higher ground here."), against the installed data, on the server's sim: each way walked from the user's own start
+// to the user's own end with the stick alone, no tick of it in the air; out of the bridge and back in by the little ramp the
+// same, and up and down the unseen slope; one walk from the first scaffold's top over the bridge to the second's; a body
+// walked at a rail is held at it; where the stub stood, a body stands. A reading of Neon's data made again from the model has
+// none of this: the tool is run after it, and these fail until it has been. (The routes over the ways are asked of the route
+// grid in pads.test.js, and there a bot moved onto the tower top stays up there.)
 import '../tools/maps/arena_files.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/sim/constants.js';
 import { createMatchState, tickMatch, emptyInput, getArena, groundHeightAt, unitOverlapsObstacle } from '../src/sim/index.js';
 
-const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
+const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS, R = C.FIGHTER_RADIUS / 4;
 const AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4;   // (Neon: the model's metres to the arena's units — the client's GLB_MAPS line)
 // A body set down at a place (model metres, the feet's height over the street) and walked from point to point, the stick
-// straight at each: where it ends, and how many ticks of the walk it was in the air.
+// straight at each: where it ends, and how many ticks of the walk it was in the air (`go`); or walked at a point for a time,
+// whatever stands in the way (`push`).
 function walker(start) {
   const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
   const f = m.fighters.p1, e = m.fighters.p2;
@@ -23,20 +29,20 @@ function walker(start) {
   f.pos = { x: AX(start[0]), y: start[2] * 4 + G, z: AZ(start[1]) }; f.vel = { x: 0, y: 0, z: 0 }; f.airborne = false; f.grounded = true; f.floorY = f.pos.y;
   let now = 1000;
   const at = () => ({ x: f.pos.x / 4 - 12.44, z: f.pos.z / 4 + 40.37, feet: (f.pos.y - G) / 4 });
+  const step = (tx, tz) => { const dx = AX(tx) - f.pos.x, dz = AZ(tz) - f.pos.z, d = Math.hypot(dx, dz) || 1; now += MS; tickMatch(m, { p1: { ...emptyInput(), moveX: dx / d, moveZ: dz / d } }, now, DT); return f.airborne ? 1 : 0; };
   const go = (points) => {
     let air = 0;
     for (const [tx, tz] of points) {
       for (let n = 0; ; n += 1) {
-        const dx = AX(tx) - f.pos.x, dz = AZ(tz) - f.pos.z, d = Math.hypot(dx, dz);
-        if (d < 1) break;
+        if (Math.hypot(AX(tx) - f.pos.x, AZ(tz) - f.pos.z) < 1) break;
         assert.ok(n < 60 * 30, `the walk comes to (${tx}, ${tz}); it is at (${at().x.toFixed(2)}, ${at().z.toFixed(2)}) feet ${at().feet.toFixed(2)}`);
-        now += MS; tickMatch(m, { p1: { ...emptyInput(), moveX: dx / d, moveZ: dz / d } }, now, DT);
-        if (f.airborne) air += 1;
+        air += step(tx, tz);
       }
     }
     return { ...at(), air };
   };
-  return { go, at };
+  const push = (tx, tz, ticks = 180) => { for (let n = 0; n < ticks; n += 1) step(tx, tz); return at(); };
+  return { go, push, at };
 }
 
 test('the north way: from the first scaffold\'s top, up two ramps and a landing, onto the strip at the bridge\'s north end — walked, never in the air', () => {
@@ -44,19 +50,71 @@ test('the north way: from the first scaffold\'s top, up two ramps and a landing,
   const landing = w.go([[-8.3, 31.7]]);
   assert.ok(Math.abs(landing.feet - 17.014) < 0.02 && landing.air === 0, `up the first ramp to the landing: feet ${landing.feet.toFixed(2)}, ${landing.air} ticks in the air`);
   const top = w.go([[-4.3, 31.7], [-4.3, 24.6], [-5.87, 23.57]]);   // (the user's end: "x -5.87 z 23.57 feet 21.24 m" — the way's platform lies on the strip there, 0.2 m thick)
-  assert.ok(Math.abs(top.feet - 21.443) < 0.02 && top.air === 0, `up the second ramp to the platform on the strip: feet ${top.feet.toFixed(2)}, ${top.air} ticks in the air`);
+  assert.ok(Math.abs(top.feet - 21.443) < 0.02 && top.air === 0, `up the second ramp, between its rails, to the platform on the strip: feet ${top.feet.toFixed(2)}, ${top.air} ticks in the air`);
   const strip = w.go([[-4.3, 22.0]]);
   assert.ok(Math.abs(strip.feet - 21.24) < 0.02, `and off the platform's north edge onto the strip itself: feet ${strip.feet.toFixed(2)}`);
 });
 
-test('the south way: from the second scaffold\'s top, up three ramps and along the walkway to the last east window\'s sill — walked, never in the air — and down into the bridge', () => {
+test('the south way: from the second scaffold\'s top, up three ramps and along the walkway to the last east window\'s sill, and down the little ramp into the bridge — walked, never in the air', () => {
   const w = walker([16.01, 31.64, 12.585]);   // (the user's start: "x 16.01 z 31.64 feet 12.59 m")
   const walkway = w.go([[15.4, 32.6], [15.4, 47.2]]);
-  assert.ok(Math.abs(walkway.feet - 21.88) < 0.02 && walkway.air === 0, `up the three ramps onto the walkway: feet ${walkway.feet.toFixed(2)}, ${walkway.air} ticks in the air`);
+  assert.ok(Math.abs(walkway.feet - 21.88) < 0.02 && walkway.air === 0, `up the three ramps, between their rails, onto the walkway: feet ${walkway.feet.toFixed(2)}, ${walkway.air} ticks in the air`);
   const sill = w.go([[15.4, 55.75], [10.0, 55.75], [8.53, 57.10]]);   // (the user's end: "x 8.53 z 57.10 feet 21.80 m")
   assert.ok(Math.abs(sill.feet - 21.80) < 0.02 && sill.air === 0, `along the walkway and west onto the sill: feet ${sill.feet.toFixed(2)}, ${sill.air} ticks in the air`);
   const bridge = w.go([[5.0, 57.1]]);
-  assert.ok(Math.abs(bridge.feet - 20.235) < 0.02, `and through the window onto the bridge's floor: feet ${bridge.feet.toFixed(2)}`);
+  assert.ok(Math.abs(bridge.feet - 20.235) < 0.02 && bridge.air === 0, `and through the window down the little ramp onto the bridge's floor: feet ${bridge.feet.toFixed(2)}, ${bridge.air} ticks in the air`);
+});
+
+test('out of the bridge: from pad D up the little ramp, over the sill and onto the walkway — walked, never in the air (until b1105ki a jump of 1.57 m)', () => {
+  const w = walker([4.07, 56.40, 20.235]);   // (pad D's own place on the bridge's floor)
+  const sill = w.go([[5.6, 56.6], [8.4, 56.6]]);
+  assert.ok(Math.abs(sill.feet - 21.80) < 0.02 && sill.air === 0, `up the little ramp onto the sill: feet ${sill.feet.toFixed(2)}, ${sill.air} ticks in the air`);
+  const walkway = w.go([[10.5, 55.9], [15.4, 55.75]]);
+  assert.ok(Math.abs(walkway.feet - 21.88) < 0.02 && walkway.air === 0, `and out onto the walkway: feet ${walkway.feet.toFixed(2)}, ${walkway.air} ticks in the air`);
+  // a body on the bridge's floor walked at the little ramp's side: held where the ramp stands over a step's height, up onto it where it does not
+  const high = walker([7.6, 54.6, 20.235]).push(7.6, 57.0);
+  assert.ok(Math.abs(high.feet - 20.235) < 0.02 && high.z < 55.49 - R + 0.03, `at the ramp's high side it is held (z ${high.z.toFixed(2)}, feet ${high.feet.toFixed(2)})`);
+  const low = walker([6.2, 54.6, 20.235]).go([[6.2, 56.6]]);
+  assert.ok(low.feet > 20.3 && low.feet < 20.6, `at its low side it steps onto the ramp (feet ${low.feet.toFixed(2)})`);
+});
+
+test('the rails: a body walked at a side of the north way\'s upper ramp, of the platform where it hangs over the air, or of the south way\'s slope is held at the rail; where the platform lies on the strip it steps off', () => {
+  // (a rail's inner face and a body's radius: the upper ramp's and the platform's rails at x -2.903 and -5.723, the south slope's at x 16.843 and 14.023)
+  for (const [name, start, east, west] of [['the north way\'s upper ramp', [-4.3, 27.7, 19.243], -2.903, -5.723], ['the platform over the air', [-4.3, 25.0, 21.443], -2.903, -5.723], ['the south way\'s slope', [15.4, 40.0, 17.340], 16.843, 14.023]]) {
+    const e = walker(start).push(start[0] + 6, start[1]), w = walker(start).push(start[0] - 6, start[1]);
+    assert.ok(Math.abs(e.x - (east - R)) < 0.02 && Math.abs(e.feet - start[2]) < 0.03, `${name}, east: held at x ${e.x.toFixed(2)}, feet ${e.feet.toFixed(2)}`);
+    assert.ok(Math.abs(w.x - (west + R)) < 0.02 && Math.abs(w.feet - start[2]) < 0.03, `${name}, west: held at x ${w.x.toFixed(2)}, feet ${w.feet.toFixed(2)}`);
+  }
+  const off = walker([-4.3, 23.6, 21.443]).go([[-0.6, 23.6]]);
+  assert.ok(Math.abs(off.feet - 21.24) < 0.02, `off the platform's east side onto the strip, toward the bridge: feet ${off.feet.toFixed(2)}`);
+});
+
+test('the unseen slope at the bridge\'s north step: from the bridge\'s floor up onto the strip and back down — walked, never in the air (until b1105kj held at the step\'s face, 0.95 m high, and a fall off it)', () => {
+  const FLOOR = 20.285, STRIP = 21.2375, FACE = 24.62, LONG = 1.25;   // (the bridge's floor at its north end and the strip's top, as the data has them; the step's face; the slope's length)
+  for (const [name, x] of [['by the west wall', 1.2], ['where the user stood', 4.83], ['by the east wall', 7.7]]) {   // (the user: "x 4.83 z 24.91 feet 20.29 m", against the face)
+    const w = walker([x, 28.0, FLOOR]);
+    const up = w.go([[x, 22.5]]);
+    assert.ok(Math.abs(up.feet - STRIP) < 0.02 && up.air === 0, `${name}, north onto the strip: feet ${up.feet.toFixed(2)} at z ${up.z.toFixed(2)}, ${up.air} ticks in the air`);
+    const down = w.go([[x, 28.0]]);
+    assert.ok(Math.abs(down.feet - FLOOR) < 0.02 && down.air === 0, `${name}, south onto the bridge's floor: feet ${down.feet.toFixed(2)} at z ${down.z.toFixed(2)}, ${down.air} ticks in the air`);
+  }
+  // on it a body stands on the slope itself — over the floor the picture shows, by as much as the slope has risen
+  const mid = walker([4.83, 28.0, FLOOR]).go([[4.83, FACE + LONG / 2 - 0.2]]);
+  assert.ok(mid.z > FACE && mid.z < FACE + LONG && Math.abs(mid.feet - (STRIP - (mid.z - FACE) * (STRIP - FLOOR) / LONG)) < 0.02 && mid.feet > FLOOR + 0.3, `half way up: feet ${mid.feet.toFixed(2)} at z ${mid.z.toFixed(2)}`);
+});
+
+test('one walk from the first scaffold\'s top to the second\'s and back, the stick alone, no jump: the north way, the strip, the unseen slope, the bridge, the little ramp, the south way', () => {
+  // (a walk with no jump, not one with no tick in the air: the platform lies 0.2 m over the strip, the bridge's floor has three sills 0.27 m high across it, and down the north way a body leaves each ramp's top for 0.4 s)
+  const there = [[-8.3, 31.7], [-4.3, 31.7], [-4.3, 23.6], [-2.0, 22.9], [3.0, 22.9], [3.0, 27.0], [3.0, 54.5], [5.6, 56.6], [8.4, 56.6], [10.5, 55.9], [15.4, 55.75], [15.4, 47.2], [15.4, 32.6], [16.01, 31.64]];   // (east along the strip at z 22.9: between the slanted panel's foot and the post at the bridge's north-west corner)
+  const w = walker([-7.92, 24.15, 12.585]);
+  const strip = w.go(there.slice(0, 5));
+  assert.ok(Math.abs(strip.feet - 21.2375) < 0.02, `up the north way and east along the strip to the bridge's end: feet ${strip.feet.toFixed(2)}`);
+  const bridge = w.go(there.slice(5, 8));
+  assert.ok(Math.abs(bridge.feet - 20.235) < 0.02, `down the unseen slope and south through the bridge to the little ramp's foot: feet ${bridge.feet.toFixed(2)}`);
+  const top = w.go(there.slice(8));
+  assert.ok(Math.abs(top.feet - 12.585) < 0.02, `up the little ramp, out by the window and down the south way to the second scaffold's top: feet ${top.feet.toFixed(2)}`);
+  const back = w.go([...there.slice(0, -1).reverse(), [-7.92, 24.15]]);
+  assert.ok(Math.abs(back.feet - 12.585) < 0.02 && Math.hypot(back.x + 7.92, back.z - 24.15) < 0.3, `and the same way back to the first scaffold's top: (${back.x.toFixed(2)}, ${back.z.toFixed(2)}) feet ${back.feet.toFixed(2)}`);
 });
 
 test('the stub of a railing at the catwalk\'s joint is gone: a body stands where it stood', () => {

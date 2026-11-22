@@ -159,7 +159,7 @@ test('the route grid: a link each way per pad; every spawn reaches B and D, by a
   assert.ok(firstLegs[1].has(0) && firstLegs[3].has(2), 'the gold pair still carries routes to B, the silver pair routes to the bridge');
 });
 
-test('a bot whose target stands on B: it walks to A, charges a second, and stands on B with no goal left', async () => {
+test('a bot whose target stands on B: it walks to A, charges a second, and stays up there with no goal left', async () => {
   const { tickBot } = await import('../src/sim/ai.js');
   const m = match(); const pads = getArenaPads('neon'); const p = m.fighters.p1, b = m.fighters.p2;
   p.pos = { x: pads[1].x, y: pads[1].y + G, z: pads[1].z - 6 }; p.floorY = p.pos.y; p.invulnerableUntil = 1e15;
@@ -172,18 +172,18 @@ test('a bot whose target stands on B: it walks to A, charges a second, and stand
   }
   assert.ok(chargeAt && movedAt, 'it charged and moved'); assert.ok(movedAt - chargeAt >= PAD_HOLD_MS && movedAt - chargeAt < PAD_HOLD_MS + 3 * MS, `a second's charge (${movedAt - chargeAt} ms)`);
   assert.ok(Math.abs(b.pos.y - G - pads[1].y) < 0.05, 'on B');
-  // No goal is left by the move. (Until b1105kg this was asked of the next three seconds whole, which the bot spent on the
-  // tower top: the strip's south edge held its retreat. The north way's ramp goes on from that edge now; a bot backing off a
-  // target this near goes on down it and may hop off its side, and a bot that has come down has a goal again, as it should. So
-  // it is asked while the bot stands up there — the tower top, the strip and the way's platform on it, 0.2 m higher — which
-  // is half a second at the least.)
-  let up = 0;
+  // No goal is left by the move, and none comes back in the three seconds after it: the bot stays up there. (Until b1105kg
+  // the tower top was an island, and the strip's south edge held the bot's retreat from a target this near. The north way's
+  // upper ramp goes on from that edge since: in b1105kg, the way without rails, the bot backed on down it, hopped off its side
+  // onto the deck 12 m below and had a goal again, and this was asked only while it stood on the top. The rails of b1105kh
+  // keep it on the way — neon_ways_up.mjs; user 2026-11-22: "加欄杆可以解決" — so it is asked of the three seconds whole
+  // again: no goal, and the feet never under the upper ramp's foot, the landing at 17.014 m.)
+  let low = Infinity;
   for (let t = 0; t < 3000 / MS; t += 1) {
     now += MS; m.tick += 1; tickBot(m, 'p2', now); tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']);
-    if (b.airborne || Math.abs(b.pos.y - G - pads[1].y) > 1) break;
-    up += 1; assert.equal(b.botPadGoal, undefined, 'no goal left on B');
+    assert.equal(b.botPadGoal, undefined, 'no goal left on B'); low = Math.min(low, (b.pos.y - G) / 4);
   }
-  assert.ok(up >= 500 / MS, `it stood up there for ${up} ticks after the move`);
+  assert.ok(low > 17, `it stayed up there for the three seconds: its feet never under ${low.toFixed(2)} m`);
 });
 
 test('a bot with the goal on D: charges, and is on C after PAD_HOLD_MS', () => {
