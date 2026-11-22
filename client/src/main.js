@@ -4465,7 +4465,15 @@ function updateMoveSfx(now, real) {
   // spectator plays no unit and hears the movement of the one they watch — its steps from b1105id, its dodge, jump and
   // landing from b1105if; from b1105hl until then a spectator heard no movement at all, and before b1105hl the watched
   // match's first seat's, whoever was watched)
-  const quiet = st.hp <= 0 || finale.active || intro.active || state.phase !== 'match' || !m.root.visible || dioramaActive() || !(sfxOwn(m) || viewer);
+  // (b1105jx, user 2026-11-22: "footsteps/dodge sounds are missing in online games. investigate, check the jump/landing sounds as
+  // well. Fix without making online games any more lag." — A MATCH BEING PLAYED, AS THESE FOUR SOUNDS READ IT: offline the page's
+  // phase, as before. Online that phase is 'online' from the room to the end page and never 'match', so reading it alone kept
+  // the dodge, the jump, the landing and the steps unheard in every online match since b1105hk, for the player of a unit and
+  // for a room's spectator alike. Online the match's own word is read — onlineMatchLive: the server's match under way, past
+  // the game-start intro and before the ending camera — and never under the loading screen. One more comparison in a frame
+  // that ran this function already: nothing is sent, nothing is asked of the server, nothing more is drawn.)
+  const playing = state.online ? onlineMatchLive() && !matchCoverUp : state.phase === 'match';
+  const quiet = st.hp <= 0 || finale.active || intro.active || !playing || !m.root.visible || dioramaActive() || !(sfxOwn(m) || viewer);
   // (a stall, a page put away, a body set down elsewhere — a respawn, a transporter, a snap: nothing is read off that frame)
   if (quiet || !(dt > 0) || dt > 0.25 || Math.hypot(dx, dz) > MODEL_SNAP_U) {
     w.air = air; w.step = stepping; w.leap = false; w.act = null;
@@ -9351,7 +9359,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105jw 11-22';
+const CLIENT_BUILD_TAG = 'b1105jx 11-22';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
