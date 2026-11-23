@@ -12,7 +12,9 @@
 // And of the two pieces of the strip's south edge that no jump cleared — a low rail under a hold 3 m tall that is not seen — shown where they stand: "Can you use the higher
 // version fence for these two spots then? I don't like invisible cbox here.", and of that fence on the PT site: "兩段改成高欄杆. make them unpassable for bullets, then update
 // to 9.9"; of the one rail that a sprint off the deck above it still went over: "東側內斜坡那條的判定加高到約 1.2 公尺，外觀不變. Implement in PT and 9.9" (b1105ks: THE TALL
-// FENCE and HOLD_MORE below).
+// FENCE below, and that leg's hold at 1.20 m for the one build).
+// And of that leg, with one of its boxes picked on the page (#8246): "I believe this is the piece of mini fence which you raised its cbox height. Remove this piece of fence
+// visually and physically. Then replace it with the higher version fence, the one that also blocks bullets. PT and 9.9" (b1105kt: TALL_LEGS below).
 // usage: node neon_rails.mjs <tree root> <in neon_data.json> <out neon_data.json> <out pieces.json>      (LIST=1: the plan is listed and nothing is written)
 //        then for the model glb_place.mjs <in neon.glb> <out> echo_01_242 <pieces>_tall_spec.json (the tall fence's two panels; the spec is written beside the pieces) and
 //        glb_rails.mjs <in> <out neon.glb> <pieces.json> (the low rails: the last thing written to the model), and navgrid_build.mjs <tree root> neon for the route grid.
@@ -28,8 +30,9 @@
 import { pathToFileURL } from 'node:url'; import path from 'node:path'; import fs from 'node:fs';
 const [treeA, inF, outF, piecesF] = process.argv.slice(2); if (!piecesF) { console.error('usage: node neon_rails.mjs <tree root> <in neon_data.json> <out neon_data.json> <out pieces.json>'); process.exit(2); }
 // the rail (metres): through, tall, the bar's height, a post's reach under the floor's top, the posts' greatest pitch; the model's height of the street; where the hold begins
-// over the floor; the holds (BUFFER_MORE: a leg of HOLD_MORE below; BUFFER_NO_HOP: the two rails that no jump cleared in b1105kn to b1105kq, where THE TALL FENCE stands
-// now — known still, so that a run on such a build's data takes them out); the model's colour (linear: the scaffold's dark steel)
+// over the floor; the holds (BUFFER_MORE: the east inner ramp's north leg in b1105ks, held to 1.20 m; BUFFER_NO_HOP: the two rails that no jump cleared in b1105kn to
+// b1105kq — the tall fence stands at all three now, and the two holds are known still, so that a run on such a build's data takes its rails out); the model's colour
+// (linear: the scaffold's dark steel)
 const T = 0.06, TALL = 0.75, BAR = 0.05, FOOT = 0.03, PITCH = 2.0, GROUND = 4.2927, HOLD_FROM = 0.25, BUFFER = 2, BUFFER_MORE = 4.25, BUFFER_NO_HOP = 12, COLOR = [0.051, 0.073, 0.077];
 const MX = (u) => u / 4 - 12.44, MZ = (u) => u / 4 + 40.37, AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4; const r4 = (v) => Math.round(v * 1e4) / 1e4;   // (arena units and model metres)
 const isRail = (o) => o.noProjectile === true && (o.topBuffer === BUFFER || o.topBuffer === BUFFER_MORE || o.topBuffer === BUFFER_NO_HOP) && Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < T * 4 + 1e-3;
@@ -42,10 +45,26 @@ const isRail = (o) => o.noProjectile === true && (o.topBuffer === BUFFER || o.to
 // and no noProjectile (it stops a round, a beam and the bots' sight. The PT site's b1105kr let those pass, as the low rail there had; the user, of it: "make them
 // unpassable for bullets"). A panel of an earlier run is known by its plan and its height, with that flag or without. Model metres: the opening along x, the panel's band
 // along z, the floor; the panel copied (glb_place.mjs).
-const PANEL = { from: ['Node_214_214', 'Node_215_215'], x0: 0.963, z0: 21.839, base: 8.545, deck: 8.629, top: 11.240, depth: 0.59 };
+const PANEL = { from: ['Node_214_214', 'Node_215_215'], x0: 0.963, z0: 21.839, len: 4.002, base: 8.545, deck: 8.629, top: 11.240, depth: 0.59 };
 const TALL_FENCE = [{ x0: -7.19, x1: -6.31, z0: 24.03, z1: 24.62, h: 21.24, suffix: '_tallsw', name: 'the strip\'s south-west corner' }, { x0: -2.31, x1: -0.19, z0: 24.03, z1: 24.62, h: 21.24, suffix: '_talls', name: 'the strip\'s south edge between the platform and the bridge' }];
 const tallBox = (t) => ({ minX: r4(AX(t.x0)), maxX: r4(AX(t.x1)), minZ: r4(AZ(t.z0)), maxZ: r4(AZ(t.z1)), minY: r4(t.h * 4), maxY: r4((t.h + PANEL.top - PANEL.deck) * 4) });
-const isTall = (o) => TALL_FENCE.some((t) => { const b = tallBox(t); return ['minX', 'maxX', 'minZ', 'maxZ', 'minY', 'maxY'].every((k) => Math.abs(o[k] - b[k]) < 0.01); });
+// A LEG WHERE THE TALL FENCE STANDS (b1105kt). The east inner ramp's north side had a low rail as every ramp's side has; a sprint off the deck at the ramp's top went over
+// it (22 of the bodies' scan, 12 m down to the street), and b1105ks gave its boxes a hold 0.45 m over the bar one sees. The user, with a box of it picked: "Remove this
+// piece of fence visually and physically. Then replace it with the higher version fence, the one that also blocks bullets." So the scaffold's fence panel stands along
+// that side now, leant with the ramp as the panels on the two ways' ramps are (neon_ways_up.mjs leantRail): the panel made the leg's length, its posts upright, its foot
+// 8 cm in the ramp's floor line, its outer face on the frame's edge where the low rail's was — 2.61 m over the ramp's floor from the ramp's foot to the deck at its top.
+// In the data it is a row of wall boxes in steps, the panel's depth through, each from the ramp's floor at the lower end of its step to the panel's height over the floor
+// at the higher: no topBuffer and no noProjectile, as the panels above. The plan's leg on that line gets no low rail (the tool stops if the plan has no such leg, or has
+// it elsewhere), and a flat run that runs into the panel's band ends at the panel's end. Model metres: the leg's axis, line and open side; from, to; the ramp's floor at
+// those two (the tool stops if the data's sloped floor is not there).
+const TALL_LEGS = [{ axis: 'x', c: 29.61, n: -1, from: 9.79, to: 13.30, f0: 8.807, f1: 12.327, suffix: '_talle', name: 'the east inner ramp\'s north side' }];
+const tallLegBand = (t) => (t.n > 0 ? [t.c - PANEL.depth, t.c] : [t.c, t.c + PANEL.depth]);   // (across the leg: from its line in over the frame)
+const tallLegBoxes = (t) => { const len = t.to - t.from, K = Math.max(1, Math.ceil(Math.max(len / 0.5, Math.abs(t.f1 - t.f0) / 0.25))), f = (a) => t.f0 + (t.f1 - t.f0) * (a - t.from) / len, [p0, p1] = tallLegBand(t); const out = [];
+  for (let k = 0; k < K; k += 1) { const a0 = t.from + len * k / K, a1 = t.from + len * (k + 1) / K; const b = t.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
+    out.push({ minX: r4(b.minX), maxX: r4(b.maxX), minZ: r4(b.minZ), maxZ: r4(b.maxZ), minY: r4(Math.min(f(a0), f(a1)) * 4), maxY: r4((Math.max(f(a0), f(a1)) + PANEL.top - PANEL.deck) * 4) }); }
+  return out; };
+const TALL_BOXES = [...TALL_FENCE.map(tallBox), ...TALL_LEGS.flatMap(tallLegBoxes)];
+const isTall = (o) => TALL_BOXES.some((b) => ['minX', 'maxX', 'minZ', 'maxZ', 'minY', 'maxY'].every((k) => Math.abs(o[k] - b[k]) < 0.01));
 const text = fs.readFileSync(inF, 'utf8'); const D = JSON.parse(text); if (JSON.stringify(D) !== text) throw new Error('the file does not come back the same from a read and a write');
 const before = D.obstacles.length; D.obstacles = D.obstacles.filter((o) => !isRail(o)); const taken = before - D.obstacles.length;
 const withTall = D.obstacles.length; D.obstacles = D.obstacles.filter((o) => !isTall(o)); const tallTaken = withTall - D.obstacles.length;
@@ -77,13 +96,6 @@ const SLOPE_JOINTS = [
 // Carried on to the frame's end at x 16.06, 0.41 m over the deck, the leg lets the body go lower than the deck rail's hold. A leg of its own, as the frame's floor falls
 // less steeply there than the leg's line and the posts stand on the deck. The tool stops if no leg of the plan ends where this one begins.
 const SLOPE_MORE = [['x', 47.62, 1, 15.13, 16.06, 6.58, 6.19, 5.78, 'the leg beside the ramp east of the 8.6 m deck, to the frame\'s end']];
-// A LEG WITH A TALLER HOLD (b1105ks; model metres: the leg's axis, line and open side). The east inner ramp's north leg stands beside a floor that falls a metre in a
-// metre, under the deck at the ramp's top. A body that SPRINTS off that deck is in the air over the ramp and comes to the leg with its feet over the hold every rail has
-// (0.64 m over the frame's floor), and so is one that sprints down the frame's own strip beside the rail, as the floor falls away under it: 22 sprints of the bodies' scan went over the leg and down to the street, 12 m. With the hold at 1.20 m over the frame's floor
-// (BUFFER_MORE, a topBuffer of 4.25: 0.75 m + (4.25 - 2.45) / 4) none does. What one sees is as it was: the rail is 0.75 m tall, and for 0.45 m over its bar a body is
-// held by a thing not seen (the user, of that way put to them: "東側內斜坡那條的判定加高到約 1.2 公尺，外觀不變"). The boxes of every
-// leg on that line get it. The tool stops if the plan has no leg there.
-const HOLD_MORE = [['x', 29.61, -1, 'the east inner ramp\'s north leg']];
 // 1. THE FLAT FLOORS' OPEN EDGES. Along every open edge of the flat floors of the scaffold complex that a unit stands on — a side of a floor's rectangle beyond which the
 // ground drops 2.4 m or more, with no floor going on within a step's height across a gap, no wall there already and a floor at least 1.6 m deep behind it — a run of rail:
 // its outer face on the floor's own edge line. Runs on one line are joined, a gap narrower than a body bridged, a run shorter than a body dropped unless it lies between
@@ -260,6 +272,8 @@ for (const t of TALL_FENCE) if (planned.filter((r) => r.noHop && inTall(r, t)).l
 if (planned.filter((r) => r.noHop).length !== TALL_FENCE.length) throw new Error('a run that is not hopped has no tall fence');
 const model = planned.filter((r) => !r.noHop);
 for (const r of model) for (const t of TALL_FENCE) { if (Math.abs(r.h - t.h) > 0.3 || r.axis !== 'z' || r.c < t.x0 - 0.1 || r.c > t.x1 + 0.1) continue; if (r.to > t.z0 && r.from < t.z0) r.to = t.z0; }
+for (const r of model) for (const t of TALL_LEGS) { const [p0, p1] = tallLegBand(t); if (r.axis !== t.axis || r.c < p0 - 0.05 || r.c > p1 + 0.05 || r.h < Math.min(t.f0, t.f1) - 1 || r.h > Math.max(t.f0, t.f1) + 1) continue;   // (the deck's north rail at the ramp's top: it began under the panel's end)
+  if (r.from >= t.from && r.from < t.to && r.to > t.to) r.from = t.to; else if (r.to <= t.to && r.to > t.from && r.from < t.from) r.to = t.from; }
 for (const t of TALL_FENCE) D.obstacles.push(tallBox(t));
 const tallSpec = TALL_FENCE.map((t) => ({ from: PANEL.from, suffix: t.suffix, pivot: [PANEL.x0, +(PANEL.base + GROUND).toFixed(4), PANEL.z0], scale: [1, 1, 1], turn: 90,   // (a quarter turn: the panel's length from its end post goes east, its depth north of the pivot)
   move: [+(t.x0 - PANEL.x0).toFixed(4), +(t.h - (PANEL.deck - PANEL.base) - PANEL.base).toFixed(4), +(t.z1 - PANEL.z0).toFixed(4)], clip: { axis: 'z', from: +(PANEL.z0 - 0.01).toFixed(4), to: +(PANEL.z0 + t.x1 - t.x0).toFixed(4) } }));
@@ -277,17 +291,24 @@ for (const [i, r] of model.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 =
 const modelSlopes = slopeLegs(arenaNow()); let sBoxes = 0, sPosts = 0;
 for (const [ax, c, n, from, to, h0, h1, lo, why] of SLOPE_MORE) { if (modelSlopes.filter((r) => r.axis === ax && r.n === n && Math.abs(r.c - c) < 0.02 && Math.abs(r.to - from) < 0.08).length !== 1) throw new Error(`the leg carried on "${why}": no one leg of the plan ends where it begins`);
   modelSlopes.push({ axis: ax, c, n, from, to, h0, h1, lo0: lo, lo1: lo, more: true }); }
-for (const [ax, c, n, why] of HOLD_MORE) { const legs = modelSlopes.filter((r) => r.axis === ax && r.n === n && Math.abs(r.c - c) < 0.02); if (!legs.length) throw new Error(`the taller hold of "${why}": no leg of the plan on that line`); for (const r of legs) r.hold = BUFFER_MORE; }
-for (const [i, r] of modelSlopes.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
+// (a leg where the tall fence stands: the plan's own leg, found here and marked; its boxes and its copy of the panel instead of a low rail's)
+for (const t of TALL_LEGS) { const legs = modelSlopes.filter((r) => r.axis === t.axis && r.n === t.n && Math.abs(r.c - t.c) < 0.02); if (legs.length !== 1 || Math.abs(legs[0].from - t.from) > 0.02 || Math.abs(legs[0].to - t.to) > 0.02) throw new Error(`the tall fence along ${t.name}: the plan has no one leg on that line from ${t.from} to ${t.to} (it has ${legs.map((r) => `${r.from}..${r.to}`).join(', ') || 'none'})`);
+  if (t.axis !== 'x') throw new Error(`the tall fence along ${t.name}: a ramp that runs along z has its form in neon_ways_up.mjs (leantRail)`);
+  const arena = arenaNow(), zin = t.c - t.n * (PANEL.depth + 0.3); for (const a of [t.from + 0.3, (t.from + t.to) / 2, t.to - 0.3]) { const fl = t.f0 + (t.f1 - t.f0) * (a - t.from) / (t.to - t.from), g = P.groundHeightAt(AX(a), AZ(zin), arena.surfaces, (fl + 0.5) * 4) / 4;   // (0.3 m in from the ends: a landing lies over the ramp's first 2 cm)
+    if (Math.abs(g - fl) > 0.02) throw new Error(`the tall fence along ${t.name}: the ramp's floor at x ${a.toFixed(2)} is at ${g.toFixed(3)} m, not ${fl.toFixed(3)}`); }
+  legs[0].tall = t; for (const b of tallLegBoxes(t)) D.obstacles.push(b);
+  tallSpec.push({ from: PANEL.from, suffix: t.suffix, pivot: [PANEL.x0, +(PANEL.base + GROUND).toFixed(4), PANEL.z0], scale: [1, 1, +((t.to - t.from) / PANEL.len).toFixed(6)], turn: 90, rise: [+((t.f1 - t.f0) / (t.to - t.from)).toFixed(6), 0],   // (the panel made the leg's length, turned a quarter — its length east from the pivot, its depth north of it — and leant along x)
+    move: [+(t.from - PANEL.x0).toFixed(4), +(t.f0 - (PANEL.deck - PANEL.base) - PANEL.base).toFixed(4), +(tallLegBand(t)[1] - PANEL.z0).toFixed(4)] }); }
+for (const r of modelSlopes) { if (r.tall) continue; const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
   const K = Math.max(1, Math.ceil(Math.max(len / 0.5, Math.abs(r.h1 - r.h0) / 0.25)));
   for (let k = 0; k < K; k += 1) { const a0 = r.from + len * k / K, a1 = r.from + len * (k + 1) / K; const box = r.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
-    D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: r.hold ?? BUFFER, noProjectile: true }); sBoxes += 1; }
+    D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: BUFFER, noProjectile: true }); sBoxes += 1; }
   const boxes = [], hexa = []; const pt = (a, y, p) => (r.axis === 'x' ? [a, y, p] : [p, y, a]);
   const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const yb = Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
     boxes.push(r.axis === 'x' ? { min: [a, yb, p0], max: [a + T, yt, p1] } : { min: [p0, yb, a], max: [p1, yt, a + T] }); sPosts += 1; }
   const yA = hi(r.from) + GROUND + TALL, yB = hi(r.to) + GROUND + TALL;   // (the bar: a box sheared along the slope — upright ends, the top and the bottom parallel to the slope)
   hexa.push([pt(r.from, yA - BAR, p0), pt(r.to, yB - BAR, p0), pt(r.to, yB - BAR, p1), pt(r.from, yA - BAR, p1), pt(r.from, yA, p0), pt(r.to, yB, p0), pt(r.to, yB, p1), pt(r.from, yA, p1)].map((v) => v.map(r4)));
-  pieces.push({ name: `Rail_${String(model.length + i + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
+  pieces.push({ name: `Rail_${String(pieces.length + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
 // 5. THE FLOORS BESIDE A LEG (b1105kq). A rail on a ramp's side has its boxes as every rail has, and bodies went through two of them at a walk: 17 walks of the bodies' scan
 // through the east inner ramp's north leg (9 to 12 m down to the street), 11 through the leg beside the ramp east of the 8.6 m deck. What let them through is the frame
 // beside the rail, not the rail. The frame's pieces are boxes in steps, and a box is a floor to the sim when a floor lies on ANY of its top (arena.js markFloorTops): such
@@ -297,7 +318,8 @@ for (const [i, r] of modelSlopes.entries()) { const p0 = r.n > 0 ? r.c - T : r.c
 // So beside the legs named here every such top is given its floor: within 0.9 m inside the leg and a body's half-width beyond its ends, over each place where a box that
 // is no wall has its top under what the leg holds and no more than a metre under the leg's lower floor, nothing stands on that top, and no floor lies within a step over
 // it or 7 cm under it. A body then stands there, held by the rail.
-const FLOORED = [['x', 29.61, -1, 'the east inner ramp\'s north leg'], ['x', 47.62, 1, 'the leg beside the ramp east of the 8.6 m deck']];   // (the leg's axis, line and open side, model metres)
+// (b1105kt: the east inner ramp's north leg was the other of the two. The tall fence stands there now, and its boxes cover the frame's strip: no body comes onto it.)
+const FLOORED = [['x', 47.62, 1, 'the leg beside the ramp east of the 8.6 m deck']];   // (the leg's axis, line and open side, model metres)
 const railFloors = []; { const arena = arenaNow(); const WIDE = 0.9 * 4, PAST = R, ST = 0.2;
   for (const [ax, c, n, why] of FLOORED) { const legs = modelSlopes.filter((r) => r.axis === ax && r.n === n && Math.abs(r.c - c) < 0.02); if (!legs.length) throw new Error(`the floors beside "${why}": no leg of the plan on that line`);
     const a0 = Math.min(...legs.map((r) => r.from)), a1 = Math.max(...legs.map((r) => r.to));   // (model metres along)
@@ -306,7 +328,7 @@ const railFloors = []; { const arena = arenaNow(); const WIDE = 0.9 * 4, PAST = 
     const rect = (o) => (ax === 'x' ? [o.minX, o.maxX, o.minZ, o.maxZ] : [o.minZ, o.maxZ, o.minX, o.maxX]);   // (a box along and across the leg)
     const near = arena.obstacles.filter((o) => !isRail(o) && Number.isFinite(o.minX) && (() => { const [ua, ub, va, vb] = rect(o); return ub > u0 && ua < u1 && vb > v0 && va < v1; })());
     const marks = new Map();
-    for (let u = u0 + ST / 2; u < u1; u += ST) for (let v = v0 + ST / 2; v < v1; v += ST) { const x = ax === 'x' ? u : v, z = ax === 'x' ? v : u; const holds = (hiAt(M(u)) + TALL) * 4 + BUFFER - G;   // (the feet the leg holds here, units — by the hold every rail has: a leg of HOLD_MORE gets the floors it had)
+    for (let u = u0 + ST / 2; u < u1; u += ST) for (let v = v0 + ST / 2; v < v1; v += ST) { const x = ax === 'x' ? u : v, z = ax === 'x' ? v : u; const holds = (hiAt(M(u)) + TALL) * 4 + BUFFER - G;   // (the feet the leg holds here, units)
       for (const o of near) { if (o.topBuffer == null) continue; const [ua, ub, va, vb] = rect(o); if (u < ua || u > ub || v < va || v > vb) continue; const top = o.maxY; if (top > holds - 0.4 || top < (loAt(M(u)) - 1) * 4) continue;
         if (near.some((q) => q !== o && x >= q.minX && x <= q.maxX && z >= q.minZ && z <= q.maxZ && q.minY <= top + 0.1 && q.maxY > top + 0.3)) continue;   // (a thing stands on it here)
         if (P.groundHeightAt(x, z, arena.surfaces, top) >= top - 0.3) continue;   // (a floor at its top, or one a step over it)
@@ -318,10 +340,11 @@ const railFloors = []; { const arena = arenaNow(); const WIDE = 0.9 * 4, PAST = 
   for (const f of railFloors) D.surfaces.push(f.s); }
 if (!process.env.LIST) { fs.writeFileSync(outF, JSON.stringify(D)); fs.writeFileSync(piecesF, JSON.stringify({ color: COLOR, pieces })); fs.writeFileSync(piecesF.replace(/\.json$/, '') + '_tall_spec.json', JSON.stringify(tallSpec)); }   // (LIST=1: the plan alone)
 const side = (r) => `at ${r.axis === 'x' ? 'z' : 'x'} ${r.c.toFixed(2)}, open to ${r.n > 0 ? '+' : '-'}${r.axis === 'x' ? 'z' : 'x'}`;   // (model metres)
+const lowLegs = modelSlopes.filter((r) => !r.tall);
 for (const r of model) console.log(`  flat, floor ${r.h.toFixed(2)} m: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}`);
 for (const t of TALL_FENCE) console.log(`  the tall fence at ${t.name}: x ${t.x0.toFixed(2)}..${t.x1.toFixed(2)} z ${t.z0.toFixed(2)}..${t.z1.toFixed(2)}, from ${t.h.toFixed(2)} to ${(t.h + PANEL.top - PANEL.deck).toFixed(2)} m, a wall`);
-for (const r of modelSlopes) console.log(`  slope: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}, the lower floor ${r.lo0.toFixed(2)}..${r.lo1.toFixed(2)} m, the higher ${r.h0.toFixed(2)}..${r.h1.toFixed(2)} m${r.more ? ' (a leg carried on)' : ''}${r.hold ? ` (held to ${(TALL + (r.hold - G) / 4).toFixed(2)} m over the frame)` : ''}`);
+for (const r of modelSlopes) console.log(`  slope: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}, the lower floor ${r.lo0.toFixed(2)}..${r.lo1.toFixed(2)} m, the higher ${r.h0.toFixed(2)}..${r.h1.toFixed(2)} m${r.more ? ' (a leg carried on)' : ''}${r.tall ? ` (the tall fence, leant: ${tallLegBoxes(r.tall).length} wall boxes over the ramp's floor at ${r.tall.f0.toFixed(2)}..${r.tall.f1.toFixed(2)} m)` : ''}`);
 for (const f of railFloors) console.log(`  floor beside ${f.why}: x ${MX(f.s.minX).toFixed(2)}..${MX(f.s.maxX).toFixed(2)} z ${MZ(f.s.minZ).toFixed(2)}..${MZ(f.s.maxZ).toFixed(2)}, ${(f.s.top / 4).toFixed(2)} m`);
-console.log(`${model.length} flat runs, ${model.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m: ${model.length} boxes, ${posts} posts and ${model.length} bars; ${modelSlopes.length} slope legs, ${modelSlopes.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m along the ground: ${sBoxes} boxes, ${sPosts} posts and ${modelSlopes.length} leaning bars`);
+console.log(`${model.length} flat runs, ${model.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m: ${model.length} boxes, ${posts} posts and ${model.length} bars; ${lowLegs.length} slope legs, ${lowLegs.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m along the ground: ${sBoxes} boxes, ${sPosts} posts and ${lowLegs.length} leaning bars; the tall fence: ${TALL_FENCE.length} panels and ${TALL_LEGS.length} leant along a ramp's side (${TALL_BOXES.length} boxes)`);
 console.log(`${railFloors.length} floors beside ${FLOORED.length} legs, ${railFloors.reduce((s, f) => s + (f.s.maxX - f.s.minX) * (f.s.maxZ - f.s.minZ) / 16, 0).toFixed(2)} m2`);
-console.log(process.env.LIST ? `listed alone: nothing written (${taken} rails, ${tallTaken} panels of the tall fence and ${floorsTaken} floors of an earlier run in the file read)` : `${outF}: ${taken} rails, ${tallTaken} panels of the tall fence and ${floorsTaken} floors of an earlier run out, ${model.length + sBoxes} rails, ${TALL_FENCE.length} panels and ${railFloors.length} floors in, ${D.obstacles.length} boxes, ${D.surfaces.length} floors; ${piecesF}: ${pieces.length} pieces for the model, and the panels' spec beside it`);
+console.log(process.env.LIST ? `listed alone: nothing written (${taken} rails, ${tallTaken} boxes of the tall fence and ${floorsTaken} floors of an earlier run in the file read)` : `${outF}: ${taken} rails, ${tallTaken} boxes of the tall fence and ${floorsTaken} floors of an earlier run out, ${model.length + sBoxes} rails, ${TALL_BOXES.length} boxes of the tall fence and ${railFloors.length} floors in, ${D.obstacles.length} boxes, ${D.surfaces.length} floors; ${piecesF}: ${pieces.length} pieces for the model, and the panels' spec beside it`);

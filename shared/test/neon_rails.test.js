@@ -16,6 +16,9 @@
 // for bullets, then update to 9.9"; of the rail a sprint off the deck above went over: "東側內斜坡那條的判定加高到約 1.2 公尺，外觀不變. Implement in PT and 9.9"; of a bin
 // on the pavement: "Also remove this garbage can stuff visually and physically.", "垃圾桶移除. To 9.9"): the two panels are walls to a body, to the route grid, to a round
 // and to a bot's sight; the sprints are held and a jump still clears that rail; the bin's place is walked through.
+// And the fence along a ramp (b1105kt; user, with a box of that rail picked on the page, #8246: "I believe this is the piece of mini fence which you raised its cbox
+// height. Remove this piece of fence visually and physically. Then replace it with the higher version fence, the one that also blocks bullets. PT and 9.9"): the low
+// rail of the east inner ramp's north side is gone and the tall fence stands there, leant with the ramp — a wall to a body, to a round and to a bot's sight.
 import '../tools/maps/arena_files.mjs';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -26,8 +29,8 @@ import { navGridFor, botHasLineOfSight } from '../src/sim/ai.js';
 
 const G = C.GROUND_BASE_Y, DT = C.TICK_DT, MS = C.TICK_RATE_MS;
 const AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4, MX = (u) => u / 4 - 12.44, MZ = (u) => u / 4 + 40.37;   // (Neon: the model's metres and the arena's units)
-// a rail in the data: it holds a body alone, has a hold a rail is given (2; 4.25 on the one leg with a taller hold) and is 6 cm through (neon_rails.mjs: no key of its own)
-const isRail = (o) => o.noProjectile === true && (o.topBuffer === 2 || o.topBuffer === 4.25) && Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < 0.241;
+// a rail in the data: it holds a body alone, has the hold a rail is given and is 6 cm through (neon_rails.mjs: no key of its own)
+const isRail = (o) => o.noProjectile === true && o.topBuffer === 2 && Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < 0.241;
 const long = (o) => Math.max(o.maxX - o.minX, o.maxZ - o.minZ) / 4;
 // A body set down at a place (model metres; its feet on the floor there) and walked at a point for a time, whatever stands in the way: a walk, a sprint, a walk with a
 // dodge in it, or a walk with a jump at a tick. Where it ends.
@@ -77,11 +80,11 @@ function shot(from, to) {
 // (what a thing would be if the rails stopped a round as a plain box does: the flag off for the time of one reading, then on again)
 function withSolidRails(read) { const rails = getArena('neon').obstacles.filter(isRail); for (const o of rails) o.noProjectile = false; try { return read(); } finally { for (const o of rails) o.noProjectile = true; } }
 
-test('the rails are in the data: 27 runs along the flat floors\' open edges and 15 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
+test('the rails are in the data: 27 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
   const a = getArena('neon'); const rails = a.obstacles.filter(isRail); const flat = rails.filter((o) => long(o) > 0.55), slope = rails.filter((o) => long(o) <= 0.55);   // (a run is a body's width long or more; a leg is a row of boxes half a metre long or less)
   assert.equal(flat.length, 27, 'the flat floors\' runs, a box each');
-  assert.equal(slope.length, 150, 'the boxes of the ramps\' legs');
-  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 178.7) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 38.7) < 0.1, `178.7 m on the flat and 38.7 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
+  assert.equal(slope.length, 136, 'the boxes of the ramps\' legs');
+  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 178.2) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 35.4) < 0.1, `178.2 m on the flat and 35.4 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
   for (const o of rails) assert.ok(Math.abs(Math.min(o.maxX - o.minX, o.maxZ - o.minZ) - 0.24) < 1e-6, 'a rail is 6 cm through');
   // a flat run: from 0.25 m over its floor to 0.75 m over it, the floor on one side of it (read 0.3 m off the rail; a deck and the frame tops in it lie within 0.25 m of each
   // other) and on the other a drop of 2.4 m or more within a body's width (read 0.3 m and 0.6 m off the rail: the sign's top under the walkway's inner corner lies between),
@@ -96,8 +99,7 @@ test('the rails are in the data: 27 runs along the flat floors\' open edges and 
       assert.ok((floor(-1) && drop(1)) || (floor(1) && drop(-1)), `the run at model (${MX(px).toFixed(2)}, ${MZ(pz).toFixed(2)}), floor ${(h / 4).toFixed(2)} m, stands on an open edge: ${(at(-1, 1.2) / 4).toFixed(2)} m and ${(at(-1, 2.4) / 4).toFixed(2)} m on one side, ${(at(1, 1.2) / 4).toFixed(2)} m and ${(at(1, 2.4) / 4).toFixed(2)} m on the other`);
     }
   }
-  assert.equal(a.obstacles.filter((o) => o.noProjectile === true && o.topBuffer === 12).length, 0, 'no rail with a hold that no jump clears (b1105kn to b1105kq had two: the tall fence stands there)');
-  assert.equal(rails.filter((o) => o.topBuffer === 4.25).length, 14, 'the boxes of the one leg with a taller hold');
+  assert.equal(a.obstacles.filter((o) => o.noProjectile === true && (o.topBuffer === 12 || o.topBuffer === 4.25)).length, 0, 'no rail with a hold of its own (b1105kn to b1105kq had two that no jump cleared, b1105ks a leg held to 1.20 m: the tall fence stands at all three)');
 });
 
 test('a walk, a sprint and a dodge are held at a rail and a jump clears it — on a deck, on the south way\'s walkway and at two edges of the strip, from the places the user read off the game', () => {
@@ -153,26 +155,25 @@ test('the gaps are closed: at the walkway\'s inner corner and by its pillar (the
 // a floor to the sim when a floor lies on any of its top, and where its top had no floor a body that came onto it sank into the box and was put out at the box's nearest
 // face — the one under the rail, a rail 6 cm through. neon_rails.mjs gives every such top beside those two legs its floor (19 floors, written with `railFloor`: the one key
 // of its own that the tool writes, read here off the file — the sim keeps a floor's own keys alone). Before: each of these runs came down 2.9 m to 11.2 m lower.
+// (b1105kt: the first of the two legs is the tall fence now, whose boxes cover the frame's strip — its eleven floors are gone with its rail, and its runs are held by
+// the fence: the test of the fence, below.)
 const heading = (from, deg) => [from[0] + 10 * Math.cos(deg * Math.PI / 180), from[1] + 10 * Math.sin(deg * Math.PI / 180)];   // (a point 10 m off at a heading, as the bodies' scan ran them)
-test('the frame beside two rails has its floors: the walks and dodges that went through the east inner ramp\'s north rail and the rail beside the ramp east of the 8.6 m deck are held on the frame', () => {
+test('the frame beside a rail has its floors: the walks and dodges that went through the rail beside the ramp east of the 8.6 m deck are held on the frame', () => {
   const D = JSON.parse(fs.readFileSync(new URL('../../client/public/maps/neon_data.json', import.meta.url), 'utf8')); const floors = D.surfaces.filter((q) => q.railFloor === true);
-  assert.equal(floors.length, 19, 'the floors written beside the two legs');
-  for (const q of floors) {   // (each lies on the top of a box that is no wall, within 0.9 m inside one of the two legs and a body's half-width beyond its ends)
+  assert.equal(floors.length, 8, 'the floors written beside the leg');
+  for (const q of floors) {   // (each lies on the top of a box that is no wall, within 0.9 m inside the leg and a body's half-width beyond its ends)
     assert.ok(q.type === 'flat' && q.top === q.maxTop, 'a flat floor');
     assert.ok(D.obstacles.some((o) => o.topBuffer != null && o.maxY === q.top && o.minX <= q.minX + 0.011 && o.maxX >= q.maxX - 0.011 && o.minZ <= q.minZ + 0.011 && o.maxZ >= q.maxZ - 0.011), `the floor at model (${MX(q.minX).toFixed(2)}, ${MZ(q.minZ).toFixed(2)}), ${(q.top / 4).toFixed(2)} m, lies on a box's top`);
     const x0 = MX(q.minX), x1 = MX(q.maxX), z0 = MZ(q.minZ), z1 = MZ(q.maxZ);
-    assert.ok((x0 >= 9.49 && x1 <= 13.40 && z0 >= 29.66 && z1 <= 30.58) || (x0 >= 10.52 && x1 <= 16.36 && z0 >= 46.65 && z1 <= 47.57), `the floor at model (${x0.toFixed(2)}..${x1.toFixed(2)}, ${z0.toFixed(2)}..${z1.toFixed(2)}) lies beside one of the two legs`);
+    assert.ok(x0 >= 10.52 && x1 <= 16.36 && z0 >= 46.65 && z1 <= 47.57, `the floor at model (${x0.toFixed(2)}..${x1.toFixed(2)}, ${z0.toFixed(2)}..${z1.toFixed(2)}) lies beside the leg`);
   }
-  // (from, the heading in degrees, how; the side of the rail the body must end on: north of z 29.9 is the street beyond the first, south of z 48.0 the street beyond the second's deck)
+  // (from, the heading in degrees, how; the body must end north of z 48.0: south of it is the street beyond the leg's deck)
   const RUNS = [
-    ['the east inner ramp, down it and north-west', [12.06, 30.87, 11.08], 225, 'walk'], ['the east inner ramp, down it and north-north-west', [11.06, 30.87, 10.08], 247, 'walk'],
-    ['the east inner ramp, from its top', [13.06, 30.87, 12.09], 202, 'walk'], ['the east inner ramp, up it and north-east', [10.06, 30.87, 9.08], 315, 'walk'], ['the east inner ramp, up it and north-north-east', [11.06, 30.87, 10.08], 293, 'walk'],
-    ['the east inner ramp, a dodge north-west', [12.06, 30.87, 11.08], 225, 'dodge'], ['the east inner ramp, a dodge north-north-west', [11.06, 30.87, 10.08], 247, 'dodge'],
     ['the ramp east of the 8.6 m deck, down it and south', [12.06, 44.87, 7.65], 68, 'walk'], ['the ramp east of the 8.6 m deck, across it', [14.06, 44.87, 6.70], 113, 'walk'], ['the ramp east of the 8.6 m deck, down it and south, lower', [13.06, 45.87, 7.17], 68, 'walk'],
     ['the ramp east of the 8.6 m deck, a dodge south-east', [11.06, 45.87, 8.12], 45, 'dodge'], ['the ramp east of the 8.6 m deck, south-east to the deck\'s edge', [12.06, 46.87, 7.65], 45, 'walk'],
   ];
   for (const [name, from, deg, how] of RUNS) { const r = ran(from, heading(from, deg), how);
-    assert.ok(r.fall < 1.2 && (from[1] < 40 ? r.z > 29.9 : r.z < 48.0), `${name}, a ${how}: the body is held on the ramp's side (its greatest fall ${r.fall.toFixed(2)} m, it ends at (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m)`); }
+    assert.ok(r.fall < 1.2 && r.z < 48.0, `${name}, a ${how}: the body is held on the ramp's side (its greatest fall ${r.fall.toFixed(2)} m, it ends at (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m)`); }
 });
 
 // THE LEG CARRIED ON (b1105kq). The leg beside the ramp east of the 8.6 m deck ended where the frame beside the ramp is still 0.64 m over the 5.78 m deck: a body that
@@ -244,23 +245,48 @@ test('a panel of the tall fence stops rounds both ways and a bot\'s sight: what 
   }
 });
 
-// A LEG WITH A TALLER HOLD (b1105ks). The east inner ramp's north leg stands beside a floor that falls a metre in a metre, under the deck at the ramp's top. A body that
-// sprinted north-west off that deck was in the air over the ramp and came to the leg with its feet over the hold every rail has (0.64 m over the frame's floor): 19
-// sprints of the bodies' scan went over it and down to the street, 12.4 m. The user, told so and that the rail would look as it does: "東側內斜坡那條的判定加高到約 1.2
-// 公尺，外觀不變". The leg's 14 boxes hold feet up to 1.20 m over the frame's floor (a topBuffer of 4.25: 0.75 m + (4.25 - 2.45) / 4); the rail one sees is 0.75 m tall.
-test('the east inner ramp\'s north rail holds a sprint off the deck above it: its boxes hold to 1.20 m over the frame, a jump off the deck still clears it, and with the hold every rail has those sprints went over', () => {
-  const a = getArena('neon'); const leg = a.obstacles.filter((o) => isRail(o) && Math.abs(MZ(o.minZ) - 29.61) < 0.01 && MX(o.minX) > 9.78 && MX(o.maxX) < 13.11);
-  assert.ok(leg.length === 14 && leg.every((o) => o.topBuffer === 4.25), `the leg's boxes, x 9.79..13.10 at z 29.61: ${leg.length}, with a topBuffer of ${[...new Set(leg.map((o) => o.topBuffer))].join(', ')}`);
-  // (six of the scan's nineteen: where the body sets out, model metres; each sprints north-west)
-  const SPRINTS = [[14.06, 30.12, 12.59], [17.06, 30.87, 12.59], [13.06, 31.87, 12.09], [15.06, 32.87, 12.59], [16.06, 33.87, 12.6], [12.06, 30.87, 11.08]];
-  for (const from of SPRINTS) { const r = ran(from, heading(from, 225), 'sprint', -1, 130);
-    assert.ok(r.z > 29.67 && r.feet > 8, `a sprint north-west from (${from[0]}, ${from[1]}): the body is held south of the rail (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); }
-  const j = ran([14.06, 30.12, 12.59], heading([14.06, 30.12, 12.59], 225), 'walk', 3);
-  assert.ok(j.z < 29.61 && j.feet < 1, `a walk north-west off the deck with a jump: over the rail and down to the street (${j.x.toFixed(2)}, ${j.z.toFixed(2)}) feet ${j.feet.toFixed(2)} m`);
-  for (const o of leg) o.topBuffer = 2;   // (the hold every rail has, for the time of these readings)
-  try { for (const from of SPRINTS) { const r = ran(from, heading(from, 225), 'sprint', -1, 130);
-    assert.ok(r.z < 29.61 && r.feet < 1, `with a hold of 0.64 m, the sprint from (${from[0]}, ${from[1]}) went over the rail to the street (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); } }
-  finally { for (const o of leg) o.topBuffer = 4.25; }
+// THE TALL FENCE ALONG A RAMP (b1105kt). The east inner ramp's north side had a low rail as every ramp's side has. A sprint off the deck at the ramp's top was in the
+// air over a floor that falls a metre in a metre and went over it — 22 sprints of the bodies' scan, 12.4 m down to the street — and b1105ks gave the rail's boxes a
+// hold 0.45 m over the bar one sees. The user, with a box of it picked: "Remove this piece of fence visually and physically. Then replace it with the higher version
+// fence, the one that also blocks bullets." The scaffold's fence panel stands along that side now, leant with the ramp from its foot to the deck at its top (model
+// x 9.79..13.30, z 29.61..30.20), 2.61 m over the ramp's floor; in the data 15 wall boxes in steps. The deck's own low rail begins at its upper end.
+// What it does not hold: a sprint with a jump slantwise DOWN the ramp. The fence goes down with the floor, the jump does not, and 2 m on the body is over the fence's
+// lower part (as a jump is over every rail of a platform's edge). A jump straight at the fence, and a sprint without one, are held.
+const rampFloor = (x) => 8.807 + 1.0028 * (x - 9.79);   // (the east inner ramp's floor over the street, model metres: it rises eastward)
+const fenceBoxes = () => getArena('neon').obstacles.filter((o) => o.topBuffer == null && Math.abs(MZ(o.minZ) - 29.61) < 0.01 && Math.abs(MZ(o.maxZ) - 30.20) < 0.01 && MX(o.minX) > 9.78 && MX(o.maxX) < 13.31);
+test('the tall fence stands along the east inner ramp\'s north side instead of its low rail: wall boxes in steps with the ramp, and no walk, sprint or dodge takes a body past it — from the ramp, off the deck above, or round its two ends', () => {
+  const a = getArena('neon'); const fence = fenceBoxes();
+  assert.equal(fence.length, 15, 'the fence\'s boxes');
+  for (const o of fence) { const x = MX((o.minX + o.maxX) / 2);   // (each a wall from the ramp's floor at its step's lower end to the panel's 2.61 m over the floor at its higher)
+    assert.ok(o.noProjectile == null && Math.abs(o.minY / 4 - rampFloor(MX(o.minX))) < 0.02 && Math.abs(o.maxY / 4 - rampFloor(MX(o.maxX)) - 2.611) < 0.02, `the box at x ${x.toFixed(2)} is a wall from ${(o.minY / 4).toFixed(2)} to ${(o.maxY / 4).toFixed(2)} m`); }
+  assert.equal(a.obstacles.filter((o) => isRail(o) && Math.abs(MZ(o.minZ) - 29.61) < 0.02 && MX(o.minX) > 9.7 && MX(o.maxX) < 13.31).length, 0, 'no box of the low rail is left on that line');
+  const deck = a.obstacles.filter((o) => isRail(o) && Math.abs(MZ(o.minZ) - 29.62) < 0.02 && (o.maxX - o.minX) / 4 > 1);   // (the rail along the deck's north edge, at the ramp's top)
+  assert.ok(deck.length === 1 && Math.abs(MX(deck[0].minX) - 13.30) < 0.01, 'the deck\'s north rail begins at the fence\'s upper end');
+  const down = (r) => r.feet < 5 || (r.z < 29.61 && r.x > 9.79 && r.x < 13.30);   // (at the street, or north of the fence's line)
+  // from the ramp at the fence: five places along it, north and slantwise both ways; a jump straight at it too
+  for (const x of [10.2, 10.9, 11.6, 12.3, 13.0]) for (const deg of [270, 240, 300]) for (const [how, jumpAt] of [['walk', -1], ['sprint', -1], ['dodge', -1], ...(deg === 270 ? [['walk', 3], ['walk', 10], ['sprint', 3]] : [])]) {
+    const from = [x, 31.6, rampFloor(x)]; const r = ran(from, heading(from, deg), how, jumpAt);
+    assert.ok(!down(r), `from the ramp at x ${x}, a ${how}${jumpAt >= 0 ? ` with a jump at tick ${jumpAt}` : ''} heading ${deg}: the body is held (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); }
+  // the scan's sprints north-west off the deck (six of its nineteen) and its walks and dodges on the ramp, which went through the low rail before b1105kq
+  for (const from of [[14.06, 30.12, 12.59], [17.06, 30.87, 12.59], [13.06, 31.87, 12.09], [15.06, 32.87, 12.59], [16.06, 33.87, 12.6], [12.06, 30.87, 11.08]]) { const r = ran(from, heading(from, 225), 'sprint', -1, 130);
+    assert.ok(!down(r) && r.feet > 8, `a sprint north-west from (${from[0]}, ${from[1]}): the body is held (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); }
+  for (const [from, deg, how] of [[[12.06, 30.87, 11.08], 225, 'walk'], [[11.06, 30.87, 10.08], 247, 'walk'], [[13.06, 30.87, 12.09], 202, 'walk'], [[10.06, 30.87, 9.08], 315, 'walk'], [[11.06, 30.87, 10.08], 293, 'walk'], [[12.06, 30.87, 11.08], 225, 'dodge'], [[11.06, 30.87, 10.08], 247, 'dodge']]) { const r = ran(from, heading(from, deg), how);
+    assert.ok(!down(r) && r.fall < 1.2, `a ${how} from (${from[0]}, ${from[1]}) heading ${deg}: the body is held on the ramp (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m, its greatest fall ${r.fall.toFixed(2)} m`); }
+  // its two ends: the deck's corner at its top, the landing and the ramp's foot at its bottom
+  for (const from of [[13.6, 30.2, 12.59], [13.45, 30.6, 12.59], [13.8, 30.0, 12.59], [9.3, 30.9, 9.0], [9.6, 31.2, 9.0], [10.1, 31.0, 9.1]]) for (const deg of [225, 250, 270, 290, 315, 180]) for (const how of ['walk', 'sprint', 'dodge']) { const r = ran(from, heading(from, deg), how);
+    assert.ok(!(r.fall >= 2.4 && r.feet < 5), `from (${from[0]}, ${from[1]}) at the fence's end, a ${how} heading ${deg}: the body does not come down to the street (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); }
+});
+
+test('the fence along the ramp stops rounds both ways and a bot\'s sight, at its foot, its middle and its top', () => {
+  // (the shooter on the ramp, its target north of the fence at the same height: the line goes through the fence alone, as the reading with its boxes open shows)
+  const a = getArena('neon'), EYE = C.BOT_LOS_EYE_HEIGHT; const eye = (p) => ({ x: AX(p[0]), y: p[2] * 4 + G + EYE, z: AZ(p[1]) }); const fence = fenceBoxes();
+  const open = (read) => { for (const o of fence) o.noProjectile = true; try { return read(); } finally { for (const o of fence) delete o.noProjectile; } };
+  for (const [name, inn, out] of [['near its foot', [10.3, 31.4, rampFloor(10.3)], [10.3, 27.4, rampFloor(10.3) - 0.5]], ['at its middle', [11.5, 31.6, rampFloor(11.5)], [11.5, 27.6, rampFloor(11.5)]], ['near its top', [12.8, 31.4, rampFloor(12.8)], [12.8, 27.4, rampFloor(12.8) + 0.3]]]) {
+    assert.equal(shot(inn, out), 0, `${name}: no round arrives out through the fence`); assert.equal(shot(out, inn), 0, `${name}: none arrives in through it`);
+    assert.ok(!botHasLineOfSight(eye(inn), eye(out), a.obstacles, a.surfaces), `${name}: a bot on the ramp does not see a target beyond the fence`);
+    const o = open(() => [shot(inn, out), shot(out, inn), botHasLineOfSight(eye(inn), eye(out), a.obstacles, a.surfaces)]);
+    assert.ok(o[0] > 100 && o[1] > 100 && o[2], `${name}: nothing else is in the line — were the fence open, rounds arrive (${o[0]} out, ${o[1]} in) and the bot sees (${o[2]})`);
+  }
 });
 
 // THE BIN IS OUT (b1105ks). A bin 1.2 m square and 2.75 m tall stood on the pavement by the north-east fence; the user, with a box of it picked on the page: "Also remove
