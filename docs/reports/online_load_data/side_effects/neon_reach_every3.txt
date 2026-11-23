@@ -1,0 +1,4 @@
+150 target places on floors 8.63, 8.64 m, 3 bot starts, 25 s a run: the bot NEVER has sight of its target or comes within 3 m of it on its floor in 5 of 450 runs; in the others after 6.3 s on average
+  the bot ends at (-2.0, 23 | 21.2): 2 runs: T(-1.9,22.9)
+  the bot ends at (-1.0, 23 | 21.2): 2 runs: T(-0.9,22.9)
+  the bot ends at (-3.0, 24 | 21.4): 1 runs: T(-1.9,23.9)

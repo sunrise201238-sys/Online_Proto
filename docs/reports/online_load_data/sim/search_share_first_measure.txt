@@ -1,0 +1,30 @@
+The first measure of how often a bot takes the match's route search slot (the numbers given on 2026-11-23), from the session's own output.
+3000 ticks counted a match; the search budget 2 ms a tick, one search a tick a match.
+
+== the players walking (random walk; two rounds)
+town       1v1 player and bot         a route search in 0.8 % of ticks; the bots' thinking on such a tick 0.94 ms (over 1.6 ms in 12), on the other ticks 0.036 ms
+town       2v2 two players two bots   a route search in 1.5 % of ticks; the bots' thinking on such a tick 1.30 ms (over 1.6 ms in 34), on the other ticks 0.129 ms
+town       2v2 player and three bots  a route search in 1.2 % of ticks; the bots' thinking on such a tick 0.81 ms (over 1.6 ms in 9), on the other ticks 0.121 ms
+neon       1v1 player and bot         a route search in 0.4 % of ticks; the bots' thinking on such a tick 1.55 ms (over 1.6 ms in 17), on the other ticks 0.020 ms
+neon       2v2 two players two bots   a route search in 7.3 % of ticks; the bots' thinking on such a tick 2.00 ms (over 1.6 ms in 364), on the other ticks 0.154 ms
+neon       2v2 player and three bots  a route search in 15.8 % of ticks; the bots' thinking on such a tick 2.13 ms (over 1.6 ms in 839), on the other ticks 0.278 ms
+compound   1v1 player and bot         a route search in 1.1 % of ticks; the bots' thinking on such a tick 1.67 ms (over 1.6 ms in 30), on the other ticks 0.087 ms
+compound   2v2 two players two bots   a route search in 1.6 % of ticks; the bots' thinking on such a tick 1.08 ms (over 1.6 ms in 29), on the other ticks 0.089 ms
+compound   2v2 player and three bots  a route search in 2.4 % of ticks; the bots' thinking on such a tick 1.19 ms (over 1.6 ms in 48), on the other ticks 0.154 ms
+spacecraft 1v1 player and bot         a route search in 1.9 % of ticks; the bots' thinking on such a tick 1.19 ms (over 1.6 ms in 51), on the other ticks 0.026 ms
+spacecraft 2v2 two players two bots   a route search in 1.8 % of ticks; the bots' thinking on such a tick 1.34 ms (over 1.6 ms in 51), on the other ticks 0.093 ms
+spacecraft 2v2 player and three bots  a route search in 2.5 % of ticks; the bots' thinking on such a tick 1.31 ms (over 1.6 ms in 66), on the other ticks 0.147 ms
+district   1v1 player and bot         a route search in 0.9 % of ticks; the bots' thinking on such a tick 3.65 ms (over 1.6 ms in 35), on the other ticks 0.027 ms
+district   2v2 two players two bots   a route search in 1.6 % of ticks; the bots' thinking on such a tick 1.95 ms (over 1.6 ms in 38), on the other ticks 0.081 ms
+district   2v2 player and three bots  a route search in 4.0 % of ticks; the bots' thinking on such a tick 1.97 ms (over 1.6 ms in 156), on the other ticks 0.122 ms
+
+== the players standing still at their spawns (one round)
+town       1v1 player and bot         a route search in 0.7 % of ticks; the bots' thinking on such a tick 0.26 ms (over 1.6 ms in 0), on the other ticks 0.027 ms
+town       2v2 two players two bots   a route search in 1.0 % of ticks; the bots' thinking on such a tick 0.87 ms (over 1.6 ms in 8), on the other ticks 0.089 ms
+town       2v2 player and three bots  a route search in 1.3 % of ticks; the bots' thinking on such a tick 0.80 ms (over 1.6 ms in 8), on the other ticks 0.111 ms
+neon       1v1 player and bot         a route search in 0.0 % of ticks; the bots' thinking on such a tick 0.23 ms (over 1.6 ms in 0), on the other ticks 0.015 ms
+neon       2v2 two players two bots   a route search in 3.4 % of ticks; the bots' thinking on such a tick 1.89 ms (over 1.6 ms in 77), on the other ticks 0.145 ms
+neon       2v2 player and three bots  a route search in 14.0 % of ticks; the bots' thinking on such a tick 2.20 ms (over 1.6 ms in 378), on the other ticks 0.226 ms
+compound   1v1 player and bot         a route search in 1.0 % of ticks; the bots' thinking on such a tick 0.34 ms (over 1.6 ms in 0), on the other ticks 0.059 ms
+compound   2v2 two players two bots   a route search in 1.5 % of ticks; the bots' thinking on such a tick 1.09 ms (over 1.6 ms in 13), on the other ticks 0.065 ms
+compound   2v2 player and three bots  a route search in 1.9 % of ticks; the bots' thinking on such a tick 1.19 ms (over 1.6 ms in 18), on the other ticks 0.208 ms

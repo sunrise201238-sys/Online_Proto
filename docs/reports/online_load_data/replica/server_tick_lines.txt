@@ -1,0 +1,117 @@
+The measuring server's own [tick] lines of each match of batch1.txt to batch4.txt (a line every 30 s: the worst tick is here).
+== n3_base (the server's own lines)
+[tick] 30 s: mean 1.05 ms, max 7 ms, over 16 ms 0, late starts 18 of 1800, active lobbies 1
+[tick] 30 s: mean 0.95 ms, max 8 ms, over 16 ms 0, late starts 0 of 1858, active lobbies 1
+== n3_snap2 (the server's own lines)
+[tick] 30 s: mean 0.99 ms, max 7 ms, over 16 ms 0, late starts 19 of 1795, active lobbies 1
+[tick] 30 s: mean 1.21 ms, max 7 ms, over 16 ms 0, late starts 0 of 1858, active lobbies 1
+== n3_snap3 (the server's own lines)
+[tick] 30 s: mean 0.84 ms, max 5 ms, over 16 ms 0, late starts 19 of 1793, active lobbies 1
+[tick] 30 s: mean 0.61 ms, max 6 ms, over 16 ms 0, late starts 0 of 1854, active lobbies 1
+== n3_bot2 (the server's own lines)
+[tick] 30 s: mean 1.21 ms, max 6 ms, over 16 ms 0, late starts 15 of 1795, active lobbies 1
+[tick] 30 s: mean 1.07 ms, max 9 ms, over 16 ms 0, late starts 0 of 1858, active lobbies 1
+== n3_bot3 (the server's own lines)
+[tick] 30 s: mean 0.93 ms, max 7 ms, over 16 ms 0, late starts 16 of 1795, active lobbies 1
+[tick] 30 s: mean 0.80 ms, max 6 ms, over 16 ms 0, late starts 0 of 1857, active lobbies 1
+== n3_search1 (the server's own lines)
+[tick] 30 s: mean 1.15 ms, max 7 ms, over 16 ms 0, late starts 18 of 1798, active lobbies 1
+[tick] 30 s: mean 0.87 ms, max 11 ms, over 16 ms 0, late starts 0 of 1857, active lobbies 1
+== n3_bot2snap2 (the server's own lines)
+[tick] 30 s: mean 0.79 ms, max 10 ms, over 16 ms 0, late starts 15 of 1801, active lobbies 1
+[tick] 30 s: mean 0.54 ms, max 4 ms, over 16 ms 0, late starts 0 of 1856, active lobbies 1
+== n3_all (the server's own lines)
+[tick] 30 s: mean 0.62 ms, max 8 ms, over 16 ms 0, late starts 15 of 1802, active lobbies 1
+[tick] 30 s: mean 0.48 ms, max 3 ms, over 16 ms 0, late starts 0 of 1855, active lobbies 1
+== n_1v1_2p (the server's own lines)
+[tick] 30 s: mean 0.45 ms, max 12 ms, over 16 ms 0, late starts 18 of 1797, active lobbies 1
+[tick] 30 s: mean 0.39 ms, max 2 ms, over 16 ms 0, late starts 0 of 1861, active lobbies 1
+== n_2v2_2p2b (the server's own lines)
+[tick] 30 s: mean 1.01 ms, max 8 ms, over 16 ms 0, late starts 17 of 1797, active lobbies 1
+[tick] 30 s: mean 1.11 ms, max 5 ms, over 16 ms 0, late starts 0 of 1859, active lobbies 1
+== airport3 (the server's own lines)
+[tick] 30 s: mean 0.55 ms, max 4 ms, over 16 ms 0, late starts 15 of 1802, active lobbies 1
+[tick] 30 s: mean 0.55 ms, max 3 ms, over 16 ms 0, late starts 0 of 1859, active lobbies 1
+== town3 (the server's own lines)
+[tick] 30 s: mean 0.85 ms, max 8 ms, over 16 ms 0, late starts 16 of 1800, active lobbies 1
+[tick] 30 s: mean 0.75 ms, max 14 ms, over 16 ms 0, late starts 0 of 1859, active lobbies 1
+== a_base (the server's own lines)
+[tick] 30 s: mean 0.66 ms, max 6 ms, over 16 ms 0, late starts 18 of 1795, active lobbies 1
+== a_one (the server's own lines)
+[tick] 30 s: mean 0.63 ms, max 6 ms, over 16 ms 0, late starts 20 of 1785, active lobbies 1
+== a_str (the server's own lines)
+[tick] 30 s: mean 0.66 ms, max 4 ms, over 16 ms 0, late starts 18 of 1797, active lobbies 1
+== a_one_str (the server's own lines)
+[tick] 30 s: mean 0.63 ms, max 24 ms, over 16 ms 1, late starts 19 of 1796, active lobbies 1
+== a_one_str_slim (the server's own lines)
+[tick] 30 s: mean 0.60 ms, max 12 ms, over 16 ms 0, late starts 16 of 1801, active lobbies 1
+== a_slim_every2 (the server's own lines)
+[tick] 30 s: mean 0.43 ms, max 3 ms, over 16 ms 0, late starts 17 of 1798, active lobbies 1
+== a_all (the server's own lines)
+[tick] 30 s: mean 0.39 ms, max 3 ms, over 16 ms 0, late starts 16 of 1791, active lobbies 1
+== n_all_1 (the server's own lines)
+[tick] 30 s: mean 0.81 ms, max 6 ms, over 16 ms 0, late starts 17 of 1797, active lobbies 1
+== n_all_2 (the server's own lines)
+[tick] 30 s: mean 0.97 ms, max 12 ms, over 16 ms 0, late starts 19 of 1782, active lobbies 1
+== n_base_2 (the server's own lines)
+[tick] 30 s: mean 1.09 ms, max 8 ms, over 16 ms 0, late starts 16 of 1791, active lobbies 1
+== n_base_3 (the server's own lines)
+[tick] 30 s: mean 1.08 ms, max 7 ms, over 16 ms 0, late starts 18 of 1789, active lobbies 1
+== n_all3_1 (the server's own lines)
+[tick] 30 s: mean 0.67 ms, max 20 ms, over 16 ms 1, late starts 18 of 1788, active lobbies 1
+== A_compound (the server's own lines)
+[tick] 30 s: mean 0.96 ms, max 14 ms, over 16 ms 0, late starts 19 of 1797, active lobbies 1
+== A_district (the server's own lines)
+[tick] 30 s: mean 0.85 ms, max 16 ms, over 16 ms 1, late starts 15 of 1802, active lobbies 1
+== A_spacecraft (the server's own lines)
+[tick] 30 s: mean 0.83 ms, max 5 ms, over 16 ms 0, late starts 18 of 1801, active lobbies 1
+== A_hospital (the server's own lines)
+[tick] 30 s: mean 0.70 ms, max 5 ms, over 16 ms 0, late starts 19 of 1800, active lobbies 1
+== A_warehouse (the server's own lines)
+[tick] 30 s: mean 0.66 ms, max 7 ms, over 16 ms 0, late starts 19 of 1791, active lobbies 1
+== A_dust (the server's own lines)
+[tick] 30 s: mean 0.76 ms, max 8 ms, over 16 ms 0, late starts 19 of 1798, active lobbies 1
+== A_factory (the server's own lines)
+[tick] 30 s: mean 0.57 ms, max 5 ms, over 16 ms 0, late starts 17 of 1794, active lobbies 1
+== B_sd_neon (the server's own lines)
+[tick] 30 s: mean 4.82 ms, max 153 ms, over 16 ms 20, late starts 22 of 1785, active lobbies 1
+== B_sd_compound (the server's own lines)
+[tick] 30 s: mean 3.33 ms, max 174 ms, over 16 ms 6, late starts 20 of 1791, active lobbies 1
+== C_4p_neon (the server's own lines)
+[tick] 30 s: mean 0.65 ms, max 3 ms, over 16 ms 0, late starts 14 of 1801, active lobbies 1
+== C_4p_compound (the server's own lines)
+[tick] 30 s: mean 0.79 ms, max 5 ms, over 16 ms 0, late starts 18 of 1799, active lobbies 1
+== C_4p_neon_snap2 (the server's own lines)
+[tick] 30 s: mean 0.48 ms, max 12 ms, over 16 ms 0, late starts 17 of 1796, active lobbies 1
+== C_4p_neon_snap3 (the server's own lines)
+[tick] 30 s: mean 0.39 ms, max 2 ms, over 16 ms 0, late starts 19 of 1797, active lobbies 1
+== D_2p_neon_snap2 (the server's own lines)
+[tick] 30 s: mean 0.31 ms, max 6 ms, over 16 ms 0, late starts 18 of 1796, active lobbies 1
+== D_2p_compound (the server's own lines)
+[tick] 30 s: mean 0.52 ms, max 9 ms, over 16 ms 0, late starts 18 of 1799, active lobbies 1
+== E_bot_neon (the server's own lines)
+[tick] 30 s: mean 0.52 ms, max 4 ms, over 16 ms 0, late starts 17 of 1795, active lobbies 1
+== E_bot_compound (the server's own lines)
+[tick] 30 s: mean 0.66 ms, max 11 ms, over 16 ms 0, late starts 18 of 1794, active lobbies 1
+== F_neon (the server's own lines)
+[tick] 30 s: mean 0.89 ms, max 9 ms, over 16 ms 0, late starts 16 of 1804, active lobbies 1
+== F_compound (the server's own lines)
+[tick] 30 s: mean 0.80 ms, max 12 ms, over 16 ms 0, late starts 18 of 1796, active lobbies 1
+== F_town (the server's own lines)
+[tick] 30 s: mean 0.58 ms, max 7 ms, over 16 ms 0, late starts 15 of 1802, active lobbies 1
+== S_neon_real (the server's own lines)
+[tick] 30 s: mean 4.34 ms, max 135 ms, over 16 ms 7, late starts 17 of 1788, active lobbies 1
+== S_neon_god2 (the server's own lines)
+[tick] 30 s: mean 4.00 ms, max 138 ms, over 16 ms 14, late starts 21 of 1792, active lobbies 1
+== S_town (the server's own lines)
+[tick] 30 s: mean 2.80 ms, max 87 ms, over 16 ms 5, late starts 16 of 1799, active lobbies 1
+== S_airport (the server's own lines)
+[tick] 30 s: mean 0.86 ms, max 7 ms, over 16 ms 0, late starts 16 of 1803, active lobbies 1
+== S_district (the server's own lines)
+[tick] 30 s: mean 3.38 ms, max 317 ms, over 16 ms 7, late starts 18 of 1787, active lobbies 1
+== S_neon_1v1 (the server's own lines)
+[tick] 30 s: mean 1.57 ms, max 154 ms, over 16 ms 1, late starts 18 of 1794, active lobbies 1
+== S_neon_bot3 (the server's own lines)
+[tick] 30 s: mean 3.87 ms, max 150 ms, over 16 ms 10, late starts 21 of 1788, active lobbies 1
+== S_neon_2p2b (the server's own lines)
+[tick] 30 s: mean 3.40 ms, max 134 ms, over 16 ms 3, late starts 18 of 1789, active lobbies 1

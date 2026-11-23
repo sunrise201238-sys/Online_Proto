@@ -1,0 +1,116 @@
+ticks counted a match 3000, rounds 2, bots think every 1 tick(s), search budget 2 ms
+a line a match: mean ms a tick (the bots / the shared tick) | 99 in 100 under | worst | ticks over 1.6 ms | a route search in % of ticks, the bots on such a tick ms
+arena1: boxes 4, floors 0, nodes 3600, links 0, grid built
+   1v1 two players            0.003 (0.000 / 0.003) | 0.01 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.007 (0.004 / 0.004) | 0.03 | 0.5 | 0 | 0.0 %, 0.11
+   2v2 four players           0.009 (0.000 / 0.009) | 0.03 | 0.5 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.027 (0.019 / 0.009) | 0.27 | 1.1 | 0 | 4.1 %, 0.22
+   2v2 player and three bots  0.026 (0.018 / 0.008) | 0.27 | 1.6 | 0 | 2.6 %, 0.24
+arena2: boxes 168, floors 19, nodes 3190, links 322, grid built
+   1v1 two players            0.007 (0.000 / 0.007) | 0.03 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.020 (0.012 / 0.008) | 0.09 | 2.3 | 2 | 0.8 %, 0.27
+   2v2 four players           0.012 (0.000 / 0.012) | 0.04 | 0.5 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.039 (0.026 / 0.014) | 0.25 | 2.1 | 2 | 1.6 %, 0.29
+   2v2 player and three bots  0.047 (0.035 / 0.013) | 0.27 | 2.0 | 2 | 1.8 %, 0.28
+factory: boxes 404, floors 2, nodes 3229, links 66, grid built
+   1v1 two players            0.007 (0.000 / 0.007) | 0.03 | 2.7 | 1 | 0.0 %, 0.00
+   1v1 player and bot         0.014 (0.009 / 0.006) | 0.06 | 2.1 | 2 | 0.6 %, 0.31
+   2v2 four players           0.013 (0.000 / 0.013) | 0.04 | 0.6 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.038 (0.025 / 0.013) | 0.18 | 1.7 | 1 | 1.7 %, 0.17
+   2v2 player and three bots  0.053 (0.038 / 0.015) | 0.21 | 9.1 | 2 | 1.8 %, 0.21
+factory2: boxes 323, floors 7, nodes 3191, links 144, grid built
+   1v1 two players            0.011 (0.000 / 0.011) | 0.05 | 1.0 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.013 (0.008 / 0.006) | 0.05 | 1.0 | 0 | 0.7 %, 0.14
+   2v2 four players           0.013 (0.000 / 0.012) | 0.04 | 0.7 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.041 (0.028 / 0.014) | 0.27 | 5.7 | 12 | 1.9 %, 0.46
+   2v2 player and three bots  0.044 (0.033 / 0.011) | 0.33 | 2.1 | 10 | 2.4 %, 0.38
+square: boxes 125, floors 0, nodes 2879, links 16, grid built
+   1v1 two players            0.006 (0.000 / 0.006) | 0.03 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.011 (0.006 / 0.005) | 0.04 | 0.7 | 0 | 0.2 %, 0.08
+   2v2 four players           0.010 (0.000 / 0.010) | 0.03 | 2.0 | 1 | 0.0 %, 0.00
+   2v2 two players two bots   0.029 (0.019 / 0.010) | 0.11 | 2.2 | 3 | 0.8 %, 0.35
+   2v2 player and three bots  0.048 (0.035 / 0.013) | 0.29 | 4.6 | 9 | 1.5 %, 0.48
+lobby: boxes 155, floors 2, nodes 5602, links 210, grid built
+   1v1 two players            0.005 (0.000 / 0.005) | 0.01 | 0.5 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.010 (0.005 / 0.005) | 0.03 | 0.7 | 0 | 0.1 %, 0.15
+   2v2 four players           0.012 (0.001 / 0.011) | 0.03 | 3.6 | 3 | 0.0 %, 0.00
+   2v2 two players two bots   0.038 (0.028 / 0.010) | 0.42 | 2.3 | 1 | 2.2 %, 0.44
+   2v2 player and three bots  0.041 (0.031 / 0.010) | 0.32 | 8.4 | 1 | 1.8 %, 0.38
+station: boxes 80, floors 2, nodes 4145, links 80, grid built
+   1v1 two players            0.005 (0.000 / 0.004) | 0.01 | 0.5 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.010 (0.006 / 0.004) | 0.04 | 1.0 | 0 | 0.6 %, 0.16
+   2v2 four players           0.010 (0.000 / 0.010) | 0.03 | 0.7 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.025 (0.016 / 0.009) | 0.10 | 2.7 | 2 | 1.3 %, 0.16
+   2v2 player and three bots  0.031 (0.023 / 0.009) | 0.18 | 1.8 | 1 | 1.9 %, 0.23
+flashpoint: boxes 55, floors 1, nodes 1867, links 12, grid built
+   1v1 two players            0.005 (0.000 / 0.005) | 0.01 | 0.5 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.011 (0.006 / 0.004) | 0.05 | 1.6 | 1 | 1.1 %, 0.17
+   2v2 four players           0.009 (0.000 / 0.009) | 0.03 | 0.5 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.026 (0.018 / 0.009) | 0.17 | 2.2 | 3 | 1.6 %, 0.38
+   2v2 player and three bots  0.029 (0.021 / 0.008) | 0.18 | 1.7 | 1 | 2.1 %, 0.25
+airport: boxes 73, floors 5, nodes 3486, links 4, grid built
+   1v1 two players            0.005 (0.000 / 0.005) | 0.01 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.011 (0.006 / 0.005) | 0.05 | 2.0 | 1 | 1.0 %, 0.16
+   2v2 four players           0.010 (0.000 / 0.009) | 0.03 | 0.6 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.023 (0.014 / 0.009) | 0.12 | 0.8 | 0 | 1.4 %, 0.20
+   2v2 player and three bots  0.033 (0.024 / 0.009) | 0.26 | 2.1 | 2 | 3.2 %, 0.20
+town: boxes 7714, floors 8336, nodes 15500, links 2980, grid file
+   1v1 two players            0.037 (0.000 / 0.037) | 0.14 | 5.5 | 1 | 0.0 %, 0.00
+   1v1 player and bot         0.074 (0.049 / 0.025) | 0.44 | 2.5 | 13 | 0.9 %, 0.91
+   2v2 four players           0.088 (0.000 / 0.087) | 0.38 | 9.0 | 1 | 0.0 %, 0.00
+   2v2 two players two bots   0.228 (0.156 / 0.072) | 1.22 | 3.5 | 50 | 1.9 %, 1.35
+   2v2 player and three bots  0.251 (0.187 / 0.063) | 0.96 | 4.8 | 33 | 1.9 %, 1.06
+neon: boxes 8224, floors 3730, nodes 20892, links 3507, grid file
+   1v1 two players            0.022 (0.000 / 0.022) | 0.08 | 1.3 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.071 (0.045 / 0.026) | 0.37 | 3.6 | 11 | 0.6 %, 1.01
+   2v2 four players           0.058 (0.000 / 0.058) | 0.24 | 3.4 | 11 | 0.0 %, 0.00
+   2v2 two players two bots   0.392 (0.320 / 0.072) | 2.47 | 5.1 | 376 | 7.3 %, 2.04
+   2v2 player and three bots  0.548 (0.466 / 0.082) | 2.69 | 6.7 | 529 | 9.8 %, 2.15
+compound: boxes 22349, floors 16580, nodes 20011, links 3977, grid file
+   1v1 two players            0.041 (0.000 / 0.041) | 0.15 | 2.3 | 1 | 0.0 %, 0.00
+   1v1 player and bot         0.174 (0.098 / 0.076) | 0.65 | 7.5 | 15 | 0.8 %, 1.50
+   2v2 four players           0.086 (0.000 / 0.086) | 0.41 | 3.8 | 1 | 0.0 %, 0.00
+   2v2 two players two bots   0.148 (0.084 / 0.064) | 0.85 | 3.3 | 33 | 1.7 %, 1.07
+   2v2 player and three bots  0.246 (0.169 / 0.077) | 1.63 | 4.4 | 62 | 2.9 %, 1.13
+dust: boxes 1769, floors 1463, nodes 2911, links 538, grid file
+   1v1 two players            0.030 (0.000 / 0.030) | 0.10 | 0.8 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.058 (0.035 / 0.023) | 0.46 | 2.2 | 6 | 0.8 %, 0.94
+   2v2 four players           0.041 (0.000 / 0.041) | 0.11 | 0.8 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.122 (0.081 / 0.041) | 0.96 | 2.7 | 34 | 2.0 %, 0.89
+   2v2 player and three bots  0.148 (0.111 / 0.037) | 0.95 | 3.6 | 31 | 2.4 %, 0.82
+warehouse: boxes 802, floors 676, nodes 2291, links 382, grid file
+   1v1 two players            0.008 (0.000 / 0.008) | 0.03 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.032 (0.021 / 0.010) | 0.26 | 3.3 | 6 | 1.6 %, 0.41
+   2v2 four players           0.020 (0.000 / 0.020) | 0.06 | 0.7 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.088 (0.068 / 0.021) | 1.07 | 2.7 | 41 | 2.5 %, 0.94
+   2v2 player and three bots  0.123 (0.100 / 0.023) | 1.58 | 3.1 | 59 | 3.2 %, 0.93
+hospital: boxes 1750, floors 694, nodes 3516, links 219, grid file
+   1v1 two players            0.012 (0.000 / 0.012) | 0.04 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.017 (0.009 / 0.008) | 0.06 | 0.9 | 0 | 0.1 %, 0.24
+   2v2 four players           0.027 (0.000 / 0.027) | 0.07 | 2.1 | 1 | 0.0 %, 0.00
+   2v2 two players two bots   0.112 (0.080 / 0.032) | 0.91 | 3.0 | 35 | 1.9 %, 1.10
+   2v2 player and three bots  0.169 (0.137 / 0.033) | 2.15 | 5.5 | 105 | 4.3 %, 1.20
+spacecraft: boxes 3333, floors 1780, nodes 3239, links 118, grid file
+   1v1 two players            0.022 (0.000 / 0.022) | 0.06 | 0.7 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.067 (0.047 / 0.020) | 1.08 | 3.4 | 44 | 1.9 %, 1.12
+   2v2 four players           0.052 (0.000 / 0.051) | 0.12 | 0.6 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.169 (0.121 / 0.048) | 1.12 | 3.0 | 55 | 1.8 %, 1.29
+   2v2 player and three bots  0.218 (0.168 / 0.050) | 1.15 | 3.2 | 41 | 2.1 %, 1.00
+district: boxes 9332, floors 8700, nodes 96931, links 8561, grid file
+   1v1 two players            0.012 (0.000 / 0.012) | 0.05 | 0.6 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.076 (0.063 / 0.013) | 0.57 | 12.0 | 39 | 0.9 %, 4.14
+   2v2 four players           0.023 (0.000 / 0.023) | 0.07 | 0.6 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.134 (0.098 / 0.036) | 0.84 | 7.8 | 39 | 1.3 %, 1.96
+   2v2 player and three bots  0.204 (0.163 / 0.041) | 2.18 | 7.9 | 95 | 2.8 %, 1.85
+backrooms: boxes 73, floors 5, nodes 2296, links 0, grid built
+   1v1 two players            0.005 (0.000 / 0.005) | 0.01 | 0.7 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.009 (0.004 / 0.005) | 0.04 | 0.7 | 0 | 0.4 %, 0.11
+   2v2 four players           0.009 (0.000 / 0.009) | 0.03 | 0.7 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.025 (0.016 / 0.009) | 0.17 | 1.6 | 0 | 1.3 %, 0.28
+   2v2 player and three bots  0.032 (0.022 / 0.009) | 0.23 | 1.3 | 0 | 1.8 %, 0.24
+backrooms_anomaly: boxes 61, floors 9, nodes 2612, links 3, grid built
+   1v1 two players            0.005 (0.000 / 0.005) | 0.01 | 0.9 | 0 | 0.0 %, 0.00
+   1v1 player and bot         0.010 (0.005 / 0.005) | 0.04 | 0.8 | 0 | 0.7 %, 0.16
+   2v2 four players           0.009 (0.000 / 0.009) | 0.03 | 0.7 | 0 | 0.0 %, 0.00
+   2v2 two players two bots   0.028 (0.018 / 0.009) | 0.35 | 2.5 | 2 | 1.9 %, 0.36
+   2v2 player and three bots  0.036 (0.027 / 0.009) | 0.45 | 2.3 | 5 | 2.7 %, 0.38

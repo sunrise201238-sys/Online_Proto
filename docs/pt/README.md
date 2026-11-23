@@ -1,37 +1,63 @@
 # PT: the play-test page
 
-PT is the page the user plays at `https://claude.ai/artifact/XGYXTJd12wfiwnPee1qMhy`. It never had a branch of its own. This
-folder holds two things: **the site itself as it was served on 2026-11-19** (below), and the older recipe that rebuilt it from
-0.8.9 in October (further down).
+PT is the page the user plays. It never had a branch of its own, and it has stood at two addresses:
 
-## The site as served (saved 2026-11-19)
+- `https://claude.ai/artifact/XGYXTJd12wfiwnPee1qMhy` until 2026-11-20, when the artifact was let go (the user: "since the PT and
+  sound test site for ArchiveVS are already on 9.0. You can now release everything from artifact except the mech board now.");
+- `https://claude.ai/artifact/1TFLYxwPwGng9jnSd9W5u8` from 2026-11-22, put back **from this folder** (the user: "rebuild the PT
+  site real quick. I want to make a quick cbox change in map Dust."), and to be let go in its turn (the user, 2026-11-23: "After
+  this task, The PT in artifact will be cleaned up soon.").
+
+This folder holds two things: **the site itself as it was served on 2026-11-23** (below), and the older recipe that rebuilt it
+from 0.8.9 in October (further down).
+
+## The site as served (saved 2026-11-19, brought up to date 2026-11-23)
 
 The user (2026-11-19): "Put everything you need in \"Testing_0.9.0_Develop-Tools\", along with the PT site stuffs there. We're
-about to clean up the artifact here." So the whole site is here, byte for byte, and the page can be put back from this folder
-alone.
+about to clean up the artifact here." And on 2026-11-23: "update branch \"Testing_0.9.0_Develop-Tools\". I assume the PT data in
+the branch could use some update." So the whole site is here, byte for byte, and the page can be put back from this folder
+alone, as it was on 2026-11-22.
 
 | here | what |
 | --- | --- |
 | `site/` | every file the artifact served, at its served path: 217 files, 171 MB. `site/index.html` is the page as the host served it (the host wraps the page file in a document) |
 | `site_page.html` | the page file that is published (the host adds the wrapping) |
 | `site.sha256` | `sha256sum` of the 217 files: `cd site && sha256sum -c ../site.sha256` |
-| `site_sources.tsv` | for each file: its size, its sha256, and the file of the line (`Proto_0.9.8_BA_Optimizing` at `95a7b99`) that holds the same bytes, or `PT only` |
-| `bundle-patches/` | the four scripts that wrote the last four builds into the published script and style sheet (below) |
+| `site_sources.tsv` | for each file: its size, its sha256, and the file of the line (`Proto_0.9.9_BA_Finalizing` at `33a1512`) that holds the same bytes, or `PT only` |
+| `site_publishes.tsv` | which file went up in which of the four publishes that put the site back on 2026-11-22 |
+| `bundle-patches/` | the four scripts that wrote the last four changes into the published script and style sheet, and `pt_tag.py`, which writes a build tag (below) |
 | `pt_tree.sh` | builds a folder a probe can serve as PT out of a built checkout of the line plus PT's page and script |
-| `which404.cjs` | `node which404.cjs <folder> [unit key]`: which requests the page makes, through a match's start, that the folder cannot serve |
+| `which404.cjs` | `node which404.cjs <folder> [unit key] [map key]`: which requests the page makes, through a match's start (on Warehouse unless a map is named), that the folder cannot serve; the page's own line on the map's route grid and its errors |
 
-**What it is.** Build `b1105ju 11-19` (the tag in the pause menu), the artifact's version `1795050497-4746`. The page's title is
-ArchiveVS. 203 of the 217 files are the line's own bytes: the pictures and the map data under their own names, the five
+**What it is.** Build `b1105kl 11-22` (the tag in the pause menu), the second artifact's version `1795377519-92a5`. The page's
+title is ArchiveVS. 203 of the 217 files are the line's own bytes at `33a1512`: the pictures and the map data under their own names, the five
 fonts under the build's hashed names, and 81 files under `.wasm` (29 `.glb` models and maps, 8 `.nav` route grids, 39 `.mp3`
 and 5 `.wav` sounds), because the page host serves `.wasm` and not those types. 14 files are PT's own: the script
 `assets/index-BUZtMzc6.js`, the style sheet `assets/index-9COOofA9.css`, `assets/debugPanel-B9sb70Hz.js`, the served
 `index.html`, and the ten pieces of music under `bgm/` (smaller encodings than the line's).
 
-Checked on 2026-11-19: ten files across the folders, the script among them, have the sha256 the artifact reported for them;
-and `site/`, served by `which404.cjs` and played to a match's start, asks for nothing the folder lacks but `/favicon.ico`,
-which a browser asks for by itself.
+Checked on 2026-11-23: the artifact's own listing of its 217 files (each path, its size, the first 32 hex digits of its sha256)
+is this folder's, file for file; the four files of the last publish (the script, Neon's model, data and route grid) were read
+back whole and have the sha256 of the files here; and `site/`, served by `which404.cjs` and played to a match's start on
+Warehouse, on Neon and on Dust, asks for nothing the folder lacks but `/favicon.ico` (which a browser asks for by itself), reads
+each map's route grid from its file, and has no page error. (On 2026-11-19 the first copy was checked the same way on Warehouse,
+ten files' sha256 against the first artifact's.)
 
-**How it differs from the line at `95a7b99`.**
+**What changed between the two copies** (2026-11-19, `b1105ju 11-19`, and 2026-11-23). Six files, and no other:
+
+- `assets/index-BUZtMzc6.js`: the build tag alone, the same number of bytes (`bundle-patches/pt_tag.py`). Nothing else in the
+  script moved, so nothing the line's page gained after b1105ju is in PT (below).
+- `maps/dust_data.json`, `maps/dust_nav.wasm`: Dust's collision data and route grid, the PT site's b1105jz and b1105ka to
+  b1105kf (2026-11-22): the kerb before the first home's yard walked up; the piles, crates, baskets and barrels one box a thing,
+  the columns that stood up out of them gone, the plaster wall's end a wall.
+- `maps/neon.wasm`, `maps/neon_data.json`, `maps/neon_nav.wasm`: Neon's model, collision data and route grid, the PT site's
+  b1105kg to b1105kl (2026-11-22): the scaffolds carried up to the skybridge and the rail stub out; rails on the two ways, a
+  little ramp out of the bridge, an unseen slope at the bridge's north step; the bridge's floor carried to its side walls
+  (b1105kk was a first form of that last one, on the PT site for an hour and twenty minutes, and is not here).
+
+All five map files are the line's own bytes at `33a1512`; each build's entry, with what was measured, is in the line's README.
+
+**How it differs from the line at `33a1512`** (`Proto_0.9.9_BA_Finalizing`; `Proto_0.9.8_BA_Optimizing` of the first copy is `Proto_0.9.8_BA_Steady` now, still at `95a7b99`).
 
 - PT carries the testing tools, which the line does not: the collision view and its inspector, the map scale test, the
   infinite boost switch, the map card's photo mode (**Dev tools** in this branch's README describes them), with their console
@@ -41,6 +67,10 @@ which a browser asks for by itself.
   when it is built with no `VITE_SERVER_URL`), so PT's online modes need a server on the same machine.
 - The teammate's messages of b1105js are not in PT (the user: "no need this on PT. I'll verify it on 9.8"), and its bot
   command reads BACK OFF where the line reads PULL BACK.
+- What the line's page gained after b1105ju is not in PT: the fourth battle track (b1105jv; PT's `bgm/` has three), the
+  disclaimer at the Guide's foot (b1105jw), and the player's own steps, dodge, jump and landing sounding online (b1105jx). Each
+  went to 9.9 and not to PT.
+- The maps are the line's, all of them (the table of sources); the build tag is PT's own.
 
 **Run it from here.** Any static file server over `site/` plays it: the offline modes whole, the online ones if the line's
 server runs on port 3001 of the same machine.
@@ -53,7 +83,9 @@ cd docs/pt/site && python3 -m http.server 8080      # then open http://localhost
 216 paths (not `index.html`: that is the page). One publish carries at most 255 files and 64 MB, so a new artifact takes the
 site in several publishes to the same address; the maps' and the models' `.wasm` files are the weight. An existing artifact
 keeps the files a publish does not name, so a change sends only what changed. Read the files back afterwards and compare with
-`site.sha256`.
+`site.sha256`. On 2026-11-22 the site went back so in four publishes of 166, 15, 20 and 15 files (54, 46, 54 and 24 MB;
+`site_publishes.tsv` names each file's publish), the page file with the first; the builds after it sent the changed map files
+and the script alone.
 
 ## How PT was kept after its source was lost
 
@@ -70,6 +102,12 @@ published under the same file name, so the page file does not change. `bundle-pa
 
 b1105jp, the Town pit, was data: `maps/town_data.json` and `maps/town_nav.wasm` replaced, and the tag. b1105js is not in PT.
 Each script is good for the one bundle it was written against; they are kept as the pattern, not to be run again.
+
+Every build since (b1105jz to b1105kl, 2026-11-22) was data too: the map's files replaced with the line's own (a `.glb` and a
+`.nav` under `.wasm`), and the tag written by `pt_tag.py <script in> <script out> <old tag> <new tag>`, which wants the old tag
+in the script exactly once and the new one not at all. A map's data and its route grid go up together: the grid file carries a
+signature of the data it was built from, and a page given one without the other builds the grid itself at the match's start
+(`which404.cjs` prints which it did).
 
 The rules that made this safe:
 

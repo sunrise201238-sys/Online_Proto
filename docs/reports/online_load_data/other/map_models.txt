@@ -1,0 +1,9 @@
+backrooms.glb       4.9 MB  mesh nodes    11  draws    11  triangles    13763  materials   11  textures   5
+compound.glb       12.3 MB  mesh nodes   116  draws   116  triangles   202633  materials  100  textures  97
+district.glb        4.5 MB  mesh nodes  1380  draws  2044  triangles   147600  materials   48  textures   3
+dust.glb            4.3 MB  mesh nodes     9  draws     9  triangles    24156  materials    9  textures  10
+hospital.glb       11.5 MB  mesh nodes    90  draws    90  triangles   170400  materials    5  textures   3
+invasion.glb       14.1 MB  mesh nodes    52  draws    52  triangles   228176  materials    9  textures   7
+neon.glb            9.9 MB  mesh nodes   333  draws   335  triangles   143897  materials   33  textures  39
+spacecraft.glb     11.8 MB  mesh nodes   121  draws   121  triangles   222125  materials   94  textures  47
+warehouse.glb      12.2 MB  mesh nodes    71  draws    71  triangles   171356  materials   36  textures  33

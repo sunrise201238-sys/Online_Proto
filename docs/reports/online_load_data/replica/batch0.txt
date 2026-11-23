@@ -1,0 +1,13 @@
+== n3_first (neon 2v2, 1 player(s); GOD=1)
+one snapshot, 6378 bytes as text: fighters 5685, projectiles 371, acks 34, botSlots 16, startBotSlots 16, serverTime 13, introUntil 13, holdUntil 13, mapKey 6, mode 5, suddenDeath 5, tick 3, beams 2, events 2
+one fighter in it, 1353 bytes: pos 55, vel 21, yaw 18, refillPausedUntil 13, jumpCooldownUntil 13, hoverUntil 13, antiMeleeUntil 13, lastFireAt 13, hp 10, unitKey 7, action 6, redLock 5, freeAim 5, airborne 5, padPrevDown 5, prevJumpHeld 5, flightClimb 5, flightLevel 5, id 4, grounded 4, hitStunScale 4, momentumDecay 4
+fighters 4, each 1353 1199 1891 1217; projectiles 1, beams 0
+driver: neon 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 7063 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.478 ms, shared tick 0.126 ms, snapshots 0.348 ms; the process's CPU 97.1 ms a second (user 92.9, system 4.3); over 16 ms 0, late 0
+[prof] 10.0 s: ticks 619; a tick: bots 0.704 ms, shared tick 0.194 ms, snapshots 0.348 ms; the process's CPU 105.0 ms a second (user 99.7, system 5.3); over 16 ms 0, late 0
+[tick] 30 s: mean 1.19 ms, max 6 ms, over 16 ms 0, late starts 20 of 1797, active lobbies 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.978 ms, shared tick 0.185 ms, snapshots 0.330 ms; the process's CPU 135.9 ms a second (user 128.2, system 7.7); over 16 ms 0, late 0
+[prof] 10.0 s: ticks 619; a tick: bots 0.630 ms, shared tick 0.168 ms, snapshots 0.332 ms; the process's CPU 96.6 ms a second (user 90.5, system 6.1); over 16 ms 0, late 0
+[prof] 10.0 s: ticks 619; a tick: bots 0.469 ms, shared tick 0.147 ms, snapshots 0.327 ms; the process's CPU 101.5 ms a second (user 99.3, system 2.2); over 16 ms 0, late 0
+[tick] 30 s: mean 1.06 ms, max 5 ms, over 16 ms 0, late starts 0 of 1856, active lobbies 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.414 ms, shared tick 0.152 ms, snapshots 0.337 ms; the process's CPU 74.8 ms a second (user 69.0, system 5.8); over 16 ms 0, late 0

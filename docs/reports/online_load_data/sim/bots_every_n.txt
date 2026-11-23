@@ -1,0 +1,30 @@
+The bots thinking on every tick, every second and every third (the bots staggered), the same seeds. Lines as in builds.txt.
+
+== every tick, four rounds
+ticks counted a match 3000, rounds 4; ms a tick on this machine: mean | 99 in 100 under | worst | ticks over 1.6 ms
+town               boxes   7714 floors   8336 nodes  15500 links  2980 grid file 30 ms | 0.034 0.14 7.2 2 | 0.056 0.29 6.0 17 | 0.087 0.39 5.0 9 | 0.202 0.94 3.7 67 | 0.242 0.99 5.5 80
+neon               boxes   8224 floors   3730 nodes  20892 links  3507 grid file 20 ms | 0.024 0.13 1.3 0 | 0.085 2.11 3.7 143 | 0.050 0.19 6.8 3 | 0.275 2.37 8.4 444 | 0.497 2.71 12.3 859
+
+== every second tick, four rounds
+ticks counted a match 3000, rounds 4; ms a tick on this machine: mean | 99 in 100 under | worst | ticks over 1.6 ms
+town               boxes   7714 floors   8336 nodes  15500 links  2980 grid file 26 ms | 0.043 0.22 3.9 3 | 0.052 0.34 7.0 16 | 0.094 0.49 7.3 11 | 0.169 2.16 5.0 188 | 0.215 2.10 12.9 156
+neon               boxes   8224 floors   3730 nodes  20892 links  3507 grid file 31 ms | 0.026 0.14 6.0 3 | 0.032 0.17 2.7 1 | 0.065 0.35 9.8 8 | 0.141 2.10 8.6 139 | 0.468 2.67 10.6 1146
+
+== every third tick, four rounds
+ticks counted a match 3000, rounds 4; ms a tick on this machine: mean | 99 in 100 under | worst | ticks over 1.6 ms
+town               boxes   7714 floors   8336 nodes  15500 links  2980 grid file 37 ms | 0.035 0.15 7.2 2 | 0.039 0.26 5.5 15 | 0.081 0.33 9.0 3 | 0.129 1.89 3.5 132 | 0.148 1.25 6.7 98
+neon               boxes   8224 floors   3730 nodes  20892 links  3507 grid file 21 ms | 0.024 0.12 0.8 0 | 0.044 0.28 2.5 61 | 0.056 0.24 3.5 2 | 0.132 2.17 4.4 213 | 0.244 2.29 7.2 538
+
+== every tick, six rounds
+ticks counted a match 3000, rounds 6; ms a tick on this machine: mean | 99 in 100 under | worst | ticks over 1.6 ms
+town               boxes   7714 floors   8336 nodes  15500 links  2980 grid file 30 ms | 0.036 0.14 0.5 0 | 0.069 0.41 2.3 26 | 0.081 0.39 2.5 3 | 0.213 0.93 9.7 86 | 0.237 0.98 18.7 108
+neon               boxes   8224 floors   3730 nodes  20892 links  3507 grid file 21 ms | 0.024 0.11 2.6 1 | 0.069 1.66 2.6 185 | 0.054 0.24 7.2 2 | 0.310 2.40 13.5 849 | 0.554 2.66 14.4 1806
+compound           boxes  22349 floors  16580 nodes  20011 links  3977 grid file 65 ms | 0.038 0.14 0.7 0 | 0.168 2.15 18.9 238 | 0.089 0.36 3.2 7 | 0.153 0.94 3.8 124 | 0.260 1.41 8.0 167
+district           boxes   9332 floors   8700 nodes  96931 links  8561 grid file 39 ms | 0.011 0.04 0.8 0 | 0.055 0.36 7.9 107 | 0.026 0.09 3.0 4 | 0.137 1.08 6.4 147 | 0.197 2.17 7.1 282
+
+== every third tick, six rounds
+ticks counted a match 3000, rounds 6; ms a tick on this machine: mean | 99 in 100 under | worst | ticks over 1.6 ms
+town               boxes   7714 floors   8336 nodes  15500 links  2980 grid file 27 ms | 0.040 0.18 1.0 0 | 0.045 0.30 2.8 24 | 0.084 0.38 5.9 1 | 0.158 1.41 6.6 165 | 0.170 1.44 8.1 160
+neon               boxes   8224 floors   3730 nodes  20892 links  3507 grid file 20 ms | 0.026 0.13 1.0 0 | 0.039 0.29 5.3 81 | 0.052 0.20 1.2 0 | 0.159 2.24 4.0 475 | 0.348 2.40 11.4 1534
+compound           boxes  22349 floors  16580 nodes  20011 links  3977 grid file 69 ms | 0.043 0.19 0.8 0 | 0.132 2.21 12.9 269 | 0.106 0.39 1.5 0 | 0.130 1.00 13.3 115 | 0.194 2.10 14.1 233
+district           boxes   9332 floors   8700 nodes  96931 links  8561 grid file 36 ms | 0.013 0.05 1.0 0 | 0.036 0.20 9.2 59 | 0.025 0.08 0.6 0 | 0.178 2.16 8.1 852 | 0.185 2.17 9.7 699

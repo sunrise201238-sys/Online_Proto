@@ -1,0 +1,20 @@
+A bot on Neon against a body that stands still (bot_think_damage.mjs), the bot thinking on every tick and on every third.
+The sight time is counted on thinking ticks alone, so it reads a third in the every-third lines: read the damage.
+
+== by the bot's unit, place B (the tower top), 6 runs of 60 s
+unit4 every 1 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.3 s, sight 54.2 s, near 54.3 s, damage 1680 (middle 1680)
+unit4 every 3 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.6 s, sight 18.1 s, near 55.6 s, damage 1357 (middle 1362)
+unit5 every 1 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.1 s, sight 53.3 s, near 54.1 s, damage 1924 (middle 1964)
+unit5 every 3 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.3 s, sight 18.1 s, near 55.3 s, damage 2101 (middle 2118)
+unit9 every 1 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.2 s, sight 53.2 s, near 54.2 s, damage 1529 (middle 1532)
+unit9 every 3 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.6 s, sight 18.5 s, near 55.6 s, damage 1471 (middle 1472)
+unit13 every 1 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.3 s, sight 54.2 s, near 54.3 s, damage 1730 (middle 1730)
+unit13 every 3 | B, 6 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.6 s, sight 18.1 s, near 55.6 s, damage 1778 (middle 1778)
+
+== unit1, places B and D (in the bridge), 8 runs of 60 s, every tick, every second, every third
+every 1 tick(s) | B, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.2 s, sight 53.2 s, near 54.2 s, damage 1463 (middle 1460)
+every 2 tick(s) | B, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.4 s, sight 27.7 s, near 55.4 s, damage 1544 (middle 1544)
+every 3 tick(s) | B, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 55.6 s, sight 18.5 s, near 55.6 s, damage 1560 (middle 1560)
+every 1 tick(s) | D, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.3 s, sight 54.3 s, near 6.1 s, damage 1249 (middle 1252)
+every 2 tick(s) | D, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.3 s, sight 27.2 s, near 6.2 s, damage 1255 (middle 1264)
+every 3 tick(s) | D, 8 runs of 60 s: MEAN pad moves 1.0, came down 0.0 times, up 54.3 s, sight 18.1 s, near 5.1 s, damage 1244 (middle 1252)

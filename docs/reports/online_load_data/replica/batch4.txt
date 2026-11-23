@@ -1,0 +1,49 @@
+== S_neon_real (neon 2v2, 1 player(s); )
+driver: neon 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.7 a second, about 5722 bytes each as text
+[prof] 10.0 s: ticks 610; a tick: bots 2.265 ms, shared tick 0.112 ms, snapshots 0.314 ms; the process's CPU 196.1 ms a second (user 188.9, system 7.2); over 16 ms 4, late 3; memory 175 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 5.167 ms, shared tick 0.136 ms, snapshots 0.323 ms; the process's CPU 390.9 ms a second (user 378.5, system 12.4); over 16 ms 2, late 0; memory 180 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 5.294 ms, shared tick 0.138 ms, snapshots 0.309 ms; the process's CPU 371.4 ms a second (user 362.5, system 9.0); over 16 ms 1, late 0; memory 180 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 5.425 ms, shared tick 0.126 ms, snapshots 0.293 ms; the process's CPU 374.4 ms a second (user 366.8, system 7.5); over 16 ms 0, late 0; memory 180 MB, active 1
+== S_neon_god2 (neon 2v2, 1 player(s); GOD=1)
+driver: neon 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.6 a second, about 6244 bytes each as text
+[prof] 10.0 s: ticks 611; a tick: bots 2.320 ms, shared tick 0.108 ms, snapshots 0.310 ms; the process's CPU 194.1 ms a second (user 185.7, system 8.4); over 16 ms 3, late 3; memory 173 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 4.958 ms, shared tick 0.159 ms, snapshots 0.316 ms; the process's CPU 371.4 ms a second (user 360.1, system 11.3); over 16 ms 5, late 1; memory 190 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 4.173 ms, shared tick 0.155 ms, snapshots 0.323 ms; the process's CPU 341.6 ms a second (user 327.3, system 14.3); over 16 ms 7, late 1; memory 198 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 5.414 ms, shared tick 0.130 ms, snapshots 0.307 ms; the process's CPU 385.5 ms a second (user 376.0, system 9.4); over 16 ms 9, late 1; memory 207 MB, active 1
+== S_town (town 2v2, 1 player(s); GOD=1)
+driver: town 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.8 a second, about 6339 bytes each as text
+[prof] 10.0 s: ticks 616; a tick: bots 1.378 ms, shared tick 0.151 ms, snapshots 0.325 ms; the process's CPU 151.8 ms a second (user 146.0, system 5.8); over 16 ms 3, late 1; memory 179 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 2.654 ms, shared tick 0.133 ms, snapshots 0.333 ms; the process's CPU 218.3 ms a second (user 214.1, system 4.2); over 16 ms 2, late 0; memory 184 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.738 ms, shared tick 0.125 ms, snapshots 0.308 ms; the process's CPU 303.2 ms a second (user 289.3, system 13.9); over 16 ms 0, late 0; memory 186 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.150 ms, shared tick 0.132 ms, snapshots 0.310 ms; the process's CPU 256.0 ms a second (user 247.9, system 8.2); over 16 ms 0, late 0; memory 192 MB, active 1
+== S_airport (airport 2v2, 1 player(s); GOD=1)
+driver: airport 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.9 a second, about 6229 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.180 ms, shared tick 0.080 ms, snapshots 0.312 ms; the process's CPU 68.8 ms a second (user 64.6, system 4.2); over 16 ms 0, late 0; memory 179 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.664 ms, shared tick 0.068 ms, snapshots 0.316 ms; the process's CPU 93.8 ms a second (user 83.7, system 10.1); over 16 ms 0, late 0; memory 180 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.767 ms, shared tick 0.062 ms, snapshots 0.317 ms; the process's CPU 110.1 ms a second (user 103.4, system 6.6); over 16 ms 0, late 0; memory 181 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.762 ms, shared tick 0.080 ms, snapshots 0.302 ms; the process's CPU 106.4 ms a second (user 99.2, system 7.3); over 16 ms 0, late 0; memory 179 MB, active 1
+== S_district (district 2v2, 1 player(s); GOD=1)
+driver: district 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.4 a second, about 6097 bytes each as text
+[prof] 10.0 s: ticks 601; a tick: bots 2.483 ms, shared tick 0.099 ms, snapshots 0.323 ms; the process's CPU 203.6 ms a second (user 196.0, system 7.6); over 16 ms 3, late 1; memory 179 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 3.880 ms, shared tick 0.104 ms, snapshots 0.324 ms; the process's CPU 304.3 ms a second (user 294.0, system 10.3); over 16 ms 2, late 1; memory 196 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.034 ms, shared tick 0.113 ms, snapshots 0.317 ms; the process's CPU 238.8 ms a second (user 230.4, system 8.3); over 16 ms 2, late 0; memory 218 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.160 ms, shared tick 0.123 ms, snapshots 0.297 ms; the process's CPU 280.9 ms a second (user 270.9, system 10.0); over 16 ms 0, late 0; memory 234 MB, active 1
+== S_neon_1v1 (neon 1v1, 1 player(s); GOD=1)
+driver: neon 1v1 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.7 a second, about 3074 bytes each as text
+[prof] 10.0 s: ticks 612; a tick: bots 0.773 ms, shared tick 0.092 ms, snapshots 0.247 ms; the process's CPU 94.5 ms a second (user 90.2, system 4.3); over 16 ms 1, late 1; memory 174 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.989 ms, shared tick 0.081 ms, snapshots 0.243 ms; the process's CPU 113.6 ms a second (user 108.6, system 5.0); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 2.107 ms, shared tick 0.101 ms, snapshots 0.256 ms; the process's CPU 180.1 ms a second (user 172.4, system 7.7); over 16 ms 1, late 0; memory 182 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 1.100 ms, shared tick 0.100 ms, snapshots 0.236 ms; the process's CPU 113.9 ms a second (user 108.8, system 5.1); over 16 ms 6, late 0; memory 185 MB, active 1
+== S_neon_bot3 (neon 2v2, 1 player(s); GOD=1 BOT_EVERY=3)
+driver: neon 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.7 a second, about 5777 bytes each as text
+[prof] 10.0 s: ticks 611; a tick: bots 1.158 ms, shared tick 0.107 ms, snapshots 0.305 ms; the process's CPU 131.0 ms a second (user 126.2, system 4.8); over 16 ms 3, late 3; memory 177 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 4.604 ms, shared tick 0.167 ms, snapshots 0.329 ms; the process's CPU 345.2 ms a second (user 336.5, system 8.7); over 16 ms 7, late 0; memory 183 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 5.636 ms, shared tick 0.170 ms, snapshots 0.310 ms; the process's CPU 397.7 ms a second (user 389.6, system 8.1); over 16 ms 0, late 0; memory 186 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 5.541 ms, shared tick 0.159 ms, snapshots 0.288 ms; the process's CPU 394.3 ms a second (user 380.1, system 14.1); over 16 ms 0, late 0; memory 184 MB, active 1
+== S_neon_2p2b (neon 2v2, 2 player(s); GOD=1)
+driver: neon 2v2 SUDDEN DEATH, 2 player(s): match started; snapshots to one player 61.5 a second, about 6254 bytes each as text
+[prof] 10.0 s: ticks 611; a tick: bots 1.640 ms, shared tick 0.123 ms, snapshots 0.459 ms; the process's CPU 175.7 ms a second (user 168.0, system 7.8); over 16 ms 2, late 2; memory 171 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 4.089 ms, shared tick 0.125 ms, snapshots 0.434 ms; the process's CPU 325.2 ms a second (user 316.5, system 8.7); over 16 ms 1, late 0; memory 181 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.635 ms, shared tick 0.146 ms, snapshots 0.435 ms; the process's CPU 311.8 ms a second (user 302.2, system 9.6); over 16 ms 1, late 0; memory 189 MB, active 1
+[prof] 10.0 s: ticks 611; a tick: bots 4.141 ms, shared tick 0.130 ms, snapshots 0.412 ms; the process's CPU 314.4 ms a second (user 303.3, system 11.0); over 16 ms 15, late 7; memory 200 MB, active 1
+BATCH DONE

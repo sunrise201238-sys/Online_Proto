@@ -1,0 +1,121 @@
+== A_compound (compound 2v2, 1 player(s); GOD=1)
+driver: compound 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 6986 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.486 ms, shared tick 0.147 ms, snapshots 0.330 ms; the process's CPU 100.1 ms a second (user 93.3, system 6.8); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.496 ms, shared tick 0.185 ms, snapshots 0.326 ms; the process's CPU 88.4 ms a second (user 83.7, system 4.7); over 16 ms 0, late 1; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.534 ms, shared tick 0.193 ms, snapshots 0.356 ms; the process's CPU 111.0 ms a second (user 103.4, system 7.6); over 16 ms 0, late 0; memory 180 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.449 ms, shared tick 0.181 ms, snapshots 0.328 ms; the process's CPU 80.8 ms a second (user 75.0, system 5.8); over 16 ms 0, late 0; memory 181 MB, active 1
+== A_district (district 2v2, 1 player(s); GOD=1)
+driver: district 2v2, 1 player(s): match started; snapshots to one player 62.0 a second, about 6857 bytes each as text
+[prof] 10.0 s: ticks 621; a tick: bots 0.447 ms, shared tick 0.095 ms, snapshots 0.316 ms; the process's CPU 86.9 ms a second (user 82.7, system 4.2); over 16 ms 1, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.551 ms, shared tick 0.095 ms, snapshots 0.331 ms; the process's CPU 90.4 ms a second (user 83.8, system 6.7); over 16 ms 0, late 0; memory 182 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.281 ms, shared tick 0.115 ms, snapshots 0.326 ms; the process's CPU 70.2 ms a second (user 65.5, system 4.8); over 16 ms 0, late 0; memory 187 MB, active 1
+[prof] 10.0 s: ticks 621; a tick: bots 0.287 ms, shared tick 0.099 ms, snapshots 0.308 ms; the process's CPU 65.4 ms a second (user 60.6, system 4.8); over 16 ms 0, late 0; memory 193 MB, active 1
+== A_spacecraft (spacecraft 2v2, 1 player(s); GOD=1)
+driver: spacecraft 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 6782 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.275 ms, shared tick 0.147 ms, snapshots 0.349 ms; the process's CPU 84.8 ms a second (user 77.2, system 7.6); over 16 ms 0, late 0; memory 178 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.396 ms, shared tick 0.149 ms, snapshots 0.366 ms; the process's CPU 97.5 ms a second (user 93.4, system 4.2); over 16 ms 0, late 0; memory 179 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.323 ms, shared tick 0.156 ms, snapshots 0.349 ms; the process's CPU 81.9 ms a second (user 76.7, system 5.2); over 16 ms 0, late 1; memory 181 MB, active 1
+[prof] 10.0 s: ticks 621; a tick: bots 0.291 ms, shared tick 0.143 ms, snapshots 0.331 ms; the process's CPU 69.2 ms a second (user 64.0, system 5.2); over 16 ms 0, late 0; memory 182 MB, active 1
+== A_hospital (hospital 2v2, 1 player(s); GOD=1)
+driver: hospital 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 6834 bytes each as text
+[prof] 10.0 s: ticks 621; a tick: bots 0.215 ms, shared tick 0.105 ms, snapshots 0.348 ms; the process's CPU 74.2 ms a second (user 70.5, system 3.8); over 16 ms 0, late 0; memory 175 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.287 ms, shared tick 0.124 ms, snapshots 0.337 ms; the process's CPU 70.8 ms a second (user 66.8, system 4.0); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.268 ms, shared tick 0.108 ms, snapshots 0.348 ms; the process's CPU 70.1 ms a second (user 64.5, system 5.6); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.317 ms, shared tick 0.102 ms, snapshots 0.344 ms; the process's CPU 73.8 ms a second (user 66.3, system 7.5); over 16 ms 0, late 0; memory 180 MB, active 1
+== A_warehouse (warehouse 2v2, 1 player(s); GOD=1)
+driver: warehouse 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 6805 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.173 ms, shared tick 0.097 ms, snapshots 0.345 ms; the process's CPU 74.1 ms a second (user 69.4, system 4.7); over 16 ms 0, late 0; memory 173 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.279 ms, shared tick 0.122 ms, snapshots 0.341 ms; the process's CPU 70.9 ms a second (user 64.2, system 6.7); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.211 ms, shared tick 0.113 ms, snapshots 0.348 ms; the process's CPU 68.2 ms a second (user 61.1, system 7.1); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.282 ms, shared tick 0.107 ms, snapshots 0.338 ms; the process's CPU 76.9 ms a second (user 73.0, system 3.9); over 16 ms 0, late 0; memory 207 MB, active 1
+== A_dust (dust 2v2, 1 player(s); GOD=1)
+driver: dust 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 7093 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.223 ms, shared tick 0.137 ms, snapshots 0.359 ms; the process's CPU 80.2 ms a second (user 71.1, system 9.1); over 16 ms 0, late 0; memory 172 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.333 ms, shared tick 0.156 ms, snapshots 0.360 ms; the process's CPU 82.2 ms a second (user 79.6, system 2.7); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.276 ms, shared tick 0.120 ms, snapshots 0.345 ms; the process's CPU 69.8 ms a second (user 67.0, system 2.8); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 621; a tick: bots 0.274 ms, shared tick 0.118 ms, snapshots 0.325 ms; the process's CPU 85.0 ms a second (user 77.8, system 7.1); over 16 ms 0, late 0; memory 179 MB, active 1
+== A_factory (factory 2v2, 1 player(s); GOD=1)
+driver: factory 2v2, 1 player(s): match started; snapshots to one player 61.9 a second, about 6942 bytes each as text
+[prof] 10.0 s: ticks 621; a tick: bots 0.132 ms, shared tick 0.094 ms, snapshots 0.329 ms; the process's CPU 67.0 ms a second (user 62.8, system 4.2); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.187 ms, shared tick 0.092 ms, snapshots 0.348 ms; the process's CPU 59.3 ms a second (user 53.7, system 5.6); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.155 ms, shared tick 0.071 ms, snapshots 0.346 ms; the process's CPU 72.1 ms a second (user 65.8, system 6.3); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 621; a tick: bots 0.144 ms, shared tick 0.072 ms, snapshots 0.333 ms; the process's CPU 51.4 ms a second (user 48.0, system 3.4); over 16 ms 0, late 0; memory 176 MB, active 1
+== B_sd_neon (neon 2v2, 1 player(s); GOD=1)
+driver: neon 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.6 a second, about 5892 bytes each as text
+[prof] 10.0 s: ticks 611; a tick: bots 2.248 ms, shared tick 0.122 ms, snapshots 0.339 ms; the process's CPU 197.1 ms a second (user 192.4, system 4.7); over 16 ms 3, late 3; memory 173 MB, active 1
+[prof] 10.0 s: ticks 617; a tick: bots 5.603 ms, shared tick 0.157 ms, snapshots 0.329 ms; the process's CPU 418.7 ms a second (user 410.4, system 8.4); over 16 ms 13, late 1; memory 186 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 6.554 ms, shared tick 0.191 ms, snapshots 0.332 ms; the process's CPU 470.9 ms a second (user 456.4, system 14.5); over 16 ms 5, late 0; memory 185 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 6.628 ms, shared tick 0.161 ms, snapshots 0.305 ms; the process's CPU 453.8 ms a second (user 440.2, system 13.7); over 16 ms 1, late 1; memory 188 MB, active 1
+== B_sd_compound (compound 2v2, 1 player(s); GOD=1)
+driver: compound 2v2 SUDDEN DEATH, 1 player(s): match started; snapshots to one player 61.7 a second, about 6214 bytes each as text
+[prof] 10.0 s: ticks 610; a tick: bots 2.190 ms, shared tick 0.196 ms, snapshots 0.362 ms; the process's CPU 201.4 ms a second (user 196.9, system 4.4); over 16 ms 3, late 3; memory 179 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.684 ms, shared tick 0.236 ms, snapshots 0.340 ms; the process's CPU 296.8 ms a second (user 290.1, system 6.7); over 16 ms 3, late 0; memory 183 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.213 ms, shared tick 0.175 ms, snapshots 0.325 ms; the process's CPU 269.0 ms a second (user 260.1, system 8.9); over 16 ms 1, late 0; memory 187 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 3.782 ms, shared tick 0.162 ms, snapshots 0.307 ms; the process's CPU 292.8 ms a second (user 286.6, system 6.2); over 16 ms 1, late 0; memory 192 MB, active 1
+== C_4p_neon (neon 2v2, 4 player(s); GOD=1)
+driver: neon 2v2, 4 player(s): match started; snapshots to one player 61.9 a second, about 6227 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.001 ms, shared tick 0.158 ms, snapshots 0.547 ms; the process's CPU 91.7 ms a second (user 82.3, system 9.4); over 16 ms 0, late 0; memory 175 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.178 ms, snapshots 0.501 ms; the process's CPU 79.3 ms a second (user 71.5, system 7.7); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.000 ms, shared tick 0.145 ms, snapshots 0.471 ms; the process's CPU 63.3 ms a second (user 55.3, system 8.1); over 16 ms 0, late 0; memory 180 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.000 ms, shared tick 0.151 ms, snapshots 0.483 ms; the process's CPU 60.6 ms a second (user 52.1, system 8.5); over 16 ms 0, late 0; memory 180 MB, active 1
+== C_4p_compound (compound 2v2, 4 player(s); GOD=1)
+driver: compound 2v2, 4 player(s): match started; snapshots to one player 61.9 a second, about 6075 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.001 ms, shared tick 0.222 ms, snapshots 0.580 ms; the process's CPU 99.5 ms a second (user 91.8, system 7.7); over 16 ms 0, late 0; memory 172 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.001 ms, shared tick 0.322 ms, snapshots 0.527 ms; the process's CPU 92.7 ms a second (user 83.0, system 9.7); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.270 ms, snapshots 0.523 ms; the process's CPU 73.8 ms a second (user 68.5, system 5.3); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.000 ms, shared tick 0.230 ms, snapshots 0.503 ms; the process's CPU 69.2 ms a second (user 60.5, system 8.7); over 16 ms 0, late 0; memory 177 MB, active 1
+== C_4p_neon_snap2 (neon 2v2, 4 player(s); GOD=1 SNAP_EVERY=2)
+driver: neon 2v2, 4 player(s): match started; snapshots to one player 30.9 a second, about 6240 bytes each as text
+[prof] 10.0 s: ticks 617; a tick: bots 0.001 ms, shared tick 0.175 ms, snapshots 0.338 ms; the process's CPU 82.1 ms a second (user 73.0, system 9.1); over 16 ms 0, late 2; memory 173 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.001 ms, shared tick 0.198 ms, snapshots 0.293 ms; the process's CPU 68.3 ms a second (user 59.2, system 9.1); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.158 ms, snapshots 0.278 ms; the process's CPU 56.2 ms a second (user 48.8, system 7.4); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.000 ms, shared tick 0.146 ms, snapshots 0.244 ms; the process's CPU 47.6 ms a second (user 42.0, system 5.6); over 16 ms 0, late 0; memory 174 MB, active 1
+== C_4p_neon_snap3 (neon 2v2, 4 player(s); GOD=1 SNAP_EVERY=3)
+driver: neon 2v2, 4 player(s): match started; snapshots to one player 20.6 a second, about 6246 bytes each as text
+[prof] 10.0 s: ticks 621; a tick: bots 0.001 ms, shared tick 0.157 ms, snapshots 0.214 ms; the process's CPU 71.0 ms a second (user 65.4, system 5.6); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.194 ms, snapshots 0.221 ms; the process's CPU 62.6 ms a second (user 55.4, system 7.2); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.001 ms, shared tick 0.161 ms, snapshots 0.209 ms; the process's CPU 49.8 ms a second (user 44.5, system 5.2); over 16 ms 0, late 1; memory 176 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.000 ms, shared tick 0.175 ms, snapshots 0.199 ms; the process's CPU 50.9 ms a second (user 44.7, system 6.2); over 16 ms 0, late 0; memory 176 MB, active 1
+== D_2p_neon_snap2 (neon 1v1, 2 player(s); GOD=1 SNAP_EVERY=2)
+driver: neon 1v1, 2 player(s): match started; snapshots to one player 30.9 a second, about 3300 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.001 ms, shared tick 0.122 ms, snapshots 0.201 ms; the process's CPU 51.5 ms a second (user 46.9, system 4.6); over 16 ms 0, late 0; memory 171 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.112 ms, snapshots 0.173 ms; the process's CPU 50.4 ms a second (user 45.2, system 5.1); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.001 ms, shared tick 0.108 ms, snapshots 0.177 ms; the process's CPU 45.0 ms a second (user 41.0, system 4.0); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.000 ms, shared tick 0.089 ms, snapshots 0.173 ms; the process's CPU 37.3 ms a second (user 33.5, system 3.7); over 16 ms 0, late 0; memory 177 MB, active 1
+== D_2p_compound (compound 1v1, 2 player(s); GOD=1)
+driver: compound 1v1, 2 player(s): match started; snapshots to one player 61.9 a second, about 3173 bytes each as text
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.161 ms, snapshots 0.371 ms; the process's CPU 63.3 ms a second (user 58.0, system 5.3); over 16 ms 0, late 0; memory 171 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.001 ms, shared tick 0.221 ms, snapshots 0.336 ms; the process's CPU 63.0 ms a second (user 57.7, system 5.3); over 16 ms 0, late 0; memory 173 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.001 ms, shared tick 0.152 ms, snapshots 0.305 ms; the process's CPU 57.1 ms a second (user 50.0, system 7.1); over 16 ms 0, late 0; memory 173 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.001 ms, shared tick 0.139 ms, snapshots 0.283 ms; the process's CPU 46.5 ms a second (user 39.8, system 6.7); over 16 ms 0, late 0; memory 177 MB, active 1
+== E_bot_neon (neon 1v1, 1 player(s); GOD=1)
+driver: neon 1v1, 1 player(s): match started; snapshots to one player 61.9 a second, about 3288 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.135 ms, shared tick 0.095 ms, snapshots 0.273 ms; the process's CPU 57.7 ms a second (user 51.5, system 6.2); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.227 ms, shared tick 0.101 ms, snapshots 0.268 ms; the process's CPU 66.1 ms a second (user 59.7, system 6.4); over 16 ms 0, late 0; memory 178 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.113 ms, shared tick 0.078 ms, snapshots 0.272 ms; the process's CPU 45.8 ms a second (user 40.8, system 4.9); over 16 ms 0, late 0; memory 178 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.149 ms, shared tick 0.085 ms, snapshots 0.243 ms; the process's CPU 52.2 ms a second (user 48.3, system 3.9); over 16 ms 0, late 0; memory 179 MB, active 1
+== E_bot_compound (compound 1v1, 1 player(s); GOD=1)
+driver: compound 1v1, 1 player(s): match started; snapshots to one player 62.0 a second, about 3161 bytes each as text
+[prof] 10.0 s: ticks 621; a tick: bots 0.184 ms, shared tick 0.139 ms, snapshots 0.281 ms; the process's CPU 66.4 ms a second (user 60.5, system 5.9); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.280 ms, shared tick 0.199 ms, snapshots 0.288 ms; the process's CPU 77.6 ms a second (user 72.7, system 4.9); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 620; a tick: bots 0.225 ms, shared tick 0.127 ms, snapshots 0.276 ms; the process's CPU 61.2 ms a second (user 57.2, system 4.0); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 621; a tick: bots 0.176 ms, shared tick 0.100 ms, snapshots 0.250 ms; the process's CPU 58.9 ms a second (user 53.0, system 5.9); over 16 ms 0, late 0; memory 179 MB, active 1
+== F_neon (neon 2v2, 1 player(s); GOD=1 BOT_EVERY=3 SNAP_EVERY=2)
+driver: neon 2v2, 1 player(s): match started; snapshots to one player 30.9 a second, about 6899 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.383 ms, shared tick 0.133 ms, snapshots 0.193 ms; the process's CPU 84.5 ms a second (user 81.7, system 2.8); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.659 ms, shared tick 0.197 ms, snapshots 0.197 ms; the process's CPU 90.7 ms a second (user 87.1, system 3.5); over 16 ms 0, late 0; memory 185 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.582 ms, shared tick 0.199 ms, snapshots 0.199 ms; the process's CPU 90.9 ms a second (user 86.3, system 4.6); over 16 ms 0, late 0; memory 191 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.594 ms, shared tick 0.183 ms, snapshots 0.186 ms; the process's CPU 84.2 ms a second (user 82.2, system 2.0); over 16 ms 0, late 0; memory 195 MB, active 1
+== F_compound (compound 2v2, 1 player(s); GOD=1 BOT_EVERY=3 SNAP_EVERY=2)
+driver: compound 2v2, 1 player(s): match started; snapshots to one player 30.9 a second, about 7091 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.356 ms, shared tick 0.170 ms, snapshots 0.192 ms; the process's CPU 83.1 ms a second (user 77.4, system 5.7); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.430 ms, shared tick 0.293 ms, snapshots 0.206 ms; the process's CPU 88.2 ms a second (user 82.0, system 6.2); over 16 ms 0, late 0; memory 179 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.472 ms, shared tick 0.243 ms, snapshots 0.202 ms; the process's CPU 88.1 ms a second (user 82.7, system 5.4); over 16 ms 0, late 0; memory 181 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.458 ms, shared tick 0.252 ms, snapshots 0.203 ms; the process's CPU 81.1 ms a second (user 76.7, system 4.4); over 16 ms 0, late 0; memory 183 MB, active 1
+== F_town (town 2v2, 1 player(s); GOD=1 BOT_EVERY=3 SNAP_EVERY=2)
+driver: town 2v2, 1 player(s): match started; snapshots to one player 31.0 a second, about 7168 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.285 ms, shared tick 0.168 ms, snapshots 0.190 ms; the process's CPU 81.8 ms a second (user 79.0, system 2.8); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.162 ms, shared tick 0.180 ms, snapshots 0.198 ms; the process's CPU 59.1 ms a second (user 54.3, system 4.8); over 16 ms 0, late 0; memory 174 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.202 ms, shared tick 0.174 ms, snapshots 0.193 ms; the process's CPU 63.3 ms a second (user 56.5, system 6.8); over 16 ms 0, late 0; memory 177 MB, active 1
+[prof] 10.0 s: ticks 619; a tick: bots 0.154 ms, shared tick 0.144 ms, snapshots 0.187 ms; the process's CPU 48.6 ms a second (user 46.5, system 2.2); over 16 ms 0, late 0; memory 177 MB, active 1
+BATCH DONE

@@ -1,0 +1,4 @@
+== check_neon (neon 2v2, 1 player(s); GOD=1)
+driver: neon 2v2, 1 player(s): match started; snapshots to one player 61.8 a second, about 6588 bytes each as text
+[prof] 10.0 s: ticks 620; a tick: bots 0.467 ms, shared tick 0.118 ms, snapshots 0.340 ms; the process's CPU 97.1 ms a second (user 91.3, system 5.8); over 16 ms 0, late 0; memory 176 MB, active 1
+[prof] 10.0 s: ticks 618; a tick: bots 0.729 ms, shared tick 0.188 ms, snapshots 0.370 ms; the process's CPU 108.2 ms a second (user 102.3, system 5.8); over 16 ms 0, late 0; memory 178 MB, active 1

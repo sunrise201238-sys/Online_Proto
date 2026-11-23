@@ -1,0 +1,18 @@
+total 2.3 s
+   18.3%  obstaclesNearPoint physics.js:205
+    9.0%  obstaclesNearSegment physics.js:162
+    7.6%  (garbage collector) 
+    6.9%  sightHitsSurface physics.js:569
+    5.0%  segmentHitsObstacle physics.js:15
+    4.2%  botHasLineOfSight nbrain.js:383
+    3.5%  nbBrainTick nbrain.js:546
+    3.0%  tickBot ai.js:78
+    3.0%  tickMatch tick.js:340
+    2.9%  (anon) physics.js:229
+    2.2%  loadArenaFiles arena_files.mjs:7
+    2.2%  segmentObstacleImpactT physics.js:452
+    2.1%  surfaceCrossT physics.js:500
+    1.9%  run navgrid.js:1017
+    1.8%  groundHeightAt physics.js:380
+    1.8%  pickBotTargetId ai.js:51
+  under: tickBot 46.8%, botHasLineOfSight 22.1%, tickMatch 19.9%, obstaclesNearSegment 9.4%, findFiringPath 5.1%, segmentHitsObstacle 5.0%, sightClear 2.7%, findHiddenSpot 2.2%, truncateAtFiringPoint 0.5%

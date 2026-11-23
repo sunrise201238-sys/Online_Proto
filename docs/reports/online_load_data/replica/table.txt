@@ -1,0 +1,55 @@
+label            map         mode pl. SD  |    bots    tick    snap |  CPU ms/s | mem MB | worst ms | sent to one player     | knobs
+n3_first         neon        2v2  1   -   |   0.639   0.169   0.335 |     102.8 |      - |        6 | 61.9/s x 7063 B = 437 kB/s | -
+n3_base          neon        2v2  1   -   |   0.497   0.152   0.338 |      91.4 |      - |        8 | 61.9/s x 7087 B = 439 kB/s | -
+n3_snap2         neon        2v2  1   -   |   0.784   0.165   0.200 |     100.8 |      - |        7 | 30.9/s x 6936 B = 214 kB/s | SNAP_EVERY=2
+n3_snap3         neon        2v2  1   -   |   0.386   0.139   0.164 |      73.8 |      - |        6 | 20.6/s x 7128 B = 147 kB/s | SNAP_EVERY=3
+n3_bot2          neon        2v2  1   -   |   0.639   0.180   0.353 |      99.9 |      - |        9 | 61.9/s x 6935 B = 429 kB/s | BOT_EVERY=2
+n3_bot3          neon        2v2  1   -   |   0.333   0.156   0.332 |      74.3 |      - |        7 | 61.9/s x 7159 B = 443 kB/s | BOT_EVERY=3
+n3_search1       neon        2v2  1   -   |   0.523   0.139   0.329 |      90.3 |      - |       11 | 61.9/s x 7033 B = 435 kB/s | SEARCH_MS=1
+n3_bot2snap2     neon        2v2  1   -   |   0.302   0.134   0.185 |      61.6 |      - |       10 | 30.9/s x 7069 B = 218 kB/s | BOT_EVERY=2 SNAP_EVERY=2
+n3_all           neon        2v2  1   -   |   0.243   0.144   0.128 |      59.1 |      - |        8 | 20.6/s x 7021 B = 145 kB/s | BOT_EVERY=3 SNAP_EVERY=3 SEARCH_MS=1
+n_1v1_2p         neon        1v1  2   -   |   0.001   0.112   0.273 |      45.6 |      - |       12 | 61.9/s x 3289 B = 204 kB/s | -
+n_2v2_2p2b       neon        2v2  2   -   |   0.449   0.144   0.482 |      95.9 |      - |        8 | 61.9/s x 7018 B = 434 kB/s | -
+airport3         airport     2v2  1   -   |   0.151   0.077   0.300 |      56.5 |      - |        4 | 61.9/s x 7004 B = 434 kB/s | -
+town3            town        2v2  1   -   |   0.294   0.129   0.329 |      73.1 |      - |       14 | 61.9/s x 7322 B = 453 kB/s | -
+a_base           airport     2v2  1   -   |   0.186   0.098   0.373 |      75.4 |      - |        6 | 61.9/s x 6845 B = 424 kB/s | -
+a_one            airport     2v2  1   -   |   0.166   0.089   0.339 |      67.0 |      - |        6 | 61.8/s x 6817 B = 421 kB/s | SNAP_ONE=1
+a_str            airport     2v2  1   -   |   0.172   0.092   0.347 |      68.9 |      - |        4 | 61.9/s x 6905 B = 427 kB/s | SNAP_STR=1
+a_one_str        airport     2v2  1   -   |   0.186   0.097   0.324 |      67.5 |      - |       24 | 61.9/s x 7043 B = 436 kB/s | SNAP_ONE=1 SNAP_STR=1
+a_one_str_slim   airport     2v2  1   -   |   0.184   0.096   0.261 |      61.9 |      - |       12 | 61.9/s x 3165 B = 196 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1
+a_slim_every2    airport     2v2  1   -   |   0.164   0.093   0.150 |      57.7 |      - |        3 | 30.9/s x 3107 B = 96 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1 SNAP_EVERY=2
+a_all            airport     2v2  1   -   |   0.124   0.087   0.144 |      47.9 |      - |        3 | 30.9/s x 3046 B = 94 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1 SNAP_EVERY=2 BOT_EVERY=2
+n_all_1          neon        2v2  1   -   |   0.640   0.187   0.155 |      91.2 |      - |        6 | 30.9/s x 3197 B = 99 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1 SNAP_EVERY=2 BOT_EVERY=2
+n_all_2          neon        2v2  1   -   |   0.549   0.213   0.174 |      87.8 |      - |       12 | 30.9/s x 3210 B = 99 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1 SNAP_EVERY=2 BOT_EVERY=2
+n_base_2         neon        2v2  1   -   |   0.432   0.134   0.353 |      88.8 |      - |        8 | 61.9/s x 7000 B = 433 kB/s | -
+n_base_3         neon        2v2  1   -   |   0.839   0.169   0.349 |     114.8 |      - |        7 | 61.8/s x 6963 B = 430 kB/s | -
+n_all3_1         neon        2v2  1   -   |   0.240   0.158   0.110 |      58.4 |      - |       20 | 20.6/s x 3213 B = 66 kB/s | SNAP_ONE=1 SNAP_STR=1 SNAP_SLIM=1 SNAP_EVERY=3 BOT_EVERY=3
+A_compound       compound    2v2  1   -   |   0.493   0.186   0.337 |      93.4 |    181 |       14 | 61.9/s x 6986 B = 432 kB/s | -
+A_district       district    2v2  1   -   |   0.373   0.103   0.322 |      75.3 |    193 |       16 | 62.0/s x 6857 B = 425 kB/s | -
+A_spacecraft     spacecraft  2v2  1   -   |   0.337   0.149   0.349 |      82.9 |    182 |        5 | 61.9/s x 6782 B = 420 kB/s | -
+A_hospital       hospital    2v2  1   -   |   0.291   0.111   0.343 |      71.6 |    180 |        5 | 61.9/s x 6834 B = 423 kB/s | -
+A_warehouse      warehouse   2v2  1   -   |   0.257   0.114   0.342 |      72.0 |    207 |        7 | 61.9/s x 6805 B = 421 kB/s | -
+A_dust           dust        2v2  1   -   |   0.294   0.131   0.343 |      79.0 |    179 |        8 | 61.9/s x 7093 B = 439 kB/s | -
+A_factory        factory     2v2  1   -   |   0.162   0.078   0.342 |      60.9 |    176 |        5 | 61.9/s x 6942 B = 430 kB/s | -
+B_sd_neon        neon        2v2  1   SD  |   6.262   0.170   0.322 |     447.8 |    188 |      153 | 61.6/s x 5892 B = 363 kB/s | -
+B_sd_compound    compound    2v2  1   SD  |   3.560   0.191   0.324 |     286.2 |    192 |      174 | 61.7/s x 6214 B = 383 kB/s | -
+C_4p_neon        neon        2v2  4   -   |   0.000   0.158   0.485 |      67.7 |    180 |        3 | 61.9/s x 6227 B = 385 kB/s | -
+C_4p_compound    compound    2v2  4   -   |   0.001   0.274   0.518 |      78.6 |    177 |        5 | 61.9/s x 6075 B = 376 kB/s | -
+C_4p_neon_snap2  neon        2v2  4   -   |   0.001   0.167   0.272 |      57.4 |    174 |       12 | 30.9/s x 6240 B = 193 kB/s | SNAP_EVERY=2
+C_4p_neon_snap3  neon        2v2  4   -   |   0.001   0.177   0.210 |      54.4 |    176 |        2 | 20.6/s x 6246 B = 129 kB/s | SNAP_EVERY=3
+D_2p_neon_snap2  neon        1v1  2   -   |   0.001   0.103   0.174 |      44.2 |    177 |        6 | 30.9/s x 3300 B = 102 kB/s | SNAP_EVERY=2
+D_2p_compound    compound    1v1  2   -   |   0.001   0.171   0.308 |      55.5 |    177 |        9 | 61.9/s x 3173 B = 196 kB/s | -
+E_bot_neon       neon        1v1  1   -   |   0.163   0.088   0.261 |      54.7 |    179 |        4 | 61.9/s x 3288 B = 204 kB/s | -
+E_bot_compound   compound    1v1  1   -   |   0.227   0.142   0.271 |      65.9 |    179 |       11 | 62.0/s x 3161 B = 196 kB/s | -
+F_neon           neon        2v2  1   -   |   0.612   0.193   0.194 |      88.6 |    195 |        9 | 30.9/s x 6899 B = 213 kB/s | BOT_EVERY=3 SNAP_EVERY=2
+F_compound       compound    2v2  1   -   |   0.453   0.263   0.204 |      85.8 |    183 |       12 | 30.9/s x 7091 B = 219 kB/s | BOT_EVERY=3 SNAP_EVERY=2
+F_town           town        2v2  1   -   |   0.173   0.166   0.193 |      57.0 |    177 |        7 | 31.0/s x 7168 B = 222 kB/s | BOT_EVERY=3 SNAP_EVERY=2
+S_neon_real      neon        2v2  1   SD  |   5.295   0.133   0.308 |     378.9 |    180 |      135 | 61.7/s x 5722 B = 353 kB/s | - (units can fall)
+S_neon_god2      neon        2v2  1   SD  |   4.848   0.148   0.315 |     366.2 |    207 |      138 | 61.6/s x 6244 B = 385 kB/s | -
+S_town           town        2v2  1   SD  |   3.181   0.130   0.317 |     259.2 |    192 |       87 | 61.8/s x 6339 B = 392 kB/s | -
+S_airport        airport     2v2  1   SD  |   0.731   0.070   0.312 |     103.4 |    179 |        7 | 61.9/s x 6229 B = 386 kB/s | -
+S_district       district    2v2  1   SD  |   3.358   0.113   0.313 |     274.7 |    234 |      317 | 61.4/s x 6097 B = 374 kB/s | -
+S_neon_1v1       neon        1v1  1   SD  |   1.399   0.094   0.245 |     135.9 |    185 |      154 | 61.7/s x 3074 B = 190 kB/s | -
+S_neon_bot3      neon        2v2  1   SD  |   5.260   0.165   0.309 |     379.1 |    184 |      150 | 61.7/s x 5777 B = 356 kB/s | BOT_EVERY=3
+S_neon_2p2b      neon        2v2  2   SD  |   3.955   0.134   0.427 |     317.1 |    200 |      134 | 61.5/s x 6254 B = 385 kB/s | -
+check_neon       neon        2v2  1   -   |   0.598   0.153   0.355 |     102.7 |    178 |        - | 61.8/s x 6588 B = 407 kB/s | -

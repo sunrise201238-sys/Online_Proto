@@ -1,0 +1,5 @@
+snapshot_bench.mjs on Neon, 2v2 with one player and three bots: the run whose numbers were given on 2026-11-23, then the stored tool's own run.
+neon, 6000 ticks: as now 0.076 ms a tick, 6605 bytes | the player's team alone built 0.046 ms a tick, 6605 bytes | and the other three units cut down 0.030 ms a tick, 2639 bytes
+a second of it: as now 4.8 ms and 413 kB; team alone 2.9 ms; cut down 1.9 ms and 165 kB; cut down and every second tick 0.9 ms and 82 kB
+neon, 6000 ticks: as now 0.083 ms a tick, 6896 bytes | the player's team alone built 0.048 ms a tick, 6896 bytes | and the other three units cut down 0.032 ms a tick, 2984 bytes
+a second of it: as now 5.2 ms and 431 kB; team alone 3.0 ms; cut down 2.0 ms and 186 kB; cut down and every second tick 1.0 ms and 93 kB
