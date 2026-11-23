@@ -6,6 +6,8 @@
 // clears it; the one rail no jump clears, with the route grid's reason for it; rounds and a bot's sight pass; and where the user asked for none there is none. A reading
 // of Neon's data made again from the model has no rail: the tool is run after neon_ways_up.mjs, and these fail until it has been. (What the rails do to a fight — how
 // often a bot comes off a platform — was measured, not tested: the main README, b1105ko.)
+// And the gaps (b1105kp; user, with two pictures of gaps in the walkway's rails, told of six more places like them: "Assess if there would be issue fencing them up. if
+// no, implement in PT and 9.9"): at each of the eight a walk, a sprint and a dodge went off the platform; none does now, and a jump still clears every rail but two.
 import '../tools/maps/arena_files.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,6 +36,21 @@ function pushed(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
   }
   return { x: MX(f.pos.x), z: MZ(f.pos.z), feet: (f.pos.y - G) / 4, floor: floor / 4 };
 }
+// The same body, and the greatest single fall of its run: from where it left the ground to where it came down, in metres (0: it never left the ground).
+function fell(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
+  const a = getArena('neon'); const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
+  const f = m.fighters.p1, e = m.fighters.p2; for (const q of [f, e]) { q.hp = 1e9; q.invulnerableUntil = 1e15; }
+  e.pos = { x: -200, y: G, z: 0 }; e.floorY = G;
+  const floor = groundHeightAt(AX(start[0]), AZ(start[1]), a.surfaces, start[2] * 4 + 2);
+  f.pos = { x: AX(start[0]), y: floor + G, z: AZ(start[1]) }; f.vel = { x: 0, y: 0, z: 0 }; f.airborne = false; f.grounded = true; f.floorY = f.pos.y;
+  const dx = AX(at[0]) - f.pos.x, dz = AZ(at[1]) - f.pos.z, d = Math.hypot(dx, dz) || 1; let now = 1000, left = null, last = floor, most = 0;   // (one heading for the whole run)
+  for (let n = 0; n < ticks; n += 1) {
+    const inp = { ...emptyInput(), moveX: dx / d, moveZ: dz / d }; if (how === 'sprint') { inp.boost = true; inp.sprintLocked = true; } if (how === 'dodge' && n === 5) inp.stepTap = true; if (n === jumpAt) inp.jump = true;
+    now += MS; tickMatch(m, { p1: inp }, now, DT);
+    const feet = f.pos.y - G; if (f.airborne) { if (left == null) left = last; } else { if (left != null) most = Math.max(most, left - feet); left = null; last = feet; }
+  }
+  return most / 4;
+}
 // A unit pinned at a place (model metres, the feet's height) holds the trigger on a unit pinned at another for six seconds: the damage done.
 function shot(from, to) {
   const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 }); const a = m.fighters.p1, b = m.fighters.p2;
@@ -49,24 +66,26 @@ function shot(from, to) {
 // (what a thing would be if the rails stopped a round as a plain box does: the flag off for the time of one reading, then on again)
 function withSolidRails(read) { const rails = getArena('neon').obstacles.filter(isRail); for (const o of rails) o.noProjectile = false; try { return read(); } finally { for (const o of rails) o.noProjectile = true; } }
 
-test('the rails are in the data: 26 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
+test('the rails are in the data: 29 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
   const a = getArena('neon'); const rails = a.obstacles.filter(isRail); const flat = rails.filter((o) => long(o) > 0.55), slope = rails.filter((o) => long(o) <= 0.55);   // (a run is a body's width long or more; a leg is a row of boxes half a metre long or less)
-  assert.equal(flat.length, 26, 'the flat floors\' runs, a box each');
-  assert.equal(slope.length, 145, 'the boxes of the ramps\' legs');
-  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 172.5) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 37.1) < 0.1, `172.5 m on the flat and 37.1 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
+  assert.equal(flat.length, 29, 'the flat floors\' runs, a box each');
+  assert.equal(slope.length, 148, 'the boxes of the ramps\' legs');
+  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 181.6) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 37.8) < 0.1, `181.6 m on the flat and 37.8 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
   for (const o of rails) assert.ok(Math.abs(Math.min(o.maxX - o.minX, o.maxZ - o.minZ) - 0.24) < 1e-6, 'a rail is 6 cm through');
-  // a flat run: from 0.25 m over its floor to 0.75 m over it, the floor on one side of it and a drop of 2.4 m or more on the other (read 0.3 m off the rail, at three places along it;
-  // a deck and the frame tops in it lie within 0.25 m of each other)
+  // a flat run: from 0.25 m over its floor to 0.75 m over it, the floor on one side of it (read 0.3 m off the rail; a deck and the frame tops in it lie within 0.25 m of each
+  // other) and on the other a drop of 2.4 m or more within a body's width (read 0.3 m and 0.6 m off the rail: the sign's top under the walkway's inner corner lies between),
+  // at three places along it
   for (const o of flat) {
     assert.ok(Math.abs(o.maxY - o.minY - 2) < 1e-6, 'a flat run holds from 0.25 m to 0.75 m over its floor');
     const alongX = o.maxX - o.minX > o.maxZ - o.minZ, cx = (o.minX + o.maxX) / 2, cz = (o.minZ + o.maxZ) / 2, h = o.minY - 1;
     for (const t of [0.15, 0.5, 0.85]) {
       const px = alongX ? o.minX + (o.maxX - o.minX) * t : cx, pz = alongX ? cz : o.minZ + (o.maxZ - o.minZ) * t;
-      const [p, q] = [-1, 1].map((n) => groundHeightAt(px + (alongX ? 0 : n * 1.2), pz + (alongX ? n * 1.2 : 0), a.surfaces, h + 2));
-      assert.ok((Math.abs(p - h) <= 1 && q <= h - 9.6) || (Math.abs(q - h) <= 1 && p <= h - 9.6), `the run at model (${MX(px).toFixed(2)}, ${MZ(pz).toFixed(2)}), floor ${(h / 4).toFixed(2)} m, stands on an open edge: ${(p / 4).toFixed(2)} m on one side, ${(q / 4).toFixed(2)} m on the other`);
+      const at = (n, d) => groundHeightAt(px + (alongX ? 0 : n * d), pz + (alongX ? n * d : 0), a.surfaces, h + 2);
+      const floor = (n) => Math.abs(at(n, 1.2) - h) <= 1, drop = (n) => [1.2, 2.4].some((d) => at(n, d) <= h - 9.6);
+      assert.ok((floor(-1) && drop(1)) || (floor(1) && drop(-1)), `the run at model (${MX(px).toFixed(2)}, ${MZ(pz).toFixed(2)}), floor ${(h / 4).toFixed(2)} m, stands on an open edge: ${(at(-1, 1.2) / 4).toFixed(2)} m and ${(at(-1, 2.4) / 4).toFixed(2)} m on one side, ${(at(1, 1.2) / 4).toFixed(2)} m and ${(at(1, 2.4) / 4).toFixed(2)} m on the other`);
     }
   }
-  assert.equal(rails.filter((o) => o.topBuffer === 12).length, 1, 'one rail that no jump clears');
+  assert.equal(rails.filter((o) => o.topBuffer === 12).length, 2, 'two rails that no jump clears');
 });
 
 test('a walk, a sprint and a dodge are held at a rail and a jump clears it — on a deck, on the south way\'s walkway and at two edges of the strip, from the places the user read off the game', () => {
@@ -88,11 +107,41 @@ test('a walk, a sprint and a dodge are held at a rail and a jump clears it — o
   }
 });
 
+// THE GAPS (b1105kp). b1105ko's rails had eight places where a body that walked, sprinted or dodged at the edge went down: two the user saw in the game (the walkway's inner
+// corner; the east end of the gap in front of the pillar, where the wall draws back from the walkway) and six found by walking bodies off every place of the platforms.
+// Why the plan had left each is in neon_rails.mjs: a wall it took for one that holds (the pillar's east end, the first top platform's notch), the sign's top it took for
+// ground (the inner corner), a stretch it took for a sliver (the strip's south-west corner), and joints it has no rule for (the window's jamb, the east ramp's top, the top
+// of the west inner ramp's frame). Before: each of these runs came down 2.4 m to 21.7 m lower.
+test('the gaps are closed: at the walkway\'s inner corner and by its pillar (the user\'s two pictures), at the window\'s jamb, on the first top platform\'s north side, at the strip\'s south-west corner and at two ramp tops, a walk, a sprint and a dodge stay up, and a jump still clears the rail', () => {
+  // (from, toward; hops: a jump clears this rail — every one but the strip's south-west piece, below)
+  const GAPS = [
+    ['the walkway\'s inner corner, westward (the second picture)', [15.0, 52.8, 21.88], [9.0, 52.8], true],
+    ['the walkway\'s inner corner, northward', [13.25, 55.5, 21.88], [13.25, 49.0], true],
+    ['the walkway\'s inner corner, across it', [15.0, 55.5, 21.88], [11.5, 51.5], true],
+    ['the east end of the gap in front of the pillar (the first picture)', [14.3, 56.0, 21.88], [14.3, 62.0], true],
+    ['the last east window\'s jamb, from the sill', [8.4, 56.5, 21.80], [9.6, 60.1], true],
+    ['the last east window\'s jamb, from the little slope', [7.06, 56.87, 21.05], [10.06, 59.87], true],
+    ['the first top platform\'s notch', [-8.3, 23.4, 12.59], [-8.3, 18.0], true],
+    ['the first top platform\'s north-west corner', [-8.94, 22.87, 12.59], [-12.0, 19.8], true],
+    ['the strip\'s south-west corner', [-5.94, 23.12, 21.44], [-8.9, 26.1], false],
+    ['the deck at the east ramp\'s top', [18.06, 40.87, 5.78], [21.8, 39.3], true],
+    ['the top of the west inner ramp\'s frame', [-5.94, 35.87, 7.17], [-4.0, 40.67], false],   // (a jump from the ramp below comes down on the frame, not over its rail)
+  ];
+  for (const [name, from, at, hops] of GAPS) {
+    for (const how of ['walk', 'sprint', 'dodge']) { const d = fell(from, at, how); assert.ok(d < 1, `${name}, a ${how}: the body stays up (its greatest fall ${d.toFixed(2)} m)`); }
+    if (hops) { const d = fell(from, at, 'walk', 20); assert.ok(d >= 2.4, `${name}, a jump: over the rail and down (${d.toFixed(2)} m)`); }
+  }
+  // (the east ramp's north leg carried up to the deck: a walk and a dodge off the frame's first step are held; a sprint slides down the frame along the leg and over it lower down,
+  // as at every ramp's side — the rail is 0.75 m tall)
+  for (const how of ['walk', 'dodge']) { const d = fell([19.6, 40.75, 5.02], [19.6, 36.0], how); assert.ok(d < 1, `the east ramp's frame by the deck, a ${how}: the body stays up (${d.toFixed(2)} m)`); }
+});
+
 // THE STRIP'S SOUTH RAIL IS NOT HOPPED. It is 1.5 m between the bridge's end and the north way's platform, where a bot that comes out of the bridge walked off to the
 // decks 12.6 m below (the user's case of b1105kl: neon_ways.test.js, a bot in the bridge and its target under the strip). A rail a jump clears is a lip to the route
 // grid: the drop over it stays in the grid, a route's last step is walked and never jumped (nbrain.js truncateAtFiringPoint — the bots' own rule, on every map, not
 // touched), so the bot stood held at the rail: that test failed, and a scan of 438 runs from the bridge to the decks went from 20 that never arrive to 44. With a hold
 // no jump clears the rail is a wall to the grid, there is no drop over it, and the bot goes round (23 of 438).
+// The strip's south-west corner (b1105kp) is the same: left open, a bot walked off it; closed with a rail a jump clears, the bot stood at it (31 of 438); with this hold, 18.
 test('the strip\'s south rail, from "x -1.35 z 24.14 feet 21.24 m": no walk, sprint, dodge or jump takes a body over it, and the route grid has no drop over it', () => {
   for (const [how, jumpAt] of [['walk', -1], ['sprint', -1], ['dodge', -1], ['walk', 8], ['walk', 14], ['walk', 20], ['walk', 26], ['sprint', 14]]) {
     const r = pushed([-1.35, 24.14, 21.24], [-1.35, 28], how, jumpAt);
@@ -106,6 +155,22 @@ test('the strip\'s south rail, from "x -1.35 z 24.14 feet 21.24 m": no walk, spr
   }
   assert.ok(nodes >= 4, `the strip has its nodes behind the rail (${nodes})`);
   assert.equal(down.length, 0, `links from the strip behind its south rail to a floor more than 3 m under it: ${down.slice(0, 4).join('; ')}`);
+});
+
+test('the strip\'s south-west piece, between its west rail and the north way\'s fence: no walk, sprint, dodge or jump takes a body over it, the route grid has no link across it, and the west rail beside it is jumped', () => {
+  for (const how of ['walk', 'sprint', 'dodge']) { const d = fell([-5.94, 23.12, 21.44], [-8.9, 26.1], how); assert.ok(d < 1, `a ${how} from the way's platform into the corner: the body stays on the strip (its greatest fall ${d.toFixed(2)} m)`); }
+  // (southward at the piece, from the strip between the west rail and the platform: a jump early, in the air as it comes to the piece, and late, at the piece)
+  for (const [how, jumpAt] of [['walk', 2], ['walk', 5], ['walk', 8], ['walk', 14], ['walk', 20], ['sprint', 2], ['sprint', 5], ['sprint', 14]]) {
+    const d = fell([-6.72, 23.3, 21.24], [-6.72, 27.0], how, jumpAt);
+    assert.ok(d < 1, `a ${how} south at the piece with a jump at tick ${jumpAt}: the body stays on the strip (its greatest fall ${d.toFixed(2)} m)`);
+  }
+  const g = navGridFor(getArena('neon')); const across = [];   // (a link from the strip whose straight line crosses the piece: model x -7.19..-6.34 at z 24.62)
+  for (let i = 0; i < g.N; i += 1) {
+    const x = MX(g.posX[i]), z = MZ(g.posZ[i]), f = g.floor[i] / 4; if (f < 21.0 || f > 21.6 || z > 24.62 || Math.hypot(x + 6.8, z - 24.0) > 3) continue;
+    for (let k = g.linkStart[i]; k < g.linkStart[i + 1]; k += 1) { const j = g.linkAdj[k], x1 = MX(g.posX[j]), z1 = MZ(g.posZ[j]); if (z1 <= 24.62) continue; const xc = x + (x1 - x) * (24.62 - z) / (z1 - z); if (xc >= -7.19 && xc <= -6.34) across.push(`(${x.toFixed(2)}, ${z.toFixed(2)}) to (${x1.toFixed(2)}, ${z1.toFixed(2)} | ${(g.floor[j] / 4).toFixed(2)})`); }
+  }
+  assert.equal(across.length, 0, `links from the strip across its south-west piece: ${across.join('; ')}`);
+  const w = fell([-6.31, 23.33, 21.44], [-10, 23.6], 'walk', 20); assert.ok(w >= 2.4, `a jump at the west rail beside it goes over and down (${w.toFixed(2)} m)`);
 });
 
 test('rounds pass a rail both ways, and a bot\'s sight passes it: what a plain box of the same size would stop', () => {
