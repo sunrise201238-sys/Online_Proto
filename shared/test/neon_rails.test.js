@@ -8,7 +8,11 @@
 // often a bot comes off a platform — was measured, not tested: the main README, b1105ko.)
 // And the gaps (b1105kp; user, with two pictures of gaps in the walkway's rails, told of six more places like them: "Assess if there would be issue fencing them up. if
 // no, implement in PT and 9.9"): at each of the eight a walk, a sprint and a dodge went off the platform; none does now, and a jump still clears every rail but two.
+// And the frame beside two rails (b1105kq; user, told that the rails on three ramps' sides have their boxes as the others have and that what lets a body through is the
+// frame's own boxes beside them, tops with no floor: "要不要照「補齊框架地板」做在 PT 和 9.9？ YES"; and of the rail that ended above its ramp's foot: "Implement, PT and
+// 9.9"): the walks and dodges that went through the two rails are held, and a sprint down along the carried-on rail comes to stand on the deck.
 import '../tools/maps/arena_files.mjs';
+import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../src/sim/constants.js';
@@ -37,7 +41,9 @@ function pushed(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
   return { x: MX(f.pos.x), z: MZ(f.pos.z), feet: (f.pos.y - G) / 4, floor: floor / 4 };
 }
 // The same body, and the greatest single fall of its run: from where it left the ground to where it came down, in metres (0: it never left the ground).
-function fell(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
+function fell(start, at, how = 'walk', jumpAt = -1, ticks = 150) { return ran(start, at, how, jumpAt, ticks).fall; }
+// (and where the run ends: the body's place and its feet, model metres)
+function ran(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
   const a = getArena('neon'); const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 });
   const f = m.fighters.p1, e = m.fighters.p2; for (const q of [f, e]) { q.hp = 1e9; q.invulnerableUntil = 1e15; }
   e.pos = { x: -200, y: G, z: 0 }; e.floorY = G;
@@ -49,7 +55,7 @@ function fell(start, at, how = 'walk', jumpAt = -1, ticks = 150) {
     now += MS; tickMatch(m, { p1: inp }, now, DT);
     const feet = f.pos.y - G; if (f.airborne) { if (left == null) left = last; } else { if (left != null) most = Math.max(most, left - feet); left = null; last = feet; }
   }
-  return most / 4;
+  return { fall: most / 4, x: MX(f.pos.x), z: MZ(f.pos.z), feet: (f.pos.y - G) / 4 };
 }
 // A unit pinned at a place (model metres, the feet's height) holds the trigger on a unit pinned at another for six seconds: the damage done.
 function shot(from, to) {
@@ -66,11 +72,11 @@ function shot(from, to) {
 // (what a thing would be if the rails stopped a round as a plain box does: the flag off for the time of one reading, then on again)
 function withSolidRails(read) { const rails = getArena('neon').obstacles.filter(isRail); for (const o of rails) o.noProjectile = false; try { return read(); } finally { for (const o of rails) o.noProjectile = true; } }
 
-test('the rails are in the data: 29 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
+test('the rails are in the data: 29 runs along the flat floors\' open edges and 15 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
   const a = getArena('neon'); const rails = a.obstacles.filter(isRail); const flat = rails.filter((o) => long(o) > 0.55), slope = rails.filter((o) => long(o) <= 0.55);   // (a run is a body's width long or more; a leg is a row of boxes half a metre long or less)
   assert.equal(flat.length, 29, 'the flat floors\' runs, a box each');
-  assert.equal(slope.length, 148, 'the boxes of the ramps\' legs');
-  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 181.6) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 37.8) < 0.1, `181.6 m on the flat and 37.8 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
+  assert.equal(slope.length, 150, 'the boxes of the ramps\' legs');
+  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 181.6) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 38.7) < 0.1, `181.6 m on the flat and 38.7 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
   for (const o of rails) assert.ok(Math.abs(Math.min(o.maxX - o.minX, o.maxZ - o.minZ) - 0.24) < 1e-6, 'a rail is 6 cm through');
   // a flat run: from 0.25 m over its floor to 0.75 m over it, the floor on one side of it (read 0.3 m off the rail; a deck and the frame tops in it lie within 0.25 m of each
   // other) and on the other a drop of 2.4 m or more within a body's width (read 0.3 m and 0.6 m off the rail: the sign's top under the walkway's inner corner lies between),
@@ -134,6 +140,44 @@ test('the gaps are closed: at the walkway\'s inner corner and by its pillar (the
   // (the east ramp's north leg carried up to the deck: a walk and a dodge off the frame's first step are held; a sprint slides down the frame along the leg and over it lower down,
   // as at every ramp's side — the rail is 0.75 m tall)
   for (const how of ['walk', 'dodge']) { const d = fell([19.6, 40.75, 5.02], [19.6, 36.0], how); assert.ok(d < 1, `the east ramp's frame by the deck, a ${how}: the body stays up (${d.toFixed(2)} m)`); }
+});
+
+// THE FRAME BESIDE TWO RAILS (b1105kq). A rail on a ramp's side has its boxes as every rail has, and bodies went through two of them at a walk: the east inner ramp's north
+// leg (9 to 12 m down to the street beyond it) and the leg beside the ramp east of the 8.6 m deck. The frame beside the rail let them: its pieces are boxes in steps, a box is
+// a floor to the sim when a floor lies on any of its top, and where its top had no floor a body that came onto it sank into the box and was put out at the box's nearest
+// face — the one under the rail, a rail 6 cm through. neon_rails.mjs gives every such top beside those two legs its floor (19 floors, written with `railFloor`: the one key
+// of its own that the tool writes, read here off the file — the sim keeps a floor's own keys alone). Before: each of these runs came down 2.9 m to 11.2 m lower.
+const heading = (from, deg) => [from[0] + 10 * Math.cos(deg * Math.PI / 180), from[1] + 10 * Math.sin(deg * Math.PI / 180)];   // (a point 10 m off at a heading, as the bodies' scan ran them)
+test('the frame beside two rails has its floors: the walks and dodges that went through the east inner ramp\'s north rail and the rail beside the ramp east of the 8.6 m deck are held on the frame', () => {
+  const D = JSON.parse(fs.readFileSync(new URL('../../client/public/maps/neon_data.json', import.meta.url), 'utf8')); const floors = D.surfaces.filter((q) => q.railFloor === true);
+  assert.equal(floors.length, 19, 'the floors written beside the two legs');
+  for (const q of floors) {   // (each lies on the top of a box that is no wall, within 0.9 m inside one of the two legs and a body's half-width beyond its ends)
+    assert.ok(q.type === 'flat' && q.top === q.maxTop, 'a flat floor');
+    assert.ok(D.obstacles.some((o) => o.topBuffer != null && o.maxY === q.top && o.minX <= q.minX + 0.011 && o.maxX >= q.maxX - 0.011 && o.minZ <= q.minZ + 0.011 && o.maxZ >= q.maxZ - 0.011), `the floor at model (${MX(q.minX).toFixed(2)}, ${MZ(q.minZ).toFixed(2)}), ${(q.top / 4).toFixed(2)} m, lies on a box's top`);
+    const x0 = MX(q.minX), x1 = MX(q.maxX), z0 = MZ(q.minZ), z1 = MZ(q.maxZ);
+    assert.ok((x0 >= 9.49 && x1 <= 13.40 && z0 >= 29.66 && z1 <= 30.58) || (x0 >= 10.52 && x1 <= 16.36 && z0 >= 46.65 && z1 <= 47.57), `the floor at model (${x0.toFixed(2)}..${x1.toFixed(2)}, ${z0.toFixed(2)}..${z1.toFixed(2)}) lies beside one of the two legs`);
+  }
+  // (from, the heading in degrees, how; the side of the rail the body must end on: north of z 29.9 is the street beyond the first, south of z 48.0 the street beyond the second's deck)
+  const RUNS = [
+    ['the east inner ramp, down it and north-west', [12.06, 30.87, 11.08], 225, 'walk'], ['the east inner ramp, down it and north-north-west', [11.06, 30.87, 10.08], 247, 'walk'],
+    ['the east inner ramp, from its top', [13.06, 30.87, 12.09], 202, 'walk'], ['the east inner ramp, up it and north-east', [10.06, 30.87, 9.08], 315, 'walk'], ['the east inner ramp, up it and north-north-east', [11.06, 30.87, 10.08], 293, 'walk'],
+    ['the east inner ramp, a dodge north-west', [12.06, 30.87, 11.08], 225, 'dodge'], ['the east inner ramp, a dodge north-north-west', [11.06, 30.87, 10.08], 247, 'dodge'],
+    ['the ramp east of the 8.6 m deck, down it and south', [12.06, 44.87, 7.65], 68, 'walk'], ['the ramp east of the 8.6 m deck, across it', [14.06, 44.87, 6.70], 113, 'walk'], ['the ramp east of the 8.6 m deck, down it and south, lower', [13.06, 45.87, 7.17], 68, 'walk'],
+    ['the ramp east of the 8.6 m deck, a dodge south-east', [11.06, 45.87, 8.12], 45, 'dodge'], ['the ramp east of the 8.6 m deck, south-east to the deck\'s edge', [12.06, 46.87, 7.65], 45, 'walk'],
+  ];
+  for (const [name, from, deg, how] of RUNS) { const r = ran(from, heading(from, deg), how);
+    assert.ok(r.fall < 1.2 && (from[1] < 40 ? r.z > 29.9 : r.z < 48.0), `${name}, a ${how}: the body is held on the ramp's side (its greatest fall ${r.fall.toFixed(2)} m, it ends at (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m)`); }
+});
+
+// THE LEG CARRIED ON (b1105kq). The leg beside the ramp east of the 8.6 m deck ended where the frame beside the ramp is still 0.64 m over the 5.78 m deck: a body that
+// sprinted down along it came round its end 0.9 m over the deck and was over the deck's own rail, half a metre on, before it was down — 16 sprints of the bodies' scan
+// went to the street, 6.6 m. Carried on to the frame's end the leg lets the body down onto the deck, where the deck's rail holds it. (A sprint off a platform over a rail
+// that goes down with a ramp is over it still, at this ramp and at the others: the rail is 0.75 m tall.)
+test('the leg beside the ramp east of the 8.6 m deck goes on to the frame\'s end, and a sprint down along it comes to stand on the 5.78 m deck behind the deck\'s rail', () => {
+  const more = getArena('neon').obstacles.filter((o) => isRail(o) && MZ(o.minZ) > 47.55 && MZ(o.maxZ) < 47.63 && MX(o.minX) > 15.12 && MX(o.maxX) < 16.07);
+  assert.ok(more.length >= 2 && Math.abs(more.reduce((s, o) => s + long(o), 0) - 0.93) < 0.02, `the leg's boxes from x 15.13 to 16.06: ${more.length}, ${more.reduce((s, o) => s + long(o), 0).toFixed(2)} m`);
+  for (const [from, ticks] of [[[10.06, 44.87, 8.64], 90], [[9.06, 45.87, 8.64], 100], [[11.06, 43.87, 8.12], 80]]) { const r = ran(from, heading(from, 45), 'sprint', -1, ticks);
+    assert.ok(r.fall < 1.2 && Math.abs(r.feet - 5.78) < 0.03 && r.x > 16.06 && r.z < 48.06, `a sprint south-east from (${from[0]}, ${from[1]}): on the deck behind its rail after ${ticks} ticks (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m, its greatest fall ${r.fall.toFixed(2)} m`); }
 });
 
 // THE STRIP'S SOUTH RAIL IS NOT HOPPED. It is 1.5 m between the bridge's end and the north way's platform, where a bot that comes out of the bridge walked off to the
