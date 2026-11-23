@@ -9,7 +9,7 @@
 // to the user's own end with the stick alone, no tick of it in the air; out of the bridge and back in by the little ramp the
 // same, and up and down the unseen slope; one walk from the first scaffold's top over the bridge to the second's; a body
 // walked at a rail is held at it; the route grid has no drop from the bridge's floor over a sill, a bot in the bridge comes
-// to sight of a target on the decks below, and no body stands in a wall on the floors carried to the walls; where the stub stood, a body stands. A reading of Neon's data made again from the model has
+// to sight of a target on the decks below, and no body stands in a wall on the floors carried to the walls; where the stub stood, nothing holds a body but the deck's low rail (b1105ko, neon_rails.test.js). A reading of Neon's data made again from the model has
 // none of this: the tool is run after it, and these fail until it has been. (The routes over the ways are asked of the route
 // grid in pads.test.js, and there a bot moved onto the tower top stays up there.)
 import '../tools/maps/arena_files.mjs';
@@ -177,9 +177,13 @@ test('the floors carried to the walls are no floor for a body: one that walks no
   assert.equal(inWall.length, 0, `bodies that came to stand in a wall at the bridge's floor's height: ${inWall.slice(0, 4).join('; ')}`);
 });
 
-test('the stub of a railing at the catwalk\'s joint is gone: a body stands where it stood', () => {
+// (b1105ko: the deck's west edge runs through the stub's place, and its low rail — neon_rails.mjs: 0.75 m tall, a box that holds a body alone, topBuffer 2 — stands along it.
+// The stub's panel stood to 11.25 m; what holds a body there now is that rail and nothing else, and a body 0.8 m up is free.)
+test('the stub of a railing at the catwalk\'s joint is gone: where it stood nothing holds a body but the deck\'s own low rail', () => {
   const a = getArena('neon'); const x = AX(5.81), z = AZ(33.74);   // (its panel's box was model x 5.56..6.06, z 33.37..34.10, from 8.75 m to 11.25 m)
   const floor = groundHeightAt(x, z, a.surfaces, 8.64 * 4 + 0.5);
   assert.ok(Math.abs(floor / 4 - 8.64) < 0.02, `the walkway's floor there: ${(floor / 4).toFixed(2)} m`);
-  assert.ok(!unitOverlapsObstacle(x, floor + G, z, a.obstacles), 'no box holds a body on it');
+  const lowRail = (o) => o.noProjectile === true && o.topBuffer === 2 && o.maxY <= floor + 3.01;
+  assert.ok(!unitOverlapsObstacle(x, floor + G, z, a.obstacles.filter((o) => !lowRail(o))), 'no box but the low rail holds a body on it');
+  assert.ok(!unitOverlapsObstacle(x, floor + 3.2 + G, z, a.obstacles), 'and none holds a body 0.8 m up, where the panel stood');
 });

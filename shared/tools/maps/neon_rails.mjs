@@ -1,0 +1,201 @@
+// NEON'S LOW RAILS (b1105ko, 2026-11-23): low rails along the open edges of the scaffold complex's platforms and along the open sides of its ramps, in the data.
+// The user, of a way to make a fight on the platforms last ("Currently the BOT does go on the platform to engage, but the defense sprint takes them down real quick.",
+// "sometimes not only the defense sprint, but also the natural engaging orbiting takes BOT down.", "one thing i don't like about fences is that it blocks the bullets so the
+// high ground advantage is kind of lost."), with a picture of Town's low railing: "how about the mini fences used in town?", "do it on PT", "can you make these mini fences
+// passable for bullets? both in town and neon." Then, of the first forms on the PT site: "In Neion, can the mini fences be mounted on the scaffolding slopes?", "edges already
+// have scaffolding walls mounted do not need extra mini fences.", "mini fence around here as well. (The slope inside the catwalk does not need mini fence.)", "mini fence at
+// these three edges as well.", "No need mini fences at this one platform top.", "Then update Neon and Town to 9.9".
+// usage: node neon_rails.mjs <tree root> <in neon_data.json> <out neon_data.json> <out pieces.json>
+//        then glb_rails.mjs <in neon.glb> <out neon.glb> <pieces.json> for the model, and navgrid_build.mjs <tree root> neon for the route grid.
+// A RAIL stands ON the floor with its outer face on the edge's line: 6 cm through and 0.75 m tall (under the page's fade height of 0.8 m, so a rail never goes see-through).
+// In the data it is a box that holds a body alone (noProjectile: rounds, beams and the bots' sight pass it; it is no cover), from 0.25 m over the floor to the rail's top,
+// with a topBuffer of 2: a body is held while its feet are under 0.64 m over the floor (one on a ramp's side frame, 0.46 m up, too), so a walk, a sprint and a dodge are
+// held and a jump clears it. In the model it is posts 6 cm square, no more than 2 m apart, under a bar 5 cm tall; a run is one object.
+// Where the rails go is found, not listed: (1) the flat floors' open edges are read off the data without rails, (2) those rails are put in, and (3) the ramps' sides are
+// TRIED on the sim with them in place. A rail of an earlier run is known by its flags and its thickness (no new key in the data; no box of the map without rails has a
+// topBuffer of 2 or 12) and is taken out first, so a run on its own output writes the same file. What is written is put at the end of the boxes; the file's other text is
+// kept byte for byte.
+import { pathToFileURL } from 'node:url'; import path from 'node:path'; import fs from 'node:fs';
+const [treeA, inF, outF, piecesF] = process.argv.slice(2); if (!piecesF) { console.error('usage: node neon_rails.mjs <tree root> <in neon_data.json> <out neon_data.json> <out pieces.json>'); process.exit(2); }
+// the rail (metres): through, tall, the bar's height, a post's reach under the floor's top, the posts' greatest pitch; the model's height of the street; where the hold begins
+// over the floor; the two holds (BUFFER_NO_HOP: a rail no jump clears — NO_HOP below); the model's colour (linear: the scaffold's dark steel)
+const T = 0.06, TALL = 0.75, BAR = 0.05, FOOT = 0.03, PITCH = 2.0, GROUND = 4.2927, HOLD_FROM = 0.25, BUFFER = 2, BUFFER_NO_HOP = 12, COLOR = [0.051, 0.073, 0.077];
+const isRail = (o) => o.noProjectile === true && (o.topBuffer === BUFFER || o.topBuffer === BUFFER_NO_HOP) && Math.min(o.maxX - o.minX, o.maxZ - o.minZ) < T * 4 + 1e-3;
+const text = fs.readFileSync(inF, 'utf8'); const D = JSON.parse(text); if (JSON.stringify(D) !== text) throw new Error('the file does not come back the same from a read and a write');
+const before = D.obstacles.length; D.obstacles = D.obstacles.filter((o) => !isRail(o)); const taken = before - D.obstacles.length;
+const SIM = pathToFileURL(path.resolve(treeA) + '/shared/src/sim/').href; const A = await import(SIM + 'arena.js'); const C = await import(SIM + 'constants.js');
+const { createMatchState, tickMatch, emptyInput, getArena } = await import(SIM + 'index.js'); const { navGridFor } = await import(SIM + 'ai.js'); const P = await import(SIM + 'physics.js');
+const G = C.GROUND_BASE_Y, R = C.FIGHTER_RADIUS, STEP = C.SURFACE_STEP_HEIGHT, DT = C.TICK_DT, MS = C.TICK_RATE_MS; const MX = (u) => u / 4 - 12.44, MZ = (u) => u / 4 + 40.37, AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4; const r4 = (v) => Math.round(v * 1e4) / 1e4;
+const arenaNow = () => { A.registerGeneratedData('neon', JSON.parse(JSON.stringify(D))); return getArena('neon'); };   // (the sim reads a copy of the data as it stands: what it marks on a box stays out of the file)
+
+// 1. THE FLAT FLOORS' OPEN EDGES. Along every open edge of the flat floors of the scaffold complex that a unit stands on — a side of a floor's rectangle beyond which the
+// ground drops 2.4 m or more, with no floor going on within a step's height across a gap, no wall there already and a floor at least 1.6 m deep behind it — a run of rail:
+// its outer face on the floor's own edge line. Runs on one line are joined, a gap narrower than a body bridged, a run shorter than a body dropped.
+function flatRuns(arena) {
+  const REGION = [-14, 22, 16, 60], UP = 4.5, DROP = 2.4 * 4, NARROW_FLOOR = 6.4;   // (the scaffold complex in model metres; a raised floor; an open edge's drop, units)
+  const g = navGridFor(arena);   // (the route grid of the data without rails, built here: about ten seconds)
+  // the raised places a unit comes to: from the street by the grid's walk links and its jump and drop links
+  let s0 = -1, best = 1e9; for (let i = 0; i < g.N; i += 1) { if (g.floor[i] / 4 > 1) continue; const d = Math.hypot(MX(g.posX[i]) - 0, MZ(g.posZ[i]) - 45); if (d < best) { best = d; s0 = i; } }
+  const seen = new Uint8Array(g.N); const q = [s0]; seen[s0] = 1; for (let h = 0; h < q.length; h += 1) { const n = q[h]; for (let k = g.walkStart[n]; k < g.walkStart[n + 1]; k += 1) { const m = g.walkAdj[k]; if (!seen[m]) { seen[m] = 1; q.push(m); } } for (let k = g.linkStart[n]; k < g.linkStart[n + 1]; k += 1) { const m = g.linkAdj[k]; if (!seen[m]) { seen[m] = 1; q.push(m); } } }
+  const inReg = (x, z) => MX(x) >= REGION[0] && MX(x) <= REGION[1] && MZ(z) >= REGION[2] && MZ(z) <= REGION[3];
+  const nodes = q.filter((n) => g.floor[n] / 4 >= UP && inReg(g.posX[n], g.posZ[n])).map((n) => ({ x: g.posX[n], z: g.posZ[n], f: g.floor[n] }));
+  const cellKey = (x, z) => `${Math.floor(x / 8)},${Math.floor(z / 8)}`; const nb = new Map(); for (const n of nodes) { const k = cellKey(n.x, n.z); if (!nb.has(k)) nb.set(k, []); nb.get(k).push(n); }
+  const stoodNear = (x, z, h, nx, nz) => { for (let i = -1; i <= 1; i += 1) for (let j = -1; j <= 1; j += 1) { const l = nb.get(`${Math.floor(x / 8) + i},${Math.floor(z / 8) + j}`); if (!l) continue; for (const n of l) { if (Math.abs(n.f - h) > 0.3) continue; const dx = n.x - x, dz = n.z - z; if (dx * dx + dz * dz > 36) continue; if (dx * nx + dz * nz < 0.5) return true; } } return false; };
+  const flats = arena.surfaces.filter((s) => s.type === 'flat' && s.maxTop / 4 >= UP && s.maxX > AX(REGION[0]) && s.minX < AX(REGION[1]) && s.maxZ > AZ(REGION[2]) && s.minZ < AZ(REGION[3]));
+  // AN EDGE WITH A WALL (user 2026-11-23, of the rails inside the scaffold's cage: "edges already have scaffolding walls mounted do not need extra mini fences"): a body falls
+  // when its MIDDLE passes the floor's edge, so the edge is walled where a box holds a body whose middle is at the edge (just past it: 0.05 units), or holds it before it gets
+  // there. The first plan asked only for a box 0.3 units before the edge; the cage's walls stand on a foot beam that holds a body 4 cm before the floor's edge, so the floor's last
+  // 10 cm read as open and a rail was planned along a wall.
+  // And a wall one SEES there: a box that rises 1.2 m or more over the floor within 0.8 m beyond the edge (a building's face half a metre off a platform: a body's middle can pass
+  // the edge into the slot between them, but a rail in front of a wall is the extra fence the user means).
+  const seenWall = (x, z, h, nx, nz) => { for (let d = 0.2; d <= 3.21; d += 0.2) { const px = x + nx * d, pz = z + nz * d; if (arena.obstacles.some((o) => o.maxY >= h + 4.8 && o.minY <= h + 3.2 && px >= o.minX - 0.01 && px <= o.maxX + 0.01 && pz >= o.minZ - 0.01 && pz <= o.maxZ + 0.01)) return true; } return false; };
+  const walled = (x, z, h, nx, nz) => P.unitOverlapsObstacle(x - nx * 0.3, h + G, z - nz * 0.3, arena.obstacles, R) || P.unitOverlapsObstacle(x + nx * 0.05, h + G, z + nz * 0.05, arena.obstacles, R) || seenWall(x, z, h, nx, nz);
+  const open = (x, z, h, nx, nz) => { if (!inReg(x, z) || !stoodNear(x, z, h, nx, nz)) return false;
+    if (P.groundHeightAt(x + nx * 0.3, z + nz * 0.3, arena.surfaces, h) > h - DROP) return false;                 // (beyond the edge: a drop of 2.4 m or more)
+    for (const d of [0.8, 1.3, 1.8]) if (P.groundHeightAt(x + nx * d, z + nz * d, arena.surfaces, h) >= h - STEP - 0.01) return false;   // (a floor goes on across a gap: no rail across a way)
+    if (walled(x, z, h, nx, nz)) return false;
+    for (let d = 0.4; d < NARROW_FLOOR; d += 0.4) if (P.groundHeightAt(x - nx * d, z - nz * d, arena.surfaces, h) < h - STEP - 0.01) return false;   // (the floor itself ends within 1.6 m behind the edge: a beam's top, a ledge along a wall — no platform)
+    return true; };
+  const SAMPLE = 0.25, BODY = 2 * R; const raw = [];
+  for (const s of flats) { const h = s.maxTop;
+    for (const side of [{ axis: 'x', c: s.minZ, n: -1, a: s.minX, b: s.maxX }, { axis: 'x', c: s.maxZ, n: 1, a: s.minX, b: s.maxX }, { axis: 'z', c: s.minX, n: -1, a: s.minZ, b: s.maxZ }, { axis: 'z', c: s.maxX, n: 1, a: s.minZ, b: s.maxZ }]) {
+      const N = Math.max(1, Math.round((side.b - side.a) / SAMPLE)); let from = null;
+      for (let i = 0; i <= N; i += 1) { const t = side.a + (side.b - side.a) * i / N; const o = side.axis === 'x' ? open(t, side.c, h, 0, side.n) : open(side.c, t, h, side.n, 0);
+        if (o && from == null) from = t; if ((!o || i === N) && from != null) { const to = o ? t : side.a + (side.b - side.a) * (i - 1) / N; if (to > from) raw.push({ h, axis: side.axis, c: side.c, n: side.n, from, to }); from = null; } } } }
+  // THE PLATFORMS (model metres: x0, x1, z0, z1, h0, h1): the two scaffolds with their decks, top platforms and the north way's landing; the strip at the tower top's level; the
+  // south way's walkway. Not the bridge's tube (its floor, its ends, its window sills, the little slopes in it), not a building's roof, not the landings of the ramps up from the street.
+  // The strip and the walkway were left out of the first build on PT: a bot that comes up by a transporter goes down from those two by walking off their edge, and a route's last
+  // step is walked, never jumped (nbrain.js truncateAtFiringPoint: the cut's own waypoint carries no jump), so a rail there holds it (b1105kl's scan of a bot in the bridge and a target on the decks below: 18 runs
+  // never arrive of 450 before, 44 of 438 with rails on those two). The user, told so, on PT's b1105kn, standing on the walkway and at three edges of the strip: "mini fence around here as well. (The slope inside
+  // the catwalk does not need mini fence.)", "mini fence at these three edges as well." — and of the cage's roof: "No need mini fences at this one platform top." (the SKIP below).
+  const ZONES = [[-13.6, 20.8, 21.4, 49.0, 5.5, 19.5], [-13.6, 10, 15, 26, 20.9, 21.6], [8.9, 17.6, 45.8, 58.0, 21.7, 22.0]];
+  const SKIP = [[-3.7, 2.8, 33.1, 39.6, 12.5, 13.1]];   // (the west cage's roof)
+  // A RAIL THAT IS NOT HOPPED (model metres, as SKIP): the strip's south edge, 1.5 m between the bridge's end and the tower. It is where a bot that comes out of the bridge walks off
+  // to the decks 12.6 m below (the user's own case of b1105kl: a target under the strip, the bot held in the bridge before); a rail a jump clears is a lip to the route grid, the
+  // drop over it stays in the grid, the bot's route still ends with it and the bot stands held at the rail (neon_ways.test.js's case of it failed; a scan of 438 runs from the
+  // bridge to the decks below went from 20 never to 44). Given a hold too tall for a jump (BUFFER_NO_HOP above) the rail is a wall to the grid: no drop over it,
+  // and the bot goes round — sight of that target after 3.6 s, the scan 23 never of 438. The one rail of the map a body cannot jump.
+  const NO_HOP = [[-2.2, -0.3, 24.3, 24.9, 21.0, 21.5]];
+  const inZone = (xm, zm, hm) => ZONES.some(([x0, x1, z0, z1, h0, h1]) => xm >= x0 && xm <= x1 && zm >= z0 && zm <= z1 && hm >= h0 && hm <= h1);
+  const mid = (r) => r.axis === 'x' ? [MX((r.from + r.to) / 2), MZ(r.c)] : [MX(r.c), MZ((r.from + r.to) / 2)];
+  let R0 = raw.filter((r) => { const [xm, zm] = mid(r); return r.to - r.from >= 2 && inZone(xm, zm, r.h / 4); });   // (a sliver under half a metre, a corner's leftover, is no edge of its own)
+  // floor levels within 0.25 m of each other are one platform's (a deck and the frame tops in it); a platform has 12 m2 of floor or more (a ramp's steps have not)
+  const zf = flats.filter((s) => inZone(MX((s.minX + s.maxX) / 2), MZ((s.minZ + s.maxZ) / 2), s.maxTop / 4)); const hs = [...new Set(zf.map((s) => +s.maxTop.toFixed(2)))].sort((a, b) => a - b);
+  const clusterOf = new Map(); let cid = -1, prev = -1e9; for (const h of hs) { if (h - prev > 1.0) cid += 1; clusterOf.set(h, cid); prev = h; }
+  const area = new Map(); for (const s of zf) { const c = clusterOf.get(+s.maxTop.toFixed(2)); area.set(c, (area.get(c) ?? 0) + (s.maxX - s.minX) * (s.maxZ - s.minZ) / 16); }
+  const cl = (h) => clusterOf.get(+h.toFixed(2)); R0 = R0.filter((r) => cl(r.h) != null && area.get(cl(r.h)) >= 12);
+  // runs of one platform's side whose lines lie within 0.6 m and whose ends are within 1.25 m: one rail, on the line that is farthest IN (so that it stands on floor all along)
+  const JOIN = 5.0, NEARLINE = 2.4; const groups = new Map(); for (const r of R0) { const k = `${cl(r.h)}|${r.axis}|${r.n}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  let merged = []; for (const l of groups.values()) { const par = l.map((_, i) => i); const find = (i) => par[i] === i ? i : (par[i] = find(par[i]));
+    for (let i = 0; i < l.length; i += 1) for (let j = i + 1; j < l.length; j += 1) { const a = l[i], b = l[j]; if (Math.abs(a.c - b.c) > NEARLINE) continue; const gap = Math.max(a.from, b.from) - Math.min(a.to, b.to); if (gap <= JOIN) par[find(i)] = find(j); }
+    const comp = new Map(); l.forEach((r, i) => { const k = find(i); if (!comp.has(k)) comp.set(k, []); comp.get(k).push(r); });
+    for (const rs of comp.values()) { const n = rs[0].n; merged.push({ h: Math.max(...rs.map((r) => r.h)), axis: rs[0].axis, n, c: ((big) => n > 0 ? Math.min(...big.map((r) => r.c)) : Math.max(...big.map((r) => r.c)))(rs.some((r) => r.to - r.from >= 4) ? rs.filter((r) => r.to - r.from >= 4) : rs),   // (the line: the one farthest in among the pieces a metre long or more)
+         from: Math.min(...rs.map((r) => r.from)), to: Math.max(...rs.map((r) => r.to)), parts: rs.length }); } }
+  // a floor narrower than 1.6 m between two rails that face away from each other: no rail on either side there (a beam, a ledge: the rails would close it)
+  const NARROW = 6.4; const cutOut = (r, a, b) => (b <= r.from || a >= r.to) ? [r] : [{ ...r, to: Math.min(r.to, a) }, { ...r, from: Math.max(r.from, b) }].filter((q) => q.to - q.from > 0.01);
+  const strips = []; { let again = true; while (again) { again = false; outer: for (let i = 0; i < merged.length; i += 1) for (let j = 0; j < merged.length; j += 1) { const a = merged[i], b = merged[j]; if (i === j || a.axis !== b.axis || a.n !== 1 || b.n !== -1 || Math.abs(a.h - b.h) > 1.0) continue;
+        const w = a.c - b.c; if (w <= 0 || w >= NARROW) continue; const lo = Math.max(a.from, b.from), hi = Math.min(a.to, b.to); if (hi - lo <= 0.01) continue;
+        strips.push({ axis: a.axis, lo, hi, c0: b.c, c1: a.c, h: a.h }); merged = merged.filter((_, k) => k !== i && k !== j).concat(cutOut(a, lo, hi), cutOut(b, lo, hi)); again = true; break outer; } } }
+  // (and the narrow floor's end: a rail across the end of a floor whose sides have none)
+  merged = merged.filter((r) => !strips.some((t) => t.axis !== r.axis && Math.abs(t.h - r.h) <= 1.0 && r.c >= t.lo - 2.4 && r.c <= t.hi + 2.4 && r.from >= t.c0 - 0.5 && r.to <= t.c1 + 0.5));
+  merged = merged.filter((r) => r.to - r.from >= BODY);
+  // at a corner the two rails meet: an end within 0.6 m of a crossing rail's line is carried to it
+  for (const r of merged) for (const o of merged) { if (o.axis === r.axis || Math.abs(o.h - r.h) > 1.0) continue; if (r.c < o.from - 2.4 || r.c > o.to + 2.4) continue;
+    if (Math.abs(r.from - o.c) <= 2.4) r.from = o.c; if (Math.abs(r.to - o.c) <= 2.4) r.to = o.c; }
+  // the skip boxes cut out
+  const skip = SKIP; let runs = []; for (const r of merged) { let parts = [[r.from, r.to]];
+    for (const [x0, x1, z0, z1, h0, h1] of skip) { if (r.h / 4 < h0 || r.h / 4 > h1) continue; const lo = r.axis === 'x' ? AX(x0) : AZ(z0), hi = r.axis === 'x' ? AX(x1) : AZ(z1), c0 = r.axis === 'x' ? AZ(z0) : AX(x0), c1 = r.axis === 'x' ? AZ(z1) : AX(x1); if (r.c < c0 || r.c > c1) continue;
+      parts = parts.flatMap(([a, b]) => (hi <= a || lo >= b) ? [[a, b]] : [[a, Math.min(b, lo)], [Math.max(a, hi), b]].filter(([p, t]) => t - p > 0.01)); }
+    for (const [a, b] of parts) runs.push({ ...r, from: a, to: b }); }
+  // (a short run across the END of a narrow floor — the floor ends beyond both its ends — is no rail: a beam's end)
+  const endsOpen = (r) => { const at = (t) => (r.axis === 'x' ? [t, r.c - r.n * 0.3] : [r.c - r.n * 0.3, t]); const gone = (t) => { const [x, z] = at(t); return P.groundHeightAt(x, z, arena.surfaces, r.h) < r.h - STEP - 0.01; }; return gone(r.from - 0.4) && gone(r.to + 0.4); };
+  const noHop = (r) => { const [xm, zm] = mid(r), hm = r.h / 4; return NO_HOP.some(([x0, x1, z0, z1, h0, h1]) => xm >= x0 && xm <= x1 && zm >= z0 && zm <= z1 && hm >= h0 && hm <= h1); };
+  runs = runs.filter((r) => r.to - r.from >= BODY && !(r.to - r.from < NARROW_FLOOR && endsOpen(r))).map((r) => ({ h: +r.h.toFixed(4), axis: r.axis, c: +r.c.toFixed(4), n: r.n, from: +r.from.toFixed(4), to: +r.to.toFixed(4), ...(noHop(r) ? { noHop: true } : {}) }));
+  const len = runs.reduce((s, r) => s + (r.to - r.from) / 4, 0); const lv = new Map(); for (const r of runs) { const k = (r.h / 4).toFixed(2); lv.set(k, (lv.get(k) ?? 0) + (r.to - r.from) / 4); }
+  console.log(`flat floors ${flats.length}, raised places a unit comes to ${nodes.length}: ${runs.length} runs, ${len.toFixed(1)} m; by floor height (m): ${[...lv.entries()].sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}: ${v.toFixed(1)}`).join(', ')}`);
+  return runs.map((r) => ({ h: +(r.h / 4).toFixed(3), axis: r.axis, c: +(r.axis === 'x' ? MZ(r.c) : MX(r.c)).toFixed(3), n: r.n, from: +(r.axis === 'x' ? MX(r.from) : MZ(r.from)).toFixed(3), to: +(r.axis === 'x' ? MX(r.to) : MZ(r.to)).toFixed(3), ...(r.noHop ? { noHop: true } : {}) }));   // (model metres from here on)
+}
+
+// 3. THE RAMPS' SIDES, BY TRIAL (user 2026-11-23: "can the mini fences be mounted on the scaffolding slopes?"). A ramp of the scaffold is a sloped floor with a frame beside
+// it: strips a body walks on, kerbs that hold a body standing beside them and let one pass that comes off the higher ramp (a box holds a body only while its feet are 0.41 m
+// or more under the box's top), and next to two ramps a deck's edge whose own rail a body flies over when it leaves the ramp 0.75 m or more above the deck. Reading that off
+// the boxes went wrong twice, so the side is tried: at every quarter metre of a sloped floor's side a body is set on the floor inside and run outward, at a walk and at a
+// sprint, with the flat rails in place. Where it comes to be 2.4 m or more lower within 3 m of the side, the side is open there and gets a rail: along the outer edge of
+// whatever floor goes on beside the ramp at its level (the frame's strip), from the lower of the two floors to the rail's height over the higher. The two ways up to the
+// bridge have tall rails of their own (neon_ways_up.mjs): a body is held there, and nothing comes out for them. So with the little slopes inside the bridge: they lie
+// outside the trial's zone.
+function slopeLegs(arena) {
+  const SREG = [-22, 27, 16, 60], SZONE = [-21.5, 26.5, 21.4, 49.0, 1.0, 19.5], DROP = 9.6, SAMPLE = 1, BODY = 2 * R, INSIDE = 3, NEAR = 12;
+  // a body run outward from a place: where it comes to stand, and where it last stood before it went down
+  const run = (x, z, h, nx, nz, sprint) => { const m = createMatchState({ mapKey: 'neon', mode: '1v1', p1UnitKey: 'unit1', p2UnitKey: 'unit1', startTime: 1000 }); const p = m.fighters.p1; for (const q of Object.values(m.fighters)) { q.hp = 1e9; q.invulnerableUntil = 0; }
+    p.pos = { x, y: h + G, z }; p.floorY = p.pos.y; let now = 1000, last = { x, z }, down = null;
+    for (let t = 0; t < 84 && !down; t += 1) { now += MS; m.tick = (m.tick ?? 0) + 1; const inp = emptyInput(); inp.moveX = nx; inp.moveZ = nz; if (sprint) { inp.boost = true; inp.sprintLocked = true; } tickMatch(m, { p1: inp, p2: emptyInput() }, now, DT, []);
+      const feet = p.pos.y - G; if (feet <= h - DROP) down = { ...last }; else if (!p.airborne) last = { x: p.pos.x, z: p.pos.z }; }   // (2.4 m under where it set out, in the air or on a floor: it went down; where it last stood is where)
+    return down; };
+  // (nine run-ups, 0.5 m to 2.5 m: a kerb beside a ramp holds or lets pass by how the body meets it — at one place a sprint from 1.1 m went over and from 0.75 m and 1.5 m did not)
+  const tried = (x, z, h, nx, nz) => { for (const ins of [2, INSIDE, 4, 4.5, 5, 6, 7, 8, 10]) { const sx = x - nx * ins, sz = z - nz * ins; const hs = P.groundHeightAt(sx, sz, arena.surfaces, h + 0.5); if (Math.abs(hs - h) > 1.6 || P.unitOverlapsObstacle(sx, hs + G, sz, arena.obstacles, R)) continue;
+      for (const sprint of [false, true]) { const d = run(sx, sz, hs, nx, nz, sprint); if (d && (d.x - x) * nx + (d.z - z) * nz <= NEAR) return true; } } return false; };
+  // the outer edge of the floor that goes on beside the side at its level
+  const strip = (x, z, h, nx, nz) => { let hc = h, dE = 0, lo = h, hi = h; for (let d = 0.1; d <= 4.0001; d += 0.1) { const gh = P.groundHeightAt(x + nx * d, z + nz * d, arena.surfaces, hc); if (gh < hc - STEP - 0.01) break; hc = gh; dE = d; lo = Math.min(lo, gh); hi = Math.max(hi, gh); } return { d: dE >= 3.95 ? 0 : dE + (dE > 0 ? 0.05 : 0), lo, hi }; };
+  const planes = arena.surfaces.filter((s) => s.type === 'plane' && s.maxX > AX(SREG[0]) && s.minX < AX(SREG[1]) && s.maxZ > AZ(SREG[2]) && s.minZ < AZ(SREG[3]) && Math.min(s.maxX - s.minX, s.maxZ - s.minZ) >= 2);
+  let sraw = []; let samples = 0, opens = 0;
+  for (const s of planes) { const alongX = Math.abs(s.gx) >= Math.abs(s.gz); const rise = alongX ? Math.abs(s.gx) * (s.maxX - s.minX) : Math.abs(s.gz) * (s.maxZ - s.minZ); if (rise < 1.2) continue;
+    if (Math.min(Math.abs(s.gx), Math.abs(s.gz)) * (alongX ? s.maxZ - s.minZ : s.maxX - s.minX) > 0.4) continue;
+    const mx = MX((s.minX + s.maxX) / 2), mz = MZ((s.minZ + s.maxZ) / 2), mh = s.heightAt((s.minX + s.maxX) / 2, (s.minZ + s.maxZ) / 2) / 4; if (mx < SZONE[0] || mx > SZONE[1] || mz < SZONE[2] || mz > SZONE[3] || mh < 0.5 || mh > SZONE[5]) continue;
+    for (const side of (alongX ? [{ axis: 'x', c: s.minZ, n: -1, a: s.minX, b: s.maxX }, { axis: 'x', c: s.maxZ, n: 1, a: s.minX, b: s.maxX }] : [{ axis: 'z', c: s.minX, n: -1, a: s.minZ, b: s.maxZ }, { axis: 'z', c: s.maxX, n: 1, a: s.minZ, b: s.maxZ }])) {
+      const hAt = (t) => side.axis === 'x' ? s.heightAt(t, side.c) : s.heightAt(side.c, t); const N = Math.max(1, Math.round((side.b - side.a) / SAMPLE)); const res = [];
+      for (let i = 0; i <= N; i += 1) { const t = side.a + (side.b - side.a) * i / N; const hr = hAt(t); const [x, z, nx, nz] = side.axis === 'x' ? [t, side.c, 0, side.n] : [side.c, t, side.n, 0]; samples += 1;
+        // (a floor of the same slope goes on beside this one: the side is no side — the ramp's other part is tried on its own)
+        const beside = arena.surfaces.some((q) => q !== s && q.type === 'plane' && x + nx * 0.2 >= q.minX && x + nx * 0.2 <= q.maxX && z + nz * 0.2 >= q.minZ && z + nz * 0.2 <= q.maxZ && Math.abs(q.heightAt(x + nx * 0.2, z + nz * 0.2) - hr) < 0.6 && Math.min(q.maxX - q.minX, q.maxZ - q.minZ) >= 2);
+        if (beside || !tried(x, z, hr, nx, nz)) { res.push({ t, hr, no: true }); continue; } const e = strip(x, z, hr, nx, nz); opens += 1; res.push({ t, hr, d: e.d, lo: Math.min(e.lo, hr), hi: Math.max(e.hi, hr) }); }
+      for (let i = 0; i < res.length; i += 1) { if (!res[i].no || i === 0 || res[i - 1].no) continue; let j = i; while (j < res.length && res[j].no) j += 1; if (j >= res.length) break;   // (a stretch narrower than a body between two open ones is open too)
+        if (res[j].t - res[i - 1].t <= BODY) for (let k = i; k < j; k += 1) res[k] = { t: res[k].t, hr: res[k].hr, d: Math.min(res[i - 1].d, res[j].d), lo: res[k].hr + Math.min(res[i - 1].lo - res[i - 1].hr, res[j].lo - res[j].hr), hi: res[k].hr + Math.max(res[i - 1].hi - res[i - 1].hr, res[j].hi - res[j].hr) }; i = j; }
+      let cur = null; const flush = () => { if (cur && cur.length > 1) { const ds = cur.map((p) => p.d).sort((a, b) => a - b), d = ds[ds.length >> 1]; /* (the line: the frame's outer edge as most of the side has it. On the ramp's own side line the frame's strip lay OUTSIDE the rail: a bot stepped onto it past the rail's end, went up its steps and off — 22 falls by the dodge in 1,120 lives at one ramp) */ const up = Math.max(...cur.map((p) => p.hi - p.hr)), dn = Math.min(...cur.map((p) => p.lo - p.hr)); const t0 = Math.max(side.a, cur[0].t - 1.2), t1 = Math.min(side.b, cur[cur.length - 1].t + 1.2); /* (0.3 m more at each end, as far as the sloped floor goes: a body that slides along a rail goes round its end) */
+          sraw.push({ axis: side.axis, c: side.c + side.n * d, n: side.n, from: t0, to: t1, h0: hAt(t0) + up, h1: hAt(t1) + up, lo0: hAt(t0) + dn, lo1: hAt(t1) + dn, wid: alongX ? s.maxZ - s.minZ : s.maxX - s.minX }); } cur = null; };
+      for (const e of res) { if (!e.no) { (cur ??= []).push(e); } else flush(); } flush(); } }
+  // one frame edge found from two floors: the one found from the wider floor is kept
+  sraw.sort((a, b) => b.wid - a.wid); { const kept = []; for (const r of sraw) { if (kept.some((k) => k.axis === r.axis && k.n === r.n && Math.abs(k.c - r.c) <= 0.8 && Math.min(k.to, r.to) - Math.max(k.from, r.from) > 0.5 * (r.to - r.from))) continue; kept.push(r); } sraw = kept; }
+  // the pieces of one side that follow one another are one rail of several legs, made to meet; a rail shorter than a body is none
+  { const by = new Map(); for (const r of sraw) { const k = `${r.axis}|${r.n}`; if (!by.has(k)) by.set(k, []); by.get(k).push(r); } const keep = [];
+    for (const l of by.values()) { l.sort((a, b) => a.c - b.c || a.from - b.from); const used = new Set();
+      for (let i = 0; i < l.length; i += 1) { if (used.has(i)) continue; const chain = [l[i]]; used.add(i); let grown = true; while (grown) { grown = false; for (let j = 0; j < l.length; j += 1) { if (used.has(j)) continue; const last = chain[chain.length - 1], first = chain[0];
+            if (Math.abs(l[j].c - last.c) <= 2.4 && Math.abs(l[j].from - last.to) <= 1.2) { chain.push(l[j]); used.add(j); grown = true; } else if (Math.abs(l[j].c - first.c) <= 2.4 && Math.abs(l[j].to - first.from) <= 1.2) { chain.unshift(l[j]); used.add(j); grown = true; } } }
+        if (chain[chain.length - 1].to - chain[0].from < BODY) continue; const c = chain.reduce((b, r) => (r.to - r.from > b.to - b.from ? r : b)).c;   // (one line for the whole rail: its longest leg's)
+        for (let k = 0; k + 1 < chain.length; k += 1) { const u = chain[k], v = chain[k + 1]; const m = (u.to + v.from) / 2; const at = (r, t, a, b) => r[a] + (r[b] - r[a]) * (t - r.from) / (r.to - r.from);
+          const uh = at(u, m, 'h0', 'h1'), ul = at(u, m, 'lo0', 'lo1'), vh = at(v, m, 'h0', 'h1'), vl = at(v, m, 'lo0', 'lo1'); u.to = m; u.h1 = Math.max(uh, vh); u.lo1 = Math.min(ul, vl); v.from = m; v.h0 = Math.max(uh, vh); v.lo0 = Math.min(ul, vl); }
+        for (const r of chain) keep.push({ ...r, c }); } } sraw = keep; }
+  const slopes = sraw.map((r) => ({ axis: r.axis, c: +r.c.toFixed(4), n: r.n, from: +r.from.toFixed(4), to: +r.to.toFixed(4), h0: +r.h0.toFixed(4), h1: +r.h1.toFixed(4), lo0: +r.lo0.toFixed(4), lo1: +r.lo1.toFixed(4) }));
+  console.log(`sloped floors tried ${planes.length}, places tried ${samples}, open ${opens}: ${slopes.length} slope legs, ${slopes.reduce((s, r) => s + (r.to - r.from) / 4, 0).toFixed(1)} m along the ground`);
+  const mdl = (v, ax) => +(ax === 'x' ? MX(v) : MZ(v)).toFixed(3);
+  return slopes.map((r) => ({ axis: r.axis, c: +(r.axis === 'x' ? MZ(r.c) : MX(r.c)).toFixed(3), n: r.n, from: mdl(r.from, r.axis), to: mdl(r.to, r.axis), h0: +(r.h0 / 4).toFixed(3), h1: +(r.h1 / 4).toFixed(3), lo0: +(r.lo0 / 4).toFixed(3), lo1: +(r.lo1 / 4).toFixed(3) }));
+}
+
+const pieces = []; let posts = 0; const model = flatRuns(arenaNow());
+// 2. THE FLAT RUNS into the data and the pieces: a run is one box; in the model its posts and its bar
+for (const [i, r] of model.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T;   // (the band across: on the floor's side of the line)
+  const box = r.axis === 'x' ? { minX: AX(r.from), maxX: AX(r.to), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(r.from), maxZ: AZ(r.to) };
+  D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((r.h + HOLD_FROM) * 4), maxY: r4((r.h + TALL) * 4), topBuffer: r.noHop ? BUFFER_NO_HOP : BUFFER, noProjectile: true });
+  const y0 = r.h + GROUND - FOOT, y1 = r.h + GROUND + TALL; const boxes = []; const B = (a0, a1, ya, yb) => boxes.push(r.axis === 'x' ? { min: [a0, ya, p0], max: [a1, yb, p1] } : { min: [p0, ya, a0], max: [p1, yb, a1] });
+  const N = Math.max(1, Math.ceil((r.to - r.from - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (r.to - r.from - T) * k / N; B(a, a + T, y0, y1 - BAR); posts += 1; }
+  B(r.from, r.to, y1 - BAR, y1);
+  pieces.push({ name: `Rail_${String(i + 1).padStart(2, '0')}_${r.h.toFixed(2).replace('.', 'm')}`, h: r.h, boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })) }); }
+// 4. THE SLOPES' LEGS: the rail follows the slope. In the data a leg is a row of short boxes, each no longer than 0.5 m and rising no more than 0.25 m, from 0.25 m over the
+// frame's lowest floor at its ends to the rail's top over its highest (a body anywhere on the frame's strip is held; a jump clears it as on the flat). In the model a leg is
+// one object: upright posts no more than 2 m apart and a bar that leans with the slope.
+const modelSlopes = slopeLegs(arenaNow()); let sBoxes = 0, sPosts = 0;
+for (const [i, r] of modelSlopes.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
+  const K = Math.max(1, Math.ceil(Math.max(len / 0.5, Math.abs(r.h1 - r.h0) / 0.25)));
+  for (let k = 0; k < K; k += 1) { const a0 = r.from + len * k / K, a1 = r.from + len * (k + 1) / K; const box = r.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
+    D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: BUFFER, noProjectile: true }); sBoxes += 1; }
+  const boxes = [], hexa = []; const pt = (a, y, p) => (r.axis === 'x' ? [a, y, p] : [p, y, a]);
+  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const yb = Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
+    boxes.push(r.axis === 'x' ? { min: [a, yb, p0], max: [a + T, yt, p1] } : { min: [p0, yb, a], max: [p1, yt, a + T] }); sPosts += 1; }
+  const yA = hi(r.from) + GROUND + TALL, yB = hi(r.to) + GROUND + TALL;   // (the bar: a box sheared along the slope — upright ends, the top and the bottom parallel to the slope)
+  hexa.push([pt(r.from, yA - BAR, p0), pt(r.to, yB - BAR, p0), pt(r.to, yB - BAR, p1), pt(r.from, yA - BAR, p1), pt(r.from, yA, p0), pt(r.to, yB, p0), pt(r.to, yB, p1), pt(r.from, yA, p1)].map((v) => v.map(r4)));
+  pieces.push({ name: `Rail_${String(model.length + i + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
+fs.writeFileSync(outF, JSON.stringify(D)); fs.writeFileSync(piecesF, JSON.stringify({ color: COLOR, pieces }));
+const side = (r) => `at ${r.axis === 'x' ? 'z' : 'x'} ${r.c.toFixed(2)}, open to ${r.n > 0 ? '+' : '-'}${r.axis === 'x' ? 'z' : 'x'}`;   // (model metres)
+for (const r of model) console.log(`  flat, floor ${r.h.toFixed(2)} m: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}${r.noHop ? ' (not hopped)' : ''}`);
+for (const r of modelSlopes) console.log(`  slope: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}, the lower floor ${r.lo0.toFixed(2)}..${r.lo1.toFixed(2)} m, the higher ${r.h0.toFixed(2)}..${r.h1.toFixed(2)} m`);
+console.log(`${model.length} flat runs, ${model.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m: ${model.length} boxes, ${posts} posts and ${model.length} bars; ${modelSlopes.length} slope legs, ${modelSlopes.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m along the ground: ${sBoxes} boxes, ${sPosts} posts and ${modelSlopes.length} leaning bars`);
+console.log(`${outF}: ${taken} rails of an earlier run out, ${model.length + sBoxes} in, ${D.obstacles.length} boxes; ${piecesF}: ${pieces.length} pieces for the model`);
