@@ -10481,7 +10481,10 @@ const ARENA_SPAWNS = {
   // (35.5, 11.5) and three more, all on the street or the lots' paving. Set by spawn_set.mjs x,z,y on the solid reading's json —
   // the third number names the walked floor nearest the user's feet. A sixth, at the junction under the 12.9 m deck (model
   // (-1.1, 36.6)), came out the same day ("remove spot 3"). (The first set of eight, 2026-10-31, is gone.)
-  neon: { p1: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 }, p2: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 },
+  // The homes swapped (b1105kw, user 2026-11-24, "switch the initial spawn spots for team1 and team2 in Neon."): team 1 (p1) at the north-east
+  // place, model (35.5, 11.5), team 2 (p2) at the south-west one, model (-33.3, 52.2) — a 2v2 mate beside its own home as before (mateSpawnFor
+  // asks the home, not the slot); the five places, the Trio respawns' pool, unchanged.
+  neon: { p1: { x: 191.9, y: GROUND_BASE_Y, z: -115.3 }, p2: { x: -83.2, y: GROUND_BASE_Y + 0.61, z: 47.2 },
     more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
