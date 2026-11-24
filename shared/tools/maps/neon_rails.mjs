@@ -90,7 +90,7 @@ const arenaNow = () => { A.registerGeneratedData('neon', JSON.parse(JSON.stringi
 const FLAT_JOINTS = [
   ['x', 57.75, 'from', 8.84, 7.81, 'the walkway\'s south rail to the jamb of the bridge\'s last east window'],   // (the window's opening goes on 0.54 m south of the walkway's line, over the sill's end: a walk from the little slope or the sill went out there, 11.6 m down)
   ['x', 21.87, 'from', -8.63, -10.44, 'the first top platform\'s north rail to its west rail'],                     // (the plan rails the notch alone; west of it a lip 0.25 m deep runs to the corner, where a body squeezed past the west rail's end)
-  ['z', 19.56, 'to', 40.32, 40.43, 'the deck\'s east rail to the east ramp\'s north leg'],                                 // (the plan ends it 5 cm short of the leg's line: the two meet in one post)
+  ['z', 19.56, 'to', 40.32, 40.46, 'the deck\'s east rail to the east ramp\'s north leg'],                                 // (the plan ends it 5 cm short of the leg's line: the two meet in one post)
   ['z', -12.19, 'from', 40.68, 40.37, 'the 5.78 m deck\'s west rail to the west street ramp\'s south leg'],          // (b1105ku: that leg stands a quarter metre farther north now, on the frame one sees — neon_frame_edges.mjs)
 ];
 // (b1105kp to b1105kt wrote A RUN OF ITS OWN here: 1.25 m of rail on the top of the west inner ramp's south frame, a strip half a metre wide in two steps beside the ramp,
@@ -98,7 +98,7 @@ const FLAT_JOINTS = [
 // — the plan has no run there, as no place of the route grid stands on those two steps — and a walk up that strip goes off its end again.)
 const SLOPE_JOINTS = [
   ['x', 32.36, 'from', -15.25, -14.96, 'the west street ramp\'s north leg begins at its frame\'s end'],             // (b1105kv: as the south one — its first 0.29 m hung beside the frame's narrow end piece)
-  ['x', 40.37, 'from', 20.21, 19.50, 'the east ramp\'s north leg up to the deck\'s east rail'],                    // (the frame's first steps, between the deck and the sloped floor: a walk from the deck went off their north side, 5 m down)
+  ['x', 40.40, 'from', 20.21, 19.50, 'the east ramp\'s north leg up to the deck\'s east rail'],                    // (the frame's first steps, between the deck and the sloped floor: a walk from the deck went off their north side, 5 m down)   // (b1105ky: the leg's line is 40.39 for 40.37 — neon_frame_edges.mjs cuts that side's boxes 3 cm back, onto the beam — and the deck's east rail above is carried to the leg's inner face there, 40.46 for 40.43)
   ['x', 40.37, 'from', -15.50, -14.96, 'the west street ramp\'s south leg begins at its frame\'s end'],             // (b1105ku: west of x -14.96 the frame one sees is a narrow end piece 0.27 m farther in, and the rail's first half metre hung beside it)
 ];
 // A LEG CARRIED ON (b1105kq; model metres: the leg's axis, line and open side; from where the plan ends it, to; the frame's floor at those two places; the floor the posts stand

@@ -376,6 +376,24 @@ test('a panel of the north-east fence is out and walked through; the west street
   assert.equal(a.obstacles.filter((o) => isRail(o) && MX(o.minX) > 9.4 && MX(o.maxX) < 11.5 && MZ(o.minZ) > 41.2 && MZ(o.maxZ) < 41.6 && o.minY / 4 > 8.4).length, 0, 'no rail at x 9.56..11.31, z 41.37 on the 8.64 m deck');
 });
 
+// THE EAST STREET RAMP'S TWO RAILS ON THEIR BEAMS (b1105ky; user, with a box of each picked: "These two mini fences are floating a bit outside. Make them visually
+// connect with the slope."). That ramp is the west one's copy, 8 m wide, its beams' outer faces at model z 40.384 and 48.384. The south side's boxes went on to 48.62
+// and its rail hung 19 cm beside the beam; the north side's began at 40.37 and its rail's outer 1.4 cm hung outside the beam's face. neon_frame_edges.mjs cuts both
+// sides back (to 48.37 and to 40.40), and the plan sets the rails on them.
+test('the east street ramp\'s two rails stand on its beams, and hold a walk, a sprint and a dodge as before', () => {
+  const a = getArena('neon'); const D = JSON.parse(fs.readFileSync(new URL('../../client/public/maps/neon_data.json', import.meta.url), 'utf8'));
+  const legs = a.obstacles.filter((o) => isRail(o) && long(o) <= 0.55 && MX(o.minX) > 18.8 && MX(o.maxX) < 22.4);
+  const south = legs.filter((o) => MZ(o.minZ) > 48.2 && MZ(o.maxZ) < 48.7), north = legs.filter((o) => MZ(o.minZ) > 40.3 && MZ(o.maxZ) < 40.6);
+  assert.ok(south.length >= 12 && south.every((o) => Math.abs(MZ(o.maxZ) - 48.37) < 0.01), `the south rail's boxes end on the beam's edge, z 48.37: ${south.length}, ${[...new Set(south.map((o) => MZ(o.maxZ).toFixed(2)))].join(', ')}`);
+  assert.ok(north.length >= 10 && north.every((o) => Math.abs(MZ(o.minZ) - 40.39) < 0.01), `the north rail's boxes begin 2 cm in from where they began, z 40.39: ${north.length}, ${[...new Set(north.map((o) => MZ(o.minZ).toFixed(2)))].join(', ')}`);
+  const frame = (o, top) => MX(o.minX) >= 19.0 && MX(o.maxX) <= 22.8 && top / 4 >= 2.0 && top / 4 <= 5.2 && ((MZ(o.maxZ) > 48.38 && MZ(o.minZ) < 48.37) || (MZ(o.minZ) < 40.395 && MZ(o.maxZ) > 40.40 && MZ(o.minZ) > 40.3));
+  assert.equal(D.obstacles.filter((o) => o.topBuffer != null && o.noProjectile !== true && frame(o, o.maxY)).length + D.surfaces.filter((q) => q.type === 'flat' && frame(q, q.maxTop)).length, 0, 'no box and no floor of the frame goes beyond z 48.37 or begins before z 40.40');
+  const ramp = (x) => 5.787 - (x - 19.5) * 1.0019;   // (the ramp's floor over the street, model metres)
+  for (const x of [20.2, 20.8, 21.4]) for (const [z, deg, held] of [[46.8, 90, (r) => r.z < 48.31], [42.0, 270, (r) => r.z > 40.45]]) for (const how of ['walk', 'sprint', 'dodge']) { const from = [x, z, ramp(x)]; const r = ran(from, heading(from, deg), how);
+    assert.ok(r.fall < 1 && held(r), `from the ramp at x ${x} heading ${deg}°, a ${how}: held at the rail (${r.x.toFixed(2)}, ${r.z.toFixed(2)}), its greatest fall ${r.fall.toFixed(2)} m`); }
+  for (const [z, deg] of [[46.8, 90], [42.0, 270]]) { const from = [20.8, z, ramp(20.8)]; const d = fell(from, heading(from, deg), 'walk', 20); assert.ok(d >= 2.4, `a jump heading ${deg}° clears the rail: down ${d.toFixed(2)} m`); }
+});
+
 // THE BIN IS OUT (b1105ks). A bin 1.2 m square and 2.75 m tall stood on the pavement by the north-east fence; the user, with a box of it picked on the page: "Also remove
 // this garbage can stuff visually and physically.", "垃圾桶移除. To 9.9" (neon_bin_out.mjs: twelve boxes and eleven floors of the reading; in the model Object_275's part there).
 test('the bin by the north-east fence is out of the data: no box and no floor of it, and a walk goes through where it stood', () => {
