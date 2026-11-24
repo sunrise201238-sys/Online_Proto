@@ -226,7 +226,10 @@ const BOT_JUMP_HEIGHT_DIFF = 2.5;
 // glass/walls) reads this many units FARTHER than it really is, so a visible
 // enemy wins the lock unless the blocked one is drastically closer. The
 // margin keeps the current lock unless a rival clearly beats it (no flicker).
-export const BOT_TARGET_BLOCKED_PENALTY = 50;
+// 150 units, 37.5 m (b1105kx, user 2026-11-24, told that an enemy behind a wall or an object counts 50 units farther: "make the +50 to +150 instead. PT
+// and 9.9 (online and offline)."); 50, 12.5 m, from the first day until then. One number for the server's bots (ai.js pickBotTargetId) and the
+// offline client's (main.js reads it from here).
+export const BOT_TARGET_BLOCKED_PENALTY = 150;
 export const BOT_TARGET_SWITCH_MARGIN = 6;
 
 // --- Elevation-kiting tunables ---
