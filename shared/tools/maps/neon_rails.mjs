@@ -341,20 +341,30 @@ for (const [ax, c, n, to, why] of SLOPE_LINES) { const legs = modelSlopes.filter
 // tube, leant with the slope, as thick and as far under the floor's line as a foot plate. The legs are not set on the tubes: the ramp's floor would be 14 cm
 // narrower on each side, the route grid's places on it with it, and the legs would stand off the line of the rails they meet at the ramp's top.
 const ON_SLOPE = [['z', -10.31, -1, -10.14, 'the north way\'s ramp, its west side'], ['z', -6.31, 1, -6.48, 'the north way\'s ramp, its east side']]; const stripped = [];
+// A LEG'S LAST POST ON ITS BEAM (b1105kz; model metres: the leg's axis, line and open side, where the beam under it ends, how far the beam's top lies under the ramp's
+// floor line, a name). The east street ramp's two legs run on to x 22.33 and their side beams end at x 22.1, cut aslant there (the sleeve beyond stands 14 cm farther
+// in): the last post of each stood past its beam's end and went down to the leg's lower floor, 1.5 m and 1.2 m of post with nothing under it. The user, with the two
+// circled: "Their bottom legs are dangling around in the air. Trim the visual." A post past the beam's end is set back to stand at that end, and its foot is the
+// beam's top there, 3 cm in. THE MODEL ONLY: the leg's boxes are what they were, and its bar is as long (it goes 33 cm on past the post).
+const ON_BEAM = [['x', 40.39, -1, 22.00, 0.232, 'the east street ramp\'s north leg'], ['x', 48.38, 1, 22.00, 0.232, 'the east street ramp\'s south leg']]; const beamed = [];
 for (const r of modelSlopes) { if (r.tall) continue; const on = ON_SLOPE.filter(([ax, c, n]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02); if (on.length) { r.lo0 = r.h0; r.lo1 = r.h1; r.strip = on[0]; stripped.push(on[0][4]); }
   const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
   const K = Math.max(1, Math.ceil(Math.max(len / 0.5, Math.abs(r.h1 - r.h0) / 0.25)));
   for (let k = 0; k < K; k += 1) { const a0 = r.from + len * k / K, a1 = r.from + len * (k + 1) / K; const box = r.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
     D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: BUFFER, noProjectile: true }); sBoxes += 1; }
   const boxes = [], hexa = []; const pt = (a, y, p) => (r.axis === 'x' ? [a, y, p] : [p, y, a]);
-  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const yb = Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
+  const beam = ON_BEAM.find(([ax, c, n, end]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02 && r.from < end && r.to > end); let set = 0;
+  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a00 = r.from + (len - T) * k / N; const off = !!beam && a00 + T > beam[3] + 1e-9; if (off) set += 1; const a = off ? beam[3] - T : a00;
+    const yb = (off ? Math.min(hi(a), hi(a + T)) - beam[4] : Math.min(lo(a), lo(a + T))) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
     boxes.push(r.axis === 'x' ? { min: [a, yb, p0], max: [a + T, yt, p1] } : { min: [p0, yb, a], max: [p1, yt, a + T] }); sPosts += 1; }
   const yA = hi(r.from) + GROUND + TALL, yB = hi(r.to) + GROUND + TALL;   // (the bar: a box sheared along the slope — upright ends, the top and the bottom parallel to the slope)
   hexa.push([pt(r.from, yA - BAR, p0), pt(r.to, yB - BAR, p0), pt(r.to, yB - BAR, p1), pt(r.from, yA - BAR, p1), pt(r.from, yA, p0), pt(r.to, yB, p0), pt(r.to, yB, p1), pt(r.from, yA, p1)].map((v) => v.map(r4)));
   if (r.strip) { const q0 = Math.min(r.c, r.strip[3]), q1 = Math.max(r.c, r.strip[3]), fA = hi(r.from) + GROUND, fB = hi(r.to) + GROUND;
     hexa.push([pt(r.from, fA - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q1), pt(r.from, fA - PLATE_DEEP, q1), pt(r.from, fA - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q1), pt(r.from, fA - PLATE_UNDER, q1)].map((v) => v.map(r4))); }
+  if (beam) { if (set !== 1) throw new Error(`"${beam[5]}": ${set} posts past the beam's end, 1 looked for`); beamed.push(beam[5]); }
   pieces.push({ name: `Rail_${String(pieces.length + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
 if (stripped.length !== ON_SLOPE.length) throw new Error(`the legs on a slope's own floor: ${stripped.length} of ${ON_SLOPE.length} found in the plan`);
+if (beamed.length !== ON_BEAM.length) throw new Error(`the legs with a last post on their beam: ${beamed.length} of ${ON_BEAM.length} found in the plan`);
 // 5. THE FLOORS BESIDE A LEG (b1105kq). A rail on a ramp's side has its boxes as every rail has, and bodies went through two of them at a walk: 17 walks of the bodies' scan
 // through the east inner ramp's north leg (9 to 12 m down to the street), 11 through the leg beside the ramp east of the 8.6 m deck. What let them through is the frame
 // beside the rail, not the rail. The frame's pieces are boxes in steps, and a box is a floor to the sim when a floor lies on ANY of its top (arena.js markFloorTops): such
