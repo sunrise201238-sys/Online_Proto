@@ -28,6 +28,7 @@ const text = fs.readFileSync(inF, 'utf8'); const D = JSON.parse(text); if (JSON.
 const MX = (u) => u / 4 - 12.44, MZ = (u) => u / 4 + 40.37, AX = (x) => (x + 12.44) * 4, AZ = (z) => (z - 40.37) * 4, r4 = (v) => +v.toFixed(4);   // (model metres and the arena's units)
 const CUTS = [
   { name: 'the west street ramp\'s south side', side: 'maxZ', to: 40.37, from: [40.615, 40.625], win: [-15.6, -11.7], top: [2.0, 5.2], cut: [33, 32], out: [0, 0] },   // (tops under the deck's own lip at 5.25 m and the post at its corner, which stay)
+  { name: 'the west street ramp\'s north side', side: 'minZ', to: 32.39, from: [32.365, 32.375], win: [-15.6, -11.7], top: [2.0, 5.2], cut: [35, 33], out: [0, 0] },   // (b1105kv; user, with a box of that rail picked: "This mini fence is slightly floating outside in the air as well." The beam's outer face is at 32.374 and the rail's outer 1.6 cm hung outside it: neon_rails.mjs SLOPE_LINES sets the rail 3 cm farther in, and these boxes are cut back to its line with it)
 ];
 let done = 0;
 for (const c of CUTS) { const alongZ = c.side.endsWith('Z'), max = c.side.startsWith('max'); const M = alongZ ? MZ : MX, A = alongZ ? AZ : AX; const lo = alongZ ? 'minX' : 'minZ', hi = alongZ ? 'maxX' : 'maxZ', W = alongZ ? MX : MZ, near = max ? (alongZ ? 'minZ' : 'minX') : (alongZ ? 'maxZ' : 'maxX');

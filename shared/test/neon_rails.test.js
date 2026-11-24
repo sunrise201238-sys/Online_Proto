@@ -25,6 +25,10 @@
 // dodge as it did; the other rail is gone, and a walk up its strip goes off the strip's end. And of the 12.59 m top platform's north and east rails (#8213, #8222):
 // "this particular corner's mini fences also floats a bit in visual. Make them visually connect with the platform." — those two stay where they stand, with the
 // route grid's row of places at them, and are joined to the frame in the model alone.
+// And four more picked the same day (b1105kv): a panel of the north-east fence — "Remove this piece of fence here physically and visually. Not the whole fence
+// wall."; the north way's ramp's two rails — "These two mini fences are slightly floating and there feet dangling in the air beneath the airborne slope."; the
+// west street ramp's north rail — "This mini fence is slightly floating outside in the air as well."; and the 1.75 m run at the 8.64 m deck's corner — "remove
+// this mini fence physically and visually."
 import '../tools/maps/arena_files.mjs';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -86,11 +90,11 @@ function shot(from, to) {
 // (what a thing would be if the rails stopped a round as a plain box does: the flag off for the time of one reading, then on again)
 function withSolidRails(read) { const rails = getArena('neon').obstacles.filter(isRail); for (const o of rails) o.noProjectile = false; try { return read(); } finally { for (const o of rails) o.noProjectile = true; } }
 
-test('the rails are in the data: 26 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
+test('the rails are in the data: 25 runs along the flat floors\' open edges and 14 legs along the ramps\' sides, 6 cm through, every one a box that holds a body alone', () => {
   const a = getArena('neon'); const rails = a.obstacles.filter(isRail); const flat = rails.filter((o) => long(o) > 0.55), slope = rails.filter((o) => long(o) <= 0.55);   // (a run is a body's width long or more; a leg is a row of boxes half a metre long or less)
-  assert.equal(flat.length, 26, 'the flat floors\' runs, a box each');
-  assert.equal(slope.length, 133, 'the boxes of the ramps\' legs');
-  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 177.2) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 34.9) < 0.1, `177.2 m on the flat and 34.9 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
+  assert.equal(flat.length, 25, 'the flat floors\' runs, a box each');
+  assert.equal(slope.length, 132, 'the boxes of the ramps\' legs');
+  assert.ok(Math.abs(flat.reduce((s, o) => s + long(o), 0) - 175.5) < 0.1 && Math.abs(slope.reduce((s, o) => s + long(o), 0) - 34.6) < 0.1, `175.5 m on the flat and 34.6 m along the ramps: ${flat.reduce((s, o) => s + long(o), 0).toFixed(1)} and ${slope.reduce((s, o) => s + long(o), 0).toFixed(1)}`);
   for (const o of rails) assert.ok(Math.abs(Math.min(o.maxX - o.minX, o.maxZ - o.minZ) - 0.24) < 1e-6, 'a rail is 6 cm through');
   // a flat run: from 0.25 m over its floor to 0.75 m over it, the floor on one side of it (read 0.3 m off the rail; a deck and the frame tops in it lie within 0.25 m of each
   // other) and on the other a drop of 2.4 m or more within a body's width (read 0.3 m and 0.6 m off the rail: the sign's top under the walkway's inner corner lies between),
@@ -342,6 +346,34 @@ test('the 12.59 m top platform keeps its north and east rails where they stood, 
     let hops = 0; for (let k = g.linkStart[i]; k < g.linkStart[i + 1]; k += 1) { const j = g.linkAdj[k]; if (MZ(g.posZ[j]) < 29.5 && g.floor[j] / 4 < 1) hops += 1; } row.push([x, hops]); }
   assert.equal(row.length, 4, `the places of the platform's north row, a quarter cell in from their cells' centres (z 30.12): ${row.map(([x]) => x.toFixed(2)).join(', ')}`);
   assert.ok(row.every(([, hops]) => hops >= 1), `each has its hop off the north side, down to the street: ${row.map(([x, h]) => `${x.toFixed(2)}: ${h}`).join(', ')}`);
+});
+
+// A FENCE PANEL OUT, THREE LEGS SET RIGHT AND A RUN GONE (b1105kv). The first of the north-east fence's four panels (model z 2.57..8.38 at x 27.06..27.31) is out of
+// the model and the data (neon_fence_panel_out.mjs): the opening is walked through, and the fence beside it stands. The west street ramp's north rail hung 1.6 cm
+// outside its beam's face and began beside the frame's narrow end piece: it stands 3 cm farther in (z 32.39..32.45, the frame's boxes cut back with it) from the
+// beam's end at x -14.96. The north way's ramp's east rail had its posts and its boxes down to a floor 0.84 m under the ramp: both rails of that ramp begin at the
+// ramp's own floor (and the model joins them to the frame's tubes with a strip: nothing of that in the data). And the 1.75 m run at the 8.64 m deck's corner is gone.
+test('a panel of the north-east fence is out and walked through; the west street ramp\'s north rail stands on its beam; the north way\'s ramp\'s rails begin at the ramp\'s floor; the run at the 8.64 m deck\'s corner is gone', () => {
+  const a = getArena('neon'); const D = JSON.parse(fs.readFileSync(new URL('../../client/public/maps/neon_data.json', import.meta.url), 'utf8'));
+  // the panel's opening: nothing of the fence in the window (neon_fence_panel_out.mjs's), a walk east goes through it, and one beside it is held
+  const inWin = (o, top) => MZ(o.minZ) >= 2.3 && MZ(o.maxZ) <= 25.7 && MX(o.minX) >= 26.806 && MX(o.maxX) <= 27.814 && MZ(o.maxZ) > 2.874 && MZ(o.minZ) < 8.366 && top / 4 >= 0.25 && top / 4 <= 4.0;
+  assert.equal(D.obstacles.filter((o) => inWin(o, o.maxY)).length + D.surfaces.filter((q) => q.type === 'flat' && inWin(q, q.maxTop)).length, 0, 'no box and no floor of the fence in the panel\'s opening');
+  for (const z of [3.6, 5.6, 7.8]) { const r = ran([25.6, z, 0.15], [35.6, z], 'walk', -1, 120); assert.ok(r.x > 29 && r.feet < 0.2, `a walk east at z ${z} is through the opening: (${r.x.toFixed(2)}, ${r.z.toFixed(2)}) feet ${r.feet.toFixed(2)} m`); }
+  { const r = ran([25.6, 9.0, 0.15], [35.6, 9.0], 'walk', -1, 120); assert.ok(r.x < 27.1, `a walk east at z 9.0 is held by the second panel: (${r.x.toFixed(2)}, ${r.z.toFixed(2)})`); }
+  // the west street ramp's north rail: on the line set for it, from the beam's end; the frame's boxes begin on that line; held as before, and a jump clears it
+  const north = a.obstacles.filter((o) => isRail(o) && long(o) <= 0.55 && MX(o.minX) > -15.6 && MX(o.maxX) < -12.3 && MZ(o.minZ) > 32.2 && MZ(o.maxZ) < 32.6);
+  assert.ok(north.length >= 10 && north.every((o) => Math.abs(MZ(o.minZ) - 32.39) < 0.005) && Math.abs(Math.min(...north.map((o) => MX(o.minX))) + 14.96) < 0.01, `the north rail's boxes at z 32.39 from x -14.96: ${north.length}, ${[...new Set(north.map((o) => MZ(o.minZ).toFixed(3)))].join(', ')}, from ${Math.min(...north.map((o) => MX(o.minX))).toFixed(2)}`);
+  assert.equal(D.obstacles.filter((o) => o.topBuffer != null && o.noProjectile !== true && MX(o.minX) >= -15.6 && MX(o.maxX) <= -11.7 && MZ(o.minZ) > 32.3 && MZ(o.minZ) < 32.385 && o.maxY / 4 >= 2 && o.maxY / 4 <= 5.2).length, 0, 'no box of the frame begins north of z 32.39');
+  const ramp = (x) => (x < -14.20 ? (x + 17.70) * 1.0019 : 3.5039 + (x + 14.20) * 1.0019);
+  for (const x of [-14.4, -13.8, -13.2]) for (const how of ['walk', 'sprint', 'dodge']) { const from = [x, 34.0, ramp(x)]; const r = ran(from, heading(from, 270), how); assert.ok(r.fall < 1 && r.z > 32.45, `from the ramp at x ${x} northward, a ${how}: held at the rail (${r.x.toFixed(2)}, ${r.z.toFixed(2)}), its greatest fall ${r.fall.toFixed(2)} m`); }
+  { const from = [-13.8, 34.0, ramp(-13.8)]; const d = fell(from, heading(from, 270), 'walk', 20); assert.ok(d >= 2.4, `a jump over the north rail: down ${d.toFixed(2)} m`); }
+  // the north way's ramp: every box of its two rails is a rail's height over the ramp's floor (the east one's went 0.84 m under it), and a walk at each is held
+  const way = a.obstacles.filter((o) => isRail(o) && long(o) <= 0.55 && MZ(o.minZ) > 25.8 && MZ(o.maxZ) < 29.9 && (Math.abs(MX(o.minX) + 10.31) < 0.01 || Math.abs(MX(o.maxX) + 6.31) < 0.01));
+  assert.ok(way.length >= 30 && way.every((o) => (o.maxY - o.minY) / 4 < 1.05), `the boxes of the two rails (${way.length}) are no taller than 1.05 m: the tallest ${(Math.max(...way.map((o) => o.maxY - o.minY)) / 4).toFixed(2)} m`);
+  const wayFloor = (z) => 12.585 + (z - 25.84) * 1.105316;
+  for (const [deg, side] of [[180, -1], [0, 1]]) for (const how of ['walk', 'sprint', 'dodge']) { const from = [-8.3, 27.2, wayFloor(27.2)]; const r = ran(from, heading(from, deg), how); assert.ok(r.fall < 1 && r.x > -10.31 && r.x < -6.31, `on the north way's ramp heading ${deg}°, a ${how}: held at the rail (${r.x.toFixed(2)}, ${r.z.toFixed(2)}), its greatest fall ${r.fall.toFixed(2)} m`); }
+  // the run at the 8.64 m deck's south-east corner: gone
+  assert.equal(a.obstacles.filter((o) => isRail(o) && MX(o.minX) > 9.4 && MX(o.maxX) < 11.5 && MZ(o.minZ) > 41.2 && MZ(o.maxZ) < 41.6 && o.minY / 4 > 8.4).length, 0, 'no rail at x 9.56..11.31, z 41.37 on the 8.64 m deck');
 });
 
 // THE BIN IS OUT (b1105ks). A bin 1.2 m square and 2.75 m tall stood on the pavement by the north-east fence; the user, with a box of it picked on the page: "Also remove
