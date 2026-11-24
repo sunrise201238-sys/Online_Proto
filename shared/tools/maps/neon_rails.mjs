@@ -341,8 +341,9 @@ for (const [ax, c, n, to, why] of SLOPE_LINES) { const legs = modelSlopes.filter
 // tube, leant with the slope, as thick and as far under the floor's line as a foot plate. The legs are not set on the tubes: the ramp's floor would be 14 cm
 // narrower on each side, the route grid's places on it with it, and the legs would stand off the line of the rails they meet at the ramp's top.
 const ON_SLOPE = [['z', -10.31, -1, -10.14, 'the north way\'s ramp, its west side'], ['z', -6.31, 1, -6.48, 'the north way\'s ramp, its east side']]; const stripped = [];
-// A LEG ON A BEAM THAT ENDS BEFORE THE LEG DOES (b1105la, after b1105kz; model metres: the leg's axis, line and open side; where the beam's whole top ends under the leg; how
-// far the beam's top lies under the ramp's floor line; the beam's inner face, which the foot plate goes in to; a name). The east street ramp's two legs run on to x 22.33,
+// A LEG ON A BEAM, ITS LAST POST ON A FOOT PLATE (b1105la, after b1105kz; b1105lb; model metres: the leg's axis, line and open side; where on the beam the foot plate
+// begins, and it runs to the leg's lower end; the beam's top, either as how far it lies under the leg's floor line or as its own line, two places along and their heights
+// over the street; the beam's inner face, which the foot plate goes in to; how thick the plate is; a name). The east street ramp's two legs run on to x 22.33,
 // and their side beams' tops end before that: from x 22.09 the beam's end is cut aslant, and where the last post stands (x 22.27..22.33) the top's edge is 8 to 17 cm away
 // from the post. The posts went down to the leg's lower floor, and the last one had 1.5 m (south) and 1.2 m (north) of post with nothing under it. The user, with the two
 // circled: "Their bottom legs are dangling around in the air. Trim the visual." b1105kz set that post back onto the beam and left the bar as long ("i don't like that.
@@ -351,28 +352,35 @@ const ON_SLOPE = [['z', -10.31, -1, -10.14, 'the north way\'s ramp, its west sid
 // it: a foot plate on the beam's top, from where the whole top ends to the leg's end and from the leg's outer face in to the beam's inner face, leant with the slope,
 // 1.5 cm over the beam's top and 9.5 cm thick. The last post's foot is in the plate; the posts on the beam end 30 cm inside it (they went through it, 2 cm out of its
 // underside on the south side). THE MODEL ONLY: the leg's boxes are what they were.
-const ON_BEAM = [['x', 40.39, -1, 22.00, 0.232, 40.67, 'the east street ramp\'s north leg'], ['x', 48.38, 1, 22.00, 0.232, 48.10, 'the east street ramp\'s south leg']]; const beamed = [];
-const BEAM_IN = 0.30, BEAM_PLATE_OVER = 0.015, BEAM_PLATE_THICK = 0.095, BEAM_PLATE_FOOT = 0.01;
+// (b1105lb: the west street ramp, of which the east one is the copy. The user: "Give the same treatment to the other ground/slope entrance." Its legs end where the
+// beam's whole top does, x -14.96, since b1105ku and b1105kv, so the last post stands on the top; but the beam is a wedge there, 2 to 4 cm thick under the post's outer
+// corner, and the post went on down to the leg's lower floor: 10 to 25 cm of it out of the beam's underside. The same plate and the same feet; the plate is 3 cm
+// thick there, 1.5 cm over the top and 1.5 cm in, since one of 9.5 cm came out of the wedge's underside as the post had. The beam's top is given by its own line
+// there, x -14.96 at 2.97 m and x -13.00 at 4.93 m, cut from the model: the plan's floor line for that leg is 7 to 11 cm low at its lower end.)
+const ON_BEAM = [['x', 40.39, -1, 22.00, 0.232, 40.67, 0.095, 'the east street ramp\'s north leg'], ['x', 48.38, 1, 22.00, 0.232, 48.10, 0.095, 'the east street ramp\'s south leg'],
+  ['x', 32.39, -1, -14.63, [-14.96, 2.97, -13.00, 4.93], 32.67, 0.03, 'the west street ramp\'s north leg'], ['x', 40.37, 1, -14.63, [-14.96, 2.97, -13.00, 4.93], 40.09, 0.03, 'the west street ramp\'s south leg']]; const beamed = [];
+const BEAM_IN = 0.30, BEAM_PLATE_OVER = 0.015, BEAM_PLATE_FOOT = 0.01;
 for (const r of modelSlopes) { if (r.tall) continue; const on = ON_SLOPE.filter(([ax, c, n]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02); if (on.length) { r.lo0 = r.h0; r.lo1 = r.h1; r.strip = on[0]; stripped.push(on[0][4]); }
   const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
   const K = Math.max(1, Math.ceil(Math.max(len / 0.5, Math.abs(r.h1 - r.h0) / 0.25)));
   for (let k = 0; k < K; k += 1) { const a0 = r.from + len * k / K, a1 = r.from + len * (k + 1) / K; const box = r.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
     D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: BUFFER, noProjectile: true }); sBoxes += 1; }
   const boxes = [], hexa = []; const pt = (a, y, p) => (r.axis === 'x' ? [a, y, p] : [p, y, a]);
-  const beam = ON_BEAM.find(([ax, c, n, end]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02 && r.from < end && r.to > end); let set = 0;
-  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const off = !!beam && a + T > beam[3] + 1e-9; if (off) set += 1;
-    const yb = beam ? Math.min(hi(a), hi(a + T)) - beam[4] - (off ? BEAM_PLATE_FOOT : BEAM_IN) + GROUND : Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
+  const beam = ON_BEAM.find(([ax, c, n, at]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02 && r.from < at && r.to > at); let set = 0; const lowTo = r.h1 < r.h0;   // (the leg's lower end: its 'to' or its 'from')
+  const bTop = !beam ? null : Array.isArray(beam[4]) ? (a) => beam[4][1] + (beam[4][3] - beam[4][1]) * (a - beam[4][0]) / (beam[4][2] - beam[4][0]) : (a) => hi(a) - beam[4];
+  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const off = !!beam && (lowTo ? a + T > beam[3] + 1e-9 : a < beam[3] - 1e-9); if (off) set += 1;
+    const yb = beam ? Math.min(bTop(a), bTop(a + T)) - (off ? BEAM_PLATE_FOOT : BEAM_IN) + GROUND : Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
     boxes.push(r.axis === 'x' ? { min: [a, yb, p0], max: [a + T, yt, p1] } : { min: [p0, yb, a], max: [p1, yt, a + T] }); sPosts += 1; }
   const yA = hi(r.from) + GROUND + TALL, yB = hi(r.to) + GROUND + TALL;   // (the bar: a box sheared along the slope — upright ends, the top and the bottom parallel to the slope)
   hexa.push([pt(r.from, yA - BAR, p0), pt(r.to, yB - BAR, p0), pt(r.to, yB - BAR, p1), pt(r.from, yA - BAR, p1), pt(r.from, yA, p0), pt(r.to, yB, p0), pt(r.to, yB, p1), pt(r.from, yA, p1)].map((v) => v.map(r4)));
   if (r.strip) { const q0 = Math.min(r.c, r.strip[3]), q1 = Math.max(r.c, r.strip[3]), fA = hi(r.from) + GROUND, fB = hi(r.to) + GROUND;
     hexa.push([pt(r.from, fA - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q1), pt(r.from, fA - PLATE_DEEP, q1), pt(r.from, fA - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q1), pt(r.from, fA - PLATE_UNDER, q1)].map((v) => v.map(r4))); }
-  if (beam) { if (set !== 1) throw new Error(`"${beam[6]}": ${set} posts past the beam's end, 1 looked for`); beamed.push(beam[6]);   // (the foot plate: a box sheared along the slope as the bar is)
-    const q0 = Math.min(r.c, beam[5]), q1 = Math.max(r.c, beam[5]), tA = hi(beam[3]) - beam[4] + GROUND + BEAM_PLATE_OVER, tB = hi(r.to) - beam[4] + GROUND + BEAM_PLATE_OVER, D = BEAM_PLATE_THICK;
-    hexa.push([pt(beam[3], tA - D, q0), pt(r.to, tB - D, q0), pt(r.to, tB - D, q1), pt(beam[3], tA - D, q1), pt(beam[3], tA, q0), pt(r.to, tB, q0), pt(r.to, tB, q1), pt(beam[3], tA, q1)].map((v) => v.map(r4))); }
+  if (beam) { if (set !== 1) throw new Error(`"${beam[7]}": ${set} posts on the foot plate, 1 looked for`); beamed.push(beam[7]);   // (the foot plate: a box sheared along the slope as the bar is)
+    const E = lowTo ? r.to : r.from, a0 = Math.min(beam[3], E), a1 = Math.max(beam[3], E), q0 = Math.min(r.c, beam[5]), q1 = Math.max(r.c, beam[5]), tA = bTop(a0) + GROUND + BEAM_PLATE_OVER, tB = bTop(a1) + GROUND + BEAM_PLATE_OVER, D = beam[6];
+    hexa.push([pt(a0, tA - D, q0), pt(a1, tB - D, q0), pt(a1, tB - D, q1), pt(a0, tA - D, q1), pt(a0, tA, q0), pt(a1, tB, q0), pt(a1, tB, q1), pt(a0, tA, q1)].map((v) => v.map(r4))); }
   pieces.push({ name: `Rail_${String(pieces.length + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
 if (stripped.length !== ON_SLOPE.length) throw new Error(`the legs on a slope's own floor: ${stripped.length} of ${ON_SLOPE.length} found in the plan`);
-if (beamed.length !== ON_BEAM.length) throw new Error(`the legs on a beam that ends before them: ${beamed.length} of ${ON_BEAM.length} found in the plan`);
+if (beamed.length !== ON_BEAM.length) throw new Error(`the legs with a foot plate on their beam: ${beamed.length} of ${ON_BEAM.length} found in the plan`);
 // 5. THE FLOORS BESIDE A LEG (b1105kq). A rail on a ramp's side has its boxes as every rail has, and bodies went through two of them at a walk: 17 walks of the bodies' scan
 // through the east inner ramp's north leg (9 to 12 m down to the street), 11 through the leg beside the ramp east of the 8.6 m deck. What let them through is the frame
 // beside the rail, not the rail. The frame's pieces are boxes in steps, and a box is a floor to the sim when a floor lies on ANY of its top (arena.js markFloorTops): such
