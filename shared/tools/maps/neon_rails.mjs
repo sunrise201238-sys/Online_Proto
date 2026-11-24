@@ -15,6 +15,12 @@
 // FENCE below, and that leg's hold at 1.20 m for the one build).
 // And of that leg, with one of its boxes picked on the page (#8246): "I believe this is the piece of mini fence which you raised its cbox height. Remove this piece of fence
 // visually and physically. Then replace it with the higher version fence, the one that also blocks bullets. PT and 9.9" (b1105kt: TALL_LEGS below).
+// And of two rails, each with a box of it picked on the page: "This mini fence is visually floating in the air. make sure it visually connects with the platform slope."
+// (#8315: the west street ramp's south side) and "Remove this mini fence visually and physically." (#8236: the top of the west inner ramp's south frame) — "Implement
+// these 2 changes in PT and 9.9" (b1105ku: the frame's boxes of that side are cut back to the frame one sees by neon_frame_edges.mjs, run before this tool, and the plan
+// sets the rail on it; the two joints of it below; the run of its own that b1105kp wrote is gone). And the same day, of the 12.59 m top platform's north and east
+// rails (#8213, #8222): "while you're at it, this particular corner's mini fences also floats a bit in visual. Make them visually connect with the platform." —
+// "PT and 9.9" (FOOT_PLATES below).
 // usage: node neon_rails.mjs <tree root> <in neon_data.json> <out neon_data.json> <out pieces.json>      (LIST=1: the plan is listed and nothing is written)
 //        then for the model glb_place.mjs <in neon.glb> <out> echo_01_242 <pieces>_tall_spec.json (the tall fence's two panels; the spec is written beside the pieces) and
 //        glb_rails.mjs <in> <out neon.glb> <pieces.json> (the low rails: the last thing written to the model), and navgrid_build.mjs <tree root> neon for the route grid.
@@ -81,13 +87,14 @@ const FLAT_JOINTS = [
   ['x', 57.75, 'from', 8.84, 7.81, 'the walkway\'s south rail to the jamb of the bridge\'s last east window'],   // (the window's opening goes on 0.54 m south of the walkway's line, over the sill's end: a walk from the little slope or the sill went out there, 11.6 m down)
   ['x', 21.87, 'from', -8.63, -10.44, 'the first top platform\'s north rail to its west rail'],                     // (the plan rails the notch alone; west of it a lip 0.25 m deep runs to the corner, where a body squeezed past the west rail's end)
   ['z', 19.56, 'to', 40.32, 40.43, 'the deck\'s east rail to the east ramp\'s north leg'],                                 // (the plan ends it 5 cm short of the leg's line: the two meet in one post)
+  ['z', -12.19, 'from', 40.68, 40.37, 'the 5.78 m deck\'s west rail to the west street ramp\'s south leg'],          // (b1105ku: that leg stands a quarter metre farther north now, on the frame one sees — neon_frame_edges.mjs)
 ];
-// A RUN OF ITS OWN (model metres: the floor's height, the run's axis and line, the side the air is on, from, to): the top of the west inner ramp's south frame, a strip
-// half a metre wide in two steps (8.23 and 8.34 m) beside the ramp, 2.45 and 2.56 m over the 5.78 m deck: a walk up the strip went off it. No place of the route grid stands
-// on those two steps, so the plan does not know that a unit comes there.
-const FLAT_RUNS = [[8.34, 'x', 39.62, 1, -4.69, -3.44]];
+// (b1105kp to b1105kt wrote A RUN OF ITS OWN here: 1.25 m of rail on the top of the west inner ramp's south frame, a strip half a metre wide in two steps beside the ramp,
+// 2.45 and 2.56 m over the 5.78 m deck, where a walk up the strip went off it. The user, with its box picked: "Remove this mini fence visually and physically." It is gone
+// — the plan has no run there, as no place of the route grid stands on those two steps — and a walk up that strip goes off its end again.)
 const SLOPE_JOINTS = [
   ['x', 40.37, 'from', 20.21, 19.50, 'the east ramp\'s north leg up to the deck\'s east rail'],                    // (the frame's first steps, between the deck and the sloped floor: a walk from the deck went off their north side, 5 m down)
+  ['x', 40.37, 'from', -15.50, -14.96, 'the west street ramp\'s south leg begins at its frame\'s end'],             // (b1105ku: west of x -14.96 the frame one sees is a narrow end piece 0.27 m farther in, and the rail's first half metre hung beside it)
 ];
 // A LEG CARRIED ON (b1105kq; model metres: the leg's axis, line and open side; from where the plan ends it, to; the frame's floor at those two places; the floor the posts stand
 // on): the leg beside the ramp east of the 8.6 m deck ended at x 15.13, where the frame beside the ramp is still 0.64 m over the 5.78 m deck — the trial runs a body straight
@@ -200,7 +207,6 @@ function flatRuns(arena) {
   const endsOpen = (r) => { const at = (t) => (r.axis === 'x' ? [t, r.c - r.n * 0.3] : [r.c - r.n * 0.3, t]); const gone = (t) => { const [x, z] = at(t); return P.groundHeightAt(x, z, arena.surfaces, r.h) < r.h - STEP - 0.01; }; return gone(r.from - 0.4) && gone(r.to + 0.4); };
   const noHop = (r) => { const [xm, zm] = mid(r), hm = r.h / 4; return NO_HOP.some(([x0, x1, z0, z1, h0, h1]) => xm >= x0 && xm <= x1 && zm >= z0 && zm <= z1 && hm >= h0 && hm <= h1); };
   runs = runs.filter((r) => r.to - r.from >= BODY && !(r.to - r.from < NARROW_FLOOR && endsOpen(r))).map((r) => ({ h: +r.h.toFixed(4), axis: r.axis, c: +r.c.toFixed(4), n: r.n, from: +r.from.toFixed(4), to: +r.to.toFixed(4), ...(noHop(r) ? { noHop: true } : {}) }));
-  for (const [h, ax, c, n, from, to] of FLAT_RUNS) runs.push({ h: +(h * 4).toFixed(4), axis: ax, c: +(ax === 'x' ? AZ(c) : AX(c)).toFixed(4), n, from: +(ax === 'x' ? AX(from) : AZ(from)).toFixed(4), to: +(ax === 'x' ? AX(to) : AZ(to)).toFixed(4) });
   for (const [ax, c, end, at, to, why] of FLAT_JOINTS) { const hit = runs.filter((r) => r.axis === ax && Math.abs((ax === 'x' ? MZ(r.c) : MX(r.c)) - c) < 0.02 && Math.abs((ax === 'x' ? MX(r[end]) : MZ(r[end])) - at) < 0.08); if (hit.length !== 1) throw new Error(`the joint "${why}": ${hit.length} runs found with that end`); hit[0][end] = +(ax === 'x' ? AX(to) : AZ(to)).toFixed(4); }
   const len = runs.reduce((s, r) => s + (r.to - r.from) / 4, 0); const lv = new Map(); for (const r of runs) { const k = (r.h / 4).toFixed(2); lv.set(k, (lv.get(k) ?? 0) + (r.to - r.from) / 4); }
   console.log(`flat floors ${flats.length}, raised places a unit comes to ${nodes.length}: ${runs.length} runs, ${len.toFixed(1)} m; by floor height (m): ${[...lv.entries()].sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}: ${v.toFixed(1)}`).join(', ')}`);
@@ -277,6 +283,20 @@ for (const r of model) for (const t of TALL_LEGS) { const [p0, p1] = tallLegBand
 for (const t of TALL_FENCE) D.obstacles.push(tallBox(t));
 const tallSpec = TALL_FENCE.map((t) => ({ from: PANEL.from, suffix: t.suffix, pivot: [PANEL.x0, +(PANEL.base + GROUND).toFixed(4), PANEL.z0], scale: [1, 1, 1], turn: 90,   // (a quarter turn: the panel's length from its end post goes east, its depth north of the pivot)
   move: [+(t.x0 - PANEL.x0).toFixed(4), +(t.h - (PANEL.deck - PANEL.base) - PANEL.base).toFixed(4), +(t.z1 - PANEL.z0).toFixed(4)], clip: { axis: 'z', from: +(PANEL.z0 - 0.01).toFixed(4), to: +(PANEL.z0 + t.x1 - t.x0).toFixed(4) } }));
+// THE FOOT PLATES (b1105ku; model metres: the run's axis, line, open side and floor; the line in the frame the plate goes in to). A run stands on its floor's outer
+// edge, and a floor of the solid reading goes up to a quarter metre beyond the frame one sees (neon_frame_edges.mjs). The 12.59 m top platform's frame is blocks with
+// their outer face at z 29.85 and x 17.43, lengths between them 13 cm and 10 cm farther in, and a corner cut slantwise: its north rail hangs 17 to 31 cm beside the
+// frame, its east rail 7 to 17 cm, the post at the corner beyond the corner. The user, with those two rails picked: "this particular corner's mini fences also
+// floats a bit in visual. Make them visually connect with the platform." Set on the frame they would take the platform's north row out of the route grid and its
+// hops off that side with it (neon_frame_edges.mjs: why), so the rails stay where they are and each is given a plate under its feet: a flat box in the rail's own
+// steel and in the rail's own object, from the rail's outer face in to a line inside the frame's face all along, its top 1.5 cm under the floor's line (under the
+// frame's own top, which is the floor's: inside the frame the plate is not seen) and 9.5 cm thick (the frame is 20). No thicker: the page takes an object of the
+// model for a thing that fades when its top stands 0.8 m over the floor at its foot (main.js fadeNodes, fadeTall 3.2), and the floor at its foot is the highest
+// one no more than 0.125 m over the object's bottom. A rail is 0.75 m over its floor and never fades; with a plate 16.5 cm thick its bottom was 0.18 m under the
+// floor's line, the floor at its foot was the grating's 12 cm lower, and the two rails faded with the walls. Nothing is written to the data for a plate: the
+// floor it shows is there already, and a body's middle comes no nearer the rail than its radius, which is over the frame.
+const FOOT_PLATES = [['x', 29.62, -1, 12.59, 30.00, 'the 12.59 m top platform\'s north rail'], ['z', 17.56, 1, 12.59, 17.32, 'the 12.59 m top platform\'s east rail']];
+const PLATE_UNDER = 0.015, PLATE_DEEP = 0.11; const plated = [];
 // 2. THE FLAT RUNS into the data and the pieces: a run is one box; in the model its posts and its bar
 for (const [i, r] of model.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T;   // (the band across: on the floor's side of the line)
   const box = r.axis === 'x' ? { minX: AX(r.from), maxX: AX(r.to), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(r.from), maxZ: AZ(r.to) };
@@ -284,7 +304,10 @@ for (const [i, r] of model.entries()) { const p0 = r.n > 0 ? r.c - T : r.c, p1 =
   const y0 = r.h + GROUND - FOOT, y1 = r.h + GROUND + TALL; const boxes = []; const B = (a0, a1, ya, yb) => boxes.push(r.axis === 'x' ? { min: [a0, ya, p0], max: [a1, yb, p1] } : { min: [p0, ya, a0], max: [p1, yb, a1] });
   const N = Math.max(1, Math.ceil((r.to - r.from - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (r.to - r.from - T) * k / N; B(a, a + T, y0, y1 - BAR); posts += 1; }
   B(r.from, r.to, y1 - BAR, y1);
+  for (const [ax, c, n, h, inn, why] of FOOT_PLATES) { if (ax !== r.axis || n !== r.n || Math.abs(r.c - c) > 0.02 || Math.abs(r.h - h) > 0.1) continue; if (plated.includes(why)) throw new Error(`the foot plate of ${why}: two runs of the plan on that line`);
+    const q0 = Math.min(r.c, inn), q1 = Math.max(r.c, inn), ya = r.h + GROUND - PLATE_DEEP, yb = r.h + GROUND - PLATE_UNDER; boxes.push(r.axis === 'x' ? { min: [r.from, ya, q0], max: [r.to, yb, q1] } : { min: [q0, ya, r.from], max: [q1, yb, r.to] }); plated.push(why); r.plate = [q0, q1]; }
   pieces.push({ name: `Rail_${String(i + 1).padStart(2, '0')}_${r.h.toFixed(2).replace('.', 'm')}`, h: r.h, boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })) }); }
+if (plated.length !== FOOT_PLATES.length) throw new Error(`the foot plates: ${plated.length} of ${FOOT_PLATES.length} found their run in the plan`);
 // 4. THE SLOPES' LEGS: the rail follows the slope. In the data a leg is a row of short boxes, each no longer than 0.5 m and rising no more than 0.25 m, from 0.25 m over the
 // frame's lowest floor at its ends to the rail's top over its highest (a body anywhere on the frame's strip is held; a jump clears it as on the flat). In the model a leg is
 // one object: upright posts no more than 2 m apart and a bar that leans with the slope.
@@ -341,10 +364,10 @@ const railFloors = []; { const arena = arenaNow(); const WIDE = 0.9 * 4, PAST = 
 if (!process.env.LIST) { fs.writeFileSync(outF, JSON.stringify(D)); fs.writeFileSync(piecesF, JSON.stringify({ color: COLOR, pieces })); fs.writeFileSync(piecesF.replace(/\.json$/, '') + '_tall_spec.json', JSON.stringify(tallSpec)); }   // (LIST=1: the plan alone)
 const side = (r) => `at ${r.axis === 'x' ? 'z' : 'x'} ${r.c.toFixed(2)}, open to ${r.n > 0 ? '+' : '-'}${r.axis === 'x' ? 'z' : 'x'}`;   // (model metres)
 const lowLegs = modelSlopes.filter((r) => !r.tall);
-for (const r of model) console.log(`  flat, floor ${r.h.toFixed(2)} m: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}`);
+for (const r of model) console.log(`  flat, floor ${r.h.toFixed(2)} m: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}${r.plate ? ` (a foot plate under it, ${r.axis === 'x' ? 'z' : 'x'} ${r.plate[0].toFixed(2)}..${r.plate[1].toFixed(2)})` : ''}`);
 for (const t of TALL_FENCE) console.log(`  the tall fence at ${t.name}: x ${t.x0.toFixed(2)}..${t.x1.toFixed(2)} z ${t.z0.toFixed(2)}..${t.z1.toFixed(2)}, from ${t.h.toFixed(2)} to ${(t.h + PANEL.top - PANEL.deck).toFixed(2)} m, a wall`);
 for (const r of modelSlopes) console.log(`  slope: ${r.axis} ${r.from.toFixed(2)}..${r.to.toFixed(2)} ${side(r)}, the lower floor ${r.lo0.toFixed(2)}..${r.lo1.toFixed(2)} m, the higher ${r.h0.toFixed(2)}..${r.h1.toFixed(2)} m${r.more ? ' (a leg carried on)' : ''}${r.tall ? ` (the tall fence, leant: ${tallLegBoxes(r.tall).length} wall boxes over the ramp's floor at ${r.tall.f0.toFixed(2)}..${r.tall.f1.toFixed(2)} m)` : ''}`);
 for (const f of railFloors) console.log(`  floor beside ${f.why}: x ${MX(f.s.minX).toFixed(2)}..${MX(f.s.maxX).toFixed(2)} z ${MZ(f.s.minZ).toFixed(2)}..${MZ(f.s.maxZ).toFixed(2)}, ${(f.s.top / 4).toFixed(2)} m`);
-console.log(`${model.length} flat runs, ${model.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m: ${model.length} boxes, ${posts} posts and ${model.length} bars; ${lowLegs.length} slope legs, ${lowLegs.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m along the ground: ${sBoxes} boxes, ${sPosts} posts and ${lowLegs.length} leaning bars; the tall fence: ${TALL_FENCE.length} panels and ${TALL_LEGS.length} leant along a ramp's side (${TALL_BOXES.length} boxes)`);
+console.log(`${model.length} flat runs, ${model.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m: ${model.length} boxes, ${posts} posts, ${model.length} bars and ${plated.length} foot plates; ${lowLegs.length} slope legs, ${lowLegs.reduce((s, r) => s + r.to - r.from, 0).toFixed(1)} m along the ground: ${sBoxes} boxes, ${sPosts} posts and ${lowLegs.length} leaning bars; the tall fence: ${TALL_FENCE.length} panels and ${TALL_LEGS.length} leant along a ramp's side (${TALL_BOXES.length} boxes)`);
 console.log(`${railFloors.length} floors beside ${FLOORED.length} legs, ${railFloors.reduce((s, f) => s + (f.s.maxX - f.s.minX) * (f.s.maxZ - f.s.minZ) / 16, 0).toFixed(2)} m2`);
 console.log(process.env.LIST ? `listed alone: nothing written (${taken} rails, ${tallTaken} boxes of the tall fence and ${floorsTaken} floors of an earlier run in the file read)` : `${outF}: ${taken} rails, ${tallTaken} boxes of the tall fence and ${floorsTaken} floors of an earlier run out, ${model.length + sBoxes} rails, ${TALL_BOXES.length} boxes of the tall fence and ${railFloors.length} floors in, ${D.obstacles.length} boxes, ${D.surfaces.length} floors; ${piecesF}: ${pieces.length} pieces for the model, and the panels' spec beside it`);
