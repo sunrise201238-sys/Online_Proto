@@ -358,8 +358,15 @@ const ON_SLOPE = [['z', -10.31, -1, -10.14, 'the north way\'s ramp, its west sid
 // corner, and the post went on down to the leg's lower floor: 10 to 25 cm of it out of the beam's underside. The same plate and the same feet; the plate is 3 cm
 // thick there, 1.5 cm over the top and 1.5 cm in, since one of 9.5 cm came out of the wedge's underside as the post had. The beam's top is given by its own line
 // there, x -14.96 at 2.97 m and x -13.00 at 4.93 m, cut from the model: the plan's floor line for that leg is 7 to 11 cm low at its lower end.)
+// (b1105ld: the two inner ramps' south legs, the east one's and its mirror west of the 8.6 m deck. The user, with boxes of both picked on the page (#8301, #8303 and
+// #8286, #8288): "Trim these mini fences' foot visual. They are dangling in the air." The ramp's edge member is 0.28 m deep, its top 5 cm over the east leg's floor
+// line, and its outer face is at the leg's line but for a waist 0.7 m long at mid-span, 13.5 cm farther in — where the leg's middle post stands. The posts went
+// down to the leg's lower floor, 0.58 m and 0.70 m under the floor line: out of the member's underside at the ends, and all of it in the air at the waist. An
+// entry may now give the plate's own run along the leg (a pair) where it is not at the leg's lower end, and how far inside the beam the other posts end (last, 0.12
+// here for the 0.30 of a beam 0.56 m deep). The plate is under the middle post, 0.33 m long, from the leg's outer face in to the waist.)
 const ON_BEAM = [['x', 40.39, -1, 22.00, 0.232, 40.67, 0.095, 'the east street ramp\'s north leg'], ['x', 48.38, 1, 22.00, 0.232, 48.10, 0.095, 'the east street ramp\'s south leg'],
-  ['x', 32.39, -1, -14.63, [-14.96, 2.97, -13.00, 4.93], 32.67, 0.03, 'the west street ramp\'s north leg'], ['x', 40.37, 1, -14.63, [-14.96, 2.97, -13.00, 4.93], 40.09, 0.03, 'the west street ramp\'s south leg']]; const beamed = [];
+  ['x', 32.39, -1, -14.63, [-14.96, 2.97, -13.00, 4.93], 32.67, 0.03, 'the west street ramp\'s north leg'], ['x', 40.37, 1, -14.63, [-14.96, 2.97, -13.00, 4.93], 40.09, 0.03, 'the west street ramp\'s south leg'],
+  ['x', 33.86, 1, [11.38, 11.71], [10.60, 9.73, 12.50, 11.63], 33.65, 0.095, 'the east inner ramp\'s south leg', 0.12], ['x', 25.88, 1, [-4.59, -4.26], [-3.48, 9.73, -5.38, 11.63], 25.64, 0.095, 'the west inner ramp\'s south leg', 0.12]]; const beamed = [];
 const BEAM_IN = 0.30, BEAM_PLATE_OVER = 0.015, BEAM_PLATE_FOOT = 0.01;
 for (const r of modelSlopes) { if (r.tall) continue; const on = ON_SLOPE.filter(([ax, c, n]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02); if (on.length) { r.lo0 = r.h0; r.lo1 = r.h1; r.strip = on[0]; stripped.push(on[0][4]); }
   const p0 = r.n > 0 ? r.c - T : r.c, p1 = r.n > 0 ? r.c : r.c + T; const len = r.to - r.from; const hi = (a) => r.h0 + (r.h1 - r.h0) * (a - r.from) / len, lo = (a) => r.lo0 + (r.lo1 - r.lo0) * (a - r.from) / len;
@@ -367,17 +374,18 @@ for (const r of modelSlopes) { if (r.tall) continue; const on = ON_SLOPE.filter(
   for (let k = 0; k < K; k += 1) { const a0 = r.from + len * k / K, a1 = r.from + len * (k + 1) / K; const box = r.axis === 'x' ? { minX: AX(a0), maxX: AX(a1), minZ: AZ(p0), maxZ: AZ(p1) } : { minX: AX(p0), maxX: AX(p1), minZ: AZ(a0), maxZ: AZ(a1) };
     D.obstacles.push({ minX: r4(box.minX), maxX: r4(box.maxX), minZ: r4(box.minZ), maxZ: r4(box.maxZ), minY: r4((Math.min(lo(a0), lo(a1)) + HOLD_FROM) * 4), maxY: r4((Math.max(hi(a0), hi(a1)) + TALL) * 4), topBuffer: BUFFER, noProjectile: true }); sBoxes += 1; }
   const boxes = [], hexa = []; const pt = (a, y, p) => (r.axis === 'x' ? [a, y, p] : [p, y, a]);
-  const beam = ON_BEAM.find(([ax, c, n, at]) => ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02 && r.from < at && r.to > at); let set = 0; const lowTo = r.h1 < r.h0;   // (the leg's lower end: its 'to' or its 'from')
+  const beam = ON_BEAM.find(([ax, c, n, at]) => { const m = Array.isArray(at) ? (at[0] + at[1]) / 2 : at; return ax === r.axis && n === r.n && Math.abs(r.c - c) < 0.02 && r.from < m && r.to > m; }); let set = 0; const lowTo = r.h1 < r.h0;   // (the leg's lower end: its 'to' or its 'from')
+  const lowEnd = lowTo ? r.to : r.from, plateRun = !beam ? null : Array.isArray(beam[3]) ? beam[3] : [Math.min(beam[3], lowEnd), Math.max(beam[3], lowEnd)], beamIn = beam ? beam[8] ?? BEAM_IN : 0;
   const bTop = !beam ? null : Array.isArray(beam[4]) ? (a) => beam[4][1] + (beam[4][3] - beam[4][1]) * (a - beam[4][0]) / (beam[4][2] - beam[4][0]) : (a) => hi(a) - beam[4];
-  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const off = !!beam && (lowTo ? a + T > beam[3] + 1e-9 : a < beam[3] - 1e-9); if (off) set += 1;
-    const yb = beam ? Math.min(bTop(a), bTop(a + T)) - (off ? BEAM_PLATE_FOOT : BEAM_IN) + GROUND : Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
+  const N = Math.max(1, Math.ceil((len - T) / PITCH)); for (let k = 0; k <= N; k += 1) { const a = r.from + (len - T) * k / N; const off = !!beam && a + T > plateRun[0] + 1e-9 && a < plateRun[1] - 1e-9; if (off) set += 1;
+    const yb = beam ? Math.min(bTop(a), bTop(a + T)) - (off ? BEAM_PLATE_FOOT : beamIn) + GROUND : Math.min(lo(a), lo(a + T)) + GROUND - FOOT, yt = Math.min(hi(a), hi(a + T)) + GROUND + TALL - BAR * 0.5;
     boxes.push(r.axis === 'x' ? { min: [a, yb, p0], max: [a + T, yt, p1] } : { min: [p0, yb, a], max: [p1, yt, a + T] }); sPosts += 1; }
   const yA = hi(r.from) + GROUND + TALL, yB = hi(r.to) + GROUND + TALL;   // (the bar: a box sheared along the slope — upright ends, the top and the bottom parallel to the slope)
   hexa.push([pt(r.from, yA - BAR, p0), pt(r.to, yB - BAR, p0), pt(r.to, yB - BAR, p1), pt(r.from, yA - BAR, p1), pt(r.from, yA, p0), pt(r.to, yB, p0), pt(r.to, yB, p1), pt(r.from, yA, p1)].map((v) => v.map(r4)));
   if (r.strip) { const q0 = Math.min(r.c, r.strip[3]), q1 = Math.max(r.c, r.strip[3]), fA = hi(r.from) + GROUND, fB = hi(r.to) + GROUND;
     hexa.push([pt(r.from, fA - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q0), pt(r.to, fB - PLATE_DEEP, q1), pt(r.from, fA - PLATE_DEEP, q1), pt(r.from, fA - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q0), pt(r.to, fB - PLATE_UNDER, q1), pt(r.from, fA - PLATE_UNDER, q1)].map((v) => v.map(r4))); }
   if (beam) { if (set !== 1) throw new Error(`"${beam[7]}": ${set} posts on the foot plate, 1 looked for`); beamed.push(beam[7]);   // (the foot plate: a box sheared along the slope as the bar is)
-    const E = lowTo ? r.to : r.from, a0 = Math.min(beam[3], E), a1 = Math.max(beam[3], E), q0 = Math.min(r.c, beam[5]), q1 = Math.max(r.c, beam[5]), tA = bTop(a0) + GROUND + BEAM_PLATE_OVER, tB = bTop(a1) + GROUND + BEAM_PLATE_OVER, D = beam[6];
+    const a0 = plateRun[0], a1 = plateRun[1], q0 = Math.min(r.c, beam[5]), q1 = Math.max(r.c, beam[5]), tA = bTop(a0) + GROUND + BEAM_PLATE_OVER, tB = bTop(a1) + GROUND + BEAM_PLATE_OVER, D = beam[6];
     hexa.push([pt(a0, tA - D, q0), pt(a1, tB - D, q0), pt(a1, tB - D, q1), pt(a0, tA - D, q1), pt(a0, tA, q0), pt(a1, tB, q0), pt(a1, tB, q1), pt(a0, tA, q1)].map((v) => v.map(r4))); }
   pieces.push({ name: `Rail_${String(pieces.length + 1).padStart(2, '0')}_slope`, h: Math.min(r.h0, r.h1), boxes: boxes.map((b) => ({ min: b.min.map(r4), max: b.max.map(r4) })), hexa }); }
 if (stripped.length !== ON_SLOPE.length) throw new Error(`the legs on a slope's own floor: ${stripped.length} of ${ON_SLOPE.length} found in the plan`);
