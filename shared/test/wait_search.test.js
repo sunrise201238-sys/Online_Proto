@@ -2,10 +2,12 @@
 // stood with no plan: "Do 乙"). A search that does not end inside its slice is parked and taken up at the unit's next tick while
 // its key stays the same. The key carried the body's own square and THE WAIT paces, so a waiting unit's parked search was
 // thrown away at every step and begun again, without end. Here: a 2v2 Sudden Death on Town as the trial ran it — the player's
-// unit standing, its teammate down, the two enemy bots on the brain — 30 s of it, every search cut after the same few checks on
+// unit standing, its teammate down, the two enemy bots on the brain — 60 s of it, every search cut after the same few checks on
 // any machine (a clock of the test's own: each reading of it is one step on). A waiting unit's parked search is never replaced
 // by one of its own kind and stage for another square while the same wait stands, and a parked search that has lived across a
 // step of the pacing goes on to its end. (Before the change this match threw 27 away and ended none.)
+// (60 s since b1105le, 30 s until then: Town's two trucks as simple boxes numbered the grid's places anew, the match ran a little otherwise, and the one search
+// that had ended inside the first 30 s no longer did. The long wait comes after the 45th second with either data, and some thirty searches end in it.)
 import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their files, before any arena is asked for)
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,7 +45,7 @@ test('a waiting unit keeps its parked search while it paces, and the search goes
   const was = {}; let parkedTicks = 0, thrown = 0, ended = 0, now = 1000;
   performance.now = () => (clock += 1); Math.random = mulberry32(1);
   try {
-    for (let i = 0; i < 30000 / TICK_RATE_MS; i += 1) {
+    for (let i = 0; i < 60000 / TICK_RATE_MS; i += 1) {
       now += TICK_RATE_MS;
       for (const id of bots) { const me = m.fighters[id]; if (me.hp <= 0) continue; me.targetId = pickBotTargetId(m, me) ?? me.targetId; tickBot(m, id, now); }
       tickMatch(m, inputs, now, TICK_DT, bots);
