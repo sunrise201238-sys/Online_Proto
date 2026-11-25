@@ -42,6 +42,7 @@ import {
   obstaclesNearPoint,
   getArenaSpawns,
   pickRespawnSpawn,
+  pickRespawnNearEnemy,
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles,
@@ -9359,7 +9360,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105le 11-25';
+const CLIENT_BUILD_TAG = 'b1105lf 11-25';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13264,7 +13265,12 @@ function respawnSlotMech(slotName, unitKey) {
   // positions — the call the server makes; elsewhere the slot's own start.
   const others = ['player', 'ally', 'enemy', 'enemy2'].filter((s) => s !== slotName && state[s])
     .map((s) => ({ team: state[s].state.team, hp: state[s].state.hp, pos: state[s].body.position }));
-  const sp = pickRespawnSpawn(state.mapKey, old.state.team, others) ?? state.spawnPoints?.[slotName];
+  // THE PLACE BY THE FIGHT (b1105lf; user 2026-11-25, "1. Apply option B. 2. Offline scene maps only. 3. Does not apply to team1 Sniper units."): a fresh
+  // unit of team 1 — the player's side: the player and the ally — on a scene map comes on at the free place nearest a living enemy, seen or not
+  // (spawn.js pickRespawnNearEnemy). A sniper keeps the shared rule, as team 2 does and as every unit does on a concept map; online the server places.
+  const byTheFight = GLB_MAPS[state.mapKey] && old.state.team === 'A' && !UNIT_DATA[unitKey]?.sniperCharge;
+  const sp = (byTheFight ? pickRespawnNearEnemy(state.mapKey, old.state.team, others) : null)
+    ?? pickRespawnSpawn(state.mapKey, old.state.team, others) ?? state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
   // Body teleport only — sync the visual root NOW. The bot AI reads
   // root.position and the frame sync runs after it; without this the fresh

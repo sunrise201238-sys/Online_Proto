@@ -9,7 +9,8 @@
 // nothing (the earlier rule put a respawn beside a living teammate; gone with the user's word). A place within SPAWN_CLEAR of a living body is passed over
 // while another remains. A map whose spawns say `pick: 'random'` draws any free place at random instead (Spacecraft,
 // user 2026-10-19). The server (index.js, the Trio step) and the offline client (main.js respawnSlotMech) ask this
-// and hand the place to respawnFighterNext / the fresh mech.
+// and hand the place to respawnFighterNext / the fresh mech. (Team 1's fresh unit, offline on a scene map, asks
+// pickRespawnNearEnemy first: the foot of this file.)
 import { MAP_DATA, GROUND_BASE_Y, FIGHTER_RADIUS } from './constants.js';
 import { getArena, getArenaBounds } from './arena.js';
 import { botHasLineOfSight } from './nbrain.js';
@@ -64,5 +65,30 @@ export function pickRespawnSpawn(mapKey, team, others) {
   if (unseen.length) return draw(unseen);
   let best = null, bd = -Infinity;
   for (const p of pool) { const d = nearest(p); if (d > bd) { best = p; bd = d; } }   // (ties keep the data's order)
+  return best;
+}
+
+// THE PLACE BY THE FIGHT (b1105lf; user 2026-11-25, of this side's measured ways to favour the offline player's team by the
+// place alone — "B. 同 A，但不管是否被看見 … Trio 1v1 49% 69%, Trio 2v2 49% 84%": "1. Apply option B. 2. Offline scene maps
+// only. 3. Does not apply to team1 Sniper units."): of the map's places, the free one nearest a living enemy, seen or not.
+// The offline client asks it for a fresh unit of team 1 on a scene map, a sniper excepted (main.js respawnSlotMech), and
+// falls back on pickRespawnSpawn; the server never asks it, so an online match respawns as it did. null on a map without
+// spawn places and with no enemy alive. A place within SPAWN_CLEAR of a living body is passed over while another remains,
+// as above. What the rule gives is the respawn's three seconds of protection spent within reach of the enemy: with the
+// protection taken out of the sim it gained nothing (README: Spawn places).
+export function pickRespawnNearEnemy(mapKey, team, others) {
+  if (!MAP_DATA[mapKey]) return null;
+  const sp = getArena(mapKey).spawns;
+  if (!sp.more) return null;
+  const live = others.filter((f) => f.hp > 0);
+  const enemies = live.filter((f) => f.team !== team);
+  if (!enemies.length) return null;
+  const places = [sp.p1, sp.p2, ...sp.more].map((p) => ({ x: p.x, y: p.y ?? GROUND_BASE_Y, z: p.z }));
+  const free = places.filter((p) => live.every((f) => Math.hypot(f.pos.x - p.x, f.pos.z - p.z) >= SPAWN_CLEAR));
+  let best = null, bd = Infinity;
+  for (const p of free.length ? free : places) {
+    const d = Math.min(...enemies.map((f) => Math.hypot(f.pos.x - p.x, f.pos.z - p.z)));
+    if (d < bd) { best = p; bd = d; }   // (ties keep the data's order)
+  }
   return best;
 }

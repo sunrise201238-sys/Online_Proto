@@ -2,7 +2,7 @@ import '../tools/maps/arena_files.mjs';   // (the modelled maps' data from their
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createMatchState, respawnFighterNext, pickRespawnSpawn, getArena, botHasLineOfSight,
+  createMatchState, respawnFighterNext, pickRespawnSpawn, pickRespawnNearEnemy, getArena, botHasLineOfSight,
   unitOverlapsObstacle, groundHeightAt, GROUND_BASE_Y
 } from '../src/sim/index.js';
 
@@ -137,4 +137,46 @@ test('District: team 1 starts at the ring road\'s south-east corner, team 2 at t
   assert.ok(F.p3.team === 'A' && d(F.p3, F.p1.pos) <= 20, 'team 1\'s mate beside its home'); assert.ok(F.p4.team === 'B' && d(F.p4, F.p2.pos) <= 20, 'team 2\'s mate beside its home');
   const pool = [sp.p1, sp.p2, ...sp.more].map((p) => `${p.x},${p.z}`).sort();
   assert.deepEqual(pool, ['-1,-510', '-1,202', '-105,318', '-353,-154', '-353,-510', '-353,202', '351,-154', '351,-510', '351,202'].sort(), 'the nine places unchanged');
+});
+
+// THE PLACE BY THE FIGHT (b1105lf; user 2026-11-25, of the measured ways to favour the offline player's team by the place alone:
+// "1. Apply option B. 2. Offline scene maps only. 3. Does not apply to team1 Sniper units."): pickRespawnNearEnemy, which the
+// offline client asks for a fresh unit of team 1 on a scene map, a sniper excepted (main.js respawnSlotMech; the server never
+// asks it) — of the map's places the free one nearest a living enemy, seen or not.
+const SCENE_MAPS = ['town', 'district', 'neon', 'spacecraft', 'dust', 'warehouse', 'compound', 'hospital', 'backrooms', 'backrooms_anomaly'];
+test('the place by the fight: on every scene map the free place nearest a living enemy, in its sight or out of it', () => {
+  let inSight = 0, picks = 0;
+  for (const key of SCENE_MAPS) { const a = getArena(key); const sees = seesOn(a); const ps = placesOf(a);
+    const m = createMatchState({ mapKey: key, mode: '1v1', rosters: ROSTERS, startTime: 1000 }); m.fighters.p1.hp = 0; const e = m.fighters.p2;
+    for (const q of ps) { put(e, { x: q.x + 12, y: q.y, z: q.z });   // (the enemy three metres beside a place: off it, so the place is free)
+      const pick = pickRespawnNearEnemy(key, 'A', [e]); const free = ps.filter((p) => dist(p, e.pos) >= 8);
+      assert.ok(free.some((p) => same(p, pick)), `${key}: the pick is one of the map's free places`);
+      for (const p of free) assert.ok(dist(pick, e.pos) <= dist(p, e.pos) + 1e-9, `${key}: (${p.x}, ${p.z}) is nearer the enemy than the pick`);
+      picks += 1; if (sees(pick, e.pos)) inSight += 1; } }
+  // (the shared rule would give none of these while an unseen place remained: here the sight is not asked)
+  assert.ok(picks >= 80 && inSight >= 20, `picks in the enemy's sight: ${inSight} of ${picks}`);
+});
+
+test('the place by the fight: a place a living body stands on is passed over, a fallen enemy counts for nothing, two enemies count by the nearer', () => {
+  const a = getArena('town'); const ps = placesOf(a);
+  const m = createMatchState({ mapKey: 'town', mode: '2v2', rosters: ROSTERS, startTime: 1000 }); m.fighters.p1.hp = 0;
+  const e1 = m.fighters.p2, e2 = m.fighters.p4, mate = m.fighters.p3; const others = [e1, mate, e2];
+  const byNearest = (from, skip = []) => ps.filter((p) => !skip.some((q) => same(p, q))).sort((p, q) => dist(p, from) - dist(q, from));
+  // an enemy standing on a place itself: that place is passed over, the next nearest to it is the pick
+  put(e1, ps[2]); put(e2, ps[2]); e2.hp = 0; put(mate, ps[0]); const order = byNearest(e1.pos, [ps[2], ps[0]]);
+  assert.ok(same(pickRespawnNearEnemy('town', 'A', others), order[0]), 'the enemy\'s own place and the mate\'s are passed over');
+  // the mate standing on that next place: passed over too
+  put(mate, order[0]); assert.ok(same(pickRespawnNearEnemy('town', 'A', others), byNearest(e1.pos, [ps[2], order[0]])[0]), 'a place the mate stands on is passed over');
+  // the fallen enemy lies three metres from another place: it draws nothing
+  put(mate, ps[0]); put(e2, { x: ps[5].x + 12, y: ps[5].y, z: ps[5].z }); assert.ok(same(pickRespawnNearEnemy('town', 'A', others), order[0]), 'a fallen enemy counts for nothing');
+  // alive, it does: the place beside it is three metres from an enemy, nearer than any place is to the other
+  e2.hp = 100; assert.ok(same(pickRespawnNearEnemy('town', 'A', others), ps[5]), 'two enemies: the place nearest either');
+});
+
+test('the place by the fight: null with no enemy alive and on a map without spawn places — the caller keeps the shared rule', () => {
+  const m = createMatchState({ mapKey: 'town', mode: '2v2', rosters: ROSTERS, startTime: 1000 }); m.fighters.p1.hp = 0; m.fighters.p2.hp = 0; m.fighters.p4.hp = 0;
+  assert.equal(pickRespawnNearEnemy('town', 'A', [m.fighters.p2, m.fighters.p3, m.fighters.p4]), null);
+  const c = createMatchState({ mapKey: 'arena2', mode: '1v1', rosters: ROSTERS, startTime: 1000 }); c.fighters.p1.hp = 0;
+  assert.equal(pickRespawnNearEnemy('arena2', 'A', [c.fighters.p2]), null);
+  assert.equal(pickRespawnNearEnemy('no_such_map', 'A', [c.fighters.p2]), null);
 });
