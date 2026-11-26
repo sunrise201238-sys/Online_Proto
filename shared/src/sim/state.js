@@ -339,11 +339,12 @@ export function respawnFighterNext(matchState, id, at = null) {
   fresh.roster = old.roster;
   fresh.rosterIdx = nextIdx;
   fresh.invulnerableUntil = matchState.now + SPAWN_IMMUNITY_MS;
-  // Keep the old lock if that enemy is still alive; otherwise closest.
-  const oldTgt = matchState.fighters[old.targetId];
-  fresh.targetId = (oldTgt && oldTgt.team !== old.team && oldTgt.hp > 0)
-    ? old.targetId
-    : (pickClosestEnemyId(matchState, fresh) ?? old.targetId);
+  // THE FRESH UNIT'S LOCK (b1105lh; user 2026-11-26, "when player unit respawns, make their unit locks at nearer enemy", done for the offline player as
+  // b1105lg — main.js respawnSlotMech — and then: "online also"): the living enemy nearest the place it comes on at. Until then it kept the fallen
+  // unit's lock while that enemy lived, which with two enemies could be the far one. With no enemy alive the old lock stays, as it did. (A bot's lock
+  // is picked anew by the server's driver before every tick, so this is a human's; the client mirrors it from the next snapshot — main.js, the sync of
+  // the player's target to the server's targetId.)
+  fresh.targetId = pickClosestEnemyId(matchState, fresh) ?? old.targetId;
   matchState.fighters[id] = fresh;
   // THE LOCK MOVES TO THE LIVING ENEMY (user 2026-10-25, "not the respawned same one"): an opponent locked on this slot moves
   // its lock to another living enemy when there is one. applyInput's auto-retarget (2026-08-12) meant to do this on the
