@@ -9360,7 +9360,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lf 11-25';
+const CLIENT_BUILD_TAG = 'b1105lg 11-26';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13308,6 +13308,11 @@ function respawnSlotMech(slotName, unitKey) {
     state.reticleLastEnemyFireAt = next.state.lastFireAt;
     state.reticleEnemyFiringUntil = 0;
   }
+  // THE FRESH PLAYER'S LOCK (b1105lg; user 2026-11-26: "when player unit respawns, make their unit locks at nearer enemy."): the player's own next
+  // unit comes on locked on the living enemy nearest the place it comes on at. Until now it kept the fallen unit's lock, which with two enemies could be
+  // the far one while the unit stood beside the near one (THE PLACE BY THE FIGHT, above). One enemy alive: that one, as before. A spectated player slot
+  // is a bot's and its lock follows the bot's own; online the server sets the lock (respawnFighterNext keeps the old one while that enemy lives).
+  if (slotName === 'player' && !state.spectatorActive) { const near = pickClosestEnemyOf(fresh); if (near) setPlayerTargetMech(near); }
 }
 
 // Roster units left on a slot, counting the live current unit.
