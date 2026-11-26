@@ -104,6 +104,10 @@ const JUMP_LINK_COST = 2.5;
 // 7 s out-and-back loop that never resolved). Judge the cell from an eye
 // lowered by this margin so the sight it was chosen for survives the slack.
 const FIRING_SIGHT_MARGIN = 0.8;
+// The most a jump lifts the feet, world units: 5.374 for every unit (jumpVelocity 30 and the 300 ms hover), rounded up. THE
+// VAULT'S OWN LANDING, in the builder, reads the floors a vault can come down on by it; shared/test/vault_landing.test.js jumps
+// every unit and fails when one rises higher than this.
+export const JUMP_APEX = 5.4;
 
 export function buildNavGrid(obstacles, surfaces, ladders = []) {
   // Grid bounds = obstacle bounding box. Boundary walls are obstacles in
@@ -462,6 +466,21 @@ export function buildNavGrid(obstacles, surfaces, ladders = []) {
     }
     return true;
   };
+  // THE VAULT'S OWN LANDING (b1105li; user 2026-11-26, of a bot that had followed up District's east tower by its ladder and "will
+  // get stuck tracking me after i run down a few floors"): the follower vaults toward the waypoint a link leads to, so the body
+  // leaves the higher floor on the jump's arc, and the floor it comes down on at the landing place is the highest one there that
+  // the arc steps onto (physics.js groundHeightAt, the ground rule: a floor within a step over the feet takes the body — at the
+  // arc's top the feet are JUMP_APEX over the take-off's floor, so a floor up to 8 units over it does). A link is a fall to the
+  // lower node only where that floor is the lower node's. The towers' stairs are ramps along the inner walls,
+  // and by a ramp's upper end the storey above stands 1.2 m over the tread: its edge a lip by its height (THE LIP, above), and
+  // the walker's own fall off the ramp's side a true one (walkFloorTo, below: a walker does not step that high) — so a fall link
+  // led from the ramp's side down to the floor under that storey, and the vault put the body ON the storey above, over the
+  // waypoint. Read in the plan the waypoint was reached, and the route went on a storey too high, turn after turn: the east
+  // tower had 16 such falls, the route down from its roof was made of them, and the bot spent 90 s on the top storey; with
+  // them gone it is on its enemy's floor, five storeys down, in 23 s. Lower on the ramp the storey above is out of the arc's
+  // reach, and the fall off the ramp's side stands. (A wall's top is no floor: a parapet, a rail or a sill with the place below
+  // it is no matter to this rule — the rooftop falls of 2026-10-29 are as they were.)
+  const vaultLandsOn = (x, z, floorY) => groundHeightAt(x, z, surfaces, floorY + JUMP_APEX);
   // Capped BFS walking distance (cells) between two nodes of one component.
   const walkDetourCells = (from, to, capCells) => {
     if (from === to) return 0;
@@ -540,6 +559,8 @@ export function buildNavGrid(obstacles, surfaces, ladders = []) {
             if (Math.abs(walkFloorTo(nodeX(hi), nodeZ(hi), floor[hi], nodeX(lo), nodeZ(lo), surfaces) - floor[lo]) > 0.05) continue;
             // (the edge clear at the higher floor's body height, or crossed by lips alone — THE LIP above: a parapet, a sill — that the jump hops)
             if (walkSegmentBlocked(nodeX(hi), nodeZ(hi), nodeX(lo), nodeZ(lo), floor[hi] + GROUND_BASE_Y, obstacles) && !onlyLipsAcross(nodeX(hi), nodeZ(hi), nodeX(lo), nodeZ(lo), floor[hi])) continue;
+            // (and the vault the follower takes it by comes down on the lower node's floor as well — THE VAULT'S OWN LANDING, above)
+            if (Math.abs(vaultLandsOn(nodeX(lo), nodeZ(lo), floor[hi]) - floor[lo]) > 0.05) continue;
             if (sameComp) { const capCells = Math.ceil(SAME_COMP_MIN_DETOUR / CELL) + 2; if (walkDetourCells(hi, lo, capCells) * CELL < SAME_COMP_MIN_DETOUR) continue; }
             addDrop(hi, lo); linked = true; continue;
           }

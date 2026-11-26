@@ -262,6 +262,12 @@ const BOT_WAYPOINT_ADVANCE_RADIUS = 1.5;
 // slab's rise; more is another storey, and a distance measured in the plan (x, z) alone says nothing about reaching it. The
 // vertical stack, the regained sight, the in-band arrival and the final waypoint all ask it (2026-11-03, b1102s).
 const BOT_SAME_FLOOR_RISE = 2.5;
+// ANOTHER STOREY (b1105li): a waypoint whose floor is this far over or under the floor the body stands on is on another
+// storey — more than any step, kerb, box top or ramp's rise within the waypoint's radius (a 56 degree ramp, the steepest the
+// readings keep as a floor, rises 2.2 units in the radius's 1.5), less than the least room a body has under a slab (7 units and
+// more). Wider than BOT_SAME_FLOOR_RISE on purpose: this one stops the follower at a waypoint, and a body that stands on a
+// thing's top beside its waypoint must still be let past it.
+const BOT_WAYPOINT_STOREY = 6;
 // How far out the bot scans for a ledge to perch on, and how close it has to
 // get to that ledge (or to a drop edge) before it commits the jump.
 const BOT_PERCH_SEEK_RADIUS = 24;
@@ -488,7 +494,13 @@ function findHighGroundPerch(px, pz, myFloorY, surfaces, obstacles, searchRadius
 // that just lead into a wall or don't actually descend. Returns a unit
 // vector toward that edge plus the distance to it, or null if the bot isn't
 // on a droppable surface.
-function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, awayZ) {
+// NOT PAST THE ENEMY (`notUnder`, the enemy's floor; b1105li, user 2026-11-26, District's east tower): the hop is a way down
+// to the enemy's ground, and an edge whose drop ends farther under the enemy's floor than a jump climbs back
+// (BOT_CLIMB_MAX_RISE) is no way to it. On the tower's stairs, a metre over its enemy's storey and in sight of it, the bot's
+// one edge with lower ground beyond it was the window's — 33 m down to the street; it hopped out, came back up by the ladder
+// and down the stairs, and hopped out again, for as long as the match ran. Such an edge is passed over now: the bot walks on
+// at its enemy, and the router has the rest. (A drop a jump climbs back from stands: Station's tracks between two platforms.)
+function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, awayZ, notUnder = null) {
   let deck = null;
   const cands = obstaclesNearPoint(surfaces, px, pz, 0, _perchScratch);   // (the floors under the point, in the list's order: the first that fits, as before)
   for (let i = 0; i < cands.length; i++) {
@@ -511,7 +523,9 @@ function findDescentDirection(px, pz, myFloorY, surfaces, obstacles, awayX, away
   let bestScore = -Infinity;
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i];
-    if (groundHeightAt(e.probeX, e.probeZ, surfaces, myFloorY + 50) > lowerY) continue;
+    const land = groundHeightAt(e.probeX, e.probeZ, surfaces, myFloorY + 50);
+    if (land > lowerY) continue;
+    if (notUnder != null && land < notUnder - BOT_CLIMB_MAX_RISE) continue;   // (the drop would end under the enemy's floor, past a jump's climb back)
     if (unitOverlapsObstacle(e.probeX, probeY, e.probeZ, obstaclesNearPoint(obstacles, e.probeX, e.probeZ, 4))) continue;
     const score = (e.x * awayX + e.z * awayZ) - e.edgeDist * 0.03;
     if (score > bestScore) {
@@ -1728,7 +1742,7 @@ export function nbBrainTick(host) {
         const up = findHighGroundPerch(pos.x, pos.z, myFloorY, surfaces, obstacles, BOT_PERCH_SEEK_RADIUS);
         if (up && up.dist < BOT_LEDGE_JUMP_REACH && hopAllowed(up, mx, mz, opp, now)) { jumpDirX = up.toX; jumpDirZ = up.toZ; if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'pursue-climb'; } }
       } else if (onHighGround) {
-        const exit = findDescentDirection(pos.x, pos.z, myFloorY, surfaces, obstacles, dirX, dirZ);
+        const exit = findDescentDirection(pos.x, pos.z, myFloorY, surfaces, obstacles, dirX, dirZ, oppFloorY);
         if (exit && exit.edgeDist < BOT_LEDGE_JUMP_REACH && Math.random() > 0.5) {
           jumpDirX = exit.toX; jumpDirZ = exit.toZ;
           if (botTryJump(host)) { jumpThisTick = true; me.botHopWhy = 'pursue-descent'; }
@@ -1778,9 +1792,16 @@ export function nbBrainTick(host) {
     // its enemy, again and again — then re-planned every tick on the spot
     // (Compound's big building, its enemy on the second floor; user
     // 2026-11-03, "the unit cannot break through a back and forth loop").
+    // And DOWN at it (b1105li; user 2026-11-26, the bot that "will get stuck tracking me after i run down a few floors"): a
+    // body in the air over the destination's floor is on its way there. The floor read is the one under the body, so a body
+    // that stepped off a storey's edge to a last waypoint on the stairs below had arrived the tick it left the edge: the route
+    // was dropped for a fresh plan (no sight of the enemy yet), nothing stood meanwhile, and the pathless fallback steered the
+    // body back onto the storey it was leaving, at its enemy underneath — District's east tower, the enemy one storey down:
+    // to the stairwell's edge and back, every three seconds, for as long as the match ran.
     if (nav && nav.path.length > 0) {
       const lastWp = nav.path[nav.path.length - 1];
-      const onItsFloor = lastWp.y == null || Math.abs(lastWp.y - myFloorY) < BOT_SAME_FLOOR_RISE;
+      const onItsFloor = lastWp.y == null
+        || (Math.abs(lastWp.y - myFloorY) < BOT_SAME_FLOOR_RISE && pos.y - GROUND_BASE_Y - lastWp.y < BOT_SAME_FLOOR_RISE);
       if (onItsFloor && Math.hypot(lastWp.x - pos.x, lastWp.z - pos.z) < 3) {
         // Arrived — but if the trip did NOT buy sight of the target, dropping
         // to the pathless fallback sends the bot beelining back where it came
@@ -1827,11 +1848,39 @@ export function nbBrainTick(host) {
       // already made read as ahead.)
       const standY = me.floorY != null ? me.floorY - GROUND_BASE_Y : myFloorY;
       const padAhead = (w) => w.pad != null && Math.abs((w.y ?? standY) - standY) >= BOT_SAME_FLOOR_RISE;
+      // A WAYPOINT ON ANOTHER STOREY IS NOT REACHED (b1105li; user 2026-11-26, of a bot that had followed up District's east tower by
+      // its ladder: it "will get stuck tracking me after i run down a few floors"). The advance read the plan alone, x and z: a body
+      // on the storey over its waypoint — a link it could not take had left it there (navgrid.js, THE VAULT'S OWN LANDING) — passed
+      // that waypoint and every one after it that lay under its feet, walked the route a storey too high, and the next plan began
+      // the same way: 90 s on the tower's top storey. Now a waypoint a storey off (BOT_WAYPOINT_STOREY, by the floor under the body
+      // and by the one it stands on) is not passed; and a body that stands at such a waypoint in the plan has a route that failed —
+      // it plans afresh from where it stands, at most once a second (the plan's age) and never over a search still parked (that one
+      // goes on, tick by tick, as any other), the old route standing meanwhile. In the air the body is on its way to the waypoint's
+      // floor and waits to land. The same sense as the final waypoint's, above.
+      //   THE PLAN ALONE, STILL, WHERE THE GRID DOES NOT HOLD THE BODY (`planOnly`, on the route record — off the fighter, as the
+      // route is): a route whose FIRST waypoint — the place its search pinned the body on — is a storey off the body at it was
+      // planned for a body on a floor with no place of the grid's (a truck's roof, a ledge: the pin is the place under or over
+      // it), and walking the plan off that floor is the way on, as it was before this rule; and so is the old route where a fresh
+      // plan of this rule's found no other (`storeyFrom`: the route it was made from, still standing when its searches end).
+      const storeyOff = (w) => w.y != null && Math.abs(w.y - myFloorY) > BOT_WAYPOINT_STOREY && Math.abs(w.y - standY) > BOT_WAYPOINT_STOREY;
+      const atWaypoint = (w) => Math.hypot(w.x - pos.x, w.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS;
+      if (!nav.planOnly) {
+        if (nav.storeyFrom && !nav.pending) { if (nav.path === nav.storeyFrom) nav.planOnly = true; nav.storeyFrom = null; }
+        if (nav.idx === 0 && storeyOff(wp) && atWaypoint(wp)) nav.planOnly = true;
+      }
       while (nav.idx < nav.path.length - 1
-          && !ladderAhead(wp) && !padAhead(wp)
-          && Math.hypot(wp.x - pos.x, wp.z - pos.z) < BOT_WAYPOINT_ADVANCE_RADIUS) {
+          && !ladderAhead(wp) && !padAhead(wp) && (nav.planOnly || !storeyOff(wp))
+          && atWaypoint(wp)) {
         nav.idx += 1;
         wp = nav.path[nav.idx];
+      }
+      if (!nav.planOnly && storeyOff(wp) && wp.ladder == null && wp.pad == null && grounded && !me.airborne && !nav.pending
+          && now - nav.at > 1000 && atWaypoint(wp)) {
+        const failed = nav.path;
+        navPlan(true);
+        const fresh = host.navGet();
+        if (fresh) fresh.storeyFrom = failed;
+        if (fresh && fresh.path[fresh.idx]) { nav = fresh; wp = fresh.path[fresh.idx]; }
       }
       if (now - nav.at > 1000
           && Math.hypot(opp.pos.x - nav.gx, opp.pos.z - nav.gz) > 12) {
