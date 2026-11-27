@@ -35,12 +35,12 @@ export const UNIT_DATA = {
     // Weapon spec
     lockRange: 110,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 110; 112 until then)
     // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "remove all 2V2 lock range settings" — no unit carries lockRange2v2 now; 2v2 bots take lockRange, as 1v1 does)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,        // ≈ 85.71 ms cooldown — 96 ms tick slot (10.4/s); AR/SMG cadence ladder: M4 700 < FAMAS 900 < EVO3 1100
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Saori M4 — same as 0.8.3 M4: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
-    bloomPerShot: 0.002,        // SA added per shot
+    bloomPerShot: 0.003,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.002 until then) SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -49,7 +49,7 @@ export const UNIT_DATA = {
     botFireCap: 30,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit2: {
     id: 'unit2',
@@ -74,7 +74,7 @@ export const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±BOT_BAND_HALF_WIDTH) gives the shotgun its band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -86,7 +86,7 @@ export const UNIT_DATA = {
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 },
+    stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
     // Horizontal-only pattern widening (see volleyPelletOffset): applied
     // after the per-shot random rotation, so blasts stay randomized while
     // the cloud is 1.4x wider and exactly as tall as Haruka's.
@@ -125,7 +125,7 @@ export const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit4: {
     id: 'unit4',
@@ -145,11 +145,11 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1100,       // ≈ 54.55 ms cooldown
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then) base SA (rad, full cone) — Atsuko evo3 — same as 0.8.3 evo3 (base 0.06 -> 0.03): sure-hit 107 at base, 40 at cap (bloom port 2026-09-22)
-    bloomPerShot: 0.003,        // SA added per shot
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
     bloomCap: 0.08,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -163,7 +163,7 @@ export const UNIT_DATA = {
     // Per-weapon hit-stun. Every unit declares its own stun; the ??-fallbacks
     // in projectiles.js (PROJECTILE_HIT_STUN_MS, 0.25) are just a safety net.
     // SMG = short + light.
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
   unit5: {
     id: 'unit5',
@@ -185,11 +185,11 @@ export const UNIT_DATA = {
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
     // (b1105fe, user 2026-11-10: "Give Hina the same 33% hit rate gating other auto-weapons have" — no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO 8.84 / cone, as the ARs and SMGs; botGateWidth 0, no gate line, from owner 2026-09-25 until then)
     botGateWidth: 11.42,       // bot fire gate (b1105ga, user 2026-11-11: "change hina hit rate gating from 33% to 20%"): she fires while her CURRENT cone still lands one round in five on a standing target — the 3.2 x 6.4 capsule a fifth of the cone's disc at radius 5.71 — so the line is 11.42 / cone, 1.29x the autos' 33% line (BOT_GATE_WIDTH_AUTO 8.84) she rode from b1105fe; at her 120 lock she holds once the cone passes 0.095
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
-    bloomPerShot: 0.003,        // SA added per shot
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
     bloomCap: 0.16,            // SA ceiling while spraying (b1105fz, user 2026-11-11: "change hina bloom to 0.16 CAP, recovery 0.06/s, 200 ms"; 0.17 in PT b1105fy, 0.20 from b1105eq, 0.30 from b1105el, 0.14 until then): the sure-hit at the cap 20, reached at the 55th round on the 0 base, after 2.6 s of spray
     bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 2.7 s after the 200 ms
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too) (PT b1105eq: 200, as b1105ep; 0 in b1105eo; b1105fy and b1105fz keep it, "200 ms")
@@ -198,7 +198,7 @@ export const UNIT_DATA = {
     botFireCap: 150,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01; 100 with the magazine, 2026-11-06; 150 with it, b1105ga)
     reloadMs: 5000,            // user 2026-11-06: 5 s (7 s until then)
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.85 }   // light stun, same as the SMG
+    stun: { ms: 25, moveScale: 0.925 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.85 -> 0.925, and the time, 50 ms -> 25; 50 ms at 0.85 until then) light stun, same as the SMG
   },
   unit6: {
     id: 'unit6',
@@ -228,7 +228,7 @@ export const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
-    stun: { ms: 100, moveScale: 0.25 },
+    stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
     // Kei fires a 照射ビーム (sustained hitscan laser) instead of a bullet: on
     // release an instant wide line appears (blocked by walls), damaging each
     // enemy once during durationMs, then fading. radius = visual half-width.
@@ -258,13 +258,13 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1500,   // (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lk, 1.0.0 b1105lo, user 2026-11-27: "rifle 2500 also"; 1500 until then) (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
-    bloomPerShot: 0.10,        // SA added per shot
+    bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) SA added per shot
     bloomCap: 0.20,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
@@ -272,7 +272,7 @@ export const UNIT_DATA = {
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 },
+    stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
     // FLIGHT (players only — bots play her grounded, no flight AI): a JUMP
     // tap in air re-fires the full jump impulse (airJumpBoostCost per pop);
     // holding JUMP sustains the climb at sprint speed, drained only while
@@ -305,11 +305,11 @@ export const UNIT_DATA = {
 
     // Weapon spec
     lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Mika Lanchester (hidden) — SMG bloom on the 0.04 base, cap 0.09: sure-hit 80 at base, 36 at cap (bloom port 2026-09-22)
-    bloomPerShot: 0.003,        // SA added per shot
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
     bloomCap: 0.09,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -319,7 +319,7 @@ export const UNIT_DATA = {
     botFireCap: 50,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
   unit9: {
     id: 'unit9',
@@ -341,12 +341,12 @@ export const UNIT_DATA = {
     // Weapon spec — Saori-derived, tuned 2026-07-14: faster cadence, lighter
     // per-shot damage, smaller mag.
     lockRange: 110,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 110; 112 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 900,        // ≈ 66.67 ms cooldown — 80 ms tick slot (12.5/s), middle rung of the M4 700 < FAMAS 900 < EVO3 1100 ladder
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Asuna FAMAS — same as 0.8.3 FAMAS: sure-hit 160 at base, 53 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
-    bloomPerShot: 0.003,        // SA added per shot
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
     bloomCap: 0.06,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.035,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -355,7 +355,7 @@ export const UNIT_DATA = {
     botFireCap: 25,         // bot: shots per trigger pull (fire cap, 2026-08-01)
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit10: {
     id: 'unit10',
@@ -378,13 +378,13 @@ export const UNIT_DATA = {
     // laser bolt), heavier per-shot chunk on a 30-round mag with a slow
     // manual reload.
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1500,   // (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lk, 1.0.0 b1105lo, user 2026-11-27: "rifle 2500 also"; 1500 until then) (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 180,        // ≈ 333.33 ms cooldown — 336 ms tick slot (2.98/s), one rung below the 240 ms shotguns (owner 2026-09-19, was 250)
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
-    bloomPerShot: 0.10,        // SA added per shot
+    bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) SA added per shot
     bloomCap: 0.30,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.17,  // SA recovered per second
+    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
@@ -394,7 +394,7 @@ export const UNIT_DATA = {
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit11: {
     id: 'unit11',
@@ -417,7 +417,7 @@ export const UNIT_DATA = {
     // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
     // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -429,7 +429,7 @@ export const UNIT_DATA = {
     botFireCap: 4,         // bot: shots per trigger pull (fire cap: 4 blasts per trigger pull, 2026-08-01)
     reloadMs: 1200,
     autoReload: true,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit12: {
     id: 'unit12',
@@ -452,12 +452,12 @@ export const UNIT_DATA = {
     // stun — at ~10 hits/s her chain-slow is the identity Hina can't match.
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
     botGateWidth: 0,          // no bloom gate line in either mode (0% hit-rate threshold; owner 2026-09-25, 1v1 first then 2v2 the same day) — sprays the full magazine on the burst / rest rhythm
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s), below Saori's 96 ms rung
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Koyuki M60 — same as 0.8.3 RPK (base 0.04 -> 0.02): sure-hit 160 at base, 27 at cap (bloom port 2026-09-22)
     sdReach: 80,               // SD engage reach (owner 2026-10-11): the band's far edge and the cap on every enemy's floor — 80, not the cone's sure-hit 160
-    bloomPerShot: 0.004,        // SA added per shot
+    bloomPerShot: 0.006,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.004 until then) SA added per shot
     bloomCap: 0.12,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.03,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -466,7 +466,7 @@ export const UNIT_DATA = {
     botFireCap: 100,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 5000,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit13: {
     id: 'unit13',
@@ -491,11 +491,11 @@ export const UNIT_DATA = {
     // wide, sure-hit drops to ~32).
     lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
     botGateWidth: 11.42,       // bot fire gate (b1105je, user 2026-11-17: "change marina's firing gating from 33% to 20%. That should make her gating same with Hina"): the 20%-hit line, Hina's own (b1105ga) — she fires while her CURRENT cone still lands one round in five on a standing target, the line 11.42 / cone where the autos' 33% line is 8.84 / cone (BOT_GATE_WIDTH_AUTO), which she rode until then. Her cone stops at 0.11, so the line never comes nearer than 103.8, past her 100 lock: inside it she fires her whole drum in one pull and holds for the cone only beyond it (the 33% line stood at 80.4 at her cap and passed her at 100 once the cone reached 0.088, after thirty rounds)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.06 until then) base SA (rad, full cone) — Marina PPSh-41 — owner: keep the 0.06 base, cap 0.11 (0.05 of bloom room like the P90): sure-hit 53 at base, 29 at cap (bloom port 2026-09-22)
-    bloomPerShot: 0.003,        // SA added per shot
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
     bloomCap: 0.11,            // SA ceiling while spraying
     bloomRecoverPerSec: 0.05,  // SA recovered per second
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
@@ -507,7 +507,7 @@ export const UNIT_DATA = {
     reloadMs: 2000,
     autoReload: false,
     // Per-weapon hit-stun. SMG = short + light, same as Atsuko/Mika.
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
   // Subaru / HK33 (user 2026-10-22): Saori's M4 numbers, bar the bloom per shot — 0.005, the cap at the 9th round where
   // the M4 reaches it at the 21st. Mirrored in the client.
@@ -529,12 +529,12 @@ export const UNIT_DATA = {
 
     // Weapon spec — Saori's M4, the bloom per shot her own.
     lockRange: 110,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 110; 112 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 700,
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
-    bloomPerShot: 0.005,       // user 2026-10-22 (the M4: 0.002)
+    bloomPerShot: 0.0075,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.005 until then) user 2026-10-22 (the M4: 0.002)
     bloomCap: 0.06,
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (the M4's 0.035 until then) — the rifles' pace, 200 ms behind the last round (both tables: shared/src/sim/constants.js and the client's UNIT_DATA)
     bloomRecoverDelayMs: 200,   // (kept at 200 on 2026-10-24)
@@ -543,7 +543,7 @@ export const UNIT_DATA = {
     botFireCap: 30,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   // Yuuka / MPX (user 2026-10-22): Atsuko's evo3 numbers with her own cadence and bloom — 850 rpm (a 70.6 ms cooldown
   // lands on the 80 ms tick slot, Asuna's: 64 and 80 ms are the only slots near) and 0.01 per shot (the cap at the 6th
@@ -566,11 +566,11 @@ export const UNIT_DATA = {
 
     // Weapon spec — Atsuko's evo3, the cadence and the bloom per shot her own.
     lockRange: 100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 50 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 850,        // user 2026-10-22 (the evo3: 1100) — fires on the 80 ms tick slot, 750 real
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then)
-    bloomPerShot: 0.01,        // user 2026-10-22 (the evo3: 0.003)
+    bloomPerShot: 0.015,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.01 until then) user 2026-10-22 (the evo3: 0.003)
     bloomCap: 0.08,
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.05 until then) — the rifles' pace, 200 ms behind the last round (both tables: shared/src/sim/constants.js and the client's UNIT_DATA)
     bloomRecoverDelayMs: 200,   // (kept at 200 on 2026-10-24)
@@ -580,7 +580,7 @@ export const UNIT_DATA = {
     botFireCap: 30,
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 50, moveScale: 0.50 }
+    stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
   // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
@@ -604,11 +604,11 @@ export const UNIT_DATA = {
 
     // Weapon spec — the MPX's shape with her own numbers (user 2026-10-23).
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)   // user 2026-10-23 (the MPX: 50) — the shotguns' reach
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,   // user 2026-10-23 (the MPX: 850) — the 112 ms tick slot, Koyuki's, 535 real
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.03 until then)
-    bloomPerShot: 0.015,   // user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
+    bloomPerShot: 0.0225,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.015 until then) user 2026-10-23 (the MPX: 0.01) — the cap at the 7th round
     bloomCap: 0.11,   // user 2026-10-23 (the MPX: 0.08) — Marina's cap
     bloomRecoverPerSec: 0.17,   // user 2026-10-24 (0.035 then 0.05 on 2026-10-23; 0.17, 0.3 and 0.17 again the same day) — the rifles' pace; behind the 200 ms delay the cone is frozen while she sprays (112 ms a round) and comes back at this pace after. The client's UNIT_DATA in client/src/main.js mirrors this line
     bloomRecoverDelayMs: 200,   // user 2026-10-24 (200, then 0 for an hour, then 200 again the same day): frozen while she sprays, recovering from 200 ms after the last round
@@ -619,7 +619,7 @@ export const UNIT_DATA = {
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
     autoReload: false,
     stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
-    stun: { ms: 100, moveScale: 0.25 },   // user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
+    stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then) user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   },
   // Rabu / M590 (user 2026-10-23): Haruka's SDASS — the concentrated pattern — on a 10-shell box magazine that reloads as
   // one in 2 s (the other shotguns load shell by shell); the rest hers until her own are set. Mirrored in the client.
@@ -641,7 +641,7 @@ export const UNIT_DATA = {
 
     // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 500,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
+    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
     firePerMinute: 250,
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -652,7 +652,7 @@ export const UNIT_DATA = {
     botFireCap: 10,            // user 2026-10-23: the bot empties the magazine in one pull, as Marina does (the shell-loaders: 4)
     reloadMs: 2000,            // user 2026-10-23 (the SDASS: 1.2 s a shell)
     autoReload: false,         // user 2026-10-23: a box magazine, reloaded as one when empty — the only shotgun on the magazine rule
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit19: {
     id: 'unit19',
@@ -686,7 +686,7 @@ export const UNIT_DATA = {
     autoReload: false,
     sniperCharge: true,
     chargeMs: 1000,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit20: {
     id: 'unit20',
@@ -704,18 +704,18 @@ export const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it),
+    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 1 s forced cooldown after every shot (the cooldown clip spans it; 0.75 s until b1105lo),
     // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
-    projectileSpeed: 1500,   // (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
-    firePerMinute: 80,         // = 750 ms cooldown per shot (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
+    projectileSpeed: 2500,   // (PT b1105lk, 1.0.0 b1105lo, user 2026-11-27: "rifle 2500 also"; 1500 until then) (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    firePerMinute: 60,         // = 1000 ms cooldown per shot (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make Iori's cool down after shot from 0.75sec to 1sec"; 80, 750 ms, until then) (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
                                // the cooldown time from 0.5sec to 0.75sec")
     forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) Fubuki's accuracy
-    bloomPerShot: 0.10,        // Fubuki's bloom
+    bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) Fubuki's bloom
     bloomCap: 0.30,
-    bloomRecoverPerSec: 0.17,
+    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then)
     bloomRecoverDelayMs: 0,
     botSuppressBurst: 1,
     botGateWidth: 3.2,
@@ -725,7 +725,7 @@ export const UNIT_DATA = {
     botFireCap: 5,             // bot: shots per trigger pull = full mag
     reloadMs: 2000,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit21: {
     id: 'unit21',
@@ -746,12 +746,12 @@ export const UNIT_DATA = {
     // Weapon spec: the user's numbers; the reach, the bullet and the bots' rules are Koyuki's
     lockRange: 120,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 120; 126 until then)
     botGateWidth: 0,          // no bloom gate line, as the other machine guns
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 500,        // = 120 ms cooldown — 128 ms tick slot
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
-    bloomPerShot: 0.003,
+    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then)
     bloomCap: 0.06,
     bloomRecoverPerSec: 0.045,
     bloomRecoverDelayMs: 200,
@@ -761,7 +761,7 @@ export const UNIT_DATA = {
     reloadMs: 5000,
     autoReload: false,
     crouchHit: ['Normal_Attack_ReadyStart', 'Normal_Attack_Ing', 'Normal_Reload'],   // (9.5 b1105dj: her crouched hit capsule online too — history.js hitCapOf reads her firing, the opening and the loop alike, and her reload)
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   },
   unit22: {
     id: 'unit22',
@@ -783,12 +783,12 @@ export const UNIT_DATA = {
     // stats differences to Minori. The unmentioned stays the same with Saori M4, including the 33% hit rate gating."); the rest
     // Saori's, the bots' rules with it (no botGateWidth: the autos' 33%-hit line, BOT_GATE_WIDTH_AUTO)
     lockRange: 110,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 110; 112 until then)
-    projectileSpeed: 1100,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
+    projectileSpeed: 2500,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "Implement 2500 speed", the automatic weapons' rounds; 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
     firePerMinute: 600,        // = 100 ms cooldown — 112 ms tick slot (8.9/s, 535 real), Koyuki's rung (Saori's M4: 700, the 96 ms slot)
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then)
     sdReach: 80,
-    bloomPerShot: 0.015,        // the cap from the 7th shot (Saori: 0.002)
+    bloomPerShot: 0.0225,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.015 until then) the cap from the 7th shot (Saori: 0.002)
     bloomCap: 0.11,            // sure-hit 29 at the cap, the 33%-hit gate line 80 (Saori: 0.06 — 53 and 147)
     bloomRecoverPerSec: 0.17,   // the cap back to the base cone in 0.53 s (Saori: 0.035)
     bloomRecoverDelayMs: 200,
@@ -797,7 +797,7 @@ export const UNIT_DATA = {
     botFireCap: 30,          // bot: shots per trigger pull = full mag
     reloadMs: 1500,
     autoReload: false,
-    stun: { ms: 100, moveScale: 0.25 }
+    stun: { ms: 50, moveScale: 0.625 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then)
   }
 };
 

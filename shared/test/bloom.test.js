@@ -25,7 +25,7 @@ test('horizontal spread is gone from every unit and bloom defaults are filled in
   assert.equal(effectiveSpread(UNIT_DATA.unit2, 0.5), UNIT_DATA.unit2.spreadAngle);
 });
 
-test('M4 hold-fire: +0.002 per shot, frozen inside the burst, capped at 0.06, recovers 200 ms after the last shot', () => {
+test('M4 hold-fire: +0.003 per shot, frozen inside the burst, capped at 0.06, recovers 200 ms after the last shot', () => {   // (b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; +0.002 until then)
   const { m, p1, p2 } = duel('unit1', 30);
   let now = 1000, shots = 0, last = p1.lastFireAt;
   const trace = [];
@@ -36,10 +36,10 @@ test('M4 hold-fire: +0.002 per shot, frozen inside the burst, capped at 0.06, re
     now += TICK_RATE_MS;
   }
   assert.ok(shots >= 30, 'fired ' + shots);
-  assert.equal(trace[0][1], 0.002);                 // after the 1st shot
-  assert.equal(trace[9][1], 0.02);                  // after 10 shots, no recovery inside the burst (96 ms < 200 ms delay)
-  assert.equal(trace[19][1], 0.04);                 // 20th shot: 0.04, the cap not reached yet
-  assert.equal(trace[29][1], 0.06);                 // 30th shot reaches it: the whole 0.06 cap is bloom on a 0 base (b1105fw; 0.04 on the 0.02 base, from the 20th, until then)
+  assert.equal(trace[0][1], 0.003);                 // after the 1st shot (0.002 until b1105lo)
+  assert.equal(trace[9][1], 0.03);                  // after 10 shots, no recovery inside the burst (96 ms < 200 ms delay)
+  assert.equal(trace[19][1], 0.06);                 // the 20th shot reaches the cap (b1105lo; 0.04 there, and the cap at the 30th, until then)
+  assert.equal(trace[29][1], 0.06);                 // the 30th: at the cap still — the whole 0.06 cap is bloom on a 0 base (b1105fw; 0.04 on the 0.02 base, from the 20th, until then)
   assert.equal(trace[trace.length - 1][1], 0.06);   // and never exceeds it
   assert.equal(effectiveSpread(p1.unit, p1.bloom), 0.06);
   // stop firing: bloom holds until 200 ms after the LAST SHOT, then drops at 0.035/s
@@ -51,7 +51,7 @@ test('M4 hold-fire: +0.002 per shot, frozen inside the burst, capped at 0.06, re
   assert.ok(Math.abs(p1.bloom - expected) < 0.0006, `bloom ${p1.bloom} vs ${expected}`);
 });
 
-test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0, 0.043, 0.086, 0.129, 0.172, 0.214, then a 0.243 steady under the 0.30 cap', () => {
+test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0, 0.112, 0.223, then a 0.262 steady under the 0.30 cap', () => {   // (b1105lo, user 2026-11-27: a shot adds 0.15 and the rifles recover at 0.1139 a second; 0, 0.043, 0.086, 0.129, 0.172, 0.214, then 0.243, on +0.10 and 0.17 a second until then)
   const { m, p1 } = duel('unit10', 30);
   let now = 1000, last = p1.lastFireAt; const cones = [];
   for (let i = 0; i < 3000 / TICK_RATE_MS; i += 1) {
@@ -61,8 +61,9 @@ test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time
     if (p1.lastFireAt !== last) { cones.push(+atFire.toFixed(3)); last = p1.lastFireAt; }
     now += TICK_RATE_MS;
   }
-  assert.deepEqual(cones.slice(0, 6), [0, 0.043, 0.086, 0.129, 0.172, 0.214]);   // from a 0 base (b1105fw; 0.02 until then): +0.10 per shot, -0.057 between shots; the 0.30 cap not reached yet
-  for (const c of cones.slice(6)) assert.ok(Math.abs(c - 0.243) < 0.001, 'steady ' + c);   // 0.243 once the cap clips the post-shot bloom (0.30 - 0.057), as on the old base
+  assert.deepEqual(cones.slice(0, 3), [0, 0.112, 0.223]);   // from a 0 base (b1105fw; 0.02 until then): +0.15 per shot, -0.038 between shots (21 ticks at 0.1139 a second); the third shot's 0.373 is clipped to the 0.30 cap
+  assert.ok(cones.length >= 8, 'shots ' + cones.length);
+  for (const c of cones.slice(3)) assert.ok(Math.abs(c - 0.262) < 0.001, 'steady ' + c);   // 0.262 once the cap clips the post-shot bloom (0.30 - 0.038), from the 4th shot on
 });
 
 // b1105fx (user 2026-11-11: "Currently, when unit fires while standing still, the bloom wouldn't take effect. Make bloom take
@@ -233,9 +234,9 @@ test('gate lines: autos 8.84 / cone (one round in three on a standing target), m
 test('M14 bot at its 135 lock range: every shot pushes the cone past the line, so it fires once per full recovery', () => {
   // (at the old 56-unit band since b1105fw's 0 base, a second round goes 336 ms after the first from a 0.043 cone, whose
   // sure-hit line, 74.6, is still past the target: two rounds, then the hold; from 100 on, one round per full recovery)
-  const { gaps, coneAtFire } = botRun('unit10', 135, 3000);
+  const { gaps, coneAtFire } = botRun('unit10', 135, 8000);   // (8 s: a full recovery is 1.3 s now)
   assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
-  for (const g of gaps) assert.ok(g >= 576 && g <= 624, 'gap ' + g);   // 0.1 / 0.17 = 0.59 s
+  for (const g of gaps) assert.ok(g >= 1312 && g <= 1344, 'gap ' + g);   // 0.15 / 0.1139 = 1.32 s, 83 ticks (b1105lo; 0.1 / 0.17 = 0.59 s, a gap of 576 to 624, until then)
   for (const c of coneAtFire) assert.equal(c, 0);                       // and always from the base cone (0 since b1105fw, 0.02 until then)
 });
 
