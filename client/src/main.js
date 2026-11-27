@@ -380,10 +380,9 @@ const UNIT_DATA = {
     // lock range until it was doubled (56), so in-band hits landed with a
     // partially grown body; at her 160 (b1105es) they land with the whole
     // body. The grow-out-of-the-muzzle rule keeps that honest at every distance.
-    // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
-    // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
-    // (b1105lq, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the same." — and DRAWN half as thick again,
-    // 0.6: BOLT_DRAW_RADIUS_SCALE; this radius stays the hit test's.)
+    // (b1105lp and b1105lq drew the bolt twice as long and half as thick again as this, its hit body; b1105lr, user 2026-11-27: "revert the Aris
+    // cylinder visual (before 1.5 times radius width and 2 times length)" — it is drawn as its hit body again.)
+    bulletTrail: true,         // (b1105lr, PT and 1.0.0, user 2026-11-27: "Add a bullet trace effect for Aris, the visual is the same cylinder visual style. The length and fade out mechanics are same as Iori and Fubuki." — the rifles' trail, drawn as her bolt is: bulletTrailStyleFor in client/src/main.js. Client visual only; in both unit-data copies because the online renderer reads the sim's.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {
@@ -3702,16 +3701,11 @@ let hudRefs = null;
 // the projectile's logical position vs the target's hit radius and never the
 // mesh geometry, so the visual length/orientation has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 55.08;   // (PT b1105ll, 1.0.0 b1105lo, user 2026-11-27: "Make the bullet spindle visual 1.5 times bigger (length/wdith etc.)", 36.72 x 1.5; 36.72 until then) (b1105ek, PT and 9.6, user 2026-11-09: 1.8 times as long, 20.4 x 1.8: a round at 1100 u/s draws its tail off the muzzle after 33 ms, as one at 600 did with 20.4; 20.4 until then; owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
-// THE LASER BOLT IS DRAWN TWICE AS LONG AS IT HITS (b1105lp, PT and 1.0.0, user 2026-11-27: "double the beam cylinder length. But the detection
-// stays the same."): the cylinder, and the stretch of flight over which it grows out of the muzzle, take beamBolt.length times this (128 for
-// Aris's 64); the hit test keeps beamBolt.length itself, offline (updateProjectileSystem's segStart) and in the shared sim, so a unit is hit by
-// the first 64 u behind the nose and by nothing behind them. Drawing only, the same offline and online — the three places that draw a bolt:
-// buildProjectileMesh, the offline round's frame, placeOnlineBullet. Until then the bolt's hit body and its picture were one length.
-const BOLT_DRAW_LENGTH_SCALE = 2;
-// ...AND HALF AS THICK AGAIN (b1105lq, PT and 1.0.0, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the
-// same."): the cylinder's radius is beamBolt.radius times this (0.6 for her 0.4); the hit test keeps beamBolt.radius itself (a round's
-// boltRadius: a unit is hit within 1.6 + 0.4 of the hit body). Drawing only, one place: buildProjectileMesh.
-const BOLT_DRAW_RADIUS_SCALE = 1.5;
+// THE LASER BOLT'S LOOK, its mesh's and its trace's (bulletTrailStyleFor): a transparent bright cyan. (b1105lp and b1105lq drew the bolt twice as long
+// and half as thick again as it hits, on two scale constants here; b1105lr, user 2026-11-27: "revert the Aris cylinder visual (before 1.5 times
+// radius width and 2 times length)" — they are gone, and the cylinder is beamBolt's own length and radius again, as its hit test's.)
+const BOLT_COLOR = 0x66faff;
+const BOLT_OPACITY = 0.85;
 const SNIPER_TRACER_MID_RADIUS = 0.3375;   // (PT b1105ll, 1.0.0 b1105lo, the same request: 0.225 x 1.5; 0.225 until then) (b1105ek, PT and 9.6, user 2026-11-09: 1.5 times as thick, 0.15 x 1.5; 0.15 until then; owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
@@ -3768,7 +3762,8 @@ const BULLET_TRAIL_OPACITY = 0.55;
 // BA rifle, the demo line's M14 / SVD width); Aru's PSG1 joined 2026-09-22
 // (owner: "use the 0.8.3 trails") with the demo line's deliberately fatter
 // sniper ribbon. Aris's laser bolt is its own trail and Kei's beam is hitscan,
-// so neither has a demo-line trail to take.
+// so neither has a demo-line trail to take. (Aris's bolt has a trace of its own
+// kind since b1105lr: bulletTrailStyleFor.)
 const BULLET_TRAIL_RADIUS_RIFLE = 0.06;    // Fubuki (demo line: M14 / SVD)
 const BULLET_TRAIL_RADIUS_SNIPER = 0.10;   // Aru / PSG1 — deliberately the fatter one (demo line: PSG1)
 const BULLET_TRAIL_THICK_BY_NAME = new Map([
@@ -3777,7 +3772,16 @@ const BULLET_TRAIL_THICK_BY_NAME = new Map([
   [UNIT_DATA.unit3?.name, BULLET_TRAIL_RADIUS_SNIPER]     // Aru / PSG1
 ].filter(([name]) => name));
 // 0 = keep the 1 px Line. Anything above 0 is a world-space half-width.
-const bulletTrailRadiusFor = (unit) => BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// (A bolt unit's trail is as wide as its bolt: b1105lr.)
+const bulletTrailRadiusFor = (unit) => unit?.beamBolt?.radius ?? BULLET_TRAIL_THICK_BY_NAME.get(unit?.name) ?? 0;
+// THE LASER BOLT'S TRACE (b1105lr, PT and 1.0.0, user 2026-11-27: "Add a bullet trace effect for Aris, the visual is the same cylinder visual
+// style. The length and fade out mechanics are same as Iori and Fubuki. Make sure the online games will not be more lag due to this."): a bolt
+// unit's trail is the rifles' in everything it does — its tail at the muzzle for the flight, its head on the round, frozen where the round ended
+// and fading over BULLET_TRAIL_FADE_MS_MG — and its bolt's in how it looks: ONE camera-facing quad of the bolt's radius, colour and opacity, no
+// halo under it, no depth written (as the bolt's own material). An unlit cylinder seen from any side is that band, so the trace reads as the
+// cylinder drawn out behind the bolt. The cost: one quad (one draw call) a round in flight or fading, half a rifle's trail (core and halo), built
+// and taken away with the round as theirs; nothing in the sim, on the server or on the network. null: the smoky ink of every other trail.
+const bulletTrailStyleFor = (unit) => (unit?.beamBolt ? { color: BOLT_COLOR, opacity: BOLT_OPACITY } : null);
 // Ribbon HALO (owner pick "C" from four in-game samples, 2026-09-23 — "apply
 // option C to Fubuki and Aru only"): the two ribbons carry a second quad,
 // 3.2x wider and much fainter, underneath the core as a soft edge. Cost: one
@@ -3808,7 +3812,8 @@ const _trailTmp = new THREE.Vector3();
 
 function bulletTrailFadeMsFor(unit) {
   if (!unit) return 0;
-  if (unit.beamBolt) return 0;  // the laser bolt IS its own trail
+  // (A laser bolt was its own trail, and a bolt unit got none whatever its flag, until b1105lr: Aris carries the flag now and
+  // takes the rifles' trail below, drawn as her bolt is — bulletTrailStyleFor.)
   if (unit.sniperCharge) return BULLET_TRAIL_FADE_MS_SNIPER;
   if ((unit.spreadCount ?? 1) > 1) return 0;  // shotgun opts out (8 pellets/shot = visual noise)
   // NO TRAIL ON THE AUTOS (owner 2026-10-14): the smoky streak stays on the
@@ -3853,7 +3858,12 @@ function makeRibbonQuad(radius, color, opacity, additive) {
   return mesh;
 }
 
-function buildBulletTrail(radius = 0) {
+function buildBulletTrail(radius = 0, style = null) {
+  if (radius > 0 && style) {   // a bolt's trace: its bolt's band (bulletTrailStyleFor)
+    const band = makeRibbonQuad(radius, style.color, style.opacity, false);
+    band.material.depthWrite = false;
+    return band;
+  }
   if (radius > 0) {
     // Glow: the core quad, with the halo quad as its child — the child keeps
     // the identity transform too, so its world-space corners are written the
@@ -4015,20 +4025,18 @@ function sharedGeo(key, make) {
   return g;
 }
 function buildProjectileMesh(unit, isRedLock) {
-  // Aris laser bolt: a thin transparent bright-cyan
+  // Aris laser bolt: hitbox == visual — a thin transparent bright-cyan
   // cylinder, nose at the mesh origin with the body trailing behind (same
   // convention as the spindle tracers, so orientTracer aligns it with
-  // velocity). The hit test extends its swept segment by beamBolt.length, the
-  // bolt's hit body; the cylinder is DRAWN BOLT_DRAW_LENGTH_SCALE times as long
-  // (b1105lp; hitbox == visual until then) and BOLT_DRAW_RADIUS_SCALE times as
-  // thick (b1105lq): the hit test widens its capsule by beamBolt.radius itself.
+  // velocity). The hit test extends its swept segment by this body length.
+  // (b1105lp and b1105lq drew it longer and thicker than it hits; b1105lr put
+  // its picture back on its hit body and gave it a trace: bulletTrailStyleFor.)
   if (unit?.beamBolt) {
-    const radius = unit.beamBolt.radius * BOLT_DRAW_RADIUS_SCALE;   // the drawn radius
-    const length = unit.beamBolt.length * BOLT_DRAW_LENGTH_SCALE;   // the drawn length
+    const { radius, length } = unit.beamBolt;
     const geom = sharedGeo(`bolt ${radius} ${length}`, () => new THREE.CylinderGeometry(radius, radius, length, 10, 1, true).translate(0, -length / 2, 0));
     const mesh = new THREE.Mesh(
       geom,
-      new THREE.MeshBasicMaterial({ color: 0x66faff, transparent: true, opacity: 0.85, fog: false, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: BOLT_COLOR, transparent: true, opacity: BOLT_OPACITY, fog: false, depthWrite: false })
     );
     mesh.userData.isTracer = true;
     return mesh;
@@ -4641,7 +4649,7 @@ function spawnProjectiles(owner, target, aimDir = null) {   // (aimDir, free pov
     const trailFadeMs = bulletTrailFadeMsFor(owner.unit);
     let trail = null;
     if (trailFadeMs > 0) {
-      trail = buildBulletTrail(bulletTrailRadiusFor(owner.unit));
+      trail = buildBulletTrail(bulletTrailRadiusFor(owner.unit), bulletTrailStyleFor(owner.unit));
       scene.add(trail);
     }
 
@@ -5343,9 +5351,8 @@ function updateProjectileSystem(dt) {
       const bl = p.vel.length() || 1;
       const prevBody = Math.min(p.boltLen, prevPos.distanceTo(p.trailSpawnPos));
       segStart = prevPos.clone().addScaledVector(p.vel, -prevBody / bl);
-      const drawLen = p.boltLen * BOLT_DRAW_LENGTH_SCALE;   // (b1105lp: drawn twice as long as it hits — segStart above keeps p.boltLen)
-      const nowBody = Math.min(drawLen, p.mesh.position.distanceTo(p.trailSpawnPos));
-      p.mesh.scale.y = Math.max(nowBody, 0.6) / drawLen;
+      const nowBody = Math.min(p.boltLen, p.mesh.position.distanceTo(p.trailSpawnPos));
+      p.mesh.scale.y = Math.max(nowBody, 0.6) / p.boltLen;
     }
     const path = new THREE.Line3(segStart, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
@@ -8635,7 +8642,7 @@ function matchWarmSamples() {
   const once = (kind, make) => { if (seen.has(kind)) return; seen.add(kind); try { out.push(make()); } catch (e) { console.warn('[loading] a warm sample', kind, e); } };
   for (const u of units) {
     once(u.beamBolt ? `bolt ${u.beamBolt.radius} ${u.beamBolt.length}` : (u.sniperCharge || (u.spreadCount ?? 0) === 1) ? 'spindle' : 'pellet', () => buildProjectileMesh(u, false));
-    if (bulletTrailFadeMsFor(u) > 0) { const r = bulletTrailRadiusFor(u); once(r > 0 ? 'ribbon' : 'line', () => buildBulletTrail(r)); }
+    if (bulletTrailFadeMsFor(u) > 0) { const r = bulletTrailRadiusFor(u), st = bulletTrailStyleFor(u); once(st ? 'band' : r > 0 ? 'ribbon' : 'line', () => buildBulletTrail(r, st)); }
   }
   if (units.size) once('hit ring', () => buildHitRing(0xffffff));
   return out;
@@ -9279,10 +9286,8 @@ function placeOnlineBullet(entry, x, y, z, now) {
   const flown = Math.sqrt(fdx * fdx + fdy * fdy + fdz * fdz);
   if (entry.boltLen) {
     // Laser bolt: scale the body to the distance flown from the spawn point
-    // (the sim clips its hit body the same way, to beamBolt.length — see shared
-    // projectiles.js; the picture is BOLT_DRAW_LENGTH_SCALE times that, b1105lp).
-    const drawLen = entry.boltLen * BOLT_DRAW_LENGTH_SCALE;
-    entry.mesh.scale.y = Math.max(Math.min(drawLen, flown), 0.6) / drawLen;
+    // (the sim clips its hitbox the same way — see shared projectiles.js).
+    entry.mesh.scale.y = Math.max(Math.min(entry.boltLen, flown), 0.6) / entry.boltLen;
   } else if (entry.mesh.userData?.isTracer) {
     // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline).
     entry.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
@@ -9381,7 +9386,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lq 11-27';
+const CLIENT_BUILD_TAG = 'b1105lr 11-27';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9424,7 +9429,7 @@ function spawnOwnShotVisuals(sim, projBefore, seq, now, ticksAgo, fromReplay = f
     const trailFadeMs = bulletTrailFadeMsFor(unit);
     let trail = null;
     if (trailFadeMs > 0) {
-      trail = buildBulletTrail(bulletTrailRadiusFor(unit));
+      trail = buildBulletTrail(bulletTrailRadiusFor(unit), bulletTrailStyleFor(unit));
       scene.add(trail);
     }
     // The sim has already flown this round ticksAgo ticks past the muzzle.
@@ -9741,7 +9746,7 @@ function syncOnlineProjectiles(snap) {
       const trailFadeMs = bulletTrailFadeMsFor(ownerUnit);
       let trail = null;
       if (trailFadeMs > 0) {
-        trail = buildBulletTrail(bulletTrailRadiusFor(ownerUnit));
+        trail = buildBulletTrail(bulletTrailRadiusFor(ownerUnit), bulletTrailStyleFor(ownerUnit));
         scene.add(trail);
       }
       entry = {

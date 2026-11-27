@@ -282,10 +282,9 @@ export const UNIT_DATA = {
     // Laser bolt: the projectile's hitbox is a thin beamBolt-sized cylinder
     // that grows out of the muzzle; the client draws the transparent cyan
     // visual from this same entry, so hitbox and visual can't drift apart.
-    // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
-    // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
-    // (b1105lq, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the same." — and DRAWN half as thick again,
-    // 0.6: BOLT_DRAW_RADIUS_SCALE; this radius stays the hit test's.)
+    // (b1105lp and b1105lq drew the bolt twice as long and half as thick again as this, its hit body; b1105lr, user 2026-11-27: "revert the Aris
+    // cylinder visual (before 1.5 times radius width and 2 times length)" — it is drawn as its hit body again.)
+    bulletTrail: true,         // (b1105lr, PT and 1.0.0, user 2026-11-27: "Add a bullet trace effect for Aris, the visual is the same cylinder visual style. The length and fade out mechanics are same as Iori and Fubuki." — the rifles' trail, drawn as her bolt is: bulletTrailStyleFor in client/src/main.js. Client visual only; in both unit-data copies because the online renderer reads the sim's.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {
