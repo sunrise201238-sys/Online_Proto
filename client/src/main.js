@@ -157,7 +157,7 @@ const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±BOT_BAND_HALF_WIDTH) gives the shotgun its band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 600,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "change SG pellet speed to 600"; 1000 from b1105lq) (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -357,7 +357,7 @@ const UNIT_DATA = {
     spreadAngle: 0.02,         // base SA (rad, full cone) — Aris Laser rifle — same as 0.8.3 M14: sure-hit 160 at base, 16 at cap; no delay (bloom port 2026-09-22)
     bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) SA added per shot
     bloomCap: 0.20,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
+    bloomRecoverPerSec: 0.17,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "revert the bloom recovery nerf for Rifles"; 0.1139 from b1105lo) (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
@@ -494,7 +494,7 @@ const UNIT_DATA = {
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) base SA (rad, full cone) — Fubuki Mini-14 — 0.8.3 M14 with the cap raised to 0.30 (owner): sure-hit 160 at base, 11 at cap; no delay, so the second quick shot leaves at 0.063 (bloom port 2026-09-22)
     bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) SA added per shot
     bloomCap: 0.30,            // SA ceiling while spraying
-    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
+    bloomRecoverPerSec: 0.17,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "revert the bloom recovery nerf for Rifles"; 0.1139 from b1105lo) (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then) SA recovered per second
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
@@ -529,7 +529,7 @@ const UNIT_DATA = {
     // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
     // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 600,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "change SG pellet speed to 600"; 1000 from b1105lq) (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -761,7 +761,7 @@ const UNIT_DATA = {
 
     // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
+    projectileSpeed: 600,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "change SG pellet speed to 600"; 1000 from b1105lq) (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
     firePerMinute: 250,
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -839,7 +839,7 @@ const UNIT_DATA = {
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.02 until then) Fubuki's accuracy
     bloomPerShot: 0.15,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.10 until then) Fubuki's bloom
     bloomCap: 0.30,
-    bloomRecoverPerSec: 0.1139,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then)
+    bloomRecoverPerSec: 0.17,   // (PT and 1.0.0 b1105ls, user 2026-11-27: "revert the bloom recovery nerf for Rifles"; 0.1139 from b1105lo) (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make the bloom recovery 33% slower for rifles", 0.17 x 0.67; 0.17 until then)
     bloomRecoverDelayMs: 0,
     botSuppressBurst: 1,
     botGateWidth: 3.2,
@@ -9386,7 +9386,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lr 11-27';
+const CLIENT_BUILD_TAG = 'b1105ls 11-27';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

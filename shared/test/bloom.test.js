@@ -51,7 +51,7 @@ test('M4 hold-fire: +0.003 per shot, frozen inside the burst, capped at 0.06, re
   assert.ok(Math.abs(p1.bloom - expected) < 0.0006, `bloom ${p1.bloom} vs ${expected}`);
 });
 
-test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0, 0.112, 0.223, then a 0.262 steady under the 0.30 cap', () => {   // (b1105lo, user 2026-11-27: a shot adds 0.15 and the rifles recover at 0.1139 a second; 0, 0.043, 0.086, 0.129, 0.172, 0.214, then 0.243, on +0.10 and 0.17 a second until then)
+test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time cone 0, 0.093, 0.186, then a 0.243 steady under the 0.30 cap', () => {   // (b1105ls, user 2026-11-27: "revert the bloom recovery nerf for Rifles" — a shot adds 0.15 (b1105lo) and the rifles recover at 0.17 a second again; 0, 0.112, 0.223, then 0.262, on b1105lo's 0.1139 a second; 0, 0.043, 0.086, 0.129, 0.172, 0.214, then 0.243, on +0.10 and 0.17 a second until then)
   const { m, p1 } = duel('unit10', 30);
   let now = 1000, last = p1.lastFireAt; const cones = [];
   for (let i = 0; i < 3000 / TICK_RATE_MS; i += 1) {
@@ -61,9 +61,9 @@ test('Fubuki Mini-14: recovers between its 336 ms shots (no delay) — fire-time
     if (p1.lastFireAt !== last) { cones.push(+atFire.toFixed(3)); last = p1.lastFireAt; }
     now += TICK_RATE_MS;
   }
-  assert.deepEqual(cones.slice(0, 3), [0, 0.112, 0.223]);   // from a 0 base (b1105fw; 0.02 until then): +0.15 per shot, -0.038 between shots (21 ticks at 0.1139 a second); the third shot's 0.373 is clipped to the 0.30 cap
+  assert.deepEqual(cones.slice(0, 3), [0, 0.093, 0.186]);   // from a 0 base (b1105fw; 0.02 until then): +0.15 per shot, -0.057 between shots (21 ticks at 0.17 a second); the third shot's 0.336 is clipped to the 0.30 cap
   assert.ok(cones.length >= 8, 'shots ' + cones.length);
-  for (const c of cones.slice(3)) assert.ok(Math.abs(c - 0.262) < 0.001, 'steady ' + c);   // 0.262 once the cap clips the post-shot bloom (0.30 - 0.038), from the 4th shot on
+  for (const c of cones.slice(3)) assert.ok(Math.abs(c - 0.243) < 0.001, 'steady ' + c);   // 0.243 once the cap clips the post-shot bloom (0.30 - 0.057), from the 4th shot on
 });
 
 // b1105fx (user 2026-11-11: "Currently, when unit fires while standing still, the bloom wouldn't take effect. Make bloom take
@@ -234,9 +234,9 @@ test('gate lines: autos 8.84 / cone (one round in three on a standing target), m
 test('M14 bot at its 135 lock range: every shot pushes the cone past the line, so it fires once per full recovery', () => {
   // (at the old 56-unit band since b1105fw's 0 base, a second round goes 336 ms after the first from a 0.043 cone, whose
   // sure-hit line, 74.6, is still past the target: two rounds, then the hold; from 100 on, one round per full recovery)
-  const { gaps, coneAtFire } = botRun('unit10', 135, 8000);   // (8 s: a full recovery is 1.3 s now)
+  const { gaps, coneAtFire } = botRun('unit10', 135, 8000);   // (8 s: a full recovery is 0.9 s)
   assert.ok(gaps.length >= 4, 'gaps ' + gaps.length);
-  for (const g of gaps) assert.ok(g >= 1312 && g <= 1344, 'gap ' + g);   // 0.15 / 0.1139 = 1.32 s, 83 ticks (b1105lo; 0.1 / 0.17 = 0.59 s, a gap of 576 to 624, until then)
+  for (const g of gaps) assert.ok(g >= 880 && g <= 912, 'gap ' + g);   // 0.15 / 0.17 = 0.88 s, 56 ticks (b1105ls; 1.32 s, 1312 to 1344, on b1105lo's 0.1139 a second; 0.1 / 0.17 = 0.59 s, a gap of 576 to 624, until then)
   for (const c of coneAtFire) assert.equal(c, 0);                       // and always from the base cone (0 since b1105fw, 0.02 until then)
 });
 
