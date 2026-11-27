@@ -16,11 +16,11 @@ const duel = (shooter, dist, target = 'unit1') => {
 };
 const fire = () => { const i = emptyInput(); i.shootHold = true; i.shootTap = true; return i; };
 
-test('the rounds fly at 2500 for every automatic weapon and rifle and at 600 for the shotguns; the snipers keep theirs', () => {
+test('the rounds fly at 2500 for every automatic weapon and rifle and at 1000 for the shotguns; the snipers keep theirs', () => {   // (the shotguns: 1000 since b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 from b1105lo)
   const seen = {};
   for (const u of Object.values(UNIT_DATA)) (seen[classOf(u)] ??= new Set()).add(u.projectileSpeed);
   for (const c of ['Assault Rifle', 'Submachine Gun', 'Machine Gun', 'Rifle']) assert.deepEqual([...seen[c]], [2500], c);
-  assert.deepEqual([...seen.Shotgun], [600]);
+  assert.deepEqual([...seen.Shotgun], [1000]);
   assert.deepEqual([...seen['Sniper Rifle']].sort((a, b) => a - b), [2000, 4500]);   // Kei's (her beam is instant), Aru's and Hiyori's
 });
 

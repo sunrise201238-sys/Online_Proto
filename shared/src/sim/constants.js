@@ -74,7 +74,7 @@ export const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±BOT_BAND_HALF_WIDTH) gives the shotgun its band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -284,6 +284,8 @@ export const UNIT_DATA = {
     // visual from this same entry, so hitbox and visual can't drift apart.
     // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
     // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
+    // (b1105lq, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the same." — and DRAWN half as thick again,
+    // 0.6: BOLT_DRAW_RADIUS_SCALE; this radius stays the hit test's.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {
@@ -419,7 +421,7 @@ export const UNIT_DATA = {
     // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
     // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -643,7 +645,7 @@ export const UNIT_DATA = {
 
     // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
     firePerMinute: 250,
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far

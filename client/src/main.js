@@ -157,7 +157,7 @@ const UNIT_DATA = {
     // Pellet-cluster fighting distance; the bot band rule (sweet spot =
     // lockRange, edges ±BOT_BAND_HALF_WIDTH) gives the shotgun its band.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -382,6 +382,8 @@ const UNIT_DATA = {
     // body. The grow-out-of-the-muzzle rule keeps that honest at every distance.
     // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
     // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
+    // (b1105lq, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the same." — and DRAWN half as thick again,
+    // 0.6: BOLT_DRAW_RADIUS_SCALE; this radius stays the hit test's.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {
@@ -528,7 +530,7 @@ const UNIT_DATA = {
     // fan she carried since 2026-07-14 is Hoshino's now; her cloud is the
     // unstretched pattern, a tight slug vs Hoshino's dodge-catching fan).
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then) // 300 -> 350 (owner 2026-09-22, as on the demo line): shorter flight, less target drift before impact; the pattern opens by distance, so its shape is unchanged
     firePerMinute: 250,         // ≈ 697.67 ms cooldown
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -760,7 +762,7 @@ const UNIT_DATA = {
 
     // Weapon spec — the SDASS's pattern and cadence; the magazine her own.
     lockRange: 80,   // (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "multiply all existing LR settings by 2 times"; 40 until then)
-    projectileSpeed: 600,   // (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
+    projectileSpeed: 1000,   // (PT and 1.0.0 b1105lq, user 2026-11-27: "Increase SG pellet speed to 1000"; 600 until then) (PT b1105lj, 1.0.0 b1105lo, user 2026-11-27: "SG 600"; 500 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change Shotgun bullet speed to 500"; 350 until then)
     firePerMinute: 250,
     spreadCount: 8,
     pelletRange: 150,        // (PT and 9.6 b1105et, user 2026-11-10: "change shotgun pellet effective range from 100 to 150"; 100 until then) the blast's reach in units (25 m; user 2026-10-25, PT first): the volley dies once its centre has flown this far
@@ -3706,6 +3708,10 @@ const SNIPER_TRACER_LENGTH = 55.08;   // (PT b1105ll, 1.0.0 b1105lo, user 2026-1
 // the first 64 u behind the nose and by nothing behind them. Drawing only, the same offline and online — the three places that draw a bolt:
 // buildProjectileMesh, the offline round's frame, placeOnlineBullet. Until then the bolt's hit body and its picture were one length.
 const BOLT_DRAW_LENGTH_SCALE = 2;
+// ...AND HALF AS THICK AGAIN (b1105lq, PT and 1.0.0, user 2026-11-27: "increase the Aris cylinder radius by 1.5 times. The detection stays the
+// same."): the cylinder's radius is beamBolt.radius times this (0.6 for her 0.4); the hit test keeps beamBolt.radius itself (a round's
+// boltRadius: a unit is hit within 1.6 + 0.4 of the hit body). Drawing only, one place: buildProjectileMesh.
+const BOLT_DRAW_RADIUS_SCALE = 1.5;
 const SNIPER_TRACER_MID_RADIUS = 0.3375;   // (PT b1105ll, 1.0.0 b1105lo, the same request: 0.225 x 1.5; 0.225 until then) (b1105ek, PT and 9.6, user 2026-11-09: 1.5 times as thick, 0.15 x 1.5; 0.15 until then; owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
@@ -4014,9 +4020,10 @@ function buildProjectileMesh(unit, isRedLock) {
   // convention as the spindle tracers, so orientTracer aligns it with
   // velocity). The hit test extends its swept segment by beamBolt.length, the
   // bolt's hit body; the cylinder is DRAWN BOLT_DRAW_LENGTH_SCALE times as long
-  // (b1105lp; hitbox == visual until then).
+  // (b1105lp; hitbox == visual until then) and BOLT_DRAW_RADIUS_SCALE times as
+  // thick (b1105lq): the hit test widens its capsule by beamBolt.radius itself.
   if (unit?.beamBolt) {
-    const { radius } = unit.beamBolt;
+    const radius = unit.beamBolt.radius * BOLT_DRAW_RADIUS_SCALE;   // the drawn radius
     const length = unit.beamBolt.length * BOLT_DRAW_LENGTH_SCALE;   // the drawn length
     const geom = sharedGeo(`bolt ${radius} ${length}`, () => new THREE.CylinderGeometry(radius, radius, length, 10, 1, true).translate(0, -length / 2, 0));
     const mesh = new THREE.Mesh(
@@ -9374,7 +9381,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lp 11-27';
+const CLIENT_BUILD_TAG = 'b1105lq 11-27';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
