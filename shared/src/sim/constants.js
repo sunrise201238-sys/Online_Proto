@@ -282,6 +282,8 @@ export const UNIT_DATA = {
     // Laser bolt: the projectile's hitbox is a thin beamBolt-sized cylinder
     // that grows out of the muzzle; the client draws the transparent cyan
     // visual from this same entry, so hitbox and visual can't drift apart.
+    // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
+    // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {

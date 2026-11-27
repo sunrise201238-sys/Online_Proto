@@ -380,6 +380,8 @@ const UNIT_DATA = {
     // lock range until it was doubled (56), so in-band hits landed with a
     // partially grown body; at her 160 (b1105es) they land with the whole
     // body. The grow-out-of-the-muzzle rule keeps that honest at every distance.
+    // (b1105lp, user 2026-11-27: "double the beam cylinder length. But the detection stays the same." — this length is the bolt's HIT body, as
+    // before; the cylinder is DRAWN twice as long, 128: BOLT_DRAW_LENGTH_SCALE in client/src/main.js.)
     beamBolt: { length: 64, radius: 0.4 }
   },
   unit8: {
@@ -3698,6 +3700,12 @@ let hudRefs = null;
 // the projectile's logical position vs the target's hit radius and never the
 // mesh geometry, so the visual length/orientation has no gameplay effect.
 const SNIPER_TRACER_LENGTH = 55.08;   // (PT b1105ll, 1.0.0 b1105lo, user 2026-11-27: "Make the bullet spindle visual 1.5 times bigger (length/wdith etc.)", 36.72 x 1.5; 36.72 until then) (b1105ek, PT and 9.6, user 2026-11-09: 1.8 times as long, 20.4 x 1.8: a round at 1100 u/s draws its tail off the muzzle after 33 ms, as one at 600 did with 20.4; 20.4 until then; owner 2026-10-14: 3.4 -> 6.8 -> 20.4, three times again; every single-round gun flies this spindle now)
+// THE LASER BOLT IS DRAWN TWICE AS LONG AS IT HITS (b1105lp, PT and 1.0.0, user 2026-11-27: "double the beam cylinder length. But the detection
+// stays the same."): the cylinder, and the stretch of flight over which it grows out of the muzzle, take beamBolt.length times this (128 for
+// Aris's 64); the hit test keeps beamBolt.length itself, offline (updateProjectileSystem's segStart) and in the shared sim, so a unit is hit by
+// the first 64 u behind the nose and by nothing behind them. Drawing only, the same offline and online — the three places that draw a bolt:
+// buildProjectileMesh, the offline round's frame, placeOnlineBullet. Until then the bolt's hit body and its picture were one length.
+const BOLT_DRAW_LENGTH_SCALE = 2;
 const SNIPER_TRACER_MID_RADIUS = 0.3375;   // (PT b1105ll, 1.0.0 b1105lo, the same request: 0.225 x 1.5; 0.225 until then) (b1105ek, PT and 9.6, user 2026-11-09: 1.5 times as thick, 0.15 x 1.5; 0.15 until then; owner 2026-10-14: 0.18 -> 0.15)
 // MG reuses the sniper spindle at half length and half width.
 const MG_TRACER_SCALE = 0.5;
@@ -4001,12 +4009,15 @@ function sharedGeo(key, make) {
   return g;
 }
 function buildProjectileMesh(unit, isRedLock) {
-  // Aris laser bolt: hitbox == visual — a thin transparent bright-cyan
+  // Aris laser bolt: a thin transparent bright-cyan
   // cylinder, nose at the mesh origin with the body trailing behind (same
   // convention as the spindle tracers, so orientTracer aligns it with
-  // velocity). The hit test extends its swept segment by this body length.
+  // velocity). The hit test extends its swept segment by beamBolt.length, the
+  // bolt's hit body; the cylinder is DRAWN BOLT_DRAW_LENGTH_SCALE times as long
+  // (b1105lp; hitbox == visual until then).
   if (unit?.beamBolt) {
-    const { radius, length } = unit.beamBolt;
+    const { radius } = unit.beamBolt;
+    const length = unit.beamBolt.length * BOLT_DRAW_LENGTH_SCALE;   // the drawn length
     const geom = sharedGeo(`bolt ${radius} ${length}`, () => new THREE.CylinderGeometry(radius, radius, length, 10, 1, true).translate(0, -length / 2, 0));
     const mesh = new THREE.Mesh(
       geom,
@@ -5325,8 +5336,9 @@ function updateProjectileSystem(dt) {
       const bl = p.vel.length() || 1;
       const prevBody = Math.min(p.boltLen, prevPos.distanceTo(p.trailSpawnPos));
       segStart = prevPos.clone().addScaledVector(p.vel, -prevBody / bl);
-      const nowBody = Math.min(p.boltLen, p.mesh.position.distanceTo(p.trailSpawnPos));
-      p.mesh.scale.y = Math.max(nowBody, 0.6) / p.boltLen;
+      const drawLen = p.boltLen * BOLT_DRAW_LENGTH_SCALE;   // (b1105lp: drawn twice as long as it hits — segStart above keeps p.boltLen)
+      const nowBody = Math.min(drawLen, p.mesh.position.distanceTo(p.trailSpawnPos));
+      p.mesh.scale.y = Math.max(nowBody, 0.6) / drawLen;
     }
     const path = new THREE.Line3(segStart, p.mesh.position.clone());
     const nearest = new THREE.Vector3();
@@ -9260,8 +9272,10 @@ function placeOnlineBullet(entry, x, y, z, now) {
   const flown = Math.sqrt(fdx * fdx + fdy * fdy + fdz * fdz);
   if (entry.boltLen) {
     // Laser bolt: scale the body to the distance flown from the spawn point
-    // (the sim clips its hitbox the same way — see shared projectiles.js).
-    entry.mesh.scale.y = Math.max(Math.min(entry.boltLen, flown), 0.6) / entry.boltLen;
+    // (the sim clips its hit body the same way, to beamBolt.length — see shared
+    // projectiles.js; the picture is BOLT_DRAW_LENGTH_SCALE times that, b1105lp).
+    const drawLen = entry.boltLen * BOLT_DRAW_LENGTH_SCALE;
+    entry.mesh.scale.y = Math.max(Math.min(drawLen, flown), 0.6) / drawLen;
   } else if (entry.mesh.userData?.isTracer) {
     // THE SPINDLE GROWS OUT OF THE MUZZLE (owner 2026-10-14, mirrors offline).
     entry.mesh.scale.y = Math.max(0.05, Math.min(1, flown / SNIPER_TRACER_LENGTH));
@@ -9360,7 +9374,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lo 11-27';
+const CLIENT_BUILD_TAG = 'b1105lp 11-27';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
