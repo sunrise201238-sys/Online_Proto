@@ -1,5 +1,5 @@
 // b1105lo (user 2026-11-27; PT's b1105lj to b1105ln, then "Apply these changes in 1.0.0. Online and offline."): the rounds'
-// speed, the hit stun and Iori's beat as they stand since, and what the speed is for — a sprint across the line of fire slips
+// speed and the hit stun as they stand since, Iori's beat as b1105lt put it back, and what the speed is for — a sprint across the line of fire slips
 // a straight round only past 120 u now (three ticks of flight at 2500 u/s; 53 u at the 1100 the automatic weapons flew until
 // then). The bloom's side of the same build is in bloom.test.js.
 import test from 'node:test';
@@ -81,9 +81,10 @@ test('a sprint across the line of fire no longer slips a straight round inside 1
   assert.equal(far.hit, false);                                                              // the last 15 u of a rifle's 135 lock are still a sprint's
 });
 
-test("Iori's beat: a second between her shots", () => {
-  assert.equal(UNIT_DATA.unit20.firePerMinute, 60);
-  assert.equal(UNIT_DATA.unit20.fireCooldownMs, 1000);                                       // 750 until b1105lo
+// (b1105lt, user 2026-11-27: "change iori cool down after shot from 1sec back to 0.75sec"; a second, 1008 ms a shot, in b1105lo to b1105ls)
+test("Iori's beat: three quarters of a second between her shots", () => {
+  assert.equal(UNIT_DATA.unit20.firePerMinute, 80);
+  assert.equal(UNIT_DATA.unit20.fireCooldownMs, 750);                                        // 1000 in b1105lo to b1105ls
   const { m, p1 } = duel('unit20', 40);
   let now = 1000, last = p1.lastFireAt; const at = [];
   for (let i = 0; i < 4200 / TICK_RATE_MS; i += 1) {
@@ -92,5 +93,5 @@ test("Iori's beat: a second between her shots", () => {
     now += TICK_RATE_MS;
   }
   assert.ok(at.length >= 4, 'shots ' + at.length);
-  for (let i = 1; i < at.length; i += 1) assert.equal(at[i] - at[i - 1], 1008);              // 63 ticks: the first tick a second after the shot
+  for (let i = 1; i < at.length; i += 1) assert.equal(at[i] - at[i - 1], 752);               // 47 ticks: the first tick 750 ms after the shot
 });

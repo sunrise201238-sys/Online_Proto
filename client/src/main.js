@@ -277,9 +277,9 @@ const UNIT_DATA = {
     firePerMinute: 1250,       // = 48 ms cooldown — 48 ms tick slot (20.8/s), one real tier above the 64 ms guns
     spreadCount: 1,
     spreadAngle: 0,   // (b1105fw, user 2026-11-11: "Change every units accuracy from 0.02 to 0. Except Aris" and "Even for those who are not 0.02, change theirs to 0 as well"; 0.04 until then) base SA (rad, full cone) — Hina MG42 — owner: keep the 0.04 base, cap 0.14 (NEGEV's bloom): sure-hit 80 at base, 23 at cap (bloom port 2026-09-22)
-    bloomPerShot: 0.0045,   // (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
-    bloomCap: 0.16,            // SA ceiling while spraying (b1105fz, user 2026-11-11: "change hina bloom to 0.16 CAP, recovery 0.06/s, 200 ms"; 0.17 in PT b1105fy, 0.20 from b1105eq, 0.30 from b1105el, 0.14 until then): the sure-hit at the cap 20, reached at the 55th round on the 0 base, after 2.6 s of spray
-    bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 2.7 s after the 200 ms
+    bloomPerShot: 0.005,   // (PT and 1.0.0 b1105lt, user 2026-11-27: "change Hina bloom per shot to 0.005"; 0.0045 from b1105lo) (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "1.5 times the bloom per shot universally"; 0.003 until then) SA added per shot
+    bloomCap: 0.25,            // SA ceiling while spraying (PT and 1.0.0 b1105lt, user 2026-11-27: "change Hina bloom cap to 0.25"; 0.16 from b1105fz, user 2026-11-11: "change hina bloom to 0.16 CAP, recovery 0.06/s, 200 ms"; 0.17 in PT b1105fy, 0.20 from b1105eq, 0.30 from b1105el, 0.14 until then): the sure-hit at the cap 12.8, and the bot's 20% line there 45.7; the first round from the cap is the 51st, 2.4 s into the spray (at 0.16: 20 and 71.4, the 37th round on b1105lo's 0.0045, after 1.7 s)
+    bloomRecoverPerSec: 0.06,  // SA recovered per second (b1105fz, the same request; 0.05 in PT b1105fy, 0.03 from b1105eq, 0.06 in b1105eo/ep, 0.05 in b1105en, 0.03 until then): the cap back to 0 in 4.2 s after the 200 ms (2.7 s from the 0.16 cap, until b1105lt)
     bloomRecoverDelayMs: 200,  // recovery starts this long after the last shot (0 = between the shots of a burst too) (PT b1105eq: 200, as b1105ep; 0 in b1105eo; b1105fy and b1105fz keep it, "200 ms")
     damage: 3.5,               // (b1105jg, user 2026-11-17: "Change Hina damage to 3.5"; 4 until then) — 29 rounds to a full-HP kill, 1.34 s of her 48 ms beat with every round landing (25 rounds and 1.15 s at 4); a full drum carries 525 (600)
     magCapacity: 150,          // user 2026-11-11: "change hina mag size from 100 to 150" (b1105ga; 100 from 2026-11-06, 250 until then)
@@ -361,7 +361,7 @@ const UNIT_DATA = {
     bloomRecoverDelayMs: 0,  // recovery starts this long after the last shot (0 = between the shots of a burst too)
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
-    damage: 9,                   // (b1105jo, user 2026-11-17: "Change Aris damage from 12 to 9."; 12 from the user's tune of 2026-08-06, ported from the demo line, 15 until then) — 12 bolts to a full-HP kill, 4.82 s after the first with every bolt landing: ten leave in 3.02 s (the magazine's 8 and the 2 that come back meanwhile), the 11th and the 12th each wait for their round (9 bolts and 2.69 s at 12); a full magazine carries 72 (96)
+    damage: 12,                  // (PT and 1.0.0 b1105lt, user 2026-11-27: "change Aris damage from 9 to 12"; 9 from b1105jo, user 2026-11-17: "Change Aris damage from 12 to 9."; 12 from the user's tune of 2026-08-06, ported from the demo line, 15 until then) — 9 bolts to a full-HP kill, 2.69 s after the first with every bolt landing: the nine are of the ten that leave in a row, 336 ms apart (the magazine's 8 and the 2 that come back meanwhile; from the 11th on each bolt waits for its round) (12 bolts and 4.82 s at 9); a full magazine carries 96 (72)
     magCapacity: 8,
     reloadMs: 1200,
     autoReload: true,
@@ -499,7 +499,7 @@ const UNIT_DATA = {
     botSuppressBurst: 1,       // bot: rounds fired as one committed suppress burst outside its gate line
     botGateWidth: 3.2,         // bot fire gate on the sure-hit line (= SURE_HIT_WIDTH); the autos gate on BOT_GATE_WIDTH_AUTO, the 33%-hit line
     bulletTrail: true,         // keeps the smoky bullet trail (owner 2026-10-14: the autos lose theirs). Also set in shared constants.js — the online renderer reads the shared unit data (2026-10-15)
-    damage: 10,               // (PT b1105dd, user 2026-11-08: "change Fubuki's damage from 13 to 10"; 13 since 2026-09-22): 10 rounds to a full-HP kill
+    damage: 12,               // (PT and 1.0.0 b1105lt, user 2026-11-27: "change Fubuki damage from 10 to 12"; 10 from PT b1105dd, user 2026-11-08: "change Fubuki's damage from 13 to 10"; 13 since 2026-09-22): 9 rounds to a full-HP kill, 2.69 s after the first with every round landing (10 rounds and 3.02 s at 10)
     magCapacity: 30,
     botFireCap: 30,         // bot: shots per trigger pull = full mag (fire cap, 2026-08-01)
     reloadMs: 2000,
@@ -828,11 +828,11 @@ const UNIT_DATA = {
     jumpCooldownMs: 1500,
     jumpBoostCost: 48,
 
-    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 1 s forced cooldown after every shot (the cooldown clip spans it; 0.75 s until b1105lo),
+    // Weapon spec: Fubuki's rifle with a bolt-action's beat: a 0.75 s forced cooldown after every shot (the cooldown clip spans it; 1 s in b1105lo to b1105ls),
     // a magazine of 5; Fubuki's accuracy and bloom, her bullet (the one spindle every single round flies) and her trail
     lockRange: 135,   // (PT and 9.6 b1105et, user 2026-11-10, the lock-range table: 135; 160 until then)
     projectileSpeed: 2500,   // (PT b1105lk, 1.0.0 b1105lo, user 2026-11-27: "rifle 2500 also"; 1500 until then) (PT b1105fh, 9.6 b1105fh, user 2026-11-10: "reduce Iori/Aris/Fubuki bullet speed from 2000 to 1500"; 2000 from b1105fd, 1100 until then) (PT b1105ed, 9.6 b1105eg, user 2026-11-09: "Change all AR/SMG/MG/Rifle bullet speed to 1100"; 600 until then)
-    firePerMinute: 60,         // = 1000 ms cooldown per shot (PT b1105ln, 1.0.0 b1105lo, user 2026-11-27: "Make Iori's cool down after shot from 0.75sec to 1sec"; 80, 750 ms, until then) (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
+    firePerMinute: 80,         // = 750 ms cooldown per shot (PT and 1.0.0 b1105lt, user 2026-11-27: "change iori cool down after shot from 1sec back to 0.75sec"; 60, 1000 ms, in PT b1105ln to b1105ls and 1.0.0 b1105lo to b1105ls, user 2026-11-27: "Make Iori's cool down after shot from 0.75sec to 1sec"; 80, 750 ms, until then) (user: "a forced cool down per shot like sniper class, 0.5sec"; PT b1105de: "change
                                // the cooldown time from 0.5sec to 0.75sec")
     forcedCooldown: true,      // the snipers' between-shot ring on the fire button (PT b1105de, user: "show the cooldown edge at the fire button like snipers")
     spreadCount: 1,
@@ -9386,7 +9386,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ls 11-27';
+const CLIENT_BUILD_TAG = 'b1105lt 11-27';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
