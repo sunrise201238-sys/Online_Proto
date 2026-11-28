@@ -52,7 +52,7 @@ export {
   volleyAxes, volleyPelletOffset, volleySpreadFactor
 } from './projectiles.js';
 export { tickBot, pickBotTargetId, botHasLineOfSight } from './ai.js';
-export { pickRespawnSpawn, pickRespawnNearEnemy, mateSpawnFor } from './spawn.js';
+export { mateSpawnFor } from './spawn.js';
 export { bloomMax, effectiveSpread, bloomAfterShot, bloomAfterTime, bloomFraction, sureHitDistance, withinSureHit, botGateDistance, botMayFire, botNoteShot, botClearFireRule } from './bloom.js';
 export { buildNavGrid, findPathOnGrid, findFiringPath, findHiddenSpot, smoothPath, attachLadderLinks } from './navgrid.js';
 export { tickMatch, applyInput, emptyInput, updateLocks } from './tick.js';

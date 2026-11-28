@@ -37,14 +37,14 @@ test('boost scale: a Trio respawn keeps the dead unit\'s scale, the fresh unit\'
   for (const [mapKey, k] of [['compound', 5], ['arena2', 1]]) {
     const m = createMatchState({ mapKey, mode: '1v1', rosters, startTime: 1000 });
     m.now = 1000; m.fighters.p1.hp = 0;
-    const fresh = respawnFighterNext(m, 'p1', getArena(mapKey).spawns.p1);
+    const fresh = respawnFighterNext(m, 'p1');
     assert.ok(fresh, `${mapKey}: no respawn`);
     assert.equal(fresh.boostScale, k, mapKey); assert.equal(fresh.boost, 250 * k, `${mapKey} boost`);
   }
   // (a scale no map gives — the respawn carries the dead unit's own, it does not fall back to the map's or the default)
   const m = createMatchState({ mapKey: 'arena2', mode: '1v1', rosters, startTime: 1000 });
   m.now = 1000; m.fighters.p2.boostScale = 3; m.fighters.p2.hp = 0;
-  const fresh2 = respawnFighterNext(m, 'p2', getArena('arena2').spawns.p2);
+  const fresh2 = respawnFighterNext(m, 'p2');
   assert.ok(fresh2, 'no second respawn');
   assert.equal(fresh2.boostScale, 3); assert.equal(fresh2.boost, 750);
 });

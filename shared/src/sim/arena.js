@@ -10428,8 +10428,15 @@ const ARENA_SPAWNS = {
   // spawn sees the other. Earlier iterations (open-corner spawns ±95/∓47
   // etc.) are in this line's git history. Mirrored in client main.js.
   flashpoint: { p1: { x: -68, y: GROUND_BASE_Y, z: -62 }, p2: { x: 68, y: GROUND_BASE_Y, z: 62 } },
+  // THE SCENE MAPS' ROWS, Town to Backrooms (Anomaly) below, SINCE b1105mj (user 2026-11-28: "make scene maps use fixed spawn spots mechanics,
+  // just like concept maps do", "use existing initial spawn spots. Other alternate spawn spots are not deleted; just not being used", "For all
+  // scene maps, figure out which existing initial spawn sites is more favorable, make the more favorable spots for team1"). A match starts at
+  // the homes and a Trio respawn comes on at its slot's own start, as on a concept map (state.js respawnFighterNext): the `more` places, and
+  // Spacecraft's `pick`, stay in these rows and nothing reads them. And p1 — team 1's home — is on each of the ten the home that won the more
+  // bot matches played from both homes in turn under that rule (Duel and Trio, 1v1 and 2v2; the README's entry of b1105mj has every map's
+  // count): where p2's had, the two homes changed hands — each such row says so — and where p1's had, or the two came out even, they stayed.
   // Town: the spawn places (user 2026-10-18) — the homes on the west and east terraces, and four `more` places;
-  // a Trio respawn picks among all six by the rule in spawn.js (unseen, user 2026-10-22). Set by spawn_pick.mjs on the generator's json, each
+  // a Trio respawn picked among all six by the rule in spawn.js (unseen, user 2026-10-22) until b1105mj. Set by spawn_pick.mjs on the generator's json, each
   // on two metres of clear floor at the floor it stands on. The offline client reads these (getArenaSpawns), no second copy.
   // (The heights re-read on the pieces reading of 2026-10-29 — the terraces' tops as the model's faces have them, 9.46 and
   //  15.54 for 9.4 and 15.6, the road's 0.2 under the street — the same six places.)
@@ -10445,30 +10452,36 @@ const ARENA_SPAWNS = {
   // eight more places (the marked plan, 2026-10-22): the plateau's north-west, the sunken channel, the plateau's edge, the site's
   // middle (a metre off the wall), the west, the east passage, the lower yard, and the slope below the south-east roof (3 m under the street — the plan's roof spot, 9.9 m up, moved 7 m
   // north-west onto the slope on the user's green cross of 2026-10-24, 1 m east of the cross for a 2 m clearance).
-  // A Trio respawn picks among all ten by the rule in spawn.js. Set by spawn_set.mjs on the generator's json.
-  dust: { p1: { x: 49, y: GROUND_BASE_Y + 14.32, z: -65 }, p2: { x: 27, y: GROUND_BASE_Y - 2.13, z: 228 },
+  // A Trio respawn picked among all ten by the rule in spawn.js until b1105mj. Set by spawn_set.mjs on the generator's json.
+  // The homes swapped (b1105mj, user 2026-11-28, "figure out which existing initial spawn sites is more favorable, make the more favorable spots
+  // for team1"): of 1,200 bot matches played from both homes in turn, a respawn at its slot's own start, the side that started in the lower yard, at its south end won 59% —
+  // team 1 (p1) in the lower yard, at its south end, team 2 (p2) at the long path's gate on the plateau; a 2v2 mate beside its own home as before (mateSpawnFor asks the home, not the slot).
+  dust: { p1: { x: 27, y: GROUND_BASE_Y - 2.13, z: 228 }, p2: { x: 49, y: GROUND_BASE_Y + 14.32, z: -65 },
     more: [{ x: -42, y: GROUND_BASE_Y + 12.12, z: -18 }, { x: -25, y: GROUND_BASE_Y - 9.19, z: 33 }, { x: -52, y: GROUND_BASE_Y + 12.12, z: 42 }, { x: 21, y: GROUND_BASE_Y - 0.68, z: 104 }, { x: -86, y: GROUND_BASE_Y - 0.68, z: 118 }, { x: 104, y: GROUND_BASE_Y + 3.92, z: 187 }, { x: -16, y: GROUND_BASE_Y - 2.28, z: 225 }, { x: 69, y: GROUND_BASE_Y - 11.89, z: 234 }] },
   // Warehouse: the homes at the south-west and north-east corners of the doubled yard, and the user's eight more places (the marked
   // plan, 2026-10-22): the copy's south end, its west and east, the middle's west, the middle's east gap, the original's west,
-  // its east gap, and south of the standing container. A Trio respawn picks among all ten by the rule in spawn.js.
-  warehouse: { p1: { x: -58, y: GROUND_BASE_Y, z: 102 }, p2: { x: 58, y: GROUND_BASE_Y, z: -102 },
+  // its east gap, and south of the standing container. A Trio respawn picked among all ten by the rule in spawn.js until b1105mj.
+  // The homes swapped (b1105mj, user 2026-11-28, "figure out which existing initial spawn sites is more favorable, make the more favorable spots
+  // for team1"): of 3,600 bot matches played from both homes in turn, a respawn at its slot's own start, the side that started at the yard's north-east corner won 53% —
+  // team 1 (p1) at the yard's north-east corner, team 2 (p2) at the south-west corner; a 2v2 mate beside its own home as before (mateSpawnFor asks the home, not the slot).
+  warehouse: { p1: { x: 58, y: GROUND_BASE_Y, z: -102 }, p2: { x: -58, y: GROUND_BASE_Y, z: 102 },
     more: [{ x: 18, y: GROUND_BASE_Y, z: -81 }, { x: -46, y: GROUND_BASE_Y, z: -46 }, { x: 34, y: GROUND_BASE_Y, z: -43 }, { x: -28, y: GROUND_BASE_Y, z: -6 }, { x: 26, y: GROUND_BASE_Y, z: 3 }, { x: -36, y: GROUND_BASE_Y, z: 41 }, { x: 44, y: GROUND_BASE_Y, z: 42 }, { x: -20, y: GROUND_BASE_Y, z: 76 }] },
   // Compound: the homes in the north shed (p1) and the south yard (p2), and the user's eight more places (the marked plan, 2026-10-24):
   // the north-west yard by the parked cars, the yard north of the big building's tank, the north-east road, the yard road north of the
   // big building, the loading strip at the road's west gate and its south half, the yard east of the big building, the south yard east of
-  // the shed. A Trio respawn picks among all ten by the rule in spawn.js (by sight, as Town's and Dust's). Set by spawn_set.mjs on the generator's json.
+  // the shed. A Trio respawn picked among all ten by the rule in spawn.js (by sight, as Town's and Dust's) until b1105mj. Set by spawn_set.mjs on the generator's json.
   compound: { p1: { x: -80, y: GROUND_BASE_Y, z: -247 }, p2: { x: -107, y: GROUND_BASE_Y, z: 220 },
     more: [{ x: -160, y: GROUND_BASE_Y + 1.43, z: -186 }, { x: -139, y: GROUND_BASE_Y, z: -106 }, { x: 87, y: GROUND_BASE_Y, z: -93 }, { x: -134, y: GROUND_BASE_Y, z: 14 }, { x: -241, y: GROUND_BASE_Y, z: 16 }, { x: 3, y: GROUND_BASE_Y, z: 81 }, { x: -234, y: GROUND_BASE_Y, z: 140 }, { x: -32, y: GROUND_BASE_Y, z: 155 }] },
   // Hospital: Cut from the animal_hospital_map glTF (2026-10-28, README: Maps): a single-storey animal hospital, mostly indoors — the long corridor with wards either side, the lobby and the waiting room, the hydrotherapy room at the south end, the fenced lawn to the east; every door opened, the road beyond the fence background.
   // Hospital: the user's marked plan (2026-10-29): the homes on the road's near stretch and in the ward at the corridor's far
   // end, and eight more places — the hydrotherapy room, three wards, the waiting room, the small room off the corridor, the lawn by
-  // the gate (its floor 0.34 m down) and the road's far stretch. The rule in spawn.js, as the Backrooms'. (Before them the
+  // the gate (its floor 0.34 m down) and the road's far stretch. The rule in spawn.js, as the Backrooms', until b1105mj. (Before them the
   // generator's own twelve places, 2026-10-28.)
   hospital: { p1: { x: 66, y: GROUND_BASE_Y, z: -133 }, p2: { x: -97, y: GROUND_BASE_Y, z: 166 },
     more: [{ x: -96, y: GROUND_BASE_Y, z: -163 }, { x: -55, y: GROUND_BASE_Y, z: -116 }, { x: 26, y: GROUND_BASE_Y - 1.36, z: -67 }, { x: -131, y: GROUND_BASE_Y, z: -28 }, { x: -57, y: GROUND_BASE_Y, z: 27 }, { x: 71, y: GROUND_BASE_Y - 0.56, z: 72 }, { x: -49, y: GROUND_BASE_Y, z: 73 }, { x: -154, y: GROUND_BASE_Y, z: 86 }] },
   // District: a first set (2026-10-29): the homes at the ring road's NW and SE corners, the other corners and the mid-sides,
   // the inner street west and the station forecourt under its canopy's west end; the user's marks to come. The rule in spawn.js,
-  // as the Backrooms'. (The arena's origin moved 39 m south when the plaza came in, and this row kept the old units for a round:
+  // as the Backrooms', until b1105mj. (The arena's origin moved 39 m south when the plaza came in, and this row kept the old units for a round:
   // p2 stood in the dark beside the plaza — user 2026-10-29, "the enemy bot is spawning outside the map wall". The tenth then
   // stood at 63,398 on the backdrop plate behind the station building, which is walled from the city, the forecourt and the
   // platforms alike: a bot spawned there never came out, no bot came in — moved the second day. Set by spawn_set.mjs on the
@@ -10488,11 +10501,17 @@ const ARENA_SPAWNS = {
     more: [{ x: 149.9, y: GROUND_BASE_Y + 0.61, z: 111.3 }, { x: 129, y: GROUND_BASE_Y + 0.61, z: -136.3 }, { x: -84.8, y: GROUND_BASE_Y + 0.61, z: -91.7 }] },
   // Backrooms: the homes at the north-west and south-east corners, and the user's eight more places (the marked plan, 2026-10-22):
   // the north-east corner, both sides of the north T, under the box, the west wall's gap, the two corridors by the vents
-  // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22).
-  backrooms: { p1: { x: -88, y: GROUND_BASE_Y, z: -92 }, p2: { x: 84, y: GROUND_BASE_Y, z: 68 },
+  // (each at its corridor's middle), and the south-west corner. The rule in spawn.js, no longer at random (user 2026-10-22), until b1105mj.
+  // The homes swapped (b1105mj, user 2026-11-28, "figure out which existing initial spawn sites is more favorable, make the more favorable spots
+  // for team1"): of 1,200 bot matches played from both homes in turn, a respawn at its slot's own start, the side that started at the south-east corner won 58% —
+  // team 1 (p1) at the south-east corner, team 2 (p2) at the north-west corner; a 2v2 mate beside its own home as before (mateSpawnFor asks the home, not the slot).
+  backrooms: { p1: { x: 84, y: GROUND_BASE_Y, z: 68 }, p2: { x: -88, y: GROUND_BASE_Y, z: -92 },
     more: [{ x: 84, y: GROUND_BASE_Y, z: -96 }, { x: -45, y: GROUND_BASE_Y, z: -67 }, { x: -19, y: GROUND_BASE_Y, z: -66 }, { x: 37, y: GROUND_BASE_Y, z: -20 }, { x: -87, y: GROUND_BASE_Y, z: -6 }, { x: -64, y: GROUND_BASE_Y, z: 54 }, { x: -50, y: GROUND_BASE_Y, z: 66 }, { x: -92, y: GROUND_BASE_Y, z: 79 }] },
   // Backrooms (Anomaly): the same hall and places as Backrooms.
-  backrooms_anomaly: { p1: { x: -88, y: GROUND_BASE_Y, z: -92 }, p2: { x: 84, y: GROUND_BASE_Y, z: 68 },
+  // The homes swapped (b1105mj, user 2026-11-28, "figure out which existing initial spawn sites is more favorable, make the more favorable spots
+  // for team1"): of 1,200 bot matches played from both homes in turn, a respawn at its slot's own start, the side that started at the south-east corner won 59% —
+  // team 1 (p1) at the south-east corner, team 2 (p2) at the north-west corner; a 2v2 mate beside its own home as before (mateSpawnFor asks the home, not the slot).
+  backrooms_anomaly: { p1: { x: 84, y: GROUND_BASE_Y, z: 68 }, p2: { x: -88, y: GROUND_BASE_Y, z: -92 },
     more: [{ x: 84, y: GROUND_BASE_Y, z: -96 }, { x: -45, y: GROUND_BASE_Y, z: -67 }, { x: -19, y: GROUND_BASE_Y, z: -66 }, { x: 37, y: GROUND_BASE_Y, z: -20 }, { x: -87, y: GROUND_BASE_Y, z: -6 }, { x: -64, y: GROUND_BASE_Y, z: 54 }, { x: -50, y: GROUND_BASE_Y, z: 66 }, { x: -92, y: GROUND_BASE_Y, z: 79 }] },
   // Airport: ground level right at the mouth of a corner ramp (ramp x-span
   // 88..130, feet at |z| 50). 2026-08-08 (user): ±118/±72 -> ±130/±56, 6u

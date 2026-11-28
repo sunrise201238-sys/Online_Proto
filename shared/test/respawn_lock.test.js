@@ -6,7 +6,7 @@ import { createMatchState, respawnFighterNext, applyInput, emptyInput, getArena 
 // refill in one tick): the lock moves to the other living enemy, not to the respawned unit (user 2026-10-25). With no
 // other living enemy the lock keeps the slot, as it always did.
 const rosters = { p1: ['unit1', 'unit1', 'unit1'], p2: ['unit2', 'unit2', 'unit2'], p3: ['unit4', 'unit4', 'unit4'], p4: ['unit5', 'unit5', 'unit5'] };
-const killAndRespawn = (m, id) => { m.fighters[id].hp = 0; return respawnFighterNext(m, id, getArena(m.mapKey).spawns.p2); };
+const killAndRespawn = (m, id) => { m.fighters[id].hp = 0; return respawnFighterNext(m, id); };   // (at the slot's own start, as every respawn since b1105mj)
 
 test('the locked enemy dies and respawns in the same tick: the lock moves to its living teammate', () => {
   const m = createMatchState({ mapKey: 'arena1', mode: '2v2', rosters, startTime: 1000 });
@@ -40,10 +40,10 @@ const setAt = (f, x, z) => { f.pos.x = x; f.pos.z = z; };
 test('the respawned unit itself comes on locked on the living enemy nearest its place, whichever enemy the fallen unit was locked on', () => {
   for (const [locked, nearId, farId] of [['p1', 'p3', 'p1'], ['p3', 'p3', 'p1'], ['p1', 'p1', 'p3'], ['p3', 'p1', 'p3']]) {
     const m = createMatchState({ mapKey: 'arena1', mode: '2v2', rosters, startTime: 1000 }); m.now = 1000;
-    const at = { x: 40, y: m.fighters.p2.pos.y, z: 10 };   // (the place the fresh unit comes on at)
+    const at = { x: 40, y: m.fighters.p2.pos.y, z: 10 }; m.spawnPoints.p2 = at;   // (the place the fresh unit comes on at: its slot's start, put here by hand)
     setAt(m.fighters[nearId], at.x - 12, at.z); setAt(m.fighters[farId], at.x - 160, at.z + 40);
     m.fighters.p2.targetId = locked; m.fighters.p2.hp = 0;
-    const fresh = respawnFighterNext(m, 'p2', at);
+    const fresh = respawnFighterNext(m, 'p2');
     assert.equal(fresh.targetId, nearId, `the fallen unit was locked on ${locked}, the nearer enemy is ${nearId}`);
     // and a frame of input does not pull it back
     applyInput(m, fresh, emptyInput(), 1016, getArena('arena1').obstacles, getArena('arena1').surfaces);
@@ -53,12 +53,12 @@ test('the respawned unit itself comes on locked on the living enemy nearest its 
 
 test('the respawned unit\'s lock: a fallen enemy is passed over, however near; with no enemy alive the old lock stays', () => {
   const m = createMatchState({ mapKey: 'arena1', mode: '2v2', rosters, startTime: 1000 }); m.now = 1000;
-  const at = { x: 40, y: m.fighters.p2.pos.y, z: 10 };
+  const at = { x: 40, y: m.fighters.p2.pos.y, z: 10 }; m.spawnPoints.p2 = at;
   setAt(m.fighters.p3, at.x - 12, at.z); m.fighters.p3.hp = 0; setAt(m.fighters.p1, at.x - 160, at.z + 40);
   m.fighters.p2.targetId = 'p3'; m.fighters.p2.hp = 0;
-  assert.equal(respawnFighterNext(m, 'p2', at).targetId, 'p1', 'the near enemy is down: the living one');
+  assert.equal(respawnFighterNext(m, 'p2').targetId, 'p1', 'the near enemy is down: the living one');
   m.fighters.p1.hp = 0; m.fighters.p2.targetId = 'p3'; m.fighters.p2.hp = 0;
-  assert.equal(respawnFighterNext(m, 'p2', at).targetId, 'p3', 'nobody to lock: the lock it had');
+  assert.equal(respawnFighterNext(m, 'p2').targetId, 'p3', 'nobody to lock: the lock it had');
 });
 
 test('the respawned unit\'s lock in a 1v1: the one enemy, as before', () => {

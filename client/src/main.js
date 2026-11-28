@@ -41,8 +41,6 @@ import {
   obstaclesNearSegment,
   obstaclesNearPoint,
   getArenaSpawns,
-  pickRespawnSpawn,
-  pickRespawnNearEnemy,
   getArenaSurfaces,
   getArenaBounds,
   getGeneratedObstacles,
@@ -8926,8 +8924,8 @@ function startMatchNow() {
     if (m) m.root.position.set(m.body.position.x, m.body.position.y + m.modelYOffset, m.body.position.z);
   }
   // Trio bookkeeping: per-slot roster cursor + the spawn positions recorded
-  // for mid-match respawns (next roster unit spawns where its team started —
-  // unless the map has spawn places: respawnSlotMech asks spawn.js).
+  // for mid-match respawns (next roster unit spawns where its slot started, on
+  // every map since b1105mj: respawnSlotMech).
   // The Shooting Range ignores Trio entirely (solo practice stays SD-style).
   state.rosterIdx = { player: 0, ally: 0, enemy: 0, enemy2: 0 };
   const trioActive = state.mainMode === 'trio' && state.mapKey !== 'range' && state.trioRosters;
@@ -9433,7 +9431,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105mi 11-28';
+const CLIENT_BUILD_TAG = 'b1105mj 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13385,16 +13383,10 @@ function respawnSlotMech(slotName, unitKey) {
     ?? createMech(TRIO_SLOT_COLORS[slotName], UNIT_DATA[unitKey], slotName === 'player');
   fresh.state.team = old.state.team;
   if (state.suddenDeathActive) fresh.state.hp = 1;   // Sudden Death: Trio respawns arrive at 1 HP too
-  // The place: on a map with spawn places the shared rule (spawn.js), from the other mechs' teams, health and
-  // positions — the call the server makes; elsewhere the slot's own start.
-  const others = ['player', 'ally', 'enemy', 'enemy2'].filter((s) => s !== slotName && state[s])
-    .map((s) => ({ team: state[s].state.team, hp: state[s].state.hp, pos: state[s].body.position }));
-  // THE PLACE BY THE FIGHT (b1105lf; user 2026-11-25, "1. Apply option B. 2. Offline scene maps only. 3. Does not apply to team1 Sniper units."): a fresh
-  // unit of team 1 — the player's side: the player and the ally — on a scene map comes on at the free place nearest a living enemy, seen or not
-  // (spawn.js pickRespawnNearEnemy). A sniper keeps the shared rule, as team 2 does and as every unit does on a concept map; online the server places.
-  const byTheFight = GLB_MAPS[state.mapKey] && old.state.team === 'A' && !UNIT_DATA[unitKey]?.sniperCharge;
-  const sp = (byTheFight ? pickRespawnNearEnemy(state.mapKey, old.state.team, others) : null)
-    ?? pickRespawnSpawn(state.mapKey, old.state.team, others) ?? state.spawnPoints?.[slotName];
+  // The place: the slot's own start, on every map (b1105mj; user 2026-11-28: "make scene maps use fixed spawn spots mechanics, just like concept maps do" and "use existing initial spawn spots. Other alternate spawn spots are not deleted; just not being used"). Until then a
+  // scene map's respawn asked spawn.js for one of the map's places — one out of the enemy's sight, and for team 1's unit the one nearest a living enemy
+  // (b1105lf); the server places the same way, state.js respawnFighterNext.
+  const sp = state.spawnPoints?.[slotName];
   if (sp) fresh.body.position.set(sp.x, sp.y, sp.z);
   // Body teleport only — sync the visual root NOW. The bot AI reads
   // root.position and the frame sync runs after it; without this the fresh
@@ -13434,7 +13426,7 @@ function respawnSlotMech(slotName, unitKey) {
   }
   // THE FRESH PLAYER'S LOCK (b1105lg; user 2026-11-26: "when player unit respawns, make their unit locks at nearer enemy."): the player's own next
   // unit comes on locked on the living enemy nearest the place it comes on at. Until now it kept the fallen unit's lock, which with two enemies could be
-  // the far one while the unit stood beside the near one (THE PLACE BY THE FIGHT, above). One enemy alive: that one, as before. A spectated player slot
+  // the far one while the unit stood beside the near one (the place by the fight of b1105lf; the slot's own start since b1105mj). One enemy alive: that one, as before. A spectated player slot
   // is a bot's and its lock follows the bot's own; online the server sets the lock, by the same rule since b1105lh (state.js respawnFighterNext).
   if (slotName === 'player' && !state.spectatorActive) { const near = pickClosestEnemyOf(fresh); if (near) setPlayerTargetMech(near); }
 }
