@@ -2,6 +2,8 @@
 // back to 0.75sec. 2. change Aris damage from 9 to 12. 3. change Fubuki damage from 10 to 12. 4. change Hina bloom per shot to
 // 0.005. 5. change Hina bloom cap to 0.25."): Hina's cone, Fubuki's round, and what Iori's quicker beat leaves of a round's bloom.
 // Iori's beat itself is in tune_lo.test.js and Aris's bolt in sim.test.js, where their old numbers were held.
+// (b1105mi, user 2026-11-28, after four settings tried on PT: "Hina / Bloom per shot 0.008 / Cap 0.25 / recover 0.05 / PT and 1.0.0 (online and offline)." — her cone's test below holds
+// those: 0.008 a round where b1105lt gave 0.005, the cap its 0.25, and 0.05 a second back where it came back 0.06.)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatchState, tickMatch, emptyInput, TICK_RATE_MS, TICK_DT, UNIT_DATA, effectiveSpread, bloomAfterTime, botGateDistance, sureHitDistance } from '../src/sim/index.js';
@@ -28,27 +30,28 @@ const spray = (shooter, dist, rounds) => {
 };
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
-test("Hina's cone opens by 0.005 a round up to 0.25: the 51st round is the first from the cap, 2.4 s into the spray", () => {
+test("Hina's cone opens by 0.008 a round up to 0.25: the 33rd round is the first from the cap, 1.54 s into the spray, and it is back at nothing 5.2 s after the last round", () => {
   const u = UNIT_DATA.unit5;
-  assert.equal(u.bloomPerShot, 0.005);                                                       // 0.0045 from b1105lo, 0.003 before
+  assert.equal(u.bloomPerShot, 0.008);                                                       // b1105mi; 0.005 from b1105lt, 0.0045 from b1105lo, 0.003 before
   assert.equal(u.bloomCap, 0.25);                                                            // 0.16 from b1105fz
-  assert.equal(u.spreadAngle, 0); assert.equal(u.bloomRecoverPerSec, 0.06); assert.equal(u.bloomRecoverDelayMs, 200);   // as they were
+  assert.equal(u.spreadAngle, 0); assert.equal(u.bloomRecoverDelayMs, 200);                  // as they were
+  assert.equal(u.bloomRecoverPerSec, 0.05);                                                  // b1105mi; 0.06 from b1105fz
   const { m, p1, cones, at, now: end } = spray('unit5', 20, 60);
   assert.equal(cones.length, 60);
-  for (let n = 1; n <= 60; n += 1) assert.ok(near(cones[n - 1], Math.min(0.25, 0.005 * (n - 1))), `round ${n} left from ${cones[n - 1]}`);
-  assert.ok(cones[49] < 0.25 - 1e-9 && near(cones[50], 0.25));                               // the 50th still opening, the 51st at the cap
-  assert.equal(at[50] - at[0], 2400);                                                        // fifty 48 ms beats
+  for (let n = 1; n <= 60; n += 1) assert.ok(near(cones[n - 1], Math.min(0.25, 0.008 * (n - 1))), `round ${n} left from ${cones[n - 1]}`);
+  assert.ok(cones[31] < 0.25 - 1e-9 && near(cones[32], 0.25));                               // the 32nd still opening (0.248), the 33rd at the cap
+  assert.equal(at[32] - at[0], 1536);                                                        // thirty-two 48 ms beats (the 51st round and 2400 ms at 0.005)
   // the lines at the cap: a sure hit inside 12.8 u, and a bot's 20% line at 45.7 u (20 and 71.4 at the 0.16 cap)
   assert.ok(near(sureHitDistance(u.bloomCap), 12.8));
   assert.ok(near(botGateDistance(u, u.bloomCap), 11.42 / 0.25));
-  // the trigger let go at the cap: the cone waits out the 200 ms and is 0 again 4.17 s after that
+  // the trigger let go at the cap: the cone waits out the 200 ms and is 0 again 5 s after that (4.17 s at 0.06 a second)
   let now = end, cleared = null; const last = p1.lastFireAt;
   for (let i = 0; i < 8000 / TICK_RATE_MS && cleared === null; i += 1) {
     tickMatch(m, { p1: emptyInput(), p2: emptyInput() }, now, TICK_DT, []);
     if (p1.bloom <= 1e-9) cleared = now - last;
     now += TICK_RATE_MS;
   }
-  assert.ok(cleared !== null && Math.abs(cleared - (200 + 1000 * 0.25 / 0.06)) <= 2 * TICK_RATE_MS, 'cleared after ' + cleared + ' ms');
+  assert.ok(cleared !== null && Math.abs(cleared - (200 + 1000 * 0.25 / 0.05)) <= 2 * TICK_RATE_MS, 'cleared after ' + cleared + ' ms');
 });
 
 test("Fubuki's round takes 12 off a standing target: 9 hits to the kill, the 9th round 2.69 s after the first", () => {
