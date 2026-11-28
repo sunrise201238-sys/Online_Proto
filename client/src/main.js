@@ -1421,9 +1421,16 @@ const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the rationale.
 const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
-// SPAWN PROTECTION, OFFLINE — how long a Trio roster unit that comes on mid-match takes no damage, by its team. (Online the server stamps
-// every unit's — SPAWN_IMMUNITY_MS in shared/src/sim/constants.js, 3 s — and the page mirrors that stamp from the snapshots; the page's own
-// copy of the 3 s went with its last reader at b1105ml.) Not at the match's start since b1105gz: THE GAME-START INTRO holds the match instead.
+// SPAWN PROTECTION, OFFLINE — how long a Trio roster unit that comes on mid-match takes no damage: by its team under Health Point rules,
+// and the online game's 3 s for either team under Sudden Death rules. (Online the server stamps every unit's — SPAWN_IMMUNITY_MS in
+// shared/src/sim/constants.js, 3 s — and the page mirrors that stamp from the snapshots.) Not at the match's start since b1105gz: THE
+// GAME-START INTRO holds the match instead.
+// UNDER SUDDEN DEATH RULES (b1105mm; user 2026-11-28: "Apply 6sec. Offline Health Point mode only. Trio mode only. Team1 only. BTW offline Sudden Death mode should use the same
+// mechanics with online modes as well, so the previous respawn immunity stuff should be tuned back in offline SD mode (i believe online SD mode
+// was not affected in the first place)." and "PT and 1.0.0."): the page's copy of the
+// sim's 3 s, for every unit — offline Sudden Death plays by the online game's mechanics, so the two team numbers below are Health Point
+// rules' alone. (The copy had gone out at b1105ml, its one reader gone; this is its reader again.)
+const SPAWN_IMMUNITY_MS = 3000;
 // TEAM 1'S (b1105mk; user 2026-11-28, after the assessment made the same day of ways to favour team 1 beyond the
 // homes: "1. respawn immunity 6sec. 2. offline team1 only (trio. duel doesn't need it). all other stay the same. 3. PT and 1.0.0."): a Trio
 // roster unit of team 1 — the player's side: the player and the ally — that comes on mid-match in the offline game takes no damage for this
@@ -1437,6 +1444,13 @@ const TEAM1_SPAWN_IMMUNITY_MS = 6000;
 // (3 s until then). Its stamp is still written, the moment it came on: the bots' brain tells one life of a unit from the next by that
 // stamp (nbrain.js botDefenseRefLife), so a fresh unit's must not be left at the first life's 0.
 const TEAM2_SPAWN_IMMUNITY_MS = 0;
+// TEAM 1'S KILL PROTECTION, OFFLINE (b1105mm; the same words of the user's, after two assessments of it on bot matches — 3 s and 6 s): a
+// unit of team 1 that fells an enemy takes no damage for this long from that moment, in an offline Trio under Health Point rules. Not
+// under Sudden Death rules, not in Duel, not for team 2, not online. It is the respawn's own stamp pushed on (killImmunityNote, by the
+// kill's one note, finaleNoteKill): the white glow lights on the unit, no round hurts it, and a bot holds its fire on it. In the
+// assessment's bot pools, laid over the sim with b1105ml's respawn numbers: team 1 from 63% to 76% of Trio 1v1 matches and from 69% to 89%
+// of Trio 2v2 (3 s: 67% and 80%).
+const TEAM1_KILL_IMMUNITY_MS = 6000;
 
 const input = {
   x: 0,
@@ -9444,7 +9458,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ml 11-28';
+const CLIENT_BUILD_TAG = 'b1105mm 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13349,9 +13363,10 @@ const clock = new THREE.Clock();
 // ---------------------------------------------------------------------------
 // Trio mode (offline): a dead unit is replaced by the next entry of its
 // slot's roster — a brand-new mech at the slot's recorded spawn point with
-// its spawn immunity (team 1's unit 6 s since b1105mk, team 2's none since
-// b1105ml). The killer keeps position/HP/boost (no kill
-// reward); a slot whose roster is exhausted stays dead; the team loses when
+// its spawn immunity (Health Point rules: team 1's unit 6 s since b1105mk,
+// team 2's none since b1105ml; Sudden Death rules: 3 s, b1105mm). The killer
+// keeps position/HP/boost (no reward but team 1's 6 s of protection under
+// Health Point rules, b1105mm: killImmunityNote); a slot whose roster is exhausted stays dead; the team loses when
 // every one of its rosters is empty.
 // ---------------------------------------------------------------------------
 const TRIO_SLOT_COLORS = { player: 0x62d7ff, enemy: 0xff7ad5, ally: 0x86f7c2, enemy2: 0xff5a8a };
@@ -13410,7 +13425,9 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
   fresh.state.fireInitAt = now;
-  fresh.state.invulnerableUntil = now + (fresh.state.team === 'A' ? TEAM1_SPAWN_IMMUNITY_MS : TEAM2_SPAWN_IMMUNITY_MS);   // (team 1's unit 6 s — b1105mk; team 2's none — b1105ml: its stamp the moment it came on. The white glow and every hit test read this stamp)
+  // (Health Point rules: team 1's unit 6 s — b1105mk; team 2's none — b1105ml: its stamp the moment it came on. Sudden Death rules: the online
+  //  game's 3 s for either team — b1105mm. The white glow and every hit test read this stamp.)
+  fresh.state.invulnerableUntil = now + (state.suddenDeathActive ? SPAWN_IMMUNITY_MS : fresh.state.team === 'A' ? TEAM1_SPAWN_IMMUNITY_MS : TEAM2_SPAWN_IMMUNITY_MS);
   if (slotName === 'enemy' || slotName === 'enemy2' || slotName === 'ally' || (slotName === 'player' && state.spectatorActive)) fresh.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server's Trio respawn)
   state[slotName] = fresh;
   old.heir = fresh;   // (THE FINALE's next roster unit, b1105gh: a round the fallen unit left in the air still names it as its owner)
@@ -14086,6 +14103,16 @@ function finaleNoteKill(victim, killer) {
   noted.add(victim);
   (state.killLog ?? (state.killLog = [])).push({ victim, killer: killer ?? null });
   killFeedNote(victim, killer);   // (THE KILL FEED, b1105gm)
+  killImmunityNote(victim, killer);   // (TEAM 1'S KILL PROTECTION, b1105mm)
+}
+// TEAM 1'S KILL PROTECTION (b1105mm, TEAM1_KILL_IMMUNITY_MS): the unit of team 1 whose round felled an enemy is protected from this moment —
+// an offline Trio under Health Point rules alone. Called once a kill (finaleNoteKill notes a unit's first lethal hit, with its shooter). The
+// shooter must be standing: a round left in the air by a unit that has since fallen protects nobody (its slot's next unit has its own
+// respawn stamp). The stamp is only ever pushed on, never cut short: a kill inside a respawn's 6 s leaves what is longer.
+function killImmunityNote(victim, killer) {
+  if (state.online || state.mainMode !== 'trio' || !state.trioRosters || state.suddenDeathActive) return;
+  if (!killer || killer.state.team !== 'A' || victim.state.team === 'A' || !(killer.state.hp > 0)) return;
+  killer.state.invulnerableUntil = Math.max(killer.state.invulnerableUntil || 0, performance.now() + TEAM1_KILL_IMMUNITY_MS);
 }
 // a clip's length at its own speed, from the unit's model (0 while it stands on the billboard)
 function finaleClipSeconds(m, key) {
