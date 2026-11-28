@@ -699,18 +699,21 @@ const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP until b1105ly, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrors shared/src/sim/constants.js.
+  // THE SHIELD (PT b1105lu to b1105lx, here b1105ly; user 2026-11-28 — the whole of it under shared/src/sim/constants.js's unit17): `shield` is the box on
+  // the bone of her model that carries the shield; offline every hit test of this file tries it where the bone stands (THE SHIELD, by shieldBoxT).
+  // Her health 100 with it, and her card's word "Shield" in the map cards' red crayon (`crayon`, as a map's) where the yellow note said 20% more health.
   unit17: {
     name: 'Unit 17 / Submachine Gun',
-    cardNote: 'This unit has 20% more health.',   // (user 2026-10-24: one line at the profile card's bottom-left, under the art — any unit may carry one)
+    crayon: 'Shield',   // (PT b1105lv, 1.0.0 b1105ly, user 2026-11-28: 'Change Kurumi\'s message on info card "This unit has 20% more health." to "Shield". use the same red crayon effect used in map info cards.' — a unit's `crayon` is written on its card as a map's is on a map's; a `cardNote` (user 2026-10-24: one line at the card's bottom, a yellow note — any unit may carry one) still shows where a unit has no crayon)
     spriteKey: 'kurumi', char: 'Kurumi', weapon: 'UMP45', accent: 0xc8a66a,
     model: 'kurumi',   // 3D character (UNIT_MODELS)
 
     // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 120,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24: a mainline magazine, 100–120, falls just short
+    hp: 100,   // (PT b1105lv, 1.0.0 b1105ly, user 2026-11-28: "Change Kurumi's health from 120 to 100" — with her shield stopping what is shot at it; 120 until then) user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
@@ -738,6 +741,7 @@ const UNIT_DATA = {
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
     autoReload: false,
     stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
+    shield: { bone: 'bone_Shield_00', c: [0.0001, 0.0237, -0.0163], h: [0.2075, 0.3206, 0.0464] },   // (THE SHIELD, above)
     stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then) user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   },
   // Rabu / M590 (user 2026-10-23): Haruka's SDASS — the concentrated pattern — on a 10-shell box magazine that reloads as
@@ -1008,8 +1012,9 @@ state.suddenDeathActive = false;
 function mechMaxHp(m) {
   return state.suddenDeathActive ? 1 : (m.unit.hp ?? MAX_HP);
 }
-// A unit's HP bars are as long as its HP (user 2026-10-24): the 100 HP base is the base length, Kurumi's 120 HP bar is
+// A unit's HP bars are as long as its HP (user 2026-10-24): the 100 HP base is the base length, a 120 HP unit's bar is
 // 1.2 of it — the corner bar, the overhead pill, the command card alike. From the unit's own hp, not Sudden Death's 1.
+// (Kurumi's was the one such bar, 120, until b1105ly gave her 100 with her shield: every unit's is the base length now.)
 function hpBarScale(m) { return (m?.unit?.hp ?? MAX_HP) / MAX_HP; }
 // Spectator mode (offline map-picker toggle, like Dummy): a BOT takes over
 // the player's slot and the human just watches. spectatorMode is the sticky
@@ -4356,6 +4361,21 @@ function reloadSfxOnline(mech) {
   mech.sfxReloadAt = now;
   unitReloadSfx(mech);
 }
+// the block sound (THE SHIELD, b1105ly; user 2026-11-28: "shield block sound that plays when player hits the shield instead of normal target hit
+// HUD sound and when kurumi player gets hit instead of normal being hit sound", then "tune the SB sound same volume as target-hit and
+// getting-hit HUD sound"): `owner`'s round, beam or pellets were stopped by `target`'s shield. One recording at two levels (sfx_data.js
+// block_hit, block_hurt) — as loud as the sound it stands in for. A block's ring is let go over BLOCK_SFX_CUT_S as the next one starts (a
+// bolt's sound is cut by the next shot the same way), so a fast gun's blocks do not pile up.
+const BLOCK_SFX_CUT_S = 0.06;
+let blockVoice = null;
+function blockSfx(owner, target) {
+  const me = cameraFocusMech();
+  if (!me) return;
+  const key = target === me ? 'block_hurt' : (owner === me && getTeamOf(target) !== getTeamOf(me)) ? 'block_hit' : null;
+  if (!key) return;
+  if (blockVoice) sfxStop(blockVoice, BLOCK_SFX_CUT_S);
+  blockVoice = sfxPlay(key);
+}
 // the hit hint and the being-hit sound: `owner`'s round, beam or pellets landed on `target` (noteHitX's callers)
 function hitSfx(owner, target) {
   const me = cameraFocusMech();
@@ -5176,6 +5196,7 @@ function updateProjectileSystem(dt) {
       const hitCenter = p.target.root.position;
 
       let pelletsHit = 0;
+      let pelletsStopped = 0;   // (THE SHIELD, b1105ly)
       for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
         const bit = 1 << k;
         if (!(p.pelletMask & bit)) continue;
@@ -5215,6 +5236,11 @@ function updateProjectileSystem(dt) {
           dead = true;
           hitThis = false;
         }
+        // (THE SHIELD: the pellet's line to where it comes nearest her when it strikes, else its step — as a round's)
+        if (!dead && targetable && p.target.unit?.shield) {
+          const end = hitThis ? new THREE.Line3(a, b).closestPointToPoint(_shieldE.set(hitCenter.x, hitCenter.y + hitCapsule(p.target)[0], hitCenter.z), false, new THREE.Vector3()) : sweepEnd;
+          if (shieldBoxT(p.target, a, end) >= 0) { dead = true; hitThis = false; pelletsStopped += 1; }
+        }
         // Shooting Range: every PELLET prints its own dot — hits at the
         // impact point, misses where the pellet crosses the sign plane.
         // (The volley branch never reaches the generic recording hooks.)
@@ -5242,6 +5268,7 @@ function updateProjectileSystem(dt) {
         }
       }
 
+      if (pelletsStopped > 0) blockSfx(p.owner, p.target);   // (THE SHIELD: once for the volley's frame)
       if (pelletsHit > 0) {
         const finalDamage = getProjectileDamage(p) * pelletsHit;
         tgtState.hp = Math.max(0, tgtState.hp - finalDamage);
@@ -5384,6 +5411,16 @@ function updateProjectileSystem(dt) {
     if (deathT < 0 && projectileHitsSurface(prevPos, sweepEnd)) {
       const st = surfaceImpactT(prevPos, sweepEnd);
       deathT = st >= 0 ? st : 1;
+    }
+    // THE SHIELD (b1105ly): the target's box met before the wall and before the target, on the round's line — the round dies there as at a wall
+    // (the clamp and the despawn just below) and nothing lands.
+    if (p.target.unit?.shield && p.target.state.hp > 0 && !sameTeam && now >= p.target.state.invulnerableUntil && now > p.target.state.stepUntil) {
+      const end = botHit ? path.closestPointToPoint(hitCenter, false, _shieldE) : sweepEnd;
+      const st = shieldBoxT(p.target, prevPos, end);
+      if (st >= 0) {
+        const k = st * prevPos.distanceTo(end) / (prevPos.distanceTo(sweepEnd) || 1);   // (as a fraction of prevPos -> sweepEnd, the wall's own measure)
+        if (deathT < 0 || k <= deathT) { deathT = k; blockSfx(p.owner, p.target); }
+      }
     }
     if (deathT >= 0) {
       clampTrailHead(p.trail,
@@ -5574,6 +5611,7 @@ function updateBeamDamage(now) {
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - bcap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
+      if (shieldBoxT(m, beamLine.start, near) >= 0) { b.hitIds.push(m); blockSfx(b.owner, m); continue; }   // (THE SHIELD, b1105ly: the beam's line from its start to where it comes nearest her — stopped once, as it strikes once)
       let dmg = b.damage;
       if (state.dummyMode && b.owner !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
       st.hp = Math.max(0, st.hp - dmg);
@@ -5856,6 +5894,7 @@ function updateChargedBeams(now, dt) {
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - ccap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
+      if (shieldBoxT(t, cBeamLine.start, near) >= 0) { m.chargedBeamHitIds.push(t); blockSfx(m, t); continue; }   // (THE SHIELD, b1105ly: as the quick beam's)
       // The charged sweep channel hits softer than the quick beam / normal shot.
       let dmg = u.beam?.chargedDamage ?? u.damage;
       if (state.dummyMode && m !== state.player) dmg = 0;   // dummy: only the player slot damages (its bot too, in Spectator)
@@ -9386,7 +9425,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105lt 11-27';
+const CLIENT_BUILD_TAG = 'b1105ly 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -9488,6 +9527,8 @@ function advanceOwnShots(now) {
     for (const m of [state.enemy, state.enemy2]) {
       const ht = ownShotHitsMech(prev, next, m);
       if (ht >= 0 && (hitT < 0 || ht < hitT)) hitT = ht;
+      const sh = ownShotMeetsShield(prev, next, m);   // (THE SHIELD, b1105ly: the round ends on the drawn shield as on the drawn body)
+      if (sh >= 0 && (hitT < 0 || sh < hitT)) hitT = sh;
     }
     const sweepEnd = hitT >= 0
       ? { x: prev.x + (next.x - prev.x) * hitT, y: prev.y + (next.y - prev.y) * hitT, z: prev.z + (next.z - prev.z) * hitT }
@@ -9521,6 +9562,44 @@ function advanceOwnShots(now) {
   }
 }
 
+// THE SHIELD (PT b1105lu to b1105lx, here b1105ly; user 2026-11-28: "Add a simple geometry cbox for kurumi's shield. Which would block bullets for
+// her.", then "Apply Kurumi's shield to 1.0.0 (online and offline)"): a unit whose data carries `shield` — { bone, c, h }: a box in the frame of
+// that bone of its model, its centre and half sizes in the model's own units — holds a box that goes wherever the shield is drawn, in every
+// motion. What is shot AT the unit and meets the box before it meets the unit is stopped: a round or a bolt is taken off there as at a wall, a
+// pellet of a volley dies there, the railgun's two beams are stopped once as they strike once — no damage, no stun, no hit mark, and the block
+// sound in place of the hit hint or the being-hit sound (blockSfx). The game's rule stands: a round is tried against its own target alone, so
+// the box covers its bearer and nobody behind it; and where the bearer cannot be hit anyway (down, the same team, spawn protection, the
+// dodge's moment) the box is not tried either. "Before it meets the unit" is read on the round's LINE — from where it was to where its line
+// comes nearest the unit — not on the frame's step of it: a round goes 40 u a frame, and a step that ended inside the unit, short of the box,
+// would let it through by the frame's chance.
+// Every hit test of this file tries it (the rounds, the pellets, the beams) and the online mirror's own-shot round ends on it as it ends on
+// the drawn capsule (ownShotMeetsShield). Online the server judges: it plays no motions, so it takes the box's place from the motion the
+// fighter's state says the model is in (shared/src/sim/shield.js, shield_poses.js) and says what it stopped ('block' events — the sound).
+// The bots do not know of it: their sight, cover and hit-chance reasoning is the shared brains', on the body alone.
+const _shieldA = new THREE.Vector3(), _shieldB = new THREE.Vector3(), _shieldE = new THREE.Vector3();
+// The bone the box stands on, found again when the model is another; null with no shield or no model yet (asked again once it has come).
+function shieldBone(m) {
+  const def = m?.unit?.shield; const rig = def ? m.modelHolder?.userData?.modelRig : null;
+  if (!rig?.ready) return null;
+  if (m.shieldRig !== rig || m.shieldDef !== def) { m.shieldRig = rig; m.shieldDef = def; m.shieldNode = m.modelHolder.getObjectByName(def.bone) ?? null; }
+  return m.shieldNode;
+}
+// Where along a→b (0..1) the segment enters m's shield box, or -1 when it does not meet it (a and b: anything with x, y, z).
+function shieldBoxT(m, a, b) {
+  const bone = shieldBone(m); if (!bone) return -1;
+  const def = m.unit.shield, p = bone.worldToLocal(_shieldA.copy(a)), q = bone.worldToLocal(_shieldB.copy(b));
+  let t0 = 0, t1 = 1;
+  for (let k = 0; k < 3; k += 1) {
+    const o = p.getComponent(k) - def.c[k], d = q.getComponent(k) - p.getComponent(k), h = def.h[k];
+    if (Math.abs(d) < 1e-9) { if (o < -h || o > h) return -1; continue; }
+    let x = (-h - o) / d, y = (h - o) / d;
+    if (x > y) { const z = x; x = y; y = z; }
+    if (x > t0) t0 = x;
+    if (y < t1) t1 = y;
+    if (t0 > t1) return -1;
+  }
+  return t0;
+}
 // THE CROUCHING HIT CAPSULE (PT b1105cn, 2026-11-08; user: "Normal_Attack_Ing, Normal_Reload: Asuna's model crouches in these
 // 2 motions. Make her hitbox half height when these 2 motions are in play; the bottom side of the hitbox stays at the same height",
 // "Just simply make her hitbox changes whenever the character is playing "Normal_Attack_Ing" and "Normal_Reload" motion", and
@@ -9537,6 +9616,12 @@ function hitCapsule(m) {
   const names = m?.unit?.crouchHit; if (!names) return HIT_CAP_STAND;
   const rig = m.modelHolder?.userData?.modelRig; const a = rig?.ready && rig.current ? rig.actions[rig.current] : null;
   return a && names.includes(a.cfg?.name) ? HIT_CAP_CROUCH : HIT_CAP_STAND;
+}
+// Where (0..1 along prev→next) a local round meets the drawn enemy's shield (THE SHIELD, b1105ly), or -1. Visual only, as the capsule
+// below: the block is the server's.
+function ownShotMeetsShield(prev, next, m) {
+  if (!m?.unit?.shield || !m.root?.visible || (m.state?.hp ?? 1) <= 0) return -1;
+  return shieldBoxT(m, prev, next);
 }
 // Where (0..1 along prev→next) a local round meets the drawn enemy's hit
 // capsule — the sim's volume (radius 1.6, half height 1.6 about the chest,
@@ -11012,6 +11097,7 @@ function ensureOnlineMatchSetup(snap) {
   // Save the snapshot-id → mech mapping for per-frame mirroring.
   onl.slotMap = { cameraId, allyId, enemyId, enemy2Id };
   onl.conn?.drainHits?.();   // (HIT X: hits queued before this match are not this match's)
+  onl.conn?.drainBlocks?.();   // (THE SHIELD: nor the blocks)
   onl.conn?.drainKills?.();  // (THE KILL FEED, b1105gm: nor are its knockouts)
   onl.conn?.drainAllyMsgs?.();   // (THE TEAMMATE'S MESSAGES, b1105js: nor a message of the match before)
   onl.conn?.drainFired?.();  // (THE UNIT'S SOUNDS, b1105hk: nor its trigger pulls)
@@ -11350,6 +11436,8 @@ function runOnlineMatchFrame(dt, onl, conn) {
   }
   // HIT X: every hit event of every snapshot that came in (a frame can see two), once the server confirmed it
   for (const h of conn.drainHits?.() ?? []) noteHitX(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
+  // THE SHIELD (b1105ly): every block event the same way — the server stopped `ownerId`'s round, pellets or beam on `targetId`'s shield
+  for (const h of conn.drainBlocks?.() ?? []) blockSfx(onlineMechOfId(h.ownerId), onlineMechOfId(h.targetId));
   for (const k of conn.drainKills?.() ?? []) killFeedNoteOnline(k);   // (THE KILL FEED, b1105gm: every snapshot's knockouts, as the hits)
   for (const m of conn.drainAllyMsgs?.() ?? []) allyMsgNote(m);       // (THE TEAMMATE'S MESSAGES, b1105js: the ones passed on to this page)
   { const t = performance.now(); for (const f of conn.drainFired?.() ?? []) shotSfxOnline(f, t); }   // (THE UNIT'S SOUNDS, b1105hk: every snapshot's trigger pulls, as the hits)
@@ -12367,7 +12455,7 @@ function showProfilePopup(card, unit, onConfirm) {
   const clip = '<svg class="paper-clip' + (print ? ' clip-corner' : '') + '" viewBox="0 0 22 46" fill="none" stroke="#1B1B2F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14v22a5 5 0 0 0 10 0V9a4 4 0 0 0-8 0v24a1.5 1.5 0 0 0 3 0V14"/></svg>';
   spawnProfilePopup(card,
     // (b1105r: the side card's band sits where the unit's face is — the face-box, as the lobby's cards)
-    `${print}${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
+    `${print}${clip}${sideCard ? `<span class="face-box profile-face-box" ${faceStyle(unit)}>${faceImg}</span>` : faceImg}${head}${weaponPanel}${unit.crayon ? `<span class="memo-crayon memo-crayon-flow unit-crayon">${unit.crayon}</span>` : unit.cardNote ? `<div class="unit-note">${unit.cardNote}</div>` : ''}`,   // (PT: a unit's cardNote, one line at the card's bottom-left under the art)
     onConfirm);
   // (b1105bq) the side card's photo band opens the full picture (showFullPicture); the tap stops here, so it neither confirms
   // the pick nor reaches the menu's cancel
@@ -12872,6 +12960,8 @@ function showMapPicker(onPick = null, onBack = () => showSelectMenu()) {
 // nine modelled maps stand one to a line in the user's order: the map's name in the game, the model's title and its maker as
 // Sketchfab has them. The count of the tracks is the music table's own (the text said ten; eleven since b1105jv), so the line
 // stays true when a track is added.
+// b1105ly, user 2026-11-28 (Kurumi's shield and her health 100): the Health Point line said "every unit has 100 HP, Kurumi has 120" — every unit
+// has 100 now, and the line says what is hers instead: her shield stops the shots that hit it.
 function showGuidePopup() {
   const out = (href, text) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   const model = (page, title) => out(`https://sketchfab.com/3d-models/${page}`, title);
@@ -12892,7 +12982,7 @@ function showGuidePopup() {
           <h4>How to win</h4>
           <ul>
             <li>Bring the enemy's HP to zero before they do it to you.</li>
-            <li><strong>Health Point</strong> rules: every unit has 100 HP, Kurumi has 120. <strong>Sudden Death</strong>: everyone has 1 HP, so one hit wins.</li>
+            <li><strong>Health Point</strong> rules: every unit has 100 HP. Kurumi's shield stops the shots that hit it. <strong>Sudden Death</strong>: everyone has 1 HP, so one hit wins.</li>
             <li><strong>Duel</strong>: one unit each. <strong>Trio</strong>: three units each, in the order you pick them. When one falls, the next one comes in and can't be hurt for 3 seconds.</li>
             <li>The last knockout plays an ending camera. Tap to move on.</li>
           </ul>

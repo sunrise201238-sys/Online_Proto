@@ -49,6 +49,7 @@ export function applyHitStun(target, unit, ms, scale, now) {
 import { segmentHitsObstacle, segmentObstacleImpactT, projectileHitsSurface, surfaceImpactT, raycastObstacleDistance, obstaclesNearSegment } from './physics.js';
 import { effectiveSpread, bloomAfterShot } from './bloom.js';
 import { bodyAt, hitCapAt } from './history.js';
+import { shieldFrameOf, shieldEntryT, nearestOnLine } from './shield.js';   // THE SHIELD (b1105ly)
 
 // SHARED SPREAD SEED (owner 2026-10-15, "implement seed"): the direction a
 // round takes inside its cone is no longer Math.random() but a stream keyed
@@ -351,6 +352,21 @@ export function tickProjectiles(matchState, dt, now, obstacles, surfaces, damage
       deathT = st >= 0 ? st : 1;
       deathReason = 'surface';
     }
+    // THE SHIELD (shield.js, b1105ly): the target's box, as the shooter saw it, met before the wall and before the target — on the round's
+    // LINE (to where it comes nearest her when it strikes this tick, not to this tick's step's end). The round is taken off at the box, as at
+    // a wall, and nothing lands; a 'block' event says who stopped whose (the clients' block sound). Not where she cannot be hit anyway.
+    const shieldFr = target.hp > 0 && !sameTeam && vt >= body.invulnerableUntil && vt > body.stepUntil ? shieldFrameOf(matchState, target, body) : null;
+    if (shieldFr) {
+      const end = botHit ? nearestOnLine(segStart, p.pos, capC, { x: 0, y: 0, z: 0 }) : sweepEnd;
+      const st = shieldEntryT(shieldFr, prevPos.x, prevPos.y, prevPos.z, end.x, end.y, end.z);
+      if (st >= 0) {
+        // (as a fraction of prevPos -> sweepEnd, the wall's own measure)
+        const full = Math.hypot(sweepEnd.x - prevPos.x, sweepEnd.y - prevPos.y, sweepEnd.z - prevPos.z) || 1;
+        const k = st * Math.hypot(end.x - prevPos.x, end.y - prevPos.y, end.z - prevPos.z) / full;
+        if (!deathReason || k <= deathT) { deathT = k; deathReason = 'shield'; }
+      }
+    }
+    if (deathReason === 'shield') matchState.events.push({ type: 'block', ownerId: p.ownerId, targetId: p.targetId });
     if (deathReason) {
       p.pos.x = prevPos.x + (sweepEnd.x - prevPos.x) * deathT;
       p.pos.y = prevPos.y + (sweepEnd.y - prevPos.y) * deathT;
@@ -543,6 +559,8 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
   // test first (clipping the wall sweep to the hit point, like the single-
   // projectile path), then walls, then surfaces. Deaths clear its mask bit.
   const pcap = hitCapAt(body, vt); const pcapC = { x: hitCenter.x, y: hitCenter.y + pcap[0], z: hitCenter.z };   // (crouchHit, b1105ct)
+  const shieldFr = targetable ? shieldFrameOf(matchState, target, body) : null;   // (THE SHIELD, shield.js, b1105ly: each pellet its own, below)
+  let pelletsStopped = 0;
   let pelletsHit = 0;
   for (let k = 0; k < SHOTGUN_PATTERN.length; k += 1) {
     if (!(p.pelletMask & (1 << k))) continue;
@@ -575,6 +593,11 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
       dead = true;
       hitThis = false;
     }
+    // (THE SHIELD: the pellet's line to where it comes nearest her when it strikes, else its step — as a round's)
+    if (!dead && shieldFr) {
+      const end = hitThis ? nearestOnLine(a, b, pcapC, { x: 0, y: 0, z: 0 }) : sweepEnd;
+      if (shieldEntryT(shieldFr, a.x, a.y, a.z, end.x, end.y, end.z) >= 0) { dead = true; hitThis = false; pelletsStopped += 1; }
+    }
     if (hitThis) {
       pelletsHit += 1;
       dead = true;       // pellets despawn on hit, as before
@@ -602,6 +625,7 @@ function _tickVolley(matchState, projectiles, i, p, dt, now, obstacles, surfaces
     });
   }
 
+  if (pelletsStopped > 0) matchState.events.push({ type: 'block', ownerId: p.ownerId, targetId: p.targetId });   // (THE SHIELD: once for the volley's tick)
   if (p.pelletMask === 0) _despawn(matchState, projectiles, i, p, 'obstacle');
 }
 
@@ -696,6 +720,9 @@ export function tickBeams(matchState, now, damageScaler = null) {
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - bcap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrN * rrN) continue;
+      // (THE SHIELD, shield.js, b1105ly: the beam's line from its start to where it comes nearest her — stopped once, as it strikes once)
+      const bsf = shieldFrameOf(matchState, f, body);
+      if (bsf && shieldEntryT(bsf, bA.x, bA.y, bA.z, near.x, near.y, near.z) >= 0) { b.hitIds.push(f.id); matchState.events.push({ type: 'block', ownerId: b.ownerId, targetId: f.id }); continue; }
       const damage = damageScaler ? damageScaler(b) : b.damage;
       f.hp = Math.max(0, f.hp - damage);
       applyHitStun(f, f.unit, b.hitStunMs, b.hitStunScale, now);
@@ -859,6 +886,9 @@ export function tickChargedBeams(matchState, inputs, botSet, now, dt, obstacles)
       const vdy = Math.max(0, Math.abs(near.y - hc.y) - ccap[1]);
       const hdx = near.x - hc.x, hdz = near.z - hc.z;
       if (hdx * hdx + vdy * vdy + hdz * hdz >= rrC * rrC) continue;
+      // (THE SHIELD, shield.js, b1105ly: as the quick beam's)
+      const csf = shieldFrameOf(matchState, t, body);
+      if (csf && shieldEntryT(csf, cA.x, cA.y, cA.z, near.x, near.y, near.z) >= 0) { f.chargedBeamHitIds.push(t.id); matchState.events.push({ type: 'block', ownerId: f.id, targetId: t.id }); continue; }
       // The charged sweep channel hits softer than the quick beam / normal shot.
       const damage = u.beam?.chargedDamage ?? u.damage;
       t.hp = Math.max(0, t.hp - damage);

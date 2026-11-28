@@ -22,6 +22,7 @@ import {
 import { clamp, vec3Length2D, aimDirOf } from './math.js';
 import { nearestEnemyId, aimTargetOf } from './aim.js';
 import { getArena } from './arena.js';
+import { trackShields } from './shield.js';   // THE SHIELD (b1105ly)
 import {
   resolveUnitObstacleCollisions,
   voidUnder
@@ -420,7 +421,9 @@ export function tickMatch(matchState, inputs, now, dt, botIds = null) {
   for (const f of fighters) dampHorizontal(f, dt);
 
   // 6.5 The bodies' record for the rounds' lag compensation (history.js):
-  //     where everyone stands now that everyone has moved.
+  //     where everyone stands now that everyone has moved. (THE SHIELD, shield.js: a shield bearer's heading, motion and box
+  //     first, so the record carries this tick's box.)
+  trackShields(matchState, now, dt, arena.ladders ?? []);
   recordBodies(matchState, now);
 
   // 7. Lock state.

@@ -52,6 +52,13 @@ export const SFX_SOUNDS = {
   land: {"file": "sfx/cs_land", "ext": ".mp3", "level": 0.26},
   hit: {"file": "sfx/hitmarker", "ext": ".wav", "level": 0.396},
   hurt: {"file": "sfx/hurt_punch", "ext": ".wav", "level": 0.72},
+  // the shield's block (main.js blockSfx; PT b1105lu to b1105lx, here b1105ly; user 2026-11-28, with the recording: "Trim and use this shield block sound",
+  // "there's a tearing sound at the beginning ... Try to remove that part", "tune the SB sound same volume as target-hit and getting-hit HUD sound"): two
+  // lines written by hand — the listening site of that day has the same two rows (打到盾牌, 用盾擋下), a slider at 100 = these levels. One recording, a helmet
+  // hit cut to start at its ring (0.36 s), at the level where it reads as loud as the sound it stands in for on a meter with the ear's quickness (K-weighted,
+  // the 'Fast' 125 ms, the highest reading): the hit hint at 0.396 reads -23.3, the being-hit sound at 0.72 reads -18.6.
+  block_hit: {"file": "sfx/shield_block", "ext": ".wav", "level": 0.14},
+  block_hurt: {"file": "sfx/shield_block", "ext": ".wav", "level": 0.24},
   kill: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_team: {"file": "sfx/kill_2", "ext": ".mp3", "level": 0.4875},
   intro_start: {"file": "sfx/kill_1", "ext": ".mp3", "level": 0.4875},

@@ -20,9 +20,13 @@ test('a unit without the flag takes the stun, and a heavier one replaces a runni
   assert.equal(applyHitStun(y, y.unit, 100, 0.25, 1010), true, 'a heavier stun replaces it'); assert.equal(y.hitStunUntil, 1110);
 });
 
-test('a fighter spawns with the HP its unit data names (Kurumi 120, the rest 100)', () => {
+// (Kurumi's was 120 until b1105ly, user 2026-11-28: "Change Kurumi's health from 120 to 100" — with her shield; a unit whose data names another HP still spawns with it)
+test('a fighter spawns with the HP its unit data names (100 for every unit since b1105ly)', () => {
   const m = createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit17', p2UnitKey: 'unit4', startTime: 1000, mode: '1v1' });
-  assert.equal(m.fighters.p1.hp, UNIT_DATA.unit17.hp); assert.equal(m.fighters.p2.hp, UNIT_DATA.unit4.hp); assert.equal(UNIT_DATA.unit17.hp, 120); assert.equal(UNIT_DATA.unit4.hp, 100);
+  assert.equal(m.fighters.p1.hp, UNIT_DATA.unit17.hp); assert.equal(m.fighters.p2.hp, UNIT_DATA.unit4.hp); assert.equal(UNIT_DATA.unit17.hp, 100); assert.equal(UNIT_DATA.unit4.hp, 100);
+  for (const [key, u] of Object.entries(UNIT_DATA)) assert.equal(u.hp ?? 100, 100, key);
+  const saved = UNIT_DATA.unit17.hp; UNIT_DATA.unit17.hp = 130;
+  try { assert.equal(createMatchState({ mapKey: 'arena1', p1UnitKey: 'unit17', p2UnitKey: 'unit4', startTime: 1000, mode: '1v1' }).fighters.p1.hp, 130); } finally { UNIT_DATA.unit17.hp = saved; }
 });
 
 test('a stun-immune bot still knows it was hit: the hit evade arms off the hit itself', () => {

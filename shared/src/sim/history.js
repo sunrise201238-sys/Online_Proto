@@ -41,7 +41,10 @@ export function recordBodies(matchState, now) {
   for (const f of Object.values(matchState.fighters)) {
     let h = history[f.id];
     if (!h || h.f !== f) h = history[f.id] = { f, ring: [] };
-    h.ring.push({ t: now, pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }, stepUntil: f.stepUntil, invulnerableUntil: f.invulnerableUntil, hitCap: hitCapOf(f, now) });
+    const rec = { t: now, pos: { x: f.pos.x, y: f.pos.y, z: f.pos.z }, stepUntil: f.stepUntil, invulnerableUntil: f.invulnerableUntil, hitCap: hitCapOf(f, now) };
+    // (THE SHIELD, shield.js, b1105ly: a shield bearer's box of this tick — or null, none standing — so a lagged shooter's round meets the box the shooter saw)
+    const sh = matchState.shields?.[f.id]; if (sh && sh.f === f) rec.shield = sh.frame;
+    h.ring.push(rec);
     if (h.ring.length > KEEP) h.ring.shift();
   }
 }

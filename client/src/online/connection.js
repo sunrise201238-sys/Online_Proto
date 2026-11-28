@@ -129,6 +129,7 @@ export function createConnection() {
   });
 
   const hitQueue = [];
+  const blockQueue = [];   // (THE SHIELD, b1105ly: the server's block events, as the hits)
   const firedQueue = [];   // (THE UNIT'S SOUNDS, b1105hk: the trigger pulls of the snapshots since the last drain — see the snapshot handler)
   // THE FINALE (PT b1105gb): the last lethal hit seen, its shooter and its target — a knockout's final blow.
   // (b1105gh) And the lethal hits before it, the last eight, each with the moment it arrived: where a Trio slot's unit fell in
@@ -207,6 +208,9 @@ export function createConnection() {
     // two can land between frames, so the events of the one skipped were lost; the loop drains this (drainHits).
     if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'hit') hitQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
     if (hitQueue.length > 256) hitQueue.splice(0, hitQueue.length - 256);
+    // THE SHIELD (b1105ly): every snapshot's block events — a round, a volley's pellets or a beam stopped by its target's shield — queued as the hits are (drainBlocks)
+    if (payload.events) for (const ev of payload.events) if (ev && ev.type === 'block') blockQueue.push({ ownerId: ev.ownerId, targetId: ev.targetId });
+    if (blockQueue.length > 256) blockQueue.splice(0, blockQueue.length - 256);
     // THE UNIT'S SOUNDS (b1105hk): every snapshot's trigger pulls, queued as the hits are. Who fired; as which unit (the
     // event's own word: in Trio the seat may hold its next unit by the snapshot's end); the pull's number in the sim's
     // shot counter and the rounds left after it — the seat's own in this snapshot, or, its roster having moved in this
@@ -275,6 +279,7 @@ export function createConnection() {
     // Debug log helpers (snapshot events filtered out — see log()).
     getEvents: () => events.slice(),
     drainHits: () => hitQueue.splice(0),   // (HIT X: the hit events queued since the last call)
+    drainBlocks: () => blockQueue.splice(0),   // (THE SHIELD, b1105ly: the block events queued since the last call)
     drainFired: () => firedQueue.splice(0), // (THE UNIT'S SOUNDS, b1105hk: the trigger pulls queued since the last call)
     drainKills: () => killQueue.splice(0), // (THE KILL FEED, b1105gm: the knockouts worked out since the last call)
     drainAllyMsgs: () => msgQueue.splice(0), // (THE TEAMMATE'S MESSAGES, b1105js: the ones passed on to this page since the last call)

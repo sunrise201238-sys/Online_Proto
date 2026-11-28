@@ -585,16 +585,23 @@ export const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP until b1105ly, never stunned (stunImmune); for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrored in the client.
+  // THE SHIELD (PT b1105lu to b1105lx, here b1105ly; user 2026-11-28: "Add a simple geometry cbox for kurumi's shield. Which would block bullets for her.",
+  // then "Apply Kurumi's shield to 1.0.0 (online and offline)" and "Oh and Kurumi's health as well" — 100, as PT has had it since b1105lv): `shield` is
+  // a box in the frame of the bone of her model that carries the shield — the bone's name, the box's centre and half sizes there in the model's own
+  // units (the shield's own bounds: 2.27 x 3.51 x 0.51 as she is drawn, 0.954 of that while she stands, whose motion sizes the bone). What is shot AT her and meets the box before it meets her is stopped: no
+  // damage, no stun. Offline the client tries the box where the motion in play has put the bone (main.js THE SHIELD); the server plays no motions and
+  // takes the box's place for the motion her state says she is in from shield_poses.js (shield.js). She is drawn with it up in front of her while she
+  // fires or moves, down at her left while she stands, down while she reloads — so is the box.
   unit17: {
     id: 'unit17',
     name: 'Unit 17 / Submachine Gun',
 
     // Pilot stats — Atsuko's block, the HP and the walk her own.
-    hp: 120,                   // user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24: a mainline magazine, 100–120, falls just short
+    hp: 100,   // (PT b1105lv, 1.0.0 b1105ly, user 2026-11-28: "Change Kurumi's health from 120 to 100" — with her shield stopping what is shot at it; 120 until then) user 2026-10-23 (150 → 100 → 150 → 125 the same day), 120 on 2026-10-24
     boostCap: 250,
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
@@ -622,6 +629,7 @@ export const UNIT_DATA = {
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
     autoReload: false,
     stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
+    shield: { bone: 'bone_Shield_00', c: [0.0001, 0.0237, -0.0163], h: [0.2075, 0.3206, 0.0464] },   // (THE SHIELD, above)
     stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then) user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   },
   // Rabu / M590 (user 2026-10-23): Haruka's SDASS — the concentrated pattern — on a 10-shell box magazine that reloads as

@@ -1046,9 +1046,11 @@ html.hud-range .fullscreen-btn.in-match { top: 10px; left: 12px; }
 
 /* the ladder (ladder.js; user 2026-11-05): Target / Fire / Dodge / Sprint hidden while the player climbs — main.js updateHud sets hud-climb; the jump button stays, it is the ladder's (let go) */
 .hud-climb .btn-shoot, .hud-climb .btn-target, .hud-climb .btn-step, .hud-climb .btn-boost { visibility: hidden; }
-/* (PT, 2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art (Kurumi: her 20% more health); a yellow tag since b1105l */
+/* (PT, 2026-10-24) a unit's note on its profile card — `cardNote`, one line at the bottom-left under the art; a yellow tag since b1105l. (Kurumi's 20% more health was the one such note until b1105ly: her card wears the crayon word Shield now — .memo-crayon below, as a map's card — and no unit carries a cardNote.) */
 .profile-body .unit-note { padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--yellow); font-size: 9px; line-height: 11px; font-weight: 800; color: var(--ink); pointer-events: none; }
 .unit-profile-popup .unit-note { position: absolute; left: 12px; bottom: 12px; max-width: 108px; }
+/* (b1105ly) a unit's crayon word (`crayon` — Kurumi's Shield) is the map cards' own mark (.memo-crayon .memo-crayon-flow): on the side card it stands in the card's column where the yellow note stood; on this pop-up, whose sheet is a row, it takes the note's place under the art instead of a column of its own beside the paper clip */
+.unit-profile-popup .unit-crayon { position: absolute; left: 14px; top: auto; bottom: 10px; margin: 0; }
 .unit-profile-popup .map-note { max-width: 244px; }   /* (a map's note runs under its 260 px picture, one line, user 2026-10-29) */
 
 /* FREE POV (user 2026-10-30): the crosshair at the screen centre — Counter-Strike's classic since 2026-11-02 (the user's
