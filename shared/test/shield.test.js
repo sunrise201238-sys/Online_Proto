@@ -40,7 +40,7 @@ const keep = (m, hp1 = 1e6) => () => { const { p1, p2 } = m.fighters; p1.hp = hp
 test('the data: Kurumi carries the shield and 100 health; her motions have their places', () => {
   const u = UNIT_DATA.unit17;
   assert.equal(u.hp, 100);                                           // 120 until b1105ly
-  assert.equal(u.stunImmune, true);                                  // as it was
+  assert.equal(u.stunImmune, undefined);                             // never stunned until b1105ma; a hit that reaches her stuns her now
   assert.deepEqual(u.shield, { bone: 'bone_Shield_00', c: [0.0001, 0.0237, -0.0163], h: [0.2075, 0.3206, 0.0464] });
   const poses = shieldPosesOf(u);
   assert.ok(poses && poses === SHIELD_POSES.unit17);
@@ -85,6 +85,31 @@ test('standing still, her shield is down at her left: a round from dead ahead la
   assert.equal(count(events, 'hit', (e) => e.targetId === 'p2'), fired);
   assert.ok(p2.hp < hp0);
   assert.equal(m.shields.p2.pose, 'stand');
+});
+
+// b1105ma (user 2026-11-28: "Make kurumi immune to stun when the bullets hit the shield, but receive normal stun as others when directly hit.")
+test('a round that reaches her stuns her as it stuns another unit; a round her shield stops stuns nobody', () => {
+  // standing, the rounds from ahead land: the same stun, for as many ticks, on her as on a unit with no shield
+  const stunnedTicks = (target) => {
+    const { m, p1, p2 } = duel('unit1', 22, target);
+    const warm = run(m, START, 40, idle, idle, keep(m));
+    let ticks = 0;
+    const { events } = run(m, warm.now, 100, fire, idle, (now) => { keep(m)(); if (now < p2.hitStunUntil) ticks += 1; });
+    assert.ok(count(events, 'hit', (e) => e.targetId === 'p2') >= 10, `${target} was hit`);
+    assert.equal(p2.hitStunScale, p1.unit.stun.moveScale, `${target} wears the shooter's stun`);
+    return ticks;
+  };
+  const hers = stunnedTicks('unit17'), another = stunnedTicks('unit15');
+  assert.ok(hers > 0, 'she was never slowed');
+  assert.equal(hers, another);
+  // firing, the rounds are stopped at the box: she is never slowed
+  const { m, p2 } = duel();
+  const warm = run(m, START, 40, idle, fire, keep(m));
+  let slowed = 0;
+  const { events } = run(m, warm.now, 150, fire, fire, (now) => { keep(m)(); if (now < p2.hitStunUntil) slowed += 1; });
+  assert.ok(count(events, 'block', (e) => e.targetId === 'p2') >= 15);
+  assert.equal(count(events, 'hit', (e) => e.targetId === 'p2'), 0);
+  assert.equal(slowed, 0); assert.equal(p2.hitStunUntil, 0); assert.equal(p2.lastHitAt, 0, 'a stopped round is no hit');
 });
 
 test('walking at the shooter, her shield is up in front: the rounds are stopped', () => {

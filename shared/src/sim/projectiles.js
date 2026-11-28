@@ -36,7 +36,8 @@ import { createProjectile, nextProjectileId } from './state.js';
 
 // Hit-stun on a body (every hit path: bullets, pellets, the beam, the sniper's round; the offline client's mirrors call it
 // too): a new stun lands when none is running OR it is strictly heavier (a lower move-scale), taking its own duration even
-// if shorter. A unit whose data says `stunImmune` (user 2026-10-23, Kurumi's shield) is never slowed — the hit's damage and
+// if shorter. A unit whose data says `stunImmune` (user 2026-10-23, for Kurumi; no unit names it since b1105ma, when a hit that reaches her began to stun her as
+// any unit — her shield stops the rest) is never slowed — the hit's damage and
 // its momentum cut stand as before. `unit` is passed apart from the body because the client's state objects carry none.
 export function applyHitStun(target, unit, ms, scale, now) {
   target.lastHitAt = now;   // (the hit itself, stun or no stun: the bot brains read it as "I was hit" — user 2026-10-23, Kurumi's Defense never fired)

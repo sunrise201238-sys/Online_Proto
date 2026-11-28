@@ -585,7 +585,7 @@ export const UNIT_DATA = {
     autoReload: false,
     stun: { ms: 25, moveScale: 0.75 }   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.50 -> 0.75, and the time, 50 ms -> 25; 50 ms at 0.50 until then)
   },
-  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP until b1105ly, never stunned (stunImmune); for it a
+  // Kurumi / UMP45 (user 2026-10-23, her own numbers the same day): the shield bearer — 120 HP until b1105ly, never stunned (stunImmune) until b1105ma; for it a
   // slow walk (10), a short reach (40 / 50), a slow 600 RPM, a 25-round magazine on a 2 s reload and a cone that opens to
   // Marina's 0.11 and Atsuko's 3.5 bullet. The reload hold (reloadHolds) came and went twice the same day; the field stays for
   // any unit. Sudden Death puts her at 1 HP like everyone. Mirrored in the client.
@@ -628,7 +628,7 @@ export const UNIT_DATA = {
     botFireCap: 25,
     reloadMs: 2000,   // user 2026-10-23 (the MPX: 1500)
     autoReload: false,
-    stunImmune: true,          // user 2026-10-23: she is never stunned (projectiles.js applyHitStun)
+    // (no stunImmune since b1105ma, user 2026-11-28: "Make kurumi immune to stun when the bullets hit the shield, but receive normal stun as others when directly hit." — a round her shield stops lands nothing, so no stun; one that reaches her stuns her as it stuns anyone. She was never stunned from 2026-10-23 until then. The field is still read for any unit that names it: projectiles.js applyHitStun)
     shield: { bone: 'bone_Shield_00', c: [0.0001, 0.0237, -0.0163], h: [0.2075, 0.3206, 0.0464] },   // (THE SHIELD, above)
     stun: { ms: 50, moveScale: 0.625 },   // (PT b1105ll and b1105lm, 1.0.0 b1105lo, user 2026-11-27: "make the stun effect (the walk speed de-buff only, not the time) 50% less universally", then "half time the duration also" — the slow-down halved, the speed left 0.25 -> 0.625, and the time, 100 ms -> 50; 100 ms at 0.25 until then) user 2026-10-23 (the MPX: 50 ms at 0.50) — the rifles' stun
   },
