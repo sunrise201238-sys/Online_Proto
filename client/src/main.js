@@ -1421,17 +1421,22 @@ const SNIPER_GLINT_MIN_FLASH_MS = 100;
 // Mirrors SHOTGUN_CLUSTER_SPREAD_DISTANCE in shared/src/sim/constants.js —
 // see that file for the rationale.
 const SHOTGUN_CLUSTER_SPREAD_DISTANCE = 70;
-// Spawn protection — a Trio roster unit that comes on mid-match takes no damage for this long (mirrors SPAWN_IMMUNITY_MS
-// in shared/src/sim/constants.js). Not at the match's start since b1105gz: THE GAME-START INTRO holds the match instead.
-const SPAWN_IMMUNITY_MS = 3000;
-// TEAM 1'S SPAWN PROTECTION, OFFLINE (b1105mk; user 2026-11-28, after the assessment made the same day of ways to favour team 1 beyond the
+// SPAWN PROTECTION, OFFLINE — how long a Trio roster unit that comes on mid-match takes no damage, by its team. (Online the server stamps
+// every unit's — SPAWN_IMMUNITY_MS in shared/src/sim/constants.js, 3 s — and the page mirrors that stamp from the snapshots; the page's own
+// copy of the 3 s went with its last reader at b1105ml.) Not at the match's start since b1105gz: THE GAME-START INTRO holds the match instead.
+// TEAM 1'S (b1105mk; user 2026-11-28, after the assessment made the same day of ways to favour team 1 beyond the
 // homes: "1. respawn immunity 6sec. 2. offline team1 only (trio. duel doesn't need it). all other stay the same. 3. PT and 1.0.0."): a Trio
 // roster unit of team 1 — the player's side: the player and the ally — that comes on mid-match in the offline game takes no damage for this
-// long. Team 2's unit keeps SPAWN_IMMUNITY_MS, and so does every unit online (the server stamps that one: state.js respawnFighterNext).
+// long. Every unit online keeps the server's 3 s (state.js respawnFighterNext), and team 2's unit kept it offline until b1105ml, below.
 // Why it tells: since b1105mj a fresh unit comes on at its slot's own start, some 220 u from the fight, and the 3 s ran out on the way back;
 // with 6 it reaches the fight still protected, and a bot holds its fire on a protected unit (nbrain.js). In the assessment's bot pools, the
 // 6 s laid over the sim for team 1: from 50% to 60% of Trio 1v1 matches won and from 51% to 64% of Trio 2v2.
 const TEAM1_SPAWN_IMMUNITY_MS = 6000;
+// TEAM 2'S (b1105ml; user 2026-11-28: "1. respawn immunity 0sec. 2. offline team2 only (trio. duel doesn't need it). all other stay the same.
+// 3. PT and 1.0.0."): none — a Trio roster unit of team 2, the enemy's side, can be hurt from the moment it comes on in the offline game
+// (3 s until then). Its stamp is still written, the moment it came on: the bots' brain tells one life of a unit from the next by that
+// stamp (nbrain.js botDefenseRefLife), so a fresh unit's must not be left at the first life's 0.
+const TEAM2_SPAWN_IMMUNITY_MS = 0;
 
 const input = {
   x: 0,
@@ -9439,7 +9444,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105mk 11-28';
+const CLIENT_BUILD_TAG = 'b1105ml 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -13344,8 +13349,8 @@ const clock = new THREE.Clock();
 // ---------------------------------------------------------------------------
 // Trio mode (offline): a dead unit is replaced by the next entry of its
 // slot's roster — a brand-new mech at the slot's recorded spawn point with
-// its spawn immunity (team 2's unit the standard 3 s, team 1's 6 s since
-// b1105mk). The killer keeps position/HP/boost (no kill
+// its spawn immunity (team 1's unit 6 s since b1105mk, team 2's none since
+// b1105ml). The killer keeps position/HP/boost (no kill
 // reward); a slot whose roster is exhausted stays dead; the team loses when
 // every one of its rosters is empty.
 // ---------------------------------------------------------------------------
@@ -13405,7 +13410,7 @@ function respawnSlotMech(slotName, unitKey) {
   fresh.root.position.set(fresh.body.position.x, fresh.body.position.y + fresh.modelYOffset, fresh.body.position.z);
   fresh.state.lastFireAt = now;
   fresh.state.fireInitAt = now;
-  fresh.state.invulnerableUntil = now + (fresh.state.team === 'A' ? TEAM1_SPAWN_IMMUNITY_MS : SPAWN_IMMUNITY_MS);   // (team 1's unit 6 s, team 2's 3 — b1105mk; the white glow and every hit test read this stamp)
+  fresh.state.invulnerableUntil = now + (fresh.state.team === 'A' ? TEAM1_SPAWN_IMMUNITY_MS : TEAM2_SPAWN_IMMUNITY_MS);   // (team 1's unit 6 s — b1105mk; team 2's none — b1105ml: its stamp the moment it came on. The white glow and every hit test read this stamp)
   if (slotName === 'enemy' || slotName === 'enemy2' || slotName === 'ally' || (slotName === 'player' && state.spectatorActive)) fresh.state.nextFireAt = now + 650;   // (every bot slot — mirrors the server's Trio respawn)
   state[slotName] = fresh;
   old.heir = fresh;   // (THE FINALE's next roster unit, b1105gh: a round the fallen unit left in the air still names it as its owner)
