@@ -178,11 +178,21 @@ test('a bot whose target stands on B: it walks to A, charges a second, and stays
   // onto the deck 12 m below and had a goal again, and this was asked only while it stood on the top. The rails of b1105kh
   // keep it on the way — neon_ways_up.mjs; user 2026-11-22: "加欄杆可以解決" — so it is asked of the three seconds whole
   // again: no goal, and the feet never under the upper ramp's foot, the landing at 17.014 m.)
-  let low = Infinity;
+  // (b1105mc, the gauge back 1.5 times as fast after half the wait: the bot is at the way's head a second sooner, and the
+  // stuck detector's Maze begins there 2.0 s after the move where it began 3.0 s after it. The route that brought the bot up
+  // — its last point the pad's arrival, planned before the move, never walked off since the bot woke in Pursue — is then
+  // young enough to stand in for the one tick the new search takes (nbrain.js navPlan: "the old route standing in
+  // meanwhile"), and from the way's head, 2.5 units under B, its arrival reads as ahead: the goal is written for that tick
+  // and gone the next, with the body 80 units over A's zone. Sixty runs of this scene: one tick each, at 2032 ms. So the
+  // three seconds are asked for what a goal left on B would do: none stands for two ticks running, no charge begins, and
+  // the feet stay up there.)
+  let low = Infinity, run = 0, longest = 0;
   for (let t = 0; t < 3000 / MS; t += 1) {
     now += MS; m.tick += 1; tickBot(m, 'p2', now); tickMatch(m, { p1: emptyInput() }, now, DT, ['p2']);
-    assert.equal(b.botPadGoal, undefined, 'no goal left on B'); low = Math.min(low, (b.pos.y - G) / 4);
+    run = b.botPadGoal !== undefined ? run + 1 : 0; longest = Math.max(longest, run);
+    assert.ok(b.padCharge == null, 'no charge on B'); low = Math.min(low, (b.pos.y - G) / 4);
   }
+  assert.ok(longest <= 1, `no goal left on B: one stood for ${longest} ticks running`);
   assert.ok(low > 17, `it stayed up there for the three seconds: its feet never under ${low.toFixed(2)} m`);
 });
 

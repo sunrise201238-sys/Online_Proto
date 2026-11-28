@@ -14,6 +14,7 @@ import {
   JUMP_BOOST_COST,
   JUMP_INITIAL_VELOCITY,
   BOOST_DASH_DRAIN_PER_TICK,
+  BOOST_REFILL_PAUSE_MS,
   MOMENTUM_STANDARD,
   MAX_HP,
   LAG_COMP_MAX_MS,
@@ -252,7 +253,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
         && fighter.boost >= airPopCost
         && now >= fighter.jumpCooldownUntil) {
       fighter.boost = Math.max(0, fighter.boost - airPopCost);
-      fighter.refillPausedUntil = now + 500;
+      fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
       fighter.jumpVelocity = fighter.unit?.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
       fighter.jumpCooldownUntil = now + 250;
     }
@@ -263,7 +264,7 @@ export function applyInput(matchState, fighter, input, now, obstacles, surfaces)
       const climbRate = fighter.unit?.sprintSpeed ?? BOOST_MOVE_SPEED;
       if (fighter.jumpVelocity <= climbRate + 0.01) {
         fighter.boost = Math.max(0, fighter.boost - (fighter.unit?.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
-        fighter.refillPausedUntil = now + 500;
+        fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
       }
     }
   }

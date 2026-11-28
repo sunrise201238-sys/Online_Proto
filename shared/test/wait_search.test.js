@@ -28,6 +28,11 @@ const mulberry32 = (a) => () => {
 const kindAndStage = (key) => key.split('|').slice(0, 2).join('|');
 // (the playtest tree's switch for a tank that never empties is off for the match — the gauge is half of what a route costs,
 //  and the bots of a full tank never come to THE WAIT here; as ladder_bots.test.js withGauge)
+// (b1105mc: the gauge comes back 1.5 times as fast after half the wait, and this match's bots no longer come to THE WAIT on it —
+//  none in 60 s under any of six seeds, where they waited 1057 ticks. The test is of the parked search, not of the gauge: its bots
+//  refill SLOW_REGEN a tick by the test's own hand. 0.5 to 2.5 a tick all bring the wait; at 1.5 it begins at 8.5 s as it did,
+//  884 ticks parked and 29 searches ended.)
+const SLOW_REGEN = 1.5;
 const withGauge = (fn) => () => { const sw = C.PT; const was = sw?.infiniteBoost; if (sw) sw.infiniteBoost = false; try { return fn(); } finally { if (sw) sw.infiniteBoost = was; } };
 
 test('a waiting unit keeps its parked search while it paces, and the search goes on to its end', withGauge(() => {
@@ -36,7 +41,7 @@ test('a waiting unit keeps its parked search while it paces, and the search goes
   navGridFor(arena);
   const ids = ['p1', 'p2', 'p3', 'p4'], bots = ['p2', 'p3', 'p4'];
   const m = createMatchState({ mapKey: 'town', mode: '2v2', p1UnitKey: 'unit17', p2UnitKey: 'unit22', p3UnitKey: 'unit7', p4UnitKey: 'unit15', startTime: 1000 });
-  for (const id of ids) { const f = m.fighters[id]; f.botSD = id !== 'p1'; f.hp = id === 'p3' ? 0 : 1; }
+  for (const id of ids) { const f = m.fighters[id]; f.botSD = id !== 'p1'; f.hp = id === 'p3' ? 0 : 1; if (id !== 'p1') f.unit = { ...f.unit, boostRegen: SLOW_REGEN }; }
   const inputs = Object.fromEntries(ids.map((id) => [id, emptyInput()]));
   // THE CLOCK: every reading is one step on, and a search's deadline is three and a half steps from where it is asked for —
   // the search is cut at its fourth 32-pop check, parked, and goes on at the unit's next tick: the same on any machine

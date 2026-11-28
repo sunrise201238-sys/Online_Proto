@@ -26,7 +26,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -61,7 +61,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -103,7 +103,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -137,7 +137,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -175,7 +175,7 @@ export const UNIT_DATA = {
     walkSpeed: 8,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -210,7 +210,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -244,7 +244,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     // No jump cooldown — airborne again the moment she lands. tryStartJump
@@ -300,7 +300,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -335,7 +335,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -371,7 +371,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -409,7 +409,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -444,7 +444,7 @@ export const UNIT_DATA = {
     walkSpeed: 10,            // owner 2026-09-24 (was 12)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -481,7 +481,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -524,7 +524,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -561,7 +561,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -606,7 +606,7 @@ export const UNIT_DATA = {
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -644,7 +644,7 @@ export const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -675,7 +675,7 @@ export const UNIT_DATA = {
     walkSpeed: 10,   // (b1105db, user 2026-11-08: "Change Hiyori walking speed from 12 to 10"; the card reads Slow)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -709,7 +709,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -748,7 +748,7 @@ export const UNIT_DATA = {
     walkSpeed: 10,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -784,7 +784,7 @@ export const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -1001,8 +1001,11 @@ export const REPULSION_DECAY_MS = 220;
 
 // Boost behavior.
 export const BOOST_DASH_DRAIN_PER_TICK = 1.1;
-export const BOOST_REGEN_PER_TICK = 4.59;
-export const BOOST_REFILL_PAUSE_MS = 500;
+// (b1105mc, user 2026-11-28: the gauge comes back 1.5 times as fast — 4.59 a tick until then, every unit's boostRegen with it —
+//  and the wait before it starts is halved, 500 ms until then. The wait is ONE number: every spending sets
+//  refillPausedUntil = now + BOOST_REFILL_PAUSE_MS — a sprint tick, a dodge, a jump, the sniper's cancel, a flyer's pop and climb.)
+export const BOOST_REGEN_PER_TICK = 6.885;
+export const BOOST_REFILL_PAUSE_MS = 250;
 export const BOOST_EMPTY_RECOVER_MS = 100;
 
 // Server tick rate (ms per tick) — drives both server broadcast and the

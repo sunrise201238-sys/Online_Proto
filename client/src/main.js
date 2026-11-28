@@ -108,7 +108,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -145,7 +145,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -188,7 +188,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -224,7 +224,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -264,7 +264,7 @@ const UNIT_DATA = {
     walkSpeed: 8,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -301,7 +301,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -337,7 +337,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     // No jump cooldown — airborne again the moment she lands. The player path
@@ -404,7 +404,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -441,7 +441,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -479,7 +479,7 @@ const UNIT_DATA = {
     walkSpeed: 12,            // owner 2026-09-24 (was 16)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -519,7 +519,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -555,7 +555,7 @@ const UNIT_DATA = {
     walkSpeed: 10,            // owner 2026-09-24 (was 12)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -594,7 +594,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -638,7 +638,7 @@ const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -676,7 +676,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -719,7 +719,7 @@ const UNIT_DATA = {
     walkSpeed: 10,   // user 2026-10-23 (the MPX: 16) — the Slow tier, Koyuki's
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -758,7 +758,7 @@ const UNIT_DATA = {
     walkSpeed: 16,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -791,7 +791,7 @@ const UNIT_DATA = {
     walkSpeed: 10,   // (b1105db, user 2026-11-08: "Change Hiyori walking speed from 12 to 10"; the card reads Slow)
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -827,7 +827,7 @@ const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -868,7 +868,7 @@ const UNIT_DATA = {
     walkSpeed: 10,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -906,7 +906,7 @@ const UNIT_DATA = {
     walkSpeed: 12,
     sprintSpeed: 11.76,
     boostDrain: 1.1,
-    boostRegen: 4.59,
+    boostRegen: 6.885,
     jumpVelocity: 30,
     jumpHoverMs: 300,
     jumpCooldownMs: 1500,
@@ -1389,7 +1389,8 @@ const MAX_HP = 100;                     // unit.hp default (150 -> 100, 2026-08-
 const BOOST_MOVE_SPEED = 11.76;         // unit.sprintSpeed default
 const WALK_SPEED = 16;                  // unit.walkSpeed default
 const BOOST_DASH_DRAIN_PER_TICK = 1.1;  // unit.boostDrain default
-const BOOST_REGEN_PER_TICK = 4.59;      // unit.boostRegen default
+const BOOST_REGEN_PER_TICK = 6.885;     // unit.boostRegen default (b1105mc: 1.5 times 4.59, as the sim's)
+const BOOST_REFILL_PAUSE_MS = 250;      // the wait after any spending before the gauge comes back (b1105mc: 500 until then, a bare number at each site; the sim's constant of the same name)
 const GROUND_BASE_Y = 2.45;
 const HOMING_MAX_DEG_PER_FRAME = 0;     // homing disabled — projectiles fly straight
 const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
@@ -4868,7 +4869,7 @@ function sdBotStartStep(mech, sdx, sdz, now) {
   st.momentumVX = 0;
   st.momentumVZ = 0;
   st.boost = Math.max(0, st.boost - (u?.stepBoostCost ?? STEP_BOOST_COST));
-  st.refillPausedUntil = now + 500;
+  st.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   clearIncomingHoming(mech, now);
   return true;
 }
@@ -4934,7 +4935,7 @@ function tickSniperCharge(mech, now, sprintHeld = false) {
     && mech.state.boost >= SNIPER_CANCEL_BOOST_COST
   ) {
     mech.state.boost = Math.max(0, mech.state.boost - SNIPER_CANCEL_BOOST_COST);
-    mech.state.refillPausedUntil = now + 500;
+    mech.state.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
     mech.state.sniperChargeUntil = now;
     wasCancelled = true;
   }
@@ -6149,7 +6150,7 @@ function updateBoost(mech, now, action) {
   const ticks = stepBoostTicks(s, 'boostClock', now);
   if (consume) {
     if (ticks) s.boost = Math.max(0, s.boost - drain * ticks);
-    s.refillPausedUntil = now + 500;
+    s.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   } else if (grounded && now >= s.refillPausedUntil && ticks) {
     s.boost = Math.min(cap, s.boost + regen * ticks);
   }
@@ -6343,7 +6344,7 @@ function updatePlayer(now) {
     const jumpCooldownMs = state.player.unit.jumpCooldownMs ?? JUMP_COOLDOWN_MS;
     input.boost = false;
     state.player.state.boost = Math.max(0, state.player.state.boost - jumpBoostCost);
-    state.player.state.refillPausedUntil = now + 500;
+    state.player.state.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
     state.player.state.jumpVelocity = jumpVelocity;
     state.player.state.airborne = true;
     state.player.state.hoverUntil = now + jumpHoverMs;
@@ -6397,7 +6398,7 @@ function updatePlayer(now) {
       state.player.state.momentumVZ = 0;
       state.player.state.boost = Math.max(0, state.player.state.boost - (stepU?.stepBoostCost ?? STEP_BOOST_COST));
       input.sprintLocked = false;
-      state.player.state.refillPausedUntil = now + 500;
+      state.player.state.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
       clearIncomingHoming(state.player, now);
       action = 'step';
     }
@@ -6428,7 +6429,7 @@ function updatePlayer(now) {
         && st.boost >= airPopCost
         && now >= st.jumpCooldownUntil) {
       st.boost = Math.max(0, st.boost - airPopCost);
-      st.refillPausedUntil = now + 500;
+      st.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
       st.jumpVelocity = state.player.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
       st.jumpCooldownUntil = now + 250;
     }
@@ -6448,7 +6449,7 @@ function updatePlayer(now) {
         // drain condition drops, so climb start always charges exactly one tick.
         const n = stepBoostTicks(st, 'climbClock', now);
         if (n) st.boost = Math.max(0, st.boost - n * (state.player.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK));
-        st.refillPausedUntil = now + 500;
+        st.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
       } else st.climbClock = undefined;
     } else st.climbClock = undefined;
   }
@@ -6562,7 +6563,7 @@ function botStartJump(now) {
   if (now < eState.jumpCooldownUntil) return false;
   if (eState.boost < jumpBoostCost) return false;
   eState.boost = Math.max(0, eState.boost - jumpBoostCost);
-  eState.refillPausedUntil = now + 500;
+  eState.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   eState.jumpVelocity = state.enemy.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
   eState.airborne = true;
   eState.hoverUntil = now + (state.enemy.unit.jumpHoverMs ?? JUMP_HOVER_MS);
@@ -9432,7 +9433,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105mb 11-28';
+const CLIENT_BUILD_TAG = 'b1105mc 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single
@@ -17062,7 +17063,7 @@ function cmdTryStartJump(m, now) {
   if (now < st.jumpCooldownUntil) return false;
   if (st.boost < MANDATED_JUMP_MIN_BOOST * (st.boostScale ?? boostScaleOf(state.mapKey))) return false;
   st.boost = Math.max(0, st.boost - (m.unit.jumpBoostCost ?? JUMP_BOOST_COST));
-  st.refillPausedUntil = now + 500;
+  st.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   st.jumpVelocity = m.unit.jumpVelocity ?? JUMP_INITIAL_VELOCITY;
   st.airborne = true;
   st.hoverUntil = now + (m.unit.jumpHoverMs ?? JUMP_HOVER_MS);
@@ -17196,7 +17197,7 @@ function applyMoveOrder(m, now) {
           const drain = m.unit.boostDrain ?? BOOST_DASH_DRAIN_PER_TICK;
           st.boost = Math.max(floor, st.boost - drain * ticks);
         }
-        st.refillPausedUntil = now + 500;
+        st.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
         st.action = 'dash';
         m.thrusters.forEach((t) => { t.material.opacity = 0.9; t.scale.y = 1.6; });
         m.plumeLight.intensity = 2.1;

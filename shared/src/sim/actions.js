@@ -243,7 +243,7 @@ export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
   fighter.momentumVX = 0;
   fighter.momentumVZ = 0;
   fighter.boost = Math.max(0, fighter.boost - (u?.stepBoostCost ?? STEP_BOOST_COST));
-  fighter.refillPausedUntil = now + 500;
+  fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   clearIncomingHoming(matchState, fighter, now);
   return true;
 }
@@ -328,7 +328,7 @@ export function tryStartJump(fighter, now, carry = fighter.vel) {
   if (fighter.boost < jumpBoostCost) return false;
   if (!fighter.grounded && fighter.pos.y > GROUND_BASE_Y + 0.15) return false;
   fighter.boost = Math.max(0, fighter.boost - jumpBoostCost);
-  fighter.refillPausedUntil = now + 500;
+  fighter.refillPausedUntil = now + BOOST_REFILL_PAUSE_MS;
   fighter.jumpVelocity = jumpVelocity;
   fighter.airborne = true;
   fighter.hoverUntil = now + jumpHoverMs;

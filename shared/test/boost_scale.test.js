@@ -85,7 +85,7 @@ test('boost scale: the refill is five times a tick and the cap five times — Di
     tickMatch(m, { p1: emptyInput(), p2: emptyInput() }, 1016, TICK_DT, []); const one = f.boost; for (let i = 0; i < 400; i += 1) tickMatch(m, { p1: emptyInput(), p2: emptyInput() }, 1032 + i * TICK_RATE_MS, TICK_DT, []); return { one, full: f.boost }; };
   const t1 = run('town'), t5 = run('town', 5), d = run('district');
   assert.ok(Math.abs(d.one - 5 * t1.one) < 1e-9, `one tick: District ${d.one}, Town ${t1.one}`);
-  assert.ok(t1.one > 4 && t1.one < 5, 'Town refills 4.59 a tick: ' + t1.one);
+  assert.ok(Math.abs(t1.one - 6.885) < 1e-9, 'Town refills 6.885 a tick (b1105mc; 4.59 until then): ' + t1.one);
   assert.ok(Math.abs(t5.one - d.one) < 1e-9, `Town at 5 and District alike: ${t5.one}, ${d.one}`);
   assert.equal(d.full, 1250, 'District full'); assert.equal(t5.full, 1250, 'Town at 5 full'); assert.equal(t1.full, 250, 'Town full');
 }));
