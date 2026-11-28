@@ -890,7 +890,16 @@ export const MOMENTUM_STANDARD = 100;
 export const LADDER_CLIMB_SPEED = BOOST_MOVE_SPEED * 2.5;
 
 // Step (dodge) tunables.
-export const STEP_DISTANCE = 9.2;
+// THE DODGE'S LENGTH (b1105mb, user 2026-11-28: "Implement 1.5 times dodge distance without causing go through walls/objects issue. PT and
+// 1.0.0. Make sure online games are not getting more lag."): 13.8, one and a half times the 9.2 it was. Nothing else of the dodge moved — its
+// 300 ms, which is also the time it cannot be hit, its cooldown, its cost — so it runs at 46 u/s where it ran at 30.7 (the sprint's steady
+// 29.4). The Sudden Death brain reads the length (sdbrain.js stepD); the Health Point brain reads none. Mirrored in the client's own constant.
+export const STEP_DISTANCE = 13.8;
+// THE DODGE'S WAY, TRIED PIECE BY PIECE (b1105mb, actions.js sweepStep): the longest piece of a dodge's way that is put behind the body
+// without a test against the walls. A body is 2.3 wide, so nothing, however thin, lies between two tests; and a tick's own piece of a dodge
+// is 0.736 (13.8 u over 300 ms, 16 ms a tick), under this — one test a tick, as there always was. More tests are made only when the clock
+// has stepped further than a tick: the server's late tick, the offline page's stalled frame.
+export const STEP_SWEEP_MAX = 0.75;
 export const STEP_DURATION_MS = 300;
 export const STEP_COOLDOWN_MS = 1175;
 export const STEP_BOOST_COST = 48;

@@ -52,6 +52,7 @@ import {
   generatedDataFile,
   reloadHolds,
   applyHitStun,
+  sweepStep,   // (THE DODGE'S WAY TRIED PIECE BY PIECE, b1105mb: actions.js)
   getArena,
   ladderHumanInput, ladderPress, ladderBotStep, ladderTick,   // the ladders (ladder.js; user 2026-11-05)
   padHumanInput, padBotStep, padChargeProgress,               // the transporters (pads.js; b1105fk)
@@ -1395,7 +1396,8 @@ const HOMING_CLOSE_RANGE_CUTOFF = 2.6;
 const HOMING_SOFTEN_RANGE = 20;
 const HOMING_SOFTEN_DEG_PER_FRAME = 0;  // homing disabled — projectiles fly straight
 const BOOST_CAP = 250;                  // unit.boostCap default
-const STEP_DISTANCE = 9.2;
+const STEP_DISTANCE = 13.8;   // (b1105mb, user 2026-11-28: "Implement 1.5 times dodge distance without causing go through walls/objects issue" — 9.2 until then; the same 300 ms, so 46 u/s. Mirrors shared/src/sim/constants.js, where the whole of it is said)
+const _stepAt = { x: 0, z: 0 };   // (sweepStep's farthest free point: the two dodges below, the player's and a bot's)
 const STEP_DURATION_MS = 300;
 const STEP_COOLDOWN_MS = 1175;
 const STEP_BOOST_COST = 48;
@@ -6299,14 +6301,17 @@ function updatePlayer(now) {
     const progress = THREE.MathUtils.clamp((now - stepState.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(stepState.stepFromX, stepState.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(stepState.stepFromZ, stepState.stepToZ, progress);
-    // Bonk: the next lerp point lands inside an obstacle. Halt the dodge here for
-    // the rest of the step — collapse the lerp path to this spot so a later point
+    // Bonk: a point of the way to the next lerp point lands inside an obstacle. Halt the dodge at the last free spot for
+    // the rest of the step — collapse the lerp path to there so a later point
     // on the FAR side of a thin wall can't tunnel the unit through. The step is
     // NOT ended early, so the animation + i-frames run the full duration.
-    if (!unitOverlapsObstacle(targetX, state.player.body.position.y, targetZ)) {
+    // THE WAY TRIED PIECE BY PIECE (b1105mb, the shared sweepStep): the whole way from where the body stands to this frame's point, every
+    // 0.75 u at the most — a frame is as long as the page makes it, and until then a stalled one set the body down beyond the wall.
+    if (sweepStep(state.player.body.position.x, state.player.body.position.z, targetX, targetZ, state.player.body.position.y, unitOverlapsObstacle, undefined, _stepAt)) {
       state.player.body.position.x = targetX;
       state.player.body.position.z = targetZ;
     } else {
+      state.player.body.position.x = _stepAt.x; state.player.body.position.z = _stepAt.z;
       stepState.stepFromX = state.player.body.position.x; stepState.stepToX = state.player.body.position.x;
       stepState.stepFromZ = state.player.body.position.z; stepState.stepToZ = state.player.body.position.z;
     }
@@ -6745,14 +6750,16 @@ function botTickStep(mech, now) {
     const progress = THREE.MathUtils.clamp((now - st.stepStartAt) / span, 0, 1);
     const targetX = THREE.MathUtils.lerp(st.stepFromX, st.stepToX, progress);
     const targetZ = THREE.MathUtils.lerp(st.stepFromZ, st.stepToZ, progress);
-    // Bonk: the next lerp point lands inside an obstacle. Halt the dodge here for
-    // the rest of the step — collapse the lerp path to this spot so a later point
+    // Bonk: a point of the way to the next lerp point lands inside an obstacle. Halt the dodge at the last free spot for
+    // the rest of the step — collapse the lerp path to there so a later point
     // on the FAR side of a thin wall can't tunnel the unit through. The step is
     // NOT ended early, so the animation + i-frames run the full duration.
-    if (!unitOverlapsObstacle(targetX, mech.body.position.y, targetZ)) {
+    // (THE WAY TRIED PIECE BY PIECE, b1105mb: as the player's dodge above)
+    if (sweepStep(mech.body.position.x, mech.body.position.z, targetX, targetZ, mech.body.position.y, unitOverlapsObstacle, undefined, _stepAt)) {
       mech.body.position.x = targetX;
       mech.body.position.z = targetZ;
     } else {
+      mech.body.position.x = _stepAt.x; mech.body.position.z = _stepAt.z;
       st.stepFromX = mech.body.position.x; st.stepToX = mech.body.position.x;
       st.stepFromZ = mech.body.position.z; st.stepToZ = mech.body.position.z;
     }
@@ -9425,7 +9432,7 @@ const OWN_SHOT_SAME_SHOT_MS = 1000;       // older server without the shot count
 // Build tag, printed in the own-shot console tally so a stale deploy or
 // cache can be told from a live one (it was shown in the tab title for a
 // day; the owner had it taken off the tab, 2026-10-15).
-const CLIENT_BUILD_TAG = 'b1105ma 11-28';
+const CLIENT_BUILD_TAG = 'b1105mb 11-28';
 
 // Called after every prediction tick — the forward tick in runPredictionTick
 // and each replayed tick in applySnapshotToPrediction: every own single

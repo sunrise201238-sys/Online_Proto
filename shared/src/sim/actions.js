@@ -5,6 +5,7 @@
 
 import {
   STEP_DISTANCE,
+  STEP_SWEEP_MAX,
   STEP_DURATION_MS,
   STEP_COOLDOWN_MS,
   STEP_BOOST_COST,
@@ -247,6 +248,31 @@ export function tryStartStep(matchState, fighter, dirX, dirZ, now, obstacles) {
   return true;
 }
 
+// THE DODGE'S WAY TRIED PIECE BY PIECE (b1105mb; user 2026-11-28: "Implement 1.5 times dodge distance without causing go through walls/objects
+// issue"). A dodge puts its body along a line by the clock: where it should be now. Until b1105mb that one point alone was tried against the
+// walls, so a step of the clock longer than a tick — the offline page's stalled frame, the server's late tick — could set the body down on
+// the far side of a wall it never touched: Plain Field's 4 u of wall after a stall of 230 ms at the old 9.2, and after 140 ms at 13.8, a
+// fifth of the dodges straight at it at 200 ms (measured before the build). Now the WAY from where the body stands to that point is tried
+// every STEP_SWEEP_MAX at the most, and the body stops at the last free point before the first that lies in an obstacle. A body is 2.3 wide
+// and a piece 0.75 at the most, so no wall and no object, however thin, lies between two tries. Where the clock is steady a tick's piece is
+// 0.736 — ONE try a tick, on the very point the old rule tried: the same answers and the same cost as before.
+// `overlaps(x, y, z, arg)` is the caller's own test of a body against the obstacles — the sim's unitOverlapsObstacle with its obstacle list as
+// `arg`; the offline client's own, which takes none. Returns true when the whole way is free; `out` holds the farthest free point either way
+// (the start when the first piece is already blocked).
+const SWEEP_PIECES_MAX = 64;   // (a way longer than 48 u is no dodge: its pieces are let grow sooner than its tests)
+export function sweepStep(x0, z0, x1, z1, y, overlaps, arg, out) {
+  const dx = x1 - x0, dz = z1 - z0, dist = Math.sqrt(dx * dx + dz * dz);
+  const n = dist > STEP_SWEEP_MAX ? Math.min(SWEEP_PIECES_MAX, Math.ceil(dist / STEP_SWEEP_MAX)) : 1;
+  out.x = x0; out.z = z0;
+  for (let k = 1; k <= n; k += 1) {
+    const x = k === n ? x1 : x0 + (dx * k) / n, z = k === n ? z1 : z0 + (dz * k) / n;
+    if (overlaps(x, y, z, arg)) return false;
+    out.x = x; out.z = z;
+  }
+  return true;
+}
+const _stepAt = { x: 0, z: 0 };
+
 // Each tick while a step is active, lerp the fighter along the step path.
 // Returns true if step is still running, false if it ended this call.
 export function tickStep(fighter, now, obstacles) {
@@ -266,16 +292,17 @@ export function tickStep(fighter, now, obstacles) {
   const t = Math.max(0, Math.min(1, (now - fighter.stepStartAt) / span));
   const targetX = fighter.stepFromX + (fighter.stepToX - fighter.stepFromX) * t;
   const targetZ = fighter.stepFromZ + (fighter.stepToZ - fighter.stepFromZ) * t;
-  // Bonk: the next lerp point lands inside an obstacle. Halt the dodge at the
-  // current spot for the rest of the step — collapse the lerp path to here so a
-  // later point on the FAR side of a thin wall can't tunnel the unit through. The
-  // step is NOT ended early, so the animation + i-frames run the full duration.
-  if (unitOverlapsObstacle(targetX, fighter.pos.y, targetZ, obstacles)) {
-    fighter.stepFromX = fighter.pos.x; fighter.stepToX = fighter.pos.x;
-    fighter.stepFromZ = fighter.pos.z; fighter.stepToZ = fighter.pos.z;
-  } else {
+  // Bonk: a point of the way to the next lerp point lands inside an obstacle (sweepStep, above: the way is tried piece by piece since
+  // b1105mb — on a steady clock the one piece is that point itself). Halt the dodge at the last free spot for the rest of the step —
+  // collapse the lerp path to there so a later point on the FAR side of a thin wall can't tunnel the unit through. The step is NOT ended
+  // early, so the animation + i-frames run the full duration.
+  if (sweepStep(fighter.pos.x, fighter.pos.z, targetX, targetZ, fighter.pos.y, unitOverlapsObstacle, obstacles, _stepAt)) {
     fighter.pos.x = targetX;
     fighter.pos.z = targetZ;
+  } else {
+    fighter.pos.x = _stepAt.x; fighter.pos.z = _stepAt.z;
+    fighter.stepFromX = fighter.pos.x; fighter.stepToX = fighter.pos.x;
+    fighter.stepFromZ = fighter.pos.z; fighter.stepToZ = fighter.pos.z;
   }
   fighter.vel.x = 0;
   fighter.vel.z = 0;

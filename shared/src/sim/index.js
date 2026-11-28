@@ -39,6 +39,7 @@ export {
   clearIncomingHoming,
   tryStartStep,
   tickStep,
+  sweepStep,   // (THE DODGE'S WAY TRIED PIECE BY PIECE, b1105mb: the offline client's dodge uses the same rule)
   tryStartJump,
   startDash,
   reloadHolds
